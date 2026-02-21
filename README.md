@@ -1,4 +1,4 @@
-![logo](https://raw.githubusercontent.com/xingkaixin/assets/main/assets/logo.png)
+![logo](https://raw.githubusercontent.com/xingkaixin/agent-dump/assets/main/assets/logo.png)
 
 # Agent Dump
 
