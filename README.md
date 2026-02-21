@@ -1,3 +1,5 @@
+![logo](https://raw.githubusercontent.com/xingkaixin/assets/main/assets/logo.png)
+
 # Agent Dump
 
 AI 编码助手会话导出工具 - 支持从多种 AI 编码工具的会话数据导出会话为 JSON 格式。
