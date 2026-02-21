@@ -22,7 +22,12 @@ agent-dump/
 │   ├── db.py                 # 数据库连接和查询操作
 │   ├── exporter.py           # JSON 导出逻辑
 │   └── selector.py           # 交互式会话选择
-├── tests/                    # 测试目录（待填充）
+├── tests/                    # 测试目录
+│   ├── conftest.py          # 测试配置和共享 fixtures
+│   ├── test_db.py           # 数据库模块测试
+│   ├── test_exporter.py     # 导出功能测试
+│   ├── test_selector.py     # 选择器测试
+│   └── test_cli.py          # CLI 测试
 ├── data/opencode/            # 本地数据库
 ├── sessions/                 # 导出目录
 ├── pyproject.toml            # 项目配置
@@ -116,6 +121,11 @@ make lint.fmt      # ruff format
 
 # 类型检查（待配置）
 make check         # ty check
+
+# 测试
+uv run pytest              # 运行所有测试
+uv run pytest -v          # 详细输出
+uv run pytest -k "test_name"  # 运行特定测试
 ```
 
 ### 添加依赖

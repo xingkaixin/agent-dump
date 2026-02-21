@@ -10,3 +10,6 @@ lint.fmt:
 check:
 	uv run pyright
 	uv run ty check .
+
+test:
+	uv run pytest -vv
