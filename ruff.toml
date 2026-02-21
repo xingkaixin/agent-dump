@@ -1,0 +1,41 @@
+# ruff.toml
+line-length = 120
+target-version = "py314"
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "tests",
+]
+
+[lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "A",    # builtins
+    "S",    # bandit（安全检查，轻量但非常有用）
+    "C4",   # flake8-comprehensions（提升可读性）
+    "SIM",  # flake8-simplify（简化代码）
+]
+ignore = [
+    "E501",  # line-length
+]
+
+# --- Import Sorting ---
+[lint.isort]
+known-first-party = ["agent-dump"]
+combine-as-imports = true
+force-sort-within-sections = true
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# --- 可选：对特定目录放宽规则 ---
+[lint.per-file-ignores]
+"tests/*" = ["S101"]   # 测试里允许 assert
+"scripts/*" = ["SIM"]  # 脚本可以更随意
