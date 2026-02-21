@@ -13,3 +13,6 @@ check:
 
 test:
 	uv run pytest -vv
+
+logo:
+	rsvg-convert -o assets/logo.png assets/logo.svg
