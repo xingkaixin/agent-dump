@@ -6,6 +6,8 @@ import sys
 from typing import Any
 
 import questionary
+import questionary.constants
+from questionary import Style
 
 
 def is_terminal() -> bool:
@@ -32,10 +34,27 @@ def select_sessions_interactive(sessions: list[dict[str, Any]]) -> list[dict[str
 
         choices.append(questionary.Choice(title=label, value=session, description=description))
 
+    # Override default markers with checkboxes
+    questionary.constants.INDICATOR_SELECTED = "[x]"
+    questionary.constants.INDICATOR_UNSELECTED = "[ ]"
+
     # Show interactive checkbox
+    custom_style = Style([
+        ('qmark', 'fg:#673ab7 bold'),       # token in front of the question
+        ('question', 'bold'),               # question text
+        ('answer', 'fg:#f44336 bold'),      # submitted answer text behind the question
+        ('pointer', 'fg:#673ab7 bold'),     # pointer used in select and checkbox prompts
+        ('highlighted', 'noreverse'),       # PREVENT background highlighting  
+        ('selected', 'noreverse'),          # PREVENT background highlighting 
+        ('separator', 'fg:#cc5454'),        # separator in lists
+        ('instruction', ''),                # user instructions
+        ('text', ''),                       # plain text
+    ])
+
     selected = questionary.checkbox(
         "选择要导出的会话 (空格选择/取消, 回车确认):",
         choices=choices,
+        style=custom_style,
         instruction="\n使用 ↑↓ 移动, 空格 选择/取消, 回车 确认导出",
     ).ask()
 
