@@ -5,8 +5,6 @@ Claude Code agent handler
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
-import os
-from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 
@@ -17,6 +15,7 @@ class ClaudeCodeAgent(BaseAgent):
     def __init__(self):
         super().__init__("claudecode", "Claude Code")
         self.base_path: Path | None = None
+        self._sessions_index_cache: dict[str, dict] = {}
 
     def _find_base_path(self) -> Path | None:
         """Find the Claude Code projects directory"""
@@ -30,6 +29,33 @@ class ClaudeCodeAgent(BaseAgent):
             if path.exists():
                 return path
         return None
+
+    def _load_sessions_index(self, project_dir: Path) -> dict[str, dict]:
+        """Load sessions index for a project"""
+        index_path = project_dir / "sessions-index.json"
+        if not index_path.exists():
+            return {}
+
+        try:
+            with open(index_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            entries = data.get("entries", [])
+            # Build a map of sessionId to entry data
+            return {entry["sessionId"]: entry for entry in entries}
+        except Exception:
+            return {}
+
+    def _get_session_metadata(self, session_id: str, project_dir: Path) -> dict | None:
+        """Get session metadata from sessions-index.json"""
+        cache_key = f"{project_dir.name}:{session_id}"
+        if cache_key not in self._sessions_index_cache:
+            # Load index for this project
+            project_index = self._load_sessions_index(project_dir)
+            # Update cache with all entries from this project
+            for sid, entry in project_index.items():
+                self._sessions_index_cache[f"{project_dir.name}:{sid}"] = entry
+
+        return self._sessions_index_cache.get(cache_key)
 
     def is_available(self) -> bool:
         """Check if Claude Code sessions exist"""
@@ -100,8 +126,13 @@ class ClaudeCodeAgent(BaseAgent):
                 stat = file_path.stat()
                 created_at = datetime.fromtimestamp(stat.st_mtime)
 
-            # Extract title from user messages
-            title = self._extract_title(lines)
+            # Try to get title from sessions-index.json first
+            metadata = self._get_session_metadata(session_id, project_dir)
+            if metadata and metadata.get("summary"):
+                title = metadata["summary"]
+            else:
+                # Fall back to extracting from messages
+                title = self._extract_title(lines)
 
             return Session(
                 id=session_id,

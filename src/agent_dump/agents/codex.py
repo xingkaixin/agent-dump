@@ -5,8 +5,6 @@ Codex agent handler
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
-import os
-from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 
@@ -17,6 +15,7 @@ class CodexAgent(BaseAgent):
     def __init__(self):
         super().__init__("codex", "Codex")
         self.base_path: Path | None = None
+        self._titles_cache: dict[str, str] | None = None
 
     def _find_base_path(self) -> Path | None:
         """Find the Codex sessions directory"""
@@ -30,6 +29,30 @@ class CodexAgent(BaseAgent):
             if path.exists():
                 return path
         return None
+
+    def _load_titles_cache(self) -> dict[str, str]:
+        """Load session titles from global state file"""
+        if self._titles_cache is not None:
+            return self._titles_cache
+
+        titles: dict[str, str] = {}
+        global_state_path = Path.home() / ".codex/.codex-global-state.json"
+
+        if global_state_path.exists():
+            try:
+                with open(global_state_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                titles = data.get("thread-titles", {}).get("titles", {})
+            except Exception:
+                pass
+
+        self._titles_cache = titles
+        return titles
+
+    def _get_session_title(self, session_id: str) -> str | None:
+        """Get session title from global state by session ID"""
+        titles = self._load_titles_cache()
+        return titles.get(session_id)
 
     def is_available(self) -> bool:
         """Check if Codex sessions exist"""
@@ -63,6 +86,23 @@ class CodexAgent(BaseAgent):
 
         return sorted(sessions, key=lambda s: s.created_at, reverse=True)
 
+    def _extract_session_id_from_filename(self, file_path: Path) -> str:
+        """Extract session ID from Codex filename
+
+        Filename format: rollout-{timestamp}-{sessionId}.jsonl
+        Example: rollout-2026-02-03T10-04-47-019c213e-c251-73a3-af66-0ec9d7cb9e29.jsonl
+        """
+        stem = file_path.stem  # rollout-2026-02-03T10-04-47-019c213e-c251-73a3-af66-0ec9d7cb9e29
+        parts = stem.split("-")
+
+        # Session ID is the last 5 parts (UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+        if len(parts) >= 5:
+            # Last 5 parts form the UUID
+            session_id = "-".join(parts[-5:])
+            return session_id
+
+        return stem
+
     def _parse_session_file(self, file_path: Path) -> Session | None:
         """Parse a single Codex session file"""
         try:
@@ -80,8 +120,8 @@ class CodexAgent(BaseAgent):
             timestamp_str = payload.get("timestamp", "")
 
             if not session_id:
-                # Try to extract from filename
-                session_id = file_path.stem
+                # Extract from filename
+                session_id = self._extract_session_id_from_filename(file_path)
 
             # Parse timestamp
             try:
@@ -91,8 +131,10 @@ class CodexAgent(BaseAgent):
                 stat = file_path.stat()
                 created_at = datetime.fromtimestamp(stat.st_mtime)
 
-            # Extract title from messages
-            title = self._extract_title(lines)
+            # Try to get title from global state first, then fall back to extracting from messages
+            title = self._get_session_title(session_id)
+            if not title:
+                title = self._extract_title(lines)
 
             return Session(
                 id=session_id,
