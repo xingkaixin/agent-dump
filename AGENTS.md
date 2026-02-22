@@ -32,7 +32,7 @@ agent-dump/
 ├── sessions/                 # 导出目录
 ├── pyproject.toml            # 项目配置
 ├── ruff.toml                 # 代码风格配置
-└── Makefile                  # 自动化命令
+└── justfile                  # 自动化命令
 ```
 
 ## 核心模块
@@ -115,12 +115,12 @@ export_session(db_path, sessions[0], output_dir)
 
 ```bash
 # 代码检查
-make lint          # ruff check
-make lint.fix      # ruff check --fix
-make lint.fmt      # ruff format
+just lint          # ruff check
+just lint-fix      # ruff check --fix
+just lint-format      # ruff format
 
 # 类型检查（待配置）
-make check         # ty check
+just check         # ty check
 
 # 测试
 uv run pytest              # 运行所有测试
@@ -318,4 +318,4 @@ uv publish
 - `pyproject.toml` - 项目配置和依赖
 - `ruff.toml` - 代码风格配置
 - `README.md` - 用户文档（中文）
-- `Makefile` - 自动化命令
+- `justfile` - 自动化命令

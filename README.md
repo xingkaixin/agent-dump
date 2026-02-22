@@ -7,18 +7,21 @@ AI Coding Assistant Session Export Tool - Supports exporting session data from m
 ## Supported AI Tools
 
 - **OpenCode** - Open source AI coding assistant
-- **Claude Code** - Anthropic's AI coding tool *(Planned)*
-- **Code X** - GitHub Copilot Chat *(Planned)*
+- **Claude Code** - Anthropic's AI coding tool
+- **Codex** - OpenAI's command-line AI coding assistant
+- **Kimi** - Moonshot AI assistant
 - **More Tools** - PRs are welcome to support other AI coding tools
 
 ## Features
 
 - **Interactive Selection**: Provides a friendly command-line interactive interface using questionary
+- **Multi-Agent Support**: Automatically scan session data from multiple AI tools
 - **Batch Export**: Supports exporting all sessions from the last N days
 - **Specific Export**: Export specific sessions by session ID
 - **Session List**: Only list sessions without exporting them
 - **Statistics**: Exports include statistics such as token usage and cost
 - **Message Details**: Fully retains session messages, tool calls, and other details
+- **Smart Title Extraction**: Automatically extract session titles from agent metadata
 
 ## Installation
 
@@ -95,22 +98,25 @@ uv run agent-dump --export ses_abc,ses_xyz    # Export sessions with specific ID
 ```text
 .
 ├── src/
-│   └── agent_dump/      # Main package directory
-│       ├── __init__.py  # Package initialization
-│       ├── __main__.py  # python -m agent_dump entry point
-│       ├── cli.py       # Command-line interface
-│       ├── db.py        # Database operations
-│       ├── exporter.py  # Export logic
-│       └── selector.py  # Interactive selection
-├── tests/               # Test directory
-├── pyproject.toml       # Project configuration
-├── Makefile            # Automated commands
-├── ruff.toml           # Code style configuration
-├── data/               # Database directory
-│   └── opencode/
-│       └── opencode.db
-└── sessions/           # Export directory
-    └── {agent-name}/   # Exported files categorized by tool
+│   └── agent_dump/          # Main package directory
+│       ├── __init__.py      # Package initialization
+│       ├── __main__.py      # python -m agent_dump entry point
+│       ├── cli.py           # Command-line interface
+│       ├── scanner.py       # Agent scanner
+│       ├── selector.py      # Interactive selection
+│       └── agents/          # Agent modules directory
+│           ├── __init__.py  # Agent exports
+│           ├── base.py      # BaseAgent abstract class
+│           ├── opencode.py  # OpenCode Agent
+│           ├── claudecode.py # Claude Code Agent
+│           ├── codex.py     # Codex Agent
+│           └── kimi.py      # Kimi Agent
+├── tests/                   # Test directory
+├── pyproject.toml           # Project configuration
+├── justfile                 # Automated commands
+├── ruff.toml                # Code style configuration
+└── sessions/                # Export directory
+    └── {agent-name}/        # Exported files categorized by tool
         └── ses_xxx.json
 ```
 
@@ -118,25 +124,20 @@ uv run agent-dump --export ses_abc,ses_xyz    # Export sessions with specific ID
 
 ```bash
 # Lint code
-make lint
+just lint
 
 # Auto-fix linting issues
-make lint.fix
+just lint-fix
 
 # Format code
-make lint.fmt
+just lint-format
 
 # Type checking
-make check
+just check
+
+# Testing
+just test
 ```
-
-## Dependencies
-
-- Python >= 3.14
-- prompt-toolkit >= 3.0.0
-- questionary >= 2.1.1
-- ruff >= 0.15.2 (Development)
-- ty >= 0.0.18 (Development)
 
 ## License
 
