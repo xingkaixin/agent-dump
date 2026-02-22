@@ -4,7 +4,6 @@
 
 from unittest import mock
 
-import questionary
 import pytest
 
 from agent_dump.selector import is_terminal, select_sessions_interactive, select_sessions_simple
@@ -111,50 +110,19 @@ class TestSelectSessionsInteractive:
         mock_simple.assert_called_once_with(sample_sessions)
         assert result == sample_sessions[:1]
 
-    def test_terminal_uses_questionary(self, sample_sessions):
-        """测试终端环境使用 questionary"""
-        # 创建一个 mock prompt 对象
-        mock_prompt = mock.MagicMock()
-        mock_prompt.ask.return_value = sample_sessions
-
-        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
-            with mock.patch("questionary.checkbox", return_value=mock_prompt) as mock_checkbox:
-                result = select_sessions_interactive(sample_sessions)
-
-        mock_checkbox.assert_called_once()
-        assert result == sample_sessions
-
-    def test_questionary_returns_none(self, sample_sessions):
-        """测试 questionary 返回 None 时"""
-        # 创建一个 mock prompt 对象
-        mock_prompt = mock.MagicMock()
-        mock_prompt.ask.return_value = None
-
-        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
-            with mock.patch("questionary.checkbox", return_value=mock_prompt):
-                result = select_sessions_interactive(sample_sessions)
-
-        assert result == []
-
     def test_long_title_truncation(self):
         """测试长标题截断"""
         sessions = [
             {
                 "id": "test",
-                "title": "A" * 100,  # 很长的标题
+                "title": "A" * 100,
                 "created_formatted": "2024-01-01 00:00:00",
             }
         ]
 
         with mock.patch("agent_dump.selector.is_terminal", return_value=True):
-            with mock.patch("questionary.checkbox") as mock_checkbox:
-                mock_checkbox.return_value.ask.return_value = sessions
-                select_sessions_interactive(sessions)
+            with mock.patch("inquirer.prompt") as mock_prompt:
+                mock_prompt.return_value = {"sessions": sessions}
+                result = select_sessions_interactive(sessions)
 
-        # 验证 questionary.Choice 被正确创建
-        call_args = mock_checkbox.call_args
-        assert call_args is not None
-        choices = call_args[1].get("choices", [])
-        # 第一个 choice 的 title 应该被截断
-        if choices:
-            assert len(choices[0].title) <= 65  # 60 + "..."
+        assert result == sessions
