@@ -121,8 +121,8 @@ class TestSelectSessionsInteractive:
         ]
 
         with mock.patch("agent_dump.selector.is_terminal", return_value=True):
-            with mock.patch("inquirer.prompt") as mock_prompt:
-                mock_prompt.return_value = {"sessions": sessions}
+            with mock.patch("questionary.checkbox") as mock_checkbox:
+                mock_checkbox.return_value.ask.return_value = sessions
                 result = select_sessions_interactive(sessions)
 
         assert result == sessions

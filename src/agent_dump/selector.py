@@ -5,7 +5,8 @@ Session selection utilities
 import sys
 from typing import Any
 
-import inquirer
+import questionary
+from questionary import Style
 
 
 def is_terminal() -> bool:
@@ -24,26 +25,42 @@ def select_sessions_interactive(sessions: list[dict[str, Any]]) -> list[dict[str
 
     choices = []
     for session in sessions:
-        description = f"{session['created_formatted']} | {session['id']}"
-        choices.append((description, session))
+        title = session["title"][:60] + ("..." if len(session["title"]) > 60 else "")
+        time_str = session["created_formatted"]
+        label = f"{title} ({time_str})"
+        choices.append(questionary.Choice(title=label, value=session))
 
-    questions = [
-        inquirer.Checkbox(
-            "sessions",
-            message="选择要导出的会话:",
-            choices=choices,
-            default=[],
-        )
-    ]
+    custom_style = Style(
+        [
+            ("qmark", "fg:#673ab7 bold"),
+            ("question", "bold"),
+            ("answer", "fg:#f44336 bold"),
+            ("pointer", "fg:#673ab7 bold"),
+            ("highlighted", "noreverse"),
+            ("selected", "noreverse"),
+            ("separator", "fg:#cc5454"),
+            ("instruction", ""),
+            ("text", ""),
+        ]
+    )
+
+    q = questionary.checkbox(
+        "选择要导出的会话:",
+        choices=choices,
+        style=custom_style,
+        instruction="\n↑↓ 移动  |  空格 选择/取消  |  回车 确认  |  q 退出",
+    )
+
+    q.application.key_bindings.add("q")(lambda event: event.app.exit(result=None))
+    q.application.key_bindings.add("Q")(lambda event: event.app.exit(result=None))
 
     try:
-        answers = inquirer.prompt(questions)
-        selected = answers.get("sessions", []) if answers else []
+        selected = q.ask()
     except KeyboardInterrupt:
         print("\n⚠️  用户取消操作，退出。")
         return []
 
-    return selected
+    return selected or []
 
 
 def select_sessions_simple(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:

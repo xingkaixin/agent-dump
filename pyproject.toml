@@ -17,7 +17,6 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "inquirer>=3.4.1",
     "prompt-toolkit>=3.0.0",
     "questionary>=2.1.1",
 ]
