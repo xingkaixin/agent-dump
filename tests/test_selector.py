@@ -176,6 +176,64 @@ class TestSelectSessionsSimple:
         assert result == []
 
 
+class TestSelectAgentInteractive:
+    """测试 select_agent_interactive 函数"""
+
+    def test_empty_agents(self, capsys):
+        """测试空 agent 列表"""
+        result = select_agent_interactive([])
+        assert result is None
+        captured = capsys.readouterr()
+        assert "没有可用的 Agent Tools" in captured.out
+
+    def test_non_terminal_uses_simple_mode(self, mock_agent):
+        """测试非终端环境使用简单模式"""
+        agents = [mock_agent]
+
+        with mock.patch("agent_dump.selector.is_terminal", return_value=False):
+            with mock.patch("agent_dump.selector.select_agent_simple") as mock_simple:
+                mock_simple.return_value = mock_agent
+                result = select_agent_interactive(agents)
+
+        mock_simple.assert_called_once_with(agents)
+        assert result == mock_agent
+
+    def test_terminal_interactive_selection(self, mock_agent):
+        """测试终端环境交互式选择"""
+        agents = [mock_agent]
+
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.select") as mock_select:
+                mock_select.return_value.ask.return_value = mock_agent
+                result = select_agent_interactive(agents)
+
+        assert result == mock_agent
+
+    def test_terminal_keyboard_interrupt(self, mock_agent, capsys):
+        """测试终端环境键盘中断"""
+        agents = [mock_agent]
+
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.select") as mock_select:
+                mock_select.return_value.ask.side_effect = KeyboardInterrupt()
+                result = select_agent_interactive(agents)
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert "用户取消操作" in captured.out
+
+    def test_q_key_exit(self, mock_agent):
+        """测试按 q 键退出"""
+        agents = [mock_agent]
+
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.select") as mock_select:
+                mock_select.return_value.ask.return_value = None
+                result = select_agent_interactive(agents)
+
+        assert result is None
+
+
 class TestSelectSessionsInteractive:
     """测试 select_sessions_interactive 函数"""
 
@@ -196,6 +254,35 @@ class TestSelectSessionsInteractive:
         mock_simple.assert_called_once_with(sample_sessions, mock_agent)
         assert result == sample_sessions[:1]
 
+    def test_terminal_interactive_selection(self, mock_agent, sample_sessions):
+        """测试终端环境交互式选择"""
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.checkbox") as mock_checkbox:
+                mock_checkbox.return_value.ask.return_value = sample_sessions
+                result = select_sessions_interactive(sample_sessions, mock_agent)
+
+        assert result == sample_sessions
+
+    def test_terminal_keyboard_interrupt(self, mock_agent, sample_sessions, capsys):
+        """测试终端环境键盘中断"""
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.checkbox") as mock_checkbox:
+                mock_checkbox.return_value.ask.side_effect = KeyboardInterrupt()
+                result = select_sessions_interactive(sample_sessions, mock_agent)
+
+        assert result == []
+        captured = capsys.readouterr()
+        assert "用户取消操作" in captured.out
+
+    def test_q_key_exit_returns_empty_list(self, mock_agent, sample_sessions):
+        """测试按 q 键退出返回空列表"""
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.checkbox") as mock_checkbox:
+                mock_checkbox.return_value.ask.return_value = None
+                result = select_sessions_interactive(sample_sessions, mock_agent)
+
+        assert result == []
+
     def test_long_title_truncation(self, mock_agent):
         """测试长标题截断"""
         sessions = [
@@ -215,3 +302,36 @@ class TestSelectSessionsInteractive:
                 result = select_sessions_interactive(sessions, mock_agent)
 
         assert result == sessions
+
+
+class TestSelectAgentInteractiveEdgeCases:
+    """测试 select_agent_interactive 边界情况"""
+
+    def test_agent_scan_count_display(self, mock_agent):
+        """测试显示 agent 的会话数量"""
+        mock_agent.scan.return_value = [mock.MagicMock(), mock.MagicMock(), mock.MagicMock()]
+        agents = [mock_agent]
+
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.select") as mock_select:
+                with mock.patch("questionary.Choice") as mock_choice:
+                    mock_choice.return_value = mock.MagicMock()
+                    mock_select.return_value.ask.return_value = mock_agent
+                    select_agent_interactive(agents)
+
+        # Verify Choice was called with correct label format
+        mock_choice.assert_called_once()
+        call_args = mock_choice.call_args
+        assert "3 个会话" in call_args.kwargs.get("title", "") or any("3 个会话" in str(arg) for arg in call_args.args)
+
+    def test_session_display_format(self, mock_agent, sample_sessions):
+        """测试会话显示格式"""
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.checkbox") as mock_checkbox:
+                with mock.patch("questionary.Choice") as mock_choice:
+                    mock_choice.return_value = mock.MagicMock()
+                    mock_checkbox.return_value.ask.return_value = sample_sessions
+                    select_sessions_interactive(sample_sessions, mock_agent)
+
+        # Verify Choice was created for each session
+        assert mock_choice.call_count == len(sample_sessions)

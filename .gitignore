@@ -23,6 +23,9 @@ wheels/
 *.egg
 .pytest_cache
 
+# pytest
+.coverage
+
 # pyright
 .pyright/
 
