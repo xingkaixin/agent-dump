@@ -2,9 +2,9 @@
 Codex agent handler
 """
 
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 import json
+from pathlib import Path
 
 from agent_dump.agents.base import BaseAgent, Session
 
@@ -40,11 +40,11 @@ class CodexAgent(BaseAgent):
 
         if global_state_path.exists():
             try:
-                with open(global_state_path, "r", encoding="utf-8") as f:
+                with open(global_state_path, encoding="utf-8") as f:
                     data = json.load(f)
                 titles = data.get("thread-titles", {}).get("titles", {})
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"警告: 加载标题缓存失败: {e}")
 
         self._titles_cache = titles
         return titles
@@ -73,7 +73,7 @@ class CodexAgent(BaseAgent):
         if not self.base_path:
             return []
 
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_time = datetime.now(UTC) - timedelta(days=days)
         sessions = []
 
         for jsonl_file in self.base_path.rglob("*.jsonl"):
@@ -81,7 +81,8 @@ class CodexAgent(BaseAgent):
                 session = self._parse_session_file(jsonl_file)
                 if session and session.created_at >= cutoff_time:
                     sessions.append(session)
-            except Exception:
+            except Exception as e:
+                print(f"警告: 解析会话文件失败 {jsonl_file}: {e}")
                 continue
 
         return sorted(sessions, key=lambda s: s.created_at, reverse=True)
@@ -106,7 +107,7 @@ class CodexAgent(BaseAgent):
     def _parse_session_file(self, file_path: Path) -> Session | None:
         """Parse a single Codex session file"""
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             if not lines:
@@ -129,7 +130,7 @@ class CodexAgent(BaseAgent):
             except Exception:
                 # Try to get from file modification time
                 stat = file_path.stat()
-                created_at = datetime.fromtimestamp(stat.st_mtime)
+                created_at = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
 
             # Try to get title from global state first, then fall back to extracting from messages
             title = self._get_session_title(session_id)
@@ -166,8 +167,8 @@ class CodexAgent(BaseAgent):
                         # Clean up the text
                         text = text.strip().replace("\n", " ")[:100]
                         return text
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"警告: 提取标题失败: {e}")
 
         return "Untitled Session"
 
@@ -185,7 +186,7 @@ class CodexAgent(BaseAgent):
             "message_count": 0,
         }
 
-        with open(session.source_path, "r", encoding="utf-8") as f:
+        with open(session.source_path, encoding="utf-8") as f:
             for line in f:
                 try:
                     data = json.loads(line)
@@ -200,7 +201,8 @@ class CodexAgent(BaseAgent):
                                 token_usage = info.get("total_token_usage", {})
                                 stats["total_input_tokens"] += token_usage.get("input_tokens", 0)
                                 stats["total_output_tokens"] += token_usage.get("output_tokens", 0)
-                except Exception:
+                except Exception as e:
+                    print(f"警告: 转换消息格式失败: {e}")
                     continue
 
         session_data = {

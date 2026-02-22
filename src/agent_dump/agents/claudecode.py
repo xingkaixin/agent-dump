@@ -2,9 +2,9 @@
 Claude Code agent handler
 """
 
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 import json
+from pathlib import Path
 
 from agent_dump.agents.base import BaseAgent, Session
 
@@ -37,7 +37,7 @@ class ClaudeCodeAgent(BaseAgent):
             return {}
 
         try:
-            with open(index_path, "r", encoding="utf-8") as f:
+            with open(index_path, encoding="utf-8") as f:
                 data = json.load(f)
             entries = data.get("entries", [])
             # Build a map of sessionId to entry data
@@ -81,7 +81,7 @@ class ClaudeCodeAgent(BaseAgent):
         if not self.base_path:
             return []
 
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_time = datetime.now(UTC) - timedelta(days=days)
         sessions = []
 
         # Iterate through project directories
@@ -98,7 +98,8 @@ class ClaudeCodeAgent(BaseAgent):
                     session = self._parse_session_file(jsonl_file, project_dir)
                     if session and session.created_at >= cutoff_time:
                         sessions.append(session)
-                except Exception:
+                except Exception as e:
+                    print(f"警告: 解析会话文件失败 {jsonl_file}: {e}")
                     continue
 
         return sorted(sessions, key=lambda s: s.created_at, reverse=True)
@@ -106,7 +107,7 @@ class ClaudeCodeAgent(BaseAgent):
     def _parse_session_file(self, file_path: Path, project_dir: Path) -> Session | None:
         """Parse a single Claude Code session file"""
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             if not lines:
@@ -124,15 +125,11 @@ class ClaudeCodeAgent(BaseAgent):
             except Exception:
                 # Use file modification time
                 stat = file_path.stat()
-                created_at = datetime.fromtimestamp(stat.st_mtime)
+                created_at = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
 
             # Try to get title from sessions-index.json first
             metadata = self._get_session_metadata(session_id, project_dir)
-            if metadata and metadata.get("summary"):
-                title = metadata["summary"]
-            else:
-                # Fall back to extracting from messages
-                title = self._extract_title(lines)
+            title = metadata["summary"] if metadata and metadata.get("summary") else self._extract_title(lines)
 
             return Session(
                 id=session_id,
@@ -159,11 +156,21 @@ class ClaudeCodeAgent(BaseAgent):
                 if msg.get("role") == "user":
                     content = msg.get("content", "")
                     if content:
+                        # Handle both string and list content
+                        if isinstance(content, list):
+                            # Extract text from content list
+                            texts = []
+                            for item in content:
+                                if isinstance(item, dict):
+                                    texts.append(item.get("text", ""))
+                                elif isinstance(item, str):
+                                    texts.append(item)
+                            content = " ".join(texts)
                         # Clean up and truncate
                         content = content.strip().replace("\n", " ")[:100]
                         return content
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"警告: 提取标题失败: {e}")
 
         return "Untitled Session"
 
@@ -181,7 +188,7 @@ class ClaudeCodeAgent(BaseAgent):
             "message_count": 0,
         }
 
-        with open(session.source_path, "r", encoding="utf-8") as f:
+        with open(session.source_path, encoding="utf-8") as f:
             for line in f:
                 try:
                     data = json.loads(line)
@@ -189,7 +196,8 @@ class ClaudeCodeAgent(BaseAgent):
                     if msg:
                         messages.append(msg)
                         stats["message_count"] += 1
-                except Exception:
+                except Exception as e:
+                    print(f"警告: 转换消息格式失败: {e}")
                     continue
 
         session_data = {

@@ -5,9 +5,9 @@ Command-line interface for agent-dump
 import argparse
 from pathlib import Path
 
+from agent_dump.agents.base import BaseAgent
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
-from agent_dump.agents.base import BaseAgent
 
 
 def export_sessions(agent: BaseAgent, sessions: list, output_base_dir: Path) -> list[Path]:

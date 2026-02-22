@@ -3,10 +3,8 @@ Kimi agent handler
 """
 
 from datetime import datetime, timedelta
-from pathlib import Path
 import json
-import os
-from typing import Any
+from pathlib import Path
 
 from agent_dump.agents.base import BaseAgent, Session
 
@@ -59,7 +57,8 @@ class KimiAgent(BaseAgent):
                 session = self._parse_session(metadata_file)
                 if session and session.created_at >= cutoff_time:
                     sessions.append(session)
-            except Exception:
+            except Exception as e:
+                print(f"警告: 解析会话文件失败 {metadata_file}: {e}")
                 continue
 
         return sorted(sessions, key=lambda s: s.created_at, reverse=True)
@@ -67,7 +66,7 @@ class KimiAgent(BaseAgent):
     def _parse_session(self, metadata_path: Path) -> Session | None:
         """Parse a Kimi session from metadata file"""
         try:
-            with open(metadata_path, "r", encoding="utf-8") as f:
+            with open(metadata_path, encoding="utf-8") as f:
                 metadata = json.load(f)
 
             session_dir = metadata_path.parent
@@ -110,7 +109,7 @@ class KimiAgent(BaseAgent):
             "message_count": 0,
         }
 
-        with open(wire_path, "r", encoding="utf-8") as f:
+        with open(wire_path, encoding="utf-8") as f:
             for line in f:
                 try:
                     data = json.loads(line)
@@ -123,7 +122,8 @@ class KimiAgent(BaseAgent):
                         if token_usage:
                             stats["total_input_tokens"] += token_usage.get("input_tokens", 0)
                             stats["total_output_tokens"] += token_usage.get("output_tokens", 0)
-                except Exception:
+                except Exception as e:
+                    print(f"警告: 转换消息格式失败: {e}")
                     continue
 
         session_data = {

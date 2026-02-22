@@ -3,11 +3,9 @@ OpenCode agent handler
 """
 
 from datetime import datetime, timedelta
-from pathlib import Path
 import json
-import os
+from pathlib import Path
 import sqlite3
-from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 

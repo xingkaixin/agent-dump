@@ -3,7 +3,6 @@ Session selection utilities
 """
 
 import sys
-from typing import Any
 
 import questionary
 from questionary import Style
@@ -53,8 +52,9 @@ def select_agent_interactive(agents: list[BaseAgent]) -> BaseAgent | None:
         instruction="\n↑↓ 移动  |  回车 选择  |  q 退出",
     )
 
-    q.application.key_bindings.add("q")(lambda event: event.app.exit(result=None))
-    q.application.key_bindings.add("Q")(lambda event: event.app.exit(result=None))
+    if q.application.key_bindings:
+        q.application.key_bindings.add("q")(lambda event: event.app.exit(result=None))  # type: ignore
+        q.application.key_bindings.add("Q")(lambda event: event.app.exit(result=None))  # type: ignore
 
     try:
         selected = q.ask()
@@ -128,8 +128,9 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
         instruction="\n↑↓ 移动  |  空格 选择/取消  |  回车 确认  |  q 退出",
     )
 
-    q.application.key_bindings.add("q")(lambda event: event.app.exit(result=None))
-    q.application.key_bindings.add("Q")(lambda event: event.app.exit(result=None))
+    if q.application.key_bindings:
+        q.application.key_bindings.add("q")(lambda event: event.app.exit(result=None))  # type: ignore
+        q.application.key_bindings.add("Q")(lambda event: event.app.exit(result=None))  # type: ignore
 
     try:
         selected = q.ask()
