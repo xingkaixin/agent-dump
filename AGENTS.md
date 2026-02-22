@@ -222,6 +222,80 @@ CREATE TABLE part (
 );
 ```
 
+## 交互式 CLI 开发原则
+
+本项目使用 `questionary` 库实现交互式命令行界面。开发时需遵循以下原则：
+
+### 1. 库的选择
+- **使用 `questionary`**：基于 `prompt_toolkit`，提供良好的交互体验
+- **避免使用 `inquirer`**：虽然 API 简单，但无法灵活自定义键绑定
+
+### 2. 基本使用模式
+
+```python
+import questionary
+from questionary import Style
+
+# 创建选项
+choices = []
+for session in sessions:
+    title = session["title"][:60] + ("..." if len(session["title"]) > 60 else "")
+    time_str = session["created_formatted"]
+    label = f"{title} ({time_str})"
+    choices.append(questionary.Choice(title=label, value=session))
+
+# 创建问题
+q = questionary.checkbox(
+    "选择要导出的会话:",
+    choices=choices,
+    style=custom_style,
+    instruction="\n↑↓ 移动  |  空格 选择/取消  |  回车 确认  |  q 退出",
+)
+
+# 添加自定义键绑定（重要）
+q.application.key_bindings.add("q")(lambda event: event.app.exit(result=None))
+q.application.key_bindings.add("Q")(lambda event: event.app.exit(result=None))
+
+# 获取结果
+selected = q.ask()
+```
+
+### 3. 关键注意事项
+
+- **属性访问**：Question 对象的 `app` 属性实际是 `application`
+  ```python
+  # 正确
+  q.application.key_bindings.add(...)
+  # 错误
+  q.app.key_bindings.add(...)  # AttributeError
+  ```
+
+- **回调函数签名**：键绑定回调接收 `event` 参数
+  ```python
+  lambda event: event.app.exit(result=None)
+  ```
+
+- **退出机制**：
+  - `Ctrl+C`：内置支持，抛出 `KeyboardInterrupt`
+  - 自定义键：通过 `event.app.exit(result=None)` 退出
+  - `result=None` 表示用户取消，返回空列表
+
+### 4. 测试策略
+
+```python
+# 测试交互式选择需要 mock questionary.checkbox
+with mock.patch("questionary.checkbox") as mock_checkbox:
+    mock_checkbox.return_value.ask.return_value = sessions
+    result = select_sessions_interactive(sessions)
+```
+
+### 5. 用户体验
+
+- **显示标题**：优先显示会话标题，附加时间信息
+- **操作提示**：在 `instruction` 中清晰说明所有可用操作
+- **退出选项**：提供多种退出方式（`q` 键、`Ctrl+C`）
+- **非终端回退**：检测 `is_terminal()`，非终端环境使用简单输入模式
+
 ## 注意事项
 
 1. **数据库路径**: `find_db_path()` 会尝试多个路径，新工具需要添加对应路径
