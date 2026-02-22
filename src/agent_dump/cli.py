@@ -5,9 +5,27 @@ Command-line interface for agent-dump
 import argparse
 from pathlib import Path
 
-from agent_dump.db import find_db_path, get_recent_sessions
-from agent_dump.exporter import export_sessions
-from agent_dump.selector import select_sessions_interactive
+from agent_dump.scanner import AgentScanner
+from agent_dump.selector import select_agent_interactive, select_sessions_interactive
+from agent_dump.agents.base import BaseAgent
+
+
+def export_sessions(agent: BaseAgent, sessions: list, output_base_dir: Path) -> list[Path]:
+    """Export multiple sessions"""
+    output_dir = output_base_dir / agent.name
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"📤 导出 {agent.display_name} 会话...")
+    exported = []
+    for session in sessions:
+        try:
+            output_path = agent.export_session(session, output_dir)
+            exported.append(output_path)
+            print(f"  ✓ {session.title[:50]}... → {output_path.name}")
+        except Exception as e:
+            print(f"  ✗ {session.title[:50]}... → 错误: {e}")
+
+    return exported
 
 
 def main():
@@ -15,76 +33,84 @@ def main():
     parser = argparse.ArgumentParser(description="Export agent sessions to JSON")
     parser.add_argument("--days", type=int, default=7, help="Number of days to look back (default: 7)")
     parser.add_argument(
-        "--agent",
-        type=str,
-        default="opencode",
-        help="Agent tool name (default: opencode)",
-    )
-    parser.add_argument(
         "--output",
         type=str,
         default="./sessions",
         help="Output base directory (default: ./sessions)",
     )
     parser.add_argument(
-        "--export",
-        type=str,
-        metavar="IDS",
-        help="Export specific session IDs (comma-separated)",
+        "--list",
+        action="store_true",
+        help="List all available sessions without exporting",
     )
-    parser.add_argument("--list", action="store_true", help="List sessions without exporting")
     args = parser.parse_args()
 
-    print(f"🔍 {args.agent.title()} Session Exporter\n")
+    print("🚀 Agent Session Exporter\n")
+    print("=" * 60 + "\n")
 
-    # Find database
-    try:
-        db_path = find_db_path()
-        print(f"📁 Database: {db_path}\n")
-    except FileNotFoundError as e:
-        print(f"❌ Error: {e}")
+    # Scan for available agents
+    scanner = AgentScanner()
+    available_sessions = scanner.scan()
+
+    if not available_sessions:
+        print("❌ 未找到任何可用的 Agent Tools 会话。")
+        print("\n支持的 Agent Tools:")
+        print("  - OpenCode: ~/.local/share/opencode/opencode.db")
+        print("  - Codex: ~/.codex/sessions/{YYYY}/{MM}/{DD}/")
+        print("  - Kimi: ~/.kimi/sessions/{project_id}/{session_id}/")
+        print("  - Claude Code: ~/.claude/projects/{project_id}/")
         return
 
-    # Get recent sessions
-    print(f"📊 Loading sessions from the last {args.days} days...")
-    sessions = get_recent_sessions(db_path, days=args.days)
-    print(f"✓ Found {len(sessions)} sessions\n")
-
-    if not sessions:
-        print("No sessions found.")
-        return
+    # Get available agents
+    available_agents = scanner.get_available_agents()
 
     # List mode
     if args.list:
-        print("Available sessions:")
-        print("-" * 80)
-        for i, session in enumerate(sessions, 1):
-            print(f"{i}. {session['title']}")
-            print(f"   Time: {session['created_formatted']}")
-            print(f"   ID: {session['id']}")
-            print()
+        print("可用的 Agent Tools 和会话:")
+        print("-" * 60)
+        for agent in available_agents:
+            sessions = available_sessions.get(agent.name, [])
+            print(f"\n📁 {agent.display_name} ({len(sessions)} 个会话)")
+            for session in sessions[:10]:  # Show first 10
+                print(f"   • {agent.get_formatted_title(session)}")
+            if len(sessions) > 10:
+                print(f"   ... 还有 {len(sessions) - 10} 个会话")
+        print()
         return
 
-    # Export specific IDs
-    if args.export:
-        target_ids = [sid.strip() for sid in args.export.split(",")]
-        selected = [s for s in sessions if s["id"] in target_ids]
-        if not selected:
-            print(f"❌ No sessions found with IDs: {args.export}")
-            return
-        print(f"✓ Selected {len(selected)} session(s) by ID\n")
+    # Select agent
+    if len(available_agents) == 1:
+        selected_agent = available_agents[0]
+        print(f"自动选择: {selected_agent.display_name}\n")
     else:
-        # Interactive selection
-        selected = select_sessions_interactive(sessions)
-        if not selected:
-            print("\n⚠️  No sessions selected. Exiting.")
+        selected_agent = select_agent_interactive(available_agents)
+        if not selected_agent:
+            print("\n⚠️  未选择 Agent Tool，退出。")
             return
-        print(f"\n✓ Selected {len(selected)} session(s)\n")
+        print(f"\n已选择: {selected_agent.display_name}\n")
+
+    # Get sessions for the selected agent
+    sessions = selected_agent.get_sessions(days=args.days)
+
+    if not sessions:
+        print(f"⚠️  未找到最近 {args.days} 天内的会话。")
+        return
+
+    print(f"📊 找到 {len(sessions)} 个会话 (最近 {args.days} 天)\n")
+
+    # Select sessions
+    selected_sessions = select_sessions_interactive(sessions, selected_agent)
+    if not selected_sessions:
+        print("\n⚠️  未选择会话，退出。")
+        return
+
+    print(f"\n✓ 选择了 {len(selected_sessions)} 个会话\n")
 
     # Export
-    output_dir = Path(args.output) / args.agent
-    exported = export_sessions(db_path, selected, output_dir)
-    print(f"\n✅ Successfully exported {len(exported)} session(s) to {output_dir}/")
+    output_base_dir = Path(args.output)
+    exported = export_sessions(selected_agent, selected_sessions, output_base_dir)
+
+    print(f"\n✅ 成功导出 {len(exported)} 个会话到 {output_base_dir}/{selected_agent.name}/")
 
 
 if __name__ == "__main__":
