@@ -78,7 +78,7 @@ class TestSelectAgentSimple:
 
     def test_select_single_agent(self, mock_agent):
         """测试选择单个 agent"""
-        mock_agent.scan.return_value = ["session1"]
+        mock_agent.get_sessions.return_value = ["session1"]
         agents = [mock_agent]
 
         with mock.patch("builtins.input", return_value="1"):
@@ -88,7 +88,7 @@ class TestSelectAgentSimple:
 
     def test_select_invalid_index(self, mock_agent, capsys):
         """测试选择无效索引"""
-        mock_agent.scan.return_value = ["session1"]
+        mock_agent.get_sessions.return_value = ["session1"]
         agents = [mock_agent]
 
         with mock.patch("builtins.input", return_value="5"):
@@ -98,7 +98,7 @@ class TestSelectAgentSimple:
 
     def test_select_invalid_input(self, mock_agent, capsys):
         """测试无效输入"""
-        mock_agent.scan.return_value = ["session1"]
+        mock_agent.get_sessions.return_value = ["session1"]
         agents = [mock_agent]
 
         with mock.patch("builtins.input", return_value="invalid"):
@@ -108,7 +108,7 @@ class TestSelectAgentSimple:
 
     def test_select_eof_error(self, mock_agent, capsys):
         """测试 EOF 错误处理"""
-        mock_agent.scan.return_value = ["session1"]
+        mock_agent.get_sessions.return_value = ["session1"]
         agents = [mock_agent]
 
         with mock.patch("builtins.input", side_effect=EOFError()):
@@ -195,7 +195,7 @@ class TestSelectAgentInteractive:
                 mock_simple.return_value = mock_agent
                 result = select_agent_interactive(agents)
 
-        mock_simple.assert_called_once_with(agents)
+        mock_simple.assert_called_once_with(agents, 7)
         assert result == mock_agent
 
     def test_terminal_interactive_selection(self, mock_agent):
@@ -309,7 +309,7 @@ class TestSelectAgentInteractiveEdgeCases:
 
     def test_agent_scan_count_display(self, mock_agent):
         """测试显示 agent 的会话数量"""
-        mock_agent.scan.return_value = [mock.MagicMock(), mock.MagicMock(), mock.MagicMock()]
+        mock_agent.get_sessions.return_value = [mock.MagicMock(), mock.MagicMock(), mock.MagicMock()]
         agents = [mock_agent]
 
         with mock.patch("agent_dump.selector.is_terminal", return_value=True):

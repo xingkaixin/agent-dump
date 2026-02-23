@@ -15,10 +15,10 @@ def format_relative_time(time_value: datetime | float) -> str:
     """Format time as relative description"""
     if isinstance(time_value, (int, float)):
         time_value = datetime.fromtimestamp(time_value)
-    
+
     now = datetime.now()
     delta = now - time_value
-    
+
     if delta.days == 0:
         if delta.seconds < 3600:
             minutes = delta.seconds // 60
@@ -45,29 +45,29 @@ def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
         "本月": [],
         "更早": [],
     }
-    
+
     now = datetime.now()
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = today - timedelta(days=1)
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
-    
+
     for session in sessions:
         # Handle different time formats
-        if hasattr(session, 'created_at'):
+        if hasattr(session, "created_at"):
             session_time = session.created_at
-        elif hasattr(session, 'time_created'):
+        elif hasattr(session, "time_created"):
             session_time = session.time_created
         else:
             session_time = now
-            
+
         if isinstance(session_time, (int, float)):
             # Assume milliseconds if large number
             if session_time > 1e10:
                 session_time = datetime.fromtimestamp(session_time / 1000)
             else:
                 session_time = datetime.fromtimestamp(session_time)
-        
+
         if session_time >= today:
             groups["今天"].append(session)
         elif session_time >= yesterday:
@@ -78,51 +78,48 @@ def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
             groups["本月"].append(session)
         else:
             groups["更早"].append(session)
-    
+
     # Remove empty groups
     return {k: v for k, v in groups.items() if v}
 
 
 def display_sessions_list(
-    agent: BaseAgent, 
-    sessions: list[Session], 
-    page_size: int = 20,
-    show_pagination: bool = True
+    agent: BaseAgent, sessions: list[Session], page_size: int = 20, show_pagination: bool = True
 ) -> None:
     """Display sessions with pagination support"""
     total = len(sessions)
-    
+
     if total == 0:
-        print(f"   (无会话)")
+        print("   (无会话)")
         return
-    
+
     # Show all sessions with pagination
     current_page = 0
     total_pages = (total + page_size - 1) // page_size
-    
+
     while True:
         start_idx = current_page * page_size
         end_idx = min(start_idx + page_size, total)
-        
+
         # Display current page
         for i in range(start_idx, end_idx):
             session = sessions[i]
             title = agent.get_formatted_title(session)
             print(f"   • {title}")
-        
+
         # Show pagination info
         if show_pagination and total_pages > 1:
             print(f"\n   第 {current_page + 1}/{total_pages} 页 (共 {total} 个会话)")
-            
+
             if current_page < total_pages - 1:
                 print("   按 Enter 查看更多，或输入 'q' 退出")
                 try:
                     user_input = input("> ").strip().lower()
-                    if user_input == 'q':
+                    if user_input == "q":
                         break
                     current_page += 1
                     print()
-                except (EOFError, KeyboardInterrupt):
+                except EOFError, KeyboardInterrupt:
                     print()
                     break
             else:
@@ -209,19 +206,19 @@ def main():
     if args.list:
         print(f"📋 列出最近 {args.days} 天的会话:\n")
         print("-" * 60)
-        
+
         for agent in available_agents:
             # Get filtered sessions with days parameter
             sessions = agent.get_sessions(days=args.days)
             print(f"\n📁 {agent.display_name} ({len(sessions)} 个会话)")
-            
+
             if sessions:
                 display_sessions_list(agent, sessions, page_size=args.page_size)
             else:
                 print(f"   (最近 {args.days} 天内无会话)")
-        
+
         print("\n" + "=" * 60)
-        print(f"提示: 使用 --interactive 进入交互式导出模式")
+        print("提示: 使用 --interactive 进入交互式导出模式")
         print()
         return
 
@@ -231,7 +228,7 @@ def main():
         selected_agent = available_agents[0]
         print(f"自动选择: {selected_agent.display_name}\n")
     else:
-        selected_agent = select_agent_interactive(available_agents)
+        selected_agent = select_agent_interactive(available_agents, days=args.days)
         if not selected_agent:
             print("\n⚠️  未选择 Agent Tool，退出。")
             return
@@ -249,7 +246,7 @@ def main():
     # Show warning if too many sessions
     if len(sessions) > 100:
         print(f"⚠️  注意: 会话数量较多 ({len(sessions)} 个)，建议使用 --days 缩小时间范围")
-        print(f"   例如: agent-dump --interactive --days 1\n")
+        print("   例如: agent-dump --interactive --days 1\n")
 
     # Select sessions
     selected_sessions = select_sessions_interactive(sessions, selected_agent)
