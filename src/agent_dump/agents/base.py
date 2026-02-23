@@ -67,3 +67,11 @@ class BaseAgent(ABC):
     def get_session_uri(self, session: Session) -> str:
         """Get the agent session URI for a session"""
         return f"{self.name}://{session.id}"
+
+    @abstractmethod
+    def get_session_data(self, session: Session) -> dict:
+        """
+        Get session data as a dictionary.
+        Returns dict with keys: id, title, messages, etc.
+        """
+        pass

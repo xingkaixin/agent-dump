@@ -172,8 +172,8 @@ class CodexAgent(BaseAgent):
 
         return "Untitled Session"
 
-    def export_session(self, session: Session, output_dir: Path) -> Path:
-        """Export a single session to unified JSON format"""
+    def get_session_data(self, session: Session) -> dict:
+        """Get session data as a dictionary"""
         if not session.source_path.exists():
             raise FileNotFoundError(f"Session file not found: {session.source_path}")
 
@@ -205,7 +205,7 @@ class CodexAgent(BaseAgent):
                     print(f"警告: 转换消息格式失败: {e}")
                     continue
 
-        session_data = {
+        return {
             "id": session.id,
             "title": session.title,
             "slug": None,
@@ -217,6 +217,10 @@ class CodexAgent(BaseAgent):
             "stats": stats,
             "messages": messages,
         }
+
+    def export_session(self, session: Session, output_dir: Path) -> Path:
+        """Export a single session to unified JSON format"""
+        session_data = self.get_session_data(session)
 
         output_path = output_dir / f"{session.id}.json"
         with open(output_path, "w", encoding="utf-8") as f:

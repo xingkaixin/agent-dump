@@ -91,8 +91,8 @@ class OpenCodeAgent(BaseAgent):
         conn.close()
         return sessions
 
-    def export_session(self, session: Session, output_dir: Path) -> Path:
-        """Export a single session to JSON"""
+    def get_session_data(self, session: Session) -> dict:
+        """Get session data as a dictionary"""
         if not self.db_path:
             raise FileNotFoundError("Database not found")
 
@@ -176,6 +176,12 @@ class OpenCodeAgent(BaseAgent):
             session_data["messages"].append(message)
 
         conn.close()
+
+        return session_data
+
+    def export_session(self, session: Session, output_dir: Path) -> Path:
+        """Export a single session to JSON"""
+        session_data = self.get_session_data(session)
 
         output_path = output_dir / f"{session.id}.json"
         with open(output_path, "w", encoding="utf-8") as f:

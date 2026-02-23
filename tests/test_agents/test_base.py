@@ -66,6 +66,13 @@ class ConcreteAgent(BaseAgent):
     def export_session(self, session, output_dir):
         return output_dir / f"{session.id}.json"
 
+    def get_session_data(self, session):
+        return {
+            "id": session.id,
+            "title": session.title,
+            "messages": [],
+        }
+
 
 class TestBaseAgent:
     """测试 BaseAgent 抽象基类"""
