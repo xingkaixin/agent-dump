@@ -146,6 +146,10 @@ class ClaudeCodeAgent(BaseAgent):
         except Exception:
             return None
 
+    def get_session_uri(self, session: Session) -> str:
+        """Get the agent session URI for a session - Claude uses 'claude://' scheme"""
+        return f"claude://{session.id}"
+
     def _extract_title(self, lines: list[str]) -> str:
         """Extract title from user messages"""
         try:

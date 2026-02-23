@@ -169,7 +169,8 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
         # Add sessions in this group
         for session in group_sessions_list:
             label = agent.get_formatted_title(session)
-            choices.append(questionary.Choice(title=f"  {label}", value=session))
+            uri = agent.get_session_uri(session)
+            choices.append(questionary.Choice(title=f"  {label} {uri}", value=session))
 
     custom_style = Style(
         [
@@ -221,7 +222,8 @@ def select_sessions_simple(sessions: list[Session], agent: BaseAgent) -> list[Se
         print(f"\n[{group_name}] ({len(group_sessions_list)} 个)")
         for session in group_sessions_list:
             title = agent.get_formatted_title(session)
-            print(f"{idx}. {title}")
+            uri = agent.get_session_uri(session)
+            print(f"{idx}. {title} {uri}")
             session_map[idx] = session
             idx += 1
 

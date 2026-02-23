@@ -63,3 +63,7 @@ class BaseAgent(ABC):
         title = session.title[:60] + "..." if len(session.title) > 60 else session.title
         time_str = session.created_at.strftime("%Y-%m-%d %H:%M")
         return f"{title} ({time_str})"
+
+    def get_session_uri(self, session: Session) -> str:
+        """Get the agent session URI for a session"""
+        return f"{self.name}://{session.id}"

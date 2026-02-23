@@ -99,7 +99,8 @@ def display_sessions_list(
         for i in range(start_idx, end_idx):
             session = sessions[i]
             title = agent.get_formatted_title(session)
-            print(f"   • {title}")
+            uri = agent.get_session_uri(session)
+            print(f"   • {title} {uri}")
 
         # Show pagination info
         if show_pagination and total_pages > 1:
