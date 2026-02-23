@@ -53,13 +53,7 @@ def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
     month_ago = today - timedelta(days=30)
 
     for session in sessions:
-        # Handle different time formats
-        if hasattr(session, "created_at"):
-            session_time = session.created_at
-        elif hasattr(session, "time_created"):
-            session_time = session.time_created
-        else:
-            session_time = now
+        session_time = session.created_at
 
         if isinstance(session_time, (int, float)):
             # Assume milliseconds if large number

@@ -26,13 +26,7 @@ def get_time_group(session: Session) -> str:
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
 
-    # Handle different time formats
-    if hasattr(session, "created_at"):
-        session_time = session.created_at
-    elif hasattr(session, "time_created"):
-        session_time = session.time_created
-    else:
-        return "未知时间"
+    session_time = session.created_at
 
     if isinstance(session_time, (int, float)):
         # Assume milliseconds if large number
@@ -170,7 +164,7 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
 
     for group_name, group_sessions_list in groups.items():
         # Add separator for group
-        choices.append(Choice(title=f"─── {group_name} ({len(group_sessions_list)} 个) ───", disabled=True))
+        choices.append(Choice(title=f"─── {group_name} ({len(group_sessions_list)} 个) ───", disabled="分组标题"))
 
         # Add sessions in this group
         for session in group_sessions_list:
