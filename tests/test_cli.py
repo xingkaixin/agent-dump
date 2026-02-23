@@ -98,10 +98,10 @@ class TestMain:
         """测试没有可用 agent 时退出"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
-            mock_scanner.scan.return_value = {}
+            mock_scanner.get_available_agents.return_value = []
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump"]):
+            with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                 main()
 
             captured = capsys.readouterr()
@@ -116,8 +116,8 @@ class TestMain:
             mock_agent.name = "opencode"
             mock_agent.display_name = "OpenCode"
             mock_agent.get_formatted_title.return_value = "Session Title (2024-01-01)"
+            mock_agent.get_sessions.return_value = [mock.MagicMock()]  # Use get_sessions instead of scan
 
-            mock_scanner.scan.return_value = {"opencode": [mock.MagicMock()]}
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
@@ -126,7 +126,7 @@ class TestMain:
 
             captured = capsys.readouterr()
             assert "OpenCode" in captured.out
-            assert "可用的 Agent Tools" in captured.out
+            assert "列出" in captured.out  # Updated text
 
     def test_main_single_agent_auto_select(self, capsys):
         """测试只有一个 agent 时自动选择"""
@@ -146,7 +146,7 @@ class TestMain:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
-                    with mock.patch("sys.argv", ["agent-dump"]):
+                    with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                         main()
 
             captured = capsys.readouterr()
@@ -176,7 +176,7 @@ class TestMain:
                         mock_select_session.return_value = [mock.MagicMock()]
                         mock_export.return_value = [Path("test.json")]
 
-                        with mock.patch("sys.argv", ["agent-dump"]):
+                        with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                             main()
 
             captured = capsys.readouterr()
@@ -195,7 +195,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump"]):
+            with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                 main()
 
             captured = capsys.readouterr()
@@ -217,7 +217,7 @@ class TestMain:
             with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
                 mock_select.return_value = []
 
-                with mock.patch("sys.argv", ["agent-dump"]):
+                with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                     main()
 
             captured = capsys.readouterr()
@@ -266,7 +266,7 @@ class TestMain:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
-                    with mock.patch("sys.argv", ["agent-dump", "--output", str(output_dir)]):
+                    with mock.patch("sys.argv", ["agent-dump", "--interactive", "--output", str(output_dir)]):
                         main()
 
             mock_export.assert_called_once()
@@ -277,10 +277,10 @@ class TestMain:
         """测试键盘中断处理"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
-            mock_scanner.scan.side_effect = KeyboardInterrupt()
+            mock_scanner.get_available_agents.side_effect = KeyboardInterrupt()
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump"]):
+            with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                 # KeyboardInterrupt will propagate since main() doesn't catch it
                 with pytest.raises(KeyboardInterrupt):
                     main()

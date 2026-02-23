@@ -3,9 +3,10 @@ Session selection utilities
 """
 
 import sys
+from datetime import datetime, timedelta
 
 import questionary
-from questionary import Style
+from questionary import Choice, Style
 
 from agent_dump.agents.base import BaseAgent, Session
 
@@ -13,6 +14,61 @@ from agent_dump.agents.base import BaseAgent, Session
 def is_terminal() -> bool:
     """Check if running in a terminal"""
     return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def get_time_group(session: Session) -> str:
+    """Get time group for a session"""
+    now = datetime.now()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday = today - timedelta(days=1)
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+    
+    # Handle different time formats
+    if hasattr(session, 'created_at'):
+        session_time = session.created_at
+    elif hasattr(session, 'time_created'):
+        session_time = session.time_created
+    else:
+        return "未知时间"
+    
+    if isinstance(session_time, (int, float)):
+        # Assume milliseconds if large number
+        if session_time > 1e10:
+            session_time = datetime.fromtimestamp(session_time / 1000)
+        else:
+            session_time = datetime.fromtimestamp(session_time)
+    
+    if session_time >= today:
+        return "今天"
+    elif session_time >= yesterday:
+        return "昨天"
+    elif session_time >= week_ago:
+        return "本周"
+    elif session_time >= month_ago:
+        return "本月"
+    else:
+        return "更早"
+
+
+def group_sessions(sessions: list[Session]) -> dict[str, list[Session]]:
+    """Group sessions by time periods"""
+    groups: dict[str, list[Session]] = {}
+    
+    for session in sessions:
+        group = get_time_group(session)
+        if group not in groups:
+            groups[group] = []
+        groups[group].append(session)
+    
+    # Define order
+    order = ["今天", "昨天", "本周", "本月", "更早", "未知时间"]
+    ordered_groups = {}
+    for key in order:
+        if key in groups:
+            ordered_groups[key] = groups[key]
+    
+    return ordered_groups
 
 
 def select_agent_interactive(agents: list[BaseAgent]) -> BaseAgent | None:
@@ -94,7 +150,7 @@ def select_agent_simple(agents: list[BaseAgent]) -> BaseAgent | None:
 
 
 def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> list[Session]:
-    """Let user select sessions interactively"""
+    """Let user select sessions interactively with time grouping"""
     if not sessions:
         print("No sessions found in the specified time range.")
         return []
@@ -102,10 +158,19 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
     if not is_terminal():
         return select_sessions_simple(sessions, agent)
 
+    # Group sessions by time
+    groups = group_sessions(sessions)
+    
     choices = []
-    for session in sessions:
-        label = agent.get_formatted_title(session)
-        choices.append(questionary.Choice(title=label, value=session))
+    
+    for group_name, group_sessions_list in groups.items():
+        # Add separator for group
+        choices.append(Choice(title=f"─── {group_name} ({len(group_sessions_list)} 个) ───", disabled=True))
+        
+        # Add sessions in this group
+        for session in group_sessions_list:
+            label = agent.get_formatted_title(session)
+            choices.append(questionary.Choice(title=f"  {label}", value=session))
 
     custom_style = Style(
         [
@@ -118,6 +183,7 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
             ("separator", "fg:#cc5454"),
             ("instruction", ""),
             ("text", ""),
+            ("disabled", "fg:#666666 italic"),
         ]
     )
 
@@ -143,14 +209,24 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
 
 def select_sessions_simple(sessions: list[Session], agent: BaseAgent) -> list[Session]:
     """Simple selection for non-terminal environments"""
+    # Group sessions for display
+    groups = group_sessions(sessions)
+    
     print("Available sessions:")
     print("-" * 80)
-    for i, session in enumerate(sessions, 1):
-        title = agent.get_formatted_title(session)
-        print(f"{i}. {title}")
-        print(f"   ID: {session.id}")
-        print()
-
+    
+    idx = 1
+    session_map = {}
+    
+    for group_name, group_sessions_list in groups.items():
+        print(f"\n[{group_name}] ({len(group_sessions_list)} 个)")
+        for session in group_sessions_list:
+            title = agent.get_formatted_title(session)
+            print(f"{idx}. {title}")
+            session_map[idx] = session
+            idx += 1
+    
+    print()
     print("Enter session numbers to export (comma-separated, e.g., '1,3,5' or 'all'):")
     try:
         selection = input("> ").strip()
@@ -162,13 +238,13 @@ def select_sessions_simple(sessions: list[Session], agent: BaseAgent) -> list[Se
         return sessions
 
     try:
-        indices = [int(x.strip()) - 1 for x in selection.split(",")]
+        indices = [int(x.strip()) for x in selection.split(",")]
         selected = []
-        for idx in indices:
-            if 0 <= idx < len(sessions):
-                selected.append(sessions[idx])
+        for num in indices:
+            if num in session_map:
+                selected.append(session_map[num])
             else:
-                print(f"⚠️  Invalid selection: {idx + 1}")
+                print(f"⚠️  Invalid selection: {num}")
         return selected
     except ValueError:
         print("⚠️  Invalid input. Please enter numbers separated by commas.")
