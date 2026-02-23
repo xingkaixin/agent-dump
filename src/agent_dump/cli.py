@@ -43,7 +43,21 @@ def main():
         action="store_true",
         help="List all available sessions without exporting",
     )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Run in interactive mode to select and export sessions",
+    )
     args = parser.parse_args()
+
+    # 如果没有指定 --interactive 或 --list，但指定了 --days，则自动启用 --list
+    # 如果都没有指定，显示帮助信息
+    if not args.interactive and not args.list:
+        if args.days != 7:  # 用户显式指定了 --days
+            args.list = True
+        else:
+            parser.print_help()
+            return
 
     print("🚀 Agent Session Exporter\n")
     print("=" * 60 + "\n")
