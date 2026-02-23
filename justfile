@@ -34,6 +34,9 @@ test:
     uv run pytest -q
     @echo "✅ Tests complete!"
 
+# Run lint check test
+isok: lint check test
+
 # Run the agent-dump CLI
 run:
     @echo "🚀 Starting agent-dump..."
