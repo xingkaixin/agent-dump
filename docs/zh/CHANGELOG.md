@@ -2,6 +2,39 @@
 
 ## [未发布]
 
+## [0.3.0] - 2026-02-23
+
+### 破坏性变更
+
+- **CLI 默认行为变更**：直接运行 `agent-dump` 现在显示帮助信息，而不是进入交互模式
+  - 使用 `--interactive` 参数进入交互式选择模式
+  - 仅使用 `--days N` 时自动启用列表模式
+
+### 新增功能
+
+- **列表模式支持分页** (`--list`)
+  - 新增 `--page-size` 参数控制每页显示数量（默认：20）
+  - 交互式分页，按 Enter 查看更多，输入 'q' 退出
+- **交互模式时间分组**
+  - 会话按时间分组：今天、昨天、本周、本月、更早
+  - 时间组之间显示视觉分隔符，便于导航
+- **大量会话警告**：当发现超过 100 个会话时显示警告，建议使用 `--days` 缩小范围
+
+### 问题修复
+
+- **`--days` 过滤在 `--list` 模式下现在正常工作**
+  - 之前显示所有扫描的会话，忽略时间过滤
+  - 现在根据指定的时间范围正确过滤会话
+- **时区兼容性**：修复 naive 和 aware datetime 之间的比较错误
+  - Claude Code 和 Codex 使用 UTC 时区感知的 datetime
+  - OpenCode 和 Kimi 使用无时区的 datetime
+  - 所有比较现在统一归一化为 UTC
+
+### 改进
+
+- 交互式 Agent 选择现在根据 `--days` 参数显示过滤后的会话数量
+- 更好的用户体验，提供清晰的提示和导航说明
+
 ## [0.2.0] - 2026-02-22
 
 ### 新增功能
@@ -48,5 +81,6 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.3.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.3.0
 [0.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.2.0
 [0.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.1.0

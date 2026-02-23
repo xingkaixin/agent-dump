@@ -61,37 +61,53 @@ uv tool install . --force
 
 ## Usage
 
-### Interactive Export (Default)
+### Interactive Export
 
 ```bash
-# Option 1: Use the command-line entry point
-uv run agent-dump
+# Enter interactive mode to select and export sessions
+uv run agent-dump --interactive
 
-# Option 2: Run as a module
-uv run python -m agent_dump
+# Or run as a module
+uv run python -m agent_dump --interactive
 ```
 
-After running, it will display the list of sessions from the last 7 days. Use the spacebar to select/deselect, and press Enter to confirm the export.
+After running, it will display the list of sessions from the last 7 days grouped by time (Today, Yesterday, This Week, This Month, Earlier). Use the spacebar to select/deselect, and press Enter to confirm the export.
+
+> **Note:** Starting from v0.3.0, the default behavior has changed. Running `agent-dump` without arguments now shows the help message. Use `--interactive` to enter interactive mode.
 
 ### Command-line Arguments
 
 ```bash
-uv run agent-dump --days 3                    # Export sessions from the last 3 days
-uv run agent-dump --agent claude              # Specify the Agent tool name
-uv run agent-dump --output ./my-sessions      # Specify the output directory
-uv run agent-dump --list                      # Only list sessions
-uv run agent-dump --export ses_abc,ses_xyz    # Export sessions with specific IDs
+# Display help
+uv run agent-dump                             # Show help message
+uv run agent-dump --help                      # Show detailed help
+
+# List mode (with pagination)
+uv run agent-dump --list                      # List sessions from last 7 days
+uv run agent-dump --list --days 3             # List sessions from last 3 days
+uv run agent-dump --list --page-size 10       # Show 10 sessions per page
+
+# Interactive export mode
+uv run agent-dump --interactive               # Interactive mode (default 7 days)
+uv run agent-dump --interactive --days 3      # Interactive mode (3 days)
+uv run agent-dump --days 3                    # Auto-activates list mode
+
+# Other options
+uv run agent-dump --output ./my-sessions      # Specify output directory
+uv run agent-dump --export ses_abc,ses_xyz    # Export specific session IDs
 ```
 
 ### Full Parameter Reference
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
+| `--interactive` | Run in interactive mode to select and export sessions | - |
 | `--days` | Query sessions from the last N days | 7 |
-| `--agent` | Agent tool name | opencode |
+| `--list` | Only list sessions without exporting (auto-activated if `--days` is specified without `--interactive`) | - |
+| `--page-size` | Number of sessions to display per page in list mode | 20 |
 | `--output` | Output directory | ./sessions |
 | `--export` | Export specific session IDs (comma-separated) | - |
-| `--list` | Only list sessions, do not export | - |
+| `-h, --help` | Show help message | - |
 
 ## Project Structure
 
