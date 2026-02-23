@@ -2,6 +2,26 @@
 
 ## [未发布]
 
+## [0.4.0] - 2026-02-23
+
+### 新增功能
+
+- **URI 模式** - 通过 Agent Session URI 直接导出会话文本
+  - 新命令: `agent-dump <uri>` (如 `opencode://session-id`)
+  - 支持的 URI 协议: `opencode://`, `codex://`, `kimi://`, `claude://`
+  - 直接将格式化的会话文本渲染到终端
+  - 适用于快速查看会话内容，无需导出到文件
+- **Agent Session URI 显示** - 在 CLI 列表和交互式选择器中显示 URI
+  - 每个会话现在显示其唯一的 URI，便于引用
+  - 支持复制粘贴格式，方便在 URI 模式中使用
+- **开发命令** - 新增 `just isok` 命令，一键运行 lint、check 和 test
+
+### 问题修复
+
+- **会话列表中断处理** - 正确处理退出和中断信号
+  - `display_sessions_list` 返回布尔值指示用户是否退出
+  - 将 `EOFError` 和 `KeyboardInterrupt` 作为退出信号处理
+
 ## [0.3.0] - 2026-02-23
 
 ### 破坏性变更
@@ -81,6 +101,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.4.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.4.0
 [0.3.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.3.0
 [0.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.2.0
 [0.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.1.0

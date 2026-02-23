@@ -19,6 +19,7 @@ AI Coding Assistant Session Export Tool - Supports exporting session data from m
 - **Batch Export**: Supports exporting all sessions from the last N days
 - **Specific Export**: Export specific sessions by session ID
 - **Session List**: Only list sessions without exporting them
+- **Direct Text Dump**: View session content directly in terminal via URI (e.g., `agent-dump opencode://session-id`)
 - **Statistics**: Exports include statistics such as token usage and cost
 - **Message Details**: Fully retains session messages, tool calls, and other details
 - **Smart Title Extraction**: Automatically extract session titles from agent metadata
@@ -75,6 +76,24 @@ After running, it will display the list of sessions from the last 7 days grouped
 
 > **Note:** Starting from v0.3.0, the default behavior has changed. Running `agent-dump` without arguments now shows the help message. Use `--interactive` to enter interactive mode.
 
+### URI Mode (Direct Text Dump)
+
+Quickly view session content directly in the terminal without exporting to a file:
+
+```bash
+# View a specific session by URI
+uv run agent-dump opencode://session-id-abc123
+
+# The URI format is shown in list mode and interactive selector
+#   • Session Title (opencode://session-id-abc123)
+```
+
+Supported URI schemes:
+- `opencode://<session_id>` - OpenCode sessions
+- `codex://<session_id>` - Codex sessions  
+- `kimi://<session_id>` - Kimi sessions
+- `claude://<session_id>` - Claude Code sessions
+
 ### Command-line Arguments
 
 ```bash
@@ -92,6 +111,12 @@ uv run agent-dump --interactive               # Interactive mode (default 7 days
 uv run agent-dump --interactive --days 3      # Interactive mode (3 days)
 uv run agent-dump --days 3                    # Auto-activates list mode
 
+# URI mode - Direct text dump
+uv run agent-dump opencode://<session-id>     # View OpenCode session content
+uv run agent-dump codex://<session-id>        # View Codex session content
+uv run agent-dump kimi://<session-id>         # View Kimi session content
+uv run agent-dump claude://<session-id>       # View Claude Code session content
+
 # Other options
 uv run agent-dump --output ./my-sessions      # Specify output directory
 uv run agent-dump --export ses_abc,ses_xyz    # Export specific session IDs
@@ -101,6 +126,7 @@ uv run agent-dump --export ses_abc,ses_xyz    # Export specific session IDs
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
+| `uri` | Agent session URI to dump (e.g., `opencode://session-id`) | - |
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `--days` | Query sessions from the last N days | 7 |
 | `--list` | Only list sessions without exporting (auto-activated if `--days` is specified without `--interactive`) | - |
@@ -139,6 +165,9 @@ uv run agent-dump --export ses_abc,ses_xyz    # Export specific session IDs
 ## Development
 
 ```bash
+# Run all checks (lint, type check, test)
+just isok
+
 # Lint code
 just lint
 

@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-02-23
+
+### Added
+
+- **URI Mode** - Direct session text dump via agent session URIs
+  - New command: `agent-dump <uri>` (e.g., `opencode://session-id`)
+  - Supported URI schemes: `opencode://`, `codex://`, `kimi://`, `claude://`
+  - Renders formatted session text with message content directly to terminal
+  - Useful for quick inspection of session content without exporting to file
+- **Agent Session URI Display** - Show URIs in CLI list and interactive selector
+  - Each session now displays its unique URI for easy reference
+  - Copy-paste friendly format for URI mode usage
+- **Development Command** - Added `just isok` to run lint, check, and test in one command
+
+### Fixed
+
+- **Session Listing Interrupt Handling** - Properly handle quit and interrupt signals
+  - Returns boolean from `display_sessions_list` to indicate user quit intent
+  - Handles `EOFError` and `KeyboardInterrupt` as quit signals
+
 ## [0.3.0] - 2026-02-23
 
 ### Breaking Changes
@@ -81,6 +101,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.4.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.4.0
 [0.3.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.3.0
 [0.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.2.0
 [0.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.1.0
