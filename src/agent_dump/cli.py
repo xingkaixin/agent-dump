@@ -168,13 +168,17 @@ def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
 
 def display_sessions_list(
     agent: BaseAgent, sessions: list[Session], page_size: int = 20, show_pagination: bool = True
-) -> None:
-    """Display sessions with pagination support"""
+) -> bool:
+    """Display sessions with pagination support.
+    
+    Returns:
+        True if user chose to quit, False otherwise.
+    """
     total = len(sessions)
 
     if total == 0:
         print("   (无会话)")
-        return
+        return False
 
     # Show all sessions with pagination
     current_page = 0
@@ -200,12 +204,12 @@ def display_sessions_list(
                 try:
                     user_input = input("> ").strip().lower()
                     if user_input == "q":
-                        break
+                        return True  # User wants to quit entirely
                     current_page += 1
                     print()
-                except EOFError, KeyboardInterrupt:
+                except (EOFError, KeyboardInterrupt):
                     print()
-                    break
+                    return True  # User interrupted, quit entirely
             else:
                 print("   已显示全部会话")
                 break
@@ -213,6 +217,8 @@ def display_sessions_list(
             if total > page_size:
                 print(f"\n   ... 还有 {total - page_size} 个会话未显示")
             break
+    
+    return False
 
 
 def export_sessions(agent: BaseAgent, sessions: list, output_base_dir: Path) -> list[Path]:
@@ -345,7 +351,10 @@ def main():
             print(f"\n📁 {agent.display_name} ({len(sessions)} 个会话)")
 
             if sessions:
-                display_sessions_list(agent, sessions, page_size=args.page_size)
+                should_quit = display_sessions_list(agent, sessions, page_size=args.page_size)
+                if should_quit:
+                    print("\n" + "=" * 60)
+                    return 0
             else:
                 print(f"   (最近 {args.days} 天内无会话)")
 
