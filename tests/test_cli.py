@@ -8,7 +8,29 @@ from unittest import mock
 
 import pytest
 
-from agent_dump.cli import export_sessions, main
+from agent_dump.cli import export_sessions, main, parse_uri, render_session_text
+
+
+class TestParseUri:
+    """测试 parse_uri 函数"""
+
+    def test_parse_uri_codex_standard(self):
+        """测试 Codex 标准 URI 解析"""
+        assert parse_uri("codex://019c8d87-ecc4-7080-bde9-3e257c97cb99") == (
+            "codex",
+            "019c8d87-ecc4-7080-bde9-3e257c97cb99",
+        )
+
+    def test_parse_uri_codex_threads_variant(self):
+        """测试 Codex threads 变体 URI 解析"""
+        assert parse_uri("codex://threads/019c8d87-ecc4-7080-bde9-3e257c97cb99") == (
+            "codex",
+            "019c8d87-ecc4-7080-bde9-3e257c97cb99",
+        )
+
+    def test_parse_uri_codex_threads_empty_session_id(self):
+        """测试 Codex threads 变体缺少 session_id 时返回 None"""
+        assert parse_uri("codex://threads/") is None
 
 
 class TestExportSessions:
@@ -106,6 +128,35 @@ class TestMain:
 
             captured = capsys.readouterr()
             assert "未找到任何可用的" in captured.out
+
+    def test_main_uri_mode_codex_threads_variant(self, capsys):
+        """测试 URI 模式支持 codex://threads/<id> 变体"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.return_value = {"messages": []}
+
+            mock_session = mock.MagicMock()
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id") as mock_find:
+                mock_find.return_value = (mock_agent, mock_session)
+
+                with mock.patch(
+                    "sys.argv",
+                    ["agent-dump", "codex://threads/019c8d87-ecc4-7080-bde9-3e257c97cb99"],
+                ):
+                    result = main()
+
+            assert result == 0
+            mock_find.assert_called_once_with(mock_scanner, "019c8d87-ecc4-7080-bde9-3e257c97cb99")
+
+            captured = capsys.readouterr()
+            assert "# Session Dump" in captured.out
 
     def test_main_list_mode(self, capsys):
         """测试列表模式"""
@@ -323,3 +374,65 @@ class TestMain:
                 # KeyboardInterrupt will propagate since main() doesn't catch it
                 with pytest.raises(KeyboardInterrupt):
                     main()
+
+
+class TestRenderSessionText:
+    """测试 render_session_text 函数"""
+
+    def test_render_session_text_skips_developer_messages(self):
+        """测试 URI 输出会过滤 developer 角色"""
+        session_data = {
+            "messages": [
+                {
+                    "role": "developer",
+                    "parts": [{"type": "text", "text": "System instruction"}],
+                },
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "text": "Hello"}],
+                },
+                {
+                    "role": "assistant",
+                    "parts": [{"type": "text", "text": "Hi"}],
+                },
+            ]
+        }
+
+        output = render_session_text("codex://abc", session_data)
+
+        assert "Developer" not in output
+        assert "System instruction" not in output
+        assert "## 1. User" in output
+        assert "## 2. Assistant" in output
+
+    def test_render_session_text_skips_developer_like_user_context(self):
+        """测试 URI 输出会过滤伪装成 user 的系统上下文"""
+        session_data = {
+            "messages": [
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "text": "# AGENTS.md instructions for /path/project"}],
+                },
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "text": "<environment_context>\n  <cwd>/tmp</cwd>"}],
+                },
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "text": "真实用户问题"}],
+                },
+                {
+                    "role": "assistant",
+                    "parts": [{"type": "text", "text": "真实助手回复"}],
+                },
+            ]
+        }
+
+        output = render_session_text("codex://abc", session_data)
+
+        assert "AGENTS.md instructions" not in output
+        assert "<environment_context>" not in output
+        assert "## 1. User" in output
+        assert "真实用户问题" in output
+        assert "## 2. Assistant" in output
+        assert "真实助手回复" in output

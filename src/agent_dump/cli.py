@@ -20,6 +20,15 @@ VALID_URI_SCHEMES = {
 }
 
 
+DEVELOPER_LIKE_USER_MARKERS = (
+    "agents.md instructions for",
+    "<instructions>",
+    "<environment_context>",
+    "<permissions instructions>",
+    "<collaboration_mode>",
+)
+
+
 def parse_uri(uri: str) -> tuple[str, str] | None:
     """
     Parse an agent session URI.
@@ -32,6 +41,14 @@ def parse_uri(uri: str) -> tuple[str, str] | None:
     scheme, session_id = match.groups()
     if scheme not in VALID_URI_SCHEMES:
         return None
+
+    # Support Codex URI variant:
+    # codex://threads/<session_id> == codex://<session_id>
+    if scheme == "codex" and session_id.startswith("threads/"):
+        session_id = session_id.removeprefix("threads/")
+        if not session_id:
+            return None
+
     return scheme, session_id
 
 
@@ -44,6 +61,15 @@ def find_session_by_id(scanner: AgentScanner, session_id: str) -> tuple[BaseAgen
             if session.id == session_id:
                 return agent, session
     return None
+
+
+def _is_developer_like_user_message(role_normalized: str, content_parts: list[str]) -> bool:
+    """Detect user messages that are actually injected system/developer context."""
+    if role_normalized != "user" or not content_parts:
+        return False
+
+    combined_text = "\n".join(content_parts).lower()
+    return any(marker in combined_text for marker in DEVELOPER_LIKE_USER_MARKERS)
 
 
 def render_session_text(uri: str, session_data: dict) -> str:
@@ -59,19 +85,8 @@ def render_session_text(uri: str, session_data: dict) -> str:
 
     for msg in messages:
         role = msg.get("role", "unknown")
+        role_normalized = str(role).lower()
         parts = msg.get("parts", [])
-
-        # Skip tool messages
-        if role == "tool":
-            continue
-
-        # Determine display name
-        if role == "user":
-            display_role = "User"
-        elif role == "assistant":
-            display_role = "Assistant"
-        else:
-            display_role = role.capitalize()
 
         # Collect content from parts
         content_parts = []
@@ -85,6 +100,20 @@ def render_session_text(uri: str, session_data: dict) -> str:
 
         if not content_parts:
             continue
+
+        # Skip non-conversational and injected context messages
+        if role_normalized in {"tool", "developer"}:
+            continue
+        if _is_developer_like_user_message(role_normalized, content_parts):
+            continue
+
+        # Determine display name
+        if role_normalized == "user":
+            display_role = "User"
+        elif role_normalized == "assistant":
+            display_role = "Assistant"
+        else:
+            display_role = str(role).capitalize()
 
         # Add section header
         lines.append(f"## {msg_idx}. {display_role}")
@@ -276,6 +305,7 @@ def main():
             print("\n支持的 URI 格式:")
             print("  - opencode://<session_id>")
             print("  - codex://<session_id>")
+            print("  - codex://threads/<session_id>")
             print("  - kimi://<session_id>")
             print("  - claude://<session_id>")
             return 1
