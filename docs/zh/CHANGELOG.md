@@ -2,6 +2,36 @@
 
 ## [未发布]
 
+## [0.5.0] - 2026-02-24
+
+### 新增功能
+
+- **跨 Agent 关键词查询 (`--query`)**
+  - 支持 `keyword` 与 `agent1,agent2:keyword` 两种格式
+  - 支持 agent 别名 `claude` -> `claudecode`
+  - 支持按会话标题与内容进行关键词匹配，提升定位效率
+- **支持 Codex URI 变体**：`codex://threads/<session_id>`
+  - `codex://threads/<id>` 与 `codex://<id>` 现在等价
+
+### 变更
+
+- **列表模式输出行为** (`--list`)
+  - 现在一次性输出全部匹配会话（不再出现分页提示）
+  - `--page-size` 为兼容旧参数仍可传入，但在列表模式下会被忽略
+
+### 问题修复
+
+- **导出与 URI 文本渲染中的消息过滤**
+  - 过滤 `developer` 角色消息
+  - 过滤注入的上下文型 user 消息（如 AGENTS/instructions/environment 区块）
+  - 降低导出结果中的提示词与上下文噪音
+
+### 改进
+
+- **测试覆盖**
+  - 新增更完整的 CLI 测试（URI 解析、列表行为、消息过滤）
+  - 新增 query 过滤与 Codex 导出过滤的针对性测试
+
 ## [0.4.0] - 2026-02-23
 
 ### 新增功能
@@ -101,6 +131,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.5.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.5.0
 [0.4.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.4.0
 [0.3.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.3.0
 [0.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.2.0

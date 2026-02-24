@@ -91,6 +91,7 @@ uv run agent-dump opencode://session-id-abc123
 支持的 URI 协议：
 - `opencode://<session_id>` - OpenCode 会话
 - `codex://<session_id>` - Codex 会话  
+- `codex://thread/<session_id>` - Codex 会话  
 - `kimi://<session_id>` - Kimi 会话
 - `claude://<session_id>` - Claude Code 会话
 

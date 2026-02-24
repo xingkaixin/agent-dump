@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-24
+
+### Added
+
+- **Query filtering (`--query`)** across agents
+  - Supports both `keyword` and `agent1,agent2:keyword` formats
+  - Supports agent alias `claude` -> `claudecode`
+  - Adds keyword matching on session title/content for faster targeting
+- **Codex URI variant support**: `codex://threads/<session_id>`
+  - `codex://threads/<id>` and `codex://<id>` now resolve to the same session
+
+### Changed
+
+- **List mode output behavior** (`--list`)
+  - Now prints all matched sessions in one pass (no pagination prompts)
+  - `--page-size` remains accepted for backward compatibility but is ignored in list mode
+
+### Fixed
+
+- **Message filtering in exports and URI text rendering**
+  - Filters `developer` role messages
+  - Filters injected context-like user messages (e.g. AGENTS/instructions/environment blocks)
+  - Reduces prompt/context noise in exported session data
+
+### Improved
+
+- **Test coverage**
+  - Added comprehensive CLI tests (URI parsing, list behavior, message filtering)
+  - Added targeted tests for query filtering and Codex export filtering
+
 ## [0.4.0] - 2026-02-23
 
 ### Added
@@ -101,6 +131,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.5.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.5.0
 [0.4.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.4.0
 [0.3.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.3.0
 [0.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.2.0

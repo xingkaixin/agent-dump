@@ -90,7 +90,8 @@ uv run agent-dump opencode://session-id-abc123
 
 Supported URI schemes:
 - `opencode://<session_id>` - OpenCode sessions
-- `codex://<session_id>` - Codex sessions  
+- `codex://<session_id>` - Codex sessions
+- `codex://thread/<session_id>` - Codex sessions
 - `kimi://<session_id>` - Kimi sessions
 - `claude://<session_id>` - Claude Code sessions
 
