@@ -3,12 +3,22 @@
 """
 
 import argparse
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
-from agent_dump.cli import export_sessions, main, parse_uri, render_session_text
+from agent_dump.cli import (
+    display_sessions_list,
+    export_sessions,
+    find_session_by_id,
+    format_relative_time,
+    group_sessions_by_time,
+    main,
+    parse_uri,
+    render_session_text,
+)
 
 
 class TestParseUri:
@@ -31,6 +41,48 @@ class TestParseUri:
     def test_parse_uri_codex_threads_empty_session_id(self):
         """测试 Codex threads 变体缺少 session_id 时返回 None"""
         assert parse_uri("codex://threads/") is None
+
+    def test_parse_uri_invalid_format(self):
+        """测试非 URI 字符串返回 None"""
+        assert parse_uri("invalid-uri") is None
+
+    def test_parse_uri_unsupported_scheme(self):
+        """测试不支持的 URI scheme 返回 None"""
+        assert parse_uri("unknown://session-001") is None
+
+
+class TestFindSessionById:
+    """测试 find_session_by_id 函数"""
+
+    def test_find_session_by_id_found(self):
+        """测试跨 agent 查找命中会话"""
+        scanner = mock.MagicMock()
+
+        agent1 = mock.MagicMock()
+        agent1.get_sessions.return_value = [mock.MagicMock(id="s1"), mock.MagicMock(id="s2")]
+
+        target_session = mock.MagicMock(id="target")
+        agent2 = mock.MagicMock()
+        agent2.get_sessions.return_value = [target_session]
+
+        scanner.get_available_agents.return_value = [agent1, agent2]
+
+        result = find_session_by_id(scanner, "target")
+
+        assert result == (agent2, target_session)
+        agent1.get_sessions.assert_called_once_with(days=3650)
+        agent2.get_sessions.assert_called_once_with(days=3650)
+
+    def test_find_session_by_id_not_found(self):
+        """测试找不到会话时返回 None"""
+        scanner = mock.MagicMock()
+        agent = mock.MagicMock()
+        agent.get_sessions.return_value = [mock.MagicMock(id="s1")]
+        scanner.get_available_agents.return_value = [agent]
+
+        result = find_session_by_id(scanner, "missing")
+
+        assert result is None
 
 
 class TestExportSessions:
@@ -158,6 +210,87 @@ class TestMain:
             captured = capsys.readouterr()
             assert "# Session Dump" in captured.out
 
+    def test_main_uri_mode_invalid_uri(self, capsys):
+        """测试 URI 模式下无效 URI 会报错"""
+        with mock.patch("sys.argv", ["agent-dump", "invalid-uri"]):
+            result = main()
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "无效的 URI 格式" in captured.out
+
+    def test_main_uri_mode_no_available_agents(self, capsys):
+        """测试 URI 模式下没有可用 agent"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_scanner.get_available_agents.return_value = []
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
+                result = main()
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "未找到任何可用的 Agent Tools 会话" in captured.out
+
+    def test_main_uri_mode_session_not_found(self, capsys):
+        """测试 URI 模式下找不到会话"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_scanner.get_available_agents.return_value = [mock.MagicMock()]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=None):
+                with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
+                    result = main()
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "未找到会话" in captured.out
+
+    def test_main_uri_mode_scheme_mismatch(self, capsys):
+        """测试 URI scheme 与真实会话来源不匹配"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id") as mock_find:
+                mock_find.return_value = (mock_agent, mock.MagicMock())
+
+                with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
+                    result = main()
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "URI scheme 与会话不匹配" in captured.out
+
+    def test_main_uri_mode_get_session_data_failed(self, capsys):
+        """测试 URI 模式获取会话数据异常"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.side_effect = RuntimeError("read error")
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id") as mock_find:
+                mock_find.return_value = (mock_agent, mock.MagicMock())
+
+                with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
+                    result = main()
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "获取会话数据失败" in captured.out
+
     def test_main_list_mode(self, capsys):
         """测试列表模式"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
@@ -218,6 +351,41 @@ class TestMain:
             assert "第 1/" not in captured.out
             assert "还有" not in captured.out
 
+    def test_main_list_mode_no_sessions_for_agent(self, capsys):
+        """测试 --list 模式下某 agent 无会话"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = []
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--list"]):
+                result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "最近 7 天内无会话" in captured.out
+
+    def test_main_list_mode_quit_early_when_display_requests_quit(self, capsys):
+        """测试 --list 模式下 display_sessions_list 请求提前退出"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = [mock.MagicMock()]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.display_sessions_list", return_value=True):
+                with mock.patch("sys.argv", ["agent-dump", "--list"]):
+                    result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "=" * 60 in captured.out
+
     def test_main_single_agent_auto_select(self, capsys):
         """测试只有一个 agent 时自动选择"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
@@ -271,6 +439,25 @@ class TestMain:
 
             captured = capsys.readouterr()
             assert "已选择" in captured.out
+
+    def test_main_multiple_agents_interactive_select_none(self, capsys):
+        """测试多 agent 交互选择取消"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            agent1 = mock.MagicMock()
+            agent1.display_name = "OpenCode"
+            agent2 = mock.MagicMock()
+            agent2.display_name = "Codex"
+            mock_scanner.get_available_agents.return_value = [agent1, agent2]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.select_agent_interactive", return_value=None):
+                with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
+                    result = main()
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "未选择 Agent Tool" in captured.out
 
     def test_main_no_sessions_found(self, capsys):
         """测试没有找到会话时退出"""
@@ -336,6 +523,23 @@ class TestMain:
 
             mock_agent.get_sessions.assert_called_once_with(days=3)
 
+    def test_main_days_without_mode_auto_switches_to_list(self, capsys):
+        """测试仅指定 --days 时自动进入 --list 模式"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = []
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--days", "3"]):
+                result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "列出最近 3 天的会话" in captured.out
+
     def test_main_with_output_argument(self, tmp_path):
         """测试指定 output 参数"""
         output_dir = tmp_path / "custom_output"
@@ -374,6 +578,38 @@ class TestMain:
                 # KeyboardInterrupt will propagate since main() doesn't catch it
                 with pytest.raises(KeyboardInterrupt):
                     main()
+
+    def test_main_no_flags_prints_help(self, capsys):
+        """测试无参数时打印帮助并返回 None"""
+        with mock.patch("sys.argv", ["agent-dump"]):
+            result = main()
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert "usage:" in captured.out
+
+    def test_main_warns_when_too_many_sessions(self, capsys):
+        """测试会话数量超过 100 时提示缩小范围"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = [mock.MagicMock() for _ in range(101)]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.cli.export_sessions") as mock_export:
+                    mock_select.return_value = [mock.MagicMock()]
+                    mock_export.return_value = [Path("a.json")]
+
+                    with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
+                        result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "会话数量较多" in captured.out
 
 
 class TestRenderSessionText:
@@ -436,3 +672,181 @@ class TestRenderSessionText:
         assert "真实用户问题" in output
         assert "## 2. Assistant" in output
         assert "真实助手回复" in output
+
+    def test_render_session_text_skips_messages_without_text_parts(self):
+        """测试无文本内容的消息会跳过"""
+        session_data = {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "parts": [{"type": "tool", "tool": "read_file"}],
+                },
+                {
+                    "role": "assistant",
+                    "parts": [{"type": "text", "text": "有效文本"}],
+                },
+            ]
+        }
+
+        output = render_session_text("codex://abc", session_data)
+
+        assert "read_file" not in output
+        assert "有效文本" in output
+        assert "## 1. Assistant" in output
+
+    def test_render_session_text_unknown_role_display(self):
+        """测试未知角色使用首字母大写展示"""
+        session_data = {
+            "messages": [
+                {
+                    "role": "system",
+                    "parts": [{"type": "text", "text": "System notice"}],
+                }
+            ]
+        }
+
+        output = render_session_text("codex://abc", session_data)
+
+        assert "## 1. System" in output
+        assert "System notice" in output
+
+
+class TestTimeHelpers:
+    """测试时间相关辅助函数"""
+
+    @staticmethod
+    def _format_with_fixed_now(time_value, now_value):
+        with mock.patch("agent_dump.cli.datetime") as mock_datetime:
+            mock_datetime.now.return_value = now_value
+            mock_datetime.fromtimestamp.side_effect = datetime.fromtimestamp
+            return format_relative_time(time_value)
+
+    def test_format_relative_time_just_now(self):
+        """测试刚刚分支"""
+        now_value = datetime(2026, 1, 1, 12, 0, 0)
+        result = self._format_with_fixed_now(now_value, now_value)
+        assert result == "刚刚"
+
+    def test_format_relative_time_minutes_with_timestamp(self):
+        """测试分钟分支（数字时间戳输入）"""
+        now_value = datetime(2026, 1, 1, 12, 0, 0)
+        seconds_ts = (now_value - timedelta(minutes=5)).timestamp()
+        result = self._format_with_fixed_now(seconds_ts, now_value)
+        assert result == "5 分钟前"
+
+    def test_format_relative_time_hours(self):
+        """测试小时分支"""
+        now_value = datetime(2026, 1, 1, 12, 0, 0)
+        result = self._format_with_fixed_now(now_value - timedelta(hours=3), now_value)
+        assert result == "3 小时前"
+
+    def test_format_relative_time_yesterday(self):
+        """测试昨天分支"""
+        now_value = datetime(2026, 1, 10, 12, 0, 0)
+        result = self._format_with_fixed_now(now_value - timedelta(days=1), now_value)
+        assert result == "昨天"
+
+    def test_format_relative_time_days(self):
+        """测试天分支"""
+        now_value = datetime(2026, 1, 10, 12, 0, 0)
+        result = self._format_with_fixed_now(now_value - timedelta(days=3), now_value)
+        assert result == "3 天前"
+
+    def test_format_relative_time_weeks(self):
+        """测试周分支"""
+        now_value = datetime(2026, 2, 1, 12, 0, 0)
+        result = self._format_with_fixed_now(now_value - timedelta(days=14), now_value)
+        assert result == "2 周前"
+
+    def test_format_relative_time_date(self):
+        """测试日期分支"""
+        now_value = datetime(2026, 2, 1, 12, 0, 0)
+        old_time = now_value - timedelta(days=40)
+        result = self._format_with_fixed_now(old_time, now_value)
+        assert result == old_time.strftime("%Y-%m-%d")
+
+    def test_group_sessions_by_time_all_buckets(self):
+        """测试按时间分组包含所有分组与时间戳转换"""
+        now_value = datetime(2026, 1, 10, 12, 0, 0)
+
+        sessions = [
+            mock.MagicMock(id="today-dt", created_at=now_value - timedelta(hours=1)),
+            mock.MagicMock(id="today-sec", created_at=(now_value - timedelta(hours=2)).timestamp()),
+            mock.MagicMock(id="today-ms", created_at=int((now_value - timedelta(hours=3)).timestamp() * 1000)),
+            mock.MagicMock(id="yesterday", created_at=now_value - timedelta(days=1, hours=1)),
+            mock.MagicMock(id="week", created_at=now_value - timedelta(days=3)),
+            mock.MagicMock(id="month", created_at=now_value - timedelta(days=20)),
+            mock.MagicMock(id="older", created_at=now_value - timedelta(days=40)),
+        ]
+
+        with mock.patch("agent_dump.cli.datetime") as mock_datetime:
+            mock_datetime.now.return_value = now_value
+            mock_datetime.fromtimestamp.side_effect = datetime.fromtimestamp
+            groups = group_sessions_by_time(sessions)
+
+        assert set(groups.keys()) == {"今天", "昨天", "本周", "本月", "更早"}
+        assert len(groups["今天"]) == 3
+        assert len(groups["昨天"]) == 1
+        assert len(groups["本周"]) == 1
+        assert len(groups["本月"]) == 1
+        assert len(groups["更早"]) == 1
+
+
+class TestDisplaySessionsList:
+    """测试 display_sessions_list 函数"""
+
+    @staticmethod
+    def _build_agent():
+        agent = mock.MagicMock()
+        agent.get_formatted_title.side_effect = lambda session: session.title
+        agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+        return agent
+
+    def test_display_sessions_list_empty(self, capsys):
+        """测试空会话列表输出"""
+        result = display_sessions_list(self._build_agent(), [], page_size=2)
+        assert result is False
+        captured = capsys.readouterr()
+        assert "(无会话)" in captured.out
+
+    def test_display_sessions_list_quit_on_q(self, capsys):
+        """测试分页模式输入 q 退出"""
+        sessions = [mock.MagicMock(id=f"s{i}", title=f"Session {i}") for i in range(3)]
+
+        with mock.patch("builtins.input", return_value="q"):
+            result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=True)
+
+        assert result is True
+        captured = capsys.readouterr()
+        assert "第 1/2 页" in captured.out
+
+    def test_display_sessions_list_handles_eof_interrupt(self, capsys):
+        """测试分页模式处理 EOFError"""
+        sessions = [mock.MagicMock(id=f"s{i}", title=f"Session {i}") for i in range(3)]
+
+        with mock.patch("builtins.input", side_effect=EOFError):
+            result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=True)
+
+        assert result is True
+        captured = capsys.readouterr()
+        assert "按 Enter 查看更多" in captured.out
+
+    def test_display_sessions_list_show_all_pages(self, capsys):
+        """测试分页模式翻页直到结束"""
+        sessions = [mock.MagicMock(id=f"s{i}", title=f"Session {i}") for i in range(3)]
+
+        with mock.patch("builtins.input", return_value=""):
+            result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=True)
+
+        assert result is False
+        captured = capsys.readouterr()
+        assert "已显示全部会话" in captured.out
+
+    def test_display_sessions_list_non_pagination_shows_remaining_hint(self, capsys):
+        """测试非分页模式提示剩余会话数"""
+        sessions = [mock.MagicMock(id=f"s{i}", title=f"Session {i}") for i in range(3)]
+        result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=False)
+
+        assert result is False
+        captured = capsys.readouterr()
+        assert "还有 1 个会话未显示" in captured.out
