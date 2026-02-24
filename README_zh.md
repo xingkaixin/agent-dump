@@ -101,10 +101,10 @@ uv run agent-dump opencode://session-id-abc123
 uv run agent-dump                             # 显示帮助信息
 uv run agent-dump --help                      # 显示详细帮助
 
-# 列表模式（支持分页）
+# 列表模式（输出全部匹配内容，不分页）
 uv run agent-dump --list                      # 列出最近 7 天的会话
 uv run agent-dump --list --days 3             # 列出最近 3 天的会话
-uv run agent-dump --list --page-size 10       # 每页显示 10 个会话
+uv run agent-dump --list --page-size 10       # 参数保留兼容，当前在 --list 模式下不生效
 
 # 交互式导出模式
 uv run agent-dump --interactive               # 交互模式（默认 7 天）
@@ -129,8 +129,8 @@ uv run agent-dump --export ses_abc,ses_xyz    # 导出指定会话 ID
 | `uri` | Agent Session URI 用于直接查看（如 `opencode://session-id`） | - |
 | `--interactive` | 进入交互式模式选择和导出会话 | - |
 | `--days` | 查询最近 N 天的会话 | 7 |
-| `--list` | 仅列出会话不导出（若指定 `--days` 但未指定 `--interactive` 则自动启用） | - |
-| `--page-size` | 列表模式下每页显示的会话数量 | 20 |
+| `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `--days` 但未指定 `--interactive` 则自动启用） | - |
+| `--page-size` | 为兼容保留，当前在 `--list` 模式下不生效 | 20 |
 | `--output` | 输出目录 | ./sessions |
 | `--export` | 导出指定会话 ID（逗号分隔） | - |
 | `-h, --help` | 显示帮助信息 | - |

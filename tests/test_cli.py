@@ -128,6 +128,45 @@ class TestMain:
             assert "OpenCode" in captured.out
             assert "列出" in captured.out  # Updated text
 
+    def test_main_list_mode_no_pagination_prints_all(self, capsys):
+        """测试 --list 模式不分页，输出全部会话"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+
+            session1 = mock.MagicMock()
+            session1.id = "s1"
+            session1.title = "Session 1"
+
+            session2 = mock.MagicMock()
+            session2.id = "s2"
+            session2.title = "Session 2"
+
+            session3 = mock.MagicMock()
+            session3.id = "s3"
+            session3.title = "Session 3"
+
+            sessions = [session1, session2, session3]
+            mock_agent.get_sessions.return_value = sessions
+            mock_agent.get_formatted_title.side_effect = lambda session: session.title
+            mock_agent.get_session_uri.side_effect = lambda session: f"opencode://{session.id}"
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--list", "--page-size", "1"]):
+                main()
+
+            captured = capsys.readouterr()
+            assert "Session 1 opencode://s1" in captured.out
+            assert "Session 2 opencode://s2" in captured.out
+            assert "Session 3 opencode://s3" in captured.out
+            assert "第 1/" not in captured.out
+            assert "还有" not in captured.out
+
     def test_main_single_agent_auto_select(self, capsys):
         """测试只有一个 agent 时自动选择"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:

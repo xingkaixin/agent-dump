@@ -351,7 +351,13 @@ def main():
             print(f"\n📁 {agent.display_name} ({len(sessions)} 个会话)")
 
             if sessions:
-                should_quit = display_sessions_list(agent, sessions, page_size=args.page_size)
+                # In list mode, always print all matched sessions without pagination.
+                should_quit = display_sessions_list(
+                    agent,
+                    sessions,
+                    page_size=max(len(sessions), 1),
+                    show_pagination=False,
+                )
                 if should_quit:
                     print("\n" + "=" * 60)
                     return 0

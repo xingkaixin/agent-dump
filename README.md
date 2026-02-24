@@ -101,10 +101,10 @@ Supported URI schemes:
 uv run agent-dump                             # Show help message
 uv run agent-dump --help                      # Show detailed help
 
-# List mode (with pagination)
+# List mode (prints all matches, no pagination)
 uv run agent-dump --list                      # List sessions from last 7 days
 uv run agent-dump --list --days 3             # List sessions from last 3 days
-uv run agent-dump --list --page-size 10       # Show 10 sessions per page
+uv run agent-dump --list --page-size 10       # Accepted but currently ignored in --list mode
 
 # Interactive export mode
 uv run agent-dump --interactive               # Interactive mode (default 7 days)
@@ -129,8 +129,8 @@ uv run agent-dump --export ses_abc,ses_xyz    # Export specific session IDs
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`) | - |
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `--days` | Query sessions from the last N days | 7 |
-| `--list` | Only list sessions without exporting (auto-activated if `--days` is specified without `--interactive`) | - |
-| `--page-size` | Number of sessions to display per page in list mode | 20 |
+| `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `--days` is specified without `--interactive`) | - |
+| `--page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
 | `--output` | Output directory | ./sessions |
 | `--export` | Export specific session IDs (comma-separated) | - |
 | `-h, --help` | Show help message | - |
