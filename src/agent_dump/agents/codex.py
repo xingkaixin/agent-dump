@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.message_filter import filter_messages_for_export
 
 
 class CodexAgent(BaseAgent):
@@ -221,6 +222,9 @@ class CodexAgent(BaseAgent):
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to unified JSON format"""
         session_data = self.get_session_data(session)
+        messages = session_data.get("messages")
+        if isinstance(messages, list):
+            session_data["messages"] = filter_messages_for_export(messages)
 
         output_path = output_dir / f"{session.id}.json"
         with open(output_path, "w", encoding="utf-8") as f:

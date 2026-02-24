@@ -278,6 +278,81 @@ class TestCodexAgent:
         assert exported["title"] == "Test Session"
         assert len(exported["messages"]) == 1
 
+    def test_export_session_filters_developer_and_context_user_messages(self, tmp_path):
+        """测试导出时过滤 developer 与注入上下文 user 消息，并保留 tool 部分"""
+        agent = CodexAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        session_file = tmp_path / "test-filter.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "developer",
+                    "content": [{"type": "input_text", "text": "System instruction"}],
+                },
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "<environment_context>\n  <cwd>/tmp</cwd>"}],
+                },
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "真实用户问题"}],
+                },
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "read_file",
+                    "call_id": "call-001",
+                    "arguments": {"path": "/tmp/a.py"},
+                },
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="test-filter",
+            title="Test Filter Session",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=session_file,
+            metadata={"cwd": "/test", "cli_version": "1.0"},
+        )
+
+        result = agent.export_session(session, output_dir)
+
+        with open(result, encoding="utf-8") as f:
+            exported = json.load(f)
+
+        messages = exported["messages"]
+        assert all(message["role"] != "developer" for message in messages)
+        assert all(
+            "<environment_context>" not in part.get("text", "")
+            for message in messages
+            for part in message.get("parts", [])
+        )
+        assert any(
+            part.get("type") == "tool" and part.get("tool") == "read_file"
+            for message in messages
+            for part in message.get("parts", [])
+        )
+
     def test_convert_to_opencode_format_session_meta(self):
         """测试 session_meta 类型返回 None"""
         agent = CodexAgent()

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 
@@ -18,15 +19,6 @@ VALID_URI_SCHEMES = {
     "kimi": "kimi",
     "claude": "claudecode",  # claude:// maps to claudecode agent
 }
-
-
-DEVELOPER_LIKE_USER_MARKERS = (
-    "agents.md instructions for",
-    "<instructions>",
-    "<environment_context>",
-    "<permissions instructions>",
-    "<collaboration_mode>",
-)
 
 
 def parse_uri(uri: str) -> tuple[str, str] | None:
@@ -63,15 +55,6 @@ def find_session_by_id(scanner: AgentScanner, session_id: str) -> tuple[BaseAgen
     return None
 
 
-def _is_developer_like_user_message(role_normalized: str, content_parts: list[str]) -> bool:
-    """Detect user messages that are actually injected system/developer context."""
-    if role_normalized != "user" or not content_parts:
-        return False
-
-    combined_text = "\n".join(content_parts).lower()
-    return any(marker in combined_text for marker in DEVELOPER_LIKE_USER_MARKERS)
-
-
 def render_session_text(uri: str, session_data: dict) -> str:
     """Render session data as formatted text"""
     lines = []
@@ -86,25 +69,15 @@ def render_session_text(uri: str, session_data: dict) -> str:
     for msg in messages:
         role = msg.get("role", "unknown")
         role_normalized = str(role).lower()
-        parts = msg.get("parts", [])
-
-        # Collect content from parts
-        content_parts = []
-        for part in parts:
-            part_type = part.get("type")
-            if part_type in ("text", "reasoning"):
-                text = part.get("text", "").strip()
-                if text:
-                    content_parts.append(text)
-            # Skip tool parts and other non-text parts
+        content_parts = get_text_content_parts(msg)
 
         if not content_parts:
             continue
 
         # Skip non-conversational and injected context messages
-        if role_normalized in {"tool", "developer"}:
+        if role_normalized == "tool":
             continue
-        if _is_developer_like_user_message(role_normalized, content_parts):
+        if should_filter_message_for_export(msg):
             continue
 
         # Determine display name
