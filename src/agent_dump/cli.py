@@ -9,6 +9,7 @@ import re
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
+from agent_dump.query_filter import filter_sessions, parse_query
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 
@@ -268,6 +269,12 @@ def main():
         default=20,
         help="Number of sessions to display per page (default: 20)",
     )
+    parser.add_argument(
+        "--query",
+        type=str,
+        default=None,
+        help="Query filter, supports 'agent1,agent2:keyword' or 'keyword'",
+    )
     args = parser.parse_args()
 
     # Handle URI mode first
@@ -318,10 +325,10 @@ def main():
             print(f"❌ 获取会话数据失败: {e}")
             return 1
 
-    # 如果没有指定 --interactive 或 --list，但指定了 --days，则自动启用 --list
+    # 如果没有指定 --interactive 或 --list，但指定了筛选参数，则自动启用 --list
     # 如果都没有指定，显示帮助信息
     if not args.interactive and not args.list:
-        if args.days != 7:  # 用户显式指定了 --days
+        if args.days != 7 or args.query:
             args.list = True
         else:
             parser.print_help()
@@ -332,6 +339,13 @@ def main():
 
     # Scan for available agents
     scanner = AgentScanner()
+    valid_agents = {agent.name for agent in scanner.agents}
+    try:
+        query_spec = parse_query(args.query, valid_agents=valid_agents)
+    except ValueError as e:
+        print(f"❌ 无效的 --query 参数: {e}")
+        return 1
+
     available_agents = scanner.get_available_agents()
 
     if not available_agents:
@@ -343,14 +357,25 @@ def main():
         print("  - Claude Code: ~/.claude/projects/{project_id}/")
         return
 
+    if query_spec and query_spec.agent_names:
+        available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
+        if not available_agents:
+            print("⚠️  查询范围内没有可用的 Agent Tools。")
+            return 0 if args.list else 1
+
     # List mode
     if args.list:
-        print(f"📋 列出最近 {args.days} 天的会话:\n")
+        if query_spec:
+            print(f"📋 列出最近 {args.days} 天且匹配「{query_spec.keyword}」的会话:\n")
+        else:
+            print(f"📋 列出最近 {args.days} 天的会话:\n")
         print("-" * 60)
 
         for agent in available_agents:
             # Get filtered sessions with days parameter
             sessions = agent.get_sessions(days=args.days)
+            if query_spec:
+                sessions = filter_sessions(agent, sessions, query_spec.keyword)
             print(f"\n📁 {agent.display_name} ({len(sessions)} 个会话)")
 
             if sessions:
@@ -373,25 +398,56 @@ def main():
         return 0
 
     # Interactive mode
+    interactive_agents = available_agents
+    matched_sessions_by_agent: dict[str, list[Session]] = {}
+    session_counts: dict[str, int] | None = None
+
+    if query_spec:
+        session_counts = {}
+        for agent in available_agents:
+            sessions = agent.get_sessions(days=args.days)
+            matched_sessions = filter_sessions(agent, sessions, query_spec.keyword)
+            if matched_sessions:
+                matched_sessions_by_agent[agent.name] = matched_sessions
+                session_counts[agent.name] = len(matched_sessions)
+
+        interactive_agents = [agent for agent in available_agents if agent.name in matched_sessions_by_agent]
+        if not interactive_agents:
+            print(f"⚠️  未找到最近 {args.days} 天内匹配「{query_spec.keyword}」的会话。")
+            return 1
+
     # Select agent
-    if len(available_agents) == 1:
-        selected_agent = available_agents[0]
+    if len(interactive_agents) == 1:
+        selected_agent = interactive_agents[0]
         print(f"自动选择: {selected_agent.display_name}\n")
     else:
-        selected_agent = select_agent_interactive(available_agents, days=args.days)
+        selected_agent = select_agent_interactive(
+            interactive_agents,
+            days=args.days,
+            session_counts=session_counts,
+        )
         if not selected_agent:
             print("\n⚠️  未选择 Agent Tool，退出。")
             return 1
         print(f"\n已选择: {selected_agent.display_name}\n")
 
     # Get sessions for the selected agent
-    sessions = selected_agent.get_sessions(days=args.days)
+    if query_spec:
+        sessions = matched_sessions_by_agent.get(selected_agent.name, [])
+    else:
+        sessions = selected_agent.get_sessions(days=args.days)
 
     if not sessions:
-        print(f"⚠️  未找到最近 {args.days} 天内的会话。")
+        if query_spec:
+            print(f"⚠️  未找到最近 {args.days} 天内匹配「{query_spec.keyword}」的会话。")
+        else:
+            print(f"⚠️  未找到最近 {args.days} 天内的会话。")
         return 1
 
-    print(f"📊 找到 {len(sessions)} 个会话 (最近 {args.days} 天)\n")
+    if query_spec:
+        print(f"📊 找到 {len(sessions)} 个会话 (最近 {args.days} 天，匹配「{query_spec.keyword}」)\n")
+    else:
+        print(f"📊 找到 {len(sessions)} 个会话 (最近 {args.days} 天)\n")
 
     # Show warning if too many sessions
     if len(sessions) > 100:

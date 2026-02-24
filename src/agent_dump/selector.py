@@ -70,20 +70,32 @@ def group_sessions(sessions: list[Session]) -> dict[str, list[Session]]:
     return ordered_groups
 
 
-def select_agent_interactive(agents: list[BaseAgent], days: int = 7) -> BaseAgent | None:
+def _get_agent_session_count(
+    agent: BaseAgent, days: int, session_counts: dict[str, int] | None = None
+) -> int:
+    """Get session count for an agent, optionally from precomputed counts."""
+    if session_counts is not None:
+        return session_counts.get(agent.name, 0)
+
+    sessions = agent.get_sessions(days=days)
+    return len(sessions)
+
+
+def select_agent_interactive(
+    agents: list[BaseAgent], days: int = 7, session_counts: dict[str, int] | None = None
+) -> BaseAgent | None:
     """Let user select an agent tool interactively"""
     if not agents:
         print("没有可用的 Agent Tools。")
         return None
 
     if not is_terminal():
-        return select_agent_simple(agents, days)
+        return select_agent_simple(agents, days=days, session_counts=session_counts)
 
     choices = []
     for agent in agents:
-        # Get session count with days filter
-        sessions = agent.get_sessions(days=days)
-        label = f"{agent.display_name} ({len(sessions)} 个会话)"
+        count = _get_agent_session_count(agent, days=days, session_counts=session_counts)
+        label = f"{agent.display_name} ({count} 个会话)"
         choices.append(questionary.Choice(title=label, value=agent))
 
     custom_style = Style(
@@ -120,13 +132,15 @@ def select_agent_interactive(agents: list[BaseAgent], days: int = 7) -> BaseAgen
     return selected
 
 
-def select_agent_simple(agents: list[BaseAgent], days: int = 7) -> BaseAgent | None:
+def select_agent_simple(
+    agents: list[BaseAgent], days: int = 7, session_counts: dict[str, int] | None = None
+) -> BaseAgent | None:
     """Simple agent selection for non-terminal environments"""
     print("可用的 Agent Tools:")
     print("-" * 80)
     for i, agent in enumerate(agents, 1):
-        sessions = agent.get_sessions(days=days)
-        print(f"{i}. {agent.display_name} ({len(sessions)} 个会话)")
+        count = _get_agent_session_count(agent, days=days, session_counts=session_counts)
+        print(f"{i}. {agent.display_name} ({count} 个会话)")
     print()
 
     print("选择 Agent Tool 编号:")

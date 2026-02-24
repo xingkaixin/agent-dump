@@ -104,12 +104,18 @@ uv run agent-dump --help                      # Show detailed help
 # List mode (prints all matches, no pagination)
 uv run agent-dump --list                      # List sessions from last 7 days
 uv run agent-dump --list --days 3             # List sessions from last 3 days
+uv run agent-dump --list --query error        # List sessions matching keyword "error"
+uv run agent-dump --list --query codex,kimi:error  # Query only within Codex/Kimi
 uv run agent-dump --list --page-size 10       # Accepted but currently ignored in --list mode
 
 # Interactive export mode
 uv run agent-dump --interactive               # Interactive mode (default 7 days)
 uv run agent-dump --interactive --days 3      # Interactive mode (3 days)
 uv run agent-dump --days 3                    # Auto-activates list mode
+uv run agent-dump --query error               # Auto-activates list mode
+
+# Note: in interactive mode with --query, only agents with keyword matches are shown,
+#       and the count shown for each agent is the post-filter matched count.
 
 # URI mode - Direct text dump
 uv run agent-dump opencode://<session-id>     # View OpenCode session content
@@ -129,7 +135,8 @@ uv run agent-dump --export ses_abc,ses_xyz    # Export specific session IDs
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`) | - |
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `--days` | Query sessions from the last N days | 7 |
-| `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `--days` is specified without `--interactive`) | - |
+| `--query` | Query filter. Supports `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`) | - |
+| `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `--days` or `--query` is specified without `--interactive`) | - |
 | `--page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
 | `--output` | Output directory | ./sessions |
 | `--export` | Export specific session IDs (comma-separated) | - |

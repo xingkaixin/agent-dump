@@ -116,6 +116,16 @@ class TestSelectAgentSimple:
 
         assert result is None
 
+    def test_select_agent_simple_uses_precomputed_session_counts(self, mock_agent):
+        """测试简单模式使用 session_counts 时不调用 get_sessions"""
+        agents = [mock_agent]
+
+        with mock.patch("builtins.input", return_value="1"):
+            result = select_agent_simple(agents, days=7, session_counts={"test_agent": 5})
+
+        assert result == mock_agent
+        mock_agent.get_sessions.assert_not_called()
+
 
 class TestSelectSessionsSimple:
     """测试 select_sessions_simple 函数"""
@@ -195,7 +205,7 @@ class TestSelectAgentInteractive:
                 mock_simple.return_value = mock_agent
                 result = select_agent_interactive(agents)
 
-        mock_simple.assert_called_once_with(agents, 7)
+        mock_simple.assert_called_once_with(agents, days=7, session_counts=None)
         assert result == mock_agent
 
     def test_terminal_interactive_selection(self, mock_agent):
@@ -323,6 +333,25 @@ class TestSelectAgentInteractiveEdgeCases:
         mock_choice.assert_called_once()
         call_args = mock_choice.call_args
         assert "3 个会话" in call_args.kwargs.get("title", "") or any("3 个会话" in str(arg) for arg in call_args.args)
+
+    def test_agent_count_uses_precomputed_session_counts(self, mock_agent):
+        """测试传入 session_counts 时不再调用 get_sessions"""
+        agents = [mock_agent]
+
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.select") as mock_select:
+                with mock.patch("questionary.Choice") as mock_choice:
+                    mock_choice.return_value = mock.MagicMock()
+                    mock_select.return_value.ask.return_value = mock_agent
+                    select_agent_interactive(
+                        agents,
+                        days=7,
+                        session_counts={"test_agent": 2},
+                    )
+
+        mock_agent.get_sessions.assert_not_called()
+        call_args = mock_choice.call_args
+        assert "2 个会话" in call_args.kwargs.get("title", "") or any("2 个会话" in str(arg) for arg in call_args.args)
 
     def test_session_display_format(self, mock_agent, sample_sessions):
         """测试会话显示格式"""
