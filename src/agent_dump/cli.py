@@ -9,7 +9,7 @@ import re
 import sys
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.i18n import i18n, setup_i18n, Keys
+from agent_dump.i18n import Keys, i18n, setup_i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.query_filter import filter_sessions, parse_query
 from agent_dump.scanner import AgentScanner

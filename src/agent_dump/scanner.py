@@ -7,7 +7,7 @@ from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
-from agent_dump.i18n import i18n, Keys
+from agent_dump.i18n import Keys, i18n
 
 
 class AgentScanner:

@@ -9,7 +9,7 @@ import questionary
 from questionary import Choice, Style
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.i18n import i18n, Keys
+from agent_dump.i18n import Keys, i18n
 
 
 def is_terminal() -> bool:

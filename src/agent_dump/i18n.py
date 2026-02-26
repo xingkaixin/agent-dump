@@ -4,7 +4,7 @@ Internationalization support for agent-dump
 
 import locale
 import os
-import sys
+
 
 # Translation keys
 class Keys:
@@ -267,7 +267,7 @@ class I18n:
             loc = locale.getdefaultlocale()
             if loc and loc[0] and "zh" in loc[0].lower():
                 return "zh"
-        except:
+        except Exception:  # noqa: S110
             pass
 
         return "en"
