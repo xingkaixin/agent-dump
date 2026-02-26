@@ -18,9 +18,9 @@ def is_terminal() -> bool:
 
 def get_time_group(session: Session) -> str:
     """Get time group for a session"""
-    from datetime import UTC
+    from datetime import timezone
 
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = today - timedelta(days=1)
     week_ago = today - timedelta(days=7)
@@ -31,12 +31,12 @@ def get_time_group(session: Session) -> str:
     if isinstance(session_time, (int, float)):
         # Assume milliseconds if large number
         if session_time > 1e10:
-            session_time = datetime.fromtimestamp(session_time / 1000, tz=UTC)
+            session_time = datetime.fromtimestamp(session_time / 1000, tz=timezone.utc)
         else:
-            session_time = datetime.fromtimestamp(session_time, tz=UTC)
+            session_time = datetime.fromtimestamp(session_time, tz=timezone.utc)
     elif session_time.tzinfo is None:
         # Convert naive datetime to UTC
-        session_time = session_time.replace(tzinfo=UTC)
+        session_time = session_time.replace(tzinfo=timezone.utc)
 
     if session_time >= today:
         return "今天"

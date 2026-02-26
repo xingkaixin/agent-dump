@@ -2,7 +2,7 @@
 Codex agent handler
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
@@ -74,7 +74,7 @@ class CodexAgent(BaseAgent):
         if not self.base_path:
             return []
 
-        cutoff_time = datetime.now(UTC) - timedelta(days=days)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
         sessions = []
 
         for jsonl_file in self.base_path.rglob("*.jsonl"):
@@ -131,7 +131,7 @@ class CodexAgent(BaseAgent):
             except Exception:
                 # Try to get from file modification time
                 stat = file_path.stat()
-                created_at = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
+                created_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
             # Try to get title from global state first, then fall back to extracting from messages
             title = self._get_session_title(session_id)
