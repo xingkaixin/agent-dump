@@ -194,7 +194,7 @@ class TestSelectAgentInteractive:
         result = select_agent_interactive([])
         assert result is None
         captured = capsys.readouterr()
-        assert "没有可用的 Agent Tools" in captured.out
+        assert "未找到任何可用的 Agent Tools" in captured.out
 
     def test_non_terminal_uses_simple_mode(self, mock_agent):
         """测试非终端环境使用简单模式"""

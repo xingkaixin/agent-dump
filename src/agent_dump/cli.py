@@ -6,8 +6,10 @@ import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
 import re
+import sys
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.i18n import Keys, i18n, setup_i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.query_filter import filter_sessions, parse_query
 from agent_dump.scanner import AgentScanner
@@ -114,16 +116,16 @@ def format_relative_time(time_value: datetime | float) -> str:
     if delta.days == 0:
         if delta.seconds < 3600:
             minutes = delta.seconds // 60
-            return f"{minutes} 分钟前" if minutes > 0 else "刚刚"
+            return i18n.t(Keys.TIME_MINUTES_AGO, minutes=minutes) if minutes > 0 else i18n.t(Keys.TIME_JUST_NOW)
         hours = delta.seconds // 3600
-        return f"{hours} 小时前"
+        return i18n.t(Keys.TIME_HOURS_AGO, hours=hours)
     elif delta.days == 1:
-        return "昨天"
+        return i18n.t(Keys.TIME_YESTERDAY)
     elif delta.days < 7:
-        return f"{delta.days} 天前"
+        return i18n.t(Keys.TIME_DAYS_AGO, days=delta.days)
     elif delta.days < 30:
         weeks = delta.days // 7
-        return f"{weeks} 周前"
+        return i18n.t(Keys.TIME_WEEKS_AGO, weeks=weeks)
     else:
         return time_value.strftime("%Y-%m-%d")
 
@@ -131,12 +133,19 @@ def format_relative_time(time_value: datetime | float) -> str:
 def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
     """Group sessions by relative time periods"""
     groups: dict[str, list[Session]] = {
-        "今天": [],
-        "昨天": [],
-        "本周": [],
-        "本月": [],
-        "更早": [],
+        i18n.t(Keys.TIME_TODAY): [],
+        i18n.t(Keys.TIME_YESTERDAY): [],
+        i18n.t(Keys.TIME_THIS_WEEK): [],
+        i18n.t(Keys.TIME_THIS_MONTH): [],
+        i18n.t(Keys.TIME_OLDER): [],
     }
+
+    # Map keys for lookup
+    key_today = i18n.t(Keys.TIME_TODAY)
+    key_yesterday = i18n.t(Keys.TIME_YESTERDAY)
+    key_week = i18n.t(Keys.TIME_THIS_WEEK)
+    key_month = i18n.t(Keys.TIME_THIS_MONTH)
+    key_older = i18n.t(Keys.TIME_OLDER)
 
     now = datetime.now()
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -155,15 +164,15 @@ def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
                 session_time = datetime.fromtimestamp(session_time)
 
         if session_time >= today:
-            groups["今天"].append(session)
+            groups[key_today].append(session)
         elif session_time >= yesterday:
-            groups["昨天"].append(session)
+            groups[key_yesterday].append(session)
         elif session_time >= week_ago:
-            groups["本周"].append(session)
+            groups[key_week].append(session)
         elif session_time >= month_ago:
-            groups["本月"].append(session)
+            groups[key_month].append(session)
         else:
-            groups["更早"].append(session)
+            groups[key_older].append(session)
 
     # Remove empty groups
     return {k: v for k, v in groups.items() if v}
@@ -180,7 +189,7 @@ def display_sessions_list(
     total = len(sessions)
 
     if total == 0:
-        print("   (无会话)")
+        print(i18n.t(Keys.NO_SESSIONS_PAREN))
         return False
 
     # Show all sessions with pagination
@@ -200,10 +209,10 @@ def display_sessions_list(
 
         # Show pagination info
         if show_pagination and total_pages > 1:
-            print(f"\n   第 {current_page + 1}/{total_pages} 页 (共 {total} 个会话)")
+            print("\n   " + i18n.t(Keys.PAGINATION_INFO, current=current_page + 1, total=total_pages, total_sessions=total))
 
             if current_page < total_pages - 1:
-                print("   按 Enter 查看更多，或输入 'q' 退出")
+                print("   " + i18n.t(Keys.PAGINATION_PROMPT))
                 try:
                     user_input = input("> ").strip().lower()
                     if user_input == "q":
@@ -214,11 +223,11 @@ def display_sessions_list(
                     print()
                     return True  # User interrupted, quit entirely
             else:
-                print("   已显示全部会话")
+                print("   " + i18n.t(Keys.PAGINATION_DONE))
                 break
         else:
             if total > page_size:
-                print(f"\n   ... 还有 {total - page_size} 个会话未显示")
+                print("\n   " + i18n.t(Keys.PAGINATION_REMAINING, count=total - page_size))
             break
     
     return False
@@ -229,41 +238,55 @@ def export_sessions(agent: BaseAgent, sessions: list, output_base_dir: Path) -> 
     output_dir = output_base_dir / agent.name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"📤 导出 {agent.display_name} 会话...")
+    print(i18n.t(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
     exported = []
     for session in sessions:
         try:
             output_path = agent.export_session(session, output_dir)
             exported.append(output_path)
-            print(f"  ✓ {session.title[:50]}... → {output_path.name}")
+            print(i18n.t(Keys.EXPORT_SUCCESS, title=session.title[:50], filename=output_path.name))
         except Exception as e:
-            print(f"  ✗ {session.title[:50]}... → 错误: {e}")
+            print(i18n.t(Keys.EXPORT_ERROR, title=session.title[:50], error=e))
 
     return exported
 
 
 def main():
     """Main entry point"""
-    parser = argparse.ArgumentParser(description="Export agent sessions to JSON")
-    parser.add_argument("uri", nargs="?", help="Agent session URI to dump (e.g., opencode://session-id)")
+
+    # Pre-parse language argument
+    lang_arg = None
+    for i, arg in enumerate(sys.argv):
+        if arg == "--lang":
+            if i + 1 < len(sys.argv):
+                lang_arg = sys.argv[i + 1]
+                break
+        elif arg.startswith("--lang="):
+            lang_arg = arg.split("=", 1)[1]
+            break
+
+    setup_i18n(lang_arg)
+
+    parser = argparse.ArgumentParser(description=i18n.t(Keys.CLI_DESC))
+    parser.add_argument("uri", nargs="?", help=i18n.t(Keys.CLI_URI_HELP))
     parser.add_argument(
-        "-d", "-days", type=int, default=7, dest="days", help="Number of days to look back (default: 7)"
+        "-d", "-days", type=int, default=7, dest="days", help=i18n.t(Keys.CLI_DAYS_HELP)
     )
     parser.add_argument(
         "--output",
         type=str,
         default="./sessions",
-        help="Output base directory (default: ./sessions)",
+        help=i18n.t(Keys.CLI_OUTPUT_HELP),
     )
     parser.add_argument(
         "--list",
         action="store_true",
-        help="List all available sessions without exporting",
+        help=i18n.t(Keys.CLI_LIST_HELP),
     )
     parser.add_argument(
         "--interactive",
         action="store_true",
-        help="Run in interactive mode to select and export sessions",
+        help=i18n.t(Keys.CLI_INTERACTIVE_HELP),
     )
     parser.add_argument(
         "-p",
@@ -271,7 +294,7 @@ def main():
         type=int,
         default=20,
         dest="page_size",
-        help="Number of sessions to display per page (default: 20)",
+        help=i18n.t(Keys.CLI_PAGE_SIZE_HELP),
     )
     parser.add_argument(
         "-q",
@@ -279,7 +302,14 @@ def main():
         type=str,
         default=None,
         dest="query",
-        help="Query filter, supports 'agent1,agent2:keyword' or 'keyword'",
+        help=i18n.t(Keys.CLI_QUERY_HELP),
+    )
+    parser.add_argument(
+        "--lang",
+        type=str,
+        default=None,
+        choices=["en", "zh"],
+        help=i18n.t(Keys.CLI_LANG_HELP),
     )
     args = parser.parse_args()
 
@@ -287,8 +317,8 @@ def main():
     if args.uri:
         uri_result = parse_uri(args.uri)
         if uri_result is None:
-            print(f"❌ 无效的 URI 格式: {args.uri}")
-            print("\n支持的 URI 格式:")
+            print(i18n.t(Keys.URI_INVALID_FORMAT, uri=args.uri))
+            print(i18n.t(Keys.URI_SUPPORTED_FORMATS))
             print("  - opencode://<session_id>")
             print("  - codex://<session_id>")
             print("  - codex://threads/<session_id>")
@@ -303,13 +333,13 @@ def main():
         available_agents = scanner.get_available_agents()
 
         if not available_agents:
-            print("❌ 未找到任何可用的 Agent Tools 会话。")
+            print(i18n.t(Keys.NO_AGENTS_FOUND))
             return 1
 
         # Find the session
         result = find_session_by_id(scanner, session_id)
         if result is None:
-            print(f"❌ 未找到会话: {args.uri}")
+            print(i18n.t(Keys.SESSION_NOT_FOUND, uri=args.uri))
             return 1
 
         agent, session = result
@@ -317,8 +347,8 @@ def main():
         # Verify the URI scheme matches the agent
         expected_agent_name = VALID_URI_SCHEMES.get(scheme)
         if agent.name != expected_agent_name:
-            print(f"❌ URI scheme 与会话不匹配: {args.uri}")
-            print(f"   该会话属于 {agent.display_name}，但 URI 使用了 {scheme}://")
+            print(i18n.t(Keys.URI_SCHEME_MISMATCH, uri=args.uri))
+            print(i18n.t(Keys.URI_BELONGS_TO, agent_display_name=agent.display_name, scheme=scheme))
             return 1
 
         # Get session data and render
@@ -328,11 +358,11 @@ def main():
             print(output)
             return 0
         except Exception as e:
-            print(f"❌ 获取会话数据失败: {e}")
+            print(i18n.t(Keys.FETCH_DATA_FAILED, error=e))
             return 1
 
-    # 如果没有指定 --interactive 或 --list，但指定了筛选参数，则自动启用 --list
-    # 如果都没有指定，显示帮助信息
+    # If --interactive or --list not specified, but filters are, enable --list
+    # If nothing specified, show help
     if not args.interactive and not args.list:
         if args.days != 7 or args.query:
             args.list = True
@@ -349,14 +379,14 @@ def main():
     try:
         query_spec = parse_query(args.query, valid_agents=valid_agents)
     except ValueError as e:
-        print(f"❌ 无效的 -query 参数: {e}")
+        print(i18n.t(Keys.QUERY_INVALID, error=e))
         return 1
 
     available_agents = scanner.get_available_agents()
 
     if not available_agents:
-        print("❌ 未找到任何可用的 Agent Tools 会话。")
-        print("\n支持的 Agent Tools:")
+        print(i18n.t(Keys.NO_AGENTS_FOUND))
+        print(i18n.t(Keys.SUPPORTED_AGENTS))
         print("  - OpenCode: ~/.local/share/opencode/opencode.db")
         print("  - Codex: ~/.codex/sessions/{YYYY}/{MM}/{DD}/")
         print("  - Kimi: ~/.kimi/sessions/{project_id}/{session_id}/")
@@ -366,15 +396,15 @@ def main():
     if query_spec and query_spec.agent_names:
         available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
         if not available_agents:
-            print("⚠️  查询范围内没有可用的 Agent Tools。")
+            print(i18n.t(Keys.NO_AGENTS_IN_QUERY))
             return 0 if args.list else 1
 
     # List mode
     if args.list:
         if query_spec:
-            print(f"📋 列出最近 {args.days} 天且匹配「{query_spec.keyword}」的会话:\n")
+            print(i18n.t(Keys.LIST_HEADER_FILTERED, days=args.days, keyword=query_spec.keyword))
         else:
-            print(f"📋 列出最近 {args.days} 天的会话:\n")
+            print(i18n.t(Keys.LIST_HEADER, days=args.days))
         print("-" * 60)
 
         for agent in available_agents:
@@ -382,10 +412,10 @@ def main():
             sessions = agent.get_sessions(days=args.days)
             if query_spec:
                 sessions = filter_sessions(agent, sessions, query_spec.keyword)
-            print(f"\n📁 {agent.display_name} ({len(sessions)} 个会话)")
+
+            print(f"\n📁 {agent.display_name} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
 
             if sessions:
-                # In list mode, always print all matched sessions without pagination.
                 should_quit = display_sessions_list(
                     agent,
                     sessions,
@@ -396,10 +426,10 @@ def main():
                     print("\n" + "=" * 60)
                     return 0
             else:
-                print(f"   (最近 {args.days} 天内无会话)")
+                print(i18n.t(Keys.NO_SESSIONS_IN_DAYS, days=args.days))
 
         print("\n" + "=" * 60)
-        print("提示: 使用 --interactive 进入交互式导出模式")
+        print(i18n.t(Keys.HINT_INTERACTIVE))
         print()
         return 0
 
@@ -419,13 +449,13 @@ def main():
 
         interactive_agents = [agent for agent in available_agents if agent.name in matched_sessions_by_agent]
         if not interactive_agents:
-            print(f"⚠️  未找到最近 {args.days} 天内匹配「{query_spec.keyword}」的会话。")
+            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, keyword=query_spec.keyword))
             return 1
 
     # Select agent
     if len(interactive_agents) == 1:
         selected_agent = interactive_agents[0]
-        print(f"自动选择: {selected_agent.display_name}\n")
+        print(i18n.t(Keys.AUTO_SELECT_AGENT, agent_name=selected_agent.display_name))
     else:
         selected_agent = select_agent_interactive(
             interactive_agents,
@@ -433,9 +463,9 @@ def main():
             session_counts=session_counts,
         )
         if not selected_agent:
-            print("\n⚠️  未选择 Agent Tool，退出。")
+            print("\n" + i18n.t(Keys.NO_AGENT_SELECTED))
             return 1
-        print(f"\n已选择: {selected_agent.display_name}\n")
+        print(i18n.t(Keys.AGENT_SELECTED, agent_name=selected_agent.display_name))
 
     # Get sessions for the selected agent
     if query_spec:
@@ -445,34 +475,34 @@ def main():
 
     if not sessions:
         if query_spec:
-            print(f"⚠️  未找到最近 {args.days} 天内匹配「{query_spec.keyword}」的会话。")
+            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, keyword=query_spec.keyword))
         else:
-            print(f"⚠️  未找到最近 {args.days} 天内的会话。")
+            print(i18n.t(Keys.NO_SESSIONS_FOUND, days=args.days))
         return 1
 
     if query_spec:
-        print(f"📊 找到 {len(sessions)} 个会话 (最近 {args.days} 天，匹配「{query_spec.keyword}」)\n")
+        print(i18n.t(Keys.SESSIONS_FOUND_FILTERED, count=len(sessions), days=args.days, keyword=query_spec.keyword))
     else:
-        print(f"📊 找到 {len(sessions)} 个会话 (最近 {args.days} 天)\n")
+        print(i18n.t(Keys.SESSIONS_FOUND, count=len(sessions), days=args.days))
 
     # Show warning if too many sessions
     if len(sessions) > 100:
-        print(f"⚠️  注意: 会话数量较多 ({len(sessions)} 个)，建议使用 -days 缩小时间范围")
-        print("   例如: agent-dump --interactive -days 1\n")
+        print(i18n.t(Keys.MANY_SESSIONS_WARNING, count=len(sessions)))
+        print(i18n.t(Keys.MANY_SESSIONS_EXAMPLE))
 
     # Select sessions
     selected_sessions = select_sessions_interactive(sessions, selected_agent)
     if not selected_sessions:
-        print("\n⚠️  未选择会话，退出。")
+        print("\n" + i18n.t(Keys.NO_SESSION_SELECTED))
         return 1
 
-    print(f"\n✓ 选择了 {len(selected_sessions)} 个会话\n")
+    print(i18n.t(Keys.SESSIONS_SELECTED_COUNT, count=len(selected_sessions)))
 
     # Export
     output_base_dir = Path(args.output)
     exported = export_sessions(selected_agent, selected_sessions, output_base_dir)
 
-    print(f"\n✅ 成功导出 {len(exported)} 个会话到 {output_base_dir}/{selected_agent.name}/")
+    print(i18n.t(Keys.EXPORT_SUMMARY, count=len(exported), path=f"{output_base_dir}/{selected_agent.name}"))
     return 0
 
 
