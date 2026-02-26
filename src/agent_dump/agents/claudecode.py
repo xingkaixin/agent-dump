@@ -2,7 +2,7 @@
 Claude Code agent handler
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
@@ -81,7 +81,7 @@ class ClaudeCodeAgent(BaseAgent):
         if not self.base_path:
             return []
 
-        cutoff_time = datetime.now(UTC) - timedelta(days=days)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
         sessions = []
 
         # Iterate through project directories
@@ -125,7 +125,7 @@ class ClaudeCodeAgent(BaseAgent):
             except Exception:
                 # Use file modification time
                 stat = file_path.stat()
-                created_at = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
+                created_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
             # Try to get title from sessions-index.json first
             metadata = self._get_session_metadata(session_id, project_dir)

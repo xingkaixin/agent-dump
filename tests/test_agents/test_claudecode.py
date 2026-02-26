@@ -3,7 +3,7 @@
 """
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -151,7 +151,7 @@ class TestClaudeCodeAgent:
         project_dir.mkdir()
 
         file_path = project_dir / "session-001.jsonl"
-        timestamp = datetime.now(UTC).isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         data = {
             "timestamp": timestamp,
             "cwd": "/test/dir",
@@ -183,7 +183,7 @@ class TestClaudeCodeAgent:
             json.dump(index_data, f)
 
         file_path = project_dir / "session-001.jsonl"
-        file_path.write_text(json.dumps({"timestamp": datetime.now(UTC).isoformat()}) + "\n")
+        file_path.write_text(json.dumps({"timestamp": datetime.now(timezone.utc).isoformat()}) + "\n")
 
         result = agent._parse_session_file(file_path, project_dir)
 
@@ -202,8 +202,8 @@ class TestClaudeCodeAgent:
         new_file = project_dir / "new.jsonl"
         old_file = project_dir / "old.jsonl"
 
-        new_timestamp = datetime.now(UTC).isoformat()
-        old_timestamp = (datetime.now(UTC) - timedelta(days=10)).isoformat()
+        new_timestamp = datetime.now(timezone.utc).isoformat()
+        old_timestamp = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
 
         new_file.write_text(json.dumps({"timestamp": new_timestamp}) + "\n")
         old_file.write_text(json.dumps({"timestamp": old_timestamp}) + "\n")
@@ -225,7 +225,7 @@ class TestClaudeCodeAgent:
         session_file = project_dir / "session.jsonl"
 
         index_file.write_text("{}")
-        session_file.write_text(json.dumps({"timestamp": datetime.now(UTC).isoformat()}) + "\n")
+        session_file.write_text(json.dumps({"timestamp": datetime.now(timezone.utc).isoformat()}) + "\n")
 
         result = agent.get_sessions(days=7)
 
@@ -294,7 +294,7 @@ class TestClaudeCodeAgent:
         data = {
             "type": "user",
             "uuid": "msg-001",
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "message": {
                 "role": "user",
                 "content": "Hello Claude",

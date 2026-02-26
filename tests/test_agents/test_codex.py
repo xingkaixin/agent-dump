@@ -3,7 +3,7 @@
 """
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -162,7 +162,7 @@ class TestCodexAgent:
 
         file_path = tmp_path / "rollout-2026-02-03T10-04-47-019c213e-c251-73a3-af66-0ec9d7cb9e29.jsonl"
 
-        timestamp = datetime.now(UTC).isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         data = {
             "payload": {
                 "id": "test-id",
@@ -190,8 +190,8 @@ class TestCodexAgent:
         new_file = tmp_path / "new.jsonl"
         old_file = tmp_path / "old.jsonl"
 
-        new_timestamp = datetime.now(UTC).isoformat()
-        old_timestamp = (datetime.now(UTC) - timedelta(days=10)).isoformat()
+        new_timestamp = datetime.now(timezone.utc).isoformat()
+        old_timestamp = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
 
         new_file.write_text(json.dumps({"payload": {"timestamp": new_timestamp}}) + "\n")
         old_file.write_text(json.dumps({"payload": {"timestamp": old_timestamp}}) + "\n")
@@ -255,7 +255,7 @@ class TestCodexAgent:
                 "role": "user",
                 "content": [{"type": "input_text", "text": "Hello"}],
             },
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         session_file.write_text(json.dumps(data) + "\n")
 
@@ -293,7 +293,7 @@ class TestCodexAgent:
                     "role": "developer",
                     "content": [{"type": "input_text", "text": "System instruction"}],
                 },
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             {
                 "type": "response_item",
@@ -302,7 +302,7 @@ class TestCodexAgent:
                     "role": "user",
                     "content": [{"type": "input_text", "text": "<environment_context>\n  <cwd>/tmp</cwd>"}],
                 },
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             {
                 "type": "response_item",
@@ -311,7 +311,7 @@ class TestCodexAgent:
                     "role": "user",
                     "content": [{"type": "input_text", "text": "真实用户问题"}],
                 },
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             {
                 "type": "response_item",
@@ -321,7 +321,7 @@ class TestCodexAgent:
                     "call_id": "call-001",
                     "arguments": {"path": "/tmp/a.py"},
                 },
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         ]
         session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
