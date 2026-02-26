@@ -60,6 +60,12 @@ uv sync
 uv tool install . --force
 ```
 
+### Method 4: Install as a Skill
+
+```bash
+npx skills add xingkaixin/agent-dump
+```
+
 ## Usage
 
 ### Interactive Export

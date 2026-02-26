@@ -60,6 +60,12 @@ uv sync
 uv tool install . --force
 ```
 
+### 方式四：安装为 Skill 使用
+
+```bash
+npx skills add xingkaixin/agent-dump
+```
+
 ## 使用方法
 
 ### 交互式导出
