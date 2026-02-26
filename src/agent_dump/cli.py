@@ -251,6 +251,54 @@ def export_sessions(agent: BaseAgent, sessions: list, output_base_dir: Path) -> 
     return exported
 
 
+def export_session_markdown(uri: str, session_data: dict, session_id: str, output_dir: Path) -> Path:
+    """Export a single session to Markdown"""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"{session_id}.md"
+    output_path.write_text(render_session_text(uri, session_data), encoding="utf-8")
+    return output_path
+
+
+def export_sessions_markdown(agent: BaseAgent, sessions: list[Session], output_base_dir: Path) -> list[Path]:
+    """Export multiple sessions to Markdown"""
+    output_dir = output_base_dir / agent.name
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    print(i18n.t(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
+    exported: list[Path] = []
+    for session in sessions:
+        try:
+            session_data = agent.get_session_data(session)
+            session_uri = agent.get_session_uri(session)
+            output_path = export_session_markdown(session_uri, session_data, session.id, output_dir)
+            exported.append(output_path)
+            print(i18n.t(Keys.EXPORT_SUCCESS, title=session.title[:50], filename=output_path.name))
+        except Exception as e:
+            print(i18n.t(Keys.EXPORT_ERROR, title=session.title[:50], error=e))
+
+    return exported
+
+
+def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:
+    """Check whether a CLI option is explicitly specified"""
+    return any(arg in (short_option, long_option) or arg.startswith(f"{long_option}=") for arg in argv)
+
+
+def resolve_effective_format(args: argparse.Namespace, is_uri_mode: bool, format_specified: bool) -> str:
+    """Resolve effective output format by mode and explicit user input"""
+    if format_specified and args.format:
+        return args.format
+    return "print" if is_uri_mode else "json"
+
+
+def warn_list_ignored_options(output_specified: bool, format_specified: bool) -> None:
+    """Warn when --list mode receives options that have no effect"""
+    if format_specified:
+        print(i18n.t(Keys.LIST_IGNORE_FORMAT))
+    if output_specified:
+        print(i18n.t(Keys.LIST_IGNORE_OUTPUT))
+
+
 def main():
     """Main entry point"""
 
@@ -266,6 +314,9 @@ def main():
             break
 
     setup_i18n(lang_arg)
+    argv = sys.argv[1:]
+    output_specified = is_option_specified(argv, "-output", "--output")
+    format_specified = is_option_specified(argv, "-format", "--format")
 
     parser = argparse.ArgumentParser(description=i18n.t(Keys.CLI_DESC))
     parser.add_argument("uri", nargs="?", help=i18n.t(Keys.CLI_URI_HELP))
@@ -273,10 +324,19 @@ def main():
         "-d", "-days", type=int, default=7, dest="days", help=i18n.t(Keys.CLI_DAYS_HELP)
     )
     parser.add_argument(
+        "-output",
         "--output",
         type=str,
         default="./sessions",
         help=i18n.t(Keys.CLI_OUTPUT_HELP),
+    )
+    parser.add_argument(
+        "-format",
+        "--format",
+        type=str,
+        choices=["json", "md", "print"],
+        default=None,
+        help=i18n.t(Keys.CLI_FORMAT_HELP),
     )
     parser.add_argument(
         "--list",
@@ -312,9 +372,11 @@ def main():
         help=i18n.t(Keys.CLI_LANG_HELP),
     )
     args = parser.parse_args()
+    is_uri_mode = bool(args.uri)
+    output_format = resolve_effective_format(args, is_uri_mode=is_uri_mode, format_specified=format_specified)
 
     # Handle URI mode first
-    if args.uri:
+    if is_uri_mode:
         uri_result = parse_uri(args.uri)
         if uri_result is None:
             print(i18n.t(Keys.URI_INVALID_FORMAT, uri=args.uri))
@@ -353,9 +415,22 @@ def main():
 
         # Get session data and render
         try:
-            session_data = agent.get_session_data(session)
-            output = render_session_text(args.uri, session_data)
-            print(output)
+            if output_format == "print":
+                session_data = agent.get_session_data(session)
+                output = render_session_text(args.uri, session_data)
+                print(output)
+                return 0
+
+            output_dir = Path(args.output) / agent.name
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            if output_format == "json":
+                output_path = agent.export_session(session, output_dir)
+            else:
+                session_data = agent.get_session_data(session)
+                output_path = export_session_markdown(args.uri, session_data, session.id, output_dir)
+
+            print(i18n.t(Keys.URI_EXPORT_SAVED, path=str(output_path)))
             return 0
         except Exception as e:
             print(i18n.t(Keys.FETCH_DATA_FAILED, error=e))
@@ -401,6 +476,7 @@ def main():
 
     # List mode
     if args.list:
+        warn_list_ignored_options(output_specified=output_specified, format_specified=format_specified)
         if query_spec:
             print(i18n.t(Keys.LIST_HEADER_FILTERED, days=args.days, keyword=query_spec.keyword))
         else:
@@ -432,6 +508,10 @@ def main():
         print(i18n.t(Keys.HINT_INTERACTIVE))
         print()
         return 0
+
+    if output_format == "print":
+        print(i18n.t(Keys.INTERACTIVE_FORMAT_INVALID))
+        return 1
 
     # Interactive mode
     interactive_agents = available_agents
@@ -500,7 +580,10 @@ def main():
 
     # Export
     output_base_dir = Path(args.output)
-    exported = export_sessions(selected_agent, selected_sessions, output_base_dir)
+    if output_format == "json":
+        exported = export_sessions(selected_agent, selected_sessions, output_base_dir)
+    else:
+        exported = export_sessions_markdown(selected_agent, selected_sessions, output_base_dir)
 
     print(i18n.t(Keys.EXPORT_SUMMARY, count=len(exported), path=f"{output_base_dir}/{selected_agent.name}"))
     return 0

@@ -123,10 +123,13 @@ uv run agent-dump opencode://<session-id>     # View OpenCode session content
 uv run agent-dump codex://<session-id>        # View Codex session content
 uv run agent-dump kimi://<session-id>         # View Kimi session content
 uv run agent-dump claude://<session-id>       # View Claude Code session content
+uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
+uv run agent-dump codex://<session-id> -format md -output ./my-sessions       # Export Markdown file
 
 # Other options
-uv run agent-dump --output ./my-sessions      # Specify output directory
-uv run agent-dump --export ses_abc,ses_xyz    # Export specific session IDs
+uv run agent-dump --interactive --format json # Interactive export as JSON (default)
+uv run agent-dump --interactive --format md   # Interactive export as Markdown
+uv run agent-dump --interactive -output ./my-sessions  # Specify output directory
 ```
 
 ### Full Parameter Reference
@@ -138,9 +141,9 @@ uv run agent-dump --export ses_abc,ses_xyz    # Export specific session IDs
 | `-d`, `-days` | Query sessions from the last N days | 7 |
 | `-q`, `-query` | Query filter. Supports `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`) | - |
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
+| `-format`, `--format` | Output format. `json \\| md \\| print`. Default: URI mode `print`, non-URI mode `json`. `--interactive` only supports `json/md`; `--list` ignores this option with warning. | - |
 | `-p`, `-page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
-| `--output` | Output directory | ./sessions |
-| `--export` | Export specific session IDs (comma-separated) | - |
+| `-output`, `--output` | Output directory. Effective for `--interactive`; in URI mode only when `format` is `json/md`; ignored in `--list` with warning. | ./sessions |
 | `-h, --help` | Show help message | - |
 
 ## Project Structure
