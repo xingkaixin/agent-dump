@@ -272,13 +272,18 @@ class I18n:
 
         return "en"
 
-    def t(self, key, **kwargs):
+    def t(self, key: str, **kwargs) -> str:
         lang_dict = self.translations.get(self.lang, {})
         msg = lang_dict.get(key)
 
         if msg is None:
             # Fallback to English
             msg = self.translations.get("en", {}).get(key, key)
+
+        # Should strictly be a string if keys are managed correctly,
+        # but for type safety we ensure it is not None.
+        if msg is None:
+            msg = key
 
         if kwargs:
             try:
