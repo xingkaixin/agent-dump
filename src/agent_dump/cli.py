@@ -246,7 +246,9 @@ def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description="Export agent sessions to JSON")
     parser.add_argument("uri", nargs="?", help="Agent session URI to dump (e.g., opencode://session-id)")
-    parser.add_argument("--days", type=int, default=7, help="Number of days to look back (default: 7)")
+    parser.add_argument(
+        "-d", "-days", type=int, default=7, dest="days", help="Number of days to look back (default: 7)"
+    )
     parser.add_argument(
         "--output",
         type=str,
@@ -264,15 +266,19 @@ def main():
         help="Run in interactive mode to select and export sessions",
     )
     parser.add_argument(
-        "--page-size",
+        "-p",
+        "-page-size",
         type=int,
         default=20,
+        dest="page_size",
         help="Number of sessions to display per page (default: 20)",
     )
     parser.add_argument(
-        "--query",
+        "-q",
+        "-query",
         type=str,
         default=None,
+        dest="query",
         help="Query filter, supports 'agent1,agent2:keyword' or 'keyword'",
     )
     args = parser.parse_args()
@@ -343,7 +349,7 @@ def main():
     try:
         query_spec = parse_query(args.query, valid_agents=valid_agents)
     except ValueError as e:
-        print(f"❌ 无效的 --query 参数: {e}")
+        print(f"❌ 无效的 -query 参数: {e}")
         return 1
 
     available_agents = scanner.get_available_agents()
@@ -451,8 +457,8 @@ def main():
 
     # Show warning if too many sessions
     if len(sessions) > 100:
-        print(f"⚠️  注意: 会话数量较多 ({len(sessions)} 个)，建议使用 --days 缩小时间范围")
-        print("   例如: agent-dump --interactive --days 1\n")
+        print(f"⚠️  注意: 会话数量较多 ({len(sessions)} 个)，建议使用 -days 缩小时间范围")
+        print("   例如: agent-dump --interactive -days 1\n")
 
     # Select sessions
     selected_sessions = select_sessions_interactive(sessions, selected_agent)

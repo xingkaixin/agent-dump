@@ -341,7 +341,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump", "--list", "--page-size", "1"]):
+            with mock.patch("sys.argv", ["agent-dump", "--list", "-page-size", "1"]):
                 main()
 
             captured = capsys.readouterr()
@@ -518,13 +518,13 @@ class TestMain:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
-                    with mock.patch("sys.argv", ["agent-dump", "--days", "3"]):
+                    with mock.patch("sys.argv", ["agent-dump", "-days", "3"]):
                         main()
 
             mock_agent.get_sessions.assert_called_once_with(days=3)
 
     def test_main_days_without_mode_auto_switches_to_list(self, capsys):
-        """测试仅指定 --days 时自动进入 --list 模式"""
+        """测试仅指定 -days 时自动进入 --list 模式"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             mock_agent = mock.MagicMock()
@@ -533,7 +533,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump", "--days", "3"]):
+            with mock.patch("sys.argv", ["agent-dump", "-days", "3"]):
                 result = main()
 
         assert result == 0
@@ -541,7 +541,7 @@ class TestMain:
         assert "列出最近 3 天的会话" in captured.out
 
     def test_main_query_without_mode_auto_switches_to_list(self, capsys):
-        """测试仅指定 --query 时自动进入 --list 模式"""
+        """测试仅指定 -query 时自动进入 --list 模式"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             known_agent = mock.MagicMock()
@@ -556,7 +556,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump", "--query", "报错"]):
+            with mock.patch("sys.argv", ["agent-dump", "-query", "报错"]):
                 result = main()
 
         assert result == 0
@@ -564,7 +564,7 @@ class TestMain:
         assert "匹配「报错」" in captured.out
 
     def test_main_list_mode_with_query_filters_sessions(self, capsys):
-        """测试 --list + --query 会调用过滤逻辑"""
+        """测试 --list + -query 会调用过滤逻辑"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             known_agent = mock.MagicMock()
@@ -589,7 +589,7 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli.filter_sessions", return_value=[session2]) as mock_filter:
-                with mock.patch("sys.argv", ["agent-dump", "--list", "--query", "error"]):
+                with mock.patch("sys.argv", ["agent-dump", "--list", "-query", "error"]):
                     result = main()
 
         assert result == 0
@@ -643,7 +643,7 @@ class TestMain:
                         with mock.patch("agent_dump.cli.export_sessions", return_value=[Path("a.json")]):
                             with mock.patch(
                                 "sys.argv",
-                                ["agent-dump", "--interactive", "--query", "codex,kimi:bug"],
+                                ["agent-dump", "--interactive", "-query", "codex,kimi:bug"],
                             ):
                                 result = main()
 
@@ -658,7 +658,7 @@ class TestMain:
         assert "已选择: Codex" in captured.out
 
     def test_main_days_and_query_filters_with_and_relation(self):
-        """测试 --days 与 --query 同时存在时都会生效"""
+        """测试 -days 与 -query 同时存在时都会生效"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             known_agent = mock.MagicMock()
@@ -680,7 +680,7 @@ class TestMain:
                     with mock.patch("agent_dump.cli.export_sessions", return_value=[Path("a.json")]):
                         with mock.patch(
                             "sys.argv",
-                            ["agent-dump", "--interactive", "--days", "3", "--query", "bug"],
+                            ["agent-dump", "--interactive", "-days", "3", "-query", "bug"],
                         ):
                             result = main()
 
@@ -701,12 +701,12 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [known_opencode]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump", "--query", "codex,unknown:bug"]):
+            with mock.patch("sys.argv", ["agent-dump", "-query", "codex,unknown:bug"]):
                 result = main()
 
         assert result == 1
         captured = capsys.readouterr()
-        assert "无效的 --query 参数" in captured.out
+        assert "无效的 -query 参数" in captured.out
 
     def test_main_interactive_query_no_match_returns_1(self, capsys):
         """测试 interactive + query 全部无命中时返回 1"""
@@ -734,7 +734,7 @@ class TestMain:
 
             with mock.patch("agent_dump.cli.filter_sessions", side_effect=[[], []]) as mock_filter:
                 with mock.patch("agent_dump.cli.select_agent_interactive") as mock_select_agent:
-                    with mock.patch("sys.argv", ["agent-dump", "--interactive", "--query", "codex,kimi:bug"]):
+                    with mock.patch("sys.argv", ["agent-dump", "--interactive", "-query", "codex,kimi:bug"]):
                         result = main()
 
         assert result == 1
@@ -780,7 +780,7 @@ class TestMain:
                         return_value=[selected_session],
                     ):
                         with mock.patch("agent_dump.cli.export_sessions", return_value=[Path("a.json")]):
-                            with mock.patch("sys.argv", ["agent-dump", "--interactive", "--query", "codex,kimi:bug"]):
+                            with mock.patch("sys.argv", ["agent-dump", "--interactive", "-query", "codex,kimi:bug"]):
                                 result = main()
 
         assert result == 0
