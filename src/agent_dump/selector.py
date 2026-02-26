@@ -9,6 +9,7 @@ import questionary
 from questionary import Choice, Style
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.i18n import i18n, Keys
 
 
 def is_terminal() -> bool:
@@ -39,15 +40,15 @@ def get_time_group(session: Session) -> str:
         session_time = session_time.replace(tzinfo=timezone.utc)
 
     if session_time >= today:
-        return "今天"
+        return i18n.t(Keys.TIME_TODAY)
     elif session_time >= yesterday:
-        return "昨天"
+        return i18n.t(Keys.TIME_YESTERDAY)
     elif session_time >= week_ago:
-        return "本周"
+        return i18n.t(Keys.TIME_THIS_WEEK)
     elif session_time >= month_ago:
-        return "本月"
+        return i18n.t(Keys.TIME_THIS_MONTH)
     else:
-        return "更早"
+        return i18n.t(Keys.TIME_OLDER)
 
 
 def group_sessions(sessions: list[Session]) -> dict[str, list[Session]]:
@@ -61,7 +62,14 @@ def group_sessions(sessions: list[Session]) -> dict[str, list[Session]]:
         groups[group].append(session)
 
     # Define order
-    order = ["今天", "昨天", "本周", "本月", "更早", "未知时间"]
+    order = [
+        i18n.t(Keys.TIME_TODAY),
+        i18n.t(Keys.TIME_YESTERDAY),
+        i18n.t(Keys.TIME_THIS_WEEK),
+        i18n.t(Keys.TIME_THIS_MONTH),
+        i18n.t(Keys.TIME_OLDER),
+        i18n.t(Keys.TIME_UNKNOWN)
+    ]
     ordered_groups = {}
     for key in order:
         if key in groups:
@@ -86,7 +94,7 @@ def select_agent_interactive(
 ) -> BaseAgent | None:
     """Let user select an agent tool interactively"""
     if not agents:
-        print("没有可用的 Agent Tools。")
+        print(i18n.t(Keys.NO_AGENTS_FOUND))
         return None
 
     if not is_terminal():
@@ -95,7 +103,7 @@ def select_agent_interactive(
     choices = []
     for agent in agents:
         count = _get_agent_session_count(agent, days=days, session_counts=session_counts)
-        label = f"{agent.display_name} ({count} 个会话)"
+        label = f"{agent.display_name} ({count} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})"
         choices.append(questionary.Choice(title=label, value=agent))
 
     custom_style = Style(
@@ -113,10 +121,10 @@ def select_agent_interactive(
     )
 
     q = questionary.select(
-        "选择要导出的 Agent Tool:",
+        i18n.t(Keys.SELECT_AGENT_PROMPT),
         choices=choices,
         style=custom_style,
-        instruction="\n↑↓ 移动  |  回车 选择  |  q 退出",
+        instruction=i18n.t(Keys.SELECT_INSTRUCTION),
     )
 
     if q.application.key_bindings:
@@ -126,7 +134,7 @@ def select_agent_interactive(
     try:
         selected = q.ask()
     except KeyboardInterrupt:
-        print("\n⚠️  用户取消操作，退出。")
+        print("\n" + i18n.t(Keys.USER_CANCELLED))
         return None
 
     return selected
@@ -136,18 +144,18 @@ def select_agent_simple(
     agents: list[BaseAgent], days: int = 7, session_counts: dict[str, int] | None = None
 ) -> BaseAgent | None:
     """Simple agent selection for non-terminal environments"""
-    print("可用的 Agent Tools:")
+    print(i18n.t(Keys.AVAILABLE_AGENTS))
     print("-" * 80)
     for i, agent in enumerate(agents, 1):
         count = _get_agent_session_count(agent, days=days, session_counts=session_counts)
-        print(f"{i}. {agent.display_name} ({count} 个会话)")
+        print(f"{i}. {agent.display_name} ({count} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
     print()
 
-    print("选择 Agent Tool 编号:")
+    print(i18n.t(Keys.SELECT_AGENT_NUMBER))
     try:
         selection = input("> ").strip()
     except EOFError:
-        print("\n⚠️  No input provided. Exiting.")
+        print("\n" + i18n.t(Keys.NO_INPUT_EXITING))
         return None
 
     try:
@@ -155,17 +163,17 @@ def select_agent_simple(
         if 0 <= idx < len(agents):
             return agents[idx]
         else:
-            print(f"⚠️  Invalid selection: {selection}")
+            print(i18n.t(Keys.INVALID_SELECTION, selection=selection))
             return None
     except ValueError:
-        print("⚠️  Invalid input. Please enter a number.")
+        print(i18n.t(Keys.INVALID_INPUT_NUMBER))
         return None
 
 
 def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> list[Session]:
     """Let user select sessions interactively with time grouping"""
     if not sessions:
-        print("No sessions found in the specified time range.")
+        print(i18n.t(Keys.NO_SESSIONS_IN_RANGE))
         return []
 
     if not is_terminal():
@@ -178,7 +186,7 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
 
     for group_name, group_sessions_list in groups.items():
         # Add separator for group
-        choices.append(Choice(title=f"─── {group_name} ({len(group_sessions_list)} 个) ───", disabled="分组标题"))
+        choices.append(Choice(title=i18n.t(Keys.GROUP_TITLE, group_name=group_name, count=len(group_sessions_list)), disabled="分组标题"))
 
         # Add sessions in this group
         for session in group_sessions_list:
@@ -202,10 +210,10 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
     )
 
     q = questionary.checkbox(
-        "选择要导出的会话:",
+        i18n.t(Keys.SELECT_SESSIONS_PROMPT),
         choices=choices,
         style=custom_style,
-        instruction="\n↑↓ 移动  |  空格 选择/取消  |  回车 确认  |  q 退出",
+        instruction=i18n.t(Keys.CHECKBOX_INSTRUCTION),
     )
 
     if q.application.key_bindings:
@@ -215,7 +223,7 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
     try:
         selected = q.ask()
     except KeyboardInterrupt:
-        print("\n⚠️  用户取消操作，退出。")
+        print("\n" + i18n.t(Keys.USER_CANCELLED))
         return []
 
     return selected or []
@@ -226,14 +234,14 @@ def select_sessions_simple(sessions: list[Session], agent: BaseAgent) -> list[Se
     # Group sessions for display
     groups = group_sessions(sessions)
 
-    print("Available sessions:")
+    print(i18n.t(Keys.AVAILABLE_SESSIONS))
     print("-" * 80)
 
     idx = 1
     session_map = {}
 
     for group_name, group_sessions_list in groups.items():
-        print(f"\n[{group_name}] ({len(group_sessions_list)} 个)")
+        print(f"\n[{group_name}] ({len(group_sessions_list)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
         for session in group_sessions_list:
             title = agent.get_formatted_title(session)
             uri = agent.get_session_uri(session)
@@ -242,11 +250,11 @@ def select_sessions_simple(sessions: list[Session], agent: BaseAgent) -> list[Se
             idx += 1
 
     print()
-    print("Enter session numbers to export (comma-separated, e.g., '1,3,5' or 'all'):")
+    print(i18n.t(Keys.ENTER_SESSION_NUMBERS))
     try:
         selection = input("> ").strip()
     except EOFError:
-        print("\n⚠️  No input provided. Exiting.")
+        print("\n" + i18n.t(Keys.NO_INPUT_EXITING))
         return []
 
     if selection.lower() == "all":
@@ -259,8 +267,8 @@ def select_sessions_simple(sessions: list[Session], agent: BaseAgent) -> list[Se
             if num in session_map:
                 selected.append(session_map[num])
             else:
-                print(f"⚠️  Invalid selection: {num}")
+                print(i18n.t(Keys.INVALID_SELECTION, selection=num))
         return selected
     except ValueError:
-        print("⚠️  Invalid input. Please enter numbers separated by commas.")
+        print(i18n.t(Keys.INVALID_INPUT_NUMBERS))
         return []

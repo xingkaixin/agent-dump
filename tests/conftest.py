@@ -8,6 +8,20 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from agent_dump.i18n import i18n
+
+
+@pytest.fixture(autouse=True)
+def set_language_zh(monkeypatch):
+    # Force language to Chinese for all tests to match existing assertions
+    # Patch detect_language to always return 'zh' so setup_i18n() in main() doesn't overwrite it to 'en'
+    monkeypatch.setattr("agent_dump.i18n.I18n.detect_language", lambda self: "zh")
+
+    # Also set initial state
+    i18n.set_language("zh")
+    yield
+    # Reset to default (en) after test
+    i18n.set_language("en")
 
 
 @pytest.fixture

@@ -7,6 +7,7 @@ from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
+from agent_dump.i18n import i18n, Keys
 
 
 class AgentScanner:
@@ -25,7 +26,7 @@ class AgentScanner:
         Scan all agents and return available sessions.
         Returns a dict mapping agent name to list of sessions.
         """
-        print("🔍 正在扫描 Agent Tools...\n")
+        print(i18n.t(Keys.SCANNING_AGENTS))
 
         results: dict[str, list[Session]] = {}
 
@@ -34,9 +35,9 @@ class AgentScanner:
                 sessions = agent.scan()
                 if sessions:
                     results[agent.name] = sessions
-                    print(f"   ✓ 发现 {agent.display_name} ({len(sessions)} 个会话)")
+                    print(i18n.t(Keys.AGENT_FOUND, name=agent.display_name, count=len(sessions)))
                 else:
-                    print(f"   ⚠ 发现 {agent.display_name} (0 个会话)")
+                    print(i18n.t(Keys.AGENT_FOUND_EMPTY, name=agent.display_name))
 
         print()
         return results
