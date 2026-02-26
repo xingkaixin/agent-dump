@@ -818,6 +818,185 @@ class TestMain:
             args = mock_export.call_args
             assert str(output_dir) in str(args[0][2])
 
+    def test_main_with_output_short_argument(self, tmp_path):
+        """测试指定 -output 参数"""
+        output_dir = tmp_path / "custom_output"
+
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = [mock.MagicMock()]
+
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.cli.export_sessions") as mock_export:
+                    mock_select.return_value = [mock.MagicMock()]
+                    mock_export.return_value = [Path("test.json")]
+
+                    with mock.patch("sys.argv", ["agent-dump", "--interactive", "-output", str(output_dir)]):
+                        main()
+
+            mock_export.assert_called_once()
+            args = mock_export.call_args
+            assert str(output_dir) in str(args[0][2])
+
+    def test_main_interactive_with_format_long_alias_md(self):
+        """测试 --format md 会走 Markdown 导出"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = [mock.MagicMock()]
+
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.cli.export_sessions") as mock_export_json:
+                    with mock.patch("agent_dump.cli.export_sessions_markdown") as mock_export_md:
+                        mock_select.return_value = [mock.MagicMock()]
+                        mock_export_md.return_value = [Path("test.md")]
+
+                        with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "md"]):
+                            result = main()
+
+        assert result == 0
+        mock_export_md.assert_called_once()
+        mock_export_json.assert_not_called()
+
+    def test_main_interactive_with_format_print_returns_1(self, capsys):
+        """测试 --interactive + -format print 返回错误"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--interactive", "-format", "print"]):
+                result = main()
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--interactive 模式仅支持 json 或 md" in captured.out
+
+    def test_main_list_mode_warns_and_continues_when_format_specified(self, capsys):
+        """测试 --list + -format 会警告但继续"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = []
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--list", "-format", "md"]):
+                result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "--list 模式会忽略 -format/--format 参数" in captured.out
+
+    def test_main_list_mode_warns_and_continues_when_output_specified(self, capsys, tmp_path):
+        """测试 --list + -output 会警告但继续"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = []
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--list", "-output", str(tmp_path / "x")]):
+                result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "--list 模式会忽略 -output/--output 参数" in captured.out
+
+    def test_main_uri_mode_json_writes_file_and_not_print_body(self, capsys, tmp_path):
+        """测试 URI + --format json 写文件且不输出正文"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            output_root = tmp_path / "out"
+            expected_output_dir = output_root / "codex"
+            expected_output = expected_output_dir / "session-001.json"
+            mock_agent.export_session.return_value = expected_output
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch(
+                    "sys.argv",
+                    ["agent-dump", "codex://session-001", "--format", "json", "--output", str(output_root)],
+                ):
+                    result = main()
+
+        assert result == 0
+        mock_agent.export_session.assert_called_once_with(mock_session, expected_output_dir)
+        captured = capsys.readouterr()
+        assert "# Session Dump" not in captured.out
+        assert str(expected_output) in captured.out
+
+    def test_main_uri_mode_md_writes_file_and_not_print_body(self, capsys, tmp_path):
+        """测试 URI + -format md 写文件且不输出正文"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.return_value = {
+                "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
+            }
+
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            output_root = tmp_path / "out"
+            expected_output = output_root / "codex" / "session-001.md"
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch(
+                    "sys.argv",
+                    ["agent-dump", "codex://session-001", "-format", "md", "-output", str(output_root)],
+                ):
+                    result = main()
+
+        assert result == 0
+        assert expected_output.exists()
+        assert "Hello" in expected_output.read_text(encoding="utf-8")
+        captured = capsys.readouterr()
+        assert "## 1. User" not in captured.out
+        assert str(expected_output) in captured.out
+
     def test_main_keyboard_interrupt(self, capsys):
         """测试键盘中断处理"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:

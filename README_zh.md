@@ -123,10 +123,13 @@ uv run agent-dump opencode://<session-id>     # 查看 OpenCode 会话内容
 uv run agent-dump codex://<session-id>        # 查看 Codex 会话内容
 uv run agent-dump kimi://<session-id>         # 查看 Kimi 会话内容
 uv run agent-dump claude://<session-id>       # 查看 Claude Code 会话内容
+uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # 导出 JSON 文件
+uv run agent-dump codex://<session-id> -format md -output ./my-sessions       # 导出 Markdown 文件
 
 # 其他选项
-uv run agent-dump --output ./my-sessions      # 指定输出目录
-uv run agent-dump --export ses_abc,ses_xyz    # 导出指定会话 ID
+uv run agent-dump --interactive --format json # 交互式导出 JSON（默认）
+uv run agent-dump --interactive --format md   # 交互式导出 Markdown
+uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 ```
 
 ### 完整参数说明
@@ -138,9 +141,9 @@ uv run agent-dump --export ses_abc,ses_xyz    # 导出指定会话 ID
 | `-d`, `-days` | 查询最近 N 天的会话 | 7 |
 | `-q`, `-query` | 查询过滤。支持 `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`） | - |
 | `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `-days` 或 `-query` 且未指定 `--interactive` 则自动启用） | - |
+| `-format`, `--format` | 输出格式。`json \\| md \\| print`。默认：URI 模式为 `print`，非 URI 模式为 `json`。`--interactive` 仅支持 `json/md`；`--list` 下会警告并忽略。 | - |
 | `-p`, `-page-size` | 为兼容保留，当前在 `--list` 模式下不生效 | 20 |
-| `--output` | 输出目录 | ./sessions |
-| `--export` | 导出指定会话 ID（逗号分隔） | - |
+| `-output`, `--output` | 输出目录。`--interactive` 可用；URI 模式仅在 `format=json/md` 时生效；`--list` 下会警告并忽略。 | ./sessions |
 | `-h, --help` | 显示帮助信息 | - |
 
 ## 项目结构
