@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-02-26
+
+### Breaking Changes
+
+- **CLI option syntax update for filter/paging flags**
+  - `--days` -> `-days` (short alias `-d`)
+  - `--query` -> `-query` (short alias `-q`)
+  - `--page-size` -> `-page-size` (short alias `-p`)
+  - `--list`, `--interactive`, `--output` keep double-dash style
+
+### Added
+
+- **Internationalization support (English/Chinese)**
+  - New `--lang {en,zh}` option to force CLI language
+  - Introduced centralized translation module for user-facing messages
+- **Export format selection via `--format`**
+  - Supports `json`, `md`, and `print`
+  - Adds Markdown export path for session output
+
+### Changed
+
+- **Format defaults by mode**
+  - URI mode defaults to `print`
+  - Interactive/export workflows default to `json`
+- **Python compatibility baseline**
+  - Adjusted code paths to support Python `>=3.10`
+
+### Improved
+
+- **CI automation**
+  - Added GitHub Actions workflow to run lint, type check, and tests
+  - Expanded CI Python matrix coverage (3.10-3.14)
+
+### Documentation
+
+- Updated README/README_zh with new CLI option syntax and format usage examples
+- Added Skills integration docs and CLI recipes under `skills/agent-dump/`
+
 ## [0.5.0] - 2026-02-24
 
 ### Added
@@ -131,6 +169,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.6.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.0
 [0.5.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.5.0
 [0.4.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.4.0
 [0.3.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.3.0

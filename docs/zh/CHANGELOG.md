@@ -2,6 +2,44 @@
 
 ## [未发布]
 
+## [0.6.0] - 2026-02-26
+
+### 破坏性变更
+
+- **筛选与分页参数的 CLI 语法调整**
+  - `--days` -> `-days`（短别名 `-d`）
+  - `--query` -> `-query`（短别名 `-q`）
+  - `--page-size` -> `-page-size`（短别名 `-p`）
+  - `--list`、`--interactive`、`--output` 仍保持双短横线风格
+
+### 新增功能
+
+- **国际化支持（英文/中文）**
+  - 新增 `--lang {en,zh}` 参数，可强制指定 CLI 语言
+  - 新增统一的翻译模块，用于管理用户可见文案
+- **通过 `--format` 选择导出格式**
+  - 支持 `json`、`md`、`print`
+  - 新增会话 Markdown 导出能力
+
+### 变更
+
+- **不同模式的默认导出格式**
+  - URI 模式默认 `print`
+  - 交互/导出流程默认 `json`
+- **Python 兼容性基线**
+  - 调整代码以支持 Python `>=3.10`
+
+### 改进
+
+- **CI 自动化**
+  - 新增 GitHub Actions 工作流，执行 lint、类型检查与测试
+  - 扩展 CI Python 版本矩阵覆盖（3.10-3.14）
+
+### 文档
+
+- 更新 README/README_zh 中的 CLI 参数语法与格式用法示例
+- 在 `skills/agent-dump/` 下新增 Skills 集成文档与 CLI recipes
+
 ## [0.5.0] - 2026-02-24
 
 ### 新增功能
@@ -131,6 +169,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.6.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.0
 [0.5.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.5.0
 [0.4.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.4.0
 [0.3.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.3.0
