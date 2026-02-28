@@ -2,6 +2,22 @@
 
 ## [未发布]
 
+## [0.6.2] - 2026-02-28
+
+### 问题修复
+
+- **Codex 响应导出去重**
+  - assistant 可见的 `reasoning` 与 `text` 只从 `response_item` 提取
+  - 避免 `event_msg` 镜像记录导致的 thinking/commentary 重复导出
+
+### 变更
+
+- **Codex `apply_patch` 工具导出结构**
+  - 将 `custom_tool_call(name=apply_patch)` 统一归一化为 `tool=patch`
+  - 将 patch input 重建为 `state.arguments.content` 下按文件和操作组织的块列表
+  - 文件编辑输出为 diff 文本，新增文件输出为最终文件内容，删除和纯移动输出为空内容
+  - 保留原始 patch 文本用于兜底与调试，并继续按 `call_id` 回填工具输出
+
 ## [0.6.1] - 2026-02-28
 
 ### 新增功能
@@ -191,6 +207,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.6.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.2
 [0.6.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.1
 [0.6.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.0
 [0.5.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.5.0

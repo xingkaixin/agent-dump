@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-02-28
+
+### Fixed
+
+- **Codex response export deduplication**
+  - Exports visible assistant `reasoning` and `text` content only from `response_item`
+  - Prevents duplicate assistant thinking/commentary caused by mirrored `event_msg` records
+
+### Changed
+
+- **Codex `apply_patch` tool export shape**
+  - Normalizes `custom_tool_call(name=apply_patch)` as `tool=patch`
+  - Rebuilds patch input into per-file operation blocks under `state.arguments.content`
+  - Uses diff text for file edits, final file content for new files, and empty content for delete/pure-move operations
+  - Keeps raw patch text for debugging and preserves tool output backfilling by `call_id`
+
 ## [0.6.1] - 2026-02-28
 
 ### Added
@@ -191,6 +207,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.6.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.2
 [0.6.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.1
 [0.6.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.0
 [0.5.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.5.0
