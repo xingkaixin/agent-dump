@@ -458,6 +458,189 @@ class TestKimiAgent:
 
         assert result["messages"][0]["parts"][0]["state"]["arguments"] == raw_arguments
 
+    def test_context_tool_titles_are_mapped(self, tmp_path):
+        """测试 context 中已知工具 title 会被统一映射"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        tool_names = ["ReadFile", "Glob", "StrReplaceFile", "Grep", "WriteFile", "Shell"]
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": f"call-{index}",
+                            "function": {"name": name, "arguments": "{}"},
+                        }
+                        for index, name in enumerate(tool_names, start=1)
+                    ],
+                }
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert [part["title"] for part in result["messages"][0]["parts"]] == [
+            "read",
+            "glob",
+            "edit",
+            "grep",
+            "write",
+            "bash",
+        ]
+
+    def test_unknown_tool_title_keeps_original_name(self, tmp_path):
+        """测试未知工具名默认保留原名"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "call-001",
+                            "function": {"name": "UnknownTool", "arguments": "{}"},
+                        }
+                    ],
+                }
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert result["messages"][0]["parts"][0]["title"] == "UnknownTool"
+
+    def test_context_set_todo_list_tool_call_is_ignored(self, tmp_path):
+        """测试 context 中 SetTodoList 不会生成 tool part"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "继续处理"}],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "todo-001",
+                            "function": {
+                                "name": "SetTodoList",
+                                "arguments": "{\"items\": [\"a\"]}",
+                            },
+                        }
+                    ],
+                }
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["parts"] == [
+            {"type": "text", "text": "继续处理", "time_created": 0}
+        ]
+
+    def test_context_set_todo_list_tool_output_is_dropped(self, tmp_path):
+        """测试 context 中 SetTodoList 的 output 会被直接丢弃"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "继续处理"}],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "todo-001",
+                            "function": {
+                                "name": "SetTodoList",
+                                "arguments": "{\"items\": [\"a\"]}",
+                            },
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "todo-001",
+                    "content": "<system>Todo list updated</system>",
+                },
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert len(result["messages"]) == 1
+        assert all(message["role"] != "tool" for message in result["messages"])
+        assert "Todo list updated" not in json.dumps(result, ensure_ascii=False)
+
+    def test_context_non_ignored_tools_still_backfill_output(self, tmp_path):
+        """测试 context 混合 SetTodoList 和正常工具时只保留正常工具"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [{"type": "think", "think": "分析"}],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "read-001",
+                            "function": {
+                                "name": "ReadFile",
+                                "arguments": "{\"path\": \"src/main.py\"}",
+                            },
+                        },
+                        {
+                            "type": "function",
+                            "id": "todo-001",
+                            "function": {
+                                "name": "SetTodoList",
+                                "arguments": "{\"items\": [\"a\"]}",
+                            },
+                        },
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "read-001",
+                    "content": "<system>read ok</system>",
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "todo-001",
+                    "content": "<system>Todo list updated</system>",
+                },
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        message = result["messages"][0]
+        assert [part["type"] for part in message["parts"]] == ["reasoning", "tool"]
+        assert message["parts"][1]["tool"] == "ReadFile"
+        assert message["parts"][1]["title"] == "read"
+        assert message["parts"][1]["state"]["output"] == [
+            {"type": "text", "text": "<system>read ok</system>", "time_created": 0}
+        ]
+        assert "SetTodoList" not in json.dumps(result, ensure_ascii=False)
+
     def test_wire_rebuilds_single_assistant_message_from_content_and_tool_calls(self, tmp_path):
         """测试 wire 会把 content 和 tool call 聚合为一条 assistant 消息"""
         agent = KimiAgent()
@@ -567,6 +750,226 @@ class TestKimiAgent:
 
         assistant = result["messages"][1]
         assert assistant["parts"][0]["state"]["arguments"] == {"path": "/workspace/a.py"}
+
+    def test_wire_tool_titles_are_mapped(self, tmp_path):
+        """测试 wire 中已知工具 title 会被统一映射"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        tool_names = ["ReadFile", "Glob", "StrReplaceFile", "Grep", "WriteFile", "Shell"]
+        records = [
+            {
+                "timestamp": 1.0,
+                "message": {
+                    "type": "TurnBegin",
+                    "payload": {"user_input": [{"text": "Hello"}]},
+                },
+            }
+        ]
+        records.extend(
+            {
+                "timestamp": float(index + 1),
+                "message": {
+                    "type": "ToolCall",
+                    "payload": {
+                        "type": "function",
+                        "id": f"call-{index}",
+                        "function": {"name": name, "arguments": "{}"},
+                    },
+                },
+            }
+            for index, name in enumerate(tool_names, start=1)
+        )
+        write_jsonl(session_dir / "wire.jsonl", records)
+
+        result = agent._get_session_data_from_wire(make_session(session_dir))
+
+        assistant = result["messages"][1]
+        assert [part["title"] for part in assistant["parts"]] == [
+            "read",
+            "glob",
+            "edit",
+            "grep",
+            "write",
+            "bash",
+        ]
+
+    def test_wire_set_todo_list_tool_call_is_ignored(self, tmp_path):
+        """测试 wire 中只有 SetTodoList 时不会留下空 assistant 消息"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": 1.0,
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                    },
+                },
+                {
+                    "timestamp": 2.0,
+                    "message": {
+                        "type": "ToolCall",
+                        "payload": {
+                            "type": "function",
+                            "id": "todo-001",
+                            "function": {"name": "SetTodoList", "arguments": "{\"items\": [\"a\"]}"},
+                        },
+                    },
+                },
+                {
+                    "timestamp": 3.0,
+                    "message": {
+                        "type": "ToolResult",
+                        "payload": {
+                            "tool_call_id": "todo-001",
+                            "return_value": "<system>Todo list updated</system>",
+                        },
+                    },
+                },
+            ],
+        )
+
+        result = agent._get_session_data_from_wire(make_session(session_dir))
+
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["role"] == "user"
+
+    def test_wire_set_todo_list_tool_result_is_dropped(self, tmp_path):
+        """测试 wire 中 SetTodoList 的 result 不会变成 fallback 消息"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": 1.0,
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                    },
+                },
+                {
+                    "timestamp": 2.0,
+                    "message": {
+                        "type": "ContentPart",
+                        "payload": {"type": "text", "text": "继续处理"},
+                    },
+                },
+                {
+                    "timestamp": 3.0,
+                    "message": {
+                        "type": "ToolCall",
+                        "payload": {
+                            "type": "function",
+                            "id": "todo-001",
+                            "function": {"name": "SetTodoList", "arguments": "{\"items\": [\"a\"]}"},
+                        },
+                    },
+                },
+                {
+                    "timestamp": 4.0,
+                    "message": {
+                        "type": "ToolResult",
+                        "payload": {
+                            "tool_call_id": "todo-001",
+                            "return_value": "<system>Todo list updated</system>",
+                        },
+                    },
+                },
+            ],
+        )
+
+        result = agent._get_session_data_from_wire(make_session(session_dir))
+
+        assert len(result["messages"]) == 2
+        assert result["messages"][1]["role"] == "assistant"
+        assert result["messages"][1]["parts"] == [
+            {"type": "text", "text": "继续处理", "time_created": 2000}
+        ]
+        assert "Todo list updated" not in json.dumps(result, ensure_ascii=False)
+
+    def test_wire_non_ignored_tools_still_work_with_mapping(self, tmp_path):
+        """测试 wire 混合 SetTodoList 和正常工具时正常工具仍可回填"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": 1.0,
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                    },
+                },
+                {
+                    "timestamp": 2.0,
+                    "message": {
+                        "type": "ContentPart",
+                        "payload": {"type": "think", "think": "分析"},
+                    },
+                },
+                {
+                    "timestamp": 3.0,
+                    "message": {
+                        "type": "ToolCall",
+                        "payload": {
+                            "type": "function",
+                            "id": "read-001",
+                            "function": {"name": "ReadFile", "arguments": "{\"path\": \"src/main.py\"}"},
+                        },
+                    },
+                },
+                {
+                    "timestamp": 4.0,
+                    "message": {
+                        "type": "ToolCall",
+                        "payload": {
+                            "type": "function",
+                            "id": "todo-001",
+                            "function": {"name": "SetTodoList", "arguments": "{\"items\": [\"a\"]}"},
+                        },
+                    },
+                },
+                {
+                    "timestamp": 5.0,
+                    "message": {
+                        "type": "ToolResult",
+                        "payload": {
+                            "tool_call_id": "read-001",
+                            "return_value": "<system>read ok</system>",
+                        },
+                    },
+                },
+                {
+                    "timestamp": 6.0,
+                    "message": {
+                        "type": "ToolResult",
+                        "payload": {
+                            "tool_call_id": "todo-001",
+                            "return_value": "<system>Todo list updated</system>",
+                        },
+                    },
+                },
+            ],
+        )
+
+        result = agent._get_session_data_from_wire(make_session(session_dir))
+
+        assistant = result["messages"][1]
+        assert [part["type"] for part in assistant["parts"]] == ["reasoning", "tool"]
+        assert assistant["parts"][1]["tool"] == "ReadFile"
+        assert assistant["parts"][1]["title"] == "read"
+        assert assistant["parts"][1]["state"]["output"] == [
+            {"type": "text", "text": "<system>read ok</system>", "time_created": 0}
+        ]
+        assert "SetTodoList" not in json.dumps(result, ensure_ascii=False)
 
     def test_wire_ignores_step_begin_status_update_and_approval_events(self, tmp_path):
         """测试 wire 内部状态事件不会导出为消息"""

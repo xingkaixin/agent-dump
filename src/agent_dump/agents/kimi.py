@@ -9,6 +9,17 @@ from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 
+KIMI_TOOL_TITLE_MAP = {
+    "ReadFile": "read",
+    "Glob": "glob",
+    "StrReplaceFile": "edit",
+    "Grep": "grep",
+    "WriteFile": "write",
+    "Shell": "bash",
+}
+
+KIMI_IGNORED_TOOLS = {"SetTodoList"}
+
 
 class KimiAgent(BaseAgent):
     """Handler for Kimi sessions"""
@@ -157,6 +168,14 @@ class KimiAgent(BaseAgent):
             "time_created": time_created,
         }
 
+    def _map_tool_title(self, tool_name: str) -> str:
+        """Map Kimi tool names to unified short titles."""
+        return KIMI_TOOL_TITLE_MAP.get(tool_name, tool_name)
+
+    def _should_ignore_tool(self, tool_name: str) -> bool:
+        """Check whether a tool should be excluded from export."""
+        return tool_name in KIMI_IGNORED_TOOLS
+
     def _extract_kimi_stats_from_wire(self, session_dir: Path) -> dict[str, int | float]:
         """Extract best-effort usage stats from wire.jsonl."""
         stats: dict[str, int | float] = {
@@ -271,7 +290,7 @@ class KimiAgent(BaseAgent):
             "type": "tool",
             "tool": tool_name,
             "callID": call_id,
-            "title": f"Tool: {tool_name}",
+            "title": self._map_tool_title(tool_name),
             "state": {
                 "arguments": self._normalize_tool_arguments(function.get("arguments")),
                 "output": None,
@@ -292,7 +311,12 @@ class KimiAgent(BaseAgent):
             parts=[self._build_text_part(text)],
         )
 
-    def _build_context_assistant_message(self, record: dict[str, Any], seq: int) -> tuple[dict | None, dict[str, int]]:
+    def _build_context_assistant_message(
+        self,
+        record: dict[str, Any],
+        seq: int,
+        ignored_tool_call_ids: set[str],
+    ) -> tuple[dict | None, dict[str, int]]:
         """Build one assistant message and record tool part indexes."""
         parts: list[dict] = []
         tool_indexes: dict[str, int] = {}
@@ -310,6 +334,12 @@ class KimiAgent(BaseAgent):
         if isinstance(tool_calls, list):
             for tool_call in tool_calls:
                 if not isinstance(tool_call, dict):
+                    continue
+                function = tool_call.get("function", {})
+                tool_name = str(function.get("name", "")).strip() if isinstance(function, dict) else ""
+                call_id = str(tool_call.get("id", "")).strip()
+                if tool_name and call_id and self._should_ignore_tool(tool_name):
+                    ignored_tool_call_ids.add(call_id)
                     continue
                 tool_part = self._convert_context_tool_call(tool_call)
                 if tool_part:
@@ -373,6 +403,7 @@ class KimiAgent(BaseAgent):
         seq: int,
         messages: list[dict],
         pending_tool_calls: dict[str, tuple[int, int]],
+        ignored_tool_call_ids: set[str],
     ) -> None:
         """Convert one context record and update parsing state."""
         role = record.get("role")
@@ -386,7 +417,7 @@ class KimiAgent(BaseAgent):
             return
 
         if role == "assistant":
-            message, tool_indexes = self._build_context_assistant_message(record, seq)
+            message, tool_indexes = self._build_context_assistant_message(record, seq, ignored_tool_call_ids)
             if not message:
                 return
             message_index = len(messages)
@@ -397,6 +428,8 @@ class KimiAgent(BaseAgent):
 
         if role == "tool":
             tool_call_id = str(record.get("tool_call_id", "")).strip()
+            if tool_call_id and tool_call_id in ignored_tool_call_ids:
+                return
             output_parts = self._normalize_tool_output_parts(record.get("content"))
             if self._backfill_tool_output(output_parts, tool_call_id, messages, pending_tool_calls):
                 return
@@ -416,6 +449,7 @@ class KimiAgent(BaseAgent):
 
         messages: list[dict] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}
+        ignored_tool_call_ids: set[str] = set()
 
         with open(context_path, encoding="utf-8") as f:
             for seq, line in enumerate(f, start=1):
@@ -424,7 +458,13 @@ class KimiAgent(BaseAgent):
                 except json.JSONDecodeError as e:
                     print(f"警告: 转换 context 记录失败: {e}")
                     continue
-                self._convert_context_record(record, seq, messages, pending_tool_calls)
+                self._convert_context_record(
+                    record,
+                    seq,
+                    messages,
+                    pending_tool_calls,
+                    ignored_tool_call_ids,
+                )
 
         stats = self._extract_kimi_stats_from_wire(session.source_path)
         stats["message_count"] = len(messages)
@@ -494,7 +534,7 @@ class KimiAgent(BaseAgent):
             "type": "tool",
             "tool": tool_name,
             "callID": call_id,
-            "title": f"Tool: {tool_name}",
+            "title": self._map_tool_title(tool_name),
             "state": {
                 "arguments": normalized_arguments,
                 "output": None,
@@ -536,6 +576,7 @@ class KimiAgent(BaseAgent):
         messages: list[dict] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}
         open_tool_argument_buffer: dict[str, str] = {}
+        ignored_tool_call_ids: set[str] = set()
         current_assistant_index: int | None = None
         open_tool_call_id: str | None = None
 
@@ -579,6 +620,13 @@ class KimiAgent(BaseAgent):
                     continue
 
                 if msg_type == "ToolCall":
+                    function = payload.get("function", {})
+                    tool_name = str(function.get("name", "")).strip() if isinstance(function, dict) else ""
+                    call_id = str(payload.get("id", "")).strip()
+                    if tool_name and call_id and self._should_ignore_tool(tool_name):
+                        ignored_tool_call_ids.add(call_id)
+                        open_tool_call_id = call_id
+                        continue
                     current_assistant_index = self._get_or_create_wire_assistant(
                         messages, current_assistant_index, f"wire-{seq}"
                     )
@@ -595,6 +643,8 @@ class KimiAgent(BaseAgent):
                     continue
 
                 if msg_type == "ToolCallPart":
+                    if open_tool_call_id and open_tool_call_id in ignored_tool_call_ids:
+                        continue
                     arguments_part = str(payload.get("arguments_part", ""))
                     self._append_wire_tool_call_part(
                         arguments_part,
@@ -607,6 +657,8 @@ class KimiAgent(BaseAgent):
 
                 if msg_type == "ToolResult":
                     tool_call_id = str(payload.get("tool_call_id", "")).strip()
+                    if tool_call_id and tool_call_id in ignored_tool_call_ids:
+                        continue
                     output_parts = self._normalize_wire_tool_output_parts(payload.get("return_value"))
                     if self._backfill_tool_output(output_parts, tool_call_id, messages, pending_tool_calls):
                         continue
