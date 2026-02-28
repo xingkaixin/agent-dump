@@ -185,6 +185,7 @@ class CodexAgent(BaseAgent):
 
         messages: list[dict[str, Any]] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}
+        current_assistant_index: int | None = None
         latest_assistant_text_index: int | None = None
         stats = {
             "total_cost": 0,
@@ -197,10 +198,11 @@ class CodexAgent(BaseAgent):
             for line in f:
                 try:
                     data = json.loads(line)
-                    latest_assistant_text_index = self._convert_record_to_messages(
+                    current_assistant_index, latest_assistant_text_index = self._convert_record_to_messages(
                         data=data,
                         messages=messages,
                         pending_tool_calls=pending_tool_calls,
+                        current_assistant_index=current_assistant_index,
                         latest_assistant_text_index=latest_assistant_text_index,
                     )
                     # Preserve the existing best-effort token extraction behavior.
@@ -383,6 +385,79 @@ class CodexAgent(BaseAgent):
         )
         return len(messages) - 1
 
+    def _message_has_part_type(self, message: dict[str, Any], part_type: str) -> bool:
+        """Whether a message already contains a given part type."""
+        return any(part.get("type") == part_type for part in message.get("parts", []))
+
+    def _append_part_if_new(self, message: dict[str, Any], part: dict[str, Any]) -> None:
+        """Append a part unless it duplicates the current tail part."""
+        parts = message.get("parts", [])
+        if parts and parts[-1] == part:
+            return
+        parts.append(part)
+
+    def _append_assistant_reasoning(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        message_id: str,
+        timestamp_ms: int,
+        parts: list[dict[str, Any]],
+        current_assistant_index: int | None,
+    ) -> int | None:
+        """Append reasoning to the active assistant group or create a new one."""
+        if not parts:
+            return current_assistant_index
+
+        if current_assistant_index is not None:
+            message = messages[current_assistant_index]
+            has_text = self._message_has_part_type(message, "text")
+            has_tool = self._message_has_part_type(message, "tool")
+            if not has_text and not has_tool:
+                for part in parts:
+                    self._append_part_if_new(message, part)
+                return current_assistant_index
+
+        messages.append(
+            self._build_message(
+                message_id=message_id,
+                role="assistant",
+                agent="codex",
+                time_created=timestamp_ms,
+                parts=list(parts),
+            )
+        )
+        return len(messages) - 1
+
+    def _append_assistant_text(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        message_id: str,
+        timestamp_ms: int,
+        parts: list[dict[str, Any]],
+        current_assistant_index: int | None,
+    ) -> int | None:
+        """Append text to the active assistant group or create a new one."""
+        if not parts:
+            return current_assistant_index
+
+        if current_assistant_index is not None:
+            message = messages[current_assistant_index]
+            has_tool = self._message_has_part_type(message, "tool")
+            if not has_tool:
+                for part in parts:
+                    self._append_part_if_new(message, part)
+                return current_assistant_index
+
+        assistant_index = self._append_assistant_text_message(
+            messages,
+            message_id=message_id,
+            timestamp_ms=timestamp_ms,
+            parts=parts,
+        )
+        return assistant_index if assistant_index is not None else current_assistant_index
+
     def _attach_tool_call_to_latest_assistant(
         self,
         messages: list[dict[str, Any]],
@@ -462,8 +537,9 @@ class CodexAgent(BaseAgent):
         data: dict[str, Any],
         messages: list[dict[str, Any]],
         pending_tool_calls: dict[str, tuple[int, int]],
+        current_assistant_index: int | None,
         latest_assistant_text_index: int | None,
-    ) -> int | None:
+    ) -> tuple[int | None, int | None]:
         """Convert one Codex record into unified messages while preserving stream relationships."""
         msg_type = data.get("type", "")
         payload = data.get("payload", {})
@@ -471,7 +547,7 @@ class CodexAgent(BaseAgent):
         message_id = str(data.get("timestamp", ""))
 
         if msg_type == "session_meta":
-            return latest_assistant_text_index
+            return current_assistant_index, latest_assistant_text_index
 
         if msg_type == "response_item":
             item_type = payload.get("type", "")
@@ -480,16 +556,20 @@ class CodexAgent(BaseAgent):
                 role = str(payload.get("role", "unknown"))
                 parts = self._extract_message_content_parts(role, payload.get("content", []), timestamp_ms)
                 if not parts:
-                    return latest_assistant_text_index
+                    return current_assistant_index, latest_assistant_text_index
 
                 if role == "assistant":
-                    assistant_index = self._append_assistant_text_message(
+                    assistant_index = self._append_assistant_text(
                         messages,
                         message_id=message_id,
                         timestamp_ms=timestamp_ms,
                         parts=parts,
+                        current_assistant_index=current_assistant_index,
                     )
-                    return assistant_index if assistant_index is not None else latest_assistant_text_index
+                    next_index = (
+                        assistant_index if assistant_index is not None else current_assistant_index
+                    )
+                    return next_index, next_index
 
                 messages.append(
                     self._build_message(
@@ -499,17 +579,19 @@ class CodexAgent(BaseAgent):
                         parts=parts,
                     )
                 )
-                return latest_assistant_text_index
+                return None, None
 
             if item_type == "reasoning":
                 parts = self._extract_reasoning_parts(payload, timestamp_ms)
-                assistant_index = self._append_assistant_text_message(
+                assistant_index = self._append_assistant_reasoning(
                     messages,
                     message_id=message_id,
                     timestamp_ms=timestamp_ms,
                     parts=parts,
+                    current_assistant_index=current_assistant_index,
                 )
-                return assistant_index if assistant_index is not None else latest_assistant_text_index
+                next_index = assistant_index if assistant_index is not None else current_assistant_index
+                return next_index, latest_assistant_text_index
 
             if item_type == "function_call":
                 message_index, part_index = self._attach_tool_call_to_latest_assistant(
@@ -521,7 +603,10 @@ class CodexAgent(BaseAgent):
                 call_id = str(payload.get("call_id", ""))
                 if call_id:
                     pending_tool_calls[call_id] = (message_index, part_index)
-                return latest_assistant_text_index
+                next_current_index = current_assistant_index
+                if latest_assistant_text_index is None and message_index == len(messages) - 1:
+                    next_current_index = message_index
+                return next_current_index, latest_assistant_text_index
 
             if item_type == "function_call_output":
                 call_id = str(payload.get("call_id", ""))
@@ -532,7 +617,7 @@ class CodexAgent(BaseAgent):
                     call_id=call_id,
                     output_parts=output_parts,
                 ):
-                    return latest_assistant_text_index
+                    return current_assistant_index, latest_assistant_text_index
 
                 fallback = self._build_fallback_tool_message(
                     message_id=message_id,
@@ -542,9 +627,9 @@ class CodexAgent(BaseAgent):
                 )
                 if fallback:
                     messages.append(fallback)
-                return latest_assistant_text_index
+                return current_assistant_index, latest_assistant_text_index
 
-            return latest_assistant_text_index
+            return current_assistant_index, latest_assistant_text_index
 
         if msg_type == "event_msg":
             event_type = payload.get("type", "")
@@ -553,15 +638,26 @@ class CodexAgent(BaseAgent):
             elif event_type == "agent_reasoning":
                 text = str(payload.get("text", payload.get("message", "")))
                 parts = [self._build_text_part(text, timestamp_ms, part_type="reasoning")]
+                assistant_index = self._append_assistant_reasoning(
+                    messages,
+                    message_id=message_id,
+                    timestamp_ms=timestamp_ms,
+                    parts=parts,
+                    current_assistant_index=current_assistant_index,
+                )
+                next_index = assistant_index if assistant_index is not None else current_assistant_index
+                return next_index, latest_assistant_text_index
             else:
-                return latest_assistant_text_index
+                return current_assistant_index, latest_assistant_text_index
 
-            assistant_index = self._append_assistant_text_message(
+            assistant_index = self._append_assistant_text(
                 messages,
                 message_id=message_id,
                 timestamp_ms=timestamp_ms,
                 parts=parts,
+                current_assistant_index=current_assistant_index,
             )
-            return assistant_index if assistant_index is not None else latest_assistant_text_index
+            next_index = assistant_index if assistant_index is not None else current_assistant_index
+            return next_index, next_index
 
-        return latest_assistant_text_index
+        return current_assistant_index, latest_assistant_text_index
