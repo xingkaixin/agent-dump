@@ -2,8 +2,8 @@
 测试 agents/kimi.py 模块
 """
 
-import json
 from datetime import datetime, timedelta
+import json
 from pathlib import Path
 from unittest import mock
 
@@ -11,6 +11,45 @@ import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.kimi import KimiAgent
+
+
+def write_metadata(
+    session_dir: Path,
+    *,
+    session_id: str = "test-session",
+    title: str = "Test Session",
+    wire_mtime: float | None = None,
+    title_generated: bool = False,
+) -> Path:
+    """写入 metadata.json。"""
+    metadata = {
+        "session_id": session_id,
+        "title": title,
+        "wire_mtime": wire_mtime or datetime.now().timestamp(),
+        "title_generated": title_generated,
+    }
+    metadata_path = session_dir / "metadata.json"
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    return metadata_path
+
+
+def write_jsonl(file_path: Path, records: list[dict]) -> None:
+    """写入 jsonl 文件。"""
+    content = "\n".join(json.dumps(record, ensure_ascii=False) for record in records)
+    file_path.write_text(f"{content}\n", encoding="utf-8")
+
+
+def make_session(session_dir: Path, session_id: str = "test-session", title: str = "Test Session") -> Session:
+    """构造测试用 Session。"""
+    now = datetime.now()
+    return Session(
+        id=session_id,
+        title=title,
+        created_at=now,
+        updated_at=now,
+        source_path=session_dir,
+        metadata={},
+    )
 
 
 class TestKimiAgent:
@@ -56,8 +95,7 @@ class TestKimiAgent:
         """测试有 metadata.json 时可用"""
         agent = KimiAgent()
         sessions_dir = tmp_path / "sessions"
-        project_dir = sessions_dir / "project1"
-        session_dir = project_dir / "session1"
+        session_dir = sessions_dir / "project1" / "session1"
         session_dir.mkdir(parents=True)
         (session_dir / "metadata.json").touch()
 
@@ -66,62 +104,69 @@ class TestKimiAgent:
 
         assert result is True
 
-    def test_parse_session_valid(self, tmp_path):
-        """测试解析有效的会话"""
+    def test_parse_session_with_context_only(self, tmp_path):
+        """测试仅有 context.jsonl 也能解析会话"""
         agent = KimiAgent()
-
         session_dir = tmp_path / "session1"
         session_dir.mkdir()
 
-        metadata = {
-            "session_id": "test-session-001",
-            "title": "Test Session",
-            "wire_mtime": datetime.now().timestamp(),
-            "title_generated": True,
-        }
-        metadata_file = session_dir / "metadata.json"
-        with open(metadata_file, "w") as f:
-            json.dump(metadata, f)
+        metadata_path = write_metadata(
+            session_dir,
+            session_id="context-session",
+            title="Context Session",
+            title_generated=True,
+        )
+        write_jsonl(session_dir / "context.jsonl", [{"role": "user", "content": "hello"}])
 
-        # 创建 wire.jsonl 文件
-        (session_dir / "wire.jsonl").touch()
-
-        result = agent._parse_session(metadata_file)
+        result = agent._parse_session(metadata_path)
 
         assert result is not None
         assert isinstance(result, Session)
-        assert result.id == "test-session-001"
-        assert result.title == "Test Session"
+        assert result.id == "context-session"
+        assert result.title == "Context Session"
+        assert result.metadata["context_file"] == str(session_dir / "context.jsonl")
+        assert result.metadata["wire_file"] is None
         assert result.metadata["title_generated"] is True
 
-    def test_parse_session_no_wire_file(self, tmp_path):
-        """测试没有 wire.jsonl 时返回 None"""
+    def test_parse_session_with_wire_only(self, tmp_path):
+        """测试仅有 wire.jsonl 也能解析会话"""
         agent = KimiAgent()
-
         session_dir = tmp_path / "session1"
         session_dir.mkdir()
 
-        metadata = {"session_id": "test", "title": "Test"}
-        metadata_file = session_dir / "metadata.json"
-        with open(metadata_file, "w") as f:
-            json.dump(metadata, f)
+        metadata_path = write_metadata(session_dir, session_id="wire-session")
+        (session_dir / "wire.jsonl").touch()
 
-        result = agent._parse_session(metadata_file)
+        result = agent._parse_session(metadata_path)
+
+        assert result is not None
+        assert result.id == "wire-session"
+        assert result.metadata["context_file"] is None
+        assert result.metadata["wire_file"] == str(session_dir / "wire.jsonl")
+
+    def test_parse_session_no_context_and_no_wire(self, tmp_path):
+        """测试既没有 context 也没有 wire 时返回 None"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+
+        metadata_path = write_metadata(session_dir)
+
+        result = agent._parse_session(metadata_path)
 
         assert result is None
 
     def test_parse_session_invalid_json(self, tmp_path):
         """测试无效的 JSON 返回 None"""
         agent = KimiAgent()
-
         session_dir = tmp_path / "session1"
         session_dir.mkdir()
 
-        metadata_file = session_dir / "metadata.json"
-        metadata_file.write_text("invalid json")
+        metadata_path = session_dir / "metadata.json"
+        metadata_path.write_text("invalid json", encoding="utf-8")
         (session_dir / "wire.jsonl").touch()
 
-        result = agent._parse_session(metadata_file)
+        result = agent._parse_session(metadata_path)
 
         assert result is None
 
@@ -130,30 +175,25 @@ class TestKimiAgent:
         agent = KimiAgent()
         agent.base_path = tmp_path
 
-        # 创建两个会话
         old_session_dir = tmp_path / "old"
         new_session_dir = tmp_path / "new"
         old_session_dir.mkdir()
         new_session_dir.mkdir()
 
-        # 旧会话
-        old_metadata = {
-            "session_id": "old-session",
-            "title": "Old",
-            "wire_mtime": (datetime.now() - timedelta(days=10)).timestamp(),
-        }
-        with open(old_session_dir / "metadata.json", "w") as f:
-            json.dump(old_metadata, f)
-        (old_session_dir / "wire.jsonl").touch()
+        write_metadata(
+            old_session_dir,
+            session_id="old-session",
+            title="Old",
+            wire_mtime=(datetime.now() - timedelta(days=10)).timestamp(),
+        )
+        write_jsonl(old_session_dir / "context.jsonl", [{"role": "user", "content": "old"}])
 
-        # 新会话
-        new_metadata = {
-            "session_id": "new-session",
-            "title": "New",
-            "wire_mtime": datetime.now().timestamp(),
-        }
-        with open(new_session_dir / "metadata.json", "w") as f:
-            json.dump(new_metadata, f)
+        write_metadata(
+            new_session_dir,
+            session_id="new-session",
+            title="New",
+            wire_mtime=datetime.now().timestamp(),
+        )
         (new_session_dir / "wire.jsonl").touch()
 
         result = agent.get_sessions(days=7)
@@ -166,31 +206,28 @@ class TestKimiAgent:
         agent = KimiAgent()
         agent.base_path = tmp_path
 
-        # 创建两个会话
+        now = datetime.now()
+        yesterday = now - timedelta(days=1)
+
         session1_dir = tmp_path / "session1"
         session2_dir = tmp_path / "session2"
         session1_dir.mkdir()
         session2_dir.mkdir()
 
-        now = datetime.now()
-        yesterday = now - timedelta(days=1)
+        write_metadata(
+            session1_dir,
+            session_id="session-001",
+            title="Yesterday",
+            wire_mtime=yesterday.timestamp(),
+        )
+        write_jsonl(session1_dir / "context.jsonl", [{"role": "user", "content": "y"}])
 
-        metadata1 = {
-            "session_id": "session-001",
-            "title": "Yesterday",
-            "wire_mtime": yesterday.timestamp(),
-        }
-        with open(session1_dir / "metadata.json", "w") as f:
-            json.dump(metadata1, f)
-        (session1_dir / "wire.jsonl").touch()
-
-        metadata2 = {
-            "session_id": "session-002",
-            "title": "Today",
-            "wire_mtime": now.timestamp(),
-        }
-        with open(session2_dir / "metadata.json", "w") as f:
-            json.dump(metadata2, f)
+        write_metadata(
+            session2_dir,
+            session_id="session-002",
+            title="Today",
+            wire_mtime=now.timestamp(),
+        )
         (session2_dir / "wire.jsonl").touch()
 
         result = agent.get_sessions(days=7)
@@ -199,210 +236,442 @@ class TestKimiAgent:
         assert result[0].id == "session-002"
         assert result[1].id == "session-001"
 
-    def test_export_session_wire_not_found(self, tmp_path):
-        """测试 wire.jsonl 不存在时报错"""
+    def test_export_session_no_context_or_wire(self, tmp_path):
+        """测试没有 context 和 wire 时导出报错"""
         agent = KimiAgent()
-
         session_dir = tmp_path / "session1"
         session_dir.mkdir()
 
-        session = Session(
-            id="test",
-            title="Test",
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-            source_path=session_dir,
-            metadata={},
-        )
+        session = make_session(session_dir)
 
         with pytest.raises(FileNotFoundError):
             agent.export_session(session, tmp_path)
 
-    def test_export_session_valid(self, tmp_path):
-        """测试导出有效的会话"""
+    def test_get_session_data_from_context_user_message(self, tmp_path):
+        """测试 context user 记录正确转换"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(session_dir / "context.jsonl", [{"role": "user", "content": "Hello Kimi"}])
+
+        session = make_session(session_dir)
+        result = agent._get_session_data_from_context(session)
+
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["role"] == "user"
+        assert result["messages"][0]["parts"] == [{"type": "text", "text": "Hello Kimi", "time_created": 0}]
+
+    def test_context_assistant_tool_outputs_are_backfilled_to_tool_parts(self, tmp_path):
+        """测试 assistant 的 tool output 会按 tool_call_id 回填"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "think", "think": "先分析一下"},
+                        {"type": "text", "text": "开始处理"},
+                    ],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "call-001",
+                            "function": {
+                                "name": "read_file",
+                                "arguments": "{\"path\": \"/workspace/a.py\"}",
+                            },
+                        },
+                        {
+                            "type": "function",
+                            "id": "call-002",
+                            "function": {
+                                "name": "shell",
+                                "arguments": "{\"cmd\": \"pwd\"}",
+                            },
+                        },
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "call-001",
+                    "content": [
+                        {"type": "text", "text": "<system>read ok</system>"},
+                        {"type": "text", "text": "file body"},
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "call-002",
+                    "content": "workspace path",
+                },
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert result["stats"]["message_count"] == 1
+        assert len(result["messages"]) == 1
+        message = result["messages"][0]
+        assert message["role"] == "assistant"
+        assert [part["type"] for part in message["parts"]] == ["reasoning", "text", "tool", "tool"]
+        assert message["parts"][2]["state"]["arguments"] == {"path": "/workspace/a.py"}
+        assert message["parts"][2]["state"]["output"] == [
+            {"type": "text", "text": "<system>read ok</system>", "time_created": 0},
+            {"type": "text", "text": "file body", "time_created": 0},
+        ]
+        assert message["parts"][3]["state"]["output"] == [
+            {"type": "text", "text": "workspace path", "time_created": 0}
+        ]
+
+    def test_context_tool_record_with_missing_call_id_becomes_fallback_tool_message(self, tmp_path):
+        """测试缺少 tool_call_id 时退化为 fallback tool 消息"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {"role": "assistant", "content": [{"type": "text", "text": "hi"}], "tool_calls": []},
+                {"role": "tool", "content": "orphan output"},
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert len(result["messages"]) == 2
+        assert result["messages"][1]["role"] == "tool"
+        assert result["messages"][1]["parts"] == [
+            {"type": "text", "text": "orphan output", "time_created": 0}
+        ]
+
+    def test_context_tool_record_with_unknown_tool_call_id_becomes_fallback_tool_message(self, tmp_path):
+        """测试未知 tool_call_id 时退化为 fallback tool 消息"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "call-001",
+                            "function": {"name": "read_file", "arguments": "{\"path\": \"a.py\"}"},
+                        }
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "call-999", "content": "unknown output"},
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert len(result["messages"]) == 2
+        assert result["messages"][1]["role"] == "tool"
+        assert result["messages"][1]["tool_call_id"] == "call-999"
+
+    def test_get_session_data_from_context_ignores_checkpoint_and_usage(self, tmp_path):
+        """测试 _checkpoint 和 _usage 不进入导出消息"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {"role": "_checkpoint", "id": 1},
+                {"role": "_usage", "token_count": 123},
+                {"role": "user", "content": "real user"},
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["role"] == "user"
+        assert result["stats"]["message_count"] == 1
+
+    def test_get_session_data_from_context_parses_tool_arguments_json_string(self, tmp_path):
+        """测试 tool arguments 的 JSON 字符串会被解析"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "call-001",
+                            "function": {
+                                "name": "shell",
+                                "arguments": "{\"cmd\": \"ls\", \"cwd\": \"/workspace\"}",
+                            },
+                        }
+                    ],
+                }
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        message = result["messages"][0]
+        assert message["mode"] == "tool"
+        assert message["parts"][0]["state"]["arguments"] == {"cmd": "ls", "cwd": "/workspace"}
+        assert message["parts"][0]["state"]["output"] is None
+
+    def test_get_session_data_from_context_keeps_raw_tool_arguments_when_invalid_json(self, tmp_path):
+        """测试非法 JSON 参数保留原始字符串"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        raw_arguments = '{"cmd": "ls"'
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "call-001",
+                            "function": {
+                                "name": "shell",
+                                "arguments": raw_arguments,
+                            },
+                        }
+                    ],
+                }
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert result["messages"][0]["parts"][0]["state"]["arguments"] == raw_arguments
+
+    def test_wire_rebuilds_single_assistant_message_from_content_and_tool_calls(self, tmp_path):
+        """测试 wire 会把 content 和 tool call 聚合为一条 assistant 消息"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": 1.0,
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                    },
+                },
+                {
+                    "timestamp": 2.0,
+                    "message": {
+                        "type": "ContentPart",
+                        "payload": {"type": "think", "think": "Thinking"},
+                    },
+                },
+                {
+                    "timestamp": 3.0,
+                    "message": {
+                        "type": "ContentPart",
+                        "payload": {"type": "text", "text": "Answer"},
+                    },
+                },
+                {
+                    "timestamp": 4.0,
+                    "message": {
+                        "type": "ToolCall",
+                        "payload": {
+                            "type": "function",
+                            "id": "call-001",
+                            "function": {"name": "read_file", "arguments": "{\"path\": \"/workspace/a.py\"}"},
+                        },
+                    },
+                },
+                {
+                    "timestamp": 5.0,
+                    "message": {
+                        "type": "ToolResult",
+                        "payload": {
+                            "tool_call_id": "call-001",
+                            "return_value": {"content": "file body"},
+                        },
+                    },
+                },
+            ],
+        )
+
+        result = agent._get_session_data_from_wire(make_session(session_dir))
+
+        assert result["stats"]["message_count"] == 2
+        assert len(result["messages"]) == 2
+        assert result["messages"][0]["role"] == "user"
+        assistant = result["messages"][1]
+        assert assistant["role"] == "assistant"
+        assert [part["type"] for part in assistant["parts"]] == ["reasoning", "text", "tool"]
+        assert assistant["parts"][2]["state"]["output"] == [
+            {
+                "type": "text",
+                "text": json.dumps({"content": "file body"}, ensure_ascii=False, indent=2),
+                "time_created": 0,
+            }
+        ]
+
+    def test_wire_tool_call_part_appends_arguments_to_open_call(self, tmp_path):
+        """测试 wire ToolCallPart 会把参数碎片拼回对应 tool call"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": 1.0,
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                    },
+                },
+                {
+                    "timestamp": 2.0,
+                    "message": {
+                        "type": "ToolCall",
+                        "payload": {
+                            "type": "function",
+                            "id": "call-001",
+                            "function": {"name": "read_file", "arguments": "{\"path"},
+                        },
+                    },
+                },
+                {
+                    "timestamp": 3.0,
+                    "message": {
+                        "type": "ToolCallPart",
+                        "payload": {"arguments_part": "\": \"/workspace/a.py\"}"},
+                    },
+                },
+            ],
+        )
+
+        result = agent._get_session_data_from_wire(make_session(session_dir))
+
+        assistant = result["messages"][1]
+        assert assistant["parts"][0]["state"]["arguments"] == {"path": "/workspace/a.py"}
+
+    def test_wire_ignores_step_begin_status_update_and_approval_events(self, tmp_path):
+        """测试 wire 内部状态事件不会导出为消息"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": 1.0,
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                    },
+                },
+                {"timestamp": 2.0, "message": {"type": "StepBegin", "payload": {"n": 1}}},
+                {"timestamp": 3.0, "message": {"type": "StatusUpdate", "payload": {"token_usage": {"input_tokens": 1}}}},
+                {"timestamp": 4.0, "message": {"type": "ApprovalRequest", "payload": {"id": "a"}}},
+                {"timestamp": 5.0, "message": {"type": "ApprovalResponse", "payload": {"id": "a"}}},
+                {"timestamp": 6.0, "message": {"type": "TurnEnd", "payload": {}}},
+            ],
+        )
+
+        result = agent._get_session_data_from_wire(make_session(session_dir))
+
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["role"] == "user"
+
+    def test_wire_unmatched_tool_result_becomes_fallback_tool_message(self, tmp_path):
+        """测试 wire 无法关联的 ToolResult 会退化为 fallback tool 消息"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": 1.0,
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                    },
+                },
+                {
+                    "timestamp": 2.0,
+                    "message": {
+                        "type": "ToolResult",
+                        "payload": {
+                            "tool_call_id": "missing-call",
+                            "return_value": {"error": "not found"},
+                        },
+                    },
+                },
+            ],
+        )
+
+        result = agent._get_session_data_from_wire(make_session(session_dir))
+
+        assert len(result["messages"]) == 2
+        assert result["messages"][1]["role"] == "tool"
+        assert result["messages"][1]["tool_call_id"] == "missing-call"
+
+    def test_export_session_valid_uses_context_when_present(self, tmp_path):
+        """测试导出优先使用 context 主路径且回填 tool output"""
         agent = KimiAgent()
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
         session_dir = tmp_path / "session1"
         session_dir.mkdir()
-
-        # 创建 wire.jsonl
-        wire_file = session_dir / "wire.jsonl"
-        wire_data = {
-            "timestamp": datetime.now().timestamp(),
-            "message": {
-                "type": "TurnBegin",
-                "payload": {
-                    "user_input": [{"text": "Hello Kimi"}],
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {"role": "_checkpoint", "id": 0},
+                {"role": "user", "content": "Hello Kimi"},
+                {
+                    "role": "assistant",
+                    "content": [{"type": "think", "think": "分析"}, {"type": "text", "text": "回答"}],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "call-001",
+                            "function": {"name": "read_file", "arguments": "{\"path\": \"/workspace/x.py\"}"},
+                        }
+                    ],
                 },
-            },
-        }
-        with open(wire_file, "w") as f:
-            f.write(json.dumps(wire_data) + "\n")
-
-        session = Session(
-            id="test-session",
-            title="Test Session",
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-            source_path=session_dir,
-            metadata={},
+                {"role": "tool", "content": "tool result", "tool_call_id": "call-001"},
+                {"role": "_usage", "token_count": 999},
+            ],
         )
 
+        session = make_session(session_dir, session_id="context-session", title="Context Session")
         result = agent.export_session(session, output_dir)
 
-        assert result.exists()
-        with open(result) as f:
-            exported = json.load(f)
-
-        assert exported["id"] == "test-session"
-        assert exported["title"] == "Test Session"
-        assert len(exported["messages"]) == 1
-
-    def test_convert_to_opencode_format_turn_begin(self):
-        """测试 TurnBegin 类型转换"""
-        agent = KimiAgent()
-
-        timestamp = datetime.now().timestamp()
-        data = {
-            "timestamp": timestamp,
-            "message": {
-                "type": "TurnBegin",
-                "payload": {
-                    "user_input": [{"text": "Hello"}],
-                },
-            },
-        }
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is not None
-        assert result["role"] == "user"
-        assert result["parts"][0]["text"] == "Hello"
-
-    def test_convert_to_opencode_format_content_part_text(self):
-        """测试 ContentPart text 类型转换"""
-        agent = KimiAgent()
-
-        timestamp = datetime.now().timestamp()
-        data = {
-            "timestamp": timestamp,
-            "message": {
-                "type": "ContentPart",
-                "payload": {
-                    "type": "text",
-                    "text": "Response text",
-                },
-            },
-        }
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is not None
-        assert result["role"] == "assistant"
-        assert result["agent"] == "kimi"
-        assert result["parts"][0]["type"] == "text"
-        assert result["parts"][0]["text"] == "Response text"
-
-    def test_convert_to_opencode_format_content_part_think(self):
-        """测试 ContentPart think 类型转换"""
-        agent = KimiAgent()
-
-        timestamp = datetime.now().timestamp()
-        data = {
-            "timestamp": timestamp,
-            "message": {
-                "type": "ContentPart",
-                "payload": {
-                    "type": "think",
-                    "think": "Thinking process",
-                },
-            },
-        }
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is not None
-        assert result["parts"][0]["type"] == "reasoning"
-        assert result["parts"][0]["text"] == "Thinking process"
-
-    def test_convert_to_opencode_format_tool_call(self):
-        """测试 ToolCall 类型转换"""
-        agent = KimiAgent()
-
-        timestamp = datetime.now().timestamp()
-        data = {
-            "timestamp": timestamp,
-            "message": {
-                "type": "ToolCall",
-                "payload": {
-                    "function": {
-                        "name": "read_file",
-                        "id": "call-001",
-                        "arguments": {"path": "/test/file.py"},
-                    },
-                },
-            },
-        }
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is not None
-        assert result["role"] == "assistant"
-        assert result["mode"] == "tool"
-        assert result["parts"][0]["type"] == "tool"
-        assert result["parts"][0]["tool"] == "read_file"
-
-    def test_convert_to_opencode_format_tool_result(self):
-        """测试 ToolResult 类型转换"""
-        agent = KimiAgent()
-
-        timestamp = datetime.now().timestamp()
-        data = {
-            "timestamp": timestamp,
-            "message": {
-                "type": "ToolResult",
-                "payload": {
-                    "return_value": {"content": "file content"},
-                },
-            },
-        }
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is not None
-        assert result["role"] == "tool"
-        assert result["parts"][0]["type"] == "text"
-        assert "file content" in result["parts"][0]["text"]
-
-    def test_convert_to_opencode_format_unknown_type(self):
-        """测试未知类型返回 None"""
-        agent = KimiAgent()
-
-        data = {
-            "timestamp": datetime.now().timestamp(),
-            "message": {
-                "type": "UnknownType",
-                "payload": {},
-            },
-        }
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is None
-
-    def test_convert_to_opencode_format_content_part_other(self):
-        """测试 ContentPart 其他类型返回 None"""
-        agent = KimiAgent()
-
-        timestamp = datetime.now().timestamp()
-        data = {
-            "timestamp": timestamp,
-            "message": {
-                "type": "ContentPart",
-                "payload": {
-                    "type": "unknown",
-                },
-            },
-        }
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is None
+        exported = json.loads(result.read_text(encoding="utf-8"))
+        assert exported["id"] == "context-session"
+        assert exported["title"] == "Context Session"
+        assert exported["stats"]["message_count"] == 2
+        assert len(exported["messages"]) == 2
+        assert exported["messages"][0]["role"] == "user"
+        assert exported["messages"][1]["role"] == "assistant"
+        assert exported["messages"][1]["parts"][2]["state"]["output"] == [
+            {"type": "text", "text": "tool result", "time_created": 0}
+        ]
 
     def test_export_session_extracts_tokens(self, tmp_path):
         """测试导出时提取 token 使用情况"""
@@ -412,33 +681,23 @@ class TestKimiAgent:
 
         session_dir = tmp_path / "session1"
         session_dir.mkdir()
-
-        # 创建包含 token 使用数据的 wire.jsonl
-        wire_file = session_dir / "wire.jsonl"
-        wire_data = {
-            "timestamp": datetime.now().timestamp(),
-            "message": {
-                "type": "TurnBegin",
-                "payload": {"user_input": [{"text": "Hello"}]},
-                "usage": {"input_tokens": 10, "output_tokens": 20},
-            },
-        }
-        with open(wire_file, "w") as f:
-            f.write(json.dumps(wire_data) + "\n")
-
-        session = Session(
-            id="test",
-            title="Test",
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-            source_path=session_dir,
-            metadata={},
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": datetime.now().timestamp(),
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                        "usage": {"input_tokens": 10, "output_tokens": 20},
+                    },
+                }
+            ],
         )
 
+        session = make_session(session_dir, session_id="test", title="Test")
         result = agent.export_session(session, output_dir)
 
-        with open(result) as f:
-            exported = json.load(f)
-
+        exported = json.loads(result.read_text(encoding="utf-8"))
         assert exported["stats"]["total_input_tokens"] == 10
         assert exported["stats"]["total_output_tokens"] == 20

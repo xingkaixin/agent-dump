@@ -5,6 +5,7 @@ Kimi agent handler
 from datetime import datetime, timedelta
 import json
 from pathlib import Path
+from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 
@@ -18,7 +19,6 @@ class KimiAgent(BaseAgent):
 
     def _find_base_path(self) -> Path | None:
         """Find the Kimi sessions directory"""
-        # Priority: user data directory > local development data
         paths = [
             Path.home() / ".kimi/sessions",
             Path("data/kimi"),
@@ -29,12 +29,20 @@ class KimiAgent(BaseAgent):
                 return path
         return None
 
+    def _get_session_files(self, session_dir: Path) -> dict[str, Path | None]:
+        """Get available session files for a Kimi session directory."""
+        context_path = session_dir / "context.jsonl"
+        wire_path = session_dir / "wire.jsonl"
+        return {
+            "context_file": context_path if context_path.exists() else None,
+            "wire_file": wire_path if wire_path.exists() else None,
+        }
+
     def is_available(self) -> bool:
         """Check if Kimi sessions exist"""
         self.base_path = self._find_base_path()
         if not self.base_path:
             return False
-        # Check for metadata.json files
         return len(list(self.base_path.rglob("metadata.json"))) > 0
 
     def scan(self) -> list[Session]:
@@ -51,7 +59,6 @@ class KimiAgent(BaseAgent):
         cutoff_time = datetime.now() - timedelta(days=days)
         sessions = []
 
-        # Find all metadata.json files
         for metadata_file in self.base_path.rglob("metadata.json"):
             try:
                 session = self._parse_session(metadata_file)
@@ -70,14 +77,18 @@ class KimiAgent(BaseAgent):
                 metadata = json.load(f)
 
             session_dir = metadata_path.parent
-            wire_path = session_dir / "wire.jsonl"
+            session_files = self._get_session_files(session_dir)
+            context_path = session_files["context_file"]
+            wire_path = session_files["wire_file"]
 
-            if not wire_path.exists():
+            if not context_path and not wire_path:
                 return None
 
             session_id = metadata.get("session_id", "")
             title = metadata.get("title", "Untitled Session")
-            created_at = datetime.fromtimestamp(metadata.get("wire_mtime", 0))
+            wire_mtime = metadata.get("wire_mtime")
+            created_at_ts = wire_mtime if isinstance(wire_mtime, (int, float)) else metadata_path.stat().st_mtime
+            created_at = datetime.fromtimestamp(created_at_ts)
 
             return Session(
                 id=session_id,
@@ -86,46 +97,16 @@ class KimiAgent(BaseAgent):
                 updated_at=created_at,
                 source_path=session_dir,
                 metadata={
-                    "wire_file": str(wire_path),
+                    "context_file": str(context_path) if context_path else None,
+                    "wire_file": str(wire_path) if wire_path else None,
                     "title_generated": metadata.get("title_generated", False),
                 },
             )
         except Exception:
             return None
 
-    def get_session_data(self, session: Session) -> dict:
-        """Get session data as a dictionary"""
-        wire_path = session.source_path / "wire.jsonl"
-
-        if not wire_path.exists():
-            raise FileNotFoundError(f"Wire file not found: {wire_path}")
-
-        # Read all messages from the wire.jsonl file
-        messages = []
-        stats = {
-            "total_cost": 0,
-            "total_input_tokens": 0,
-            "total_output_tokens": 0,
-            "message_count": 0,
-        }
-
-        with open(wire_path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    data = json.loads(line)
-                    msg = self._convert_to_opencode_format(data)
-                    if msg:
-                        messages.append(msg)
-                        stats["message_count"] += 1
-                        # Extract token info if available
-                        token_usage = data.get("message", {}).get("usage", {})
-                        if token_usage:
-                            stats["total_input_tokens"] += token_usage.get("input_tokens", 0)
-                            stats["total_output_tokens"] += token_usage.get("output_tokens", 0)
-                except Exception as e:
-                    print(f"警告: 转换消息格式失败: {e}")
-                    continue
-
+    def _build_session_data(self, session: Session, messages: list[dict], stats: dict[str, int | float]) -> dict:
+        """Build unified session data payload."""
         return {
             "id": session.id,
             "title": session.title,
@@ -139,6 +120,526 @@ class KimiAgent(BaseAgent):
             "messages": messages,
         }
 
+    def _build_message(
+        self,
+        *,
+        message_id: str,
+        role: str,
+        parts: list[dict],
+        agent: str | None = None,
+        mode: str | None = None,
+        time_created: int = 0,
+        extra: dict[str, Any] | None = None,
+    ) -> dict:
+        """Build one unified message."""
+        message = {
+            "id": message_id,
+            "role": role,
+            "agent": agent,
+            "mode": mode,
+            "model": None,
+            "provider": None,
+            "time_created": time_created,
+            "time_completed": None,
+            "tokens": {},
+            "cost": 0,
+            "parts": parts,
+        }
+        if extra:
+            message.update(extra)
+        return message
+
+    def _build_text_part(self, text: str, time_created: int = 0) -> dict:
+        """Build one text part."""
+        return {
+            "type": "text",
+            "text": text,
+            "time_created": time_created,
+        }
+
+    def _extract_kimi_stats_from_wire(self, session_dir: Path) -> dict[str, int | float]:
+        """Extract best-effort usage stats from wire.jsonl."""
+        stats: dict[str, int | float] = {
+            "total_cost": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "message_count": 0,
+        }
+
+        wire_path = session_dir / "wire.jsonl"
+        if not wire_path.exists():
+            return stats
+
+        with open(wire_path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                token_usage = data.get("message", {}).get("usage", {})
+                if not isinstance(token_usage, dict):
+                    continue
+
+                stats["total_input_tokens"] += int(token_usage.get("input_tokens", 0))
+                stats["total_output_tokens"] += int(token_usage.get("output_tokens", 0))
+
+        return stats
+
+    def _convert_context_content_part(self, item: dict[str, Any]) -> dict | None:
+        """Convert one assistant content part from context.jsonl."""
+        part_type = item.get("type")
+        if part_type == "think":
+            text = str(item.get("think", ""))
+            if not text.strip():
+                return None
+            return {
+                "type": "reasoning",
+                "text": text,
+                "time_created": 0,
+            }
+
+        if part_type == "text":
+            text = str(item.get("text", ""))
+            if not text.strip():
+                return None
+            return {
+                "type": "text",
+                "text": text,
+                "time_created": 0,
+            }
+
+        return None
+
+    def _normalize_tool_arguments(self, raw: Any) -> Any:
+        """Normalize tool call arguments."""
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                return raw
+        return raw
+
+    def _normalize_tool_output_parts(self, content: Any) -> list[dict]:
+        """Normalize tool output content to text parts."""
+        if isinstance(content, str):
+            return [self._build_text_part(content)] if content.strip() else []
+
+        if isinstance(content, list):
+            parts: list[dict] = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    text = str(item.get("text", ""))
+                    if text.strip():
+                        parts.append(self._build_text_part(text))
+                elif isinstance(item, str) and item.strip():
+                    parts.append(self._build_text_part(item))
+            return parts
+
+        if content is None:
+            return []
+
+        text = str(content)
+        return [self._build_text_part(text)] if text.strip() else []
+
+    def _normalize_wire_tool_output_parts(self, return_value: Any) -> list[dict]:
+        """Normalize wire tool output content to text parts."""
+        if return_value is None:
+            return []
+        if isinstance(return_value, str):
+            return [self._build_text_part(return_value)] if return_value.strip() else []
+        if isinstance(return_value, (dict, list)):
+            return [self._build_text_part(json.dumps(return_value, ensure_ascii=False, indent=2))]
+        text = str(return_value)
+        return [self._build_text_part(text)] if text.strip() else []
+
+    def _convert_context_tool_call(self, tool_call: dict[str, Any]) -> dict | None:
+        """Convert one assistant tool call from context.jsonl."""
+        if tool_call.get("type") != "function":
+            return None
+
+        function = tool_call.get("function", {})
+        if not isinstance(function, dict):
+            return None
+
+        tool_name = str(function.get("name", "")).strip()
+        call_id = str(tool_call.get("id", "")).strip()
+        if not tool_name or not call_id:
+            return None
+
+        return {
+            "type": "tool",
+            "tool": tool_name,
+            "callID": call_id,
+            "title": f"Tool: {tool_name}",
+            "state": {
+                "arguments": self._normalize_tool_arguments(function.get("arguments")),
+                "output": None,
+            },
+            "time_created": 0,
+        }
+
+    def _convert_context_user_message(self, record: dict[str, Any], seq: int) -> dict | None:
+        """Convert one user record from context.jsonl."""
+        content = record.get("content", "")
+        text = str(content)
+        if not text.strip():
+            return None
+
+        return self._build_message(
+            message_id=f"context-{seq}",
+            role="user",
+            parts=[self._build_text_part(text)],
+        )
+
+    def _build_context_assistant_message(self, record: dict[str, Any], seq: int) -> tuple[dict | None, dict[str, int]]:
+        """Build one assistant message and record tool part indexes."""
+        parts: list[dict] = []
+        tool_indexes: dict[str, int] = {}
+
+        content = record.get("content", [])
+        if isinstance(content, list):
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                part = self._convert_context_content_part(item)
+                if part:
+                    parts.append(part)
+
+        tool_calls = record.get("tool_calls", [])
+        if isinstance(tool_calls, list):
+            for tool_call in tool_calls:
+                if not isinstance(tool_call, dict):
+                    continue
+                tool_part = self._convert_context_tool_call(tool_call)
+                if tool_part:
+                    tool_indexes[tool_part["callID"]] = len(parts)
+                    parts.append(tool_part)
+
+        if not parts:
+            return None, {}
+
+        message = self._build_message(
+            message_id=f"context-{seq}",
+            role="assistant",
+            agent="kimi",
+            mode="tool" if all(part.get("type") == "tool" for part in parts) else None,
+            parts=parts,
+        )
+        return message, tool_indexes
+
+    def _build_fallback_tool_message(
+        self,
+        *,
+        message_id: str,
+        tool_call_id: str | None,
+        output_parts: list[dict],
+    ) -> dict | None:
+        """Build fallback tool message when tool output cannot be associated."""
+        if not output_parts:
+            return None
+
+        extra = {"tool_call_id": tool_call_id} if tool_call_id else None
+        return self._build_message(
+            message_id=message_id,
+            role="tool",
+            parts=output_parts,
+            extra=extra,
+        )
+
+    def _backfill_tool_output(
+        self,
+        output_parts: list[dict],
+        tool_call_id: str,
+        messages: list[dict],
+        pending_tool_calls: dict[str, tuple[int, int]],
+    ) -> bool:
+        """Backfill tool output into the corresponding assistant tool part."""
+        if not output_parts or not tool_call_id:
+            return False
+
+        location = pending_tool_calls.get(tool_call_id)
+        if location is None:
+            return False
+
+        message_index, part_index = location
+        state = messages[message_index]["parts"][part_index].setdefault("state", {})
+        state["output"] = output_parts
+        return True
+
+    def _convert_context_record(
+        self,
+        record: dict[str, Any],
+        seq: int,
+        messages: list[dict],
+        pending_tool_calls: dict[str, tuple[int, int]],
+    ) -> None:
+        """Convert one context record and update parsing state."""
+        role = record.get("role")
+        if role in {"_checkpoint", "_usage"}:
+            return
+
+        if role == "user":
+            message = self._convert_context_user_message(record, seq)
+            if message:
+                messages.append(message)
+            return
+
+        if role == "assistant":
+            message, tool_indexes = self._build_context_assistant_message(record, seq)
+            if not message:
+                return
+            message_index = len(messages)
+            messages.append(message)
+            for tool_call_id, part_index in tool_indexes.items():
+                pending_tool_calls[tool_call_id] = (message_index, part_index)
+            return
+
+        if role == "tool":
+            tool_call_id = str(record.get("tool_call_id", "")).strip()
+            output_parts = self._normalize_tool_output_parts(record.get("content"))
+            if self._backfill_tool_output(output_parts, tool_call_id, messages, pending_tool_calls):
+                return
+            fallback_message = self._build_fallback_tool_message(
+                message_id=f"context-{seq}",
+                tool_call_id=tool_call_id or None,
+                output_parts=output_parts,
+            )
+            if fallback_message:
+                messages.append(fallback_message)
+
+    def _get_session_data_from_context(self, session: Session) -> dict:
+        """Build unified session data from context.jsonl."""
+        context_path = session.source_path / "context.jsonl"
+        if not context_path.exists():
+            raise FileNotFoundError(f"Context file not found: {context_path}")
+
+        messages: list[dict] = []
+        pending_tool_calls: dict[str, tuple[int, int]] = {}
+
+        with open(context_path, encoding="utf-8") as f:
+            for seq, line in enumerate(f, start=1):
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as e:
+                    print(f"警告: 转换 context 记录失败: {e}")
+                    continue
+                self._convert_context_record(record, seq, messages, pending_tool_calls)
+
+        stats = self._extract_kimi_stats_from_wire(session.source_path)
+        stats["message_count"] = len(messages)
+        return self._build_session_data(session, messages, stats)
+
+    def _create_wire_assistant_message(self, message_id: str) -> dict:
+        """Create one assistant message for wire state machine."""
+        return self._build_message(
+            message_id=message_id,
+            role="assistant",
+            agent="kimi",
+            parts=[],
+        )
+
+    def _get_or_create_wire_assistant(
+        self,
+        messages: list[dict],
+        current_assistant_index: int | None,
+        message_id: str,
+    ) -> int:
+        """Get or create current assistant message index."""
+        if current_assistant_index is not None:
+            return current_assistant_index
+        messages.append(self._create_wire_assistant_message(message_id))
+        return len(messages) - 1
+
+    def _append_wire_content_part(self, assistant_message: dict, payload: dict[str, Any], timestamp_ms: int) -> None:
+        """Append one wire content part to assistant message."""
+        part_type = payload.get("type")
+        if part_type == "think":
+            text = str(payload.get("think", ""))
+            if text.strip():
+                assistant_message["parts"].append(
+                    {
+                        "type": "reasoning",
+                        "text": text,
+                        "time_created": timestamp_ms,
+                    }
+                )
+        elif part_type == "text":
+            text = str(payload.get("text", ""))
+            if text.strip():
+                assistant_message["parts"].append(
+                    {
+                        "type": "text",
+                        "text": text,
+                        "time_created": timestamp_ms,
+                    }
+                )
+
+    def _create_wire_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> tuple[dict | None, str | None, str | None]:
+        """Create one wire tool part and optional raw arguments buffer."""
+        call_id = str(payload.get("id", "")).strip()
+        function = payload.get("function", {})
+        if not isinstance(function, dict) or not call_id:
+            return None, None, None
+
+        tool_name = str(function.get("name", "")).strip()
+        if not tool_name:
+            return None, None, None
+
+        raw_arguments = function.get("arguments")
+        normalized_arguments = self._normalize_tool_arguments(raw_arguments)
+        buffer = raw_arguments if isinstance(raw_arguments, str) and isinstance(normalized_arguments, str) else None
+
+        tool_part = {
+            "type": "tool",
+            "tool": tool_name,
+            "callID": call_id,
+            "title": f"Tool: {tool_name}",
+            "state": {
+                "arguments": normalized_arguments,
+                "output": None,
+            },
+            "time_created": timestamp_ms,
+        }
+        return tool_part, call_id, buffer
+
+    def _append_wire_tool_call_part(
+        self,
+        arguments_part: str,
+        open_tool_call_id: str | None,
+        open_tool_argument_buffer: dict[str, str],
+        messages: list[dict],
+        pending_tool_calls: dict[str, tuple[int, int]],
+    ) -> None:
+        """Append ToolCallPart fragments to the active tool call."""
+        if not open_tool_call_id or open_tool_call_id not in pending_tool_calls:
+            return
+
+        buffer = open_tool_argument_buffer.get(open_tool_call_id, "")
+        buffer += arguments_part
+        try:
+            parsed_arguments = json.loads(buffer)
+        except json.JSONDecodeError:
+            open_tool_argument_buffer[open_tool_call_id] = buffer
+            return
+
+        message_index, part_index = pending_tool_calls[open_tool_call_id]
+        messages[message_index]["parts"][part_index]["state"]["arguments"] = parsed_arguments
+        open_tool_argument_buffer.pop(open_tool_call_id, None)
+
+    def _get_session_data_from_wire(self, session: Session) -> dict:
+        """Build unified session data from legacy wire.jsonl."""
+        wire_path = session.source_path / "wire.jsonl"
+        if not wire_path.exists():
+            raise FileNotFoundError(f"Wire file not found: {wire_path}")
+
+        messages: list[dict] = []
+        pending_tool_calls: dict[str, tuple[int, int]] = {}
+        open_tool_argument_buffer: dict[str, str] = {}
+        current_assistant_index: int | None = None
+        open_tool_call_id: str | None = None
+
+        with open(wire_path, encoding="utf-8") as f:
+            for seq, line in enumerate(f, start=1):
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError as e:
+                    print(f"警告: 转换 wire 记录失败: {e}")
+                    continue
+
+                message = data.get("message", {})
+                msg_type = message.get("type", "")
+                payload = message.get("payload", {})
+                timestamp = data.get("timestamp", 0)
+                timestamp_ms = int(timestamp * 1000) if isinstance(timestamp, (int, float)) else 0
+
+                if msg_type == "TurnBegin":
+                    user_input = payload.get("user_input", [])
+                    text = ""
+                    if user_input and isinstance(user_input, list):
+                        text = str(user_input[0].get("text", ""))
+                    if text.strip():
+                        messages.append(
+                            self._build_message(
+                                message_id=f"wire-{seq}",
+                                role="user",
+                                parts=[self._build_text_part(text, timestamp_ms)],
+                                time_created=timestamp_ms,
+                            )
+                        )
+                    current_assistant_index = None
+                    open_tool_call_id = None
+                    continue
+
+                if msg_type == "ContentPart":
+                    current_assistant_index = self._get_or_create_wire_assistant(
+                        messages, current_assistant_index, f"wire-{seq}"
+                    )
+                    self._append_wire_content_part(messages[current_assistant_index], payload, timestamp_ms)
+                    continue
+
+                if msg_type == "ToolCall":
+                    current_assistant_index = self._get_or_create_wire_assistant(
+                        messages, current_assistant_index, f"wire-{seq}"
+                    )
+                    tool_part, call_id, buffer = self._create_wire_tool_part(payload, timestamp_ms)
+                    if tool_part is None or call_id is None:
+                        continue
+                    part_index = len(messages[current_assistant_index]["parts"])
+                    messages[current_assistant_index]["parts"].append(tool_part)
+                    messages[current_assistant_index]["mode"] = "tool"
+                    pending_tool_calls[call_id] = (current_assistant_index, part_index)
+                    open_tool_call_id = call_id
+                    if buffer is not None:
+                        open_tool_argument_buffer[call_id] = buffer
+                    continue
+
+                if msg_type == "ToolCallPart":
+                    arguments_part = str(payload.get("arguments_part", ""))
+                    self._append_wire_tool_call_part(
+                        arguments_part,
+                        open_tool_call_id,
+                        open_tool_argument_buffer,
+                        messages,
+                        pending_tool_calls,
+                    )
+                    continue
+
+                if msg_type == "ToolResult":
+                    tool_call_id = str(payload.get("tool_call_id", "")).strip()
+                    output_parts = self._normalize_wire_tool_output_parts(payload.get("return_value"))
+                    if self._backfill_tool_output(output_parts, tool_call_id, messages, pending_tool_calls):
+                        continue
+                    fallback_message = self._build_fallback_tool_message(
+                        message_id=f"wire-{seq}",
+                        tool_call_id=tool_call_id or None,
+                        output_parts=output_parts,
+                    )
+                    if fallback_message:
+                        messages.append(fallback_message)
+                    continue
+
+                if msg_type in {
+                    "StepBegin",
+                    "StatusUpdate",
+                    "ApprovalRequest",
+                    "ApprovalResponse",
+                    "TurnEnd",
+                }:
+                    continue
+
+        messages = [message for message in messages if message.get("parts")]
+        stats = self._extract_kimi_stats_from_wire(session.source_path)
+        stats["message_count"] = len(messages)
+        return self._build_session_data(session, messages, stats)
+
+    def get_session_data(self, session: Session) -> dict:
+        """Get session data as a dictionary"""
+        context_path = session.source_path / "context.jsonl"
+        if context_path.exists():
+            return self._get_session_data_from_context(session)
+        return self._get_session_data_from_wire(session)
+
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to unified JSON format"""
         session_data = self.get_session_data(session)
@@ -148,112 +649,3 @@ class KimiAgent(BaseAgent):
             json.dump(session_data, f, ensure_ascii=False, indent=2)
 
         return output_path
-
-    def _convert_to_opencode_format(self, data: dict) -> dict | None:
-        """Convert Kimi message format to OpenCode format"""
-        msg = data.get("message", {})
-        msg_type = msg.get("type", "")
-        payload = msg.get("payload", {})
-        timestamp = data.get("timestamp", 0)
-
-        if msg_type == "TurnBegin":
-            user_input = payload.get("user_input", [])
-            text = ""
-            if user_input and isinstance(user_input, list):
-                text = user_input[0].get("text", "")
-
-            return {
-                "id": str(timestamp),
-                "role": "user",
-                "agent": None,
-                "mode": None,
-                "model": None,
-                "provider": None,
-                "time_created": int(timestamp * 1000),
-                "time_completed": None,
-                "tokens": {},
-                "cost": 0,
-                "parts": [
-                    {
-                        "type": "text",
-                        "text": text,
-                        "time_created": int(timestamp * 1000),
-                    }
-                ],
-            }
-
-        elif msg_type == "ContentPart":
-            part_type = payload.get("type", "")
-            content = ""
-
-            if part_type == "think":
-                content = payload.get("think", "")
-                part_data = {"type": "reasoning", "text": content, "time_created": int(timestamp * 1000)}
-            elif part_type == "text":
-                content = payload.get("text", "")
-                part_data = {"type": "text", "text": content, "time_created": int(timestamp * 1000)}
-            else:
-                return None
-
-            return {
-                "id": str(timestamp),
-                "role": "assistant",
-                "agent": "kimi",
-                "mode": None,
-                "model": None,
-                "provider": None,
-                "time_created": int(timestamp * 1000),
-                "time_completed": None,
-                "tokens": {},
-                "cost": 0,
-                "parts": [part_data],
-            }
-
-        elif msg_type == "ToolCall":
-            tool = payload.get("function", {})
-            return {
-                "id": str(timestamp),
-                "role": "assistant",
-                "agent": None,
-                "mode": "tool",
-                "model": None,
-                "provider": None,
-                "time_created": int(timestamp * 1000),
-                "time_completed": None,
-                "tokens": {},
-                "cost": 0,
-                "parts": [
-                    {
-                        "type": "tool",
-                        "tool": tool.get("name", ""),
-                        "callID": tool.get("id", ""),
-                        "title": f"Tool: {tool.get('name', '')}",
-                        "state": {"arguments": tool.get("arguments", {})},
-                        "time_created": int(timestamp * 1000),
-                    }
-                ],
-            }
-
-        elif msg_type == "ToolResult":
-            result = payload.get("return_value", {})
-            return {
-                "id": str(timestamp),
-                "role": "tool",
-                "agent": None,
-                "mode": None,
-                "model": None,
-                "provider": None,
-                "time_created": int(timestamp * 1000),
-                "time_completed": None,
-                "tokens": {},
-                "cost": 0,
-                "parts": [
-                    {
-                        "type": "text",
-                        "text": str(result),
-                        "time_created": int(timestamp * 1000),
-                    }
-                ],
-            }
-
-        return None
