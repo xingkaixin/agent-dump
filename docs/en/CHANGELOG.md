@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-02-28
+
+### Added
+
+- **Kimi parser support for `context.jsonl` sessions**
+  - Supports Kimi's newer session storage layout
+  - Normalizes tool titles and skips noisy `SetTodoList` tool entries
+
+### Fixed
+
+- **Codex export reconstruction**
+  - Corrected exported timestamps for reconstructed messages and tool calls
+  - Improved assistant/tool grouping so tool calls no longer attach to reasoning-only messages
+- **Claude Code tool trace export**
+  - Cleans tool traces in exported conversations
+  - Backfills missing tool outputs when reconstructing assistant state
+
+### Improved
+
+- Expanded regression coverage for Kimi, Codex, and Claude Code session parsing
+- Added `.uv-cache/` to `.gitignore`
+
 ## [0.6.0] - 2026-02-26
 
 ### Breaking Changes
@@ -169,6 +191,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.6.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.1
 [0.6.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.0
 [0.5.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.5.0
 [0.4.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.4.0

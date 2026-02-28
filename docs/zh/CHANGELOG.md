@@ -2,6 +2,28 @@
 
 ## [未发布]
 
+## [0.6.1] - 2026-02-28
+
+### 新增功能
+
+- **Kimi 解析器支持 `context.jsonl` 会话**
+  - 支持 Kimi 较新的会话存储格式
+  - 统一工具标题映射，并跳过噪音较大的 `SetTodoList` 工具记录
+
+### 问题修复
+
+- **Codex 导出重建逻辑**
+  - 修正重建消息与工具调用时导出的时间戳
+  - 改进 assistant/tool 分组逻辑，避免将工具调用挂到仅含 reasoning 的消息上
+- **Claude Code 工具轨迹导出**
+  - 清理导出会话中的工具轨迹内容
+  - 在重建 assistant 状态时回填缺失的工具输出
+
+### 改进
+
+- 扩展 Kimi、Codex 和 Claude Code 会话解析的回归测试覆盖
+- 将 `.uv-cache/` 添加到 `.gitignore`
+
 ## [0.6.0] - 2026-02-26
 
 ### 破坏性变更
@@ -169,6 +191,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.6.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.1
 [0.6.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.0
 [0.5.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.5.0
 [0.4.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.4.0

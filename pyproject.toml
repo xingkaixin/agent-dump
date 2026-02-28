@@ -1,6 +1,6 @@
 [project]
 name = "agent-dump"
-version = "0.6.0"
+version = "0.6.1"
 description = "AI Coding Assistant Session Export Tool"
 readme = "README.md"
 license = "MIT"
