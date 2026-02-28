@@ -353,81 +353,405 @@ class TestCodexAgent:
             for part in message.get("parts", [])
         )
 
-    def test_convert_to_opencode_format_session_meta(self):
-        """测试 session_meta 类型返回 None"""
+    def test_get_session_data_uses_record_timestamps_and_merges_tool_output(self, tmp_path):
+        """测试消息时间戳使用原始记录时间，并按 call_id 合并 tool output"""
         agent = CodexAgent()
-
-        data = {"type": "session_meta", "payload": {}}
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is None
-
-    def test_convert_to_opencode_format_response_item_message(self):
-        """测试 response_item message 类型转换"""
-        agent = CodexAgent()
-
-        data = {
-            "type": "response_item",
-            "timestamp": "2026-01-01T00:00:00Z",
-            "payload": {
-                "type": "message",
-                "role": "user",
-                "content": [{"type": "input_text", "text": "Hello"}],
+        session_file = tmp_path / "test-merge.jsonl"
+        timestamps = [
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:01Z",
+            "2026-01-01T00:00:02Z",
+            "2026-01-01T00:00:03Z",
+        ]
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": timestamps[0],
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello"}],
+                },
             },
-        }
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is not None
-        assert result["role"] == "user"
-        assert len(result["parts"]) == 1
-        assert result["parts"][0]["text"] == "Hello"
-
-    def test_convert_to_opencode_format_function_call(self):
-        """测试 function_call 类型转换"""
-        agent = CodexAgent()
-
-        data = {
-            "type": "response_item",
-            "timestamp": "2026-01-01T00:00:00Z",
-            "payload": {
-                "type": "function_call",
-                "name": "read_file",
-                "call_id": "call-001",
-                "arguments": {"path": "/test/file.py"},
+            {
+                "type": "response_item",
+                "timestamp": timestamps[1],
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "先执行检查"}],
+                },
             },
-        }
-        result = agent._convert_to_opencode_format(data)
-
-        assert result is not None
-        assert result["role"] == "assistant"
-        assert result["mode"] == "tool"
-        assert result["parts"][0]["type"] == "tool"
-        assert result["parts"][0]["tool"] == "read_file"
-
-    def test_convert_to_opencode_format_event_msg(self):
-        """测试 event_msg 类型转换"""
-        agent = CodexAgent()
-
-        data = {
-            "type": "event_msg",
-            "timestamp": "2026-01-01T00:00:00Z",
-            "payload": {
-                "type": "agent_message",
-                "message": "Hello from agent",
+            {
+                "type": "response_item",
+                "timestamp": timestamps[2],
+                "payload": {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "call_id": "call-001",
+                    "arguments": {"cmd": "just isok"},
+                },
             },
-        }
-        result = agent._convert_to_opencode_format(data)
+            {
+                "type": "response_item",
+                "timestamp": timestamps[3],
+                "payload": {
+                    "type": "function_call_output",
+                    "call_id": "call-001",
+                    "output": "ok",
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
 
-        assert result is not None
-        assert result["role"] == "assistant"
-        assert result["agent"] == "codex"
-        assert result["parts"][0]["text"] == "Hello from agent"
+        session = Session(
+            id="merge",
+            title="Merge Session",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={"cwd": "/test", "cli_version": "1.0"},
+        )
 
-    def test_convert_to_opencode_format_unknown_type(self):
-        """测试未知类型返回 None"""
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 2
+        user_message, assistant_message = result["messages"]
+        assert user_message["time_created"] == 1767225600000
+        assert user_message["parts"][0]["time_created"] == 1767225600000
+        assert assistant_message["time_created"] == 1767225601000
+        assert [part["type"] for part in assistant_message["parts"]] == ["text", "tool"]
+        assert assistant_message["parts"][0]["time_created"] == 1767225601000
+        tool_part = assistant_message["parts"][1]
+        assert tool_part["time_created"] == 1767225602000
+        assert tool_part["title"] == "bash"
+        assert tool_part["state"]["arguments"] == {"cmd": "just isok"}
+        assert tool_part["state"]["output"] == [
+            {"type": "text", "text": "ok", "time_created": 1767225603000}
+        ]
+
+    def test_tool_calls_attach_to_latest_assistant_text_until_next_assistant(self, tmp_path):
+        """测试 tool 会归属到最近一条 assistant text，直到下一个 assistant text"""
         agent = CodexAgent()
+        session_file = tmp_path / "test-assistant-scope.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "A"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "call_id": "call-001",
+                    "arguments": {"cmd": "pwd"},
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "spawn_agent",
+                    "call_id": "call-002",
+                    "arguments": {"task": "x"},
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:03Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "B"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:04Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "call_id": "call-003",
+                    "arguments": {"cmd": "ls"},
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
 
-        data = {"type": "unknown_type", "payload": {}}
-        result = agent._convert_to_opencode_format(data)
+        session = Session(
+            id="assistant-scope",
+            title="Assistant Scope",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
 
-        assert result is None
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 2
+        first_message, second_message = result["messages"]
+        first_tool_calls = [part["callID"] for part in first_message["parts"] if part["type"] == "tool"]
+        second_tool_calls = [part["callID"] for part in second_message["parts"] if part["type"] == "tool"]
+        assert first_tool_calls == ["call-001", "call-002"]
+        assert second_tool_calls == ["call-003"]
+        assert first_message["parts"][2]["title"] == "spawn_agent"
+
+    def test_assistant_thinking_text_tool_are_grouped_in_order(self, tmp_path):
+        """测试 thinking + text + tool 会归并为一条 assistant 消息并保持顺序"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-thinking-text-tool.jsonl"
+        lines = [
+            {
+                "type": "event_msg",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {"type": "agent_reasoning", "text": "thinking"},
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {"type": "reasoning", "summary": [{"type": "summary_text", "text": "thinking"}]},
+            },
+            {
+                "type": "event_msg",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {"type": "agent_message", "message": "answer"},
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "answer"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "call_id": "call-001",
+                    "arguments": {"cmd": "pwd"},
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="thinking-text-tool",
+            title="Thinking Text Tool",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        message = result["messages"][0]
+        assert [part["type"] for part in message["parts"]] == ["reasoning", "text", "tool"]
+        assert message["parts"][0]["text"] == "thinking"
+        assert message["parts"][1]["text"] == "answer"
+        assert message["parts"][2]["callID"] == "call-001"
+
+    def test_assistant_thinking_only_stays_as_single_message(self, tmp_path):
+        """测试只有 thinking 时保持单独的 assistant 消息"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-thinking-only.jsonl"
+        lines = [
+            {
+                "type": "event_msg",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {"type": "agent_reasoning", "text": "thinking only"},
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {"type": "reasoning", "summary": [{"type": "summary_text", "text": "thinking only"}]},
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="thinking-only",
+            title="Thinking Only",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["parts"] == [
+            {"type": "reasoning", "text": "thinking only", "time_created": 1767225600000}
+        ]
+
+    def test_assistant_text_only_stays_as_single_message(self, tmp_path):
+        """测试只有 text 时保持单独的 assistant 消息"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-text-only.jsonl"
+        lines = [
+            {
+                "type": "event_msg",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {"type": "agent_message", "message": "text only"},
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "text only"}],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="text-only",
+            title="Text Only",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        assert result["messages"][0]["parts"] == [
+            {"type": "text", "text": "text only", "time_created": 1767225600000}
+        ]
+
+    def test_tool_does_not_attach_to_thinking_only_message(self, tmp_path):
+        """测试 tool 不能挂到只有 thinking 的 assistant 消息上"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-thinking-then-tool.jsonl"
+        lines = [
+            {
+                "type": "event_msg",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {"type": "agent_reasoning", "text": "thinking only"},
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "call_id": "call-001",
+                    "arguments": {"cmd": "pwd"},
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="thinking-then-tool",
+            title="Thinking Then Tool",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 2
+        thinking_message, tool_message = result["messages"]
+        assert thinking_message["parts"] == [
+            {"type": "reasoning", "text": "thinking only", "time_created": 1767225600000}
+        ]
+        assert tool_message["role"] == "assistant"
+        assert tool_message["mode"] == "tool"
+        assert tool_message["parts"][0]["callID"] == "call-001"
+
+    def test_function_call_without_assistant_text_creates_fallback_tool_message(self, tmp_path):
+        """测试没有前置 assistant text 时，tool call 会退化为 tool-only assistant 消息"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-tool-only.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "payload": {
+                        "type": "function_call",
+                        "name": "exec_command",
+                        "call_id": "call-001",
+                        "arguments": {"cmd": "pwd"},
+                    },
+                }
+            )
+            + "\n"
+        )
+
+        session = Session(
+            id="tool-only",
+            title="Tool Only",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        message = result["messages"][0]
+        assert message["role"] == "assistant"
+        assert message["mode"] == "tool"
+        assert message["parts"][0]["type"] == "tool"
+        assert message["parts"][0]["callID"] == "call-001"
+
+    def test_unmatched_function_call_output_becomes_fallback_tool_message(self, tmp_path):
+        """测试无法匹配 call_id 的 output 会退化为 tool 消息"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-tool-output.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "payload": {
+                        "type": "function_call_output",
+                        "call_id": "call-999",
+                        "output": "orphan output",
+                    },
+                }
+            )
+            + "\n"
+        )
+
+        session = Session(
+            id="tool-output",
+            title="Tool Output",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        message = result["messages"][0]
+        assert message["role"] == "tool"
+        assert message["tool_call_id"] == "call-999"
+        assert message["parts"] == [
+            {"type": "text", "text": "orphan output", "time_created": 1767225600000}
+        ]
