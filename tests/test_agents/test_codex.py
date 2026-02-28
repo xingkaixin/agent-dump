@@ -12,6 +12,25 @@ import pytest
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
 
+PATCH_INPUT = """*** Begin Patch
+*** Add File: /workspace/new.py
++print("new")
+*** Update File: /workspace/old.py
+@@
+-old = 1
++new = 2
+ context = True
+*** Update File: /workspace/rename.py
+*** Move to: /workspace/renamed.py
+@@
+-before = 1
++after = 2
+*** Update File: /workspace/move-only.py
+*** Move to: /workspace/moved.py
+*** Delete File: /workspace/unused.py
+*** End Patch
+"""
+
 
 class TestCodexAgent:
     """测试 CodexAgent 类"""
@@ -565,8 +584,8 @@ class TestCodexAgent:
         assert message["parts"][1]["text"] == "answer"
         assert message["parts"][2]["callID"] == "call-001"
 
-    def test_assistant_thinking_only_stays_as_single_message(self, tmp_path):
-        """测试只有 thinking 时保持单独的 assistant 消息"""
+    def test_event_reasoning_without_response_item_is_ignored(self, tmp_path):
+        """测试只有 event_msg thinking 时不会导出可见 assistant 消息"""
         agent = CodexAgent()
         session_file = tmp_path / "test-thinking-only.jsonl"
         lines = [
@@ -574,12 +593,7 @@ class TestCodexAgent:
                 "type": "event_msg",
                 "timestamp": "2026-01-01T00:00:00Z",
                 "payload": {"type": "agent_reasoning", "text": "thinking only"},
-            },
-            {
-                "type": "response_item",
-                "timestamp": "2026-01-01T00:00:00Z",
-                "payload": {"type": "reasoning", "summary": [{"type": "summary_text", "text": "thinking only"}]},
-            },
+            }
         ]
         session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
 
@@ -594,13 +608,10 @@ class TestCodexAgent:
 
         result = agent.get_session_data(session)
 
-        assert len(result["messages"]) == 1
-        assert result["messages"][0]["parts"] == [
-            {"type": "reasoning", "text": "thinking only", "time_created": 1767225600000}
-        ]
+        assert result["messages"] == []
 
-    def test_assistant_text_only_stays_as_single_message(self, tmp_path):
-        """测试只有 text 时保持单独的 assistant 消息"""
+    def test_event_text_without_response_item_is_ignored(self, tmp_path):
+        """测试只有 event_msg text 时不会导出可见 assistant 消息"""
         agent = CodexAgent()
         session_file = tmp_path / "test-text-only.jsonl"
         lines = [
@@ -608,16 +619,7 @@ class TestCodexAgent:
                 "type": "event_msg",
                 "timestamp": "2026-01-01T00:00:00Z",
                 "payload": {"type": "agent_message", "message": "text only"},
-            },
-            {
-                "type": "response_item",
-                "timestamp": "2026-01-01T00:00:00Z",
-                "payload": {
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": "text only"}],
-                },
-            },
+            }
         ]
         session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
 
@@ -632,13 +634,10 @@ class TestCodexAgent:
 
         result = agent.get_session_data(session)
 
-        assert len(result["messages"]) == 1
-        assert result["messages"][0]["parts"] == [
-            {"type": "text", "text": "text only", "time_created": 1767225600000}
-        ]
+        assert result["messages"] == []
 
-    def test_tool_does_not_attach_to_thinking_only_message(self, tmp_path):
-        """测试 tool 不能挂到只有 thinking 的 assistant 消息上"""
+    def test_tool_does_not_attach_to_event_reasoning_only_message(self, tmp_path):
+        """测试 tool 不会挂到仅来自 event_msg 的 thinking 上"""
         agent = CodexAgent()
         session_file = tmp_path / "test-thinking-then-tool.jsonl"
         lines = [
@@ -671,11 +670,8 @@ class TestCodexAgent:
 
         result = agent.get_session_data(session)
 
-        assert len(result["messages"]) == 2
-        thinking_message, tool_message = result["messages"]
-        assert thinking_message["parts"] == [
-            {"type": "reasoning", "text": "thinking only", "time_created": 1767225600000}
-        ]
+        assert len(result["messages"]) == 1
+        tool_message = result["messages"][0]
         assert tool_message["role"] == "assistant"
         assert tool_message["mode"] == "tool"
         assert tool_message["parts"][0]["callID"] == "call-001"
@@ -754,4 +750,214 @@ class TestCodexAgent:
         assert message["tool_call_id"] == "call-999"
         assert message["parts"] == [
             {"type": "text", "text": "orphan output", "time_created": 1767225600000}
+        ]
+
+    def test_custom_apply_patch_tool_is_structured_and_backfilled(self, tmp_path):
+        """测试 apply_patch 会解析为 patch tool，并回填 custom output"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-custom-patch.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "准备修改文件"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "custom_tool_call",
+                    "name": "apply_patch",
+                    "call_id": "call-patch-001",
+                    "status": "completed",
+                    "input": PATCH_INPUT,
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "custom_tool_call_output",
+                    "call_id": "call-patch-001",
+                    "output": json.dumps(
+                        {
+                            "output": "Success. Updated the following files:\nA /workspace/new.py\n",
+                            "metadata": {"exit_code": 0},
+                        }
+                    ),
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="custom-patch",
+            title="Custom Patch",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        message = result["messages"][0]
+        assert [part["type"] for part in message["parts"]] == ["text", "tool"]
+
+        tool_part = message["parts"][1]
+        assert tool_part["tool"] == "patch"
+        assert tool_part["title"] == "patch"
+        assert tool_part["callID"] == "call-patch-001"
+
+        arguments = tool_part["state"]["arguments"]
+        assert arguments["kind"] == "apply_patch"
+        assert arguments["raw"] == PATCH_INPUT
+        blocks = arguments["content"]
+        assert [block["type"] for block in blocks] == [
+            "write_file",
+            "edit_file",
+            "edit_file",
+            "move_file",
+            "delete_file",
+        ]
+        assert blocks[0] == {
+            "type": "write_file",
+            "path": "/workspace/new.py",
+            "old_path": None,
+            "input": {"content": 'print("new")'},
+        }
+        assert blocks[1] == {
+            "type": "edit_file",
+            "path": "/workspace/old.py",
+            "old_path": None,
+            "input": {
+                "content": (
+                    "Index: /workspace/old.py\n"
+                    "===================================================================\n"
+                    "--- /workspace/old.py\n"
+                    "+++ /workspace/old.py\n"
+                    "@@\n"
+                    "-old = 1\n"
+                    "+new = 2\n"
+                    " context = True"
+                )
+            },
+        }
+        assert blocks[2] == {
+            "type": "edit_file",
+            "path": "/workspace/renamed.py",
+            "old_path": "/workspace/rename.py",
+            "input": {
+                "content": (
+                    "Index: /workspace/renamed.py\n"
+                    "===================================================================\n"
+                    "--- /workspace/rename.py\n"
+                    "+++ /workspace/renamed.py\n"
+                    "@@\n"
+                    "-before = 1\n"
+                    "+after = 2"
+                )
+            },
+        }
+        assert blocks[3] == {
+            "type": "move_file",
+            "path": "/workspace/moved.py",
+            "old_path": "/workspace/move-only.py",
+            "input": {"content": ""},
+        }
+        assert blocks[4] == {
+            "type": "delete_file",
+            "path": "/workspace/unused.py",
+            "old_path": None,
+            "input": {"content": ""},
+        }
+        assert tool_part["state"]["output"] == [
+            {
+                "type": "text",
+                "text": "Success. Updated the following files:\nA /workspace/new.py\n",
+                "time_created": 1767225602000,
+            }
+        ]
+
+    def test_invalid_apply_patch_keeps_raw_and_parse_error(self, tmp_path):
+        """测试无法解析的 apply_patch 仍保留原文并带 parse_error"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-invalid-patch.jsonl"
+        invalid_patch = "*** Begin Patch\nnot a valid patch\n*** End Patch\n"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "payload": {
+                        "type": "custom_tool_call",
+                        "name": "apply_patch",
+                        "call_id": "call-patch-invalid",
+                        "input": invalid_patch,
+                    },
+                }
+            )
+            + "\n"
+        )
+
+        session = Session(
+            id="invalid-patch",
+            title="Invalid Patch",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        tool_part = result["messages"][0]["parts"][0]
+        arguments = tool_part["state"]["arguments"]
+        assert tool_part["tool"] == "patch"
+        assert arguments["raw"] == invalid_patch
+        assert arguments["content"] == []
+        assert "parse_error" in arguments
+
+    def test_unmatched_custom_tool_call_output_becomes_fallback_tool_message(self, tmp_path):
+        """测试无法匹配 call_id 的 custom tool output 会退化为 tool 消息"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-custom-tool-output.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "payload": {
+                        "type": "custom_tool_call_output",
+                        "call_id": "call-patch-404",
+                        "output": json.dumps({"output": "orphan custom output"}),
+                    },
+                }
+            )
+            + "\n"
+        )
+
+        session = Session(
+            id="custom-tool-output",
+            title="Custom Tool Output",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        message = result["messages"][0]
+        assert message["role"] == "tool"
+        assert message["tool_call_id"] == "call-patch-404"
+        assert message["parts"] == [
+            {"type": "text", "text": "orphan custom output", "time_created": 1767225600000}
         ]

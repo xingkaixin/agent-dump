@@ -12,6 +12,8 @@ from agent_dump.message_filter import filter_messages_for_export
 
 CODEX_TOOL_TITLE_MAP = {
     "exec_command": "bash",
+    "apply_patch": "patch",
+    "patch": "patch",
 }
 
 
@@ -261,6 +263,36 @@ class CodexAgent(BaseAgent):
         """Map Codex tool names to unified short titles."""
         return CODEX_TOOL_TITLE_MAP.get(tool_name, tool_name)
 
+    def _normalize_tool_arguments(self, arguments: Any) -> Any:
+        """Normalize tool arguments while preserving non-JSON strings."""
+        if not isinstance(arguments, str):
+            return arguments
+
+        parsed = self._try_parse_json_string(arguments)
+        return parsed if parsed is not None else arguments
+
+    def _normalize_tool_name(self, tool_name: str) -> str:
+        """Normalize Codex tool names to unified export names."""
+        return tool_name
+
+    def _normalize_custom_tool_name(self, tool_name: str) -> str:
+        """Normalize Codex custom tool names to unified export names."""
+        return "patch" if tool_name == "apply_patch" else tool_name
+
+    def _try_parse_json_string(self, value: Any) -> Any | None:
+        """Parse a JSON string and return None when it is not valid JSON."""
+        if not isinstance(value, str):
+            return None
+
+        stripped = value.strip()
+        if not stripped:
+            return None
+
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
+
     def _build_message(
         self,
         *,
@@ -298,17 +330,287 @@ class CodexAgent(BaseAgent):
             "time_created": timestamp_ms,
         }
 
-    def _build_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
-        """Build one tool part from a function_call payload."""
-        tool_name = str(payload.get("name", ""))
+    def _build_tool_part(
+        self,
+        *,
+        tool_name: str,
+        call_id: str,
+        arguments: Any,
+        timestamp_ms: int,
+    ) -> dict[str, Any]:
+        """Build one unified tool part."""
         return {
             "type": "tool",
             "tool": tool_name,
-            "callID": str(payload.get("call_id", "")),
+            "callID": call_id,
             "title": self._map_tool_title(tool_name),
-            "state": {"arguments": payload.get("arguments", {})},
+            "state": {"arguments": arguments},
             "time_created": timestamp_ms,
         }
+
+    def _build_function_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
+        """Build one tool part from a function_call payload."""
+        raw_tool_name = str(payload.get("name", ""))
+        tool_name = self._normalize_tool_name(raw_tool_name)
+        arguments = self._normalize_tool_arguments(payload.get("arguments", {}))
+        return self._build_tool_part(
+            tool_name=tool_name,
+            call_id=str(payload.get("call_id", "")),
+            arguments=arguments,
+            timestamp_ms=timestamp_ms,
+        )
+
+    def _build_custom_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
+        """Build one tool part from a custom_tool_call payload."""
+        raw_tool_name = str(payload.get("name", ""))
+        tool_name = self._normalize_custom_tool_name(raw_tool_name)
+        arguments = self._normalize_custom_tool_arguments(raw_tool_name, payload.get("input"))
+        return self._build_tool_part(
+            tool_name=tool_name,
+            call_id=str(payload.get("call_id", "")),
+            arguments=arguments,
+            timestamp_ms=timestamp_ms,
+        )
+
+    def _build_empty_patch_arguments(self, raw_input: str, parse_error: str | None = None) -> dict[str, Any]:
+        """Build the default apply_patch arguments payload."""
+        arguments = {
+            "kind": "apply_patch",
+            "raw": raw_input,
+            "content": [],
+        }
+        if parse_error:
+            arguments["parse_error"] = parse_error
+        return arguments
+
+    def _normalize_custom_tool_arguments(self, tool_name: str, raw_input: Any) -> Any:
+        """Normalize custom tool input."""
+        if tool_name == "apply_patch":
+            return self._parse_apply_patch_input(str(raw_input or ""))
+        return raw_input
+
+    def _is_patch_operation_header(self, line: str) -> bool:
+        """Whether one line starts a new apply_patch operation."""
+        return line.startswith(
+            (
+                "*** Add File: ",
+                "*** Delete File: ",
+                "*** Update File: ",
+                "*** End Patch",
+            )
+        )
+
+    def _build_patch_operation(
+        self,
+        *,
+        action: str,
+        path: str,
+        old_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Build one structured patch operation."""
+        return {
+            "action": action,
+            "path": path,
+            "old_path": old_path,
+            "hunks": [],
+        }
+
+    def _append_patch_line(
+        self,
+        operation: dict[str, Any],
+        *,
+        header: str | None,
+        kind: str,
+        text: str,
+    ) -> None:
+        """Append one line to the current patch hunk, creating it when needed."""
+        hunks = operation["hunks"]
+        if not hunks or hunks[-1]["header"] != header:
+            hunks.append({"header": header, "lines": []})
+        hunks[-1]["lines"].append({"kind": kind, "text": text})
+
+    def _parse_patch_hunks(self, lines: list[str], start_index: int, operation: dict[str, Any]) -> int:
+        """Parse all hunks for one apply_patch operation."""
+        index = start_index
+        current_header: str | None = None
+
+        while index < len(lines):
+            line = lines[index]
+            if self._is_patch_operation_header(line):
+                break
+            if line == "*** End of File":
+                index += 1
+                continue
+            if line.startswith("@@"):
+                current_header = line
+                if not operation["hunks"] or operation["hunks"][-1]["header"] != current_header:
+                    operation["hunks"].append({"header": current_header, "lines": []})
+                index += 1
+                continue
+            if line.startswith("+"):
+                self._append_patch_line(operation, header=current_header, kind="add", text=line[1:])
+                index += 1
+                continue
+            if line.startswith("-"):
+                self._append_patch_line(operation, header=current_header, kind="remove", text=line[1:])
+                index += 1
+                continue
+            if line.startswith(" "):
+                self._append_patch_line(operation, header=current_header, kind="context", text=line[1:])
+                index += 1
+                continue
+            raise ValueError(f"无法解析 patch 行: {line}")
+
+        return index
+
+    def _build_write_file_content(self, operation: dict[str, Any]) -> str:
+        """Build final file content for an added file."""
+        lines: list[str] = []
+        for hunk in operation["hunks"]:
+            for line in hunk["lines"]:
+                if line["kind"] == "remove":
+                    continue
+                lines.append(line["text"])
+        return "\n".join(lines)
+
+    def _build_edit_file_diff(self, operation: dict[str, Any]) -> str:
+        """Build one unified diff string for an edited file."""
+        source_path = operation.get("old_path") or operation["path"]
+        target_path = operation["path"]
+        diff_lines = [
+            f"Index: {target_path}",
+            "===================================================================",
+            f"--- {source_path}",
+            f"+++ {target_path}",
+        ]
+
+        for hunk in operation["hunks"]:
+            header = hunk.get("header")
+            if header:
+                diff_lines.append(header)
+            for line in hunk["lines"]:
+                prefix = {
+                    "remove": "-",
+                    "add": "+",
+                    "context": " ",
+                }.get(line["kind"], "")
+                diff_lines.append(f"{prefix}{line['text']}")
+
+        return "\n".join(diff_lines)
+
+    def _build_patch_content_blocks(self, operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Convert parsed patch operations into exported content blocks."""
+        blocks: list[dict[str, Any]] = []
+
+        for operation in operations:
+            action = operation["action"]
+            path = operation["path"]
+            old_path = operation.get("old_path")
+
+            if action == "add":
+                blocks.append(
+                    {
+                        "type": "write_file",
+                        "path": path,
+                        "old_path": None,
+                        "input": {"content": self._build_write_file_content(operation)},
+                    }
+                )
+                continue
+
+            if action == "delete":
+                blocks.append(
+                    {
+                        "type": "delete_file",
+                        "path": path,
+                        "old_path": None,
+                        "input": {"content": ""},
+                    }
+                )
+                continue
+
+            if action == "move":
+                blocks.append(
+                    {
+                        "type": "move_file",
+                        "path": path,
+                        "old_path": old_path,
+                        "input": {"content": ""},
+                    }
+                )
+                continue
+
+            blocks.append(
+                {
+                    "type": "edit_file",
+                    "path": path,
+                    "old_path": old_path,
+                    "input": {"content": self._build_edit_file_diff(operation)},
+                }
+            )
+
+        return blocks
+
+    def _parse_apply_patch_input(self, raw_input: str) -> dict[str, Any]:
+        """Parse apply_patch input into a structured patch payload."""
+        result = self._build_empty_patch_arguments(raw_input)
+        lines = raw_input.splitlines()
+
+        try:
+            if not lines:
+                raise ValueError("patch 为空")
+            if lines[0] != "*** Begin Patch":
+                raise ValueError("patch 缺少 Begin Patch 头")
+
+            index = 1
+            operations: list[dict[str, Any]] = []
+            saw_end_patch = False
+
+            while index < len(lines):
+                line = lines[index]
+                if line == "*** End Patch":
+                    saw_end_patch = True
+                    index += 1
+                    break
+                if line.startswith("*** Add File: "):
+                    path = line.removeprefix("*** Add File: ")
+                    operation = self._build_patch_operation(action="add", path=path)
+                    index = self._parse_patch_hunks(lines, index + 1, operation)
+                    operations.append(operation)
+                    continue
+                if line.startswith("*** Delete File: "):
+                    path = line.removeprefix("*** Delete File: ")
+                    operation = self._build_patch_operation(action="delete", path=path)
+                    index = self._parse_patch_hunks(lines, index + 1, operation)
+                    operations.append(operation)
+                    continue
+                if line.startswith("*** Update File: "):
+                    old_path = line.removeprefix("*** Update File: ")
+                    index += 1
+                    new_path = old_path
+                    if index < len(lines) and lines[index].startswith("*** Move to: "):
+                        new_path = lines[index].removeprefix("*** Move to: ")
+                        index += 1
+
+                    operation = self._build_patch_operation(
+                        action="move" if new_path != old_path else "update",
+                        path=new_path,
+                        old_path=old_path if new_path != old_path else None,
+                    )
+                    index = self._parse_patch_hunks(lines, index, operation)
+                    if operation["old_path"] and operation["hunks"]:
+                        operation["action"] = "update"
+                    operations.append(operation)
+                    continue
+                raise ValueError(f"无法解析 patch 操作头: {line}")
+
+            if not saw_end_patch:
+                raise ValueError("patch 缺少 End Patch 尾")
+
+            result["content"] = self._build_patch_content_blocks(operations)
+            return result
+        except ValueError as exc:
+            return self._build_empty_patch_arguments(raw_input, parse_error=str(exc))
 
     def _normalize_output_parts(self, output: Any, timestamp_ms: int) -> list[dict[str, Any]]:
         """Normalize tool output into text parts."""
@@ -316,7 +618,16 @@ class CodexAgent(BaseAgent):
             return []
         if isinstance(output, str):
             return [self._build_text_part(output, timestamp_ms)]
+        if isinstance(output, (dict, list)):
+            return [self._build_text_part(json.dumps(output, ensure_ascii=False, indent=2), timestamp_ms)]
         return [self._build_text_part(str(output), timestamp_ms)]
+
+    def _normalize_custom_tool_output(self, output: Any, timestamp_ms: int) -> list[dict[str, Any]]:
+        """Normalize custom tool output and prefer the user-facing output field."""
+        parsed_output = self._try_parse_json_string(output)
+        if isinstance(parsed_output, dict) and "output" in parsed_output:
+            return self._normalize_output_parts(parsed_output["output"], timestamp_ms)
+        return self._normalize_output_parts(parsed_output if parsed_output is not None else output, timestamp_ms)
 
     def _extract_message_content_parts(
         self, role: str, content: Any, timestamp_ms: int
@@ -458,16 +769,14 @@ class CodexAgent(BaseAgent):
         )
         return assistant_index if assistant_index is not None else current_assistant_index
 
-    def _attach_tool_call_to_latest_assistant(
+    def _attach_tool_part_to_latest_assistant(
         self,
         messages: list[dict[str, Any]],
-        payload: dict[str, Any],
+        tool_part: dict[str, Any],
         timestamp_ms: int,
         latest_assistant_text_index: int | None,
     ) -> tuple[int, int]:
         """Attach one tool call to the latest assistant text message or create a fallback one."""
-        tool_part = self._build_tool_part(payload, timestamp_ms)
-
         if latest_assistant_text_index is not None:
             messages[latest_assistant_text_index]["parts"].append(tool_part)
             return latest_assistant_text_index, len(messages[latest_assistant_text_index]["parts"]) - 1
@@ -482,6 +791,38 @@ class CodexAgent(BaseAgent):
             )
         )
         return len(messages) - 1, 0
+
+    def _attach_tool_call_to_latest_assistant(
+        self,
+        messages: list[dict[str, Any]],
+        payload: dict[str, Any],
+        timestamp_ms: int,
+        latest_assistant_text_index: int | None,
+    ) -> tuple[int, int]:
+        """Attach one function_call tool part to the latest assistant text message."""
+        tool_part = self._build_function_tool_part(payload, timestamp_ms)
+        return self._attach_tool_part_to_latest_assistant(
+            messages,
+            tool_part,
+            timestamp_ms,
+            latest_assistant_text_index,
+        )
+
+    def _attach_custom_tool_call_to_latest_assistant(
+        self,
+        messages: list[dict[str, Any]],
+        payload: dict[str, Any],
+        timestamp_ms: int,
+        latest_assistant_text_index: int | None,
+    ) -> tuple[int, int]:
+        """Attach one custom_tool_call tool part to the latest assistant text message."""
+        tool_part = self._build_custom_tool_part(payload, timestamp_ms)
+        return self._attach_tool_part_to_latest_assistant(
+            messages,
+            tool_part,
+            timestamp_ms,
+            latest_assistant_text_index,
+        )
 
     def _backfill_tool_output(
         self,
@@ -608,6 +949,21 @@ class CodexAgent(BaseAgent):
                     next_current_index = message_index
                 return next_current_index, latest_assistant_text_index
 
+            if item_type == "custom_tool_call":
+                message_index, part_index = self._attach_custom_tool_call_to_latest_assistant(
+                    messages,
+                    payload,
+                    timestamp_ms,
+                    latest_assistant_text_index,
+                )
+                call_id = str(payload.get("call_id", ""))
+                if call_id:
+                    pending_tool_calls[call_id] = (message_index, part_index)
+                next_current_index = current_assistant_index
+                if latest_assistant_text_index is None and message_index == len(messages) - 1:
+                    next_current_index = message_index
+                return next_current_index, latest_assistant_text_index
+
             if item_type == "function_call_output":
                 call_id = str(payload.get("call_id", ""))
                 output_parts = self._normalize_output_parts(payload.get("output"), timestamp_ms)
@@ -629,35 +985,30 @@ class CodexAgent(BaseAgent):
                     messages.append(fallback)
                 return current_assistant_index, latest_assistant_text_index
 
+            if item_type == "custom_tool_call_output":
+                call_id = str(payload.get("call_id", ""))
+                output_parts = self._normalize_custom_tool_output(payload.get("output"), timestamp_ms)
+                if self._backfill_tool_output(
+                    messages,
+                    pending_tool_calls,
+                    call_id=call_id,
+                    output_parts=output_parts,
+                ):
+                    return current_assistant_index, latest_assistant_text_index
+
+                fallback = self._build_fallback_tool_message(
+                    message_id=message_id,
+                    timestamp_ms=timestamp_ms,
+                    call_id=call_id,
+                    output_parts=output_parts,
+                )
+                if fallback:
+                    messages.append(fallback)
+                return current_assistant_index, latest_assistant_text_index
+
             return current_assistant_index, latest_assistant_text_index
 
         if msg_type == "event_msg":
-            event_type = payload.get("type", "")
-            if event_type == "agent_message":
-                parts = [self._build_text_part(str(payload.get("message", "")), timestamp_ms)]
-            elif event_type == "agent_reasoning":
-                text = str(payload.get("text", payload.get("message", "")))
-                parts = [self._build_text_part(text, timestamp_ms, part_type="reasoning")]
-                assistant_index = self._append_assistant_reasoning(
-                    messages,
-                    message_id=message_id,
-                    timestamp_ms=timestamp_ms,
-                    parts=parts,
-                    current_assistant_index=current_assistant_index,
-                )
-                next_index = assistant_index if assistant_index is not None else current_assistant_index
-                return next_index, latest_assistant_text_index
-            else:
-                return current_assistant_index, latest_assistant_text_index
-
-            assistant_index = self._append_assistant_text(
-                messages,
-                message_id=message_id,
-                timestamp_ms=timestamp_ms,
-                parts=parts,
-                current_assistant_index=current_assistant_index,
-            )
-            next_index = assistant_index if assistant_index is not None else current_assistant_index
-            return next_index, next_index
+            return current_assistant_index, latest_assistant_text_index
 
         return current_assistant_index, latest_assistant_text_index
