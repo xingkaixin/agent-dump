@@ -188,7 +188,10 @@ class ClaudeCodeAgent(BaseAgent):
         pending_tool_calls: dict[str, tuple[int, int]] = {}
         ignored_tool_call_ids: set[str] = set()
         assistant_uuid_to_tool_calls: dict[str, list[str]] = {}
-        assistant_state = {"current_index": None, "latest_text_index": None}
+        assistant_state: dict[str, int | None] = {
+            "current_index": None,
+            "latest_text_index": None,
+        }
         stats = {
             "total_cost": 0,
             "total_input_tokens": 0,
@@ -719,7 +722,11 @@ class ClaudeCodeAgent(BaseAgent):
     def _convert_to_opencode_format(self, data: dict[str, Any]) -> dict[str, Any] | None:
         """Convert a single Claude record into unified message format."""
         messages: list[dict[str, Any]] = []
-        self._convert_claude_record(data, messages, {}, set(), {}, {"current_index": None, "latest_text_index": None})
+        assistant_state: dict[str, int | None] = {
+            "current_index": None,
+            "latest_text_index": None,
+        }
+        self._convert_claude_record(data, messages, {}, set(), {}, assistant_state)
         if not messages:
             return None
         return messages[0]
