@@ -2,18 +2,31 @@
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-03-01
+
 ### Added
 
 - **Multi-format export and raw session output**
   - `--format` now supports comma-separated values such as `json,markdown,raw`
   - Added `raw` export support for all agents
   - Keeps `md` as a compatibility alias for `markdown`
+- **Codex plan export reconstruction**
+  - Extracts assistant `<proposed_plan>` blocks as structured `plan` parts
+  - Merges the following user approval or rejection into `approval_status` and `output`
+  - Hides consumed approval messages from exported conversations to avoid duplication
 
 ### Changed
 
 - **Mode-specific format behavior**
   - URI mode can combine `print` with file exports like `print,json`
   - Interactive mode supports `json`, `markdown`, and `raw`, but rejects `print`
+- **Codex skill wrapper export behavior**
+  - Converts `<skill><name>...</name></skill>` user wrapper messages into assistant `tool=skill` entries in JSON export
+  - Keeps non-JSON session data unchanged so text rendering still preserves the original payload
+
+### Improved
+
+- Expanded Codex regression coverage for plan approval handling and skill export conversion
 
 ## [0.6.2] - 2026-02-28
 

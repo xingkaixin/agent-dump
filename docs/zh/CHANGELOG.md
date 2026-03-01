@@ -2,18 +2,31 @@
 
 ## [未发布]
 
+## [0.6.3] - 2026-03-01
+
 ### 新增功能
 
 - **多格式导出与 raw 原始会话输出**
   - `--format` 现已支持逗号分隔多值，例如 `json,markdown,raw`
   - 为所有 agent 增加 `raw` 导出能力
   - 保留 `md` 作为 `markdown` 的兼容别名
+- **Codex plan 导出重建**
+  - 将 assistant 的 `<proposed_plan>` 区块提取为结构化 `plan` part
+  - 将后续 user 的批准或拒绝结果合并到 `approval_status` 与 `output`
+  - 已消费的审批消息不再重复出现在导出会话中
 
 ### 变更
 
 - **按模式区分格式行为**
   - URI 模式可组合 `print` 与文件导出，例如 `print,json`
   - 交互模式支持 `json`、`markdown`、`raw`，但拒绝 `print`
+- **Codex skill 包装消息导出行为**
+  - 在 JSON 导出中，将 `<skill><name>...</name></skill>` 形式的 user 包装消息转换为 assistant `tool=skill`
+  - 非 JSON 的会话数据保持原样，文本渲染继续保留原始 payload
+
+### 改进
+
+- 扩展 Codex 关于 plan 审批处理与 skill 导出转换的回归测试覆盖
 
 ## [0.6.2] - 2026-02-28
 
