@@ -5,6 +5,7 @@ Kimi agent handler
 from datetime import datetime, timedelta
 import json
 from pathlib import Path
+import shutil
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -48,6 +49,18 @@ class KimiAgent(BaseAgent):
             "context_file": context_path if context_path.exists() else None,
             "wire_file": wire_path if wire_path.exists() else None,
         }
+
+    def _get_raw_source_path(self, session: Session) -> Path:
+        """Pick the preferred raw source file for a Kimi session."""
+        context_file = session.metadata.get("context_file")
+        if context_file:
+            return Path(context_file)
+
+        wire_file = session.metadata.get("wire_file")
+        if wire_file:
+            return Path(wire_file)
+
+        raise FileNotFoundError(f"No raw session file found for session: {session.id}")
 
     def is_available(self) -> bool:
         """Check if Kimi sessions exist"""
@@ -130,6 +143,17 @@ class KimiAgent(BaseAgent):
             "stats": stats,
             "messages": messages,
         }
+
+    def export_raw_session(self, session: Session, output_dir: Path) -> Path:
+        """Export the preferred raw Kimi session file."""
+        source_path = self._get_raw_source_path(session)
+        if not source_path.exists():
+            raise FileNotFoundError(f"Raw session file not found: {source_path}")
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = self._build_raw_output_path(session, output_dir, suffix=".raw.jsonl")
+        shutil.copy2(source_path, output_path)
+        return output_path
 
     def _build_message(
         self,

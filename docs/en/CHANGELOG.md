@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-format export and raw session output**
+  - `--format` now supports comma-separated values such as `json,markdown,raw`
+  - Added `raw` export support for all agents
+  - Keeps `md` as a compatibility alias for `markdown`
+
+### Changed
+
+- **Mode-specific format behavior**
+  - URI mode can combine `print` with file exports like `print,json`
+  - Interactive mode supports `json`, `markdown`, and `raw`, but rejects `print`
+
 ## [0.6.2] - 2026-02-28
 
 ### Fixed

@@ -247,6 +247,72 @@ class TestKimiAgent:
         with pytest.raises(FileNotFoundError):
             agent.export_session(session, tmp_path)
 
+    def test_export_raw_session_prefers_context_file(self, tmp_path):
+        """测试 raw 导出优先使用 context.jsonl"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+
+        context_path = session_dir / "context.jsonl"
+        wire_path = session_dir / "wire.jsonl"
+        context_path.write_text("{\"role\":\"user\"}\n", encoding="utf-8")
+        wire_path.write_text("{\"wire\":true}\n", encoding="utf-8")
+
+        session = Session(
+            id="test-session",
+            title="Test Session",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=session_dir,
+            metadata={"context_file": str(context_path), "wire_file": str(wire_path)},
+        )
+
+        result = agent.export_raw_session(session, tmp_path)
+
+        assert result.name == "test-session.raw.jsonl"
+        assert result.read_text(encoding="utf-8") == context_path.read_text(encoding="utf-8")
+
+    def test_export_raw_session_falls_back_to_wire_file(self, tmp_path):
+        """测试 raw 导出在没有 context 时回退到 wire.jsonl"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+
+        wire_path = session_dir / "wire.jsonl"
+        wire_path.write_text("{\"wire\":true}\n", encoding="utf-8")
+
+        session = Session(
+            id="test-session",
+            title="Test Session",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=session_dir,
+            metadata={"context_file": None, "wire_file": str(wire_path)},
+        )
+
+        result = agent.export_raw_session(session, tmp_path)
+
+        assert result.name == "test-session.raw.jsonl"
+        assert result.read_text(encoding="utf-8") == wire_path.read_text(encoding="utf-8")
+
+    def test_export_raw_session_raises_when_no_raw_file(self, tmp_path):
+        """测试 raw 导出在没有原始文件时抛错"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+
+        session = Session(
+            id="test-session",
+            title="Test Session",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=session_dir,
+            metadata={"context_file": None, "wire_file": None},
+        )
+
+        with pytest.raises(FileNotFoundError):
+            agent.export_raw_session(session, tmp_path)
+
     def test_get_session_data_from_context_user_message(self, tmp_path):
         """测试 context user 记录正确转换"""
         agent = KimiAgent()

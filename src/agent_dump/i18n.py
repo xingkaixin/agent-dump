@@ -36,6 +36,8 @@ class Keys:
     EXPORTING_AGENT = "EXPORTING_AGENT"
     EXPORT_SUCCESS = "EXPORT_SUCCESS"
     EXPORT_ERROR = "EXPORT_ERROR"
+    EXPORT_SUCCESS_FORMAT = "EXPORT_SUCCESS_FORMAT"
+    EXPORT_ERROR_FORMAT = "EXPORT_ERROR_FORMAT"
     EXPORT_SUMMARY = "EXPORT_SUMMARY"
     NO_SESSIONS_PAREN = "NO_SESSIONS_PAREN"
     PAGINATION_INFO = "PAGINATION_INFO"
@@ -87,6 +89,7 @@ class Keys:
     CLI_PAGE_SIZE_HELP = "CLI_PAGE_SIZE_HELP"
     CLI_QUERY_HELP = "CLI_QUERY_HELP"
     CLI_LANG_HELP = "CLI_LANG_HELP"
+    CLI_FORMAT_INVALID = "CLI_FORMAT_INVALID"
     LIST_IGNORE_FORMAT = "LIST_IGNORE_FORMAT"
     LIST_IGNORE_OUTPUT = "LIST_IGNORE_OUTPUT"
     INTERACTIVE_FORMAT_INVALID = "INTERACTIVE_FORMAT_INVALID"
@@ -126,6 +129,8 @@ TRANSLATIONS = {
         Keys.EXPORTING_AGENT: "📤 Exporting {agent_name} sessions...",
         Keys.EXPORT_SUCCESS: "  ✓ {title}... → {filename}",
         Keys.EXPORT_ERROR: "  ✗ {title}... → Error: {error}",
+        Keys.EXPORT_SUCCESS_FORMAT: "  ✓ {title}... [{format}] → {filename}",
+        Keys.EXPORT_ERROR_FORMAT: "  ✗ {title}... [{format}] → Error: {error}",
         Keys.EXPORT_SUMMARY: "\n✅ Successfully exported {count} sessions to {path}/",
         Keys.NO_SESSIONS_PAREN: "   (No sessions)",
         Keys.PAGINATION_INFO: "   Page {current}/{total} (Total {total_sessions} sessions)",
@@ -161,20 +166,21 @@ TRANSLATIONS = {
         Keys.AVAILABLE_SESSIONS: "Available sessions:",
         Keys.ENTER_SESSION_NUMBERS: "Enter session numbers to export (comma-separated, e.g., '1,3,5' or 'all'):",
         Keys.INVALID_INPUT_NUMBERS: "⚠️  Invalid input. Please enter numbers separated by commas.",
-        Keys.CLI_DESC: "Export agent sessions to JSON",
+        Keys.CLI_DESC: "Export agent sessions",
         Keys.CLI_URI_HELP: "Agent session URI to dump (e.g., opencode://session-id)",
         Keys.CLI_DAYS_HELP: "Number of days to look back (default: 7)",
         Keys.CLI_OUTPUT_HELP: "Output base directory (default: ./sessions)",
-        Keys.CLI_FORMAT_HELP: "Output format: json | md | print",
+        Keys.CLI_FORMAT_HELP: "Output format: json | markdown | raw | print (comma-separated, md alias supported)",
         Keys.CLI_LIST_HELP: "List all available sessions without exporting",
         Keys.CLI_INTERACTIVE_HELP: "Run in interactive mode to select and export sessions",
         Keys.CLI_PAGE_SIZE_HELP: "Number of sessions to display per page (default: 20)",
         Keys.CLI_QUERY_HELP: "Query filter, supports 'agent1,agent2:keyword' or 'keyword'",
         Keys.CLI_LANG_HELP: "Language (en, zh). Default: auto-detect",
+        Keys.CLI_FORMAT_INVALID: "invalid format list: {value}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list mode ignores -format/--format.",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list mode ignores -output/--output.",
-        Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive mode only supports json or md format.",
-        Keys.URI_EXPORT_SAVED: "✅ Exported session to: {path}",
+        Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive mode does not support print; use json, markdown, or raw.",
+        Keys.URI_EXPORT_SAVED: "✅ Exported session [{format}] to: {path}",
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
@@ -206,6 +212,8 @@ TRANSLATIONS = {
         Keys.EXPORTING_AGENT: "📤 导出 {agent_name} 会话...",
         Keys.EXPORT_SUCCESS: "  ✓ {title}... → {filename}",
         Keys.EXPORT_ERROR: "  ✗ {title}... → 错误: {error}",
+        Keys.EXPORT_SUCCESS_FORMAT: "  ✓ {title}... [{format}] → {filename}",
+        Keys.EXPORT_ERROR_FORMAT: "  ✗ {title}... [{format}] → 错误: {error}",
         Keys.EXPORT_SUMMARY: "\n✅ 成功导出 {count} 个会话到 {path}/",
         Keys.NO_SESSIONS_PAREN: "   (无会话)",
         Keys.PAGINATION_INFO: "   第 {current}/{total} 页 (共 {total_sessions} 个会话)",
@@ -241,20 +249,21 @@ TRANSLATIONS = {
         Keys.AVAILABLE_SESSIONS: "Available sessions:",
         Keys.ENTER_SESSION_NUMBERS: "Enter session numbers to export (comma-separated, e.g., '1,3,5' or 'all'):",
         Keys.INVALID_INPUT_NUMBERS: "⚠️  Invalid input. Please enter numbers separated by commas.",
-        Keys.CLI_DESC: "导出 Agent 会话到 JSON",
+        Keys.CLI_DESC: "导出 Agent 会话",
         Keys.CLI_URI_HELP: "要导出的 Agent 会话 URI (例如: opencode://session-id)",
         Keys.CLI_DAYS_HELP: "查找最近几天的会话 (默认: 7)",
         Keys.CLI_OUTPUT_HELP: "输出目录 (默认: ./sessions)",
-        Keys.CLI_FORMAT_HELP: "输出格式: json | md | print",
+        Keys.CLI_FORMAT_HELP: "输出格式: json | markdown | raw | print（支持逗号分隔，兼容 md 别名）",
         Keys.CLI_LIST_HELP: "列出所有可用会话而不导出",
         Keys.CLI_INTERACTIVE_HELP: "进入交互式模式选择并导出",
         Keys.CLI_PAGE_SIZE_HELP: "每页显示的会话数量 (默认: 20)",
         Keys.CLI_QUERY_HELP: "查询过滤器，支持 'agent1,agent2:关键词' 或 '关键词'",
         Keys.CLI_LANG_HELP: "语言 (en, zh). 默认: 自动检测",
+        Keys.CLI_FORMAT_INVALID: "无效的格式列表: {value}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list 模式会忽略 -format/--format 参数。",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list 模式会忽略 -output/--output 参数。",
-        Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive 模式仅支持 json 或 md 格式。",
-        Keys.URI_EXPORT_SAVED: "✅ 已导出到: {path}",
+        Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive 模式不支持 print；可用格式为 json、markdown、raw。",
+        Keys.URI_EXPORT_SAVED: "✅ 已导出 [{format}] 到: {path}",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     }
 }

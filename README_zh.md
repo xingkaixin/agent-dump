@@ -130,12 +130,18 @@ uv run agent-dump codex://<session-id>        # 查看 Codex 会话内容
 uv run agent-dump kimi://<session-id>         # 查看 Kimi 会话内容
 uv run agent-dump claude://<session-id>       # 查看 Claude Code 会话内容
 uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # 导出 JSON 文件
-uv run agent-dump codex://<session-id> -format md -output ./my-sessions       # 导出 Markdown 文件
+uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # 导出 Markdown 文件
+uv run agent-dump codex://<session-id> --format print,json --output ./my-sessions # 打印并导出 JSON
+uv run agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # 同时导出多种格式
 
 # 其他选项
 uv run agent-dump --interactive --format json # 交互式导出 JSON（默认）
-uv run agent-dump --interactive --format md   # 交互式导出 Markdown
+uv run agent-dump --interactive --format markdown   # 交互式导出 Markdown
+uv run agent-dump --interactive --format json,markdown,raw # 交互式多格式导出
 uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
+
+# 兼容说明
+# md 仍可作为 markdown 的别名使用，例如：--format md,raw
 ```
 
 ### 完整参数说明
@@ -147,9 +153,9 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `-d`, `-days` | 查询最近 N 天的会话 | 7 |
 | `-q`, `-query` | 查询过滤。支持 `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`） | - |
 | `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `-days` 或 `-query` 且未指定 `--interactive` 则自动启用） | - |
-| `-format`, `--format` | 输出格式。`json \\| md \\| print`。默认：URI 模式为 `print`，非 URI 模式为 `json`。`--interactive` 仅支持 `json/md`；`--list` 下会警告并忽略。 | - |
+| `-format`, `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`，兼容 `md` 别名。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略。 | - |
 | `-p`, `-page-size` | 为兼容保留，当前在 `--list` 模式下不生效 | 20 |
-| `-output`, `--output` | 输出目录。`--interactive` 可用；URI 模式仅在 `format=json/md` 时生效；`--list` 下会警告并忽略。 | ./sessions |
+| `-output`, `--output` | 输出目录。`--interactive` 可用；URI 模式在包含任意文件导出格式（`json/markdown/raw`）时生效；`--list` 下会警告并忽略。 | ./sessions |
 | `-h, --help` | 显示帮助信息 | - |
 
 ## 项目结构

@@ -297,6 +297,30 @@ class TestCodexAgent:
         assert exported["title"] == "Test Session"
         assert len(exported["messages"]) == 1
 
+    def test_export_raw_session_copies_original_jsonl(self, tmp_path):
+        """测试 raw 导出会复制原始 jsonl 文件"""
+        agent = CodexAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        session_file = tmp_path / "test.jsonl"
+        original = json.dumps({"type": "response_item", "payload": {"type": "message"}}) + "\n"
+        session_file.write_text(original, encoding="utf-8")
+
+        session = Session(
+            id="test",
+            title="Test Session",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.export_raw_session(session, output_dir)
+
+        assert result.name == "test.raw.jsonl"
+        assert result.read_text(encoding="utf-8") == original
+
     def test_export_session_filters_developer_and_context_user_messages(self, tmp_path):
         """测试导出时过滤 developer 与注入上下文 user 消息，并保留 tool 部分"""
         agent = CodexAgent()

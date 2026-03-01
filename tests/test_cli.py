@@ -12,10 +12,12 @@ import pytest
 from agent_dump.cli import (
     display_sessions_list,
     export_sessions,
+    export_sessions_for_formats,
     find_session_by_id,
     format_relative_time,
     group_sessions_by_time,
     main,
+    parse_format_spec,
     parse_uri,
     render_session_text,
 )
@@ -163,6 +165,43 @@ class TestExportSessions:
         export_sessions(mock_agent, [mock_session], output_dir)
 
         assert (output_dir / "test_agent").exists()
+
+    def test_export_sessions_for_multiple_formats(self, tmp_path):
+        """测试多格式导出会依次调用对应导出器"""
+        mock_agent = mock.MagicMock()
+        mock_agent.name = "test_agent"
+        mock_agent.display_name = "Test Agent"
+        mock_agent.get_session_uri.return_value = "codex://session-001"
+        mock_agent.get_session_data.return_value = {"messages": []}
+
+        session = mock.MagicMock()
+        session.id = "session-001"
+        session.title = "Session 1"
+
+        mock_agent.export_session.return_value = tmp_path / "test_agent" / "session-001.json"
+        mock_agent.export_raw_session.return_value = tmp_path / "test_agent" / "session-001.raw.jsonl"
+
+        result = export_sessions_for_formats(mock_agent, [session], ["json", "markdown", "raw"], tmp_path)
+
+        assert len(result) == 3
+        mock_agent.export_session.assert_called_once_with(session, tmp_path / "test_agent")
+        mock_agent.export_raw_session.assert_called_once_with(session, tmp_path / "test_agent")
+
+
+class TestFormatSpec:
+    """测试格式解析辅助函数"""
+
+    def test_parse_format_spec_supports_alias_and_dedup(self):
+        result = parse_format_spec("json, md ,raw,json")
+        assert result == ["json", "markdown", "raw"]
+
+    def test_parse_format_spec_rejects_unknown_format(self):
+        with pytest.raises(ValueError):
+            parse_format_spec("json,foo")
+
+    def test_parse_format_spec_rejects_empty_part(self):
+        with pytest.raises(ValueError):
+            parse_format_spec("json,,raw")
 
 
 class TestMain:
@@ -400,7 +439,7 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions") as mock_export:
+                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
@@ -429,7 +468,7 @@ class TestMain:
 
             with mock.patch("agent_dump.cli.select_agent_interactive") as mock_select_agent:
                 with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select_session:
-                    with mock.patch("agent_dump.cli.export_sessions") as mock_export:
+                    with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
                         mock_select_agent.return_value = agent2
                         mock_select_session.return_value = [mock.MagicMock()]
                         mock_export.return_value = [Path("test.json")]
@@ -514,7 +553,7 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions") as mock_export:
+                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
@@ -640,7 +679,7 @@ class TestMain:
                         "agent_dump.cli.select_sessions_interactive",
                         return_value=[selected_session],
                     ):
-                        with mock.patch("agent_dump.cli.export_sessions", return_value=[Path("a.json")]):
+                        with mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[Path("a.json")]):
                             with mock.patch(
                                 "sys.argv",
                                 ["agent-dump", "--interactive", "-query", "codex,kimi:bug"],
@@ -677,7 +716,7 @@ class TestMain:
             selected_sessions = [mock.MagicMock()]
             with mock.patch("agent_dump.cli.filter_sessions", return_value=selected_sessions) as mock_filter:
                 with mock.patch("agent_dump.cli.select_sessions_interactive", return_value=selected_sessions):
-                    with mock.patch("agent_dump.cli.export_sessions", return_value=[Path("a.json")]):
+                    with mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[Path("a.json")]):
                         with mock.patch(
                             "sys.argv",
                             ["agent-dump", "--interactive", "-days", "3", "-query", "bug"],
@@ -779,7 +818,7 @@ class TestMain:
                         "agent_dump.cli.select_sessions_interactive",
                         return_value=[selected_session],
                     ):
-                        with mock.patch("agent_dump.cli.export_sessions", return_value=[Path("a.json")]):
+                        with mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[Path("a.json")]):
                             with mock.patch("sys.argv", ["agent-dump", "--interactive", "-query", "codex,kimi:bug"]):
                                 result = main()
 
@@ -807,7 +846,7 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions") as mock_export:
+                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
@@ -816,7 +855,7 @@ class TestMain:
 
             mock_export.assert_called_once()
             args = mock_export.call_args
-            assert str(output_dir) in str(args[0][2])
+            assert str(output_dir) in str(args[0][3])
 
     def test_main_with_output_short_argument(self, tmp_path):
         """测试指定 -output 参数"""
@@ -835,7 +874,7 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions") as mock_export:
+                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
@@ -844,7 +883,7 @@ class TestMain:
 
             mock_export.assert_called_once()
             args = mock_export.call_args
-            assert str(output_dir) in str(args[0][2])
+            assert str(output_dir) in str(args[0][3])
 
     def test_main_interactive_with_format_long_alias_md(self):
         """测试 --format md 会走 Markdown 导出"""
@@ -861,17 +900,16 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions") as mock_export_json:
-                    with mock.patch("agent_dump.cli.export_sessions_markdown") as mock_export_md:
-                        mock_select.return_value = [mock.MagicMock()]
-                        mock_export_md.return_value = [Path("test.md")]
+                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+                    mock_select.return_value = [mock.MagicMock()]
+                    mock_export.return_value = [Path("test.md")]
 
-                        with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "md"]):
-                            result = main()
+                    with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "md"]):
+                        result = main()
 
         assert result == 0
-        mock_export_md.assert_called_once()
-        mock_export_json.assert_not_called()
+        mock_export.assert_called_once()
+        assert mock_export.call_args.args[2] == ["markdown"]
 
     def test_main_interactive_with_format_print_returns_1(self, capsys):
         """测试 --interactive + -format print 返回错误"""
@@ -891,7 +929,86 @@ class TestMain:
 
         assert result == 1
         captured = capsys.readouterr()
-        assert "--interactive 模式仅支持 json 或 md" in captured.out
+        assert "--interactive 模式不支持 print" in captured.out
+
+    def test_main_interactive_with_multi_formats(self):
+        """测试 --interactive 支持多格式导出"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = [mock.MagicMock()]
+
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+                    mock_select.return_value = [mock.MagicMock()]
+                    mock_export.return_value = [Path("a.json"), Path("a.md"), Path("a.raw.json")]
+
+                    with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "json,markdown,raw"]):
+                        result = main()
+
+        assert result == 0
+        assert mock_export.call_args.args[2] == ["json", "markdown", "raw"]
+
+    def test_main_interactive_with_format_json_print_returns_1(self, capsys):
+        """测试 --interactive + 多格式包含 print 返回错误"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--interactive", "-format", "json,print"]):
+                result = main()
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--interactive 模式不支持 print" in captured.out
+
+    def test_main_interactive_with_raw_format(self):
+        """测试 --interactive + raw 会传给统一导出入口"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = [mock.MagicMock()]
+
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+                    mock_select.return_value = [mock.MagicMock()]
+                    mock_export.return_value = [Path("a.raw.json")]
+
+                    with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "raw"]):
+                        result = main()
+
+        assert result == 0
+        assert mock_export.call_args.args[2] == ["raw"]
+
+    def test_main_invalid_format_list_exits(self, capsys):
+        """测试无效格式列表会被 argparse 拒绝"""
+        with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "json,foo"]):
+            with pytest.raises(SystemExit):
+                main()
+
+        captured = capsys.readouterr()
+        assert "无效的格式列表" in captured.err
 
     def test_main_list_mode_warns_and_continues_when_format_specified(self, capsys):
         """测试 --list + -format 会警告但继续"""
@@ -997,6 +1114,87 @@ class TestMain:
         assert "## 1. User" not in captured.out
         assert str(expected_output) in captured.out
 
+    def test_main_uri_mode_print_and_json(self, capsys, tmp_path):
+        """测试 URI + print,json 会先打印再写文件"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.return_value = {
+                "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
+            }
+
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            output_root = tmp_path / "out"
+            expected_output_dir = output_root / "codex"
+            expected_output = expected_output_dir / "session-001.json"
+            mock_agent.export_session.return_value = expected_output
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch(
+                    "sys.argv",
+                    ["agent-dump", "codex://session-001", "--format", "print,json", "--output", str(output_root)],
+                ):
+                    result = main()
+
+        assert result == 0
+        mock_agent.export_session.assert_called_once_with(mock_session, expected_output_dir)
+        captured = capsys.readouterr()
+        assert "# Session Dump" in captured.out
+        assert str(expected_output) in captured.out
+
+    def test_main_uri_mode_print_json_raw(self, capsys, tmp_path):
+        """测试 URI + print,json,raw 会打印并导出两个文件"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.return_value = {"messages": []}
+
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            output_root = tmp_path / "out"
+            expected_output_dir = output_root / "codex"
+            json_output = expected_output_dir / "session-001.json"
+            raw_output = expected_output_dir / "session-001.raw.jsonl"
+            mock_agent.export_session.return_value = json_output
+            mock_agent.export_raw_session.return_value = raw_output
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch(
+                    "sys.argv",
+                    [
+                        "agent-dump",
+                        "codex://session-001",
+                        "--format",
+                        "print,json,raw",
+                        "--output",
+                        str(output_root),
+                    ],
+                ):
+                    result = main()
+
+        assert result == 0
+        mock_agent.export_session.assert_called_once_with(mock_session, expected_output_dir)
+        mock_agent.export_raw_session.assert_called_once_with(mock_session, expected_output_dir)
+        captured = capsys.readouterr()
+        assert "# Session Dump" in captured.out
+        assert str(json_output) in captured.out
+        assert str(raw_output) in captured.out
+
     def test_main_keyboard_interrupt(self, capsys):
         """测试键盘中断处理"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
@@ -1030,7 +1228,7 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions") as mock_export:
+                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("a.json")]
 

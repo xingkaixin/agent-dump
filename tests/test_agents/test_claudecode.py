@@ -342,6 +342,30 @@ class TestClaudeCodeAgent:
         assert exported["title"] == "Test Session"
         assert len(exported["messages"]) == 1
 
+    def test_export_raw_session_copies_original_jsonl(self, tmp_path):
+        """测试 raw 导出会复制原始 jsonl 文件"""
+        agent = ClaudeCodeAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        session_file = tmp_path / "test.jsonl"
+        original = json.dumps({"type": "user", "message": {"role": "user", "content": "hello"}}) + "\n"
+        session_file.write_text(original, encoding="utf-8")
+
+        session = Session(
+            id="test",
+            title="Test Session",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.export_raw_session(session, output_dir)
+
+        assert result.name == "test.raw.jsonl"
+        assert result.read_text(encoding="utf-8") == original
+
     def test_convert_to_opencode_format_user(self):
         """测试 user 类型消息转换"""
         agent = ClaudeCodeAgent()

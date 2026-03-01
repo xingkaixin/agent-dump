@@ -188,3 +188,16 @@ class OpenCodeAgent(BaseAgent):
             json.dump(session_data, f, ensure_ascii=False, indent=2)
 
         return output_path
+
+    def export_raw_session(self, session: Session, output_dir: Path) -> Path:
+        """Export raw session data for OpenCode.
+
+        OpenCode stores sessions in SQLite, so raw export matches JSON export content
+        while using a distinct filename.
+        """
+        session_data = self.get_session_data(session)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = self._build_raw_output_path(session, output_dir, suffix=".raw.json")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, ensure_ascii=False, indent=2)
+        return output_path

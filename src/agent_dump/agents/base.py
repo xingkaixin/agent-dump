@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+import shutil
 from typing import Any
 
 
@@ -67,6 +68,23 @@ class BaseAgent(ABC):
     def get_session_uri(self, session: Session) -> str:
         """Get the agent session URI for a session"""
         return f"{self.name}://{session.id}"
+
+    def _build_raw_output_path(self, session: Session, output_dir: Path, suffix: str = ".raw.jsonl") -> Path:
+        """Build output path for raw session export."""
+        return output_dir / f"{session.id}{suffix}"
+
+    def export_raw_session(self, session: Session, output_dir: Path) -> Path:
+        """Export the original session file when one exists."""
+        source_path = session.source_path
+        if not source_path.exists():
+            raise FileNotFoundError(f"Session source not found: {source_path}")
+        if not source_path.is_file():
+            raise NotImplementedError(f"Raw export is not supported for session source: {source_path}")
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = self._build_raw_output_path(session, output_dir)
+        shutil.copy2(source_path, output_path)
+        return output_path
 
     @abstractmethod
     def get_session_data(self, session: Session) -> dict:

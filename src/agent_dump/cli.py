@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import re
 import sys
+from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n, setup_i18n
@@ -22,6 +23,8 @@ VALID_URI_SCHEMES = {
     "kimi": "kimi",
     "claude": "claudecode",  # claude:// maps to claudecode agent
 }
+VALID_FORMATS = {"json", "markdown", "raw", "print"}
+FORMAT_ALIASES = {"md": "markdown"}
 
 
 def parse_uri(uri: str) -> tuple[str, str] | None:
@@ -233,22 +236,9 @@ def display_sessions_list(
     return False
 
 
-def export_sessions(agent: BaseAgent, sessions: list, output_base_dir: Path) -> list[Path]:
+def export_sessions(agent: BaseAgent, sessions: list[Session], output_base_dir: Path) -> list[Path]:
     """Export multiple sessions"""
-    output_dir = output_base_dir / agent.name
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    print(i18n.t(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
-    exported = []
-    for session in sessions:
-        try:
-            output_path = agent.export_session(session, output_dir)
-            exported.append(output_path)
-            print(i18n.t(Keys.EXPORT_SUCCESS, title=session.title[:50], filename=output_path.name))
-        except Exception as e:
-            print(i18n.t(Keys.EXPORT_ERROR, title=session.title[:50], error=e))
-
-    return exported
+    return export_sessions_for_formats(agent, sessions, ["json"], output_base_dir)
 
 
 def export_session_markdown(uri: str, session_data: dict, session_id: str, output_dir: Path) -> Path:
@@ -259,24 +249,82 @@ def export_session_markdown(uri: str, session_data: dict, session_id: str, outpu
     return output_path
 
 
-def export_sessions_markdown(agent: BaseAgent, sessions: list[Session], output_base_dir: Path) -> list[Path]:
-    """Export multiple sessions to Markdown"""
+def export_session_in_format(
+    agent: BaseAgent,
+    session: Session,
+    output_dir: Path,
+    output_format: str,
+    *,
+    session_data: dict[str, Any] | None = None,
+    session_uri: str | None = None,
+) -> Path:
+    """Export one session in the requested file format."""
+    if output_format == "json":
+        return agent.export_session(session, output_dir)
+    if output_format == "raw":
+        return agent.export_raw_session(session, output_dir)
+    if output_format == "markdown":
+        effective_session_data = session_data if session_data is not None else agent.get_session_data(session)
+        effective_session_uri = session_uri if session_uri is not None else agent.get_session_uri(session)
+        return export_session_markdown(effective_session_uri, effective_session_data, session.id, output_dir)
+
+    raise ValueError(f"Unsupported export format: {output_format}")
+
+
+def export_sessions_for_formats(
+    agent: BaseAgent,
+    sessions: list[Session],
+    formats: list[str],
+    output_base_dir: Path,
+) -> list[Path]:
+    """Export multiple sessions in one or more file formats."""
     output_dir = output_base_dir / agent.name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(i18n.t(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
     exported: list[Path] = []
     for session in sessions:
-        try:
-            session_data = agent.get_session_data(session)
-            session_uri = agent.get_session_uri(session)
-            output_path = export_session_markdown(session_uri, session_data, session.id, output_dir)
-            exported.append(output_path)
-            print(i18n.t(Keys.EXPORT_SUCCESS, title=session.title[:50], filename=output_path.name))
-        except Exception as e:
-            print(i18n.t(Keys.EXPORT_ERROR, title=session.title[:50], error=e))
+        session_data: dict[str, Any] | None = None
+        session_uri: str | None = None
+        for output_format in formats:
+            try:
+                if output_format == "markdown":
+                    session_data = session_data if session_data is not None else agent.get_session_data(session)
+                    session_uri = session_uri if session_uri is not None else agent.get_session_uri(session)
+
+                output_path = export_session_in_format(
+                    agent,
+                    session,
+                    output_dir,
+                    output_format,
+                    session_data=session_data,
+                    session_uri=session_uri,
+                )
+                exported.append(output_path)
+                print(
+                    i18n.t(
+                        Keys.EXPORT_SUCCESS_FORMAT,
+                        title=session.title[:50],
+                        format=output_format,
+                        filename=output_path.name,
+                    )
+                )
+            except Exception as e:
+                print(
+                    i18n.t(
+                        Keys.EXPORT_ERROR_FORMAT,
+                        title=session.title[:50],
+                        format=output_format,
+                        error=e,
+                    )
+                )
 
     return exported
+
+
+def export_sessions_markdown(agent: BaseAgent, sessions: list[Session], output_base_dir: Path) -> list[Path]:
+    """Export multiple sessions to Markdown"""
+    return export_sessions_for_formats(agent, sessions, ["markdown"], output_base_dir)
 
 
 def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:
@@ -284,11 +332,41 @@ def is_option_specified(argv: list[str], short_option: str, long_option: str) ->
     return any(arg in (short_option, long_option) or arg.startswith(f"{long_option}=") for arg in argv)
 
 
-def resolve_effective_format(args: argparse.Namespace, is_uri_mode: bool, format_specified: bool) -> str:
-    """Resolve effective output format by mode and explicit user input"""
+def parse_format_spec(raw: str) -> list[str]:
+    """Parse a comma-separated format specification."""
+    formats: list[str] = []
+    seen: set[str] = set()
+
+    for part in raw.split(","):
+        normalized = FORMAT_ALIASES.get(part.strip().lower(), part.strip().lower())
+        if not normalized:
+            raise ValueError("empty format")
+        if normalized not in VALID_FORMATS:
+            raise ValueError(normalized)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        formats.append(normalized)
+
+    if not formats:
+        raise ValueError("empty format")
+
+    return formats
+
+
+def resolve_effective_formats(args: argparse.Namespace, is_uri_mode: bool, format_specified: bool) -> list[str]:
+    """Resolve effective output formats by mode and explicit user input."""
     if format_specified and args.format:
-        return args.format
-    return "print" if is_uri_mode else "json"
+        return parse_format_spec(args.format)
+    return ["print"] if is_uri_mode else ["json"]
+
+
+def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mode: bool) -> None:
+    """Validate format combinations for the current mode."""
+    if is_list_mode or is_uri_mode:
+        return
+    if "print" in formats:
+        raise ValueError("interactive-print")
 
 
 def warn_list_ignored_options(output_specified: bool, format_specified: bool) -> None:
@@ -330,14 +408,7 @@ def main():
         default="./sessions",
         help=i18n.t(Keys.CLI_OUTPUT_HELP),
     )
-    parser.add_argument(
-        "-format",
-        "--format",
-        type=str,
-        choices=["json", "md", "print"],
-        default=None,
-        help=i18n.t(Keys.CLI_FORMAT_HELP),
-    )
+    parser.add_argument("-format", "--format", type=str, default=None, help=i18n.t(Keys.CLI_FORMAT_HELP))
     parser.add_argument(
         "--list",
         action="store_true",
@@ -373,7 +444,14 @@ def main():
     )
     args = parser.parse_args()
     is_uri_mode = bool(args.uri)
-    output_format = resolve_effective_format(args, is_uri_mode=is_uri_mode, format_specified=format_specified)
+    try:
+        output_formats = resolve_effective_formats(args, is_uri_mode=is_uri_mode, format_specified=format_specified)
+        validate_formats_for_mode(output_formats, is_uri_mode=is_uri_mode, is_list_mode=args.list)
+    except ValueError as e:
+        if str(e) == "interactive-print":
+            print(i18n.t(Keys.INTERACTIVE_FORMAT_INVALID))
+            return 1
+        parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=args.format or ""))
 
     # Handle URI mode first
     if is_uri_mode:
@@ -415,22 +493,24 @@ def main():
 
         # Get session data and render
         try:
-            if output_format == "print":
+            session_data: dict[str, Any] | None = None
+            if "print" in output_formats:
                 session_data = agent.get_session_data(session)
                 output = render_session_text(args.uri, session_data)
                 print(output)
-                return 0
 
+            file_formats = [fmt for fmt in output_formats if fmt != "print"]
             output_dir = Path(args.output) / agent.name
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-            if output_format == "json":
-                output_path = agent.export_session(session, output_dir)
-            else:
-                session_data = agent.get_session_data(session)
-                output_path = export_session_markdown(args.uri, session_data, session.id, output_dir)
-
-            print(i18n.t(Keys.URI_EXPORT_SAVED, path=str(output_path)))
+            for output_format in file_formats:
+                output_path = export_session_in_format(
+                    agent,
+                    session,
+                    output_dir,
+                    output_format,
+                    session_data=session_data,
+                    session_uri=args.uri,
+                )
+                print(i18n.t(Keys.URI_EXPORT_SAVED, path=str(output_path), format=output_format))
             return 0
         except Exception as e:
             print(i18n.t(Keys.FETCH_DATA_FAILED, error=e))
@@ -509,10 +589,6 @@ def main():
         print()
         return 0
 
-    if output_format == "print":
-        print(i18n.t(Keys.INTERACTIVE_FORMAT_INVALID))
-        return 1
-
     # Interactive mode
     interactive_agents = available_agents
     matched_sessions_by_agent: dict[str, list[Session]] = {}
@@ -580,10 +656,7 @@ def main():
 
     # Export
     output_base_dir = Path(args.output)
-    if output_format == "json":
-        exported = export_sessions(selected_agent, selected_sessions, output_base_dir)
-    else:
-        exported = export_sessions_markdown(selected_agent, selected_sessions, output_base_dir)
+    exported = export_sessions_for_formats(selected_agent, selected_sessions, output_formats, output_base_dir)
 
     print(i18n.t(Keys.EXPORT_SUMMARY, count=len(exported), path=f"{output_base_dir}/{selected_agent.name}"))
     return 0

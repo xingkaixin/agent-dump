@@ -130,12 +130,18 @@ uv run agent-dump codex://<session-id>        # View Codex session content
 uv run agent-dump kimi://<session-id>         # View Kimi session content
 uv run agent-dump claude://<session-id>       # View Claude Code session content
 uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
-uv run agent-dump codex://<session-id> -format md -output ./my-sessions       # Export Markdown file
+uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file
+uv run agent-dump codex://<session-id> --format print,json --output ./my-sessions # Print and export JSON
+uv run agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # Export multiple formats
 
 # Other options
 uv run agent-dump --interactive --format json # Interactive export as JSON (default)
-uv run agent-dump --interactive --format md   # Interactive export as Markdown
+uv run agent-dump --interactive --format markdown   # Interactive export as Markdown
+uv run agent-dump --interactive --format json,markdown,raw # Interactive multi-format export
 uv run agent-dump --interactive -output ./my-sessions  # Specify output directory
+
+# Compatibility note
+# md remains available as an alias for markdown, e.g. --format md,raw
 ```
 
 ### Full Parameter Reference
@@ -147,9 +153,9 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `-d`, `-days` | Query sessions from the last N days | 7 |
 | `-q`, `-query` | Query filter. Supports `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`) | - |
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
-| `-format`, `--format` | Output format. `json \\| md \\| print`. Default: URI mode `print`, non-URI mode `json`. `--interactive` only supports `json/md`; `--list` ignores this option with warning. | - |
+| `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning. | - |
 | `-p`, `-page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
-| `-output`, `--output` | Output directory. Effective for `--interactive`; in URI mode only when `format` is `json/md`; ignored in `--list` with warning. | ./sessions |
+| `-output`, `--output` | Output directory. Effective for `--interactive`; in URI mode when any file-export format (`json/markdown/raw`) is included; ignored in `--list` with warning. | ./sessions |
 | `-h, --help` | Show help message | - |
 
 ## Project Structure
