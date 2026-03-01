@@ -22,6 +22,10 @@ def get_text_content_parts(message: dict) -> list[str]:
             text = str(part.get("text", "")).strip()
             if text:
                 content_parts.append(text)
+        elif part_type == "plan":
+            text = str(part.get("input", "")).strip()
+            if text:
+                content_parts.append(text)
 
     return content_parts
 

@@ -35,7 +35,7 @@ test:
     @echo "✅ Tests complete!"
 
 # Run lint check test
-isok: lint check test
+isok: lint-fix lint-format check test
 
 # Run the agent-dump CLI
 run:

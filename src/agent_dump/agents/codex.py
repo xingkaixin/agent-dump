@@ -5,16 +5,19 @@ Codex agent handler
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.message_filter import filter_messages_for_export
+from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
 
 CODEX_TOOL_TITLE_MAP = {
     "exec_command": "bash",
     "apply_patch": "patch",
     "patch": "patch",
 }
+PROPOSED_PLAN_PATTERN = re.compile(r"<proposed_plan>\s*(.*?)\s*</proposed_plan>", re.DOTALL)
+PLAN_APPROVAL_PREFIX = "PLEASE IMPLEMENT THIS PLAN"
 
 
 class CodexAgent(BaseAgent):
@@ -189,6 +192,7 @@ class CodexAgent(BaseAgent):
         pending_tool_calls: dict[str, tuple[int, int]] = {}
         current_assistant_index: int | None = None
         latest_assistant_text_index: int | None = None
+        pending_plan_location: tuple[int, int] | None = None
         stats = {
             "total_cost": 0,
             "total_input_tokens": 0,
@@ -200,12 +204,15 @@ class CodexAgent(BaseAgent):
             for line in f:
                 try:
                     data = json.loads(line)
-                    current_assistant_index, latest_assistant_text_index = self._convert_record_to_messages(
-                        data=data,
-                        messages=messages,
-                        pending_tool_calls=pending_tool_calls,
-                        current_assistant_index=current_assistant_index,
-                        latest_assistant_text_index=latest_assistant_text_index,
+                    current_assistant_index, latest_assistant_text_index, pending_plan_location = (
+                        self._convert_record_to_messages(
+                            data=data,
+                            messages=messages,
+                            pending_tool_calls=pending_tool_calls,
+                            current_assistant_index=current_assistant_index,
+                            latest_assistant_text_index=latest_assistant_text_index,
+                            pending_plan_location=pending_plan_location,
+                        )
                     )
                     # Preserve the existing best-effort token extraction behavior.
                     if "token_count" in str(data):
@@ -217,6 +224,8 @@ class CodexAgent(BaseAgent):
                 except Exception as e:
                     print(f"警告: 转换消息格式失败: {e}")
                     continue
+
+        self._finalize_pending_plan(messages, pending_plan_location)
 
         stats["message_count"] = len(messages)
 
@@ -327,6 +336,16 @@ class CodexAgent(BaseAgent):
         return {
             "type": part_type,
             "text": text,
+            "time_created": timestamp_ms,
+        }
+
+    def _build_plan_part(self, plan_text: str, timestamp_ms: int) -> dict[str, Any]:
+        """Build one plan part."""
+        return {
+            "type": "plan",
+            "input": plan_text,
+            "output": None,
+            "approval_status": "fail",
             "time_created": timestamp_ms,
         }
 
@@ -629,9 +648,16 @@ class CodexAgent(BaseAgent):
             return self._normalize_output_parts(parsed_output["output"], timestamp_ms)
         return self._normalize_output_parts(parsed_output if parsed_output is not None else output, timestamp_ms)
 
-    def _extract_message_content_parts(
-        self, role: str, content: Any, timestamp_ms: int
-    ) -> list[dict[str, Any]]:
+    def _extract_proposed_plan_content(self, text: str) -> str | None:
+        """Extract the inner content of a proposed plan block."""
+        match = PROPOSED_PLAN_PATTERN.search(text)
+        if match is None:
+            return None
+
+        plan_text = match.group(1).strip()
+        return plan_text or None
+
+    def _extract_message_content_parts(self, role: str, content: Any, timestamp_ms: int) -> list[dict[str, Any]]:
         """Extract text parts from a response_item message payload."""
         if not isinstance(content, list):
             return []
@@ -646,7 +672,13 @@ class CodexAgent(BaseAgent):
             item_type = item.get("type")
             if item_type not in supported_types:
                 continue
-            parts.append(self._build_text_part(str(item.get("text", "")), timestamp_ms))
+            text = str(item.get("text", ""))
+            if is_assistant:
+                plan_text = self._extract_proposed_plan_content(text)
+                if plan_text is not None:
+                    parts.append(self._build_plan_part(plan_text, timestamp_ms))
+                    continue
+            parts.append(self._build_text_part(text, timestamp_ms))
 
         return parts
 
@@ -769,6 +801,53 @@ class CodexAgent(BaseAgent):
         )
         return assistant_index if assistant_index is not None else current_assistant_index
 
+    def _finalize_pending_plan(
+        self,
+        messages: list[dict[str, Any]],
+        pending_plan_location: tuple[int, int] | None,
+        *,
+        approval_status: str = "fail",
+        output: str | None = None,
+    ) -> None:
+        """Finalize the pending plan part in place."""
+        if pending_plan_location is None:
+            return
+
+        message_index, part_index = pending_plan_location
+        plan_part = messages[message_index]["parts"][part_index]
+        plan_part["approval_status"] = approval_status
+        plan_part["output"] = output
+
+    def _message_contains_plan_part(self, message: dict[str, Any]) -> bool:
+        """Whether one message contains a plan part."""
+        return self._message_has_part_type(message, "plan")
+
+    def _extract_visible_user_text(self, parts: list[dict[str, Any]]) -> str | None:
+        """Extract visible text from user parts."""
+        text_parts: list[str] = []
+        for part in parts:
+            if part.get("type") != "text":
+                continue
+            text = str(part.get("text", "")).strip()
+            if text:
+                text_parts.append(text)
+
+        if not text_parts:
+            return None
+
+        return "\n\n".join(text_parts)
+
+    def _is_plan_approval_user_message(self, parts: list[dict[str, Any]]) -> tuple[bool, str | None]:
+        """Whether one user message should be consumed as plan approval input."""
+        user_text = self._extract_visible_user_text(parts)
+        if user_text is None:
+            return False, None
+
+        if is_developer_like_user_message("user", [user_text]):
+            return False, None
+
+        return True, user_text
+
     def _attach_tool_part_to_latest_assistant(
         self,
         messages: list[dict[str, Any]],
@@ -880,7 +959,8 @@ class CodexAgent(BaseAgent):
         pending_tool_calls: dict[str, tuple[int, int]],
         current_assistant_index: int | None,
         latest_assistant_text_index: int | None,
-    ) -> tuple[int | None, int | None]:
+        pending_plan_location: tuple[int, int] | None,
+    ) -> tuple[int | None, int | None, tuple[int, int] | None]:
         """Convert one Codex record into unified messages while preserving stream relationships."""
         msg_type = data.get("type", "")
         payload = data.get("payload", {})
@@ -888,7 +968,7 @@ class CodexAgent(BaseAgent):
         message_id = str(data.get("timestamp", ""))
 
         if msg_type == "session_meta":
-            return current_assistant_index, latest_assistant_text_index
+            return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
         if msg_type == "response_item":
             item_type = payload.get("type", "")
@@ -897,9 +977,13 @@ class CodexAgent(BaseAgent):
                 role = str(payload.get("role", "unknown"))
                 parts = self._extract_message_content_parts(role, payload.get("content", []), timestamp_ms)
                 if not parts:
-                    return current_assistant_index, latest_assistant_text_index
+                    return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
                 if role == "assistant":
+                    if pending_plan_location is not None:
+                        self._finalize_pending_plan(messages, pending_plan_location)
+                        pending_plan_location = None
+
                     assistant_index = self._append_assistant_text(
                         messages,
                         message_id=message_id,
@@ -907,10 +991,24 @@ class CodexAgent(BaseAgent):
                         parts=parts,
                         current_assistant_index=current_assistant_index,
                     )
-                    next_index = (
-                        assistant_index if assistant_index is not None else current_assistant_index
+                    next_index = assistant_index if assistant_index is not None else current_assistant_index
+                    next_latest_text_index = next_index
+                    if assistant_index is not None and self._message_contains_plan_part(messages[assistant_index]):
+                        pending_plan_location = (assistant_index, len(messages[assistant_index]["parts"]) - 1)
+                        next_latest_text_index = None
+                    return next_index, next_latest_text_index, pending_plan_location
+
+                can_consume_for_plan, user_text = self._is_plan_approval_user_message(parts)
+                if pending_plan_location is not None and can_consume_for_plan and user_text is not None:
+                    approval_status = "success" if user_text.lstrip().startswith(PLAN_APPROVAL_PREFIX) else "fail"
+                    output = None if approval_status == "success" else user_text
+                    self._finalize_pending_plan(
+                        messages,
+                        pending_plan_location,
+                        approval_status=approval_status,
+                        output=output,
                     )
-                    return next_index, next_index
+                    return None, None, None
 
                 messages.append(
                     self._build_message(
@@ -920,7 +1018,7 @@ class CodexAgent(BaseAgent):
                         parts=parts,
                     )
                 )
-                return None, None
+                return None, None, pending_plan_location
 
             if item_type == "reasoning":
                 parts = self._extract_reasoning_parts(payload, timestamp_ms)
@@ -932,7 +1030,7 @@ class CodexAgent(BaseAgent):
                     current_assistant_index=current_assistant_index,
                 )
                 next_index = assistant_index if assistant_index is not None else current_assistant_index
-                return next_index, latest_assistant_text_index
+                return next_index, latest_assistant_text_index, pending_plan_location
 
             if item_type == "function_call":
                 message_index, part_index = self._attach_tool_call_to_latest_assistant(
@@ -947,7 +1045,7 @@ class CodexAgent(BaseAgent):
                 next_current_index = current_assistant_index
                 if latest_assistant_text_index is None and message_index == len(messages) - 1:
                     next_current_index = message_index
-                return next_current_index, latest_assistant_text_index
+                return next_current_index, latest_assistant_text_index, pending_plan_location
 
             if item_type == "custom_tool_call":
                 message_index, part_index = self._attach_custom_tool_call_to_latest_assistant(
@@ -962,7 +1060,7 @@ class CodexAgent(BaseAgent):
                 next_current_index = current_assistant_index
                 if latest_assistant_text_index is None and message_index == len(messages) - 1:
                     next_current_index = message_index
-                return next_current_index, latest_assistant_text_index
+                return next_current_index, latest_assistant_text_index, pending_plan_location
 
             if item_type == "function_call_output":
                 call_id = str(payload.get("call_id", ""))
@@ -973,7 +1071,7 @@ class CodexAgent(BaseAgent):
                     call_id=call_id,
                     output_parts=output_parts,
                 ):
-                    return current_assistant_index, latest_assistant_text_index
+                    return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
                 fallback = self._build_fallback_tool_message(
                     message_id=message_id,
@@ -983,7 +1081,7 @@ class CodexAgent(BaseAgent):
                 )
                 if fallback:
                     messages.append(fallback)
-                return current_assistant_index, latest_assistant_text_index
+                return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
             if item_type == "custom_tool_call_output":
                 call_id = str(payload.get("call_id", ""))
@@ -994,7 +1092,7 @@ class CodexAgent(BaseAgent):
                     call_id=call_id,
                     output_parts=output_parts,
                 ):
-                    return current_assistant_index, latest_assistant_text_index
+                    return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
                 fallback = self._build_fallback_tool_message(
                     message_id=message_id,
@@ -1004,11 +1102,11 @@ class CodexAgent(BaseAgent):
                 )
                 if fallback:
                     messages.append(fallback)
-                return current_assistant_index, latest_assistant_text_index
+                return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
-            return current_assistant_index, latest_assistant_text_index
+            return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
         if msg_type == "event_msg":
-            return current_assistant_index, latest_assistant_text_index
+            return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
-        return current_assistant_index, latest_assistant_text_index
+        return current_assistant_index, latest_assistant_text_index, pending_plan_location

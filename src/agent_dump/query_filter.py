@@ -138,9 +138,7 @@ def _chunk_ids(ids: list[str], size: int) -> list[list[str]]:
     return [ids[i : i + size] for i in range(0, len(ids), size)]
 
 
-def _filter_sessions_from_source_or_data(
-    agent: BaseAgent, sessions: list[Session], keyword: str
-) -> list[Session]:
+def _filter_sessions_from_source_or_data(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session]:
     matched: list[Session] = []
     for session in sessions:
         if _match_title(session, keyword):

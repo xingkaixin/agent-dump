@@ -1322,6 +1322,30 @@ class TestRenderSessionText:
         assert "有效文本" in output
         assert "## 1. Assistant" in output
 
+    def test_render_session_text_includes_plan_part_input(self):
+        """测试 plan part 会按正文渲染"""
+        session_data = {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "parts": [
+                        {
+                            "type": "plan",
+                            "input": "# 方案\n\n实现 plan 逻辑",
+                            "output": None,
+                            "approval_status": "success",
+                        }
+                    ],
+                }
+            ]
+        }
+
+        output = render_session_text("codex://abc", session_data)
+
+        assert "## 1. Assistant" in output
+        assert "# 方案" in output
+        assert "实现 plan 逻辑" in output
+
     def test_render_session_text_unknown_role_display(self):
         """测试未知角色使用首字母大写展示"""
         session_data = {

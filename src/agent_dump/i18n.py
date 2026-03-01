@@ -265,8 +265,9 @@ TRANSLATIONS = {
         Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive 模式不支持 print；可用格式为 json、markdown、raw。",
         Keys.URI_EXPORT_SAVED: "✅ 已导出 [{format}] 到: {path}",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
-    }
+    },
 }
+
 
 class I18n:
     def __init__(self):
@@ -316,8 +317,10 @@ class I18n:
                 return msg
         return msg
 
+
 # Global instance
 i18n = I18n()
+
 
 def setup_i18n(lang_arg=None):
     """

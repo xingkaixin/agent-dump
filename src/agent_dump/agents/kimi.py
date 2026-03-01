@@ -539,7 +539,9 @@ class KimiAgent(BaseAgent):
                     }
                 )
 
-    def _create_wire_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> tuple[dict | None, str | None, str | None]:
+    def _create_wire_tool_part(
+        self, payload: dict[str, Any], timestamp_ms: int
+    ) -> tuple[dict | None, str | None, str | None]:
         """Create one wire tool part and optional raw arguments buffer."""
         call_id = str(payload.get("id", "")).strip()
         function = payload.get("function", {})

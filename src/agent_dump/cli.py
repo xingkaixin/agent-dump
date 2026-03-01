@@ -185,7 +185,7 @@ def display_sessions_list(
     agent: BaseAgent, sessions: list[Session], page_size: int = 20, show_pagination: bool = True
 ) -> bool:
     """Display sessions with pagination support.
-    
+
     Returns:
         True if user chose to quit, False otherwise.
     """
@@ -212,7 +212,10 @@ def display_sessions_list(
 
         # Show pagination info
         if show_pagination and total_pages > 1:
-            print("\n   " + i18n.t(Keys.PAGINATION_INFO, current=current_page + 1, total=total_pages, total_sessions=total))
+            print(
+                "\n   "
+                + i18n.t(Keys.PAGINATION_INFO, current=current_page + 1, total=total_pages, total_sessions=total)
+            )
 
             if current_page < total_pages - 1:
                 print("   " + i18n.t(Keys.PAGINATION_PROMPT))
@@ -232,7 +235,7 @@ def display_sessions_list(
             if total > page_size:
                 print("\n   " + i18n.t(Keys.PAGINATION_REMAINING, count=total - page_size))
             break
-    
+
     return False
 
 
@@ -398,9 +401,7 @@ def main():
 
     parser = argparse.ArgumentParser(description=i18n.t(Keys.CLI_DESC))
     parser.add_argument("uri", nargs="?", help=i18n.t(Keys.CLI_URI_HELP))
-    parser.add_argument(
-        "-d", "-days", type=int, default=7, dest="days", help=i18n.t(Keys.CLI_DAYS_HELP)
-    )
+    parser.add_argument("-d", "-days", type=int, default=7, dest="days", help=i18n.t(Keys.CLI_DAYS_HELP))
     parser.add_argument(
         "-output",
         "--output",

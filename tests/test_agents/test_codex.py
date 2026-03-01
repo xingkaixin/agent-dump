@@ -985,3 +985,256 @@ class TestCodexAgent:
         assert message["parts"] == [
             {"type": "text", "text": "orphan custom output", "time_created": 1767225600000}
         ]
+
+    def test_plan_part_merges_rejected_user_response(self, tmp_path):
+        """测试 plan 会合并后续拒绝 user 响应，并移除该 user 消息"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-plan-reject.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "<proposed_plan>\n# 方案\n\n先改 parser\n</proposed_plan>",
+                        }
+                    ],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "不行，先别做这个。"}],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="plan-reject",
+            title="Plan Reject",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        plan_part = result["messages"][0]["parts"][0]
+        assert plan_part == {
+            "type": "plan",
+            "input": "# 方案\n\n先改 parser",
+            "output": "不行，先别做这个。",
+            "approval_status": "fail",
+            "time_created": 1767225600000,
+        }
+
+    def test_plan_part_marks_success_and_consumes_user_approval(self, tmp_path):
+        """测试 plan 批准后 output 为空，审批 user 消息不再导出"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-plan-approve.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "<proposed_plan>\n# 方案\n\n直接实现\n</proposed_plan>",
+                        }
+                    ],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "PLEASE IMPLEMENT THIS PLAN:\n# 方案\n\n直接实现"}
+                    ],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="plan-approve",
+            title="Plan Approve",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        plan_part = result["messages"][0]["parts"][0]
+        assert plan_part["type"] == "plan"
+        assert plan_part["approval_status"] == "success"
+        assert plan_part["output"] is None
+
+    def test_plan_without_following_user_defaults_to_fail(self, tmp_path):
+        """测试 plan 后没有 user 时默认 fail"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-plan-no-user.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "payload": {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [
+                            {"type": "output_text", "text": "<proposed_plan>\n只做这一项\n</proposed_plan>"}
+                        ],
+                    },
+                }
+            )
+            + "\n"
+        )
+
+        session = Session(
+            id="plan-no-user",
+            title="Plan No User",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        plan_part = result["messages"][0]["parts"][0]
+        assert plan_part["type"] == "plan"
+        assert plan_part["approval_status"] == "fail"
+        assert plan_part["output"] is None
+
+    def test_multiple_plans_finalize_independently(self, tmp_path):
+        """测试多次 plan 会分别结算"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-plan-multi.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "<proposed_plan>\nplan a\n</proposed_plan>"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "<proposed_plan>\nplan b\n</proposed_plan>"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "PLEASE IMPLEMENT THIS PLAN"}],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="plan-multi",
+            title="Plan Multi",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        plan_parts = [
+            part
+            for message in result["messages"]
+            for part in message["parts"]
+            if part.get("type") == "plan"
+        ]
+        assert len(plan_parts) == 2
+        first_plan, second_plan = plan_parts
+        assert first_plan["input"] == "plan a"
+        assert first_plan["approval_status"] == "fail"
+        assert first_plan["output"] is None
+        assert second_plan["input"] == "plan b"
+        assert second_plan["approval_status"] == "success"
+        assert second_plan["output"] is None
+
+    def test_injected_user_context_is_not_used_as_plan_approval(self, tmp_path):
+        """测试注入上下文 user 不参与 plan 审批"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-plan-context.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "<proposed_plan>\nplan body\n</proposed_plan>"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "<environment_context>\n  <cwd>/tmp</cwd>"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "继续后续回复"}],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="plan-context",
+            title="Plan Context",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 3
+        plan_part = result["messages"][0]["parts"][0]
+        assert plan_part["approval_status"] == "fail"
+        assert plan_part["output"] is None
+        assert result["messages"][1]["role"] == "user"

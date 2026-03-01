@@ -68,7 +68,7 @@ def group_sessions(sessions: list[Session]) -> dict[str, list[Session]]:
         i18n.t(Keys.TIME_THIS_WEEK),
         i18n.t(Keys.TIME_THIS_MONTH),
         i18n.t(Keys.TIME_OLDER),
-        i18n.t(Keys.TIME_UNKNOWN)
+        i18n.t(Keys.TIME_UNKNOWN),
     ]
     ordered_groups = {}
     for key in order:
@@ -78,9 +78,7 @@ def group_sessions(sessions: list[Session]) -> dict[str, list[Session]]:
     return ordered_groups
 
 
-def _get_agent_session_count(
-    agent: BaseAgent, days: int, session_counts: dict[str, int] | None = None
-) -> int:
+def _get_agent_session_count(agent: BaseAgent, days: int, session_counts: dict[str, int] | None = None) -> int:
     """Get session count for an agent, optionally from precomputed counts."""
     if session_counts is not None:
         return session_counts.get(agent.name, 0)
@@ -186,7 +184,12 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
 
     for group_name, group_sessions_list in groups.items():
         # Add separator for group
-        choices.append(Choice(title=i18n.t(Keys.GROUP_TITLE, group_name=group_name, count=len(group_sessions_list)), disabled="分组标题"))
+        choices.append(
+            Choice(
+                title=i18n.t(Keys.GROUP_TITLE, group_name=group_name, count=len(group_sessions_list)),
+                disabled="分组标题",
+            )
+        )
 
         # Add sessions in this group
         for session in group_sessions_list:
