@@ -1238,3 +1238,246 @@ class TestCodexAgent:
         assert plan_part["approval_status"] == "fail"
         assert plan_part["output"] is None
         assert result["messages"][1]["role"] == "user"
+
+    def test_export_session_converts_skill_user_message_to_tool_message(self, tmp_path):
+        """测试 JSON 导出时 skill user 消息会转换为 assistant tool 消息"""
+        agent = CodexAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        session_file = tmp_path / "test-skill-export.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "普通用户消息"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "<skill>\n<name>frontend-design</name>\n</skill>",
+                        }
+                    ],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="skill-export",
+            title="Skill Export",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.export_session(session, output_dir)
+
+        with open(result, encoding="utf-8") as f:
+            exported = json.load(f)
+
+        assert len(exported["messages"]) == 2
+        converted = exported["messages"][1]
+        assert converted["role"] == "assistant"
+        assert converted["mode"] == "tool"
+        assert converted["parts"][0]["tool"] == "skill"
+        assert converted["parts"][0]["title"] == "skill"
+        assert converted["parts"][0]["state"]["status"] == "completed"
+        assert converted["parts"][0]["state"]["input"] == {"name": "frontend-design"}
+        assert converted["parts"][0]["state"]["output"] is None
+
+    def test_export_session_assigns_stable_skill_call_ids(self, tmp_path):
+        """测试多条 skill 消息在 JSON 导出中按顺序生成稳定 callID"""
+        agent = CodexAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        session_file = tmp_path / "test-skill-call-id.jsonl"
+        skill_names = ["frontend-design", "ui-ux-pro-max", "web-design-guidelines"]
+        lines = []
+        for index, skill_name in enumerate(skill_names):
+            lines.append(
+                {
+                    "type": "response_item",
+                    "timestamp": f"2026-01-01T00:00:0{index}Z",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": f"<skill>\n<name>{skill_name}</name>\n</skill>",
+                            }
+                        ],
+                    },
+                }
+            )
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+        session = Session(
+            id="skill-call-id",
+            title="Skill Call Id",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.export_session(session, output_dir)
+
+        with open(result, encoding="utf-8") as f:
+            exported = json.load(f)
+
+        call_ids = [message["parts"][0]["callID"] for message in exported["messages"]]
+        assert call_ids == ["skill:0", "skill:1", "skill:2"]
+
+    def test_export_session_keeps_skill_message_without_name_as_user_text(self, tmp_path):
+        """测试缺少 name 的 skill 文本保持原始 user 消息"""
+        agent = CodexAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        session_file = tmp_path / "test-skill-missing-name.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "<skill>\n<path>/tmp/x</path>\n</skill>"}],
+                    },
+                }
+            )
+            + "\n"
+        )
+
+        session = Session(
+            id="skill-missing-name",
+            title="Skill Missing Name",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.export_session(session, output_dir)
+
+        with open(result, encoding="utf-8") as f:
+            exported = json.load(f)
+
+        message = exported["messages"][0]
+        assert message["role"] == "user"
+        assert message["parts"] == [
+            {"type": "text", "text": "<skill>\n<path>/tmp/x</path>\n</skill>", "time_created": 1767225600000}
+        ]
+
+    def test_export_session_keeps_normal_user_text_unchanged(self, tmp_path):
+        """测试普通 user 文本导出行为不变"""
+        agent = CodexAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        session_file = tmp_path / "test-normal-user.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "hello world"}],
+                    },
+                }
+            )
+            + "\n"
+        )
+
+        session = Session(
+            id="normal-user",
+            title="Normal User",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.export_session(session, output_dir)
+
+        with open(result, encoding="utf-8") as f:
+            exported = json.load(f)
+
+        assert exported["messages"] == [
+            {
+                "id": "2026-01-01T00:00:00Z",
+                "role": "user",
+                "agent": None,
+                "mode": None,
+                "model": None,
+                "provider": None,
+                "time_created": 1767225600000,
+                "time_completed": None,
+                "tokens": {},
+                "cost": 0,
+                "parts": [{"type": "text", "text": "hello world", "time_created": 1767225600000}],
+            }
+        ]
+
+    def test_skill_message_transforms_only_in_json_export(self, tmp_path):
+        """测试 skill 消息仅在 JSON 导出时转换，get_session_data 保持原样"""
+        agent = CodexAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        session_file = tmp_path / "test-skill-json-only.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "<skill>\n<name>frontend-design</name>\n</skill>"}],
+                    },
+                }
+            )
+            + "\n"
+        )
+
+        session = Session(
+            id="skill-json-only",
+            title="Skill Json Only",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        session_data = agent.get_session_data(session)
+        assert session_data["messages"][0]["role"] == "user"
+        assert session_data["messages"][0]["parts"] == [
+            {
+                "type": "text",
+                "text": "<skill>\n<name>frontend-design</name>\n</skill>",
+                "time_created": 1767225600000,
+            }
+        ]
+
+        result = agent.export_session(session, output_dir)
+
+        with open(result, encoding="utf-8") as f:
+            exported = json.load(f)
+
+        converted = exported["messages"][0]
+        assert converted["role"] == "assistant"
+        assert converted["mode"] == "tool"
+        assert converted["parts"][0]["tool"] == "skill"

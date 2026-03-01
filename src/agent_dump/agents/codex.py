@@ -17,6 +17,7 @@ CODEX_TOOL_TITLE_MAP = {
     "patch": "patch",
 }
 PROPOSED_PLAN_PATTERN = re.compile(r"<proposed_plan>\s*(.*?)\s*</proposed_plan>", re.DOTALL)
+SKILL_NAME_PATTERN = re.compile(r"<name>\s*(.*?)\s*</name>", re.DOTALL)
 PLAN_APPROVAL_PREFIX = "PLEASE IMPLEMENT THIS PLAN"
 
 
@@ -247,7 +248,8 @@ class CodexAgent(BaseAgent):
         session_data = self.get_session_data(session)
         messages = session_data.get("messages")
         if isinstance(messages, list):
-            session_data["messages"] = filter_messages_for_export(messages)
+            transformed_messages = self._transform_skill_messages_for_json_export(messages)
+            session_data["messages"] = filter_messages_for_export(transformed_messages)
 
         output_path = output_dir / f"{session.id}.json"
         with open(output_path, "w", encoding="utf-8") as f:
@@ -366,6 +368,88 @@ class CodexAgent(BaseAgent):
             "state": {"arguments": arguments},
             "time_created": timestamp_ms,
         }
+
+    def _is_skill_wrapper_text(self, text: str) -> bool:
+        """Whether text is a full skill wrapper payload."""
+        stripped = text.strip()
+        return stripped.startswith("<skill>") and stripped.endswith("</skill>")
+
+    def _extract_skill_name_from_text(self, text: str) -> str | None:
+        """Extract a skill name from a full skill wrapper payload."""
+        if not self._is_skill_wrapper_text(text):
+            return None
+
+        match = SKILL_NAME_PATTERN.search(text)
+        if match is None:
+            return None
+
+        name = match.group(1).strip()
+        return name or None
+
+    def _build_skill_tool_part(self, name: str, timestamp_ms: int, call_id: str) -> dict[str, Any]:
+        """Build one tool part for a skill payload."""
+        return {
+            "type": "tool",
+            "tool": "skill",
+            "callID": call_id,
+            "title": "skill",
+            "state": {
+                "status": "completed",
+                "input": {"name": name},
+                "output": None,
+            },
+            "time_created": timestamp_ms,
+        }
+
+    def _convert_skill_user_message_for_json_export(
+        self, message: dict[str, Any], skill_index: int
+    ) -> dict[str, Any] | None:
+        """Convert one skill-shaped user message into an assistant tool message."""
+        if message.get("role") != "user":
+            return None
+
+        parts = message.get("parts", [])
+        if len(parts) != 1:
+            return None
+
+        part = parts[0]
+        if part.get("type") != "text":
+            return None
+
+        text = str(part.get("text", ""))
+        skill_name = self._extract_skill_name_from_text(text)
+        if skill_name is None:
+            return None
+
+        return self._build_message(
+            message_id=str(message.get("id", "")),
+            role="assistant",
+            time_created=int(message.get("time_created", 0)),
+            mode="tool",
+            parts=[
+                self._build_skill_tool_part(
+                    skill_name,
+                    int(part.get("time_created", message.get("time_created", 0))),
+                    f"skill:{skill_index}",
+                )
+            ],
+        )
+
+    def _transform_skill_messages_for_json_export(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Convert skill wrapper user messages only for Codex JSON export."""
+        transformed_messages: list[dict[str, Any]] = []
+        skill_index = 0
+
+        for message in messages:
+            converted = self._convert_skill_user_message_for_json_export(message, skill_index)
+            if converted is None:
+                transformed_messages.append(message)
+                continue
+
+            transformed_messages.append(converted)
+            skill_index += 1
+
+        return transformed_messages
 
     def _build_function_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
         """Build one tool part from a function_call payload."""
