@@ -1170,3 +1170,82 @@ class TestKimiAgent:
         exported = json.loads(result.read_text(encoding="utf-8"))
         assert exported["stats"]["total_input_tokens"] == 10
         assert exported["stats"]["total_output_tokens"] == 20
+        assert exported["stats"]["total_tokens"] == 0
+
+    def test_export_session_uses_last_usage_token_count_from_context(self, tmp_path):
+        """测试导出时从 context.jsonl 的最后一条 _usage 提取会话总 token"""
+        agent = KimiAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {"role": "user", "content": "Hello"},
+                {"role": "_usage", "token_count": 100},
+                {"role": "assistant", "content": [{"type": "text", "text": "World"}]},
+                {"role": "_usage", "token_count": 250},
+                {"role": "_usage", "token_count": 999},
+            ],
+        )
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": datetime.now().timestamp(),
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                        "usage": {"input_tokens": 10, "output_tokens": 20},
+                    },
+                },
+                {"role": "_usage", "token_count": 12345},
+            ],
+        )
+
+        session = make_session(session_dir, session_id="test", title="Test")
+        result = agent.export_session(session, output_dir)
+
+        exported = json.loads(result.read_text(encoding="utf-8"))
+        assert exported["stats"]["total_input_tokens"] == 10
+        assert exported["stats"]["total_output_tokens"] == 20
+        assert exported["stats"]["total_tokens"] == 999
+
+    def test_export_session_total_tokens_defaults_to_zero_without_usage(self, tmp_path):
+        """测试没有 _usage 时会话总 token 默认为 0"""
+        agent = KimiAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": [{"type": "text", "text": "World"}]},
+            ],
+        )
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {
+                    "timestamp": datetime.now().timestamp(),
+                    "message": {
+                        "type": "TurnBegin",
+                        "payload": {"user_input": [{"text": "Hello"}]},
+                        "usage": {"input_tokens": 10, "output_tokens": 20},
+                    },
+                }
+            ],
+        )
+
+        session = make_session(session_dir, session_id="test", title="Test")
+        result = agent.export_session(session, output_dir)
+
+        exported = json.loads(result.read_text(encoding="utf-8"))
+        assert exported["stats"]["total_input_tokens"] == 10
+        assert exported["stats"]["total_output_tokens"] == 20
+        assert exported["stats"]["total_tokens"] == 0

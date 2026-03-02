@@ -200,32 +200,60 @@ class KimiAgent(BaseAgent):
         """Check whether a tool should be excluded from export."""
         return tool_name in KIMI_IGNORED_TOOLS
 
-    def _extract_kimi_stats_from_wire(self, session_dir: Path) -> dict[str, int | float]:
-        """Extract best-effort usage stats from wire.jsonl."""
-        stats: dict[str, int | float] = {
-            "total_cost": 0,
-            "total_input_tokens": 0,
-            "total_output_tokens": 0,
-            "message_count": 0,
-        }
+    def _extract_kimi_total_tokens_from_raw(self, session_dir: Path) -> int | None:
+        """Extract the final cumulative token count from raw Kimi jsonl."""
+        raw_path = session_dir / "context.jsonl"
+        if not raw_path.exists():
+            raw_path = session_dir / "wire.jsonl"
+        if not raw_path.exists():
+            return None
 
-        wire_path = session_dir / "wire.jsonl"
-        if not wire_path.exists():
-            return stats
-
-        with open(wire_path, encoding="utf-8") as f:
+        total_tokens: int | None = None
+        with open(raw_path, encoding="utf-8") as f:
             for line in f:
                 try:
                     data = json.loads(line)
                 except json.JSONDecodeError:
                     continue
 
-                token_usage = data.get("message", {}).get("usage", {})
-                if not isinstance(token_usage, dict):
+                if data.get("role") != "_usage":
                     continue
 
-                stats["total_input_tokens"] += int(token_usage.get("input_tokens", 0))
-                stats["total_output_tokens"] += int(token_usage.get("output_tokens", 0))
+                token_count = data.get("token_count")
+                if isinstance(token_count, (int, float)) and not isinstance(token_count, bool):
+                    total_tokens = int(token_count)
+
+        return total_tokens
+
+    def _extract_kimi_stats_from_wire(self, session_dir: Path) -> dict[str, int | float]:
+        """Extract best-effort usage stats from wire.jsonl."""
+        stats: dict[str, int | float] = {
+            "total_cost": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_tokens": 0,
+            "message_count": 0,
+        }
+
+        wire_path = session_dir / "wire.jsonl"
+        if wire_path.exists():
+            with open(wire_path, encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    token_usage = data.get("message", {}).get("usage", {})
+                    if not isinstance(token_usage, dict):
+                        continue
+
+                    stats["total_input_tokens"] += int(token_usage.get("input_tokens", 0))
+                    stats["total_output_tokens"] += int(token_usage.get("output_tokens", 0))
+
+        total_tokens = self._extract_kimi_total_tokens_from_raw(session_dir)
+        if total_tokens is not None:
+            stats["total_tokens"] = total_tokens
 
         return stats
 
