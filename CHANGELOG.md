@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-03-02
+
+### Added
+
+- **Kimi total token extraction from raw session files**
+  - Exports `stats.total_tokens` from the last `_usage.token_count` entry in `context.jsonl`
+  - Falls back to `wire.jsonl` when `context.jsonl` is unavailable
+  - Keeps `total_input_tokens` and `total_output_tokens` extraction from wire usage records
+
 ## [0.6.3] - 2026-03-01
 
 ### Added

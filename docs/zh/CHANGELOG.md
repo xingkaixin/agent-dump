@@ -2,6 +2,15 @@
 
 ## [未发布]
 
+## [0.6.4] - 2026-03-02
+
+### 新增功能
+
+- **Kimi 从原始会话文件提取总 token 数**
+  - 从 `context.jsonl` 最后一条 `_usage.token_count` 记录导出 `stats.total_tokens`
+  - 当 `context.jsonl` 不存在时，回退到 `wire.jsonl`
+  - 继续保留从 wire usage 记录提取 `total_input_tokens` 与 `total_output_tokens` 的行为
+
 ## [0.6.3] - 2026-03-01
 
 ### 新增功能
