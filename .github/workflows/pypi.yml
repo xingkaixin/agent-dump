@@ -1,9 +1,7 @@
-name: Publish PyPI
+name: Publish PyPI (Manual)
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,29 +27,6 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --dev --python 3.12
-
-      - name: Validate tag version
-        shell: bash
-        run: |
-          TAG_NAME="${GITHUB_REF_NAME}"
-
-          if [[ ! "${TAG_NAME}" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-            echo "Invalid tag format: ${TAG_NAME}"
-            exit 1
-          fi
-
-          TAG_VERSION="${BASH_REMATCH[1]}"
-          echo "TAG_VERSION=${TAG_VERSION}" >> "${GITHUB_ENV}"
-
-      - name: Validate package version
-        run: |
-          PACKAGE_VERSION="$(python -c 'from agent_dump.__about__ import __version__; print(__version__)')"
-          echo "PACKAGE_VERSION=${PACKAGE_VERSION}" >> "${GITHUB_ENV}"
-
-          if [ "${PACKAGE_VERSION}" != "${TAG_VERSION}" ]; then
-            echo "Tag version ${TAG_VERSION} does not match package version ${PACKAGE_VERSION}"
-            exit 1
-          fi
 
       - name: Build distributions
         run: uv build --no-sources

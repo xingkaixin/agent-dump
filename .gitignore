@@ -45,3 +45,11 @@ wheels/
 # uv
 *.lock
 !uv.lock
+
+# native packaging
+/npm/packages/cli-*/bin/agent-dump
+/npm/packages/cli-*/bin/agent-dump.exe
+/npm/*.tgz
+/npm/node_modules
+/npm/package-lock.json
+/npm/.npm-cache

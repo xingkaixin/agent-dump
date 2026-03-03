@@ -42,6 +42,26 @@ run:
     @echo "🚀 Starting agent-dump..."
     uv run agent-dump
 
+# Build a native binary for the current platform
+build-native:
+    @echo "📦 Building native binary..."
+    UV_CACHE_DIR=.uv-cache uv run --with pyinstaller pyinstaller packaging/pyinstaller.spec --clean --noconfirm
+    @echo "✅ Native binary build complete!"
+
+# Sync npm package versions from Python version metadata
+build-npm:
+    @echo "📦 Syncing npm workspace versions..."
+    npm --prefix npm run sync-version
+    @echo "✅ npm workspace is ready!"
+
+# Run npm wrapper unit tests and local packaging smoke checks
+test-npm-smoke:
+    @echo "🧪 Running npm wrapper tests..."
+    npm --prefix npm test
+    @echo "🧪 Running local npm smoke check..."
+    npm --prefix npm run smoke
+    @echo "✅ npm smoke checks complete!"
+
 # Convert SVG logo to PNG
 logo:
     @echo "🖼️ Converting logo to PNG..."

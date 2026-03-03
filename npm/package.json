@@ -1,0 +1,14 @@
+{
+  "name": "agent-dump-npm-workspace",
+  "private": true,
+  "version": "0.6.5",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "sync-version": "node ./scripts/sync-version.mjs",
+    "stage-binaries": "node ./scripts/stage-binaries.mjs",
+    "test": "node --test ./tests/*.test.mjs",
+    "smoke": "node ./scripts/smoke-install.mjs"
+  }
+}

@@ -46,7 +46,24 @@ uvx agent-dump --help
 uvx --from git+https://github.com/xingkaixin/agent-dump agent-dump --help
 ```
 
-### 方式三：本地开发
+### 方式三：使用 bunx / npx 直接运行（无需 Python）
+
+```bash
+# 从 npm 直接运行
+bunx @agent-dump/cli --help
+npx @agent-dump/cli --help
+```
+
+当前支持的平台：
+
+- `darwin-x64`
+- `darwin-arm64`
+- `linux-x64`
+- `win32-x64`
+
+若平台暂不支持，wrapper 会输出当前检测到的 `platform/arch`，并提示前往 GitHub Releases 页面。
+
+### 方式四：本地开发
 
 ```bash
 # 克隆仓库
@@ -60,7 +77,7 @@ uv sync
 uv tool install . --force
 ```
 
-### 方式四：安装为 Skill 使用
+### 方式五：安装为 Skill 使用
 
 ```bash
 npx skills add xingkaixin/agent-dump
@@ -205,6 +222,15 @@ just check
 
 # Testing
 just test
+
+# 构建当前平台原生二进制
+just build-native
+
+# 同步 npm 包版本
+just build-npm
+
+# 运行 npm wrapper 测试和 smoke 检查
+just test-npm-smoke
 ```
 
 ## 许可证

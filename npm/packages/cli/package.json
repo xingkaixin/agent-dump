@@ -1,0 +1,31 @@
+{
+  "name": "@agent-dump/cli",
+  "version": "0.6.5",
+  "description": "Standalone native binaries for agent-dump, runnable via bunx or npx.",
+  "license": "MIT",
+  "homepage": "https://github.com/xingkaixin/agent-dump",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xingkaixin/agent-dump.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "agent-dump": "./bin/agent-dump.cjs"
+  },
+  "files": [
+    "README.md",
+    "bin",
+    "lib"
+  ],
+  "optionalDependencies": {
+    "@agent-dump/cli-darwin-x64": "0.6.5",
+    "@agent-dump/cli-darwin-arm64": "0.6.5",
+    "@agent-dump/cli-linux-x64": "0.6.5",
+    "@agent-dump/cli-win32-x64": "0.6.5"
+  }
+}

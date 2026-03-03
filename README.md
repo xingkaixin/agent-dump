@@ -60,7 +60,24 @@ uvx agent-dump --help
 uvx --from git+https://github.com/xingkaixin/agent-dump agent-dump --help
 ```
 
-### Method 3: Local Development
+### Method 3: Run directly using bunx / npx (No Python required)
+
+```bash
+# Run from npm
+bunx @agent-dump/cli --help
+npx @agent-dump/cli --help
+```
+
+Supported native targets:
+
+- `darwin-x64`
+- `darwin-arm64`
+- `linux-x64`
+- `win32-x64`
+
+If your platform is unsupported, the wrapper prints the detected platform/arch pair and points to the GitHub releases page.
+
+### Method 4: Local Development
 
 ```bash
 # Clone the repository
@@ -74,7 +91,7 @@ uv sync
 uv tool install . --force
 ```
 
-### Method 4: Install as a Skill
+### Method 5: Install as a Skill
 
 ```bash
 npx skills add xingkaixin/agent-dump
@@ -219,6 +236,15 @@ just check
 
 # Testing
 just test
+
+# Build a standalone binary for the current platform
+just build-native
+
+# Sync npm package metadata
+just build-npm
+
+# Run npm wrapper tests and smoke checks
+just test-npm-smoke
 ```
 
 ## Release
@@ -234,11 +260,12 @@ git tag v{version}
 git push origin v{version}
 ```
 
-- The PyPI release workflow is [`pypi.yml`](./.github/workflows/pypi.yml)
-- Only tags matching `vX.Y.Z` trigger publishing
-- Publishing uses `uv build --no-sources` and then `uv publish`
+- The tag release workflow is [`release.yml`](./.github/workflows/release.yml)
+- The manual PyPI fallback workflow is [`pypi.yml`](./.github/workflows/pypi.yml)
+- Only tags matching `vX.Y.Z` trigger the unified release pipeline
+- Release publishes PyPI artifacts, GitHub release assets, and npm packages for `@agent-dump/cli`
 - Configure `UV_PUBLISH_TOKEN` in the GitHub `pypi` environment
-- npm publishing is not included yet
+- Configure `NPM_TOKEN` in the GitHub `release` environment
 
 ## License
 

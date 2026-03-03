@@ -52,3 +52,11 @@ jobs:
 
       - name: Test
         run: just test
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Test npm wrapper
+        run: npm --prefix npm test

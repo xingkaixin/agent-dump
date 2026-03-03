@@ -1,0 +1,23 @@
+{
+  "name": "@agent-dump/cli-darwin-arm64",
+  "version": "0.6.5",
+  "description": "darwin-arm64 native binary for agent-dump.",
+  "license": "MIT",
+  "homepage": "https://github.com/xingkaixin/agent-dump",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xingkaixin/agent-dump.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin/agent-dump"
+  ]
+}
