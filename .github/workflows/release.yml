@@ -51,7 +51,7 @@ jobs:
           fi
 
           TAG_VERSION="${BASH_REMATCH[1]}"
-          PACKAGE_VERSION="$(python -c 'from agent_dump.__about__ import __version__; print(__version__)')"
+          PACKAGE_VERSION="$(uv run python -c 'from agent_dump.__about__ import __version__; print(__version__)')"
 
           if [ "${PACKAGE_VERSION}" != "${TAG_VERSION}" ]; then
             echo "Tag version ${TAG_VERSION} does not match package version ${PACKAGE_VERSION}"
