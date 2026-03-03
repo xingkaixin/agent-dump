@@ -113,6 +113,8 @@ jobs:
         run: uv sync --dev --python ${{ env.PYTHON_VERSION }}
 
       - name: Build native binary
+        env:
+          PYINSTALLER_CONFIG_DIR: .pyinstaller
         run: >
           uv run --with pyinstaller pyinstaller packaging/pyinstaller.spec
           --clean

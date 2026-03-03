@@ -261,7 +261,6 @@ git push origin v{version}
 ```
 
 - The tag release workflow is [`release.yml`](./.github/workflows/release.yml)
-- The manual PyPI fallback workflow is [`pypi.yml`](./.github/workflows/pypi.yml)
 - Only tags matching `vX.Y.Z` trigger the unified release pipeline
 - Release publishes PyPI artifacts, GitHub release assets, and npm packages for `@agent-dump/cli`
 - Configure `UV_PUBLISH_TOKEN` in the GitHub `pypi` environment

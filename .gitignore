@@ -53,3 +53,4 @@ wheels/
 /npm/node_modules
 /npm/package-lock.json
 /npm/.npm-cache
+/.pyinstaller

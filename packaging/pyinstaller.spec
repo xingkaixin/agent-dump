@@ -8,7 +8,9 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules, copy_metadata
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# PyInstaller executes spec files via exec(), so __file__ is not guaranteed.
+SPEC_FILE = Path(globals().get("__file__", Path.cwd() / "packaging" / "pyinstaller.spec")).resolve()
+PROJECT_ROOT = SPEC_FILE.parent.parent
 
 hiddenimports = sorted(
     {
