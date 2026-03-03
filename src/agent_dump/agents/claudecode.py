@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.paths import ProviderRoots, first_existing_path
 
 
 class ClaudeCodeAgent(BaseAgent):
@@ -20,16 +21,8 @@ class ClaudeCodeAgent(BaseAgent):
 
     def _find_base_path(self) -> Path | None:
         """Find the Claude Code projects directory"""
-        # Priority: user data directory > local development data
-        paths = [
-            Path.home() / ".claude/projects",
-            Path("data/claudecode"),
-        ]
-
-        for path in paths:
-            if path.exists():
-                return path
-        return None
+        roots = ProviderRoots.from_env_or_home()
+        return first_existing_path(roots.claude_root / "projects", Path("data/claudecode"))
 
     def _load_sessions_index(self, project_dir: Path) -> dict[str, dict]:
         """Load sessions index for a project"""

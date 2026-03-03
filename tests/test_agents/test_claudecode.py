@@ -11,6 +11,7 @@ import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.claudecode import ClaudeCodeAgent
+from agent_dump.paths import ProviderRoots
 
 
 def write_jsonl(file_path: Path, records: list[dict]) -> None:
@@ -53,6 +54,37 @@ class TestClaudeCodeAgent:
             result = agent._find_base_path()
 
         assert result is None
+
+    def test_find_base_path_uses_claude_config_dir(self, monkeypatch, tmp_path):
+        """测试优先使用 CLAUDE_CONFIG_DIR/projects"""
+        agent = ClaudeCodeAgent()
+        claude_root = tmp_path / "claude-root"
+        projects_dir = claude_root / "projects"
+        projects_dir.mkdir(parents=True)
+
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude_root))
+        result = agent._find_base_path()
+
+        assert result == projects_dir
+
+    def test_find_base_path_falls_back_to_local_dev(self, monkeypatch, tmp_path):
+        """测试回退到本地开发目录 data/claudecode"""
+        agent = ClaudeCodeAgent()
+        monkeypatch.chdir(tmp_path)
+        local_dev_path = tmp_path / "data" / "claudecode"
+        local_dev_path.mkdir(parents=True)
+
+        roots = ProviderRoots(
+            codex_root=tmp_path / ".codex",
+            claude_root=tmp_path / "missing-claude-root",
+            kimi_root=tmp_path / ".kimi",
+            opencode_root=tmp_path / ".local" / "share" / "opencode",
+        )
+
+        with mock.patch("agent_dump.agents.claudecode.ProviderRoots.from_env_or_home", return_value=roots):
+            result = agent._find_base_path()
+
+        assert result == Path("data/claudecode")
 
     def test_load_sessions_index_not_exists(self, tmp_path):
         """测试加载不存在的 sessions index"""

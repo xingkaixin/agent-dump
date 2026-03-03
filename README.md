@@ -24,6 +24,20 @@ AI Coding Assistant Session Export Tool - Supports exporting session data from m
 - **Message Details**: Fully retains session messages, tool calls, and other details
 - **Smart Title Extraction**: Automatically extract session titles from agent metadata
 
+## Path Discovery
+
+`agent-dump` resolves session roots in this order: official environment variable, tool default directory, then local development fallback under `data/<agent>`.
+
+- **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
+- **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
+- **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
+- **OpenCode**: `XDG_DATA_HOME/opencode` -> Windows data directory (`LOCALAPPDATA/opencode` or `APPDATA/opencode`) -> `~/.local/share/opencode` -> `data/opencode`
+
+Notes:
+
+- On Windows, prefer configuring the tool's official environment variable when available.
+- The `data/<agent>` fallback is kept for local development and tests.
+
 ## Installation
 
 ### Method 1: Install using uv tool (Recommended)
@@ -216,8 +230,8 @@ $EDITOR src/agent_dump/__about__.py
 # 2. Commit and merge to main
 
 # 3. Create and push a release tag
-git tag v0.6.5
-git push origin v0.6.5
+git tag v{version}
+git push origin v{version}
 ```
 
 - The PyPI release workflow is [`pypi.yml`](./.github/workflows/pypi.yml)

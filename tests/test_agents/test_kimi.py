@@ -11,6 +11,7 @@ import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.kimi import KimiAgent
+from agent_dump.paths import ProviderRoots
 
 
 def write_metadata(
@@ -70,6 +71,37 @@ class TestKimiAgent:
             result = agent._find_base_path()
 
         assert result is None
+
+    def test_find_base_path_uses_kimi_share_dir(self, monkeypatch, tmp_path):
+        """测试优先使用 KIMI_SHARE_DIR/sessions"""
+        agent = KimiAgent()
+        kimi_root = tmp_path / "kimi-root"
+        sessions_dir = kimi_root / "sessions"
+        sessions_dir.mkdir(parents=True)
+
+        monkeypatch.setenv("KIMI_SHARE_DIR", str(kimi_root))
+        result = agent._find_base_path()
+
+        assert result == sessions_dir
+
+    def test_find_base_path_falls_back_to_local_dev(self, monkeypatch, tmp_path):
+        """测试回退到本地开发目录 data/kimi"""
+        agent = KimiAgent()
+        monkeypatch.chdir(tmp_path)
+        local_dev_path = tmp_path / "data" / "kimi"
+        local_dev_path.mkdir(parents=True)
+
+        roots = ProviderRoots(
+            codex_root=tmp_path / ".codex",
+            claude_root=tmp_path / ".claude",
+            kimi_root=tmp_path / "missing-kimi-root",
+            opencode_root=tmp_path / ".local" / "share" / "opencode",
+        )
+
+        with mock.patch("agent_dump.agents.kimi.ProviderRoots.from_env_or_home", return_value=roots):
+            result = agent._find_base_path()
+
+        assert result == Path("data/kimi")
 
     def test_is_available_no_path(self):
         """测试没有路径时不可用"""

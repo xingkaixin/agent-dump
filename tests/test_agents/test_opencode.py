@@ -12,6 +12,7 @@ import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.opencode import OpenCodeAgent
+from agent_dump.paths import ProviderRoots
 
 
 class TestOpenCodeAgent:
@@ -36,15 +37,62 @@ class TestOpenCodeAgent:
     def test_find_db_path_home_directory(self, tmp_path):
         """测试在用户目录找到数据库"""
         agent = OpenCodeAgent()
-        db_path = tmp_path / "opencode.db"
+        opencode_root = tmp_path / ".local" / "share" / "opencode"
+        opencode_root.mkdir(parents=True)
+        db_path = opencode_root / "opencode.db"
         db_path.touch()
 
-        with mock.patch.object(Path, "home", return_value=tmp_path.parent):
-            with mock.patch.object(Path, "exists", side_effect=lambda: True):
-                result = agent._find_db_path()
+        roots = ProviderRoots(
+            codex_root=tmp_path / ".codex",
+            claude_root=tmp_path / ".claude",
+            kimi_root=tmp_path / ".kimi",
+            opencode_root=opencode_root,
+        )
 
-        # 由于 mocking 复杂，我们只需确保函数能运行
-        assert result is None or isinstance(result, Path)
+        with mock.patch("agent_dump.agents.opencode.ProviderRoots.from_env_or_home", return_value=roots):
+            result = agent._find_db_path()
+
+        assert result == db_path
+
+    def test_find_db_path_uses_windows_data_root(self, tmp_path):
+        """测试使用 Windows 风格数据目录"""
+        agent = OpenCodeAgent()
+        opencode_root = tmp_path / "LocalAppData" / "opencode"
+        opencode_root.mkdir(parents=True)
+        db_path = opencode_root / "opencode.db"
+        db_path.touch()
+
+        roots = ProviderRoots(
+            codex_root=tmp_path / ".codex",
+            claude_root=tmp_path / ".claude",
+            kimi_root=tmp_path / ".kimi",
+            opencode_root=opencode_root,
+        )
+
+        with mock.patch("agent_dump.agents.opencode.ProviderRoots.from_env_or_home", return_value=roots):
+            result = agent._find_db_path()
+
+        assert result == db_path
+
+    def test_find_db_path_falls_back_to_local_dev(self, monkeypatch, tmp_path):
+        """测试回退到本地开发数据库路径"""
+        agent = OpenCodeAgent()
+        monkeypatch.chdir(tmp_path)
+        local_db_path = tmp_path / "data" / "opencode" / "opencode.db"
+        local_db_path.parent.mkdir(parents=True)
+        local_db_path.touch()
+
+        roots = ProviderRoots(
+            codex_root=tmp_path / ".codex",
+            claude_root=tmp_path / ".claude",
+            kimi_root=tmp_path / ".kimi",
+            opencode_root=tmp_path / "missing-opencode-root",
+        )
+
+        with mock.patch("agent_dump.agents.opencode.ProviderRoots.from_env_or_home", return_value=roots):
+            result = agent._find_db_path()
+
+        assert result == Path("data/opencode/opencode.db")
 
     def test_is_available_false(self):
         """测试数据库不存在时返回 False"""

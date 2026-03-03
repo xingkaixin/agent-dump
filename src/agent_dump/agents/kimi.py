@@ -9,6 +9,7 @@ import shutil
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.paths import ProviderRoots, first_existing_path
 
 KIMI_TOOL_TITLE_MAP = {
     "ReadFile": "read",
@@ -31,15 +32,8 @@ class KimiAgent(BaseAgent):
 
     def _find_base_path(self) -> Path | None:
         """Find the Kimi sessions directory"""
-        paths = [
-            Path.home() / ".kimi/sessions",
-            Path("data/kimi"),
-        ]
-
-        for path in paths:
-            if path.exists():
-                return path
-        return None
+        roots = ProviderRoots.from_env_or_home()
+        return first_existing_path(roots.kimi_root / "sessions", Path("data/kimi"))
 
     def _get_session_files(self, session_dir: Path) -> dict[str, Path | None]:
         """Get available session files for a Kimi session directory."""

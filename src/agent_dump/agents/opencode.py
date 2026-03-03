@@ -8,6 +8,7 @@ from pathlib import Path
 import sqlite3
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.paths import ProviderRoots, first_existing_path
 
 
 class OpenCodeAgent(BaseAgent):
@@ -19,16 +20,8 @@ class OpenCodeAgent(BaseAgent):
 
     def _find_db_path(self) -> Path | None:
         """Find the OpenCode database path"""
-        # Priority: user data directory > local development data
-        paths = [
-            Path.home() / ".local/share/opencode/opencode.db",
-            Path("data/opencode/opencode.db"),
-        ]
-
-        for path in paths:
-            if path.exists():
-                return path
-        return None
+        roots = ProviderRoots.from_env_or_home()
+        return first_existing_path(roots.opencode_root / "opencode.db", Path("data/opencode/opencode.db"))
 
     def is_available(self) -> bool:
         """Check if OpenCode database exists"""

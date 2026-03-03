@@ -4,6 +4,7 @@ Command-line interface for agent-dump
 
 import argparse
 from datetime import datetime, timedelta
+import os
 from pathlib import Path
 import re
 import sys
@@ -380,6 +381,21 @@ def warn_list_ignored_options(output_specified: bool, format_specified: bool) ->
         print(i18n.t(Keys.LIST_IGNORE_OUTPUT))
 
 
+def get_supported_agent_locations() -> list[str]:
+    """Describe supported agent storage locations."""
+    open_code_default = "LOCALAPPDATA/opencode/opencode.db or APPDATA/opencode/opencode.db"
+    if os.name != "nt":
+        open_code_default = "~/.local/share/opencode/opencode.db"
+
+    return [
+        f"  - OpenCode: XDG_DATA_HOME/opencode/opencode.db or {open_code_default}",
+        "  - Codex: CODEX_HOME/sessions or ~/.codex/sessions",
+        "  - Kimi: KIMI_SHARE_DIR/sessions or ~/.kimi/sessions",
+        "  - Claude Code: CLAUDE_CONFIG_DIR/projects or ~/.claude/projects",
+        "  - Local development fallback: data/opencode, data/codex, data/kimi, data/claudecode",
+    ]
+
+
 def main():
     """Main entry point"""
 
@@ -543,10 +559,8 @@ def main():
     if not available_agents:
         print(i18n.t(Keys.NO_AGENTS_FOUND))
         print(i18n.t(Keys.SUPPORTED_AGENTS))
-        print("  - OpenCode: ~/.local/share/opencode/opencode.db")
-        print("  - Codex: ~/.codex/sessions/{YYYY}/{MM}/{DD}/")
-        print("  - Kimi: ~/.kimi/sessions/{project_id}/{session_id}/")
-        print("  - Claude Code: ~/.claude/projects/{project_id}/")
+        for location in get_supported_agent_locations():
+            print(location)
         return
 
     if query_spec and query_spec.agent_names:

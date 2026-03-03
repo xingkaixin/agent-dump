@@ -10,6 +10,7 @@ from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
+from agent_dump.paths import ProviderRoots, first_existing_path
 
 CODEX_TOOL_TITLE_MAP = {
     "exec_command": "bash",
@@ -31,16 +32,8 @@ class CodexAgent(BaseAgent):
 
     def _find_base_path(self) -> Path | None:
         """Find the Codex sessions directory"""
-        # Priority: user data directory > local development data
-        paths = [
-            Path.home() / ".codex/sessions",
-            Path("data/codex"),
-        ]
-
-        for path in paths:
-            if path.exists():
-                return path
-        return None
+        roots = ProviderRoots.from_env_or_home()
+        return first_existing_path(roots.codex_root / "sessions", Path("data/codex"))
 
     def _load_titles_cache(self) -> dict[str, str]:
         """Load session titles from global state file"""
@@ -48,7 +41,8 @@ class CodexAgent(BaseAgent):
             return self._titles_cache
 
         titles: dict[str, str] = {}
-        global_state_path = Path.home() / ".codex/.codex-global-state.json"
+        roots = ProviderRoots.from_env_or_home()
+        global_state_path = roots.codex_root / ".codex-global-state.json"
 
         if global_state_path.exists():
             try:

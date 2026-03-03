@@ -11,6 +11,7 @@ import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
+from agent_dump.paths import ProviderRoots
 
 PATCH_INPUT = """*** Begin Patch
 *** Add File: /workspace/new.py
@@ -55,8 +56,14 @@ class TestCodexAgent:
     def test_load_titles_cache_not_exists(self, tmp_path):
         """测试加载不存在的标题缓存"""
         agent = CodexAgent()
+        roots = ProviderRoots(
+            codex_root=tmp_path / ".codex",
+            claude_root=tmp_path / ".claude",
+            kimi_root=tmp_path / ".kimi",
+            opencode_root=tmp_path / ".local" / "share" / "opencode",
+        )
 
-        with mock.patch.object(Path, "home", return_value=tmp_path):
+        with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):
             result = agent._load_titles_cache()
 
         assert result == {}
@@ -81,11 +88,49 @@ class TestCodexAgent:
         with open(state_file, "w") as f:
             json.dump(state_data, f)
 
-        with mock.patch.object(Path, "home", return_value=tmp_path):
+        roots = ProviderRoots(
+            codex_root=codex_dir,
+            claude_root=tmp_path / ".claude",
+            kimi_root=tmp_path / ".kimi",
+            opencode_root=tmp_path / ".local" / "share" / "opencode",
+        )
+
+        with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):
             result = agent._load_titles_cache()
 
         assert result == state_data["thread-titles"]["titles"]
         assert agent._titles_cache == state_data["thread-titles"]["titles"]
+
+    def test_find_base_path_uses_codex_home_env(self, monkeypatch, tmp_path):
+        """测试优先使用 CODEX_HOME/sessions"""
+        agent = CodexAgent()
+        codex_home = tmp_path / "codex-home"
+        sessions_dir = codex_home / "sessions"
+        sessions_dir.mkdir(parents=True)
+
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+        result = agent._find_base_path()
+
+        assert result == sessions_dir
+
+    def test_find_base_path_falls_back_to_local_dev(self, monkeypatch, tmp_path):
+        """测试回退到本地开发目录 data/codex"""
+        agent = CodexAgent()
+        monkeypatch.chdir(tmp_path)
+        local_dev_path = tmp_path / "data" / "codex"
+        local_dev_path.mkdir(parents=True)
+
+        roots = ProviderRoots(
+            codex_root=tmp_path / "missing-codex-home",
+            claude_root=tmp_path / ".claude",
+            kimi_root=tmp_path / ".kimi",
+            opencode_root=tmp_path / ".local" / "share" / "opencode",
+        )
+
+        with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):
+            result = agent._find_base_path()
+
+        assert result == Path("data/codex")
 
     def test_load_titles_cache_uses_cache(self, tmp_path):
         """测试标题缓存只加载一次"""
