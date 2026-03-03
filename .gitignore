@@ -13,6 +13,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!/npm/packages/cli/lib/
+!/npm/packages/cli/lib/*.cjs
 lib64/
 parts/
 sdist/
