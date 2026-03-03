@@ -2,6 +2,30 @@
 
 ## [未发布]
 
+## [0.6.5] - 2026-03-03
+
+### 新增功能
+
+- **官方 agent 数据路径发现**
+  - 支持 `CODEX_HOME`、`CLAUDE_CONFIG_DIR` 与 `KIMI_SHARE_DIR`
+  - OpenCode 现按 Unix 的 `XDG_DATA_HOME` 与 Windows 的 `LOCALAPPDATA` / `APPDATA` 发现数据目录
+  - 继续保留 home 目录与本地 `data/` 开发数据的回退路径
+- **npm 包装器与独立原生二进制分发**
+  - 新增 `bunx @agent-dump/cli` 与 `npx @agent-dump/cli` 这类无需 Python 的运行入口
+  - 为 macOS、Linux 和 Windows 发布平台特定二进制
+
+### 变更
+
+- **发布版本与分发流水线**
+  - 将包版本元数据移动到 `src/agent_dump/__about__.py`，作为单一真源
+  - 在发布构建时校验 Git tag 与包版本元数据的一致性
+  - 改为统一的 GitHub release workflow，同时处理 PyPI 发布与原生二进制分发
+
+### 改进
+
+- 扩展路径解析、CLI 路径输出与版本一致性的回归测试覆盖
+- 为打包后的二进制安装补充 smoke tests，并调整 PyInstaller 打包配置
+
 ## [0.6.4] - 2026-03-02
 
 ### 新增功能

@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-03-03
+
+### Added
+
+- **Official agent data path discovery**
+  - Supports `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, and `KIMI_SHARE_DIR`
+  - Uses `XDG_DATA_HOME` on Unix and `LOCALAPPDATA` / `APPDATA` on Windows for OpenCode data discovery
+  - Keeps fallback to home directories and local `data/` fixtures for development
+- **npm wrapper and standalone native binaries**
+  - Adds `bunx @agent-dump/cli` and `npx @agent-dump/cli` as no-Python entry points
+  - Publishes platform-specific binaries for macOS, Linux, and Windows
+
+### Changed
+
+- **Release versioning and distribution pipeline**
+  - Moves package version metadata to `src/agent_dump/__about__.py` as the single source of truth
+  - Validates version parity between Git tags and package metadata during release builds
+  - Uses a unified GitHub release workflow for PyPI publishing and native binary delivery
+
+### Improved
+
+- Expanded regression coverage for path resolution, CLI path reporting, and version consistency
+- Added smoke tests and PyInstaller packaging adjustments for packaged binary installs
+
 ## [0.6.4] - 2026-03-02
 
 ### Added
