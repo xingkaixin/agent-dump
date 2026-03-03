@@ -221,15 +221,25 @@ jobs:
           UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
         run: uv publish
 
+      - name: Stage GitHub release assets
+        shell: bash
+        run: |
+          mkdir -p dist/release
+          cp dist/native/linux-x64/agent-dump dist/release/agent-dump-linux-x64
+          cp dist/native/win32-x64/agent-dump.exe dist/release/agent-dump-win32-x64.exe
+          cp dist/native/darwin-x64/agent-dump dist/release/agent-dump-darwin-x64
+          cp dist/native/darwin-arm64/agent-dump dist/release/agent-dump-darwin-arm64
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/native/linux-x64/agent-dump
-            dist/native/win32-x64/agent-dump.exe
-            dist/native/darwin-x64/agent-dump
-            dist/native/darwin-arm64/agent-dump
-            dist/*
+            dist/release/agent-dump-linux-x64
+            dist/release/agent-dump-win32-x64.exe
+            dist/release/agent-dump-darwin-x64
+            dist/release/agent-dump-darwin-arm64
+            dist/agent_dump-${{ env.PACKAGE_VERSION }}.tar.gz
+            dist/agent_dump-${{ env.PACKAGE_VERSION }}-py3-none-any.whl
 
   smoke-npm:
     name: Smoke npx ${{ matrix.os }}
