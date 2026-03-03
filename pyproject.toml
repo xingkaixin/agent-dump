@@ -1,6 +1,6 @@
 [project]
 name = "agent-dump"
-version = "0.6.4"
+dynamic = ["version"]
 description = "AI Coding Assistant Session Export Tool"
 readme = "README.md"
 license = "MIT"
@@ -45,6 +45,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/agent_dump/__about__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_dump"]

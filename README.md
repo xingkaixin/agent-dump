@@ -207,6 +207,25 @@ just check
 just test
 ```
 
+## Release
+
+```bash
+# 1. Update the package version in a single place
+$EDITOR src/agent_dump/__about__.py
+
+# 2. Commit and merge to main
+
+# 3. Create and push a release tag
+git tag v0.6.5
+git push origin v0.6.5
+```
+
+- The PyPI release workflow is [`pypi.yml`](./.github/workflows/pypi.yml)
+- Only tags matching `vX.Y.Z` trigger publishing
+- Publishing uses `uv build --no-sources` and then `uv publish`
+- Configure `UV_PUBLISH_TOKEN` in the GitHub `pypi` environment
+- npm publishing is not included yet
+
 ## License
 
 MIT

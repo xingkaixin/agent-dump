@@ -2,8 +2,10 @@
 Agent Dump - AI Coding Assistant Session Export Tool
 """
 
-__version__ = "0.1.0"
+from agent_dump.__about__ import __version__
+
 __all__ = [
+    "__version__",
     "AgentScanner",
     "BaseAgent",
     "Session",

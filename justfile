@@ -57,7 +57,7 @@ clean-build:
 # Build package wheel file
 build: clean-build
     @echo "📦 Building package..."
-    uv build
+    uv build --no-sources
     @echo "✅ Build complete!"
 
 # Publish package to PyPI
