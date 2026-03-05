@@ -1,6 +1,41 @@
 # 更新日志
 
-## [未发布]
+## [0.6.6] - 2026-03-05
+
+
+### 新增功能
+
+- **Collect 汇总模式**
+  - 新增 `--collect`，用于按时间范围收集会话打印内容并通过 AI 总结
+  - 新增 `-since/--since` 与 `-until/--until` 日期参数（`YYYY-MM-DD` / `YYYYMMDD`）
+  - 结果会输出到终端，并写入当前目录 `agent-dump-collect-YYYYMMDD.md`
+- **配置管理模式**
+  - 新增 `--config view|edit`，用于查看与交互式编辑 AI 配置
+  - 新增跨平台配置路径解析：
+    - macOS/Linux: `~/.config/agent-dump/config.toml`
+    - Windows: `%APPDATA%/agent-dump/config.toml`
+  - collect 执行前新增配置校验
+- **URI summary 模式**
+  - 新增 `--summary`，用于 URI 模式的 AI 总结
+  - summary 生成要求 URI 模式且 `--format` 包含 `json`
+  - 配置缺失/不完整或 AI 请求失败时降级为仅告警并继续导出
+
+### 变更
+
+- **AI 总结加载提示**
+  - 在 `--summary` 与 `--collect` 流程中，AI 请求期间会在 stderr 显示 loading 提示
+
+### 改进
+
+- 扩展 collect 日期规则、collect 输出写入、config 流程和 CLI 模式分发的测试覆盖
+
+### 文档
+
+- 更新 `skills/agent-dump/SKILL.md` 与 recipes，补充安装入口与环境选择规则
+
+### CI
+
+- 在 release workflow 中增加原生二进制暂存步骤
 
 ## [0.6.5] - 2026-03-03
 

@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+[中文](docs/zh/CHANGELOG.md)
+
+## [0.6.6] - 2026-03-05
 
 ### Added
 
@@ -14,10 +16,27 @@
     - macOS/Linux: `~/.config/agent-dump/config.toml`
     - Windows: `%APPDATA%/agent-dump/config.toml`
   - Added config validation gates before running collect
+- **URI summary mode**
+  - Added `--summary` for URI mode AI summaries
+  - Summary generation requires URI mode with `--format` including `json`
+  - Falls back to warning-only behavior when config is missing/incomplete or AI requests fail
+
+### Changed
+
+- **AI summary loading hints**
+  - Shows loading hints on stderr during AI summary requests in both `--summary` and `--collect` flows
 
 ### Improved
 
 - Expanded test coverage for collect date rules, collect output writing, config flow, and CLI mode dispatch
+
+### Documentation
+
+- Updated `skills/agent-dump/SKILL.md` and recipes with installation entrypoints and environment selection rules
+
+### CI
+
+- Staged native binaries in the release workflow
 
 ## [0.6.5] - 2026-03-03
 
