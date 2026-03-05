@@ -11,6 +11,14 @@ import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.collect import (
+    build_collect_prompt,
+    collect_entries,
+    request_summary_from_llm,
+    resolve_collect_date_range,
+    write_collect_markdown,
+)
+from agent_dump.config import handle_config_command, load_ai_config, validate_ai_config
 from agent_dump.i18n import Keys, i18n, setup_i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.query_filter import filter_sessions, parse_query
@@ -396,6 +404,71 @@ def get_supported_agent_locations() -> list[str]:
     ]
 
 
+def handle_collect_mode(args: argparse.Namespace) -> int:
+    """Handle `--collect` flow."""
+    if args.uri or args.interactive or args.list:
+        print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
+        return 1
+
+    try:
+        since_date, until_date = resolve_collect_date_range(args.since, args.until)
+    except ValueError as e:
+        if str(e) == "since_after_until":
+            print(i18n.t(Keys.COLLECT_DATE_RANGE_INVALID))
+        else:
+            print(i18n.t(Keys.COLLECT_DATE_FORMAT_INVALID))
+        return 1
+
+    config = load_ai_config()
+    valid, errors = validate_ai_config(config)
+    if not valid or config is None:
+        if "missing_file" in errors:
+            print(i18n.t(Keys.COLLECT_CONFIG_MISSING))
+        else:
+            print(i18n.t(Keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(errors)))
+        print(i18n.t(Keys.COLLECT_CONFIG_HINT))
+        return 1
+
+    scanner = AgentScanner()
+    available_agents = scanner.get_available_agents()
+    if not available_agents:
+        print(i18n.t(Keys.NO_AGENTS_FOUND))
+        return 1
+
+    try:
+        entries, has_truncated = collect_entries(
+            agents=available_agents,
+            since_date=since_date,
+            until_date=until_date,
+            render_session_text_fn=render_session_text,
+        )
+    except Exception as e:
+        print(i18n.t(Keys.COLLECT_READ_FAILED, error=e))
+        return 1
+
+    if not entries:
+        print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
+        return 1
+
+    prompt = build_collect_prompt(
+        since_date=since_date,
+        until_date=until_date,
+        entries=entries,
+        has_truncated=has_truncated,
+    )
+
+    try:
+        markdown = request_summary_from_llm(config, prompt)
+    except Exception as e:
+        print(i18n.t(Keys.COLLECT_API_FAILED, error=e))
+        return 1
+
+    print(markdown)
+    output_path = write_collect_markdown(markdown)
+    print(i18n.t(Keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
+    return 0
+
+
 def main():
     """Main entry point"""
 
@@ -426,6 +499,18 @@ def main():
         help=i18n.t(Keys.CLI_OUTPUT_HELP),
     )
     parser.add_argument("-format", "--format", type=str, default=None, help=i18n.t(Keys.CLI_FORMAT_HELP))
+    parser.add_argument("--collect", action="store_true", help=i18n.t(Keys.CLI_COLLECT_HELP))
+    parser.add_argument("-since", "--since", type=str, default=None, help=i18n.t(Keys.CLI_SINCE_HELP))
+    parser.add_argument("-until", "--until", type=str, default=None, help=i18n.t(Keys.CLI_UNTIL_HELP))
+    parser.add_argument(
+        "-config",
+        "--config",
+        type=str,
+        choices=["view", "edit"],
+        default=None,
+        dest="config_action",
+        help=i18n.t(Keys.CLI_CONFIG_HELP),
+    )
     parser.add_argument(
         "--list",
         action="store_true",
@@ -460,6 +545,11 @@ def main():
         help=i18n.t(Keys.CLI_LANG_HELP),
     )
     args = parser.parse_args()
+    if args.config_action:
+        return handle_config_command(args.config_action)
+    if args.collect:
+        return handle_collect_mode(args)
+
     is_uri_mode = bool(args.uri)
     try:
         output_formats = resolve_effective_formats(args, is_uri_mode=is_uri_mode, format_specified=format_specified)

@@ -90,13 +90,19 @@ class ClaudeCodeAgent(BaseAgent):
 
                 try:
                     session = self._parse_session_file(jsonl_file, project_dir)
-                    if session and session.created_at >= cutoff_time:
+                    if session and self._normalize_datetime_utc(session.created_at) >= cutoff_time:
                         sessions.append(session)
                 except Exception as e:
                     print(f"警告: 解析会话文件失败 {jsonl_file}: {e}")
                     continue
 
-        return sorted(sessions, key=lambda s: s.created_at, reverse=True)
+        return sorted(sessions, key=lambda s: self._normalize_datetime_utc(s.created_at), reverse=True)
+
+    def _normalize_datetime_utc(self, value: datetime) -> datetime:
+        """Normalize datetime to timezone-aware UTC for safe comparisons."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
     def _parse_session_file(self, file_path: Path, project_dir: Path) -> Session | None:
         """Parse a single Claude Code session file"""

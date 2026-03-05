@@ -85,13 +85,19 @@ class CodexAgent(BaseAgent):
         for jsonl_file in self.base_path.rglob("*.jsonl"):
             try:
                 session = self._parse_session_file(jsonl_file)
-                if session and session.created_at >= cutoff_time:
+                if session and self._normalize_datetime_utc(session.created_at) >= cutoff_time:
                     sessions.append(session)
             except Exception as e:
                 print(f"警告: 解析会话文件失败 {jsonl_file}: {e}")
                 continue
 
-        return sorted(sessions, key=lambda s: s.created_at, reverse=True)
+        return sorted(sessions, key=lambda s: self._normalize_datetime_utc(s.created_at), reverse=True)
+
+    def _normalize_datetime_utc(self, value: datetime) -> datetime:
+        """Normalize datetime to timezone-aware UTC for safe comparisons."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
     def _extract_session_id_from_filename(self, file_path: Path) -> str:
         """Extract session ID from Codex filename

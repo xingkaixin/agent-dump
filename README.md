@@ -165,6 +165,15 @@ uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions 
 uv run agent-dump codex://<session-id> --format print,json --output ./my-sessions # Print and export JSON
 uv run agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # Export multiple formats
 
+# collect mode (time-range summary with AI)
+uv run agent-dump --collect
+uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
+uv run agent-dump --collect -since 20260301 -until 20260305
+
+# config mode
+uv run agent-dump --config view
+uv run agent-dump --config edit
+
 # Other options
 uv run agent-dump --interactive --format json # Interactive export as JSON (default)
 uv run agent-dump --interactive --format markdown   # Interactive export as Markdown
@@ -183,11 +192,32 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `-d`, `-days` | Query sessions from the last N days | 7 |
 | `-q`, `-query` | Query filter. Supports `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`) | - |
+| `--collect` | Collect session print content by date range and summarize with AI | - |
+| `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
+| `-until`, `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
+| `-config`, `--config` | Config management: `view` or `edit` | - |
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
 | `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning. | - |
 | `-p`, `-page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
 | `-output`, `--output` | Output directory. Effective for `--interactive`; in URI mode when any file-export format (`json/markdown/raw`) is included; ignored in `--list` with warning. | ./sessions |
 | `-h, --help` | Show help message | - |
+
+### collect configuration file
+
+Default config path:
+
+- macOS/Linux: `~/.config/agent-dump/config.toml`
+- Windows: `%APPDATA%/agent-dump/config.toml`
+
+Example:
+
+```toml
+[ai]
+provider = "openai" # openai | anthropic
+base_url = "https://api.openai.com/v1"
+model = "gpt-4.1-mini"
+api_key = "sk-..."
+```
 
 ## Project Structure
 

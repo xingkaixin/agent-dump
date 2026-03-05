@@ -89,11 +89,46 @@ class Keys:
     CLI_PAGE_SIZE_HELP = "CLI_PAGE_SIZE_HELP"
     CLI_QUERY_HELP = "CLI_QUERY_HELP"
     CLI_LANG_HELP = "CLI_LANG_HELP"
+    CLI_COLLECT_HELP = "CLI_COLLECT_HELP"
+    CLI_SINCE_HELP = "CLI_SINCE_HELP"
+    CLI_UNTIL_HELP = "CLI_UNTIL_HELP"
+    CLI_CONFIG_HELP = "CLI_CONFIG_HELP"
     CLI_FORMAT_INVALID = "CLI_FORMAT_INVALID"
     LIST_IGNORE_FORMAT = "LIST_IGNORE_FORMAT"
     LIST_IGNORE_OUTPUT = "LIST_IGNORE_OUTPUT"
     INTERACTIVE_FORMAT_INVALID = "INTERACTIVE_FORMAT_INVALID"
     URI_EXPORT_SAVED = "URI_EXPORT_SAVED"
+
+    # Config / Collect
+    CONFIG_NOT_FOUND = "CONFIG_NOT_FOUND"
+    CONFIG_PROMPT_CREATE = "CONFIG_PROMPT_CREATE"
+    CONFIG_VIEW_TITLE = "CONFIG_VIEW_TITLE"
+    CONFIG_SELECT_PROVIDER = "CONFIG_SELECT_PROVIDER"
+    CONFIG_INPUT_BASE_URL = "CONFIG_INPUT_BASE_URL"
+    CONFIG_INPUT_MODEL = "CONFIG_INPUT_MODEL"
+    CONFIG_INPUT_API_KEY = "CONFIG_INPUT_API_KEY"
+    CONFIG_CONFIRM_TITLE = "CONFIG_CONFIRM_TITLE"
+    CONFIG_CONFIRM_PROVIDER = "CONFIG_CONFIRM_PROVIDER"
+    CONFIG_CONFIRM_BASE_URL = "CONFIG_CONFIRM_BASE_URL"
+    CONFIG_CONFIRM_MODEL = "CONFIG_CONFIRM_MODEL"
+    CONFIG_CONFIRM_API_KEY = "CONFIG_CONFIRM_API_KEY"
+    CONFIG_CONFIRM_WRITE = "CONFIG_CONFIRM_WRITE"
+    CONFIG_CANCELLED = "CONFIG_CANCELLED"
+    CONFIG_SAVED = "CONFIG_SAVED"
+    CONFIG_ACTION_INVALID = "CONFIG_ACTION_INVALID"
+    CONFIG_INVALID_FIELDS = "CONFIG_INVALID_FIELDS"
+    CONFIG_INPUT_PROMPT = "CONFIG_INPUT_PROMPT"
+
+    COLLECT_MODE_CONFLICT = "COLLECT_MODE_CONFLICT"
+    COLLECT_DATE_FORMAT_INVALID = "COLLECT_DATE_FORMAT_INVALID"
+    COLLECT_DATE_RANGE_INVALID = "COLLECT_DATE_RANGE_INVALID"
+    COLLECT_CONFIG_MISSING = "COLLECT_CONFIG_MISSING"
+    COLLECT_CONFIG_INCOMPLETE = "COLLECT_CONFIG_INCOMPLETE"
+    COLLECT_CONFIG_HINT = "COLLECT_CONFIG_HINT"
+    COLLECT_READ_FAILED = "COLLECT_READ_FAILED"
+    COLLECT_NO_SESSIONS = "COLLECT_NO_SESSIONS"
+    COLLECT_API_FAILED = "COLLECT_API_FAILED"
+    COLLECT_OUTPUT_SAVED = "COLLECT_OUTPUT_SAVED"
 
     # Misc
     SESSION_COUNT_SUFFIX = "SESSION_COUNT_SUFFIX"
@@ -176,11 +211,43 @@ TRANSLATIONS = {
         Keys.CLI_PAGE_SIZE_HELP: "Number of sessions to display per page (default: 20)",
         Keys.CLI_QUERY_HELP: "Query filter, supports 'agent1,agent2:keyword' or 'keyword'",
         Keys.CLI_LANG_HELP: "Language (en, zh). Default: auto-detect",
+        Keys.CLI_COLLECT_HELP: "Collect session prints by date range and summarize with AI",
+        Keys.CLI_SINCE_HELP: "Collect start date (YYYY-MM-DD or YYYYMMDD)",
+        Keys.CLI_UNTIL_HELP: "Collect end date (YYYY-MM-DD or YYYYMMDD)",
+        Keys.CLI_CONFIG_HELP: "Manage AI config (view|edit)",
         Keys.CLI_FORMAT_INVALID: "invalid format list: {value}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list mode ignores -format/--format.",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list mode ignores -output/--output.",
         Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive mode does not support print; use json, markdown, or raw.",
         Keys.URI_EXPORT_SAVED: "✅ Exported session [{format}] to: {path}",
+        Keys.CONFIG_NOT_FOUND: "⚠️  Config file not found: {path}",
+        Keys.CONFIG_PROMPT_CREATE: "Create config file now?",
+        Keys.CONFIG_VIEW_TITLE: "Current config: {path}",
+        Keys.CONFIG_SELECT_PROVIDER: "Select AI provider:",
+        Keys.CONFIG_INPUT_BASE_URL: "Base URL",
+        Keys.CONFIG_INPUT_MODEL: "Model",
+        Keys.CONFIG_INPUT_API_KEY: "API Key",
+        Keys.CONFIG_CONFIRM_TITLE: "\nPlease confirm config:",
+        Keys.CONFIG_CONFIRM_PROVIDER: "  provider: {provider}",
+        Keys.CONFIG_CONFIRM_BASE_URL: "  base_url: {base_url}",
+        Keys.CONFIG_CONFIRM_MODEL: "  model: {model}",
+        Keys.CONFIG_CONFIRM_API_KEY: "  api_key: {api_key}",
+        Keys.CONFIG_CONFIRM_WRITE: "Write config file?",
+        Keys.CONFIG_CANCELLED: "⚠️  Config update cancelled.",
+        Keys.CONFIG_SAVED: "✅ Config saved: {path}",
+        Keys.CONFIG_ACTION_INVALID: "❌ Invalid --config action: {action}",
+        Keys.CONFIG_INVALID_FIELDS: "❌ Invalid config fields: {fields}",
+        Keys.CONFIG_INPUT_PROMPT: "> ",
+        Keys.COLLECT_MODE_CONFLICT: "❌ --collect cannot be used with URI/--interactive/--list.",
+        Keys.COLLECT_DATE_FORMAT_INVALID: "❌ Invalid date format. Use YYYY-MM-DD or YYYYMMDD.",
+        Keys.COLLECT_DATE_RANGE_INVALID: "❌ Invalid date range: since must be <= until.",
+        Keys.COLLECT_CONFIG_MISSING: "❌ Collect requires config file.",
+        Keys.COLLECT_CONFIG_INCOMPLETE: "❌ Collect config missing fields: {fields}",
+        Keys.COLLECT_CONFIG_HINT: "Run: agent-dump -config edit",
+        Keys.COLLECT_READ_FAILED: "❌ Failed to read sessions for collect: {error}",
+        Keys.COLLECT_NO_SESSIONS: "⚠️  No sessions found in range {since} ~ {until}.",
+        Keys.COLLECT_API_FAILED: "❌ AI summary request failed: {error}",
+        Keys.COLLECT_OUTPUT_SAVED: "✅ Collect summary saved: {path}",
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
@@ -259,11 +326,43 @@ TRANSLATIONS = {
         Keys.CLI_PAGE_SIZE_HELP: "每页显示的会话数量 (默认: 20)",
         Keys.CLI_QUERY_HELP: "查询过滤器，支持 'agent1,agent2:关键词' 或 '关键词'",
         Keys.CLI_LANG_HELP: "语言 (en, zh). 默认: 自动检测",
+        Keys.CLI_COLLECT_HELP: "按日期收集会话 print 内容并调用 AI 生成总结",
+        Keys.CLI_SINCE_HELP: "收集开始日期 (YYYY-MM-DD 或 YYYYMMDD)",
+        Keys.CLI_UNTIL_HELP: "收集结束日期 (YYYY-MM-DD 或 YYYYMMDD)",
+        Keys.CLI_CONFIG_HELP: "管理 AI 配置 (view|edit)",
         Keys.CLI_FORMAT_INVALID: "无效的格式列表: {value}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list 模式会忽略 -format/--format 参数。",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list 模式会忽略 -output/--output 参数。",
         Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive 模式不支持 print；可用格式为 json、markdown、raw。",
         Keys.URI_EXPORT_SAVED: "✅ 已导出 [{format}] 到: {path}",
+        Keys.CONFIG_NOT_FOUND: "⚠️  未找到配置文件: {path}",
+        Keys.CONFIG_PROMPT_CREATE: "现在创建配置文件吗？",
+        Keys.CONFIG_VIEW_TITLE: "当前配置: {path}",
+        Keys.CONFIG_SELECT_PROVIDER: "请选择 AI 提供商:",
+        Keys.CONFIG_INPUT_BASE_URL: "Base URL",
+        Keys.CONFIG_INPUT_MODEL: "Model",
+        Keys.CONFIG_INPUT_API_KEY: "API Key",
+        Keys.CONFIG_CONFIRM_TITLE: "\n请确认配置:",
+        Keys.CONFIG_CONFIRM_PROVIDER: "  provider: {provider}",
+        Keys.CONFIG_CONFIRM_BASE_URL: "  base_url: {base_url}",
+        Keys.CONFIG_CONFIRM_MODEL: "  model: {model}",
+        Keys.CONFIG_CONFIRM_API_KEY: "  api_key: {api_key}",
+        Keys.CONFIG_CONFIRM_WRITE: "确认写入配置文件？",
+        Keys.CONFIG_CANCELLED: "⚠️  已取消配置更新。",
+        Keys.CONFIG_SAVED: "✅ 配置已保存: {path}",
+        Keys.CONFIG_ACTION_INVALID: "❌ 无效的 --config 参数: {action}",
+        Keys.CONFIG_INVALID_FIELDS: "❌ 配置项不完整: {fields}",
+        Keys.CONFIG_INPUT_PROMPT: "> ",
+        Keys.COLLECT_MODE_CONFLICT: "❌ --collect 不能与 URI/--interactive/--list 同时使用。",
+        Keys.COLLECT_DATE_FORMAT_INVALID: "❌ 日期格式无效，请使用 YYYY-MM-DD 或 YYYYMMDD。",
+        Keys.COLLECT_DATE_RANGE_INVALID: "❌ 日期区间无效，since 必须小于等于 until。",
+        Keys.COLLECT_CONFIG_MISSING: "❌ collect 模式需要配置文件。",
+        Keys.COLLECT_CONFIG_INCOMPLETE: "❌ collect 配置缺少字段: {fields}",
+        Keys.COLLECT_CONFIG_HINT: "请先执行: agent-dump -config edit",
+        Keys.COLLECT_READ_FAILED: "❌ collect 读取会话失败: {error}",
+        Keys.COLLECT_NO_SESSIONS: "⚠️  在 {since} ~ {until} 区间内未找到会话。",
+        Keys.COLLECT_API_FAILED: "❌ AI 总结请求失败: {error}",
+        Keys.COLLECT_OUTPUT_SAVED: "✅ collect 总结已保存: {path}",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     },
 }

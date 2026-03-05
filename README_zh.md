@@ -151,6 +151,15 @@ uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions 
 uv run agent-dump codex://<session-id> --format print,json --output ./my-sessions # 打印并导出 JSON
 uv run agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # 同时导出多种格式
 
+# collect 模式（按时间段汇总并调用 AI 总结）
+uv run agent-dump --collect
+uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
+uv run agent-dump --collect -since 20260301 -until 20260305
+
+# 配置模式
+uv run agent-dump --config view
+uv run agent-dump --config edit
+
 # 其他选项
 uv run agent-dump --interactive --format json # 交互式导出 JSON（默认）
 uv run agent-dump --interactive --format markdown   # 交互式导出 Markdown
@@ -169,11 +178,32 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `--interactive` | 进入交互式模式选择和导出会话 | - |
 | `-d`, `-days` | 查询最近 N 天的会话 | 7 |
 | `-q`, `-query` | 查询过滤。支持 `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`） | - |
+| `--collect` | 按日期范围采集会话 print 内容并调用 AI 总结 | - |
+| `-since`, `--since` | collect 开始日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
+| `-until`, `--until` | collect 结束日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
+| `-config`, `--config` | 配置管理：`view` 或 `edit` | - |
 | `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `-days` 或 `-query` 且未指定 `--interactive` 则自动启用） | - |
 | `-format`, `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`，兼容 `md` 别名。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略。 | - |
 | `-p`, `-page-size` | 为兼容保留，当前在 `--list` 模式下不生效 | 20 |
 | `-output`, `--output` | 输出目录。`--interactive` 可用；URI 模式在包含任意文件导出格式（`json/markdown/raw`）时生效；`--list` 下会警告并忽略。 | ./sessions |
 | `-h, --help` | 显示帮助信息 | - |
+
+### collect 配置文件
+
+默认配置文件路径：
+
+- macOS/Linux: `~/.config/agent-dump/config.toml`
+- Windows: `%APPDATA%/agent-dump/config.toml`
+
+配置示例：
+
+```toml
+[ai]
+provider = "openai" # openai | anthropic
+base_url = "https://api.openai.com/v1"
+model = "gpt-4.1-mini"
+api_key = "sk-..."
+```
 
 ## 项目结构
 

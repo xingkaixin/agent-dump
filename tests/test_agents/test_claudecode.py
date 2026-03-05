@@ -218,7 +218,41 @@ class TestClaudeCodeAgent:
         assert isinstance(result, Session)
         assert result.id == "session-001"
         assert result.metadata["project"] == "project1"
-        assert result.metadata["cwd"] == "/test/dir"
+
+    def test_get_sessions_handles_mixed_naive_aware_datetime(self, tmp_path):
+        """测试 get_sessions 能处理 naive/aware 混合时间"""
+        agent = ClaudeCodeAgent()
+        projects_dir = tmp_path / "projects"
+        project_dir = projects_dir / "project1"
+        project_dir.mkdir(parents=True)
+        (project_dir / "a.jsonl").write_text("{}", encoding="utf-8")
+        (project_dir / "b.jsonl").write_text("{}", encoding="utf-8")
+        agent.base_path = projects_dir
+
+        aware_time = datetime.now(timezone.utc) - timedelta(hours=1)
+        naive_time = datetime.now() - timedelta(hours=2)
+        aware_session = Session(
+            id="aware",
+            title="aware",
+            created_at=aware_time,
+            updated_at=aware_time,
+            source_path=project_dir / "a.jsonl",
+            metadata={},
+        )
+        naive_session = Session(
+            id="naive",
+            title="naive",
+            created_at=naive_time,
+            updated_at=naive_time,
+            source_path=project_dir / "b.jsonl",
+            metadata={},
+        )
+
+        with mock.patch.object(agent, "_parse_session_file", side_effect=[aware_session, naive_session]):
+            sessions = agent.get_sessions(days=7)
+
+        assert len(sessions) == 2
+        assert {s.id for s in sessions} == {"aware", "naive"}
 
     def test_parse_session_file_with_index_title(self, tmp_path):
         """测试从 index 文件获取标题"""

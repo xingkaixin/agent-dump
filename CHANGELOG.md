@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Collect summary mode**
+  - Added `--collect` to gather session print content in a date range and summarize with AI
+  - Added `-since/--since` and `-until/--until` date parameters (`YYYY-MM-DD` / `YYYYMMDD`)
+  - Writes markdown report to terminal and `agent-dump-collect-YYYYMMDD.md` in current directory
+- **Config management mode**
+  - Added `--config view|edit` for AI config inspection and interactive editing
+  - Added cross-platform config path resolution:
+    - macOS/Linux: `~/.config/agent-dump/config.toml`
+    - Windows: `%APPDATA%/agent-dump/config.toml`
+  - Added config validation gates before running collect
+
+### Improved
+
+- Expanded test coverage for collect date rules, collect output writing, config flow, and CLI mode dispatch
+
 ## [0.6.5] - 2026-03-03
 
 ### Added

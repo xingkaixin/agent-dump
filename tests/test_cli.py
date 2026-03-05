@@ -16,6 +16,7 @@ from agent_dump.cli import (
     find_session_by_id,
     format_relative_time,
     group_sessions_by_time,
+    handle_collect_mode,
     main,
     parse_format_spec,
     parse_uri,
@@ -206,6 +207,36 @@ class TestFormatSpec:
 
 class TestMain:
     """测试 main 函数"""
+
+    def test_main_dispatches_config_mode(self):
+        with mock.patch("agent_dump.cli.handle_config_command", return_value=0) as mock_handle:
+            with mock.patch("sys.argv", ["agent-dump", "--config", "view"]):
+                result = main()
+
+        assert result == 0
+        mock_handle.assert_called_once_with("view")
+
+    def test_main_dispatches_collect_mode(self):
+        with mock.patch("agent_dump.cli.handle_collect_mode", return_value=0) as mock_handle:
+            with mock.patch("sys.argv", ["agent-dump", "--collect"]):
+                result = main()
+
+        assert result == 0
+        mock_handle.assert_called_once()
+
+    def test_collect_mode_conflict(self, capsys):
+        args = argparse.Namespace(
+            collect=True,
+            uri="codex://session-001",
+            interactive=False,
+            list=False,
+            since=None,
+            until=None,
+        )
+
+        result = handle_collect_mode(args)
+        assert result == 1
+        assert "--collect 不能与 URI/--interactive/--list 同时使用" in capsys.readouterr().out
 
     def test_main_no_agents_available(self, capsys):
         """测试没有可用 agent 时退出"""
