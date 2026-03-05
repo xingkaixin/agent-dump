@@ -3,12 +3,15 @@ Command-line interface for agent-dump
 """
 
 import argparse
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 import json
 import os
 from pathlib import Path
 import re
 import sys
+import threading
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -35,6 +38,40 @@ VALID_URI_SCHEMES = {
 }
 VALID_FORMATS = {"json", "markdown", "raw", "print"}
 FORMAT_ALIASES = {"md": "markdown"}
+
+
+@contextmanager
+def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
+    """Show loading status for long-running operations."""
+    if not sys.stderr.isatty():
+        print(message, file=sys.stderr)
+        yield
+        return
+
+    stop_event = threading.Event()
+    spinner_frames = "|/-\\"
+
+    def _write_frame(frame: str) -> None:
+        sys.stderr.write(f"\r{frame} {message}")
+        sys.stderr.flush()
+
+    def _spin() -> None:
+        idx = 0
+        while not stop_event.wait(interval_seconds):
+            _write_frame(spinner_frames[idx % len(spinner_frames)])
+            idx += 1
+
+    spinner_thread = threading.Thread(target=_spin, daemon=True)
+    _write_frame(spinner_frames[0])
+    spinner_thread.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
+        spinner_thread.join(timeout=max(0.3, interval_seconds * 3))
+        clear_width = len(message) + 4
+        sys.stderr.write("\r" + (" " * clear_width) + "\r")
+        sys.stderr.flush()
 
 
 def parse_uri(uri: str) -> tuple[str, str] | None:
@@ -180,7 +217,8 @@ def maybe_generate_uri_summary(
     prompt = build_uri_summary_prompt(uri, rendered)
 
     try:
-        summary_markdown = request_summary_from_llm(config, prompt)
+        with show_loading(i18n.t(Keys.URI_SUMMARY_LOADING)):
+            summary_markdown = request_summary_from_llm(config, prompt)
     except Exception as e:
         print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
         return effective_session_data, None
@@ -529,7 +567,8 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
     )
 
     try:
-        markdown = request_summary_from_llm(config, prompt)
+        with show_loading(i18n.t(Keys.COLLECT_SUMMARY_LOADING)):
+            markdown = request_summary_from_llm(config, prompt)
     except Exception as e:
         print(i18n.t(Keys.COLLECT_API_FAILED, error=e))
         return 1

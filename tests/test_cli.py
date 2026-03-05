@@ -239,6 +239,36 @@ class TestMain:
         assert result == 1
         assert "--collect 不能与 URI/--interactive/--list 同时使用" in capsys.readouterr().out
 
+    def test_collect_mode_success_shows_loading_in_stderr(self, capsys, tmp_path):
+        args = argparse.Namespace(
+            collect=True,
+            uri=None,
+            interactive=False,
+            list=False,
+            since=None,
+            until=None,
+        )
+        mock_config = mock.MagicMock()
+        mock_entry = mock.MagicMock()
+
+        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+            with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+                    mock_scanner = mock.MagicMock()
+                    mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+                    mock_scanner_class.return_value = mock_scanner
+                    with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
+                        with mock.patch("agent_dump.cli.build_collect_prompt", return_value="prompt"):
+                            with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                output_path = tmp_path / "agent-dump-collect-20260305.md"
+                                with mock.patch("agent_dump.cli.write_collect_markdown", return_value=output_path):
+                                    result = handle_collect_mode(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "正在调用 AI 生成汇总，请稍候" in captured.err
+        assert str(output_path) in captured.out
+
     def test_main_no_agents_available(self, capsys):
         """测试没有可用 agent 时退出"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
@@ -1277,6 +1307,7 @@ class TestMain:
         exported = json.loads(expected_output.read_text(encoding="utf-8"))
         assert exported["summary"] == "# summary markdown"
         captured = capsys.readouterr()
+        assert "正在调用 AI 生成会话总结，请稍候" in captured.err
         assert "已将 summary 写入 JSON" in captured.out
 
     def test_main_uri_mode_print_json_with_summary_success(self, capsys, tmp_path):
@@ -1504,6 +1535,7 @@ class TestMain:
         exported = json.loads(expected_output.read_text(encoding="utf-8"))
         assert "summary" not in exported
         captured = capsys.readouterr()
+        assert "正在调用 AI 生成会话总结，请稍候" in captured.err
         assert "AI 总结请求失败: boom" in captured.out
 
     def test_main_non_uri_mode_summary_warns_and_continues(self, capsys):

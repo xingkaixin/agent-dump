@@ -104,6 +104,7 @@ class Keys:
     URI_SUMMARY_CONFIG_INCOMPLETE_WARNING = "URI_SUMMARY_CONFIG_INCOMPLETE_WARNING"
     URI_SUMMARY_API_FAILED_WARNING = "URI_SUMMARY_API_FAILED_WARNING"
     URI_SUMMARY_APPLIED = "URI_SUMMARY_APPLIED"
+    URI_SUMMARY_LOADING = "URI_SUMMARY_LOADING"
     SUMMARY_IGNORED_NON_URI_WARNING = "SUMMARY_IGNORED_NON_URI_WARNING"
 
     # Config / Collect
@@ -136,6 +137,7 @@ class Keys:
     COLLECT_NO_SESSIONS = "COLLECT_NO_SESSIONS"
     COLLECT_API_FAILED = "COLLECT_API_FAILED"
     COLLECT_OUTPUT_SAVED = "COLLECT_OUTPUT_SAVED"
+    COLLECT_SUMMARY_LOADING = "COLLECT_SUMMARY_LOADING"
 
     # Misc
     SESSION_COUNT_SUFFIX = "SESSION_COUNT_SUFFIX"
@@ -233,6 +235,7 @@ TRANSLATIONS = {
         Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING: "⚠️  --summary skipped: config missing fields: {fields}",
         Keys.URI_SUMMARY_API_FAILED_WARNING: "⚠️  --summary skipped: AI summary request failed: {error}",
         Keys.URI_SUMMARY_APPLIED: "✅ Applied summary to JSON: {path}",
+        Keys.URI_SUMMARY_LOADING: "⏳ Calling AI to generate URI summary, please wait...",
         Keys.SUMMARY_IGNORED_NON_URI_WARNING: "⚠️  --summary is only supported in URI mode and will be ignored.",
         Keys.CONFIG_NOT_FOUND: "⚠️  Config file not found: {path}",
         Keys.CONFIG_PROMPT_CREATE: "Create config file now?",
@@ -262,6 +265,7 @@ TRANSLATIONS = {
         Keys.COLLECT_NO_SESSIONS: "⚠️  No sessions found in range {since} ~ {until}.",
         Keys.COLLECT_API_FAILED: "❌ AI summary request failed: {error}",
         Keys.COLLECT_OUTPUT_SAVED: "✅ Collect summary saved: {path}",
+        Keys.COLLECT_SUMMARY_LOADING: "⏳ Calling AI to generate collect summary, please wait...",
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
@@ -355,6 +359,7 @@ TRANSLATIONS = {
         Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING: "⚠️  已跳过 --summary：配置缺少字段: {fields}",
         Keys.URI_SUMMARY_API_FAILED_WARNING: "⚠️  已跳过 --summary：AI 总结请求失败: {error}",
         Keys.URI_SUMMARY_APPLIED: "✅ 已将 summary 写入 JSON: {path}",
+        Keys.URI_SUMMARY_LOADING: "⏳ 正在调用 AI 生成会话总结，请稍候...",
         Keys.SUMMARY_IGNORED_NON_URI_WARNING: "⚠️  --summary 仅支持 URI 模式，当前已忽略。",
         Keys.CONFIG_NOT_FOUND: "⚠️  未找到配置文件: {path}",
         Keys.CONFIG_PROMPT_CREATE: "现在创建配置文件吗？",
@@ -384,6 +389,7 @@ TRANSLATIONS = {
         Keys.COLLECT_NO_SESSIONS: "⚠️  在 {since} ~ {until} 区间内未找到会话。",
         Keys.COLLECT_API_FAILED: "❌ AI 总结请求失败: {error}",
         Keys.COLLECT_OUTPUT_SAVED: "✅ collect 总结已保存: {path}",
+        Keys.COLLECT_SUMMARY_LOADING: "⏳ 正在调用 AI 生成汇总，请稍候...",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     },
 }
