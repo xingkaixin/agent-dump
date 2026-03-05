@@ -4,6 +4,7 @@
 
 import argparse
 from datetime import datetime, timedelta
+import json
 from pathlib import Path
 from unittest import mock
 
@@ -1229,6 +1230,299 @@ class TestMain:
         assert "# Session Dump" in captured.out
         assert str(json_output) in captured.out
         assert str(raw_output) in captured.out
+
+    def test_main_uri_mode_json_with_summary_success(self, capsys, tmp_path):
+        """测试 URI + json + --summary 成功写入 summary 字段"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.return_value = {"messages": []}
+
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            output_root = tmp_path / "out"
+            expected_output = output_root / "codex" / "session-001.json"
+
+            def _export_json(session, output_dir):
+                output_dir.mkdir(parents=True, exist_ok=True)
+                expected_output.write_text(json.dumps({"id": "session-001", "messages": []}), encoding="utf-8")
+                return expected_output
+
+            mock_agent.export_session.side_effect = _export_json
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                        with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# summary markdown"):
+                            with mock.patch(
+                                "sys.argv",
+                                [
+                                    "agent-dump",
+                                    "codex://session-001",
+                                    "--format",
+                                    "json",
+                                    "--summary",
+                                    "--output",
+                                    str(output_root),
+                                ],
+                            ):
+                                result = main()
+
+        assert result == 0
+        exported = json.loads(expected_output.read_text(encoding="utf-8"))
+        assert exported["summary"] == "# summary markdown"
+        captured = capsys.readouterr()
+        assert "已将 summary 写入 JSON" in captured.out
+
+    def test_main_uri_mode_print_json_with_summary_success(self, capsys, tmp_path):
+        """测试 URI + print,json + --summary 同时打印正文并写入 summary"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.return_value = {
+                "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
+            }
+
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            output_root = tmp_path / "out"
+            expected_output = output_root / "codex" / "session-001.json"
+
+            def _export_json(session, output_dir):
+                output_dir.mkdir(parents=True, exist_ok=True)
+                expected_output.write_text(json.dumps({"id": "session-001", "messages": []}), encoding="utf-8")
+                return expected_output
+
+            mock_agent.export_session.side_effect = _export_json
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                        with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# summary markdown"):
+                            with mock.patch(
+                                "sys.argv",
+                                [
+                                    "agent-dump",
+                                    "codex://session-001",
+                                    "--format",
+                                    "print,json",
+                                    "--summary",
+                                    "--output",
+                                    str(output_root),
+                                ],
+                            ):
+                                result = main()
+
+        assert result == 0
+        exported = json.loads(expected_output.read_text(encoding="utf-8"))
+        assert exported["summary"] == "# summary markdown"
+        captured = capsys.readouterr()
+        assert "# Session Dump" in captured.out
+        assert str(expected_output) in captured.out
+
+    def test_main_uri_mode_summary_without_json_warns_and_skips(self, capsys, tmp_path):
+        """测试 URI + --summary 但 format 不含 json 时警告并跳过"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.return_value = {
+                "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
+            }
+
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+            output_root = tmp_path / "out"
+            expected_output = output_root / "codex" / "session-001.md"
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch(
+                    "sys.argv",
+                    [
+                        "agent-dump",
+                        "codex://session-001",
+                        "--format",
+                        "markdown",
+                        "--summary",
+                        "--output",
+                        str(output_root),
+                    ],
+                ):
+                    result = main()
+
+        assert result == 0
+        assert expected_output.exists()
+        captured = capsys.readouterr()
+        assert "--summary 需要 --format 中包含 json" in captured.out
+
+    def test_main_uri_mode_summary_with_missing_config_warns_and_exports_json(self, capsys, tmp_path):
+        """测试 URI + --summary 缺失配置时仅警告，JSON 正常导出且无 summary"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            output_root = tmp_path / "out"
+            expected_output = output_root / "codex" / "session-001.json"
+
+            def _export_json(session, output_dir):
+                output_dir.mkdir(parents=True, exist_ok=True)
+                expected_output.write_text(json.dumps({"id": "session-001", "messages": []}), encoding="utf-8")
+                return expected_output
+
+            mock_agent.export_session.side_effect = _export_json
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.cli.load_ai_config", return_value=None):
+                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(False, ["missing_file"])):
+                        with mock.patch(
+                            "sys.argv",
+                            [
+                                "agent-dump",
+                                "codex://session-001",
+                                "--format",
+                                "json",
+                                "--summary",
+                                "--output",
+                                str(output_root),
+                            ],
+                        ):
+                            result = main()
+
+        assert result == 0
+        exported = json.loads(expected_output.read_text(encoding="utf-8"))
+        assert "summary" not in exported
+        captured = capsys.readouterr()
+        assert "未找到配置文件" in captured.out
+
+    def test_main_uri_mode_summary_with_incomplete_config_warns_and_exports_json(self, capsys, tmp_path):
+        """测试 URI + --summary 配置缺字段时仅警告，JSON 正常导出且无 summary"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            output_root = tmp_path / "out"
+            expected_output = output_root / "codex" / "session-001.json"
+
+            def _export_json(session, output_dir):
+                output_dir.mkdir(parents=True, exist_ok=True)
+                expected_output.write_text(json.dumps({"id": "session-001", "messages": []}), encoding="utf-8")
+                return expected_output
+
+            mock_agent.export_session.side_effect = _export_json
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(False, ["model", "api_key"])):
+                        with mock.patch(
+                            "sys.argv",
+                            [
+                                "agent-dump",
+                                "codex://session-001",
+                                "--format",
+                                "json",
+                                "--summary",
+                                "--output",
+                                str(output_root),
+                            ],
+                        ):
+                            result = main()
+
+        assert result == 0
+        exported = json.loads(expected_output.read_text(encoding="utf-8"))
+        assert "summary" not in exported
+        captured = capsys.readouterr()
+        assert "配置缺少字段: model,api_key" in captured.out
+
+    def test_main_uri_mode_summary_api_error_warns_and_exports_json(self, capsys, tmp_path):
+        """测试 URI + --summary 请求失败时仅警告，JSON 正常导出且无 summary"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.return_value = {"messages": []}
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            output_root = tmp_path / "out"
+            expected_output = output_root / "codex" / "session-001.json"
+
+            def _export_json(session, output_dir):
+                output_dir.mkdir(parents=True, exist_ok=True)
+                expected_output.write_text(json.dumps({"id": "session-001", "messages": []}), encoding="utf-8")
+                return expected_output
+
+            mock_agent.export_session.side_effect = _export_json
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                        with mock.patch("agent_dump.cli.request_summary_from_llm", side_effect=RuntimeError("boom")):
+                            with mock.patch(
+                                "sys.argv",
+                                [
+                                    "agent-dump",
+                                    "codex://session-001",
+                                    "--format",
+                                    "json",
+                                    "--summary",
+                                    "--output",
+                                    str(output_root),
+                                ],
+                            ):
+                                result = main()
+
+        assert result == 0
+        exported = json.loads(expected_output.read_text(encoding="utf-8"))
+        assert "summary" not in exported
+        captured = capsys.readouterr()
+        assert "AI 总结请求失败: boom" in captured.out
+
+    def test_main_non_uri_mode_summary_warns_and_continues(self, capsys):
+        """测试非 URI 模式使用 --summary 时警告并继续原流程"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = []
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--list", "--summary"]):
+                result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "--summary 仅支持 URI 模式" in captured.out
 
     def test_main_keyboard_interrupt(self, capsys):
         """测试键盘中断处理"""

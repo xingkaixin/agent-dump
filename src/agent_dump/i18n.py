@@ -84,6 +84,7 @@ class Keys:
     CLI_DAYS_HELP = "CLI_DAYS_HELP"
     CLI_OUTPUT_HELP = "CLI_OUTPUT_HELP"
     CLI_FORMAT_HELP = "CLI_FORMAT_HELP"
+    CLI_SUMMARY_HELP = "CLI_SUMMARY_HELP"
     CLI_LIST_HELP = "CLI_LIST_HELP"
     CLI_INTERACTIVE_HELP = "CLI_INTERACTIVE_HELP"
     CLI_PAGE_SIZE_HELP = "CLI_PAGE_SIZE_HELP"
@@ -98,6 +99,12 @@ class Keys:
     LIST_IGNORE_OUTPUT = "LIST_IGNORE_OUTPUT"
     INTERACTIVE_FORMAT_INVALID = "INTERACTIVE_FORMAT_INVALID"
     URI_EXPORT_SAVED = "URI_EXPORT_SAVED"
+    URI_SUMMARY_NO_JSON_WARNING = "URI_SUMMARY_NO_JSON_WARNING"
+    URI_SUMMARY_CONFIG_MISSING_WARNING = "URI_SUMMARY_CONFIG_MISSING_WARNING"
+    URI_SUMMARY_CONFIG_INCOMPLETE_WARNING = "URI_SUMMARY_CONFIG_INCOMPLETE_WARNING"
+    URI_SUMMARY_API_FAILED_WARNING = "URI_SUMMARY_API_FAILED_WARNING"
+    URI_SUMMARY_APPLIED = "URI_SUMMARY_APPLIED"
+    SUMMARY_IGNORED_NON_URI_WARNING = "SUMMARY_IGNORED_NON_URI_WARNING"
 
     # Config / Collect
     CONFIG_NOT_FOUND = "CONFIG_NOT_FOUND"
@@ -206,6 +213,7 @@ TRANSLATIONS = {
         Keys.CLI_DAYS_HELP: "Number of days to look back (default: 7)",
         Keys.CLI_OUTPUT_HELP: "Output base directory (default: ./sessions)",
         Keys.CLI_FORMAT_HELP: "Output format: json | markdown | raw | print (comma-separated, md alias supported)",
+        Keys.CLI_SUMMARY_HELP: "Generate AI summary for URI JSON export (requires config and json format)",
         Keys.CLI_LIST_HELP: "List all available sessions without exporting",
         Keys.CLI_INTERACTIVE_HELP: "Run in interactive mode to select and export sessions",
         Keys.CLI_PAGE_SIZE_HELP: "Number of sessions to display per page (default: 20)",
@@ -220,6 +228,12 @@ TRANSLATIONS = {
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list mode ignores -output/--output.",
         Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive mode does not support print; use json, markdown, or raw.",
         Keys.URI_EXPORT_SAVED: "✅ Exported session [{format}] to: {path}",
+        Keys.URI_SUMMARY_NO_JSON_WARNING: "⚠️  --summary requires json in --format; summary is skipped.",
+        Keys.URI_SUMMARY_CONFIG_MISSING_WARNING: "⚠️  --summary skipped: config file not found.",
+        Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING: "⚠️  --summary skipped: config missing fields: {fields}",
+        Keys.URI_SUMMARY_API_FAILED_WARNING: "⚠️  --summary skipped: AI summary request failed: {error}",
+        Keys.URI_SUMMARY_APPLIED: "✅ Applied summary to JSON: {path}",
+        Keys.SUMMARY_IGNORED_NON_URI_WARNING: "⚠️  --summary is only supported in URI mode and will be ignored.",
         Keys.CONFIG_NOT_FOUND: "⚠️  Config file not found: {path}",
         Keys.CONFIG_PROMPT_CREATE: "Create config file now?",
         Keys.CONFIG_VIEW_TITLE: "Current config: {path}",
@@ -321,6 +335,7 @@ TRANSLATIONS = {
         Keys.CLI_DAYS_HELP: "查找最近几天的会话 (默认: 7)",
         Keys.CLI_OUTPUT_HELP: "输出目录 (默认: ./sessions)",
         Keys.CLI_FORMAT_HELP: "输出格式: json | markdown | raw | print（支持逗号分隔，兼容 md 别名）",
+        Keys.CLI_SUMMARY_HELP: "为 URI JSON 导出生成 AI 总结（需要配置且 format 包含 json）",
         Keys.CLI_LIST_HELP: "列出所有可用会话而不导出",
         Keys.CLI_INTERACTIVE_HELP: "进入交互式模式选择并导出",
         Keys.CLI_PAGE_SIZE_HELP: "每页显示的会话数量 (默认: 20)",
@@ -335,6 +350,12 @@ TRANSLATIONS = {
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list 模式会忽略 -output/--output 参数。",
         Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive 模式不支持 print；可用格式为 json、markdown、raw。",
         Keys.URI_EXPORT_SAVED: "✅ 已导出 [{format}] 到: {path}",
+        Keys.URI_SUMMARY_NO_JSON_WARNING: "⚠️  --summary 需要 --format 中包含 json；已跳过 summary。",
+        Keys.URI_SUMMARY_CONFIG_MISSING_WARNING: "⚠️  已跳过 --summary：未找到配置文件。",
+        Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING: "⚠️  已跳过 --summary：配置缺少字段: {fields}",
+        Keys.URI_SUMMARY_API_FAILED_WARNING: "⚠️  已跳过 --summary：AI 总结请求失败: {error}",
+        Keys.URI_SUMMARY_APPLIED: "✅ 已将 summary 写入 JSON: {path}",
+        Keys.SUMMARY_IGNORED_NON_URI_WARNING: "⚠️  --summary 仅支持 URI 模式，当前已忽略。",
         Keys.CONFIG_NOT_FOUND: "⚠️  未找到配置文件: {path}",
         Keys.CONFIG_PROMPT_CREATE: "现在创建配置文件吗？",
         Keys.CONFIG_VIEW_TITLE: "当前配置: {path}",

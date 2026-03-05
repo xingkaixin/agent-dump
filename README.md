@@ -164,6 +164,8 @@ uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # E
 uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file
 uv run agent-dump codex://<session-id> --format print,json --output ./my-sessions # Print and export JSON
 uv run agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # Export multiple formats
+uv run agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # Export JSON with AI summary
+uv run agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # Print, export JSON, and include summary
 
 # collect mode (time-range summary with AI)
 uv run agent-dump --collect
@@ -198,6 +200,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `-config`, `--config` | Config management: `view` or `edit` | - |
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
 | `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning. | - |
+| `-summary`, `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. | - |
 | `-p`, `-page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
 | `-output`, `--output` | Output directory. Effective for `--interactive`; in URI mode when any file-export format (`json/markdown/raw`) is included; ignored in `--list` with warning. | ./sessions |
 | `-h, --help` | Show help message | - |

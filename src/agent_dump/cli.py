@@ -4,6 +4,7 @@ Command-line interface for agent-dump
 
 import argparse
 from datetime import datetime, timedelta
+import json
 import os
 from pathlib import Path
 import re
@@ -115,6 +116,76 @@ def render_session_text(uri: str, session_data: dict) -> str:
         msg_idx += 1
 
     return "\n".join(lines)
+
+
+def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
+    """Build a single-session summary prompt for URI mode."""
+    return "\n".join(
+        [
+            "你是一个严谨的会话总结助手。",
+            "请基于下面的单个会话内容输出 Markdown 总结。",
+            "要求：",
+            "1. 只基于给定内容，不要编造。",
+            "2. 总结关键目标、主要改动、风险/异常、结果。",
+            "3. 若信息不足，明确指出。",
+            "",
+            f"会话 URI: {uri}",
+            "",
+            "会话内容：",
+            rendered_session_text,
+        ]
+    )
+
+
+def apply_summary_to_json_export(output_path: Path, summary_markdown: str) -> None:
+    """Inject summary markdown into exported JSON as top-level `summary`."""
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError("exported JSON payload is not an object")
+    payload["summary"] = summary_markdown
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def maybe_generate_uri_summary(
+    *,
+    enabled: bool,
+    output_formats: list[str],
+    uri: str,
+    agent: BaseAgent,
+    session: Session,
+    session_data: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Best-effort URI summary generation. Returns possibly-loaded session_data and summary."""
+    if not enabled:
+        return session_data, None
+
+    if "json" not in output_formats:
+        print(i18n.t(Keys.URI_SUMMARY_NO_JSON_WARNING))
+        return session_data, None
+
+    config = load_ai_config()
+    valid, errors = validate_ai_config(config)
+    if not valid or config is None:
+        if "missing_file" in errors:
+            print(i18n.t(Keys.URI_SUMMARY_CONFIG_MISSING_WARNING))
+        else:
+            print(i18n.t(Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING, fields=",".join(errors)))
+        return session_data, None
+
+    effective_session_data = session_data if session_data is not None else agent.get_session_data(session)
+    rendered = render_session_text(uri, effective_session_data)
+    prompt = build_uri_summary_prompt(uri, rendered)
+
+    try:
+        summary_markdown = request_summary_from_llm(config, prompt)
+    except Exception as e:
+        print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
+        return effective_session_data, None
+
+    return effective_session_data, summary_markdown
 
 
 def format_relative_time(time_value: datetime | float) -> str:
@@ -499,6 +570,7 @@ def main():
         help=i18n.t(Keys.CLI_OUTPUT_HELP),
     )
     parser.add_argument("-format", "--format", type=str, default=None, help=i18n.t(Keys.CLI_FORMAT_HELP))
+    parser.add_argument("-summary", "--summary", action="store_true", help=i18n.t(Keys.CLI_SUMMARY_HELP))
     parser.add_argument("--collect", action="store_true", help=i18n.t(Keys.CLI_COLLECT_HELP))
     parser.add_argument("-since", "--since", type=str, default=None, help=i18n.t(Keys.CLI_SINCE_HELP))
     parser.add_argument("-until", "--until", type=str, default=None, help=i18n.t(Keys.CLI_UNTIL_HELP))
@@ -545,6 +617,9 @@ def main():
         help=i18n.t(Keys.CLI_LANG_HELP),
     )
     args = parser.parse_args()
+    if args.summary and not args.uri:
+        print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
+
     if args.config_action:
         return handle_config_command(args.config_action)
     if args.collect:
@@ -601,8 +676,16 @@ def main():
         # Get session data and render
         try:
             session_data: dict[str, Any] | None = None
+            session_data, summary_markdown = maybe_generate_uri_summary(
+                enabled=args.summary,
+                output_formats=output_formats,
+                uri=args.uri,
+                agent=agent,
+                session=session,
+                session_data=session_data,
+            )
             if "print" in output_formats:
-                session_data = agent.get_session_data(session)
+                session_data = session_data if session_data is not None else agent.get_session_data(session)
                 output = render_session_text(args.uri, session_data)
                 print(output)
 
@@ -617,6 +700,12 @@ def main():
                     session_data=session_data,
                     session_uri=args.uri,
                 )
+                if output_format == "json" and summary_markdown is not None:
+                    try:
+                        apply_summary_to_json_export(output_path, summary_markdown)
+                        print(i18n.t(Keys.URI_SUMMARY_APPLIED, path=str(output_path)))
+                    except Exception as e:
+                        print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
                 print(i18n.t(Keys.URI_EXPORT_SAVED, path=str(output_path), format=output_format))
             return 0
         except Exception as e:
