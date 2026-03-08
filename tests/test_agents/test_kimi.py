@@ -2,7 +2,7 @@
 测试 agents/kimi.py 模块
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from unittest import mock
@@ -156,6 +156,7 @@ class TestKimiAgent:
         assert isinstance(result, Session)
         assert result.id == "context-session"
         assert result.title == "Context Session"
+        assert result.created_at.tzinfo == timezone.utc
         assert result.metadata["context_file"] == str(session_dir / "context.jsonl")
         assert result.metadata["wire_file"] is None
         assert result.metadata["title_generated"] is True
@@ -173,8 +174,27 @@ class TestKimiAgent:
 
         assert result is not None
         assert result.id == "wire-session"
+        assert result.created_at.tzinfo == timezone.utc
         assert result.metadata["context_file"] is None
         assert result.metadata["wire_file"] == str(session_dir / "wire.jsonl")
+
+    def test_parse_session_parses_wire_mtime_as_utc(self, tmp_path):
+        """测试 wire_mtime 会被解析为 UTC aware datetime"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session-utc"
+        session_dir.mkdir()
+
+        metadata_path = write_metadata(
+            session_dir,
+            session_id="utc-session",
+            wire_mtime=datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc).timestamp(),
+        )
+        (session_dir / "wire.jsonl").touch()
+
+        result = agent._parse_session(metadata_path)
+
+        assert result is not None
+        assert result.created_at == datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc)
 
     def test_parse_session_no_context_and_no_wire(self, tmp_path):
         """测试既没有 context 也没有 wire 时返回 None"""

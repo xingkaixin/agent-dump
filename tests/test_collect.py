@@ -41,6 +41,13 @@ class TestCollectDates:
         with pytest.raises(ValueError):
             resolve_collect_date_range("2026-03-05", "2026-03-01")
 
+    def test_defaults_today_in_local_timezone(self):
+        local_tz = timezone(timedelta(hours=8))
+        since, until = resolve_collect_date_range(None, None, local_tz=local_tz, today=None)
+
+        # 显式传入 local_tz 时不校验具体今天，只校验返回值对齐同一天
+        assert since == until
+
 
 class TestCollectEntries:
     def test_collect_entries_filters_and_renders(self):
@@ -126,10 +133,42 @@ class TestCollectEntries:
         assert {entry.session_id for entry in entries} == {"aware", "naive"}
         assert truncated is False
 
+    def test_collect_entries_filters_by_user_local_date(self):
+        local_tz = timezone(timedelta(hours=8))
+        utc_time = datetime(2026, 3, 4, 18, 0, tzinfo=timezone.utc)
+        session = Session(
+            id="cross-day",
+            title="cross-day",
+            created_at=utc_time,
+            updated_at=utc_time,
+            source_path=Path("/tmp/cross-day"),
+            metadata={"cwd": "/repo/cross-day"},
+        )
+
+        agent = mock.MagicMock()
+        agent.name = "opencode"
+        agent.display_name = "OpenCode"
+        agent.get_sessions.return_value = [session]
+        agent.get_session_uri.return_value = "opencode://cross-day"
+        agent.get_session_data.return_value = {"messages": []}
+
+        entries, truncated = collect_entries(
+            agents=[agent],
+            since_date=date(2026, 3, 5),
+            until_date=date(2026, 3, 5),
+            render_session_text_fn=lambda uri, data: f"# Session Dump\n{uri}\n",
+            local_tz=local_tz,
+        )
+
+        assert truncated is False
+        assert len(entries) == 1
+        assert entries[0].date_value == date(2026, 3, 5)
+        assert entries[0].session_id == "cross-day"
+
     def test_build_collect_prompt_contains_required_sections(self):
         entry = CollectEntry(
             date_value=date(2026, 3, 5),
-            created_at=datetime(2026, 3, 5, 10, 0, 0),
+            created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
             agent_name="codex",
             agent_display_name="Codex",
             session_id="a",
@@ -151,6 +190,31 @@ class TestCollectEntries:
         assert "## 重点事项（决策/风险/阻塞）" in prompt
         assert "## 产出清单" in prompt
         assert "## 下一步建议" in prompt
+
+    def test_build_collect_prompt_uses_local_time_display(self):
+        local_tz = timezone(timedelta(hours=8))
+        entry = CollectEntry(
+            date_value=date(2026, 3, 5),
+            created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
+            agent_name="codex",
+            agent_display_name="Codex",
+            session_id="a",
+            session_uri="codex://a",
+            session_title="task",
+            project_directory="/repo",
+            text="body",
+        )
+
+        prompt = build_collect_prompt(
+            since_date=date(2026, 3, 5),
+            until_date=date(2026, 3, 5),
+            entries=[entry],
+            has_truncated=False,
+            local_tz=local_tz,
+        )
+
+        assert "2026-03-05T10:00:00+08:00" in prompt
+        assert "2026-03-05T02:00:00+00:00" not in prompt
 
 
 class TestCollectLLM:

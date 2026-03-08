@@ -2,7 +2,7 @@
 OpenCode agent handler
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
@@ -43,7 +43,7 @@ class OpenCodeAgent(BaseAgent):
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        cutoff_time = int((datetime.now() - timedelta(days=days)).timestamp() * 1000)
+        cutoff_time = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
 
         cursor.execute(
             """
@@ -69,8 +69,8 @@ class OpenCodeAgent(BaseAgent):
                 Session(
                     id=row["id"],
                     title=row["title"] or "Untitled",
-                    created_at=datetime.fromtimestamp(row["time_created"] / 1000),
-                    updated_at=datetime.fromtimestamp(row["time_updated"] / 1000),
+                    created_at=datetime.fromtimestamp(row["time_created"] / 1000, tz=timezone.utc),
+                    updated_at=datetime.fromtimestamp(row["time_updated"] / 1000, tz=timezone.utc),
                     source_path=self.db_path,
                     metadata={
                         "slug": row["slug"],

@@ -2,7 +2,7 @@
 Kimi agent handler
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import shutil
@@ -74,7 +74,7 @@ class KimiAgent(BaseAgent):
         if not self.base_path:
             return []
 
-        cutoff_time = datetime.now() - timedelta(days=days)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
         sessions = []
 
         for metadata_file in self.base_path.rglob("metadata.json"):
@@ -106,7 +106,7 @@ class KimiAgent(BaseAgent):
             title = metadata.get("title", "Untitled Session")
             wire_mtime = metadata.get("wire_mtime")
             created_at_ts = wire_mtime if isinstance(wire_mtime, (int, float)) else metadata_path.stat().st_mtime
-            created_at = datetime.fromtimestamp(created_at_ts)
+            created_at = datetime.fromtimestamp(created_at_ts, tz=timezone.utc)
 
             return Session(
                 id=session_id,

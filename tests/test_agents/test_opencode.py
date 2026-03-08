@@ -4,7 +4,7 @@
 
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -171,6 +171,43 @@ class TestOpenCodeAgent:
         assert result[0].id == "session-001"
         assert result[0].title == "Test Session"
         assert isinstance(result[0], Session)
+        assert result[0].created_at.tzinfo == timezone.utc
+
+    def test_get_sessions_parses_epoch_as_utc(self, tmp_path):
+        """测试 epoch 毫秒会被解析为 UTC aware datetime"""
+        agent = OpenCodeAgent()
+        db_path = tmp_path / "opencode.db"
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE session (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                time_created INTEGER,
+                time_updated INTEGER,
+                slug TEXT,
+                directory TEXT,
+                version INTEGER,
+                summary_files TEXT
+            )
+        """)
+
+        created_at = datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc)
+        created_at_ms = int(created_at.timestamp() * 1000)
+        cursor.execute(
+            "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("session-utc", "UTC Session", created_at_ms, created_at_ms, "utc", "/utc", 1, "utc.py"),
+        )
+        conn.commit()
+        conn.close()
+
+        agent.db_path = db_path
+
+        result = agent.get_sessions(days=3650)
+
+        assert len(result) == 1
+        assert result[0].created_at == created_at
 
     def test_get_sessions_filtered_by_days(self, tmp_path):
         """测试按天数过滤会话"""

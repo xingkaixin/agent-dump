@@ -1,7 +1,7 @@
 """Collect mode: gather sessions and summarize with LLM."""
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, tzinfo
 import json
 from pathlib import Path
 from typing import Any
@@ -9,6 +9,7 @@ from urllib import error, request
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.config import AIConfig
+from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
 SUPPORTED_DATE_FORMATS = ("%Y-%m-%d", "%Y%m%d")
 MAX_SESSION_TEXT_CHARS = 8000
@@ -40,9 +41,15 @@ def parse_user_date(value: str) -> date:
     raise ValueError(f"invalid date format: {value}")
 
 
-def resolve_collect_date_range(since: str | None, until: str | None, *, today: date | None = None) -> tuple[date, date]:
+def resolve_collect_date_range(
+    since: str | None,
+    until: str | None,
+    *,
+    today: date | None = None,
+    local_tz: tzinfo | None = None,
+) -> tuple[date, date]:
     """Resolve effective [since, until] date range."""
-    effective_today = today or datetime.now().date()
+    effective_today = today or get_local_today(local_tz)
 
     if not since and not until:
         return effective_today, effective_today
@@ -69,18 +76,8 @@ def resolve_collect_date_range(since: str | None, until: str | None, *, today: d
     return start, end
 
 
-def _session_local_date(session: Session) -> date:
-    created_at = session.created_at
-    if created_at.tzinfo is not None:
-        return created_at.astimezone().date()
-    return created_at.date()
-
-
-def _normalize_datetime_utc(value: datetime) -> datetime:
-    """Normalize datetime to timezone-aware UTC for safe comparisons/sorting."""
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+def _session_local_date(session: Session, local_tz: tzinfo) -> date:
+    return to_local_datetime(session.created_at, local_tz).date()
 
 
 def _truncate(text: str, limit: int = MAX_SESSION_TEXT_CHARS) -> tuple[str, bool]:
@@ -95,17 +92,19 @@ def collect_entries(
     since_date: date,
     until_date: date,
     render_session_text_fn,
+    local_tz: tzinfo | None = None,
 ) -> tuple[list[CollectEntry], bool]:
     """Collect and render session text entries for range."""
     entries: list[CollectEntry] = []
     has_truncated = False
+    resolved_local_tz = local_tz or get_local_timezone()
 
     for agent in agents:
-        days_span = max((datetime.now().date() - since_date).days + 1, 1)
+        days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
         sessions = agent.get_sessions(days=days_span)
 
         for session in sessions:
-            session_date = _session_local_date(session)
+            session_date = _session_local_date(session, resolved_local_tz)
             if session_date < since_date or session_date > until_date:
                 continue
 
@@ -129,7 +128,7 @@ def collect_entries(
                 )
             )
 
-    entries.sort(key=lambda item: _normalize_datetime_utc(item.created_at))
+    entries.sort(key=lambda item: normalize_datetime_utc(item.created_at))
     return entries, has_truncated
 
 
@@ -139,8 +138,10 @@ def build_collect_prompt(
     until_date: date,
     entries: list[CollectEntry],
     has_truncated: bool,
+    local_tz: tzinfo | None = None,
 ) -> str:
     """Build collect summary prompt."""
+    resolved_local_tz = local_tz or get_local_timezone()
     header = [
         "你是一个工作记录分析助手。",
         "请基于给定时段内的会话内容，输出 Markdown，总结重点工作。",
@@ -164,7 +165,7 @@ def build_collect_prompt(
                 "",
                 f"### Session {index}",
                 f"- 日期: {entry.date_value.isoformat()}",
-                f"- 时间: {entry.created_at.isoformat()}",
+                f"- 时间: {to_local_datetime(entry.created_at, resolved_local_tz).isoformat()}",
                 f"- Agent: {entry.agent_display_name} ({entry.agent_name})",
                 f"- URI: {entry.session_uri}",
                 f"- 标题: {entry.session_title}",
@@ -275,7 +276,7 @@ def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -
 
 def write_collect_markdown(markdown: str, *, output_dir: Path | None = None, today: date | None = None) -> Path:
     """Write collect markdown file to current directory."""
-    resolved_today = today or datetime.now().date()
+    resolved_today = today or get_local_today()
     base = output_dir if output_dir is not None else Path.cwd()
     path = base / f"agent-dump-collect-{resolved_today.strftime('%Y%m%d')}.md"
     path.write_text(markdown, encoding="utf-8")
