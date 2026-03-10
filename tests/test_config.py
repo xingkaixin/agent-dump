@@ -3,7 +3,16 @@
 from pathlib import Path
 from unittest import mock
 
-from agent_dump.config import AIConfig, get_config_path, handle_config_command, load_ai_config, mask_api_key, write_ai_config
+from agent_dump.config import (
+    AIConfig,
+    CollectConfig,
+    get_config_path,
+    handle_config_command,
+    load_ai_config,
+    load_collect_config,
+    mask_api_key,
+    write_ai_config,
+)
 
 
 class TestConfigPath:
@@ -39,6 +48,41 @@ class TestConfigReadWrite:
         assert config.base_url == "https://api.openai.com/v1"
         assert config.model == "gpt-4.1-mini"
         assert config.api_key == "sk-test-123"
+        assert load_collect_config(path) == CollectConfig()
+
+    def test_load_collect_config_reads_summary_concurrency(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[ai]\n"
+                'provider = "openai"\n'
+                'base_url = "https://api.openai.com/v1"\n'
+                'model = "gpt-4.1-mini"\n'
+                'api_key = "sk-test-123"\n'
+                "\n[collect]\n"
+                "summary_concurrency = 8\n"
+            ),
+            encoding="utf-8",
+        )
+
+        assert load_collect_config(path) == CollectConfig(summary_concurrency=8)
+
+    def test_load_collect_config_falls_back_for_invalid_value(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[ai]\n"
+                'provider = "openai"\n'
+                'base_url = "https://api.openai.com/v1"\n'
+                'model = "gpt-4.1-mini"\n'
+                'api_key = "sk-test-123"\n'
+                "\n[collect]\n"
+                'summary_concurrency = "bad"\n'
+            ),
+            encoding="utf-8",
+        )
+
+        assert load_collect_config(path) == CollectConfig()
 
     def test_mask_api_key(self):
         assert mask_api_key("") == ""
@@ -65,6 +109,7 @@ class TestConfigCommand:
         out = capsys.readouterr().out
         assert "当前配置" in out
         assert "sk-*****123" in out
+        assert "collect.summary_concurrency: 4" in out
 
     def test_view_missing_then_create(self, tmp_path, monkeypatch):
         path = tmp_path / "config.toml"

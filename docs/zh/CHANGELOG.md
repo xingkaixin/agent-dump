@@ -1,5 +1,15 @@
 # 更新日志
 
+## [0.6.7] - 2026-03-10
+
+### 变更
+
+- **Collect 汇总链路**
+  - `--collect` 现会先逐条总结每个 session，再基于这些 session summary 生成最终总结，避免单次 prompt 过长
+  - 新增可配置的 `[collect].summary_concurrency`，用于控制单 session summary 的并发数
+  - collect 运行期间会在 stderr 从 `0/N` 开始显示 session summary 进度，并在 AI 请求进行中持续更新加载状态
+  - collect 输出文件名调整为 `agent-dump-collect-YYYYMMDD-YYYYMMDD.md`
+
 ## [0.6.6] - 2026-03-05
 
 

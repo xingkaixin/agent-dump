@@ -10,10 +10,13 @@ import pytest
 from agent_dump.agents.base import Session
 from agent_dump.collect import (
     CollectEntry,
-    build_collect_prompt,
+    SessionSummaryEntry,
+    build_collect_final_prompt,
+    build_collect_session_prompt,
     collect_entries,
     request_summary_from_llm,
     resolve_collect_date_range,
+    summarize_collect_entries,
     write_collect_markdown,
 )
 from agent_dump.config import AIConfig
@@ -45,7 +48,6 @@ class TestCollectDates:
         local_tz = timezone(timedelta(hours=8))
         since, until = resolve_collect_date_range(None, None, local_tz=local_tz, today=None)
 
-        # 显式传入 local_tz 时不校验具体今天，只校验返回值对齐同一天
         assert since == until
 
 
@@ -87,6 +89,7 @@ class TestCollectEntries:
         assert entries[0].session_id == "s-in"
         assert entries[0].project_directory == "/repo/a"
         assert truncated is False
+        assert entries[0].is_truncated is False
 
     def test_collect_entries_handles_mixed_naive_aware_datetime(self):
         aware_time = datetime.now(timezone.utc) - timedelta(hours=1)
@@ -165,7 +168,7 @@ class TestCollectEntries:
         assert entries[0].date_value == date(2026, 3, 5)
         assert entries[0].session_id == "cross-day"
 
-    def test_build_collect_prompt_contains_required_sections(self):
+    def test_build_collect_session_prompt_contains_required_sections(self):
         entry = CollectEntry(
             date_value=date(2026, 3, 5),
             created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
@@ -176,22 +179,18 @@ class TestCollectEntries:
             session_title="task",
             project_directory="/repo",
             text="body",
-        )
-        prompt = build_collect_prompt(
-            since_date=date(2026, 3, 1),
-            until_date=date(2026, 3, 5),
-            entries=[entry],
-            has_truncated=False,
+            is_truncated=False,
         )
 
-        assert "# 时段工作总结（2026-03-01 ~ 2026-03-05）" in prompt
-        assert "## 按日期" in prompt
-        assert "## 按项目/目录" in prompt
-        assert "## 重点事项（决策/风险/阻塞）" in prompt
-        assert "## 产出清单" in prompt
-        assert "## 下一步建议" in prompt
+        prompt = build_collect_session_prompt(entry, source_truncated=False)
 
-    def test_build_collect_prompt_uses_local_time_display(self):
+        assert "## 会话摘要" in prompt
+        assert "## 关键操作" in prompt
+        assert "## 风险与阻塞" in prompt
+        assert "## 结果与后续" in prompt
+        assert "codex://a" in prompt
+
+    def test_build_collect_session_prompt_uses_local_time_display(self):
         local_tz = timezone(timedelta(hours=8))
         entry = CollectEntry(
             date_value=date(2026, 3, 5),
@@ -203,18 +202,114 @@ class TestCollectEntries:
             session_title="task",
             project_directory="/repo",
             text="body",
+            is_truncated=False,
         )
 
-        prompt = build_collect_prompt(
-            since_date=date(2026, 3, 5),
-            until_date=date(2026, 3, 5),
-            entries=[entry],
-            has_truncated=False,
-            local_tz=local_tz,
-        )
+        prompt = build_collect_session_prompt(entry, source_truncated=False, local_tz=local_tz)
 
         assert "2026-03-05T10:00:00+08:00" in prompt
         assert "2026-03-05T02:00:00+00:00" not in prompt
+
+    def test_build_collect_final_prompt_contains_required_sections(self):
+        collect_entry = CollectEntry(
+            date_value=date(2026, 3, 5),
+            created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
+            agent_name="codex",
+            agent_display_name="Codex",
+            session_id="a",
+            session_uri="codex://a",
+            session_title="task",
+            project_directory="/repo",
+            text="body",
+            is_truncated=False,
+        )
+        entry = SessionSummaryEntry(
+            index=0,
+            collect_entry=collect_entry,
+            summary_markdown="## 会话摘要\n完成导出",
+            source_truncated=False,
+        )
+        prompt = build_collect_final_prompt(
+            since_date=date(2026, 3, 1),
+            until_date=date(2026, 3, 5),
+            session_summaries=[entry],
+            has_truncated=False,
+        )
+
+        assert "# 时段工作总结（2026-03-01 ~ 2026-03-05）" in prompt
+        assert "## 按日期" in prompt
+        assert "## 按项目/目录" in prompt
+        assert "## 重点事项（决策/风险/阻塞）" in prompt
+        assert "## 产出清单" in prompt
+        assert "## 下一步建议" in prompt
+        assert "## 会话摘要\n完成导出" in prompt
+
+    def test_summarize_collect_entries_reports_progress_in_order(self):
+        config = AIConfig(
+            provider="openai",
+            base_url="https://api.openai.com/v1",
+            model="gpt-4.1-mini",
+            api_key="sk-test",
+        )
+        entries = [
+            CollectEntry(
+                date_value=date(2026, 3, 5),
+                created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
+                agent_name="codex",
+                agent_display_name="Codex",
+                session_id=f"s-{index}",
+                session_uri=f"codex://s-{index}",
+                session_title=f"task-{index}",
+                project_directory="/repo",
+                text="body",
+                is_truncated=False,
+            )
+            for index in range(3)
+        ]
+        progress = []
+
+        def _summary_side_effect(config, prompt, *, timeout_seconds=90):
+            del config, timeout_seconds
+            if "codex://s-0" in prompt:
+                return "s1"
+            if "codex://s-1" in prompt:
+                return "s2"
+            return "s3"
+
+        with mock.patch("agent_dump.collect.request_summary_from_llm", side_effect=_summary_side_effect):
+            summaries = summarize_collect_entries(
+                config=config,
+                entries=entries,
+                summary_concurrency=2,
+                progress_callback=lambda completed, total: progress.append((completed, total)),
+            )
+
+        assert [item.summary_markdown for item in summaries] == ["s1", "s2", "s3"]
+        assert progress == [(1, 3), (2, 3), (3, 3)]
+
+    def test_summarize_collect_entries_raises_wrapped_session_uri(self):
+        config = AIConfig(
+            provider="openai",
+            base_url="https://api.openai.com/v1",
+            model="gpt-4.1-mini",
+            api_key="sk-test",
+        )
+        entry = CollectEntry(
+            date_value=date(2026, 3, 5),
+            created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
+            agent_name="codex",
+            agent_display_name="Codex",
+            session_id="s-1",
+            session_uri="codex://s-1",
+            session_title="task-1",
+            project_directory="/repo",
+            text="body",
+            is_truncated=False,
+        )
+
+        with mock.patch("agent_dump.collect.request_summary_from_llm", side_effect=RuntimeError("boom")):
+            with pytest.raises(RuntimeError, match="codex://s-1"):
+                summarize_collect_entries(config=config, entries=[entry], summary_concurrency=1)
 
 
 class TestCollectLLM:
@@ -257,7 +352,12 @@ class TestCollectLLM:
 
 
 class TestCollectOutput:
-    def test_write_collect_markdown(self, tmp_path):
-        path = write_collect_markdown("# report", output_dir=tmp_path, today=date(2026, 3, 5))
-        assert path == tmp_path / "agent-dump-collect-20260305.md"
+    def test_write_collect_markdown_uses_date_range_filename(self, tmp_path):
+        path = write_collect_markdown(
+            "# report",
+            since_date=date(2026, 3, 1),
+            until_date=date(2026, 3, 5),
+            output_dir=tmp_path,
+        )
+        assert path == tmp_path / "agent-dump-collect-20260301-20260305.md"
         assert path.read_text(encoding="utf-8") == "# report"

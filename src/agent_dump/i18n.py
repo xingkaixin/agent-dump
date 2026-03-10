@@ -138,6 +138,7 @@ class Keys:
     COLLECT_API_FAILED = "COLLECT_API_FAILED"
     COLLECT_OUTPUT_SAVED = "COLLECT_OUTPUT_SAVED"
     COLLECT_SUMMARY_LOADING = "COLLECT_SUMMARY_LOADING"
+    COLLECT_SESSION_PROGRESS = "COLLECT_SESSION_PROGRESS"
 
     # Misc
     SESSION_COUNT_SUFFIX = "SESSION_COUNT_SUFFIX"
@@ -266,6 +267,7 @@ TRANSLATIONS = {
         Keys.COLLECT_API_FAILED: "❌ AI summary request failed: {error}",
         Keys.COLLECT_OUTPUT_SAVED: "✅ Collect summary saved: {path}",
         Keys.COLLECT_SUMMARY_LOADING: "⏳ Calling AI to generate collect summary, please wait...",
+        Keys.COLLECT_SESSION_PROGRESS: "session summaries: {completed}/{total} ({percent}%)",
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
@@ -390,6 +392,7 @@ TRANSLATIONS = {
         Keys.COLLECT_API_FAILED: "❌ AI 总结请求失败: {error}",
         Keys.COLLECT_OUTPUT_SAVED: "✅ collect 总结已保存: {path}",
         Keys.COLLECT_SUMMARY_LOADING: "⏳ 正在调用 AI 生成汇总，请稍候...",
+        Keys.COLLECT_SESSION_PROGRESS: "session summaries: {completed}/{total} ({percent}%)",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     },
 }

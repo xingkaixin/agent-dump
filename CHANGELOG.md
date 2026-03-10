@@ -2,6 +2,16 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.7] - 2026-03-10
+
+### Changed
+
+- **Collect summary pipeline**
+  - `--collect` now summarizes each session first, then generates one final summary to avoid oversized prompts
+  - Added configurable `[collect].summary_concurrency` for per-session summary fan-out
+  - Shows session-summary progress from `0/N` on stderr during collect runs, with loading updates while AI requests are in flight
+  - Writes collect reports as `agent-dump-collect-YYYYMMDD-YYYYMMDD.md`
+
 ## [0.6.6] - 2026-03-05
 
 ### Added
@@ -20,11 +30,6 @@
   - Added `--summary` for URI mode AI summaries
   - Summary generation requires URI mode with `--format` including `json`
   - Falls back to warning-only behavior when config is missing/incomplete or AI requests fail
-
-### Changed
-
-- **AI summary loading hints**
-  - Shows loading hints on stderr during AI summary requests in both `--summary` and `--collect` flows
 
 ### Improved
 

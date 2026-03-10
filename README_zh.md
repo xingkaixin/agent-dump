@@ -158,7 +158,9 @@ uv run agent-dump --collect
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
 
-# 说明：--summary / --collect 在调用 AI 期间会在 stderr 显示 loading 提示。
+# 说明：--collect 会先按 session 逐条生成 summary，再统一生成最终总结。
+# 说明：--summary / --collect 在调用 AI 期间会在 stderr 显示 loading / 进度提示。
+# 说明：collect 输出文件名示例：agent-dump-collect-20260301-20260305.md
 
 # 配置模式
 uv run agent-dump --config view
@@ -182,7 +184,7 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `--interactive` | 进入交互式模式选择和导出会话 | - |
 | `-d`, `-days` | 查询最近 N 天的会话 | 7 |
 | `-q`, `-query` | 查询过滤。支持 `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`） | - |
-| `--collect` | 按日期范围采集会话 print 内容并调用 AI 总结。AI 请求期间会在 stderr 显示 loading 提示。 | - |
+| `--collect` | 按日期范围采集会话 print 内容，先逐条生成 session summary，再调用 AI 生成最终总结。session summary 进度和 AI loading 提示都会显示在 stderr。 | - |
 | `-since`, `--since` | collect 开始日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
 | `-until`, `--until` | collect 结束日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
 | `-config`, `--config` | 配置管理：`view` 或 `edit` | - |
@@ -208,6 +210,9 @@ provider = "openai" # openai | anthropic
 base_url = "https://api.openai.com/v1"
 model = "gpt-4.1-mini"
 api_key = "sk-..."
+
+[collect]
+summary_concurrency = 4
 ```
 
 ## 项目结构

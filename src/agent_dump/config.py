@@ -21,6 +21,16 @@ class AIConfig:
     api_key: str
 
 
+@dataclass(frozen=True)
+class CollectConfig:
+    """Collect mode configuration."""
+
+    summary_concurrency: int = 4
+
+
+DEFAULT_COLLECT_SUMMARY_CONCURRENCY = 4
+
+
 def get_config_path(
     *,
     home: Path | None = None,
@@ -51,10 +61,10 @@ def _strip_quotes(value: str) -> str:
     return text
 
 
-def _parse_simple_toml(text: str) -> dict[str, str]:
-    """Parse a minimal `[ai]` TOML section without third-party deps."""
-    in_ai_section = False
-    parsed: dict[str, str] = {}
+def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str]]:
+    """Parse minimal TOML sections without third-party deps."""
+    current_section: str | None = None
+    parsed: dict[str, dict[str, str]] = {}
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
@@ -62,10 +72,11 @@ def _parse_simple_toml(text: str) -> dict[str, str]:
             continue
 
         if line.startswith("[") and line.endswith("]"):
-            in_ai_section = line == "[ai]"
+            current_section = line[1:-1].strip()
+            parsed.setdefault(current_section, {})
             continue
 
-        if not in_ai_section:
+        if current_section is None:
             continue
 
         key, sep, value = line.partition("=")
@@ -74,10 +85,13 @@ def _parse_simple_toml(text: str) -> dict[str, str]:
 
         normalized_key = key.strip()
         normalized_value = value.split("#", 1)[0].strip()
-        if normalized_key in {"provider", "base_url", "model", "api_key"}:
-            parsed[normalized_key] = _strip_quotes(normalized_value)
+        parsed.setdefault(current_section, {})[normalized_key] = _strip_quotes(normalized_value)
 
     return parsed
+
+
+def _read_config_sections(config_path: Path) -> dict[str, dict[str, str]]:
+    return _parse_simple_toml_sections(config_path.read_text(encoding="utf-8"))
 
 
 def load_ai_config(path: Path | None = None) -> AIConfig | None:
@@ -86,13 +100,35 @@ def load_ai_config(path: Path | None = None) -> AIConfig | None:
     if not config_path.exists():
         return None
 
-    parsed = _parse_simple_toml(config_path.read_text(encoding="utf-8"))
+    parsed = _read_config_sections(config_path).get("ai", {})
     return AIConfig(
         provider=parsed.get("provider", "").strip(),
         base_url=parsed.get("base_url", "").strip(),
         model=parsed.get("model", "").strip(),
         api_key=parsed.get("api_key", "").strip(),
     )
+
+
+def load_collect_config(path: Path | None = None) -> CollectConfig:
+    """Load collect config with defaults for missing or invalid values."""
+    config_path = path if path is not None else get_config_path()
+    if not config_path.exists():
+        return CollectConfig()
+
+    parsed = _read_config_sections(config_path).get("collect", {})
+    raw_concurrency = parsed.get("summary_concurrency", "").strip()
+    if not raw_concurrency:
+        return CollectConfig()
+
+    try:
+        concurrency = int(raw_concurrency)
+    except ValueError:
+        return CollectConfig()
+
+    if concurrency <= 0:
+        return CollectConfig()
+
+    return CollectConfig(summary_concurrency=concurrency)
 
 
 def validate_ai_config(config: AIConfig | None) -> tuple[bool, list[str]]:
@@ -126,6 +162,7 @@ def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
     """Persist AI config to TOML file."""
     config_path = path if path is not None else get_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_collect = load_collect_config(config_path)
     content = (
         "[ai]\n"
         f'provider = "{config.provider}"\n'
@@ -133,6 +170,8 @@ def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
         f'model = "{config.model}"\n'
         f'api_key = "{config.api_key}"\n'
     )
+    if config_path.exists() or existing_collect != CollectConfig():
+        content += f"\n[collect]\nsummary_concurrency = {existing_collect.summary_concurrency}\n"
     config_path.write_text(content, encoding="utf-8")
     return config_path
 
@@ -277,6 +316,8 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
             print(i18n.t(Keys.CONFIG_CONFIRM_BASE_URL, base_url=existing.base_url or ""))
             print(i18n.t(Keys.CONFIG_CONFIRM_MODEL, model=existing.model or ""))
             print(i18n.t(Keys.CONFIG_CONFIRM_API_KEY, api_key=mask_api_key(existing.api_key)))
+            collect_config = load_collect_config(config_path)
+            print(f"  collect.summary_concurrency: {collect_config.summary_concurrency}")
             return 0
 
     if action != "edit":

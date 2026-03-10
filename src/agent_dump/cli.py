@@ -3,7 +3,7 @@ Command-line interface for agent-dump
 """
 
 import argparse
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 import json
@@ -16,13 +16,14 @@ from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.collect import (
-    build_collect_prompt,
+    build_collect_final_prompt,
     collect_entries,
     request_summary_from_llm,
     resolve_collect_date_range,
+    summarize_collect_entries,
     write_collect_markdown,
 )
-from agent_dump.config import handle_config_command, load_ai_config, validate_ai_config
+from agent_dump.config import handle_config_command, load_ai_config, load_collect_config, validate_ai_config
 from agent_dump.i18n import Keys, i18n, setup_i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.query_filter import filter_sessions, parse_query
@@ -72,6 +73,67 @@ def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
         clear_width = len(message) + 4
         sys.stderr.write("\r" + (" " * clear_width) + "\r")
         sys.stderr.flush()
+
+
+@contextmanager
+def show_collect_progress(total: int) -> Iterator[Callable[[int, int], None]]:
+    """Show collect session-summary progress on stderr."""
+    is_tty = sys.stderr.isatty()
+    stop_event = threading.Event()
+    progress_lock = threading.Lock()
+    spinner_frames = "|/-\\"
+    spinner_thread: threading.Thread | None = None
+    last_rendered = ""
+    completed_count = 0
+    total_count = total
+
+    def _render(completed: int, total_count: int) -> str:
+        percent = 100 if total_count == 0 else int((completed / total_count) * 100)
+        return i18n.t(Keys.COLLECT_SESSION_PROGRESS, completed=completed, total=total_count, percent=percent)
+
+    def _update(completed: int, total_sessions: int) -> None:
+        nonlocal last_rendered, completed_count
+        nonlocal total_count
+        text = _render(completed, total_sessions)
+        with progress_lock:
+            completed_count = completed
+            total_count = total_sessions
+            last_rendered = text
+        if is_tty:
+            return
+        print(text, file=sys.stderr)
+
+    if is_tty:
+
+        def _spin() -> None:
+            idx = 0
+            while not stop_event.wait(0.1):
+                with progress_lock:
+                    text = last_rendered or _render(completed_count, total_count)
+                sys.stderr.write(f"\r{spinner_frames[idx % len(spinner_frames)]} {text}")
+                sys.stderr.flush()
+                idx += 1
+
+        last_rendered = _render(0, total)
+        sys.stderr.write(f"\r{spinner_frames[0]} {last_rendered}")
+        sys.stderr.flush()
+        spinner_thread = threading.Thread(target=_spin, daemon=True)
+        spinner_thread.start()
+    else:
+        last_rendered = _render(0, total)
+        print(last_rendered, file=sys.stderr)
+
+    try:
+        yield _update
+    finally:
+        if is_tty:
+            stop_event.set()
+            if spinner_thread is not None:
+                spinner_thread.join(timeout=0.3)
+        if last_rendered and is_tty:
+            sys.stderr.write(f"\r{spinner_frames[0]} {last_rendered}")
+            sys.stderr.write("\n")
+            sys.stderr.flush()
 
 
 def parse_uri(uri: str) -> tuple[str, str] | None:
@@ -537,6 +599,7 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
             print(i18n.t(Keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(errors)))
         print(i18n.t(Keys.COLLECT_CONFIG_HINT))
         return 1
+    collect_config = load_collect_config()
 
     scanner = AgentScanner()
     available_agents = scanner.get_available_agents()
@@ -559,14 +622,20 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
         print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
         return 1
 
-    prompt = build_collect_prompt(
-        since_date=since_date,
-        until_date=until_date,
-        entries=entries,
-        has_truncated=has_truncated,
-    )
-
     try:
+        with show_collect_progress(len(entries)) as update_progress:
+            session_summaries = summarize_collect_entries(
+                config=config,
+                entries=entries,
+                summary_concurrency=collect_config.summary_concurrency,
+                progress_callback=update_progress,
+            )
+        prompt = build_collect_final_prompt(
+            since_date=since_date,
+            until_date=until_date,
+            session_summaries=session_summaries,
+            has_truncated=has_truncated,
+        )
         with show_loading(i18n.t(Keys.COLLECT_SUMMARY_LOADING)):
             markdown = request_summary_from_llm(config, prompt)
     except Exception as e:
@@ -574,7 +643,7 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
         return 1
 
     print(markdown)
-    output_path = write_collect_markdown(markdown)
+    output_path = write_collect_markdown(markdown, since_date=since_date, until_date=until_date)
     print(i18n.t(Keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
     return 0
 

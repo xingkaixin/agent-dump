@@ -22,6 +22,7 @@ from agent_dump.cli import (
     parse_format_spec,
     parse_uri,
     render_session_text,
+    show_collect_progress,
 )
 
 
@@ -252,22 +253,54 @@ class TestMain:
         mock_entry = mock.MagicMock()
 
         with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
-            with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
-                with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
-                    mock_scanner = mock.MagicMock()
-                    mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
-                    mock_scanner_class.return_value = mock_scanner
-                    with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
-                        with mock.patch("agent_dump.cli.build_collect_prompt", return_value="prompt"):
-                            with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
-                                output_path = tmp_path / "agent-dump-collect-20260305.md"
-                                with mock.patch("agent_dump.cli.write_collect_markdown", return_value=output_path):
-                                    result = handle_collect_mode(args)
+            with mock.patch("agent_dump.cli.load_collect_config", return_value=mock.MagicMock(summary_concurrency=4)):
+                with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                    with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+                        mock_scanner = mock.MagicMock()
+                        mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+                        mock_scanner_class.return_value = mock_scanner
+                        with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
+                            def _summarize_collect_entries(**kwargs):
+                                kwargs["progress_callback"](1, 1)
+                                return [mock.MagicMock()]
+
+                            with mock.patch(
+                                "agent_dump.cli.summarize_collect_entries",
+                                side_effect=_summarize_collect_entries,
+                            ):
+                                with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
+                                    with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                        output_path = tmp_path / "agent-dump-collect-20260305-20260305.md"
+                                        with mock.patch("agent_dump.cli.write_collect_markdown", return_value=output_path):
+                                            result = handle_collect_mode(args)
 
         assert result == 0
         captured = capsys.readouterr()
         assert "正在调用 AI 生成汇总，请稍候" in captured.err
+        assert "session summaries: 1/1 (100%)" in captured.err
         assert str(output_path) in captured.out
+
+    def test_show_collect_progress_non_tty_reports_incremental_progress(self, capsys):
+        with mock.patch("sys.stderr.isatty", return_value=False):
+            with show_collect_progress(20) as update_progress:
+                for completed in range(1, 21):
+                    update_progress(completed, 20)
+
+        captured = capsys.readouterr()
+        assert "session summaries: 0/20 (0%)" in captured.err
+        assert "session summaries: 1/20 (5%)" in captured.err
+        assert "session summaries: 20/20 (100%)" in captured.err
+
+    def test_show_collect_progress_tty_finishes_with_newline(self, capsys):
+        with mock.patch("sys.stderr.isatty", return_value=True):
+            with show_collect_progress(2) as update_progress:
+                update_progress(1, 2)
+                update_progress(2, 2)
+
+        captured = capsys.readouterr()
+        assert "session summaries: 0/2 (0%)" in captured.err
+        assert "session summaries: 2/2 (100%)" in captured.err
+        assert captured.err.endswith("\n")
 
     def test_main_no_agents_available(self, capsys):
         """测试没有可用 agent 时退出"""
