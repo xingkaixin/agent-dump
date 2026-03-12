@@ -88,3 +88,9 @@ publish:
 
 # Build and publish package in one step
 build-and-publish: build publish
+
+# Deploy the static web site to Cloudflare Pages
+deploy-web:
+    @echo "🌐 Deploying web/ to Cloudflare Pages..."
+    wrangler pages deploy web --project-name=agent-dump --commit-dirty=true
+    @echo "✅ Web deployment complete!"

@@ -56,3 +56,7 @@ wheels/
 /npm/package-lock.json
 /npm/.npm-cache
 /.pyinstaller
+
+
+# cloudflare
+.wrangler/
