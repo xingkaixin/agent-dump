@@ -25,6 +25,7 @@ from agent_dump.cli import (
     render_session_text,
     show_collect_progress,
 )
+from agent_dump.collect import CollectProgressEvent
 
 
 def make_session(
@@ -256,7 +257,7 @@ class TestMain:
         assert result == 1
         assert "--collect 不能与 URI/--interactive/--list 同时使用" in capsys.readouterr().out
 
-    def test_collect_mode_success_shows_loading_in_stderr(self, capsys, tmp_path):
+    def test_collect_mode_success_shows_stage_progress_in_stderr(self, capsys, tmp_path):
         args = argparse.Namespace(
             collect=True,
             uri=None,
@@ -267,6 +268,7 @@ class TestMain:
         )
         mock_config = mock.MagicMock()
         mock_entry = mock.MagicMock()
+        mock_planned_entry = mock.MagicMock()
 
         with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
             with mock.patch("agent_dump.cli.load_collect_config", return_value=mock.MagicMock(summary_concurrency=4)):
@@ -276,47 +278,83 @@ class TestMain:
                         mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                         mock_scanner_class.return_value = mock_scanner
                         with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
-                            def _summarize_collect_entries(**kwargs):
-                                kwargs["progress_callback"](1, 1)
-                                return [mock.MagicMock()]
+                            with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock_planned_entry]):
+                                def _summarize_collect_entries(**kwargs):
+                                    kwargs["progress_callback"](
+                                        CollectProgressEvent(
+                                            stage="summarize_chunks",
+                                            current=0,
+                                            total=1,
+                                            message="summarize chunks",
+                                        )
+                                    )
+                                    kwargs["progress_callback"](
+                                        CollectProgressEvent(
+                                            stage="summarize_chunks",
+                                            current=1,
+                                            total=1,
+                                            message="summarize chunks",
+                                        )
+                                    )
+                                    kwargs["progress_callback"](
+                                        CollectProgressEvent(
+                                            stage="merge_sessions",
+                                            current=0,
+                                            total=1,
+                                            message="merge sessions",
+                                        )
+                                    )
+                                    kwargs["progress_callback"](
+                                        CollectProgressEvent(
+                                            stage="merge_sessions",
+                                            current=1,
+                                            total=1,
+                                            message="merge sessions",
+                                        )
+                                    )
+                                    return [mock.MagicMock()]
 
-                            with mock.patch(
-                                "agent_dump.cli.summarize_collect_entries",
-                                side_effect=_summarize_collect_entries,
-                            ):
-                                with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
-                                    with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
-                                        with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
-                                            output_path = tmp_path / "agent-dump-collect-20260305-20260305.md"
-                                            with mock.patch("agent_dump.cli.write_collect_markdown", return_value=output_path):
-                                                result = handle_collect_mode(args)
+                                with mock.patch(
+                                    "agent_dump.cli.summarize_collect_entries",
+                                    side_effect=_summarize_collect_entries,
+                                ):
+                                    with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
+                                        with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
+                                            with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                                output_path = tmp_path / "agent-dump-collect-20260305-20260305.md"
+                                                with mock.patch("agent_dump.cli.write_collect_markdown", return_value=output_path):
+                                                    result = handle_collect_mode(args)
 
         assert result == 0
         captured = capsys.readouterr()
-        assert "正在调用 AI 生成汇总，请稍候" in captured.err
-        assert "session summaries: 1/1 (100%)" in captured.err
+        assert "summarize_chunks: 1/1" in captured.err
+        assert "merge_sessions: 1/1 sessions" in captured.err
+        assert "render_final: 2/2" in captured.err
+        assert "write_output: 1/1" in captured.err
         assert str(output_path) in captured.out
 
     def test_show_collect_progress_non_tty_reports_incremental_progress(self, capsys):
         with mock.patch("sys.stderr.isatty", return_value=False):
-            with show_collect_progress(20) as update_progress:
-                for completed in range(1, 21):
-                    update_progress(completed, 20)
+            with show_collect_progress() as update_progress:
+                update_progress(CollectProgressEvent(stage="scan_sessions", current=0, total=2, message="scan"))
+                update_progress(CollectProgressEvent(stage="scan_sessions", current=2, total=2, message="scan"))
+                update_progress(CollectProgressEvent(stage="plan_chunks", current=2, total=2, message="plan", chunk_total=5))
+                update_progress(CollectProgressEvent(stage="render_final", current=2, total=2, message="render"))
 
         captured = capsys.readouterr()
-        assert "session summaries: 0/20 (0%)" in captured.err
-        assert "session summaries: 1/20 (5%)" in captured.err
-        assert "session summaries: 20/20 (100%)" in captured.err
+        assert "scan_sessions: 0/2" in captured.err
+        assert "scan_sessions: 2/2" in captured.err
+        assert "plan_chunks: 2/2 sessions, 5 chunks" in captured.err
+        assert "render_final: 2/2" in captured.err
 
     def test_show_collect_progress_tty_finishes_with_newline(self, capsys):
         with mock.patch("sys.stderr.isatty", return_value=True):
-            with show_collect_progress(2) as update_progress:
-                update_progress(1, 2)
-                update_progress(2, 2)
+            with show_collect_progress() as update_progress:
+                update_progress(CollectProgressEvent(stage="summarize_chunks", current=0, total=2, message="summary"))
+                update_progress(CollectProgressEvent(stage="summarize_chunks", current=2, total=2, message="summary"))
 
         captured = capsys.readouterr()
-        assert "session summaries: 0/2 (0%)" in captured.err
-        assert "session summaries: 2/2 (100%)" in captured.err
+        assert "summarize_chunks: 2/2" in captured.err
         assert captured.err.endswith("\n")
 
     def test_main_no_agents_available(self, capsys):

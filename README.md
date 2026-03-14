@@ -172,8 +172,11 @@ uv run agent-dump --collect
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
 
-# Note: --collect first summarizes each session, then generates one final summary.
-# Note: during AI summary requests in --summary / --collect flows, progress is shown on stderr.
+# Note: --collect converts each session into high-signal events, plans chunks by budget,
+#       requests fixed JSON summaries per chunk, merges them deterministically per session,
+#       then uses tree reduction for the final aggregate before rendering Markdown.
+# Note: during --collect, stderr shows multi-stage progress such as scan_sessions,
+#       plan_chunks, summarize_chunks, merge_sessions, tree_reduction, render_final, and write_output.
 # Note: collect writes files like agent-dump-collect-20260301-20260305.md.
 
 # config mode
@@ -198,7 +201,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `-d`, `-days` | Query sessions from the last N days | 7 |
 | `-q`, `-query` | Query filter. Supports `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`) | - |
-| `--collect` | Collect session print content by date range, summarize each session first, then generate a final AI summary. Session-summary progress and AI loading hints are shown on stderr. | - |
+| `--collect` | Collect session print content by date range, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
 | `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
 | `-until`, `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
 | `-config`, `--config` | Config management: `view` or `edit` | - |

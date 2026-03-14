@@ -10,6 +10,8 @@ from agent_dump.collect import (
     CollectAggregate,
     CollectEntry,
     CollectEvent,
+    CollectProgressEvent,
+    PlannedCollectEntry,
     SessionSummaryEntry,
     build_collect_final_prompt,
     build_collect_session_prompt,
@@ -19,6 +21,7 @@ from agent_dump.collect import (
     extract_collect_events,
     merge_summary_payloads,
     normalize_summary_payload,
+    plan_collect_entries,
     reduce_collect_summaries,
     request_structured_summary_from_llm,
     request_summary_from_llm,
@@ -198,11 +201,13 @@ class TestCollectEntries:
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "修复 /repo/a.py 报错"}]}]
         }
 
+        progress: list[CollectProgressEvent] = []
         entries, truncated = collect_entries(
             agents=[agent],
             since_date=(now - timedelta(days=2)).date(),
             until_date=now.date(),
             render_session_text_fn=lambda uri, data: f"# Session Dump\n{uri}\n{json.dumps(data)}",
+            progress_callback=progress.append,
         )
 
         assert len(entries) == 1
@@ -211,6 +216,9 @@ class TestCollectEntries:
         assert entries[0].events[0].kind == "user_intent"
         assert truncated is False
         assert entries[0].is_truncated is False
+        assert [event.stage for event in progress] == ["scan_sessions", "scan_sessions"]
+        assert progress[-1].current == 1
+        assert progress[-1].total == 1
 
     def test_collect_entries_filters_by_user_local_date(self):
         local_tz = timezone(timedelta(hours=8))
@@ -242,6 +250,45 @@ class TestCollectEntries:
         assert entries[0].date_value == date(2026, 3, 5)
         assert entries[0].session_id == "cross-day"
 
+    def test_plan_collect_entries_reports_chunk_totals(self):
+        entries = [
+            CollectEntry(
+                date_value=date(2026, 3, 5),
+                created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
+                agent_name="codex",
+                agent_display_name="Codex",
+                session_id="s-1",
+                session_uri="codex://s-1",
+                session_title="task-1",
+                project_directory="/repo",
+                events=(
+                    CollectEvent(kind="user_intent", role="user", text="a" * 1800),
+                    CollectEvent(kind="assistant_key", role="assistant", text="b" * 1800),
+                ),
+                is_truncated=False,
+            ),
+            CollectEntry(
+                date_value=date(2026, 3, 5),
+                created_at=datetime(2026, 3, 5, 3, 0, 0, tzinfo=timezone.utc),
+                agent_name="codex",
+                agent_display_name="Codex",
+                session_id="s-2",
+                session_uri="codex://s-2",
+                session_title="task-2",
+                project_directory="/repo",
+                events=(CollectEvent(kind="user_intent", role="user", text="c" * 100),),
+                is_truncated=False,
+            ),
+        ]
+        progress: list[CollectProgressEvent] = []
+
+        planned = plan_collect_entries(entries, progress_callback=progress.append)
+
+        assert len(planned) == 2
+        assert sum(len(item.chunks) for item in planned) == 3
+        assert [event.stage for event in progress] == ["plan_chunks", "plan_chunks", "plan_chunks"]
+        assert progress[-1].chunk_total == 3
+
 
 class TestCollectStructuredSummary:
     def _config(self) -> AIConfig:
@@ -265,6 +312,10 @@ class TestCollectStructuredSummary:
             events=(CollectEvent(kind="user_intent", role="user", text=text),),
             is_truncated=False,
         )
+
+    def _planned_entry(self, *, text: str = "修复 collect", session_id: str = "s-1") -> PlannedCollectEntry:
+        entry = self._entry(text=text, session_id=session_id)
+        return PlannedCollectEntry(collect_entry=entry, chunks=tuple(chunk_collect_events(entry.events)))
 
     def test_request_structured_summary_from_llm_parses_json_fence(self):
         with mock.patch("agent_dump.collect.request_summary_from_llm", return_value="```json\n{\"topics\":[\"A\"]}\n```"):
@@ -293,9 +344,9 @@ class TestCollectStructuredSummary:
         assert "chunk: 1/1" in prompt
 
     def test_summarize_collect_entries_reports_progress_in_order(self):
-        entry1 = self._entry(session_id="s-1")
-        entry2 = self._entry(session_id="s-2")
-        progress: list[tuple[int, int]] = []
+        entry1 = self._planned_entry(session_id="s-1")
+        entry2 = self._planned_entry(session_id="s-2")
+        progress: list[CollectProgressEvent] = []
 
         def _summary_side_effect(config, prompt, *, timeout_seconds=90):
             del config, timeout_seconds
@@ -306,13 +357,18 @@ class TestCollectStructuredSummary:
         with mock.patch("agent_dump.collect.request_summary_from_llm", side_effect=_summary_side_effect):
             summaries = summarize_collect_entries(
                 config=self._config(),
-                entries=[entry1, entry2],
+                planned_entries=[entry1, entry2],
                 summary_concurrency=2,
-                progress_callback=lambda completed, total: progress.append((completed, total)),
+                progress_callback=progress.append,
             )
 
         assert [item.summary_data["topics"] for item in summaries] == [["T1"], ["T2"]]
-        assert progress == [(1, 2), (2, 2)]
+        summarize_events = [event for event in progress if event.stage == "summarize_chunks"]
+        merge_events = [event for event in progress if event.stage == "merge_sessions"]
+        assert summarize_events[0].current == 0
+        assert summarize_events[-1].current == 2
+        assert merge_events[0].current == 0
+        assert merge_events[-1].current == 2
 
     def test_summarize_collect_entries_splits_long_session_into_multiple_chunks(self):
         events = tuple(
@@ -331,6 +387,7 @@ class TestCollectStructuredSummary:
             events=events,
             is_truncated=False,
         )
+        planned_entry = PlannedCollectEntry(collect_entry=entry, chunks=tuple(chunk_collect_events(entry.events)))
 
         responses = iter(
             [
@@ -343,7 +400,7 @@ class TestCollectStructuredSummary:
         with mock.patch("agent_dump.collect.request_summary_from_llm", side_effect=lambda *args, **kwargs: next(responses)):
             summaries = summarize_collect_entries(
                 config=self._config(),
-                entries=[entry],
+                planned_entries=[planned_entry],
                 summary_concurrency=1,
             )
 
@@ -356,7 +413,7 @@ class TestCollectStructuredSummary:
             with pytest.raises(RuntimeError, match="codex://s-1"):
                 summarize_collect_entries(
                     config=self._config(),
-                    entries=[self._entry()],
+                    planned_entries=[self._planned_entry()],
                     summary_concurrency=1,
                 )
 
@@ -383,12 +440,20 @@ class TestCollectStructuredSummary:
             for index in range(17)
         ]
 
-        aggregate = reduce_collect_summaries(config=self._config(), session_summaries=summaries)
+        progress: list[CollectProgressEvent] = []
+        aggregate = reduce_collect_summaries(
+            config=self._config(),
+            session_summaries=summaries,
+            progress_callback=progress.append,
+        )
 
         assert aggregate.session_count == 17
         assert aggregate.reduction_depth >= 2
         assert "2026-03-05" in aggregate.date_summaries
         assert "/repo/0" in aggregate.project_summaries
+        tree_events = [event for event in progress if event.stage == "tree_reduction"]
+        assert tree_events[0].current == 0
+        assert tree_events[-1].current == tree_events[-1].total
 
     def test_build_collect_final_prompt_contains_required_sections(self):
         aggregate = CollectAggregate(

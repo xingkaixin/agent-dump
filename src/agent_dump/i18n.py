@@ -139,6 +139,14 @@ class Keys:
     COLLECT_OUTPUT_SAVED = "COLLECT_OUTPUT_SAVED"
     COLLECT_SUMMARY_LOADING = "COLLECT_SUMMARY_LOADING"
     COLLECT_SESSION_PROGRESS = "COLLECT_SESSION_PROGRESS"
+    COLLECT_PROGRESS_SCAN_SESSIONS = "COLLECT_PROGRESS_SCAN_SESSIONS"
+    COLLECT_PROGRESS_PLAN_CHUNKS = "COLLECT_PROGRESS_PLAN_CHUNKS"
+    COLLECT_PROGRESS_PLAN_CHUNKS_DONE = "COLLECT_PROGRESS_PLAN_CHUNKS_DONE"
+    COLLECT_PROGRESS_SUMMARIZE_CHUNKS = "COLLECT_PROGRESS_SUMMARIZE_CHUNKS"
+    COLLECT_PROGRESS_MERGE_SESSIONS = "COLLECT_PROGRESS_MERGE_SESSIONS"
+    COLLECT_PROGRESS_TREE_REDUCTION = "COLLECT_PROGRESS_TREE_REDUCTION"
+    COLLECT_PROGRESS_RENDER_FINAL = "COLLECT_PROGRESS_RENDER_FINAL"
+    COLLECT_PROGRESS_WRITE_OUTPUT = "COLLECT_PROGRESS_WRITE_OUTPUT"
 
     # Misc
     SESSION_COUNT_SUFFIX = "SESSION_COUNT_SUFFIX"
@@ -268,6 +276,14 @@ TRANSLATIONS = {
         Keys.COLLECT_OUTPUT_SAVED: "✅ Collect summary saved: {path}",
         Keys.COLLECT_SUMMARY_LOADING: "⏳ Calling AI to generate collect summary, please wait...",
         Keys.COLLECT_SESSION_PROGRESS: "session summaries: {completed}/{total} ({percent}%)",
+        Keys.COLLECT_PROGRESS_SCAN_SESSIONS: "scan_sessions: {current}/{total}",
+        Keys.COLLECT_PROGRESS_PLAN_CHUNKS: "plan_chunks: {current}/{total}",
+        Keys.COLLECT_PROGRESS_PLAN_CHUNKS_DONE: "plan_chunks: {current}/{total} sessions, {chunk_count} chunks",
+        Keys.COLLECT_PROGRESS_SUMMARIZE_CHUNKS: "summarize_chunks: {current}/{total}",
+        Keys.COLLECT_PROGRESS_MERGE_SESSIONS: "merge_sessions: {current}/{total} sessions",
+        Keys.COLLECT_PROGRESS_TREE_REDUCTION: "tree_reduction: level {level}, {current}/{total} groups",
+        Keys.COLLECT_PROGRESS_RENDER_FINAL: "render_final: {current}/{total}",
+        Keys.COLLECT_PROGRESS_WRITE_OUTPUT: "write_output: {current}/{total}",
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
@@ -393,6 +409,14 @@ TRANSLATIONS = {
         Keys.COLLECT_OUTPUT_SAVED: "✅ collect 总结已保存: {path}",
         Keys.COLLECT_SUMMARY_LOADING: "⏳ 正在调用 AI 生成汇总，请稍候...",
         Keys.COLLECT_SESSION_PROGRESS: "session summaries: {completed}/{total} ({percent}%)",
+        Keys.COLLECT_PROGRESS_SCAN_SESSIONS: "scan_sessions: {current}/{total}",
+        Keys.COLLECT_PROGRESS_PLAN_CHUNKS: "plan_chunks: {current}/{total}",
+        Keys.COLLECT_PROGRESS_PLAN_CHUNKS_DONE: "plan_chunks: {current}/{total} sessions, {chunk_count} chunks",
+        Keys.COLLECT_PROGRESS_SUMMARIZE_CHUNKS: "summarize_chunks: {current}/{total}",
+        Keys.COLLECT_PROGRESS_MERGE_SESSIONS: "merge_sessions: {current}/{total} sessions",
+        Keys.COLLECT_PROGRESS_TREE_REDUCTION: "tree_reduction: level {level}, {current}/{total} groups",
+        Keys.COLLECT_PROGRESS_RENDER_FINAL: "render_final: {current}/{total}",
+        Keys.COLLECT_PROGRESS_WRITE_OUTPUT: "write_output: {current}/{total}",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     },
 }

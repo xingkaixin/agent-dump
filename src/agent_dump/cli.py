@@ -16,8 +16,11 @@ from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.collect import (
+    CollectProgressEvent,
     build_collect_final_prompt,
     collect_entries,
+    emit_collect_progress,
+    plan_collect_entries,
     reduce_collect_summaries,
     request_summary_from_llm,
     resolve_collect_date_range,
@@ -76,29 +79,48 @@ def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
         sys.stderr.flush()
 
 
+def _format_collect_progress(event: CollectProgressEvent) -> str:
+    """Format one collect progress event for stderr."""
+    if event.stage == "scan_sessions":
+        return i18n.t(Keys.COLLECT_PROGRESS_SCAN_SESSIONS, current=event.current, total=event.total)
+    if event.stage == "plan_chunks":
+        if event.current >= event.total:
+            chunk_count = event.chunk_total or 0
+            return i18n.t(
+                Keys.COLLECT_PROGRESS_PLAN_CHUNKS_DONE,
+                current=event.current,
+                total=event.total,
+                chunk_count=chunk_count,
+            )
+        return i18n.t(Keys.COLLECT_PROGRESS_PLAN_CHUNKS, current=event.current, total=event.total)
+    if event.stage == "summarize_chunks":
+        return i18n.t(Keys.COLLECT_PROGRESS_SUMMARIZE_CHUNKS, current=event.current, total=event.total)
+    if event.stage == "merge_sessions":
+        return i18n.t(Keys.COLLECT_PROGRESS_MERGE_SESSIONS, current=event.current, total=event.total)
+    if event.stage == "tree_reduction":
+        level = event.level or 1
+        return i18n.t(Keys.COLLECT_PROGRESS_TREE_REDUCTION, level=level, current=event.current, total=event.total)
+    if event.stage == "render_final":
+        return i18n.t(Keys.COLLECT_PROGRESS_RENDER_FINAL, current=event.current, total=event.total)
+    if event.stage == "write_output":
+        return i18n.t(Keys.COLLECT_PROGRESS_WRITE_OUTPUT, current=event.current, total=event.total)
+    return event.message
+
+
 @contextmanager
-def show_collect_progress(total: int) -> Iterator[Callable[[int, int], None]]:
-    """Show collect session-summary progress on stderr."""
+def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
+    """Show collect multi-stage progress on stderr."""
     is_tty = sys.stderr.isatty()
     stop_event = threading.Event()
     progress_lock = threading.Lock()
     spinner_frames = "|/-\\"
     spinner_thread: threading.Thread | None = None
     last_rendered = ""
-    completed_count = 0
-    total_count = total
 
-    def _render(completed: int, total_count: int) -> str:
-        percent = 100 if total_count == 0 else int((completed / total_count) * 100)
-        return i18n.t(Keys.COLLECT_SESSION_PROGRESS, completed=completed, total=total_count, percent=percent)
-
-    def _update(completed: int, total_sessions: int) -> None:
-        nonlocal last_rendered, completed_count
-        nonlocal total_count
-        text = _render(completed, total_sessions)
+    def _update(event: CollectProgressEvent) -> None:
+        nonlocal last_rendered
+        text = _format_collect_progress(event)
         with progress_lock:
-            completed_count = completed
-            total_count = total_sessions
             last_rendered = text
         if is_tty:
             return
@@ -110,19 +132,15 @@ def show_collect_progress(total: int) -> Iterator[Callable[[int, int], None]]:
             idx = 0
             while not stop_event.wait(0.1):
                 with progress_lock:
-                    text = last_rendered or _render(completed_count, total_count)
+                    text = last_rendered
+                if not text:
+                    continue
                 sys.stderr.write(f"\r{spinner_frames[idx % len(spinner_frames)]} {text}")
                 sys.stderr.flush()
                 idx += 1
 
-        last_rendered = _render(0, total)
-        sys.stderr.write(f"\r{spinner_frames[0]} {last_rendered}")
-        sys.stderr.flush()
         spinner_thread = threading.Thread(target=_spin, daemon=True)
         spinner_thread.start()
-    else:
-        last_rendered = _render(0, total)
-        print(last_rendered, file=sys.stderr)
 
     try:
         yield _update
@@ -132,7 +150,8 @@ def show_collect_progress(total: int) -> Iterator[Callable[[int, int], None]]:
             if spinner_thread is not None:
                 spinner_thread.join(timeout=0.3)
         if last_rendered and is_tty:
-            sys.stderr.write(f"\r{spinner_frames[0]} {last_rendered}")
+            sys.stderr.write("\r" + (" " * (len(last_rendered) + 4)) + "\r")
+            sys.stderr.write(last_rendered)
             sys.stderr.write("\n")
             sys.stderr.flush()
 
@@ -608,47 +627,85 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
         print(i18n.t(Keys.NO_AGENTS_FOUND))
         return 1
 
+    phase = "read"
     try:
-        entries, has_truncated = collect_entries(
-            agents=available_agents,
-            since_date=since_date,
-            until_date=until_date,
-            render_session_text_fn=render_session_text,
-        )
-    except Exception as e:
-        print(i18n.t(Keys.COLLECT_READ_FAILED, error=e))
-        return 1
-
-    if not entries:
-        print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
-        return 1
-
-    try:
-        with show_collect_progress(len(entries)) as update_progress:
+        with show_collect_progress() as update_progress:
+            entries, has_truncated = collect_entries(
+                agents=available_agents,
+                since_date=since_date,
+                until_date=until_date,
+                render_session_text_fn=render_session_text,
+                progress_callback=update_progress,
+            )
+            if not entries:
+                print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
+                return 1
+            planned_entries = plan_collect_entries(entries, progress_callback=update_progress)
+            phase = "summarize"
             session_summaries = summarize_collect_entries(
                 config=config,
-                entries=entries,
+                planned_entries=planned_entries,
                 summary_concurrency=collect_config.summary_concurrency,
                 progress_callback=update_progress,
             )
-        aggregate = reduce_collect_summaries(
-            config=config,
-            session_summaries=session_summaries,
-        )
-        prompt = build_collect_final_prompt(
-            since_date=since_date,
-            until_date=until_date,
-            aggregate=aggregate,
-            has_truncated=has_truncated,
-        )
-        with show_loading(i18n.t(Keys.COLLECT_SUMMARY_LOADING)):
+            phase = "render"
+            emit_collect_progress(
+                update_progress,
+                stage="render_final",
+                current=0,
+                total=2,
+                message="render final",
+            )
+            aggregate = reduce_collect_summaries(
+                config=config,
+                session_summaries=session_summaries,
+                progress_callback=update_progress,
+            )
+            emit_collect_progress(
+                update_progress,
+                stage="render_final",
+                current=1,
+                total=2,
+                message="render final",
+            )
+            prompt = build_collect_final_prompt(
+                since_date=since_date,
+                until_date=until_date,
+                aggregate=aggregate,
+                has_truncated=has_truncated,
+            )
             markdown = request_summary_from_llm(config, prompt)
+            emit_collect_progress(
+                update_progress,
+                stage="render_final",
+                current=2,
+                total=2,
+                message="render final",
+            )
+            emit_collect_progress(
+                update_progress,
+                stage="write_output",
+                current=0,
+                total=1,
+                message="write output",
+            )
+            phase = "write"
+            output_path = write_collect_markdown(markdown, since_date=since_date, until_date=until_date)
+            emit_collect_progress(
+                update_progress,
+                stage="write_output",
+                current=1,
+                total=1,
+                message="write output",
+            )
     except Exception as e:
-        print(i18n.t(Keys.COLLECT_API_FAILED, error=e))
+        if phase == "read":
+            print(i18n.t(Keys.COLLECT_READ_FAILED, error=e))
+        else:
+            print(i18n.t(Keys.COLLECT_API_FAILED, error=e))
         return 1
 
     print(markdown)
-    output_path = write_collect_markdown(markdown, since_date=since_date, until_date=until_date)
     print(i18n.t(Keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
     return 0
 

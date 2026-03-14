@@ -8,6 +8,7 @@ from datetime import date, datetime, tzinfo
 import json
 from pathlib import Path
 import re
+import threading
 from typing import Any, cast
 from urllib import error, request
 
@@ -61,6 +62,20 @@ class CollectEvent:
 
 
 @dataclass(frozen=True)
+class CollectProgressEvent:
+    """Structured progress event for collect mode."""
+
+    stage: str
+    current: int
+    total: int
+    message: str
+    session_uri: str | None = None
+    chunk_index: int | None = None
+    chunk_total: int | None = None
+    level: int | None = None
+
+
+@dataclass(frozen=True)
 class CollectEntry:
     """One collected session entry."""
 
@@ -105,6 +120,14 @@ class CollectAggregate:
     project_summaries: dict[str, list[str]]
     session_count: int
     reduction_depth: int
+
+
+@dataclass(frozen=True)
+class PlannedCollectEntry:
+    """One collect entry with deterministic chunk planning."""
+
+    collect_entry: CollectEntry
+    chunks: tuple[tuple[CollectEvent, ...], ...]
 
 
 def parse_user_date(value: str) -> date:
@@ -247,6 +270,35 @@ def _extract_json_object(text: str) -> dict[str, Any]:
 
 def _serialize_summary_payload(payload: dict[str, list[str]]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def emit_collect_progress(
+    progress_callback: Callable[[CollectProgressEvent], None] | None,
+    *,
+    stage: str,
+    current: int,
+    total: int,
+    message: str,
+    session_uri: str | None = None,
+    chunk_index: int | None = None,
+    chunk_total: int | None = None,
+    level: int | None = None,
+) -> None:
+    """Emit one collect progress event when callback is configured."""
+    if progress_callback is None:
+        return
+    progress_callback(
+        CollectProgressEvent(
+            stage=stage,
+            current=current,
+            total=total,
+            message=message,
+            session_uri=session_uri,
+            chunk_index=chunk_index,
+            chunk_total=chunk_total,
+            level=level,
+        )
+    )
 
 
 def _find_paths_in_text(text: str) -> list[str]:
@@ -431,11 +483,13 @@ def collect_entries(
     until_date: date,
     render_session_text_fn,
     local_tz: tzinfo | None = None,
+    progress_callback: Callable[[CollectProgressEvent], None] | None = None,
 ) -> tuple[list[CollectEntry], bool]:
     """Collect session entries for range."""
     entries: list[CollectEntry] = []
     has_truncated = False
     resolved_local_tz = local_tz or get_local_timezone()
+    matched_sessions: list[tuple[BaseAgent, Session, date]] = []
 
     for agent in agents:
         days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
@@ -445,30 +499,83 @@ def collect_entries(
             session_date = _session_local_date(session, resolved_local_tz)
             if session_date < since_date or session_date > until_date:
                 continue
+            matched_sessions.append((agent, session, session_date))
 
-            session_data: dict[str, Any] = agent.get_session_data(session)
-            uri = agent.get_session_uri(session)
-            fallback_text = render_session_text_fn(uri, session_data)
-            events, truncated = extract_collect_events(session_data, fallback_text=fallback_text)
-            has_truncated = has_truncated or truncated
+    total = len(matched_sessions)
+    emit_collect_progress(
+        progress_callback,
+        stage="scan_sessions",
+        current=0,
+        total=total,
+        message="scan sessions",
+    )
 
-            entries.append(
-                CollectEntry(
-                    date_value=session_date,
-                    created_at=session.created_at,
-                    agent_name=agent.name,
-                    agent_display_name=agent.display_name,
-                    session_id=session.id,
-                    session_title=session.title,
-                    session_uri=uri,
-                    project_directory=str(session.metadata.get("cwd") or session.metadata.get("directory") or ""),
-                    events=events,
-                    is_truncated=truncated,
-                )
+    for index, (agent, session, session_date) in enumerate(matched_sessions, start=1):
+        session_data = agent.get_session_data(session)
+        uri = agent.get_session_uri(session)
+        fallback_text = render_session_text_fn(uri, session_data)
+        events, truncated = extract_collect_events(session_data, fallback_text=fallback_text)
+        has_truncated = has_truncated or truncated
+
+        entries.append(
+            CollectEntry(
+                date_value=session_date,
+                created_at=session.created_at,
+                agent_name=agent.name,
+                agent_display_name=agent.display_name,
+                session_id=session.id,
+                session_title=session.title,
+                session_uri=uri,
+                project_directory=str(session.metadata.get("cwd") or session.metadata.get("directory") or ""),
+                events=events,
+                is_truncated=truncated,
             )
+        )
+        emit_collect_progress(
+            progress_callback,
+            stage="scan_sessions",
+            current=index,
+            total=total,
+            message="scan sessions",
+            session_uri=uri,
+        )
 
     entries.sort(key=lambda item: normalize_datetime_utc(item.created_at))
     return entries, has_truncated
+
+
+def plan_collect_entries(
+    entries: list[CollectEntry],
+    *,
+    progress_callback: Callable[[CollectProgressEvent], None] | None = None,
+) -> list[PlannedCollectEntry]:
+    """Plan deterministic event chunks for each collected session."""
+    total = len(entries)
+    planned_entries: list[PlannedCollectEntry] = []
+    total_chunks = 0
+    emit_collect_progress(
+        progress_callback,
+        stage="plan_chunks",
+        current=0,
+        total=total,
+        message="plan chunks",
+    )
+
+    for index, entry in enumerate(entries, start=1):
+        chunks = tuple(chunk_collect_events(entry.events))
+        total_chunks += len(chunks)
+        planned_entries.append(PlannedCollectEntry(collect_entry=entry, chunks=chunks))
+        emit_collect_progress(
+            progress_callback,
+            stage="plan_chunks",
+            current=index,
+            total=total,
+            message="plan chunks",
+            session_uri=entry.session_uri,
+            chunk_total=total_chunks,
+        )
+
+    return planned_entries
 
 
 def build_collect_chunk_prompt(
@@ -581,12 +688,15 @@ def build_collect_session_prompt(
 def _summarize_collect_entry(
     *,
     config: AIConfig,
-    entry: CollectEntry,
+    planned_entry: PlannedCollectEntry,
     index: int,
     timeout_seconds: int,
     local_tz: tzinfo | None,
+    on_chunk_summarized: Callable[[CollectProgressEvent], None] | None = None,
+    on_session_merged: Callable[[CollectProgressEvent], None] | None = None,
 ) -> SessionSummaryEntry:
-    chunks = chunk_collect_events(entry.events)
+    entry = planned_entry.collect_entry
+    chunks = planned_entry.chunks
     chunk_payloads: list[dict[str, list[str]]] = []
     for chunk_index, chunk_events in enumerate(chunks):
         prompt = build_collect_chunk_prompt(
@@ -603,6 +713,16 @@ def _summarize_collect_entry(
             timeout_seconds=timeout_seconds,
         )
         chunk_payloads.append(payload)
+        emit_collect_progress(
+            on_chunk_summarized,
+            stage="summarize_chunks",
+            current=1,
+            total=1,
+            message="summarize chunk",
+            session_uri=entry.session_uri,
+            chunk_index=chunk_index + 1,
+            chunk_total=len(chunks),
+        )
 
     merged = merge_summary_payloads(chunk_payloads)
     if len(chunk_payloads) > 1 and _summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
@@ -612,6 +732,15 @@ def _summarize_collect_entry(
             context_label=f"{entry.session_uri} session merge",
             timeout_seconds=timeout_seconds,
         )
+    emit_collect_progress(
+        on_session_merged,
+        stage="merge_sessions",
+        current=1,
+        total=1,
+        message="merge session",
+        session_uri=entry.session_uri,
+        chunk_total=len(chunks),
+    )
 
     return SessionSummaryEntry(
         index=index,
@@ -625,37 +754,89 @@ def _summarize_collect_entry(
 def summarize_collect_entries(
     *,
     config: AIConfig,
-    entries: list[CollectEntry],
+    planned_entries: list[PlannedCollectEntry],
     summary_concurrency: int,
     local_tz: tzinfo | None = None,
-    progress_callback: Callable[[int, int], None] | None = None,
+    progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     timeout_seconds: int = 90,
 ) -> list[SessionSummaryEntry]:
     """Generate structured per-session summaries with limited concurrency."""
-    if not entries:
+    if not planned_entries:
         return []
 
-    total = len(entries)
+    total = len(planned_entries)
+    total_chunks = sum(len(item.chunks) for item in planned_entries)
     max_workers = max(1, summary_concurrency)
     results: list[SessionSummaryEntry | None] = [None] * total
+    chunk_progress_lock = threading.Lock()
+    merge_progress_lock = threading.Lock()
+    summarized_chunks = 0
+    merged_sessions = 0
 
-    def _summarize(index: int, entry: CollectEntry) -> SessionSummaryEntry:
+    emit_collect_progress(
+        progress_callback,
+        stage="summarize_chunks",
+        current=0,
+        total=total_chunks,
+        message="summarize chunks",
+    )
+    emit_collect_progress(
+        progress_callback,
+        stage="merge_sessions",
+        current=0,
+        total=total,
+        message="merge sessions",
+    )
+
+    def _mark_chunk_summarized(event: CollectProgressEvent) -> None:
+        nonlocal summarized_chunks
+        with chunk_progress_lock:
+            summarized_chunks += event.current
+            current = summarized_chunks
+        emit_collect_progress(
+            progress_callback,
+            stage="summarize_chunks",
+            current=current,
+            total=total_chunks,
+            message="summarize chunks",
+            session_uri=event.session_uri,
+            chunk_index=event.chunk_index,
+            chunk_total=event.chunk_total,
+        )
+
+    def _mark_session_merged(event: CollectProgressEvent) -> None:
+        nonlocal merged_sessions
+        with merge_progress_lock:
+            merged_sessions += event.current
+            current = merged_sessions
+        emit_collect_progress(
+            progress_callback,
+            stage="merge_sessions",
+            current=current,
+            total=total,
+            message="merge sessions",
+            session_uri=event.session_uri,
+            chunk_total=event.chunk_total,
+        )
+
+    def _summarize(index: int, planned_entry: PlannedCollectEntry) -> SessionSummaryEntry:
         return _summarize_collect_entry(
             config=config,
-            entry=entry,
+            planned_entry=planned_entry,
             index=index,
             timeout_seconds=timeout_seconds,
             local_tz=local_tz,
+            on_chunk_summarized=_mark_chunk_summarized,
+            on_session_merged=_mark_session_merged,
         )
 
-    completed = 0
     future_to_index: dict[Future[SessionSummaryEntry], int] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        pending_entries = iter(enumerate(entries))
+        pending_entries = iter(enumerate(planned_entries))
 
         while len(future_to_index) < min(max_workers, total):
-            index, entry = next(pending_entries)
-            future_to_index[executor.submit(_summarize, index, entry)] = index
+            index, planned_entry = next(pending_entries)
+            future_to_index[executor.submit(_summarize, index, planned_entry)] = index
 
         while future_to_index:
             done, _ = wait(tuple(future_to_index), return_when=FIRST_COMPLETED)
@@ -663,9 +844,6 @@ def summarize_collect_entries(
                 index = future_to_index.pop(future)
                 result = future.result()
                 results[index] = result
-                completed += 1
-                if progress_callback is not None:
-                    progress_callback(completed, total)
 
                 try:
                     next_index, next_entry = next(pending_entries)
@@ -697,6 +875,7 @@ def reduce_collect_summaries(
     session_summaries: list[SessionSummaryEntry],
     timeout_seconds: int = 90,
     group_size: int = GROUP_SIZE,
+    progress_callback: Callable[[CollectProgressEvent], None] | None = None,
 ) -> CollectAggregate:
     """Reduce per-session summaries via tree reduction into one final aggregate."""
     if not session_summaries:
@@ -716,6 +895,15 @@ def reduce_collect_summaries(
     while len(working) > 1:
         reduction_depth += 1
         next_level: list[GroupSummaryEntry] = []
+        total_groups = (len(working) + group_size - 1) // group_size
+        emit_collect_progress(
+            progress_callback,
+            stage="tree_reduction",
+            current=0,
+            total=total_groups,
+            message="tree reduction",
+            level=reduction_depth,
+        )
         for start in range(0, len(working), group_size):
             group = working[start : start + group_size]
             payloads = [item.summary_data for item in group]
@@ -736,6 +924,14 @@ def reduce_collect_summaries(
                     summary_data=merged,
                     session_count=sum(item.session_count for item in group),
                 )
+            )
+            emit_collect_progress(
+                progress_callback,
+                stage="tree_reduction",
+                current=(start // group_size) + 1,
+                total=total_groups,
+                message="tree reduction",
+                level=reduction_depth,
             )
         working = next_level
 
