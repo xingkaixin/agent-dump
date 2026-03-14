@@ -1011,6 +1011,10 @@ def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> s
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.2,
+        "enable_thinking": False,
+        "thinking": {
+            "type": "disbled"
+        }
     }
     body = json.dumps(payload).encode("utf-8")
     url = f"{_normalize_base_url(config.base_url)}/chat/completions"
@@ -1051,6 +1055,7 @@ def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -
         "messages": [
             {"role": "user", "content": prompt},
         ],
+        "thinking":{"type":"disabled"}
     }
     body = json.dumps(payload).encode("utf-8")
     url = f"{_normalize_base_url(config.base_url)}/messages"
