@@ -1092,9 +1092,18 @@ def write_collect_markdown(
     since_date: date,
     until_date: date,
     output_dir: Path | None = None,
+    output_path: Path | None = None,
 ) -> Path:
-    """Write collect markdown file to current directory."""
-    base = output_dir if output_dir is not None else Path.cwd()
-    path = base / f"agent-dump-collect-{since_date.strftime('%Y%m%d')}-{until_date.strftime('%Y%m%d')}.md"
+    """Write collect markdown file to current directory or a specific path."""
+    if output_path is not None and output_dir is not None:
+        raise ValueError("output_path and output_dir are mutually exclusive")
+
+    if output_path is not None:
+        path = output_path
+    else:
+        base = output_dir if output_dir is not None else Path.cwd()
+        path = base / f"agent-dump-collect-{since_date.strftime('%Y%m%d')}-{until_date.strftime('%Y%m%d')}.md"
+
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(markdown, encoding="utf-8")
     return path

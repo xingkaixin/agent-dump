@@ -23,6 +23,7 @@ from agent_dump.cli import (
     parse_format_spec,
     parse_uri,
     render_session_text,
+    resolve_collect_save_path,
     show_collect_progress,
 )
 from agent_dump.collect import CollectProgressEvent
@@ -251,6 +252,7 @@ class TestMain:
             list=False,
             since=None,
             until=None,
+            save=None,
         )
 
         result = handle_collect_mode(args)
@@ -265,6 +267,7 @@ class TestMain:
             list=False,
             since=None,
             until=None,
+            save=None,
         )
         mock_config = mock.MagicMock()
         mock_entry = mock.MagicMock()
@@ -332,6 +335,82 @@ class TestMain:
         assert "render_final: 2/2" in captured.err
         assert "write_output: 1/1" in captured.err
         assert str(output_path) in captured.out
+
+    def test_collect_mode_passes_resolved_save_path(self, tmp_path):
+        args = argparse.Namespace(
+            collect=True,
+            uri=None,
+            interactive=False,
+            list=False,
+            since="2026-03-01",
+            until="2026-03-05",
+            save=str(tmp_path / "reports" / "report.md"),
+        )
+        mock_config = mock.MagicMock()
+        mock_entry = mock.MagicMock()
+        mock_planned_entry = mock.MagicMock()
+        output_path = tmp_path / "reports" / "report.md"
+
+        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+            with mock.patch("agent_dump.cli.load_collect_config", return_value=mock.MagicMock(summary_concurrency=4)):
+                with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                    with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+                        mock_scanner = mock.MagicMock()
+                        mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+                        mock_scanner_class.return_value = mock_scanner
+                        with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
+                            with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock_planned_entry]):
+                                with mock.patch("agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]):
+                                    with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
+                                        with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
+                                            with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                                with mock.patch(
+                                                    "agent_dump.cli.write_collect_markdown",
+                                                    return_value=output_path,
+                                                ) as mock_write:
+                                                    result = handle_collect_mode(args)
+
+        assert result == 0
+        mock_write.assert_called_once_with(
+            "# collect",
+            since_date=datetime(2026, 3, 1).date(),
+            until_date=datetime(2026, 3, 5).date(),
+            output_path=output_path,
+        )
+
+    def test_resolve_collect_save_path_defaults_to_current_directory_when_missing(self):
+        assert (
+            resolve_collect_save_path(
+                None,
+                since_date=datetime(2026, 3, 1).date(),
+                until_date=datetime(2026, 3, 5).date(),
+            )
+            is None
+        )
+
+    def test_resolve_collect_save_path_uses_default_filename_for_directory(self, tmp_path):
+        path = resolve_collect_save_path(
+            str(tmp_path),
+            since_date=datetime(2026, 3, 1).date(),
+            until_date=datetime(2026, 3, 5).date(),
+        )
+        assert path == tmp_path / "agent-dump-collect-20260301-20260305.md"
+
+    def test_resolve_collect_save_path_treats_missing_non_suffix_path_as_directory(self, tmp_path):
+        path = resolve_collect_save_path(
+            str(tmp_path / "reports"),
+            since_date=datetime(2026, 3, 1).date(),
+            until_date=datetime(2026, 3, 5).date(),
+        )
+        assert path == tmp_path / "reports" / "agent-dump-collect-20260301-20260305.md"
+
+    def test_resolve_collect_save_path_treats_md_suffix_as_file(self, tmp_path):
+        path = resolve_collect_save_path(
+            str(tmp_path / "reports" / "report.md"),
+            since_date=datetime(2026, 3, 1).date(),
+            until_date=datetime(2026, 3, 5).date(),
+        )
+        assert path == tmp_path / "reports" / "report.md"
 
     def test_show_collect_progress_non_tty_reports_incremental_progress(self, capsys):
         with mock.patch("sys.stderr.isatty", return_value=False):

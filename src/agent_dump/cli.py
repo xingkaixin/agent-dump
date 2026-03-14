@@ -5,7 +5,7 @@ Command-line interface for agent-dump
 import argparse
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import json
 import os
 from pathlib import Path
@@ -381,6 +381,23 @@ def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
     return {k: v for k, v in groups.items() if v}
 
 
+def resolve_collect_save_path(save: str | None, *, since_date: date, until_date: date) -> Path | None:
+    """Resolve collect output path from an optional save spec."""
+    if save is None:
+        return None
+
+    candidate = Path(save)
+    default_name = f"agent-dump-collect-{since_date.strftime('%Y%m%d')}-{until_date.strftime('%Y%m%d')}.md"
+
+    if candidate.exists():
+        return candidate / default_name if candidate.is_dir() else candidate
+
+    if candidate.suffix.lower() == ".md":
+        return candidate
+
+    return candidate / default_name
+
+
 def display_sessions_list(
     agent: BaseAgent, sessions: list[Session], page_size: int = 20, show_pagination: bool = True
 ) -> bool:
@@ -690,7 +707,12 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
                 message="write output",
             )
             phase = "write"
-            output_path = write_collect_markdown(markdown, since_date=since_date, until_date=until_date)
+            output_path = write_collect_markdown(
+                markdown,
+                since_date=since_date,
+                until_date=until_date,
+                output_path=resolve_collect_save_path(args.save, since_date=since_date, until_date=until_date),
+            )
             emit_collect_progress(
                 update_progress,
                 stage="write_output",
@@ -744,6 +766,7 @@ def main():
     parser.add_argument("--collect", action="store_true", help=i18n.t(Keys.CLI_COLLECT_HELP))
     parser.add_argument("-since", "--since", type=str, default=None, help=i18n.t(Keys.CLI_SINCE_HELP))
     parser.add_argument("-until", "--until", type=str, default=None, help=i18n.t(Keys.CLI_UNTIL_HELP))
+    parser.add_argument("--save", type=str, default=None, help=i18n.t(Keys.CLI_SAVE_HELP))
     parser.add_argument(
         "-config",
         "--config",

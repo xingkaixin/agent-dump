@@ -171,6 +171,10 @@ uv run agent-dump codex://<session-id> --format print,json --summary --output ./
 uv run agent-dump --collect
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
+uv run agent-dump --collect --save ./reports
+uv run agent-dump --collect --save ./reports/weekly.md
+uv run agent-dump --collect --save /tmp/agent-dump-reports
+uv run agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
 
 # Note: --collect converts each session into high-signal events, plans chunks by budget,
 #       requests fixed JSON summaries per chunk, merges them deterministically per session,
@@ -178,6 +182,7 @@ uv run agent-dump --collect -since 20260301 -until 20260305
 # Note: during --collect, stderr shows multi-stage progress such as scan_sessions,
 #       plan_chunks, summarize_chunks, merge_sessions, tree_reduction, render_final, and write_output.
 # Note: collect writes files like agent-dump-collect-20260301-20260305.md.
+# Note: --save accepts either a directory or a .md file path. Missing non-.md paths are treated as directories.
 
 # config mode
 uv run agent-dump --config view
@@ -204,6 +209,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--collect` | Collect session print content by date range, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
 | `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
 | `-until`, `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
+| `--save` | collect output path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. | - |
 | `-config`, `--config` | Config management: `view` or `edit` | - |
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
 | `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning. | - |
