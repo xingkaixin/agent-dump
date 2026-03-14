@@ -875,7 +875,7 @@ class TestKimiAgent:
         session_dir = tmp_path / "session1"
         session_dir.mkdir()
         tool_names = ["ReadFile", "Glob", "StrReplaceFile", "Grep", "WriteFile", "Shell"]
-        records = [
+        records: list[dict[str, object]] = [
             {
                 "timestamp": 1.0,
                 "message": {
@@ -884,7 +884,7 @@ class TestKimiAgent:
                 },
             }
         ]
-        records.extend(
+        tool_call_records: list[dict[str, object]] = [
             {
                 "timestamp": float(index + 1),
                 "message": {
@@ -897,7 +897,8 @@ class TestKimiAgent:
                 },
             }
             for index, name in enumerate(tool_names, start=1)
-        )
+        ]
+        records.extend(tool_call_records)
         write_jsonl(session_dir / "wire.jsonl", records)
 
         result = agent._get_session_data_from_wire(make_session(session_dir))

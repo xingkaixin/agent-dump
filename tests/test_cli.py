@@ -10,6 +10,7 @@ from unittest import mock
 
 import pytest
 
+from agent_dump.agents.base import Session
 from agent_dump.cli import (
     display_sessions_list,
     export_sessions,
@@ -24,6 +25,25 @@ from agent_dump.cli import (
     render_session_text,
     show_collect_progress,
 )
+
+
+def make_session(
+    session_id: str,
+    title: str,
+    *,
+    created_at: datetime | None = None,
+    source_path: Path | None = None,
+) -> Session:
+    """构造测试用 Session。"""
+    session_time = created_at or datetime(2026, 1, 1, 12, 0, 0)
+    return Session(
+        id=session_id,
+        title=title,
+        created_at=session_time,
+        updated_at=session_time,
+        source_path=source_path or Path(f"/tmp/{session_id}.jsonl"),
+        metadata={},
+    )
 
 
 class TestParseUri:
@@ -99,8 +119,7 @@ class TestExportSessions:
         mock_agent.name = "test_agent"
         mock_agent.display_name = "Test Agent"
 
-        mock_session = mock.MagicMock()
-        mock_session.title = "Test Session"
+        mock_session = make_session("session-001", "Test Session")
 
         mock_agent.export_session.return_value = tmp_path / "test_agent" / "session-001.json"
 
@@ -116,8 +135,8 @@ class TestExportSessions:
         mock_agent.display_name = "Test Agent"
 
         sessions = [
-            mock.MagicMock(title="Session 1"),
-            mock.MagicMock(title="Session 2"),
+            make_session("session-001", "Session 1"),
+            make_session("session-002", "Session 2"),
         ]
 
         mock_agent.export_session.side_effect = [
@@ -137,8 +156,8 @@ class TestExportSessions:
         mock_agent.display_name = "Test Agent"
 
         sessions = [
-            mock.MagicMock(title="Session 1"),
-            mock.MagicMock(title="Session 2"),
+            make_session("session-001", "Session 1"),
+            make_session("session-002", "Session 2"),
         ]
 
         # 第一个成功，第二个失败
@@ -159,8 +178,7 @@ class TestExportSessions:
         mock_agent.name = "test_agent"
         mock_agent.display_name = "Test Agent"
 
-        mock_session = mock.MagicMock()
-        mock_session.title = "Test Session"
+        mock_session = make_session("session-001", "Test Session")
 
         output_dir = tmp_path / "new_output"
         mock_agent.export_session.return_value = output_dir / "test_agent" / "session.json"
@@ -177,9 +195,7 @@ class TestExportSessions:
         mock_agent.get_session_uri.return_value = "codex://session-001"
         mock_agent.get_session_data.return_value = {"messages": []}
 
-        session = mock.MagicMock()
-        session.id = "session-001"
-        session.title = "Session 1"
+        session = make_session("session-001", "Session 1")
 
         mock_agent.export_session.return_value = tmp_path / "test_agent" / "session-001.json"
         mock_agent.export_raw_session.return_value = tmp_path / "test_agent" / "session-001.raw.jsonl"
@@ -1816,14 +1832,16 @@ class TestTimeHelpers:
         now_value = datetime(2026, 1, 10, 12, 0, 0)
 
         sessions = [
-            mock.MagicMock(id="today-dt", created_at=now_value - timedelta(hours=1)),
-            mock.MagicMock(id="today-sec", created_at=(now_value - timedelta(hours=2)).timestamp()),
-            mock.MagicMock(id="today-ms", created_at=int((now_value - timedelta(hours=3)).timestamp() * 1000)),
-            mock.MagicMock(id="yesterday", created_at=now_value - timedelta(days=1, hours=1)),
-            mock.MagicMock(id="week", created_at=now_value - timedelta(days=3)),
-            mock.MagicMock(id="month", created_at=now_value - timedelta(days=20)),
-            mock.MagicMock(id="older", created_at=now_value - timedelta(days=40)),
+            make_session("today-dt", "Today dt", created_at=now_value - timedelta(hours=1)),
+            make_session("today-sec", "Today sec"),
+            make_session("today-ms", "Today ms"),
+            make_session("yesterday", "Yesterday", created_at=now_value - timedelta(days=1, hours=1)),
+            make_session("week", "Week", created_at=now_value - timedelta(days=3)),
+            make_session("month", "Month", created_at=now_value - timedelta(days=20)),
+            make_session("older", "Older", created_at=now_value - timedelta(days=40)),
         ]
+        setattr(sessions[1], "created_at", (now_value - timedelta(hours=2)).timestamp())
+        setattr(sessions[2], "created_at", int((now_value - timedelta(hours=3)).timestamp() * 1000))
 
         with mock.patch("agent_dump.cli.datetime") as mock_datetime:
             mock_datetime.now.return_value = now_value
@@ -1857,7 +1875,7 @@ class TestDisplaySessionsList:
 
     def test_display_sessions_list_quit_on_q(self, capsys):
         """测试分页模式输入 q 退出"""
-        sessions = [mock.MagicMock(id=f"s{i}", title=f"Session {i}") for i in range(3)]
+        sessions = [make_session(f"s{i}", f"Session {i}") for i in range(3)]
 
         with mock.patch("builtins.input", return_value="q"):
             result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=True)
@@ -1868,7 +1886,7 @@ class TestDisplaySessionsList:
 
     def test_display_sessions_list_handles_eof_interrupt(self, capsys):
         """测试分页模式处理 EOFError"""
-        sessions = [mock.MagicMock(id=f"s{i}", title=f"Session {i}") for i in range(3)]
+        sessions = [make_session(f"s{i}", f"Session {i}") for i in range(3)]
 
         with mock.patch("builtins.input", side_effect=EOFError):
             result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=True)
@@ -1879,7 +1897,7 @@ class TestDisplaySessionsList:
 
     def test_display_sessions_list_show_all_pages(self, capsys):
         """测试分页模式翻页直到结束"""
-        sessions = [mock.MagicMock(id=f"s{i}", title=f"Session {i}") for i in range(3)]
+        sessions = [make_session(f"s{i}", f"Session {i}") for i in range(3)]
 
         with mock.patch("builtins.input", return_value=""):
             result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=True)
@@ -1890,7 +1908,7 @@ class TestDisplaySessionsList:
 
     def test_display_sessions_list_non_pagination_shows_remaining_hint(self, capsys):
         """测试非分页模式提示剩余会话数"""
-        sessions = [mock.MagicMock(id=f"s{i}", title=f"Session {i}") for i in range(3)]
+        sessions = [make_session(f"s{i}", f"Session {i}") for i in range(3)]
         result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=False)
 
         assert result is False
