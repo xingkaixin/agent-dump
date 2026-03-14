@@ -284,11 +284,12 @@ class TestMain:
                                 "agent_dump.cli.summarize_collect_entries",
                                 side_effect=_summarize_collect_entries,
                             ):
-                                with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
-                                    with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
-                                        output_path = tmp_path / "agent-dump-collect-20260305-20260305.md"
-                                        with mock.patch("agent_dump.cli.write_collect_markdown", return_value=output_path):
-                                            result = handle_collect_mode(args)
+                                with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
+                                    with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
+                                        with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                            output_path = tmp_path / "agent-dump-collect-20260305-20260305.md"
+                                            with mock.patch("agent_dump.cli.write_collect_markdown", return_value=output_path):
+                                                result = handle_collect_mode(args)
 
         assert result == 0
         captured = capsys.readouterr()

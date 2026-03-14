@@ -18,6 +18,7 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.collect import (
     build_collect_final_prompt,
     collect_entries,
+    reduce_collect_summaries,
     request_summary_from_llm,
     resolve_collect_date_range,
     summarize_collect_entries,
@@ -630,10 +631,14 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
                 summary_concurrency=collect_config.summary_concurrency,
                 progress_callback=update_progress,
             )
+        aggregate = reduce_collect_summaries(
+            config=config,
+            session_summaries=session_summaries,
+        )
         prompt = build_collect_final_prompt(
             since_date=since_date,
             until_date=until_date,
-            session_summaries=session_summaries,
+            aggregate=aggregate,
             has_truncated=has_truncated,
         )
         with show_loading(i18n.t(Keys.COLLECT_SUMMARY_LOADING)):
