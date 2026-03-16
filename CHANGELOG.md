@@ -2,6 +2,41 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.8] - 2026-03-16
+
+### Added
+
+- **Collect structured multi-stage reduction pipeline**
+  - Rewrote collect summary from a simple "summarize each session then merge" approach into a full multi-stage pipeline: `scan_sessions → plan_chunks → summarize_chunks → merge_sessions → tree_reduction → render_final → write_output`
+  - Uses a fixed JSON schema (10 structured fields: topics, decisions, key_actions, etc.) to generate summaries for each chunk
+  - Aggregates all session summaries through tree reduction (GROUP_SIZE=8), layer by layer
+  - Added `--save` option to specify the collect output path (directory or `.md` file)
+  - Disabled thinking/reasoning for OpenAI and Anthropic requests to reduce unnecessary token overhead
+  - stderr displays multi-stage progress events (scan_sessions, plan_chunks, summarize_chunks, etc.)
+
+### Changed
+
+- **Collect summary structure adjustment**
+  - Session summaries now use structured JSON (10 fields) instead of free-text markdown
+  - Output filename reverted to `agent-dump-collect-YYYYMMDD-YYYYMMDD.md` (customizable via `--save`)
+
+### Improved
+
+- Expanded test coverage for collect multi-stage progress and `--save` path resolution
+- Improved test type safety using typed Session factories instead of mock objects
+
+### Documentation
+
+- Updated README/README_zh `--collect` description with multi-stage pipeline details and `--save` usage
+
+### Dependencies
+
+- Bump ruff 0.15.2 → 0.15.6, ty 0.0.18 → 0.0.23
+
+### CI
+
+- Added Cloudflare Pages deployment support and analytics tracking script (web landing page infrastructure, not visible to CLI users)
+
 ## [0.6.7] - 2026-03-10
 
 ### Changed
@@ -307,6 +342,12 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8
+[0.6.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.7
+[0.6.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.6
+[0.6.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.5
+[0.6.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.4
+[0.6.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.3
 [0.6.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.2
 [0.6.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.1
 [0.6.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.0

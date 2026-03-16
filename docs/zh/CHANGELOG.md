@@ -1,5 +1,40 @@
 # 更新日志
 
+## [0.6.8] - 2026-03-16
+
+### 新增功能
+
+- **Collect 结构化多阶段归约管线**
+  - 将 collect 摘要从简单的"逐条 summary 再合并"重写为完整的多阶段管线：`scan_sessions → plan_chunks → summarize_chunks → merge_sessions → tree_reduction → render_final → write_output`
+  - 使用固定 JSON schema（10 个结构化字段：topics、decisions、key_actions 等）对每个 chunk 生成摘要
+  - 通过 tree reduction（GROUP_SIZE=8）逐层聚合所有 session 摘要
+  - 新增 `--save` 选项，支持指定 collect 输出路径（目录或 `.md` 文件）
+  - 为 OpenAI 和 Anthropic 请求禁用 thinking/reasoning，减少不必要的 token 开销
+  - stderr 显示多阶段进度事件（scan_sessions、plan_chunks、summarize_chunks 等）
+
+### 变更
+
+- **Collect 摘要结构调整**
+  - session summary 现使用结构化 JSON（10 个字段）替代自由文本 markdown
+  - 输出文件名恢复为 `agent-dump-collect-YYYYMMDD-YYYYMMDD.md`（通过 `--save` 可自定义）
+
+### 改进
+
+- 扩展 collect 多阶段进度与 `--save` 路径解析的测试覆盖
+- 改进测试类型安全，使用 typed Session 工厂替代 mock 对象
+
+### 文档
+
+- 更新 README/README_zh 中 `--collect` 的描述，补充多阶段管线说明与 `--save` 用法
+
+### 依赖
+
+- 升级 ruff 0.15.2 → 0.15.6、ty 0.0.18 → 0.0.23
+
+### CI
+
+- 新增 Cloudflare Pages 部署支持与 Analytics 追踪脚本（web 落地页基础设施，非 CLI 用户可见功能）
+
 ## [0.6.7] - 2026-03-10
 
 ### 变更
@@ -311,6 +346,12 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8
+[0.6.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.7
+[0.6.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.6
+[0.6.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.5
+[0.6.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.4
+[0.6.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.3
 [0.6.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.2
 [0.6.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.1
 [0.6.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.0
