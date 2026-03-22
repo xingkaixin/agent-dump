@@ -67,6 +67,23 @@ class TestConfigReadWrite:
 
         assert load_collect_config(path) == CollectConfig(summary_concurrency=8)
 
+    def test_load_collect_config_reads_agent_deny_paths(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[collect]\n"
+                "summary_concurrency = 8\n"
+                "\n[agent.claudecode]\n"
+                'deny = [\n  "/repo/a",\n  "/repo/b/sub"\n]\n'
+            ),
+            encoding="utf-8",
+        )
+
+        assert load_collect_config(path) == CollectConfig(
+            summary_concurrency=8,
+            agent_denies={"claudecode": ("/repo/a", "/repo/b/sub")},
+        )
+
     def test_load_collect_config_falls_back_for_invalid_value(self, tmp_path):
         path = tmp_path / "config.toml"
         path.write_text(
@@ -83,6 +100,22 @@ class TestConfigReadWrite:
         )
 
         assert load_collect_config(path) == CollectConfig()
+
+    def test_load_collect_config_ignores_invalid_agent_deny(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[collect]\n"
+                "summary_concurrency = 2\n"
+                "\n[agent.claudecode]\n"
+                "deny = bad\n"
+                "\n[agent.codex]\n"
+                "deny = []\n"
+            ),
+            encoding="utf-8",
+        )
+
+        assert load_collect_config(path) == CollectConfig(summary_concurrency=2)
 
     def test_mask_api_key(self):
         assert mask_api_key("") == ""

@@ -273,14 +273,16 @@ class TestMain:
         mock_entry = mock.MagicMock()
         mock_planned_entry = mock.MagicMock()
 
+        collect_config = mock.MagicMock(summary_concurrency=4)
+
         with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
-            with mock.patch("agent_dump.cli.load_collect_config", return_value=mock.MagicMock(summary_concurrency=4)):
+            with mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config):
                 with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
                     with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                         mock_scanner = mock.MagicMock()
                         mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                         mock_scanner_class.return_value = mock_scanner
-                        with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
+                        with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)) as mock_collect:
                             with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock_planned_entry]):
                                 def _summarize_collect_entries(**kwargs):
                                     kwargs["progress_callback"](
@@ -329,6 +331,7 @@ class TestMain:
                                                     result = handle_collect_mode(args)
 
         assert result == 0
+        assert mock_collect.call_args.kwargs["collect_config"] is collect_config
         captured = capsys.readouterr()
         assert "summarize_chunks: 1/1" in captured.err
         assert "merge_sessions: 1/1 sessions" in captured.err

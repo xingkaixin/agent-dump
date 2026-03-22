@@ -1,7 +1,7 @@
 """Configuration management for collect mode."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 from pathlib import Path
 
@@ -26,6 +26,7 @@ class CollectConfig:
     """Collect mode configuration."""
 
     summary_concurrency: int = 4
+    agent_denies: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 DEFAULT_COLLECT_SUMMARY_CONCURRENCY = 4
@@ -61,14 +62,55 @@ def _strip_quotes(value: str) -> str:
     return text
 
 
-def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str]]:
+def _parse_toml_string_array(value: str) -> tuple[str, ...] | None:
+    normalized = value.strip()
+    if not (normalized.startswith("[") and normalized.endswith("]")):
+        return None
+
+    body = normalized[1:-1].strip()
+    if not body:
+        return ()
+
+    items: list[str] = []
+    for raw_item in body.split(","):
+        item = raw_item.strip()
+        if not item:
+            return None
+        stripped = _strip_quotes(item)
+        if stripped == item or not stripped:
+            return None
+        items.append(stripped)
+    return tuple(items)
+
+
+def _parse_toml_value(value: str) -> str | tuple[str, ...]:
+    array_value = _parse_toml_string_array(value)
+    if array_value is not None:
+        return array_value
+    return _strip_quotes(value)
+
+
+def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str | tuple[str, ...]]]:
     """Parse minimal TOML sections without third-party deps."""
     current_section: str | None = None
-    parsed: dict[str, dict[str, str]] = {}
+    parsed: dict[str, dict[str, str | tuple[str, ...]]] = {}
+    pending_array_key: str | None = None
+    pending_array_lines: list[str] = []
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
+            continue
+
+        if pending_array_key is not None:
+            pending_array_lines.append(line.split("#", 1)[0].strip())
+            if "]" not in line:
+                continue
+            parsed.setdefault(current_section or "", {})[pending_array_key] = _parse_toml_value(
+                " ".join(pending_array_lines)
+            )
+            pending_array_key = None
+            pending_array_lines = []
             continue
 
         if line.startswith("[") and line.endswith("]"):
@@ -85,12 +127,16 @@ def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str]]:
 
         normalized_key = key.strip()
         normalized_value = value.split("#", 1)[0].strip()
-        parsed.setdefault(current_section, {})[normalized_key] = _strip_quotes(normalized_value)
+        if normalized_value.startswith("[") and "]" not in normalized_value:
+            pending_array_key = normalized_key
+            pending_array_lines = [normalized_value]
+            continue
+        parsed.setdefault(current_section, {})[normalized_key] = _parse_toml_value(normalized_value)
 
     return parsed
 
 
-def _read_config_sections(config_path: Path) -> dict[str, dict[str, str]]:
+def _read_config_sections(config_path: Path) -> dict[str, dict[str, str | tuple[str, ...]]]:
     return _parse_simple_toml_sections(config_path.read_text(encoding="utf-8"))
 
 
@@ -101,11 +147,15 @@ def load_ai_config(path: Path | None = None) -> AIConfig | None:
         return None
 
     parsed = _read_config_sections(config_path).get("ai", {})
+    provider = parsed.get("provider", "")
+    base_url = parsed.get("base_url", "")
+    model = parsed.get("model", "")
+    api_key = parsed.get("api_key", "")
     return AIConfig(
-        provider=parsed.get("provider", "").strip(),
-        base_url=parsed.get("base_url", "").strip(),
-        model=parsed.get("model", "").strip(),
-        api_key=parsed.get("api_key", "").strip(),
+        provider=provider.strip() if isinstance(provider, str) else "",
+        base_url=base_url.strip() if isinstance(base_url, str) else "",
+        model=model.strip() if isinstance(model, str) else "",
+        api_key=api_key.strip() if isinstance(api_key, str) else "",
     )
 
 
@@ -115,20 +165,32 @@ def load_collect_config(path: Path | None = None) -> CollectConfig:
     if not config_path.exists():
         return CollectConfig()
 
-    parsed = _read_config_sections(config_path).get("collect", {})
-    raw_concurrency = parsed.get("summary_concurrency", "").strip()
-    if not raw_concurrency:
-        return CollectConfig()
+    sections = _read_config_sections(config_path)
+    parsed = sections.get("collect", {})
+    concurrency = DEFAULT_COLLECT_SUMMARY_CONCURRENCY
+    raw_concurrency = parsed.get("summary_concurrency", "")
+    if isinstance(raw_concurrency, str) and raw_concurrency.strip():
+        try:
+            parsed_concurrency = int(raw_concurrency)
+        except ValueError:
+            parsed_concurrency = DEFAULT_COLLECT_SUMMARY_CONCURRENCY
+        if parsed_concurrency > 0:
+            concurrency = parsed_concurrency
 
-    try:
-        concurrency = int(raw_concurrency)
-    except ValueError:
-        return CollectConfig()
+    agent_denies: dict[str, tuple[str, ...]] = {}
+    for section_name, values in sections.items():
+        if not section_name.startswith("agent."):
+            continue
+        agent_name = section_name.partition(".")[2].strip()
+        if not agent_name:
+            continue
+        raw_deny = values.get("deny")
+        if isinstance(raw_deny, tuple):
+            deny_paths = tuple(item.strip() for item in raw_deny if item.strip())
+            if deny_paths:
+                agent_denies[agent_name] = deny_paths
 
-    if concurrency <= 0:
-        return CollectConfig()
-
-    return CollectConfig(summary_concurrency=concurrency)
+    return CollectConfig(summary_concurrency=concurrency, agent_denies=agent_denies)
 
 
 def validate_ai_config(config: AIConfig | None) -> tuple[bool, list[str]]:

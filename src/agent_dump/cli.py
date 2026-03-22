@@ -651,6 +651,7 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
                 agents=available_agents,
                 since_date=since_date,
                 until_date=until_date,
+                collect_config=collect_config,
                 render_session_text_fn=render_session_text,
                 progress_callback=update_progress,
             )

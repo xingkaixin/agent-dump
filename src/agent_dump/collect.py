@@ -13,7 +13,7 @@ from typing import Any, cast
 from urllib import error, request
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.config import AIConfig
+from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
@@ -177,6 +177,28 @@ def resolve_collect_date_range(
 
 def _session_local_date(session: Session, local_tz: tzinfo) -> date:
     return to_local_datetime(session.created_at, local_tz).date()
+
+
+def _normalize_collect_project_path(value: str) -> Path | None:
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return Path(normalized).expanduser().resolve(strict=False)
+
+
+def _is_session_denied(session: Session, deny_paths: tuple[str, ...]) -> bool:
+    project_directory = str(session.metadata.get("cwd") or session.metadata.get("directory") or "")
+    session_path = _normalize_collect_project_path(project_directory)
+    if session_path is None:
+        return False
+
+    for deny_path in deny_paths:
+        denied_root = _normalize_collect_project_path(deny_path)
+        if denied_root is None:
+            continue
+        if session_path == denied_root or denied_root in session_path.parents:
+            return True
+    return False
 
 
 def _normalize_text(value: str) -> str:
@@ -481,6 +503,7 @@ def collect_entries(
     agents: list[BaseAgent],
     since_date: date,
     until_date: date,
+    collect_config: CollectConfig | None = None,
     render_session_text_fn,
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
@@ -489,15 +512,19 @@ def collect_entries(
     entries: list[CollectEntry] = []
     has_truncated = False
     resolved_local_tz = local_tz or get_local_timezone()
+    resolved_collect_config = collect_config or CollectConfig()
     matched_sessions: list[tuple[BaseAgent, Session, date]] = []
 
     for agent in agents:
         days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
         sessions = agent.get_sessions(days=days_span)
+        deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
 
         for session in sessions:
             session_date = _session_local_date(session, resolved_local_tz)
             if session_date < since_date or session_date > until_date:
+                continue
+            if deny_paths and _is_session_denied(session, deny_paths):
                 continue
             matched_sessions.append((agent, session, session_date))
 
@@ -1012,9 +1039,7 @@ def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> s
         ],
         "temperature": 0.2,
         "enable_thinking": False,
-        "thinking": {
-            "type": "disbled"
-        }
+        "thinking": {"type": "disbled"},
     }
     body = json.dumps(payload).encode("utf-8")
     url = f"{_normalize_base_url(config.base_url)}/chat/completions"
@@ -1055,7 +1080,7 @@ def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -
         "messages": [
             {"role": "user", "content": prompt},
         ],
-        "thinking":{"type":"disabled"}
+        "thinking": {"type": "disabled"},
     }
     body = json.dumps(payload).encode("utf-8")
     url = f"{_normalize_base_url(config.base_url)}/messages"

@@ -236,7 +236,14 @@ api_key = "sk-..."
 
 [collect]
 summary_concurrency = 4
+
+[agent.claudecode]
+deny = [
+  "/Users/Kevin/workspace/projects/work/fin-agent/agent",
+]
 ```
+
+`[agent.<name>].deny` only applies to `--collect`. When a session `cwd` matches one of the configured paths, or is inside that path, the session is ignored during collect.
 
 ## Project Structure
 

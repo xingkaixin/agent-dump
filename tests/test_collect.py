@@ -30,6 +30,7 @@ from agent_dump.collect import (
     write_collect_markdown,
 )
 from agent_dump.config import AIConfig
+from agent_dump.config import CollectConfig
 
 
 class TestCollectDates:
@@ -219,6 +220,66 @@ class TestCollectEntries:
         assert [event.stage for event in progress] == ["scan_sessions", "scan_sessions"]
         assert progress[-1].current == 1
         assert progress[-1].total == 1
+
+    def test_collect_entries_ignores_denied_agent_projects(self):
+        now = datetime.now(timezone.utc)
+        denied_root = mock.MagicMock()
+        denied_root.id = "s-denied-root"
+        denied_root.title = "denied-root"
+        denied_root.created_at = now - timedelta(hours=1)
+        denied_root.updated_at = now - timedelta(hours=1)
+        denied_root.metadata = {"cwd": "/repo/fin-agent/agent"}
+
+        denied_child = mock.MagicMock()
+        denied_child.id = "s-denied-child"
+        denied_child.title = "denied-child"
+        denied_child.created_at = now - timedelta(hours=2)
+        denied_child.updated_at = now - timedelta(hours=2)
+        denied_child.metadata = {"cwd": "/repo/fin-agent/agent/subdir"}
+
+        allowed = mock.MagicMock()
+        allowed.id = "s-allowed"
+        allowed.title = "allowed"
+        allowed.created_at = now - timedelta(hours=3)
+        allowed.updated_at = now - timedelta(hours=3)
+        allowed.metadata = {"cwd": "/repo/other"}
+
+        claude_agent = mock.MagicMock()
+        claude_agent.name = "claudecode"
+        claude_agent.display_name = "Claude Code"
+        claude_agent.get_sessions.return_value = [denied_root, denied_child, allowed]
+        claude_agent.get_session_uri.side_effect = lambda s: f"claude://{s.id}"
+        claude_agent.get_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "处理仓库问题"}]}]
+        }
+
+        codex_session = mock.MagicMock()
+        codex_session.id = "s-codex"
+        codex_session.title = "codex"
+        codex_session.created_at = now - timedelta(hours=4)
+        codex_session.updated_at = now - timedelta(hours=4)
+        codex_session.metadata = {"cwd": "/repo/fin-agent/agent"}
+
+        codex_agent = mock.MagicMock()
+        codex_agent.name = "codex"
+        codex_agent.display_name = "Codex"
+        codex_agent.get_sessions.return_value = [codex_session]
+        codex_agent.get_session_uri.side_effect = lambda s: f"codex://{s.id}"
+        codex_agent.get_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "处理 codex 会话"}]}]
+        }
+
+        entries, truncated = collect_entries(
+            agents=[claude_agent, codex_agent],
+            since_date=(now - timedelta(days=1)).date(),
+            until_date=now.date(),
+            collect_config=CollectConfig(agent_denies={"claudecode": ("/repo/fin-agent/agent",)}),
+            render_session_text_fn=lambda uri, data: f"# Session Dump\n{uri}\n{json.dumps(data)}",
+        )
+
+        assert truncated is False
+        assert [entry.session_id for entry in entries] == ["s-codex", "s-allowed"]
+        assert [entry.agent_name for entry in entries] == ["codex", "claudecode"]
 
     def test_collect_entries_filters_by_user_local_date(self):
         local_tz = timezone(timedelta(hours=8))
