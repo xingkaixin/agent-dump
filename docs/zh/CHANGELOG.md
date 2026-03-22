@@ -1,5 +1,18 @@
 # 更新日志
 
+## [0.6.9] - 2026-03-22
+
+### 新增功能
+
+- **Collect 按 agent deny 过滤会话**
+  - `--collect` 现支持从 `config.toml` 读取 `[agent.<name>].deny`
+  - 当 session 的 `cwd`/项目目录命中 deny 路径，或位于该路径下时，会在 collect 阶段直接忽略
+  - 过滤范围仅限 collect，不影响普通导出、`--list`、`--interactive` 或 URI 链路
+
+### 文档
+
+- 补充 `[agent.claudecode].deny` 的 collect 配置示例，并明确该配置只作用于 collect
+
 ## [0.6.8] - 2026-03-16
 
 ### 新增功能
@@ -347,6 +360,7 @@
 - 支持 `uv tool install` 和 `uvx` 运行
 
 [0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8
+[0.6.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.9
 [0.6.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.7
 [0.6.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.6
 [0.6.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.5

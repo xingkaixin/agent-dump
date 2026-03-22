@@ -2,6 +2,19 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.9] - 2026-03-22
+
+### Added
+
+- **Collect agent-specific deny filtering**
+  - `--collect` now supports `[agent.<name>].deny` in `config.toml`
+  - Sessions are ignored during collect when their `cwd`/project directory matches a deny path or is inside that path
+  - Filtering is scoped to collect mode only and does not affect regular export, `--list`, `--interactive`, or URI flows
+
+### Documentation
+
+- Added collect config example for `[agent.claudecode].deny` and documented its collect-only scope
+
 ## [0.6.8] - 2026-03-16
 
 ### Added
@@ -343,6 +356,7 @@
 - Support for `uv tool install` and `uvx` execution
 
 [0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8
+[0.6.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.9
 [0.6.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.7
 [0.6.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.6
 [0.6.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.5
