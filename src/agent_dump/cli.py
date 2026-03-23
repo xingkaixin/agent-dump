@@ -201,13 +201,23 @@ def render_session_text(uri: str, session_data: dict) -> str:
     messages = session_data.get("messages", [])
     msg_idx = 1
 
+    def _append_section(display_role: str, contents: list[str]) -> None:
+        nonlocal msg_idx
+        if not contents:
+            return
+        lines.append(f"## {msg_idx}. {display_role}")
+        lines.append("")
+        for content in contents:
+            if not content:
+                continue
+            lines.append(content)
+            lines.append("")
+        msg_idx += 1
+
     for msg in messages:
         role = msg.get("role", "unknown")
         role_normalized = str(role).lower()
         content_parts = get_text_content_parts(msg)
-
-        if not content_parts:
-            continue
 
         # Skip non-conversational and injected context messages
         if role_normalized == "tool":
@@ -223,16 +233,38 @@ def render_session_text(uri: str, session_data: dict) -> str:
         else:
             display_role = str(role).capitalize()
 
-        # Add section header
-        lines.append(f"## {msg_idx}. {display_role}")
-        lines.append("")
+        nickname = str(msg.get("nickname", "")).strip()
+        if nickname and role_normalized == "assistant":
+            display_role = f"Assistant ({nickname})"
 
-        # Add content
-        for content in content_parts:
-            lines.append(content)
-            lines.append("")
+        if content_parts:
+            _append_section(display_role, content_parts)
 
-        msg_idx += 1
+        if role_normalized != "assistant":
+            continue
+
+        parts = msg.get("parts", [])
+        if not isinstance(parts, list):
+            continue
+
+        for part in parts:
+            if not isinstance(part, dict) or part.get("type") != "tool" or part.get("tool") != "subagent":
+                continue
+
+            part_nickname = str(part.get("nickname", "")).strip()
+            part_display_role = f"Assistant ({part_nickname})" if part_nickname else "Assistant"
+            state = part.get("state", {})
+            arguments = state.get("arguments")
+            prompt = ""
+            if isinstance(arguments, dict):
+                prompt = str(arguments.get("message", "")).strip()
+                if not prompt:
+                    prompt = json.dumps(arguments, ensure_ascii=False, indent=2)
+            elif isinstance(arguments, str):
+                prompt = arguments.strip()
+
+            if prompt:
+                _append_section(part_display_role, [prompt])
 
     return "\n".join(lines)
 

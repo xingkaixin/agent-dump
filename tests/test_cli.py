@@ -1853,6 +1853,50 @@ class TestRenderSessionText:
         assert "有效文本" in output
         assert "## 1. Assistant" in output
 
+    def test_render_session_text_renders_subagent_tool_as_assistant_message(self):
+        """测试 Codex subagent tool 会在 print 中渲染为 assistant 消息"""
+        session_data = {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "parts": [
+                        {"type": "text", "text": "开始委托"},
+                        {
+                            "type": "tool",
+                            "tool": "subagent",
+                            "nickname": "Laplace",
+                            "state": {"arguments": {"message": "检查 useConversation 边界"}},
+                        },
+                    ],
+                }
+            ]
+        }
+
+        output = render_session_text("codex://abc", session_data)
+
+        assert "## 1. Assistant" in output
+        assert "开始委托" in output
+        assert "## 2. Assistant (Laplace)" in output
+        assert "检查 useConversation 边界" in output
+
+    def test_render_session_text_renders_subagent_notification_with_nickname(self):
+        """测试带 nickname 的 subagent 结果会显示对应 assistant 名字"""
+        session_data = {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "nickname": "Laplace",
+                    "subagent_id": "agent-001",
+                    "parts": [{"type": "text", "text": "最终结论"}],
+                }
+            ]
+        }
+
+        output = render_session_text("codex://abc", session_data)
+
+        assert "## 1. Assistant (Laplace)" in output
+        assert "最终结论" in output
+
     def test_render_session_text_includes_plan_part_input(self):
         """测试 plan part 会按正文渲染"""
         session_data = {

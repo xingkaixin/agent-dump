@@ -623,7 +623,295 @@ class TestCodexAgent:
         second_tool_calls = [part["callID"] for part in second_message["parts"] if part["type"] == "tool"]
         assert first_tool_calls == ["call-001", "call-002"]
         assert second_tool_calls == ["call-003"]
-        assert first_message["parts"][2]["title"] == "spawn_agent"
+        assert first_message["parts"][2]["title"] == "subagent"
+
+    def test_spawn_agent_output_is_exported_as_subagent_tool_with_nickname(self, tmp_path):
+        """测试 spawn_agent 及输出会导出为带 nickname 的 subagent tool"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-subagent-tool.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "开始委托"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "spawn_agent",
+                    "call_id": "call-subagent-001",
+                    "arguments": {
+                        "message": "检查 useConversation 边界",
+                        "model": "gpt-5.4-mini",
+                        "reasoning_effort": "medium",
+                    },
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "function_call_output",
+                    "call_id": "call-subagent-001",
+                    "output": json.dumps(
+                        {"agent_id": "agent-001", "nickname": "Laplace"},
+                        ensure_ascii=False,
+                    ),
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line, ensure_ascii=False) for line in lines) + "\n")
+
+        session = Session(
+            id="subagent-tool",
+            title="Subagent Tool",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        tool_part = result["messages"][0]["parts"][1]
+        assert tool_part["tool"] == "subagent"
+        assert tool_part["title"] == "subagent"
+        assert tool_part["nickname"] == "Laplace"
+        assert tool_part["subagent_id"] == "agent-001"
+        assert tool_part["state"]["arguments"]["message"] == "检查 useConversation 边界"
+        assert tool_part["state"]["output"] == [
+            {
+                "type": "text",
+                "text": '{"agent_id": "agent-001", "nickname": "Laplace"}',
+                "time_created": 1767225602000,
+            }
+        ]
+
+    def test_subagent_notification_becomes_assistant_message_with_mapped_nickname(self, tmp_path):
+        """测试 subagent notification 会转成 assistant 消息并补全 nickname"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-subagent-notification.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "开始委托"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "spawn_agent",
+                    "call_id": "call-subagent-001",
+                    "arguments": {"message": "检查边界"},
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "function_call_output",
+                    "call_id": "call-subagent-001",
+                    "output": json.dumps({"agent_id": "agent-001", "nickname": "Laplace"}, ensure_ascii=False),
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:03Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "<subagent_notification>\n"
+                                '{"agent_id":"agent-001","status":{"completed":"最终结论"}}\n'
+                                "</subagent_notification>"
+                            ),
+                        }
+                    ],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line, ensure_ascii=False) for line in lines) + "\n")
+
+        session = Session(
+            id="subagent-notification",
+            title="Subagent Notification",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 2
+        notification_message = result["messages"][1]
+        assert notification_message["role"] == "assistant"
+        assert notification_message["nickname"] == "Laplace"
+        assert notification_message["subagent_id"] == "agent-001"
+        assert notification_message["parts"] == [
+            {"type": "text", "text": "最终结论", "time_created": 1767225603000}
+        ]
+
+    def test_multiple_subagents_do_not_cross_nickname_mapping(self, tmp_path):
+        """测试多个 subagent 并存时 nickname 按 agent_id 匹配不串线"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-multi-subagents.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "开始"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "spawn_agent",
+                    "call_id": "call-subagent-001",
+                    "arguments": {"message": "任务 A"},
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "function_call_output",
+                    "call_id": "call-subagent-001",
+                    "output": json.dumps({"agent_id": "agent-001", "nickname": "Laplace"}, ensure_ascii=False),
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:03Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "spawn_agent",
+                    "call_id": "call-subagent-002",
+                    "arguments": {"message": "任务 B"},
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:04Z",
+                "payload": {
+                    "type": "function_call_output",
+                    "call_id": "call-subagent-002",
+                    "output": json.dumps({"agent_id": "agent-002", "nickname": "Gauss"}, ensure_ascii=False),
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:05Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "<subagent_notification>\n"
+                                '{"agent_id":"agent-002","status":{"completed":"B 完成"}}\n'
+                                "</subagent_notification>"
+                            ),
+                        }
+                    ],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line, ensure_ascii=False) for line in lines) + "\n")
+
+        session = Session(
+            id="multi-subagents",
+            title="Multi Subagents",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert result["messages"][-1]["nickname"] == "Gauss"
+        assert result["messages"][-1]["subagent_id"] == "agent-002"
+
+    def test_invalid_subagent_notification_keeps_user_message(self, tmp_path):
+        """测试无法解析的 subagent notification 不会误吞普通 user 消息"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-invalid-subagent-notification.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": "<subagent_notification>\nnot-json\n</subagent_notification>",
+                            }
+                        ],
+                    },
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+
+        session = Session(
+            id="invalid-subagent-notification",
+            title="Invalid Subagent Notification",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert result["messages"] == [
+            {
+                "id": "2026-01-01T00:00:00Z",
+                "role": "user",
+                "agent": None,
+                "mode": None,
+                "model": None,
+                "provider": None,
+                "time_created": 1767225600000,
+                "time_completed": None,
+                "tokens": {},
+                "cost": 0,
+                "parts": [
+                    {
+                        "type": "text",
+                        "text": "<subagent_notification>\nnot-json\n</subagent_notification>",
+                        "time_created": 1767225600000,
+                    }
+                ],
+            }
+        ]
 
     def test_assistant_thinking_text_tool_are_grouped_in_order(self, tmp_path):
         """测试 thinking + text + tool 会归并为一条 assistant 消息并保持顺序"""
@@ -1508,6 +1796,68 @@ class TestCodexAgent:
                 "parts": [{"type": "text", "text": "hello world", "time_created": 1767225600000}],
             }
         ]
+
+    def test_export_session_filters_wait_agent_tool_only_in_json_export(self, tmp_path):
+        """测试 wait_agent 只在 Codex JSON 导出中过滤，不影响原始 session_data"""
+        agent = CodexAgent()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        session_file = tmp_path / "test-wait-agent-filter.jsonl"
+        lines = [
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "处理中"}],
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "wait_agent",
+                    "call_id": "call-wait-001",
+                    "arguments": {"ids": ["agent-001"], "timeout_ms": 30000},
+                },
+            },
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "spawn_agent",
+                    "call_id": "call-subagent-001",
+                    "arguments": {"message": "检查边界"},
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line, ensure_ascii=False) for line in lines) + "\n")
+
+        session = Session(
+            id="wait-agent-filter",
+            title="Wait Agent Filter",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={},
+        )
+
+        session_data = agent.get_session_data(session)
+        tool_names = [part["tool"] for part in session_data["messages"][0]["parts"] if part["type"] == "tool"]
+        assert tool_names == ["wait_agent", "subagent"]
+
+        result = agent.export_session(session, output_dir)
+
+        with open(result, encoding="utf-8") as f:
+            exported = json.load(f)
+
+        exported_tool_names = [
+            part["tool"] for part in exported["messages"][0]["parts"] if part["type"] == "tool"
+        ]
+        assert exported_tool_names == ["subagent"]
 
     def test_skill_message_transforms_only_in_json_export(self, tmp_path):
         """测试 skill 消息仅在 JSON 导出时转换，get_session_data 保持原样"""

@@ -16,9 +16,11 @@ CODEX_TOOL_TITLE_MAP = {
     "exec_command": "bash",
     "apply_patch": "patch",
     "patch": "patch",
+    "subagent": "subagent",
 }
 PROPOSED_PLAN_PATTERN = re.compile(r"<proposed_plan>\s*(.*?)\s*</proposed_plan>", re.DOTALL)
 SKILL_NAME_PATTERN = re.compile(r"<name>\s*(.*?)\s*</name>", re.DOTALL)
+SUBAGENT_NOTIFICATION_PATTERN = re.compile(r"<subagent_notification>\s*(.*?)\s*</subagent_notification>", re.DOTALL)
 PLAN_APPROVAL_PREFIX = "PLEASE IMPLEMENT THIS PLAN"
 
 
@@ -191,6 +193,8 @@ class CodexAgent(BaseAgent):
 
         messages: list[dict[str, Any]] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}
+        subagent_call_map: dict[str, dict[str, str]] = {}
+        subagent_nicknames: dict[str, str] = {}
         current_assistant_index: int | None = None
         latest_assistant_text_index: int | None = None
         pending_plan_location: tuple[int, int] | None = None
@@ -210,6 +214,8 @@ class CodexAgent(BaseAgent):
                             data=data,
                             messages=messages,
                             pending_tool_calls=pending_tool_calls,
+                            subagent_call_map=subagent_call_map,
+                            subagent_nicknames=subagent_nicknames,
                             current_assistant_index=current_assistant_index,
                             latest_assistant_text_index=latest_assistant_text_index,
                             pending_plan_location=pending_plan_location,
@@ -249,7 +255,8 @@ class CodexAgent(BaseAgent):
         messages = session_data.get("messages")
         if isinstance(messages, list):
             transformed_messages = self._transform_skill_messages_for_json_export(messages)
-            session_data["messages"] = filter_messages_for_export(transformed_messages)
+            json_messages = self._filter_json_export_only_tools(transformed_messages)
+            session_data["messages"] = filter_messages_for_export(json_messages)
 
         output_path = output_dir / f"{session.id}.json"
         with open(output_path, "w", encoding="utf-8") as f:
@@ -274,6 +281,34 @@ class CodexAgent(BaseAgent):
         """Map Codex tool names to unified short titles."""
         return CODEX_TOOL_TITLE_MAP.get(tool_name, tool_name)
 
+    def _filter_json_export_only_tools(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Filter Codex-only tool parts that should not appear in JSON export."""
+        filtered_messages: list[dict[str, Any]] = []
+
+        for message in messages:
+            parts = message.get("parts", [])
+            if not isinstance(parts, list):
+                filtered_messages.append(message)
+                continue
+
+            filtered_parts = [
+                part
+                for part in parts
+                if not (isinstance(part, dict) and part.get("type") == "tool" and part.get("tool") == "wait_agent")
+            ]
+            if not filtered_parts:
+                continue
+
+            next_message = dict(message)
+            next_message["parts"] = filtered_parts
+            if all(isinstance(part, dict) and part.get("type") == "tool" for part in filtered_parts):
+                next_message["mode"] = "tool"
+            elif next_message.get("mode") == "tool":
+                next_message["mode"] = None
+            filtered_messages.append(next_message)
+
+        return filtered_messages
+
     def _normalize_tool_arguments(self, arguments: Any) -> Any:
         """Normalize tool arguments while preserving non-JSON strings."""
         if not isinstance(arguments, str):
@@ -284,6 +319,8 @@ class CodexAgent(BaseAgent):
 
     def _normalize_tool_name(self, tool_name: str) -> str:
         """Normalize Codex tool names to unified export names."""
+        if tool_name == "spawn_agent":
+            return "subagent"
         return tool_name
 
     def _normalize_custom_tool_name(self, tool_name: str) -> str:
@@ -368,6 +405,139 @@ class CodexAgent(BaseAgent):
             "state": {"arguments": arguments},
             "time_created": timestamp_ms,
         }
+
+    def _extract_subagent_prompt(self, arguments: Any) -> str:
+        """Extract the visible subagent prompt from tool arguments."""
+        if isinstance(arguments, dict):
+            message = str(arguments.get("message", "")).strip()
+            if message:
+                return message
+            return json.dumps(arguments, ensure_ascii=False, indent=2)
+        if isinstance(arguments, str):
+            return arguments
+        return json.dumps(arguments, ensure_ascii=False, indent=2)
+
+    def _extract_subagent_notification(self, text: str) -> dict[str, Any] | None:
+        """Parse one subagent notification block from a user message."""
+        match = SUBAGENT_NOTIFICATION_PATTERN.fullmatch(text.strip())
+        if match is None:
+            return None
+
+        payload = self._try_parse_json_string(match.group(1))
+        if not isinstance(payload, dict):
+            return None
+
+        agent_id = str(payload.get("agent_id", "")).strip()
+        nickname = str(payload.get("nickname", "")).strip()
+        status = payload.get("status")
+        completed_text = ""
+        if isinstance(status, dict):
+            completed_text = str(status.get("completed", "")).strip()
+
+        if not agent_id or not completed_text:
+            return None
+
+        return {
+            "agent_id": agent_id,
+            "nickname": nickname,
+            "text": completed_text,
+        }
+
+    def _build_subagent_notification_message(
+        self,
+        *,
+        message_id: str,
+        timestamp_ms: int,
+        notification: dict[str, Any],
+        subagent_nicknames: dict[str, str],
+    ) -> dict[str, Any]:
+        """Build one assistant message from a subagent notification payload."""
+        agent_id = str(notification.get("agent_id", "")).strip()
+        nickname = str(notification.get("nickname", "")).strip() or subagent_nicknames.get(agent_id, "")
+        if nickname:
+            subagent_nicknames[agent_id] = nickname
+
+        extra = {"subagent_id": agent_id}
+        if nickname:
+            extra["nickname"] = nickname
+
+        return self._build_message(
+            message_id=message_id,
+            role="assistant",
+            time_created=timestamp_ms,
+            parts=[self._build_text_part(str(notification.get("text", "")), timestamp_ms)],
+            extra=extra,
+        )
+
+    def _maybe_build_subagent_notification_message(
+        self,
+        *,
+        message_id: str,
+        timestamp_ms: int,
+        role: str,
+        parts: list[dict[str, Any]],
+        subagent_nicknames: dict[str, str],
+    ) -> dict[str, Any] | None:
+        """Convert a user subagent notification into an assistant message when applicable."""
+        if role != "user" or len(parts) != 1:
+            return None
+
+        part = parts[0]
+        if part.get("type") != "text":
+            return None
+
+        notification = self._extract_subagent_notification(str(part.get("text", "")))
+        if notification is None:
+            return None
+
+        return self._build_subagent_notification_message(
+            message_id=message_id,
+            timestamp_ms=timestamp_ms,
+            notification=notification,
+            subagent_nicknames=subagent_nicknames,
+        )
+
+    def _record_subagent_output(
+        self,
+        *,
+        tool_part: dict[str, Any],
+        output_parts: list[dict[str, Any]],
+        raw_output: Any,
+        call_id: str,
+        subagent_call_map: dict[str, dict[str, str]],
+        subagent_nicknames: dict[str, str],
+    ) -> None:
+        """Persist subagent metadata from function_call_output back onto the tool part."""
+        if tool_part.get("tool") != "subagent":
+            return
+
+        state = tool_part.setdefault("state", {})
+        arguments = state.get("arguments")
+        prompt = self._extract_subagent_prompt(arguments)
+        state["prompt"] = prompt
+
+        parsed_output = self._try_parse_json_string(raw_output)
+        if not isinstance(parsed_output, dict):
+            return
+
+        agent_id = str(parsed_output.get("agent_id", "")).strip()
+        nickname = str(parsed_output.get("nickname", "")).strip()
+
+        if agent_id or nickname:
+            subagent_call_map[call_id] = {
+                "agent_id": agent_id,
+                "nickname": nickname,
+            }
+        if agent_id and nickname:
+            subagent_nicknames[agent_id] = nickname
+
+        if agent_id:
+            tool_part["subagent_id"] = agent_id
+        if nickname:
+            tool_part["nickname"] = nickname
+
+        if output_parts:
+            state["output"] = list(output_parts)
 
     def _is_skill_wrapper_text(self, text: str) -> bool:
         """Whether text is a full skill wrapper payload."""
@@ -994,6 +1164,9 @@ class CodexAgent(BaseAgent):
         *,
         call_id: str,
         output_parts: list[dict[str, Any]],
+        raw_output: Any,
+        subagent_call_map: dict[str, dict[str, str]],
+        subagent_nicknames: dict[str, str],
     ) -> bool:
         """Backfill tool output to its matching tool part."""
         if not call_id or not output_parts:
@@ -1004,7 +1177,8 @@ class CodexAgent(BaseAgent):
             return False
 
         message_index, part_index = location
-        state = messages[message_index]["parts"][part_index].setdefault("state", {})
+        tool_part = messages[message_index]["parts"][part_index]
+        state = tool_part.setdefault("state", {})
         existing_output = state.get("output")
         if isinstance(existing_output, list):
             existing_output.extend(output_parts)
@@ -1012,6 +1186,14 @@ class CodexAgent(BaseAgent):
             state["output"] = list(output_parts)
         else:
             state["output"] = [existing_output, *output_parts]
+        self._record_subagent_output(
+            tool_part=tool_part,
+            output_parts=output_parts,
+            raw_output=raw_output,
+            call_id=call_id,
+            subagent_call_map=subagent_call_map,
+            subagent_nicknames=subagent_nicknames,
+        )
         return True
 
     def _build_fallback_tool_message(
@@ -1041,6 +1223,8 @@ class CodexAgent(BaseAgent):
         data: dict[str, Any],
         messages: list[dict[str, Any]],
         pending_tool_calls: dict[str, tuple[int, int]],
+        subagent_call_map: dict[str, dict[str, str]],
+        subagent_nicknames: dict[str, str],
         current_assistant_index: int | None,
         latest_assistant_text_index: int | None,
         pending_plan_location: tuple[int, int] | None,
@@ -1093,6 +1277,17 @@ class CodexAgent(BaseAgent):
                         output=output,
                     )
                     return None, None, None
+
+                subagent_message = self._maybe_build_subagent_notification_message(
+                    message_id=message_id,
+                    timestamp_ms=timestamp_ms,
+                    role=role,
+                    parts=parts,
+                    subagent_nicknames=subagent_nicknames,
+                )
+                if subagent_message is not None:
+                    messages.append(subagent_message)
+                    return None, None, pending_plan_location
 
                 messages.append(
                     self._build_message(
@@ -1154,6 +1349,9 @@ class CodexAgent(BaseAgent):
                     pending_tool_calls,
                     call_id=call_id,
                     output_parts=output_parts,
+                    raw_output=payload.get("output"),
+                    subagent_call_map=subagent_call_map,
+                    subagent_nicknames=subagent_nicknames,
                 ):
                     return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
@@ -1175,6 +1373,9 @@ class CodexAgent(BaseAgent):
                     pending_tool_calls,
                     call_id=call_id,
                     output_parts=output_parts,
+                    raw_output=payload.get("output"),
+                    subagent_call_map=subagent_call_map,
+                    subagent_nicknames=subagent_nicknames,
                 ):
                     return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
