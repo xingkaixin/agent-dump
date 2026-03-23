@@ -3,7 +3,9 @@
 """
 
 import json
+import os
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,11 +33,19 @@ def _insert_kv(path: Path, key: str, value: dict) -> None:
 
 class TestCursorAgent:
     @staticmethod
+    def _cursor_user_root(cursor_home: Path) -> Path:
+        if os.name == "nt":
+            return cursor_home / "AppData" / "Roaming" / "Cursor" / "User"
+        if sys.platform.startswith("darwin"):
+            return cursor_home / "Library" / "Application Support" / "Cursor" / "User"
+        return cursor_home / ".config" / "Cursor" / "User"
+
+    @staticmethod
     def _create_layout(monkeypatch, tmp_path):
         cursor_home = tmp_path / "home"
         monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
         workspace_root = tmp_path / "workspaceStorage"
-        global_db = cursor_home / "Library" / "Application Support" / "Cursor" / "User" / "globalStorage" / "state.vscdb"
+        global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
         workspace_root.mkdir(parents=True)
         global_db.parent.mkdir(parents=True)
         _create_cursor_global_db(global_db)
