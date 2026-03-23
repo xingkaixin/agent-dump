@@ -15,12 +15,13 @@ class TestAgentScanner:
     def test_init(self):
         """测试初始化时创建所有 agent"""
         scanner = AgentScanner()
-        assert len(scanner.agents) == 4
+        assert len(scanner.agents) == 5
         agent_names = [a.name for a in scanner.agents]
         assert "opencode" in agent_names
         assert "codex" in agent_names
         assert "kimi" in agent_names
         assert "claudecode" in agent_names
+        assert "cursor" in agent_names
 
     def test_scan_no_available_agents(self, capsys):
         """测试没有可用 agent 时的扫描"""
@@ -94,6 +95,7 @@ class TestAgentScanner:
         scanner.agents[1].is_available = mock.MagicMock(return_value=False)  # type: ignore
         scanner.agents[2].is_available = mock.MagicMock(return_value=True)  # type: ignore
         scanner.agents[3].is_available = mock.MagicMock(return_value=False)  # type: ignore
+        scanner.agents[4].is_available = mock.MagicMock(return_value=False)  # type: ignore
 
         available = scanner.get_available_agents()
 
@@ -143,7 +145,7 @@ class TestAgentScanner:
 
         result = scanner.scan()
 
-        assert len(result) == 4
+        assert len(result) == len(scanner.agents)
         captured = capsys.readouterr()
         for agent in scanner.agents:
             assert agent.display_name in captured.out

@@ -194,7 +194,7 @@ def find_session_by_id(scanner: AgentScanner, session_id: str) -> tuple[BaseAgen
             finder = getattr(agent, "find_session_by_request_id", None)
             if callable(finder):
                 matched_session = finder(session_id)
-                if matched_session is not None:
+                if isinstance(matched_session, Session):
                     return agent, matched_session
     return None
 
