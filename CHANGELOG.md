@@ -2,6 +2,16 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.10] - 2026-03-23
+
+### Added
+
+- **Codex subagent export support**
+  - Treat `spawn_agent` as a `subagent` tool in unified JSON export and attach returned `subagent_id` / `nickname`
+  - Convert `<subagent_notification>...</subagent_notification>` user payloads into assistant messages with matching subagent metadata
+  - Render Codex subagent calls and final outputs in `--format print` as `Assistant (nickname)` messages
+  - Filter Codex `wait_agent` tool parts from JSON export only, without changing raw parsing or other formats
+
 ## [0.6.9] - 2026-03-22
 
 ### Added
@@ -355,6 +365,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10
 [0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8
 [0.6.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.9
 [0.6.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.7

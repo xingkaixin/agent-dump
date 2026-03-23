@@ -1,5 +1,15 @@
 # 更新日志
 
+## [0.6.10] - 2026-03-23
+
+### 新增功能
+
+- **Codex subagent 导出支持**
+  - 在统一 JSON 导出中将 `spawn_agent` 识别为 `subagent` tool，并附带返回的 `subagent_id` / `nickname`
+  - 将 `<subagent_notification>...</subagent_notification>` user payload 转换为带匹配 subagent 元数据的 assistant 消息
+  - 在 `--format print` 中将 Codex subagent 调用与最终结果渲染为 `Assistant (nickname)` 消息
+  - 仅在 JSON 导出中过滤 Codex 的 `wait_agent` tool part，不改变 raw 解析或其他格式行为
+
 ## [0.6.9] - 2026-03-22
 
 ### 新增功能
@@ -359,6 +369,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10
 [0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8
 [0.6.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.9
 [0.6.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.7
