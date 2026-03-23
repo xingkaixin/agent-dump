@@ -113,14 +113,15 @@ class TestCursorAgent:
         data = agent.get_session_data(session)
 
         assert data["id"] == "request-2"
-        assert data["stats"]["message_count"] == 2
+        assert data["stats"]["message_count"] == 3
         assert data["stats"]["total_input_tokens"] == 10
         assert data["stats"]["total_output_tokens"] == 20
         assert data["messages"][0]["role"] == "user"
-        assert data["messages"][1]["role"] == "assistant"
-        tool_parts = [p for p in data["messages"][1]["parts"] if p.get("type") == "tool"]
-        assert len(tool_parts) == 1
-        assert tool_parts[0]["tool"] == "subagent"
+        assistant_messages = [m for m in data["messages"] if m["role"] == "assistant"]
+        tool_messages = [m for m in data["messages"] if m["role"] == "tool"]
+        assert len(assistant_messages) == 1
+        assert len(tool_messages) == 1
+        assert tool_messages[0]["parts"][0]["tool"] == "subagent"
 
     def test_export_raw_session_not_supported(self, monkeypatch, tmp_path):
         _, global_db = self._create_layout(monkeypatch, tmp_path)
@@ -172,3 +173,28 @@ class TestCursorAgent:
         sessions = agent.get_sessions(days=7)
         assert len(sessions) == 1
         assert sessions[0].id == "request-ok"
+
+    def test_get_session_data_sorts_by_created_time(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-order",
+            {"composerId": "composer-order", "createdAt": now_ms, "name": "Ordered"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-order:b-2",
+            {"requestId": "request-order", "type": 2, "text": "second", "timingInfo": {"clientRpcSendTime": now_ms + 20}},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-order:b-1",
+            {"type": 1, "text": "first", "timingInfo": {"clientRpcSendTime": now_ms + 10}},
+        )
+
+        agent = CursorAgent()
+        session = agent.get_sessions(days=7)[0]
+        data = agent.get_session_data(session)
+        assert data["messages"][0]["parts"][0]["text"] == "first"
+        assert data["messages"][1]["parts"][0]["text"] == "second"

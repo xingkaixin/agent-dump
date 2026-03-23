@@ -184,6 +184,15 @@ class CursorAgent(BaseAgent):
         request_id = session.metadata.get("request_id") or session.id
         return f"cursor://{request_id}"
 
+    def get_formatted_title(self, session: Session) -> str:
+        """Render Cursor session title in local timezone for display."""
+        title = session.title[:60] + "..." if len(session.title) > 60 else session.title
+        session_time = session.created_at
+        if session_time.tzinfo is not None:
+            session_time = session_time.astimezone()
+        time_str = session_time.strftime("%Y-%m-%d %H:%M")
+        return f"{title} ({time_str})"
+
     def _extract_timestamp(self, bubble: dict[str, Any], fallback_ms: int) -> int:
         created = bubble.get("createdAt")
         if isinstance(created, str):
@@ -204,7 +213,7 @@ class CursorAgent(BaseAgent):
                         continue
         return fallback_ms
 
-    def _extract_text_content(self, bubble: dict[str, Any], role: str) -> str:
+    def _extract_text_content(self, bubble: dict[str, Any], role: str) -> str | None:
         if role == "assistant":
             text = bubble.get("text")
             if isinstance(text, str) and text.strip():
@@ -225,16 +234,11 @@ class CursorAgent(BaseAgent):
                 thinking_text = thinking.get("text")
                 if isinstance(thinking_text, str) and thinking_text.strip():
                     return thinking_text.strip()
-            tool_data = bubble.get("toolFormerData")
-            if isinstance(tool_data, dict):
-                result = tool_data.get("result")
-                if isinstance(result, str) and result.strip():
-                    return result.strip()
         for key in ("text", "content", "finalText", "message", "markdown", "textDescription"):
             value = bubble.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
-        return "[empty message]"
+        return None
 
     def _extract_tool_part(self, bubble: dict[str, Any], timestamp_ms: int) -> dict[str, Any] | None:
         tool_data = bubble.get("toolFormerData")
@@ -277,6 +281,39 @@ class CursorAgent(BaseAgent):
             "time_created": timestamp_ms,
         }
 
+    def _extract_tool_parent_message_id(self, bubble: dict[str, Any]) -> str | None:
+        """Extract parent message/bubble id for tool attachment when available."""
+        candidates: list[Any] = []
+        candidates.extend(
+            [
+                bubble.get("parentMessageId"),
+                bubble.get("parentBubbleId"),
+            ]
+        )
+        tool_data = bubble.get("toolFormerData")
+        if isinstance(tool_data, dict):
+            candidates.extend(
+                [
+                    tool_data.get("parentMessageId"),
+                    tool_data.get("parentBubbleId"),
+                    tool_data.get("messageId"),
+                ]
+            )
+            additional_data = tool_data.get("additionalData")
+            if isinstance(additional_data, dict):
+                candidates.extend(
+                    [
+                        additional_data.get("parentMessageId"),
+                        additional_data.get("parentBubbleId"),
+                        additional_data.get("messageId"),
+                    ]
+                )
+
+        for value in candidates:
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
     def _extract_tokens(self, bubble: dict[str, Any]) -> tuple[int, int]:
         token_count = bubble.get("tokenCount")
         if isinstance(token_count, dict):
@@ -295,13 +332,14 @@ class CursorAgent(BaseAgent):
         if not isinstance(composer_id, str) or not composer_id:
             composer_id = session.id
         bubble_rows = self._query_global(
-            "SELECT key, value FROM cursorDiskKV WHERE key LIKE ? ORDER BY key",
+            "SELECT key, value FROM cursorDiskKV WHERE key LIKE ? ORDER BY rowid ASC",
             (f"bubbleId:{composer_id}:%",),
         )
 
         total_input_tokens = 0
         total_output_tokens = 0
         messages: list[dict[str, Any]] = []
+        bubble_message_index: dict[str, int] = {}
         fallback_created_ms = int(session.created_at.timestamp() * 1000)
 
         for row in bubble_rows:
@@ -334,19 +372,12 @@ class CursorAgent(BaseAgent):
             total_input_tokens += in_tokens
             total_output_tokens += out_tokens
 
-            parts: list[dict[str, Any]] = [
-                {
-                    "type": "text",
-                    "text": self._extract_text_content(bubble, role),
-                    "time_created": timestamp_ms,
-                }
-            ]
+            text_content = self._extract_text_content(bubble, role)
             tool_part = self._extract_tool_part(bubble, timestamp_ms)
-            if tool_part:
-                parts.append(tool_part)
+            parent_message_id = self._extract_tool_parent_message_id(bubble) if tool_part else None
 
-            messages.append(
-                {
+            if text_content:
+                message = {
                     "id": bubble_id,
                     "role": role,
                     "agent": "cursor",
@@ -357,9 +388,53 @@ class CursorAgent(BaseAgent):
                     "time_completed": None,
                     "tokens": {"input": in_tokens, "output": out_tokens},
                     "cost": 0,
-                    "parts": parts,
+                    "parts": [{"type": "text", "text": text_content, "time_created": timestamp_ms}],
                 }
-            )
+                messages.append(message)
+                bubble_message_index[bubble_id] = len(messages) - 1
+
+            if tool_part:
+                if parent_message_id and parent_message_id in bubble_message_index:
+                    parent_idx = bubble_message_index[parent_message_id]
+                    messages[parent_idx]["parts"].append(tool_part)
+                else:
+                    tool_message = {
+                        "id": f"{bubble_id}:tool",
+                        "role": "tool",
+                        "agent": "cursor",
+                        "mode": "tool",
+                        "model": model_name,
+                        "provider": None,
+                        "time_created": timestamp_ms,
+                        "time_completed": None,
+                        "tokens": {"input": 0, "output": 0},
+                        "cost": 0,
+                        "parts": [tool_part],
+                    }
+                    messages.append(tool_message)
+
+            if not text_content and not tool_part:
+                messages.append(
+                    {
+                        "id": bubble_id,
+                        "role": role,
+                        "agent": "cursor",
+                        "mode": None,
+                        "model": model_name,
+                        "provider": None,
+                        "time_created": timestamp_ms,
+                        "time_completed": None,
+                        "tokens": {"input": in_tokens, "output": out_tokens},
+                        "cost": 0,
+                        "parts": [{"type": "text", "text": "[empty message]", "time_created": timestamp_ms}],
+                    }
+                )
+
+        messages = sorted(
+            enumerate(messages),
+            key=lambda item: (int(item[1].get("time_created") or fallback_created_ms), item[0]),
+        )
+        messages = [item[1] for item in messages]
 
         usage_data = session.metadata.get("usage_data")
         usage_context_tokens = None
