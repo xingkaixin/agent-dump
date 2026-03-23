@@ -1,5 +1,29 @@
 # 更新日志
 
+## [0.6.11] - 2026-03-23
+
+### 新增功能
+
+- **CLI 与扫描器支持 Cursor agent**
+  - 在 CLI 流程和会话扫描中将 `cursor` 作为一等 agent 接入
+  - 在 README 中补充 Cursor 的使用说明
+- **支持通过 request-id 风格 URI 获取 Cursor 会话**
+  - URI 流程下可按 request-id 形式标识直接加载 Cursor 会话
+
+### 变更
+
+- **Cursor 会话解析质量优化**
+  - 改进会话标题格式化，提升可读性
+  - 优化 Cursor 会话中的消息提取与排序行为
+- **Web 落地页展示优化**
+  - 更新页面文案、结构与样式，使产品信息表达更清晰
+
+### 问题修复
+
+- **Cursor 会话可用性与顺序稳定性**
+  - 精简会话可用性检查逻辑，减少列表/导出链路中的误判
+  - 改进消息排序一致性，提升 Cursor 会话渲染/导出稳定性
+
 ## [0.6.10] - 2026-03-23
 
 ### 新增功能
@@ -370,6 +394,7 @@
 - 支持 `uv tool install` 和 `uvx` 运行
 
 [0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10
+[0.6.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.11
 [0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8
 [0.6.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.9
 [0.6.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.7

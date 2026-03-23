@@ -2,6 +2,30 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.11] - 2026-03-23
+
+### Added
+
+- **Cursor agent support across CLI and scanner**
+  - Added `cursor` as a first-class agent option in CLI workflows and session scanning
+  - Added Cursor coverage in README usage docs
+- **Cursor request-id URI retrieval**
+  - Cursor sessions can now be loaded by request-id style identifiers in URI flows
+
+### Changed
+
+- **Cursor session parsing quality**
+  - Improved session title formatting for better readability
+  - Refined message extraction and ordering behavior in Cursor conversations
+- **Web landing page presentation**
+  - Updated UI copy, structure, and styling for clearer product communication
+
+### Fixed
+
+- **Cursor session availability and ordering**
+  - Streamlined session availability checks to avoid false positives in listing/export paths
+  - Improved message sorting consistency during Cursor session rendering/export
+
 ## [0.6.10] - 2026-03-23
 
 ### Added
@@ -366,6 +390,7 @@
 - Support for `uv tool install` and `uvx` execution
 
 [0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10
+[0.6.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.11
 [0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8
 [0.6.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.9
 [0.6.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.7
