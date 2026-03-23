@@ -179,6 +179,78 @@ class CursorAgent(BaseAgent):
             )
         return sessions
 
+    def _build_session_from_composer(
+        self,
+        *,
+        composer_id: str,
+        request_id: str,
+        composer: dict[str, Any],
+    ) -> Session:
+        created_raw = composer.get("createdAt")
+        created_at = self._to_datetime_utc(created_raw)
+        updated_raw = composer.get("updatedAt") or composer.get("lastUpdatedAt") or composer.get("lastSendTime")
+        updated_at = self._to_datetime_utc(updated_raw if updated_raw is not None else created_raw)
+        metadata: dict[str, Any] = {
+            "composer_id": composer_id,
+            "request_id": request_id,
+            "parent_composer_id": None,
+            "subagent_composer_ids": [],
+            "usage_data": composer.get("usageData"),
+        }
+        subagent_info = composer.get("subagentInfo")
+        if isinstance(subagent_info, dict):
+            parent_id = subagent_info.get("parentComposerId")
+            if isinstance(parent_id, str) and parent_id:
+                metadata["parent_composer_id"] = parent_id
+        sub_ids = composer.get("subagentComposerIds")
+        if isinstance(sub_ids, list):
+            metadata["subagent_composer_ids"] = [str(x) for x in sub_ids if isinstance(x, str)]
+        return Session(
+            id=request_id,
+            title=self._extract_title(composer, composer_id),
+            created_at=created_at,
+            updated_at=updated_at,
+            source_path=self.global_db_path if self.global_db_path else Path(""),
+            metadata=metadata,
+        )
+
+    def find_session_by_request_id(self, request_id: str) -> Session | None:
+        """Resolve any bubble-level requestId to its owning composer session."""
+        if not self.global_db_path:
+            if not self.is_available():
+                return None
+        rows = self._query_global(
+            "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'bubbleId:%' AND value LIKE ? ORDER BY rowid DESC",
+            (f"%{request_id}%",),
+        )
+        composer_id: str | None = None
+        for row in rows:
+            bubble = self._parse_json(row["value"])
+            if not bubble:
+                continue
+            bubble_request_id = bubble.get("requestId")
+            if isinstance(bubble_request_id, str) and bubble_request_id == request_id:
+                key = str(row["key"])
+                composer_id = key.split(":")[1]
+                break
+        if not composer_id:
+            return None
+
+        composer_rows = self._query_global(
+            "SELECT value FROM cursorDiskKV WHERE key = ?",
+            (f"composerData:{composer_id}",),
+        )
+        if not composer_rows:
+            return None
+        composer = self._parse_json(composer_rows[0]["value"])
+        if not composer:
+            return None
+        return self._build_session_from_composer(
+            composer_id=composer_id,
+            request_id=request_id,
+            composer=composer,
+        )
+
     def get_session_uri(self, session: Session) -> str:
         """Use request id as URI anchor for Cursor."""
         request_id = session.metadata.get("request_id") or session.id

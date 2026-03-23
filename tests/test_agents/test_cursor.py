@@ -198,3 +198,28 @@ class TestCursorAgent:
         data = agent.get_session_data(session)
         assert data["messages"][0]["parts"][0]["text"] == "first"
         assert data["messages"][1]["parts"][0]["text"] == "second"
+
+    def test_find_session_by_request_id_supports_non_anchor_request(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-any-req",
+            {"composerId": "composer-any-req", "createdAt": now_ms, "name": "Any Request"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-any-req:b1",
+            {"requestId": "request-anchor", "type": 1, "text": "hello"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-any-req:b2",
+            {"requestId": "request-other", "type": 2, "text": "world"},
+        )
+
+        agent = CursorAgent()
+        matched = agent.find_session_by_request_id("request-other")
+        assert matched is not None
+        assert matched.id == "request-other"
+        assert matched.metadata["composer_id"] == "composer-any-req"
