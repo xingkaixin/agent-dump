@@ -128,9 +128,10 @@ uv run agent-dump opencode://session-id-abc123
 Supported URI schemes:
 - `opencode://<session_id>` - OpenCode sessions
 - `codex://<session_id>` - Codex sessions
-- `codex://thread/<session_id>` - Codex sessions
+- `codex://threads/<session_id>` - Codex sessions
 - `kimi://<session_id>` - Kimi sessions
 - `claude://<session_id>` - Claude Code sessions
+- `cursor://<requestid>` - Cursor sessions (`requestid` is used as URI identifier)
 
 ### Command-line Arguments
 
@@ -160,10 +161,13 @@ uv run agent-dump opencode://<session-id>     # View OpenCode session content
 uv run agent-dump codex://<session-id>        # View Codex session content
 uv run agent-dump kimi://<session-id>         # View Kimi session content
 uv run agent-dump claude://<session-id>       # View Claude Code session content
+uv run agent-dump cursor://<request-id>       # View Cursor session content
 uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
 uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file
 uv run agent-dump codex://<session-id> --format print,json --output ./my-sessions # Print and export JSON
 uv run agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # Export multiple formats
+uv run agent-dump cursor://<request-id> --format json --output ./my-sessions  # Cursor supports JSON export
+uv run agent-dump cursor://<request-id> --format print,json --output ./my-sessions # Cursor print + JSON
 uv run agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # Export JSON with AI summary
 uv run agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # Print, export JSON, and include summary
 
@@ -212,7 +216,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--save` | collect output path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. | - |
 | `-config`, `--config` | Config management: `view` or `edit` | - |
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
-| `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning. | - |
+| `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning. Cursor URI only supports `json` and `print` (no `raw/markdown`). | - |
 | `-summary`, `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. | - |
 | `-p`, `-page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
 | `-output`, `--output` | Output directory. Effective for `--interactive`; in URI mode when any file-export format (`json/markdown/raw`) is included; ignored in `--list` with warning. | ./sessions |

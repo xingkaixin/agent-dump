@@ -77,6 +77,10 @@ class TestParseUri:
         """测试不支持的 URI scheme 返回 None"""
         assert parse_uri("unknown://session-001") is None
 
+    def test_parse_uri_cursor(self):
+        """测试 Cursor URI 解析"""
+        assert parse_uri("cursor://request-001") == ("cursor", "request-001")
+
 
 class TestFindSessionById:
     """测试 find_session_by_id 函数"""
@@ -110,6 +114,19 @@ class TestFindSessionById:
         result = find_session_by_id(scanner, "missing")
 
         assert result is None
+
+    def test_find_session_by_id_cursor_matches_request_id(self):
+        """测试 Cursor 会按 metadata.request_id 命中"""
+        scanner = mock.MagicMock()
+        cursor_agent = mock.MagicMock()
+        cursor_agent.name = "cursor"
+        session = mock.MagicMock(id="composer-like-id")
+        session.metadata = {"request_id": "request-xyz"}
+        cursor_agent.get_sessions.return_value = [session]
+        scanner.get_available_agents.return_value = [cursor_agent]
+
+        result = find_session_by_id(scanner, "request-xyz")
+        assert result == (cursor_agent, session)
 
 
 class TestExportSessions:
@@ -381,6 +398,43 @@ class TestMain:
             output_path=output_path,
         )
 
+    def test_collect_mode_accepts_cursor_agent(self):
+        args = argparse.Namespace(
+            collect=True,
+            uri=None,
+            interactive=False,
+            list=False,
+            since=None,
+            until=None,
+            save=None,
+        )
+        mock_config = mock.MagicMock()
+        cursor_agent = mock.MagicMock()
+        cursor_agent.name = "cursor"
+        output_path = Path("collect.md")
+
+        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+            with mock.patch("agent_dump.cli.load_collect_config", return_value=mock.MagicMock(summary_concurrency=4)):
+                with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                    with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+                        mock_scanner = mock.MagicMock()
+                        mock_scanner.get_available_agents.return_value = [cursor_agent]
+                        mock_scanner_class.return_value = mock_scanner
+                        with mock.patch("agent_dump.cli.collect_entries", return_value=([mock.MagicMock()], False)) as mock_collect:
+                            with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock.MagicMock()]):
+                                with mock.patch("agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]):
+                                    with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
+                                        with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
+                                            with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                                with mock.patch(
+                                                    "agent_dump.cli.write_collect_markdown",
+                                                    return_value=output_path,
+                                                ):
+                                                    result = handle_collect_mode(args)
+
+        assert result == 0
+        assert mock_collect.call_args.kwargs["agents"] == [cursor_agent]
+
     def test_resolve_collect_save_path_defaults_to_current_directory_when_missing(self):
         assert (
             resolve_collect_save_path(
@@ -642,6 +696,28 @@ class TestMain:
         assert result == 0
         captured = capsys.readouterr()
         assert "最近 7 天内无会话" in captured.out
+
+    def test_main_list_mode_shows_cursor_uri(self, capsys):
+        """测试 --list 模式可展示 Cursor URI"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "cursor"
+            mock_agent.display_name = "Cursor"
+            session = mock.MagicMock()
+            session.id = "request-001"
+            mock_agent.get_sessions.return_value = [session]
+            mock_agent.get_formatted_title.return_value = "Cursor Session"
+            mock_agent.get_session_uri.return_value = "cursor://request-001"
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--list"]):
+                result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "cursor://request-001" in captured.out
 
     def test_main_list_mode_quit_early_when_display_requests_quit(self, capsys):
         """测试 --list 模式下 display_sessions_list 请求提前退出"""
@@ -1430,6 +1506,61 @@ class TestMain:
         assert "# Session Dump" in captured.out
         assert str(json_output) in captured.out
         assert str(raw_output) in captured.out
+
+    def test_main_uri_mode_cursor_rejects_raw(self, capsys):
+        """测试 Cursor URI 模式拒绝 raw 格式"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "cursor"
+            mock_agent.display_name = "Cursor"
+            mock_session = mock.MagicMock()
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("sys.argv", ["agent-dump", "cursor://request-001", "--format", "raw"]):
+                    result = main()
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "仅支持 json 与 print" in captured.out
+
+    def test_main_uri_mode_cursor_json_print_success(self, capsys, tmp_path):
+        """测试 Cursor URI 支持 json,print"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "cursor"
+            mock_agent.display_name = "Cursor"
+            mock_agent.get_session_data.return_value = {
+                "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hi"}]}]
+            }
+            mock_session = mock.MagicMock()
+            mock_session.id = "request-001"
+            expected_output = tmp_path / "out" / "cursor" / "request-001.json"
+            mock_agent.export_session.return_value = expected_output
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch(
+                    "sys.argv",
+                    [
+                        "agent-dump",
+                        "cursor://request-001",
+                        "--format",
+                        "json,print",
+                        "--output",
+                        str(tmp_path / "out"),
+                    ],
+                ):
+                    result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "# Session Dump" in captured.out
+        assert str(expected_output) in captured.out
 
     def test_main_uri_mode_json_with_summary_success(self, capsys, tmp_path):
         """测试 URI + json + --summary 成功写入 summary 字段"""

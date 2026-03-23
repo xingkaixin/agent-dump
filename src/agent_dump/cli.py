@@ -40,6 +40,7 @@ VALID_URI_SCHEMES = {
     "codex": "codex",
     "kimi": "kimi",
     "claude": "claudecode",  # claude:// maps to claudecode agent
+    "cursor": "cursor",
 }
 VALID_FORMATS = {"json", "markdown", "raw", "print"}
 FORMAT_ALIASES = {"md": "markdown"}
@@ -186,6 +187,8 @@ def find_session_by_id(scanner: AgentScanner, session_id: str) -> tuple[BaseAgen
         sessions = agent.get_sessions(days=3650)
         for session in sessions:
             if session.id == session_id:
+                return agent, session
+            if agent.name == "cursor" and session.metadata.get("request_id") == session_id:
                 return agent, session
     return None
 
@@ -621,6 +624,15 @@ def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mod
         raise ValueError("interactive-print")
 
 
+def validate_uri_agent_formats(agent: BaseAgent, formats: list[str]) -> None:
+    """Validate URI format restrictions for special agents."""
+    if agent.name != "cursor":
+        return
+    unsupported = [fmt for fmt in formats if fmt in {"raw", "markdown"}]
+    if unsupported:
+        raise ValueError("cursor-uri-format")
+
+
 def warn_list_ignored_options(output_specified: bool, format_specified: bool) -> None:
     """Warn when --list mode receives options that have no effect"""
     if format_specified:
@@ -640,6 +652,7 @@ def get_supported_agent_locations() -> list[str]:
         "  - Codex: CODEX_HOME/sessions or ~/.codex/sessions",
         "  - Kimi: KIMI_SHARE_DIR/sessions or ~/.kimi/sessions",
         "  - Claude Code: CLAUDE_CONFIG_DIR/projects or ~/.claude/projects",
+        "  - Cursor: CURSOR_DATA_PATH or ~/Library/Application Support/Cursor/User/*",
         "  - Local development fallback: data/opencode, data/codex, data/kimi, data/claudecode",
     ]
 
@@ -872,6 +885,7 @@ def main():
             print("  - codex://threads/<session_id>")
             print("  - kimi://<session_id>")
             print("  - claude://<session_id>")
+            print("  - cursor://<requestid>")
             return 1
 
         scheme, session_id = uri_result
@@ -898,6 +912,13 @@ def main():
             print(i18n.t(Keys.URI_SCHEME_MISMATCH, uri=args.uri))
             print(i18n.t(Keys.URI_BELONGS_TO, agent_display_name=agent.display_name, scheme=scheme))
             return 1
+        try:
+            validate_uri_agent_formats(agent, output_formats)
+        except ValueError as e:
+            if str(e) == "cursor-uri-format":
+                print("Cursor URI 模式仅支持 json 与 print 格式，不支持 raw/markdown。")
+                return 1
+            raise
 
         # Get session data and render
         try:

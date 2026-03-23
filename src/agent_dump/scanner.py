@@ -5,6 +5,7 @@ Scanner for agent tools
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.codex import CodexAgent
+from agent_dump.agents.cursor import CursorAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.i18n import Keys, i18n
@@ -19,6 +20,7 @@ class AgentScanner:
             CodexAgent(),
             KimiAgent(),
             ClaudeCodeAgent(),
+            CursorAgent(),
         ]
 
     def scan(self) -> dict[str, list[Session]]:
