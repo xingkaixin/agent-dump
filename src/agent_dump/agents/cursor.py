@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -125,10 +126,10 @@ class CursorAgent(BaseAgent):
 
     def get_sessions(self, days: int = 7) -> list[Session]:
         """Get Cursor sessions from the last N days."""
-        if not self.global_db_path or not self.workspace_root:
-            if not self.is_available():
-                return []
-        assert self.global_db_path is not None
+        if (not self.global_db_path or not self.workspace_root) and not self.is_available():
+            return []
+        if not self.global_db_path:
+            return []
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         rows = self._query_global(
             "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%' ORDER BY rowid DESC",
@@ -216,9 +217,8 @@ class CursorAgent(BaseAgent):
 
     def find_session_by_request_id(self, request_id: str) -> Session | None:
         """Resolve any bubble-level requestId to its owning composer session."""
-        if not self.global_db_path:
-            if not self.is_available():
-                return None
+        if not self.global_db_path and not self.is_available():
+            return None
         rows = self._query_global(
             "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'bubbleId:%' AND value LIKE ? ORDER BY rowid DESC",
             (f"%{request_id}%",),
@@ -502,11 +502,7 @@ class CursorAgent(BaseAgent):
                     }
                 )
 
-        messages = sorted(
-            enumerate(messages),
-            key=lambda item: (int(item[1].get("time_created") or fallback_created_ms), item[0]),
-        )
-        messages = [item[1] for item in messages]
+        messages = sorted(messages, key=lambda message: int(message.get("time_created") or fallback_created_ms))
 
         usage_data = session.metadata.get("usage_data")
         usage_context_tokens = None
@@ -559,4 +555,4 @@ class CursorAgent(BaseAgent):
 
 def sys_platform_startswith(prefix: str) -> bool:
     """Small testable wrapper around platform detection."""
-    return os.sys.platform.startswith(prefix)
+    return sys.platform.startswith(prefix)
