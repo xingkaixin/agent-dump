@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f4f1ea" />
+    <meta name="theme-color" content="#F5F0E8" />
     <meta
       name="description"
       content="Agent Dump exports sessions from Codex, Claude Code, Kimi, and OpenCode with URI dump, multi-format export, collect reports, and skill-based workflows."
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.cn" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.cn/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.cn/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
@@ -27,241 +27,218 @@
   </head>
   <body>
     <a class="skip-link" href="#main" data-i18n="skipLink">Skip to content</a>
-    <div class="site-shell">
-      <div class="backdrop" aria-hidden="true">
-        <div class="backdrop-orb backdrop-orb-a"></div>
-        <div class="backdrop-orb backdrop-orb-b"></div>
-        <div class="backdrop-grid"></div>
-        <div class="backdrop-noise"></div>
+
+    <div class="page-noise" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="#hero" aria-label="Agent Dump home">
+        <img src="./assets/logo.png" alt="Agent Dump" width="120" height="120" />
+        <span class="brand-copy">
+          <strong>Agent Dump</strong>
+          <span data-i18n="brandTag">session export for AI coding tools</span>
+        </span>
+      </a>
+
+      <nav class="topbar-nav" aria-label="Primary">
+        <a href="#support" data-i18n="navSupport">Support</a>
+        <a href="#detail" data-i18n="navDetail">Workflow</a>
+        <a href="#final-cta" data-i18n="navSkillsInstall">Skills</a>
+      </nav>
+
+      <div class="toolbar" role="group" aria-label="Display controls">
+        <div class="segmented-control" role="group" aria-label="Language switch">
+          <button
+            type="button"
+            class="segmented-button"
+            data-lang-toggle="en"
+            aria-pressed="true"
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            class="segmented-button"
+            data-lang-toggle="zh"
+            aria-pressed="false"
+          >
+            中文
+          </button>
+        </div>
       </div>
+    </header>
 
-      <header class="topbar">
-        <a class="brand" href="#hero" aria-label="Agent Dump home">
-          <img src="./assets/logo.png" alt="Agent Dump" width="120" height="120" />
-          <span class="brand-copy">
-            <strong>Agent Dump</strong>
-            <span data-i18n="brandTag">session export for AI coding tools</span>
-          </span>
-        </a>
+    <main id="main">
+      <section id="hero" class="hero">
+        <div class="hero-copy reveal">
+          <p class="hero-brand" data-i18n="heroBrand">Agent Dump</p>
+          <h1 data-i18n="heroTitle">Export AI coding sessions without touching the source flow.</h1>
+          <p class="hero-description" data-i18n="heroDescription">
+            List, dump, export, and summarize Codex, Claude Code, Kimi, and OpenCode sessions
+            from one CLI.
+          </p>
 
-        <nav class="topbar-nav" aria-label="Primary">
-          <a href="#install" data-i18n="navInstall">Install</a>
-          <a href="#usage" data-i18n="navUsage">Usage</a>
-          <a href="#skills" data-i18n="navSkillsInstall">Skills install</a>
-        </nav>
-
-        <div class="toolbar" role="group" aria-label="Display controls">
-          <div class="segmented-control" role="group" aria-label="Language switch">
-            <button
-              type="button"
-              class="segmented-button"
-              data-lang-toggle="en"
-              aria-pressed="true"
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              class="segmented-button"
-              data-lang-toggle="zh"
-              aria-pressed="false"
-            >
-              中文
-            </button>
+          <div class="hero-actions">
+            <a class="primary-button" href="#detail" data-i18n="heroPrimary">Start with install</a>
+            <a class="secondary-button" href="#support" data-i18n="heroSecondary">See workflow</a>
           </div>
 
-          <div class="segmented-control" role="group" aria-label="Theme switch">
-            <button
-              type="button"
-              class="segmented-button"
-              data-theme-toggle="light"
-              aria-pressed="false"
-              data-i18n="themeLight"
-            >
-              Light
-            </button>
-            <button
-              type="button"
-              class="segmented-button"
-              data-theme-toggle="dark"
-              aria-pressed="false"
-              data-i18n="themeDark"
-            >
-              Dark
-            </button>
+          <div class="hero-meta">
+            <div class="hero-badge">
+              <span class="hero-badge-label" data-i18n="heroBadgeLabel">Supported</span>
+              <strong data-i18n="heroBadgeValue">4 agents</strong>
+            </div>
+
+            <div class="tool-list" aria-label="Supported tools">
+              <span>Codex</span>
+              <span>Claude Code</span>
+              <span>Kimi</span>
+              <span>OpenCode</span>
+            </div>
           </div>
         </div>
-      </header>
 
-      <main id="main">
-        <section id="hero" class="hero">
-          <div class="hero-copy reveal">
-            <h1 data-i18n="heroTitle">
-              Export, inspect, and summarize AI coding sessions without touching the source flow.
-            </h1>
-            <p class="hero-description" data-i18n="heroDescription">
-              Agent Dump collects sessions from Codex, Claude Code, Kimi, and OpenCode, then
-              lets you list, filter, dump by URI, export multiple formats, and build collect
-              reports from the terminal.
+        <div class="hero-visual reveal">
+          <div class="hero-blob hero-blob-large" aria-hidden="true"></div>
+          <div class="hero-blob hero-blob-small" aria-hidden="true"></div>
+
+          <div class="hero-token hero-token-top" aria-hidden="true">URI dump</div>
+          <div class="hero-token hero-token-bottom" aria-hidden="true">collect report</div>
+
+          <div class="terminal-stage">
+            <div class="terminal-stage-header">
+              <span class="terminal-stage-chip" data-i18n="terminalLabel">CLI workflow</span>
+              <span class="terminal-stage-path">agent-dump</span>
+            </div>
+
+            <div class="terminal-stage-command">
+              <span class="terminal-prompt">$</span>
+              <span class="terminal-command" data-command-preview></span>
+            </div>
+
+            <div class="terminal-stage-screen">
+              <div class="screen-panel screen-panel-main">
+                <p class="screen-kicker" data-i18n="stageCardOneLabel">Quick read</p>
+                <h2 data-i18n="stageCardOneTitle">Open a session by URI before exporting anything.</h2>
+                <p data-i18n="stageCardOneBody">
+                  Print the conversation text directly in your terminal when you only need the
+                  session itself.
+                </p>
+              </div>
+
+              <div class="screen-panel screen-panel-side">
+                <p class="screen-kicker" data-i18n="stageCardTwoLabel">Report path</p>
+                <h2 data-i18n="stageCardTwoTitle">Collect summaries, then write one final report.</h2>
+                <ul class="screen-list">
+                  <li data-i18n="stageSignalOne">per-session summary progress</li>
+                  <li data-i18n="stageSignalTwo">final AI report output</li>
+                  <li data-i18n="stageSignalThree">stderr loading hints</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="terminal-stage-footer" aria-hidden="true">
+              <span>print</span>
+              <span>json</span>
+              <span>markdown</span>
+              <span>raw</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="support" class="section support-section">
+        <div class="section-shell">
+          <div class="support-sidebar reveal">
+            <p class="eyebrow" data-i18n="featuresEyebrow">Capability index</p>
+            <h2 data-i18n="featuresTitle">The CLI stays narrow, but the session coverage is wide.</h2>
+            <p class="section-copy" data-i18n="featuresDescription">
+              Read, export, and summarize on the export side only, with the original session flow
+              left untouched.
             </p>
 
-            <div class="hero-actions">
-              <a class="primary-button" href="#install" data-i18n="heroPrimary">Install now</a>
-              <a class="secondary-button" href="#usage" data-i18n="heroSecondary"
-                >See examples</a
-              >
-              <a class="secondary-button" href="#skills" data-i18n="heroSkills">Skills</a>
-            </div>
-
-            <div class="supported-strip" aria-label="Supported tools">
-              <span class="strip-label" data-i18n="supportedLabel">Supported</span>
-              <div class="tool-pills">
-                <span>Codex</span>
-                <span>Claude Code</span>
-                <span>Kimi</span>
-                <span>OpenCode</span>
-              </div>
+            <div class="support-index" aria-hidden="true">
+              <span data-i18n="supportIndexOne">01 read by URI</span>
+              <span data-i18n="supportIndexTwo">02 export by format</span>
+              <span data-i18n="supportIndexThree">03 collect by range</span>
             </div>
           </div>
 
-          <div class="hero-stage reveal">
-            <div class="terminal-shell">
-              <div class="terminal-header">
-                <span class="terminal-dot"></span>
-                <span class="terminal-dot"></span>
-                <span class="terminal-dot"></span>
-                <span class="terminal-label" data-i18n="terminalLabel">live terminal flow</span>
-              </div>
+          <div class="support-grid" data-feature-grid></div>
+        </div>
+      </section>
 
-              <div class="terminal-body">
-                <div class="terminal-command-row">
-                  <span class="terminal-prompt">$</span>
-                  <span class="terminal-command" data-command-preview></span>
-                </div>
+      <section id="detail" class="section detail-section">
+        <div class="section-heading reveal">
+          <p class="eyebrow" data-i18n="detailEyebrow">Workflow</p>
+          <h2 data-i18n="detailTitle">Start light, then move into the commands that do real work.</h2>
+        </div>
 
-                <div class="terminal-output">
-                  <article class="output-card output-card-main">
-                    <p class="output-label" data-i18n="stageCardOneLabel">URI dump</p>
-                    <h2 data-i18n="stageCardOneTitle">Direct session text in your terminal</h2>
-                    <p data-i18n="stageCardOneBody">
-                      Run a session URI and read the full conversation flow without exporting a
-                      file first.
-                    </p>
-                  </article>
-
-                  <article class="output-card output-card-side">
-                    <p class="output-label" data-i18n="stageCardTwoLabel">collect mode</p>
-                    <h2 data-i18n="stageCardTwoTitle">Summary-first reports for time ranges</h2>
-                    <ul class="signal-list">
-                      <li data-i18n="stageSignalOne">per-session summary progress</li>
-                      <li data-i18n="stageSignalTwo">final AI report output</li>
-                      <li data-i18n="stageSignalThree">stderr loading hints</li>
-                    </ul>
-                  </article>
-
-                  <div class="signal-stack" aria-hidden="true">
-                    <div class="signal-line"></div>
-                    <div class="signal-line"></div>
-                    <div class="signal-line"></div>
-                    <div class="signal-line"></div>
-                  </div>
-                </div>
-              </div>
+        <div class="detail-layout">
+          <div class="install-column reveal">
+            <div class="detail-intro">
+              <p class="detail-label" data-i18n="installEyebrow">Install paths</p>
+              <h3 data-i18n="installTitle">Choose the smallest entry point for the machine you are on.</h3>
             </div>
+            <div class="install-grid" data-install-grid></div>
+          </div>
 
-            <div class="marquee-panel" aria-hidden="true">
-              <div class="marquee-track">
-                <span>uv tool install agent-dump</span>
-                <span>npx @agent-dump/cli --help</span>
-                <span>agent-dump codex://thread/session-id</span>
-                <span>agent-dump --collect -since 20260301</span>
-                <span>npx skills add xingkaixin/agent-dump</span>
-              </div>
-              <div class="marquee-track">
-                <span>uv tool install agent-dump</span>
-                <span>npx @agent-dump/cli --help</span>
-                <span>agent-dump codex://thread/session-id</span>
-                <span>agent-dump --collect -since 20260301</span>
-                <span>npx skills add xingkaixin/agent-dump</span>
-              </div>
+          <div class="usage-column reveal">
+            <div class="detail-intro">
+              <p class="detail-label" data-i18n="usageEyebrow">Working commands</p>
+              <h3 data-i18n="usageTitle">Keep the main workflow to three moves.</h3>
             </div>
+            <div class="usage-grid" data-usage-grid></div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section id="features" class="section">
-          <div class="section-heading reveal">
-            <p class="eyebrow" data-i18n="featuresEyebrow">Why Agent Dump</p>
-            <h2 data-i18n="featuresTitle">Built for people who need the session, not a screenshot.</h2>
-          </div>
-          <div class="feature-grid" data-feature-grid></div>
-        </section>
-
-        <section id="install" class="section">
-          <div class="section-heading reveal">
-            <p class="eyebrow" data-i18n="installEyebrow">Installation matrix</p>
-            <h2 data-i18n="installTitle">Choose the lightest entry point for your workflow.</h2>
-          </div>
-          <div class="install-grid" data-install-grid></div>
-        </section>
-
-        <section id="usage" class="section">
-          <div class="section-heading reveal">
-            <p class="eyebrow" data-i18n="usageEyebrow">Usage examples</p>
-            <h2 data-i18n="usageTitle">The commands that carry the main workflow.</h2>
-          </div>
-          <div class="usage-grid" data-usage-grid></div>
-        </section>
-
-        <section id="skills" class="section">
-          <div class="skill-callout reveal">
-            <div class="skill-copy">
-              <p class="eyebrow" data-i18n="skillsEyebrow">Install as a skill</p>
-              <h2 data-i18n="skillsTitle">Keep the CLI close to your agent workflow.</h2>
-              <p data-i18n="skillsDescription">
-                Install the skill when you want an agent to stay on the supported `agent-dump`
-                command surface for listing, URI dump, collect, and config flows.
-              </p>
-            </div>
-
-            <div class="skill-command code-block">
-              <button
-                type="button"
-                class="copy-button copy-button-icon"
-                data-copy-target="skill-install"
-                data-copy-title
-              >
-                <span class="button-icon-stack" aria-hidden="true">
-                  <span class="copy-icon"></span>
-                  <span class="check-icon"></span>
-                </span>
-                <span class="sr-only" data-i18n="copy">Copy</span>
-              </button>
-              <div class="command-shell">
-                <span class="command-prompt" aria-hidden="true">$</span>
-                <pre id="skill-install" class="command-code">npx skills add xingkaixin/agent-dump</pre>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <footer class="footer section reveal">
-        <div>
-          <p class="footer-title">Agent Dump</p>
-          <p class="footer-copy" data-i18n="footerCopy">
-            A terminal-first export surface for AI coding sessions.
+      <section id="final-cta" class="final-cta reveal">
+        <div class="final-copy">
+          <p class="eyebrow final-eyebrow" data-i18n="skillsEyebrow">Install as a skill</p>
+          <h2 data-i18n="skillsTitle">Keep your agent on the supported command surface.</h2>
+          <p data-i18n="skillsDescription">
+            Install the skill when you want an agent to stay on the supported `agent-dump`
+            command surface for listing, URI dump, collect, and config flows.
           </p>
+
+          <div class="final-actions">
+            <a
+              class="primary-button"
+              href="https://github.com/xingkaixin/agent-dump"
+              target="_blank"
+              rel="noreferrer"
+              data-i18n="finalPrimary"
+              >View GitHub</a
+            >
+            <a class="secondary-button secondary-button-light" href="#detail" data-i18n="finalSecondary"
+              >See commands</a
+            >
+          </div>
         </div>
 
-        <div class="footer-links">
-          <a href="https://github.com/xingkaixin/agent-dump" target="_blank" rel="noreferrer"
-            >GitHub</a
-          >
-          <a href="#install" data-i18n="footerInstall">Installation</a>
-          <a href="#usage" data-i18n="footerUsage">Usage</a>
-          <a href="#skills" data-i18n="footerSkills">Skills</a>
+        <div class="skill-command">
+          <div class="skill-command-head">
+            <span data-i18n="skillsCommandLabel">Skill install</span>
+            <button
+              type="button"
+              class="copy-button copy-button-icon"
+              data-copy-target="skill-install"
+              data-copy-title
+            >
+              <span class="button-icon-stack" aria-hidden="true">
+                <span class="copy-icon"></span>
+                <span class="check-icon"></span>
+              </span>
+              <span class="sr-only" data-i18n="copy">Copy</span>
+            </button>
+          </div>
+
+          <div class="command-shell command-shell-dark">
+            <span class="command-prompt" aria-hidden="true">$</span>
+            <pre id="skill-install" class="command-code">npx skills add xingkaixin/agent-dump</pre>
+          </div>
         </div>
-      </footer>
-    </div>
+      </section>
+    </main>
   </body>
 </html>

@@ -1,88 +1,96 @@
 const translations = {
   en: {
     brandTag: "session export for AI coding tools",
-    navInstall: "Install",
-    navUsage: "Usage",
+    navSupport: "Support",
+    navDetail: "Workflow",
     navSkillsInstall: "Skills",
-    themeLight: "Light",
-    themeDark: "Dark",
     skipLink: "Skip to content",
+    heroBrand: "Agent Dump",
     heroTitle: "Export AI coding sessions without touching the source flow.",
     heroDescription:
       "List, dump, export, and summarize Codex, Claude Code, Kimi, and OpenCode sessions from one CLI.",
-    heroPrimary: "Install now",
-    heroSecondary: "See examples",
-    heroSkills: "Skills",
-    supportedLabel: "Supported",
-    terminalLabel: "live terminal flow",
-    stageCardOneLabel: "URI dump",
-    stageCardOneTitle: "Direct session text in your terminal",
+    heroPrimary: "Start with install",
+    heroSecondary: "See workflow",
+    heroBadgeLabel: "Supported",
+    heroBadgeValue: "4 agents",
+    terminalLabel: "CLI workflow",
+    stageCardOneLabel: "Quick read",
+    stageCardOneTitle: "Open a session by URI before exporting anything.",
     stageCardOneBody:
-      "Run a session URI and read the full conversation flow without exporting a file first.",
-    stageCardTwoLabel: "collect mode",
-    stageCardTwoTitle: "Summary-first reports for time ranges",
+      "Print the conversation text directly in your terminal when you only need the session itself.",
+    stageCardTwoLabel: "Report path",
+    stageCardTwoTitle: "Collect summaries, then write one final report.",
     stageSignalOne: "per-session summary progress",
     stageSignalTwo: "final AI report output",
     stageSignalThree: "stderr loading hints",
-    featuresEyebrow: "Why Agent Dump",
-    featuresTitle: "Built for people who need the session, not a screenshot.",
-    installEyebrow: "Installation matrix",
-    installTitle: "Choose the lightest entry point for your workflow.",
-    usageEyebrow: "Usage examples",
-    usageTitle: "The commands that carry the main workflow.",
+    featuresEyebrow: "Capability index",
+    featuresTitle: "The CLI stays narrow, but the session coverage is wide.",
+    featuresDescription:
+      "Read, export, and summarize on the export side only, with the original session flow left untouched.",
+    supportIndexOne: "01 read by URI",
+    supportIndexTwo: "02 export by format",
+    supportIndexThree: "03 collect by range",
+    detailEyebrow: "Workflow",
+    detailTitle: "Start light, then move into the commands that do real work.",
+    installEyebrow: "Install paths",
+    installTitle: "Choose the smallest entry point for the machine you are on.",
+    usageEyebrow: "Working commands",
+    usageTitle: "Keep the main workflow to three moves.",
     skillsEyebrow: "Install as a skill",
-    skillsTitle: "Keep the CLI close to your agent workflow.",
+    skillsTitle: "Keep your agent on the supported command surface.",
     skillsDescription:
       "Install the skill when you want an agent to stay on the supported `agent-dump` command surface for listing, URI dump, collect, and config flows.",
     skillsCommandLabel: "Skill install",
+    finalPrimary: "View GitHub",
+    finalSecondary: "See commands",
     copy: "Copy",
     copied: "Copied",
-    footerCopy: "A terminal-first export surface for AI coding sessions.",
-    footerInstall: "Installation",
-    footerUsage: "Usage",
-    footerSkills: "Skills",
   },
   zh: {
     brandTag: "面向 AI 编码工具的会话导出",
-    navInstall: "安装",
-    navUsage: "用法",
+    navSupport: "能力",
+    navDetail: "流程",
     navSkillsInstall: "Skills",
-    themeLight: "亮色",
-    themeDark: "暗色",
     skipLink: "跳到正文",
+    heroBrand: "Agent Dump",
     heroTitle: "导出 AI 编码会话，不污染原始链路。",
     heroDescription:
       "一条 CLI 统一处理 Codex、Claude Code、Kimi 和 OpenCode 的列表、直读、导出与汇总。",
-    heroPrimary: "立即安装",
-    heroSecondary: "查看示例",
-    heroSkills: "Skills",
-    supportedLabel: "支持工具",
-    terminalLabel: "终端实时流",
-    stageCardOneLabel: "URI 直读",
-    stageCardOneTitle: "不先导文件，也能直接在终端看完整会话",
-    stageCardOneBody: "给一个 session URI，直接输出会话正文，适合先看再决定是否落盘。",
-    stageCardTwoLabel: "collect 模式",
-    stageCardTwoTitle: "按时间范围先总结 session，再生成最终报告",
+    heroPrimary: "先看安装",
+    heroSecondary: "查看流程",
+    heroBadgeLabel: "支持",
+    heroBadgeValue: "4 个 agent",
+    terminalLabel: "CLI 工作流",
+    stageCardOneLabel: "先直读",
+    stageCardOneTitle: "先用 URI 打开会话，再决定要不要导出。",
+    stageCardOneBody: "如果你只想看正文，直接在终端打印会话内容，不必先落任何文件。",
+    stageCardTwoLabel: "报告路径",
+    stageCardTwoTitle: "先 collect 汇总，再生成最终报告。",
     stageSignalOne: "逐条 session summary 进度",
-    stageSignalTwo: "最终 AI 总结输出",
+    stageSignalTwo: "最终 AI 报告输出",
     stageSignalThree: "stderr loading 提示",
-    featuresEyebrow: "为什么是 Agent Dump",
-    featuresTitle: "你要的是会话本身，不是截图，也不是手工整理。",
-    installEyebrow: "安装矩阵",
-    installTitle: "按你的工作流，选最轻的一种入口。",
-    usageEyebrow: "使用示例",
-    usageTitle: "主流程里最常用的几条命令。",
+    featuresEyebrow: "能力索引",
+    featuresTitle: "CLI 的边界很窄，但会话覆盖面足够宽。",
+    featuresDescription:
+      "直读、导出、汇总都落在导出侧，原始 session 链路保持不动。",
+    supportIndexOne: "01 通过 URI 直读",
+    supportIndexTwo: "02 按格式导出",
+    supportIndexThree: "03 按时间范围 collect",
+    detailEyebrow: "工作流",
+    detailTitle: "先用最轻入口跑通，再进入真正做事的命令面。",
+    installEyebrow: "安装路径",
+    installTitle: "按你当前机器的环境，选最小的一种入口。",
+    usageEyebrow: "主流程命令",
+    usageTitle: "把主工作流收在三步里。",
     skillsEyebrow: "作为 Skill 安装",
-    skillsTitle: "让 agent 始终站在受支持的 CLI 边界内工作。",
+    skillsTitle: "让 agent 始终停在受支持的命令边界内。",
     skillsDescription:
       "当你希望 agent 只走 `agent-dump` 已支持的 list、URI dump、collect、config 等命令面时，直接安装这个 skill。",
     skillsCommandLabel: "Skill 安装",
+    finalPrimary: "查看 GitHub",
+    finalSecondary: "查看命令",
     copy: "复制",
     copied: "已复制",
-    footerCopy: "一个以终端为先的 AI 编码会话导出界面。",
-    footerInstall: "安装",
-    footerUsage: "用法",
-    footerSkills: "Skill",
   },
 };
 
@@ -90,42 +98,40 @@ const content = {
   features: {
     en: [
       {
-        kicker: "Multi-agent scan",
-        title: "One CLI for Codex, Claude Code, Kimi, and OpenCode",
+        kicker: "Scan roots",
+        title: "One CLI surface for Codex, Claude Code, Kimi, and OpenCode",
         body:
-          "Scan multiple session roots and keep the output surface aligned with the existing CLI modes instead of inventing a second workflow.",
+          "Keep multiple session stores behind one command surface instead of building separate export flows per tool.",
       },
       {
-        kicker: "URI first",
-        title: "Open a session by URI when you only need the conversation text",
+        kicker: "Read first",
+        title: "Use URI dump when you only need the conversation text",
         body:
-          "Use `opencode://`, `codex://`, `kimi://`, or `claude://` to print content directly in the terminal before deciding whether to export.",
+          "Open `codex://`, `claude://`, `kimi://`, or `opencode://` directly in the terminal before deciding whether a file export is worth it.",
       },
       {
-        kicker: "Export shape",
-        title: "Write JSON, Markdown, raw data, or mixed URI output without changing the source session",
+        kicker: "Export side only",
+        title: "Write JSON, Markdown, raw data, or mixed output without mutating source sessions",
         body:
-          "The CLI supports multi-format export and keeps the session detail, tool calls, token stats, and summary path on the export side.",
+          "Session detail, tool calls, token stats, and summary paths stay on the export side where they belong.",
       },
     ],
     zh: [
       {
-        kicker: "多 agent 扫描",
-        title: "一条 CLI，覆盖 Codex、Claude Code、Kimi 和 OpenCode",
-        body:
-          "统一扫描多个工具的会话根目录，把能力收口在现有 CLI 模式里，而不是另起一套工作流。",
+        kicker: "扫描根目录",
+        title: "一条 CLI 统一覆盖 Codex、Claude Code、Kimi 和 OpenCode",
+        body: "多个工具的 session 存储收口到同一条命令面里，不再为每个工具各起一套导出流程。",
       },
       {
-        kicker: "URI 优先",
-        title: "只想看正文时，直接用 URI 打开会话",
+        kicker: "先读正文",
+        title: "只想看内容时，直接走 URI dump",
         body:
-          "支持 `opencode://`、`codex://`、`kimi://`、`claude://`，先在终端里看内容，再决定要不要导出。",
+          "支持 `codex://`、`claude://`、`kimi://`、`opencode://`，先在终端直读，再决定是否值得导出文件。",
       },
       {
-        kicker: "导出边界",
-        title: "JSON、Markdown、raw 与混合输出都只落在导出侧",
-        body:
-          "多格式导出保留消息详情、工具调用、token 统计和 summary 路径，不去改动原始 session 数据。",
+        kicker: "只落在导出侧",
+        title: "JSON、Markdown、raw 和混合输出都不去改动原始 session",
+        body: "消息详情、工具调用、token 统计和 summary 路径都保留在导出层，而不是回写源数据。",
       },
     ],
   },
@@ -144,10 +150,9 @@ const content = {
         ],
       },
       {
-        kicker: "No install",
+        kicker: "Zero setup",
         title: "Run without installing globally",
-        body:
-          "Use the zero-setup path for quick access, or when you want the npm wrapper without a Python install path.",
+        body: "Use this path for quick access or when you only want the wrapper command once.",
         tabs: [
           { label: "uvx", code: "uvx agent-dump --help" },
           { label: "bunx", code: "bunx @agent-dump/cli --help" },
@@ -159,7 +164,7 @@ const content = {
       {
         kicker: "推荐",
         title: "用包管理器全局安装",
-        body: "如果你希望机器上直接长期可用 `agent-dump` 命令，这条路径最直接。",
+        body: "如果你希望机器上长期可用 `agent-dump` 命令，这条路径最直接。",
         tabs: [
           { label: "uv", code: "uv tool install agent-dump" },
           { label: "npm", code: "npm install -g @agent-dump/cli" },
@@ -170,7 +175,7 @@ const content = {
       {
         kicker: "免安装",
         title: "不全局安装，直接运行",
-        body: "临时使用就走这一条；如果不想碰 Python 安装，也可以直接走 npm wrapper。",
+        body: "临时使用就走这一条；如果只想要一层 wrapper，也可以直接用它。",
         tabs: [
           { label: "uvx", code: "uvx agent-dump --help" },
           { label: "bunx", code: "bunx @agent-dump/cli --help" },
@@ -182,42 +187,41 @@ const content = {
   usage: {
     en: [
       {
-        kicker: "Interactive export",
-        title: "Select sessions from the recent window",
-        body: "Grouped terminal selection with the default 7-day window and explicit export confirmation.",
+        kicker: "Select",
+        title: "Pick recent sessions from the terminal",
+        body: "Default to the recent window, review the titles, then export only what you need.",
         code: "agent-dump --interactive",
       },
       {
-        kicker: "URI dump",
-        title: "Print a session directly from its URI",
-        body: "Open session text on demand, or mix `print` with file export formats in URI mode.",
+        kicker: "Inspect",
+        title: "Open a single session directly by URI",
+        body: "Print first when you need context fast, or mix `print` with file formats in URI mode.",
         code: "agent-dump codex://<session-id>",
       },
       {
-        kicker: "Collect and config",
-        title: "Summarize a date range and inspect local config",
-        body:
-          "Collect first writes per-session summaries, then generates one final report. Config flows stay on the CLI surface.",
+        kicker: "Summarize",
+        title: "Collect summaries over a date range",
+        body: "Generate per-session summaries first, then one final report that can be reviewed as a batch.",
         code: "agent-dump --collect -since 2026-03-01 -until 2026-03-05",
       },
     ],
     zh: [
       {
-        kicker: "交互导出",
-        title: "从最近时间窗里勾选会话再导出",
-        body: "终端分组选择，默认 7 天窗口，确认后显式导出。",
+        kicker: "选择",
+        title: "从终端里勾选最近会话",
+        body: "先用最近时间窗快速过一遍标题，再只导出真正需要的会话。",
         code: "agent-dump --interactive",
       },
       {
-        kicker: "URI 直读",
-        title: "给一个 URI，直接打印指定会话",
-        body: "需要时直接看正文；在 URI 模式下也可以混用 `print` 和文件导出格式。",
+        kicker: "检查",
+        title: "给一个 URI，直接打开单条会话",
+        body: "要快速补上下文时先 print；在 URI 模式下也可以混用 `print` 和文件格式。",
         code: "agent-dump codex://<session-id>",
       },
       {
-        kicker: "Collect 与配置",
-        title: "按日期范围汇总，再查看本地配置",
-        body: "collect 会先逐条生成 session summary，再产出一份最终报告；配置也保持在 CLI 边界内。",
+        kicker: "汇总",
+        title: "按日期范围 collect summary",
+        body: "先产出逐条 session 的 summary，再合成一份可整体审阅的最终报告。",
         code: "agent-dump --collect -since 2026-03-01 -until 2026-03-05",
       },
     ],
@@ -240,7 +244,6 @@ const commandPreviews = {
 };
 
 const root = document.documentElement;
-const themeButtons = Array.from(document.querySelectorAll("[data-theme-toggle]"));
 const langButtons = Array.from(document.querySelectorAll("[data-lang-toggle]"));
 const i18nNodes = Array.from(document.querySelectorAll("[data-i18n]"));
 const featureGrid = document.querySelector("[data-feature-grid]");
@@ -248,34 +251,12 @@ const installGrid = document.querySelector("[data-install-grid]");
 const usageGrid = document.querySelector("[data-usage-grid]");
 const copyButtons = Array.from(document.querySelectorAll("[data-copy-target]"));
 const commandPreview = document.querySelector("[data-command-preview]");
-
-const media = window.matchMedia("(prefers-color-scheme: dark)");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let currentLang = localStorage.getItem("agent-dump-lang") || "en";
-let currentTheme = localStorage.getItem("agent-dump-theme") || "system";
 let commandTimer = null;
 
-function applyTheme(theme) {
-  const effectiveTheme = theme === "system" ? (media.matches ? "dark" : "light") : theme;
-  root.dataset.theme = effectiveTheme;
-  document
-    .querySelector('meta[name="theme-color"]')
-    .setAttribute("content", effectiveTheme === "dark" ? "#111615" : "#f4f1ea");
-  themeButtons.forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.themeToggle === effectiveTheme));
-  });
-}
-
-function setTheme(theme, persist = true) {
-  currentTheme = theme;
-  applyTheme(theme);
-  if (persist) {
-    localStorage.setItem("agent-dump-theme", theme);
-  }
-}
-
-function renderCards(target, items, cardClass) {
+function renderCards(target, items, cardClass, kickerClass) {
   target.textContent = "";
   items.forEach((item, index) => {
     const article = document.createElement("article");
@@ -283,7 +264,7 @@ function renderCards(target, items, cardClass) {
     article.style.transitionDelay = `${index * 90}ms`;
 
     const kicker = document.createElement("p");
-    kicker.className = cardClass.replace("-card", "-kicker").replace("-item", "-kicker");
+    kicker.className = kickerClass;
     kicker.textContent = item.kicker;
 
     const title = document.createElement("h3");
@@ -308,17 +289,7 @@ function renderCards(target, items, cardClass) {
 
 function createCodeBlock(code) {
   const block = document.createElement("div");
-  block.className = "code-block";
-
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "copy-button copy-button-icon";
-  button.dataset.copyInline = code;
-  button.dataset.copyTitle = "true";
-  button.innerHTML =
-    '<span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span><span class="sr-only"></span>';
-  button.addEventListener("click", handleCopy);
-  updateCopyButtonText(button);
+  block.className = "command-wrap";
 
   const commandShell = document.createElement("div");
   commandShell.className = "command-shell";
@@ -332,8 +303,18 @@ function createCodeBlock(code) {
   pre.className = "command-code";
   pre.textContent = code;
 
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "copy-button copy-button-icon";
+  button.dataset.copyInline = code;
+  button.dataset.copyTitle = "true";
+  button.innerHTML =
+    '<span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span><span class="sr-only"></span>';
+  button.addEventListener("click", handleCopy);
+  updateCopyButtonText(button);
+
   commandShell.append(prompt, pre);
-  block.append(button, commandShell);
+  block.append(commandShell, button);
   return block;
 }
 
@@ -383,16 +364,17 @@ function createTabbedCodeBlock(tabs) {
 function applyLanguage(lang) {
   currentLang = lang;
   root.lang = lang === "zh" ? "zh-CN" : "en";
-  document.title = lang === "zh" ? "Agent Dump | AI 编码会话导出工具" : "Agent Dump | Session Export for AI Coding Tools";
+  document.title =
+    lang === "zh" ? "Agent Dump | AI 编码会话导出工具" : "Agent Dump | Session Export for AI Coding Tools";
   i18nNodes.forEach((node) => {
     node.textContent = translations[lang][node.dataset.i18n];
   });
   langButtons.forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.langToggle === lang));
   });
-  renderCards(featureGrid, content.features[lang], "feature-item");
-  renderCards(installGrid, content.install[lang], "install-card");
-  renderCards(usageGrid, content.usage[lang], "usage-card");
+  renderCards(featureGrid, content.features[lang], "support-item", "support-kicker");
+  renderCards(installGrid, content.install[lang], "detail-card", "detail-kicker");
+  renderCards(usageGrid, content.usage[lang], "detail-card", "detail-kicker");
   document.querySelectorAll(".copy-button").forEach(updateCopyButtonText);
   startCommandPreview();
   localStorage.setItem("agent-dump-lang", lang);
@@ -502,12 +484,6 @@ function startCommandPreview() {
   }, 2400);
 }
 
-themeButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    setTheme(button.dataset.themeToggle);
-  });
-});
-
 langButtons.forEach((button) => {
   button.addEventListener("click", () => {
     applyLanguage(button.dataset.langToggle);
@@ -515,19 +491,5 @@ langButtons.forEach((button) => {
 });
 
 copyButtons.forEach((button) => button.addEventListener("click", handleCopy));
-if (typeof media.addEventListener === "function") {
-  media.addEventListener("change", () => {
-    if (currentTheme === "system") {
-      applyTheme("system");
-    }
-  });
-} else if (typeof media.addListener === "function") {
-  media.addListener(() => {
-    if (currentTheme === "system") {
-      applyTheme("system");
-    }
-  });
-}
 
-setTheme(currentTheme, false);
 applyLanguage(currentLang);
