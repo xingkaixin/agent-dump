@@ -2,6 +2,15 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.12] - 2026-03-26
+
+### Added
+
+- **Collect diagnostic logging and timeout configuration**
+  - Added append-only JSONL diagnostics for collect runs, with a default log path under the config directory
+  - Added `summary_timeout_seconds` to collect config so LLM summary requests can be tuned without code changes
+  - Added `[logging]` config support to enable/disable collect diagnostics and override the log file path
+
 ## [0.6.11] - 2026-03-23
 
 ### Added
@@ -389,6 +398,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.6.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.12
 [0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10
 [0.6.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.11
 [0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8

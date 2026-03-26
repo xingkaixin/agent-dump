@@ -1,5 +1,14 @@
 # 更新日志
 
+## [0.6.12] - 2026-03-26
+
+### 新增功能
+
+- **Collect 诊断日志与超时配置**
+  - 为 collect 运行新增 append-only JSONL 诊断日志，默认写入配置目录下的日志路径
+  - 在 collect 配置中新增 `summary_timeout_seconds`，可直接调整 LLM 摘要请求超时
+  - 新增 `[logging]` 配置段，支持启用/禁用 collect 诊断日志并覆盖日志文件路径
+
 ## [0.6.11] - 2026-03-23
 
 ### 新增功能
@@ -393,6 +402,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.6.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.12
 [0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10
 [0.6.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.11
 [0.6.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.8
