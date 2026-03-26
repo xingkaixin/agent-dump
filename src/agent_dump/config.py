@@ -26,10 +26,33 @@ class CollectConfig:
     """Collect mode configuration."""
 
     summary_concurrency: int = 4
+    summary_timeout_seconds: int = 90
     agent_denies: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class LoggingConfig:
+    """Logging configuration for collect diagnostics."""
+
+    enabled: bool = True
+    path: Path | None = None
+
+
 DEFAULT_COLLECT_SUMMARY_CONCURRENCY = 4
+
+
+def get_default_log_path(
+    *,
+    home: Path | None = None,
+    environ: dict[str, str] | None = None,
+    is_windows: bool | None = None,
+) -> Path:
+    """Return default collect log file path under the config directory."""
+    return get_config_path(home=home, environ=environ, is_windows=is_windows).parent / "logs" / "collect.log"
+
+
+def _default_log_path_for_config(config_path: Path) -> Path:
+    return config_path.parent / "logs" / "collect.log"
 
 
 def get_config_path(
@@ -88,6 +111,17 @@ def _parse_toml_value(value: str) -> str | tuple[str, ...]:
     if array_value is not None:
         return array_value
     return _strip_quotes(value)
+
+
+def _parse_bool(value: str | tuple[str, ...], default: bool) -> bool:
+    if not isinstance(value, str):
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    return default
 
 
 def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str | tuple[str, ...]]]:
@@ -168,7 +202,9 @@ def load_collect_config(path: Path | None = None) -> CollectConfig:
     sections = _read_config_sections(config_path)
     parsed = sections.get("collect", {})
     concurrency = DEFAULT_COLLECT_SUMMARY_CONCURRENCY
+    timeout_seconds = 90
     raw_concurrency = parsed.get("summary_concurrency", "")
+    raw_timeout_seconds = parsed.get("summary_timeout_seconds", "")
     if isinstance(raw_concurrency, str) and raw_concurrency.strip():
         try:
             parsed_concurrency = int(raw_concurrency)
@@ -176,6 +212,13 @@ def load_collect_config(path: Path | None = None) -> CollectConfig:
             parsed_concurrency = DEFAULT_COLLECT_SUMMARY_CONCURRENCY
         if parsed_concurrency > 0:
             concurrency = parsed_concurrency
+    if isinstance(raw_timeout_seconds, str) and raw_timeout_seconds.strip():
+        try:
+            parsed_timeout_seconds = int(raw_timeout_seconds)
+        except ValueError:
+            parsed_timeout_seconds = 90
+        if parsed_timeout_seconds > 0:
+            timeout_seconds = parsed_timeout_seconds
 
     agent_denies: dict[str, tuple[str, ...]] = {}
     for section_name, values in sections.items():
@@ -190,7 +233,26 @@ def load_collect_config(path: Path | None = None) -> CollectConfig:
             if deny_paths:
                 agent_denies[agent_name] = deny_paths
 
-    return CollectConfig(summary_concurrency=concurrency, agent_denies=agent_denies)
+    return CollectConfig(
+        summary_concurrency=concurrency,
+        summary_timeout_seconds=timeout_seconds,
+        agent_denies=agent_denies,
+    )
+
+
+def load_logging_config(path: Path | None = None) -> LoggingConfig:
+    """Load logging config with defaults for missing or invalid values."""
+    config_path = path if path is not None else get_config_path()
+    default_path = _default_log_path_for_config(config_path)
+    if not config_path.exists():
+        return LoggingConfig(path=default_path)
+
+    parsed = _read_config_sections(config_path).get("logging", {})
+    enabled = _parse_bool(parsed.get("enabled", "true"), True)
+    raw_path = parsed.get("path")
+    if isinstance(raw_path, str) and raw_path.strip():
+        return LoggingConfig(enabled=enabled, path=Path(raw_path).expanduser())
+    return LoggingConfig(enabled=enabled, path=default_path)
 
 
 def validate_ai_config(config: AIConfig | None) -> tuple[bool, list[str]]:
@@ -220,11 +282,47 @@ def mask_api_key(value: str) -> str:
     return f"{value[:3]}{'*' * (len(value) - 6)}{value[-3:]}"
 
 
+def _render_collect_section(config: CollectConfig) -> str:
+    lines = [
+        "[collect]",
+        f"summary_concurrency = {config.summary_concurrency}",
+        f"summary_timeout_seconds = {config.summary_timeout_seconds}",
+    ]
+    for agent_name, deny_paths in config.agent_denies.items():
+        if not deny_paths:
+            continue
+        lines.extend(
+            [
+                "",
+                f"[agent.{agent_name}]",
+                "deny = [",
+                *[
+                    f'  "{deny_path}"' + ("," if index < len(deny_paths) - 1 else "")
+                    for index, deny_path in enumerate(deny_paths)
+                ],
+                "]",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def _render_logging_section(config: LoggingConfig) -> str:
+    path = config.path if config.path is not None else get_default_log_path()
+    return "\n".join(
+        [
+            "[logging]",
+            f"enabled = {'true' if config.enabled else 'false'}",
+            f'path = "{path}"',
+        ]
+    )
+
+
 def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
     """Persist AI config to TOML file."""
     config_path = path if path is not None else get_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     existing_collect = load_collect_config(config_path)
+    existing_logging = load_logging_config(config_path)
     content = (
         "[ai]\n"
         f'provider = "{config.provider}"\n'
@@ -232,8 +330,21 @@ def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
         f'model = "{config.model}"\n'
         f'api_key = "{config.api_key}"\n'
     )
+    sections: list[str] = [content.rstrip()]
     if config_path.exists() or existing_collect != CollectConfig():
-        content += f"\n[collect]\nsummary_concurrency = {existing_collect.summary_concurrency}\n"
+        sections.append(_render_collect_section(existing_collect))
+    if config_path.exists() or existing_logging != LoggingConfig():
+        sections.append(
+            _render_logging_section(
+                LoggingConfig(
+                    enabled=existing_logging.enabled,
+                    path=existing_logging.path
+                    if existing_logging.path is not None
+                    else _default_log_path_for_config(config_path),
+                )
+            )
+        )
+    content = "\n\n".join(section for section in sections if section) + "\n"
     config_path.write_text(content, encoding="utf-8")
     return config_path
 
@@ -379,7 +490,11 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
             print(i18n.t(Keys.CONFIG_CONFIRM_MODEL, model=existing.model or ""))
             print(i18n.t(Keys.CONFIG_CONFIRM_API_KEY, api_key=mask_api_key(existing.api_key)))
             collect_config = load_collect_config(config_path)
+            logging_config = load_logging_config(config_path)
             print(f"  collect.summary_concurrency: {collect_config.summary_concurrency}")
+            print(f"  collect.summary_timeout_seconds: {collect_config.summary_timeout_seconds}")
+            print(f"  logging.enabled: {logging_config.enabled}")
+            print(f"  logging.path: {logging_config.path}")
             return 0
 
     if action != "edit":

@@ -290,62 +290,65 @@ class TestMain:
         mock_entry = mock.MagicMock()
         mock_planned_entry = mock.MagicMock()
 
-        collect_config = mock.MagicMock(summary_concurrency=4)
+        collect_config = mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90)
+        mock_logger = mock.MagicMock()
 
         with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
             with mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config):
-                with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
-                    with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
-                        mock_scanner = mock.MagicMock()
-                        mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
-                        mock_scanner_class.return_value = mock_scanner
-                        with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)) as mock_collect:
-                            with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock_planned_entry]):
-                                def _summarize_collect_entries(**kwargs):
-                                    kwargs["progress_callback"](
-                                        CollectProgressEvent(
-                                            stage="summarize_chunks",
-                                            current=0,
-                                            total=1,
-                                            message="summarize chunks",
-                                        )
-                                    )
-                                    kwargs["progress_callback"](
-                                        CollectProgressEvent(
-                                            stage="summarize_chunks",
-                                            current=1,
-                                            total=1,
-                                            message="summarize chunks",
-                                        )
-                                    )
-                                    kwargs["progress_callback"](
-                                        CollectProgressEvent(
-                                            stage="merge_sessions",
-                                            current=0,
-                                            total=1,
-                                            message="merge sessions",
-                                        )
-                                    )
-                                    kwargs["progress_callback"](
-                                        CollectProgressEvent(
-                                            stage="merge_sessions",
-                                            current=1,
-                                            total=1,
-                                            message="merge sessions",
-                                        )
-                                    )
-                                    return [mock.MagicMock()]
+                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                            with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+                                mock_scanner = mock.MagicMock()
+                                mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+                                mock_scanner_class.return_value = mock_scanner
+                                with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)) as mock_collect:
+                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock_planned_entry]):
+                                        def _summarize_collect_entries(**kwargs):
+                                            kwargs["progress_callback"](
+                                                CollectProgressEvent(
+                                                    stage="summarize_chunks",
+                                                    current=0,
+                                                    total=1,
+                                                    message="summarize chunks",
+                                                )
+                                            )
+                                            kwargs["progress_callback"](
+                                                CollectProgressEvent(
+                                                    stage="summarize_chunks",
+                                                    current=1,
+                                                    total=1,
+                                                    message="summarize chunks",
+                                                )
+                                            )
+                                            kwargs["progress_callback"](
+                                                CollectProgressEvent(
+                                                    stage="merge_sessions",
+                                                    current=0,
+                                                    total=1,
+                                                    message="merge sessions",
+                                                )
+                                            )
+                                            kwargs["progress_callback"](
+                                                CollectProgressEvent(
+                                                    stage="merge_sessions",
+                                                    current=1,
+                                                    total=1,
+                                                    message="merge sessions",
+                                                )
+                                            )
+                                            return [mock.MagicMock()]
 
-                                with mock.patch(
-                                    "agent_dump.cli.summarize_collect_entries",
-                                    side_effect=_summarize_collect_entries,
-                                ):
-                                    with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
-                                        with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
-                                            with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
-                                                output_path = tmp_path / "agent-dump-collect-20260305-20260305.md"
-                                                with mock.patch("agent_dump.cli.write_collect_markdown", return_value=output_path):
-                                                    result = handle_collect_mode(args)
+                                        with mock.patch(
+                                            "agent_dump.cli.summarize_collect_entries",
+                                            side_effect=_summarize_collect_entries,
+                                        ):
+                                            with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
+                                                with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
+                                                    with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                                        output_path = tmp_path / "agent-dump-collect-20260305-20260305.md"
+                                                        with mock.patch("agent_dump.cli.write_collect_markdown", return_value=output_path):
+                                                            result = handle_collect_mode(args)
 
         assert result == 0
         assert mock_collect.call_args.kwargs["collect_config"] is collect_config
@@ -355,6 +358,7 @@ class TestMain:
         assert "render_final: 2/2" in captured.err
         assert "write_output: 1/1" in captured.err
         assert str(output_path) in captured.out
+        assert mock_logger.log.call_count >= 2
 
     def test_collect_mode_passes_resolved_save_path(self, tmp_path):
         args = argparse.Namespace(
@@ -370,25 +374,31 @@ class TestMain:
         mock_entry = mock.MagicMock()
         mock_planned_entry = mock.MagicMock()
         output_path = tmp_path / "reports" / "report.md"
+        mock_logger = mock.MagicMock()
 
         with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
-            with mock.patch("agent_dump.cli.load_collect_config", return_value=mock.MagicMock(summary_concurrency=4)):
-                with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
-                    with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
-                        mock_scanner = mock.MagicMock()
-                        mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
-                        mock_scanner_class.return_value = mock_scanner
-                        with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
-                            with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock_planned_entry]):
-                                with mock.patch("agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]):
-                                    with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
-                                        with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
-                                            with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
-                                                with mock.patch(
-                                                    "agent_dump.cli.write_collect_markdown",
-                                                    return_value=output_path,
-                                                ) as mock_write:
-                                                    result = handle_collect_mode(args)
+            with mock.patch(
+                "agent_dump.cli.load_collect_config",
+                return_value=mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90),
+            ):
+                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                            with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+                                mock_scanner = mock.MagicMock()
+                                mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+                                mock_scanner_class.return_value = mock_scanner
+                                with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
+                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock_planned_entry]):
+                                        with mock.patch("agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]):
+                                            with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
+                                                with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
+                                                    with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                                        with mock.patch(
+                                                            "agent_dump.cli.write_collect_markdown",
+                                                            return_value=output_path,
+                                                        ) as mock_write:
+                                                            result = handle_collect_mode(args)
 
         assert result == 0
         mock_write.assert_called_once_with(
@@ -412,28 +422,64 @@ class TestMain:
         cursor_agent = mock.MagicMock()
         cursor_agent.name = "cursor"
         output_path = Path("collect.md")
+        mock_logger = mock.MagicMock()
 
         with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
-            with mock.patch("agent_dump.cli.load_collect_config", return_value=mock.MagicMock(summary_concurrency=4)):
-                with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
-                    with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
-                        mock_scanner = mock.MagicMock()
-                        mock_scanner.get_available_agents.return_value = [cursor_agent]
-                        mock_scanner_class.return_value = mock_scanner
-                        with mock.patch("agent_dump.cli.collect_entries", return_value=([mock.MagicMock()], False)) as mock_collect:
-                            with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock.MagicMock()]):
-                                with mock.patch("agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]):
-                                    with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
-                                        with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
-                                            with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
-                                                with mock.patch(
-                                                    "agent_dump.cli.write_collect_markdown",
-                                                    return_value=output_path,
-                                                ):
-                                                    result = handle_collect_mode(args)
+            with mock.patch(
+                "agent_dump.cli.load_collect_config",
+                return_value=mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90),
+            ):
+                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                            with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+                                mock_scanner = mock.MagicMock()
+                                mock_scanner.get_available_agents.return_value = [cursor_agent]
+                                mock_scanner_class.return_value = mock_scanner
+                                with mock.patch("agent_dump.cli.collect_entries", return_value=([mock.MagicMock()], False)) as mock_collect:
+                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock.MagicMock()]):
+                                        with mock.patch("agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]):
+                                            with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
+                                                with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
+                                                    with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                                        with mock.patch(
+                                                            "agent_dump.cli.write_collect_markdown",
+                                                            return_value=output_path,
+                                                        ):
+                                                            result = handle_collect_mode(args)
 
         assert result == 0
         assert mock_collect.call_args.kwargs["agents"] == [cursor_agent]
+
+    def test_collect_mode_logs_failure(self, tmp_path):
+        args = argparse.Namespace(
+            collect=True,
+            uri=None,
+            interactive=False,
+            list=False,
+            since=None,
+            until=None,
+            save=None,
+        )
+        mock_logger = mock.MagicMock()
+
+        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()):
+            with mock.patch(
+                "agent_dump.cli.load_collect_config",
+                return_value=mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90),
+            ):
+                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                            with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+                                mock_scanner = mock.MagicMock()
+                                mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+                                mock_scanner_class.return_value = mock_scanner
+                                with mock.patch("agent_dump.cli.collect_entries", side_effect=RuntimeError("boom")):
+                                    result = handle_collect_mode(args)
+
+        assert result == 1
+        assert mock_logger.log.call_args_list[-1].args[0] == "collect_run_fail"
 
     def test_resolve_collect_save_path_defaults_to_current_directory_when_missing(self):
         assert (

@@ -19,6 +19,7 @@ from agent_dump.collect import (
     CollectProgressEvent,
     build_collect_final_prompt,
     collect_entries,
+    create_collect_logger,
     emit_collect_progress,
     plan_collect_entries,
     reduce_collect_summaries,
@@ -27,7 +28,13 @@ from agent_dump.collect import (
     summarize_collect_entries,
     write_collect_markdown,
 )
-from agent_dump.config import handle_config_command, load_ai_config, load_collect_config, validate_ai_config
+from agent_dump.config import (
+    handle_config_command,
+    load_ai_config,
+    load_collect_config,
+    load_logging_config,
+    validate_ai_config,
+)
 from agent_dump.i18n import Keys, i18n, setup_i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.query_filter import filter_sessions, parse_query
@@ -688,6 +695,8 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
         print(i18n.t(Keys.COLLECT_CONFIG_HINT))
         return 1
     collect_config = load_collect_config()
+    logging_config = load_logging_config()
+    collect_logger = create_collect_logger(logging_config)
 
     scanner = AgentScanner()
     available_agents = scanner.get_available_agents()
@@ -709,6 +718,14 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
             if not entries:
                 print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
                 return 1
+            collect_logger.log(
+                "collect_run_start",
+                since=since_date.isoformat(),
+                until=until_date.isoformat(),
+                summary_concurrency=collect_config.summary_concurrency,
+                agent_count=len(available_agents),
+                session_count=len(entries),
+            )
             planned_entries = plan_collect_entries(entries, progress_callback=update_progress)
             phase = "summarize"
             session_summaries = summarize_collect_entries(
@@ -716,6 +733,8 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
                 planned_entries=planned_entries,
                 summary_concurrency=collect_config.summary_concurrency,
                 progress_callback=update_progress,
+                timeout_seconds=collect_config.summary_timeout_seconds,
+                logger=collect_logger,
             )
             phase = "render"
             emit_collect_progress(
@@ -729,6 +748,8 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
                 config=config,
                 session_summaries=session_summaries,
                 progress_callback=update_progress,
+                timeout_seconds=collect_config.summary_timeout_seconds,
+                logger=collect_logger,
             )
             emit_collect_progress(
                 update_progress,
@@ -743,7 +764,11 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
                 aggregate=aggregate,
                 has_truncated=has_truncated,
             )
-            markdown = request_summary_from_llm(config, prompt)
+            markdown = request_summary_from_llm(
+                config,
+                prompt,
+                timeout_seconds=collect_config.summary_timeout_seconds,
+            )
             emit_collect_progress(
                 update_progress,
                 stage="render_final",
@@ -773,12 +798,22 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
                 message="write output",
             )
     except Exception as e:
+        collect_logger.log(
+            "collect_run_fail",
+            phase=phase,
+            error=str(e),
+        )
         if phase == "read":
             print(i18n.t(Keys.COLLECT_READ_FAILED, error=e))
         else:
             print(i18n.t(Keys.COLLECT_API_FAILED, error=e))
         return 1
 
+    collect_logger.log(
+        "collect_run_finish",
+        output_path=str(output_path),
+        session_count=len(entries),
+    )
     print(markdown)
     print(i18n.t(Keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
     return 0

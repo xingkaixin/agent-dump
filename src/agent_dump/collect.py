@@ -11,9 +11,10 @@ import re
 import threading
 from typing import Any, cast
 from urllib import error, request
+from uuid import uuid4
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.config import AIConfig, CollectConfig
+from agent_dump.config import AIConfig, CollectConfig, LoggingConfig
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
@@ -48,6 +49,7 @@ PATH_PATTERN = re.compile(
     r"(?:(?:[A-Za-z]:)?[\\/][^\s'\"`]+|(?:\./|\../|~?/)?[\w.-]+(?:/[\w.-]+)+)",
 )
 SUMMARY_JSON_PATTERN = re.compile(r"```json\s*(\{[\s\S]*?\})\s*```", re.IGNORECASE)
+MAX_LOG_PREVIEW_CHARS = 400
 
 
 @dataclass(frozen=True)
@@ -130,6 +132,31 @@ class PlannedCollectEntry:
     chunks: tuple[tuple[CollectEvent, ...], ...]
 
 
+@dataclass(frozen=True)
+class CollectLogger:
+    """Append-only JSONL logger for collect diagnostics."""
+
+    enabled: bool
+    path: Path | None = None
+    run_id: str | None = None
+
+    def log(self, event: str, **payload: Any) -> None:
+        if not self.enabled or self.path is None:
+            return
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            record = {
+                "timestamp": datetime.now().astimezone().isoformat(),
+                "event": event,
+                "run_id": self.run_id,
+                **payload,
+            }
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except OSError:
+            return
+
+
 def parse_user_date(value: str) -> date:
     """Parse date from supported input formats."""
     normalized = value.strip()
@@ -203,6 +230,11 @@ def _is_session_denied(session: Session, deny_paths: tuple[str, ...]) -> bool:
 
 def _normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def _truncate_log_preview(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
+    normalized = text.strip()
+    return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
 
 
 def _truncate_excerpt(text: str, limit: int = 280) -> str:
@@ -292,6 +324,27 @@ def _extract_json_object(text: str) -> dict[str, Any]:
 
 def _serialize_summary_payload(payload: dict[str, list[str]]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def build_summary_json_schema() -> dict[str, Any]:
+    """Build one fixed schema for collect structured summaries."""
+    return {
+        "name": "collect_summary",
+        "schema": {
+            "type": "object",
+            "properties": {field_name: {"type": "array", "items": {"type": "string"}} for field_name in SUMMARY_FIELDS},
+            "required": list(SUMMARY_FIELDS),
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
+
+
+def create_collect_logger(config: LoggingConfig | None) -> CollectLogger:
+    """Create a collect logger from config."""
+    if config is None or not config.enabled:
+        return CollectLogger(enabled=False, run_id=str(uuid4()))
+    return CollectLogger(enabled=True, path=config.path, run_id=str(uuid4()))
 
 
 def emit_collect_progress(
@@ -682,17 +735,93 @@ def request_structured_summary_from_llm(
     context_label: str,
     timeout_seconds: int = 90,
     retry_count: int = SUMMARY_PARSE_RETRY_COUNT,
+    logger: CollectLogger | None = None,
+    phase: str = "structured_summary",
+    session_uri: str | None = None,
+    chunk_index: int | None = None,
+    chunk_total: int | None = None,
 ) -> dict[str, list[str]]:
     """Call LLM and parse one structured summary payload."""
     attempts = retry_count + 1
     last_error: Exception | None = None
+    last_error_kind = "parse"
     for _ in range(attempts):
-        response = request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
+        request_id = str(uuid4())
+        if logger is not None:
+            logger.log(
+                "llm_request",
+                request_id=request_id,
+                phase=phase,
+                provider=config.provider,
+                model=config.model,
+                session_uri=session_uri,
+                chunk_index=chunk_index,
+                chunk_total=chunk_total,
+                prompt_chars=len(prompt),
+            )
+        try:
+            response = request_structured_summary_payload_from_llm(config, prompt, timeout_seconds=timeout_seconds)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            last_error_kind = "request"
+            if logger is not None:
+                logger.log(
+                    "llm_request_error",
+                    request_id=request_id,
+                    phase=phase,
+                    provider=config.provider,
+                    model=config.model,
+                    session_uri=session_uri,
+                    chunk_index=chunk_index,
+                    chunk_total=chunk_total,
+                    error=str(exc),
+                )
+            continue
+        if logger is not None:
+            logger.log(
+                "llm_response",
+                request_id=request_id,
+                phase=phase,
+                provider=config.provider,
+                model=config.model,
+                session_uri=session_uri,
+                chunk_index=chunk_index,
+                chunk_total=chunk_total,
+                response_chars=len(response),
+            )
         try:
             return normalize_summary_payload(_extract_json_object(response))
         except Exception as exc:  # noqa: BLE001
             last_error = exc
+            last_error_kind = "parse"
+            if logger is not None:
+                logger.log(
+                    "llm_parse_error",
+                    request_id=request_id,
+                    phase=phase,
+                    provider=config.provider,
+                    model=config.model,
+                    session_uri=session_uri,
+                    chunk_index=chunk_index,
+                    chunk_total=chunk_total,
+                    error=str(exc),
+                    response_preview=_truncate_log_preview(response),
+                )
+    if last_error_kind == "request":
+        raise RuntimeError(f"{context_label}: structured summary request failed: {last_error}") from last_error
     raise RuntimeError(f"{context_label}: invalid structured summary response: {last_error}") from last_error
+
+
+def request_structured_summary_payload_from_llm(
+    config: AIConfig,
+    prompt: str,
+    *,
+    timeout_seconds: int = 90,
+) -> str:
+    """Call provider API and return one structured summary payload string."""
+    if config.provider == "openai":
+        return _request_openai_structured_summary(config, prompt, timeout_seconds=timeout_seconds)
+    return request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
 
 
 def build_collect_session_prompt(
@@ -721,6 +850,7 @@ def _summarize_collect_entry(
     local_tz: tzinfo | None,
     on_chunk_summarized: Callable[[CollectProgressEvent], None] | None = None,
     on_session_merged: Callable[[CollectProgressEvent], None] | None = None,
+    logger: CollectLogger | None = None,
 ) -> SessionSummaryEntry:
     entry = planned_entry.collect_entry
     chunks = planned_entry.chunks
@@ -738,6 +868,11 @@ def _summarize_collect_entry(
             prompt,
             context_label=f"{entry.session_uri} chunk {chunk_index + 1}/{len(chunks)}",
             timeout_seconds=timeout_seconds,
+            logger=logger,
+            phase="chunk_summary",
+            session_uri=entry.session_uri,
+            chunk_index=chunk_index + 1,
+            chunk_total=len(chunks),
         )
         chunk_payloads.append(payload)
         emit_collect_progress(
@@ -758,6 +893,10 @@ def _summarize_collect_entry(
             build_collect_merge_prompt(entry=entry, payloads=chunk_payloads, merge_label="session"),
             context_label=f"{entry.session_uri} session merge",
             timeout_seconds=timeout_seconds,
+            logger=logger,
+            phase="session_merge",
+            session_uri=entry.session_uri,
+            chunk_total=len(chunks),
         )
     emit_collect_progress(
         on_session_merged,
@@ -786,6 +925,7 @@ def summarize_collect_entries(
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     timeout_seconds: int = 90,
+    logger: CollectLogger | None = None,
 ) -> list[SessionSummaryEntry]:
     """Generate structured per-session summaries with limited concurrency."""
     if not planned_entries:
@@ -855,6 +995,7 @@ def summarize_collect_entries(
             local_tz=local_tz,
             on_chunk_summarized=_mark_chunk_summarized,
             on_session_merged=_mark_session_merged,
+            logger=logger,
         )
 
     future_to_index: dict[Future[SessionSummaryEntry], int] = {}
@@ -903,6 +1044,7 @@ def reduce_collect_summaries(
     timeout_seconds: int = 90,
     group_size: int = GROUP_SIZE,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
+    logger: CollectLogger | None = None,
 ) -> CollectAggregate:
     """Reduce per-session summaries via tree reduction into one final aggregate."""
     if not session_summaries:
@@ -944,6 +1086,9 @@ def reduce_collect_summaries(
                     ),
                     context_label=f"group merge level {reduction_depth} index {start // group_size + 1}",
                     timeout_seconds=timeout_seconds,
+                    logger=logger,
+                    phase="group_merge",
+                    session_uri=dummy_entry.session_uri,
                 )
             next_level.append(
                 GroupSummaryEntry(
@@ -1030,17 +1175,18 @@ def _normalize_base_url(base_url: str) -> str:
     return base_url.rstrip("/")
 
 
-def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
-    payload = {
-        "model": config.model,
-        "messages": [
-            {"role": "system", "content": "你是一个严谨的工作总结助手。"},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.2,
-        "enable_thinking": False,
-        "thinking": {"type": "disbled"},
-    }
+def _read_openai_response_content(data: dict[str, Any]) -> str:
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except Exception as exc:
+        raise RuntimeError("OpenAI API response missing content") from exc
+
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError("OpenAI API returned empty content")
+    return content
+
+
+def _request_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_seconds: int) -> dict[str, Any]:
     body = json.dumps(payload).encode("utf-8")
     url = f"{_normalize_base_url(config.base_url)}/chat/completions"
     req = request.Request(  # noqa: S310
@@ -1055,21 +1201,42 @@ def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> s
 
     try:
         with request.urlopen(req, timeout=timeout_seconds) as resp:  # noqa: S310
-            data = json.loads(resp.read().decode("utf-8"))
+            return cast(dict[str, Any], json.loads(resp.read().decode("utf-8")))
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
         raise RuntimeError(f"OpenAI API HTTP {exc.code}: {detail}") from exc
     except error.URLError as exc:
         raise RuntimeError(f"OpenAI API request failed: {exc}") from exc
 
-    try:
-        content = data["choices"][0]["message"]["content"]
-    except Exception as exc:
-        raise RuntimeError("OpenAI API response missing content") from exc
 
-    if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("OpenAI API returned empty content")
-    return content
+def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
+    payload = {
+        "model": config.model,
+        "messages": [
+            {"role": "system", "content": "你是一个严谨的工作总结助手。"},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+        "enable_thinking": False,
+    }
+    return _read_openai_response_content(_request_openai_json(config, payload, timeout_seconds=timeout_seconds))
+
+
+def _request_openai_structured_summary(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
+    payload = {
+        "model": config.model,
+        "messages": [
+            {"role": "system", "content": "你是一个严谨的工作总结助手。"},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+        "enable_thinking": False,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": build_summary_json_schema(),
+        },
+    }
+    return _read_openai_response_content(_request_openai_json(config, payload, timeout_seconds=timeout_seconds))
 
 
 def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:

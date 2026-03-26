@@ -10,6 +10,8 @@ from agent_dump.config import (
     handle_config_command,
     load_ai_config,
     load_collect_config,
+    load_logging_config,
+    LoggingConfig,
     mask_api_key,
     write_ai_config,
 )
@@ -61,11 +63,12 @@ class TestConfigReadWrite:
                 'api_key = "sk-test-123"\n'
                 "\n[collect]\n"
                 "summary_concurrency = 8\n"
+                "summary_timeout_seconds = 120\n"
             ),
             encoding="utf-8",
         )
 
-        assert load_collect_config(path) == CollectConfig(summary_concurrency=8)
+        assert load_collect_config(path) == CollectConfig(summary_concurrency=8, summary_timeout_seconds=120)
 
     def test_load_collect_config_reads_agent_deny_paths(self, tmp_path):
         path = tmp_path / "config.toml"
@@ -117,6 +120,26 @@ class TestConfigReadWrite:
 
         assert load_collect_config(path) == CollectConfig(summary_concurrency=2)
 
+    def test_load_logging_config_reads_values(self, tmp_path):
+        path = tmp_path / "config.toml"
+        log_path = tmp_path / "logs" / "collect.jsonl"
+        path.write_text(
+            (
+                "[logging]\n"
+                "enabled = false\n"
+                f'path = "{log_path}"\n'
+            ),
+            encoding="utf-8",
+        )
+
+        assert load_logging_config(path) == LoggingConfig(enabled=False, path=log_path)
+
+    def test_load_logging_config_defaults_to_config_dir(self, tmp_path, monkeypatch):
+        path = tmp_path / "config.toml"
+        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
+
+        assert load_logging_config(path) == LoggingConfig(enabled=True, path=tmp_path / "logs" / "collect.log")
+
     def test_mask_api_key(self):
         assert mask_api_key("") == ""
         assert mask_api_key("abcdef") == "******"
@@ -126,6 +149,7 @@ class TestConfigReadWrite:
 class TestConfigCommand:
     def test_view_existing(self, tmp_path, capsys, monkeypatch):
         path = tmp_path / "config.toml"
+        default_log_path = tmp_path / "logs" / "collect.log"
         write_ai_config(
             AIConfig(
                 provider="openai",
@@ -143,6 +167,9 @@ class TestConfigCommand:
         assert "当前配置" in out
         assert "sk-*****123" in out
         assert "collect.summary_concurrency: 4" in out
+        assert "collect.summary_timeout_seconds: 90" in out
+        assert "logging.enabled: True" in out
+        assert f"logging.path: {default_log_path}" in out
 
     def test_view_missing_then_create(self, tmp_path, monkeypatch):
         path = tmp_path / "config.toml"
@@ -172,6 +199,33 @@ class TestConfigCommand:
         result = handle_config_command("edit")
         assert result == 1
         assert not path.exists()
+
+    def test_write_ai_config_preserves_collect_and_logging_sections(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[collect]\n"
+                "summary_concurrency = 8\n"
+                "summary_timeout_seconds = 180\n"
+                "\n[logging]\n"
+                "enabled = false\n"
+                'path = "/tmp/collect.log"\n'
+            ),
+            encoding="utf-8",
+        )
+
+        write_ai_config(
+            AIConfig(
+                provider="openai",
+                base_url="https://api.openai.com/v1",
+                model="gpt-4.1-mini",
+                api_key="sk-test-123",
+            ),
+            path,
+        )
+
+        assert load_collect_config(path) == CollectConfig(summary_concurrency=8, summary_timeout_seconds=180)
+        assert load_logging_config(path) == LoggingConfig(enabled=False, path=Path("/tmp/collect.log"))
 
     def test_invalid_action(self):
         result = handle_config_command("bad-action", input_fn=lambda _: "n")
