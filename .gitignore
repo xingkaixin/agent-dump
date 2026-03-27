@@ -60,3 +60,8 @@ wheels/
 
 # cloudflare
 .wrangler/
+
+
+# agent skill
+skills-lock.json
+.agents/*
