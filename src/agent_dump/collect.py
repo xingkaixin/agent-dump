@@ -3,40 +3,41 @@
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import dataclass
 from datetime import date, datetime, tzinfo
 import json
 from pathlib import Path
 import re
 import threading
 from typing import Any, cast
-from urllib import error, request
 from uuid import uuid4
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.collect_llm import build_summary_json_schema as _build_summary_json_schema
+from agent_dump.collect_llm import request_structured_summary_payload_from_llm as _request_structured_summary_payload_from_llm
+from agent_dump.collect_llm import request_summary_from_llm as _request_summary_from_llm
+from agent_dump.collect_models import (
+    CHUNK_TARGET_CHARS,
+    CollectAggregate,
+    CollectEntry,
+    CollectEvent,
+    CollectLogger,
+    CollectProgressEvent,
+    EVENT_EXTRACT_CHAR_BUDGET,
+    GROUP_SIZE,
+    GroupSummaryEntry,
+    MAX_LOG_PREVIEW_CHARS,
+    MAX_SUMMARY_ITEMS_PER_FIELD,
+    PlannedCollectEntry,
+    SESSION_MERGE_LLM_THRESHOLD,
+    SUMMARY_FIELDS,
+    SUMMARY_PARSE_RETRY_COUNT,
+    SUPPORTED_DATE_FORMATS,
+    SessionSummaryEntry,
+)
 from agent_dump.config import AIConfig, CollectConfig, LoggingConfig
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
-SUPPORTED_DATE_FORMATS = ("%Y-%m-%d", "%Y%m%d")
-SUMMARY_FIELDS = (
-    "topics",
-    "decisions",
-    "key_actions",
-    "code_changes",
-    "errors",
-    "tools_used",
-    "files",
-    "artifacts",
-    "open_questions",
-    "notes",
-)
-EVENT_EXTRACT_CHAR_BUDGET = 12000
-CHUNK_TARGET_CHARS = 3200
-GROUP_SIZE = 8
-MAX_SUMMARY_ITEMS_PER_FIELD = 12
-SESSION_MERGE_LLM_THRESHOLD = 48
-SUMMARY_PARSE_RETRY_COUNT = 1
 GREETING_PATTERN = re.compile(r"^(hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok\b)", re.IGNORECASE)
 DECISION_PATTERN = re.compile(r"(决定|采用|改成|切换|方案|fix|修复|处理|实现|完成|done|resolved?)", re.IGNORECASE)
 ERROR_PATTERN = re.compile(
@@ -49,112 +50,6 @@ PATH_PATTERN = re.compile(
     r"(?:(?:[A-Za-z]:)?[\\/][^\s'\"`]+|(?:\./|\../|~?/)?[\w.-]+(?:/[\w.-]+)+)",
 )
 SUMMARY_JSON_PATTERN = re.compile(r"```json\s*(\{[\s\S]*?\})\s*```", re.IGNORECASE)
-MAX_LOG_PREVIEW_CHARS = 400
-
-
-@dataclass(frozen=True)
-class CollectEvent:
-    """One extracted high-signal event from a session."""
-
-    kind: str
-    role: str
-    text: str
-    files: tuple[str, ...] = ()
-    tool_name: str | None = None
-
-
-@dataclass(frozen=True)
-class CollectProgressEvent:
-    """Structured progress event for collect mode."""
-
-    stage: str
-    current: int
-    total: int
-    message: str
-    session_uri: str | None = None
-    chunk_index: int | None = None
-    chunk_total: int | None = None
-    level: int | None = None
-
-
-@dataclass(frozen=True)
-class CollectEntry:
-    """One collected session entry."""
-
-    date_value: date
-    created_at: datetime
-    agent_name: str
-    agent_display_name: str
-    session_id: str
-    session_title: str
-    session_uri: str
-    project_directory: str
-    events: tuple[CollectEvent, ...]
-    is_truncated: bool
-
-
-@dataclass(frozen=True)
-class SessionSummaryEntry:
-    """One summarized session entry for collect aggregation."""
-
-    index: int
-    collect_entry: CollectEntry
-    summary_data: dict[str, list[str]]
-    chunk_count: int
-    source_truncated: bool
-
-
-@dataclass(frozen=True)
-class GroupSummaryEntry:
-    """Intermediate group summary used by tree reduction."""
-
-    level: int
-    summary_data: dict[str, list[str]]
-    session_count: int
-
-
-@dataclass(frozen=True)
-class CollectAggregate:
-    """Final aggregate input used to render the markdown report."""
-
-    summary_data: dict[str, list[str]]
-    date_summaries: dict[str, list[str]]
-    project_summaries: dict[str, list[str]]
-    session_count: int
-    reduction_depth: int
-
-
-@dataclass(frozen=True)
-class PlannedCollectEntry:
-    """One collect entry with deterministic chunk planning."""
-
-    collect_entry: CollectEntry
-    chunks: tuple[tuple[CollectEvent, ...], ...]
-
-
-@dataclass(frozen=True)
-class CollectLogger:
-    """Append-only JSONL logger for collect diagnostics."""
-
-    enabled: bool
-    path: Path | None = None
-    run_id: str | None = None
-
-    def log(self, event: str, **payload: Any) -> None:
-        if not self.enabled or self.path is None:
-            return
-        try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            record = {
-                "timestamp": datetime.now().astimezone().isoformat(),
-                "event": event,
-                "run_id": self.run_id,
-                **payload,
-            }
-            with self.path.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-        except OSError:
-            return
 
 
 def parse_user_date(value: str) -> date:
@@ -328,16 +223,7 @@ def _serialize_summary_payload(payload: dict[str, list[str]]) -> str:
 
 def build_summary_json_schema() -> dict[str, Any]:
     """Build one fixed schema for collect structured summaries."""
-    return {
-        "name": "collect_summary",
-        "schema": {
-            "type": "object",
-            "properties": {field_name: {"type": "array", "items": {"type": "string"}} for field_name in SUMMARY_FIELDS},
-            "required": list(SUMMARY_FIELDS),
-            "additionalProperties": False,
-        },
-        "strict": True,
-    }
+    return _build_summary_json_schema()
 
 
 def create_collect_logger(config: LoggingConfig | None) -> CollectLogger:
@@ -721,11 +607,7 @@ def build_collect_merge_prompt(
 
 def request_summary_from_llm(config: AIConfig, prompt: str, *, timeout_seconds: int = 90) -> str:
     """Call provider API and return markdown summary."""
-    if config.provider == "openai":
-        return _request_openai(config, prompt, timeout_seconds=timeout_seconds)
-    if config.provider == "anthropic":
-        return _request_anthropic(config, prompt, timeout_seconds=timeout_seconds)
-    raise RuntimeError(f"Unsupported provider: {config.provider}")
+    return _request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
 
 
 def request_structured_summary_from_llm(
@@ -819,9 +701,7 @@ def request_structured_summary_payload_from_llm(
     timeout_seconds: int = 90,
 ) -> str:
     """Call provider API and return one structured summary payload string."""
-    if config.provider == "openai":
-        return _request_openai_structured_summary(config, prompt, timeout_seconds=timeout_seconds)
-    return request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
+    return _request_structured_summary_payload_from_llm(config, prompt, timeout_seconds=timeout_seconds)
 
 
 def build_collect_session_prompt(
@@ -1169,119 +1049,6 @@ def build_collect_final_prompt(
         lines.extend(f"- {value}" for value in values)
 
     return "\n".join(lines)
-
-
-def _normalize_base_url(base_url: str) -> str:
-    return base_url.rstrip("/")
-
-
-def _read_openai_response_content(data: dict[str, Any]) -> str:
-    try:
-        content = data["choices"][0]["message"]["content"]
-    except Exception as exc:
-        raise RuntimeError("OpenAI API response missing content") from exc
-
-    if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("OpenAI API returned empty content")
-    return content
-
-
-def _request_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_seconds: int) -> dict[str, Any]:
-    body = json.dumps(payload).encode("utf-8")
-    url = f"{_normalize_base_url(config.base_url)}/chat/completions"
-    req = request.Request(  # noqa: S310
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {config.api_key}",
-        },
-    )
-
-    try:
-        with request.urlopen(req, timeout=timeout_seconds) as resp:  # noqa: S310
-            return cast(dict[str, Any], json.loads(resp.read().decode("utf-8")))
-    except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
-        raise RuntimeError(f"OpenAI API HTTP {exc.code}: {detail}") from exc
-    except error.URLError as exc:
-        raise RuntimeError(f"OpenAI API request failed: {exc}") from exc
-
-
-def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
-    payload = {
-        "model": config.model,
-        "messages": [
-            {"role": "system", "content": "你是一个严谨的工作总结助手。"},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.2,
-        "enable_thinking": False,
-    }
-    return _read_openai_response_content(_request_openai_json(config, payload, timeout_seconds=timeout_seconds))
-
-
-def _request_openai_structured_summary(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
-    payload = {
-        "model": config.model,
-        "messages": [
-            {"role": "system", "content": "你是一个严谨的工作总结助手。"},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.2,
-        "enable_thinking": False,
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": build_summary_json_schema(),
-        },
-    }
-    return _read_openai_response_content(_request_openai_json(config, payload, timeout_seconds=timeout_seconds))
-
-
-def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
-    payload = {
-        "model": config.model,
-        "max_tokens": 4096,
-        "system": "你是一个严谨的工作总结助手。",
-        "messages": [
-            {"role": "user", "content": prompt},
-        ],
-        "thinking": {"type": "disabled"},
-    }
-    body = json.dumps(payload).encode("utf-8")
-    url = f"{_normalize_base_url(config.base_url)}/messages"
-    req = request.Request(  # noqa: S310
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": config.api_key,
-            "anthropic-version": "2023-06-01",
-        },
-    )
-
-    try:
-        with request.urlopen(req, timeout=timeout_seconds) as resp:  # noqa: S310
-            data = json.loads(resp.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
-        raise RuntimeError(f"Anthropic API HTTP {exc.code}: {detail}") from exc
-    except error.URLError as exc:
-        raise RuntimeError(f"Anthropic API request failed: {exc}") from exc
-
-    content_items = data.get("content")
-    if not isinstance(content_items, list):
-        raise RuntimeError("Anthropic API response missing content")
-
-    texts = [item.get("text", "") for item in content_items if isinstance(item, dict) and item.get("type") == "text"]
-    content = "\n".join(part for part in texts if part)
-
-    if not content.strip():
-        raise RuntimeError("Anthropic API returned empty content")
-    return content
-
 
 def write_collect_markdown(
     markdown: str,

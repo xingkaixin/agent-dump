@@ -2,12 +2,8 @@
 Scanner for agent tools
 """
 
+from agent_dump.agent_registry import create_registered_agents
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.claudecode import ClaudeCodeAgent
-from agent_dump.agents.codex import CodexAgent
-from agent_dump.agents.cursor import CursorAgent
-from agent_dump.agents.kimi import KimiAgent
-from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.i18n import Keys, i18n
 
 
@@ -15,13 +11,7 @@ class AgentScanner:
     """Scanner for all supported agent tools"""
 
     def __init__(self):
-        self.agents: list[BaseAgent] = [
-            OpenCodeAgent(),
-            CodexAgent(),
-            KimiAgent(),
-            ClaudeCodeAgent(),
-            CursorAgent(),
-        ]
+        self.agents: list[BaseAgent] = create_registered_agents()
 
     def scan(self) -> dict[str, list[Session]]:
         """

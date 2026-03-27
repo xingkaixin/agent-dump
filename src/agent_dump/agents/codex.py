@@ -186,6 +186,32 @@ class CodexAgent(BaseAgent):
 
         return "Untitled Session"
 
+    def _empty_stats(self) -> dict[str, int]:
+        return {
+            "total_cost": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "message_count": 0,
+        }
+
+    def _accumulate_token_stats(self, stats: dict[str, int], data: dict[str, Any]) -> None:
+        """Update stats from one raw record when token usage is present."""
+        if "token_count" not in str(data):
+            return
+
+        info = data.get("payload", {}).get("info", {})
+        if not info:
+            return
+
+        token_usage = info.get("total_token_usage", {})
+        stats["total_input_tokens"] += token_usage.get("input_tokens", 0)
+        stats["total_output_tokens"] += token_usage.get("output_tokens", 0)
+
+    def _prepare_json_export_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        transformed_messages = self._transform_skill_messages_for_json_export(messages)
+        json_messages = self._filter_json_export_only_tools(transformed_messages)
+        return filter_messages_for_export(json_messages)
+
     def get_session_data(self, session: Session) -> dict:
         """Get session data as a dictionary"""
         if not session.source_path.exists():
@@ -198,12 +224,7 @@ class CodexAgent(BaseAgent):
         current_assistant_index: int | None = None
         latest_assistant_text_index: int | None = None
         pending_plan_location: tuple[int, int] | None = None
-        stats = {
-            "total_cost": 0,
-            "total_input_tokens": 0,
-            "total_output_tokens": 0,
-            "message_count": 0,
-        }
+        stats = self._empty_stats()
 
         with open(session.source_path, encoding="utf-8") as f:
             for line in f:
@@ -221,13 +242,7 @@ class CodexAgent(BaseAgent):
                             pending_plan_location=pending_plan_location,
                         )
                     )
-                    # Preserve the existing best-effort token extraction behavior.
-                    if "token_count" in str(data):
-                        info = data.get("payload", {}).get("info", {})
-                        if info:
-                            token_usage = info.get("total_token_usage", {})
-                            stats["total_input_tokens"] += token_usage.get("input_tokens", 0)
-                            stats["total_output_tokens"] += token_usage.get("output_tokens", 0)
+                    self._accumulate_token_stats(stats, data)
                 except Exception as e:
                     print(f"警告: 转换消息格式失败: {e}")
                     continue
@@ -254,9 +269,7 @@ class CodexAgent(BaseAgent):
         session_data = self.get_session_data(session)
         messages = session_data.get("messages")
         if isinstance(messages, list):
-            transformed_messages = self._transform_skill_messages_for_json_export(messages)
-            json_messages = self._filter_json_export_only_tools(transformed_messages)
-            session_data["messages"] = filter_messages_for_export(json_messages)
+            session_data["messages"] = self._prepare_json_export_messages(messages)
 
         output_path = output_dir / f"{session.id}.json"
         with open(output_path, "w", encoding="utf-8") as f:

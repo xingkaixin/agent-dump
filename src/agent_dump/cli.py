@@ -6,14 +6,13 @@ import argparse
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
-import json
-import os
 from pathlib import Path
-import re
 import sys
 import threading
 from typing import Any
 
+from agent_dump.agent_registry import get_supported_agent_locations as _get_supported_agent_locations
+from agent_dump.agent_registry import get_supported_uri_examples, get_uri_scheme_map
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.collect import (
     CollectProgressEvent,
@@ -28,6 +27,9 @@ from agent_dump.collect import (
     summarize_collect_entries,
     write_collect_markdown,
 )
+from agent_dump.collect_workflow import CollectWorkflowDeps
+from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
+from agent_dump.collect_workflow import resolve_collect_save_path as _resolve_collect_save_path
 from agent_dump.config import (
     handle_config_command,
     load_ai_config,
@@ -36,19 +38,17 @@ from agent_dump.config import (
     validate_ai_config,
 )
 from agent_dump.i18n import Keys, i18n, setup_i18n
-from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.query_filter import filter_sessions, parse_query
+from agent_dump.rendering import apply_summary_to_json_export as _apply_summary_to_json_export
+from agent_dump.rendering import export_session_in_format as _export_session_in_format
+from agent_dump.rendering import export_session_markdown as _export_session_markdown
+from agent_dump.rendering import render_session_text as _render_session_text
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
+from agent_dump.uri_support import find_session_by_id as _find_session_by_id
+from agent_dump.uri_support import parse_uri as _parse_uri
 
-# Valid URI schemes and their corresponding agent names
-VALID_URI_SCHEMES = {
-    "opencode": "opencode",
-    "codex": "codex",
-    "kimi": "kimi",
-    "claude": "claudecode",  # claude:// maps to claudecode agent
-    "cursor": "cursor",
-}
+VALID_URI_SCHEMES = get_uri_scheme_map()
 VALID_FORMATS = {"json", "markdown", "raw", "print"}
 FORMAT_ALIASES = {"md": "markdown"}
 
@@ -165,124 +165,18 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
 
 
 def parse_uri(uri: str) -> tuple[str, str] | None:
-    """
-    Parse an agent session URI.
-    Returns (scheme, session_id) if valid, None otherwise.
-    """
-    pattern = r"^([a-z]+)://(.+)$"
-    match = re.match(pattern, uri)
-    if not match:
-        return None
-    scheme, session_id = match.groups()
-    if scheme not in VALID_URI_SCHEMES:
-        return None
-
-    # Support Codex URI variant:
-    # codex://threads/<session_id> == codex://<session_id>
-    if scheme == "codex" and session_id.startswith("threads/"):
-        session_id = session_id.removeprefix("threads/")
-        if not session_id:
-            return None
-
-    return scheme, session_id
+    """Parse an agent session URI."""
+    return _parse_uri(uri)
 
 
 def find_session_by_id(scanner: AgentScanner, session_id: str) -> tuple[BaseAgent, Session] | None:
-    """Find a session by ID across all available agents"""
-    for agent in scanner.get_available_agents():
-        # Scan all sessions (use a large days value)
-        sessions = agent.get_sessions(days=3650)
-        for session in sessions:
-            if session.id == session_id:
-                return agent, session
-            if agent.name == "cursor" and session.metadata.get("request_id") == session_id:
-                return agent, session
-        if agent.name == "cursor":
-            finder = getattr(agent, "find_session_by_request_id", None)
-            if callable(finder):
-                matched_session = finder(session_id)
-                if isinstance(matched_session, Session):
-                    return agent, matched_session
-    return None
+    """Find a session by ID across all available agents."""
+    return _find_session_by_id(scanner, session_id)
 
 
-def render_session_text(uri: str, session_data: dict) -> str:
-    """Render session data as formatted text"""
-    lines = []
-    lines.append("# Session Dump")
-    lines.append("")
-    lines.append(f"- URI: `{uri}`")
-    lines.append("")
-
-    messages = session_data.get("messages", [])
-    msg_idx = 1
-
-    def _append_section(display_role: str, contents: list[str]) -> None:
-        nonlocal msg_idx
-        if not contents:
-            return
-        lines.append(f"## {msg_idx}. {display_role}")
-        lines.append("")
-        for content in contents:
-            if not content:
-                continue
-            lines.append(content)
-            lines.append("")
-        msg_idx += 1
-
-    for msg in messages:
-        role = msg.get("role", "unknown")
-        role_normalized = str(role).lower()
-        content_parts = get_text_content_parts(msg)
-
-        # Skip non-conversational and injected context messages
-        if role_normalized == "tool":
-            continue
-        if should_filter_message_for_export(msg):
-            continue
-
-        # Determine display name
-        if role_normalized == "user":
-            display_role = "User"
-        elif role_normalized == "assistant":
-            display_role = "Assistant"
-        else:
-            display_role = str(role).capitalize()
-
-        nickname = str(msg.get("nickname", "")).strip()
-        if nickname and role_normalized == "assistant":
-            display_role = f"Assistant ({nickname})"
-
-        if content_parts:
-            _append_section(display_role, content_parts)
-
-        if role_normalized != "assistant":
-            continue
-
-        parts = msg.get("parts", [])
-        if not isinstance(parts, list):
-            continue
-
-        for part in parts:
-            if not isinstance(part, dict) or part.get("type") != "tool" or part.get("tool") != "subagent":
-                continue
-
-            part_nickname = str(part.get("nickname", "")).strip()
-            part_display_role = f"Assistant ({part_nickname})" if part_nickname else "Assistant"
-            state = part.get("state", {})
-            arguments = state.get("arguments")
-            prompt = ""
-            if isinstance(arguments, dict):
-                prompt = str(arguments.get("message", "")).strip()
-                if not prompt:
-                    prompt = json.dumps(arguments, ensure_ascii=False, indent=2)
-            elif isinstance(arguments, str):
-                prompt = arguments.strip()
-
-            if prompt:
-                _append_section(part_display_role, [prompt])
-
-    return "\n".join(lines)
+def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
+    """Render session data as formatted text."""
+    return _render_session_text(uri, session_data)
 
 
 def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
@@ -306,14 +200,7 @@ def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
 
 def apply_summary_to_json_export(output_path: Path, summary_markdown: str) -> None:
     """Inject summary markdown into exported JSON as top-level `summary`."""
-    payload = json.loads(output_path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise RuntimeError("exported JSON payload is not an object")
-    payload["summary"] = summary_markdown
-    output_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _apply_summary_to_json_export(output_path, summary_markdown)
 
 
 def maybe_generate_uri_summary(
@@ -431,19 +318,7 @@ def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
 
 def resolve_collect_save_path(save: str | None, *, since_date: date, until_date: date) -> Path | None:
     """Resolve collect output path from an optional save spec."""
-    if save is None:
-        return None
-
-    candidate = Path(save)
-    default_name = f"agent-dump-collect-{since_date.strftime('%Y%m%d')}-{until_date.strftime('%Y%m%d')}.md"
-
-    if candidate.exists():
-        return candidate / default_name if candidate.is_dir() else candidate
-
-    if candidate.suffix.lower() == ".md":
-        return candidate
-
-    return candidate / default_name
+    return _resolve_collect_save_path(save, since_date=since_date, until_date=until_date)
 
 
 def display_sessions_list(
@@ -510,11 +385,8 @@ def export_sessions(agent: BaseAgent, sessions: list[Session], output_base_dir: 
 
 
 def export_session_markdown(uri: str, session_data: dict, session_id: str, output_dir: Path) -> Path:
-    """Export a single session to Markdown"""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"{session_id}.md"
-    output_path.write_text(render_session_text(uri, session_data), encoding="utf-8")
-    return output_path
+    """Export a single session to Markdown."""
+    return _export_session_markdown(uri, session_data, session_id, output_dir)
 
 
 def export_session_in_format(
@@ -527,16 +399,14 @@ def export_session_in_format(
     session_uri: str | None = None,
 ) -> Path:
     """Export one session in the requested file format."""
-    if output_format == "json":
-        return agent.export_session(session, output_dir)
-    if output_format == "raw":
-        return agent.export_raw_session(session, output_dir)
-    if output_format == "markdown":
-        effective_session_data = session_data if session_data is not None else agent.get_session_data(session)
-        effective_session_uri = session_uri if session_uri is not None else agent.get_session_uri(session)
-        return export_session_markdown(effective_session_uri, effective_session_data, session.id, output_dir)
-
-    raise ValueError(f"Unsupported export format: {output_format}")
+    return _export_session_in_format(
+        agent,
+        session,
+        output_dir,
+        output_format,
+        session_data=session_data,
+        session_uri=session_uri,
+    )
 
 
 def export_sessions_for_formats(
@@ -656,167 +526,36 @@ def warn_list_ignored_options(output_specified: bool, format_specified: bool) ->
 
 def get_supported_agent_locations() -> list[str]:
     """Describe supported agent storage locations."""
-    open_code_default = "LOCALAPPDATA/opencode/opencode.db or APPDATA/opencode/opencode.db"
-    if os.name != "nt":
-        open_code_default = "~/.local/share/opencode/opencode.db"
-
-    return [
-        f"  - OpenCode: XDG_DATA_HOME/opencode/opencode.db or {open_code_default}",
-        "  - Codex: CODEX_HOME/sessions or ~/.codex/sessions",
-        "  - Kimi: KIMI_SHARE_DIR/sessions or ~/.kimi/sessions",
-        "  - Claude Code: CLAUDE_CONFIG_DIR/projects or ~/.claude/projects",
-        "  - Cursor: CURSOR_DATA_PATH or ~/Library/Application Support/Cursor/User/*",
-        "  - Local development fallback: data/opencode, data/codex, data/kimi, data/claudecode",
-    ]
+    return _get_supported_agent_locations()
 
 
 def handle_collect_mode(args: argparse.Namespace) -> int:
     """Handle `--collect` flow."""
-    if args.uri or args.interactive or args.list:
-        print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
-        return 1
-
-    try:
-        since_date, until_date = resolve_collect_date_range(args.since, args.until)
-    except ValueError as e:
-        if str(e) == "since_after_until":
-            print(i18n.t(Keys.COLLECT_DATE_RANGE_INVALID))
-        else:
-            print(i18n.t(Keys.COLLECT_DATE_FORMAT_INVALID))
-        return 1
-
-    config = load_ai_config()
-    valid, errors = validate_ai_config(config)
-    if not valid or config is None:
-        if "missing_file" in errors:
-            print(i18n.t(Keys.COLLECT_CONFIG_MISSING))
-        else:
-            print(i18n.t(Keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(errors)))
-        print(i18n.t(Keys.COLLECT_CONFIG_HINT))
-        return 1
-    collect_config = load_collect_config()
-    logging_config = load_logging_config()
-    collect_logger = create_collect_logger(logging_config)
-
-    scanner = AgentScanner()
-    available_agents = scanner.get_available_agents()
-    if not available_agents:
-        print(i18n.t(Keys.NO_AGENTS_FOUND))
-        return 1
-
-    phase = "read"
-    try:
-        with show_collect_progress() as update_progress:
-            entries, has_truncated = collect_entries(
-                agents=available_agents,
-                since_date=since_date,
-                until_date=until_date,
-                collect_config=collect_config,
-                render_session_text_fn=render_session_text,
-                progress_callback=update_progress,
-            )
-            if not entries:
-                print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
-                return 1
-            collect_logger.log(
-                "collect_run_start",
-                since=since_date.isoformat(),
-                until=until_date.isoformat(),
-                summary_concurrency=collect_config.summary_concurrency,
-                agent_count=len(available_agents),
-                session_count=len(entries),
-            )
-            planned_entries = plan_collect_entries(entries, progress_callback=update_progress)
-            phase = "summarize"
-            session_summaries = summarize_collect_entries(
-                config=config,
-                planned_entries=planned_entries,
-                summary_concurrency=collect_config.summary_concurrency,
-                progress_callback=update_progress,
-                timeout_seconds=collect_config.summary_timeout_seconds,
-                logger=collect_logger,
-            )
-            phase = "render"
-            emit_collect_progress(
-                update_progress,
-                stage="render_final",
-                current=0,
-                total=2,
-                message="render final",
-            )
-            aggregate = reduce_collect_summaries(
-                config=config,
-                session_summaries=session_summaries,
-                progress_callback=update_progress,
-                timeout_seconds=collect_config.summary_timeout_seconds,
-                logger=collect_logger,
-            )
-            emit_collect_progress(
-                update_progress,
-                stage="render_final",
-                current=1,
-                total=2,
-                message="render final",
-            )
-            prompt = build_collect_final_prompt(
-                since_date=since_date,
-                until_date=until_date,
-                aggregate=aggregate,
-                has_truncated=has_truncated,
-            )
-            markdown = request_summary_from_llm(
-                config,
-                prompt,
-                timeout_seconds=collect_config.summary_timeout_seconds,
-            )
-            emit_collect_progress(
-                update_progress,
-                stage="render_final",
-                current=2,
-                total=2,
-                message="render final",
-            )
-            emit_collect_progress(
-                update_progress,
-                stage="write_output",
-                current=0,
-                total=1,
-                message="write output",
-            )
-            phase = "write"
-            output_path = write_collect_markdown(
-                markdown,
-                since_date=since_date,
-                until_date=until_date,
-                output_path=resolve_collect_save_path(args.save, since_date=since_date, until_date=until_date),
-            )
-            emit_collect_progress(
-                update_progress,
-                stage="write_output",
-                current=1,
-                total=1,
-                message="write output",
-            )
-    except Exception as e:
-        collect_logger.log(
-            "collect_run_fail",
-            phase=phase,
-            error=str(e),
-        )
-        if phase == "read":
-            print(i18n.t(Keys.COLLECT_READ_FAILED, error=e))
-        else:
-            print(i18n.t(Keys.COLLECT_API_FAILED, error=e))
-        return 1
-
-    collect_logger.log(
-        "collect_run_finish",
-        output_path=str(output_path),
-        session_count=len(entries),
+    return _handle_collect_mode(
+        args,
+        CollectWorkflowDeps(
+            resolve_collect_date_range=resolve_collect_date_range,
+            load_ai_config=load_ai_config,
+            validate_ai_config=validate_ai_config,
+            load_collect_config=load_collect_config,
+            load_logging_config=load_logging_config,
+            create_collect_logger=create_collect_logger,
+            scanner_factory=AgentScanner,
+            show_collect_progress=show_collect_progress,
+            collect_entries=collect_entries,
+            plan_collect_entries=plan_collect_entries,
+            summarize_collect_entries=summarize_collect_entries,
+            emit_collect_progress=emit_collect_progress,
+            reduce_collect_summaries=reduce_collect_summaries,
+            build_collect_final_prompt=build_collect_final_prompt,
+            request_summary_from_llm=request_summary_from_llm,
+            write_collect_markdown=write_collect_markdown,
+            resolve_collect_save_path=resolve_collect_save_path,
+            render_session_text=render_session_text,
+            i18n_t=i18n.t,
+            keys=Keys,
+        ),
     )
-    print(markdown)
-    print(i18n.t(Keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
-    return 0
 
 
 def main():
@@ -921,12 +660,8 @@ def main():
         if uri_result is None:
             print(i18n.t(Keys.URI_INVALID_FORMAT, uri=args.uri))
             print(i18n.t(Keys.URI_SUPPORTED_FORMATS))
-            print("  - opencode://<session_id>")
-            print("  - codex://<session_id>")
-            print("  - codex://threads/<session_id>")
-            print("  - kimi://<session_id>")
-            print("  - claude://<session_id>")
-            print("  - cursor://<requestid>")
+            for example in get_supported_uri_examples():
+                print(example)
             return 1
 
         scheme, session_id = uri_result

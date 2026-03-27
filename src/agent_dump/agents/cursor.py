@@ -124,6 +124,24 @@ class CursorAgent(BaseAgent):
             return datetime.fromtimestamp(ts, tz=timezone.utc)
         return datetime.now(timezone.utc)
 
+    def _build_session_metadata(self, composer: dict[str, Any], *, composer_id: str, request_id: str) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "composer_id": composer_id,
+            "request_id": request_id,
+            "parent_composer_id": None,
+            "subagent_composer_ids": [],
+            "usage_data": composer.get("usageData"),
+        }
+        subagent_info = composer.get("subagentInfo")
+        if isinstance(subagent_info, dict):
+            parent_id = subagent_info.get("parentComposerId")
+            if isinstance(parent_id, str) and parent_id:
+                metadata["parent_composer_id"] = parent_id
+        sub_ids = composer.get("subagentComposerIds")
+        if isinstance(sub_ids, list):
+            metadata["subagent_composer_ids"] = [str(x) for x in sub_ids if isinstance(x, str)]
+        return metadata
+
     def get_sessions(self, days: int = 7) -> list[Session]:
         """Get Cursor sessions from the last N days."""
         if (not self.global_db_path or not self.workspace_root) and not self.is_available():
@@ -152,22 +170,6 @@ class CursorAgent(BaseAgent):
             updated_at = self._to_datetime_utc(updated_raw if updated_raw is not None else created_raw)
             request_id = self._extract_request_id_from_bubbles(composer_id) or composer_id
 
-            metadata: dict[str, Any] = {
-                "composer_id": composer_id,
-                "request_id": request_id,
-                "parent_composer_id": None,
-                "subagent_composer_ids": [],
-                "usage_data": composer.get("usageData"),
-            }
-            subagent_info = composer.get("subagentInfo")
-            if isinstance(subagent_info, dict):
-                parent_id = subagent_info.get("parentComposerId")
-                if isinstance(parent_id, str) and parent_id:
-                    metadata["parent_composer_id"] = parent_id
-            sub_ids = composer.get("subagentComposerIds")
-            if isinstance(sub_ids, list):
-                metadata["subagent_composer_ids"] = [str(x) for x in sub_ids if isinstance(x, str)]
-
             sessions.append(
                 Session(
                     id=request_id,
@@ -175,7 +177,7 @@ class CursorAgent(BaseAgent):
                     created_at=created_at,
                     updated_at=updated_at,
                     source_path=self.global_db_path,
-                    metadata=metadata,
+                    metadata=self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id),
                 )
             )
         return sessions
@@ -191,28 +193,13 @@ class CursorAgent(BaseAgent):
         created_at = self._to_datetime_utc(created_raw)
         updated_raw = composer.get("updatedAt") or composer.get("lastUpdatedAt") or composer.get("lastSendTime")
         updated_at = self._to_datetime_utc(updated_raw if updated_raw is not None else created_raw)
-        metadata: dict[str, Any] = {
-            "composer_id": composer_id,
-            "request_id": request_id,
-            "parent_composer_id": None,
-            "subagent_composer_ids": [],
-            "usage_data": composer.get("usageData"),
-        }
-        subagent_info = composer.get("subagentInfo")
-        if isinstance(subagent_info, dict):
-            parent_id = subagent_info.get("parentComposerId")
-            if isinstance(parent_id, str) and parent_id:
-                metadata["parent_composer_id"] = parent_id
-        sub_ids = composer.get("subagentComposerIds")
-        if isinstance(sub_ids, list):
-            metadata["subagent_composer_ids"] = [str(x) for x in sub_ids if isinstance(x, str)]
         return Session(
             id=request_id,
             title=self._extract_title(composer, composer_id),
             created_at=created_at,
             updated_at=updated_at,
             source_path=self.global_db_path if self.global_db_path else Path(""),
-            metadata=metadata,
+            metadata=self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id),
         )
 
     def find_session_by_request_id(self, request_id: str) -> Session | None:
