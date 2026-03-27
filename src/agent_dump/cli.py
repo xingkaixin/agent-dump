@@ -11,8 +11,11 @@ import sys
 import threading
 from typing import Any
 
-from agent_dump.agent_registry import get_supported_agent_locations as _get_supported_agent_locations
-from agent_dump.agent_registry import get_supported_uri_examples, get_uri_scheme_map
+from agent_dump.agent_registry import (
+    get_supported_agent_locations as _get_supported_agent_locations,
+    get_supported_uri_examples,
+    get_uri_scheme_map,
+)
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.collect import (
     CollectProgressEvent,
@@ -27,9 +30,11 @@ from agent_dump.collect import (
     summarize_collect_entries,
     write_collect_markdown,
 )
-from agent_dump.collect_workflow import CollectWorkflowDeps
-from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
-from agent_dump.collect_workflow import resolve_collect_save_path as _resolve_collect_save_path
+from agent_dump.collect_workflow import (
+    CollectWorkflowDeps,
+    handle_collect_mode as _handle_collect_mode,
+    resolve_collect_save_path as _resolve_collect_save_path,
+)
 from agent_dump.config import (
     handle_config_command,
     load_ai_config,
@@ -39,14 +44,15 @@ from agent_dump.config import (
 )
 from agent_dump.i18n import Keys, i18n, setup_i18n
 from agent_dump.query_filter import filter_sessions, parse_query
-from agent_dump.rendering import apply_summary_to_json_export as _apply_summary_to_json_export
-from agent_dump.rendering import export_session_in_format as _export_session_in_format
-from agent_dump.rendering import export_session_markdown as _export_session_markdown
-from agent_dump.rendering import render_session_text as _render_session_text
+from agent_dump.rendering import (
+    apply_summary_to_json_export as _apply_summary_to_json_export,
+    export_session_in_format as _export_session_in_format,
+    export_session_markdown as _export_session_markdown,
+    render_session_text as _render_session_text,
+)
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
-from agent_dump.uri_support import find_session_by_id as _find_session_by_id
-from agent_dump.uri_support import parse_uri as _parse_uri
+from agent_dump.uri_support import find_session_by_id as _find_session_by_id, parse_uri as _parse_uri
 
 VALID_URI_SCHEMES = get_uri_scheme_map()
 VALID_FORMATS = {"json", "markdown", "raw", "print"}

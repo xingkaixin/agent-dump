@@ -68,11 +68,7 @@ def create_registered_agents() -> list[BaseAgent]:
 
 def get_uri_scheme_map() -> dict[str, str]:
     """Return supported URI scheme to agent name mapping."""
-    return {
-        scheme: registration.name
-        for registration in AGENT_REGISTRATIONS
-        for scheme in registration.uri_schemes
-    }
+    return {scheme: registration.name for registration in AGENT_REGISTRATIONS for scheme in registration.uri_schemes}
 
 
 def get_supported_agent_locations() -> list[str]:

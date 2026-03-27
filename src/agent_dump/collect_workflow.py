@@ -123,7 +123,9 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 logger=collect_logger,
             )
             phase = "render"
-            deps.emit_collect_progress(update_progress, stage="render_final", current=0, total=2, message="render final")
+            deps.emit_collect_progress(
+                update_progress, stage="render_final", current=0, total=2, message="render final"
+            )
             aggregate = deps.reduce_collect_summaries(
                 config=config,
                 session_summaries=session_summaries,
@@ -131,7 +133,9 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 timeout_seconds=collect_config.summary_timeout_seconds,
                 logger=collect_logger,
             )
-            deps.emit_collect_progress(update_progress, stage="render_final", current=1, total=2, message="render final")
+            deps.emit_collect_progress(
+                update_progress, stage="render_final", current=1, total=2, message="render final"
+            )
             prompt = deps.build_collect_final_prompt(
                 since_date=since_date,
                 until_date=until_date,
@@ -143,8 +147,12 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 prompt,
                 timeout_seconds=collect_config.summary_timeout_seconds,
             )
-            deps.emit_collect_progress(update_progress, stage="render_final", current=2, total=2, message="render final")
-            deps.emit_collect_progress(update_progress, stage="write_output", current=0, total=1, message="write output")
+            deps.emit_collect_progress(
+                update_progress, stage="render_final", current=2, total=2, message="render final"
+            )
+            deps.emit_collect_progress(
+                update_progress, stage="write_output", current=0, total=1, message="write output"
+            )
             phase = "write"
             output_path = deps.write_collect_markdown(
                 markdown,
@@ -152,7 +160,9 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 until_date=until_date,
                 output_path=deps.resolve_collect_save_path(args.save, since_date=since_date, until_date=until_date),
             )
-            deps.emit_collect_progress(update_progress, stage="write_output", current=1, total=1, message="write output")
+            deps.emit_collect_progress(
+                update_progress, stage="write_output", current=1, total=1, message="write output"
+            )
     except Exception as exc:
         collect_logger.log("collect_run_fail", phase=phase, error=str(exc))
         if phase == "read":

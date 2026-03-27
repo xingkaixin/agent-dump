@@ -12,26 +12,28 @@ from typing import Any, cast
 from uuid import uuid4
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.collect_llm import build_summary_json_schema as _build_summary_json_schema
-from agent_dump.collect_llm import request_structured_summary_payload_from_llm as _request_structured_summary_payload_from_llm
-from agent_dump.collect_llm import request_summary_from_llm as _request_summary_from_llm
+from agent_dump.collect_llm import (
+    build_summary_json_schema as _build_summary_json_schema,
+    request_structured_summary_payload_from_llm as _request_structured_summary_payload_from_llm,
+    request_summary_from_llm as _request_summary_from_llm,
+)
 from agent_dump.collect_models import (
     CHUNK_TARGET_CHARS,
+    EVENT_EXTRACT_CHAR_BUDGET,
+    GROUP_SIZE,
+    MAX_LOG_PREVIEW_CHARS,
+    MAX_SUMMARY_ITEMS_PER_FIELD,
+    SESSION_MERGE_LLM_THRESHOLD,
+    SUMMARY_FIELDS,
+    SUMMARY_PARSE_RETRY_COUNT,
+    SUPPORTED_DATE_FORMATS,
     CollectAggregate,
     CollectEntry,
     CollectEvent,
     CollectLogger,
     CollectProgressEvent,
-    EVENT_EXTRACT_CHAR_BUDGET,
-    GROUP_SIZE,
     GroupSummaryEntry,
-    MAX_LOG_PREVIEW_CHARS,
-    MAX_SUMMARY_ITEMS_PER_FIELD,
     PlannedCollectEntry,
-    SESSION_MERGE_LLM_THRESHOLD,
-    SUMMARY_FIELDS,
-    SUMMARY_PARSE_RETRY_COUNT,
-    SUPPORTED_DATE_FORMATS,
     SessionSummaryEntry,
 )
 from agent_dump.config import AIConfig, CollectConfig, LoggingConfig
@@ -1049,6 +1051,7 @@ def build_collect_final_prompt(
         lines.extend(f"- {value}" for value in values)
 
     return "\n".join(lines)
+
 
 def write_collect_markdown(
     markdown: str,

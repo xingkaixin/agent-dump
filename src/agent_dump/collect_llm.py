@@ -4,8 +4,8 @@ import json
 from typing import Any, cast
 from urllib import error, request
 
-from agent_dump.config import AIConfig
 from agent_dump.collect_models import SUMMARY_FIELDS
+from agent_dump.config import AIConfig
 
 
 def request_summary_from_llm(config: AIConfig, prompt: str, *, timeout_seconds: int = 90) -> str:
