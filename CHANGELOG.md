@@ -2,6 +2,15 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.14] - 2026-03-31
+
+### Fixed
+
+- **Windows npm wrapper installation reliability**
+  - Reworked `@agent-dump/cli` to install the matching native binary into the main package during `npm`/`npx` installation instead of relying on platform `optionalDependencies`
+  - Fixed Windows `npx @agent-dump/cli` failures where `@agent-dump/cli-win32-x64/package.json` could not be resolved on real installs
+  - Added checksum generation and verification for native npm binaries during release and install flows
+
 ## [0.6.13] - 2026-03-31
 
 ### Added

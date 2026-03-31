@@ -1,5 +1,14 @@
 # 更新日志
 
+## [0.6.14] - 2026-03-31
+
+### 问题修复
+
+- **Windows npm wrapper 安装稳定性**
+  - 将 `@agent-dump/cli` 改为在 `npm`/`npx` 安装阶段把当前平台对应的原生二进制安装到主包内，不再依赖平台 `optionalDependencies`
+  - 修复 Windows 上真实安装时 `npx @agent-dump/cli` 无法解析 `@agent-dump/cli-win32-x64/package.json` 的问题
+  - 为 npm 原生二进制的发布与安装链路补充 checksum 生成与校验
+
 ## [0.6.13] - 2026-03-31
 
 ### 新增功能
