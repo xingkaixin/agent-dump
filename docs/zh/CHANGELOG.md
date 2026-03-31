@@ -1,5 +1,24 @@
 # 更新日志
 
+## [0.6.13] - 2026-03-31
+
+### 新增功能
+
+- **Agent 注册表统一管理元数据**
+  - 引入 `AgentRegistration` 数据类和 `AGENT_REGISTRATIONS` 元组，作为所有 agent 名称、工厂函数、URI scheme 和帮助文本的单一数据源
+  - 使用注册表 helper 函数（`create_registered_agents`、`get_uri_scheme_map` 等）替代 CLI 中分散的 agent 初始化逻辑
+
+### 变更
+
+- **Collect 模块拆分重构**
+  - 将 LLM HTTP 调用提取为独立的 `collect_llm` 模块（OpenAI/Anthropic 请求函数）
+  - 将共享数据模型与常量提取为 `collect_models` 模块
+  - 将流程编排逻辑提取为 `collect_workflow` 模块，通过 `CollectWorkflowDeps` 实现显式依赖注入
+- **CLI 与渲染模块分离**
+  - 将会话渲染与导出逻辑提取为 `rendering` 模块
+  - 将 URI 解析与会话查找逻辑提取为 `uri_support` 模块
+  - `cli.py` 委托给新模块，代码大幅精简
+
 ## [0.6.12] - 2026-03-26
 
 ### 新增功能
@@ -402,6 +421,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.6.13]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.13
 [0.6.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.12
 [0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10
 [0.6.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.11

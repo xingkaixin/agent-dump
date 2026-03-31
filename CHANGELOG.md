@@ -2,6 +2,25 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.13] - 2026-03-31
+
+### Added
+
+- **Agent registry for centralized agent metadata**
+  - Introduced `AgentRegistration` dataclass and a single `AGENT_REGISTRATIONS` tuple as the source of truth for all agent names, factories, URI schemes, and help text
+  - Replaced scattered agent setup logic in CLI with registry-based helpers (`create_registered_agents`, `get_uri_scheme_map`, etc.)
+
+### Changed
+
+- **Collect mode module decomposition**
+  - Extracted LLM HTTP transport into `collect_llm` (OpenAI/Anthropic request functions)
+  - Extracted shared data models and constants into `collect_models`
+  - Extracted workflow orchestration into `collect_workflow` with explicit dependency injection via `CollectWorkflowDeps`
+- **CLI and rendering module separation**
+  - Extracted session rendering and export logic into `rendering` module
+  - Extracted URI parsing and session lookup into `uri_support` module
+  - Simplified `cli.py` by delegating to the new focused modules
+
 ## [0.6.12] - 2026-03-26
 
 ### Added
@@ -398,6 +417,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.6.13]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.13
 [0.6.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.12
 [0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10
 [0.6.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.11
