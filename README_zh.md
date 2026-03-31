@@ -54,6 +54,8 @@ bunx @agent-dump/cli --help
 npx @agent-dump/cli --help
 ```
 
+`@agent-dump/cli` 会在安装阶段下载当前平台对应的原生二进制，并在落盘前校验发布时生成的 checksum。
+
 当前支持的平台：
 
 - `darwin-x64`

@@ -16,13 +16,6 @@ const packageFiles = [
   path.resolve(npmRoot, "packages", "cli-win32-x64", "package.json")
 ];
 
-const platformPackages = [
-  "@agent-dump/cli-darwin-x64",
-  "@agent-dump/cli-darwin-arm64",
-  "@agent-dump/cli-linux-x64",
-  "@agent-dump/cli-win32-x64"
-];
-
 function parseVersion(source) {
   const match = source.match(/__version__\s*=\s*"([^"]+)"/);
   if (!match) {
@@ -47,9 +40,7 @@ for (const packageFile of packageFiles) {
   packageJson.version = version;
 
   if (packageJson.name === "@agent-dump/cli") {
-    packageJson.optionalDependencies = Object.fromEntries(
-      platformPackages.map((packageName) => [packageName, version])
-    );
+    delete packageJson.optionalDependencies;
   }
 
   await writeJson(packageFile, packageJson);

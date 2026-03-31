@@ -2,6 +2,9 @@
 
 Native `agent-dump` binaries for `bunx` and `npx`.
 
+The package downloads the matching native binary for the current platform during installation
+and verifies it against the published checksum manifest before exposing `agent-dump`.
+
 ```bash
 bunx @agent-dump/cli --help
 npx @agent-dump/cli --help

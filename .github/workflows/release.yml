@@ -199,6 +199,9 @@ jobs:
           node npm/scripts/stage-binaries.mjs darwin-x64 dist/native/darwin-x64/agent-dump
           node npm/scripts/stage-binaries.mjs darwin-arm64 dist/native/darwin-arm64/agent-dump
 
+      - name: Write npm binary checksums
+        run: node npm/scripts/write-checksums.mjs
+
       - name: Build PyPI distributions
         run: uv build --no-sources
 
@@ -229,6 +232,7 @@ jobs:
           cp dist/native/win32-x64/agent-dump.exe dist/release/agent-dump-win32-x64.exe
           cp dist/native/darwin-x64/agent-dump dist/release/agent-dump-darwin-x64
           cp dist/native/darwin-arm64/agent-dump dist/release/agent-dump-darwin-arm64
+          cp npm/packages/cli/lib/binary-checksums.json dist/release/agent-dump-binary-checksums.json
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -238,6 +242,7 @@ jobs:
             dist/release/agent-dump-win32-x64.exe
             dist/release/agent-dump-darwin-x64
             dist/release/agent-dump-darwin-arm64
+            dist/release/agent-dump-binary-checksums.json
             dist/agent_dump-${{ env.PACKAGE_VERSION }}.tar.gz
             dist/agent_dump-${{ env.PACKAGE_VERSION }}-py3-none-any.whl
 

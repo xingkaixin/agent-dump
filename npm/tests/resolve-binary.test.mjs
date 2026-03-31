@@ -8,6 +8,7 @@ const {
   RELEASES_URL,
   SUPPORTED_TARGETS,
   getBinarySpec,
+  getVendorBinaryPath,
   resolveInstalledBinary
 } = require("../packages/cli/lib/resolve-binary.cjs");
 
@@ -45,24 +46,19 @@ test("getBinarySpec rejects unsupported platforms with a release link", () => {
   );
 });
 
-test("resolveInstalledBinary resolves the staged binary path from the platform package", () => {
+test("resolveInstalledBinary resolves the vendored binary path from the main package", () => {
   const spec = getBinarySpec("linux", "x64");
+  const packageRoot = path.join("/tmp", "agent-dump", "node_modules", "@agent-dump", "cli");
+  const expectedPath = path.join(packageRoot, "vendor", "linux-x64", "agent-dump");
+  assert.equal(getVendorBinaryPath(spec, { packageRoot }), expectedPath);
+
   const binaryPath = resolveInstalledBinary(spec, {
-    requireResolve: (request) => {
-      assert.equal(request, "@agent-dump/cli-linux-x64/package.json");
-      return path.join("/tmp", "agent-dump", "node_modules", "@agent-dump", "cli-linux-x64", "package.json");
-    },
+    packageRoot,
     existsSync: (target) => {
-      assert.equal(
-        target,
-        path.join("/tmp", "agent-dump", "node_modules", "@agent-dump", "cli-linux-x64", "bin", "agent-dump")
-      );
+      assert.equal(target, expectedPath);
       return true;
     }
   });
 
-  assert.equal(
-    binaryPath,
-    path.join("/tmp", "agent-dump", "node_modules", "@agent-dump", "cli-linux-x64", "bin", "agent-dump")
-  );
+  assert.equal(binaryPath, expectedPath);
 });
