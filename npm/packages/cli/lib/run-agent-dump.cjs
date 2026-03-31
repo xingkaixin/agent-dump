@@ -2,6 +2,7 @@ const os = require("node:os");
 const { spawn } = require("node:child_process");
 
 const { resolveBinary } = require("./resolve-binary.cjs");
+const { ensureBinary } = require("./install-binary.cjs");
 
 function getForwardSignals(platform) {
   return platform === "win32" ? ["SIGINT", "SIGTERM", "SIGBREAK"] : ["SIGINT", "SIGTERM", "SIGHUP"];
@@ -41,7 +42,7 @@ function attachSignalForwarding(child, signals, processObject) {
   };
 }
 
-function runCli(options = {}) {
+async function runCli(options = {}) {
   const platform = options.platform || process.platform;
   const arch = options.arch || process.arch;
   const argv = options.argv || process.argv.slice(2);
@@ -55,14 +56,25 @@ function runCli(options = {}) {
     process.exitCode = code;
   });
   const resolveBinaryImpl = options.resolveBinaryImpl || resolveBinary;
+  const ensureBinaryImpl = options.ensureBinaryImpl || ensureBinary;
 
   let binaryPath;
   try {
     binaryPath = resolveBinaryImpl({ platform, arch });
   } catch (error) {
-    writeError(`${error.message}\n`);
-    exit(1);
-    return null;
+    if (!error.message.includes("Binary file is missing")) {
+      writeError(`${error.message}\n`);
+      exit(1);
+      return null;
+    }
+
+    try {
+      binaryPath = await ensureBinaryImpl({ platform, arch });
+    } catch (installError) {
+      writeError(`Failed to install agent-dump native binary: ${installError.message}\n`);
+      exit(1);
+      return null;
+    }
   }
 
   const child = spawnImpl(binaryPath, argv, {

@@ -20,7 +20,7 @@ test("runCli forwards argv and exits with the child exit code", async () => {
   let exitCode = null;
   let spawned = null;
 
-  runCli({
+  await runCli({
     argv: ["--help"],
     platform: "linux",
     arch: "x64",
@@ -49,11 +49,11 @@ test("runCli forwards argv and exits with the child exit code", async () => {
   assert.equal(exitCode, 3);
 });
 
-test("runCli prints an explicit error for unsupported platforms", () => {
+test("runCli prints an explicit error for unsupported platforms", async () => {
   const messages = [];
   let exitCode = null;
 
-  const child = runCli({
+  const child = await runCli({
     platform: "linux",
     arch: "arm64",
     resolveBinaryImpl: () => {
@@ -70,6 +70,70 @@ test("runCli prints an explicit error for unsupported platforms", () => {
   assert.equal(child, null);
   assert.equal(exitCode, 1);
   assert.deepEqual(messages, ["Unsupported platform linux/arm64\n"]);
+});
+
+test("runCli installs the binary on demand when the vendored file is missing", async () => {
+  const child = new EventEmitter();
+  child.kill = () => {};
+
+  let ensured = null;
+  let spawned = null;
+
+  await runCli({
+    argv: ["--help"],
+    platform: "linux",
+    arch: "x64",
+    resolveBinaryImpl: () => {
+      throw new Error("Binary file is missing for linux-x64: /tmp/vendor/agent-dump. Reinstall @agent-dump/cli.");
+    },
+    ensureBinaryImpl: async ({ platform, arch }) => {
+      ensured = { platform, arch };
+      return "/tmp/agent-dump";
+    },
+    spawnImpl: (command, args, options) => {
+      spawned = { command, args, options };
+      return child;
+    }
+  });
+
+  child.emit("exit", 0, null);
+
+  assert.deepEqual(ensured, { platform: "linux", arch: "x64" });
+  assert.deepEqual(spawned, {
+    command: "/tmp/agent-dump",
+    args: ["--help"],
+    options: {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: "inherit"
+    }
+  });
+});
+
+test("runCli reports install failures when the binary cannot be recovered", async () => {
+  const messages = [];
+  let exitCode = null;
+
+  const child = await runCli({
+    platform: "linux",
+    arch: "x64",
+    resolveBinaryImpl: () => {
+      throw new Error("Binary file is missing for linux-x64: /tmp/vendor/agent-dump. Reinstall @agent-dump/cli.");
+    },
+    ensureBinaryImpl: async () => {
+      throw new Error("network down");
+    },
+    writeError: (message) => {
+      messages.push(message);
+    },
+    exit: (code) => {
+      exitCode = code;
+    }
+  });
+
+  assert.equal(child, null);
+  assert.equal(exitCode, 1);
+  assert.deepEqual(messages, ["Failed to install agent-dump native binary: network down\n"]);
 });
 
 test("getForwardSignals keeps SIGBREAK only on Windows", () => {

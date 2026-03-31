@@ -1,3 +1,4 @@
+const fs = require("node:fs");
 const crypto = require("node:crypto");
 const fsp = require("node:fs/promises");
 const http = require("node:http");
@@ -172,6 +173,16 @@ function getVendorBinaryPath(packageRoot, spec) {
   return path.join(packageRoot, "vendor", spec.target, spec.executableName);
 }
 
+function isBinaryInstalled(options = {}) {
+  const platform = options.platform || process.platform;
+  const arch = options.arch || process.arch;
+  const packageRoot = options.packageRoot || getPackageRoot();
+  const existsSync = options.existsSync || fs.existsSync;
+  const spec = options.spec || getBinarySpec(platform, arch);
+  const vendorPath = getVendorBinaryPath(packageRoot, spec);
+  return existsSync(vendorPath);
+}
+
 async function installBinary(options = {}) {
   const platform = options.platform || process.platform;
   const arch = options.arch || process.arch;
@@ -237,13 +248,26 @@ async function installBinary(options = {}) {
   return vendorPath;
 }
 
+async function ensureBinary(options = {}) {
+  const platform = options.platform || process.platform;
+  const arch = options.arch || process.arch;
+  const packageRoot = options.packageRoot || getPackageRoot();
+  const spec = options.spec || getBinarySpec(platform, arch);
+
+  if (isBinaryInstalled({ ...options, platform, arch, packageRoot, spec })) {
+    return getVendorBinaryPath(packageRoot, spec);
+  }
+
+  return installBinary({ ...options, platform, arch, packageRoot, spec });
+}
+
 async function installBinaryFromPackage() {
   if (process.env.AGENT_DUMP_CLI_SKIP_INSTALL === "1") {
     return;
   }
 
   try {
-    await installBinary();
+    await ensureBinary();
   } catch (error) {
     process.stderr.write(`Failed to install agent-dump native binary: ${error.message}\n`);
     process.exitCode = 1;
@@ -254,6 +278,7 @@ module.exports = {
   DEFAULT_REGISTRY_URL,
   DEFAULT_RETRY_COUNT,
   DEFAULT_RETRY_DELAY_MS,
+  ensureBinary,
   extractBinaryFromTarball,
   fetchBuffer,
   fetchJson,
@@ -262,6 +287,7 @@ module.exports = {
   getVendorBinaryPath,
   installBinary,
   installBinaryFromPackage,
+  isBinaryInstalled,
   parseTarEntries,
   readChecksums,
   sha256,

@@ -199,6 +199,9 @@ jobs:
           node npm/scripts/stage-binaries.mjs darwin-x64 dist/native/darwin-x64/agent-dump
           node npm/scripts/stage-binaries.mjs darwin-arm64 dist/native/darwin-arm64/agent-dump
 
+      - name: Validate staged npm binaries
+        run: node npm/scripts/validate-staged-binaries.mjs
+
       - name: Write npm binary checksums
         run: node npm/scripts/write-checksums.mjs
 

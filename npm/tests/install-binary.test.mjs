@@ -8,6 +8,7 @@ import zlib from "node:zlib";
 
 const require = createRequire(import.meta.url);
 const {
+  ensureBinary,
   extractBinaryFromTarball,
   getRegistryBaseUrl,
   getVendorBinaryPath,
@@ -164,4 +165,70 @@ test("installBinary fails on checksum mismatch", async () => {
     }),
     /Checksum mismatch/
   );
+});
+
+test("ensureBinary returns the existing vendored binary without downloading", async () => {
+  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-ensure-existing-"));
+  const spec = getBinarySpec("linux", "x64");
+  const vendorPath = getVendorBinaryPath(packageRoot, spec);
+
+  await fs.mkdir(path.dirname(vendorPath), { recursive: true });
+  await fs.writeFile(vendorPath, "existing-binary", "utf8");
+
+  const ensuredPath = await ensureBinary({
+    packageRoot,
+    platform: "linux",
+    arch: "x64",
+    fetchBufferImpl: async () => {
+      throw new Error("ensureBinary should not download when the binary already exists");
+    }
+  });
+
+  assert.equal(ensuredPath, vendorPath);
+  assert.equal(await fs.readFile(vendorPath, "utf8"), "existing-binary");
+});
+
+test("ensureBinary installs the vendored binary when it is missing", async () => {
+  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-ensure-install-"));
+  const version = "0.6.13";
+  const spec = getBinarySpec("linux", "x64");
+  const binary = Buffer.from("#!/usr/bin/env bash\necho installed\n", "utf8");
+  const tarball = createTarGz([
+    { name: "package/package.json", content: Buffer.from('{"name":"@agent-dump/cli-linux-x64"}') },
+    { name: "package/bin/agent-dump", content: binary }
+  ]);
+
+  const ensuredPath = await ensureBinary({
+    packageRoot,
+    version,
+    platform: "linux",
+    arch: "x64",
+    checksums: {
+      [version]: {
+        [spec.target]: sha256(binary)
+      }
+    },
+    retries: 1,
+    fetchBufferImpl: async (url) => {
+      if (url.includes("%40agent-dump%2Fcli-linux-x64")) {
+        return Buffer.from(
+          JSON.stringify({
+            versions: {
+              [version]: {
+                dist: {
+                  tarball: "http://registry.test/tarballs/cli-linux-x64-0.6.13.tgz"
+                }
+              }
+            }
+          })
+        );
+      }
+
+      return tarball;
+    },
+    registryBaseUrl: "http://registry.test"
+  });
+
+  assert.equal(ensuredPath, getVendorBinaryPath(packageRoot, spec));
+  assert.deepEqual(await fs.readFile(ensuredPath), binary);
 });
