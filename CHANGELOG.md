@@ -2,6 +2,19 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.15] - 2026-03-31
+
+### Fixed
+
+- **npm wrapper runtime binary recovery**
+  - Made `@agent-dump/cli` recover the vendored native binary at runtime when `vendor/<target>/agent-dump` is missing, instead of assuming installation hooks already populated it
+  - Fixed `bunx @agent-dump/cli` failures where Bun left the main package installed but did not provide the vendored binary before first run
+
+### CI
+
+- **Release binary staging validation**
+  - Added a release-time validation step to fail publishing if staged npm platform binaries are missing, empty, or staged as text stubs instead of native executables
+
 ## [0.6.14] - 2026-03-31
 
 ### Fixed
