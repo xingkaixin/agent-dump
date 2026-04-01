@@ -204,7 +204,7 @@ class TestCursorAgent:
         )
 
         agent = CursorAgent()
-        session = agent.get_sessions(days=7)[0]
+        session = next(item for item in agent.get_sessions(days=7) if item.id == "request-order")
         data = agent.get_session_data(session)
         assert data["messages"][0]["parts"][0]["text"] == "first"
         assert data["messages"][1]["parts"][0]["text"] == "second"
@@ -233,3 +233,202 @@ class TestCursorAgent:
         assert matched is not None
         assert matched.id == "request-other"
         assert matched.metadata["composer_id"] == "composer-any-req"
+
+    def test_get_session_data_converts_create_plan_to_plan_part(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-plan",
+            {"composerId": "composer-plan", "createdAt": now_ms, "name": "Plan Session"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-plan:b1",
+            {
+                "requestId": "request-plan",
+                "type": 1,
+                "text": "please plan",
+                "modelInfo": {"modelName": "default"},
+                "timingInfo": {"clientRpcSendTime": now_ms},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-plan:b2",
+            {
+                "type": 2,
+                "timingInfo": {"clientRpcSendTime": now_ms + 1},
+                "toolFormerData": {
+                    "name": "create_plan",
+                    "status": "completed",
+                    "params": json.dumps({"plan": "# Plan Title\n\n- first"}, ensure_ascii=False),
+                    "result": json.dumps({"rejected": {}}, ensure_ascii=False),
+                    "additionalData": {
+                        "reviewData": {
+                            "status": "Requested",
+                            "selectedOption": "none",
+                            "isShowingInput": False,
+                        }
+                    },
+                },
+            },
+        )
+
+        agent = CursorAgent()
+        session = next(item for item in agent.get_sessions(days=7) if item.id == "request-plan")
+        data = agent.get_session_data(session)
+
+        plan_messages = [
+            message for message in data["messages"] if any(part.get("type") == "plan" for part in message["parts"])
+        ]
+        assert len(plan_messages) == 1
+        plan_part = next(part for part in plan_messages[0]["parts"] if part.get("type") == "plan")
+        assert plan_part["input"] == "# Plan Title\n\n- first"
+        assert plan_part["approval_status"] == "fail"
+        assert plan_part["output"] is None
+        tool_names = [
+            part["tool"]
+            for message in data["messages"]
+            for part in message["parts"]
+            if part.get("type") == "tool"
+        ]
+        assert "create_plan" not in tool_names
+
+    def test_get_session_data_backfills_subagent_output(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-parent",
+            {"composerId": "composer-parent", "createdAt": now_ms, "name": "Parent Session"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-parent:b1",
+            {
+                "requestId": "request-parent",
+                "type": 1,
+                "text": "run subagent",
+                "modelInfo": {"modelName": "default"},
+                "timingInfo": {"clientRpcSendTime": now_ms},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-parent:b2",
+            {
+                "type": 2,
+                "timingInfo": {"clientRpcSendTime": now_ms + 1},
+                "toolFormerData": {
+                    "name": "task_v2",
+                    "status": "completed",
+                    "toolCallId": "tool-1",
+                    "params": json.dumps(
+                        {
+                            "description": "Explore code",
+                            "prompt": "Read the files and summarize.",
+                            "subagentType": "explore",
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "result": json.dumps({"agentId": "subagent-composer"}, ensure_ascii=False),
+                    "additionalData": {
+                        "status": "success",
+                        "subagentComposerId": "subagent-composer",
+                    },
+                },
+            },
+        )
+        _insert_kv(
+            global_db,
+            "composerData:subagent-composer",
+            {
+                "composerId": "subagent-composer",
+                "createdAt": now_ms + 2,
+                "name": "Child Session",
+                "subagentInfo": {"parentComposerId": "composer-parent"},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:subagent-composer:c1",
+            {
+                "requestId": "child-request",
+                "type": 1,
+                "text": "Read the files and summarize.",
+                "timingInfo": {"clientRpcSendTime": now_ms + 2},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:subagent-composer:c2",
+            {
+                "type": 2,
+                "text": "Subagent summary output",
+                "timingInfo": {"clientRpcSendTime": now_ms + 3},
+            },
+        )
+
+        agent = CursorAgent()
+        session = next(item for item in agent.get_sessions(days=7) if item.id == "request-parent")
+        data = agent.get_session_data(session)
+
+        tool_part = next(
+            part
+            for message in data["messages"]
+            for part in message["parts"]
+            if part.get("type") == "tool" and part.get("tool") == "subagent"
+        )
+        assert tool_part["subagent_id"] == "subagent-composer"
+        assert tool_part["state"]["prompt"] == "Read the files and summarize."
+        assert tool_part["state"]["output"] == [
+            {
+                "type": "text",
+                "text": "Subagent summary output",
+                "time_created": now_ms + 3,
+            }
+        ]
+
+    def test_get_session_data_inherits_model_from_user_turn(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-model",
+            {"composerId": "composer-model", "createdAt": now_ms, "name": "Model Session"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-model:b1",
+            {
+                "requestId": "request-model",
+                "type": 1,
+                "text": "fix it",
+                "modelInfo": {"modelName": "claude-4.6-opus-high-thinking"},
+                "timingInfo": {"clientRpcSendTime": now_ms},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-model:b2",
+            {
+                "type": 2,
+                "text": "assistant reply",
+                "timingInfo": {"clientRpcSendTime": now_ms + 1},
+                "toolFormerData": {
+                    "name": "read_file_v2",
+                    "status": "completed",
+                    "params": json.dumps({"targetFile": "/tmp/a.py"}, ensure_ascii=False),
+                },
+            },
+        )
+
+        agent = CursorAgent()
+        session = agent.get_sessions(days=7)[0]
+        data = agent.get_session_data(session)
+
+        assert data["messages"][0]["model"] == "claude-4.6-opus-high-thinking"
+        assert data["messages"][1]["model"] == "claude-4.6-opus-high-thinking"
+        tool_message = next(message for message in data["messages"] if message["role"] == "tool")
+        assert tool_message["model"] == "claude-4.6-opus-high-thinking"
