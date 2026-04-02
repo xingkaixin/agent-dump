@@ -2,6 +2,15 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.16] - 2026-04-02
+
+### Fixed
+
+- **JSON export now creates missing output directories**
+  - Made `export_session()` create the target output directory for Claude Code, Codex, Kimi, and OpenCode exports before writing JSON
+  - Fixed URI-mode JSON exports such as `agent-dump claude://... --format json --output <path>` failing when the target `<path>/<agent>` directory did not already exist
+  - Added regression coverage for both agent-level exports and CLI URI exports targeting previously missing directories
+
 ## [0.6.15] - 2026-03-31
 
 ### Fixed
@@ -439,6 +448,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.6.16]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.16
 [0.6.13]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.13
 [0.6.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.12
 [0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10

@@ -1,5 +1,14 @@
 # 更新日志
 
+## [0.6.16] - 2026-04-02
+
+### 问题修复
+
+- **JSON 导出现在会自动创建缺失的输出目录**
+  - 为 Claude Code、Codex、Kimi 和 OpenCode 的 `export_session()` 补齐目标输出目录创建逻辑，再写入 JSON 文件
+  - 修复 `agent-dump claude://... --format json --output <path>` 这类 URI 模式导出在 `<path>/<agent>` 目录尚不存在时直接失败的问题
+  - 补充 agent 层与 CLI URI 导出层的回归测试，覆盖“输出目录原先不存在”的场景
+
 ## [0.6.15] - 2026-03-31
 
 ### 问题修复
@@ -443,6 +452,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.6.16]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.16
 [0.6.13]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.13
 [0.6.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.12
 [0.6.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.10
