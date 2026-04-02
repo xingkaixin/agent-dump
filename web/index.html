@@ -3,18 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#F5F0E8" />
+    <meta name="theme-color" content="#fdfcfc" />
     <meta
       name="description"
-      content="Agent Dump exports sessions from Codex, Claude Code, Kimi, and OpenCode with URI dump, multi-format export, collect reports, and skill-based workflows."
+      content="Agent Dump exports sessions from Codex, Claude Code, Kimi, and OpenCode — list, dump, export, and summarize from one CLI."
     />
-    <title>Agent Dump</title>
+    <title>Agent Dump | Session Export for AI Coding Tools</title>
     <link rel="icon" type="image/png" href="./assets/logo.png" />
     <link rel="apple-touch-icon" href="./assets/logo.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.cn" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.cn/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
@@ -28,122 +28,84 @@
   <body>
     <a class="skip-link" href="#main" data-i18n="skipLink">Skip to content</a>
 
-    <div class="page-noise" aria-hidden="true"></div>
-
     <header class="topbar">
-      <a class="brand" href="#hero" aria-label="Agent Dump home">
-        <img src="./assets/logo.png" alt="Agent Dump" width="120" height="120" />
-        <span class="brand-copy">
-          <strong>Agent Dump</strong>
-          <span data-i18n="brandTag">session export for AI coding tools</span>
-        </span>
+      <a class="brand" href="#" aria-label="Agent Dump home">
+        <img src="./assets/logo.png" alt="" width="32" height="32" />
+        <strong>Agent Dump</strong>
       </a>
 
-      <nav class="topbar-nav" aria-label="Primary">
-        <a href="#hero" data-i18n="navInstall">Install</a>
-        <a href="#commands" data-i18n="navCommands">Commands</a>
-        <a href="#safety" data-i18n="navSafety">Safety</a>
-      </nav>
-
-      <div class="toolbar" role="group" aria-label="Display controls">
-        <div class="segmented-control" role="group" aria-label="Language switch">
-          <button
-            type="button"
-            class="segmented-button"
-            data-lang-toggle="en"
-            aria-pressed="true"
-          >
-            EN
-          </button>
-          <button
-            type="button"
-            class="segmented-button"
-            data-lang-toggle="zh"
-            aria-pressed="false"
-          >
-            中文
-          </button>
-        </div>
+      <div class="segmented-control" role="group" aria-label="Language switch">
+        <button
+          type="button"
+          class="segmented-button"
+          data-lang-toggle="en"
+          aria-pressed="true"
+        >EN</button>
+        <button
+          type="button"
+          class="segmented-button"
+          data-lang-toggle="zh"
+          aria-pressed="false"
+        >中文</button>
       </div>
     </header>
 
     <main id="main">
       <section id="hero" class="hero">
-        <div class="hero-top reveal">
-          <div class="hero-copy">
-            <p class="hero-brand" data-i18n="heroBrand">Agent Dump</p>
-            <h1 data-i18n="heroTitle">Export AI coding sessions without touching the source flow.</h1>
-            <p class="hero-description" data-i18n="heroDescription">
-              List, dump, export, and summarize Codex, Claude Code, Kimi, and OpenCode sessions
-              from one CLI.
-            </p>
-          </div>
-        </div>
+        <p class="eyebrow" data-i18n="eyebrow">CLI · AI Session Export</p>
+        <h1 data-i18n="heroTitle">Export AI coding sessions.</h1>
+        <p class="description" data-i18n="heroDescription">
+          List, dump, export, and summarize sessions from Codex, Claude Code, Kimi, and OpenCode.
+        </p>
 
-        <div class="hero-bottom reveal">
-          <div class="terminal-stage terminal-stage-compact hero-install-panel">
-            <div class="terminal-stage-header">
-              <span class="terminal-stage-chip" data-i18n="heroCardLabel">Install</span>
-              <span class="terminal-stage-path">agent-dump</span>
-            </div>
-            <div id="install-paths" class="tab-shell hero-install-tabs" data-install-grid></div>
+        <div class="terminal" aria-label="Terminal showing example agent-dump commands">
+          <div class="terminal-bar" aria-hidden="true">
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
           </div>
-
-          <div class="terminal-stage terminal-stage-compact hero-skill-panel">
-            <div class="terminal-stage-header">
-              <span class="terminal-stage-chip">Skill</span>
-              <span class="terminal-stage-path">agent-dump</span>
+          <div class="terminal-body">
+            <div class="terminal-line">
+              <span class="prompt" aria-hidden="true">$</span>
+              <span id="typed-text" class="typed-text" aria-live="off"></span><span class="cursor" aria-hidden="true"></span>
             </div>
-            <div class="terminal-stage-command hero-skill-shell">
-              <span class="terminal-prompt" aria-hidden="true">$</span>
-              <pre id="skill-install" class="command-code">npx skills add xingkaixin/agent-dump</pre>
-              <button
-                type="button"
-                class="copy-button copy-button-icon"
-                data-copy-target="skill-install"
-                data-copy-title
-              >
-                <span class="button-icon-stack" aria-hidden="true">
-                  <span class="copy-icon"></span>
-                  <span class="check-icon"></span>
-                </span>
-                <span class="sr-only" data-i18n="copy">Copy</span>
-              </button>
-            </div>
-            <p class="hero-skill-note" data-i18n="skillNote">
-              Your agent learns install, inspect, export, and collect workflows.
-            </p>
           </div>
         </div>
       </section>
 
-      <section id="commands" class="section command-demo-section">
-        <div class="section-heading reveal">
-          <p class="eyebrow" data-i18n="commandEyebrow">Command demos</p>
-          <h2 data-i18n="commandTitle">Input exactly this, and see exactly this output shape.</h2>
-          <p class="section-copy command-copy" data-i18n="commandDescription">
-            Focus on the three actions used most in daily work: select, inspect, and collect.
-          </p>
-        </div>
-        <div class="command-demo-grid" data-command-grid></div>
-      </section>
-
-      <section id="safety" class="section safety-section">
-        <div class="section-heading reveal">
-          <p class="eyebrow" data-i18n="safetyEyebrow">Safety boundary</p>
-          <h2 data-i18n="safetyTitle">Read from source sessions, write only to export outputs.</h2>
-          <p class="section-copy command-copy" data-i18n="safetyDescription">
-            Keep the source chain untouched while retaining full traceability in exports.
-          </p>
-        </div>
-        <div class="support-grid" data-feature-grid></div>
-        <div class="safety-note reveal">
-          <p data-i18n="safetyNote">
-            This narrow, explicit command surface is why agents can run reliably without crossing
-            into unsupported behavior.
-          </p>
+      <section id="install" class="install-section">
+        <h2 data-i18n="installHeading">Install</h2>
+        <div class="install-groups" data-install-grid></div>
+        <div class="skill-block">
+          <p class="skill-label" data-i18n="skillNote">Or add as an agent skill:</p>
+          <div class="command-line">
+            <span class="prompt" aria-hidden="true">$</span>
+            <pre id="skill-install" class="command-code">npx skills add xingkaixin/agent-dump</pre>
+            <button
+              type="button"
+              class="copy-button"
+              data-copy-target="skill-install"
+              data-copy-title
+              aria-label="Copy"
+            >
+              <span class="button-icon-stack" aria-hidden="true">
+                <span class="copy-icon"></span>
+                <span class="check-icon"></span>
+              </span>
+            </button>
+          </div>
         </div>
       </section>
     </main>
+
+    <footer class="footer">
+      <span>Agent Dump</span>
+      <a
+        href="https://github.com/xingkaixin/agent-dump"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-i18n="footerGithub"
+      >GitHub</a>
+    </footer>
   </body>
 </html>
