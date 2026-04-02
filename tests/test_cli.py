@@ -3,7 +3,7 @@
 """
 
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from unittest import mock
@@ -1435,6 +1435,54 @@ class TestMain:
         mock_agent.export_session.assert_called_once_with(mock_session, expected_output_dir)
         captured = capsys.readouterr()
         assert "# Session Dump" not in captured.out
+        assert str(expected_output) in captured.out
+
+    def test_main_uri_mode_json_creates_missing_output_dir(self, capsys, tmp_path):
+        """测试 URI + --format json 在输出目录不存在时也能导出"""
+        from agent_dump.agents.claudecode import ClaudeCodeAgent
+
+        agent = ClaudeCodeAgent()
+        session_file = tmp_path / "test-uri.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "user",
+                    "uuid": "msg-001",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "message": {"role": "user", "content": "Hello Claude"},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        session = Session(
+            id="session-001",
+            title="Test Session",
+            created_at=datetime(2026, 1, 1, 12, 0, 0),
+            updated_at=datetime(2026, 1, 1, 12, 0, 0),
+            source_path=session_file,
+            metadata={"cwd": "/test", "version": "1.0"},
+        )
+
+        output_root = tmp_path / "missing-root"
+        expected_output = output_root / "claudecode" / "session-001.json"
+
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_scanner.get_available_agents.return_value = [agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(agent, session)):
+                with mock.patch(
+                    "sys.argv",
+                    ["agent-dump", "claude://session-001", "--format", "json", "--output", str(output_root)],
+                ):
+                    result = main()
+
+        assert result == 0
+        assert expected_output.exists()
+        captured = capsys.readouterr()
         assert str(expected_output) in captured.out
 
     def test_main_uri_mode_md_writes_file_and_not_print_body(self, capsys, tmp_path):

@@ -1195,6 +1195,27 @@ class TestKimiAgent:
             {"type": "text", "text": "tool result", "time_created": 0}
         ]
 
+    def test_export_session_creates_missing_output_dir(self, tmp_path):
+        """测试导出时会自动创建缺失的输出目录"""
+        agent = KimiAgent()
+        output_dir = tmp_path / "nested" / "output"
+
+        session_dir = tmp_path / "session-create-dir"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {"role": "user", "content": "Hello Kimi"},
+                {"role": "assistant", "content": [{"type": "text", "text": "回答"}]},
+            ],
+        )
+
+        session = make_session(session_dir, session_id="test-create-dir", title="Create Dir")
+        result = agent.export_session(session, output_dir)
+
+        assert output_dir.exists()
+        assert result.exists()
+
     def test_export_session_extracts_tokens(self, tmp_path):
         """测试导出时提取 token 使用情况"""
         agent = KimiAgent()

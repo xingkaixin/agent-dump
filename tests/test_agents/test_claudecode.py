@@ -408,6 +408,37 @@ class TestClaudeCodeAgent:
         assert exported["title"] == "Test Session"
         assert len(exported["messages"]) == 1
 
+    def test_export_session_creates_missing_output_dir(self, tmp_path):
+        """测试导出时会自动创建缺失的输出目录"""
+        agent = ClaudeCodeAgent()
+        output_dir = tmp_path / "nested" / "output"
+
+        session_file = tmp_path / "test-create-dir.jsonl"
+        data = {
+            "type": "user",
+            "uuid": "msg-001",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "message": {
+                "role": "user",
+                "content": "Hello Claude",
+            },
+        }
+        session_file.write_text(json.dumps(data) + "\n", encoding="utf-8")
+
+        session = Session(
+            id="test-create-dir",
+            title="Test Session",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=session_file,
+            metadata={"cwd": "/test", "version": "1.0"},
+        )
+
+        result = agent.export_session(session, output_dir)
+
+        assert output_dir.exists()
+        assert result.exists()
+
     def test_export_raw_session_copies_original_jsonl(self, tmp_path):
         """测试 raw 导出会复制原始 jsonl 文件"""
         agent = ClaudeCodeAgent()

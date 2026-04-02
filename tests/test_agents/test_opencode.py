@@ -441,6 +441,79 @@ class TestOpenCodeAgent:
         assert data["stats"]["total_input_tokens"] == 100
         assert data["stats"]["total_output_tokens"] == 50
 
+    def test_export_session_creates_missing_output_dir(self, tmp_path):
+        """测试导出时会自动创建缺失的输出目录"""
+        agent = OpenCodeAgent()
+        db_path = tmp_path / "opencode.db"
+        output_dir = tmp_path / "nested" / "output"
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE session (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                time_created INTEGER,
+                time_updated INTEGER,
+                slug TEXT,
+                directory TEXT,
+                version INTEGER,
+                summary_files TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE message (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                time_created INTEGER,
+                data TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE part (
+                id TEXT PRIMARY KEY,
+                message_id TEXT,
+                time_created INTEGER,
+                data TEXT
+            )
+        """)
+
+        now = int(datetime.now().timestamp() * 1000)
+        cursor.execute(
+            "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("session-create-dir", "Test", now, now, "test", "/test", 1, "file.py"),
+        )
+        cursor.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?)",
+            (
+                "msg-001",
+                "session-create-dir",
+                now,
+                json.dumps({"role": "user", "time": {}, "tokens": {}, "cost": 0}),
+            ),
+        )
+        cursor.execute(
+            "INSERT INTO part VALUES (?, ?, ?, ?)",
+            ("part-001", "msg-001", now, json.dumps({"type": "text", "text": "Hello"})),
+        )
+        conn.commit()
+        conn.close()
+
+        agent.db_path = db_path
+        session = Session(
+            id="session-create-dir",
+            title="Test Session",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=db_path,
+            metadata={"slug": "test", "directory": "/test", "version": 1, "summary_files": "file.py"},
+        )
+
+        result = agent.export_session(session, output_dir)
+
+        assert output_dir.exists()
+        assert result.exists()
+
     def test_export_raw_session_matches_json_content(self, tmp_path):
         """测试 OpenCode raw 导出与 json 导出内容一致但文件名不同"""
         agent = OpenCodeAgent()
