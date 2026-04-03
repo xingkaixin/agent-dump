@@ -2,6 +2,21 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.17] - 2026-04-03
+
+### Added
+
+- **CLI version flag**
+  - Added `-v` / `--version` so the CLI can print the current `agent-dump` version and exit immediately
+  - Added CLI coverage for the new version output path
+
+### Changed
+
+- **Timestamp normalization and local-time display**
+  - Normalize parsed session timestamps to UTC internally before any downstream formatting or comparison
+  - Display session times in the user's local timezone in CLI listing and interactive selection flows
+  - Added regression coverage for timezone-aware formatting across shared agent parsing and selector/CLI output
+
 ## [0.6.16] - 2026-04-02
 
 ### Fixed
