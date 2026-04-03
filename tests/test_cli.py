@@ -10,6 +10,7 @@ from unittest import mock
 
 import pytest
 
+from agent_dump.__about__ import __version__
 from agent_dump.agents.base import Session
 from agent_dump.cli import (
     display_sessions_list,
@@ -244,6 +245,34 @@ class TestFormatSpec:
 
 class TestMain:
     """测试 main 函数"""
+
+    def test_main_short_version_prints_and_exits(self, capsys):
+        with mock.patch("sys.argv", ["agent-dump", "-v"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert captured.out.strip() == f"agent-dump {__version__}"
+
+    def test_main_long_version_prints_and_exits(self, capsys):
+        with mock.patch("sys.argv", ["agent-dump", "--version"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert captured.out.strip() == f"agent-dump {__version__}"
+
+    def test_main_help_includes_version_option(self, capsys):
+        with mock.patch("sys.argv", ["agent-dump", "--lang", "zh", "--help"]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "-v, --version" in captured.out
+        assert "显示版本号并退出" in captured.out
 
     def test_main_dispatches_config_mode(self):
         with mock.patch("agent_dump.cli.handle_config_command", return_value=0) as mock_handle:

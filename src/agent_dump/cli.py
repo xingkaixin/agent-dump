@@ -11,6 +11,7 @@ import sys
 import threading
 from typing import Any
 
+from agent_dump.__about__ import __version__
 from agent_dump.agent_registry import (
     get_supported_agent_locations as _get_supported_agent_locations,
     get_supported_uri_examples,
@@ -640,6 +641,13 @@ def main():
         default=None,
         choices=["en", "zh"],
         help=i18n.t(Keys.CLI_LANG_HELP),
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"agent-dump {__version__}",
+        help=i18n.t(Keys.CLI_VERSION_HELP),
     )
     args = parser.parse_args()
     if args.summary and not args.uri:

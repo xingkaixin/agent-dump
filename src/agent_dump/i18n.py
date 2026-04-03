@@ -95,6 +95,7 @@ class Keys:
     CLI_SINCE_HELP = "CLI_SINCE_HELP"
     CLI_UNTIL_HELP = "CLI_UNTIL_HELP"
     CLI_CONFIG_HELP = "CLI_CONFIG_HELP"
+    CLI_VERSION_HELP = "CLI_VERSION_HELP"
     CLI_FORMAT_INVALID = "CLI_FORMAT_INVALID"
     LIST_IGNORE_FORMAT = "LIST_IGNORE_FORMAT"
     LIST_IGNORE_OUTPUT = "LIST_IGNORE_OUTPUT"
@@ -236,6 +237,7 @@ TRANSLATIONS = {
         Keys.CLI_SINCE_HELP: "Collect start date (YYYY-MM-DD or YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "Collect end date (YYYY-MM-DD or YYYYMMDD)",
         Keys.CLI_CONFIG_HELP: "Manage AI config (view|edit)",
+        Keys.CLI_VERSION_HELP: "Show version and exit (-v, --version)",
         Keys.CLI_FORMAT_INVALID: "invalid format list: {value}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list mode ignores -format/--format.",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list mode ignores -output/--output.",
@@ -370,6 +372,7 @@ TRANSLATIONS = {
         Keys.CLI_SINCE_HELP: "收集开始日期 (YYYY-MM-DD 或 YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "收集结束日期 (YYYY-MM-DD 或 YYYYMMDD)",
         Keys.CLI_CONFIG_HELP: "管理 AI 配置 (view|edit)",
+        Keys.CLI_VERSION_HELP: "显示版本号并退出（-v, --version）",
         Keys.CLI_FORMAT_INVALID: "无效的格式列表: {value}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list 模式会忽略 -format/--format 参数。",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list 模式会忽略 -output/--output 参数。",
