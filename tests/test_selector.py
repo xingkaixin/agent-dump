@@ -2,13 +2,15 @@
 测试 selector.py 模块
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from agent_dump.selector import (
+    get_time_group,
+    group_sessions,
     is_terminal,
     select_agent_interactive,
     select_agent_simple,
@@ -364,3 +366,60 @@ class TestSelectAgentInteractiveEdgeCases:
 
         # Verify Choice was created for each session
         assert mock_choice.call_count == len(sample_sessions)
+
+
+class TestTimeGrouping:
+    """测试会话时间分组使用本地时区"""
+
+    def test_get_time_group_uses_local_timezone_for_aware_utc(self):
+        """测试 aware UTC 时间会先转本地时区再分组"""
+        session = Session(
+            id="session-local-today",
+            title="Local Today",
+            created_at=datetime(2026, 1, 9, 16, 30, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 1, 9, 16, 30, 0, tzinfo=timezone.utc),
+            source_path=Path("/test/path"),
+            metadata={},
+        )
+        local_tz = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 1, 10, 1, 0, 0, tzinfo=local_tz)
+
+        with mock.patch("agent_dump.selector.get_local_timezone", return_value=local_tz):
+            with mock.patch("agent_dump.selector.datetime") as mock_datetime:
+                mock_datetime.now.return_value = fixed_now
+                assert get_time_group(session) == "今天"
+
+    def test_group_sessions_supports_timestamp_variants_in_local_timezone(self):
+        """测试秒/毫秒时间戳分组按本地时区生效"""
+        local_tz = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 1, 10, 1, 0, 0, tzinfo=local_tz)
+        today_seconds = datetime(2026, 1, 9, 16, 30, 0, tzinfo=timezone.utc).timestamp()
+        yesterday_ms = int(datetime(2026, 1, 8, 16, 30, 0, tzinfo=timezone.utc).timestamp() * 1000)
+
+        sessions = [
+            Session(
+                id="today-seconds",
+                title="Today seconds",
+                created_at=today_seconds,  # type: ignore[arg-type]
+                updated_at=today_seconds,  # type: ignore[arg-type]
+                source_path=Path("/test/path"),
+                metadata={},
+            ),
+            Session(
+                id="yesterday-ms",
+                title="Yesterday ms",
+                created_at=yesterday_ms,  # type: ignore[arg-type]
+                updated_at=yesterday_ms,  # type: ignore[arg-type]
+                source_path=Path("/test/path"),
+                metadata={},
+            ),
+        ]
+
+        with mock.patch("agent_dump.selector.get_local_timezone", return_value=local_tz):
+            with mock.patch("agent_dump.selector.datetime") as mock_datetime:
+                mock_datetime.now.return_value = fixed_now
+                groups = group_sessions(sessions)
+
+        assert list(groups.keys()) == ["今天", "昨天"]
+        assert [session.id for session in groups["今天"]] == ["today-seconds"]
+        assert [session.id for session in groups["昨天"]] == ["yesterday-ms"]

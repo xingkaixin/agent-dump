@@ -274,6 +274,8 @@ class TestCodexAgent:
 
         assert result is not None
         assert isinstance(result, Session)
+        assert result.created_at.tzinfo == timezone.utc
+        assert int(result.created_at.timestamp()) == int(datetime.fromisoformat(timestamp).timestamp())
         assert result.metadata["cwd"] == "/test/dir"
         assert result.metadata["cli_version"] == "1.0.0"
 

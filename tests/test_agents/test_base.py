@@ -2,7 +2,7 @@
 测试 agents/base.py 模块
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -89,13 +89,14 @@ class TestBaseAgent:
         session = Session(
             id="test",
             title="Short Title",
-            created_at=datetime(2024, 1, 1, 10, 30, 0),
+            created_at=datetime(2024, 1, 1, 10, 30, 0, tzinfo=timezone.utc),
             updated_at=datetime.now(),
             source_path=Path("/test"),
             metadata={},
         )
 
-        result = agent.get_formatted_title(session)
+        with mock.patch("agent_dump.time_utils.get_local_timezone", return_value=timezone.utc):
+            result = agent.get_formatted_title(session)
 
         assert result == "Short Title (2024-01-01 10:30)"
 
@@ -105,13 +106,14 @@ class TestBaseAgent:
         session = Session(
             id="test",
             title="A" * 100,
-            created_at=datetime(2024, 1, 1, 10, 30, 0),
+            created_at=datetime(2024, 1, 1, 10, 30, 0, tzinfo=timezone.utc),
             updated_at=datetime.now(),
             source_path=Path("/test"),
             metadata={},
         )
 
-        result = agent.get_formatted_title(session)
+        with mock.patch("agent_dump.time_utils.get_local_timezone", return_value=timezone.utc):
+            result = agent.get_formatted_title(session)
 
         assert "..." in result
         assert "(2024-01-01 10:30)" in result
@@ -123,13 +125,14 @@ class TestBaseAgent:
         session = Session(
             id="test",
             title="A" * 60,
-            created_at=datetime(2024, 1, 1, 10, 30, 0),
+            created_at=datetime(2024, 1, 1, 10, 30, 0, tzinfo=timezone.utc),
             updated_at=datetime.now(),
             source_path=Path("/test"),
             metadata={},
         )
 
-        result = agent.get_formatted_title(session)
+        with mock.patch("agent_dump.time_utils.get_local_timezone", return_value=timezone.utc):
+            result = agent.get_formatted_title(session)
 
         # 60 字符不应截断
         assert "..." not in result
@@ -141,13 +144,14 @@ class TestBaseAgent:
         session = Session(
             id="test",
             title="A" * 61,
-            created_at=datetime(2024, 1, 1, 10, 30, 0),
+            created_at=datetime(2024, 1, 1, 10, 30, 0, tzinfo=timezone.utc),
             updated_at=datetime.now(),
             source_path=Path("/test"),
             metadata={},
         )
 
-        result = agent.get_formatted_title(session)
+        with mock.patch("agent_dump.time_utils.get_local_timezone", return_value=timezone.utc):
+            result = agent.get_formatted_title(session)
 
         # 61 字符应截断
         assert "..." in result

@@ -9,6 +9,8 @@ from pathlib import Path
 import shutil
 from typing import Any
 
+from agent_dump.time_utils import to_local_datetime
+
 
 @dataclass
 class Session:
@@ -62,7 +64,7 @@ class BaseAgent(ABC):
     def get_formatted_title(self, session: Session) -> str:
         """Get formatted title for display"""
         title = session.title[:60] + "..." if len(session.title) > 60 else session.title
-        time_str = session.created_at.strftime("%Y-%m-%d %H:%M")
+        time_str = to_local_datetime(session.created_at).strftime("%Y-%m-%d %H:%M")
         return f"{title} ({time_str})"
 
     def get_session_uri(self, session: Session) -> str:

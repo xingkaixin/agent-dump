@@ -10,6 +10,7 @@ from questionary import Choice, Style
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
+from agent_dump.time_utils import get_local_timezone, to_local_datetime
 
 
 def is_terminal() -> bool:
@@ -19,25 +20,14 @@ def is_terminal() -> bool:
 
 def get_time_group(session: Session) -> str:
     """Get time group for a session"""
-    from datetime import timezone
-
-    now = datetime.now(timezone.utc)
+    local_tz = get_local_timezone()
+    now = datetime.now(local_tz)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = today - timedelta(days=1)
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
 
-    session_time = session.created_at
-
-    if isinstance(session_time, (int, float)):
-        # Assume milliseconds if large number
-        if session_time > 1e10:
-            session_time = datetime.fromtimestamp(session_time / 1000, tz=timezone.utc)
-        else:
-            session_time = datetime.fromtimestamp(session_time, tz=timezone.utc)
-    elif session_time.tzinfo is None:
-        # Convert naive datetime to UTC
-        session_time = session_time.replace(tzinfo=timezone.utc)
+    session_time = to_local_datetime(session.created_at, local_tz)
 
     if session_time >= today:
         return i18n.t(Keys.TIME_TODAY)

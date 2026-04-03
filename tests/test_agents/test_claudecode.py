@@ -217,6 +217,8 @@ class TestClaudeCodeAgent:
         assert result is not None
         assert isinstance(result, Session)
         assert result.id == "session-001"
+        assert result.created_at.tzinfo == timezone.utc
+        assert int(result.created_at.timestamp()) == int(datetime.fromisoformat(timestamp).timestamp())
         assert result.metadata["project"] == "project1"
 
     def test_get_sessions_handles_mixed_naive_aware_datetime(self, tmp_path):

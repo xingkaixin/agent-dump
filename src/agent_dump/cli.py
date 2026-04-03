@@ -53,6 +53,7 @@ from agent_dump.rendering import (
 )
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
+from agent_dump.time_utils import get_local_timezone, to_local_datetime
 from agent_dump.uri_support import find_session_by_id as _find_session_by_id, parse_uri as _parse_uri
 
 VALID_URI_SCHEMES = get_uri_scheme_map()
@@ -292,21 +293,15 @@ def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
     key_month = i18n.t(Keys.TIME_THIS_MONTH)
     key_older = i18n.t(Keys.TIME_OLDER)
 
-    now = datetime.now()
+    local_tz = get_local_timezone()
+    now = datetime.now(local_tz)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = today - timedelta(days=1)
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
 
     for session in sessions:
-        session_time = session.created_at
-
-        if isinstance(session_time, (int, float)):
-            # Assume milliseconds if large number
-            if session_time > 1e10:
-                session_time = datetime.fromtimestamp(session_time / 1000)
-            else:
-                session_time = datetime.fromtimestamp(session_time)
+        session_time = to_local_datetime(session.created_at, local_tz)
 
         if session_time >= today:
             groups[key_today].append(session)

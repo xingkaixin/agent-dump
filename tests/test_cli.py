@@ -2248,24 +2248,37 @@ class TestTimeHelpers:
 
     def test_group_sessions_by_time_all_buckets(self):
         """测试按时间分组包含所有分组与时间戳转换"""
-        now_value = datetime(2026, 1, 10, 12, 0, 0)
+        local_tz = timezone(timedelta(hours=8))
+        now_value = datetime(2026, 1, 10, 12, 0, 0, tzinfo=local_tz)
 
         sessions = [
-            make_session("today-dt", "Today dt", created_at=now_value - timedelta(hours=1)),
+            make_session(
+                "today-dt",
+                "Today dt",
+                created_at=(now_value - timedelta(hours=1)).astimezone(timezone.utc),
+            ),
             make_session("today-sec", "Today sec"),
             make_session("today-ms", "Today ms"),
-            make_session("yesterday", "Yesterday", created_at=now_value - timedelta(days=1, hours=1)),
-            make_session("week", "Week", created_at=now_value - timedelta(days=3)),
-            make_session("month", "Month", created_at=now_value - timedelta(days=20)),
-            make_session("older", "Older", created_at=now_value - timedelta(days=40)),
+            make_session(
+                "yesterday",
+                "Yesterday",
+                created_at=(now_value - timedelta(days=1, hours=1)).astimezone(timezone.utc),
+            ),
+            make_session("week", "Week", created_at=(now_value - timedelta(days=3)).astimezone(timezone.utc)),
+            make_session("month", "Month", created_at=(now_value - timedelta(days=20)).astimezone(timezone.utc)),
+            make_session("older", "Older", created_at=(now_value - timedelta(days=40)).astimezone(timezone.utc)),
         ]
-        setattr(sessions[1], "created_at", (now_value - timedelta(hours=2)).timestamp())
-        setattr(sessions[2], "created_at", int((now_value - timedelta(hours=3)).timestamp() * 1000))
+        setattr(sessions[1], "created_at", (now_value - timedelta(hours=2)).astimezone(timezone.utc).timestamp())
+        setattr(
+            sessions[2],
+            "created_at",
+            int((now_value - timedelta(hours=3)).astimezone(timezone.utc).timestamp() * 1000),
+        )
 
         with mock.patch("agent_dump.cli.datetime") as mock_datetime:
             mock_datetime.now.return_value = now_value
-            mock_datetime.fromtimestamp.side_effect = datetime.fromtimestamp
-            groups = group_sessions_by_time(sessions)
+            with mock.patch("agent_dump.cli.get_local_timezone", return_value=local_tz):
+                groups = group_sessions_by_time(sessions)
 
         assert set(groups.keys()) == {"今天", "昨天", "本周", "本月", "更早"}
         assert len(groups["今天"]) == 3
@@ -2273,6 +2286,31 @@ class TestTimeHelpers:
         assert len(groups["本周"]) == 1
         assert len(groups["本月"]) == 1
         assert len(groups["更早"]) == 1
+
+    def test_group_sessions_by_time_uses_local_day_boundary(self):
+        """测试分组基于本地日界线而不是 UTC"""
+        local_tz = timezone(timedelta(hours=8))
+        now_value = datetime(2026, 1, 10, 1, 0, 0, tzinfo=local_tz)
+        sessions = [
+            make_session(
+                "today-local",
+                "Today local",
+                created_at=datetime(2026, 1, 9, 16, 30, 0, tzinfo=timezone.utc),
+            ),
+            make_session(
+                "yesterday-local",
+                "Yesterday local",
+                created_at=datetime(2026, 1, 8, 16, 30, 0, tzinfo=timezone.utc),
+            ),
+        ]
+
+        with mock.patch("agent_dump.cli.datetime") as mock_datetime:
+            mock_datetime.now.return_value = now_value
+            with mock.patch("agent_dump.cli.get_local_timezone", return_value=local_tz):
+                groups = group_sessions_by_time(sessions)
+
+        assert [session.id for session in groups["今天"]] == ["today-local"]
+        assert [session.id for session in groups["昨天"]] == ["yesterday-local"]
 
 
 class TestDisplaySessionsList:
@@ -2284,6 +2322,20 @@ class TestDisplaySessionsList:
         agent.get_formatted_title.side_effect = lambda session: session.title
         agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
         return agent
+
+    def test_base_agent_formatted_title_uses_local_timezone(self):
+        """测试列表展示标题使用本地时区"""
+        from agent_dump.agents.codex import CodexAgent
+
+        session = make_session(
+            "s-local",
+            "Local Session",
+            created_at=datetime(2026, 1, 9, 16, 30, 0, tzinfo=timezone.utc),
+        )
+        with mock.patch("agent_dump.time_utils.get_local_timezone", return_value=timezone(timedelta(hours=8))):
+            title = CodexAgent().get_formatted_title(session)
+
+        assert title == "Local Session (2026-01-10 00:30)"
 
     def test_display_sessions_list_empty(self, capsys):
         """测试空会话列表输出"""
