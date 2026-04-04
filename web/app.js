@@ -5,6 +5,7 @@ const translations = {
     heroTitle: "Export AI coding sessions.",
     heroDescription:
       "List, dump, export, and summarize sessions from Codex, Claude Code, Kimi, and OpenCode.",
+    versionLabel: "Version",
     installHeading: "Install",
     installGlobalLabel: "Install globally",
     installRunLabel: "Run without installing",
@@ -19,6 +20,7 @@ const translations = {
     heroTitle: "导出 AI 编码会话。",
     heroDescription:
       "一条 CLI 统一处理 Codex、Claude Code、Kimi 和 OpenCode 的列表、直读、导出与汇总。",
+    versionLabel: "当前版本",
     installHeading: "安装",
     installGlobalLabel: "全局安装",
     installRunLabel: "免安装运行",
@@ -86,6 +88,13 @@ const TYPING_SPEED = 55;
 const DELETE_SPEED = 28;
 const PAUSE_AFTER_TYPE = 2200;
 const PAUSE_AFTER_DELETE = 400;
+const webData = window.AGENT_DUMP_WEB_DATA ?? {
+  version: "0.0.0",
+  changelogUrl: {
+    en: "https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md",
+    zh: "https://github.com/xingkaixin/agent-dump/blob/main/docs/zh/CHANGELOG.md",
+  },
+};
 
 class TypeWriter {
   constructor(element) {
@@ -148,10 +157,16 @@ const i18nNodes = Array.from(document.querySelectorAll("[data-i18n]"));
 const installGrid = document.querySelector("[data-install-grid]");
 const copyButtons = Array.from(document.querySelectorAll("[data-copy-target]"));
 const typedText = document.getElementById("typed-text");
+const releaseVersion = document.getElementById("release-version");
+const releaseLink = document.getElementById("release-link");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let currentLang = localStorage.getItem("agent-dump-lang") || "en";
 let typeWriter = null;
+
+function getChangelogUrl(lang) {
+  return webData.changelogUrl[lang] ?? webData.changelogUrl.en;
+}
 
 function renderInstall(lang) {
   installGrid.textContent = "";
@@ -253,6 +268,14 @@ function applyLanguage(lang) {
 
   renderInstall(lang);
 
+  if (releaseVersion) {
+    releaseVersion.textContent = `v${webData.version}`;
+  }
+
+  if (releaseLink) {
+    releaseLink.href = getChangelogUrl(lang);
+  }
+
   document.querySelectorAll(".copy-button").forEach((btn) => {
     btn.setAttribute("aria-label", translations[lang].copy);
     btn.setAttribute("title", translations[lang].copy);
@@ -302,6 +325,12 @@ function fallbackCopyText(text) {
 langButtons.forEach((btn) => {
   btn.addEventListener("click", () => applyLanguage(btn.dataset.langToggle));
 });
+
+if (releaseLink) {
+  releaseLink.addEventListener("click", () => {
+    releaseLink.href = getChangelogUrl(currentLang);
+  });
+}
 
 copyButtons.forEach((btn) => btn.addEventListener("click", handleCopy));
 

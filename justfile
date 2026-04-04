@@ -92,5 +92,6 @@ build-and-publish: build publish
 # Deploy the static web site to Cloudflare Pages
 deploy-web:
     @echo "🌐 Deploying web/ to Cloudflare Pages..."
+    npm --prefix npm run sync-version
     wrangler pages deploy web --project-name=agent-dump --commit-dirty=true
     @echo "✅ Web deployment complete!"

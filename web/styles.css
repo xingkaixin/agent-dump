@@ -190,6 +190,35 @@ h1 {
   line-height: 1.6;
 }
 
+.release-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 40px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.release-link {
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  transition: border-color var(--transition), color var(--transition), background var(--transition);
+}
+
+.release-link:hover {
+  color: var(--accent);
+  border-color: currentColor;
+  background: var(--bg-subtle);
+}
+
+.release-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Terminal */
 .terminal {
   border: 1px solid var(--border-strong);
@@ -492,6 +521,10 @@ h1 {
 
   .hero {
     padding: 48px 0 64px;
+  }
+
+  .release-meta {
+    flex-wrap: wrap;
   }
 
   h1 {
