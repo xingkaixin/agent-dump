@@ -145,8 +145,9 @@ def _filter_sessions_from_source_or_data(agent: BaseAgent, sessions: list[Sessio
             matched.append(session)
             continue
 
-        if _match_source_file(session.source_path, keyword):
-            matched.append(session)
+        if _has_searchable_source(session.source_path):
+            if _match_source_file(session.source_path, keyword):
+                matched.append(session)
             continue
 
         if _match_session_data(agent, session, keyword):
@@ -157,6 +158,24 @@ def _filter_sessions_from_source_or_data(agent: BaseAgent, sessions: list[Sessio
 
 def _match_title(session: Session, keyword: str) -> bool:
     return keyword in session.title.lower()
+
+
+def _has_searchable_source(source_path: Path) -> bool:
+    if source_path.is_file():
+        return _is_searchable_text_file(source_path)
+
+    if not source_path.is_dir():
+        return False
+
+    wire_file = source_path / "wire.jsonl"
+    if wire_file.exists():
+        return _is_searchable_text_file(wire_file)
+
+    return any(_is_searchable_text_file(jsonl_file) for jsonl_file in source_path.glob("*.jsonl"))
+
+
+def _is_searchable_text_file(file_path: Path) -> bool:
+    return file_path.suffix.lower() in {".jsonl", ".json", ".md", ".txt", ".log"}
 
 
 def _match_source_file(source_path: Path, keyword: str) -> bool:

@@ -6,6 +6,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import sqlite3
+from unittest import mock
 
 import pytest
 
@@ -119,6 +120,50 @@ class TestFilterSessions:
 
         result = filter_sessions(agent, [session], "session-data-keyword")
         assert result == [session]
+
+    def test_filter_does_not_fallback_when_searchable_source_exists(self, tmp_path):
+        source_path = tmp_path / "s1.jsonl"
+        source_path.write_text("no-hit", encoding="utf-8")
+        session = make_session("s1", "普通标题", source_path)
+        agent = DummyAgent(
+            name="codex",
+            session_data={"s1": {"messages": [{"parts": [{"type": "text", "text": "fatal"}]}]}},
+        )
+
+        with mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as mock_get_session_data:
+            result = filter_sessions(agent, [session], "fatal")
+
+        assert result == []
+        mock_get_session_data.assert_not_called()
+
+    def test_filter_directory_prefers_wire_file(self, tmp_path):
+        session_dir = tmp_path / "session"
+        session_dir.mkdir()
+        (session_dir / "wire.jsonl").write_text("wire-hit", encoding="utf-8")
+        (session_dir / "other.jsonl").write_text("other-hit", encoding="utf-8")
+        session = make_session("s1", "普通标题", session_dir)
+        agent = DummyAgent(name="kimi")
+
+        result = filter_sessions(agent, [session], "wire-hit")
+        assert result == [session]
+
+        result = filter_sessions(agent, [session], "other-hit")
+        assert result == []
+
+    def test_filter_binary_like_source_falls_back_to_session_data(self, tmp_path):
+        source_path = tmp_path / "state.vscdb"
+        source_path.write_bytes(b"sqlite data")
+        session = make_session("s1", "普通标题", source_path)
+        agent = DummyAgent(
+            name="cursor",
+            session_data={"s1": {"messages": [{"parts": [{"type": "text", "text": "fatal"}]}]}},
+        )
+
+        with mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as mock_get_session_data:
+            result = filter_sessions(agent, [session], "fatal")
+
+        assert result == [session]
+        mock_get_session_data.assert_called_once_with(session)
 
     def test_filter_opencode_with_sql_match(self, tmp_path):
         db_path = tmp_path / "opencode.db"
