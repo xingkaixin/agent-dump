@@ -1,5 +1,20 @@
 # 更新日志
 
+## [0.6.18] - 2026-04-05
+
+### 问题修复
+
+- **移除 Cursor 空消息占位符**
+  - 对仅包含空白字符、且没有 tool/plan/文本载荷的 Cursor assistant bubble，不再生成人为注入的 `[empty message]`
+  - 修复后，JSON 导出与 `--format print` 都不会再出现这类并非原始会话内容的占位消息
+
+### 变更
+
+- **Cursor subagent 导出改为保留真实事件顺序**
+  - Cursor subagent 调用现在会先以独立 tool 事件导出，时间戳保持为父会话中该调用真实发生的时刻，而不是把后续结果合并回同一条记录
+  - subagent 的最终可见 assistant 输出会在其真实完成时间以独立消息追加，保留与父会话其他轮次消息的原始交错顺序
+  - 在可获取时记录 subagent 的 `prompt`、`model`、`subagent_type` 与 `subagent_id`，同时继续忽略 subagent 内部的中间过程
+
 ## [0.6.17] - 2026-04-03
 
 ### 新增功能

@@ -2,6 +2,21 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.18] - 2026-04-05
+
+### Fixed
+
+- **Cursor empty-message placeholders removed**
+  - Stop emitting synthetic `[empty message]` entries for Cursor assistant bubbles that contain only whitespace and no tool/plan/text payload
+  - This fixes both JSON export and `--format print` output so Cursor sessions no longer contain placeholder messages that were never part of the original conversation
+
+### Changed
+
+- **Cursor subagent export now preserves event ordering**
+  - Export Cursor subagent calls as their own tool events at the original parent-turn timestamp instead of folding everything into one merged record
+  - Append the subagent's final visible assistant output as a later standalone message at its real completion timestamp, preserving interleaving with other parent-session turns
+  - Record subagent `prompt`, `model`, `subagent_type`, and `subagent_id` when available, while continuing to omit the subagent's internal intermediate steps
+
 ## [0.6.17] - 2026-04-03
 
 ### Added
