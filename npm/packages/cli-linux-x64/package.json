@@ -1,6 +1,6 @@
 {
   "name": "@agent-dump/cli-linux-x64",
-  "version": "0.6.17",
+  "version": "0.6.18",
   "description": "linux-x64 native binary for agent-dump.",
   "license": "MIT",
   "homepage": "https://github.com/xingkaixin/agent-dump",
