@@ -2133,6 +2133,38 @@ class TestRenderSessionText:
         assert "## 2. Assistant (Laplace)" in output
         assert "检查 useConversation 边界" in output
 
+    def test_render_session_text_renders_standalone_subagent_tool_message(self):
+        """测试独立 tool 消息中的 subagent 调用也会按 assistant 展示"""
+        session_data = {
+            "messages": [
+                {
+                    "role": "tool",
+                    "parts": [
+                        {
+                            "type": "tool",
+                            "tool": "subagent",
+                            "state": {
+                                "prompt": "Read the files and summarize.",
+                                "model": "composer-2-fast",
+                            },
+                        }
+                    ],
+                },
+                {
+                    "role": "assistant",
+                    "subagent_id": "subagent-001",
+                    "parts": [{"type": "text", "text": "最终总结"}],
+                },
+            ]
+        }
+
+        output = render_session_text("cursor://abc", session_data)
+
+        assert "## 1. Assistant" in output
+        assert "Read the files and summarize." in output
+        assert "## 2. Assistant" in output
+        assert "最终总结" in output
+
     def test_render_session_text_renders_subagent_notification_with_nickname(self):
         """测试带 nickname 的 subagent 结果会显示对应 assistant 名字"""
         session_data = {

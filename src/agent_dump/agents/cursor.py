@@ -331,6 +331,14 @@ class CursorAgent(BaseAgent):
             return arguments
         return json.dumps(arguments, ensure_ascii=False, indent=2)
 
+    def _extract_subagent_type(self, arguments: Any) -> str | None:
+        if not isinstance(arguments, dict):
+            return None
+        subagent_type = arguments.get("subagentType")
+        if isinstance(subagent_type, str) and subagent_type.strip():
+            return subagent_type.strip()
+        return None
+
     def _build_plan_part(self, tool_data: dict[str, Any], timestamp_ms: int) -> dict[str, Any] | None:
         normalized_input = self._normalize_tool_input(tool_data)
         if not isinstance(normalized_input, dict):
@@ -391,10 +399,23 @@ class CursorAgent(BaseAgent):
             return None
         return self._parse_json(rows[0]["value"])
 
-    def _build_subagent_output_parts(self, composer_id: str) -> list[dict[str, Any]]:
+    def _extract_subagent_model(self, composer: dict[str, Any], child_data: dict[str, Any]) -> str | None:
+        model_config = composer.get("modelConfig")
+        if isinstance(model_config, dict):
+            model_name = model_config.get("modelName")
+            if isinstance(model_name, str) and model_name.strip():
+                return model_name.strip()
+
+        for message in child_data.get("messages", []):
+            model_name = message.get("model")
+            if isinstance(model_name, str) and model_name.strip():
+                return model_name.strip()
+        return None
+
+    def _build_subagent_completion_message(self, composer_id: str) -> dict[str, Any] | None:
         composer = self._load_composer_by_id(composer_id)
         if not composer:
-            return []
+            return None
         child_session = self._build_session_from_composer(
             composer_id=composer_id,
             request_id=composer_id,
@@ -402,6 +423,7 @@ class CursorAgent(BaseAgent):
         )
         child_data = self.get_session_data(child_session)
         parts: list[dict[str, Any]] = []
+        latest_time_created = 0
         for message in child_data.get("messages", []):
             if message.get("role") != "assistant":
                 continue
@@ -414,24 +436,65 @@ class CursorAgent(BaseAgent):
                 stripped = text.strip()
                 if not stripped or stripped in {"[empty message]", "[corrupted message]"}:
                     continue
+                part_time_created = int(part.get("time_created") or message.get("time_created") or 0)
                 parts.append(
                     {
                         "type": "text",
                         "text": stripped,
-                        "time_created": int(part.get("time_created") or message.get("time_created") or 0),
+                        "time_created": part_time_created,
                     }
                 )
-        return parts
+                latest_time_created = max(latest_time_created, part_time_created)
 
-    def _extract_tool_part(self, bubble: dict[str, Any], timestamp_ms: int) -> dict[str, Any] | None:
+        if not parts:
+            return None
+
+        message: dict[str, Any] = {
+            "id": f"{composer_id}:subagent-output",
+            "role": "assistant",
+            "agent": "cursor",
+            "mode": None,
+            "model": self._extract_subagent_model(composer, child_data),
+            "provider": None,
+            "time_created": latest_time_created,
+            "time_completed": None,
+            "tokens": {"input": 0, "output": 0},
+            "cost": 0,
+            "parts": parts,
+            "subagent_id": composer_id,
+        }
+
+        subagent_info = composer.get("subagentInfo")
+        if isinstance(subagent_info, dict):
+            type_name = subagent_info.get("subagentTypeName")
+            if isinstance(type_name, str) and type_name.strip():
+                message["subagent_type"] = type_name.strip()
+        return message
+
+    def _extract_subagent_id(self, tool_data: dict[str, Any], result: Any) -> str | None:
+        parsed_result = self._parse_json(result)
+        additional_data = tool_data.get("additionalData")
+        if isinstance(additional_data, dict):
+            candidate_id = additional_data.get("subagentComposerId")
+            if isinstance(candidate_id, str) and candidate_id.strip():
+                return candidate_id.strip()
+        if isinstance(parsed_result, dict):
+            candidate_id = parsed_result.get("agentId") or parsed_result.get("agent_id")
+            if isinstance(candidate_id, str) and candidate_id.strip():
+                return candidate_id.strip()
+        return None
+
+    def _extract_tool_part(
+        self, bubble: dict[str, Any], timestamp_ms: int
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         tool_data = bubble.get("toolFormerData")
         if not isinstance(tool_data, dict):
-            return None
+            return None, None
         name = tool_data.get("name")
         if not isinstance(name, str) or not name:
-            return None
+            return None, None
         if name == "create_plan":
-            return None
+            return None, None
 
         normalized_input = self._normalize_tool_input(tool_data)
         status = self._extract_tool_status(tool_data)
@@ -447,22 +510,22 @@ class CursorAgent(BaseAgent):
 
         normalized_name = "subagent" if "agent" in name.lower() or "task" in name.lower() else name
         subagent_id: str | None = None
+        subagent_completion: dict[str, Any] | None = None
         if normalized_name == "subagent":
             state["prompt"] = self._extract_subagent_prompt(normalized_input)
-            parsed_result = self._parse_json(result)
-            additional_data = tool_data.get("additionalData")
-            if isinstance(additional_data, dict):
-                candidate_id = additional_data.get("subagentComposerId")
-                if isinstance(candidate_id, str) and candidate_id.strip():
-                    subagent_id = candidate_id.strip()
-            if not subagent_id and isinstance(parsed_result, dict):
-                candidate_id = parsed_result.get("agentId") or parsed_result.get("agent_id")
-                if isinstance(candidate_id, str) and candidate_id.strip():
-                    subagent_id = candidate_id.strip()
+            subagent_type = self._extract_subagent_type(normalized_input)
+            if subagent_type:
+                state["subagent_type"] = subagent_type
+            subagent_id = self._extract_subagent_id(tool_data, result)
             if subagent_id:
-                output_parts = self._build_subagent_output_parts(subagent_id)
-                if output_parts:
-                    state["output"] = output_parts
+                subagent_completion = self._build_subagent_completion_message(subagent_id)
+                if subagent_completion is not None and subagent_completion.get("model"):
+                    state["model"] = subagent_completion["model"]
+                if subagent_completion is not None:
+                    subagent_type = subagent_completion.get("subagent_type")
+                    if isinstance(subagent_type, str) and subagent_type.strip():
+                        state["subagent_type"] = subagent_type.strip()
+                state["output"] = None
 
         tool_part = {
             "type": "tool",
@@ -474,7 +537,11 @@ class CursorAgent(BaseAgent):
         }
         if normalized_name == "subagent" and subagent_id:
             tool_part["subagent_id"] = subagent_id
-        return tool_part
+            state["subagent_id"] = subagent_id
+            subagent_type = state.get("subagent_type")
+            if isinstance(subagent_type, str) and subagent_type.strip():
+                tool_part["subagent_type"] = subagent_type.strip()
+        return tool_part, subagent_completion
 
     def _extract_tool_parent_message_id(self, bubble: dict[str, Any]) -> str | None:
         """Extract parent message/bubble id for tool attachment when available."""
@@ -580,7 +647,7 @@ class CursorAgent(BaseAgent):
                 if isinstance(tool_data, dict) and tool_data.get("name") == "create_plan"
                 else None
             )
-            tool_part = self._extract_tool_part(bubble, timestamp_ms)
+            tool_part, subagent_completion = self._extract_tool_part(bubble, timestamp_ms)
             parent_message_id = self._extract_tool_parent_message_id(bubble) if tool_part else None
 
             if text_content:
@@ -641,21 +708,10 @@ class CursorAgent(BaseAgent):
                 continue
 
             if not text_content and not tool_part:
-                messages.append(
-                    {
-                        "id": bubble_id,
-                        "role": role,
-                        "agent": "cursor",
-                        "mode": None,
-                        "model": resolved_model_name,
-                        "provider": None,
-                        "time_created": timestamp_ms,
-                        "time_completed": None,
-                        "tokens": {"input": in_tokens, "output": out_tokens},
-                        "cost": 0,
-                        "parts": [{"type": "text", "text": "[empty message]", "time_created": timestamp_ms}],
-                    }
-                )
+                continue
+
+            if subagent_completion is not None:
+                messages.append(subagent_completion)
 
         messages = sorted(messages, key=lambda message: int(message.get("time_created") or fallback_created_ms))
 

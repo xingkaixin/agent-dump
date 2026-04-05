@@ -27,13 +27,27 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
             lines.append("")
         msg_idx += 1
 
+    def _extract_subagent_prompt(part: dict[str, Any]) -> str:
+        state = part.get("state", {})
+        prompt = str(state.get("prompt", "")).strip()
+        if prompt:
+            return prompt
+
+        arguments = state.get("arguments")
+        if isinstance(arguments, dict):
+            prompt = str(arguments.get("message", "")).strip()
+            if prompt:
+                return prompt
+            return json.dumps(arguments, ensure_ascii=False, indent=2)
+        if isinstance(arguments, str):
+            return arguments.strip()
+        return ""
+
     for msg in messages:
         role = msg.get("role", "unknown")
         role_normalized = str(role).lower()
         content_parts = get_text_content_parts(msg)
 
-        if role_normalized == "tool":
-            continue
         if should_filter_message_for_export(msg):
             continue
 
@@ -47,6 +61,20 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
         nickname = str(msg.get("nickname", "")).strip()
         if nickname and role_normalized == "assistant":
             display_role = f"Assistant ({nickname})"
+
+        if role_normalized == "tool":
+            parts = msg.get("parts", [])
+            if not isinstance(parts, list):
+                continue
+            for part in parts:
+                if not isinstance(part, dict) or part.get("type") != "tool" or part.get("tool") != "subagent":
+                    continue
+                part_nickname = str(part.get("nickname", "")).strip()
+                part_display_role = f"Assistant ({part_nickname})" if part_nickname else "Assistant"
+                prompt = _extract_subagent_prompt(part)
+                if prompt:
+                    _append_section(part_display_role, [prompt])
+            continue
 
         if content_parts:
             _append_section(display_role, content_parts)
@@ -64,16 +92,7 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
 
             part_nickname = str(part.get("nickname", "")).strip()
             part_display_role = f"Assistant ({part_nickname})" if part_nickname else "Assistant"
-            state = part.get("state", {})
-            arguments = state.get("arguments")
-            prompt = ""
-            if isinstance(arguments, dict):
-                prompt = str(arguments.get("message", "")).strip()
-                if not prompt:
-                    prompt = json.dumps(arguments, ensure_ascii=False, indent=2)
-            elif isinstance(arguments, str):
-                prompt = arguments.strip()
-
+            prompt = _extract_subagent_prompt(part)
             if prompt:
                 _append_section(part_display_role, [prompt])
 

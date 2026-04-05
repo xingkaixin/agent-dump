@@ -347,7 +347,8 @@ class TestCursorAgent:
                 "composerId": "subagent-composer",
                 "createdAt": now_ms + 2,
                 "name": "Child Session",
-                "subagentInfo": {"parentComposerId": "composer-parent"},
+                "modelConfig": {"modelName": "composer-2-fast"},
+                "subagentInfo": {"parentComposerId": "composer-parent", "subagentTypeName": "explore"},
             },
         )
         _insert_kv(
@@ -357,6 +358,15 @@ class TestCursorAgent:
                 "requestId": "child-request",
                 "type": 1,
                 "text": "Read the files and summarize.",
+                "timingInfo": {"clientRpcSendTime": now_ms + 2},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:subagent-composer:c-empty",
+            {
+                "type": 2,
+                "text": "\n\n\n",
                 "timingInfo": {"clientRpcSendTime": now_ms + 2},
             },
         )
@@ -374,21 +384,76 @@ class TestCursorAgent:
         session = next(item for item in agent.get_sessions(days=7) if item.id == "request-parent")
         data = agent.get_session_data(session)
 
-        tool_part = next(
-            part
+        tool_message = next(message for message in data["messages"] if message["role"] == "tool")
+        tool_part = tool_message["parts"][0]
+        assert tool_message["time_created"] == now_ms + 1
+        assert tool_part["subagent_id"] == "subagent-composer"
+        assert tool_part["subagent_type"] == "explore"
+        assert tool_part["state"]["prompt"] == "Read the files and summarize."
+        assert tool_part["state"]["model"] == "composer-2-fast"
+        assert tool_part["state"]["output"] is None
+
+        completion_message = next(
+            message
+            for message in data["messages"]
+            if message["role"] == "assistant" and message.get("subagent_id") == "subagent-composer"
+        )
+        assert completion_message["time_created"] == now_ms + 3
+        assert completion_message["model"] == "composer-2-fast"
+        assert completion_message["subagent_type"] == "explore"
+        assert completion_message["parts"] == [
+            {"type": "text", "text": "Subagent summary output", "time_created": now_ms + 3}
+        ]
+
+    def test_get_session_data_skips_empty_assistant_bubble(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-empty",
+            {"composerId": "composer-empty", "createdAt": now_ms, "name": "Empty Session"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-empty:b1",
+            {
+                "requestId": "request-empty",
+                "type": 1,
+                "text": "hello",
+                "timingInfo": {"clientRpcSendTime": now_ms},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-empty:b2",
+            {
+                "type": 2,
+                "text": "\n\n\n",
+                "timingInfo": {"clientRpcSendTime": now_ms + 1},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-empty:b3",
+            {
+                "type": 2,
+                "text": "assistant reply",
+                "timingInfo": {"clientRpcSendTime": now_ms + 2},
+            },
+        )
+
+        agent = CursorAgent()
+        session = next(item for item in agent.get_sessions(days=7) if item.id == "request-empty")
+        data = agent.get_session_data(session)
+
+        texts = [
+            part["text"]
             for message in data["messages"]
             for part in message["parts"]
-            if part.get("type") == "tool" and part.get("tool") == "subagent"
-        )
-        assert tool_part["subagent_id"] == "subagent-composer"
-        assert tool_part["state"]["prompt"] == "Read the files and summarize."
-        assert tool_part["state"]["output"] == [
-            {
-                "type": "text",
-                "text": "Subagent summary output",
-                "time_created": now_ms + 3,
-            }
+            if part.get("type") == "text"
         ]
+        assert texts == ["hello", "assistant reply"]
+        assert "[empty message]" not in texts
 
     def test_get_session_data_inherits_model_from_user_turn(self, monkeypatch, tmp_path):
         _, global_db = self._create_layout(monkeypatch, tmp_path)
