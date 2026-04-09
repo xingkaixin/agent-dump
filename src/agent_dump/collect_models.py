@@ -50,6 +50,25 @@ class CollectProgressEvent:
     chunk_index: int | None = None
     chunk_total: int | None = None
     level: int | None = None
+    agent_name: str | None = None
+    session_count: int | None = None
+    chunk_count: int | None = None
+    concurrency: int | None = None
+    since: str | None = None
+    until: str | None = None
+    agent_session_counts: dict[str, int] | None = None
+
+
+@dataclass(frozen=True)
+class CollectRunStats:
+    """User-facing collect workload stats."""
+
+    since: str
+    until: str
+    agent_session_counts: dict[str, int]
+    session_count: int
+    chunk_count: int
+    concurrency: int
 
 
 @dataclass(frozen=True)

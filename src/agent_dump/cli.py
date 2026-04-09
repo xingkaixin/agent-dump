@@ -21,6 +21,7 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.collect import (
     CollectProgressEvent,
     build_collect_final_prompt,
+    build_collect_run_stats,
     collect_entries,
     create_collect_logger,
     emit_collect_progress,
@@ -97,20 +98,38 @@ def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
 
 def _format_collect_progress(event: CollectProgressEvent) -> str:
     """Format one collect progress event for stderr."""
+    if event.stage == "collect_start":
+        return i18n.t(Keys.COLLECT_PROGRESS_START, since=event.since, until=event.until)
+    if event.stage == "collect_overview":
+        breakdown = ", ".join(
+            f"{agent_name} {count}" for agent_name, count in (event.agent_session_counts or {}).items()
+        )
+        overview = i18n.t(
+            Keys.COLLECT_PROGRESS_OVERVIEW,
+            session_count=event.session_count or event.current,
+            chunk_count=event.chunk_count or 0,
+            concurrency=event.concurrency or 1,
+        )
+        if not breakdown:
+            return overview
+        return "\n".join([overview, i18n.t(Keys.COLLECT_PROGRESS_AGENT_BREAKDOWN, breakdown=breakdown)])
     if event.stage == "scan_sessions":
         return i18n.t(Keys.COLLECT_PROGRESS_SCAN_SESSIONS, current=event.current, total=event.total)
     if event.stage == "plan_chunks":
         if event.current >= event.total:
-            chunk_count = event.chunk_total or 0
             return i18n.t(
                 Keys.COLLECT_PROGRESS_PLAN_CHUNKS_DONE,
-                current=event.current,
-                total=event.total,
-                chunk_count=chunk_count,
+                session_count=event.current,
+                chunk_count=event.chunk_total or 0,
             )
         return i18n.t(Keys.COLLECT_PROGRESS_PLAN_CHUNKS, current=event.current, total=event.total)
     if event.stage == "summarize_chunks":
-        return i18n.t(Keys.COLLECT_PROGRESS_SUMMARIZE_CHUNKS, current=event.current, total=event.total)
+        return i18n.t(
+            Keys.COLLECT_PROGRESS_SUMMARIZE_CHUNKS,
+            current=event.current,
+            total=event.total,
+            concurrency=event.concurrency or 1,
+        )
     if event.stage == "merge_sessions":
         return i18n.t(Keys.COLLECT_PROGRESS_MERGE_SESSIONS, current=event.current, total=event.total)
     if event.stage == "tree_reduction":
@@ -136,6 +155,9 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
     def _update(event: CollectProgressEvent) -> None:
         nonlocal last_rendered
         text = _format_collect_progress(event)
+        if event.stage in {"collect_start", "collect_overview"}:
+            print(text, file=sys.stderr)
+            return
         with progress_lock:
             last_rendered = text
         if is_tty:
@@ -546,6 +568,7 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
             show_collect_progress=show_collect_progress,
             collect_entries=collect_entries,
             plan_collect_entries=plan_collect_entries,
+            build_collect_run_stats=build_collect_run_stats,
             summarize_collect_entries=summarize_collect_entries,
             emit_collect_progress=emit_collect_progress,
             reduce_collect_summaries=reduce_collect_summaries,
