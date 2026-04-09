@@ -598,6 +598,64 @@ class TestMain:
         assert "正在总结内容：已完成 2/2 个单元，并发 2" in captured.err
         assert captured.err.endswith("\n")
 
+    def test_show_collect_progress_tty_clears_spinner_before_overview(self):
+        class FakeStderr:
+            def __init__(self) -> None:
+                self.chunks: list[str] = []
+
+            def isatty(self) -> bool:
+                return True
+
+            def write(self, text: str) -> int:
+                self.chunks.append(text)
+                return len(text)
+
+            def flush(self) -> None:
+                return None
+
+        class FakeThread:
+            def __init__(self, target, daemon: bool = False) -> None:
+                self.target = target
+                self.daemon = daemon
+
+            def start(self) -> None:
+                return None
+
+            def join(self, timeout: float | None = None) -> None:
+                return None
+
+        fake_stderr = FakeStderr()
+        expected_progress = "正在总结内容：已完成 1/2 个单元，并发 2"
+
+        with mock.patch("sys.stderr", fake_stderr):
+            with mock.patch("agent_dump.cli.threading.Thread", FakeThread):
+                with show_collect_progress() as update_progress:
+                    update_progress(
+                        CollectProgressEvent(
+                            stage="summarize_chunks",
+                            current=1,
+                            total=2,
+                            message="summary",
+                            concurrency=2,
+                        )
+                    )
+                    update_progress(
+                        CollectProgressEvent(
+                            stage="collect_overview",
+                            current=2,
+                            total=2,
+                            message="overview",
+                            session_count=2,
+                            chunk_count=5,
+                            concurrency=2,
+                            agent_session_counts={"Codex": 2},
+                        )
+                    )
+
+        output = "".join(fake_stderr.chunks)
+        assert f"\r{' ' * (len(expected_progress) + 4)}\r" in output
+        assert "本次将处理 2 个 session，拆分为 5 个总结单元；并发 2" in output
+
     def test_main_no_agents_available(self, capsys):
         """测试没有可用 agent 时退出"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:

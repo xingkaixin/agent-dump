@@ -152,11 +152,21 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
     spinner_thread: threading.Thread | None = None
     last_rendered = ""
 
+    def _clear_tty_line(text: str) -> None:
+        width = len(text) + 4
+        sys.stderr.write("\r" + (" " * width) + "\r")
+
     def _update(event: CollectProgressEvent) -> None:
         nonlocal last_rendered
         text = _format_collect_progress(event)
         if event.stage in {"collect_start", "collect_overview"}:
-            print(text, file=sys.stderr)
+            if is_tty:
+                with progress_lock:
+                    if last_rendered:
+                        _clear_tty_line(last_rendered)
+                    print(text, file=sys.stderr)
+            else:
+                print(text, file=sys.stderr)
             return
         with progress_lock:
             last_rendered = text
@@ -171,10 +181,10 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
             while not stop_event.wait(0.1):
                 with progress_lock:
                     text = last_rendered
-                if not text:
-                    continue
-                sys.stderr.write(f"\r{spinner_frames[idx % len(spinner_frames)]} {text}")
-                sys.stderr.flush()
+                    if not text:
+                        continue
+                    sys.stderr.write(f"\r{spinner_frames[idx % len(spinner_frames)]} {text}")
+                    sys.stderr.flush()
                 idx += 1
 
         spinner_thread = threading.Thread(target=_spin, daemon=True)
@@ -188,10 +198,11 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
             if spinner_thread is not None:
                 spinner_thread.join(timeout=0.3)
         if last_rendered and is_tty:
-            sys.stderr.write("\r" + (" " * (len(last_rendered) + 4)) + "\r")
-            sys.stderr.write(last_rendered)
-            sys.stderr.write("\n")
-            sys.stderr.flush()
+            with progress_lock:
+                _clear_tty_line(last_rendered)
+                sys.stderr.write(last_rendered)
+                sys.stderr.write("\n")
+                sys.stderr.flush()
 
 
 def parse_uri(uri: str) -> tuple[str, str] | None:
