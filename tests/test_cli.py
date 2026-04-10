@@ -318,6 +318,8 @@ class TestMain:
         mock_config = mock.MagicMock()
         mock_entry = mock.MagicMock()
         mock_planned_entry = mock.MagicMock()
+        mock_entry.agent_display_name = "Codex"
+        mock_planned_entry.chunks = (mock.MagicMock(), mock.MagicMock(), mock.MagicMock())
 
         collect_config = mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90)
         mock_logger = mock.MagicMock()
@@ -332,7 +334,7 @@ class TestMain:
                                 mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)) as mock_collect:
-                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock_planned_entry]):
+                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 3)):
                                         def _summarize_collect_entries(**kwargs):
                                             kwargs["progress_callback"](
                                                 CollectProgressEvent(
@@ -340,6 +342,7 @@ class TestMain:
                                                     current=0,
                                                     total=1,
                                                     message="summarize chunks",
+                                                    concurrency=4,
                                                 )
                                             )
                                             kwargs["progress_callback"](
@@ -348,6 +351,7 @@ class TestMain:
                                                     current=1,
                                                     total=1,
                                                     message="summarize chunks",
+                                                    concurrency=4,
                                                 )
                                             )
                                             kwargs["progress_callback"](
@@ -382,10 +386,12 @@ class TestMain:
         assert result == 0
         assert mock_collect.call_args.kwargs["collect_config"] is collect_config
         captured = capsys.readouterr()
-        assert "summarize_chunks: 1/1" in captured.err
-        assert "merge_sessions: 1/1 sessions" in captured.err
-        assert "render_final: 2/2" in captured.err
-        assert "write_output: 1/1" in captured.err
+        assert "Collect 任务开始" in captured.err
+        assert "本次将处理 1 个 session，拆分为 3 个总结单元；并发 4" in captured.err
+        assert "正在总结内容：已完成 1/1 个单元，并发 4" in captured.err
+        assert "正在合并 session 结果：1/1" in captured.err
+        assert "正在生成最终总结：2/2" in captured.err
+        assert "正在写入结果文件：1/1" in captured.err
         assert str(output_path) in captured.out
         assert mock_logger.log.call_count >= 2
 
@@ -402,6 +408,8 @@ class TestMain:
         mock_config = mock.MagicMock()
         mock_entry = mock.MagicMock()
         mock_planned_entry = mock.MagicMock()
+        mock_entry.agent_display_name = "Codex"
+        mock_planned_entry.chunks = (mock.MagicMock(),)
         output_path = tmp_path / "reports" / "report.md"
         mock_logger = mock.MagicMock()
 
@@ -418,7 +426,7 @@ class TestMain:
                                 mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
-                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock_planned_entry]):
+                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 1)):
                                         with mock.patch("agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]):
                                             with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
                                                 with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
@@ -466,7 +474,7 @@ class TestMain:
                                 mock_scanner.get_available_agents.return_value = [cursor_agent]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch("agent_dump.cli.collect_entries", return_value=([mock.MagicMock()], False)) as mock_collect:
-                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=[mock.MagicMock()]):
+                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=([mock.MagicMock()], 1)):
                                         with mock.patch("agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]):
                                             with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
                                                 with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
@@ -547,26 +555,106 @@ class TestMain:
     def test_show_collect_progress_non_tty_reports_incremental_progress(self, capsys):
         with mock.patch("sys.stderr.isatty", return_value=False):
             with show_collect_progress() as update_progress:
+                update_progress(
+                    CollectProgressEvent(stage="collect_start", current=0, total=1, message="start", since="2026-03-01", until="2026-03-05")
+                )
                 update_progress(CollectProgressEvent(stage="scan_sessions", current=0, total=2, message="scan"))
                 update_progress(CollectProgressEvent(stage="scan_sessions", current=2, total=2, message="scan"))
                 update_progress(CollectProgressEvent(stage="plan_chunks", current=2, total=2, message="plan", chunk_total=5))
+                update_progress(
+                    CollectProgressEvent(
+                        stage="collect_overview",
+                        current=2,
+                        total=2,
+                        message="overview",
+                        session_count=2,
+                        chunk_count=5,
+                        concurrency=4,
+                        agent_session_counts={"Codex": 2},
+                    )
+                )
                 update_progress(CollectProgressEvent(stage="render_final", current=2, total=2, message="render"))
 
         captured = capsys.readouterr()
-        assert "scan_sessions: 0/2" in captured.err
-        assert "scan_sessions: 2/2" in captured.err
-        assert "plan_chunks: 2/2 sessions, 5 chunks" in captured.err
-        assert "render_final: 2/2" in captured.err
+        assert "Collect 任务开始：2026-03-01 ~ 2026-03-05" in captured.err
+        assert "正在扫描会话：0/2" in captured.err
+        assert "正在扫描会话：2/2" in captured.err
+        assert "已完成预处理：2 个 session，拆分为 5 个总结单元" in captured.err
+        assert "本次将处理 2 个 session，拆分为 5 个总结单元；并发 4" in captured.err
+        assert "Agent 分布：Codex 2" in captured.err
+        assert "正在生成最终总结：2/2" in captured.err
 
     def test_show_collect_progress_tty_finishes_with_newline(self, capsys):
         with mock.patch("sys.stderr.isatty", return_value=True):
             with show_collect_progress() as update_progress:
-                update_progress(CollectProgressEvent(stage="summarize_chunks", current=0, total=2, message="summary"))
-                update_progress(CollectProgressEvent(stage="summarize_chunks", current=2, total=2, message="summary"))
+                update_progress(
+                    CollectProgressEvent(stage="summarize_chunks", current=0, total=2, message="summary", concurrency=2)
+                )
+                update_progress(
+                    CollectProgressEvent(stage="summarize_chunks", current=2, total=2, message="summary", concurrency=2)
+                )
 
         captured = capsys.readouterr()
-        assert "summarize_chunks: 2/2" in captured.err
+        assert "正在总结内容：已完成 2/2 个单元，并发 2" in captured.err
         assert captured.err.endswith("\n")
+
+    def test_show_collect_progress_tty_clears_spinner_before_overview(self):
+        class FakeStderr:
+            def __init__(self) -> None:
+                self.chunks: list[str] = []
+
+            def isatty(self) -> bool:
+                return True
+
+            def write(self, text: str) -> int:
+                self.chunks.append(text)
+                return len(text)
+
+            def flush(self) -> None:
+                return None
+
+        class FakeThread:
+            def __init__(self, target, daemon: bool = False) -> None:
+                self.target = target
+                self.daemon = daemon
+
+            def start(self) -> None:
+                return None
+
+            def join(self, timeout: float | None = None) -> None:
+                return None
+
+        fake_stderr = FakeStderr()
+        expected_progress = "正在总结内容：已完成 1/2 个单元，并发 2"
+
+        with mock.patch("sys.stderr", fake_stderr):
+            with mock.patch("agent_dump.cli.threading.Thread", FakeThread):
+                with show_collect_progress() as update_progress:
+                    update_progress(
+                        CollectProgressEvent(
+                            stage="summarize_chunks",
+                            current=1,
+                            total=2,
+                            message="summary",
+                            concurrency=2,
+                        )
+                    )
+                    update_progress(
+                        CollectProgressEvent(
+                            stage="collect_overview",
+                            current=2,
+                            total=2,
+                            message="overview",
+                            session_count=2,
+                            chunk_count=5,
+                            concurrency=2,
+                            agent_session_counts={"Codex": 2},
+                        )
+                    )
+
+        output = "".join(fake_stderr.chunks)
+        assert f"\r{' ' * (len(expected_progress) + 4)}\r" in output
+        assert "本次将处理 2 个 session，拆分为 5 个总结单元；并发 2" in output
 
     def test_main_no_agents_available(self, capsys):
         """测试没有可用 agent 时退出"""

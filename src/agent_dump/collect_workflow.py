@@ -23,7 +23,8 @@ class CollectWorkflowDeps:
     scanner_factory: Callable[[], Any]
     show_collect_progress: Callable[[], Any]
     collect_entries: Callable[..., tuple[list[Any], bool]]
-    plan_collect_entries: Callable[..., list[Any]]
+    plan_collect_entries: Callable[..., tuple[list[Any], int]]
+    build_collect_run_stats: Callable[..., Any]
     summarize_collect_entries: Callable[..., list[Any]]
     emit_collect_progress: Callable[..., None]
     reduce_collect_summaries: Callable[..., Any]
@@ -92,6 +93,15 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
     phase = "read"
     try:
         with deps.show_collect_progress() as update_progress:
+            deps.emit_collect_progress(
+                update_progress,
+                stage="collect_start",
+                current=0,
+                total=1,
+                message="collect start",
+                since=since_date.isoformat(),
+                until=until_date.isoformat(),
+            )
             entries, has_truncated = deps.collect_entries(
                 agents=available_agents,
                 since_date=since_date,
@@ -112,7 +122,27 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 agent_count=len(available_agents),
                 session_count=len(entries),
             )
-            planned_entries = deps.plan_collect_entries(entries, progress_callback=update_progress)
+            planned_entries, _ = deps.plan_collect_entries(entries, progress_callback=update_progress)
+            run_stats = deps.build_collect_run_stats(
+                entries=entries,
+                planned_entries=planned_entries,
+                since_date=since_date,
+                until_date=until_date,
+                summary_concurrency=collect_config.summary_concurrency,
+            )
+            deps.emit_collect_progress(
+                update_progress,
+                stage="collect_overview",
+                current=run_stats.session_count,
+                total=run_stats.session_count,
+                message="collect overview",
+                session_count=run_stats.session_count,
+                chunk_count=run_stats.chunk_count,
+                concurrency=run_stats.concurrency,
+                since=run_stats.since,
+                until=run_stats.until,
+                agent_session_counts=run_stats.agent_session_counts,
+            )
             phase = "summarize"
             session_summaries = deps.summarize_collect_entries(
                 config=config,

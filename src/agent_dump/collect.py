@@ -32,6 +32,7 @@ from agent_dump.collect_models import (
     CollectEvent,
     CollectLogger,
     CollectProgressEvent,
+    CollectRunStats,
     GroupSummaryEntry,
     PlannedCollectEntry,
     SessionSummaryEntry,
@@ -246,6 +247,12 @@ def emit_collect_progress(
     chunk_index: int | None = None,
     chunk_total: int | None = None,
     level: int | None = None,
+    session_count: int | None = None,
+    chunk_count: int | None = None,
+    concurrency: int | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    agent_session_counts: dict[str, int] | None = None,
 ) -> None:
     """Emit one collect progress event when callback is configured."""
     if progress_callback is None:
@@ -260,7 +267,36 @@ def emit_collect_progress(
             chunk_index=chunk_index,
             chunk_total=chunk_total,
             level=level,
+            session_count=session_count,
+            chunk_count=chunk_count,
+            concurrency=concurrency,
+            since=since,
+            until=until,
+            agent_session_counts=agent_session_counts,
         )
+    )
+
+
+def build_collect_run_stats(
+    *,
+    entries: list[CollectEntry],
+    planned_entries: list[PlannedCollectEntry],
+    since_date: date,
+    until_date: date,
+    summary_concurrency: int,
+) -> CollectRunStats:
+    """Build one user-facing collect workload summary."""
+    agent_session_counts: dict[str, int] = {}
+    for entry in entries:
+        agent_session_counts[entry.agent_display_name] = agent_session_counts.get(entry.agent_display_name, 0) + 1
+
+    return CollectRunStats(
+        since=since_date.isoformat(),
+        until=until_date.isoformat(),
+        agent_session_counts=agent_session_counts,
+        session_count=len(entries),
+        chunk_count=sum(len(item.chunks) for item in planned_entries),
+        concurrency=max(1, summary_concurrency),
     )
 
 
@@ -516,7 +552,7 @@ def plan_collect_entries(
     entries: list[CollectEntry],
     *,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
-) -> list[PlannedCollectEntry]:
+) -> tuple[list[PlannedCollectEntry], int]:
     """Plan deterministic event chunks for each collected session."""
     total = len(entries)
     planned_entries: list[PlannedCollectEntry] = []
@@ -543,7 +579,7 @@ def plan_collect_entries(
             chunk_total=total_chunks,
         )
 
-    return planned_entries
+    return planned_entries, total_chunks
 
 
 def build_collect_chunk_prompt(
@@ -828,6 +864,7 @@ def summarize_collect_entries(
         current=0,
         total=total_chunks,
         message="summarize chunks",
+        concurrency=max_workers,
     )
     emit_collect_progress(
         progress_callback,
@@ -851,6 +888,7 @@ def summarize_collect_entries(
             session_uri=event.session_uri,
             chunk_index=event.chunk_index,
             chunk_total=event.chunk_total,
+            concurrency=max_workers,
         )
 
     def _mark_session_merged(event: CollectProgressEvent) -> None:
