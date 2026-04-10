@@ -63,6 +63,10 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
         print(t(keys.COLLECT_MODE_CONFLICT))
         return 1
 
+    if args.uri and not args.uri.startswith("agents://"):
+        print(t(keys.COLLECT_MODE_CONFLICT))
+        return 1
+
     try:
         since_date, until_date = deps.resolve_collect_date_range(args.since, args.until)
     except ValueError as exc:
