@@ -52,6 +52,7 @@ from agent_dump.rendering import (
     apply_summary_to_json_export as _apply_summary_to_json_export,
     export_session_in_format as _export_session_in_format,
     export_session_markdown as _export_session_markdown,
+    format_session_metadata_summary as _format_session_metadata_summary,
     render_session_text as _render_session_text,
 )
 from agent_dump.scanner import AgentScanner
@@ -304,6 +305,11 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
     return _render_session_text(uri, session_data)
 
 
+def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
+    """Render a unified reduced metadata summary for one session."""
+    return _format_session_metadata_summary(agent, session)
+
+
 def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
     """Build a single-session summary prompt for URI mode."""
     return "\n".join(
@@ -441,7 +447,11 @@ def resolve_collect_save_path(save: str | None, *, since_date: date, until_date:
 
 
 def display_sessions_list(
-    agent: BaseAgent, sessions: list[Session], page_size: int = 20, show_pagination: bool = True
+    agent: BaseAgent,
+    sessions: list[Session],
+    page_size: int = 20,
+    show_pagination: bool = True,
+    show_metadata_summary: bool = True,
 ) -> bool:
     """Display sessions with pagination support.
 
@@ -466,8 +476,13 @@ def display_sessions_list(
         for i in range(start_idx, end_idx):
             session = sessions[i]
             title = agent.get_formatted_title(session)
-            uri = agent.get_session_uri(session)
-            print(f"   • {title} {uri}")
+            if show_metadata_summary:
+                summary = format_session_metadata_summary(agent, session)
+                print(f"   • {title}")
+                print(f"     {summary}")
+            else:
+                uri = agent.get_session_uri(session)
+                print(f"   • {title} {uri}")
 
         # Show pagination info
         if show_pagination and total_pages > 1:
@@ -760,6 +775,11 @@ def main():
         help=i18n.t(Keys.CLI_INTERACTIVE_HELP),
     )
     parser.add_argument(
+        "--no-metadata-summary",
+        action="store_true",
+        help=i18n.t(Keys.CLI_NO_METADATA_SUMMARY_HELP),
+    )
+    parser.add_argument(
         "-p",
         "-page-size",
         type=int,
@@ -792,6 +812,7 @@ def main():
     args = parser.parse_args(argv)
     if args.summary and not args.uri:
         print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
+    show_metadata_summary = not args.no_metadata_summary
 
     if args.config_action:
         return handle_config_command(args.config_action)
@@ -948,6 +969,7 @@ def main():
                     sessions,
                     page_size=max(len(sessions), 1),
                     show_pagination=False,
+                    show_metadata_summary=show_metadata_summary,
                 )
                 if should_quit:
                     print("\n" + "=" * 60)
@@ -1018,7 +1040,11 @@ def main():
         print(i18n.t(Keys.MANY_SESSIONS_EXAMPLE))
 
     # Select sessions
-    selected_sessions = select_sessions_interactive(sessions, selected_agent)
+    selected_sessions = select_sessions_interactive(
+        sessions,
+        selected_agent,
+        show_metadata_summary=show_metadata_summary,
+    )
     if not selected_sessions:
         print("\n" + i18n.t(Keys.NO_SESSION_SELECTED))
         return 1

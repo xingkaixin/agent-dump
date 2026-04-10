@@ -915,6 +915,13 @@ class TestMain:
             mock_agent.get_sessions.return_value = sessions
             mock_agent.get_formatted_title.side_effect = lambda session: session.title
             mock_agent.get_session_uri.side_effect = lambda session: f"opencode://{session.id}"
+            mock_agent.get_session_summary_fields.return_value = {
+                "cwd_project": "/workspace/demo",
+                "model": "gpt-5",
+                "branch": None,
+                "message_count": 2,
+                "updated_at": "2024-01-01 12:00",
+            }
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
@@ -923,11 +930,41 @@ class TestMain:
                 main()
 
             captured = capsys.readouterr()
-            assert "Session 1 opencode://s1" in captured.out
-            assert "Session 2 opencode://s2" in captured.out
-            assert "Session 3 opencode://s3" in captured.out
+            assert "• Session 1" in captured.out
+            assert "uri=opencode://s1" in captured.out
+            assert "model=gpt-5" in captured.out
+            assert "• Session 2" in captured.out
+            assert "uri=opencode://s2" in captured.out
+            assert "• Session 3" in captured.out
+            assert "uri=opencode://s3" in captured.out
             assert "第 1/" not in captured.out
             assert "还有" not in captured.out
+
+    def test_main_list_mode_can_hide_metadata_summary(self, capsys):
+        """测试 --no-metadata-summary 可关闭摘要展示"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+
+            session = mock.MagicMock()
+            session.id = "s1"
+            session.title = "Session 1"
+
+            mock_agent.get_sessions.return_value = [session]
+            mock_agent.get_formatted_title.return_value = "Session 1"
+            mock_agent.get_session_uri.return_value = "opencode://s1"
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--list", "--no-metadata-summary"]):
+                main()
+
+        captured = capsys.readouterr()
+        assert "Session 1 opencode://s1" in captured.out
+        assert "uri=opencode://s1" not in captured.out
 
     def test_main_list_mode_no_sessions_for_agent(self, capsys):
         """测试 --list 模式下某 agent 无会话"""

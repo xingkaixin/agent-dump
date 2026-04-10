@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import shutil
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.time_utils import to_local_datetime
 
@@ -70,6 +70,24 @@ class BaseAgent(ABC):
     def get_session_uri(self, session: Session) -> str:
         """Get the agent session URI for a session"""
         return f"{self.name}://{session.id}"
+
+    def get_session_summary_fields(self, session: Session) -> dict[str, str | int | None]:
+        """Return reduced metadata fields for list/selector display."""
+        cwd = session.metadata.get("cwd")
+        project = session.metadata.get("project")
+        directory = session.metadata.get("directory")
+        model = session.metadata.get("model")
+        branch = session.metadata.get("branch")
+        message_count = session.metadata.get("message_count")
+
+        location = project or cwd or directory
+        return {
+            "cwd_project": str(location) if isinstance(location, str) and location.strip() else None,
+            "model": str(model) if isinstance(model, str) and model.strip() else None,
+            "branch": str(branch) if isinstance(branch, str) and branch.strip() else None,
+            "message_count": cast(int | None, message_count if isinstance(message_count, int) else None),
+            "updated_at": to_local_datetime(session.updated_at).strftime("%Y-%m-%d %H:%M"),
+        }
 
     def _build_raw_output_path(self, session: Session, output_dir: Path, suffix: str = ".raw.jsonl") -> Path:
         """Build output path for raw session export."""

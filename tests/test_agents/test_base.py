@@ -172,3 +172,30 @@ class TestBaseAgent:
         """测试具体实现是 BaseAgent 的实例"""
         agent = ConcreteAgent()
         assert isinstance(agent, BaseAgent)
+
+    def test_get_session_summary_fields(self):
+        """测试默认摘要字段提取"""
+        agent = ConcreteAgent()
+        session = Session(
+            id="test",
+            title="Test",
+            created_at=datetime(2024, 1, 1, 10, 30, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 11, 0, 0, tzinfo=timezone.utc),
+            source_path=Path("/test"),
+            metadata={
+                "cwd": "/workspace/demo",
+                "model": "gpt-5",
+                "message_count": 12,
+            },
+        )
+
+        with mock.patch("agent_dump.time_utils.get_local_timezone", return_value=timezone.utc):
+            result = agent.get_session_summary_fields(session)
+
+        assert result == {
+            "cwd_project": "/workspace/demo",
+            "model": "gpt-5",
+            "branch": None,
+            "message_count": 12,
+            "updated_at": "2024-01-01 11:00",
+        }

@@ -154,12 +154,29 @@ class TestOpenCodeAgent:
                 summary_files TEXT
             )
         """)
+        cursor.execute("""
+            CREATE TABLE message (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                time_created INTEGER,
+                data TEXT
+            )
+        """)
 
         # 插入测试数据
         now = int(datetime.now().timestamp() * 1000)
         cursor.execute(
             "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             ("session-001", "Test Session", now, now, "test", "/test", 1, "file.py"),
+        )
+        cursor.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?)",
+            (
+                "msg-001",
+                "session-001",
+                now,
+                json.dumps({"role": "assistant", "modelID": "gpt-5"}, ensure_ascii=False),
+            ),
         )
         conn.commit()
         conn.close()
@@ -172,6 +189,8 @@ class TestOpenCodeAgent:
         assert result[0].title == "Test Session"
         assert isinstance(result[0], Session)
         assert result[0].created_at.tzinfo == timezone.utc
+        assert result[0].metadata["message_count"] == 1
+        assert result[0].metadata["model"] == "gpt-5"
 
     def test_get_sessions_parses_epoch_as_utc(self, tmp_path):
         """测试 epoch 毫秒会被解析为 UTC aware datetime"""

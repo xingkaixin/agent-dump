@@ -45,26 +45,73 @@ class OpenCodeAgent(BaseAgent):
 
         cutoff_time = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
 
-        cursor.execute(
-            """
-            SELECT 
-                s.id,
-                s.title,
-                s.time_created,
-                s.time_updated,
-                s.slug,
-                s.directory,
-                s.version,
-                s.summary_files
-            FROM session s
-            WHERE s.time_created >= ?
-            ORDER BY s.time_created DESC
-            """,
-            (cutoff_time,),
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'message'")
+        has_message_table = cursor.fetchone() is not None
+
+        if has_message_table:
+            cursor.execute(
+                """
+                SELECT 
+                    s.id,
+                    s.title,
+                    s.time_created,
+                    s.time_updated,
+                    s.slug,
+                    s.directory,
+                    s.version,
+                    s.summary_files,
+                    (
+                        SELECT COUNT(*)
+                        FROM message m
+                        WHERE m.session_id = s.id
+                    ) AS message_count,
+                    (
+                        SELECT m.data
+                        FROM message m
+                        WHERE m.session_id = s.id AND m.data LIKE '%"modelID"%'
+                        ORDER BY m.time_created DESC
+                        LIMIT 1
+                    ) AS model_message_data
+                FROM session s
+                WHERE s.time_created >= ?
+                ORDER BY s.time_created DESC
+                """,
+                (cutoff_time,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT 
+                    s.id,
+                    s.title,
+                    s.time_created,
+                    s.time_updated,
+                    s.slug,
+                    s.directory,
+                    s.version,
+                    s.summary_files,
+                    0 AS message_count,
+                    NULL AS model_message_data
+                FROM session s
+                WHERE s.time_created >= ?
+                ORDER BY s.time_created DESC
+                """,
+                (cutoff_time,),
+            )
 
         sessions = []
         for row in cursor.fetchall():
+            model: str | None = None
+            raw_model_message = row["model_message_data"]
+            if isinstance(raw_model_message, str) and raw_model_message.strip():
+                try:
+                    model_data = json.loads(raw_model_message)
+                except json.JSONDecodeError:
+                    model_data = {}
+                model_id = model_data.get("modelID") if isinstance(model_data, dict) else None
+                if isinstance(model_id, str) and model_id.strip():
+                    model = model_id.strip()
+
             sessions.append(
                 Session(
                     id=row["id"],
@@ -77,6 +124,8 @@ class OpenCodeAgent(BaseAgent):
                         "directory": row["directory"],
                         "version": row["version"],
                         "summary_files": row["summary_files"],
+                        "model": model,
+                        "message_count": row["message_count"],
                     },
                 )
             )

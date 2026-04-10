@@ -1,7 +1,7 @@
 """Session rendering and export helpers."""
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -136,3 +136,56 @@ def apply_summary_to_json_export(output_path: Path, summary_markdown: str) -> No
         raise RuntimeError("exported JSON payload is not an object")
     payload["summary"] = summary_markdown
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _truncate_text(text: str, max_length: int) -> str:
+    stripped = text.strip()
+    if len(stripped) <= max_length:
+        return stripped
+    return stripped[: max_length - 3] + "..."
+
+
+def _compact_location(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        return normalized
+    if "/" not in normalized and "\\" not in normalized:
+        return normalized
+
+    path = PurePath(normalized)
+    parts = [part for part in path.parts if part not in {"", "/", "\\"} and part != path.anchor]
+    if not parts:
+        return normalized
+    if len(parts) == 1:
+        return parts[0]
+    return "/".join(parts[-2:])
+
+
+def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
+    """Render reduced session metadata in a consistent one-line summary."""
+    fields = agent.get_session_summary_fields(session)
+    uri = agent.get_session_uri(session)
+    parts: list[str] = []
+
+    location = fields.get("cwd_project")
+    if isinstance(location, str) and location.strip():
+        parts.append(f"cwd={_truncate_text(_compact_location(location), 32)}")
+
+    model = fields.get("model")
+    if isinstance(model, str) and model.strip():
+        parts.append(f"model={_truncate_text(model, 24)}")
+
+    branch = fields.get("branch")
+    if isinstance(branch, str) and branch.strip():
+        parts.append(f"branch={_truncate_text(branch, 24)}")
+
+    message_count = fields.get("message_count")
+    if isinstance(message_count, int):
+        parts.append(f"msgs={message_count}")
+
+    updated_at = fields.get("updated_at")
+    if isinstance(updated_at, str) and updated_at.strip():
+        parts.append(f"updated={updated_at}")
+
+    parts.append(f"uri={uri}")
+    return " | ".join(parts)

@@ -10,6 +10,7 @@ from questionary import Choice, Style
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
+from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
 
 
@@ -158,14 +159,16 @@ def select_agent_simple(
         return None
 
 
-def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> list[Session]:
+def select_sessions_interactive(
+    sessions: list[Session], agent: BaseAgent, show_metadata_summary: bool = True
+) -> list[Session]:
     """Let user select sessions interactively with time grouping"""
     if not sessions:
         print(i18n.t(Keys.NO_SESSIONS_IN_RANGE))
         return []
 
     if not is_terminal():
-        return select_sessions_simple(sessions, agent)
+        return select_sessions_simple(sessions, agent, show_metadata_summary=show_metadata_summary)
 
     # Group sessions by time
     groups = group_sessions(sessions)
@@ -184,8 +187,13 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
         # Add sessions in this group
         for session in group_sessions_list:
             label = agent.get_formatted_title(session)
-            uri = agent.get_session_uri(session)
-            choices.append(questionary.Choice(title=f"  {label} {uri}", value=session))
+            if show_metadata_summary:
+                summary = format_session_metadata_summary(agent, session)
+                title = f"  {label}\n    {summary}"
+            else:
+                uri = agent.get_session_uri(session)
+                title = f"  {label} {uri}"
+            choices.append(questionary.Choice(title=title, value=session))
 
     custom_style = Style(
         [
@@ -222,7 +230,9 @@ def select_sessions_interactive(sessions: list[Session], agent: BaseAgent) -> li
     return selected or []
 
 
-def select_sessions_simple(sessions: list[Session], agent: BaseAgent) -> list[Session]:
+def select_sessions_simple(
+    sessions: list[Session], agent: BaseAgent, show_metadata_summary: bool = True
+) -> list[Session]:
     """Simple selection for non-terminal environments"""
     # Group sessions for display
     groups = group_sessions(sessions)
@@ -237,8 +247,12 @@ def select_sessions_simple(sessions: list[Session], agent: BaseAgent) -> list[Se
         print(f"\n[{group_name}] ({len(group_sessions_list)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
         for session in group_sessions_list:
             title = agent.get_formatted_title(session)
-            uri = agent.get_session_uri(session)
-            print(f"{idx}. {title} {uri}")
+            if show_metadata_summary:
+                print(f"{idx}. {title}")
+                print(f"    {format_session_metadata_summary(agent, session)}")
+            else:
+                uri = agent.get_session_uri(session)
+                print(f"{idx}. {title} {uri}")
             session_map[idx] = session
             idx += 1
 

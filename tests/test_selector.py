@@ -27,6 +27,14 @@ def mock_agent():
     agent.name = "test_agent"
     agent.display_name = "Test Agent"
     agent.get_formatted_title = lambda s: f"{s.title} ({s.created_at.strftime('%Y-%m-%d %H:%M')})"
+    agent.get_session_uri = lambda s: f"test_agent://{s.id}"
+    agent.get_session_summary_fields = lambda s: {
+        "cwd_project": "/workspace/demo-project",
+        "model": "gpt-5",
+        "branch": None,
+        "message_count": 3,
+        "updated_at": "2024-01-02 14:30",
+    }
     return agent
 
 
@@ -263,7 +271,7 @@ class TestSelectSessionsInteractive:
                 mock_simple.return_value = sample_sessions[:1]
                 result = select_sessions_interactive(sample_sessions, mock_agent)
 
-        mock_simple.assert_called_once_with(sample_sessions, mock_agent)
+        mock_simple.assert_called_once_with(sample_sessions, mock_agent, show_metadata_summary=True)
         assert result == sample_sessions[:1]
 
     def test_terminal_interactive_selection(self, mock_agent, sample_sessions):
@@ -366,6 +374,40 @@ class TestSelectAgentInteractiveEdgeCases:
 
         # Verify Choice was created for each session
         assert mock_choice.call_count == len(sample_sessions)
+
+    def test_session_display_format_includes_metadata_summary(self, mock_agent, sample_sessions):
+        """测试交互式选择默认展示第二行元数据摘要"""
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.checkbox") as mock_checkbox:
+                mock_checkbox.return_value.ask.return_value = sample_sessions
+                select_sessions_interactive(sample_sessions, mock_agent)
+
+        first_choice = mock_checkbox.call_args.kwargs["choices"][1]
+        assert "\n" in first_choice.title
+        assert "model=gpt-5" in first_choice.title
+        assert "msgs=3" in first_choice.title
+        assert "uri=test_agent://session-001" in first_choice.title
+
+    def test_session_display_format_can_hide_metadata_summary(self, mock_agent, sample_sessions):
+        """测试可关闭元数据摘要，回退为单行展示"""
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.checkbox") as mock_checkbox:
+                mock_checkbox.return_value.ask.return_value = sample_sessions
+                select_sessions_interactive(sample_sessions, mock_agent, show_metadata_summary=False)
+
+        first_choice = mock_checkbox.call_args.kwargs["choices"][1]
+        assert "\n" not in first_choice.title
+        assert "test_agent://session-001" in first_choice.title
+
+    def test_select_sessions_simple_prints_metadata_summary(self, mock_agent, sample_sessions, capsys):
+        """测试简单模式默认打印第二行元数据摘要"""
+        with mock.patch("builtins.input", return_value="1"):
+            result = select_sessions_simple(sample_sessions, mock_agent)
+
+        assert len(result) == 1
+        captured = capsys.readouterr()
+        assert "model=gpt-5" in captured.out
+        assert "uri=test_agent://session-001" in captured.out
 
 
 class TestTimeGrouping:

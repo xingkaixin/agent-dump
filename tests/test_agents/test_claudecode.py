@@ -221,6 +221,33 @@ class TestClaudeCodeAgent:
         assert int(result.created_at.timestamp()) == int(datetime.fromisoformat(timestamp).timestamp())
         assert result.metadata["project"] == "project1"
 
+    def test_parse_session_file_extracts_summary_metadata(self, tmp_path):
+        """测试扫描阶段提取模型、消息数和最近更新时间"""
+        agent = ClaudeCodeAgent()
+        project_dir = tmp_path / "project1"
+        project_dir.mkdir()
+
+        file_path = project_dir / "session-001.jsonl"
+        records = [
+            {
+                "timestamp": "2026-01-01T00:00:00Z",
+                "cwd": "/test/dir",
+                "message": {"role": "user", "content": "hello"},
+            },
+            {
+                "timestamp": "2026-01-01T00:00:05Z",
+                "message": {"role": "assistant", "content": "world", "model": "claude-3-opus"},
+            },
+        ]
+        write_jsonl(file_path, records)
+
+        result = agent._parse_session_file(file_path, project_dir)
+
+        assert result is not None
+        assert result.updated_at == datetime(2026, 1, 1, 0, 0, 5, tzinfo=timezone.utc)
+        assert result.metadata["message_count"] == 2
+        assert result.metadata["model"] == "claude-3-opus"
+
     def test_get_sessions_handles_mixed_naive_aware_datetime(self, tmp_path):
         """测试 get_sessions 能处理 naive/aware 混合时间"""
         agent = ClaudeCodeAgent()
