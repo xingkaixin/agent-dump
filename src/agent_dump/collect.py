@@ -39,6 +39,7 @@ from agent_dump.collect_models import (
 )
 from agent_dump.config import AIConfig, CollectConfig, LoggingConfig
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
+from agent_dump.query_filter import QuerySpec, filter_sessions_by_query
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
 GREETING_PATTERN = re.compile(r"^(hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok\b)", re.IGNORECASE)
@@ -481,6 +482,7 @@ def collect_entries(
     since_date: date,
     until_date: date,
     collect_config: CollectConfig | None = None,
+    query_spec: QuerySpec | None = None,
     render_session_text_fn,
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
@@ -496,12 +498,14 @@ def collect_entries(
         days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
         sessions = agent.get_sessions(days=days_span)
         deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
+        if deny_paths:
+            sessions = [session for session in sessions if not _is_session_denied(session, deny_paths)]
+        if query_spec is not None:
+            sessions = filter_sessions_by_query(agent, sessions, query_spec)
 
         for session in sessions:
             session_date = _session_local_date(session, resolved_local_tz)
             if session_date < since_date or session_date > until_date:
-                continue
-            if deny_paths and _is_session_denied(session, deny_paths):
                 continue
             matched_sessions.append((agent, session, session_date))
 

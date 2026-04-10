@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import sqlite3
+from urllib.parse import parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session
 
@@ -20,7 +21,8 @@ class QuerySpec:
     """Parsed query option."""
 
     agent_names: set[str] | None
-    keyword: str
+    keyword: str | None
+    project_path: Path | None
 
 
 def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
@@ -66,14 +68,37 @@ def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
             if not keyword:
                 raise ValueError("查询关键词不能为空")
 
-            return QuerySpec(agent_names=normalized_agents, keyword=keyword)
+            return QuerySpec(agent_names=normalized_agents, keyword=keyword, project_path=None)
 
-    return QuerySpec(agent_names=None, keyword=query)
+    return QuerySpec(agent_names=None, keyword=query, project_path=None)
 
 
-def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session]:
+def parse_query_uri(raw_uri: str | None, valid_agents: set[str], cwd: Path | None = None) -> QuerySpec | None:
+    """Parse structured agents query URI."""
+    if raw_uri is None:
+        return None
+
+    parsed = urlparse(raw_uri)
+    if parsed.scheme != "agents":
+        return None
+
+    project_path = _parse_query_uri_project_path(parsed, cwd=cwd)
+    params = parse_qs(parsed.query, keep_blank_values=True)
+    keyword = _extract_single_query_param(params, "q")
+    providers = _extract_single_query_param(params, "providers")
+
+    if keyword is not None:
+        keyword = keyword.strip()
+        if not keyword:
+            keyword = None
+
+    agent_names = _parse_provider_scope(providers, valid_agents) if providers is not None else None
+    return QuerySpec(agent_names=agent_names, keyword=keyword, project_path=project_path)
+
+
+def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | None) -> list[Session]:
     """Filter sessions by keyword for one agent."""
-    query = keyword.strip().lower()
+    query = (keyword or "").strip().lower()
     if not query:
         return sessions
     if not sessions:
@@ -90,6 +115,88 @@ def _normalize_agent_name(name: str, valid_agents: set[str]) -> str | None:
     if normalized in valid_agents:
         return normalized
     return None
+
+
+def _parse_query_uri_project_path(parsed_uri, cwd: Path | None) -> Path:
+    raw_path = f"{parsed_uri.netloc}{parsed_uri.path}".strip()
+    if not raw_path:
+        raise ValueError("查询路径不能为空")
+    return normalize_project_path(raw_path, cwd=cwd)
+
+
+def _extract_single_query_param(params: dict[str, list[str]], name: str) -> str | None:
+    values = params.get(name)
+    if not values:
+        return None
+    return values[-1]
+
+
+def _parse_provider_scope(raw: str, valid_agents: set[str]) -> set[str]:
+    provider_names = [name.strip().lower() for name in raw.split(",") if name.strip()]
+    if not provider_names:
+        raise ValueError("providers 不能为空")
+
+    normalized_agents: set[str] = set()
+    unknown_agents: list[str] = []
+    for name in provider_names:
+        normalized = _normalize_agent_name(name, valid_agents)
+        if normalized is None:
+            unknown_agents.append(name)
+        else:
+            normalized_agents.add(normalized)
+
+    if unknown_agents:
+        unknown = ",".join(sorted(set(unknown_agents)))
+        raise ValueError(f"未知 agent 名称: {unknown}")
+
+    return normalized_agents
+
+
+def normalize_project_path(value: str, cwd: Path | None = None) -> Path:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("查询路径不能为空")
+
+    path = Path(normalized).expanduser()
+    if not path.is_absolute():
+        base_dir = cwd if cwd is not None else Path.cwd()
+        path = base_dir / path
+    return path.resolve(strict=False)
+
+
+def extract_session_project_path(session: Session) -> Path | None:
+    raw_path = str(session.metadata.get("cwd") or session.metadata.get("directory") or "").strip()
+    if not raw_path:
+        return None
+    return normalize_project_path(raw_path)
+
+
+def is_path_scope_match(project_path: Path, session_path: Path) -> bool:
+    return session_path == project_path or project_path in session_path.parents or session_path in project_path.parents
+
+
+def filter_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: QuerySpec | None) -> list[Session]:
+    """Apply structured query spec to one agent's sessions."""
+    if spec is None:
+        return sessions
+    if spec.agent_names is not None and agent.name not in spec.agent_names:
+        return []
+
+    filtered = sessions
+    if spec.project_path is not None:
+        filtered = [
+            session
+            for session in filtered
+            if (
+                (session_path := extract_session_project_path(session)) is not None
+                and is_path_scope_match(spec.project_path, session_path)
+            )
+        ]
+
+    if spec.keyword is not None:
+        filtered = filter_sessions(agent, filtered, spec.keyword)
+
+    return filtered
 
 
 def _filter_opencode_sessions(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session]:

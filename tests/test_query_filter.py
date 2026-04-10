@@ -12,7 +12,14 @@ import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.agents.opencode import OpenCodeAgent
-from agent_dump.query_filter import QuerySpec, filter_sessions, parse_query
+from agent_dump.query_filter import (
+    QuerySpec,
+    extract_session_project_path,
+    filter_sessions,
+    filter_sessions_by_query,
+    parse_query,
+    parse_query_uri,
+)
 
 
 class DummyAgent(BaseAgent):
@@ -58,15 +65,15 @@ class TestParseQuery:
 
     def test_parse_keyword_only(self):
         result = parse_query("报错", {"opencode", "codex", "kimi", "claudecode"})
-        assert result == QuerySpec(agent_names=None, keyword="报错")
+        assert result == QuerySpec(agent_names=None, keyword="报错", project_path=None)
 
     def test_parse_agent_scope(self):
         result = parse_query("codex,kimi:报错", {"opencode", "codex", "kimi", "claudecode"})
-        assert result == QuerySpec(agent_names={"codex", "kimi"}, keyword="报错")
+        assert result == QuerySpec(agent_names={"codex", "kimi"}, keyword="报错", project_path=None)
 
     def test_parse_agent_scope_with_alias_and_case(self):
         result = parse_query("ClAuDe:bug", {"opencode", "codex", "kimi", "claudecode"})
-        assert result == QuerySpec(agent_names={"claudecode"}, keyword="bug")
+        assert result == QuerySpec(agent_names={"claudecode"}, keyword="bug", project_path=None)
 
     def test_parse_empty_query_raises(self):
         with pytest.raises(ValueError, match="查询条件不能为空"):
@@ -82,7 +89,53 @@ class TestParseQuery:
 
     def test_parse_colon_ambiguity_treat_as_plain_keyword(self):
         result = parse_query("error:timeout", {"opencode", "codex", "kimi", "claudecode"})
-        assert result == QuerySpec(agent_names=None, keyword="error:timeout")
+        assert result == QuerySpec(agent_names=None, keyword="error:timeout", project_path=None)
+
+
+class TestParseQueryUri:
+    def test_parse_relative_dot_path(self, tmp_path):
+        result = parse_query_uri(
+            "agents://.?q=refactor&providers=codex,claude",
+            {"opencode", "codex", "kimi", "claudecode"},
+            cwd=tmp_path,
+        )
+        assert result == QuerySpec(
+            agent_names={"codex", "claudecode"},
+            keyword="refactor",
+            project_path=tmp_path.resolve(),
+        )
+
+    def test_parse_home_path(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        result = parse_query_uri(
+            "agents://~/repo",
+            {"opencode", "codex", "kimi", "claudecode"},
+            cwd=tmp_path / "work",
+        )
+        assert result == QuerySpec(agent_names=None, keyword=None, project_path=(tmp_path / "repo").resolve())
+
+    def test_parse_absolute_path(self):
+        result = parse_query_uri(
+            "agents:///tmp/project?q=bug",
+            {"opencode", "codex", "kimi", "claudecode"},
+            cwd=Path("/work"),
+        )
+        assert result == QuerySpec(
+            agent_names=None,
+            keyword="bug",
+            project_path=Path("/tmp/project").resolve(strict=False),
+        )
+
+    def test_parse_empty_providers_raises(self):
+        with pytest.raises(ValueError, match="providers 不能为空"):
+            parse_query_uri("agents://.?providers=", {"opencode", "codex"}, cwd=Path("/work"))
+
+    def test_parse_unknown_provider_raises(self):
+        with pytest.raises(ValueError, match="未知 agent 名称"):
+            parse_query_uri("agents://.?providers=codex,unknown", {"opencode", "codex"}, cwd=Path("/work"))
+
+    def test_parse_non_agents_uri_returns_none(self):
+        assert parse_query_uri("codex://session-1", {"codex"}, cwd=Path("/work")) is None
 
 
 class TestFilterSessions:
@@ -284,3 +337,70 @@ class TestFilterSessions:
 
         result = filter_sessions(agent, sessions, "missing-keyword")
         assert result == []
+
+
+class TestFilterSessionsByQuery:
+    def test_path_scope_matches_equal_parent_and_child(self, tmp_path):
+        agent = DummyAgent(name="codex")
+        repo_root = tmp_path / "repo"
+        subdir = repo_root / "src"
+        equal = make_session("s1", "equal", tmp_path / "s1.jsonl")
+        equal.metadata = {"cwd": str(repo_root)}
+        parent = make_session("s2", "parent", tmp_path / "s2.jsonl")
+        parent.metadata = {"cwd": str(subdir)}
+        child = make_session("s3", "child", tmp_path / "s3.jsonl")
+        child.metadata = {"cwd": str(tmp_path)}
+
+        spec = QuerySpec(agent_names=None, keyword=None, project_path=repo_root)
+        result = filter_sessions_by_query(agent, [equal, parent, child], spec)
+        assert [session.id for session in result] == ["s1", "s2", "s3"]
+
+    def test_path_scope_excludes_same_prefix_non_descendant(self, tmp_path):
+        agent = DummyAgent(name="codex")
+        repo_root = tmp_path / "repo"
+        session = make_session("s1", "prefix", tmp_path / "s1.jsonl")
+        session.metadata = {"cwd": str(tmp_path / "repo-other")}
+
+        spec = QuerySpec(agent_names=None, keyword=None, project_path=repo_root)
+        assert filter_sessions_by_query(agent, [session], spec) == []
+
+    def test_path_scope_excludes_session_without_project_path(self, tmp_path):
+        agent = DummyAgent(name="cursor")
+        session = make_session("s1", "no path", tmp_path / "s1.jsonl")
+        spec = QuerySpec(agent_names=None, keyword=None, project_path=tmp_path / "repo")
+
+        assert filter_sessions_by_query(agent, [session], spec) == []
+
+    def test_combines_path_scope_and_keyword(self, tmp_path):
+        agent = DummyAgent(name="codex")
+        session = make_session("s1", "refactor api", tmp_path / "s1.jsonl")
+        session.metadata = {"cwd": str(tmp_path / "repo")}
+        session.source_path.write_text("contains refactor", encoding="utf-8")
+        other = make_session("s2", "refactor api", tmp_path / "s2.jsonl")
+        other.metadata = {"cwd": str(tmp_path / "other")}
+        other.source_path.write_text("contains refactor", encoding="utf-8")
+
+        spec = QuerySpec(agent_names=None, keyword="refactor", project_path=tmp_path / "repo")
+        result = filter_sessions_by_query(agent, [session, other], spec)
+        assert [item.id for item in result] == ["s1"]
+
+    def test_provider_scope_excludes_other_agents(self, tmp_path):
+        agent = DummyAgent(name="kimi")
+        session = make_session("s1", "refactor", tmp_path / "s1.jsonl")
+        spec = QuerySpec(agent_names={"codex"}, keyword=None, project_path=None)
+
+        assert filter_sessions_by_query(agent, [session], spec) == []
+
+
+class TestExtractSessionProjectPath:
+    def test_prefers_cwd_then_directory(self, tmp_path):
+        session = make_session("s1", "session", tmp_path / "s1.jsonl")
+        session.metadata = {"cwd": str(tmp_path / "repo"), "directory": str(tmp_path / "ignored")}
+
+        assert extract_session_project_path(session) == (tmp_path / "repo").resolve()
+
+    def test_uses_directory_when_cwd_missing(self, tmp_path):
+        session = make_session("s1", "session", tmp_path / "s1.jsonl")
+        session.metadata = {"directory": str(tmp_path / "repo")}
+
+        assert extract_session_project_path(session) == (tmp_path / "repo").resolve()

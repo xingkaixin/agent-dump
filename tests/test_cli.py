@@ -353,6 +353,55 @@ class TestMain:
         assert result == 0
         mock_handle.assert_called_once()
 
+    def test_main_agents_query_uri_conflicts_with_query_option(self, capsys):
+        with mock.patch("sys.argv", ["agent-dump", "agents://.?q=bug", "-q", "fatal"]):
+            result = main()
+
+        assert result == 1
+        assert "agents://" in capsys.readouterr().out
+
+    def test_main_agents_query_uri_auto_enables_list(self, capsys):
+        scanner = mock.MagicMock()
+        known_agent = mock.MagicMock()
+        known_agent.name = "codex"
+        scanner.agents = [known_agent]
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = []
+        scanner.get_available_agents.return_value = [agent]
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            with mock.patch("sys.argv", ["agent-dump", "agents://.?q=bug&providers=codex"]):
+                result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "路径=" in captured.out
+        agent.get_sessions.assert_called_once_with(days=7)
+
+    def test_main_agents_query_uri_uses_filtered_sessions_in_interactive(self):
+        scanner = mock.MagicMock()
+        known_agent = mock.MagicMock()
+        known_agent.name = "codex"
+        scanner.agents = [known_agent]
+        session = make_session("s1", "Bug fix")
+        session.metadata = {"cwd": str(Path.cwd())}
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [session]
+        scanner.get_available_agents.return_value = [agent]
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            with mock.patch("agent_dump.cli.select_sessions_interactive", return_value=[session]) as mock_select_sessions:
+                with mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[]):
+                    with mock.patch("sys.argv", ["agent-dump", "agents://.?providers=codex", "--interactive"]):
+                        result = main()
+
+        assert result == 0
+        assert mock_select_sessions.call_args.args[0] == [session]
+
     def test_main_expands_shortcut_before_collect(self):
         with mock.patch(
             "agent_dump.cli.expand_shortcut_argv",
@@ -390,6 +439,58 @@ class TestMain:
         result = handle_collect_mode(args)
         assert result == 1
         assert "--collect 不能与 URI/--interactive/--list 同时使用" in capsys.readouterr().out
+
+    def test_collect_mode_accepts_agents_query_uri(self, tmp_path):
+        args = argparse.Namespace(
+            collect=True,
+            uri="agents://.?q=bug&providers=codex",
+            interactive=False,
+            list=False,
+            since=None,
+            until=None,
+            save=None,
+        )
+        mock_config = mock.MagicMock()
+        mock_entry = mock.MagicMock()
+        mock_planned_entry = mock.MagicMock()
+        mock_entry.agent_display_name = "Codex"
+        mock_planned_entry.chunks = (mock.MagicMock(),)
+        mock_logger = mock.MagicMock()
+
+        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+            with mock.patch(
+                "agent_dump.cli.load_collect_config",
+                return_value=mock.MagicMock(summary_concurrency=1, summary_timeout_seconds=30),
+            ):
+                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                            with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+                                mock_scanner = mock.MagicMock()
+                                known_agent = mock.MagicMock()
+                                known_agent.name = "codex"
+                                available_agent = mock.MagicMock()
+                                available_agent.name = "codex"
+                                mock_scanner.agents = [known_agent]
+                                mock_scanner.get_available_agents.return_value = [available_agent]
+                                mock_scanner_class.return_value = mock_scanner
+                                with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)) as mock_collect:
+                                    with mock.patch("agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 1)):
+                                        with mock.patch("agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]):
+                                            with mock.patch("agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()):
+                                                with mock.patch("agent_dump.cli.build_collect_final_prompt", return_value="prompt"):
+                                                    with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# collect"):
+                                                        with mock.patch(
+                                                            "agent_dump.cli.write_collect_markdown",
+                                                            return_value=tmp_path / "collect.md",
+                                                        ):
+                                                            result = handle_collect_mode(args)
+
+        assert result == 0
+        query_spec = mock_collect.call_args.kwargs["query_spec"]
+        assert query_spec.keyword == "bug"
+        assert query_spec.agent_names == {"codex"}
+        assert query_spec.project_path == Path.cwd().resolve()
 
     def test_collect_mode_success_shows_stage_progress_in_stderr(self, capsys, tmp_path):
         args = argparse.Namespace(
@@ -1306,7 +1407,7 @@ class TestMain:
 
         assert result == 1
         captured = capsys.readouterr()
-        assert "无效的 -query 参数" in captured.out
+        assert "无效的查询条件" in captured.out
 
     def test_main_interactive_query_no_match_returns_1(self, capsys):
         """测试 interactive + query 全部无命中时返回 1"""

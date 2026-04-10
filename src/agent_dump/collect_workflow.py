@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent
+from agent_dump.query_filter import QuerySpec
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class CollectWorkflowDeps:
     write_collect_markdown: Callable[..., Path]
     resolve_collect_save_path: Callable[..., Path | None]
     render_session_text: Callable[[str, dict[str, Any]], str]
+    parse_query_uri: Callable[[str | None, set[str], Path | None], QuerySpec | None]
     i18n_t: Callable[..., str]
     keys: Any
 
@@ -57,7 +59,7 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
     keys = deps.keys
     t = deps.i18n_t
 
-    if args.uri or args.interactive or args.list:
+    if args.interactive or args.list:
         print(t(keys.COLLECT_MODE_CONFLICT))
         return 1
 
@@ -85,6 +87,18 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
     collect_logger = deps.create_collect_logger(logging_config)
 
     scanner = deps.scanner_factory()
+    valid_agents = {agent.name for agent in scanner.agents}
+    query_spec: QuerySpec | None = None
+    if args.uri:
+        try:
+            query_spec = deps.parse_query_uri(args.uri, valid_agents, Path.cwd())
+        except ValueError as exc:
+            print(t(keys.QUERY_INVALID, error=exc))
+            return 1
+        if query_spec is None:
+            print(t(keys.COLLECT_MODE_CONFLICT))
+            return 1
+
     available_agents: list[BaseAgent] = scanner.get_available_agents()
     if not available_agents:
         print(t(keys.NO_AGENTS_FOUND))
@@ -107,6 +121,7 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 since_date=since_date,
                 until_date=until_date,
                 collect_config=collect_config,
+                query_spec=query_spec,
                 render_session_text_fn=deps.render_session_text,
                 progress_callback=update_progress,
             )

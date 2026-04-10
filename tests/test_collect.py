@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, timedelta, timezone
 import json
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -34,6 +35,7 @@ from agent_dump.collect import (
     write_collect_markdown,
 )
 from agent_dump.config import AIConfig, CollectConfig
+from agent_dump.query_filter import QuerySpec
 
 
 class TestCollectDates:
@@ -313,6 +315,42 @@ class TestCollectEntries:
         assert len(entries) == 1
         assert entries[0].date_value == date(2026, 3, 5)
         assert entries[0].session_id == "cross-day"
+
+    def test_collect_entries_applies_path_scoped_query(self):
+        now = datetime.now(timezone.utc)
+        matching = mock.MagicMock()
+        matching.id = "s-match"
+        matching.title = "match"
+        matching.created_at = now - timedelta(hours=1)
+        matching.updated_at = now - timedelta(hours=1)
+        matching.metadata = {"cwd": "/repo/app"}
+
+        other = mock.MagicMock()
+        other.id = "s-other"
+        other.title = "other"
+        other.created_at = now - timedelta(hours=2)
+        other.updated_at = now - timedelta(hours=2)
+        other.metadata = {"cwd": "/repo/other"}
+
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [matching, other]
+        agent.get_session_uri.side_effect = lambda s: f"codex://{s.id}"
+        agent.get_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "修复仓库问题"}]}]
+        }
+
+        entries, truncated = collect_entries(
+            agents=[agent],
+            since_date=(now - timedelta(days=1)).date(),
+            until_date=now.date(),
+            query_spec=QuerySpec(agent_names=None, keyword=None, project_path=Path("/repo/app")),
+            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
+        )
+
+        assert truncated is False
+        assert [entry.session_id for entry in entries] == ["s-match"]
 
     def test_plan_collect_entries_reports_chunk_totals(self):
         entries = [

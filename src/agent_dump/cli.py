@@ -47,7 +47,13 @@ from agent_dump.config import (
     validate_ai_config,
 )
 from agent_dump.i18n import Keys, i18n, setup_i18n
-from agent_dump.query_filter import filter_sessions, parse_query
+from agent_dump.query_filter import (
+    QuerySpec,
+    filter_sessions,
+    filter_sessions_by_query,
+    parse_query,
+    parse_query_uri,
+)
 from agent_dump.rendering import (
     apply_summary_to_json_export as _apply_summary_to_json_export,
     export_session_in_format as _export_session_in_format,
@@ -618,6 +624,33 @@ def resolve_effective_formats(args: argparse.Namespace, is_uri_mode: bool, forma
     return ["print"] if is_uri_mode else ["json"]
 
 
+def render_query_summary(spec: QuerySpec) -> str:
+    """Render one compact query description for user-facing messages."""
+    if spec.project_path is None and spec.keyword:
+        return spec.keyword
+
+    parts: list[str] = []
+    if spec.project_path is not None:
+        parts.append(f"路径={spec.project_path}")
+    if spec.keyword:
+        parts.append(f"关键词={spec.keyword}")
+    if spec.agent_names:
+        providers = ",".join(sorted(spec.agent_names))
+        parts.append(f"providers={providers}")
+    return "；".join(parts) if parts else "全部会话"
+
+
+def apply_query_filter(agent: BaseAgent, sessions: list[Session], spec: QuerySpec | None) -> list[Session]:
+    """Apply query filters while preserving legacy keyword-only behavior."""
+    if spec is None:
+        return sessions
+    if spec.project_path is None and spec.keyword is not None:
+        if spec.agent_names is not None and agent.name not in spec.agent_names:
+            return []
+        return filter_sessions(agent, sessions, spec.keyword)
+    return filter_sessions_by_query(agent, sessions, spec)
+
+
 def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mode: bool) -> None:
     """Validate format combinations for the current mode."""
     if is_list_mode or is_uri_mode:
@@ -672,6 +705,7 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
             write_collect_markdown=write_collect_markdown,
             resolve_collect_save_path=resolve_collect_save_path,
             render_session_text=render_session_text,
+            parse_query_uri=parse_query_uri,
             i18n_t=i18n.t,
             keys=Keys,
         ),
@@ -790,7 +824,23 @@ def main():
         help=i18n.t(Keys.CLI_VERSION_HELP),
     )
     args = parser.parse_args(argv)
-    if args.summary and not args.uri:
+    query_uri_spec: QuerySpec | None = None
+    if args.uri and args.uri.startswith("agents://"):
+        valid_agents = {agent.name for agent in AgentScanner().agents}
+        try:
+            query_uri_spec = parse_query_uri(args.uri, valid_agents=valid_agents, cwd=Path.cwd())
+        except ValueError as e:
+            print(i18n.t(Keys.QUERY_INVALID, error=e))
+            return 1
+
+    is_query_uri_mode = query_uri_spec is not None
+    is_uri_mode = bool(args.uri) and not is_query_uri_mode
+
+    if args.query and is_query_uri_mode:
+        print(i18n.t(Keys.QUERY_INVALID, error="agents:// 查询不能与 -q/--query 同时使用"))
+        return 1
+
+    if args.summary and not is_uri_mode:
         print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
 
     if args.config_action:
@@ -798,7 +848,6 @@ def main():
     if args.collect:
         return handle_collect_mode(args)
 
-    is_uri_mode = bool(args.uri)
     try:
         output_formats = resolve_effective_formats(args, is_uri_mode=is_uri_mode, format_specified=format_specified)
         validate_formats_for_mode(output_formats, is_uri_mode=is_uri_mode, is_list_mode=args.list)
@@ -892,7 +941,7 @@ def main():
     # If --interactive or --list not specified, but filters are, enable --list
     # If nothing specified, show help
     if not args.interactive and not args.list:
-        if args.days != 7 or args.query:
+        if args.days != 7 or args.query or is_query_uri_mode:
             args.list = True
         else:
             parser.print_help()
@@ -904,11 +953,14 @@ def main():
     # Scan for available agents
     scanner = AgentScanner()
     valid_agents = {agent.name for agent in scanner.agents}
-    try:
-        query_spec = parse_query(args.query, valid_agents=valid_agents)
-    except ValueError as e:
-        print(i18n.t(Keys.QUERY_INVALID, error=e))
-        return 1
+    if is_query_uri_mode:
+        query_spec = query_uri_spec
+    else:
+        try:
+            query_spec = parse_query(args.query, valid_agents=valid_agents)
+        except ValueError as e:
+            print(i18n.t(Keys.QUERY_INVALID, error=e))
+            return 1
 
     available_agents = scanner.get_available_agents()
 
@@ -929,7 +981,7 @@ def main():
     if args.list:
         warn_list_ignored_options(output_specified=output_specified, format_specified=format_specified)
         if query_spec:
-            print(i18n.t(Keys.LIST_HEADER_FILTERED, days=args.days, keyword=query_spec.keyword))
+            print(i18n.t(Keys.LIST_HEADER_FILTERED, days=args.days, query=render_query_summary(query_spec)))
         else:
             print(i18n.t(Keys.LIST_HEADER, days=args.days))
         print("-" * 60)
@@ -938,7 +990,7 @@ def main():
             # Get filtered sessions with days parameter
             sessions = agent.get_sessions(days=args.days)
             if query_spec:
-                sessions = filter_sessions(agent, sessions, query_spec.keyword)
+                sessions = apply_query_filter(agent, sessions, query_spec)
 
             print(f"\n📁 {agent.display_name} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
 
@@ -969,14 +1021,14 @@ def main():
         session_counts = {}
         for agent in available_agents:
             sessions = agent.get_sessions(days=args.days)
-            matched_sessions = filter_sessions(agent, sessions, query_spec.keyword)
+            matched_sessions = apply_query_filter(agent, sessions, query_spec)
             if matched_sessions:
                 matched_sessions_by_agent[agent.name] = matched_sessions
                 session_counts[agent.name] = len(matched_sessions)
 
         interactive_agents = [agent for agent in available_agents if agent.name in matched_sessions_by_agent]
         if not interactive_agents:
-            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, keyword=query_spec.keyword))
+            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, query=render_query_summary(query_spec)))
             return 1
 
     # Select agent
@@ -1002,13 +1054,20 @@ def main():
 
     if not sessions:
         if query_spec:
-            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, keyword=query_spec.keyword))
+            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, query=render_query_summary(query_spec)))
         else:
             print(i18n.t(Keys.NO_SESSIONS_FOUND, days=args.days))
         return 1
 
     if query_spec:
-        print(i18n.t(Keys.SESSIONS_FOUND_FILTERED, count=len(sessions), days=args.days, keyword=query_spec.keyword))
+        print(
+            i18n.t(
+                Keys.SESSIONS_FOUND_FILTERED,
+                count=len(sessions),
+                days=args.days,
+                query=render_query_summary(query_spec),
+            )
+        )
     else:
         print(i18n.t(Keys.SESSIONS_FOUND, count=len(sessions), days=args.days))
 
