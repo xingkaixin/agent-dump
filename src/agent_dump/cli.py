@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from string import Formatter
 import sys
 import threading
 from typing import Any
@@ -42,6 +43,7 @@ from agent_dump.config import (
     load_ai_config,
     load_collect_config,
     load_logging_config,
+    load_shortcuts_config,
     validate_ai_config,
 )
 from agent_dump.i18n import Keys, i18n, setup_i18n
@@ -60,6 +62,88 @@ from agent_dump.uri_support import find_session_by_id as _find_session_by_id, pa
 VALID_URI_SCHEMES = get_uri_scheme_map()
 VALID_FORMATS = {"json", "markdown", "raw", "print"}
 FORMAT_ALIASES = {"md": "markdown"}
+
+
+def _parse_shortcut_date(value: str) -> date:
+    normalized = value.strip()
+    for fmt in ("%Y%m%d", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(normalized, fmt).date()  # noqa: DTZ007
+        except ValueError:
+            continue
+    raise ValueError("invalid_date")
+
+
+def _build_shortcut_variables(params: tuple[str, ...], values: tuple[str, ...]) -> dict[str, str]:
+    variables = dict(zip(params, values, strict=True))
+    raw_date = variables.get("date")
+    if raw_date is None:
+        return variables
+
+    parsed_date = _parse_shortcut_date(raw_date)
+    variables["date"] = parsed_date.strftime("%Y%m%d")
+    variables["year"] = parsed_date.strftime("%Y")
+    variables["month"] = parsed_date.strftime("%m")
+    variables["year_month"] = parsed_date.strftime("%Y-%m")
+    return variables
+
+
+def _render_shortcut_arg(template: str, variables: dict[str, str]) -> str:
+    formatter = Formatter()
+    rendered: list[str] = []
+    for literal_text, field_name, format_spec, conversion in formatter.parse(template):
+        rendered.append(literal_text)
+        if field_name is None:
+            continue
+        if format_spec or conversion:
+            raise ValueError("invalid_template")
+        if field_name not in variables:
+            raise ValueError(f"unknown_variable:{field_name}")
+        rendered.append(variables[field_name])
+
+    result = "".join(rendered)
+    if result.startswith("~"):
+        return str(Path(result).expanduser())
+    return result
+
+
+def expand_shortcut_argv(argv: list[str]) -> list[str]:
+    """Expand configured shortcut preset into regular CLI argv."""
+    if "--shortcut" not in argv:
+        return argv
+
+    shortcut_index = argv.index("--shortcut")
+    prefix = argv[:shortcut_index]
+    suffix = argv[shortcut_index + 1 :]
+    if not suffix:
+        raise ValueError("shortcut_missing_name")
+
+    shortcut_name = suffix[0].strip()
+    if not shortcut_name:
+        raise ValueError("shortcut_missing_name")
+
+    value_tokens: list[str] = []
+    remainder_index = len(suffix)
+    for index, token in enumerate(suffix[1:], start=1):
+        if token.startswith("-"):
+            remainder_index = index
+            break
+        value_tokens.append(token)
+
+    remainder = suffix[remainder_index:]
+    shortcuts = load_shortcuts_config()
+    shortcut = shortcuts.get(shortcut_name)
+    if shortcut is None:
+        raise ValueError(f"shortcut_not_found:{shortcut_name}")
+
+    expected = len(shortcut.params)
+    actual = len(value_tokens)
+    if actual != expected:
+        raise ValueError(f"shortcut_args_mismatch:{shortcut_name}:{expected}:{actual}")
+
+    variables = _build_shortcut_variables(shortcut.params, tuple(value_tokens))
+    expanded_args = [_render_shortcut_arg(arg, variables) for arg in shortcut.args]
+    return prefix + expanded_args + remainder
 
 
 @contextmanager
@@ -609,7 +693,33 @@ def main():
             break
 
     setup_i18n(lang_arg)
-    argv = sys.argv[1:]
+    try:
+        argv = expand_shortcut_argv(sys.argv[1:])
+    except ValueError as exc:
+        message = str(exc)
+        if message == "shortcut_missing_name":
+            print(i18n.t(Keys.SHORTCUT_MISSING_NAME))
+            return 1
+        if message == "invalid_date":
+            print(i18n.t(Keys.SHORTCUT_DATE_INVALID))
+            return 1
+        if message == "invalid_template":
+            print(i18n.t(Keys.SHORTCUT_TEMPLATE_INVALID))
+            return 1
+        if message.startswith("shortcut_not_found:"):
+            _, shortcut_name = message.split(":", 1)
+            print(i18n.t(Keys.SHORTCUT_NOT_FOUND, name=shortcut_name))
+            return 1
+        if message.startswith("shortcut_args_mismatch:"):
+            _, shortcut_name, expected, actual = message.split(":", 3)
+            print(i18n.t(Keys.SHORTCUT_ARGS_MISMATCH, name=shortcut_name, expected=expected, actual=actual))
+            return 1
+        if message.startswith("unknown_variable:"):
+            _, variable_name = message.split(":", 1)
+            print(i18n.t(Keys.SHORTCUT_UNKNOWN_VARIABLE, name=variable_name))
+            return 1
+        raise
+
     output_specified = is_option_specified(argv, "-output", "--output")
     format_specified = is_option_specified(argv, "-format", "--format")
 
@@ -626,6 +736,7 @@ def main():
     parser.add_argument("-format", "--format", type=str, default=None, help=i18n.t(Keys.CLI_FORMAT_HELP))
     parser.add_argument("-summary", "--summary", action="store_true", help=i18n.t(Keys.CLI_SUMMARY_HELP))
     parser.add_argument("--collect", action="store_true", help=i18n.t(Keys.CLI_COLLECT_HELP))
+    parser.add_argument("--shortcut", type=str, default=None, help=i18n.t(Keys.CLI_SHORTCUT_HELP))
     parser.add_argument("-since", "--since", type=str, default=None, help=i18n.t(Keys.CLI_SINCE_HELP))
     parser.add_argument("-until", "--until", type=str, default=None, help=i18n.t(Keys.CLI_UNTIL_HELP))
     parser.add_argument("--save", type=str, default=None, help=i18n.t(Keys.CLI_SAVE_HELP))
@@ -678,7 +789,7 @@ def main():
         version=f"agent-dump {__version__}",
         help=i18n.t(Keys.CLI_VERSION_HELP),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.summary and not args.uri:
         print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
 

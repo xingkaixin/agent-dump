@@ -92,6 +92,7 @@ class Keys:
     CLI_QUERY_HELP = "CLI_QUERY_HELP"
     CLI_LANG_HELP = "CLI_LANG_HELP"
     CLI_COLLECT_HELP = "CLI_COLLECT_HELP"
+    CLI_SHORTCUT_HELP = "CLI_SHORTCUT_HELP"
     CLI_SINCE_HELP = "CLI_SINCE_HELP"
     CLI_UNTIL_HELP = "CLI_UNTIL_HELP"
     CLI_CONFIG_HELP = "CLI_CONFIG_HELP"
@@ -152,6 +153,12 @@ class Keys:
     COLLECT_PROGRESS_TREE_REDUCTION = "COLLECT_PROGRESS_TREE_REDUCTION"
     COLLECT_PROGRESS_RENDER_FINAL = "COLLECT_PROGRESS_RENDER_FINAL"
     COLLECT_PROGRESS_WRITE_OUTPUT = "COLLECT_PROGRESS_WRITE_OUTPUT"
+    SHORTCUT_MISSING_NAME = "SHORTCUT_MISSING_NAME"
+    SHORTCUT_DATE_INVALID = "SHORTCUT_DATE_INVALID"
+    SHORTCUT_TEMPLATE_INVALID = "SHORTCUT_TEMPLATE_INVALID"
+    SHORTCUT_NOT_FOUND = "SHORTCUT_NOT_FOUND"
+    SHORTCUT_ARGS_MISMATCH = "SHORTCUT_ARGS_MISMATCH"
+    SHORTCUT_UNKNOWN_VARIABLE = "SHORTCUT_UNKNOWN_VARIABLE"
 
     # Misc
     SESSION_COUNT_SUFFIX = "SESSION_COUNT_SUFFIX"
@@ -237,6 +244,7 @@ TRANSLATIONS = {
         Keys.CLI_QUERY_HELP: "Query filter, supports 'agent1,agent2:keyword' or 'keyword'",
         Keys.CLI_LANG_HELP: "Language (en, zh). Default: auto-detect",
         Keys.CLI_COLLECT_HELP: "Collect session prints by date range and summarize with AI",
+        Keys.CLI_SHORTCUT_HELP: "Run a configured shortcut preset",
         Keys.CLI_SINCE_HELP: "Collect start date (YYYY-MM-DD or YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "Collect end date (YYYY-MM-DD or YYYYMMDD)",
         Keys.CLI_CONFIG_HELP: "Manage AI config (view|edit)",
@@ -294,6 +302,12 @@ TRANSLATIONS = {
         Keys.COLLECT_PROGRESS_TREE_REDUCTION: "Merging global result: round {level}, {current}/{total} groups",
         Keys.COLLECT_PROGRESS_RENDER_FINAL: "Generating final summary: {current}/{total}",
         Keys.COLLECT_PROGRESS_WRITE_OUTPUT: "Writing output file: {current}/{total}",
+        Keys.SHORTCUT_MISSING_NAME: "❌ --shortcut requires a shortcut name.",
+        Keys.SHORTCUT_DATE_INVALID: "❌ Invalid shortcut date value. Use YYYY-MM-DD or YYYYMMDD.",
+        Keys.SHORTCUT_TEMPLATE_INVALID: "❌ Invalid shortcut template. format/conversion syntax is not supported.",
+        Keys.SHORTCUT_NOT_FOUND: "❌ Shortcut not found: {name}",
+        Keys.SHORTCUT_ARGS_MISMATCH: "❌ Shortcut {name} expects {expected} args, got {actual}.",
+        Keys.SHORTCUT_UNKNOWN_VARIABLE: "❌ Shortcut template references unknown variable: {name}",
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
@@ -375,6 +389,7 @@ TRANSLATIONS = {
         Keys.CLI_QUERY_HELP: "查询过滤器，支持 'agent1,agent2:关键词' 或 '关键词'",
         Keys.CLI_LANG_HELP: "语言 (en, zh). 默认: 自动检测",
         Keys.CLI_COLLECT_HELP: "按日期收集会话 print 内容并调用 AI 生成总结",
+        Keys.CLI_SHORTCUT_HELP: "执行已配置的 shortcut 预设",
         Keys.CLI_SINCE_HELP: "收集开始日期 (YYYY-MM-DD 或 YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "收集结束日期 (YYYY-MM-DD 或 YYYYMMDD)",
         Keys.CLI_CONFIG_HELP: "管理 AI 配置 (view|edit)",
@@ -432,6 +447,12 @@ TRANSLATIONS = {
         Keys.COLLECT_PROGRESS_TREE_REDUCTION: "正在归并全局结果：第 {level} 轮，{current}/{total} 组",
         Keys.COLLECT_PROGRESS_RENDER_FINAL: "正在生成最终总结：{current}/{total}",
         Keys.COLLECT_PROGRESS_WRITE_OUTPUT: "正在写入结果文件：{current}/{total}",
+        Keys.SHORTCUT_MISSING_NAME: "❌ --shortcut 需要提供快捷方式名称。",
+        Keys.SHORTCUT_DATE_INVALID: "❌ shortcut 中的 date 参数格式无效，请使用 YYYY-MM-DD 或 YYYYMMDD。",
+        Keys.SHORTCUT_TEMPLATE_INVALID: "❌ shortcut 模板无效，暂不支持 format/conversion 语法。",
+        Keys.SHORTCUT_NOT_FOUND: "❌ 未找到 shortcut: {name}",
+        Keys.SHORTCUT_ARGS_MISMATCH: "❌ shortcut {name} 参数数量不匹配，期望 {expected} 个，实际 {actual} 个。",
+        Keys.SHORTCUT_UNKNOWN_VARIABLE: "❌ shortcut 模板引用了未定义变量: {name}",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     },
 }
