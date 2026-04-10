@@ -1,11 +1,58 @@
 """Session rendering and export helpers."""
 
+from datetime import datetime
 import json
 from pathlib import Path
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
+from agent_dump.time_utils import to_local_datetime
+
+HEAD_FIELDS = (
+    ("URI", "uri"),
+    ("Agent", "agent"),
+    ("Title", "title"),
+    ("Created", "created_at"),
+    ("Updated", "updated_at"),
+    ("CWD/Project", "cwd_or_project"),
+    ("Model", "model"),
+    ("Message Count", "message_count"),
+    ("Subtargets", "subtargets"),
+)
+
+
+def _truncate_text(value: str, limit: int = 120) -> str:
+    text = value.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
+def _normalize_head_value(value: Any) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, datetime):
+        return to_local_datetime(value).strftime("%Y-%m-%d %H:%M:%S %Z")
+    if isinstance(value, list):
+        items = [_truncate_text(str(item), limit=48) for item in value if str(item).strip()]
+        return ", ".join(items[:5]) if items else "-"
+    if isinstance(value, str):
+        text = _truncate_text(value)
+        return text if text else "-"
+    return str(value)
+
+
+def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
+    """Render lightweight session metadata for discovery."""
+    lines = ["# Session Head", ""]
+    merged_head = dict(session_head)
+    merged_head["uri"] = uri
+
+    for label, key in HEAD_FIELDS:
+        lines.append(f"- {label}: {_normalize_head_value(merged_head.get(key))}")
+
+    return "\n".join(lines)
 
 
 def render_session_text(uri: str, session_data: dict[str, Any]) -> str:

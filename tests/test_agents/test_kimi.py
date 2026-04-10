@@ -299,6 +299,28 @@ class TestKimiAgent:
         with pytest.raises(FileNotFoundError):
             agent.export_session(session, tmp_path)
 
+    def test_get_session_head_counts_raw_lines(self, tmp_path):
+        """测试 get_session_head 返回 Kimi 轻量摘要。"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "project1" / "session1"
+        session_dir.mkdir(parents=True)
+        context_path = session_dir / "context.jsonl"
+        write_jsonl(context_path, [{"role": "user"}, {"role": "assistant"}])
+
+        session = Session(
+            id="test-session",
+            title="Test Session",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_dir,
+            metadata={"context_file": str(context_path), "wire_file": None},
+        )
+
+        head = agent.get_session_head(session)
+
+        assert head["cwd_or_project"] == str(session_dir)
+        assert head["message_count"] == 2
+
     def test_export_raw_session_prefers_context_file(self, tmp_path):
         """测试 raw 导出优先使用 context.jsonl"""
         agent = KimiAgent()

@@ -133,6 +133,40 @@ class TestCursorAgent:
         assert len(tool_messages) == 1
         assert tool_messages[0]["parts"][0]["tool"] == "subagent"
 
+    def test_get_session_head_extracts_model_message_count_and_subtargets(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+
+        created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-head",
+            {
+                "composerId": "composer-head",
+                "title": "Head Session",
+                "createdAt": created_at_ms,
+                "modelConfig": {"modelName": "claude-4.6"},
+                "subagentComposerIds": ["worker-1", "worker-2"],
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-head:b1",
+            {"requestId": "request-head", "type": 1, "text": "hello"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-head:b2",
+            {"type": 2, "text": "world", "modelInfo": {"modelName": "claude-4.6"}},
+        )
+
+        agent = CursorAgent()
+        sessions = agent.get_sessions(days=7)
+        head = agent.get_session_head(sessions[0])
+
+        assert head["model"] == "claude-4.6"
+        assert head["message_count"] == 2
+        assert head["subtargets"] == ["worker-1", "worker-2"]
+
     def test_export_raw_session_not_supported(self, monkeypatch, tmp_path):
         _, global_db = self._create_layout(monkeypatch, tmp_path)
 
