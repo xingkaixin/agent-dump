@@ -2,6 +2,24 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.19] - 2026-04-10
+
+### Added
+
+- **CLI shortcut presets for common workflows**
+  - Added shortcut preset expansion so common CLI workflows can be invoked with shorter preset-style inputs
+  - Added config and CLI coverage for preset parsing and expansion behavior
+
+### Changed
+
+- **Collect progress reporting now includes workload overview**
+  - Added a collect start summary that reports session count, chunk count, configured concurrency, and agent distribution before summary work begins
+  - Refined progress output to be more readable and contextual during collect runs, including TTY spinner cleanup before overview printing
+
+- **Query filter now avoids redundant session-data scans**
+  - When the source file is already directly searchable, query filtering now skips the fallback session-data search path
+  - Added regression coverage for the new query filter behavior
+
 ## [0.6.18] - 2026-04-05
 
 ### Fixed
