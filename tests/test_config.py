@@ -11,8 +11,10 @@ from agent_dump.config import (
     load_ai_config,
     load_collect_config,
     load_logging_config,
+    load_shortcuts_config,
     LoggingConfig,
     mask_api_key,
+    ShortcutConfig,
     write_ai_config,
 )
 
@@ -140,6 +142,46 @@ class TestConfigReadWrite:
 
         assert load_logging_config(path) == LoggingConfig(enabled=True, path=tmp_path / "logs" / "collect.log")
 
+    def test_load_shortcuts_config_reads_shortcuts(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[shortcut.ob]\n"
+                'params = ["date"]\n'
+                'args = ["--collect", "--since", "{date}", "--until", "{date}"]\n'
+            ),
+            encoding="utf-8",
+        )
+
+        assert load_shortcuts_config(path) == {
+            "ob": ShortcutConfig(
+                params=("date",),
+                args=("--collect", "--since", "{date}", "--until", "{date}"),
+            )
+        }
+
+    def test_load_shortcuts_config_accepts_trailing_comma_in_multiline_args(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[shortcut.ob]\n"
+                'params = ["date"]\n'
+                "args = [\n"
+                '  "--collect",\n'
+                '  "--since", "{date}",\n'
+                '  "--until", "{date}",\n'
+                "]\n"
+            ),
+            encoding="utf-8",
+        )
+
+        assert load_shortcuts_config(path) == {
+            "ob": ShortcutConfig(
+                params=("date",),
+                args=("--collect", "--since", "{date}", "--until", "{date}"),
+            )
+        }
+
     def test_mask_api_key(self):
         assert mask_api_key("") == ""
         assert mask_api_key("abcdef") == "******"
@@ -150,14 +192,18 @@ class TestConfigCommand:
     def test_view_existing(self, tmp_path, capsys, monkeypatch):
         path = tmp_path / "config.toml"
         default_log_path = tmp_path / "logs" / "collect.log"
-        write_ai_config(
-            AIConfig(
-                provider="openai",
-                base_url="https://api.openai.com/v1",
-                model="gpt-4.1-mini",
-                api_key="sk-test-123",
+        path.write_text(
+            (
+                "[ai]\n"
+                'provider = "openai"\n'
+                'base_url = "https://api.openai.com/v1"\n'
+                'model = "gpt-4.1-mini"\n'
+                'api_key = "sk-test-123"\n'
+                "\n[shortcut.ob]\n"
+                'params = ["date"]\n'
+                'args = ["--collect", "--since", "{date}", "--until", "{date}"]\n'
             ),
-            path,
+            encoding="utf-8",
         )
         monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
 
@@ -170,6 +216,8 @@ class TestConfigCommand:
         assert "collect.summary_timeout_seconds: 90" in out
         assert "logging.enabled: True" in out
         assert f"logging.path: {default_log_path}" in out
+        assert "shortcuts.count: 1" in out
+        assert "shortcut.ob:" in out
 
     def test_view_missing_then_create(self, tmp_path, monkeypatch):
         path = tmp_path / "config.toml"
@@ -210,6 +258,9 @@ class TestConfigCommand:
                 "\n[logging]\n"
                 "enabled = false\n"
                 'path = "/tmp/collect.log"\n'
+                "\n[shortcut.ob]\n"
+                'params = ["date"]\n'
+                'args = ["--collect", "--since", "{date}", "--until", "{date}"]\n'
             ),
             encoding="utf-8",
         )
@@ -226,6 +277,12 @@ class TestConfigCommand:
 
         assert load_collect_config(path) == CollectConfig(summary_concurrency=8, summary_timeout_seconds=180)
         assert load_logging_config(path) == LoggingConfig(enabled=False, path=Path("/tmp/collect.log"))
+        assert load_shortcuts_config(path) == {
+            "ob": ShortcutConfig(
+                params=("date",),
+                args=("--collect", "--since", "{date}", "--until", "{date}"),
+            )
+        }
 
     def test_invalid_action(self):
         result = handle_config_command("bad-action", input_fn=lambda _: "n")

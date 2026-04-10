@@ -179,6 +179,7 @@ uv run agent-dump --collect --save ./reports
 uv run agent-dump --collect --save ./reports/weekly.md
 uv run agent-dump --collect --save /tmp/agent-dump-reports
 uv run agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
+uv run agent-dump --shortcut ob 20260408
 
 # Note: --collect converts each session into high-signal events, plans chunks by budget,
 #       requests fixed JSON summaries per chunk, merges them deterministically per session,
@@ -211,6 +212,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `-d`, `-days` | Query sessions from the last N days | 7 |
 | `-q`, `-query` | Query filter. Supports `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`) | - |
 | `--collect` | Collect session print content by date range, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
+| `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
 | `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
 | `-until`, `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
 | `--save` | collect output path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. | - |
@@ -241,6 +243,15 @@ api_key = "sk-..."
 [collect]
 summary_concurrency = 4
 
+[shortcut.ob]
+params = ["date"]
+args = [
+  "--collect",
+  "--save", "~/Dropbox/OBSIDIAN/XingKaiXin/00_Inbox/{year}/{year_month}/agent-dump-collect-{date}.md",
+  "--since", "{date}",
+  "--until", "{date}",
+]
+
 [agent.claudecode]
 deny = [
   "/Users/Kevin/workspace/projects/work/fin-agent/agent",
@@ -248,6 +259,8 @@ deny = [
 ```
 
 `[agent.<name>].deny` only applies to `--collect`. When a session `cwd` matches one of the configured paths, or is inside that path, the session is ignored during collect.
+
+`[shortcut.<name>]` defines a reusable shortcut preset. `params` declares positional input names. `args` declares the expanded CLI argv template. When `date` is provided, `{year}` / `{month}` / `{year_month}` are derived automatically.
 
 ## Project Structure
 

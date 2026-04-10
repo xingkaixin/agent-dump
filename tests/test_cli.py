@@ -14,6 +14,7 @@ from agent_dump.__about__ import __version__
 from agent_dump.agents.base import Session
 from agent_dump.cli import (
     display_sessions_list,
+    expand_shortcut_argv,
     export_sessions,
     export_sessions_for_formats,
     find_session_by_id,
@@ -81,6 +82,68 @@ class TestParseUri:
     def test_parse_uri_cursor(self):
         """测试 Cursor URI 解析"""
         assert parse_uri("cursor://request-001") == ("cursor", "request-001")
+
+
+class TestShortcutExpansion:
+    def test_expand_shortcut_argv_collect_date(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_dump.cli.load_shortcuts_config",
+            lambda: {
+                "ob": mock.MagicMock(
+                    params=("date",),
+                    args=(
+                        "--collect",
+                        "--save",
+                        "~/Dropbox/OBSIDIAN/XingKaiXin/00_Inbox/{year}/{year_month}/agent-dump-collect-{date}.md",
+                        "--since",
+                        "{date}",
+                        "--until",
+                        "{date}",
+                    ),
+                )
+            },
+        )
+
+        expanded = expand_shortcut_argv(["--shortcut", "ob", "20260408"])
+
+        assert expanded == [
+            "--collect",
+            "--save",
+            str(Path("~/Dropbox/OBSIDIAN/XingKaiXin/00_Inbox/2026/2026-04/agent-dump-collect-20260408.md").expanduser()),
+            "--since",
+            "20260408",
+            "--until",
+            "20260408",
+        ]
+
+    def test_expand_shortcut_argv_keeps_remaining_args(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_dump.cli.load_shortcuts_config",
+            lambda: {
+                "ob": mock.MagicMock(
+                    params=("date",),
+                    args=("--collect", "--since", "{date}", "--until", "{date}"),
+                )
+            },
+        )
+
+        expanded = expand_shortcut_argv(["--shortcut", "ob", "20260408", "--lang", "zh"])
+
+        assert expanded == ["--collect", "--since", "20260408", "--until", "20260408", "--lang", "zh"]
+
+    def test_expand_shortcut_argv_rejects_unknown_variable(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_dump.cli.load_shortcuts_config",
+            lambda: {
+                "ob": mock.MagicMock(
+                    params=("date",),
+                    args=("--collect", "--since", "{since}"),
+                )
+            },
+        )
+
+        with pytest.raises(ValueError, match="unknown_variable:since"):
+            expand_shortcut_argv(["--shortcut", "ob", "20260408"])
 
 
 class TestFindSessionById:
@@ -289,6 +352,29 @@ class TestMain:
 
         assert result == 0
         mock_handle.assert_called_once()
+
+    def test_main_expands_shortcut_before_collect(self):
+        with mock.patch(
+            "agent_dump.cli.expand_shortcut_argv",
+            return_value=["--collect", "--since", "20260408", "--until", "20260408"],
+        ):
+            with mock.patch("agent_dump.cli.handle_collect_mode", return_value=0) as mock_handle:
+                with mock.patch("sys.argv", ["agent-dump", "--shortcut", "ob", "20260408"]):
+                    result = main()
+
+        assert result == 0
+        args = mock_handle.call_args.args[0]
+        assert args.collect is True
+        assert args.since == "20260408"
+        assert args.until == "20260408"
+
+    def test_main_reports_shortcut_not_found(self, capsys):
+        with mock.patch("agent_dump.cli.expand_shortcut_argv", side_effect=ValueError("shortcut_not_found:ob")):
+            with mock.patch("sys.argv", ["agent-dump", "--shortcut", "ob", "20260408"]):
+                result = main()
+
+        assert result == 1
+        assert "未找到 shortcut: ob" in capsys.readouterr().out
 
     def test_collect_mode_conflict(self, capsys):
         args = argparse.Namespace(

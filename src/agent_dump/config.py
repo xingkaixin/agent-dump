@@ -38,6 +38,14 @@ class LoggingConfig:
     path: Path | None = None
 
 
+@dataclass(frozen=True)
+class ShortcutConfig:
+    """One shortcut preset configuration."""
+
+    params: tuple[str, ...] = ()
+    args: tuple[str, ...] = ()
+
+
 DEFAULT_COLLECT_SUMMARY_CONCURRENCY = 4
 
 
@@ -93,12 +101,16 @@ def _parse_toml_string_array(value: str) -> tuple[str, ...] | None:
     body = normalized[1:-1].strip()
     if not body:
         return ()
+    if body.endswith(","):
+        body = body[:-1].rstrip()
+    if not body:
+        return ()
 
     items: list[str] = []
     for raw_item in body.split(","):
         item = raw_item.strip()
         if not item:
-            return None
+            continue
         stripped = _strip_quotes(item)
         if stripped == item or not stripped:
             return None
@@ -255,6 +267,35 @@ def load_logging_config(path: Path | None = None) -> LoggingConfig:
     return LoggingConfig(enabled=enabled, path=default_path)
 
 
+def load_shortcuts_config(path: Path | None = None) -> dict[str, ShortcutConfig]:
+    """Load configured shortcut presets."""
+    config_path = path if path is not None else get_config_path()
+    if not config_path.exists():
+        return {}
+
+    sections = _read_config_sections(config_path)
+    shortcuts: dict[str, ShortcutConfig] = {}
+    for section_name, values in sections.items():
+        if not section_name.startswith("shortcut."):
+            continue
+        shortcut_name = section_name.partition(".")[2].strip()
+        if not shortcut_name:
+            continue
+
+        raw_params = values.get("params")
+        raw_args = values.get("args")
+        if not isinstance(raw_params, tuple) or not isinstance(raw_args, tuple):
+            continue
+
+        params = tuple(item.strip() for item in raw_params if item.strip())
+        args = tuple(item.strip() for item in raw_args if item.strip())
+        if not args:
+            continue
+        shortcuts[shortcut_name] = ShortcutConfig(params=params, args=args)
+
+    return shortcuts
+
+
 def validate_ai_config(config: AIConfig | None) -> tuple[bool, list[str]]:
     """Validate collect-required AI config."""
     if config is None:
@@ -317,12 +358,40 @@ def _render_logging_section(config: LoggingConfig) -> str:
     )
 
 
+def _render_shortcuts_sections(shortcuts: dict[str, ShortcutConfig]) -> str:
+    sections: list[str] = []
+    for shortcut_name, shortcut in shortcuts.items():
+        params_lines = [
+            f'  "{param}"' + ("," if index < len(shortcut.params) - 1 else "")
+            for index, param in enumerate(shortcut.params)
+        ]
+        args_lines = [
+            f'  "{arg}"' + ("," if index < len(shortcut.args) - 1 else "") for index, arg in enumerate(shortcut.args)
+        ]
+        sections.extend(
+            [
+                f"[shortcut.{shortcut_name}]",
+                "params = [",
+                *params_lines,
+                "]",
+                "args = [",
+                *args_lines,
+                "]",
+                "",
+            ]
+        )
+    if sections and not sections[-1]:
+        sections.pop()
+    return "\n".join(sections)
+
+
 def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
     """Persist AI config to TOML file."""
     config_path = path if path is not None else get_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     existing_collect = load_collect_config(config_path)
     existing_logging = load_logging_config(config_path)
+    existing_shortcuts = load_shortcuts_config(config_path)
     content = (
         "[ai]\n"
         f'provider = "{config.provider}"\n'
@@ -344,6 +413,8 @@ def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
                 )
             )
         )
+    if existing_shortcuts:
+        sections.append(_render_shortcuts_sections(existing_shortcuts))
     content = "\n\n".join(section for section in sections if section) + "\n"
     config_path.write_text(content, encoding="utf-8")
     return config_path
@@ -491,10 +562,14 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
             print(i18n.t(Keys.CONFIG_CONFIRM_API_KEY, api_key=mask_api_key(existing.api_key)))
             collect_config = load_collect_config(config_path)
             logging_config = load_logging_config(config_path)
+            shortcuts_config = load_shortcuts_config(config_path)
             print(f"  collect.summary_concurrency: {collect_config.summary_concurrency}")
             print(f"  collect.summary_timeout_seconds: {collect_config.summary_timeout_seconds}")
             print(f"  logging.enabled: {logging_config.enabled}")
             print(f"  logging.path: {logging_config.path}")
+            print(f"  shortcuts.count: {len(shortcuts_config)}")
+            for shortcut_name, shortcut in shortcuts_config.items():
+                print(f"  shortcut.{shortcut_name}: params={list(shortcut.params)} args={list(shortcut.args)}")
             return 0
 
     if action != "edit":
