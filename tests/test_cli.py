@@ -1603,7 +1603,9 @@ class TestMain:
                 result = main()
 
         assert result == 1
-        assert "无效的查询条件" in capsys.readouterr().out
+        captured = capsys.readouterr()
+        assert "查询条件无效" in captured.out
+        assert "下一步" in captured.out
 
     def test_main_list_mode_with_structured_query_uses_query_filter(self, capsys):
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
