@@ -51,6 +51,7 @@ from agent_dump.query_filter import (
     QuerySpec,
     filter_sessions,
     filter_sessions_by_query,
+    limit_query_matches,
     parse_query,
     parse_query_uri,
 )
@@ -315,6 +316,8 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
 def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
     """Render a unified reduced metadata summary for one session."""
     return _format_session_metadata_summary(agent, session)
+
+
 def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
     """Render lightweight session metadata as formatted text."""
     return _render_session_head(uri, session_head)
@@ -645,7 +648,13 @@ def resolve_effective_formats(args: argparse.Namespace, is_uri_mode: bool, forma
 
 def render_query_summary(spec: QuerySpec) -> str:
     """Render one compact query description for user-facing messages."""
-    if spec.project_path is None and spec.keyword:
+    if (
+        spec.project_path is None
+        and spec.agent_names is None
+        and spec.roles is None
+        and spec.limit is None
+        and spec.keyword
+    ):
         return spec.keyword
 
     parts: list[str] = []
@@ -656,6 +665,11 @@ def render_query_summary(spec: QuerySpec) -> str:
     if spec.agent_names:
         providers = ",".join(sorted(spec.agent_names))
         parts.append(f"providers={providers}")
+    if spec.roles:
+        roles = ",".join(sorted(spec.roles))
+        parts.append(f"roles={roles}")
+    if spec.limit is not None:
+        parts.append(f"limit={spec.limit}")
     return "；".join(parts) if parts else "全部会话"
 
 
@@ -663,11 +677,31 @@ def apply_query_filter(agent: BaseAgent, sessions: list[Session], spec: QuerySpe
     """Apply query filters while preserving legacy keyword-only behavior."""
     if spec is None:
         return sessions
-    if spec.project_path is None and spec.keyword is not None:
+    if spec.project_path is None and spec.roles is None and spec.limit is None and spec.keyword is not None:
         if spec.agent_names is not None and agent.name not in spec.agent_names:
             return []
         return filter_sessions(agent, sessions, spec.keyword)
     return filter_sessions_by_query(agent, sessions, spec)
+
+
+def collect_query_matches(
+    agents: list[BaseAgent],
+    *,
+    days: int,
+    spec: QuerySpec,
+) -> dict[str, list[Session]]:
+    """Collect matched sessions for all agents and apply one global query limit."""
+    matched_pairs: list[tuple[BaseAgent, Session]] = []
+    for agent in agents:
+        sessions = agent.get_sessions(days=days)
+        matched_sessions = apply_query_filter(agent, sessions, spec)
+        matched_pairs.extend((agent, session) for session in matched_sessions)
+
+    limited_pairs = limit_query_matches(matched_pairs, spec.limit)
+    grouped: dict[str, list[Session]] = {}
+    for agent, session in limited_pairs:
+        grouped.setdefault(agent.name, []).append(session)
+    return grouped
 
 
 def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mode: bool) -> None:
@@ -1018,6 +1052,10 @@ def main():
             print(i18n.t(Keys.NO_AGENTS_IN_QUERY))
             return 0 if args.list else 1
 
+    matched_sessions_by_agent: dict[str, list[Session]] = {}
+    if query_spec:
+        matched_sessions_by_agent = collect_query_matches(available_agents, days=args.days, spec=query_spec)
+
     # List mode
     if args.list:
         warn_list_ignored_options(output_specified=output_specified, format_specified=format_specified)
@@ -1028,10 +1066,9 @@ def main():
         print("-" * 60)
 
         for agent in available_agents:
-            # Get filtered sessions with days parameter
-            sessions = agent.get_sessions(days=args.days)
-            if query_spec:
-                sessions = apply_query_filter(agent, sessions, query_spec)
+            sessions = (
+                matched_sessions_by_agent.get(agent.name, []) if query_spec else agent.get_sessions(days=args.days)
+            )
 
             print(f"\n📁 {agent.display_name} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
 
@@ -1056,18 +1093,14 @@ def main():
 
     # Interactive mode
     interactive_agents = available_agents
-    matched_sessions_by_agent: dict[str, list[Session]] = {}
     session_counts: dict[str, int] | None = None
 
     if query_spec:
-        session_counts = {}
-        for agent in available_agents:
-            sessions = agent.get_sessions(days=args.days)
-            matched_sessions = apply_query_filter(agent, sessions, query_spec)
-            if matched_sessions:
-                matched_sessions_by_agent[agent.name] = matched_sessions
-                session_counts[agent.name] = len(matched_sessions)
-
+        session_counts = {
+            agent.name: len(matched_sessions_by_agent[agent.name])
+            for agent in available_agents
+            if agent.name in matched_sessions_by_agent
+        }
         interactive_agents = [agent for agent in available_agents if agent.name in matched_sessions_by_agent]
         if not interactive_agents:
             print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, query=render_query_summary(query_spec)))

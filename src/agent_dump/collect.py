@@ -39,7 +39,7 @@ from agent_dump.collect_models import (
 )
 from agent_dump.config import AIConfig, CollectConfig, LoggingConfig
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
-from agent_dump.query_filter import QuerySpec, filter_sessions_by_query
+from agent_dump.query_filter import QuerySpec, filter_sessions_by_query, limit_query_matches
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
 GREETING_PATTERN = re.compile(r"^(hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok\b)", re.IGNORECASE)
@@ -493,6 +493,7 @@ def collect_entries(
     resolved_local_tz = local_tz or get_local_timezone()
     resolved_collect_config = collect_config or CollectConfig()
     matched_sessions: list[tuple[BaseAgent, Session, date]] = []
+    limited_candidates: list[tuple[BaseAgent, Session]] = []
 
     for agent in agents:
         days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
@@ -507,7 +508,13 @@ def collect_entries(
             session_date = _session_local_date(session, resolved_local_tz)
             if session_date < since_date or session_date > until_date:
                 continue
-            matched_sessions.append((agent, session, session_date))
+            limited_candidates.append((agent, session))
+
+    if query_spec is not None:
+        limited_candidates = limit_query_matches(limited_candidates, query_spec.limit)
+
+    for agent, session in limited_candidates:
+        matched_sessions.append((agent, session, _session_local_date(session, resolved_local_tz)))
 
     total = len(matched_sessions)
     emit_collect_progress(

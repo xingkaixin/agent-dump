@@ -145,7 +145,10 @@ uv run agent-dump --list                      # List sessions from last 7 days
 uv run agent-dump --list -days 3              # List sessions from last 3 days
 uv run agent-dump --list -query error         # List sessions matching keyword "error"
 uv run agent-dump --list -query codex,kimi:error  # Query only within Codex/Kimi
+uv run agent-dump --list -query 'bug provider:codex path:.'  # Structured query: keyword + provider + path
+uv run agent-dump --interactive -query 'role:user limit:20 refactor'  # Structured query with role and global limit
 uv run agent-dump 'agents://.?q=refactor&providers=codex,claude'  # Query recent sessions for current repo
+uv run agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # Structured query URI
 uv run agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # Query by absolute path
 uv run agent-dump --interactive 'agents://~/work/repo?q=bug'  # Path-scoped interactive selection
 uv run agent-dump --list -page-size 10        # Accepted but currently ignored in --list mode
@@ -158,6 +161,13 @@ uv run agent-dump -query error                # Auto-activates list mode
 
 # Note: in interactive mode with --query, only agents with keyword matches are shown,
 #       and the count shown for each agent is the post-filter matched count.
+#
+# Query ambiguity rules:
+# - `error:timeout` remains a plain keyword query.
+# - `codex,kimi:error` remains the legacy agent-scoped query syntax.
+# - Structured mode is activated only when a known key appears: provider / role / path / cwd / limit.
+# - `role:...` constrains keyword matching to messages of those roles.
+# - `limit:...` truncates the final global matched result set, not per-agent pagination.
 
 # URI mode - Direct text dump
 uv run agent-dump opencode://<session-id>     # View OpenCode session content
@@ -213,10 +223,10 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude` | - |
+| `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `-d`, `-days` | Query sessions from the last N days | 7 |
-| `-q`, `-query` | Query filter. Supports `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`). Cannot be combined with `agents://...` query URIs. | - |
+| `-q`, `-query` | Query filter. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print lightweight session metadata for discovery; does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
