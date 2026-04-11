@@ -65,7 +65,12 @@ class TestCursorAgent:
         _insert_kv(
             global_db,
             "composerData:composer-1",
-            {"composerId": "composer-1", "name": "Cursor Session", "createdAt": created_at_ms},
+            {
+                "composerId": "composer-1",
+                "name": "Cursor Session",
+                "createdAt": created_at_ms,
+                "modelConfig": {"modelName": "composer-2-fast"},
+            },
         )
         _insert_kv(
             global_db,
@@ -80,6 +85,8 @@ class TestCursorAgent:
         assert len(sessions) == 1
         assert sessions[0].id == "request-1"
         assert sessions[0].metadata["composer_id"] == "composer-1"
+        assert sessions[0].metadata["model"] == "composer-2-fast"
+        assert sessions[0].metadata["message_count"] == 1
         assert agent.get_session_uri(sessions[0]) == "cursor://request-1"
 
     def test_get_session_data_extracts_messages_and_tool(self, monkeypatch, tmp_path):

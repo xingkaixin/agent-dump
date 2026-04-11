@@ -2,6 +2,7 @@
 Claude Code agent handler
 """
 
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -104,6 +105,40 @@ class ClaudeCodeAgent(BaseAgent):
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
 
+    def _extract_scan_metadata(
+        self, lines: list[str], fallback_created_at: datetime
+    ) -> tuple[datetime, int, str | None]:
+        """Extract lightweight summary metadata from Claude jsonl."""
+        updated_at = fallback_created_at
+        message_count = 0
+        model: str | None = None
+
+        for line in lines:
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            timestamp_str = str(data.get("timestamp", "")).strip()
+            if timestamp_str:
+                with suppress(ValueError):
+                    updated_at = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+
+            message = data.get("message")
+            if not isinstance(message, dict):
+                continue
+
+            role = message.get("role")
+            if isinstance(role, str) and role.strip():
+                message_count += 1
+
+            if model is None:
+                message_model = message.get("model")
+                if isinstance(message_model, str) and message_model.strip():
+                    model = message_model.strip()
+
+        return updated_at, message_count, model
+
     def _parse_session_file(self, file_path: Path, project_dir: Path) -> Session | None:
         """Parse a single Claude Code session file"""
         try:
@@ -131,16 +166,20 @@ class ClaudeCodeAgent(BaseAgent):
             metadata = self._get_session_metadata(session_id, project_dir)
             title = metadata["summary"] if metadata and metadata.get("summary") else self._extract_title(lines)
 
+            updated_at, message_count, model = self._extract_scan_metadata(lines, created_at)
+
             return Session(
                 id=session_id,
                 title=title,
                 created_at=created_at,
-                updated_at=created_at,
+                updated_at=updated_at,
                 source_path=file_path,
                 metadata={
                     "project": project_dir.name,
                     "cwd": first_line.get("cwd", ""),
                     "version": first_line.get("version", ""),
+                    "model": model,
+                    "message_count": message_count,
                 },
             )
         except Exception:

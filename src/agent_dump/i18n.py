@@ -88,6 +88,7 @@ class Keys:
     CLI_SUMMARY_HELP = "CLI_SUMMARY_HELP"
     CLI_LIST_HELP = "CLI_LIST_HELP"
     CLI_INTERACTIVE_HELP = "CLI_INTERACTIVE_HELP"
+    CLI_NO_METADATA_SUMMARY_HELP = "CLI_NO_METADATA_SUMMARY_HELP"
     CLI_SAVE_HELP = "CLI_SAVE_HELP"
     CLI_PAGE_SIZE_HELP = "CLI_PAGE_SIZE_HELP"
     CLI_QUERY_HELP = "CLI_QUERY_HELP"
@@ -244,6 +245,7 @@ TRANSLATIONS = {
         Keys.CLI_SUMMARY_HELP: "Generate AI summary for URI JSON export (requires config and json format)",
         Keys.CLI_LIST_HELP: "List all available sessions without exporting",
         Keys.CLI_INTERACTIVE_HELP: "Run in interactive mode to select and export sessions",
+        Keys.CLI_NO_METADATA_SUMMARY_HELP: "Hide high-signal metadata summary in list and interactive views",
         Keys.CLI_SAVE_HELP: "Collect output path: directory or .md file path (absolute or relative)",
         Keys.CLI_PAGE_SIZE_HELP: "Number of sessions to display per page (default: 20)",
         Keys.CLI_QUERY_HELP: "Query filter, supports 'agent1,agent2:keyword' or 'keyword'",
@@ -393,6 +395,7 @@ TRANSLATIONS = {
         Keys.CLI_SUMMARY_HELP: "为 URI JSON 导出生成 AI 总结（需要配置且 format 包含 json）",
         Keys.CLI_LIST_HELP: "列出所有可用会话而不导出",
         Keys.CLI_INTERACTIVE_HELP: "进入交互式模式选择并导出",
+        Keys.CLI_NO_METADATA_SUMMARY_HELP: "在列表和交互视图中隐藏高信号元数据摘要",
         Keys.CLI_SAVE_HELP: "collect 输出路径：可传目录或 .md 文件路径（支持绝对/相对路径）",
         Keys.CLI_PAGE_SIZE_HELP: "每页显示的会话数量 (默认: 20)",
         Keys.CLI_QUERY_HELP: "查询过滤器，支持 'agent1,agent2:关键词' 或 '关键词'",

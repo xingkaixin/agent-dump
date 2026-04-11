@@ -84,10 +84,7 @@ class CursorAgent(BaseAgent):
         return data if isinstance(data, dict) else None
 
     def _extract_request_id_from_bubbles(self, composer_id: str) -> str | None:
-        rows = self._query_global(
-            "SELECT value FROM cursorDiskKV WHERE key LIKE ? ORDER BY key",
-            (f"bubbleId:{composer_id}:%",),
-        )
+        rows = self._get_bubble_rows(composer_id)
         for row in rows:
             bubble = self._parse_json(row["value"])
             if not bubble:
@@ -96,6 +93,12 @@ class CursorAgent(BaseAgent):
             if isinstance(request_id, str) and request_id.strip():
                 return request_id.strip()
         return None
+
+    def _get_bubble_rows(self, composer_id: str) -> list[sqlite3.Row]:
+        return self._query_global(
+            "SELECT key, value FROM cursorDiskKV WHERE key LIKE ? ORDER BY key",
+            (f"bubbleId:{composer_id}:%",),
+        )
 
     def _extract_title(self, composer: dict[str, Any], composer_id: str) -> str:
         name = composer.get("name")
@@ -131,6 +134,8 @@ class CursorAgent(BaseAgent):
             "parent_composer_id": None,
             "subagent_composer_ids": [],
             "usage_data": composer.get("usageData"),
+            "model": self._extract_composer_model(composer),
+            "message_count": 0,
         }
         subagent_info = composer.get("subagentInfo")
         if isinstance(subagent_info, dict):
@@ -141,6 +146,34 @@ class CursorAgent(BaseAgent):
         if isinstance(sub_ids, list):
             metadata["subagent_composer_ids"] = [str(x) for x in sub_ids if isinstance(x, str)]
         return metadata
+
+    def _extract_composer_model(self, composer: dict[str, Any]) -> str | None:
+        model_config = composer.get("modelConfig")
+        if isinstance(model_config, dict):
+            model_name = model_config.get("modelName")
+            if isinstance(model_name, str) and model_name.strip():
+                return model_name.strip()
+        return None
+
+    def _augment_session_metadata_from_bubbles(self, metadata: dict[str, Any], bubble_rows: list[sqlite3.Row]) -> None:
+        message_count = 0
+        model = metadata.get("model")
+        for row in bubble_rows:
+            bubble = self._parse_json(row["value"])
+            if not bubble:
+                continue
+            bubble_type = bubble.get("type")
+            if bubble_type in {1, 2}:
+                message_count += 1
+
+            if model is None:
+                model_info = bubble.get("modelInfo")
+                model_name = model_info.get("modelName") if isinstance(model_info, dict) else None
+                if isinstance(model_name, str) and model_name.strip():
+                    model = model_name.strip()
+
+        metadata["message_count"] = message_count
+        metadata["model"] = model
 
     def get_sessions(self, days: int = 7) -> list[Session]:
         """Get Cursor sessions from the last N days."""
@@ -168,7 +201,10 @@ class CursorAgent(BaseAgent):
 
             updated_raw = composer.get("updatedAt") or composer.get("lastUpdatedAt") or composer.get("lastSendTime")
             updated_at = self._to_datetime_utc(updated_raw if updated_raw is not None else created_raw)
+            bubble_rows = self._get_bubble_rows(composer_id)
             request_id = self._extract_request_id_from_bubbles(composer_id) or composer_id
+            metadata = self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id)
+            self._augment_session_metadata_from_bubbles(metadata, bubble_rows)
 
             sessions.append(
                 Session(
@@ -177,7 +213,7 @@ class CursorAgent(BaseAgent):
                     created_at=created_at,
                     updated_at=updated_at,
                     source_path=self.global_db_path,
-                    metadata=self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id),
+                    metadata=metadata,
                 )
             )
         return sessions
@@ -193,13 +229,15 @@ class CursorAgent(BaseAgent):
         created_at = self._to_datetime_utc(created_raw)
         updated_raw = composer.get("updatedAt") or composer.get("lastUpdatedAt") or composer.get("lastSendTime")
         updated_at = self._to_datetime_utc(updated_raw if updated_raw is not None else created_raw)
+        metadata = self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id)
+        self._augment_session_metadata_from_bubbles(metadata, self._get_bubble_rows(composer_id))
         return Session(
             id=request_id,
             title=self._extract_title(composer, composer_id),
             created_at=created_at,
             updated_at=updated_at,
             source_path=self.global_db_path if self.global_db_path else Path(""),
-            metadata=self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id),
+            metadata=metadata,
         )
 
     def find_session_by_request_id(self, request_id: str) -> Session | None:

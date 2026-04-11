@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import shutil
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.time_utils import to_local_datetime
 
@@ -87,8 +87,29 @@ class BaseAgent(ABC):
             "updated_at": session.updated_at,
             "cwd_or_project": cwd_or_project,
             "model": metadata.get("model") or metadata.get("model_provider"),
-            "message_count": None,
+            "message_count": cast(
+                int | None,
+                metadata.get("message_count") if isinstance(metadata.get("message_count"), int) else None,
+            ),
             "subtargets": [],
+        }
+
+    def get_session_summary_fields(self, session: Session) -> dict[str, str | int | None]:
+        """Return reduced metadata fields for list/selector display."""
+        cwd = session.metadata.get("cwd")
+        project = session.metadata.get("project")
+        directory = session.metadata.get("directory")
+        model = session.metadata.get("model")
+        branch = session.metadata.get("branch")
+        message_count = session.metadata.get("message_count")
+
+        location = project or cwd or directory
+        return {
+            "cwd_project": str(location) if isinstance(location, str) and location.strip() else None,
+            "model": str(model) if isinstance(model, str) and model.strip() else None,
+            "branch": str(branch) if isinstance(branch, str) and branch.strip() else None,
+            "message_count": cast(int | None, message_count if isinstance(message_count, int) else None),
+            "updated_at": to_local_datetime(session.updated_at).strftime("%Y-%m-%d %H:%M"),
         }
 
     def _build_raw_output_path(self, session: Session, output_dir: Path, suffix: str = ".raw.jsonl") -> Path:
