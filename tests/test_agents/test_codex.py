@@ -278,6 +278,46 @@ class TestCodexAgent:
         assert int(result.created_at.timestamp()) == int(datetime.fromisoformat(timestamp).timestamp())
         assert result.metadata["cwd"] == "/test/dir"
         assert result.metadata["cli_version"] == "1.0.0"
+        assert result.metadata["model"] == "openai"
+
+    def test_parse_session_file_extracts_summary_metadata(self, tmp_path):
+        """测试扫描阶段提取模型、消息数和最近更新时间"""
+        agent = CodexAgent()
+        session_file = tmp_path / "rollout-2026-02-03T10-04-47-session-id.jsonl"
+        lines = [
+            {
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "id": "session-id",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "cwd": "/repo/demo",
+                    "model_provider": "openai",
+                },
+            },
+            {
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "arguments": {"model": "gpt-5.4-mini"},
+                },
+            },
+            {
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "done"}],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+
+        result = agent._parse_session_file(session_file)
+
+        assert result is not None
+        assert result.updated_at == datetime(2026, 1, 1, 0, 0, 2, tzinfo=timezone.utc)
+        assert result.metadata["message_count"] == 2
+        assert result.metadata["model"] == "gpt-5.4-mini"
 
     def test_get_sessions_filtered_by_days(self, tmp_path):
         """测试按天数过滤会话"""
@@ -406,6 +446,37 @@ class TestCodexAgent:
 
         assert output_dir.exists()
         assert result.exists()
+
+    def test_get_session_head_reads_message_count_and_model(self, tmp_path):
+        """测试 get_session_head 只读轻量信息。"""
+        session_file = tmp_path / "rollout-2026-01-01T00-00-00-session-001.jsonl"
+        records = [
+            {
+                "payload": {
+                    "id": "session-001",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "cwd": "/workspace/demo",
+                    "model_provider": "openai",
+                }
+            },
+            {"payload": {"type": "message", "role": "user", "content": [{"text": "hello"}]}},
+            {"payload": {"type": "message", "role": "assistant", "model": "gpt-5.4-mini"}},
+        ]
+        session_file.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+        session = Session(
+            id="session-001",
+            title="Test Session",
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            source_path=session_file,
+            metadata={"cwd": "/workspace/demo", "model_provider": "openai"},
+        )
+
+        head = CodexAgent().get_session_head(session)
+
+        assert head["cwd_or_project"] == "/workspace/demo"
+        assert head["model"] == "openai"
+        assert head["message_count"] == 2
 
     def test_export_raw_session_copies_original_jsonl(self, tmp_path):
         """测试 raw 导出会复制原始 jsonl 文件"""

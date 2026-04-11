@@ -165,6 +165,7 @@ uv run agent-dump codex://<session-id>        # View Codex session content
 uv run agent-dump kimi://<session-id>         # View Kimi session content
 uv run agent-dump claude://<session-id>       # View Claude Code session content
 uv run agent-dump cursor://<request-id>       # View Cursor session content
+uv run agent-dump codex://<session-id> --head # View lightweight session metadata before exporting
 uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
 uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file
 uv run agent-dump codex://<session-id> --format print,json --output ./my-sessions # Print and export JSON
@@ -205,6 +206,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 
 # Compatibility note
 # md remains available as an alias for markdown, e.g. --format md,raw
+# --head is a URI discovery mode. It does not replace --format print and cannot be combined with --format/--summary.
 ```
 
 ### Full Parameter Reference
@@ -215,6 +217,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `-d`, `-days` | Query sessions from the last N days | 7 |
 | `-q`, `-query` | Query filter. Supports `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`). Cannot be combined with `agents://...` query URIs. | - |
+| `--head` | URI mode only. Print lightweight session metadata for discovery; does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
 | `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
@@ -222,8 +225,8 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--save` | collect output path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. | - |
 | `-config`, `--config` | Config management: `view` or `edit` | - |
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
-| `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning. Cursor URI only supports `json` and `print` (no `raw/markdown`). | - |
-| `-summary`, `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. | - |
+| `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor URI only supports `json` and `print` (no `raw/markdown`). | - |
+| `-summary`, `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. Cannot be combined with `--head`. | - |
 | `-p`, `-page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
 | `-output`, `--output` | Output directory. Effective for `--interactive`; in URI mode when any file-export format (`json/markdown/raw`) is included; ignored in `--list` with warning. | ./sessions |
 | `-h, --help` | Show help message | - |

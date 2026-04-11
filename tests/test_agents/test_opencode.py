@@ -154,12 +154,29 @@ class TestOpenCodeAgent:
                 summary_files TEXT
             )
         """)
+        cursor.execute("""
+            CREATE TABLE message (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                time_created INTEGER,
+                data TEXT
+            )
+        """)
 
         # 插入测试数据
         now = int(datetime.now().timestamp() * 1000)
         cursor.execute(
             "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             ("session-001", "Test Session", now, now, "test", "/test", 1, "file.py"),
+        )
+        cursor.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?)",
+            (
+                "msg-001",
+                "session-001",
+                now,
+                json.dumps({"role": "assistant", "modelID": "gpt-5"}, ensure_ascii=False),
+            ),
         )
         conn.commit()
         conn.close()
@@ -172,6 +189,8 @@ class TestOpenCodeAgent:
         assert result[0].title == "Test Session"
         assert isinstance(result[0], Session)
         assert result[0].created_at.tzinfo == timezone.utc
+        assert result[0].metadata["message_count"] == 1
+        assert result[0].metadata["model"] == "gpt-5"
 
     def test_get_sessions_parses_epoch_as_utc(self, tmp_path):
         """测试 epoch 毫秒会被解析为 UTC aware datetime"""
@@ -584,6 +603,70 @@ class TestOpenCodeAgent:
         assert json_path.name == "session-raw.json"
         assert raw_path.name == "session-raw.raw.json"
         assert json.loads(json_path.read_text(encoding="utf-8")) == json.loads(raw_path.read_text(encoding="utf-8"))
+
+    def test_get_session_head_extracts_model_message_count_and_subtargets(self, tmp_path):
+        """测试 get_session_head 返回轻量摘要字段。"""
+        db_path = tmp_path / "opencode.db"
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.executescript(
+            """
+            CREATE TABLE session (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                time_created INTEGER,
+                time_updated INTEGER,
+                slug TEXT,
+                directory TEXT,
+                version INTEGER,
+                summary_files TEXT
+            );
+            CREATE TABLE message (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                time_created INTEGER,
+                data TEXT
+            );
+            CREATE TABLE part (
+                id TEXT PRIMARY KEY,
+                message_id TEXT,
+                time_created INTEGER,
+                data TEXT
+            );
+            """
+        )
+        now = int(datetime.now(timezone.utc).timestamp() * 1000)
+        cur.execute(
+            "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("session-head", "Head Session", now, now, "head", "/workspace/demo", 1, '["a.py","b.py"]'),
+        )
+        cur.executemany(
+            "INSERT INTO message VALUES (?, ?, ?, ?)",
+            [
+                ("m1", "session-head", now, json.dumps({"role": "user", "modelID": "gpt-4.1"})),
+                ("m2", "session-head", now + 1, json.dumps({"role": "assistant"})),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        agent = OpenCodeAgent()
+        agent.db_path = db_path
+        session = Session(
+            id="session-head",
+            title="Head Session",
+            created_at=datetime.fromtimestamp(now / 1000, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(now / 1000, tz=timezone.utc),
+            source_path=db_path,
+            metadata={"directory": "/workspace/demo", "summary_files": '["a.py","b.py"]'},
+        )
+
+        head = agent.get_session_head(session)
+
+        assert head["cwd_or_project"] == "/workspace/demo"
+        assert head["model"] == "gpt-4.1"
+        assert head["message_count"] == 2
+        assert head["subtargets"] == ["a.py", "b.py"]
 
     def test_export_session_with_tool_parts(self, tmp_path):
         """测试导出包含 tool 类型的 part"""

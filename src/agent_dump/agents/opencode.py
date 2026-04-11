@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
+from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.paths import ProviderRoots, first_existing_path
@@ -45,26 +46,73 @@ class OpenCodeAgent(BaseAgent):
 
         cutoff_time = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
 
-        cursor.execute(
-            """
-            SELECT 
-                s.id,
-                s.title,
-                s.time_created,
-                s.time_updated,
-                s.slug,
-                s.directory,
-                s.version,
-                s.summary_files
-            FROM session s
-            WHERE s.time_created >= ?
-            ORDER BY s.time_created DESC
-            """,
-            (cutoff_time,),
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'message'")
+        has_message_table = cursor.fetchone() is not None
+
+        if has_message_table:
+            cursor.execute(
+                """
+                SELECT 
+                    s.id,
+                    s.title,
+                    s.time_created,
+                    s.time_updated,
+                    s.slug,
+                    s.directory,
+                    s.version,
+                    s.summary_files,
+                    (
+                        SELECT COUNT(*)
+                        FROM message m
+                        WHERE m.session_id = s.id
+                    ) AS message_count,
+                    (
+                        SELECT m.data
+                        FROM message m
+                        WHERE m.session_id = s.id AND m.data LIKE '%"modelID"%'
+                        ORDER BY m.time_created DESC
+                        LIMIT 1
+                    ) AS model_message_data
+                FROM session s
+                WHERE s.time_created >= ?
+                ORDER BY s.time_created DESC
+                """,
+                (cutoff_time,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT 
+                    s.id,
+                    s.title,
+                    s.time_created,
+                    s.time_updated,
+                    s.slug,
+                    s.directory,
+                    s.version,
+                    s.summary_files,
+                    0 AS message_count,
+                    NULL AS model_message_data
+                FROM session s
+                WHERE s.time_created >= ?
+                ORDER BY s.time_created DESC
+                """,
+                (cutoff_time,),
+            )
 
         sessions = []
         for row in cursor.fetchall():
+            model: str | None = None
+            raw_model_message = row["model_message_data"]
+            if isinstance(raw_model_message, str) and raw_model_message.strip():
+                try:
+                    model_data = json.loads(raw_model_message)
+                except json.JSONDecodeError:
+                    model_data = {}
+                model_id = model_data.get("modelID") if isinstance(model_data, dict) else None
+                if isinstance(model_id, str) and model_id.strip():
+                    model = model_id.strip()
+
             sessions.append(
                 Session(
                     id=row["id"],
@@ -77,6 +125,8 @@ class OpenCodeAgent(BaseAgent):
                         "directory": row["directory"],
                         "version": row["version"],
                         "summary_files": row["summary_files"],
+                        "model": model,
+                        "message_count": row["message_count"],
                     },
                 )
             )
@@ -171,6 +221,57 @@ class OpenCodeAgent(BaseAgent):
         conn.close()
 
         return session_data
+
+    def _parse_summary_targets(self, raw_value: Any) -> list[str]:
+        if raw_value is None:
+            return []
+        if isinstance(raw_value, str):
+            text = raw_value.strip()
+            if not text:
+                return []
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed if str(item).strip()]
+            return [text]
+        if isinstance(raw_value, list):
+            return [str(item) for item in raw_value if str(item).strip()]
+        return [str(raw_value)]
+
+    def get_session_head(self, session: Session) -> dict[str, Any]:
+        head = super().get_session_head(session)
+        head["subtargets"] = self._parse_summary_targets(session.metadata.get("summary_files"))
+
+        if not self.db_path:
+            return head
+
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) AS count FROM message WHERE session_id = ?", (session.id,))
+            row = cursor.fetchone()
+            head["message_count"] = int(row["count"]) if row else 0
+
+            cursor.execute(
+                "SELECT data FROM message WHERE session_id = ? ORDER BY time_created DESC",
+                (session.id,),
+            )
+            for model_row in cursor.fetchall():
+                try:
+                    payload = json.loads(model_row["data"])
+                except json.JSONDecodeError:
+                    continue
+                model = payload.get("modelID")
+                if isinstance(model, str) and model.strip():
+                    head["model"] = model.strip()
+                    break
+        finally:
+            conn.close()
+
+        return head
 
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to JSON"""

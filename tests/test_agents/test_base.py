@@ -172,3 +172,52 @@ class TestBaseAgent:
         """测试具体实现是 BaseAgent 的实例"""
         agent = ConcreteAgent()
         assert isinstance(agent, BaseAgent)
+
+    def test_get_session_summary_fields(self):
+        """测试默认摘要字段提取"""
+        agent = ConcreteAgent()
+        session = Session(
+            id="test",
+            title="Test",
+            created_at=datetime(2024, 1, 1, 10, 30, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 11, 0, 0, tzinfo=timezone.utc),
+            source_path=Path("/test"),
+            metadata={
+                "cwd": "/workspace/demo",
+                "model": "gpt-5",
+                "message_count": 12,
+            },
+        )
+
+        with mock.patch("agent_dump.time_utils.get_local_timezone", return_value=timezone.utc):
+            result = agent.get_session_summary_fields(session)
+
+        assert result == {
+            "cwd_project": "/workspace/demo",
+            "model": "gpt-5",
+            "branch": None,
+            "message_count": 12,
+            "updated_at": "2024-01-01 11:00",
+        }
+
+    def test_get_session_head_uses_default_fields(self):
+        """测试默认 head 信息来自 Session 公共字段。"""
+        agent = ConcreteAgent()
+        session = Session(
+            id="test",
+            title="Head Title",
+            created_at=datetime(2024, 1, 1, 10, 30, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 11, 30, 0, tzinfo=timezone.utc),
+            source_path=Path("/workspace/session.jsonl"),
+            metadata={"cwd": "/workspace/project", "model": "gpt-5"},
+        )
+
+        result = agent.get_session_head(session)
+
+        assert result["uri"] == "concrete://test"
+        assert result["agent"] == "Concrete Agent"
+        assert result["title"] == "Head Title"
+        assert result["cwd_or_project"] == "/workspace/project"
+        assert result["model"] == "gpt-5"
+        assert result["message_count"] is None
+        assert result["subtargets"] == []

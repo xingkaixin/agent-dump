@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import shutil
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.time_utils import to_local_datetime
 
@@ -70,6 +70,47 @@ class BaseAgent(ABC):
     def get_session_uri(self, session: Session) -> str:
         """Get the agent session URI for a session"""
         return f"{self.name}://{session.id}"
+
+    def get_session_head(self, session: Session) -> dict[str, Any]:
+        """Get lightweight discovery metadata for one session."""
+        metadata = session.metadata
+
+        cwd_or_project = metadata.get("cwd") or metadata.get("directory") or metadata.get("project")
+        if not isinstance(cwd_or_project, str) or not cwd_or_project.strip():
+            cwd_or_project = str(session.source_path.parent if session.source_path.is_file() else session.source_path)
+
+        return {
+            "uri": self.get_session_uri(session),
+            "agent": self.display_name,
+            "title": session.title,
+            "created_at": session.created_at,
+            "updated_at": session.updated_at,
+            "cwd_or_project": cwd_or_project,
+            "model": metadata.get("model") or metadata.get("model_provider"),
+            "message_count": cast(
+                int | None,
+                metadata.get("message_count") if isinstance(metadata.get("message_count"), int) else None,
+            ),
+            "subtargets": [],
+        }
+
+    def get_session_summary_fields(self, session: Session) -> dict[str, str | int | None]:
+        """Return reduced metadata fields for list/selector display."""
+        cwd = session.metadata.get("cwd")
+        project = session.metadata.get("project")
+        directory = session.metadata.get("directory")
+        model = session.metadata.get("model")
+        branch = session.metadata.get("branch")
+        message_count = session.metadata.get("message_count")
+
+        location = project or cwd or directory
+        return {
+            "cwd_project": str(location) if isinstance(location, str) and location.strip() else None,
+            "model": str(model) if isinstance(model, str) and model.strip() else None,
+            "branch": str(branch) if isinstance(branch, str) and branch.strip() else None,
+            "message_count": cast(int | None, message_count if isinstance(message_count, int) else None),
+            "updated_at": to_local_datetime(session.updated_at).strftime("%Y-%m-%d %H:%M"),
+        }
 
     def _build_raw_output_path(self, session: Session, output_dir: Path, suffix: str = ".raw.jsonl") -> Path:
         """Build output path for raw session export."""

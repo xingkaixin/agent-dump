@@ -58,6 +58,8 @@ from agent_dump.rendering import (
     apply_summary_to_json_export as _apply_summary_to_json_export,
     export_session_in_format as _export_session_in_format,
     export_session_markdown as _export_session_markdown,
+    format_session_metadata_summary as _format_session_metadata_summary,
+    render_session_head as _render_session_head,
     render_session_text as _render_session_text,
 )
 from agent_dump.scanner import AgentScanner
@@ -310,6 +312,14 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
     return _render_session_text(uri, session_data)
 
 
+def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
+    """Render a unified reduced metadata summary for one session."""
+    return _format_session_metadata_summary(agent, session)
+def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
+    """Render lightweight session metadata as formatted text."""
+    return _render_session_head(uri, session_head)
+
+
 def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
     """Build a single-session summary prompt for URI mode."""
     return "\n".join(
@@ -447,7 +457,11 @@ def resolve_collect_save_path(save: str | None, *, since_date: date, until_date:
 
 
 def display_sessions_list(
-    agent: BaseAgent, sessions: list[Session], page_size: int = 20, show_pagination: bool = True
+    agent: BaseAgent,
+    sessions: list[Session],
+    page_size: int = 20,
+    show_pagination: bool = True,
+    show_metadata_summary: bool = True,
 ) -> bool:
     """Display sessions with pagination support.
 
@@ -472,8 +486,13 @@ def display_sessions_list(
         for i in range(start_idx, end_idx):
             session = sessions[i]
             title = agent.get_formatted_title(session)
-            uri = agent.get_session_uri(session)
-            print(f"   • {title} {uri}")
+            if show_metadata_summary:
+                summary = format_session_metadata_summary(agent, session)
+                print(f"   • {title}")
+                print(f"     {summary}")
+            else:
+                uri = agent.get_session_uri(session)
+                print(f"   • {title} {uri}")
 
         # Show pagination info
         if show_pagination and total_pages > 1:
@@ -768,6 +787,7 @@ def main():
         help=i18n.t(Keys.CLI_OUTPUT_HELP),
     )
     parser.add_argument("-format", "--format", type=str, default=None, help=i18n.t(Keys.CLI_FORMAT_HELP))
+    parser.add_argument("--head", action="store_true", help=i18n.t(Keys.CLI_HEAD_HELP))
     parser.add_argument("-summary", "--summary", action="store_true", help=i18n.t(Keys.CLI_SUMMARY_HELP))
     parser.add_argument("--collect", action="store_true", help=i18n.t(Keys.CLI_COLLECT_HELP))
     parser.add_argument("--shortcut", type=str, default=None, help=i18n.t(Keys.CLI_SHORTCUT_HELP))
@@ -792,6 +812,11 @@ def main():
         "--interactive",
         action="store_true",
         help=i18n.t(Keys.CLI_INTERACTIVE_HELP),
+    )
+    parser.add_argument(
+        "--no-metadata-summary",
+        action="store_true",
+        help=i18n.t(Keys.CLI_NO_METADATA_SUMMARY_HELP),
     )
     parser.add_argument(
         "-p",
@@ -842,20 +867,32 @@ def main():
 
     if args.summary and not is_uri_mode:
         print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
+    show_metadata_summary = not args.no_metadata_summary
+    if args.head and not is_uri_mode:
+        print(i18n.t(Keys.HEAD_IGNORED_NON_URI_WARNING))
 
     if args.config_action:
         return handle_config_command(args.config_action)
     if args.collect:
         return handle_collect_mode(args)
 
-    try:
-        output_formats = resolve_effective_formats(args, is_uri_mode=is_uri_mode, format_specified=format_specified)
-        validate_formats_for_mode(output_formats, is_uri_mode=is_uri_mode, is_list_mode=args.list)
-    except ValueError as e:
-        if str(e) == "interactive-print":
-            print(i18n.t(Keys.INTERACTIVE_FORMAT_INVALID))
+    if is_uri_mode and args.head:
+        if format_specified:
+            print(i18n.t(Keys.URI_HEAD_WITH_FORMAT_ERROR))
             return 1
-        parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=args.format or ""))
+        if args.summary:
+            print(i18n.t(Keys.URI_HEAD_WITH_SUMMARY_ERROR))
+            return 1
+        output_formats: list[str] = []
+    else:
+        try:
+            output_formats = resolve_effective_formats(args, is_uri_mode=is_uri_mode, format_specified=format_specified)
+            validate_formats_for_mode(output_formats, is_uri_mode=is_uri_mode, is_list_mode=args.list)
+        except ValueError as e:
+            if str(e) == "interactive-print":
+                print(i18n.t(Keys.INTERACTIVE_FORMAT_INVALID))
+                return 1
+            parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=args.format or ""))
 
     # Handle URI mode first
     if is_uri_mode:
@@ -901,6 +938,10 @@ def main():
 
         # Get session data and render
         try:
+            if args.head:
+                print(render_session_head(args.uri, agent.get_session_head(session)))
+                return 0
+
             session_data: dict[str, Any] | None = None
             session_data, summary_markdown = maybe_generate_uri_summary(
                 enabled=args.summary,
@@ -1000,6 +1041,7 @@ def main():
                     sessions,
                     page_size=max(len(sessions), 1),
                     show_pagination=False,
+                    show_metadata_summary=show_metadata_summary,
                 )
                 if should_quit:
                     print("\n" + "=" * 60)
@@ -1077,7 +1119,11 @@ def main():
         print(i18n.t(Keys.MANY_SESSIONS_EXAMPLE))
 
     # Select sessions
-    selected_sessions = select_sessions_interactive(sessions, selected_agent)
+    selected_sessions = select_sessions_interactive(
+        sessions,
+        selected_agent,
+        show_metadata_summary=show_metadata_summary,
+    )
     if not selected_sessions:
         print("\n" + i18n.t(Keys.NO_SESSION_SELECTED))
         return 1

@@ -1,11 +1,58 @@
 """Session rendering and export helpers."""
 
+from datetime import datetime
 import json
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
+from agent_dump.time_utils import to_local_datetime
+
+HEAD_FIELDS = (
+    ("URI", "uri"),
+    ("Agent", "agent"),
+    ("Title", "title"),
+    ("Created", "created_at"),
+    ("Updated", "updated_at"),
+    ("CWD/Project", "cwd_or_project"),
+    ("Model", "model"),
+    ("Message Count", "message_count"),
+    ("Subtargets", "subtargets"),
+)
+
+
+def _truncate_text(value: str, limit: int = 120) -> str:
+    text = value.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
+def _normalize_head_value(value: Any) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, datetime):
+        return to_local_datetime(value).strftime("%Y-%m-%d %H:%M:%S %Z")
+    if isinstance(value, list):
+        items = [_truncate_text(str(item), limit=48) for item in value if str(item).strip()]
+        return ", ".join(items[:5]) if items else "-"
+    if isinstance(value, str):
+        text = _truncate_text(value)
+        return text if text else "-"
+    return str(value)
+
+
+def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
+    """Render lightweight session metadata for discovery."""
+    lines = ["# Session Head", ""]
+    merged_head = dict(session_head)
+    merged_head["uri"] = uri
+
+    for label, key in HEAD_FIELDS:
+        lines.append(f"- {label}: {_normalize_head_value(merged_head.get(key))}")
+
+    return "\n".join(lines)
 
 
 def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
@@ -136,3 +183,56 @@ def apply_summary_to_json_export(output_path: Path, summary_markdown: str) -> No
         raise RuntimeError("exported JSON payload is not an object")
     payload["summary"] = summary_markdown
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _truncate_summary_text(text: str, max_length: int) -> str:
+    stripped = text.strip()
+    if len(stripped) <= max_length:
+        return stripped
+    return stripped[: max_length - 3] + "..."
+
+
+def _compact_location(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        return normalized
+    if "/" not in normalized and "\\" not in normalized:
+        return normalized
+
+    path = PurePath(normalized)
+    parts = [part for part in path.parts if part not in {"", "/", "\\"} and part != path.anchor]
+    if not parts:
+        return normalized
+    if len(parts) == 1:
+        return parts[0]
+    return "/".join(parts[-2:])
+
+
+def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
+    """Render reduced session metadata in a consistent one-line summary."""
+    fields = agent.get_session_summary_fields(session)
+    uri = agent.get_session_uri(session)
+    parts: list[str] = []
+
+    location = fields.get("cwd_project")
+    if isinstance(location, str) and location.strip():
+        parts.append(f"cwd={_truncate_summary_text(_compact_location(location), 32)}")
+
+    model = fields.get("model")
+    if isinstance(model, str) and model.strip():
+        parts.append(f"model={_truncate_summary_text(model, 24)}")
+
+    branch = fields.get("branch")
+    if isinstance(branch, str) and branch.strip():
+        parts.append(f"branch={_truncate_summary_text(branch, 24)}")
+
+    message_count = fields.get("message_count")
+    if isinstance(message_count, int):
+        parts.append(f"msgs={message_count}")
+
+    updated_at = fields.get("updated_at")
+    if isinstance(updated_at, str) and updated_at.strip():
+        parts.append(f"updated={updated_at}")
+
+    parts.append(f"uri={uri}")
+    return " | ".join(parts)

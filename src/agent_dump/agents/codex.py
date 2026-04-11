@@ -2,6 +2,7 @@
 Codex agent handler
 """
 
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -118,6 +119,47 @@ class CodexAgent(BaseAgent):
 
         return stem
 
+    def _extract_scan_metadata(
+        self, lines: list[str], fallback_created_at: datetime
+    ) -> tuple[datetime, int, str | None]:
+        """Extract lightweight summary metadata without building full session data."""
+        updated_at = fallback_created_at
+        message_count = 0
+        model: str | None = None
+
+        for line in lines:
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            timestamp_str = str(data.get("timestamp", "")).strip()
+            if timestamp_str:
+                with suppress(ValueError):
+                    updated_at = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+
+            payload = data.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
+
+            payload_type = payload.get("type")
+            if payload_type == "message" or payload_type in {"function_call", "function_call_output"}:
+                message_count += 1
+
+            if model is None:
+                payload_model = payload.get("model")
+                if isinstance(payload_model, str) and payload_model.strip():
+                    model = payload_model.strip()
+                    continue
+
+                arguments = payload.get("arguments")
+                if isinstance(arguments, dict):
+                    model_arg = arguments.get("model")
+                    if isinstance(model_arg, str) and model_arg.strip():
+                        model = model_arg.strip()
+
+        return updated_at, message_count, model
+
     def _parse_session_file(self, file_path: Path) -> Session | None:
         """Parse a single Codex session file"""
         try:
@@ -151,16 +193,20 @@ class CodexAgent(BaseAgent):
             if not title:
                 title = self._extract_title(lines)
 
+            updated_at, message_count, model = self._extract_scan_metadata(lines, created_at)
+
             return Session(
                 id=session_id,
                 title=title,
                 created_at=created_at,
-                updated_at=created_at,
+                updated_at=updated_at,
                 source_path=file_path,
                 metadata={
                     "cwd": payload.get("cwd", ""),
                     "cli_version": payload.get("cli_version", ""),
                     "model_provider": payload.get("model_provider", ""),
+                    "model": model or payload.get("model_provider", ""),
+                    "message_count": message_count,
                 },
             )
         except Exception:
@@ -263,6 +309,28 @@ class CodexAgent(BaseAgent):
             "stats": stats,
             "messages": messages,
         }
+
+    def get_session_head(self, session: Session) -> dict[str, Any]:
+        head = super().get_session_head(session)
+        message_count = 0
+
+        with open(session.source_path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                payload = data.get("payload", {})
+                if payload.get("type") == "message":
+                    message_count += 1
+
+                model = payload.get("model")
+                if isinstance(model, str) and model.strip() and not head.get("model"):
+                    head["model"] = model.strip()
+
+        head["message_count"] = message_count
+        return head
 
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to unified JSON format"""

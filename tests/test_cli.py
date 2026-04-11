@@ -24,6 +24,7 @@ from agent_dump.cli import (
     main,
     parse_format_spec,
     parse_uri,
+    render_session_head,
     render_session_text,
     resolve_collect_save_path,
     show_collect_progress,
@@ -970,6 +971,67 @@ class TestMain:
         captured = capsys.readouterr()
         assert "获取会话数据失败" in captured.out
 
+    def test_main_uri_mode_head_success_does_not_load_full_session(self, capsys):
+        """测试 URI + --head 仅输出摘要，不读取完整 session_data。"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_head.return_value = {
+                "agent": "Codex",
+                "title": "Test Session",
+                "created_at": datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+                "updated_at": datetime(2026, 1, 1, 13, 0, 0, tzinfo=timezone.utc),
+                "cwd_or_project": "/workspace/demo",
+                "model": "gpt-5.4",
+                "message_count": 12,
+                "subtargets": ["worker-a", "worker-b"],
+            }
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.find_session_by_id") as mock_find:
+                mock_find.return_value = (mock_agent, mock.MagicMock())
+
+                with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--head"]):
+                    result = main()
+
+        assert result == 0
+        mock_agent.get_session_data.assert_not_called()
+        captured = capsys.readouterr()
+        assert "# Session Head" in captured.out
+        assert "Message Count: 12" in captured.out
+
+    def test_main_uri_mode_head_with_format_returns_1(self, capsys):
+        """测试 URI + --head + --format 返回错误。"""
+        with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--head", "--format", "json"]):
+            result = main()
+
+        assert result == 1
+        assert "--head 不能与 -format/--format 同时使用" in capsys.readouterr().out
+
+    def test_main_uri_mode_head_with_summary_returns_1(self, capsys):
+        """测试 URI + --head + --summary 返回错误。"""
+        with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--head", "--summary"]):
+            result = main()
+
+        assert result == 1
+        assert "--head 不能与 --summary 同时使用" in capsys.readouterr().out
+
+    def test_main_non_uri_mode_head_warns_and_continues(self, capsys):
+        """测试非 URI 模式使用 --head 会警告并继续原有流程。"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_scanner.get_available_agents.return_value = []
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--list", "--head"]):
+                result = main()
+
+        assert result is None
+        assert "--head 仅支持 URI 模式" in capsys.readouterr().out
+
     def test_main_list_mode(self, capsys):
         """测试列表模式"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
@@ -1016,6 +1078,13 @@ class TestMain:
             mock_agent.get_sessions.return_value = sessions
             mock_agent.get_formatted_title.side_effect = lambda session: session.title
             mock_agent.get_session_uri.side_effect = lambda session: f"opencode://{session.id}"
+            mock_agent.get_session_summary_fields.return_value = {
+                "cwd_project": "/workspace/demo",
+                "model": "gpt-5",
+                "branch": None,
+                "message_count": 2,
+                "updated_at": "2024-01-01 12:00",
+            }
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
@@ -1024,11 +1093,41 @@ class TestMain:
                 main()
 
             captured = capsys.readouterr()
-            assert "Session 1 opencode://s1" in captured.out
-            assert "Session 2 opencode://s2" in captured.out
-            assert "Session 3 opencode://s3" in captured.out
+            assert "• Session 1" in captured.out
+            assert "uri=opencode://s1" in captured.out
+            assert "model=gpt-5" in captured.out
+            assert "• Session 2" in captured.out
+            assert "uri=opencode://s2" in captured.out
+            assert "• Session 3" in captured.out
+            assert "uri=opencode://s3" in captured.out
             assert "第 1/" not in captured.out
             assert "还有" not in captured.out
+
+    def test_main_list_mode_can_hide_metadata_summary(self, capsys):
+        """测试 --no-metadata-summary 可关闭摘要展示"""
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+
+            session = mock.MagicMock()
+            session.id = "s1"
+            session.title = "Session 1"
+
+            mock_agent.get_sessions.return_value = [session]
+            mock_agent.get_formatted_title.return_value = "Session 1"
+            mock_agent.get_session_uri.return_value = "opencode://s1"
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "--list", "--no-metadata-summary"]):
+                main()
+
+        captured = capsys.readouterr()
+        assert "Session 1 opencode://s1" in captured.out
+        assert "uri=opencode://s1" not in captured.out
 
     def test_main_list_mode_no_sessions_for_agent(self, capsys):
         """测试 --list 模式下某 agent 无会话"""
@@ -2497,6 +2596,53 @@ class TestRenderSessionText:
 
         assert "## 1. System" in output
         assert "System notice" in output
+
+
+class TestRenderSessionHead:
+    """测试 render_session_head 函数"""
+
+    def test_render_session_head_renders_common_fields(self):
+        output = render_session_head(
+            "codex://abc",
+            {
+                "agent": "Codex",
+                "title": "Head Title",
+                "created_at": datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+                "updated_at": datetime(2026, 1, 1, 13, 0, 0, tzinfo=timezone.utc),
+                "cwd_or_project": "/workspace/demo",
+                "model": "gpt-5.4",
+                "message_count": 3,
+                "subtargets": ["worker-a", "worker-b"],
+            },
+        )
+
+        assert "# Session Head" in output
+        assert "URI: codex://abc" in output
+        assert "Agent: Codex" in output
+        assert "Message Count: 3" in output
+        assert "Subtargets: worker-a, worker-b" in output
+
+    def test_render_session_head_truncates_long_values_and_masks_missing(self):
+        output = render_session_head(
+            "codex://abc",
+            {
+                "agent": "Codex",
+                "title": "A" * 200,
+                "created_at": None,
+                "updated_at": None,
+                "cwd_or_project": "",
+                "model": None,
+                "message_count": None,
+                "subtargets": ["B" * 80],
+                "instruction": "C" * 500,
+            },
+        )
+
+        assert "Title: " + ("A" * 117) + "..." in output
+        assert "Created: -" in output
+        assert "Model: -" in output
+        assert "Subtargets: " + ("B" * 45) + "..." in output
+        assert "instruction" not in output
 
 
 class TestTimeHelpers:

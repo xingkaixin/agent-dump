@@ -138,6 +138,21 @@ class KimiAgent(BaseAgent):
             "messages": messages,
         }
 
+    def get_session_head(self, session: Session) -> dict[str, Any]:
+        head = super().get_session_head(session)
+        head["cwd_or_project"] = str(session.source_path)
+
+        message_count = 0
+        raw_source = self._get_raw_source_path(session)
+        if raw_source.exists():
+            with open(raw_source, encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        message_count += 1
+
+        head["message_count"] = message_count
+        return head
+
     def export_raw_session(self, session: Session, output_dir: Path) -> Path:
         """Export the preferred raw Kimi session file."""
         source_path = self._get_raw_source_path(session)
