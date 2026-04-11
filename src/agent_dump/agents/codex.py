@@ -10,8 +10,9 @@ import re
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.diagnostics import source_missing
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
-from agent_dump.paths import ProviderRoots, first_existing_path
+from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 
 CODEX_TOOL_TITLE_MAP = {
     "exec_command": "bash",
@@ -35,8 +36,14 @@ class CodexAgent(BaseAgent):
 
     def _find_base_path(self) -> Path | None:
         """Find the Codex sessions directory"""
+        return first_existing_search_root(*self.get_search_roots())
+
+    def get_search_roots(self) -> tuple[SearchRoot, ...]:
         roots = ProviderRoots.from_env_or_home()
-        return first_existing_path(roots.codex_root / "sessions", Path("data/codex"))
+        return (
+            SearchRoot("CODEX_HOME/sessions", roots.codex_root / "sessions"),
+            SearchRoot("local development fallback", Path("data/codex")),
+        )
 
     def _load_titles_cache(self) -> dict[str, str]:
         """Load session titles from global state file"""
@@ -261,7 +268,15 @@ class CodexAgent(BaseAgent):
     def get_session_data(self, session: Session) -> dict:
         """Get session data as a dictionary"""
         if not session.source_path.exists():
-            raise FileNotFoundError(f"Session file not found: {session.source_path}")
+            raise source_missing(
+                "session source file is missing",
+                missing_path=session.source_path,
+                searched_roots=[root.render() for root in self.get_search_roots()],
+                next_steps=(
+                    "确认 Codex 会话文件仍在 `CODEX_HOME/sessions` 或本地开发数据目录。",
+                    "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。",
+                ),
+            )
 
         messages: list[dict[str, Any]] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}

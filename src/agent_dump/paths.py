@@ -1,11 +1,20 @@
-"""
-Internal provider path resolution helpers.
-"""
+"""Internal provider path resolution helpers."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
 import os
 from pathlib import Path
+
+
+@dataclass(frozen=True)
+class SearchRoot:
+    """One candidate path examined during discovery."""
+
+    label: str
+    path: Path
+
+    def render(self) -> str:
+        return f"{self.label}: {self.path}"
 
 
 def _get_env_path(environ: Mapping[str, str], name: str) -> Path | None:
@@ -40,6 +49,19 @@ def first_existing_path(*paths: Path) -> Path | None:
         if path.exists():
             return path
     return None
+
+
+def first_existing_search_root(*roots: SearchRoot) -> Path | None:
+    """Return the first existing root path from labeled candidates."""
+    for root in roots:
+        if root.path.exists():
+            return root.path
+    return None
+
+
+def render_search_roots(*roots: SearchRoot) -> tuple[str, ...]:
+    """Render labeled search roots for diagnostics."""
+    return tuple(root.render() for root in roots)
 
 
 @dataclass(frozen=True)

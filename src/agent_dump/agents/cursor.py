@@ -11,6 +11,8 @@ import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.diagnostics import unsupported_capability
+from agent_dump.paths import SearchRoot
 
 
 class CursorAgent(BaseAgent):
@@ -40,6 +42,14 @@ class CursorAgent(BaseAgent):
 
     def _find_global_db_path(self) -> Path:
         return self._default_cursor_user_root() / "globalStorage" / "state.vscdb"
+
+    def get_search_roots(self) -> tuple[SearchRoot, ...]:
+        workspace_root = self._find_workspace_root()
+        global_db_path = self._find_global_db_path()
+        return (
+            SearchRoot("CURSOR_DATA_PATH/workspaceStorage", workspace_root),
+            SearchRoot("Cursor global state.vscdb", global_db_path),
+        )
 
     def is_available(self) -> bool:
         """Check whether Cursor global/workspace databases are available."""
@@ -840,7 +850,15 @@ class CursorAgent(BaseAgent):
         return output_path
 
     def export_raw_session(self, session: Session, output_dir: Path) -> Path:
-        raise NotImplementedError("Raw export is not supported for Cursor sessions")
+        raise unsupported_capability(
+            "raw export is not supported for Cursor sessions",
+            capability_gap="Cursor stores session state in SQLite, not as one raw session file",
+            details=(f"session id: {session.id}",),
+            next_steps=(
+                "改用 `--format json` 或 `--format print`。",
+                "若需要定位数据源，请检查 Cursor 用户目录下的 SQLite 数据库。",
+            ),
+        )
 
 
 def sys_platform_startswith(prefix: str) -> bool:

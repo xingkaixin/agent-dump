@@ -10,7 +10,7 @@ from pathlib import Path
 from string import Formatter
 import sys
 import threading
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.__about__ import __version__
 from agent_dump.agent_registry import (
@@ -46,7 +46,17 @@ from agent_dump.config import (
     load_shortcuts_config,
     validate_ai_config,
 )
+from agent_dump.diagnostics import (
+    DiagnosticError,
+    ParsedUri,
+    invalid_query_or_uri,
+    render_diagnostic,
+    root_not_found,
+    session_not_found,
+    unsupported_capability,
+)
 from agent_dump.i18n import Keys, i18n, setup_i18n
+from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import (
     QuerySpec,
     filter_sessions,
@@ -595,14 +605,9 @@ def export_sessions_for_formats(
                     )
                 )
             except Exception as e:
-                print(
-                    i18n.t(
-                        Keys.EXPORT_ERROR_FORMAT,
-                        title=session.title[:50],
-                        format=output_format,
-                        error=e,
-                    )
-                )
+                print(i18n.t(Keys.EXPORT_ERROR_FORMAT, title=session.title[:50], format=output_format, error=str(e)))
+                diagnostic = e if isinstance(e, DiagnosticError) else _wrap_runtime_fetch_error(e, agent=agent)
+                print(render_diagnostic(diagnostic, t=i18n.t))
 
     return exported
 
@@ -718,7 +723,15 @@ def validate_uri_agent_formats(agent: BaseAgent, formats: list[str]) -> None:
         return
     unsupported = [fmt for fmt in formats if fmt in {"raw", "markdown"}]
     if unsupported:
-        raise ValueError("cursor-uri-format")
+        requested = ",".join(unsupported)
+        raise unsupported_capability(
+            "当前 URI 请求了 Cursor 不支持的导出能力。",
+            capability_gap=f"Cursor URI 仅支持 json 与 print；当前请求了 {requested}",
+            next_steps=(
+                "移除 `raw` 或 `markdown`，改用 `json` 或 `print`。",
+                "若需要进一步处理，先导出 JSON 再做转换。",
+            ),
+        )
 
 
 def warn_list_ignored_options(output_specified: bool, format_specified: bool) -> None:
@@ -732,6 +745,64 @@ def warn_list_ignored_options(output_specified: bool, format_specified: bool) ->
 def get_supported_agent_locations() -> list[str]:
     """Describe supported agent storage locations."""
     return _get_supported_agent_locations()
+
+
+def _render_agent_search_roots(agents: list[BaseAgent] | list[Any]) -> tuple[str, ...]:
+    roots: list[str] = []
+    for agent in agents:
+        get_search_roots = getattr(agent, "get_search_roots", None)
+        display_name = getattr(agent, "display_name", getattr(agent, "name", "agent"))
+        if not callable(get_search_roots):
+            continue
+        provider_roots = [root.render() for root in cast(tuple[SearchRoot, ...], get_search_roots())]
+        if not provider_roots:
+            continue
+        roots.extend(f"{display_name}: {entry}" for entry in provider_roots)
+    return tuple(roots)
+
+
+def _print_diagnostic(error: DiagnosticError) -> None:
+    print(render_diagnostic(error, t=i18n.t))
+
+
+def _build_no_agents_found_diagnostic(scanner: AgentScanner) -> DiagnosticError:
+    agents = getattr(scanner, "agents", [])
+    searched_roots = _render_agent_search_roots(agents)
+    if not searched_roots:
+        searched_roots = tuple(location.strip() for location in get_supported_agent_locations())
+    return root_not_found(
+        "未找到任何可用的本地会话数据。",
+        searched_roots=searched_roots,
+        next_steps=(
+            "确认对应 agent 已在本机生成过会话数据。",
+            "若使用自定义目录，检查相关环境变量是否指向正确位置。",
+            "若在开发环境，检查 `data/<agent>` 回退目录是否存在。",
+        ),
+    )
+
+
+def _wrap_runtime_fetch_error(exc: Exception, *, agent: BaseAgent | None = None) -> DiagnosticError:
+    searched_roots = _render_agent_search_roots([agent]) if agent is not None else ()
+    return (
+        invalid_query_or_uri(
+            "读取会话数据失败。",
+            details=(str(exc),),
+            next_steps=(
+                "检查本地会话源文件或数据库是否仍存在。",
+                "若问题持续，先用 `agent-dump --list` 缩小范围再重试。",
+            ),
+        )
+        if not searched_roots
+        else root_not_found(
+            "读取会话数据失败。",
+            details=(str(exc),),
+            searched_roots=searched_roots,
+            next_steps=(
+                "检查本地会话源文件或数据库是否仍存在。",
+                "若问题持续，先用 `agent-dump --list` 缩小范围再重试。",
+            ),
+        )
+    )
 
 
 def handle_collect_mode(args: argparse.Namespace) -> int:
@@ -889,14 +960,31 @@ def main():
         try:
             query_uri_spec = parse_query_uri(args.uri, valid_agents=valid_agents, cwd=Path.cwd())
         except ValueError as e:
-            print(i18n.t(Keys.QUERY_INVALID, error=e))
+            _print_diagnostic(
+                invalid_query_or_uri(
+                    "agents:// 查询无效。",
+                    details=(str(e),),
+                    parsed_uri=ParsedUri(raw=args.uri),
+                    next_steps=(
+                        "检查 `agents://<path>?q=<keyword>&providers=<names>` 结构是否完整。",
+                        "不要把 `agents://...` 与 `-q/--query` 同时使用。",
+                    ),
+                )
+            )
             return 1
 
     is_query_uri_mode = query_uri_spec is not None
     is_uri_mode = bool(args.uri) and not is_query_uri_mode
 
     if args.query and is_query_uri_mode:
-        print(i18n.t(Keys.QUERY_INVALID, error="agents:// 查询不能与 -q/--query 同时使用"))
+        _print_diagnostic(
+            invalid_query_or_uri(
+                "查询参数组合无效。",
+                details=("agents:// 查询不能与 -q/--query 同时使用",),
+                parsed_uri=ParsedUri(raw=args.uri),
+                next_steps=("删除 `-q/--query`，或改用普通列表/交互模式。",),
+            )
+        )
         return 1
 
     if args.summary and not is_uri_mode:
@@ -924,7 +1012,13 @@ def main():
             validate_formats_for_mode(output_formats, is_uri_mode=is_uri_mode, is_list_mode=args.list)
         except ValueError as e:
             if str(e) == "interactive-print":
-                print(i18n.t(Keys.INTERACTIVE_FORMAT_INVALID))
+                _print_diagnostic(
+                    unsupported_capability(
+                        "当前模式不支持 print 导出。",
+                        capability_gap="--interactive 模式不支持 print；仅支持 json、markdown、raw",
+                        next_steps=("移除 `print`，改用 `json`、`markdown` 或 `raw`。",),
+                    )
+                )
                 return 1
             parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=args.format or ""))
 
@@ -932,10 +1026,17 @@ def main():
     if is_uri_mode:
         uri_result = parse_uri(args.uri)
         if uri_result is None:
-            print(i18n.t(Keys.URI_INVALID_FORMAT, uri=args.uri))
-            print(i18n.t(Keys.URI_SUPPORTED_FORMATS))
-            for example in get_supported_uri_examples():
-                print(example)
+            _print_diagnostic(
+                invalid_query_or_uri(
+                    "URI 格式无效。",
+                    details=("无法解析为受支持的 `<scheme>://<session_id>` 形式。",),
+                    parsed_uri=ParsedUri(raw=args.uri),
+                    next_steps=(
+                        "改用受支持的 URI scheme。",
+                        *[example.strip() for example in get_supported_uri_examples()],
+                    ),
+                )
+            )
             return 1
 
         scheme, session_id = uri_result
@@ -945,13 +1046,25 @@ def main():
         available_agents = scanner.get_available_agents()
 
         if not available_agents:
-            print(i18n.t(Keys.NO_AGENTS_FOUND))
+            _print_diagnostic(_build_no_agents_found_diagnostic(scanner))
             return 1
 
         # Find the session
         result = find_session_by_id(scanner, session_id)
         if result is None:
-            print(i18n.t(Keys.SESSION_NOT_FOUND, uri=args.uri))
+            _print_diagnostic(
+                session_not_found(
+                    raw_uri=args.uri,
+                    scheme=scheme,
+                    session_id=session_id,
+                    searched_roots=_render_agent_search_roots(scanner.agents),
+                    details=("已扫描当前可用 provider，但未匹配到该 session id。",),
+                    next_steps=(
+                        "先运行 `agent-dump --list` 确认该会话是否仍存在。",
+                        "检查 URI 中的 session id 是否完整且对应正确 provider。",
+                    ),
+                )
+            )
             return 1
 
         agent, session = result
@@ -959,19 +1072,24 @@ def main():
         # Verify the URI scheme matches the agent
         expected_agent_name = VALID_URI_SCHEMES.get(scheme)
         if agent.name != expected_agent_name:
-            print(i18n.t(Keys.URI_SCHEME_MISMATCH, uri=args.uri))
-            print(i18n.t(Keys.URI_BELONGS_TO, agent_display_name=agent.display_name, scheme=scheme))
+            _print_diagnostic(
+                invalid_query_or_uri(
+                    "URI scheme 与实际会话来源不匹配。",
+                    details=(f"该会话实际属于 {agent.display_name}。",),
+                    parsed_uri=ParsedUri(raw=args.uri, scheme=scheme, session_id=session_id),
+                    next_steps=(f"改用 `{agent.get_session_uri(session)}` 重新执行。",),
+                )
+            )
             return 1
         try:
             validate_uri_agent_formats(agent, output_formats)
-        except ValueError as e:
-            if str(e) == "cursor-uri-format":
-                print("Cursor URI 模式仅支持 json 与 print 格式，不支持 raw/markdown。")
-                return 1
-            raise
+        except DiagnosticError as e:
+            _print_diagnostic(e)
+            return 1
 
         # Get session data and render
         try:
+            had_success = False
             if args.head:
                 print(render_session_head(args.uri, agent.get_session_head(session)))
                 return 0
@@ -989,28 +1107,35 @@ def main():
                 session_data = session_data if session_data is not None else agent.get_session_data(session)
                 output = render_session_text(args.uri, session_data)
                 print(output)
+                had_success = True
 
             file_formats = [fmt for fmt in output_formats if fmt != "print"]
             output_dir = Path(args.output) / agent.name
             for output_format in file_formats:
-                output_path = export_session_in_format(
-                    agent,
-                    session,
-                    output_dir,
-                    output_format,
-                    session_data=session_data,
-                    session_uri=args.uri,
-                )
-                if output_format == "json" and summary_markdown is not None:
-                    try:
-                        apply_summary_to_json_export(output_path, summary_markdown)
-                        print(i18n.t(Keys.URI_SUMMARY_APPLIED, path=str(output_path)))
-                    except Exception as e:
-                        print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
-                print(i18n.t(Keys.URI_EXPORT_SAVED, path=str(output_path), format=output_format))
-            return 0
+                try:
+                    output_path = export_session_in_format(
+                        agent,
+                        session,
+                        output_dir,
+                        output_format,
+                        session_data=session_data,
+                        session_uri=args.uri,
+                    )
+                    if output_format == "json" and summary_markdown is not None:
+                        try:
+                            apply_summary_to_json_export(output_path, summary_markdown)
+                            print(i18n.t(Keys.URI_SUMMARY_APPLIED, path=str(output_path)))
+                        except Exception as e:
+                            print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
+                    print(i18n.t(Keys.URI_EXPORT_SAVED, path=str(output_path), format=output_format))
+                    had_success = True
+                except Exception as e:
+                    diagnostic = e if isinstance(e, DiagnosticError) else _wrap_runtime_fetch_error(e, agent=agent)
+                    _print_diagnostic(diagnostic)
+            return 0 if had_success else 1
         except Exception as e:
-            print(i18n.t(Keys.FETCH_DATA_FAILED, error=e))
+            diagnostic = e if isinstance(e, DiagnosticError) else _wrap_runtime_fetch_error(e, agent=agent)
+            _print_diagnostic(diagnostic)
             return 1
 
     # If --interactive or --list not specified, but filters are, enable --list
@@ -1034,22 +1159,38 @@ def main():
         try:
             query_spec = parse_query(args.query, valid_agents=valid_agents)
         except ValueError as e:
-            print(i18n.t(Keys.QUERY_INVALID, error=e))
+            _print_diagnostic(
+                invalid_query_or_uri(
+                    "查询条件无效。",
+                    details=(str(e),),
+                    next_steps=(
+                        "使用 `关键词` 或 `agent1,agent2:关键词` 格式。",
+                        "如需路径作用域查询，改用 `agents://<path>?q=<keyword>&providers=<names>`。",
+                    ),
+                )
+            )
             return 1
 
     available_agents = scanner.get_available_agents()
 
     if not available_agents:
-        print(i18n.t(Keys.NO_AGENTS_FOUND))
-        print(i18n.t(Keys.SUPPORTED_AGENTS))
-        for location in get_supported_agent_locations():
-            print(location)
+        _print_diagnostic(_build_no_agents_found_diagnostic(scanner))
         return
 
     if query_spec and query_spec.agent_names:
         available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
         if not available_agents:
-            print(i18n.t(Keys.NO_AGENTS_IN_QUERY))
+            _print_diagnostic(
+                root_not_found(
+                    "查询范围内没有可用 provider。",
+                    searched_roots=_render_agent_search_roots(scanner.agents),
+                    details=(f"query providers: {','.join(sorted(query_spec.agent_names))}",),
+                    next_steps=(
+                        "确认这些 provider 在本机上确实存在会话数据。",
+                        "放宽 providers 范围，或先不加 provider 过滤执行 `--list`。",
+                    ),
+                )
+            )
             return 0 if args.list else 1
 
     matched_sessions_by_agent: dict[str, list[Session]] = {}

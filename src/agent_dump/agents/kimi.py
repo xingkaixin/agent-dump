@@ -9,7 +9,8 @@ import shutil
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.paths import ProviderRoots, first_existing_path
+from agent_dump.diagnostics import source_missing
+from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 
 KIMI_TOOL_TITLE_MAP = {
     "ReadFile": "read",
@@ -32,8 +33,14 @@ class KimiAgent(BaseAgent):
 
     def _find_base_path(self) -> Path | None:
         """Find the Kimi sessions directory"""
+        return first_existing_search_root(*self.get_search_roots())
+
+    def get_search_roots(self) -> tuple[SearchRoot, ...]:
         roots = ProviderRoots.from_env_or_home()
-        return first_existing_path(roots.kimi_root / "sessions", Path("data/kimi"))
+        return (
+            SearchRoot("KIMI_SHARE_DIR/sessions", roots.kimi_root / "sessions"),
+            SearchRoot("local development fallback", Path("data/kimi")),
+        )
 
     def _get_session_files(self, session_dir: Path) -> dict[str, Path | None]:
         """Get available session files for a Kimi session directory."""
@@ -54,7 +61,19 @@ class KimiAgent(BaseAgent):
         if wire_file:
             return Path(wire_file)
 
-        raise FileNotFoundError(f"No raw session file found for session: {session.id}")
+        checked = (
+            session.source_path / "context.jsonl",
+            session.source_path / "wire.jsonl",
+        )
+        raise source_missing(
+            "no raw session file is available for this Kimi session",
+            missing_path=session.source_path,
+            searched_roots=[str(path) for path in checked],
+            next_steps=(
+                "确认该会话目录下至少存在 `context.jsonl` 或 `wire.jsonl`。",
+                "若只需要可读导出，改用 `--format json` 或 `--format markdown`。",
+            ),
+        )
 
     def is_available(self) -> bool:
         """Check if Kimi sessions exist"""
@@ -157,7 +176,15 @@ class KimiAgent(BaseAgent):
         """Export the preferred raw Kimi session file."""
         source_path = self._get_raw_source_path(session)
         if not source_path.exists():
-            raise FileNotFoundError(f"Raw session file not found: {source_path}")
+            raise source_missing(
+                "raw session file is missing",
+                missing_path=source_path,
+                searched_roots=[str(session.source_path / "context.jsonl"), str(session.source_path / "wire.jsonl")],
+                next_steps=(
+                    "确认原始 Kimi 会话文件没有被移动或清理。",
+                    "重新运行 `agent-dump --list` 检查该会话是否仍可见。",
+                ),
+            )
 
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = self._build_raw_output_path(session, output_dir, suffix=".raw.jsonl")
@@ -506,7 +533,15 @@ class KimiAgent(BaseAgent):
         """Build unified session data from context.jsonl."""
         context_path = session.source_path / "context.jsonl"
         if not context_path.exists():
-            raise FileNotFoundError(f"Context file not found: {context_path}")
+            raise source_missing(
+                "context.jsonl is missing for this Kimi session",
+                missing_path=context_path,
+                searched_roots=[str(session.source_path / "context.jsonl"), str(session.source_path / "wire.jsonl")],
+                next_steps=(
+                    "确认会话目录中的 `context.jsonl` 未被清理。",
+                    "如果只有 `wire.jsonl`，请改走 wire 兼容路径或重新导出该会话。",
+                ),
+            )
 
         messages: list[dict] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}
@@ -634,7 +669,15 @@ class KimiAgent(BaseAgent):
         """Build unified session data from legacy wire.jsonl."""
         wire_path = session.source_path / "wire.jsonl"
         if not wire_path.exists():
-            raise FileNotFoundError(f"Wire file not found: {wire_path}")
+            raise source_missing(
+                "wire.jsonl is missing for this Kimi session",
+                missing_path=wire_path,
+                searched_roots=[str(session.source_path / "context.jsonl"), str(session.source_path / "wire.jsonl")],
+                next_steps=(
+                    "确认会话目录中的 `wire.jsonl` 未被清理。",
+                    "如果只有 `context.jsonl`，请改走 context 导出路径。",
+                ),
+            )
 
         messages: list[dict] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}

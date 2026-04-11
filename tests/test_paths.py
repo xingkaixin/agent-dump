@@ -4,7 +4,7 @@
 
 from pathlib import Path
 
-from agent_dump.paths import ProviderRoots
+from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root, render_search_roots
 
 
 class TestProviderRoots:
@@ -75,3 +75,23 @@ class TestProviderRoots:
         assert roots.claude_root == tmp_path / "home" / ".claude"
         assert roots.kimi_root == tmp_path / "home" / ".kimi"
         assert roots.opencode_root == tmp_path / "home" / ".local" / "share" / "opencode"
+
+
+class TestSearchRoots:
+    def test_first_existing_search_root_prefers_first_existing_candidate(self, tmp_path):
+        missing = SearchRoot("env", tmp_path / "missing")
+        existing = SearchRoot("fallback", tmp_path / "data")
+        existing.path.mkdir()
+
+        assert first_existing_search_root(missing, existing) == existing.path
+
+    def test_render_search_roots_preserves_labels_and_order(self, tmp_path):
+        roots = (
+            SearchRoot("CODEX_HOME/sessions", tmp_path / "codex"),
+            SearchRoot("local development fallback", tmp_path / "data/codex"),
+        )
+
+        assert render_search_roots(*roots) == (
+            f"CODEX_HOME/sessions: {tmp_path / 'codex'}",
+            f"local development fallback: {tmp_path / 'data/codex'}",
+        )
