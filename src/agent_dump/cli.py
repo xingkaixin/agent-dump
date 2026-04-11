@@ -309,8 +309,6 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
 def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
     """Render a unified reduced metadata summary for one session."""
     return _format_session_metadata_summary(agent, session)
-
-
 def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
     """Render lightweight session metadata as formatted text."""
     return _render_session_head(uri, session_head)
