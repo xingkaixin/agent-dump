@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.paths import ProviderRoots, first_existing_path
+from agent_dump.diagnostics import source_missing
+from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 
 
 class ClaudeCodeAgent(BaseAgent):
@@ -22,8 +23,14 @@ class ClaudeCodeAgent(BaseAgent):
 
     def _find_base_path(self) -> Path | None:
         """Find the Claude Code projects directory"""
+        return first_existing_search_root(*self.get_search_roots())
+
+    def get_search_roots(self) -> tuple[SearchRoot, ...]:
         roots = ProviderRoots.from_env_or_home()
-        return first_existing_path(roots.claude_root / "projects", Path("data/claudecode"))
+        return (
+            SearchRoot("CLAUDE_CONFIG_DIR/projects", roots.claude_root / "projects"),
+            SearchRoot("local development fallback", Path("data/claudecode")),
+        )
 
     def _load_sessions_index(self, project_dir: Path) -> dict[str, dict]:
         """Load sessions index for a project"""
@@ -220,7 +227,15 @@ class ClaudeCodeAgent(BaseAgent):
     def get_session_data(self, session: Session) -> dict:
         """Get session data as a dictionary"""
         if not session.source_path.exists():
-            raise FileNotFoundError(f"Session file not found: {session.source_path}")
+            raise source_missing(
+                "session source file is missing",
+                missing_path=session.source_path,
+                searched_roots=[root.render() for root in self.get_search_roots()],
+                next_steps=(
+                    "确认 Claude Code 会话文件仍位于 projects 目录下。",
+                    "重新运行 `agent-dump --list` 确认该会话是否仍存在。",
+                ),
+            )
 
         messages: list[dict[str, Any]] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}

@@ -9,6 +9,8 @@ from pathlib import Path
 import shutil
 from typing import Any, cast
 
+from agent_dump.diagnostics import source_missing, unsupported_capability
+from agent_dump.paths import SearchRoot
 from agent_dump.time_utils import to_local_datetime
 
 
@@ -71,6 +73,10 @@ class BaseAgent(ABC):
         """Get the agent session URI for a session"""
         return f"{self.name}://{session.id}"
 
+    def get_search_roots(self) -> tuple[SearchRoot, ...]:
+        """Return provider roots checked during discovery."""
+        return ()
+
     def get_session_head(self, session: Session) -> dict[str, Any]:
         """Get lightweight discovery metadata for one session."""
         metadata = session.metadata
@@ -120,9 +126,25 @@ class BaseAgent(ABC):
         """Export the original session file when one exists."""
         source_path = session.source_path
         if not source_path.exists():
-            raise FileNotFoundError(f"Session source not found: {source_path}")
+            raise source_missing(
+                "raw session source is missing",
+                missing_path=source_path,
+                searched_roots=[root.render() for root in self.get_search_roots()],
+                next_steps=(
+                    "确认原始会话文件仍在本地。",
+                    "重新运行 `agent-dump --list` 检查该会话是否仍可见。",
+                ),
+            )
         if not source_path.is_file():
-            raise NotImplementedError(f"Raw export is not supported for session source: {source_path}")
+            raise unsupported_capability(
+                "raw export is not supported for this session source",
+                capability_gap="session source is a directory, not a single raw file",
+                details=(f"source path: {source_path}",),
+                next_steps=(
+                    "改用 `--format json` 或 `--format markdown`。",
+                    "若需要原始文件，请检查该 provider 是否有独立 raw 文件。",
+                ),
+            )
 
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = self._build_raw_output_path(session, output_dir)

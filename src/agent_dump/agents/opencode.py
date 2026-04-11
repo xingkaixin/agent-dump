@@ -9,7 +9,8 @@ import sqlite3
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.paths import ProviderRoots, first_existing_path
+from agent_dump.diagnostics import source_missing
+from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 
 
 class OpenCodeAgent(BaseAgent):
@@ -21,8 +22,14 @@ class OpenCodeAgent(BaseAgent):
 
     def _find_db_path(self) -> Path | None:
         """Find the OpenCode database path"""
+        return first_existing_search_root(*self.get_search_roots())
+
+    def get_search_roots(self) -> tuple[SearchRoot, ...]:
         roots = ProviderRoots.from_env_or_home()
-        return first_existing_path(roots.opencode_root / "opencode.db", Path("data/opencode/opencode.db"))
+        return (
+            SearchRoot("XDG/LOCALAPPDATA opencode.db", roots.opencode_root / "opencode.db"),
+            SearchRoot("local development fallback", Path("data/opencode/opencode.db")),
+        )
 
     def is_available(self) -> bool:
         """Check if OpenCode database exists"""
@@ -137,7 +144,15 @@ class OpenCodeAgent(BaseAgent):
     def get_session_data(self, session: Session) -> dict:
         """Get session data as a dictionary"""
         if not self.db_path:
-            raise FileNotFoundError("Database not found")
+            raise source_missing(
+                "OpenCode database is missing",
+                missing_path="opencode.db",
+                searched_roots=[root.render() for root in self.get_search_roots()],
+                next_steps=(
+                    "确认 OpenCode 已在本机生成会话数据库。",
+                    "若在测试或开发环境，检查 `data/opencode/opencode.db` 是否存在。",
+                ),
+            )
 
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row

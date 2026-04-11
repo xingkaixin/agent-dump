@@ -164,6 +164,13 @@ class Keys:
     SHORTCUT_NOT_FOUND = "SHORTCUT_NOT_FOUND"
     SHORTCUT_ARGS_MISMATCH = "SHORTCUT_ARGS_MISMATCH"
     SHORTCUT_UNKNOWN_VARIABLE = "SHORTCUT_UNKNOWN_VARIABLE"
+    DIAGNOSTIC_HEADER = "DIAGNOSTIC_HEADER"
+    DIAGNOSTIC_SUMMARY = "DIAGNOSTIC_SUMMARY"
+    DIAGNOSTIC_DETAILS = "DIAGNOSTIC_DETAILS"
+    DIAGNOSTIC_SEARCHED_ROOTS = "DIAGNOSTIC_SEARCHED_ROOTS"
+    DIAGNOSTIC_PARSED_URI = "DIAGNOSTIC_PARSED_URI"
+    DIAGNOSTIC_CAPABILITY_GAP = "DIAGNOSTIC_CAPABILITY_GAP"
+    DIAGNOSTIC_NEXT_STEPS = "DIAGNOSTIC_NEXT_STEPS"
 
     # Misc
     SESSION_COUNT_SUFFIX = "SESSION_COUNT_SUFFIX"
@@ -318,6 +325,13 @@ TRANSLATIONS = {
         Keys.SHORTCUT_NOT_FOUND: "❌ Shortcut not found: {name}",
         Keys.SHORTCUT_ARGS_MISMATCH: "❌ Shortcut {name} expects {expected} args, got {actual}.",
         Keys.SHORTCUT_UNKNOWN_VARIABLE: "❌ Shortcut template references unknown variable: {name}",
+        Keys.DIAGNOSTIC_HEADER: "Diagnostic",
+        Keys.DIAGNOSTIC_SUMMARY: "Summary",
+        Keys.DIAGNOSTIC_DETAILS: "Details",
+        Keys.DIAGNOSTIC_SEARCHED_ROOTS: "Searched roots",
+        Keys.DIAGNOSTIC_PARSED_URI: "Parsed URI",
+        Keys.DIAGNOSTIC_CAPABILITY_GAP: "Capability gap",
+        Keys.DIAGNOSTIC_NEXT_STEPS: "Next steps",
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
@@ -468,6 +482,13 @@ TRANSLATIONS = {
         Keys.SHORTCUT_NOT_FOUND: "❌ 未找到 shortcut: {name}",
         Keys.SHORTCUT_ARGS_MISMATCH: "❌ shortcut {name} 参数数量不匹配，期望 {expected} 个，实际 {actual} 个。",
         Keys.SHORTCUT_UNKNOWN_VARIABLE: "❌ shortcut 模板引用了未定义变量: {name}",
+        Keys.DIAGNOSTIC_HEADER: "诊断信息",
+        Keys.DIAGNOSTIC_SUMMARY: "结论",
+        Keys.DIAGNOSTIC_DETAILS: "证据",
+        Keys.DIAGNOSTIC_SEARCHED_ROOTS: "searched roots",
+        Keys.DIAGNOSTIC_PARSED_URI: "解析后的 URI",
+        Keys.DIAGNOSTIC_CAPABILITY_GAP: "缺失能力",
+        Keys.DIAGNOSTIC_NEXT_STEPS: "下一步",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     },
 }

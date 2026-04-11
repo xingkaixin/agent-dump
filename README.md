@@ -133,6 +133,40 @@ Supported URI schemes:
 - `claude://<session_id>` - Claude Code sessions
 - `cursor://<requestid>` - Cursor sessions (`requestid` is used as URI identifier)
 
+### Typical Errors
+
+`agent-dump` now reports actionable diagnostics instead of a single opaque failure line. Common examples:
+
+```text
+诊断信息
+结论: 未找到任何可用的本地会话数据。
+searched roots:
+  - Codex: CODEX_HOME/sessions: /Users/me/.codex/sessions
+  - OpenCode: XDG/LOCALAPPDATA opencode.db: /Users/me/.local/share/opencode/opencode.db
+下一步:
+  - 确认对应 agent 已在本机生成过会话数据。
+  - 若使用自定义目录，检查相关环境变量是否指向正确位置。
+```
+
+```text
+诊断信息
+结论: 未找到匹配的会话。
+解析后的 URI: codex://session-123
+  - scheme: codex
+  - session_id: session-123
+下一步:
+  - 先运行 `agent-dump --list` 确认该会话是否仍存在。
+  - 检查 URI 中的 session id 是否完整且对应正确 provider。
+```
+
+```text
+诊断信息
+结论: 当前 URI 请求了 Cursor 不支持的导出能力。
+缺失能力: Cursor URI 仅支持 json 与 print；当前请求了 raw
+下一步:
+  - 移除 `raw` 或 `markdown`，改用 `json` 或 `print`。
+```
+
 ### Command-line Arguments
 
 ```bash
