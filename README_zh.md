@@ -132,6 +132,9 @@ uv run agent-dump --list                      # 列出最近 7 天的会话
 uv run agent-dump --list -days 3              # 列出最近 3 天的会话
 uv run agent-dump --list -query 报错          # 列出匹配关键词“报错”的会话
 uv run agent-dump --list -query codex,kimi:报错  # 仅在 Codex/Kimi 范围内查询
+uv run agent-dump 'agents://.?q=refactor&providers=codex,claude'  # 查询当前仓库最近的相关会话
+uv run agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # 按绝对路径查询
+uv run agent-dump --interactive 'agents://~/work/repo?q=bug'  # 按路径作用域进入交互式选择
 uv run agent-dump --list -page-size 10        # 参数保留兼容，当前在 --list 模式下不生效
 
 # 交互式导出模式
@@ -159,6 +162,7 @@ uv run agent-dump codex://<session-id> --format print,json --summary --output ./
 uv run agent-dump --collect
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
+uv run agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
 
 # 说明：--collect 会先把每条 session 转成高信号事件流，按预算切 chunk，
 #       为每个 chunk 请求固定 JSON 结构摘要，再做 session 级 deterministic merge，
@@ -185,11 +189,11 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `uri` | Agent Session URI 用于直接查看（如 `opencode://session-id`） | - |
+| `uri` | 用于直接查看的 Agent Session URI（如 `opencode://session-id`），或作用域查询 URI，如 `agents://.?q=refactor&providers=codex,claude` | - |
 | `--interactive` | 进入交互式模式选择和导出会话 | - |
 | `-d`, `-days` | 查询最近 N 天的会话 | 7 |
-| `-q`, `-query` | 查询过滤。支持 `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`） | - |
-| `--collect` | 按日期范围采集会话 print 内容，先转成高信号事件流并按固定 JSON schema 做 chunk 摘要，再做 session 级 deterministic merge，并通过 tree reduction 聚合结构化结果，最后调用 AI 生成最终总结。多阶段进度会显示在 stderr。 | - |
+| `-q`, `-query` | 查询过滤。支持 `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`），不能与 `agents://...` 查询 URI 同时使用。 | - |
+| `--collect` | 按日期范围采集会话 print 内容；若同时传入 `agents://...` 查询 URI，则只处理该路径作用域内的匹配会话。之后先转成高信号事件流并按固定 JSON schema 做 chunk 摘要，再做 session 级 deterministic merge，并通过 tree reduction 聚合结构化结果，最后调用 AI 生成最终总结。多阶段进度会显示在 stderr。 | - |
 | `-since`, `--since` | collect 开始日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
 | `-until`, `--until` | collect 结束日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
 | `-config`, `--config` | 配置管理：`view` 或 `edit` | - |
