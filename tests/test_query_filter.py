@@ -17,6 +17,7 @@ from agent_dump.query_filter import (
     extract_session_project_path,
     filter_sessions,
     filter_sessions_by_query,
+    limit_query_matches,
     parse_query,
     parse_query_uri,
 )
@@ -56,6 +57,23 @@ def make_session(session_id: str, title: str, source_path: Path) -> Session:
     )
 
 
+def make_query_spec(
+    *,
+    agent_names: set[str] | None = None,
+    keyword: str | None = None,
+    project_path: Path | None = None,
+    roles: set[str] | None = None,
+    limit: int | None = None,
+) -> QuerySpec:
+    return QuerySpec(
+        agent_names=agent_names,
+        keyword=keyword,
+        project_path=project_path,
+        roles=roles,
+        limit=limit,
+    )
+
+
 class TestParseQuery:
     """测试 parse_query 函数"""
 
@@ -65,15 +83,29 @@ class TestParseQuery:
 
     def test_parse_keyword_only(self):
         result = parse_query("报错", {"opencode", "codex", "kimi", "claudecode"})
-        assert result == QuerySpec(agent_names=None, keyword="报错", project_path=None)
+        assert result == make_query_spec(keyword="报错")
 
     def test_parse_agent_scope(self):
         result = parse_query("codex,kimi:报错", {"opencode", "codex", "kimi", "claudecode"})
-        assert result == QuerySpec(agent_names={"codex", "kimi"}, keyword="报错", project_path=None)
+        assert result == make_query_spec(agent_names={"codex", "kimi"}, keyword="报错")
 
     def test_parse_agent_scope_with_alias_and_case(self):
         result = parse_query("ClAuDe:bug", {"opencode", "codex", "kimi", "claudecode"})
-        assert result == QuerySpec(agent_names={"claudecode"}, keyword="bug", project_path=None)
+        assert result == make_query_spec(agent_names={"claudecode"}, keyword="bug")
+
+    def test_parse_structured_terms(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        result = parse_query(
+            "bug provider:codex,claude role:User,assistant path:. limit:20",
+            {"opencode", "codex", "kimi", "claudecode"},
+        )
+        assert result == make_query_spec(
+            agent_names={"codex", "claudecode"},
+            keyword="bug",
+            project_path=tmp_path.resolve(),
+            roles={"user", "assistant"},
+            limit=20,
+        )
 
     def test_parse_empty_query_raises(self):
         with pytest.raises(ValueError, match="查询条件不能为空"):
@@ -89,20 +121,30 @@ class TestParseQuery:
 
     def test_parse_colon_ambiguity_treat_as_plain_keyword(self):
         result = parse_query("error:timeout", {"opencode", "codex", "kimi", "claudecode"})
-        assert result == QuerySpec(agent_names=None, keyword="error:timeout", project_path=None)
+        assert result == make_query_spec(keyword="error:timeout")
+
+    def test_parse_unknown_structured_key_raises(self):
+        with pytest.raises(ValueError, match="未知查询字段"):
+            parse_query("bug provider:codex foo:bar", {"opencode", "codex", "kimi", "claudecode"})
+
+    def test_parse_invalid_limit_raises(self):
+        with pytest.raises(ValueError, match="limit 必须是正整数"):
+            parse_query("role:user limit:0 bug", {"opencode", "codex", "kimi", "claudecode"})
 
 
 class TestParseQueryUri:
     def test_parse_relative_dot_path(self, tmp_path):
         result = parse_query_uri(
-            "agents://.?q=refactor&providers=codex,claude",
+            "agents://.?q=refactor&providers=codex,claude&roles=user&limit=2",
             {"opencode", "codex", "kimi", "claudecode"},
             cwd=tmp_path,
         )
-        assert result == QuerySpec(
+        assert result == make_query_spec(
             agent_names={"codex", "claudecode"},
             keyword="refactor",
             project_path=tmp_path.resolve(),
+            roles={"user"},
+            limit=2,
         )
 
     def test_parse_home_path(self, monkeypatch, tmp_path):
@@ -112,7 +154,7 @@ class TestParseQueryUri:
             {"opencode", "codex", "kimi", "claudecode"},
             cwd=tmp_path / "work",
         )
-        assert result == QuerySpec(agent_names=None, keyword=None, project_path=(tmp_path / "repo").resolve())
+        assert result == make_query_spec(project_path=(tmp_path / "repo").resolve())
 
     def test_parse_absolute_path(self):
         result = parse_query_uri(
@@ -120,11 +162,7 @@ class TestParseQueryUri:
             {"opencode", "codex", "kimi", "claudecode"},
             cwd=Path("/work"),
         )
-        assert result == QuerySpec(
-            agent_names=None,
-            keyword="bug",
-            project_path=Path("/tmp/project").resolve(strict=False),
-        )
+        assert result == make_query_spec(keyword="bug", project_path=Path("/tmp/project").resolve(strict=False))
 
     def test_parse_empty_providers_raises(self):
         with pytest.raises(ValueError, match="providers 不能为空"):
@@ -133,6 +171,14 @@ class TestParseQueryUri:
     def test_parse_unknown_provider_raises(self):
         with pytest.raises(ValueError, match="未知 agent 名称"):
             parse_query_uri("agents://.?providers=codex,unknown", {"opencode", "codex"}, cwd=Path("/work"))
+
+    def test_parse_empty_roles_raises(self):
+        with pytest.raises(ValueError, match="roles 不能为空"):
+            parse_query_uri("agents://.?roles=", {"opencode", "codex"}, cwd=Path("/work"))
+
+    def test_parse_invalid_limit_raises(self):
+        with pytest.raises(ValueError, match="limit 必须是正整数"):
+            parse_query_uri("agents://.?limit=bad", {"opencode", "codex"}, cwd=Path("/work"))
 
     def test_parse_non_agents_uri_returns_none(self):
         assert parse_query_uri("codex://session-1", {"codex"}, cwd=Path("/work")) is None
@@ -351,7 +397,7 @@ class TestFilterSessionsByQuery:
         child = make_session("s3", "child", tmp_path / "s3.jsonl")
         child.metadata = {"cwd": str(tmp_path)}
 
-        spec = QuerySpec(agent_names=None, keyword=None, project_path=repo_root)
+        spec = make_query_spec(project_path=repo_root)
         result = filter_sessions_by_query(agent, [equal, parent, child], spec)
         assert [session.id for session in result] == ["s1", "s2", "s3"]
 
@@ -361,13 +407,13 @@ class TestFilterSessionsByQuery:
         session = make_session("s1", "prefix", tmp_path / "s1.jsonl")
         session.metadata = {"cwd": str(tmp_path / "repo-other")}
 
-        spec = QuerySpec(agent_names=None, keyword=None, project_path=repo_root)
+        spec = make_query_spec(project_path=repo_root)
         assert filter_sessions_by_query(agent, [session], spec) == []
 
     def test_path_scope_excludes_session_without_project_path(self, tmp_path):
         agent = DummyAgent(name="cursor")
         session = make_session("s1", "no path", tmp_path / "s1.jsonl")
-        spec = QuerySpec(agent_names=None, keyword=None, project_path=tmp_path / "repo")
+        spec = make_query_spec(project_path=tmp_path / "repo")
 
         assert filter_sessions_by_query(agent, [session], spec) == []
 
@@ -380,16 +426,74 @@ class TestFilterSessionsByQuery:
         other.metadata = {"cwd": str(tmp_path / "other")}
         other.source_path.write_text("contains refactor", encoding="utf-8")
 
-        spec = QuerySpec(agent_names=None, keyword="refactor", project_path=tmp_path / "repo")
+        spec = make_query_spec(keyword="refactor", project_path=tmp_path / "repo")
         result = filter_sessions_by_query(agent, [session, other], spec)
         assert [item.id for item in result] == ["s1"]
 
     def test_provider_scope_excludes_other_agents(self, tmp_path):
         agent = DummyAgent(name="kimi")
         session = make_session("s1", "refactor", tmp_path / "s1.jsonl")
-        spec = QuerySpec(agent_names={"codex"}, keyword=None, project_path=None)
+        spec = make_query_spec(agent_names={"codex"})
 
         assert filter_sessions_by_query(agent, [session], spec) == []
+
+    def test_role_scope_matches_keyword_only_inside_matching_roles(self, tmp_path):
+        session = make_session("s1", "fatal in title", tmp_path / "s1.jsonl")
+        session.source_path.write_text("fatal in file", encoding="utf-8")
+        agent = DummyAgent(
+            name="codex",
+            session_data={
+                "s1": {
+                    "messages": [
+                        {"role": "user", "parts": [{"type": "text", "text": "contains fatal"}]},
+                        {"role": "assistant", "parts": [{"type": "text", "text": "no hit"}]},
+                    ]
+                }
+            },
+        )
+
+        result = filter_sessions_by_query(
+            agent,
+            [session],
+            make_query_spec(keyword="fatal", roles={"assistant"}),
+        )
+
+        assert result == []
+
+    def test_role_scope_matches_existing_role_without_keyword(self, tmp_path):
+        session = make_session("s1", "session", tmp_path / "s1.jsonl")
+        agent = DummyAgent(
+            name="codex",
+            session_data={
+                "s1": {
+                    "messages": [
+                        {"role": "tool", "parts": [{"type": "text", "text": "ran tool"}]},
+                    ]
+                }
+            },
+        )
+
+        result = filter_sessions_by_query(
+            agent,
+            [session],
+            make_query_spec(roles={"tool"}),
+        )
+
+        assert result == [session]
+
+
+class TestLimitQueryMatches:
+    def test_limit_matches_applies_global_sort(self, tmp_path):
+        agent_a = DummyAgent(name="codex")
+        agent_b = DummyAgent(name="kimi")
+        session_a = make_session("s1", "a", tmp_path / "a.jsonl")
+        session_a.updated_at = datetime(2026, 1, 1, 10, 0, 0)
+        session_b = make_session("s2", "b", tmp_path / "b.jsonl")
+        session_b.updated_at = datetime(2026, 1, 1, 11, 0, 0)
+
+        result = limit_query_matches([(agent_a, session_a), (agent_b, session_b)], 1)
+
+        assert [(agent.name, session.id) for agent, session in result] == [("kimi", "s2")]
 
 
 class TestExtractSessionProjectPath:

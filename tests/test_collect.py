@@ -38,6 +38,23 @@ from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.query_filter import QuerySpec
 
 
+def make_query_spec(
+    *,
+    agent_names: set[str] | None = None,
+    keyword: str | None = None,
+    project_path: Path | None = None,
+    roles: set[str] | None = None,
+    limit: int | None = None,
+) -> QuerySpec:
+    return QuerySpec(
+        agent_names=agent_names,
+        keyword=keyword,
+        project_path=project_path,
+        roles=roles,
+        limit=limit,
+    )
+
+
 class TestCollectDates:
     def test_both_missing_defaults_today(self):
         today = date(2026, 3, 5)
@@ -345,12 +362,57 @@ class TestCollectEntries:
             agents=[agent],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
-            query_spec=QuerySpec(agent_names=None, keyword=None, project_path=Path("/repo/app")),
+            query_spec=make_query_spec(project_path=Path("/repo/app")),
             render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
         )
 
         assert truncated is False
         assert [entry.session_id for entry in entries] == ["s-match"]
+
+    def test_collect_entries_applies_global_limit_after_filtering(self):
+        now = datetime.now(timezone.utc)
+        newer = mock.MagicMock()
+        newer.id = "s-new"
+        newer.title = "new"
+        newer.created_at = now - timedelta(minutes=30)
+        newer.updated_at = now - timedelta(minutes=30)
+        newer.metadata = {"cwd": "/repo/app"}
+
+        older = mock.MagicMock()
+        older.id = "s-old"
+        older.title = "old"
+        older.created_at = now - timedelta(hours=2)
+        older.updated_at = now - timedelta(hours=2)
+        older.metadata = {"cwd": "/repo/app"}
+
+        agent_a = mock.MagicMock()
+        agent_a.name = "codex"
+        agent_a.display_name = "Codex"
+        agent_a.get_sessions.return_value = [older]
+        agent_a.get_session_uri.side_effect = lambda s: f"codex://{s.id}"
+        agent_a.get_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "refactor app"}]}]
+        }
+
+        agent_b = mock.MagicMock()
+        agent_b.name = "kimi"
+        agent_b.display_name = "Kimi"
+        agent_b.get_sessions.return_value = [newer]
+        agent_b.get_session_uri.side_effect = lambda s: f"kimi://{s.id}"
+        agent_b.get_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "refactor app"}]}]
+        }
+
+        entries, truncated = collect_entries(
+            agents=[agent_a, agent_b],
+            since_date=(now - timedelta(days=1)).date(),
+            until_date=now.date(),
+            query_spec=make_query_spec(keyword="refactor", limit=1),
+            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
+        )
+
+        assert truncated is False
+        assert [(entry.agent_name, entry.session_id) for entry in entries] == [("kimi", "s-new")]
 
     def test_plan_collect_entries_reports_chunk_totals(self):
         entries = [

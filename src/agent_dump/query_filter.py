@@ -7,13 +7,18 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import sqlite3
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.message_filter import get_text_content_parts
+from agent_dump.time_utils import normalize_datetime_utc
 
 AGENT_ALIASES = {
     "claude": "claudecode",
 }
+STRUCTURED_QUERY_KEYS = {"provider", "role", "path", "cwd", "limit"}
+QUERY_PATH_KEYS = {"path", "cwd"}
 
 
 @dataclass(frozen=True)
@@ -23,6 +28,8 @@ class QuerySpec:
     agent_names: set[str] | None
     keyword: str | None
     project_path: Path | None
+    roles: set[str] | None
+    limit: int | None
 
 
 def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
@@ -39,6 +46,9 @@ def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
     query = raw.strip()
     if not query:
         raise ValueError("查询条件不能为空")
+
+    if _contains_structured_query_terms(query):
+        return _parse_structured_query(raw=query, valid_agents=valid_agents)
 
     if ":" in query:
         scope_part, keyword_part = query.split(":", 1)
@@ -68,9 +78,15 @@ def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
             if not keyword:
                 raise ValueError("查询关键词不能为空")
 
-            return QuerySpec(agent_names=normalized_agents, keyword=keyword, project_path=None)
+            return QuerySpec(
+                agent_names=normalized_agents,
+                keyword=keyword,
+                project_path=None,
+                roles=None,
+                limit=None,
+            )
 
-    return QuerySpec(agent_names=None, keyword=query, project_path=None)
+    return QuerySpec(agent_names=None, keyword=query, project_path=None, roles=None, limit=None)
 
 
 def parse_query_uri(raw_uri: str | None, valid_agents: set[str], cwd: Path | None = None) -> QuerySpec | None:
@@ -86,6 +102,8 @@ def parse_query_uri(raw_uri: str | None, valid_agents: set[str], cwd: Path | Non
     params = parse_qs(parsed.query, keep_blank_values=True)
     keyword = _extract_single_query_param(params, "q")
     providers = _extract_single_query_param(params, "providers")
+    roles = _extract_single_query_param(params, "roles")
+    limit = _extract_single_query_param(params, "limit")
 
     if keyword is not None:
         keyword = keyword.strip()
@@ -93,7 +111,15 @@ def parse_query_uri(raw_uri: str | None, valid_agents: set[str], cwd: Path | Non
             keyword = None
 
     agent_names = _parse_provider_scope(providers, valid_agents) if providers is not None else None
-    return QuerySpec(agent_names=agent_names, keyword=keyword, project_path=project_path)
+    normalized_roles = _parse_roles(roles) if roles is not None else None
+    normalized_limit = _parse_limit(limit) if limit is not None else None
+    return QuerySpec(
+        agent_names=agent_names,
+        keyword=keyword,
+        project_path=project_path,
+        roles=normalized_roles,
+        limit=normalized_limit,
+    )
 
 
 def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | None) -> list[Session]:
@@ -108,6 +134,14 @@ def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | No
         return _filter_opencode_sessions(agent, sessions, query)
 
     return _filter_sessions_from_source_or_data(agent, sessions, query)
+
+
+def limit_query_matches(matches: list[tuple[BaseAgent, Session]], limit: int | None) -> list[tuple[BaseAgent, Session]]:
+    """Apply one global limit across matched agent sessions."""
+    if limit is None or limit >= len(matches):
+        return matches
+    sorted_matches = sorted(matches, key=_query_match_sort_key)
+    return sorted_matches[:limit]
 
 
 def _normalize_agent_name(name: str, valid_agents: set[str]) -> str | None:
@@ -152,6 +186,26 @@ def _parse_provider_scope(raw: str, valid_agents: set[str]) -> set[str]:
     return normalized_agents
 
 
+def _parse_roles(raw: str) -> set[str]:
+    role_names = {name.strip().lower() for name in raw.split(",") if name.strip()}
+    if not role_names:
+        raise ValueError("roles 不能为空")
+    return role_names
+
+
+def _parse_limit(raw: str) -> int:
+    normalized = raw.strip()
+    if not normalized:
+        raise ValueError("limit 不能为空")
+    try:
+        value = int(normalized)
+    except ValueError as exc:
+        raise ValueError("limit 必须是正整数") from exc
+    if value <= 0:
+        raise ValueError("limit 必须是正整数")
+    return value
+
+
 def normalize_project_path(value: str, cwd: Path | None = None) -> Path:
     normalized = value.strip()
     if not normalized:
@@ -193,10 +247,67 @@ def filter_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: Qu
             )
         ]
 
-    if spec.keyword is not None:
+    if spec.roles is not None:
+        filtered = _filter_sessions_by_role(agent, filtered, spec.roles, spec.keyword)
+    elif spec.keyword is not None:
         filtered = filter_sessions(agent, filtered, spec.keyword)
 
     return filtered
+
+
+def _contains_structured_query_terms(query: str) -> bool:
+    for token in query.split():
+        key, separator, _ = token.partition(":")
+        if not separator:
+            continue
+        if key.strip().lower() in STRUCTURED_QUERY_KEYS:
+            return True
+    return False
+
+
+def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
+    keyword_terms: list[str] = []
+    agent_names: set[str] | None = None
+    roles: set[str] | None = None
+    project_path: Path | None = None
+    limit: int | None = None
+
+    for token in raw.split():
+        key, separator, value = token.partition(":")
+        if not separator:
+            keyword_terms.append(token)
+            continue
+
+        normalized_key = key.strip().lower()
+        if normalized_key not in STRUCTURED_QUERY_KEYS:
+            raise ValueError(f"未知查询字段: {key.strip()}")
+
+        normalized_value = value.strip()
+        if normalized_key == "provider":
+            agent_names = _parse_provider_scope(normalized_value, valid_agents)
+            continue
+        if normalized_key == "role":
+            roles = _parse_roles(normalized_value)
+            continue
+        if normalized_key in QUERY_PATH_KEYS:
+            if project_path is not None:
+                raise ValueError("path/cwd 只能指定一次")
+            project_path = normalize_project_path(normalized_value)
+            continue
+        if normalized_key == "limit":
+            if limit is not None:
+                raise ValueError("limit 只能指定一次")
+            limit = _parse_limit(normalized_value)
+            continue
+
+    keyword = " ".join(keyword_terms).strip() or None
+    return QuerySpec(
+        agent_names=agent_names,
+        keyword=keyword,
+        project_path=project_path,
+        roles=roles,
+        limit=limit,
+    )
 
 
 def _filter_opencode_sessions(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session]:
@@ -319,3 +430,73 @@ def _match_session_data(agent: BaseAgent, session: Session, keyword: str) -> boo
 
     content = json.dumps(session_data, ensure_ascii=False)
     return keyword in content.lower()
+
+
+def _filter_sessions_by_role(
+    agent: BaseAgent,
+    sessions: list[Session],
+    roles: set[str],
+    keyword: str | None,
+) -> list[Session]:
+    matched: list[Session] = []
+    normalized_keyword = keyword.strip().lower() if keyword is not None else None
+
+    for session in sessions:
+        if _match_session_roles(agent, session, roles, normalized_keyword):
+            matched.append(session)
+
+    return matched
+
+
+def _match_session_roles(
+    agent: BaseAgent,
+    session: Session,
+    roles: set[str],
+    keyword: str | None,
+) -> bool:
+    try:
+        session_data = agent.get_session_data(session)
+    except Exception:
+        return False
+
+    messages = session_data.get("messages")
+    if not isinstance(messages, list):
+        return False
+
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role", "")).strip().lower()
+        if role not in roles:
+            continue
+        if keyword is None:
+            return True
+        if keyword in _extract_message_search_text(message).lower():
+            return True
+
+    return False
+
+
+def _extract_message_search_text(message: dict[str, Any]) -> str:
+    contents = get_text_content_parts(message)
+
+    raw_content = message.get("content")
+    if isinstance(raw_content, str) and raw_content.strip():
+        contents.append(raw_content)
+    elif isinstance(raw_content, list):
+        for item in raw_content:
+            if isinstance(item, str) and item.strip():
+                contents.append(item)
+            elif isinstance(item, dict):
+                text = str(item.get("text", "")).strip()
+                if text:
+                    contents.append(text)
+
+    return "\n".join(contents)
+
+
+def _query_match_sort_key(item: tuple[BaseAgent, Session]) -> tuple[float, float, str, str]:
+    agent, session = item
+    updated_at = normalize_datetime_utc(session.updated_at)
+    created_at = normalize_datetime_utc(session.created_at)
+    return (-updated_at.timestamp(), -created_at.timestamp(), agent.name, session.id)

@@ -13,6 +13,7 @@ import pytest
 from agent_dump.__about__ import __version__
 from agent_dump.agents.base import Session
 from agent_dump.cli import (
+    collect_query_matches,
     display_sessions_list,
     expand_shortcut_argv,
     export_sessions,
@@ -24,12 +25,14 @@ from agent_dump.cli import (
     main,
     parse_format_spec,
     parse_uri,
+    render_query_summary,
     render_session_head,
     render_session_text,
     resolve_collect_save_path,
     show_collect_progress,
 )
 from agent_dump.collect import CollectProgressEvent
+from agent_dump.query_filter import QuerySpec
 
 
 def make_session(
@@ -48,6 +51,23 @@ def make_session(
         updated_at=session_time,
         source_path=source_path or Path(f"/tmp/{session_id}.jsonl"),
         metadata={},
+    )
+
+
+def make_query_spec(
+    *,
+    agent_names: set[str] | None = None,
+    keyword: str | None = None,
+    project_path: Path | None = None,
+    roles: set[str] | None = None,
+    limit: int | None = None,
+) -> QuerySpec:
+    return QuerySpec(
+        agent_names=agent_names,
+        keyword=keyword,
+        project_path=project_path,
+        roles=roles,
+        limit=limit,
     )
 
 
@@ -145,6 +165,44 @@ class TestShortcutExpansion:
 
         with pytest.raises(ValueError, match="unknown_variable:since"):
             expand_shortcut_argv(["--shortcut", "ob", "20260408"])
+
+
+class TestQueryHelpers:
+    def test_render_query_summary_includes_structured_fields(self, tmp_path):
+        summary = render_query_summary(
+            make_query_spec(
+                agent_names={"codex", "kimi"},
+                keyword="bug",
+                project_path=tmp_path,
+                roles={"user"},
+                limit=5,
+            )
+        )
+
+        assert f"路径={tmp_path}" in summary
+        assert "关键词=bug" in summary
+        assert "providers=codex,kimi" in summary
+        assert "roles=user" in summary
+        assert "limit=5" in summary
+
+    def test_collect_query_matches_applies_global_limit(self):
+        older = make_session("s-old", "old", created_at=datetime(2026, 1, 1, 10, 0, 0))
+        newer = make_session("s-new", "new", created_at=datetime(2026, 1, 1, 11, 0, 0))
+
+        agent_a = mock.MagicMock()
+        agent_a.name = "codex"
+        agent_a.get_sessions.return_value = [older]
+
+        agent_b = mock.MagicMock()
+        agent_b.name = "kimi"
+        agent_b.get_sessions.return_value = [newer]
+
+        with mock.patch("agent_dump.cli.filter_sessions_by_query", side_effect=[[older], [newer]]):
+            matched = collect_query_matches([agent_a, agent_b], days=7, spec=make_query_spec(keyword="bug", limit=1))
+
+        assert {name: [session.id for session in sessions] for name, sessions in matched.items()} == {
+            "kimi": ["s-new"]
+        }
 
 
 class TestFindSessionById:
@@ -444,7 +502,7 @@ class TestMain:
     def test_collect_mode_accepts_agents_query_uri(self, tmp_path):
         args = argparse.Namespace(
             collect=True,
-            uri="agents://.?q=bug&providers=codex",
+            uri="agents://.?q=bug&providers=codex&roles=user&limit=2",
             interactive=False,
             list=False,
             since=None,
@@ -491,6 +549,8 @@ class TestMain:
         query_spec = mock_collect.call_args.kwargs["query_spec"]
         assert query_spec.keyword == "bug"
         assert query_spec.agent_names == {"codex"}
+        assert query_spec.roles == {"user"}
+        assert query_spec.limit == 2
         assert query_spec.project_path == Path.cwd().resolve()
 
     def test_collect_mode_success_shows_stage_progress_in_stderr(self, capsys, tmp_path):
@@ -1508,6 +1568,52 @@ class TestMain:
         captured = capsys.readouterr()
         assert "无效的查询条件" in captured.out
 
+    def test_main_invalid_structured_query_returns_error(self, capsys):
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            known_agent = mock.MagicMock()
+            known_agent.name = "codex"
+            mock_scanner.agents = [known_agent]
+            mock_scanner.get_available_agents.return_value = [known_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("sys.argv", ["agent-dump", "-query", "bug provider:codex foo:bar"]):
+                result = main()
+
+        assert result == 1
+        assert "无效的查询条件" in capsys.readouterr().out
+
+    def test_main_list_mode_with_structured_query_uses_query_filter(self, capsys):
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            known_agent = mock.MagicMock()
+            known_agent.name = "codex"
+            mock_scanner.agents = [known_agent]
+
+            session = mock.MagicMock()
+            session.id = "s1"
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_sessions.return_value = [session]
+            mock_agent.get_formatted_title.return_value = "Session s1"
+            mock_agent.get_session_uri.return_value = "codex://s1"
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.filter_sessions_by_query", return_value=[session]) as mock_filter:
+                with mock.patch("sys.argv", ["agent-dump", "--list", "-query", "bug role:user path:."]):
+                    result = main()
+
+        assert result == 0
+        spec = mock_filter.call_args.args[2]
+        assert spec.keyword == "bug"
+        assert spec.roles == {"user"}
+        assert spec.project_path == Path.cwd().resolve()
+        assert "roles=user" in capsys.readouterr().out
+
     def test_main_interactive_query_no_match_returns_1(self, capsys):
         """测试 interactive + query 全部无命中时返回 1"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
@@ -1541,7 +1647,51 @@ class TestMain:
         assert mock_filter.call_count == 2
         mock_select_agent.assert_not_called()
         captured = capsys.readouterr()
-        assert "未找到最近 7 天内匹配「bug」的会话" in captured.out
+        assert "未找到最近 7 天内匹配「关键词=bug；providers=codex,kimi」的会话" in captured.out
+
+    def test_main_interactive_structured_query_applies_global_limit(self, capsys):
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            known_codex = mock.MagicMock()
+            known_codex.name = "codex"
+            known_kimi = mock.MagicMock()
+            known_kimi.name = "kimi"
+            mock_scanner.agents = [known_codex, known_kimi]
+
+            codex_session = make_session("codex-1", "codex", created_at=datetime(2026, 1, 1, 10, 0, 0))
+            kimi_session = make_session("kimi-1", "kimi", created_at=datetime(2026, 1, 1, 11, 0, 0))
+
+            agent_codex = mock.MagicMock()
+            agent_codex.name = "codex"
+            agent_codex.display_name = "Codex"
+            agent_codex.get_sessions.return_value = [codex_session]
+
+            agent_kimi = mock.MagicMock()
+            agent_kimi.name = "kimi"
+            agent_kimi.display_name = "Kimi"
+            agent_kimi.get_sessions.return_value = [kimi_session]
+
+            mock_scanner.get_available_agents.return_value = [agent_codex, agent_kimi]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch(
+                "agent_dump.cli.filter_sessions_by_query",
+                side_effect=[[codex_session], [kimi_session]],
+            ) as mock_filter:
+                with mock.patch("agent_dump.cli.select_agent_interactive") as mock_select_agent:
+                    with mock.patch("agent_dump.cli.select_sessions_interactive", return_value=[kimi_session]):
+                        with mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[Path("a.json")]):
+                            with mock.patch(
+                                "sys.argv",
+                                ["agent-dump", "--interactive", "-query", "bug limit:1 provider:codex,kimi"],
+                            ):
+                                result = main()
+
+        assert result == 0
+        assert mock_filter.call_count == 2
+        mock_select_agent.assert_not_called()
+        assert "自动选择: Kimi" in capsys.readouterr().out
 
     def test_main_interactive_query_auto_selects_only_matched_agent(self, capsys):
         """测试 interactive + query 仅一个 agent 命中时自动选择"""
