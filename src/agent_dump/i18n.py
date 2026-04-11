@@ -84,6 +84,7 @@ class Keys:
     CLI_DAYS_HELP = "CLI_DAYS_HELP"
     CLI_OUTPUT_HELP = "CLI_OUTPUT_HELP"
     CLI_FORMAT_HELP = "CLI_FORMAT_HELP"
+    CLI_HEAD_HELP = "CLI_HEAD_HELP"
     CLI_SUMMARY_HELP = "CLI_SUMMARY_HELP"
     CLI_LIST_HELP = "CLI_LIST_HELP"
     CLI_INTERACTIVE_HELP = "CLI_INTERACTIVE_HELP"
@@ -109,6 +110,9 @@ class Keys:
     URI_SUMMARY_APPLIED = "URI_SUMMARY_APPLIED"
     URI_SUMMARY_LOADING = "URI_SUMMARY_LOADING"
     SUMMARY_IGNORED_NON_URI_WARNING = "SUMMARY_IGNORED_NON_URI_WARNING"
+    HEAD_IGNORED_NON_URI_WARNING = "HEAD_IGNORED_NON_URI_WARNING"
+    URI_HEAD_WITH_FORMAT_ERROR = "URI_HEAD_WITH_FORMAT_ERROR"
+    URI_HEAD_WITH_SUMMARY_ERROR = "URI_HEAD_WITH_SUMMARY_ERROR"
 
     # Config / Collect
     CONFIG_NOT_FOUND = "CONFIG_NOT_FOUND"
@@ -236,6 +240,7 @@ TRANSLATIONS = {
         Keys.CLI_DAYS_HELP: "Number of days to look back (default: 7)",
         Keys.CLI_OUTPUT_HELP: "Output base directory (default: ./sessions)",
         Keys.CLI_FORMAT_HELP: "Output format: json | markdown | raw | print (comma-separated, md alias supported)",
+        Keys.CLI_HEAD_HELP: "Show lightweight session metadata for URI discovery without exporting or printing body",
         Keys.CLI_SUMMARY_HELP: "Generate AI summary for URI JSON export (requires config and json format)",
         Keys.CLI_LIST_HELP: "List all available sessions without exporting",
         Keys.CLI_INTERACTIVE_HELP: "Run in interactive mode to select and export sessions",
@@ -261,6 +266,9 @@ TRANSLATIONS = {
         Keys.URI_SUMMARY_APPLIED: "✅ Applied summary to JSON: {path}",
         Keys.URI_SUMMARY_LOADING: "⏳ Calling AI to generate URI summary, please wait...",
         Keys.SUMMARY_IGNORED_NON_URI_WARNING: "⚠️  --summary is only supported in URI mode and will be ignored.",
+        Keys.HEAD_IGNORED_NON_URI_WARNING: "⚠️  --head is only supported in URI mode and will be ignored.",
+        Keys.URI_HEAD_WITH_FORMAT_ERROR: "❌ --head cannot be used with -format/--format.",
+        Keys.URI_HEAD_WITH_SUMMARY_ERROR: "❌ --head cannot be used with --summary.",
         Keys.CONFIG_NOT_FOUND: "⚠️  Config file not found: {path}",
         Keys.CONFIG_PROMPT_CREATE: "Create config file now?",
         Keys.CONFIG_VIEW_TITLE: "Current config: {path}",
@@ -381,6 +389,7 @@ TRANSLATIONS = {
         Keys.CLI_DAYS_HELP: "查找最近几天的会话 (默认: 7)",
         Keys.CLI_OUTPUT_HELP: "输出目录 (默认: ./sessions)",
         Keys.CLI_FORMAT_HELP: "输出格式: json | markdown | raw | print（支持逗号分隔，兼容 md 别名）",
+        Keys.CLI_HEAD_HELP: "仅查看 URI 会话的轻量元数据摘要，不导出文件也不打印正文",
         Keys.CLI_SUMMARY_HELP: "为 URI JSON 导出生成 AI 总结（需要配置且 format 包含 json）",
         Keys.CLI_LIST_HELP: "列出所有可用会话而不导出",
         Keys.CLI_INTERACTIVE_HELP: "进入交互式模式选择并导出",
@@ -406,6 +415,9 @@ TRANSLATIONS = {
         Keys.URI_SUMMARY_APPLIED: "✅ 已将 summary 写入 JSON: {path}",
         Keys.URI_SUMMARY_LOADING: "⏳ 正在调用 AI 生成会话总结，请稍候...",
         Keys.SUMMARY_IGNORED_NON_URI_WARNING: "⚠️  --summary 仅支持 URI 模式，当前已忽略。",
+        Keys.HEAD_IGNORED_NON_URI_WARNING: "⚠️  --head 仅支持 URI 模式，当前已忽略。",
+        Keys.URI_HEAD_WITH_FORMAT_ERROR: "❌ --head 不能与 -format/--format 同时使用。",
+        Keys.URI_HEAD_WITH_SUMMARY_ERROR: "❌ --head 不能与 --summary 同时使用。",
         Keys.CONFIG_NOT_FOUND: "⚠️  未找到配置文件: {path}",
         Keys.CONFIG_PROMPT_CREATE: "现在创建配置文件吗？",
         Keys.CONFIG_VIEW_TITLE: "当前配置: {path}",

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
+from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.paths import ProviderRoots, first_existing_path
@@ -171,6 +172,57 @@ class OpenCodeAgent(BaseAgent):
         conn.close()
 
         return session_data
+
+    def _parse_summary_targets(self, raw_value: Any) -> list[str]:
+        if raw_value is None:
+            return []
+        if isinstance(raw_value, str):
+            text = raw_value.strip()
+            if not text:
+                return []
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed if str(item).strip()]
+            return [text]
+        if isinstance(raw_value, list):
+            return [str(item) for item in raw_value if str(item).strip()]
+        return [str(raw_value)]
+
+    def get_session_head(self, session: Session) -> dict[str, Any]:
+        head = super().get_session_head(session)
+        head["subtargets"] = self._parse_summary_targets(session.metadata.get("summary_files"))
+
+        if not self.db_path:
+            return head
+
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) AS count FROM message WHERE session_id = ?", (session.id,))
+            row = cursor.fetchone()
+            head["message_count"] = int(row["count"]) if row else 0
+
+            cursor.execute(
+                "SELECT data FROM message WHERE session_id = ? ORDER BY time_created DESC",
+                (session.id,),
+            )
+            for model_row in cursor.fetchall():
+                try:
+                    payload = json.loads(model_row["data"])
+                except json.JSONDecodeError:
+                    continue
+                model = payload.get("modelID")
+                if isinstance(model, str) and model.strip():
+                    head["model"] = model.strip()
+                    break
+        finally:
+            conn.close()
+
+        return head
 
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to JSON"""
