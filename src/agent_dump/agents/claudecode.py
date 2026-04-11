@@ -268,6 +268,34 @@ class ClaudeCodeAgent(BaseAgent):
             "messages": messages,
         }
 
+    def get_session_head(self, session: Session) -> dict[str, Any]:
+        head = super().get_session_head(session)
+        model: str | None = None
+        message_count = 0
+
+        with open(session.source_path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                message = data.get("message", {})
+                if isinstance(message, dict) and message.get("role"):
+                    message_count += 1
+
+                if model:
+                    continue
+
+                candidate = message.get("model")
+                if isinstance(candidate, str) and candidate.strip():
+                    model = candidate.strip()
+
+        head["message_count"] = message_count
+        if model:
+            head["model"] = model
+        return head
+
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to unified JSON format"""
         session_data = self.get_session_data(session)

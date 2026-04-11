@@ -468,6 +468,39 @@ class TestClaudeCodeAgent:
         assert output_dir.exists()
         assert result.exists()
 
+    def test_get_session_head_extracts_message_count_and_model(self, tmp_path):
+        """测试 get_session_head 返回 Claude 轻量摘要。"""
+        session_file = tmp_path / "test-head.jsonl"
+        write_jsonl(
+            session_file,
+            [
+                {
+                    "type": "user",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "message": {"role": "user", "content": "Hello"},
+                },
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-01T00:01:00Z",
+                    "message": {"role": "assistant", "content": "Hi", "model": "claude-sonnet-4.5"},
+                },
+            ],
+        )
+        session = Session(
+            id="test-head",
+            title="Test Session",
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            source_path=session_file,
+            metadata={"cwd": "/workspace/claude", "project": "demo"},
+        )
+
+        head = ClaudeCodeAgent().get_session_head(session)
+
+        assert head["cwd_or_project"] == "/workspace/claude"
+        assert head["model"] == "claude-sonnet-4.5"
+        assert head["message_count"] == 2
+
     def test_export_raw_session_copies_original_jsonl(self, tmp_path):
         """测试 raw 导出会复制原始 jsonl 文件"""
         agent = ClaudeCodeAgent()

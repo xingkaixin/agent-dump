@@ -199,3 +199,25 @@ class TestBaseAgent:
             "message_count": 12,
             "updated_at": "2024-01-01 11:00",
         }
+
+    def test_get_session_head_uses_default_fields(self):
+        """测试默认 head 信息来自 Session 公共字段。"""
+        agent = ConcreteAgent()
+        session = Session(
+            id="test",
+            title="Head Title",
+            created_at=datetime(2024, 1, 1, 10, 30, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 11, 30, 0, tzinfo=timezone.utc),
+            source_path=Path("/workspace/session.jsonl"),
+            metadata={"cwd": "/workspace/project", "model": "gpt-5"},
+        )
+
+        result = agent.get_session_head(session)
+
+        assert result["uri"] == "concrete://test"
+        assert result["agent"] == "Concrete Agent"
+        assert result["title"] == "Head Title"
+        assert result["cwd_or_project"] == "/workspace/project"
+        assert result["model"] == "gpt-5"
+        assert result["message_count"] is None
+        assert result["subtargets"] == []

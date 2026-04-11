@@ -310,6 +310,28 @@ class CodexAgent(BaseAgent):
             "messages": messages,
         }
 
+    def get_session_head(self, session: Session) -> dict[str, Any]:
+        head = super().get_session_head(session)
+        message_count = 0
+
+        with open(session.source_path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                payload = data.get("payload", {})
+                if payload.get("type") == "message":
+                    message_count += 1
+
+                model = payload.get("model")
+                if isinstance(model, str) and model.strip() and not head.get("model"):
+                    head["model"] = model.strip()
+
+        head["message_count"] = message_count
+        return head
+
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to unified JSON format"""
         session_data = self.get_session_data(session)

@@ -71,6 +71,29 @@ class BaseAgent(ABC):
         """Get the agent session URI for a session"""
         return f"{self.name}://{session.id}"
 
+    def get_session_head(self, session: Session) -> dict[str, Any]:
+        """Get lightweight discovery metadata for one session."""
+        metadata = session.metadata
+
+        cwd_or_project = metadata.get("cwd") or metadata.get("directory") or metadata.get("project")
+        if not isinstance(cwd_or_project, str) or not cwd_or_project.strip():
+            cwd_or_project = str(session.source_path.parent if session.source_path.is_file() else session.source_path)
+
+        return {
+            "uri": self.get_session_uri(session),
+            "agent": self.display_name,
+            "title": session.title,
+            "created_at": session.created_at,
+            "updated_at": session.updated_at,
+            "cwd_or_project": cwd_or_project,
+            "model": metadata.get("model") or metadata.get("model_provider"),
+            "message_count": cast(
+                int | None,
+                metadata.get("message_count") if isinstance(metadata.get("message_count"), int) else None,
+            ),
+            "subtargets": [],
+        }
+
     def get_session_summary_fields(self, session: Session) -> dict[str, str | int | None]:
         """Return reduced metadata fields for list/selector display."""
         cwd = session.metadata.get("cwd")
