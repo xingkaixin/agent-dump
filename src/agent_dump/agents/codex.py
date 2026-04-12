@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
@@ -46,19 +47,27 @@ class CodexAgent(BaseAgent):
         )
 
     def _load_titles_cache(self) -> dict[str, str]:
-        """Load session titles from global state file"""
+        """Load session titles from session index."""
         if self._titles_cache is not None:
             return self._titles_cache
 
         titles: dict[str, str] = {}
         roots = ProviderRoots.from_env_or_home()
-        global_state_path = roots.codex_root / ".codex-global-state.json"
+        session_index_path = roots.codex_root / "session_index.jsonl"
 
-        if global_state_path.exists():
+        if session_index_path.exists():
             try:
-                with open(global_state_path, encoding="utf-8") as f:
-                    data = json.load(f)
-                titles = data.get("thread-titles", {}).get("titles", {})
+                with open(session_index_path, encoding="utf-8") as f:
+                    for line in f:
+                        if not line.strip():
+                            continue
+                        data = json.loads(line)
+                        session_id = data.get("id")
+                        thread_name = data.get("thread_name")
+                        if isinstance(session_id, str) and session_id.strip() and isinstance(thread_name, str):
+                            normalized = normalize_title_text(thread_name)
+                            if normalized:
+                                titles[session_id] = normalized
             except Exception as e:
                 print(f"警告: 加载标题缓存失败: {e}")
 
@@ -66,7 +75,7 @@ class CodexAgent(BaseAgent):
         return titles
 
     def _get_session_title(self, session_id: str) -> str | None:
-        """Get session title from global state by session ID"""
+        """Get session title from session index by session ID."""
         titles = self._load_titles_cache()
         return titles.get(session_id)
 
@@ -195,10 +204,10 @@ class CodexAgent(BaseAgent):
                 stat = file_path.stat()
                 created_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
-            # Try to get title from global state first, then fall back to extracting from messages
-            title = self._get_session_title(session_id)
-            if not title:
-                title = self._extract_title(lines)
+            explicit_title = self._get_session_title(session_id)
+            message_title = self._extract_title(lines)
+            directory_title = basename_title(payload.get("cwd")) or basename_title(file_path.parent)
+            title = resolve_session_title(explicit_title, message_title, directory_title)
 
             updated_at, message_count, model = self._extract_scan_metadata(lines, created_at)
 
@@ -219,25 +228,32 @@ class CodexAgent(BaseAgent):
         except Exception:
             return None
 
-    def _extract_title(self, lines: list[str]) -> str:
-        """Extract title from session messages"""
+    def _extract_title(self, lines: list[str]) -> str | None:
+        """Extract title from the second user message in a session."""
         try:
+            user_message_count = 0
             for line in lines[:10]:  # Check first 10 lines
                 data = json.loads(line)
                 payload = data.get("payload", {})
 
                 # Look for user message
                 if payload.get("type") == "message" and payload.get("role") == "user":
+                    user_message_count += 1
+                    if user_message_count < 2:
+                        continue
                     content = payload.get("content", [])
                     if content and isinstance(content, list):
-                        text = content[0].get("text", "")
-                        # Clean up the text
-                        text = text.strip().replace("\n", " ")[:100]
-                        return text
+                        text_fragments = []
+                        for item in content:
+                            if isinstance(item, dict):
+                                text_fragments.append(str(item.get("text", "")))
+                            elif isinstance(item, str):
+                                text_fragments.append(item)
+                        return normalize_title_text(" ".join(text_fragments))
         except Exception as e:
             print(f"警告: 提取标题失败: {e}")
 
-        return "Untitled Session"
+        return None
 
     def _empty_stats(self) -> dict[str, int]:
         return {

@@ -2,8 +2,8 @@
 测试 agents/claudecode.py 模块
 """
 
-import json
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 from unittest import mock
 
@@ -306,6 +306,51 @@ class TestClaudeCodeAgent:
         assert result is not None
         assert result.title == "Index Title"
 
+    def test_parse_session_file_falls_back_to_cwd_basename(self, tmp_path):
+        """测试无显式标题和用户消息时回退到 cwd basename"""
+        agent = ClaudeCodeAgent()
+        project_dir = tmp_path / "project1"
+        project_dir.mkdir()
+
+        file_path = project_dir / "session-001.jsonl"
+        write_jsonl(
+            file_path,
+            [
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "cwd": "/workspace/demo-app",
+                    "message": {"role": "assistant", "content": "Hi"},
+                }
+            ],
+        )
+
+        result = agent._parse_session_file(file_path, project_dir)
+
+        assert result is not None
+        assert result.title == "demo-app"
+
+    def test_parse_session_file_falls_back_to_project_name_when_cwd_missing(self, tmp_path):
+        """测试 cwd 缺失时回退到 project 目录名"""
+        agent = ClaudeCodeAgent()
+        project_dir = tmp_path / "project-fallback"
+        project_dir.mkdir()
+
+        file_path = project_dir / "session-001.jsonl"
+        write_jsonl(
+            file_path,
+            [
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "message": {"role": "assistant", "content": "Hi"},
+                }
+            ],
+        )
+
+        result = agent._parse_session_file(file_path, project_dir)
+
+        assert result is not None
+        assert result.title == "project-fallback"
+
     def test_get_sessions_filtered_by_days(self, tmp_path):
         """测试按天数过滤会话"""
         agent = ClaudeCodeAgent()
@@ -373,7 +418,7 @@ class TestClaudeCodeAgent:
         assert result == "List content"
 
     def test_extract_title_no_user_message(self):
-        """测试没有用户消息时使用默认标题"""
+        """测试没有用户消息时返回空，由上层决定兜底"""
         agent = ClaudeCodeAgent()
 
         lines = [
@@ -382,7 +427,7 @@ class TestClaudeCodeAgent:
 
         result = agent._extract_title(lines)
 
-        assert result == "Untitled Session"
+        assert result is None
 
     def test_export_session_file_not_found(self, tmp_path):
         """测试导出不存在的会话文件时报错"""

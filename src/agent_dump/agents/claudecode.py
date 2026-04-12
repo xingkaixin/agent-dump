@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 
@@ -169,9 +170,14 @@ class ClaudeCodeAgent(BaseAgent):
                 stat = file_path.stat()
                 created_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
-            # Try to get title from sessions-index.json first
+            explicit_title = None
             metadata = self._get_session_metadata(session_id, project_dir)
-            title = metadata["summary"] if metadata and metadata.get("summary") else self._extract_title(lines)
+            if metadata and metadata.get("summary"):
+                explicit_title = metadata["summary"]
+
+            message_title = self._extract_title(lines)
+            directory_title = basename_title(first_line.get("cwd")) or basename_title(project_dir)
+            title = resolve_session_title(explicit_title, message_title, directory_title)
 
             updated_at, message_count, model = self._extract_scan_metadata(lines, created_at)
 
@@ -196,7 +202,7 @@ class ClaudeCodeAgent(BaseAgent):
         """Get the agent session URI for a session - Claude uses 'claude://' scheme"""
         return f"claude://{session.id}"
 
-    def _extract_title(self, lines: list[str]) -> str:
+    def _extract_title(self, lines: list[str]) -> str | None:
         """Extract title from user messages"""
         try:
             for line in lines[:20]:  # Check first 20 lines
@@ -216,13 +222,11 @@ class ClaudeCodeAgent(BaseAgent):
                                 elif isinstance(item, str):
                                     texts.append(item)
                             content = " ".join(texts)
-                        # Clean up and truncate
-                        content = content.strip().replace("\n", " ")[:100]
-                        return content
+                        return normalize_title_text(content)
         except Exception as e:
             print(f"警告: 提取标题失败: {e}")
 
-        return "Untitled Session"
+        return None
 
     def get_session_data(self, session: Session) -> dict:
         """Get session data as a dictionary"""
