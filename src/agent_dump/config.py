@@ -39,6 +39,13 @@ class LoggingConfig:
 
 
 @dataclass(frozen=True)
+class ExportConfig:
+    """Default export directory configuration."""
+
+    output: str = ""
+
+
+@dataclass(frozen=True)
 class ShortcutConfig:
     """One shortcut preset configuration."""
 
@@ -192,7 +199,10 @@ def load_ai_config(path: Path | None = None) -> AIConfig | None:
     if not config_path.exists():
         return None
 
-    parsed = _read_config_sections(config_path).get("ai", {})
+    sections = _read_config_sections(config_path)
+    if "ai" not in sections:
+        return None
+    parsed = sections["ai"]
     provider = parsed.get("provider", "")
     base_url = parsed.get("base_url", "")
     model = parsed.get("model", "")
@@ -265,6 +275,19 @@ def load_logging_config(path: Path | None = None) -> LoggingConfig:
     if isinstance(raw_path, str) and raw_path.strip():
         return LoggingConfig(enabled=enabled, path=Path(raw_path).expanduser())
     return LoggingConfig(enabled=enabled, path=default_path)
+
+
+def load_export_config(path: Path | None = None) -> ExportConfig:
+    """Load export config with defaults for missing or invalid values."""
+    config_path = path if path is not None else get_config_path()
+    if not config_path.exists():
+        return ExportConfig()
+
+    parsed = _read_config_sections(config_path).get("export", {})
+    raw_output = parsed.get("output", "")
+    if isinstance(raw_output, str):
+        return ExportConfig(output=raw_output.strip())
+    return ExportConfig()
 
 
 def load_shortcuts_config(path: Path | None = None) -> dict[str, ShortcutConfig]:
@@ -358,6 +381,15 @@ def _render_logging_section(config: LoggingConfig) -> str:
     )
 
 
+def _render_export_section(config: ExportConfig) -> str:
+    return "\n".join(
+        [
+            "[export]",
+            f'output = "{config.output}"',
+        ]
+    )
+
+
 def _render_shortcuts_sections(shortcuts: dict[str, ShortcutConfig]) -> str:
     sections: list[str] = []
     for shortcut_name, shortcut in shortcuts.items():
@@ -385,21 +417,31 @@ def _render_shortcuts_sections(shortcuts: dict[str, ShortcutConfig]) -> str:
     return "\n".join(sections)
 
 
-def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
-    """Persist AI config to TOML file."""
+def write_config(
+    ai_config: AIConfig | None,
+    export_config: ExportConfig | None = None,
+    path: Path | None = None,
+) -> Path:
+    """Persist config sections to TOML file."""
     config_path = path if path is not None else get_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     existing_collect = load_collect_config(config_path)
     existing_logging = load_logging_config(config_path)
+    existing_export = load_export_config(config_path)
     existing_shortcuts = load_shortcuts_config(config_path)
-    content = (
-        "[ai]\n"
-        f'provider = "{config.provider}"\n'
-        f'base_url = "{config.base_url}"\n'
-        f'model = "{config.model}"\n'
-        f'api_key = "{config.api_key}"\n'
-    )
-    sections: list[str] = [content.rstrip()]
+    effective_export = export_config if export_config is not None else existing_export
+
+    sections: list[str] = []
+    if ai_config is not None:
+        sections.append(
+            (
+                "[ai]\n"
+                f'provider = "{ai_config.provider}"\n'
+                f'base_url = "{ai_config.base_url}"\n'
+                f'model = "{ai_config.model}"\n'
+                f'api_key = "{ai_config.api_key}"\n'
+            ).rstrip()
+        )
     if config_path.exists() or existing_collect != CollectConfig():
         sections.append(_render_collect_section(existing_collect))
     if config_path.exists() or existing_logging != LoggingConfig():
@@ -413,11 +455,19 @@ def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
                 )
             )
         )
+    if config_path.exists() or effective_export != ExportConfig():
+        sections.append(_render_export_section(effective_export))
     if existing_shortcuts:
         sections.append(_render_shortcuts_sections(existing_shortcuts))
-    content = "\n\n".join(section for section in sections if section) + "\n"
-    config_path.write_text(content, encoding="utf-8")
+
+    content = "\n\n".join(section for section in sections if section).rstrip()
+    config_path.write_text(f"{content}\n" if content else "", encoding="utf-8")
     return config_path
+
+
+def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
+    """Persist AI config to TOML file."""
+    return write_config(config, path=path)
 
 
 def _is_terminal() -> bool:
@@ -542,13 +592,100 @@ def prompt_edit_ai_config(existing: AIConfig | None = None) -> AIConfig | None:
     return candidate
 
 
+def _normalize_ai_candidate(candidate: AIConfig, existing: AIConfig | None) -> AIConfig | None:
+    if candidate.base_url or candidate.model or candidate.api_key:
+        return candidate
+    if existing is not None:
+        return candidate
+    return None
+
+
+def prompt_edit_config(
+    existing_ai: AIConfig | None = None,
+    existing_export: ExportConfig | None = None,
+) -> tuple[AIConfig | None, ExportConfig]:
+    """Interactive config edit flow, including default export output."""
+    default_provider = existing_ai.provider if existing_ai else "openai"
+    default_base_url = existing_ai.base_url if existing_ai else ""
+    default_model = existing_ai.model if existing_ai else ""
+    default_api_key = existing_ai.api_key if existing_ai else ""
+    default_export_output = existing_export.output if existing_export is not None else ""
+
+    if _is_terminal():
+        provider = _ask_provider(default_provider)
+        if provider is None:
+            return (None, existing_export or ExportConfig())
+        base_url = _ask_text(i18n.t(Keys.CONFIG_INPUT_BASE_URL), default_base_url)
+        if base_url is None:
+            return (None, existing_export or ExportConfig())
+        model = _ask_text(i18n.t(Keys.CONFIG_INPUT_MODEL), default_model)
+        if model is None:
+            return (None, existing_export or ExportConfig())
+        api_key = _ask_text(i18n.t(Keys.CONFIG_INPUT_API_KEY), default_api_key, secret=True)
+        if api_key is None:
+            return (None, existing_export or ExportConfig())
+        export_output = _ask_text(i18n.t(Keys.CONFIG_INPUT_EXPORT_OUTPUT), default_export_output)
+        if export_output is None:
+            return (None, existing_export or ExportConfig())
+    else:
+        provider = _simple_select(
+            i18n.t(Keys.CONFIG_SELECT_PROVIDER),
+            [("OpenAI", "openai"), ("Anthropic", "anthropic")],
+            default_provider,
+        )
+        if provider is None:
+            return (None, existing_export or ExportConfig())
+        base_url_input = input(f"{i18n.t(Keys.CONFIG_INPUT_BASE_URL)} [{default_base_url}]: ").strip()
+        model_input = input(f"{i18n.t(Keys.CONFIG_INPUT_MODEL)} [{default_model}]: ").strip()
+        api_key_input = input(f"{i18n.t(Keys.CONFIG_INPUT_API_KEY)} [{mask_api_key(default_api_key)}]: ").strip()
+        export_output_input = input(f"{i18n.t(Keys.CONFIG_INPUT_EXPORT_OUTPUT)} [{default_export_output}]: ").strip()
+        base_url = base_url_input or default_base_url
+        model = model_input or default_model
+        api_key = api_key_input or default_api_key
+        export_output = export_output_input or default_export_output
+
+    ai_candidate = _normalize_ai_candidate(
+        AIConfig(
+            provider=provider.strip(),
+            base_url=base_url.strip(),
+            model=model.strip(),
+            api_key=api_key.strip(),
+        ),
+        existing_ai,
+    )
+    export_candidate = ExportConfig(output=export_output.strip())
+
+    print(i18n.t(Keys.CONFIG_CONFIRM_TITLE))
+    print(i18n.t(Keys.CONFIG_CONFIRM_PROVIDER, provider=ai_candidate.provider if ai_candidate is not None else ""))
+    print(i18n.t(Keys.CONFIG_CONFIRM_BASE_URL, base_url=ai_candidate.base_url if ai_candidate is not None else ""))
+    print(i18n.t(Keys.CONFIG_CONFIRM_MODEL, model=ai_candidate.model if ai_candidate is not None else ""))
+    print(
+        i18n.t(
+            Keys.CONFIG_CONFIRM_API_KEY,
+            api_key=mask_api_key(ai_candidate.api_key) if ai_candidate is not None else "",
+        )
+    )
+    print(i18n.t(Keys.CONFIG_CONFIRM_EXPORT_OUTPUT, output=export_candidate.output))
+
+    if _is_terminal():
+        if not _confirm(i18n.t(Keys.CONFIG_CONFIRM_WRITE)):
+            return (None, existing_export or ExportConfig())
+    else:
+        raw = input(f"{i18n.t(Keys.CONFIG_CONFIRM_WRITE)} (y/N): ").strip().lower()
+        if raw not in {"y", "yes"}:
+            return (None, existing_export or ExportConfig())
+
+    return ai_candidate, export_candidate
+
+
 def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input) -> int:
     """Handle `--config view|edit` command flow."""
     config_path = get_config_path()
     existing = load_ai_config(config_path)
+    existing_export = load_export_config(config_path)
 
     if action == "view":
-        if existing is None:
+        if not config_path.exists():
             print(i18n.t(Keys.CONFIG_NOT_FOUND, path=str(config_path)))
             raw = input_fn(i18n.t(Keys.CONFIG_PROMPT_CREATE) + " (y/N): ").strip().lower()
             if raw not in {"y", "yes"}:
@@ -556,10 +693,21 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
             action = "edit"
         else:
             print(i18n.t(Keys.CONFIG_VIEW_TITLE, path=str(config_path)))
-            print(i18n.t(Keys.CONFIG_CONFIRM_PROVIDER, provider=existing.provider or ""))
-            print(i18n.t(Keys.CONFIG_CONFIRM_BASE_URL, base_url=existing.base_url or ""))
-            print(i18n.t(Keys.CONFIG_CONFIRM_MODEL, model=existing.model or ""))
-            print(i18n.t(Keys.CONFIG_CONFIRM_API_KEY, api_key=mask_api_key(existing.api_key)))
+            print(i18n.t(Keys.CONFIG_CONFIRM_PROVIDER, provider=existing.provider if existing is not None else ""))
+            print(i18n.t(Keys.CONFIG_CONFIRM_BASE_URL, base_url=existing.base_url if existing is not None else ""))
+            print(i18n.t(Keys.CONFIG_CONFIRM_MODEL, model=existing.model if existing is not None else ""))
+            print(
+                i18n.t(
+                    Keys.CONFIG_CONFIRM_API_KEY,
+                    api_key=mask_api_key(existing.api_key) if existing is not None else "",
+                )
+            )
+            print(
+                i18n.t(
+                    Keys.CONFIG_CONFIRM_EXPORT_OUTPUT,
+                    output=existing_export.output or "./sessions (default)",
+                )
+            )
             collect_config = load_collect_config(config_path)
             logging_config = load_logging_config(config_path)
             shortcuts_config = load_shortcuts_config(config_path)
@@ -576,16 +724,16 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
         print(i18n.t(Keys.CONFIG_ACTION_INVALID, action=action))
         return 1
 
-    edited = prompt_edit_ai_config(existing)
-    if edited is None:
+    edited_ai, edited_export = prompt_edit_config(existing, existing_export)
+    if edited_ai is None and edited_export == existing_export:
         print(i18n.t(Keys.CONFIG_CANCELLED))
         return 1
 
-    ok, errors = validate_ai_config(edited)
+    ok, errors = validate_ai_config(edited_ai) if edited_ai is not None else (True, [])
     if not ok:
         print(i18n.t(Keys.CONFIG_INVALID_FIELDS, fields=", ".join(errors)))
         return 1
 
-    path = write_ai_config(edited, config_path)
+    path = write_config(edited_ai, edited_export, config_path)
     print(i18n.t(Keys.CONFIG_SAVED, path=str(path)))
     return 0

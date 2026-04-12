@@ -123,11 +123,13 @@ class Keys:
     CONFIG_INPUT_BASE_URL = "CONFIG_INPUT_BASE_URL"
     CONFIG_INPUT_MODEL = "CONFIG_INPUT_MODEL"
     CONFIG_INPUT_API_KEY = "CONFIG_INPUT_API_KEY"
+    CONFIG_INPUT_EXPORT_OUTPUT = "CONFIG_INPUT_EXPORT_OUTPUT"
     CONFIG_CONFIRM_TITLE = "CONFIG_CONFIRM_TITLE"
     CONFIG_CONFIRM_PROVIDER = "CONFIG_CONFIRM_PROVIDER"
     CONFIG_CONFIRM_BASE_URL = "CONFIG_CONFIRM_BASE_URL"
     CONFIG_CONFIRM_MODEL = "CONFIG_CONFIRM_MODEL"
     CONFIG_CONFIRM_API_KEY = "CONFIG_CONFIRM_API_KEY"
+    CONFIG_CONFIRM_EXPORT_OUTPUT = "CONFIG_CONFIRM_EXPORT_OUTPUT"
     CONFIG_CONFIRM_WRITE = "CONFIG_CONFIRM_WRITE"
     CONFIG_CANCELLED = "CONFIG_CANCELLED"
     CONFIG_SAVED = "CONFIG_SAVED"
@@ -246,7 +248,7 @@ TRANSLATIONS = {
         Keys.CLI_DESC: "Export agent sessions",
         Keys.CLI_URI_HELP: "Agent session URI to dump, or agents://<path>?q=<keyword>&providers=<names>&roles=<names>&limit=<n> for scoped queries",
         Keys.CLI_DAYS_HELP: "Number of days to look back (default: 7)",
-        Keys.CLI_OUTPUT_HELP: "Output base directory (default: ./sessions)",
+        Keys.CLI_OUTPUT_HELP: "Output base directory for JSON/raw exports (default: config export.output or ./sessions)",
         Keys.CLI_FORMAT_HELP: "Output format: json | markdown | raw | print (comma-separated, md alias supported)",
         Keys.CLI_HEAD_HELP: "Show lightweight session metadata for URI discovery without exporting or printing body",
         Keys.CLI_SUMMARY_HELP: "Generate AI summary for URI JSON export (requires config and json format)",
@@ -285,11 +287,13 @@ TRANSLATIONS = {
         Keys.CONFIG_INPUT_BASE_URL: "Base URL",
         Keys.CONFIG_INPUT_MODEL: "Model",
         Keys.CONFIG_INPUT_API_KEY: "API Key",
+        Keys.CONFIG_INPUT_EXPORT_OUTPUT: "Default export output",
         Keys.CONFIG_CONFIRM_TITLE: "\nPlease confirm config:",
         Keys.CONFIG_CONFIRM_PROVIDER: "  provider: {provider}",
         Keys.CONFIG_CONFIRM_BASE_URL: "  base_url: {base_url}",
         Keys.CONFIG_CONFIRM_MODEL: "  model: {model}",
         Keys.CONFIG_CONFIRM_API_KEY: "  api_key: {api_key}",
+        Keys.CONFIG_CONFIRM_EXPORT_OUTPUT: "  export.output: {output}",
         Keys.CONFIG_CONFIRM_WRITE: "Write config file?",
         Keys.CONFIG_CANCELLED: "⚠️  Config update cancelled.",
         Keys.CONFIG_SAVED: "✅ Config saved: {path}",
@@ -403,7 +407,7 @@ TRANSLATIONS = {
         Keys.CLI_DESC: "导出 Agent 会话",
         Keys.CLI_URI_HELP: "要导出的 Agent 会话 URI，或使用 agents://<path>?q=<关键词>&providers=<名称>&roles=<名称>&limit=<数量> 做路径作用域查询",
         Keys.CLI_DAYS_HELP: "查找最近几天的会话 (默认: 7)",
-        Keys.CLI_OUTPUT_HELP: "输出目录 (默认: ./sessions)",
+        Keys.CLI_OUTPUT_HELP: "JSON/raw 输出目录（默认: config export.output，其次 ./sessions）",
         Keys.CLI_FORMAT_HELP: "输出格式: json | markdown | raw | print（支持逗号分隔，兼容 md 别名）",
         Keys.CLI_HEAD_HELP: "仅查看 URI 会话的轻量元数据摘要，不导出文件也不打印正文",
         Keys.CLI_SUMMARY_HELP: "为 URI JSON 导出生成 AI 总结（需要配置且 format 包含 json）",
@@ -442,11 +446,13 @@ TRANSLATIONS = {
         Keys.CONFIG_INPUT_BASE_URL: "Base URL",
         Keys.CONFIG_INPUT_MODEL: "Model",
         Keys.CONFIG_INPUT_API_KEY: "API Key",
+        Keys.CONFIG_INPUT_EXPORT_OUTPUT: "默认导出目录",
         Keys.CONFIG_CONFIRM_TITLE: "\n请确认配置:",
         Keys.CONFIG_CONFIRM_PROVIDER: "  provider: {provider}",
         Keys.CONFIG_CONFIRM_BASE_URL: "  base_url: {base_url}",
         Keys.CONFIG_CONFIRM_MODEL: "  model: {model}",
         Keys.CONFIG_CONFIRM_API_KEY: "  api_key: {api_key}",
+        Keys.CONFIG_CONFIRM_EXPORT_OUTPUT: "  export.output: {output}",
         Keys.CONFIG_CONFIRM_WRITE: "确认写入配置文件？",
         Keys.CONFIG_CANCELLED: "⚠️  已取消配置更新。",
         Keys.CONFIG_SAVED: "✅ 配置已保存: {path}",

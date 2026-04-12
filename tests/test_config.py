@@ -6,15 +6,19 @@ from unittest import mock
 from agent_dump.config import (
     AIConfig,
     CollectConfig,
+    ExportConfig,
     get_config_path,
     handle_config_command,
     load_ai_config,
     load_collect_config,
+    load_export_config,
     load_logging_config,
     load_shortcuts_config,
     LoggingConfig,
     mask_api_key,
+    prompt_edit_config,
     ShortcutConfig,
+    write_config,
     write_ai_config,
 )
 
@@ -53,6 +57,7 @@ class TestConfigReadWrite:
         assert config.model == "gpt-4.1-mini"
         assert config.api_key == "sk-test-123"
         assert load_collect_config(path) == CollectConfig()
+        assert load_export_config(path) == ExportConfig()
 
     def test_load_collect_config_reads_summary_concurrency(self, tmp_path):
         path = tmp_path / "config.toml"
@@ -142,6 +147,18 @@ class TestConfigReadWrite:
 
         assert load_logging_config(path) == LoggingConfig(enabled=True, path=tmp_path / "logs" / "collect.log")
 
+    def test_load_export_config_reads_output(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[export]\n"
+                'output = "../exports"\n'
+            ),
+            encoding="utf-8",
+        )
+
+        assert load_export_config(path) == ExportConfig(output="../exports")
+
     def test_load_shortcuts_config_reads_shortcuts(self, tmp_path):
         path = tmp_path / "config.toml"
         path.write_text(
@@ -199,6 +216,8 @@ class TestConfigCommand:
                 'base_url = "https://api.openai.com/v1"\n'
                 'model = "gpt-4.1-mini"\n'
                 'api_key = "sk-test-123"\n'
+                "\n[export]\n"
+                'output = "../exports"\n'
                 "\n[shortcut.ob]\n"
                 'params = ["date"]\n'
                 'args = ["--collect", "--since", "{date}", "--until", "{date}"]\n'
@@ -212,6 +231,7 @@ class TestConfigCommand:
         out = capsys.readouterr().out
         assert "当前配置" in out
         assert "sk-*****123" in out
+        assert "export.output: ../exports" in out
         assert "collect.summary_concurrency: 4" in out
         assert "collect.summary_timeout_seconds: 90" in out
         assert "logging.enabled: True" in out
@@ -223,12 +243,15 @@ class TestConfigCommand:
         path = tmp_path / "config.toml"
         monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
         monkeypatch.setattr(
-            "agent_dump.config.prompt_edit_ai_config",
-            lambda existing=None: AIConfig(
-                provider="anthropic",
-                base_url="https://api.anthropic.com/v1",
-                model="claude-3-7-sonnet",
-                api_key="ak-test",
+            "agent_dump.config.prompt_edit_config",
+            lambda existing_ai=None, existing_export=None: (
+                AIConfig(
+                    provider="anthropic",
+                    base_url="https://api.anthropic.com/v1",
+                    model="claude-3-7-sonnet",
+                    api_key="ak-test",
+                ),
+                ExportConfig(output="./exports"),
             ),
         )
 
@@ -238,11 +261,15 @@ class TestConfigCommand:
         saved = load_ai_config(path)
         assert saved is not None
         assert saved.provider == "anthropic"
+        assert load_export_config(path) == ExportConfig(output="./exports")
 
     def test_edit_cancelled(self, tmp_path, monkeypatch):
         path = tmp_path / "config.toml"
         monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
-        monkeypatch.setattr("agent_dump.config.prompt_edit_ai_config", lambda existing=None: None)
+        monkeypatch.setattr(
+            "agent_dump.config.prompt_edit_config",
+            lambda existing_ai=None, existing_export=None: (None, existing_export or ExportConfig()),
+        )
 
         result = handle_config_command("edit")
         assert result == 1
@@ -277,6 +304,7 @@ class TestConfigCommand:
 
         assert load_collect_config(path) == CollectConfig(summary_concurrency=8, summary_timeout_seconds=180)
         assert load_logging_config(path) == LoggingConfig(enabled=False, path=Path("/tmp/collect.log"))
+        assert load_export_config(path) == ExportConfig()
         assert load_shortcuts_config(path) == {
             "ob": ShortcutConfig(
                 params=("date",),
@@ -284,18 +312,55 @@ class TestConfigCommand:
             )
         }
 
+    def test_write_config_preserves_export_collect_and_logging_sections(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[collect]\n"
+                "summary_concurrency = 8\n"
+                "summary_timeout_seconds = 180\n"
+                "\n[logging]\n"
+                "enabled = false\n"
+                'path = "/tmp/collect.log"\n'
+                "\n[shortcut.ob]\n"
+                'params = ["date"]\n'
+                'args = ["--collect", "--since", "{date}", "--until", "{date}"]\n'
+            ),
+            encoding="utf-8",
+        )
+
+        write_config(None, ExportConfig(output="../exports"), path)
+
+        assert load_ai_config(path) is None
+        assert load_collect_config(path) == CollectConfig(summary_concurrency=8, summary_timeout_seconds=180)
+        assert load_logging_config(path) == LoggingConfig(enabled=False, path=Path("/tmp/collect.log"))
+        assert load_export_config(path) == ExportConfig(output="../exports")
+
+    def test_handle_config_command_allows_export_only_config(self, tmp_path, monkeypatch):
+        path = tmp_path / "config.toml"
+        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
+        monkeypatch.setattr(
+            "agent_dump.config.prompt_edit_config",
+            lambda existing_ai=None, existing_export=None: (None, ExportConfig(output="./exports")),
+        )
+
+        result = handle_config_command("edit")
+
+        assert result == 0
+        assert load_ai_config(path) is None
+        assert load_export_config(path) == ExportConfig(output="./exports")
+
     def test_invalid_action(self):
         result = handle_config_command("bad-action", input_fn=lambda _: "n")
         assert result == 1
 
     def test_prompt_edit_simple_mode(self, monkeypatch):
         monkeypatch.setattr("agent_dump.config._is_terminal", lambda: False)
-        inputs = iter(["1", "https://api.openai.com/v1", "gpt-4.1-mini", "sk-123", "y"])
+        inputs = iter(["1", "https://api.openai.com/v1", "gpt-4.1-mini", "sk-123", "./exports", "y"])
         with mock.patch("builtins.input", side_effect=lambda _="": next(inputs)):
-            from agent_dump.config import prompt_edit_ai_config
+            edited_ai, edited_export = prompt_edit_config()
 
-            edited = prompt_edit_ai_config()
-
-        assert edited is not None
-        assert edited.provider == "openai"
-        assert edited.model == "gpt-4.1-mini"
+        assert edited_ai is not None
+        assert edited_ai.provider == "openai"
+        assert edited_ai.model == "gpt-4.1-mini"
+        assert edited_export == ExportConfig(output="./exports")
