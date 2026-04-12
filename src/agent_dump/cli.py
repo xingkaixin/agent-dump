@@ -42,6 +42,7 @@ from agent_dump.config import (
     handle_config_command,
     load_ai_config,
     load_collect_config,
+    load_export_config,
     load_logging_config,
     load_shortcuts_config,
     validate_ai_config,
@@ -81,6 +82,7 @@ from agent_dump.uri_support import find_session_by_id as _find_session_by_id, pa
 VALID_URI_SCHEMES = get_uri_scheme_map()
 VALID_FORMATS = {"json", "markdown", "raw", "print"}
 FORMAT_ALIASES = {"md": "markdown"}
+DEFAULT_OUTPUT_BASE_DIR = Path("./sessions")
 
 
 def _parse_shortcut_date(value: str) -> date:
@@ -571,11 +573,10 @@ def export_sessions_for_formats(
     sessions: list[Session],
     formats: list[str],
     output_base_dir: Path,
+    *,
+    output_base_dirs: dict[str, Path] | None = None,
 ) -> list[Path]:
     """Export multiple sessions in one or more file formats."""
-    output_dir = output_base_dir / agent.name
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     print(i18n.t(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
     exported: list[Path] = []
     for session in sessions:
@@ -583,6 +584,13 @@ def export_sessions_for_formats(
         session_uri: str | None = None
         for output_format in formats:
             try:
+                format_base_dir = (
+                    output_base_dirs.get(output_format, output_base_dir)
+                    if output_base_dirs is not None
+                    else output_base_dir
+                )
+                output_dir = format_base_dir / agent.name
+                output_dir.mkdir(parents=True, exist_ok=True)
                 if output_format == "markdown":
                     session_data = session_data if session_data is not None else agent.get_session_data(session)
                     session_uri = session_uri if session_uri is not None else agent.get_session_uri(session)
@@ -620,6 +628,21 @@ def export_sessions_markdown(agent: BaseAgent, sessions: list[Session], output_b
 def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:
     """Check whether a CLI option is explicitly specified"""
     return any(arg in (short_option, long_option) or arg.startswith(f"{long_option}=") for arg in argv)
+
+
+def resolve_output_base_dir(
+    *,
+    cli_output: str | None,
+    output_specified: bool,
+    export_output: str,
+    output_format: str,
+) -> Path:
+    """Resolve effective output base directory for one file format."""
+    if output_specified and cli_output:
+        return Path(cli_output)
+    if output_format in {"json", "raw"} and export_output:
+        return Path(export_output)
+    return DEFAULT_OUTPUT_BASE_DIR
 
 
 def parse_format_spec(raw: str) -> list[str]:
@@ -888,7 +911,7 @@ def main():
         "-output",
         "--output",
         type=str,
-        default="./sessions",
+        default=None,
         help=i18n.t(Keys.CLI_OUTPUT_HELP),
     )
     parser.add_argument("-format", "--format", type=str, default=None, help=i18n.t(Keys.CLI_FORMAT_HELP))
@@ -997,6 +1020,8 @@ def main():
         return handle_config_command(args.config_action)
     if args.collect:
         return handle_collect_mode(args)
+
+    export_config = load_export_config()
 
     if is_uri_mode and args.head:
         if format_specified:
@@ -1110,9 +1135,17 @@ def main():
                 had_success = True
 
             file_formats = [fmt for fmt in output_formats if fmt != "print"]
-            output_dir = Path(args.output) / agent.name
             for output_format in file_formats:
                 try:
+                    output_dir = (
+                        resolve_output_base_dir(
+                            cli_output=args.output,
+                            output_specified=output_specified,
+                            export_output=export_config.output,
+                            output_format=output_format,
+                        )
+                        / agent.name
+                    )
                     output_path = export_session_in_format(
                         agent,
                         session,
@@ -1305,10 +1338,36 @@ def main():
     print(i18n.t(Keys.SESSIONS_SELECTED_COUNT, count=len(selected_sessions)))
 
     # Export
-    output_base_dir = Path(args.output)
-    exported = export_sessions_for_formats(selected_agent, selected_sessions, output_formats, output_base_dir)
+    output_base_dirs = {
+        output_format: resolve_output_base_dir(
+            cli_output=args.output,
+            output_specified=output_specified,
+            export_output=export_config.output,
+            output_format=output_format,
+        )
+        for output_format in output_formats
+    }
+    primary_output_format = output_formats[0] if output_formats else "json"
+    output_base_dir = output_base_dirs.get(
+        primary_output_format,
+        resolve_output_base_dir(
+            cli_output=args.output,
+            output_specified=output_specified,
+            export_output=export_config.output,
+            output_format=primary_output_format,
+        ),
+    )
+    exported = export_sessions_for_formats(
+        selected_agent,
+        selected_sessions,
+        output_formats,
+        output_base_dir,
+        output_base_dirs=output_base_dirs,
+    )
 
-    print(i18n.t(Keys.EXPORT_SUMMARY, count=len(exported), path=f"{output_base_dir}/{selected_agent.name}"))
+    summary_paths = sorted({str(path.parent) for path in exported})
+    summary_path = ", ".join(summary_paths) if summary_paths else f"{output_base_dir}/{selected_agent.name}"
+    print(i18n.t(Keys.EXPORT_SUMMARY, count=len(exported), path=summary_path))
     return 0
 
 

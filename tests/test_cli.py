@@ -32,6 +32,7 @@ from agent_dump.cli import (
     show_collect_progress,
 )
 from agent_dump.collect import CollectProgressEvent
+from agent_dump.config import ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import QuerySpec
@@ -349,6 +350,31 @@ class TestExportSessions:
         assert len(result) == 3
         mock_agent.export_session.assert_called_once_with(session, tmp_path / "test_agent")
         mock_agent.export_raw_session.assert_called_once_with(session, tmp_path / "test_agent")
+
+    def test_export_sessions_for_multiple_formats_supports_per_format_output_dirs(self, tmp_path):
+        mock_agent = mock.MagicMock()
+        mock_agent.name = "test_agent"
+        mock_agent.display_name = "Test Agent"
+        mock_agent.get_session_uri.return_value = "codex://session-001"
+        mock_agent.get_session_data.return_value = {"messages": []}
+
+        session = make_session("session-001", "Session 1")
+        json_root = tmp_path / "json-root"
+        markdown_root = tmp_path / "markdown-root"
+        raw_root = tmp_path / "raw-root"
+        mock_agent.export_session.return_value = json_root / "test_agent" / "session-001.json"
+        mock_agent.export_raw_session.return_value = raw_root / "test_agent" / "session-001.raw.jsonl"
+
+        export_sessions_for_formats(
+            mock_agent,
+            [session],
+            ["json", "markdown", "raw"],
+            tmp_path,
+            output_base_dirs={"json": json_root, "markdown": markdown_root, "raw": raw_root},
+        )
+
+        mock_agent.export_session.assert_called_once_with(session, json_root / "test_agent")
+        mock_agent.export_raw_session.assert_called_once_with(session, raw_root / "test_agent")
 
 
 class TestFormatSpec:
@@ -1820,6 +1846,63 @@ class TestMain:
             args = mock_export.call_args
             assert str(output_dir) in str(args[0][3])
 
+    def test_main_uses_configured_output_for_interactive_json(self, tmp_path):
+        configured_output = tmp_path / "configured-output"
+
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = [mock.MagicMock()]
+
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.load_export_config", return_value=ExportConfig(output=str(configured_output))):
+                with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
+                    with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+                        mock_select.return_value = [mock.MagicMock()]
+                        mock_export.return_value = [configured_output / "opencode" / "test.json"]
+
+                        with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
+                            main()
+
+            mock_export.assert_called_once()
+            args = mock_export.call_args
+            assert args.kwargs["output_base_dirs"]["json"] == configured_output
+            assert args.args[3] == configured_output
+
+    def test_main_interactive_markdown_ignores_configured_output(self, tmp_path):
+        configured_output = tmp_path / "configured-output"
+
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "opencode"
+            mock_agent.display_name = "OpenCode"
+            mock_agent.get_sessions.return_value = [mock.MagicMock()]
+
+            mock_scanner.agents = [mock_agent]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.load_export_config", return_value=ExportConfig(output=str(configured_output))):
+                with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
+                    with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+                        mock_select.return_value = [mock.MagicMock()]
+                        mock_export.return_value = [Path("test.md")]
+
+                        with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "markdown"]):
+                            main()
+
+            args = mock_export.call_args
+            assert args.kwargs["output_base_dirs"]["markdown"] == Path("./sessions")
+            assert args.args[3] == Path("./sessions")
+
     def test_main_interactive_with_format_long_alias_md(self):
         """测试 --format md 会走 Markdown 导出"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
@@ -2013,6 +2096,61 @@ class TestMain:
         captured = capsys.readouterr()
         assert "# Session Dump" not in captured.out
         assert str(expected_output) in captured.out
+
+    def test_main_uri_mode_json_uses_configured_output_when_unspecified(self, capsys, tmp_path):
+        configured_output = tmp_path / "configured-out"
+        expected_output = configured_output / "codex" / "session-001.json"
+
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+            mock_agent.export_session.return_value = expected_output
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.load_export_config", return_value=ExportConfig(output=str(configured_output))):
+                with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                    with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--format", "json"]):
+                        result = main()
+
+        assert result == 0
+        mock_agent.export_session.assert_called_once_with(mock_session, configured_output / "codex")
+        assert str(expected_output) in capsys.readouterr().out
+
+    def test_main_uri_mode_markdown_ignores_configured_output_when_unspecified(self, capsys, tmp_path):
+        configured_output = tmp_path / "configured-out"
+
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            mock_agent.get_session_data.return_value = {
+                "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
+            }
+
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.cli.load_export_config", return_value=ExportConfig(output=str(configured_output))):
+                with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                    with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--format", "markdown"]):
+                        result = main()
+
+        assert result == 0
+        expected_output = Path("./sessions") / "codex" / "session-001.md"
+        assert expected_output.exists()
+        assert str(expected_output) in capsys.readouterr().out
+        expected_output.unlink()
 
     def test_main_uri_mode_json_creates_missing_output_dir(self, capsys, tmp_path):
         """测试 URI + --format json 在输出目录不存在时也能导出"""

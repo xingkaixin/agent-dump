@@ -272,7 +272,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor URI only supports `json` and `print` (no `raw/markdown`). | - |
 | `-summary`, `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. Cannot be combined with `--head`. | - |
 | `-p`, `-page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
-| `-output`, `--output` | Output directory. Effective for `--interactive`; in URI mode when any file-export format (`json/markdown/raw`) is included; ignored in `--list` with warning. | ./sessions |
+| `-output`, `--output` | Output directory. For `json/raw`, priority is `--output` > `config.toml` `[export].output` > `./sessions`. Relative paths are resolved from the current working directory. Markdown keeps using `./sessions` unless `--output` is explicitly passed. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
 | `-h, --help` | Show help message | - |
 
 ### collect configuration file
@@ -294,6 +294,9 @@ api_key = "sk-..."
 [collect]
 summary_concurrency = 4
 
+[export]
+output = "../exports"
+
 [shortcut.ob]
 params = ["date"]
 args = [
@@ -310,6 +313,8 @@ deny = [
 ```
 
 `[agent.<name>].deny` only applies to `--collect`. When a session `cwd` matches one of the configured paths, or is inside that path, the session is ignored during collect.
+
+`[export].output` defines the global default output root for `json/raw` exports. It accepts absolute or relative paths. Relative paths are resolved from the directory where `agent-dump` is executed, not from the config file location.
 
 `[shortcut.<name>]` defines a reusable shortcut preset. `params` declares positional input names. `args` declares the expanded CLI argv template. When `date` is provided, `{year}` / `{month}` / `{year_month}` are derived automatically.
 
