@@ -2,8 +2,8 @@
 测试 agents/codex.py 模块
 """
 
-import json
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 from unittest import mock
 
@@ -70,23 +70,22 @@ class TestCodexAgent:
         assert agent._titles_cache == {}
 
     def test_load_titles_cache_with_data(self, tmp_path):
-        """测试加载有数据的标题缓存"""
+        """测试从 session_index.jsonl 加载标题缓存"""
         agent = CodexAgent()
 
-        # 创建全局状态文件
         codex_dir = tmp_path / ".codex"
         codex_dir.mkdir()
-        state_file = codex_dir / ".codex-global-state.json"
-        state_data = {
-            "thread-titles": {
-                "titles": {
-                    "session-001": "Test Session",
-                    "session-002": "Another Session",
-                }
-            }
-        }
-        with open(state_file, "w") as f:
-            json.dump(state_data, f)
+        state_file = codex_dir / "session_index.jsonl"
+        state_file.write_text(
+            "\n".join(
+                [
+                    json.dumps({"id": "session-001", "thread_name": "Test Session"}),
+                    json.dumps({"id": "session-002", "thread_name": "Another Session"}),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
         roots = ProviderRoots(
             codex_root=codex_dir,
@@ -98,8 +97,11 @@ class TestCodexAgent:
         with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):
             result = agent._load_titles_cache()
 
-        assert result == state_data["thread-titles"]["titles"]
-        assert agent._titles_cache == state_data["thread-titles"]["titles"]
+        assert result == {
+            "session-001": "Test Session",
+            "session-002": "Another Session",
+        }
+        assert agent._titles_cache == result
 
     def test_find_base_path_uses_codex_home_env(self, monkeypatch, tmp_path):
         """测试优先使用 CODEX_HOME/sessions"""
@@ -339,10 +341,11 @@ class TestCodexAgent:
         assert len(result) == 1
 
     def test_extract_title_from_user_message(self, tmp_path):
-        """测试从用户消息提取标题"""
+        """测试从第二条用户消息提取标题"""
         agent = CodexAgent()
 
         lines = [
+            json.dumps({"payload": {"type": "message", "role": "user", "content": [{"text": "First"}]}}),
             json.dumps({"payload": {"type": "message", "role": "user", "content": [{"text": "Hello World"}]}}),
             json.dumps({"payload": {"type": "message", "role": "assistant", "content": [{"text": "Hi"}]}}),
         ]
@@ -352,7 +355,7 @@ class TestCodexAgent:
         assert result == "Hello World"
 
     def test_extract_title_no_user_message(self, tmp_path):
-        """测试没有用户消息时使用默认标题"""
+        """测试没有用户消息时返回空，由上层决定兜底"""
         agent = CodexAgent()
 
         lines = [
@@ -361,7 +364,130 @@ class TestCodexAgent:
 
         result = agent._extract_title(lines)
 
-        assert result == "Untitled Session"
+        assert result is None
+
+    def test_parse_session_file_prefers_session_index_title_over_other_fallbacks(self, tmp_path):
+        """测试 session_index 标题优先于消息和目录名"""
+        agent = CodexAgent()
+        agent._titles_cache = {"session-001": "Global Title"}
+
+        file_path = tmp_path / "rollout-2026-02-03T10-04-47-session-001.jsonl"
+        file_path.write_text(
+            json.dumps(
+                {
+                    "payload": {
+                        "id": "session-001",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "cwd": "/workspace/demo",
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"text": "User Title"}],
+                    }
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = agent._parse_session_file(file_path)
+
+        assert result is not None
+        assert result.title == "Global Title"
+
+    def test_parse_session_file_uses_second_user_message_when_title_missing(self, tmp_path):
+        """测试显式标题缺失时使用第二条用户消息"""
+        agent = CodexAgent()
+        file_path = tmp_path / "rollout-2026-02-03T10-04-47-session-001.jsonl"
+        file_path.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "payload": {
+                                "id": "session-001",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "cwd": "/workspace/demo-app",
+                                "type": "message",
+                                "role": "user",
+                                "content": [{"text": "First User Message"}],
+                            }
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "payload": {
+                                "id": "session-001",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "cwd": "/workspace/demo-app",
+                                "type": "message",
+                                "role": "user",
+                                "content": [{"text": "Second User Message"}],
+                            }
+                        }
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = agent._parse_session_file(file_path)
+
+        assert result is not None
+        assert result.title == "Second User Message"
+
+    def test_parse_session_file_falls_back_to_cwd_basename(self, tmp_path):
+        """测试无显式标题和用户消息时回退到 cwd basename"""
+        agent = CodexAgent()
+        file_path = tmp_path / "rollout-2026-02-03T10-04-47-session-001.jsonl"
+        file_path.write_text(
+            json.dumps(
+                {
+                    "payload": {
+                        "id": "session-001",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "cwd": "/workspace/demo-app",
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"text": "Hi"}],
+                    }
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = agent._parse_session_file(file_path)
+
+        assert result is not None
+        assert result.title == "demo-app"
+
+    def test_parse_session_file_falls_back_to_parent_name_when_cwd_missing(self, tmp_path):
+        """测试 cwd 缺失时回退到会话目录名"""
+        agent = CodexAgent()
+        session_dir = tmp_path / "project-fallback"
+        session_dir.mkdir()
+        file_path = session_dir / "rollout-2026-02-03T10-04-47-session-001.jsonl"
+        file_path.write_text(
+            json.dumps(
+                {
+                    "payload": {
+                        "id": "session-001",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"text": "Hi"}],
+                    }
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = agent._parse_session_file(file_path)
+
+        assert result is not None
+        assert result.title == "project-fallback"
 
     def test_export_session_file_not_found(self, tmp_path):
         """测试导出不存在的会话文件时报错"""
