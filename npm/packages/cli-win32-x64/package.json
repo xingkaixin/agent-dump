@@ -1,6 +1,6 @@
 {
   "name": "@agent-dump/cli-win32-x64",
-  "version": "0.6.19",
+  "version": "0.6.20",
   "description": "win32-x64 native binary for agent-dump.",
   "license": "MIT",
   "homepage": "https://github.com/xingkaixin/agent-dump",

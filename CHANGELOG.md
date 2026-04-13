@@ -2,6 +2,43 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.6.20] - 2026-04-12
+
+### Added
+
+- **Lightweight session metadata preview with `--head`**
+  - Added a dedicated `--head` URI mode that prints lightweight session metadata without rendering full session content or exporting files
+  - Added shared agent hooks and metadata extraction for fields such as model, message count, cwd/project, and subtargets
+  - Added CLI validation and regression coverage for `--head` interactions with `--format` and `--summary`
+
+- **Richer query capabilities across CLI and URI flows**
+  - Added scoped `agents://<path>?q=<keyword>&providers=<names>` query URIs so path-constrained filtering works across list, interactive, and collect modes
+  - Added structured query syntax with `provider:`, `role:`, `path:`, and `limit:` filters while keeping legacy query behavior compatible
+  - Added coverage for scoped and structured query parsing and filtering
+
+- **Configurable default output directory for JSON/raw exports**
+  - Added `[export].output` in `config.toml` as the default output directory for JSON and raw exports
+  - Output directory precedence is now `--output` > config > `./sessions`, while markdown keeps using `./sessions` unless explicitly overridden
+
+### Changed
+
+- **Session listing metadata is now extracted more directly**
+  - Added lightweight summary-field extraction for session listings so CLI and selector views can show better metadata without fully loading sessions
+  - Improved listing output for supported agents with fields such as message count and model when available
+
+- **Session title fallback is now consistent across agents**
+  - Extracted shared title normalization and fallback resolution into a dedicated module
+  - Claude Code and Codex now follow the same explicit → message → directory fallback chain for more stable titles
+
+- **Error diagnostics are now structured and actionable**
+  - Replaced opaque failure lines with structured diagnostics that expose candidate search roots, failure reasons, and next-step guidance
+  - Updated agents to report searchable roots so CLI errors can explain what was checked instead of only reporting failure
+
+### Fixed
+
+- **Invalid structured query errors are clearer**
+  - Refined the invalid query message wording and included explicit next-step guidance in the CLI output
+
 ## [0.6.19] - 2026-04-10
 
 ### Added

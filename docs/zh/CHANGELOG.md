@@ -1,5 +1,42 @@
 # 更新日志
 
+## [0.6.20] - 2026-04-12
+
+### 新增功能
+
+- **新增 `--head` 轻量会话元数据预览**
+  - 新增专门的 `--head` URI 模式，可直接输出轻量级会话元数据，无需渲染完整会话内容，也不会导出文件
+  - 为各 agent 补充统一的 metadata 提取钩子，可提取 model、message 数、cwd/项目路径、subtarget 等信息
+  - 为 `--head` 与 `--format`、`--summary` 的组合约束补充 CLI 校验与回归测试
+
+- **CLI 与 URI 查询能力增强**
+  - 新增 `agents://<path>?q=<keyword>&providers=<names>` scoped query URI，使 list、interactive、collect 模式都支持按路径约束过滤
+  - 新增结构化查询语法，支持 `provider:`、`role:`、`path:`、`limit:` 过滤条件，同时保持旧查询写法兼容
+  - 为 scoped query 与结构化查询的解析、过滤行为补充测试覆盖
+
+- **JSON/raw 导出的默认输出目录可配置**
+  - 在 `config.toml` 中新增 `[export].output`，作为 JSON 与 raw 导出的默认输出目录
+  - 输出目录优先级调整为 `--output` > config > `./sessions`；markdown 仍保持默认写入 `./sessions`，除非显式覆盖
+
+### 变更
+
+- **会话列表元数据改为更直接的轻量提取**
+  - 为 session listing 新增轻量 summary fields 提取能力，CLI 与 selector 可在不完整加载会话的前提下展示更有价值的元数据
+  - 对支持的 agent，在可获取时补充显示 message 数、model 等信息
+
+- **会话标题兜底逻辑在不同 agent 间统一**
+  - 将标题规范化与 fallback 决策提取到共享模块
+  - Claude Code 与 Codex 现在统一采用 explicit → message → directory 的标题兜底链路，减少标题不稳定问题
+
+- **错误诊断改为结构化且可执行**
+  - 用结构化诊断替换过去不透明的失败提示，输出候选搜索根、失败原因以及下一步建议
+  - 各 agent 现在会暴露可搜索根路径，CLI 报错时可以说明“检查了哪里”，而不只是简单报失败
+
+### 问题修复
+
+- **无效结构化查询的报错更清晰**
+  - 调整无效查询的文案，并在 CLI 输出中加入明确的下一步指引
+
 ## [0.6.19] - 2026-04-10
 
 ### 新增功能
