@@ -149,3 +149,27 @@ class TestAgentScanner:
         captured = capsys.readouterr()
         for agent in scanner.agents:
             assert agent.display_name in captured.out
+
+    def test_scan_runs_concurrently(self):
+        """测试并发扫描确实并行执行，总时间接近最慢单个 agent 的时间"""
+        import time
+
+        scanner = AgentScanner()
+
+        def make_delayed_scan(delay: float):
+            def _scan():
+                time.sleep(delay)
+                return [mock.MagicMock()]
+            return _scan
+
+        for agent in scanner.agents:
+            agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
+            agent.scan = make_delayed_scan(0.1)  # type: ignore
+
+        start = time.monotonic()
+        result = scanner.scan()
+        elapsed = time.monotonic() - start
+
+        assert len(result) == len(scanner.agents)
+        # 5 个 agent 各 0.1s，若串行需 0.5s；并发应远小于 0.5s
+        assert elapsed < 0.35
