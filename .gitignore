@@ -66,3 +66,7 @@ wheels/
 # agent skill
 skills-lock.json
 .agents/*
+
+
+# worktree
+.worktree
