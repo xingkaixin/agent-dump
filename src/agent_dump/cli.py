@@ -859,6 +859,102 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
     )
 
 
+def handle_stats_mode(args: argparse.Namespace) -> int:
+    """Handle `--stats` flow."""
+    scanner = AgentScanner()
+    available_agents = scanner.get_available_agents()
+
+    if not available_agents:
+        _print_diagnostic(_build_no_agents_found_diagnostic(scanner))
+        return 1
+
+    query_spec: QuerySpec | None = None
+    if args.query:
+        valid_agents = {agent.name for agent in scanner.agents}
+        try:
+            query_spec = parse_query(args.query, valid_agents=valid_agents)
+        except ValueError as e:
+            _print_diagnostic(
+                invalid_query_or_uri(
+                    "查询条件无效。",
+                    details=(str(e),),
+                    next_steps=(
+                        "使用 `关键词` 或 `agent1,agent2:关键词` 格式。",
+                        "如需路径作用域查询，改用 `agents://<path>?q=<keyword>&providers=<names>`。",
+                    ),
+                )
+            )
+            return 1
+
+    if query_spec and query_spec.agent_names:
+        available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
+        if not available_agents:
+            _print_diagnostic(
+                root_not_found(
+                    "查询范围内没有可用 provider。",
+                    searched_roots=_render_agent_search_roots(scanner.agents),
+                    details=(f"query providers: {','.join(sorted(query_spec.agent_names))}",),
+                    next_steps=(
+                        "确认这些 provider 在本机上确实存在会话数据。",
+                        "放宽 providers 范围，或先不加 provider 过滤执行 `--list`。",
+                    ),
+                )
+            )
+            return 0
+
+    all_sessions: list[tuple[BaseAgent, Session]] = []
+    for agent in available_agents:
+        sessions = agent.get_sessions(days=args.days)
+        if query_spec is not None:
+            sessions = apply_query_filter(agent, sessions, query_spec)
+        for session in sessions:
+            all_sessions.append((agent, session))
+
+    if not all_sessions:
+        print(i18n.t(Keys.STATS_NO_SESSIONS, days=args.days))
+        return 0
+
+    total_sessions = len(all_sessions)
+    total_messages = 0
+    agent_stats: dict[str, dict[str, int]] = {}
+
+    for agent, session in all_sessions:
+        agent_name = agent.display_name
+        if agent_name not in agent_stats:
+            agent_stats[agent_name] = {"sessions": 0, "messages": 0}
+        agent_stats[agent_name]["sessions"] += 1
+
+        message_count = session.metadata.get("message_count")
+        if isinstance(message_count, int):
+            agent_stats[agent_name]["messages"] += message_count
+            total_messages += message_count
+
+    print(i18n.t(Keys.STATS_HEADER, days=args.days))
+    print()
+    print(i18n.t(Keys.STATS_TOTAL_SESSIONS, count=total_sessions))
+    if total_messages > 0:
+        print(i18n.t(Keys.STATS_TOTAL_MESSAGES, count=total_messages))
+    print()
+
+    print(i18n.t(Keys.STATS_BY_AGENT))
+    for name in sorted(agent_stats):
+        stats = agent_stats[name]
+        if total_messages > 0:
+            print(i18n.t(Keys.STATS_AGENT_ROW, name=name, sessions=stats["sessions"], messages=stats["messages"]))
+        else:
+            print(f"  {name}: {stats['sessions']} {i18n.t(Keys.SESSION_COUNT_SUFFIX)}")
+    print()
+
+    # Group all sessions by time regardless of agent
+    grouped = group_sessions_by_time([session for _, session in all_sessions])
+    if grouped:
+        print(i18n.t(Keys.STATS_BY_TIME))
+        for label, sessions in grouped.items():
+            print(i18n.t(Keys.STATS_TIME_ROW, label=label, count=len(sessions)))
+
+    return 0
+
+
 def main():
     """Main entry point"""
 
@@ -918,6 +1014,7 @@ def main():
     parser.add_argument("--head", action="store_true", help=i18n.t(Keys.CLI_HEAD_HELP))
     parser.add_argument("-summary", "--summary", action="store_true", help=i18n.t(Keys.CLI_SUMMARY_HELP))
     parser.add_argument("--collect", action="store_true", help=i18n.t(Keys.CLI_COLLECT_HELP))
+    parser.add_argument("--stats", action="store_true", help=i18n.t(Keys.CLI_STATS_HELP))
     parser.add_argument("--shortcut", type=str, default=None, help=i18n.t(Keys.CLI_SHORTCUT_HELP))
     parser.add_argument("-since", "--since", type=str, default=None, help=i18n.t(Keys.CLI_SINCE_HELP))
     parser.add_argument("-until", "--until", type=str, default=None, help=i18n.t(Keys.CLI_UNTIL_HELP))
@@ -1020,6 +1117,8 @@ def main():
         return handle_config_command(args.config_action)
     if args.collect:
         return handle_collect_mode(args)
+    if args.stats:
+        return handle_stats_mode(args)
 
     export_config = load_export_config()
 
