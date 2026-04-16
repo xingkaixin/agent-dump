@@ -1,6 +1,7 @@
 """URI parsing and session lookup helpers."""
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from agent_dump.agent_registry import get_uri_scheme_map
 from agent_dump.agents.base import BaseAgent, Session
@@ -27,8 +28,22 @@ def parse_uri(uri: str) -> tuple[str, str] | None:
 
 def find_session_by_id(scanner: AgentScanner, session_id: str) -> tuple[BaseAgent, Session] | None:
     """Find a session by ID across all available agents."""
-    for agent in scanner.get_available_agents():
-        sessions = agent.get_sessions(days=3650)
+    available_agents = scanner.get_available_agents()
+    if not available_agents:
+        return None
+
+    # Fetch sessions concurrently to speed up URI resolution
+    agent_sessions: list[tuple[BaseAgent, list[Session]]] = []
+    with ThreadPoolExecutor(max_workers=len(available_agents)) as executor:
+        futures = [executor.submit(agent.get_sessions, days=3650) for agent in available_agents]
+        for i, future in enumerate(futures):
+            try:
+                sessions = future.result()
+            except Exception:
+                sessions = []
+            agent_sessions.append((available_agents[i], sessions))
+
+    for agent, sessions in agent_sessions:
         for session in sessions:
             if session.id == session_id:
                 return agent, session
