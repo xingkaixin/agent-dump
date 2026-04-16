@@ -44,6 +44,7 @@ def make_session(
     *,
     created_at: datetime | None = None,
     source_path: Path | None = None,
+    metadata: dict | None = None,
 ) -> Session:
     """构造测试用 Session。"""
     session_time = created_at or datetime(2026, 1, 1, 12, 0, 0)
@@ -53,7 +54,7 @@ def make_session(
         created_at=session_time,
         updated_at=session_time,
         source_path=source_path or Path(f"/tmp/{session_id}.jsonl"),
-        metadata={},
+        metadata=metadata or {},
     )
 
 
@@ -2739,6 +2740,100 @@ class TestMain:
         assert result == 0
         captured = capsys.readouterr()
         assert "会话数量较多" in captured.out
+
+    def test_main_dispatches_stats_mode(self, capsys):
+        from agent_dump.cli import handle_stats_mode
+
+        with mock.patch("agent_dump.cli.handle_stats_mode", return_value=0) as mock_handle:
+            with mock.patch("sys.argv", ["agent-dump", "--stats"]):
+                result = main()
+
+        assert result == 0
+        mock_handle.assert_called_once()
+
+
+class TestStatsMode:
+    """测试 stats 命令"""
+
+    def test_stats_no_agents_found(self, capsys):
+        from agent_dump.cli import handle_stats_mode
+
+        args = argparse.Namespace(days=7, query=None)
+        scanner = mock.MagicMock()
+        scanner.get_available_agents.return_value = []
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            result = handle_stats_mode(args)
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "未找到" in captured.out
+
+    def test_stats_empty_sessions(self, capsys):
+        from agent_dump.cli import handle_stats_mode
+
+        args = argparse.Namespace(days=7, query=None)
+        agent = mock.MagicMock()
+        agent.display_name = "Claude Code"
+        agent.get_sessions.return_value = []
+
+        scanner = mock.MagicMock()
+        scanner.agents = [agent]
+        scanner.get_available_agents.return_value = [agent]
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            result = handle_stats_mode(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "未找到会话" in captured.out or "最近 7 天内未找到会话" in captured.out
+
+    def test_stats_shows_counts(self, capsys):
+        from agent_dump.cli import handle_stats_mode
+
+        args = argparse.Namespace(days=7, query=None)
+        session1 = make_session("s1", "Session 1", metadata={"message_count": 10})
+        session2 = make_session("s2", "Session 2", metadata={"message_count": 20})
+
+        agent = mock.MagicMock()
+        agent.display_name = "Claude Code"
+        agent.get_sessions.return_value = [session1, session2]
+
+        scanner = mock.MagicMock()
+        scanner.agents = [agent]
+        scanner.get_available_agents.return_value = [agent]
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            result = handle_stats_mode(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "总会话数: 2" in captured.out
+        assert "总消息数: 30" in captured.out
+        assert "Claude Code: 2 个会话, 30 条消息" in captured.out
+
+    def test_stats_with_query_filter(self, capsys):
+        from agent_dump.cli import handle_stats_mode
+
+        args = argparse.Namespace(days=7, query="bug")
+        session = make_session("s1", "Bug fix", metadata={"message_count": 5})
+
+        agent = mock.MagicMock()
+        agent.name = "claudecode"
+        agent.display_name = "Claude Code"
+        agent.get_sessions.return_value = [session]
+
+        scanner = mock.MagicMock()
+        scanner.agents = [agent]
+        scanner.get_available_agents.return_value = [agent]
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            with mock.patch("agent_dump.cli.apply_query_filter", return_value=[session]):
+                result = handle_stats_mode(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "总会话数: 1" in captured.out
 
 
 class TestRenderSessionText:

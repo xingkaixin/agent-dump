@@ -98,6 +98,7 @@ class Keys:
     CLI_SINCE_HELP = "CLI_SINCE_HELP"
     CLI_UNTIL_HELP = "CLI_UNTIL_HELP"
     CLI_CONFIG_HELP = "CLI_CONFIG_HELP"
+    CLI_STATS_HELP = "CLI_STATS_HELP"
     CLI_VERSION_HELP = "CLI_VERSION_HELP"
     CLI_FORMAT_INVALID = "CLI_FORMAT_INVALID"
     LIST_IGNORE_FORMAT = "LIST_IGNORE_FORMAT"
@@ -173,6 +174,16 @@ class Keys:
     DIAGNOSTIC_PARSED_URI = "DIAGNOSTIC_PARSED_URI"
     DIAGNOSTIC_CAPABILITY_GAP = "DIAGNOSTIC_CAPABILITY_GAP"
     DIAGNOSTIC_NEXT_STEPS = "DIAGNOSTIC_NEXT_STEPS"
+
+    # Stats
+    STATS_HEADER = "STATS_HEADER"
+    STATS_TOTAL_SESSIONS = "STATS_TOTAL_SESSIONS"
+    STATS_TOTAL_MESSAGES = "STATS_TOTAL_MESSAGES"
+    STATS_BY_AGENT = "STATS_BY_AGENT"
+    STATS_BY_TIME = "STATS_BY_TIME"
+    STATS_NO_SESSIONS = "STATS_NO_SESSIONS"
+    STATS_AGENT_ROW = "STATS_AGENT_ROW"
+    STATS_TIME_ROW = "STATS_TIME_ROW"
 
     # Misc
     SESSION_COUNT_SUFFIX = "SESSION_COUNT_SUFFIX"
@@ -264,6 +275,7 @@ TRANSLATIONS = {
         Keys.CLI_SINCE_HELP: "Collect start date (YYYY-MM-DD or YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "Collect end date (YYYY-MM-DD or YYYYMMDD)",
         Keys.CLI_CONFIG_HELP: "Manage AI config (view|edit)",
+        Keys.CLI_STATS_HELP: "Show session usage statistics",
         Keys.CLI_VERSION_HELP: "Show version and exit (-v, --version)",
         Keys.CLI_FORMAT_INVALID: "invalid format list: {value}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list mode ignores -format/--format.",
@@ -336,6 +348,14 @@ TRANSLATIONS = {
         Keys.DIAGNOSTIC_PARSED_URI: "Parsed URI",
         Keys.DIAGNOSTIC_CAPABILITY_GAP: "Capability gap",
         Keys.DIAGNOSTIC_NEXT_STEPS: "Next steps",
+        Keys.STATS_HEADER: "📊 Session Statistics (last {days} days)",
+        Keys.STATS_TOTAL_SESSIONS: "Total sessions: {count}",
+        Keys.STATS_TOTAL_MESSAGES: "Total messages: {count}",
+        Keys.STATS_BY_AGENT: "By Agent",
+        Keys.STATS_BY_TIME: "By Time",
+        Keys.STATS_NO_SESSIONS: "No sessions found in the last {days} days.",
+        Keys.STATS_AGENT_ROW: "  {name}: {sessions} sessions, {messages} messages",
+        Keys.STATS_TIME_ROW: "  {label}: {count} sessions",
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
@@ -423,6 +443,7 @@ TRANSLATIONS = {
         Keys.CLI_SINCE_HELP: "收集开始日期 (YYYY-MM-DD 或 YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "收集结束日期 (YYYY-MM-DD 或 YYYYMMDD)",
         Keys.CLI_CONFIG_HELP: "管理 AI 配置 (view|edit)",
+        Keys.CLI_STATS_HELP: "显示会话使用统计",
         Keys.CLI_VERSION_HELP: "显示版本号并退出（-v, --version）",
         Keys.CLI_FORMAT_INVALID: "无效的格式列表: {value}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list 模式会忽略 -format/--format 参数。",
@@ -495,6 +516,14 @@ TRANSLATIONS = {
         Keys.DIAGNOSTIC_PARSED_URI: "解析后的 URI",
         Keys.DIAGNOSTIC_CAPABILITY_GAP: "缺失能力",
         Keys.DIAGNOSTIC_NEXT_STEPS: "下一步",
+        Keys.STATS_HEADER: "📊 会话统计 (最近 {days} 天)",
+        Keys.STATS_TOTAL_SESSIONS: "总会话数: {count}",
+        Keys.STATS_TOTAL_MESSAGES: "总消息数: {count}",
+        Keys.STATS_BY_AGENT: "按 Agent",
+        Keys.STATS_BY_TIME: "按时间",
+        Keys.STATS_NO_SESSIONS: "最近 {days} 天内未找到会话。",
+        Keys.STATS_AGENT_ROW: "  {name}: {sessions} 个会话, {messages} 条消息",
+        Keys.STATS_TIME_ROW: "  {label}: {count} 个会话",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     },
 }
