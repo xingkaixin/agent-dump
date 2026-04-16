@@ -80,13 +80,13 @@ class KimiAgent(BaseAgent):
                 path = entry.get("path")
                 if not isinstance(path, str):
                     continue
-                hashed = hashlib.md5(path.encode("utf-8")).hexdigest()
+                hashed = hashlib.md5(  # noqa: S324
+                    path.encode("utf-8")
+                ).hexdigest()
                 if hashed == project_hash:
                     return path
         except Exception:
-            pass
-
-        return None
+            return None
 
     def _get_raw_source_path(self, session: Session) -> Path:
         """Pick the preferred raw source file for a Kimi session."""
