@@ -1,7 +1,7 @@
 """URI parsing and session lookup helpers."""
 
-import re
 from concurrent.futures import ThreadPoolExecutor
+import re
 
 from agent_dump.agent_registry import get_uri_scheme_map
 from agent_dump.agents.base import BaseAgent, Session
