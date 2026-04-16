@@ -3,6 +3,7 @@ Kimi agent handler
 """
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -50,6 +51,42 @@ class KimiAgent(BaseAgent):
             "context_file": context_path if context_path.exists() else None,
             "wire_file": wire_path if wire_path.exists() else None,
         }
+
+    def _resolve_cwd_from_project_hash(self, project_hash: str) -> str | None:
+        """Resolve real cwd path from Kimi project hash.
+
+        Kimi stores sessions under sessions/<project_hash>/<session_id>.
+        The project_hash is the MD5 hex digest of the working directory path,
+        recorded in ~/.kimi/kimi.json under work_dirs.
+        """
+        if not self.base_path:
+            return None
+
+        kimi_json_path = self.base_path.parent / "kimi.json"
+        if not kimi_json_path.exists():
+            return None
+
+        try:
+            with open(kimi_json_path, encoding="utf-8") as f:
+                data = json.load(f)
+
+            work_dirs = data.get("work_dirs", [])
+            if not isinstance(work_dirs, list):
+                return None
+
+            for entry in work_dirs:
+                if not isinstance(entry, dict):
+                    continue
+                path = entry.get("path")
+                if not isinstance(path, str):
+                    continue
+                hashed = hashlib.md5(path.encode("utf-8")).hexdigest()
+                if hashed == project_hash:
+                    return path
+        except Exception:
+            pass
+
+        return None
 
     def _get_raw_source_path(self, session: Session) -> Path:
         """Pick the preferred raw source file for a Kimi session."""
@@ -127,6 +164,9 @@ class KimiAgent(BaseAgent):
             created_at_ts = wire_mtime if isinstance(wire_mtime, (int, float)) else metadata_path.stat().st_mtime
             created_at = datetime.fromtimestamp(created_at_ts, tz=timezone.utc)
 
+            project_hash = session_dir.parent.name
+            cwd = self._resolve_cwd_from_project_hash(project_hash)
+
             return Session(
                 id=session_id,
                 title=title,
@@ -137,6 +177,7 @@ class KimiAgent(BaseAgent):
                     "context_file": str(context_path) if context_path else None,
                     "wire_file": str(wire_path) if wire_path else None,
                     "title_generated": metadata.get("title_generated", False),
+                    "cwd": cwd,
                 },
             )
         except Exception:
@@ -159,7 +200,6 @@ class KimiAgent(BaseAgent):
 
     def get_session_head(self, session: Session) -> dict[str, Any]:
         head = super().get_session_head(session)
-        head["cwd_or_project"] = str(session.source_path)
 
         message_count = 0
         raw_source = self._get_raw_source_path(session)

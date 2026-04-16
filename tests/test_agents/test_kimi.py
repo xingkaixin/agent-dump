@@ -3,6 +3,7 @@
 """
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 from pathlib import Path
 from unittest import mock
@@ -135,6 +136,87 @@ class TestKimiAgent:
             result = agent.is_available()
 
         assert result is True
+
+    def test_resolve_cwd_from_project_hash_returns_path_when_matched(self, tmp_path):
+        """测试能正确从 kimi.json 解析 project hash 对应的 cwd"""
+        agent = KimiAgent()
+        agent.base_path = tmp_path / "sessions"
+
+        kimi_root = agent.base_path.parent
+        kimi_root.mkdir(parents=True, exist_ok=True)
+        real_cwd = "/workspace/demo-project"
+        project_hash = hashlib.md5(real_cwd.encode("utf-8")).hexdigest()
+
+        kimi_json = {
+            "work_dirs": [
+                {"path": "/other/project", "kaos": "local"},
+                {"path": real_cwd, "kaos": "local"},
+            ]
+        }
+        (kimi_root / "kimi.json").write_text(json.dumps(kimi_json), encoding="utf-8")
+
+        result = agent._resolve_cwd_from_project_hash(project_hash)
+        assert result == real_cwd
+
+    def test_resolve_cwd_from_project_hash_returns_none_when_no_kimi_json(self, tmp_path):
+        """测试没有 kimi.json 时返回 None"""
+        agent = KimiAgent()
+        agent.base_path = tmp_path / "sessions"
+        result = agent._resolve_cwd_from_project_hash("anyhash")
+        assert result is None
+
+    def test_resolve_cwd_from_project_hash_returns_none_when_no_match(self, tmp_path):
+        """测试 kimi.json 中没有匹配项时返回 None"""
+        agent = KimiAgent()
+        agent.base_path = tmp_path / "sessions"
+
+        kimi_root = agent.base_path.parent
+        kimi_root.mkdir(parents=True, exist_ok=True)
+        kimi_json = {"work_dirs": [{"path": "/other/project", "kaos": "local"}]}
+        (kimi_root / "kimi.json").write_text(json.dumps(kimi_json), encoding="utf-8")
+
+        result = agent._resolve_cwd_from_project_hash("nomatchhash")
+        assert result is None
+
+    def test_parse_session_includes_cwd_from_kimi_json(self, tmp_path):
+        """测试 _parse_session 会把真实 cwd 存入 metadata"""
+        agent = KimiAgent()
+        agent.base_path = tmp_path / "sessions"
+
+        real_cwd = "/workspace/demo-project"
+        project_hash = hashlib.md5(real_cwd.encode("utf-8")).hexdigest()
+        session_dir = agent.base_path / project_hash / "session1"
+        session_dir.mkdir(parents=True)
+
+        kimi_json = {"work_dirs": [{"path": real_cwd, "kaos": "local"}]}
+        (tmp_path / "kimi.json").write_text(json.dumps(kimi_json), encoding="utf-8")
+
+        metadata_path = write_metadata(session_dir, session_id="s1")
+        write_jsonl(session_dir / "context.jsonl", [{"role": "user", "content": "hi"}])
+
+        result = agent._parse_session(metadata_path)
+        assert result is not None
+        assert result.metadata.get("cwd") == real_cwd
+
+    def test_get_session_head_uses_cwd_from_metadata(self, tmp_path):
+        """测试 get_session_head 优先使用 metadata 中的真实 cwd"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "hash" / "session1"
+        session_dir.mkdir(parents=True)
+        context_path = session_dir / "context.jsonl"
+        write_jsonl(context_path, [{"role": "user"}])
+
+        session = Session(
+            id="test-session",
+            title="Test Session",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_dir,
+            metadata={"context_file": str(context_path), "wire_file": None, "cwd": "/real/cwd"},
+        )
+
+        head = agent.get_session_head(session)
+        assert head["cwd_or_project"] == "/real/cwd"
 
     def test_parse_session_with_context_only(self, tmp_path):
         """测试仅有 context.jsonl 也能解析会话"""
