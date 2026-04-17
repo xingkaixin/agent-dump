@@ -35,10 +35,10 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --dev --python ${{ env.PYTHON_VERSION }}
 
-      - name: Set up Node 20
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Validate tag version
         shell: bash
@@ -135,6 +135,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
 
+    permissions:
+      id-token: write
+      contents: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -151,10 +155,10 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --dev --python ${{ env.PYTHON_VERSION }}
 
-      - name: Set up Node 20
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
           scope: "@agent-dump"
 
@@ -210,17 +214,17 @@ jobs:
 
       - name: Publish npm platform packages
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ""
         run: |
-          npm publish ./npm/packages/cli-linux-x64 --access public
-          npm publish ./npm/packages/cli-win32-x64 --access public
-          npm publish ./npm/packages/cli-darwin-x64 --access public
-          npm publish ./npm/packages/cli-darwin-arm64 --access public
+          npm publish ./npm/packages/cli-linux-x64 --provenance --access public
+          npm publish ./npm/packages/cli-win32-x64 --provenance --access public
+          npm publish ./npm/packages/cli-darwin-x64 --provenance --access public
+          npm publish ./npm/packages/cli-darwin-arm64 --provenance --access public
 
       - name: Publish npm CLI package
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish ./npm/packages/cli --access public
+          NODE_AUTH_TOKEN: ""
+        run: npm publish ./npm/packages/cli --provenance --access public
 
       - name: Publish to PyPI
         env:
@@ -263,10 +267,10 @@ jobs:
           - macos-14
 
     steps:
-      - name: Set up Node 20
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Smoke test npx package
         shell: bash
