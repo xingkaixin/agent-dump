@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts
+from agent_dump.search_index import SearchIndex
 from agent_dump.time_utils import normalize_datetime_utc
 
 AGENT_ALIASES = {
@@ -132,6 +133,11 @@ def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | No
 
     if agent.name == "opencode":
         return _filter_opencode_sessions(agent, sessions, query)
+
+    # Try indexed full-text search first
+    indexed = _try_indexed_search(agent, sessions, query)
+    if indexed is not None:
+        return indexed
 
     return _filter_sessions_from_source_or_data(agent, sessions, query)
 
@@ -500,3 +506,20 @@ def _query_match_sort_key(item: tuple[BaseAgent, Session]) -> tuple[float, float
     updated_at = normalize_datetime_utc(session.updated_at)
     created_at = normalize_datetime_utc(session.created_at)
     return (-updated_at.timestamp(), -created_at.timestamp(), agent.name, session.id)
+
+
+def _try_indexed_search(
+    agent: BaseAgent, sessions: list[Session], keyword: str
+) -> list[Session] | None:
+    """Try using the local search index. Returns None to fall back."""
+    try:
+        index = SearchIndex()
+        if not index.is_available:
+            return None
+
+        index.update(agent, sessions)
+        results = index.search(keyword, agent_names={agent.name})
+        matched_ids = {r.session_id for r in results}
+        return [s for s in sessions if s.id in matched_ids]
+    except Exception:
+        return None

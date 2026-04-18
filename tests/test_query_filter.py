@@ -229,7 +229,10 @@ class TestFilterSessions:
             session_data={"s1": {"messages": [{"parts": [{"type": "text", "text": "fatal"}]}]}},
         )
 
-        with mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as mock_get_session_data:
+        with (
+            mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as mock_get_session_data,
+            mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None),
+        ):
             result = filter_sessions(agent, [session], "fatal")
 
         assert result == []
