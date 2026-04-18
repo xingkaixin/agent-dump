@@ -99,8 +99,14 @@ class Keys:
     CLI_UNTIL_HELP = "CLI_UNTIL_HELP"
     CLI_CONFIG_HELP = "CLI_CONFIG_HELP"
     CLI_STATS_HELP = "CLI_STATS_HELP"
+    CLI_SEARCH_HELP = "CLI_SEARCH_HELP"
+    CLI_REINDEX_HELP = "CLI_REINDEX_HELP"
     CLI_VERSION_HELP = "CLI_VERSION_HELP"
     CLI_FORMAT_INVALID = "CLI_FORMAT_INVALID"
+    SEARCH_INDEX_NOT_AVAILABLE = "SEARCH_INDEX_NOT_AVAILABLE"
+    REINDEX_START = "REINDEX_START"
+    REINDEX_AGENT_DONE = "REINDEX_AGENT_DONE"
+    REINDEX_DONE = "REINDEX_DONE"
     LIST_IGNORE_FORMAT = "LIST_IGNORE_FORMAT"
     LIST_IGNORE_OUTPUT = "LIST_IGNORE_OUTPUT"
     INTERACTIVE_FORMAT_INVALID = "INTERACTIVE_FORMAT_INVALID"
@@ -276,8 +282,14 @@ TRANSLATIONS = {
         Keys.CLI_UNTIL_HELP: "Collect end date (YYYY-MM-DD or YYYYMMDD)",
         Keys.CLI_CONFIG_HELP: "Manage AI config (view|edit)",
         Keys.CLI_STATS_HELP: "Show session usage statistics",
+        Keys.CLI_SEARCH_HELP: "Full-text search keyword (searches message content via index)",
+        Keys.CLI_REINDEX_HELP: "Force rebuild the full-text search index",
         Keys.CLI_VERSION_HELP: "Show version and exit (-v, --version)",
         Keys.CLI_FORMAT_INVALID: "invalid format list: {value}",
+        Keys.SEARCH_INDEX_NOT_AVAILABLE: "⚠️  Full-text search is not available (SQLite FTS5 not supported).",
+        Keys.REINDEX_START: "🔄 Rebuilding search index...",
+        Keys.REINDEX_AGENT_DONE: "   ✓ {agent}: indexed {count} sessions",
+        Keys.REINDEX_DONE: "✅ Index rebuild complete. Total indexed: {count} sessions.",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list mode ignores -format/--format.",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list mode ignores -output/--output.",
         Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive mode does not support print; use json, markdown, or raw.",
@@ -444,8 +456,14 @@ TRANSLATIONS = {
         Keys.CLI_UNTIL_HELP: "收集结束日期 (YYYY-MM-DD 或 YYYYMMDD)",
         Keys.CLI_CONFIG_HELP: "管理 AI 配置 (view|edit)",
         Keys.CLI_STATS_HELP: "显示会话使用统计",
+        Keys.CLI_SEARCH_HELP: "全文搜索关键词（通过索引搜索消息内容）",
+        Keys.CLI_REINDEX_HELP: "强制重建全文搜索索引",
         Keys.CLI_VERSION_HELP: "显示版本号并退出（-v, --version）",
         Keys.CLI_FORMAT_INVALID: "无效的格式列表: {value}",
+        Keys.SEARCH_INDEX_NOT_AVAILABLE: "⚠️  全文搜索不可用（SQLite 不支持 FTS5）。",
+        Keys.REINDEX_START: "🔄 正在重建搜索索引...",
+        Keys.REINDEX_AGENT_DONE: "   ✓ {agent}: 已索引 {count} 个会话",
+        Keys.REINDEX_DONE: "✅ 索引重建完成。共索引 {count} 个会话。",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list 模式会忽略 -format/--format 参数。",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list 模式会忽略 -output/--output 参数。",
         Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive 模式不支持 print；可用格式为 json、markdown、raw。",

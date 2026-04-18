@@ -955,6 +955,39 @@ def handle_stats_mode(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_reindex_mode(args: argparse.Namespace) -> int:
+    """Handle `--reindex` flow: force rebuild the full-text index."""
+    from agent_dump.search_index import SearchIndex
+
+    scanner = AgentScanner()
+    available_agents = scanner.get_available_agents()
+
+    if not available_agents:
+        _print_diagnostic(_build_no_agents_found_diagnostic(scanner))
+        return 1
+
+    index = SearchIndex()
+    if not index.is_available:
+        print(i18n.t(Keys.SEARCH_INDEX_NOT_AVAILABLE))
+        return 1
+
+    print(i18n.t(Keys.REINDEX_START))
+    print()
+
+    total_indexed = 0
+    for agent in available_agents:
+        sessions = agent.get_sessions(days=args.days)
+        if not sessions:
+            continue
+        added = index.rebuild(agent, sessions)
+        total_indexed += added
+        print(i18n.t(Keys.REINDEX_AGENT_DONE, agent=agent.display_name, count=added))
+
+    print()
+    print(i18n.t(Keys.REINDEX_DONE, count=total_indexed))
+    return 0
+
+
 def main():
     """Main entry point"""
 
@@ -1060,6 +1093,17 @@ def main():
         help=i18n.t(Keys.CLI_QUERY_HELP),
     )
     parser.add_argument(
+        "--search",
+        type=str,
+        default=None,
+        help=i18n.t(Keys.CLI_SEARCH_HELP),
+    )
+    parser.add_argument(
+        "--reindex",
+        action="store_true",
+        help=i18n.t(Keys.CLI_REINDEX_HELP),
+    )
+    parser.add_argument(
         "--lang",
         type=str,
         default=None,
@@ -1119,6 +1163,8 @@ def main():
         return handle_collect_mode(args)
     if args.stats:
         return handle_stats_mode(args)
+    if args.reindex:
+        return handle_reindex_mode(args)
 
     export_config = load_export_config()
 
@@ -1272,6 +1318,10 @@ def main():
 
     # If --interactive or --list not specified, but filters are, enable --list
     # If nothing specified, show help
+    # --search implicitly enables --list
+    if args.search:
+        args.list = True
+
     if not args.interactive and not args.list:
         if args.days != 7 or args.query or is_query_uri_mode:
             args.list = True
@@ -1302,6 +1352,25 @@ def main():
                 )
             )
             return 1
+
+    # Merge --search keyword into query_spec
+    if args.search:
+        if query_spec is None:
+            query_spec = QuerySpec(
+                agent_names=None,
+                keyword=args.search,
+                project_path=None,
+                roles=None,
+                limit=None,
+            )
+        else:
+            query_spec = QuerySpec(
+                agent_names=query_spec.agent_names,
+                keyword=args.search,
+                project_path=query_spec.project_path,
+                roles=query_spec.roles,
+                limit=query_spec.limit,
+            )
 
     available_agents = scanner.get_available_agents()
 
