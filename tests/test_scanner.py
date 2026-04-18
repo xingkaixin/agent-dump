@@ -164,7 +164,7 @@ class TestAgentScanner:
 
         for agent in scanner.agents:
             agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
-            agent.scan = make_delayed_scan(0.1)  # type: ignore
+            agent.scan = make_delayed_scan(0.1)
 
         start = time.monotonic()
         result = scanner.scan()
