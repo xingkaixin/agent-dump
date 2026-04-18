@@ -4,7 +4,7 @@ const translations = {
     eyebrow: "CLI · AI Session Export",
     heroTitle: "Export AI coding sessions.",
     heroDescription:
-      "List, dump, export, and summarize sessions from Codex, Claude Code, Kimi, and OpenCode.",
+      "List, dump, export, summarize, and get usage stats for sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor.",
     versionLabel: "Version",
     installHeading: "Install",
     installGlobalLabel: "Install globally",
@@ -19,7 +19,7 @@ const translations = {
     eyebrow: "CLI · AI 会话导出",
     heroTitle: "导出 AI 编码会话。",
     heroDescription:
-      "一条 CLI 统一处理 Codex、Claude Code、Kimi 和 OpenCode 的列表、直读、导出与汇总。",
+      "一条 CLI 统一处理 Codex、Claude Code、Kimi、OpenCode 和 Cursor 的列表、直读、导出、汇总与统计。",
     versionLabel: "当前版本",
     installHeading: "安装",
     installGlobalLabel: "全局安装",
@@ -80,7 +80,8 @@ const content = {
 
 const TYPING_COMMANDS = [
   "agent-dump --interactive",
-  "agent-dump codex://thread/abc123 --format json",
+  "agent-dump codex://threads/abc123 --format json",
+  "agent-dump --stats -days 30",
   "agent-dump --collect --since 2026-03-01",
 ];
 

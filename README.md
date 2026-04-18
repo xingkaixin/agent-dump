@@ -23,6 +23,7 @@ AI Coding Assistant Session Export Tool - Supports exporting session data from m
 - **Statistics**: Exports include statistics such as token usage and cost
 - **Message Details**: Fully retains session messages, tool calls, and other details
 - **Smart Title Extraction**: Automatically extract session titles from agent metadata
+- **Session Statistics**: View usage statistics grouped by agent and time (`--stats`)
 
 ## Path Discovery
 
@@ -219,6 +220,10 @@ uv run agent-dump cursor://<request-id> --format print,json --output ./my-sessio
 uv run agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # Export JSON with AI summary
 uv run agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # Print, export JSON, and include summary
 
+# Statistics mode
+uv run agent-dump --stats                    # Show session stats for last 7 days
+uv run agent-dump --stats -days 30           # Show session stats for last 30 days
+
 # collect mode (time-range summary with AI)
 uv run agent-dump --collect
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
@@ -263,6 +268,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `-q`, `-query` | Query filter. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print lightweight session metadata for discovery; does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
+| `--stats` | Show session usage statistics for the last N days, grouped by agent and time. Supports `-days`. Cannot be combined with other modes. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
 | `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
 | `-until`, `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |

@@ -52,6 +52,13 @@ uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
 ```
 
+### 统计（stats）
+
+```bash
+uv run agent-dump --stats
+uv run agent-dump --stats -days 30
+```
+
 ### 配置管理（config）
 
 ```bash
@@ -85,6 +92,7 @@ uv run agent-dump --list -query "codex,kimi:timeout"
 | 非 URI 模式 | `json` | 主要配合 `--interactive` 使用 |
 | `--list` 模式 | N/A | 仅列出，不导出；`--format/--output` 会被忽略并警告 |
 | `--interactive` 模式 | `json` | 支持 `json/markdown/raw`，不接受 `print` |
+| `--stats` 模式 | N/A | 不能与 URI/`--interactive`/`--list`/`--collect` 同时使用 |
 | `--collect` 模式 | N/A | 不能与 URI/`--interactive`/`--list` 同时使用 |
 
 补充：

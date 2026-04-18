@@ -2,6 +2,37 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.7.0] - 2026-04-18
+
+### Added
+
+- **`--stats` session usage statistics**
+  - Added `--stats` mode to show session usage statistics for the last N days
+  - Dimensions include: total sessions, total messages (when available), grouped by agent, and grouped by time (Today, Yesterday, This Week, This Month, Earlier)
+  - Supports `-days` parameter to adjust the statistics time range
+
+- **Concurrent scanner**
+  - Agent availability checks and session scanning are now concurrent, significantly reducing scan time in multi-agent scenarios
+  - URI session lookup is also concurrent, reducing single-URI resolution latency
+
+- **Kimi project path resolution**
+  - Kimi agent now reads project info from `kimi.json` to resolve project hashes into real cwd paths
+  - Improves path display and filtering accuracy for Kimi sessions in `--collect` and `--list`
+
+### Improved
+
+- **Test type safety**
+  - Removed redundant `# type: ignore` comments in scanner concurrent tests
+
+### Changed
+
+- **Build environment upgrade**
+  - Release pipeline Node.js upgraded to v24
+  - npm package publishing now enables provenance for supply-chain trust
+
+- **Development config**
+  - Added `.worktree` to `.gitignore`
+
 ## [0.6.20] - 2026-04-12
 
 ### Added
