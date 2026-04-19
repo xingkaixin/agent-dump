@@ -1,5 +1,27 @@
 # 更新日志
 
+## [0.8.0] - 2026-04-19
+
+### 新增功能
+
+- **基于 SQLite FTS5 的本地全文会话搜索**
+  - `--search <keyword>`: 跨会话标题、消息内容、reasoning 和 tool state 全文搜索
+  - `--reindex`: 强制重建全文索引
+  - 双分词器策略：`unicode61` 处理西文 + `trigram` 处理 CJK 与模糊匹配
+  - CJK 预处理：在相邻 CJK 字符间插入空格，使 `unicode61` 能逐字分词
+  - 基于源文件修改时间 (mtime) 的增量更新
+  - FTS5 不可用时优雅回退到 O(n) 文件扫描
+
+- **Query filter 集成**
+  - 结构化查询与 scoped query 在索引可用时优先使用搜索索引
+  - 索引过期或缺失时自动回退到文件扫描
+
+### 变更
+
+- **构建/测试**
+  - 新增 `tests/test_search_index.py` 提供完整的回归测试覆盖
+  - 更新 `test_query_filter.py` 以覆盖索引感知查询行为
+
 ## [0.7.0] - 2026-04-18
 
 ### 新增功能
@@ -568,6 +590,8 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.8.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.8.0
+[0.7.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.7.0
 [0.6.16]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.16
 [0.6.13]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.13
 [0.6.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.12

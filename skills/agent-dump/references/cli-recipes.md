@@ -59,6 +59,20 @@ uv run agent-dump --stats
 uv run agent-dump --stats -days 30
 ```
 
+### 搜索（search）
+
+```bash
+# Full-text search across all sessions
+uv run agent-dump --search "auth timeout"
+uv run agent-dump --search "认证"
+
+# Combine with list + days
+uv run agent-dump --search "auth" --list -days 30
+
+# Rebuild index
+uv run agent-dump --reindex
+```
+
 ### 配置管理（config）
 
 ```bash
@@ -66,7 +80,9 @@ uv run agent-dump --config view
 uv run agent-dump --config edit
 ```
 
-## 2) 查询语法（-q / -query）
+## 2) 查询语法
+
+### `-q` / `-query`（过滤查询）
 
 - 关键词查询：`-query "keyword"`
 - 指定 agent 范围查询：`-query "agent1,agent2:keyword"`
@@ -84,6 +100,21 @@ uv run agent-dump --list -query "timeout"
 uv run agent-dump --list -query "codex,kimi:timeout"
 ```
 
+### `--search`（全文搜索）
+
+- 基于 SQLite FTS5 的本地全文搜索，覆盖标题、消息、reasoning、tool state。
+- 双分词器：`unicode61` 处理西文，`trigram` 处理 CJK 与模糊匹配。
+- 索引基于源文件 mtime 增量更新；FTS5 不可用时回退到 O(n) 文件扫描。
+- 可与 `--list` 组合使用；不能与 URI、`--interactive`、`--collect`、`--stats` 同时使用。
+
+示例：
+
+```bash
+uv run agent-dump --search "auth timeout"
+uv run agent-dump --search "认证"
+uv run agent-dump --search "auth" --list -days 30
+```
+
 ## 3) 行为矩阵（避免误用）
 
 | 场景 | 默认格式 | 关键规则 |
@@ -94,6 +125,8 @@ uv run agent-dump --list -query "codex,kimi:timeout"
 | `--interactive` 模式 | `json` | 支持 `json/markdown/raw`，不接受 `print` |
 | `--stats` 模式 | N/A | 不能与 URI/`--interactive`/`--list`/`--collect` 同时使用 |
 | `--collect` 模式 | N/A | 不能与 URI/`--interactive`/`--list` 同时使用 |
+| `--search` 模式 | N/A | 不能与 URI/`--interactive`/`--collect`/`--stats` 同时使用。可与 `--list` 组合 |
+| `--reindex` | N/A | 独立的索引维护命令，不应与其他模式标志组合 |
 
 补充：
 - `-p/-page-size` 参数目前在 `--list` 模式下保留兼容，不生效。

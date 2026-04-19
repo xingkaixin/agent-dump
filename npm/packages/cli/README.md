@@ -64,6 +64,14 @@ agent-dump --stats
 agent-dump --stats -days 30
 ```
 
+### Search
+
+```bash
+agent-dump --search "auth timeout"
+agent-dump --search "auth" --list -days 30
+agent-dump --reindex
+```
+
 ### Collect (AI summary by date range)
 
 ```bash
@@ -94,6 +102,7 @@ agent-dump --config edit
 - **URI direct access**: View or export any session by its URI without searching
 - **Statistics**: `--stats` shows session counts and message counts grouped by agent and time
 - **AI collect**: `--collect` summarizes sessions over a date range using your configured LLM
+- **Full-text search**: `--search` uses local SQLite FTS5 with dual tokenizer (`unicode61` + `trigram`) for Western and CJK text
 - **Structured queries**: `provider:`, `role:`, `path:`, `limit:` filters in `-query`
 - **Scoped queries**: `agents://<path>?q=keyword&providers=codex,claude` for repo-scoped searches
 - **Multi-format export**: `--format json,markdown,raw,print` with `md` alias for markdown

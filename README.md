@@ -24,6 +24,7 @@ AI Coding Assistant Session Export Tool - Supports exporting session data from m
 - **Message Details**: Fully retains session messages, tool calls, and other details
 - **Smart Title Extraction**: Automatically extract session titles from agent metadata
 - **Session Statistics**: View usage statistics grouped by agent and time (`--stats`)
+- **Full-Text Search**: Local SQLite FTS5 search across session titles, messages, reasoning, and tool state (`--search`)
 
 ## Path Discovery
 
@@ -220,6 +221,12 @@ uv run agent-dump cursor://<request-id> --format print,json --output ./my-sessio
 uv run agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # Export JSON with AI summary
 uv run agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # Print, export JSON, and include summary
 
+# Search mode (full-text)
+uv run agent-dump --search "auth timeout"          # Search sessions matching keyword
+uv run agent-dump --search "认证"                   # CJK keyword search works
+uv run agent-dump --search "auth" --list -days 30  # Combine with list + days
+uv run agent-dump --reindex                        # Force rebuild search index
+
 # Statistics mode
 uv run agent-dump --stats                    # Show session stats for last 7 days
 uv run agent-dump --stats -days 30           # Show session stats for last 30 days
@@ -269,6 +276,8 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--head` | URI mode only. Print lightweight session metadata for discovery; does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
 | `--stats` | Show session usage statistics for the last N days, grouped by agent and time. Supports `-days`. Cannot be combined with other modes. | - |
+| `--search` | Full-text search across session titles, messages, reasoning, and tool state using local SQLite FTS5. Supports CJK via dual tokenizer (`unicode61` + `trigram`). Auto-fallback to file scan when index is stale or FTS5 unavailable. Can be combined with `--list`. | - |
+| `--reindex` | Force rebuild of the full-text search index. Use when index is corrupted or after manual session data changes. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
 | `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
 | `-until`, `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |

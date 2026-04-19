@@ -2,6 +2,28 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.8.0] - 2026-04-19
+
+### Added
+
+- **Local full-text session search via SQLite FTS5**
+  - `--search <keyword>`: full-text search across session titles, message content, reasoning, and tool state
+  - `--reindex`: force rebuild of the full-text index
+  - Dual tokenizer strategy: `unicode61` for Western text + `trigram` for CJK and substring matching
+  - CJK preprocessing: inserts spaces between adjacent CJK characters so `unicode61` can tokenize them individually
+  - Incremental updates based on source file modification time (mtime)
+  - Graceful fallback to O(n) file scan when FTS5 is unavailable
+
+- **Query filter integration**
+  - Structured and scoped queries now leverage the search index when available
+  - Falls back to file scan when index is stale or missing
+
+### Changed
+
+- **Build / test**
+  - Added `tests/test_search_index.py` with comprehensive regression coverage
+  - Updated `test_query_filter.py` for index-aware query behavior
+
 ## [0.7.0] - 2026-04-18
 
 ### Added
@@ -564,6 +586,8 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.8.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.8.0
+[0.7.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.7.0
 [0.6.16]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.16
 [0.6.13]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.13
 [0.6.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.12
