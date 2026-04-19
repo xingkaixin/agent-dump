@@ -508,9 +508,7 @@ def _query_match_sort_key(item: tuple[BaseAgent, Session]) -> tuple[float, float
     return (-updated_at.timestamp(), -created_at.timestamp(), agent.name, session.id)
 
 
-def _try_indexed_search(
-    agent: BaseAgent, sessions: list[Session], keyword: str
-) -> list[Session] | None:
+def _try_indexed_search(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session] | None:
     """Try using the local search index. Returns None to fall back."""
     try:
         index = SearchIndex()

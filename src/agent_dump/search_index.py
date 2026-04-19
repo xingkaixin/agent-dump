@@ -202,9 +202,7 @@ def _select_fts_table(keyword: str) -> str:
 _FTS_TABLES = ("sessions_fts", "sessions_fts_trigram")
 
 
-def _delete_fts_by_session(
-    conn: sqlite3.Connection, fts_table: str, session_id: str, agent_name: str
-) -> None:
+def _delete_fts_by_session(conn: sqlite3.Connection, fts_table: str, session_id: str, agent_name: str) -> None:
     """Delete FTS rows for a specific session."""
     cursor = conn.execute(
         f"SELECT rowid FROM {fts_table} WHERE session_id = ? AND agent_name = ?",
@@ -217,9 +215,7 @@ def _delete_fts_by_session(
         )
 
 
-def _delete_fts_by_agent(
-    conn: sqlite3.Connection, fts_table: str, agent_name: str
-) -> None:
+def _delete_fts_by_agent(conn: sqlite3.Connection, fts_table: str, agent_name: str) -> None:
     """Delete FTS rows for a specific agent."""
     cursor = conn.execute(
         f"SELECT rowid FROM {fts_table} WHERE agent_name = ?",
@@ -280,9 +276,7 @@ class SearchIndex:
         conn = self._get_connection()
         try:
             # Schema migration: rebuild if old schema detected
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='index_state'"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='index_state'")
             has_index_state = cursor.fetchone() is not None
             if has_index_state and not self._check_schema_ok(conn):
                 self._drop_all_tables(conn)
@@ -439,8 +433,7 @@ class SearchIndex:
         try:
             if agent_names:
                 placeholders = ",".join("?" * len(agent_names))
-                sql = (
-                    f"""
+                sql = f"""
                     SELECT agent_name, session_id, title,
                            snippet({fts_table}, 3, '**', '**', '...', 10) as snippet,
                            bm25({fts_table}) as rank
@@ -448,11 +441,9 @@ class SearchIndex:
                     WHERE {fts_table} MATCH ? AND agent_name IN ({placeholders})
                     ORDER BY rank
                     """
-                )
                 params = (fts_query,) + tuple(agent_names)
             else:
-                sql = (
-                    f"""
+                sql = f"""
                     SELECT agent_name, session_id, title,
                            snippet({fts_table}, 3, '**', '**', '...', 10) as snippet,
                            bm25({fts_table}) as rank
@@ -460,7 +451,6 @@ class SearchIndex:
                     WHERE {fts_table} MATCH ?
                     ORDER BY rank
                     """
-                )
                 params = (fts_query,)
 
             cursor = conn.execute(sql, params)
@@ -495,9 +485,7 @@ class SearchIndex:
         try:
             for fts_table in _FTS_TABLES:
                 _delete_fts_by_agent(conn, fts_table, agent_name)
-            cursor = conn.execute(
-                "DELETE FROM index_state WHERE agent = ? RETURNING source_path", (agent_name,)
-            )
+            cursor = conn.execute("DELETE FROM index_state WHERE agent = ? RETURNING source_path", (agent_name,))
             deleted = len(cursor.fetchall())
             conn.commit()
             return deleted
@@ -517,9 +505,7 @@ class SearchIndex:
 
         conn = self._get_connection()
         try:
-            cursor = conn.execute(
-                "SELECT agent, COUNT(*) as count FROM index_state GROUP BY agent"
-            )
+            cursor = conn.execute("SELECT agent, COUNT(*) as count FROM index_state GROUP BY agent")
             return {row["agent"]: {"sessions": row["count"]} for row in cursor.fetchall()}
         finally:
             conn.close()
