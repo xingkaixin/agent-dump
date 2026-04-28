@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://agent-dump.xingkaixin.me/sitemap.xml

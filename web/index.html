@@ -6,11 +6,57 @@
     <meta name="theme-color" content="#fdfcfc" />
     <meta
       name="description"
-      content="Agent Dump exports sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor — list, dump, export, summarize, and get stats from one CLI."
+      content="Agent Dump is a CLI tool to list, dump, export, summarize, and search AI coding sessions from Claude Code, Codex, Kimi, OpenCode, and Cursor. Install via npm, uv, or run with npx/uvx."
     />
+    <meta name="keywords" content="agent-dump, AI session export, Claude Code sessions, Codex sessions, Cursor sessions, AI coding tool, session dump, CLI export, developer tool" />
+    <meta name="author" content="xingkaixin" />
+    <meta name="robots" content="index, follow" />
     <title>Agent Dump | Session Export for AI Coding Tools</title>
+    <link rel="canonical" href="https://agent-dump.xingkaixin.me/" />
     <link rel="icon" type="image/png" href="./assets/logo.png" />
     <link rel="apple-touch-icon" href="./assets/logo.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://agent-dump.xingkaixin.me/" />
+    <meta property="og:site_name" content="Agent Dump" />
+    <meta property="og:title" content="Agent Dump | Session Export for AI Coding Tools" />
+    <meta property="og:description" content="CLI tool to list, dump, export, summarize, and search AI coding sessions from Claude Code, Codex, Kimi, OpenCode, and Cursor. One command for all your AI tools." />
+    <meta property="og:image" content="https://agent-dump.xingkaixin.me/assets/logo.png" />
+    <meta property="og:image:alt" content="Agent Dump logo" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Agent Dump | Session Export for AI Coding Tools" />
+    <meta name="twitter:description" content="CLI tool to list, dump, export, summarize, and search AI coding sessions from Claude Code, Codex, Kimi, OpenCode, and Cursor." />
+    <meta name="twitter:image" content="https://agent-dump.xingkaixin.me/assets/logo.png" />
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Agent Dump",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "macOS, Linux, Windows",
+      "description": "CLI tool to list, dump, export, summarize, and search AI coding sessions from Claude Code, Codex, Kimi, OpenCode, and Cursor.",
+      "url": "https://agent-dump.xingkaixin.me/",
+      "downloadUrl": "https://www.npmjs.com/package/@agent-dump/cli",
+      "softwareVersion": "0.8.0",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "xingkaixin",
+        "url": "https://github.com/xingkaixin"
+      },
+      "codeRepository": "https://github.com/xingkaixin/agent-dump",
+      "license": "https://github.com/xingkaixin/agent-dump/blob/main/LICENSE"
+    }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -120,5 +166,20 @@
         data-i18n="footerGithub"
       >GitHub</a>
     </footer>
+
+    <noscript>
+      <style>.hero,.install-section{display:block}</style>
+      <section style="max-width:720px;margin:2rem auto;padding:0 1rem;font-family:monospace">
+        <h1>Agent Dump – Export AI Coding Sessions</h1>
+        <p>CLI tool to list, dump, export, summarize, and search sessions from Claude Code, Codex, Kimi, OpenCode, and Cursor.</p>
+        <h2>Install</h2>
+        <pre>npm install -g @agent-dump/cli</pre>
+        <pre>uv tool install agent-dump</pre>
+        <h2>Run without installing</h2>
+        <pre>npx @agent-dump/cli --help</pre>
+        <pre>uvx agent-dump --help</pre>
+        <p><a href="https://github.com/xingkaixin/agent-dump">View on GitHub</a></p>
+      </section>
+    </noscript>
   </body>
 </html>
