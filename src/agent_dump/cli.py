@@ -33,6 +33,7 @@ from agent_dump.collect import (
     summarize_collect_entries,
     write_collect_markdown,
 )
+from agent_dump.collect_models import collect_fields_for
 from agent_dump.collect_workflow import (
     CollectWorkflowDeps,
     handle_collect_mode as _handle_collect_mode,
@@ -853,6 +854,7 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
             resolve_collect_save_path=resolve_collect_save_path,
             render_session_text=render_session_text,
             parse_query_uri=parse_query_uri,
+            collect_fields_for=collect_fields_for,
             i18n_t=i18n.t,
             keys=Keys,
         ),
@@ -1047,6 +1049,14 @@ def main():
     parser.add_argument("--head", action="store_true", help=i18n.t(Keys.CLI_HEAD_HELP))
     parser.add_argument("-summary", "--summary", action="store_true", help=i18n.t(Keys.CLI_SUMMARY_HELP))
     parser.add_argument("--collect", action="store_true", help=i18n.t(Keys.CLI_COLLECT_HELP))
+    parser.add_argument(
+        "--collect-mode",
+        type=str,
+        choices=["pm", "insight"],
+        default="pm",
+        dest="collect_mode",
+        help=i18n.t(Keys.CLI_COLLECT_MODE_HELP),
+    )
     parser.add_argument("--stats", action="store_true", help=i18n.t(Keys.CLI_STATS_HELP))
     parser.add_argument("--shortcut", type=str, default=None, help=i18n.t(Keys.CLI_SHORTCUT_HELP))
     parser.add_argument("-since", "--since", type=str, default=None, help=i18n.t(Keys.CLI_SINCE_HELP))

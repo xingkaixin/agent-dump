@@ -24,7 +24,6 @@ from agent_dump.collect_models import (
     MAX_LOG_PREVIEW_CHARS,
     MAX_SUMMARY_ITEMS_PER_FIELD,
     SESSION_MERGE_LLM_THRESHOLD,
-    SUMMARY_FIELDS,
     SUMMARY_PARSE_RETRY_COUNT,
     SUPPORTED_DATE_FORMATS,
     CollectAggregate,
@@ -36,6 +35,7 @@ from agent_dump.collect_models import (
     GroupSummaryEntry,
     PlannedCollectEntry,
     SessionSummaryEntry,
+    collect_fields_for,
 )
 from agent_dump.config import AIConfig, CollectConfig, LoggingConfig
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
@@ -158,15 +158,16 @@ def _dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_IT
     return result
 
 
-def empty_summary_payload() -> dict[str, list[str]]:
+def empty_summary_payload(mode: str = "pm") -> dict[str, list[str]]:
     """Create one empty structured summary payload."""
-    return {field_name: [] for field_name in SUMMARY_FIELDS}
+    return {field_name: [] for field_name in collect_fields_for(mode)}
 
 
-def normalize_summary_payload(payload: dict[str, Any]) -> dict[str, list[str]]:
+def normalize_summary_payload(payload: dict[str, Any], *, mode: str = "pm") -> dict[str, list[str]]:
     """Normalize unknown payload to the fixed summary schema."""
-    normalized = empty_summary_payload()
-    for field_name in SUMMARY_FIELDS:
+    fields = collect_fields_for(mode)
+    normalized: dict[str, list[str]] = {field_name: [] for field_name in fields}
+    for field_name in fields:
         raw_value = payload.get(field_name, [])
         values: list[str]
         if isinstance(raw_value, list):
@@ -183,10 +184,12 @@ def merge_summary_payloads(
     payloads: Iterable[dict[str, list[str]]],
     *,
     max_items_per_field: int = MAX_SUMMARY_ITEMS_PER_FIELD,
+    mode: str = "pm",
 ) -> dict[str, list[str]]:
     """Merge structured summaries deterministically."""
-    merged = empty_summary_payload()
-    for field_name in SUMMARY_FIELDS:
+    fields = collect_fields_for(mode)
+    merged: dict[str, list[str]] = {field_name: [] for field_name in fields}
+    for field_name in fields:
         items: list[str] = []
         for payload in payloads:
             items.extend(payload.get(field_name, []))
@@ -225,9 +228,9 @@ def _serialize_summary_payload(payload: dict[str, list[str]]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def build_summary_json_schema() -> dict[str, Any]:
+def build_summary_json_schema(mode: str = "pm") -> dict[str, Any]:
     """Build one fixed schema for collect structured summaries."""
-    return _build_summary_json_schema()
+    return _build_summary_json_schema(collect_fields_for(mode))
 
 
 def create_collect_logger(config: LoggingConfig | None) -> CollectLogger:
@@ -600,30 +603,53 @@ def build_collect_chunk_prompt(
     chunk_index: int,
     chunk_total: int,
     local_tz: tzinfo | None = None,
+    mode: str = "pm",
 ) -> str:
     """Build prompt for a chunk-level structured summary."""
     resolved_local_tz = local_tz or get_local_timezone()
-    lines = [
-        "你是一个严谨的工作记录结构化摘要助手。",
-        "请只基于给定 chunk 内容输出 JSON 对象，不要输出 Markdown，不要补充解释。",
-        f"JSON 必须只包含这些字段: {', '.join(SUMMARY_FIELDS)}。",
-        "每个字段都必须是字符串数组；没有内容时返回空数组。",
-        "要求：",
-        "1. 只保留事实，不要编造。",
-        "2. 同一事实不要换说法重复写。",
-        "3. errors 只放错误/异常/失败。",
-        "4. files 只放文件路径。",
-        "5. tools_used 只放工具名。",
-        "",
-        "会话元信息：",
-        f"- session_uri: {entry.session_uri}",
-        f"- title: {entry.session_title}",
-        f"- project_directory: {entry.project_directory or '(unknown)'}",
-        f"- created_at: {to_local_datetime(entry.created_at, resolved_local_tz).isoformat()}",
-        f"- chunk: {chunk_index + 1}/{chunk_total}",
-        "",
-        "chunk events:",
-    ]
+    fields = collect_fields_for(mode)
+    if mode == "insight":
+        lines = [
+            "你是一个会话事实提取助手，从用户视角提取关键片段。",
+            "请只基于给定 chunk 内容输出 JSON 对象，不要输出 Markdown，不要补充解释。",
+            f"JSON 必须只包含这些字段: {', '.join(fields)}。",
+            "每个字段都必须是字符串数组；没有内容时返回空数组。",
+            "字段说明：",
+            "- scene: 用户想做什么——目标、意图、正在推进的事。每条一句话。",
+            "- stuck: 用户卡在哪——遇到的障碍、反复尝试的地方、报错、犹豫。每条一句话。",
+            "- turning: 转折点——思路或行为发生明确变化的时刻（换方案、换工具、换角度）。每条一句话。",
+            "要求：",
+            "1. 只基于会话中的事实，不要编造。",
+            "2. 不要做价值判断或锐评，只描述发生了什么。",
+            "3. 同一事实不要换说法重复写。",
+            "4. 如果某个字段没有对应内容，返回空数组。",
+        ]
+    else:
+        lines = [
+            "你是一个严谨的工作记录结构化摘要助手。",
+            "请只基于给定 chunk 内容输出 JSON 对象，不要输出 Markdown，不要补充解释。",
+            f"JSON 必须只包含这些字段: {', '.join(fields)}。",
+            "每个字段都必须是字符串数组；没有内容时返回空数组。",
+            "要求：",
+            "1. 只保留事实，不要编造。",
+            "2. 同一事实不要换说法重复写。",
+            "3. errors 只放错误/异常/失败。",
+            "4. files 只放文件路径。",
+            "5. tools_used 只放工具名。",
+        ]
+    lines.extend(
+        [
+            "",
+            "会话元信息：",
+            f"- session_uri: {entry.session_uri}",
+            f"- title: {entry.session_title}",
+            f"- project_directory: {entry.project_directory or '(unknown)'}",
+            f"- created_at: {to_local_datetime(entry.created_at, resolved_local_tz).isoformat()}",
+            f"- chunk: {chunk_index + 1}/{chunk_total}",
+            "",
+            "chunk events:",
+        ]
+    )
     lines.extend(f"- {_render_event(event)}" for event in chunk_events)
     return "\n".join(lines)
 
@@ -633,12 +659,14 @@ def build_collect_merge_prompt(
     entry: CollectEntry,
     payloads: list[dict[str, list[str]]],
     merge_label: str,
+    mode: str = "pm",
 ) -> str:
     """Build prompt for session/group structured merge when deterministic merge is too large."""
+    fields = collect_fields_for(mode)
     lines = [
         "你是一个严谨的结构化摘要归并助手。",
         "请把下面多个 JSON 摘要归并成一个 JSON 对象。",
-        f"输出 JSON 仍然只能包含这些字段: {', '.join(SUMMARY_FIELDS)}。",
+        f"输出 JSON 仍然只能包含这些字段: {', '.join(fields)}。",
         "每个字段必须是字符串数组；没有内容时返回空数组。",
         "要求：去重、保留关键事实、压缩重复表述，不要输出字段之外的内容。",
         "",
@@ -671,8 +699,10 @@ def request_structured_summary_from_llm(
     session_uri: str | None = None,
     chunk_index: int | None = None,
     chunk_total: int | None = None,
+    mode: str = "pm",
 ) -> dict[str, list[str]]:
     """Call LLM and parse one structured summary payload."""
+    summary_fields = collect_fields_for(mode)
     attempts = retry_count + 1
     last_error: Exception | None = None
     last_error_kind = "parse"
@@ -691,7 +721,12 @@ def request_structured_summary_from_llm(
                 prompt_chars=len(prompt),
             )
         try:
-            response = request_structured_summary_payload_from_llm(config, prompt, timeout_seconds=timeout_seconds)
+            response = request_structured_summary_payload_from_llm(
+                config,
+                prompt,
+                timeout_seconds=timeout_seconds,
+                summary_fields=summary_fields,
+            )
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             last_error_kind = "request"
@@ -721,7 +756,7 @@ def request_structured_summary_from_llm(
                 response_chars=len(response),
             )
         try:
-            return normalize_summary_payload(_extract_json_object(response))
+            return normalize_summary_payload(_extract_json_object(response), mode=mode)
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             last_error_kind = "parse"
@@ -748,9 +783,15 @@ def request_structured_summary_payload_from_llm(
     prompt: str,
     *,
     timeout_seconds: int = 90,
+    summary_fields: tuple[str, ...] | None = None,
 ) -> str:
     """Call provider API and return one structured summary payload string."""
-    return _request_structured_summary_payload_from_llm(config, prompt, timeout_seconds=timeout_seconds)
+    return _request_structured_summary_payload_from_llm(
+        config,
+        prompt,
+        timeout_seconds=timeout_seconds,
+        summary_fields=summary_fields,
+    )
 
 
 def build_collect_session_prompt(
@@ -758,6 +799,7 @@ def build_collect_session_prompt(
     *,
     source_truncated: bool,
     local_tz: tzinfo | None = None,
+    mode: str = "pm",
 ) -> str:
     """Build compatibility prompt string for one whole session."""
     chunks = chunk_collect_events(entry.events)
@@ -767,6 +809,7 @@ def build_collect_session_prompt(
         chunk_index=0,
         chunk_total=len(chunks),
         local_tz=local_tz,
+        mode=mode,
     ) + ("\n\n注意：原始 session 内容在事件提取阶段已截断。" if source_truncated else "")
 
 
@@ -780,6 +823,7 @@ def _summarize_collect_entry(
     on_chunk_summarized: Callable[[CollectProgressEvent], None] | None = None,
     on_session_merged: Callable[[CollectProgressEvent], None] | None = None,
     logger: CollectLogger | None = None,
+    mode: str = "pm",
 ) -> SessionSummaryEntry:
     entry = planned_entry.collect_entry
     chunks = planned_entry.chunks
@@ -791,6 +835,7 @@ def _summarize_collect_entry(
             chunk_index=chunk_index,
             chunk_total=len(chunks),
             local_tz=local_tz,
+            mode=mode,
         )
         payload = request_structured_summary_from_llm(
             config,
@@ -802,6 +847,7 @@ def _summarize_collect_entry(
             session_uri=entry.session_uri,
             chunk_index=chunk_index + 1,
             chunk_total=len(chunks),
+            mode=mode,
         )
         chunk_payloads.append(payload)
         emit_collect_progress(
@@ -815,17 +861,18 @@ def _summarize_collect_entry(
             chunk_total=len(chunks),
         )
 
-    merged = merge_summary_payloads(chunk_payloads)
+    merged = merge_summary_payloads(chunk_payloads, mode=mode)
     if len(chunk_payloads) > 1 and _summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
         merged = request_structured_summary_from_llm(
             config,
-            build_collect_merge_prompt(entry=entry, payloads=chunk_payloads, merge_label="session"),
+            build_collect_merge_prompt(entry=entry, payloads=chunk_payloads, merge_label="session", mode=mode),
             context_label=f"{entry.session_uri} session merge",
             timeout_seconds=timeout_seconds,
             logger=logger,
             phase="session_merge",
             session_uri=entry.session_uri,
             chunk_total=len(chunks),
+            mode=mode,
         )
     emit_collect_progress(
         on_session_merged,
@@ -855,6 +902,7 @@ def summarize_collect_entries(
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     timeout_seconds: int = 90,
     logger: CollectLogger | None = None,
+    mode: str = "pm",
 ) -> list[SessionSummaryEntry]:
     """Generate structured per-session summaries with limited concurrency."""
     if not planned_entries:
@@ -927,6 +975,7 @@ def summarize_collect_entries(
             on_chunk_summarized=_mark_chunk_summarized,
             on_session_merged=_mark_session_merged,
             logger=logger,
+            mode=mode,
         )
 
     future_to_index: dict[Future[SessionSummaryEntry], int] = {}
@@ -957,12 +1006,18 @@ def _build_summary_bucket_lines(
     session_summaries: list[SessionSummaryEntry],
     *,
     key_fn: Callable[[SessionSummaryEntry], str],
+    mode: str = "pm",
 ) -> dict[str, list[str]]:
     grouped: dict[str, list[str]] = defaultdict(list)
     for summary in session_summaries:
         key = key_fn(summary)
         payload = summary.summary_data
-        highlights = payload["key_actions"][:2] + payload["decisions"][:1] + payload["errors"][:1]
+        if mode == "insight":
+            highlights = payload.get("scene", [])[:2] + payload.get("stuck", [])[:1]
+        else:
+            highlights = (
+                payload.get("key_actions", [])[:2] + payload.get("decisions", [])[:1] + payload.get("errors", [])[:1]
+            )
         line = f"{summary.collect_entry.session_title}: {'; '.join(_dedupe_preserve_order(highlights, limit=4)) or '(no highlights)'}"
         grouped[key].append(line)
     return {key: _dedupe_preserve_order(values, limit=6) for key, values in grouped.items()}
@@ -976,11 +1031,12 @@ def reduce_collect_summaries(
     group_size: int = GROUP_SIZE,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     logger: CollectLogger | None = None,
+    mode: str = "pm",
 ) -> CollectAggregate:
     """Reduce per-session summaries via tree reduction into one final aggregate."""
     if not session_summaries:
         return CollectAggregate(
-            summary_data=empty_summary_payload(),
+            summary_data=empty_summary_payload(mode),
             date_summaries={},
             project_summaries={},
             session_count=0,
@@ -1007,19 +1063,23 @@ def reduce_collect_summaries(
         for start in range(0, len(working), group_size):
             group = working[start : start + group_size]
             payloads = [item.summary_data for item in group]
-            merged = merge_summary_payloads(payloads)
+            merged = merge_summary_payloads(payloads, mode=mode)
             if _summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
                 dummy_entry = session_summaries[min(start, len(session_summaries) - 1)].collect_entry
                 merged = request_structured_summary_from_llm(
                     config,
                     build_collect_merge_prompt(
-                        entry=dummy_entry, payloads=payloads, merge_label=f"group-level-{reduction_depth}"
+                        entry=dummy_entry,
+                        payloads=payloads,
+                        merge_label=f"group-level-{reduction_depth}",
+                        mode=mode,
                     ),
                     context_label=f"group merge level {reduction_depth} index {start // group_size + 1}",
                     timeout_seconds=timeout_seconds,
                     logger=logger,
                     phase="group_merge",
                     session_uri=dummy_entry.session_uri,
+                    mode=mode,
                 )
             next_level.append(
                 GroupSummaryEntry(
@@ -1041,10 +1101,12 @@ def reduce_collect_summaries(
     date_summaries = _build_summary_bucket_lines(
         session_summaries,
         key_fn=lambda item: item.collect_entry.date_value.isoformat(),
+        mode=mode,
     )
     project_summaries = _build_summary_bucket_lines(
         session_summaries,
         key_fn=lambda item: item.collect_entry.project_directory or "(unknown)",
+        mode=mode,
     )
     return CollectAggregate(
         summary_data=working[0].summary_data,
@@ -1061,23 +1123,50 @@ def build_collect_final_prompt(
     until_date: date,
     aggregate: CollectAggregate,
     has_truncated: bool,
+    mode: str = "pm",
 ) -> str:
     """Build final collect markdown prompt from the final aggregate."""
-    lines = [
-        "你是一个工作记录分析助手。",
-        "请基于给定的结构化聚合数据输出 Markdown，总结重点工作。",
-        "必须严格使用以下结构：",
-        f"# 时段工作总结（{since_date.isoformat()} ~ {until_date.isoformat()}）",
-        "## 按日期",
-        "## 按项目/目录",
-        "## 重点事项（决策/风险/阻塞）",
-        "## 产出清单",
-        "## 下一步建议",
-        "要求：避免空话，按事实归纳；同一事项合并去重；可按优先级标注。",
-        "",
-        f"- session_count: {aggregate.session_count}",
-        f"- reduction_depth: {aggregate.reduction_depth}",
-    ]
+    if mode == "insight":
+        lines = [
+            "你是一个会话事实整理助手，从用户视角归纳关键片段。",
+            "请基于给定的结构化聚合数据输出 Markdown，只摆事实，不做评价。",
+            "必须严格使用以下结构：",
+            f"# 作者洞察（{since_date.isoformat()} ~ {until_date.isoformat()}）",
+            "",
+            "## 洞察",
+            "",
+            "每条洞察用以下格式（scene/stuck/turning 三个维度交叉组合，不要求每条都齐备）：",
+            "### [简短标题]",
+            "- **想做什么**: [用户的目标或意图]",
+            "- **卡在哪**: [遇到的障碍或反复尝试的地方]",
+            "- **转折点**: [思路或行为发生明确变化的时刻]",
+            "",
+            "要求：",
+            "1. 从聚合数据中提炼，同一 session 的相关事实合并。",
+            "2. 只描述事实，不做价值判断。",
+            "3. 如果某个维度没有内容，省略该行。",
+        ]
+    else:
+        lines = [
+            "你是一个工作记录分析助手。",
+            "请基于给定的结构化聚合数据输出 Markdown，总结重点工作。",
+            "必须严格使用以下结构：",
+            f"# 时段工作总结（{since_date.isoformat()} ~ {until_date.isoformat()}）",
+            "## 按日期",
+            "## 按项目/目录",
+            "## 重点事项（决策/风险/阻塞）",
+            "## 产出清单",
+            "## 下一步建议",
+            "要求：避免空话，按事实归纳；同一事项合并去重；可按优先级标注。",
+        ]
+
+    lines.extend(
+        [
+            "",
+            f"- session_count: {aggregate.session_count}",
+            f"- reduction_depth: {aggregate.reduction_depth}",
+        ]
+    )
     if has_truncated:
         lines.append("注意：部分 session 在事件提取阶段达到预算上限，最终结论可能遗漏低优先级细节。")
 

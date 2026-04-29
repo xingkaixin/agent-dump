@@ -22,10 +22,13 @@ def request_structured_summary_payload_from_llm(
     prompt: str,
     *,
     timeout_seconds: int = 90,
+    summary_fields: tuple[str, ...] | None = None,
 ) -> str:
     """Call provider API and return one structured summary payload string."""
     if config.provider == "openai":
-        return _request_openai_structured_summary(config, prompt, timeout_seconds=timeout_seconds)
+        return _request_openai_structured_summary(
+            config, prompt, timeout_seconds=timeout_seconds, summary_fields=summary_fields
+        )
     return request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
 
 
@@ -80,7 +83,13 @@ def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> s
     return _read_openai_response_content(_request_openai_json(config, payload, timeout_seconds=timeout_seconds))
 
 
-def _request_openai_structured_summary(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
+def _request_openai_structured_summary(
+    config: AIConfig,
+    prompt: str,
+    *,
+    timeout_seconds: int,
+    summary_fields: tuple[str, ...] | None = None,
+) -> str:
     payload = {
         "model": config.model,
         "messages": [
@@ -91,7 +100,7 @@ def _request_openai_structured_summary(config: AIConfig, prompt: str, *, timeout
         "enable_thinking": False,
         "response_format": {
             "type": "json_schema",
-            "json_schema": build_summary_json_schema(),
+            "json_schema": build_summary_json_schema(summary_fields),
         },
     }
     return _read_openai_response_content(_request_openai_json(config, payload, timeout_seconds=timeout_seconds))
@@ -139,14 +148,15 @@ def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -
     return content
 
 
-def build_summary_json_schema() -> dict[str, Any]:
+def build_summary_json_schema(summary_fields: tuple[str, ...] | None = None) -> dict[str, Any]:
     """Build structured summary JSON schema."""
+    fields = summary_fields if summary_fields is not None else SUMMARY_FIELDS
     return {
         "name": "collect_summary",
         "schema": {
             "type": "object",
-            "properties": {field_name: {"type": "array", "items": {"type": "string"}} for field_name in SUMMARY_FIELDS},
-            "required": list(SUMMARY_FIELDS),
+            "properties": {field_name: {"type": "array", "items": {"type": "string"}} for field_name in fields},
+            "required": list(fields),
             "additionalProperties": False,
         },
         "strict": True,

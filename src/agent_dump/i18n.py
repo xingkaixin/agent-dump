@@ -94,6 +94,7 @@ class Keys:
     CLI_QUERY_HELP = "CLI_QUERY_HELP"
     CLI_LANG_HELP = "CLI_LANG_HELP"
     CLI_COLLECT_HELP = "CLI_COLLECT_HELP"
+    CLI_COLLECT_MODE_HELP = "CLI_COLLECT_MODE_HELP"
     CLI_SHORTCUT_HELP = "CLI_SHORTCUT_HELP"
     CLI_SINCE_HELP = "CLI_SINCE_HELP"
     CLI_UNTIL_HELP = "CLI_UNTIL_HELP"
@@ -277,6 +278,7 @@ TRANSLATIONS = {
         Keys.CLI_QUERY_HELP: "Query filter. Supports legacy 'agent1,agent2:keyword' / 'keyword', or structured terms like 'bug provider:codex role:user path:. limit:20'; cannot be combined with agents:// query URIs",
         Keys.CLI_LANG_HELP: "Language (en, zh). Default: auto-detect",
         Keys.CLI_COLLECT_HELP: "Collect session prints by date range and summarize with AI",
+        Keys.CLI_COLLECT_MODE_HELP: "Collect output mode: pm (project management) or insight (author insights)",
         Keys.CLI_SHORTCUT_HELP: "Run a configured shortcut preset",
         Keys.CLI_SINCE_HELP: "Collect start date (YYYY-MM-DD or YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "Collect end date (YYYY-MM-DD or YYYYMMDD)",
@@ -451,6 +453,7 @@ TRANSLATIONS = {
         Keys.CLI_PAGE_SIZE_HELP: "每页显示的会话数量 (默认: 20)",
         Keys.CLI_LANG_HELP: "语言 (en, zh). 默认: 自动检测",
         Keys.CLI_COLLECT_HELP: "按日期收集会话 print 内容并调用 AI 生成总结",
+        Keys.CLI_COLLECT_MODE_HELP: "收集输出模式: pm（项目管理）或 insight（作者洞察）",
         Keys.CLI_SHORTCUT_HELP: "执行已配置的 shortcut 预设",
         Keys.CLI_SINCE_HELP: "收集开始日期 (YYYY-MM-DD 或 YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "收集结束日期 (YYYY-MM-DD 或 YYYYMMDD)",

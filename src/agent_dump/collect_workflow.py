@@ -35,6 +35,7 @@ class CollectWorkflowDeps:
     resolve_collect_save_path: Callable[..., Path | None]
     render_session_text: Callable[[str, dict[str, Any]], str]
     parse_query_uri: Callable[[str | None, set[str], Path | None], QuerySpec | None]
+    collect_fields_for: Callable[[str], tuple[str, ...]]
     i18n_t: Callable[..., str]
     keys: Any
 
@@ -108,6 +109,7 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
         print(t(keys.NO_AGENTS_FOUND))
         return 1
 
+    collect_mode = getattr(args, "collect_mode", "pm")
     phase = "read"
     try:
         with deps.show_collect_progress() as update_progress:
@@ -170,6 +172,7 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 progress_callback=update_progress,
                 timeout_seconds=collect_config.summary_timeout_seconds,
                 logger=collect_logger,
+                mode=collect_mode,
             )
             phase = "render"
             deps.emit_collect_progress(
@@ -181,6 +184,7 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 progress_callback=update_progress,
                 timeout_seconds=collect_config.summary_timeout_seconds,
                 logger=collect_logger,
+                mode=collect_mode,
             )
             deps.emit_collect_progress(
                 update_progress, stage="render_final", current=1, total=2, message="render final"
@@ -190,6 +194,7 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 until_date=until_date,
                 aggregate=aggregate,
                 has_truncated=has_truncated,
+                mode=collect_mode,
             )
             markdown = deps.request_summary_from_llm(
                 config,

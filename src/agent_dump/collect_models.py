@@ -18,6 +18,22 @@ SUMMARY_FIELDS = (
     "open_questions",
     "notes",
 )
+INSIGHT_SUMMARY_FIELDS = ("scene", "stuck", "turning")
+
+_COLLECT_MODE_FIELDS = {
+    "pm": SUMMARY_FIELDS,
+    "insight": INSIGHT_SUMMARY_FIELDS,
+}
+
+
+def collect_fields_for(mode: str) -> tuple[str, ...]:
+    """Return the summary field names for the given collect mode."""
+    fields = _COLLECT_MODE_FIELDS.get(mode)
+    if fields is None:
+        raise ValueError(f"unsupported collect mode: {mode}")
+    return fields
+
+
 EVENT_EXTRACT_CHAR_BUDGET = 12000
 CHUNK_TARGET_CHARS = 3200
 GROUP_SIZE = 8
