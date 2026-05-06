@@ -34,7 +34,7 @@ from agent_dump.cli import (
     show_collect_progress,
 )
 from agent_dump.collect import CollectProgressEvent
-from agent_dump.config import ExportConfig
+from agent_dump.config import CollectConfig, ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import QuerySpec, SearchSessionMatch
@@ -485,6 +485,16 @@ class TestMain:
         assert result == 0
         mock_handle.assert_called_once()
 
+    def test_main_dispatches_collect_dry_run(self):
+        with mock.patch("agent_dump.cli.handle_collect_mode", return_value=0) as mock_handle:
+            with mock.patch("sys.argv", ["agent-dump", "--collect", "--dry-run"]):
+                result = main()
+
+        assert result == 0
+        args = mock_handle.call_args.args[0]
+        assert args.collect is True
+        assert args.dry_run is True
+
     def test_main_agents_query_uri_conflicts_with_query_option(self, capsys):
         with mock.patch("sys.argv", ["agent-dump", "agents://.?q=bug", "-q", "fatal"]):
             result = main()
@@ -625,6 +635,148 @@ class TestMain:
         assert query_spec.roles == {"user"}
         assert query_spec.limit == 2
         assert query_spec.project_path == Path.cwd().resolve()
+
+    def test_collect_mode_dry_run_skips_ai_config_llm_and_write(self, capsys, tmp_path):
+        args = argparse.Namespace(
+            collect=True,
+            uri=None,
+            interactive=False,
+            list=False,
+            since="2026-03-01",
+            until="2026-03-05",
+            save=str(tmp_path / "reports"),
+            dry_run=True,
+        )
+        mock_entry = mock.MagicMock()
+        mock_entry.agent_display_name = "Codex"
+        mock_planned_entry = mock.MagicMock()
+        mock_planned_entry.chunks = (mock.MagicMock(), mock.MagicMock())
+        collect_config = CollectConfig(summary_concurrency=3)
+
+        mock_scanner = mock.MagicMock()
+        known_agent = mock.MagicMock()
+        known_agent.name = "codex"
+        available_agent = mock.MagicMock()
+        available_agent.name = "codex"
+        mock_scanner.agents = [known_agent]
+        mock_scanner.get_available_agents.return_value = [available_agent]
+
+        with (
+            mock.patch("agent_dump.cli.load_ai_config") as mock_load_ai,
+            mock.patch("agent_dump.cli.validate_ai_config") as mock_validate_ai,
+            mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config),
+            mock.patch("agent_dump.cli.load_logging_config") as mock_load_logging,
+            mock.patch("agent_dump.cli.create_collect_logger") as mock_create_logger,
+            mock.patch("agent_dump.cli.AgentScanner", return_value=mock_scanner),
+            mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)),
+            mock.patch("agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 2)),
+            mock.patch("agent_dump.cli.summarize_collect_entries") as mock_summarize,
+            mock.patch("agent_dump.cli.request_summary_from_llm") as mock_request_summary,
+            mock.patch("agent_dump.cli.write_collect_markdown") as mock_write,
+        ):
+            result = handle_collect_mode(args)
+
+        assert result == 0
+        mock_load_ai.assert_not_called()
+        mock_validate_ai.assert_not_called()
+        mock_load_logging.assert_not_called()
+        mock_create_logger.assert_not_called()
+        mock_summarize.assert_not_called()
+        mock_request_summary.assert_not_called()
+        mock_write.assert_not_called()
+        output = capsys.readouterr().out
+        assert "Collect dry-run 预览" in output
+        assert "日期范围：2026-03-01 ~ 2026-03-05" in output
+        assert "Provider 分布：Codex 1" in output
+        assert "Session 数：1" in output
+        assert "Chunk 数：2" in output
+        assert "并发配置：3" in output
+        assert str(tmp_path / "reports" / "agent-dump-collect-20260301-20260305.md") in output
+
+    def test_collect_mode_dry_run_applies_agents_uri_path_scope_and_agent_denies(self, capsys, tmp_path):
+        cwd = Path.cwd().resolve()
+        output_path = tmp_path / "collect.md"
+        args = argparse.Namespace(
+            collect=True,
+            uri="agents://.?providers=codex,claude",
+            interactive=False,
+            list=False,
+            since="2026-03-01",
+            until="2026-03-05",
+            save=str(output_path),
+            dry_run=True,
+        )
+
+        in_scope = make_session(
+            "codex-in-scope",
+            "Codex in scope",
+            created_at=datetime(2026, 3, 2, 12, 0, tzinfo=timezone.utc),
+            metadata={"cwd": str(cwd / "app")},
+        )
+        out_of_scope = make_session(
+            "codex-out-of-scope",
+            "Codex out of scope",
+            created_at=datetime(2026, 3, 2, 12, 0, tzinfo=timezone.utc),
+            metadata={"cwd": str(tmp_path / "outside")},
+        )
+        denied = make_session(
+            "claude-denied",
+            "Claude denied",
+            created_at=datetime(2026, 3, 2, 12, 0, tzinfo=timezone.utc),
+            metadata={"cwd": str(cwd / "blocked")},
+        )
+
+        codex_agent = mock.MagicMock()
+        codex_agent.name = "codex"
+        codex_agent.display_name = "Codex"
+        codex_agent.get_sessions.return_value = [in_scope, out_of_scope]
+        codex_agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+        codex_agent.get_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "实现 dry-run"}]}]
+        }
+
+        claude_agent = mock.MagicMock()
+        claude_agent.name = "claudecode"
+        claude_agent.display_name = "Claude Code"
+        claude_agent.get_sessions.return_value = [denied]
+        claude_agent.get_session_uri.side_effect = lambda session: f"claude://{session.id}"
+        claude_agent.get_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "被 deny 的会话"}]}]
+        }
+        collect_config = CollectConfig(
+            summary_concurrency=2,
+            agent_denies={"claudecode": (str(cwd / "blocked"),)},
+        )
+        mock_scanner = mock.MagicMock()
+        known_codex = mock.MagicMock()
+        known_codex.name = "codex"
+        known_claude = mock.MagicMock()
+        known_claude.name = "claudecode"
+        mock_scanner.agents = [known_codex, known_claude]
+        mock_scanner.get_available_agents.return_value = [codex_agent, claude_agent]
+
+        with (
+            mock.patch("agent_dump.cli.load_ai_config") as mock_load_ai,
+            mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config),
+            mock.patch("agent_dump.cli.AgentScanner", return_value=mock_scanner),
+            mock.patch("agent_dump.cli.summarize_collect_entries") as mock_summarize,
+            mock.patch("agent_dump.cli.request_summary_from_llm") as mock_request_summary,
+            mock.patch("agent_dump.cli.write_collect_markdown") as mock_write,
+        ):
+            result = handle_collect_mode(args)
+
+        assert result == 0
+        mock_load_ai.assert_not_called()
+        mock_summarize.assert_not_called()
+        mock_request_summary.assert_not_called()
+        mock_write.assert_not_called()
+        codex_agent.get_session_data.assert_called_once_with(in_scope)
+        claude_agent.get_session_data.assert_not_called()
+        assert output_path.exists() is False
+        output = capsys.readouterr().out
+        assert "Provider 分布：Codex 1" in output
+        assert "Session 数：1" in output
+        assert str(output_path) in output
 
     def test_collect_mode_success_shows_stage_progress_in_stderr(self, capsys, tmp_path):
         args = argparse.Namespace(

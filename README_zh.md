@@ -208,11 +208,14 @@ uv run agent-dump --collect --save ./reports/weekly.md
 uv run agent-dump --collect --save /tmp/agent-dump-reports
 uv run agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
 uv run agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
+uv run agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
 uv run agent-dump --shortcut ob 20260408
 
 # 说明：--collect 会先把每条 session 转成高信号事件流，按预算切 chunk，
 #       为每个 chunk 请求固定 JSON 结构摘要，再做 session 级 deterministic merge，
 #       最后通过 tree reduction 聚合结构化结果，再交给 Markdown prompt。
+# 说明：--collect --dry-run 会完成扫描、查询过滤和 chunk planning，并输出 provider 分布、
+#       session 数、chunk 数、并发配置、日期范围和保存路径预览。
 # 说明：--collect 会在 stderr 输出多阶段进度，包括 scan_sessions、plan_chunks、
 #       summarize_chunks、merge_sessions、tree_reduction、render_final、write_output。
 # 说明：collect 输出文件名示例：agent-dump-collect-20260301-20260305.md。
@@ -243,6 +246,7 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `-q`, `-query` | 查询过滤。支持 legacy `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`），也支持结构化条件如 `bug provider:codex role:user path:. limit:20`。`cwd:` 是 `path:` 的别名。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印轻量会话元数据用于发现，不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
 | `--collect` | 按日期范围采集会话 print 内容，可选通过 `agents://...` 查询 URI 约束范围。将会话转成高信号事件流，按固定 JSON schema 做 chunk 摘要，session 级 deterministic merge，再 tree-reduce 结构化结果生成最终 AI 总结。多阶段进度显示在 stderr。 | - |
+| `--dry-run` | 与 `--collect` 搭配使用，预览 provider 分布、session 数、chunk 数、并发配置、日期范围和保存路径，跳过 AI 请求和文件写入。 | - |
 | `--stats` | 显示最近 N 天会话使用统计，按 Agent 和时间分组。支持 `-days`。不能与其他模式同时使用。 | - |
 | `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。双分词器（`unicode61` + `trigram`）支持 CJK。索引过期或 FTS5 不可用时自动回退到文件扫描。可与 `--list` 组合。 | - |
 | `--reindex` | 强制重建全文搜索索引。索引损坏或手动修改会话数据后使用。 | - |

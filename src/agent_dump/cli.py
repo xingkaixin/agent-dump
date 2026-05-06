@@ -1092,6 +1092,7 @@ def main():
         dest="collect_mode",
         help=i18n.t(Keys.CLI_COLLECT_MODE_HELP),
     )
+    parser.add_argument("--dry-run", action="store_true", help=i18n.t(Keys.CLI_DRY_RUN_HELP))
     parser.add_argument("--stats", action="store_true", help=i18n.t(Keys.CLI_STATS_HELP))
     parser.add_argument("--shortcut", type=str, default=None, help=i18n.t(Keys.CLI_SHORTCUT_HELP))
     parser.add_argument("-since", "--since", type=str, default=None, help=i18n.t(Keys.CLI_SINCE_HELP))

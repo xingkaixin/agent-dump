@@ -240,11 +240,14 @@ uv run agent-dump --collect --save ./reports/weekly.md
 uv run agent-dump --collect --save /tmp/agent-dump-reports
 uv run agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
 uv run agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
+uv run agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
 uv run agent-dump --shortcut ob 20260408
 
 # Note: --collect converts each session into high-signal events, plans chunks by budget,
 #       requests fixed JSON summaries per chunk, merges them deterministically per session,
 #       then uses tree reduction for the final aggregate before rendering Markdown.
+# Note: --collect --dry-run completes scanning, query filtering, and chunk planning, then
+#       prints provider breakdown, session/chunk counts, concurrency, dates, and save path preview.
 # Note: during --collect, stderr shows multi-stage progress such as scan_sessions,
 #       plan_chunks, summarize_chunks, merge_sessions, tree_reduction, render_final, and write_output.
 # Note: collect writes files like agent-dump-collect-20260301-20260305.md.
@@ -275,6 +278,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `-q`, `-query` | Query filter. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print lightweight session metadata for discovery; does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
+| `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
 | `--stats` | Show session usage statistics for the last N days, grouped by agent and time. Supports `-days`. Cannot be combined with other modes. | - |
 | `--search` | Full-text search across session titles, messages, reasoning, and tool state using local SQLite FTS5. Supports CJK via dual tokenizer (`unicode61` + `trigram`). Auto-fallback to file scan when index is stale or FTS5 unavailable. Can be combined with `--list`. | - |
 | `--reindex` | Force rebuild of the full-text search index. Use when index is corrupted or after manual session data changes. | - |

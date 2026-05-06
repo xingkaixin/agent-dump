@@ -95,6 +95,7 @@ class Keys:
     CLI_LANG_HELP = "CLI_LANG_HELP"
     CLI_COLLECT_HELP = "CLI_COLLECT_HELP"
     CLI_COLLECT_MODE_HELP = "CLI_COLLECT_MODE_HELP"
+    CLI_DRY_RUN_HELP = "CLI_DRY_RUN_HELP"
     CLI_SHORTCUT_HELP = "CLI_SHORTCUT_HELP"
     CLI_SINCE_HELP = "CLI_SINCE_HELP"
     CLI_UNTIL_HELP = "CLI_UNTIL_HELP"
@@ -162,6 +163,13 @@ class Keys:
     COLLECT_NO_SESSIONS = "COLLECT_NO_SESSIONS"
     COLLECT_API_FAILED = "COLLECT_API_FAILED"
     COLLECT_OUTPUT_SAVED = "COLLECT_OUTPUT_SAVED"
+    COLLECT_DRY_RUN_HEADER = "COLLECT_DRY_RUN_HEADER"
+    COLLECT_DRY_RUN_DATE_RANGE = "COLLECT_DRY_RUN_DATE_RANGE"
+    COLLECT_DRY_RUN_PROVIDER_BREAKDOWN = "COLLECT_DRY_RUN_PROVIDER_BREAKDOWN"
+    COLLECT_DRY_RUN_SESSION_COUNT = "COLLECT_DRY_RUN_SESSION_COUNT"
+    COLLECT_DRY_RUN_CHUNK_COUNT = "COLLECT_DRY_RUN_CHUNK_COUNT"
+    COLLECT_DRY_RUN_CONCURRENCY = "COLLECT_DRY_RUN_CONCURRENCY"
+    COLLECT_DRY_RUN_SAVE_PATH = "COLLECT_DRY_RUN_SAVE_PATH"
     COLLECT_SUMMARY_LOADING = "COLLECT_SUMMARY_LOADING"
     COLLECT_SESSION_PROGRESS = "COLLECT_SESSION_PROGRESS"
     COLLECT_PROGRESS_START = "COLLECT_PROGRESS_START"
@@ -286,6 +294,7 @@ TRANSLATIONS = {
         Keys.CLI_LANG_HELP: "Language (en, zh). Default: auto-detect",
         Keys.CLI_COLLECT_HELP: "Collect session prints by date range and summarize with AI",
         Keys.CLI_COLLECT_MODE_HELP: "Collect output mode: pm (project management) or insight (author insights)",
+        Keys.CLI_DRY_RUN_HELP: "Preview collect workload without AI calls or file writes",
         Keys.CLI_SHORTCUT_HELP: "Run a configured shortcut preset",
         Keys.CLI_SINCE_HELP: "Collect start date (YYYY-MM-DD or YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "Collect end date (YYYY-MM-DD or YYYYMMDD)",
@@ -350,6 +359,13 @@ TRANSLATIONS = {
         Keys.COLLECT_NO_SESSIONS: "⚠️  No sessions found in range {since} ~ {until}.",
         Keys.COLLECT_API_FAILED: "❌ AI summary request failed: {error}",
         Keys.COLLECT_OUTPUT_SAVED: "✅ Collect summary saved: {path}",
+        Keys.COLLECT_DRY_RUN_HEADER: "Collect dry-run preview",
+        Keys.COLLECT_DRY_RUN_DATE_RANGE: "Date range: {since} ~ {until}",
+        Keys.COLLECT_DRY_RUN_PROVIDER_BREAKDOWN: "Provider breakdown: {breakdown}",
+        Keys.COLLECT_DRY_RUN_SESSION_COUNT: "Sessions: {count}",
+        Keys.COLLECT_DRY_RUN_CHUNK_COUNT: "Chunks: {count}",
+        Keys.COLLECT_DRY_RUN_CONCURRENCY: "Concurrency: {concurrency}",
+        Keys.COLLECT_DRY_RUN_SAVE_PATH: "Save path: {path}",
         Keys.COLLECT_SUMMARY_LOADING: "⏳ Calling AI to generate collect summary, please wait...",
         Keys.COLLECT_SESSION_PROGRESS: "session summaries: {completed}/{total} ({percent}%)",
         Keys.COLLECT_PROGRESS_START: "Collect started: {since} ~ {until}",
@@ -468,6 +484,7 @@ TRANSLATIONS = {
         Keys.CLI_LANG_HELP: "语言 (en, zh). 默认: 自动检测",
         Keys.CLI_COLLECT_HELP: "按日期收集会话 print 内容并调用 AI 生成总结",
         Keys.CLI_COLLECT_MODE_HELP: "收集输出模式: pm（项目管理）或 insight（作者洞察）",
+        Keys.CLI_DRY_RUN_HELP: "预览 collect 工作量，跳过 AI 请求和文件写入",
         Keys.CLI_SHORTCUT_HELP: "执行已配置的 shortcut 预设",
         Keys.CLI_SINCE_HELP: "收集开始日期 (YYYY-MM-DD 或 YYYYMMDD)",
         Keys.CLI_UNTIL_HELP: "收集结束日期 (YYYY-MM-DD 或 YYYYMMDD)",
@@ -532,6 +549,13 @@ TRANSLATIONS = {
         Keys.COLLECT_NO_SESSIONS: "⚠️  在 {since} ~ {until} 区间内未找到会话。",
         Keys.COLLECT_API_FAILED: "❌ AI 总结请求失败: {error}",
         Keys.COLLECT_OUTPUT_SAVED: "✅ collect 总结已保存: {path}",
+        Keys.COLLECT_DRY_RUN_HEADER: "Collect dry-run 预览",
+        Keys.COLLECT_DRY_RUN_DATE_RANGE: "日期范围：{since} ~ {until}",
+        Keys.COLLECT_DRY_RUN_PROVIDER_BREAKDOWN: "Provider 分布：{breakdown}",
+        Keys.COLLECT_DRY_RUN_SESSION_COUNT: "Session 数：{count}",
+        Keys.COLLECT_DRY_RUN_CHUNK_COUNT: "Chunk 数：{count}",
+        Keys.COLLECT_DRY_RUN_CONCURRENCY: "并发配置：{concurrency}",
+        Keys.COLLECT_DRY_RUN_SAVE_PATH: "保存路径：{path}",
         Keys.COLLECT_SUMMARY_LOADING: "⏳ 正在调用 AI 生成汇总，请稍候...",
         Keys.COLLECT_SESSION_PROGRESS: "session summaries: {completed}/{total} ({percent}%)",
         Keys.COLLECT_PROGRESS_START: "Collect 任务开始：{since} ~ {until}",

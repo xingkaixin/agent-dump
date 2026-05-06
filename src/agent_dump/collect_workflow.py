@@ -11,6 +11,10 @@ from agent_dump.agents.base import BaseAgent
 from agent_dump.query_filter import QuerySpec
 
 
+def _collect_default_filename(*, since_date: date, until_date: date) -> str:
+    return f"agent-dump-collect-{since_date.strftime('%Y%m%d')}-{until_date.strftime('%Y%m%d')}.md"
+
+
 @dataclass(frozen=True)
 class CollectWorkflowDeps:
     """Injected dependencies for collect mode orchestration."""
@@ -46,7 +50,7 @@ def resolve_collect_save_path(save: str | None, *, since_date: date, until_date:
         return None
 
     candidate = Path(save)
-    default_name = f"agent-dump-collect-{since_date.strftime('%Y%m%d')}-{until_date.strftime('%Y%m%d')}.md"
+    default_name = _collect_default_filename(since_date=since_date, until_date=until_date)
 
     if candidate.exists():
         return candidate / default_name if candidate.is_dir() else candidate
@@ -55,10 +59,41 @@ def resolve_collect_save_path(save: str | None, *, since_date: date, until_date:
     return candidate / default_name
 
 
+def preview_collect_save_path(save: str | None, *, since_date: date, until_date: date) -> Path:
+    resolved = resolve_collect_save_path(save, since_date=since_date, until_date=until_date)
+    if resolved is not None:
+        return resolved
+    return Path.cwd() / _collect_default_filename(since_date=since_date, until_date=until_date)
+
+
+def _format_collect_dry_run_preview(
+    *,
+    run_stats: Any,
+    output_path: Path,
+    t: Callable[..., str],
+    keys: Any,
+) -> str:
+    breakdown = ", ".join(
+        f"{agent_name} {count}" for agent_name, count in sorted(run_stats.agent_session_counts.items())
+    )
+    return "\n".join(
+        [
+            t(keys.COLLECT_DRY_RUN_HEADER),
+            t(keys.COLLECT_DRY_RUN_DATE_RANGE, since=run_stats.since, until=run_stats.until),
+            t(keys.COLLECT_DRY_RUN_PROVIDER_BREAKDOWN, breakdown=breakdown),
+            t(keys.COLLECT_DRY_RUN_SESSION_COUNT, count=run_stats.session_count),
+            t(keys.COLLECT_DRY_RUN_CHUNK_COUNT, count=run_stats.chunk_count),
+            t(keys.COLLECT_DRY_RUN_CONCURRENCY, concurrency=run_stats.concurrency),
+            t(keys.COLLECT_DRY_RUN_SAVE_PATH, path=str(output_path)),
+        ]
+    )
+
+
 def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> int:
     """Handle `--collect` flow."""
     keys = deps.keys
     t = deps.i18n_t
+    dry_run = bool(getattr(args, "dry_run", False))
 
     if args.interactive or args.list:
         print(t(keys.COLLECT_MODE_CONFLICT))
@@ -77,19 +112,23 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
             print(t(keys.COLLECT_DATE_FORMAT_INVALID))
         return 1
 
-    config = deps.load_ai_config()
-    valid, errors = deps.validate_ai_config(config)
-    if not valid or config is None:
-        if "missing_file" in errors:
-            print(t(keys.COLLECT_CONFIG_MISSING))
-        else:
-            print(t(keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(errors)))
-        print(t(keys.COLLECT_CONFIG_HINT))
-        return 1
+    config = None
+    if not dry_run:
+        config = deps.load_ai_config()
+        valid, errors = deps.validate_ai_config(config)
+        if not valid or config is None:
+            if "missing_file" in errors:
+                print(t(keys.COLLECT_CONFIG_MISSING))
+            else:
+                print(t(keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(errors)))
+            print(t(keys.COLLECT_CONFIG_HINT))
+            return 1
 
     collect_config = deps.load_collect_config()
-    logging_config = deps.load_logging_config()
-    collect_logger = deps.create_collect_logger(logging_config)
+    collect_logger = None
+    if not dry_run:
+        logging_config = deps.load_logging_config()
+        collect_logger = deps.create_collect_logger(logging_config)
 
     scanner = deps.scanner_factory()
     valid_agents = {agent.name for agent in scanner.agents}
@@ -135,14 +174,15 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 print(t(keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
                 return 1
 
-            collect_logger.log(
-                "collect_run_start",
-                since=since_date.isoformat(),
-                until=until_date.isoformat(),
-                summary_concurrency=collect_config.summary_concurrency,
-                agent_count=len(available_agents),
-                session_count=len(entries),
-            )
+            if collect_logger is not None:
+                collect_logger.log(
+                    "collect_run_start",
+                    since=since_date.isoformat(),
+                    until=until_date.isoformat(),
+                    summary_concurrency=collect_config.summary_concurrency,
+                    agent_count=len(available_agents),
+                    session_count=len(entries),
+                )
             planned_entries, _ = deps.plan_collect_entries(entries, progress_callback=update_progress)
             run_stats = deps.build_collect_run_stats(
                 entries=entries,
@@ -164,6 +204,16 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 until=run_stats.until,
                 agent_session_counts=run_stats.agent_session_counts,
             )
+            if dry_run:
+                print(
+                    _format_collect_dry_run_preview(
+                        run_stats=run_stats,
+                        output_path=preview_collect_save_path(args.save, since_date=since_date, until_date=until_date),
+                        t=t,
+                        keys=keys,
+                    )
+                )
+                return 0
             phase = "summarize"
             session_summaries = deps.summarize_collect_entries(
                 config=config,
@@ -218,14 +268,16 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 update_progress, stage="write_output", current=1, total=1, message="write output"
             )
     except Exception as exc:
-        collect_logger.log("collect_run_fail", phase=phase, error=str(exc))
+        if collect_logger is not None:
+            collect_logger.log("collect_run_fail", phase=phase, error=str(exc))
         if phase == "read":
             print(t(keys.COLLECT_READ_FAILED, error=exc))
         else:
             print(t(keys.COLLECT_API_FAILED, error=exc))
         return 1
 
-    collect_logger.log("collect_run_finish", output_path=str(output_path), session_count=len(entries))
+    if collect_logger is not None:
+        collect_logger.log("collect_run_finish", output_path=str(output_path), session_count=len(entries))
     print(markdown)
     print(t(keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
     return 0
