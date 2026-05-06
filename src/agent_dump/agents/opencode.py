@@ -36,6 +36,23 @@ class OpenCodeAgent(BaseAgent):
         self.db_path = self._find_db_path()
         return self.db_path is not None
 
+    def _connect_db(self) -> sqlite3.Connection:
+        db_path = self.db_path
+        if not db_path or not db_path.exists():
+            raise source_missing(
+                "OpenCode database is missing",
+                missing_path=db_path or "opencode.db",
+                searched_roots=[root.render() for root in self.get_search_roots()],
+                next_steps=(
+                    "确认 OpenCode 已在本机生成会话数据库。",
+                    "若在测试或开发环境，检查 `data/opencode/opencode.db` 是否存在。",
+                ),
+            )
+
+        conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        return conn
+
     def scan(self) -> list[Session]:
         """Scan for all available sessions"""
         if not self.db_path:
@@ -47,8 +64,7 @@ class OpenCodeAgent(BaseAgent):
         if not self.db_path:
             return []
 
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self._connect_db()
         cursor = conn.cursor()
 
         cutoff_time = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
@@ -143,19 +159,7 @@ class OpenCodeAgent(BaseAgent):
 
     def get_session_data(self, session: Session) -> dict:
         """Get session data as a dictionary"""
-        if not self.db_path:
-            raise source_missing(
-                "OpenCode database is missing",
-                missing_path="opencode.db",
-                searched_roots=[root.render() for root in self.get_search_roots()],
-                next_steps=(
-                    "确认 OpenCode 已在本机生成会话数据库。",
-                    "若在测试或开发环境，检查 `data/opencode/opencode.db` 是否存在。",
-                ),
-            )
-
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self._connect_db()
         cursor = conn.cursor()
 
         session_data = {
@@ -262,8 +266,7 @@ class OpenCodeAgent(BaseAgent):
         if not self.db_path:
             return head
 
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self._connect_db()
         cursor = conn.cursor()
         try:
             cursor.execute("SELECT COUNT(*) AS count FROM message WHERE session_id = ?", (session.id,))

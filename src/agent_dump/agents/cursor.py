@@ -11,7 +11,7 @@ import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.diagnostics import unsupported_capability
+from agent_dump.diagnostics import source_missing, unsupported_capability
 from agent_dump.paths import SearchRoot
 
 
@@ -64,9 +64,19 @@ class CursorAgent(BaseAgent):
         return self.get_sessions(days=3650)
 
     def _query_global(self, sql: str, params: tuple[Any, ...]) -> list[sqlite3.Row]:
-        if not self.global_db_path:
-            return []
-        conn = sqlite3.connect(self.global_db_path)
+        db_path = self.global_db_path
+        if not db_path or not db_path.exists():
+            raise source_missing(
+                "Cursor global database is missing",
+                missing_path=db_path or "state.vscdb",
+                searched_roots=[root.render() for root in self.get_search_roots()],
+                next_steps=(
+                    "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。",
+                    "重新运行 `agent-dump --list --agent cursor` 检查会话是否仍可见。",
+                ),
+            )
+
+        conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
         try:
             cursor = conn.cursor()
@@ -252,7 +262,7 @@ class CursorAgent(BaseAgent):
 
     def find_session_by_request_id(self, request_id: str) -> Session | None:
         """Resolve any bubble-level requestId to its owning composer session."""
-        if not self.global_db_path and not self.is_available():
+        if (not self.global_db_path or not self.global_db_path.exists()) and not self.is_available():
             return None
         rows = self._query_global(
             "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'bubbleId:%' AND value LIKE ? ORDER BY rowid DESC",

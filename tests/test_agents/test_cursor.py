@@ -31,6 +31,14 @@ def _insert_kv(path: Path, key: str, value: dict) -> None:
     conn.close()
 
 
+def _insert_raw_kv(path: Path, key: str, value: object) -> None:
+    conn = sqlite3.connect(path)
+    cur = conn.cursor()
+    cur.execute("INSERT OR REPLACE INTO cursorDiskKV(key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
+    conn.close()
+
+
 class TestCursorAgent:
     @staticmethod
     def _cursor_user_root(cursor_home: Path) -> Path:
@@ -538,3 +546,207 @@ class TestCursorAgent:
         assert data["messages"][1]["model"] == "claude-4.6-opus-high-thinking"
         tool_message = next(message for message in data["messages"] if message["role"] == "tool")
         assert tool_message["model"] == "claude-4.6-opus-high-thinking"
+
+    def test_parse_helpers_cover_cursor_edge_shapes(self):
+        agent = CursorAgent()
+
+        assert agent._parse_json(b'{"ok": true}') == {"ok": True}
+        assert agent._parse_json(b"\xff") is None
+        assert agent._parse_json(1) is None
+        assert agent._parse_json(" ") is None
+        assert agent._parse_json("{") is None
+        assert agent._parse_json("[]") is None
+
+        assert agent._extract_title({"title": "Title Fallback"}, "composer-abc") == "Title Fallback"
+        assert agent._extract_title({}, "composer-abc") == "Cursor Session composer"
+
+        assert agent._to_datetime_utc("1741140000000") == datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc)
+        assert agent._to_datetime_utc("1741140000") == datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc)
+        assert agent._to_datetime_utc("bad").tzinfo == timezone.utc
+
+        fallback_ms = 100
+        assert (
+            agent._extract_timestamp({"createdAt": "2026-01-01T00:00:00Z"}, fallback_ms)
+            == 1767225600000
+        )
+        assert agent._extract_timestamp({"createdAt": "bad", "timingInfo": {"clientSettleTime": "123.0"}}, fallback_ms) == 123
+        assert agent._extract_timestamp({"timingInfo": {"clientRpcSendTime": "bad"}}, fallback_ms) == fallback_ms
+
+        assert agent._extract_text_content({"codeBlocks": [{"content": "code"}]}, "user") == "code"
+        assert agent._extract_text_content({"thinking": {"text": "thought"}}, "assistant") == "thought"
+        assert agent._extract_text_content({"finalText": "done"}, "assistant") == "done"
+
+        assert agent._extract_subagent_prompt({"description": "Explore"}) == "Explore"
+        assert agent._extract_subagent_prompt("raw prompt") == "raw prompt"
+        assert agent._extract_subagent_prompt(["prompt"]) == json.dumps(["prompt"], ensure_ascii=False, indent=2)
+        assert agent._extract_subagent_type("raw") is None
+
+        assert agent._build_plan_part({"params": "raw"}, 1) is None
+        assert agent._build_plan_part({"params": json.dumps({"other": "value"})}, 1) is None
+        plan = agent._build_plan_part(
+            {
+                "params": json.dumps({"plan": "  plan body  "}, ensure_ascii=False),
+                "result": json.dumps({"rejected": {"reason": "no"}}, ensure_ascii=False),
+                "additionalData": {"reviewData": {"selectedOption": "approve"}},
+            },
+            123,
+        )
+        assert plan == {
+            "type": "plan",
+            "input": "plan body",
+            "output": '{"reason": "no"}',
+            "approval_status": "success",
+            "time_created": 123,
+        }
+
+        assert agent._extract_tool_output_parts([{"type": "text", "text": " output ", "time_created": 4}], 1) == [
+            {"type": "text", "text": "output", "time_created": 4}
+        ]
+        assert agent._extract_tool_output_parts("raw output", 5) == [
+            {"type": "text", "text": "raw output", "time_created": 5}
+        ]
+        assert agent._extract_tool_output_parts(None, 5) == []
+
+        assert agent._extract_tokens({"usage": {"input_tokens": 2, "output_tokens": 3}}) == (2, 3)
+        assert agent._extract_tokens({"contextWindowStatusAtCreation": {"tokensUsed": 9}}) == (9, 0)
+
+        tool_part, completion = agent._extract_tool_part(
+            {
+                "toolFormerData": {
+                    "name": "read_file_v2",
+                    "callId": "call-1",
+                    "rawArgs": '{"targetFile":',
+                    "result": {"stderr": "boom"},
+                    "additionalData": {"status": "failed"},
+                }
+            },
+            10,
+        )
+        assert completion is None
+        assert tool_part is not None
+        assert tool_part["callID"] == "call-1"
+        assert tool_part["state"]["status"] == "failed"
+        assert tool_part["state"]["arguments"] == {"_raw": '{"targetFile":'}
+        assert tool_part["state"]["error"] == "boom"
+
+    def test_get_session_data_attaches_tool_to_parent_and_exports_usage(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-parent-tool",
+            {
+                "composerId": "composer-parent-tool",
+                "createdAt": now_ms,
+                "name": "Parent Tool",
+                "usageData": {
+                    "contextTokensUsed": 1000,
+                    "contextTokenLimit": 2000,
+                    "contextUsagePercent": 50,
+                },
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-parent-tool:b1",
+            {
+                "requestId": "request-parent-tool",
+                "type": 1,
+                "text": "inspect file",
+                "usage": {"input_tokens": 3, "output_tokens": 4},
+                "timingInfo": {"clientRpcSendTime": now_ms},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-parent-tool:b2",
+            {
+                "type": 2,
+                "parentBubbleId": "b1",
+                "contextWindowStatusAtCreation": {"tokensUsed": 12},
+                "timingInfo": {"clientRpcSendTime": now_ms + 1},
+                "toolFormerData": {
+                    "name": "read_file_v2",
+                    "toolCallId": "tool-parent",
+                    "params": {"targetFile": "/workspace/a.py"},
+                    "status": "completed",
+                    "result": "file body",
+                },
+            },
+        )
+
+        agent = CursorAgent()
+        session = next(item for item in agent.get_sessions(days=7) if item.id == "request-parent-tool")
+        data = agent.get_session_data(session)
+
+        assert len(data["messages"]) == 1
+        message = data["messages"][0]
+        assert [part["type"] for part in message["parts"]] == ["text", "tool"]
+        assert message["parts"][1]["callID"] == "tool-parent"
+        assert message["parts"][1]["state"]["output"] == "file body"
+        assert data["stats"]["total_input_tokens"] == 15
+        assert data["stats"]["total_output_tokens"] == 4
+        assert data["stats"]["context_tokens_used"] == 1000
+        assert data["stats"]["context_token_limit"] == 2000
+        assert data["stats"]["context_usage_percent"] == 50
+
+    def test_get_session_data_keeps_corrupted_and_alternate_text_shapes(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-shapes",
+            {"composerId": "composer-shapes", "createdAt": now_ms, "name": "Shapes"},
+        )
+        _insert_raw_kv(global_db, "bubbleId:composer-shapes:b1", "{")
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-shapes:b2",
+            {
+                "requestId": "request-shapes",
+                "type": 2,
+                "codeBlocks": [{"content": "code block"}],
+                "timingInfo": {"clientRpcSendTime": now_ms + 1},
+            },
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-shapes:b3",
+            {
+                "type": 2,
+                "thinking": {"text": "thinking text"},
+                "timingInfo": {"clientRpcSendTime": now_ms + 2},
+            },
+        )
+
+        agent = CursorAgent()
+        session = next(item for item in agent.get_sessions(days=7) if item.id == "request-shapes")
+        data = agent.get_session_data(session)
+        head = agent.get_session_head(session)
+
+        texts = [part["text"] for message in data["messages"] for part in message["parts"] if part["type"] == "text"]
+        assert texts == ["[corrupted message]", "code block", "thinking text"]
+        assert head["message_count"] == 2
+
+    def test_find_session_by_request_id_none_paths(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("CURSOR_DATA_PATH", raising=False)
+        cursor_home = tmp_path / "empty-home"
+        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+
+        empty_agent = CursorAgent()
+        assert empty_agent.scan() == []
+        assert empty_agent.find_session_by_request_id("missing") is None
+
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        _insert_kv(
+            global_db,
+            "bubbleId:orphan-composer:b1",
+            {"requestId": "orphan-request", "type": 1, "text": "orphan"},
+        )
+
+        agent = CursorAgent()
+        assert agent.find_session_by_request_id("missing") is None
+        assert agent.find_session_by_request_id("orphan-request") is None
+
+        _insert_raw_kv(global_db, "composerData:orphan-composer", "[]")
+        assert agent.find_session_by_request_id("orphan-request") is None
