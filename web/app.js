@@ -83,7 +83,7 @@ const TYPING_COMMANDS = [
   "agent-dump codex://threads/abc123 --format json",
   "agent-dump --search \"auth timeout\"",
   "agent-dump --stats -days 30",
-  "agent-dump --collect --since 2026-03-01",
+  "agent-dump --collect --dry-run",
 ];
 
 const TYPING_SPEED = 55;

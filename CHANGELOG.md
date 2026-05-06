@@ -2,6 +2,47 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.9.0] - 2026-05-06
+
+### Added
+
+- **Collect dry-run preview**
+  - Added `--dry-run` for `--collect` to complete scanning, query filtering, chunk planning, and save-path resolution while skipping AI calls and file writes
+  - Preview output includes date range, provider breakdown, session/chunk counts, configured concurrency, and output path
+
+- **Insight collect mode**
+  - Added `--collect-mode insight` for author insight summaries using `scene`, `stuck`, and `turning` fields
+  - Kept `pm` as the default collect mode for project-management summaries
+
+- **Ranked search evidence**
+  - `--search` now prints provider, updated time, URI, rank, and highlighted snippet evidence for each result
+  - Search-backed query matching preserves ranking before applying a global `limit:`
+
+- **Cursor public API export**
+  - Added `CursorAgent` to the top-level `agent_dump.__all__` export surface
+  - Added regression coverage to keep the documented public API importable
+
+### Changed
+
+- **Faster JSONL provider scanning**
+  - Codex and Claude Code now use bounded head/tail JSONL metadata reads for listing and indexing
+  - JSONL session parsing now runs concurrently across session files, reducing scan cost on large histories
+  - Search index freshness checks now account for related source files such as Codex context and wire files
+
+- **CLI workflow modules**
+  - Extracted shared CLI behavior into `cli_shared.py`
+  - Split session, URI, collect, stats, and reindex flows into dedicated workflow modules with focused tests
+
+- **Documentation and web landing page**
+  - Synced README, AGENTS, and skill recipes with the current multi-provider architecture
+  - Added landing-page SEO metadata, structured data, robots.txt, and sitemap.xml
+
+### Fixed
+
+- **Provider source-missing diagnostics**
+  - OpenCode and Cursor exports now report structured diagnostics when backing source files are unavailable
+  - Added provider contract tests for missing source behavior and Cursor export boundaries
+
 ## [0.8.0] - 2026-04-19
 
 ### Added
@@ -586,6 +627,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.9.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.0
 [0.8.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.8.0
 [0.7.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.7.0
 [0.6.16]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.16

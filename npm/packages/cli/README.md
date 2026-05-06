@@ -53,8 +53,11 @@ agent-dump --list -query error
 ```bash
 agent-dump opencode://<session-id>
 agent-dump codex://<session-id>
+agent-dump codex://threads/<session-id>
 agent-dump kimi://<session-id>
 agent-dump claude://<session-id>
+agent-dump cursor://<request-id>
+agent-dump codex://<session-id> --head
 ```
 
 ### Statistics
@@ -77,6 +80,8 @@ agent-dump --reindex
 ```bash
 agent-dump --collect
 agent-dump --collect -since 2026-04-01 -until 2026-04-15
+agent-dump --collect --collect-mode insight
+agent-dump --collect --dry-run --save ./reports
 agent-dump --collect --save ./reports
 ```
 
@@ -91,6 +96,7 @@ agent-dump --config edit
 
 - `opencode://<session_id>` - OpenCode sessions
 - `codex://<session_id>` - Codex sessions
+- `codex://threads/<session_id>` - Codex sessions
 - `kimi://<session_id>` - Kimi sessions
 - `claude://<session_id>` - Claude Code sessions
 - `cursor://<requestid>` - Cursor sessions
@@ -100,9 +106,11 @@ agent-dump --config edit
 - **Multi-agent support**: Scan and export sessions from OpenCode, Claude Code, Codex, Kimi, and Cursor
 - **Interactive selection**: Friendly CLI selector with time-based grouping
 - **URI direct access**: View or export any session by its URI without searching
+- **Head metadata**: `--head` prints lightweight URI metadata for discovery
 - **Statistics**: `--stats` shows session counts and message counts grouped by agent and time
-- **AI collect**: `--collect` summarizes sessions over a date range using your configured LLM
-- **Full-text search**: `--search` uses local SQLite FTS5 with dual tokenizer (`unicode61` + `trigram`) for Western and CJK text
+- **AI collect**: `--collect` summarizes sessions over a date range using your configured LLM, with `pm` and `insight` modes
+- **Collect dry-run**: `--collect --dry-run` previews provider breakdown, session/chunk counts, concurrency, and save path
+- **Full-text search**: `--search` uses local SQLite FTS5 with ranked results and highlighted snippets
 - **Structured queries**: `provider:`, `role:`, `path:`, `limit:` filters in `-query`
 - **Scoped queries**: `agents://<path>?q=keyword&providers=codex,claude` for repo-scoped searches
 - **Multi-format export**: `--format json,markdown,raw,print` with `md` alias for markdown

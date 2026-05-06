@@ -26,6 +26,8 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 - **Smart Title Extraction**: Automatically extract session titles from agent metadata
 - **Session Statistics**: View usage statistics grouped by agent and time (`--stats`)
 - **Full-Text Search**: Local SQLite FTS5 search across session titles, messages, reasoning, and tool state (`--search`)
+- **Ranked Search Evidence**: Search results include rank, URI, updated time, and highlighted snippets
+- **Actionable Diagnostics**: CLI errors show checked roots, parsed URI fields, capability gaps, and next steps
 
 ## Path Discovery
 
@@ -228,6 +230,8 @@ uv run agent-dump --search "auth timeout"          # Search sessions matching ke
 uv run agent-dump --search "认证"                   # CJK keyword search works
 uv run agent-dump --search "auth" --list -days 30  # Combine with list + days
 uv run agent-dump --reindex                        # Force rebuild search index
+
+# Note: search results include provider, updated time, URI, rank, and highlighted snippets.
 
 # Statistics mode
 uv run agent-dump --stats                    # Show session stats for last 7 days

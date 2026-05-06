@@ -1,5 +1,46 @@
 # 更新日志
 
+## [0.9.0] - 2026-05-06
+
+### 新增功能
+
+- **Collect dry-run 预览**
+  - 为 `--collect` 新增 `--dry-run`，执行扫描、查询过滤、chunk 规划和保存路径解析，并跳过 AI 请求与文件写入
+  - 预览输出包含日期范围、provider 分布、session/chunk 数、配置并发数和输出路径
+
+- **Insight collect 模式**
+  - 新增 `--collect-mode insight`，用于作者洞察视角摘要，字段为 `scene`、`stuck`、`turning`
+  - `pm` 仍作为默认 collect 模式，用于项目管理视角摘要
+
+- **带证据的排序搜索结果**
+  - `--search` 现在会为每条结果输出来源、更新时间、URI、匹配度和高亮命中片段
+  - 基于搜索的 query 匹配会先保留排序，再应用全局 `limit:`
+
+- **Cursor 顶层公开 API**
+  - 将 `CursorAgent` 加入 `agent_dump.__all__` 顶层导出集合
+  - 增加公开 API 可导入性的回归测试
+
+### 变更
+
+- **JSONL provider 扫描提速**
+  - Codex 与 Claude Code 在列表和索引场景中改用有界 head/tail JSONL 元数据读取
+  - JSONL session 文件解析改为并发执行，降低大历史记录下的扫描成本
+  - 搜索索引新鲜度判断会纳入 Codex context/wire 等相关源文件
+
+- **CLI workflow 模块化**
+  - 将共享 CLI 行为提取到 `cli_shared.py`
+  - 将 session、URI、collect、stats、reindex 流程拆到独立 workflow 模块，并补充对应测试
+
+- **文档与网页落地页**
+  - 同步 README、AGENTS 与 skill recipes，使其覆盖当前多 provider 架构
+  - 为落地页新增 SEO metadata、结构化数据、robots.txt 与 sitemap.xml
+
+### 问题修复
+
+- **Provider 源文件缺失诊断**
+  - OpenCode 与 Cursor 导出在底层源文件不可用时会输出结构化诊断
+  - 增加 provider contract 测试，覆盖源文件缺失行为与 Cursor 导出边界
+
 ## [0.8.0] - 2026-04-19
 
 ### 新增功能
@@ -590,6 +631,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.9.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.0
 [0.8.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.8.0
 [0.7.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.7.0
 [0.6.16]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.6.16

@@ -46,6 +46,7 @@ uv run agent-dump codex://<session_id> --format print,json --output ./my-session
 uv run agent-dump codex://<session_id> --format print,json --summary --output ./my-sessions
 uv run agent-dump codex://<session_id> --format json,markdown,raw --output ./my-sessions
 uv run agent-dump cursor://<request_id> --format print,json --output ./my-sessions
+uv run agent-dump codex://<session_id> --head
 ```
 
 ### 汇总分析（collect）
@@ -135,7 +136,7 @@ uv run agent-dump --search "auth" --list -days 30
 
 | 场景 | 默认格式 | 关键规则 |
 |---|---|---|
-| URI 模式（给定 session URI） | `print` | 可显式改为 `json/markdown/raw`，也可组合 `print,json`；支持 `codex://threads/<session_id>`；Cursor URI 支持 `json/print` |
+| URI 模式（给定 session URI） | `print` | 可显式改为 `json/markdown/raw`，也可组合 `print,json`；支持 `codex://threads/<session_id>`；Cursor URI 支持 `json/print`；`--head` 输出轻量元数据 |
 | `agents://` 查询 URI | N/A | 可配合 list、interactive 或 collect 使用；支持 `q/providers/roles/limit` |
 | 非 URI 模式 | `json` | 主要配合 `--interactive` 使用 |
 | `--list` 模式 | N/A | 仅列出，不导出；`--format/--output` 会被忽略并警告 |
@@ -149,6 +150,7 @@ uv run agent-dump --search "auth" --list -days 30
 - `-p/-page-size` 参数目前在 `--list` 模式下保留兼容，不生效。
 - `--lang` 支持 `en` 与 `zh`。
 - `md` 是 `markdown` 的别名。
+- `--head` 仅 URI 模式可用，用于查看轻量元数据，不能与 `--format` 或 `--summary` 组合。
 - `--summary` 仅 URI 模式可用，且需 `--format` 包含 `json`。
 - `--collect-mode` 默认 `pm`，`insight` 用于作者洞察视角。
 
