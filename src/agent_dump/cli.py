@@ -5,20 +5,51 @@ Command-line interface for agent-dump
 import argparse
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 from string import Formatter
 import sys
 import threading
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.__about__ import __version__
-from agent_dump.agent_registry import (
-    get_supported_agent_locations as _get_supported_agent_locations,
-    get_supported_uri_examples,
-    get_uri_scheme_map,
-)
+from agent_dump.agent_registry import get_supported_uri_examples
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.cli_shared import (
+    DEFAULT_OUTPUT_BASE_DIR,
+    VALID_URI_SCHEMES,
+    apply_query_filter,
+    apply_summary_to_json_export,
+    build_no_agents_found_diagnostic as _build_no_agents_found_diagnostic,
+    collect_query_matches,
+    collect_search_matches,
+    display_search_results,
+    display_sessions_list,
+    export_session_in_format,
+    export_session_markdown,
+    export_sessions,
+    export_sessions_for_formats,
+    export_sessions_markdown,
+    find_session_by_id,
+    format_relative_time,
+    format_session_metadata_summary,
+    get_supported_agent_locations,
+    group_sessions_by_time,
+    is_option_specified,
+    parse_format_spec,
+    parse_uri,
+    print_diagnostic as _print_diagnostic,
+    render_agent_search_roots as _render_agent_search_roots,
+    render_query_summary,
+    render_session_head,
+    render_session_text,
+    resolve_effective_formats,
+    resolve_output_base_dir,
+    validate_formats_for_mode,
+    validate_uri_agent_formats,
+    warn_list_ignored_options,
+    wrap_runtime_fetch_error as _wrap_runtime_fetch_error,
+)
 from agent_dump.collect import (
     CollectProgressEvent,
     build_collect_final_prompt,
@@ -49,44 +80,61 @@ from agent_dump.config import (
     validate_ai_config,
 )
 from agent_dump.diagnostics import (
-    DiagnosticError,
     ParsedUri,
     invalid_query_or_uri,
-    render_diagnostic,
-    root_not_found,
-    session_not_found,
     unsupported_capability,
 )
 from agent_dump.i18n import Keys, i18n, setup_i18n
-from agent_dump.paths import SearchRoot
-from agent_dump.query_filter import (
-    QuerySpec,
-    SearchSessionMatch,
-    filter_sessions,
-    filter_sessions_by_query,
-    limit_query_matches,
-    limit_search_matches,
-    parse_query,
-    parse_query_uri,
-    search_sessions_by_query,
+from agent_dump.maintenance_workflow import (
+    MaintenanceModeDeps,
+    handle_reindex_mode as _handle_reindex_mode,
+    handle_stats_mode as _handle_stats_mode,
 )
-from agent_dump.rendering import (
-    apply_summary_to_json_export as _apply_summary_to_json_export,
-    export_session_in_format as _export_session_in_format,
-    export_session_markdown as _export_session_markdown,
-    format_session_metadata_summary as _format_session_metadata_summary,
-    render_session_head as _render_session_head,
-    render_session_text as _render_session_text,
-)
+from agent_dump.query_filter import QuerySpec, parse_query, parse_query_uri
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
-from agent_dump.time_utils import get_local_timezone, to_local_datetime
-from agent_dump.uri_support import find_session_by_id as _find_session_by_id, parse_uri as _parse_uri
+from agent_dump.session_workflow import SessionModeDeps, handle_session_modes as _handle_session_modes
+from agent_dump.uri_workflow import UriModeDeps, handle_uri_mode as _handle_uri_mode
 
-VALID_URI_SCHEMES = get_uri_scheme_map()
-VALID_FORMATS = {"json", "markdown", "raw", "print"}
-FORMAT_ALIASES = {"md": "markdown"}
-DEFAULT_OUTPUT_BASE_DIR = Path("./sessions")
+__all__ = (
+    "DEFAULT_OUTPUT_BASE_DIR",
+    "VALID_URI_SCHEMES",
+    "apply_query_filter",
+    "apply_summary_to_json_export",
+    "collect_query_matches",
+    "collect_search_matches",
+    "display_search_results",
+    "display_sessions_list",
+    "expand_shortcut_argv",
+    "export_session_in_format",
+    "export_session_markdown",
+    "export_sessions",
+    "export_sessions_for_formats",
+    "export_sessions_markdown",
+    "find_session_by_id",
+    "format_relative_time",
+    "format_session_metadata_summary",
+    "get_supported_agent_locations",
+    "group_sessions_by_time",
+    "handle_collect_mode",
+    "handle_reindex_mode",
+    "handle_stats_mode",
+    "is_option_specified",
+    "main",
+    "parse_format_spec",
+    "parse_uri",
+    "render_query_summary",
+    "render_session_head",
+    "render_session_text",
+    "resolve_collect_save_path",
+    "resolve_effective_formats",
+    "resolve_output_base_dir",
+    "show_collect_progress",
+    "show_loading",
+    "validate_formats_for_mode",
+    "validate_uri_agent_formats",
+    "warn_list_ignored_options",
+)
 
 
 def _parse_shortcut_date(value: str) -> date:
@@ -314,31 +362,6 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
                 sys.stderr.flush()
 
 
-def parse_uri(uri: str) -> tuple[str, str] | None:
-    """Parse an agent session URI."""
-    return _parse_uri(uri)
-
-
-def find_session_by_id(scanner: AgentScanner, session_id: str) -> tuple[BaseAgent, Session] | None:
-    """Find a session by ID across all available agents."""
-    return _find_session_by_id(scanner, session_id)
-
-
-def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
-    """Render session data as formatted text."""
-    return _render_session_text(uri, session_data)
-
-
-def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
-    """Render a unified reduced metadata summary for one session."""
-    return _format_session_metadata_summary(agent, session)
-
-
-def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
-    """Render lightweight session metadata as formatted text."""
-    return _render_session_head(uri, session_head)
-
-
 def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
     """Build a single-session summary prompt for URI mode."""
     return "\n".join(
@@ -356,11 +379,6 @@ def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
             rendered_session_text,
         ]
     )
-
-
-def apply_summary_to_json_export(output_path: Path, summary_markdown: str) -> None:
-    """Inject summary markdown into exported JSON as top-level `summary`."""
-    _apply_summary_to_json_export(output_path, summary_markdown)
 
 
 def maybe_generate_uri_summary(
@@ -403,465 +421,9 @@ def maybe_generate_uri_summary(
     return effective_session_data, summary_markdown
 
 
-def format_relative_time(time_value: datetime | float) -> str:
-    """Format time as relative description"""
-    if isinstance(time_value, (int, float)):
-        time_value = datetime.fromtimestamp(time_value)
-
-    now = datetime.now()
-    delta = now - time_value
-
-    if delta.days == 0:
-        if delta.seconds < 3600:
-            minutes = delta.seconds // 60
-            return i18n.t(Keys.TIME_MINUTES_AGO, minutes=minutes) if minutes > 0 else i18n.t(Keys.TIME_JUST_NOW)
-        hours = delta.seconds // 3600
-        return i18n.t(Keys.TIME_HOURS_AGO, hours=hours)
-    elif delta.days == 1:
-        return i18n.t(Keys.TIME_YESTERDAY)
-    elif delta.days < 7:
-        return i18n.t(Keys.TIME_DAYS_AGO, days=delta.days)
-    elif delta.days < 30:
-        weeks = delta.days // 7
-        return i18n.t(Keys.TIME_WEEKS_AGO, weeks=weeks)
-    else:
-        return time_value.strftime("%Y-%m-%d")
-
-
-def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
-    """Group sessions by relative time periods"""
-    groups: dict[str, list[Session]] = {
-        i18n.t(Keys.TIME_TODAY): [],
-        i18n.t(Keys.TIME_YESTERDAY): [],
-        i18n.t(Keys.TIME_THIS_WEEK): [],
-        i18n.t(Keys.TIME_THIS_MONTH): [],
-        i18n.t(Keys.TIME_OLDER): [],
-    }
-
-    # Map keys for lookup
-    key_today = i18n.t(Keys.TIME_TODAY)
-    key_yesterday = i18n.t(Keys.TIME_YESTERDAY)
-    key_week = i18n.t(Keys.TIME_THIS_WEEK)
-    key_month = i18n.t(Keys.TIME_THIS_MONTH)
-    key_older = i18n.t(Keys.TIME_OLDER)
-
-    local_tz = get_local_timezone()
-    now = datetime.now(local_tz)
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    yesterday = today - timedelta(days=1)
-    week_ago = today - timedelta(days=7)
-    month_ago = today - timedelta(days=30)
-
-    for session in sessions:
-        session_time = to_local_datetime(session.created_at, local_tz)
-
-        if session_time >= today:
-            groups[key_today].append(session)
-        elif session_time >= yesterday:
-            groups[key_yesterday].append(session)
-        elif session_time >= week_ago:
-            groups[key_week].append(session)
-        elif session_time >= month_ago:
-            groups[key_month].append(session)
-        else:
-            groups[key_older].append(session)
-
-    # Remove empty groups
-    return {k: v for k, v in groups.items() if v}
-
-
 def resolve_collect_save_path(save: str | None, *, since_date: date, until_date: date) -> Path | None:
     """Resolve collect output path from an optional save spec."""
     return _resolve_collect_save_path(save, since_date=since_date, until_date=until_date)
-
-
-def display_sessions_list(
-    agent: BaseAgent,
-    sessions: list[Session],
-    page_size: int = 20,
-    show_pagination: bool = True,
-    show_metadata_summary: bool = True,
-) -> bool:
-    """Display sessions with pagination support.
-
-    Returns:
-        True if user chose to quit, False otherwise.
-    """
-    total = len(sessions)
-
-    if total == 0:
-        print(i18n.t(Keys.NO_SESSIONS_PAREN))
-        return False
-
-    # Show all sessions with pagination
-    current_page = 0
-    total_pages = (total + page_size - 1) // page_size
-
-    while True:
-        start_idx = current_page * page_size
-        end_idx = min(start_idx + page_size, total)
-
-        # Display current page
-        for i in range(start_idx, end_idx):
-            session = sessions[i]
-            title = agent.get_formatted_title(session)
-            if show_metadata_summary:
-                summary = format_session_metadata_summary(agent, session)
-                print(f"   • {title}")
-                print(f"     {summary}")
-            else:
-                uri = agent.get_session_uri(session)
-                print(f"   • {title} {uri}")
-
-        # Show pagination info
-        if show_pagination and total_pages > 1:
-            print(
-                "\n   "
-                + i18n.t(Keys.PAGINATION_INFO, current=current_page + 1, total=total_pages, total_sessions=total)
-            )
-
-            if current_page < total_pages - 1:
-                print("   " + i18n.t(Keys.PAGINATION_PROMPT))
-                try:
-                    user_input = input("> ").strip().lower()
-                    if user_input == "q":
-                        return True  # User wants to quit entirely
-                    current_page += 1
-                    print()
-                except (EOFError, KeyboardInterrupt):
-                    print()
-                    return True  # User interrupted, quit entirely
-            else:
-                print("   " + i18n.t(Keys.PAGINATION_DONE))
-                break
-        else:
-            if total > page_size:
-                print("\n   " + i18n.t(Keys.PAGINATION_REMAINING, count=total - page_size))
-            break
-
-    return False
-
-
-def export_sessions(agent: BaseAgent, sessions: list[Session], output_base_dir: Path) -> list[Path]:
-    """Export multiple sessions"""
-    return export_sessions_for_formats(agent, sessions, ["json"], output_base_dir)
-
-
-def export_session_markdown(uri: str, session_data: dict, session_id: str, output_dir: Path) -> Path:
-    """Export a single session to Markdown."""
-    return _export_session_markdown(uri, session_data, session_id, output_dir)
-
-
-def export_session_in_format(
-    agent: BaseAgent,
-    session: Session,
-    output_dir: Path,
-    output_format: str,
-    *,
-    session_data: dict[str, Any] | None = None,
-    session_uri: str | None = None,
-) -> Path:
-    """Export one session in the requested file format."""
-    return _export_session_in_format(
-        agent,
-        session,
-        output_dir,
-        output_format,
-        session_data=session_data,
-        session_uri=session_uri,
-    )
-
-
-def export_sessions_for_formats(
-    agent: BaseAgent,
-    sessions: list[Session],
-    formats: list[str],
-    output_base_dir: Path,
-    *,
-    output_base_dirs: dict[str, Path] | None = None,
-) -> list[Path]:
-    """Export multiple sessions in one or more file formats."""
-    print(i18n.t(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
-    exported: list[Path] = []
-    for session in sessions:
-        session_data: dict[str, Any] | None = None
-        session_uri: str | None = None
-        for output_format in formats:
-            try:
-                format_base_dir = (
-                    output_base_dirs.get(output_format, output_base_dir)
-                    if output_base_dirs is not None
-                    else output_base_dir
-                )
-                output_dir = format_base_dir / agent.name
-                output_dir.mkdir(parents=True, exist_ok=True)
-                if output_format == "markdown":
-                    session_data = session_data if session_data is not None else agent.get_session_data(session)
-                    session_uri = session_uri if session_uri is not None else agent.get_session_uri(session)
-
-                output_path = export_session_in_format(
-                    agent,
-                    session,
-                    output_dir,
-                    output_format,
-                    session_data=session_data,
-                    session_uri=session_uri,
-                )
-                exported.append(output_path)
-                print(
-                    i18n.t(
-                        Keys.EXPORT_SUCCESS_FORMAT,
-                        title=session.title[:50],
-                        format=output_format,
-                        filename=output_path.name,
-                    )
-                )
-            except Exception as e:
-                print(i18n.t(Keys.EXPORT_ERROR_FORMAT, title=session.title[:50], format=output_format, error=str(e)))
-                diagnostic = e if isinstance(e, DiagnosticError) else _wrap_runtime_fetch_error(e, agent=agent)
-                print(render_diagnostic(diagnostic, t=i18n.t))
-
-    return exported
-
-
-def export_sessions_markdown(agent: BaseAgent, sessions: list[Session], output_base_dir: Path) -> list[Path]:
-    """Export multiple sessions to Markdown"""
-    return export_sessions_for_formats(agent, sessions, ["markdown"], output_base_dir)
-
-
-def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:
-    """Check whether a CLI option is explicitly specified"""
-    return any(arg in (short_option, long_option) or arg.startswith(f"{long_option}=") for arg in argv)
-
-
-def resolve_output_base_dir(
-    *,
-    cli_output: str | None,
-    output_specified: bool,
-    export_output: str,
-    output_format: str,
-) -> Path:
-    """Resolve effective output base directory for one file format."""
-    if output_specified and cli_output:
-        return Path(cli_output)
-    if output_format in {"json", "raw"} and export_output:
-        return Path(export_output)
-    return DEFAULT_OUTPUT_BASE_DIR
-
-
-def parse_format_spec(raw: str) -> list[str]:
-    """Parse a comma-separated format specification."""
-    formats: list[str] = []
-    seen: set[str] = set()
-
-    for part in raw.split(","):
-        normalized = FORMAT_ALIASES.get(part.strip().lower(), part.strip().lower())
-        if not normalized:
-            raise ValueError("empty format")
-        if normalized not in VALID_FORMATS:
-            raise ValueError(normalized)
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        formats.append(normalized)
-
-    if not formats:
-        raise ValueError("empty format")
-
-    return formats
-
-
-def resolve_effective_formats(args: argparse.Namespace, is_uri_mode: bool, format_specified: bool) -> list[str]:
-    """Resolve effective output formats by mode and explicit user input."""
-    if format_specified and args.format:
-        return parse_format_spec(args.format)
-    return ["print"] if is_uri_mode else ["json"]
-
-
-def render_query_summary(spec: QuerySpec) -> str:
-    """Render one compact query description for user-facing messages."""
-    if (
-        spec.project_path is None
-        and spec.agent_names is None
-        and spec.roles is None
-        and spec.limit is None
-        and spec.keyword
-    ):
-        return spec.keyword
-
-    parts: list[str] = []
-    if spec.project_path is not None:
-        parts.append(f"路径={spec.project_path}")
-    if spec.keyword:
-        parts.append(f"关键词={spec.keyword}")
-    if spec.agent_names:
-        providers = ",".join(sorted(spec.agent_names))
-        parts.append(f"providers={providers}")
-    if spec.roles:
-        roles = ",".join(sorted(spec.roles))
-        parts.append(f"roles={roles}")
-    if spec.limit is not None:
-        parts.append(f"limit={spec.limit}")
-    return "；".join(parts) if parts else "全部会话"
-
-
-def apply_query_filter(agent: BaseAgent, sessions: list[Session], spec: QuerySpec | None) -> list[Session]:
-    """Apply query filters while preserving legacy keyword-only behavior."""
-    if spec is None:
-        return sessions
-    if spec.project_path is None and spec.roles is None and spec.limit is None and spec.keyword is not None:
-        if spec.agent_names is not None and agent.name not in spec.agent_names:
-            return []
-        return filter_sessions(agent, sessions, spec.keyword)
-    return filter_sessions_by_query(agent, sessions, spec)
-
-
-def collect_query_matches(
-    agents: list[BaseAgent],
-    *,
-    days: int,
-    spec: QuerySpec,
-) -> dict[str, list[Session]]:
-    """Collect matched sessions for all agents and apply one global query limit."""
-    matched_pairs: list[tuple[BaseAgent, Session]] = []
-    for agent in agents:
-        sessions = agent.get_sessions(days=days)
-        matched_sessions = apply_query_filter(agent, sessions, spec)
-        matched_pairs.extend((agent, session) for session in matched_sessions)
-
-    limited_pairs = limit_query_matches(matched_pairs, spec.limit)
-    grouped: dict[str, list[Session]] = {}
-    for agent, session in limited_pairs:
-        grouped.setdefault(agent.name, []).append(session)
-    return grouped
-
-
-def collect_search_matches(
-    agents: list[BaseAgent],
-    *,
-    days: int,
-    spec: QuerySpec,
-) -> list[SearchSessionMatch]:
-    """Collect ranked search matches for all agents."""
-    matches: list[SearchSessionMatch] = []
-    for agent in agents:
-        sessions = agent.get_sessions(days=days)
-        matches.extend(search_sessions_by_query(agent, sessions, spec))
-    return limit_search_matches(matches, spec.limit)
-
-
-def display_search_results(matches: list[SearchSessionMatch]) -> None:
-    """Render full-text search results with snippet evidence."""
-    if not matches:
-        print(i18n.t(Keys.SEARCH_NO_RESULTS))
-        return
-
-    for index, match in enumerate(matches, start=1):
-        title = match.agent.get_formatted_title(match.session)
-        uri = match.agent.get_session_uri(match.session)
-        updated = to_local_datetime(match.session.updated_at).strftime("%Y-%m-%d %H:%M:%S %Z")
-        print(f"\n{index}. {title}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_PROVIDER)}: {match.agent.display_name}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_UPDATED)}: {updated}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_URI)}: {uri}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_RANK)}: {match.rank:.6g}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_SNIPPET)}: {match.snippet}")
-
-
-def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mode: bool) -> None:
-    """Validate format combinations for the current mode."""
-    if is_list_mode or is_uri_mode:
-        return
-    if "print" in formats:
-        raise ValueError("interactive-print")
-
-
-def validate_uri_agent_formats(agent: BaseAgent, formats: list[str]) -> None:
-    """Validate URI format restrictions for special agents."""
-    if agent.name != "cursor":
-        return
-    unsupported = [fmt for fmt in formats if fmt in {"raw", "markdown"}]
-    if unsupported:
-        requested = ",".join(unsupported)
-        raise unsupported_capability(
-            "当前 URI 请求了 Cursor 不支持的导出能力。",
-            capability_gap=f"Cursor URI 仅支持 json 与 print；当前请求了 {requested}",
-            next_steps=(
-                "移除 `raw` 或 `markdown`，改用 `json` 或 `print`。",
-                "若需要进一步处理，先导出 JSON 再做转换。",
-            ),
-        )
-
-
-def warn_list_ignored_options(output_specified: bool, format_specified: bool) -> None:
-    """Warn when --list mode receives options that have no effect"""
-    if format_specified:
-        print(i18n.t(Keys.LIST_IGNORE_FORMAT))
-    if output_specified:
-        print(i18n.t(Keys.LIST_IGNORE_OUTPUT))
-
-
-def get_supported_agent_locations() -> list[str]:
-    """Describe supported agent storage locations."""
-    return _get_supported_agent_locations()
-
-
-def _render_agent_search_roots(agents: list[BaseAgent] | list[Any]) -> tuple[str, ...]:
-    roots: list[str] = []
-    for agent in agents:
-        get_search_roots = getattr(agent, "get_search_roots", None)
-        display_name = getattr(agent, "display_name", getattr(agent, "name", "agent"))
-        if not callable(get_search_roots):
-            continue
-        provider_roots = [root.render() for root in cast(tuple[SearchRoot, ...], get_search_roots())]
-        if not provider_roots:
-            continue
-        roots.extend(f"{display_name}: {entry}" for entry in provider_roots)
-    return tuple(roots)
-
-
-def _print_diagnostic(error: DiagnosticError) -> None:
-    print(render_diagnostic(error, t=i18n.t))
-
-
-def _build_no_agents_found_diagnostic(scanner: AgentScanner) -> DiagnosticError:
-    agents = getattr(scanner, "agents", [])
-    searched_roots = _render_agent_search_roots(agents)
-    if not searched_roots:
-        searched_roots = tuple(location.strip() for location in get_supported_agent_locations())
-    return root_not_found(
-        "未找到任何可用的本地会话数据。",
-        searched_roots=searched_roots,
-        next_steps=(
-            "确认对应 agent 已在本机生成过会话数据。",
-            "若使用自定义目录，检查相关环境变量是否指向正确位置。",
-            "若在开发环境，检查 `data/<agent>` 回退目录是否存在。",
-        ),
-    )
-
-
-def _wrap_runtime_fetch_error(exc: Exception, *, agent: BaseAgent | None = None) -> DiagnosticError:
-    searched_roots = _render_agent_search_roots([agent]) if agent is not None else ()
-    return (
-        invalid_query_or_uri(
-            "读取会话数据失败。",
-            details=(str(exc),),
-            next_steps=(
-                "检查本地会话源文件或数据库是否仍存在。",
-                "若问题持续，先用 `agent-dump --list` 缩小范围再重试。",
-            ),
-        )
-        if not searched_roots
-        else root_not_found(
-            "读取会话数据失败。",
-            details=(str(exc),),
-            searched_roots=searched_roots,
-            next_steps=(
-                "检查本地会话源文件或数据库是否仍存在。",
-                "若问题持续，先用 `agent-dump --list` 缩小范围再重试。",
-            ),
-        )
-    )
 
 
 def handle_collect_mode(args: argparse.Namespace) -> int:
@@ -896,133 +458,105 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
     )
 
 
+def _build_maintenance_deps() -> MaintenanceModeDeps:
+    from agent_dump.search_index import SearchIndex
+
+    return MaintenanceModeDeps(
+        scanner_factory=AgentScanner,
+        search_index_factory=SearchIndex,
+        parse_query=parse_query,
+        apply_query_filter=apply_query_filter,
+        group_sessions_by_time=group_sessions_by_time,
+        print_diagnostic=_print_diagnostic,
+        build_no_agents_found_diagnostic=_build_no_agents_found_diagnostic,
+        render_agent_search_roots=_render_agent_search_roots,
+    )
+
+
 def handle_stats_mode(args: argparse.Namespace) -> int:
-    """Handle `--stats` flow."""
-    scanner = AgentScanner()
-    available_agents = scanner.get_available_agents()
-
-    if not available_agents:
-        _print_diagnostic(_build_no_agents_found_diagnostic(scanner))
-        return 1
-
-    query_spec: QuerySpec | None = None
-    if args.query:
-        valid_agents = {agent.name for agent in scanner.agents}
-        try:
-            query_spec = parse_query(args.query, valid_agents=valid_agents)
-        except ValueError as e:
-            _print_diagnostic(
-                invalid_query_or_uri(
-                    "查询条件无效。",
-                    details=(str(e),),
-                    next_steps=(
-                        "使用 `关键词` 或 `agent1,agent2:关键词` 格式。",
-                        "如需路径作用域查询，改用 `agents://<path>?q=<keyword>&providers=<names>`。",
-                    ),
-                )
-            )
-            return 1
-
-    if query_spec and query_spec.agent_names:
-        available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
-        if not available_agents:
-            _print_diagnostic(
-                root_not_found(
-                    "查询范围内没有可用 provider。",
-                    searched_roots=_render_agent_search_roots(scanner.agents),
-                    details=(f"query providers: {','.join(sorted(query_spec.agent_names))}",),
-                    next_steps=(
-                        "确认这些 provider 在本机上确实存在会话数据。",
-                        "放宽 providers 范围，或先不加 provider 过滤执行 `--list`。",
-                    ),
-                )
-            )
-            return 0
-
-    all_sessions: list[tuple[BaseAgent, Session]] = []
-    for agent in available_agents:
-        sessions = agent.get_sessions(days=args.days)
-        if query_spec is not None:
-            sessions = apply_query_filter(agent, sessions, query_spec)
-        for session in sessions:
-            all_sessions.append((agent, session))
-
-    if not all_sessions:
-        print(i18n.t(Keys.STATS_NO_SESSIONS, days=args.days))
-        return 0
-
-    total_sessions = len(all_sessions)
-    total_messages = 0
-    agent_stats: dict[str, dict[str, int]] = {}
-
-    for agent, session in all_sessions:
-        agent_name = agent.display_name
-        if agent_name not in agent_stats:
-            agent_stats[agent_name] = {"sessions": 0, "messages": 0}
-        agent_stats[agent_name]["sessions"] += 1
-
-        message_count = session.metadata.get("message_count")
-        if isinstance(message_count, int):
-            agent_stats[agent_name]["messages"] += message_count
-            total_messages += message_count
-
-    print(i18n.t(Keys.STATS_HEADER, days=args.days))
-    print()
-    print(i18n.t(Keys.STATS_TOTAL_SESSIONS, count=total_sessions))
-    if total_messages > 0:
-        print(i18n.t(Keys.STATS_TOTAL_MESSAGES, count=total_messages))
-    print()
-
-    print(i18n.t(Keys.STATS_BY_AGENT))
-    for name in sorted(agent_stats):
-        stats = agent_stats[name]
-        if total_messages > 0:
-            print(i18n.t(Keys.STATS_AGENT_ROW, name=name, sessions=stats["sessions"], messages=stats["messages"]))
-        else:
-            print(f"  {name}: {stats['sessions']} {i18n.t(Keys.SESSION_COUNT_SUFFIX)}")
-    print()
-
-    # Group all sessions by time regardless of agent
-    grouped = group_sessions_by_time([session for _, session in all_sessions])
-    if grouped:
-        print(i18n.t(Keys.STATS_BY_TIME))
-        for label, sessions in grouped.items():
-            print(i18n.t(Keys.STATS_TIME_ROW, label=label, count=len(sessions)))
-
-    return 0
+    return _handle_stats_mode(args, deps=_build_maintenance_deps())
 
 
 def handle_reindex_mode(args: argparse.Namespace) -> int:
-    """Handle `--reindex` flow: force rebuild the full-text index."""
-    from agent_dump.search_index import SearchIndex
+    return _handle_reindex_mode(args, deps=_build_maintenance_deps())
 
-    scanner = AgentScanner()
-    available_agents = scanner.get_available_agents()
 
-    if not available_agents:
-        _print_diagnostic(_build_no_agents_found_diagnostic(scanner))
-        return 1
+def _build_uri_deps() -> UriModeDeps:
+    return UriModeDeps(
+        scanner_factory=AgentScanner,
+        parse_uri=parse_uri,
+        find_session_by_id=find_session_by_id,
+        render_session_head=render_session_head,
+        maybe_generate_uri_summary=maybe_generate_uri_summary,
+        render_session_text=render_session_text,
+        export_session_in_format=export_session_in_format,
+        apply_summary_to_json_export=apply_summary_to_json_export,
+        resolve_output_base_dir=resolve_output_base_dir,
+        validate_uri_agent_formats=validate_uri_agent_formats,
+        print_diagnostic=_print_diagnostic,
+        build_no_agents_found_diagnostic=_build_no_agents_found_diagnostic,
+        wrap_runtime_fetch_error=_wrap_runtime_fetch_error,
+        render_agent_search_roots=_render_agent_search_roots,
+        get_supported_uri_examples=get_supported_uri_examples,
+    )
 
-    index = SearchIndex()
-    if not index.is_available:
-        print(i18n.t(Keys.SEARCH_INDEX_NOT_AVAILABLE))
-        return 1
 
-    print(i18n.t(Keys.REINDEX_START))
-    print()
+def _build_session_deps() -> SessionModeDeps:
+    return SessionModeDeps(
+        scanner_factory=AgentScanner,
+        parse_query=parse_query,
+        collect_query_matches=collect_query_matches,
+        collect_search_matches=collect_search_matches,
+        display_search_results=display_search_results,
+        display_sessions_list=display_sessions_list,
+        select_agent_interactive=select_agent_interactive,
+        select_sessions_interactive=select_sessions_interactive,
+        export_sessions_for_formats=export_sessions_for_formats,
+        resolve_output_base_dir=resolve_output_base_dir,
+        render_query_summary=render_query_summary,
+        warn_list_ignored_options=warn_list_ignored_options,
+        print_diagnostic=_print_diagnostic,
+        build_no_agents_found_diagnostic=_build_no_agents_found_diagnostic,
+        render_agent_search_roots=_render_agent_search_roots,
+    )
 
-    total_indexed = 0
-    for agent in available_agents:
-        sessions = agent.get_sessions(days=args.days)
-        if not sessions:
-            continue
-        added = index.rebuild(agent, sessions)
-        total_indexed += added
-        print(i18n.t(Keys.REINDEX_AGENT_DONE, agent=agent.display_name, count=added))
 
-    print()
-    print(i18n.t(Keys.REINDEX_DONE, count=total_indexed))
-    return 0
+def handle_uri_mode(
+    args: argparse.Namespace,
+    *,
+    output_formats: list[str],
+    output_specified: bool,
+    export_config: Any,
+) -> int:
+    return _handle_uri_mode(
+        args,
+        output_formats=output_formats,
+        output_specified=output_specified,
+        export_config=export_config,
+        deps=_build_uri_deps(),
+    )
+
+
+def handle_session_modes(
+    args: argparse.Namespace,
+    *,
+    query_uri_spec: QuerySpec | None,
+    output_specified: bool,
+    format_specified: bool,
+    output_formats: list[str],
+    export_config: Any,
+    print_help: Callable[[], None],
+) -> int | None:
+    return _handle_session_modes(
+        args,
+        query_uri_spec=query_uri_spec,
+        output_specified=output_specified,
+        format_specified=format_specified,
+        output_formats=output_formats,
+        export_config=export_config,
+        print_help=print_help,
+        deps=_build_session_deps(),
+    )
 
 
 def main():
@@ -1199,7 +733,6 @@ def main():
 
     if args.summary and not is_uri_mode:
         print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
-    show_metadata_summary = not args.no_metadata_summary
     if args.head and not is_uri_mode:
         print(i18n.t(Keys.HEAD_IGNORED_NON_URI_WARNING))
 
@@ -1238,359 +771,23 @@ def main():
                 return 1
             parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=args.format or ""))
 
-    # Handle URI mode first
     if is_uri_mode:
-        uri_result = parse_uri(args.uri)
-        if uri_result is None:
-            _print_diagnostic(
-                invalid_query_or_uri(
-                    "URI 格式无效。",
-                    details=("无法解析为受支持的 `<scheme>://<session_id>` 形式。",),
-                    parsed_uri=ParsedUri(raw=args.uri),
-                    next_steps=(
-                        "改用受支持的 URI scheme。",
-                        *[example.strip() for example in get_supported_uri_examples()],
-                    ),
-                )
-            )
-            return 1
-
-        scheme, session_id = uri_result
-
-        # Scan for available agents
-        scanner = AgentScanner()
-        available_agents = scanner.get_available_agents()
-
-        if not available_agents:
-            _print_diagnostic(_build_no_agents_found_diagnostic(scanner))
-            return 1
-
-        # Find the session
-        result = find_session_by_id(scanner, session_id)
-        if result is None:
-            _print_diagnostic(
-                session_not_found(
-                    raw_uri=args.uri,
-                    scheme=scheme,
-                    session_id=session_id,
-                    searched_roots=_render_agent_search_roots(scanner.agents),
-                    details=("已扫描当前可用 provider，但未匹配到该 session id。",),
-                    next_steps=(
-                        "先运行 `agent-dump --list` 确认该会话是否仍存在。",
-                        "检查 URI 中的 session id 是否完整且对应正确 provider。",
-                    ),
-                )
-            )
-            return 1
-
-        agent, session = result
-
-        # Verify the URI scheme matches the agent
-        expected_agent_name = VALID_URI_SCHEMES.get(scheme)
-        if agent.name != expected_agent_name:
-            _print_diagnostic(
-                invalid_query_or_uri(
-                    "URI scheme 与实际会话来源不匹配。",
-                    details=(f"该会话实际属于 {agent.display_name}。",),
-                    parsed_uri=ParsedUri(raw=args.uri, scheme=scheme, session_id=session_id),
-                    next_steps=(f"改用 `{agent.get_session_uri(session)}` 重新执行。",),
-                )
-            )
-            return 1
-        try:
-            validate_uri_agent_formats(agent, output_formats)
-        except DiagnosticError as e:
-            _print_diagnostic(e)
-            return 1
-
-        # Get session data and render
-        try:
-            had_success = False
-            if args.head:
-                print(render_session_head(args.uri, agent.get_session_head(session)))
-                return 0
-
-            session_data: dict[str, Any] | None = None
-            session_data, summary_markdown = maybe_generate_uri_summary(
-                enabled=args.summary,
-                output_formats=output_formats,
-                uri=args.uri,
-                agent=agent,
-                session=session,
-                session_data=session_data,
-            )
-            if "print" in output_formats:
-                session_data = session_data if session_data is not None else agent.get_session_data(session)
-                output = render_session_text(args.uri, session_data)
-                print(output)
-                had_success = True
-
-            file_formats = [fmt for fmt in output_formats if fmt != "print"]
-            for output_format in file_formats:
-                try:
-                    output_dir = (
-                        resolve_output_base_dir(
-                            cli_output=args.output,
-                            output_specified=output_specified,
-                            export_output=export_config.output,
-                            output_format=output_format,
-                        )
-                        / agent.name
-                    )
-                    output_path = export_session_in_format(
-                        agent,
-                        session,
-                        output_dir,
-                        output_format,
-                        session_data=session_data,
-                        session_uri=args.uri,
-                    )
-                    if output_format == "json" and summary_markdown is not None:
-                        try:
-                            apply_summary_to_json_export(output_path, summary_markdown)
-                            print(i18n.t(Keys.URI_SUMMARY_APPLIED, path=str(output_path)))
-                        except Exception as e:
-                            print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
-                    print(i18n.t(Keys.URI_EXPORT_SAVED, path=str(output_path), format=output_format))
-                    had_success = True
-                except Exception as e:
-                    diagnostic = e if isinstance(e, DiagnosticError) else _wrap_runtime_fetch_error(e, agent=agent)
-                    _print_diagnostic(diagnostic)
-            return 0 if had_success else 1
-        except Exception as e:
-            diagnostic = e if isinstance(e, DiagnosticError) else _wrap_runtime_fetch_error(e, agent=agent)
-            _print_diagnostic(diagnostic)
-            return 1
-
-    # If --interactive or --list not specified, but filters are, enable --list
-    # If nothing specified, show help
-    # --search implicitly enables --list
-    if args.search:
-        args.list = True
-
-    if not args.interactive and not args.list:
-        if args.days != 7 or args.query or is_query_uri_mode:
-            args.list = True
-        else:
-            parser.print_help()
-            return
-
-    print("🚀 Agent Session Exporter\n")
-    print("=" * 60 + "\n")
-
-    # Scan for available agents
-    scanner = AgentScanner()
-    valid_agents = {agent.name for agent in scanner.agents}
-    if is_query_uri_mode:
-        query_spec = query_uri_spec
-    else:
-        try:
-            query_spec = parse_query(args.query, valid_agents=valid_agents)
-        except ValueError as e:
-            _print_diagnostic(
-                invalid_query_or_uri(
-                    "查询条件无效。",
-                    details=(str(e),),
-                    next_steps=(
-                        "使用 `关键词` 或 `agent1,agent2:关键词` 格式。",
-                        "如需路径作用域查询，改用 `agents://<path>?q=<keyword>&providers=<names>`。",
-                    ),
-                )
-            )
-            return 1
-
-    # Merge --search keyword into query_spec
-    if args.search:
-        if query_spec is None:
-            query_spec = QuerySpec(
-                agent_names=None,
-                keyword=args.search,
-                project_path=None,
-                roles=None,
-                limit=None,
-            )
-        else:
-            query_spec = QuerySpec(
-                agent_names=query_spec.agent_names,
-                keyword=args.search,
-                project_path=query_spec.project_path,
-                roles=query_spec.roles,
-                limit=query_spec.limit,
-            )
-
-    available_agents = scanner.get_available_agents()
-
-    if not available_agents:
-        _print_diagnostic(_build_no_agents_found_diagnostic(scanner))
-        return
-
-    if query_spec and query_spec.agent_names:
-        available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
-        if not available_agents:
-            _print_diagnostic(
-                root_not_found(
-                    "查询范围内没有可用 provider。",
-                    searched_roots=_render_agent_search_roots(scanner.agents),
-                    details=(f"query providers: {','.join(sorted(query_spec.agent_names))}",),
-                    next_steps=(
-                        "确认这些 provider 在本机上确实存在会话数据。",
-                        "放宽 providers 范围，或先不加 provider 过滤执行 `--list`。",
-                    ),
-                )
-            )
-            return 0 if args.list else 1
-
-    if args.search and query_spec is not None:
-        warn_list_ignored_options(output_specified=output_specified, format_specified=format_specified)
-        print(i18n.t(Keys.SEARCH_HEADER, days=args.days, query=render_query_summary(query_spec)))
-        print("-" * 60)
-        display_search_results(collect_search_matches(available_agents, days=args.days, spec=query_spec))
-        print("\n" + "=" * 60)
-        return 0
-
-    matched_sessions_by_agent: dict[str, list[Session]] = {}
-    if query_spec:
-        matched_sessions_by_agent = collect_query_matches(available_agents, days=args.days, spec=query_spec)
-
-    # List mode
-    if args.list:
-        warn_list_ignored_options(output_specified=output_specified, format_specified=format_specified)
-        if query_spec:
-            print(i18n.t(Keys.LIST_HEADER_FILTERED, days=args.days, query=render_query_summary(query_spec)))
-        else:
-            print(i18n.t(Keys.LIST_HEADER, days=args.days))
-        print("-" * 60)
-
-        for agent in available_agents:
-            sessions = (
-                matched_sessions_by_agent.get(agent.name, []) if query_spec else agent.get_sessions(days=args.days)
-            )
-
-            print(f"\n📁 {agent.display_name} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
-
-            if sessions:
-                should_quit = display_sessions_list(
-                    agent,
-                    sessions,
-                    page_size=max(len(sessions), 1),
-                    show_pagination=False,
-                    show_metadata_summary=show_metadata_summary,
-                )
-                if should_quit:
-                    print("\n" + "=" * 60)
-                    return 0
-            else:
-                print(i18n.t(Keys.NO_SESSIONS_IN_DAYS, days=args.days))
-
-        print("\n" + "=" * 60)
-        print(i18n.t(Keys.HINT_INTERACTIVE))
-        print()
-        return 0
-
-    # Interactive mode
-    interactive_agents = available_agents
-    session_counts: dict[str, int] | None = None
-
-    if query_spec:
-        session_counts = {
-            agent.name: len(matched_sessions_by_agent[agent.name])
-            for agent in available_agents
-            if agent.name in matched_sessions_by_agent
-        }
-        interactive_agents = [agent for agent in available_agents if agent.name in matched_sessions_by_agent]
-        if not interactive_agents:
-            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, query=render_query_summary(query_spec)))
-            return 1
-
-    # Select agent
-    if len(interactive_agents) == 1:
-        selected_agent = interactive_agents[0]
-        print(i18n.t(Keys.AUTO_SELECT_AGENT, agent_name=selected_agent.display_name))
-    else:
-        selected_agent = select_agent_interactive(
-            interactive_agents,
-            days=args.days,
-            session_counts=session_counts,
-        )
-        if not selected_agent:
-            print("\n" + i18n.t(Keys.NO_AGENT_SELECTED))
-            return 1
-        print(i18n.t(Keys.AGENT_SELECTED, agent_name=selected_agent.display_name))
-
-    # Get sessions for the selected agent
-    if query_spec:
-        sessions = matched_sessions_by_agent.get(selected_agent.name, [])
-    else:
-        sessions = selected_agent.get_sessions(days=args.days)
-
-    if not sessions:
-        if query_spec:
-            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, query=render_query_summary(query_spec)))
-        else:
-            print(i18n.t(Keys.NO_SESSIONS_FOUND, days=args.days))
-        return 1
-
-    if query_spec:
-        print(
-            i18n.t(
-                Keys.SESSIONS_FOUND_FILTERED,
-                count=len(sessions),
-                days=args.days,
-                query=render_query_summary(query_spec),
-            )
-        )
-    else:
-        print(i18n.t(Keys.SESSIONS_FOUND, count=len(sessions), days=args.days))
-
-    # Show warning if too many sessions
-    if len(sessions) > 100:
-        print(i18n.t(Keys.MANY_SESSIONS_WARNING, count=len(sessions)))
-        print(i18n.t(Keys.MANY_SESSIONS_EXAMPLE))
-
-    # Select sessions
-    selected_sessions = select_sessions_interactive(
-        sessions,
-        selected_agent,
-        show_metadata_summary=show_metadata_summary,
-    )
-    if not selected_sessions:
-        print("\n" + i18n.t(Keys.NO_SESSION_SELECTED))
-        return 1
-
-    print(i18n.t(Keys.SESSIONS_SELECTED_COUNT, count=len(selected_sessions)))
-
-    # Export
-    output_base_dirs = {
-        output_format: resolve_output_base_dir(
-            cli_output=args.output,
+        return handle_uri_mode(
+            args,
+            output_formats=output_formats,
             output_specified=output_specified,
-            export_output=export_config.output,
-            output_format=output_format,
+            export_config=export_config,
         )
-        for output_format in output_formats
-    }
-    primary_output_format = output_formats[0] if output_formats else "json"
-    output_base_dir = output_base_dirs.get(
-        primary_output_format,
-        resolve_output_base_dir(
-            cli_output=args.output,
-            output_specified=output_specified,
-            export_output=export_config.output,
-            output_format=primary_output_format,
-        ),
-    )
-    exported = export_sessions_for_formats(
-        selected_agent,
-        selected_sessions,
-        output_formats,
-        output_base_dir,
-        output_base_dirs=output_base_dirs,
-    )
 
-    summary_paths = sorted({str(path.parent) for path in exported})
-    summary_path = ", ".join(summary_paths) if summary_paths else f"{output_base_dir}/{selected_agent.name}"
-    print(i18n.t(Keys.EXPORT_SUMMARY, count=len(exported), path=summary_path))
-    return 0
+    return handle_session_modes(
+        args,
+        query_uri_spec=query_uri_spec,
+        output_specified=output_specified,
+        format_specified=format_specified,
+        output_formats=output_formats,
+        export_config=export_config,
+        print_help=parser.print_help,
+    )
 
 
 if __name__ == "__main__":
