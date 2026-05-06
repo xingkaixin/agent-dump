@@ -11,6 +11,7 @@ import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.claudecode import ClaudeCodeAgent
+from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
 from agent_dump.paths import ProviderRoots
 
 
@@ -247,6 +248,73 @@ class TestClaudeCodeAgent:
         assert result.updated_at == datetime(2026, 1, 1, 0, 0, 5, tzinfo=timezone.utc)
         assert result.metadata["message_count"] == 2
         assert result.metadata["model"] == "claude-3-opus"
+
+    def test_parse_large_session_file_uses_bounded_reads(self, tmp_path):
+        """测试大文件扫描只读取头尾窗口。"""
+        agent = ClaudeCodeAgent()
+        project_dir = tmp_path / "project1"
+        project_dir.mkdir()
+
+        file_path = project_dir / "session-001.jsonl"
+        records = [
+            {
+                "timestamp": "2026-01-01T00:00:00Z",
+                "cwd": "/test/dir",
+                "message": {"role": "user", "content": "Large File Title"},
+            },
+            {
+                "timestamp": "2026-01-01T00:00:01Z",
+                "message": {"role": "assistant", "content": "hello", "model": "claude-3-opus"},
+            },
+            {
+                "timestamp": "2026-01-01T00:05:00Z",
+                "message": {"role": "assistant", "content": "x" * (FULL_SCAN_BYTE_LIMIT + HEAD_SCAN_BYTE_LIMIT)},
+            },
+            {
+                "timestamp": "2026-01-01T00:10:00Z",
+                "message": {"role": "assistant", "content": "done"},
+            },
+        ]
+        write_jsonl(file_path, records)
+        read_bytes = {"count": 0}
+        real_open = open
+
+        class CountingBinaryFile:
+            def __init__(self, wrapped):
+                self.wrapped = wrapped
+
+            def __enter__(self):
+                self.wrapped.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.wrapped.__exit__(*args)
+
+            def __getattr__(self, name):
+                return getattr(self.wrapped, name)
+
+            def read(self, size=-1):
+                data = self.wrapped.read(size)
+                read_bytes["count"] += len(data)
+                return data
+
+        def counting_open(file, *args, **kwargs):
+            wrapped = real_open(file, *args, **kwargs)
+            mode = args[0] if args else kwargs.get("mode", "r")
+            if Path(file) == file_path and "b" in mode:
+                return CountingBinaryFile(wrapped)
+            return wrapped
+
+        with mock.patch("builtins.open", counting_open):
+            result = agent._parse_session_file(file_path, project_dir)
+
+        assert result is not None
+        assert result.title == "Large File Title"
+        assert result.updated_at == datetime(2026, 1, 1, 0, 10, tzinfo=timezone.utc)
+        assert result.metadata["model"] == "claude-3-opus"
+        assert result.metadata["message_count"] is None
+        assert read_bytes["count"] <= HEAD_SCAN_BYTE_LIMIT + TAIL_SCAN_BYTE_LIMIT
+        assert read_bytes["count"] < file_path.stat().st_size // 2
 
     def test_get_sessions_handles_mixed_naive_aware_datetime(self, tmp_path):
         """测试 get_sessions 能处理 naive/aware 混合时间"""

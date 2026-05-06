@@ -11,6 +11,7 @@ from agent_dump.search_index import (
     SearchIndex,
     SearchResult,
     _build_fts_query,
+    _extract_related_source_paths,
     _extract_session_searchable_text,
     _extract_source_mtime,
     _has_cjk,
@@ -123,6 +124,33 @@ class TestExtractSourceMtime:
     def test_nonexistent_returns_zero(self, tmp_path):
         assert _extract_source_mtime(tmp_path / "missing") == 0.0
 
+    def test_directory_mtime_uses_related_paths_without_recursive_scan(self, tmp_path):
+        session_dir = tmp_path / "session"
+        session_dir.mkdir()
+        context_file = session_dir / "context.jsonl"
+        context_file.write_text("context")
+
+        with mock.patch.object(Path, "rglob", side_effect=AssertionError("recursive scan should not run")):
+            mtime = _extract_source_mtime(session_dir, (context_file,))
+
+        assert mtime >= context_file.stat().st_mtime
+
+    def test_extract_related_source_paths_from_session_metadata(self, tmp_path):
+        session_dir = tmp_path / "session"
+        context_file = session_dir / "context.jsonl"
+        wire_file = session_dir / "wire.jsonl"
+        session = make_session(
+            "s1",
+            "Test",
+            session_dir,
+        )
+        session.metadata = {
+            "context_file": str(context_file),
+            "wire_file": str(wire_file),
+        }
+
+        assert _extract_related_source_paths(session) == (context_file, wire_file)
+
 
 class TestExtractSessionSearchableText:
     def test_extracts_text_parts(self):
@@ -230,6 +258,22 @@ class TestSearchIndex:
 
         added, removed = index.update(agent, [session])
         assert added == 1
+
+    def test_incremental_caches_source_mtime_within_update(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(session_data={
+            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "one"}]}]},
+            "s2": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "two"}]}]},
+        })
+        shared_source = tmp_path / "shared.db"
+        shared_source.write_text("data")
+        session1 = make_session("s1", "Test 1", shared_source)
+        session2 = make_session("s2", "Test 2", shared_source)
+
+        with mock.patch("agent_dump.search_index._extract_source_mtime", return_value=123.0) as mtime:
+            index.update(agent, [session1, session2])
+
+        assert mtime.call_count == 1
 
     def test_delete_stale_sessions(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")

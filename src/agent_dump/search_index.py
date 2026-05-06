@@ -95,19 +95,29 @@ def _has_fts5(conn: sqlite3.Connection) -> bool:
         return False
 
 
-def _extract_source_mtime(source_path: Path) -> float:
+def _extract_source_mtime(source_path: Path, related_paths: tuple[Path, ...] = ()) -> float:
     """Get modification time for a source path (file or directory)."""
+    mtimes: list[float] = []
     if not source_path.exists():
+        return max((_path_mtime(path) for path in related_paths), default=0.0)
+    mtimes.append(source_path.stat().st_mtime)
+    mtimes.extend(_path_mtime(path) for path in related_paths)
+    return max(mtimes, default=0.0)
+
+
+def _path_mtime(path: Path) -> float:
+    if not path.exists():
         return 0.0
-    if source_path.is_file():
-        return source_path.stat().st_mtime
-    if source_path.is_dir():
-        max_mtime = source_path.stat().st_mtime
-        for child in source_path.rglob("*"):
-            if child.is_file():
-                max_mtime = max(max_mtime, child.stat().st_mtime)
-        return max_mtime
-    return 0.0
+    return path.stat().st_mtime
+
+
+def _extract_related_source_paths(session: Session) -> tuple[Path, ...]:
+    related_paths: list[Path] = []
+    for key in ("context_file", "wire_file"):
+        raw_path = session.metadata.get(key)
+        if isinstance(raw_path, str) and raw_path.strip():
+            related_paths.append(Path(raw_path))
+    return tuple(dict.fromkeys(related_paths))
 
 
 def _serialize_for_search(value: Any) -> str:
@@ -369,11 +379,16 @@ class SearchIndex:
             # Determine which sessions need updating
             current_paths: set[str] = set()
             to_update: list[tuple[Session, float]] = []
+            mtime_cache: dict[tuple[str, tuple[str, ...]], float] = {}
 
             for session in sessions:
                 path_str = str(session.source_path)
                 current_paths.add(path_str)
-                current_mtime = _extract_source_mtime(session.source_path)
+                related_paths = _extract_related_source_paths(session)
+                cache_key = (path_str, tuple(str(path) for path in related_paths))
+                if cache_key not in mtime_cache:
+                    mtime_cache[cache_key] = _extract_source_mtime(session.source_path, related_paths)
+                current_mtime = mtime_cache[cache_key]
 
                 if path_str not in indexed or abs(indexed[path_str]["mtime"] - current_mtime) > 0.001:
                     to_update.append((session, current_mtime))

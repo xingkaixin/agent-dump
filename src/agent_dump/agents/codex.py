@@ -2,14 +2,17 @@
 Codex agent handler
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import re
+from threading import Lock
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
@@ -34,6 +37,7 @@ class CodexAgent(BaseAgent):
         super().__init__("codex", "Codex")
         self.base_path: Path | None = None
         self._titles_cache: dict[str, str] | None = None
+        self._titles_cache_lock = Lock()
 
     def _find_base_path(self) -> Path | None:
         """Find the Codex sessions directory"""
@@ -51,28 +55,32 @@ class CodexAgent(BaseAgent):
         if self._titles_cache is not None:
             return self._titles_cache
 
-        titles: dict[str, str] = {}
-        roots = ProviderRoots.from_env_or_home()
-        session_index_path = roots.codex_root / "session_index.jsonl"
+        with self._titles_cache_lock:
+            if self._titles_cache is not None:
+                return self._titles_cache
 
-        if session_index_path.exists():
-            try:
-                with open(session_index_path, encoding="utf-8") as f:
-                    for line in f:
-                        if not line.strip():
-                            continue
-                        data = json.loads(line)
-                        session_id = data.get("id")
-                        thread_name = data.get("thread_name")
-                        if isinstance(session_id, str) and session_id.strip() and isinstance(thread_name, str):
-                            normalized = normalize_title_text(thread_name)
-                            if normalized:
-                                titles[session_id] = normalized
-            except Exception as e:
-                print(f"警告: 加载标题缓存失败: {e}")
+            titles: dict[str, str] = {}
+            roots = ProviderRoots.from_env_or_home()
+            session_index_path = roots.codex_root / "session_index.jsonl"
 
-        self._titles_cache = titles
-        return titles
+            if session_index_path.exists():
+                try:
+                    with open(session_index_path, encoding="utf-8") as f:
+                        for line in f:
+                            if not line.strip():
+                                continue
+                            data = json.loads(line)
+                            session_id = data.get("id")
+                            thread_name = data.get("thread_name")
+                            if isinstance(session_id, str) and session_id.strip() and isinstance(thread_name, str):
+                                normalized = normalize_title_text(thread_name)
+                                if normalized:
+                                    titles[session_id] = normalized
+                except Exception as e:
+                    print(f"警告: 加载标题缓存失败: {e}")
+
+            self._titles_cache = titles
+            return titles
 
     def _get_session_title(self, session_id: str) -> str | None:
         """Get session title from session index by session ID."""
@@ -84,8 +92,7 @@ class CodexAgent(BaseAgent):
         self.base_path = self._find_base_path()
         if not self.base_path:
             return False
-        # Check if there are any jsonl files
-        return len(list(self.base_path.rglob("*.jsonl"))) > 0
+        return next(self.base_path.rglob("*.jsonl"), None) is not None
 
     def scan(self) -> list[Session]:
         """Scan for all available sessions"""
@@ -100,15 +107,22 @@ class CodexAgent(BaseAgent):
 
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
         sessions = []
+        jsonl_files = list(self.base_path.rglob("*.jsonl"))
+        if not jsonl_files:
+            return []
 
-        for jsonl_file in self.base_path.rglob("*.jsonl"):
-            try:
-                session = self._parse_session_file(jsonl_file)
-                if session and self._normalize_datetime_utc(session.created_at) >= cutoff_time:
-                    sessions.append(session)
-            except Exception as e:
-                print(f"警告: 解析会话文件失败 {jsonl_file}: {e}")
-                continue
+        max_workers = min(32, len(jsonl_files))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(self._parse_session_file, jsonl_file): jsonl_file for jsonl_file in jsonl_files}
+            for future in as_completed(futures):
+                jsonl_file = futures[future]
+                try:
+                    session = future.result()
+                    if session and self._normalize_datetime_utc(session.created_at) >= cutoff_time:
+                        sessions.append(session)
+                except Exception as e:
+                    print(f"警告: 解析会话文件失败 {jsonl_file}: {e}")
+                    continue
 
         return sorted(sessions, key=lambda s: self._normalize_datetime_utc(s.created_at), reverse=True)
 
@@ -136,19 +150,14 @@ class CodexAgent(BaseAgent):
         return stem
 
     def _extract_scan_metadata(
-        self, lines: list[str], fallback_created_at: datetime
-    ) -> tuple[datetime, int, str | None]:
+        self, records: list[dict[str, Any]], fallback_created_at: datetime, *, scanned_all: bool
+    ) -> tuple[datetime, int | None, str | None]:
         """Extract lightweight summary metadata without building full session data."""
         updated_at = fallback_created_at
         message_count = 0
         model: str | None = None
 
-        for line in lines:
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
+        for data in records:
             timestamp_str = str(data.get("timestamp", "")).strip()
             if timestamp_str:
                 with suppress(ValueError):
@@ -174,19 +183,17 @@ class CodexAgent(BaseAgent):
                     if isinstance(model_arg, str) and model_arg.strip():
                         model = model_arg.strip()
 
-        return updated_at, message_count, model
+        return updated_at, message_count if scanned_all else None, model
 
     def _parse_session_file(self, file_path: Path) -> Session | None:
         """Parse a single Codex session file"""
         try:
-            with open(file_path, encoding="utf-8") as f:
-                lines = f.readlines()
-
-            if not lines:
+            scan = read_jsonl_scan_metadata(file_path, head_line_limit=10)
+            first_line = scan.first_record
+            if first_line is None:
                 return None
 
             # Parse first line to get session metadata
-            first_line = json.loads(lines[0])
             payload = first_line.get("payload", {})
 
             session_id = payload.get("id", "")
@@ -205,11 +212,18 @@ class CodexAgent(BaseAgent):
                 created_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
             explicit_title = self._get_session_title(session_id)
-            message_title = self._extract_title(lines)
+            message_title = self._extract_title_from_records(scan.head_records[:10])
             directory_title = basename_title(payload.get("cwd")) or basename_title(file_path.parent)
             title = resolve_session_title(explicit_title, message_title, directory_title)
 
-            updated_at, message_count, model = self._extract_scan_metadata(lines, created_at)
+            metadata_records = list(scan.head_records)
+            if not scan.scanned_all and scan.tail_record is not None:
+                metadata_records.append(scan.tail_record)
+            updated_at, message_count, model = self._extract_scan_metadata(
+                metadata_records,
+                created_at,
+                scanned_all=scan.scanned_all,
+            )
 
             return Session(
                 id=session_id,
@@ -231,27 +245,42 @@ class CodexAgent(BaseAgent):
     def _extract_title(self, lines: list[str]) -> str | None:
         """Extract title from the second user message in a session."""
         try:
-            user_message_count = 0
-            for line in lines[:10]:  # Check first 10 lines
-                data = json.loads(line)
-                payload = data.get("payload", {})
-
-                # Look for user message
-                if payload.get("type") == "message" and payload.get("role") == "user":
-                    user_message_count += 1
-                    if user_message_count < 2:
-                        continue
-                    content = payload.get("content", [])
-                    if content and isinstance(content, list):
-                        text_fragments = []
-                        for item in content:
-                            if isinstance(item, dict):
-                                text_fragments.append(str(item.get("text", "")))
-                            elif isinstance(item, str):
-                                text_fragments.append(item)
-                        return normalize_title_text(" ".join(text_fragments))
+            records = []
+            for line in lines[:10]:
+                records.append(json.loads(line))
+            return self._extract_title_from_records(records)
         except Exception as e:
             print(f"警告: 提取标题失败: {e}")
+
+        return None
+
+    def _extract_title_from_records(self, records: list[dict[str, Any]]) -> str | None:
+        user_message_count = 0
+        for data in records:
+            payload = data.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
+
+            if payload.get("type") != "message" or payload.get("role") != "user":
+                continue
+
+            user_message_count += 1
+            if user_message_count < 2:
+                continue
+
+            content = payload.get("content", [])
+            if not isinstance(content, list):
+                continue
+
+            text_fragments = []
+            for item in content:
+                if isinstance(item, dict):
+                    text_fragments.append(str(item.get("text", "")))
+                elif isinstance(item, str):
+                    text_fragments.append(item)
+            normalized = normalize_title_text(" ".join(text_fragments))
+            if normalized:
+                return normalized
 
         return None
 

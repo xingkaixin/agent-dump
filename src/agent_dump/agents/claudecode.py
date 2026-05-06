@@ -2,13 +2,16 @@
 Claude Code agent handler
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
@@ -21,6 +24,7 @@ class ClaudeCodeAgent(BaseAgent):
         super().__init__("claudecode", "Claude Code")
         self.base_path: Path | None = None
         self._sessions_index_cache: dict[str, dict] = {}
+        self._sessions_index_lock = Lock()
 
     def _find_base_path(self) -> Path | None:
         """Find the Claude Code projects directory"""
@@ -52,11 +56,13 @@ class ClaudeCodeAgent(BaseAgent):
         """Get session metadata from sessions-index.json"""
         cache_key = f"{project_dir.name}:{session_id}"
         if cache_key not in self._sessions_index_cache:
-            # Load index for this project
-            project_index = self._load_sessions_index(project_dir)
-            # Update cache with all entries from this project
-            for sid, entry in project_index.items():
-                self._sessions_index_cache[f"{project_dir.name}:{sid}"] = entry
+            with self._sessions_index_lock:
+                if cache_key not in self._sessions_index_cache:
+                    # Load index for this project
+                    project_index = self._load_sessions_index(project_dir)
+                    # Update cache with all entries from this project
+                    for sid, entry in project_index.items():
+                        self._sessions_index_cache[f"{project_dir.name}:{sid}"] = entry
 
         return self._sessions_index_cache.get(cache_key)
 
@@ -67,10 +73,8 @@ class ClaudeCodeAgent(BaseAgent):
             return False
         # Check for jsonl files in project directories
         for project_dir in self.base_path.iterdir():
-            if project_dir.is_dir():
-                jsonl_files = list(project_dir.glob("*.jsonl"))
-                if jsonl_files:
-                    return True
+            if project_dir.is_dir() and next(project_dir.glob("*.jsonl"), None) is not None:
+                return True
         return False
 
     def scan(self) -> list[Session]:
@@ -86,6 +90,7 @@ class ClaudeCodeAgent(BaseAgent):
 
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
         sessions = []
+        session_files: list[tuple[Path, Path]] = []
 
         # Iterate through project directories
         for project_dir in self.base_path.iterdir():
@@ -97,8 +102,21 @@ class ClaudeCodeAgent(BaseAgent):
                 if jsonl_file.name == "sessions-index.json":
                     continue
 
+                session_files.append((jsonl_file, project_dir))
+
+        if not session_files:
+            return []
+
+        max_workers = min(32, len(session_files))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self._parse_session_file, jsonl_file, project_dir): (jsonl_file, project_dir)
+                for jsonl_file, project_dir in session_files
+            }
+            for future in as_completed(futures):
+                jsonl_file, _ = futures[future]
                 try:
-                    session = self._parse_session_file(jsonl_file, project_dir)
+                    session = future.result()
                     if session and self._normalize_datetime_utc(session.created_at) >= cutoff_time:
                         sessions.append(session)
                 except Exception as e:
@@ -114,19 +132,14 @@ class ClaudeCodeAgent(BaseAgent):
         return value.astimezone(timezone.utc)
 
     def _extract_scan_metadata(
-        self, lines: list[str], fallback_created_at: datetime
-    ) -> tuple[datetime, int, str | None]:
+        self, records: list[dict[str, Any]], fallback_created_at: datetime, *, scanned_all: bool
+    ) -> tuple[datetime, int | None, str | None]:
         """Extract lightweight summary metadata from Claude jsonl."""
         updated_at = fallback_created_at
         message_count = 0
         model: str | None = None
 
-        for line in lines:
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
+        for data in records:
             timestamp_str = str(data.get("timestamp", "")).strip()
             if timestamp_str:
                 with suppress(ValueError):
@@ -145,22 +158,20 @@ class ClaudeCodeAgent(BaseAgent):
                 if isinstance(message_model, str) and message_model.strip():
                     model = message_model.strip()
 
-        return updated_at, message_count, model
+        return updated_at, message_count if scanned_all else None, model
 
     def _parse_session_file(self, file_path: Path, project_dir: Path) -> Session | None:
         """Parse a single Claude Code session file"""
         try:
-            with open(file_path, encoding="utf-8") as f:
-                lines = f.readlines()
-
-            if not lines:
+            scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)
+            first_line = scan.first_record
+            if first_line is None:
                 return None
 
             # Extract session ID from filename
             session_id = file_path.stem
 
             # Parse first message to get timestamp
-            first_line = json.loads(lines[0])
             timestamp_str = first_line.get("timestamp", "")
 
             try:
@@ -175,11 +186,18 @@ class ClaudeCodeAgent(BaseAgent):
             if metadata and metadata.get("summary"):
                 explicit_title = metadata["summary"]
 
-            message_title = self._extract_title(lines)
+            message_title = self._extract_title_from_records(scan.head_records[:20])
             directory_title = basename_title(first_line.get("cwd")) or basename_title(project_dir)
             title = resolve_session_title(explicit_title, message_title, directory_title)
 
-            updated_at, message_count, model = self._extract_scan_metadata(lines, created_at)
+            metadata_records = list(scan.head_records)
+            if not scan.scanned_all and scan.tail_record is not None:
+                metadata_records.append(scan.tail_record)
+            updated_at, message_count, model = self._extract_scan_metadata(
+                metadata_records,
+                created_at,
+                scanned_all=scan.scanned_all,
+            )
 
             return Session(
                 id=session_id,
@@ -205,26 +223,36 @@ class ClaudeCodeAgent(BaseAgent):
     def _extract_title(self, lines: list[str]) -> str | None:
         """Extract title from user messages"""
         try:
-            for line in lines[:20]:  # Check first 20 lines
-                data = json.loads(line)
-                msg = data.get("message", {})
-
-                if msg.get("role") == "user":
-                    content = msg.get("content", "")
-                    if content:
-                        # Handle both string and list content
-                        if isinstance(content, list):
-                            # Extract text from content list
-                            texts = []
-                            for item in content:
-                                if isinstance(item, dict):
-                                    texts.append(item.get("text", ""))
-                                elif isinstance(item, str):
-                                    texts.append(item)
-                            content = " ".join(texts)
-                        return normalize_title_text(content)
+            records = []
+            for line in lines[:20]:
+                records.append(json.loads(line))
+            return self._extract_title_from_records(records)
         except Exception as e:
             print(f"警告: 提取标题失败: {e}")
+
+        return None
+
+    def _extract_title_from_records(self, records: list[dict[str, Any]]) -> str | None:
+        for data in records:
+            msg = data.get("message", {})
+            if not isinstance(msg, dict):
+                continue
+
+            if msg.get("role") != "user":
+                continue
+
+            content = msg.get("content", "")
+            if not content:
+                continue
+            if isinstance(content, list):
+                texts = []
+                for item in content:
+                    if isinstance(item, dict):
+                        texts.append(item.get("text", ""))
+                    elif isinstance(item, str):
+                        texts.append(item)
+                content = " ".join(texts)
+            return normalize_title_text(content)
 
         return None
 

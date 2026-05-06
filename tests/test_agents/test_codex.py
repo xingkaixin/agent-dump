@@ -11,6 +11,7 @@ import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
+from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
 from agent_dump.paths import ProviderRoots
 
 PATCH_INPUT = """*** Begin Patch
@@ -320,6 +321,97 @@ class TestCodexAgent:
         assert result.updated_at == datetime(2026, 1, 1, 0, 0, 2, tzinfo=timezone.utc)
         assert result.metadata["message_count"] == 2
         assert result.metadata["model"] == "gpt-5.4-mini"
+
+    def test_parse_large_session_file_uses_bounded_reads(self, tmp_path):
+        """测试大文件扫描只读取头尾窗口。"""
+        agent = CodexAgent()
+        agent._titles_cache = {}
+        session_file = tmp_path / "rollout-2026-02-03T10-04-47-session-id.jsonl"
+        records = [
+            {
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "id": "session-id",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "cwd": "/repo/demo",
+                    "model_provider": "openai",
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"text": "First"}],
+                },
+            },
+            {
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"text": "Large File Title"}],
+                },
+            },
+            {
+                "timestamp": "2026-01-01T00:00:02Z",
+                "payload": {
+                    "type": "function_call",
+                    "arguments": {"model": "gpt-5.4-mini"},
+                },
+            },
+            {
+                "timestamp": "2026-01-01T00:05:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"text": "x" * (FULL_SCAN_BYTE_LIMIT + HEAD_SCAN_BYTE_LIMIT)}],
+                },
+            },
+            {
+                "timestamp": "2026-01-01T00:10:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"text": "done"}],
+                },
+            },
+        ]
+        session_file.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+        read_bytes = {"count": 0}
+        real_open = open
+
+        class CountingBinaryFile:
+            def __init__(self, wrapped):
+                self.wrapped = wrapped
+
+            def __enter__(self):
+                self.wrapped.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.wrapped.__exit__(*args)
+
+            def __getattr__(self, name):
+                return getattr(self.wrapped, name)
+
+            def read(self, size=-1):
+                data = self.wrapped.read(size)
+                read_bytes["count"] += len(data)
+                return data
+
+        def counting_open(file, *args, **kwargs):
+            wrapped = real_open(file, *args, **kwargs)
+            mode = args[0] if args else kwargs.get("mode", "r")
+            if Path(file) == session_file and "b" in mode:
+                return CountingBinaryFile(wrapped)
+            return wrapped
+
+        with mock.patch("builtins.open", counting_open):
+            result = agent._parse_session_file(session_file)
+
+        assert result is not None
+        assert result.title == "Large File Title"
+        assert result.updated_at == datetime(2026, 1, 1, 0, 10, tzinfo=timezone.utc)
+        assert result.metadata["model"] == "gpt-5.4-mini"
+        assert result.metadata["message_count"] is None
+        assert read_bytes["count"] <= HEAD_SCAN_BYTE_LIMIT + TAIL_SCAN_BYTE_LIMIT
+        assert read_bytes["count"] < session_file.stat().st_size // 2
 
     def test_get_sessions_filtered_by_days(self, tmp_path):
         """测试按天数过滤会话"""
