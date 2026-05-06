@@ -22,84 +22,132 @@
 
 ### 1.3 数据安全约束
 
-- **数据库 schema 不可假设未来变更**：当前代码基于 OpenCode 当前版本 schema，不得硬编码 schema 假设
-- **不得删除或修改用户数据**：导出工具只读访问数据库
+- **Provider 数据源只读访问**：导出、搜索、统计、collect 均只读取本地会话源
+- **Provider schema 只在对应 Agent 内处理**：OpenCode/Cursor 的 SQLite 细节、JSONL provider 的文件结构都封装在各自 Agent
+- **不得删除或修改用户数据**：禁止对用户会话目录、数据库、JSONL 源文件执行写入或清理
 - **临时文件必须清理**：使用 `tempfile` 模块并确保清理
 
 ### 1.4 架构边界约束
 
 - **cli.py 只负责参数解析和工作流调度**：业务逻辑必须下沉到具体模块
-- **数据库逻辑禁止写入 cli.py**：所有数据库操作封装在 `db.py`
+- **Provider 读取逻辑禁止写入 cli.py**：所有会话发现、读取、导出实现封装在 `BaseAgent` 子类
 - **UI 逻辑与业务逻辑分离**：selector 层不得直接操作数据库或文件系统
+- **跨模式共享逻辑进入 cli_shared.py**：URI、format、渲染、导出调度等复用入口集中维护
 
 ---
 
 ## 2. 公共接口声明（Public API Surface）
 
-以下接口为稳定公开 API，变更需保持向后兼容。
+以下接口由 `src/agent_dump/__init__.py` 的 `__all__` 定义，属于稳定公开 API。变更时必须保持向后兼容，并同步更新本节、README 与测试。
 
 ### 2.1 稳定公开 API（Stable Public API）
 
-位于 `src/agent_dump/__init__.py` 导出：
-
-| 函数/类 | 模块 | 稳定性 |
-|---------|------|--------|
-| `find_db_path()` → `Path` | `db.py` | **稳定** |
-| `get_recent_sessions(db_path, days=7)` → `List[Dict]` | `db.py` | **稳定** |
-| `export_session(db_path, session, output_dir)` → `Path` | `exporter.py` | **稳定** |
-| `export_sessions(db_path, sessions, output_dir)` → `List[Path]` | `exporter.py` | **稳定** |
+| 符号 | 来源模块 | 说明 |
+|------|----------|------|
+| `__version__` | `agent_dump.__about__` | 包版本号，单一版本源 |
+| `AgentScanner` | `agent_dump.scanner` | 按 registry 创建并扫描所有 provider |
+| `BaseAgent` | `agent_dump.agents.base` | Provider 实现的抽象基类 |
+| `Session` | `agent_dump.agents.base` | 统一会话数据模型 |
+| `OpenCodeAgent` | `agent_dump.agents.opencode` | OpenCode provider |
+| `CodexAgent` | `agent_dump.agents.codex` | Codex provider |
+| `KimiAgent` | `agent_dump.agents.kimi` | Kimi provider |
+| `ClaudeCodeAgent` | `agent_dump.agents.claudecode` | Claude Code provider |
+| `CursorAgent` | `agent_dump.agents.cursor` | Cursor provider |
 
 ### 2.2 内部实现（Internal Implementation）
 
-以下函数为内部实现，不建议外部直接依赖，可能随版本变更：
+以下模块是当前实现边界，外部调用方应优先使用上表公开 API 或 CLI：
 
-| 函数/类 | 模块 | 稳定性 |
-|---------|------|--------|
-| `main()` | `cli.py` | 内部入口 |
-| `select_sessions_interactive(sessions)` | `selector.py` | 内部 |
-| `select_sessions_simple(sessions)` | `selector.py` | 内部 |
-| `is_terminal()` → `bool` | `selector.py` | 内部 |
+| 模块 | 职责 |
+|------|------|
+| `agent_registry.py` | 注册 provider、URI scheme、用户可见路径说明 |
+| `cli.py` | 参数解析、模式选择、依赖装配 |
+| `cli_shared.py` | CLI 共享能力：URI、format、导出调度、诊断渲染 |
+| `session_workflow.py` | list / interactive / query 会话工作流 |
+| `uri_workflow.py` | 单 URI 查看、head、summary、单会话导出 |
+| `collect_workflow.py` | collect 模式编排、dry-run、保存路径解析 |
+| `maintenance_workflow.py` | stats 与 reindex 模式 |
+| `rendering.py` | print/head/markdown 渲染与 format 导出分发 |
+| `query_filter.py` | `-query` 与 `agents://` 查询 URI 解析、过滤、搜索匹配 |
+| `search_index.py` | SQLite FTS5 搜索索引 |
+| `selector.py` | 终端交互选择与非 TTY 输入回退 |
+| `config.py` | TOML 配置加载、编辑与校验 |
 
 ### 2.3 作为库使用示例
 
 ```python
-from agent_dump import find_db_path, get_recent_sessions, export_session
 from pathlib import Path
 
-# 查找数据库
-db_path = find_db_path()
+from agent_dump import AgentScanner
 
-# 获取最近 7 天的会话
-sessions = get_recent_sessions(db_path, days=7)
+scanner = AgentScanner()
 
-# 导出第一个会话
-output_dir = Path("./my-sessions")
-export_session(db_path, sessions[0], output_dir)
+for agent in scanner.get_available_agents():
+    sessions = agent.get_sessions(days=7)
+    if not sessions:
+        continue
+
+    output_dir = Path("./sessions") / agent.name
+    exported_path = agent.export_session(sessions[0], output_dir)
+    print(f"{agent.display_name}: {exported_path}")
 ```
 
 ---
 
 ## 3. 数据流概述
 
-简化的执行路径：
+### 3.1 列表与交互导出
 
 ```
 CLI (cli.py)
-  ↓ 解析参数
-找到数据库 (db.py::find_db_path)
-  ↓ 查询
-获取 sessions (db.py::get_recent_sessions)
-  ↓ 交互选择
-Selector (selector.py)
-  ↓ 导出
-Exporter (exporter.py::export_sessions)
-  ↓ 写入
-JSON 输出到磁盘
+  ↓ 解析参数、加载配置、选择模式
+Session workflow (session_workflow.py)
+  ↓ 创建扫描器
+AgentScanner (scanner.py)
+  ↓ 从 registry 创建 provider
+BaseAgent 子类 (agents/*.py)
+  ↓ scan / get_sessions 返回 Session
+Selector / Query / Search
+  ↓ 选择或过滤 Session
+Rendering / export dispatch (rendering.py, cli_shared.py)
+  ↓ 调用 agent.export_session / export_raw_session / markdown renderer
+输出到 sessions/<agent>/ 或 --output 目录
 ```
 
-**重要**：改动某个阶段时，不得破坏上下游契约。例如：
-- `db.py` 返回的 session dict 结构变更时，`selector.py` 和 `exporter.py` 需同步适配
-- `selector.py` 的输出格式变更时，`exporter.py` 的输入处理需同步更新
+### 3.2 URI 模式
+
+```
+CLI uri 参数
+  ↓
+uri_support.parse_uri()
+  ↓
+uri_support.find_session_by_id()
+  ↓
+agent.get_session_head / agent.get_session_data / agent.export_session
+  ↓
+print、head、json、markdown、raw、summary
+```
+
+### 3.3 collect 模式
+
+```
+--collect
+  ↓
+collect_workflow.handle_collect_mode()
+  ↓
+AgentScanner + 可选 agents:// 查询 URI
+  ↓
+collect.py 将 Session 渲染为高信号事件流
+  ↓
+LLM chunk summary → session merge → tree reduction
+  ↓
+Markdown 输出到 --save 或默认文件名
+```
+
+改动某个阶段时，必须维护上下游契约：
+- Provider 返回 `Session`，完整内容通过 `get_session_data()` 获取。
+- URI scheme 由 `agent_registry.AGENT_REGISTRATIONS` 统一声明。
+- 输出格式由 `cli_shared.VALID_FORMATS`、`rendering.export_session_in_format()` 和模式校验共同约束。
 
 ---
 
@@ -107,61 +155,158 @@ JSON 输出到磁盘
 
 ```
 agent-dump/
-├── src/agent_dump/           # 主包目录
-│   ├── __init__.py           # 包初始化，公开 API
-│   ├── __main__.py           # python -m agent_dump 入口
-│   ├── cli.py                # 命令行接口和参数解析
-│   ├── db.py                 # 数据库连接和查询操作
-│   ├── exporter.py           # JSON 导出逻辑
-│   └── selector.py           # 交互式会话选择
-├── tests/                    # 测试目录
-│   ├── conftest.py          # 测试配置和共享 fixtures
-│   ├── test_db.py           # 数据库模块测试
-│   ├── test_exporter.py     # 导出功能测试
-│   ├── test_selector.py     # 选择器测试
-│   └── test_cli.py          # CLI 测试
-├── data/opencode/            # 本地数据库
-├── sessions/                 # 导出目录
-├── pyproject.toml            # 项目配置
-├── ruff.toml                 # 代码风格配置
-└── justfile                  # 自动化命令
+├── src/agent_dump/
+│   ├── __init__.py              # 顶层公开 API
+│   ├── __about__.py             # 单一版本源
+│   ├── __main__.py              # python -m agent_dump 入口
+│   ├── agent_registry.py        # provider 注册表
+│   ├── cli.py                   # CLI 参数解析与模式分发
+│   ├── cli_shared.py            # CLI 共享工具
+│   ├── session_workflow.py      # list / interactive / query 工作流
+│   ├── uri_workflow.py          # URI 工作流
+│   ├── collect_workflow.py      # collect 工作流
+│   ├── maintenance_workflow.py  # stats / reindex 工作流
+│   ├── collect.py               # collect 核心逻辑
+│   ├── collect_llm.py           # collect LLM 请求
+│   ├── collect_models.py        # collect 输出字段定义
+│   ├── config.py                # 配置加载与编辑
+│   ├── diagnostics.py           # 结构化诊断
+│   ├── i18n.py                  # 中英文文案
+│   ├── message_filter.py        # 消息过滤
+│   ├── paths.py                 # 搜索根路径模型
+│   ├── query_filter.py          # 查询解析与过滤
+│   ├── rendering.py             # print/head/markdown/json/raw 渲染调度
+│   ├── scanner.py               # AgentScanner
+│   ├── search_index.py          # FTS5 搜索索引
+│   ├── selector.py              # 交互式选择
+│   ├── time_utils.py            # 时间与时区工具
+│   ├── uri_support.py           # URI 解析与查找
+│   └── agents/
+│       ├── __init__.py          # provider 导出
+│       ├── base.py              # BaseAgent 与 Session
+│       ├── opencode.py          # OpenCode SQLite provider
+│       ├── codex.py             # Codex JSONL provider
+│       ├── kimi.py              # Kimi JSONL provider
+│       ├── claudecode.py        # Claude Code JSONL provider
+│       ├── cursor.py            # Cursor SQLite provider
+│       ├── jsonl_scan.py        # JSONL 扫描辅助
+│       └── title_fallback.py    # 标题回退策略
+├── tests/
+│   ├── test_agents/             # provider 合约和实现测试
+│   ├── test_cli.py              # CLI 参数与模式分发测试
+│   ├── test_cli_shared.py       # 共享 CLI 能力测试
+│   ├── test_collect.py          # collect 核心测试
+│   ├── test_config.py           # 配置测试
+│   ├── test_maintenance_workflow.py
+│   ├── test_query_filter.py
+│   ├── test_scanner.py
+│   ├── test_search_index.py
+│   ├── test_selector.py
+│   └── test_version.py
+├── skills/agent-dump/           # Codex skill 文档与命令 recipes
+├── npm/                         # npm wrapper 与平台包
+├── web/                         # 静态站点
+├── data/<agent>/                # 本地开发回退数据目录
+├── sessions/                    # 默认导出目录
+├── pyproject.toml
+├── ruff.toml
+└── justfile
 ```
 
 ---
 
 ## 5. 核心模块
 
-### 5.1 cli.py
-命令行入口模块，**仅负责**：
-- 参数解析（`argparse`）
-- 工作流调度（调用 db → selector → exporter）
-- 错误处理和退出码
+### 5.1 `cli.py`
 
-**禁止**：直接操作数据库、直接写入文件、实现业务逻辑。
+职责：
+- 解析 `argparse` 参数。
+- 根据 `uri`、`--collect`、`--stats`、`--reindex`、`--list`、`--interactive` 选择模式。
+- 装配 workflow 依赖对象。
+- 处理顶层参数冲突、退出码、诊断输出。
 
-### 5.2 db.py
-数据库操作模块，处理 SQLite 数据库连接和查询。
+约束：
+- Provider 数据读取、导出、搜索实现必须下沉到 provider、workflow 或 shared 模块。
+- 新 CLI 参数必须补充 `tests/test_cli.py` 覆盖。
 
-**职责**：
-- 自动查找数据库路径（支持多路径回退）
-- 执行 SQL 查询并返回结构化数据
-- 时间戳转换（毫秒 → datetime）
+### 5.2 `BaseAgent` 与 `Session`
 
-### 5.3 exporter.py
-导出逻辑模块，处理会话数据的 JSON 序列化。
+`src/agent_dump/agents/base.py` 定义统一 provider contract：
 
-**职责**：
-- 单个/批量会话导出
-- JSON 格式序列化（含缩进、中文编码）
-- 输出目录管理
+```python
+@dataclass
+class Session:
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    source_path: Path
+    metadata: dict[str, Any]
 
-### 5.4 selector.py
-交互式选择模块，提供终端和简单两种选择模式。
 
-**职责**：
-- 检测终端环境并选择合适的选择模式
-- 交互式多选（`questionary`）
-- 简单 stdin 输入模式（非终端环境）
+class BaseAgent(ABC):
+    name: str
+    display_name: str
+
+    def scan(self) -> list[Session]: ...
+    def is_available(self) -> bool: ...
+    def get_sessions(self, days: int = 7) -> list[Session]: ...
+    def export_session(self, session: Session, output_dir: Path) -> Path: ...
+    def get_session_data(self, session: Session) -> dict: ...
+```
+
+可选扩展点：
+- `get_session_uri(session)`：默认返回 `<agent>://<session.id>`。
+- `get_search_roots()`：结构化诊断和路径发现使用。
+- `get_session_head(session)`：URI `--head` 使用。
+- `get_session_summary_fields(session)`：列表和交互视图元数据摘要使用。
+- `export_raw_session(session, output_dir)`：默认复制原始单文件，目录型 source 会返回能力缺失诊断。
+
+### 5.3 `agent_registry.py`
+
+所有 provider 在 `AGENT_REGISTRATIONS` 中注册：
+
+| provider name | display name | URI scheme |
+|---------------|--------------|------------|
+| `opencode` | OpenCode | `opencode://` |
+| `codex` | Codex | `codex://`、`codex://threads/` |
+| `kimi` | Kimi | `kimi://` |
+| `claudecode` | Claude Code | `claude://` |
+| `cursor` | Cursor | `cursor://` |
+
+`AgentScanner` 只从 registry 创建 provider。新增 provider 的入口是 registry。
+
+### 5.4 `rendering.py` 与导出格式
+
+当前格式：
+- `json`：调用 `agent.export_session()`。
+- `raw`：调用 `agent.export_raw_session()`。
+- `markdown`：调用 `agent.get_session_data()` 后渲染 Markdown 文件。
+- `print`：URI 模式直接打印 `render_session_text()` 结果。
+
+格式相关入口：
+- `cli_shared.VALID_FORMATS`
+- `cli_shared.FORMAT_ALIASES`
+- `cli_shared.validate_formats_for_mode()`
+- `cli_shared.validate_uri_agent_formats()`
+- `rendering.export_session_in_format()`
+
+### 5.5 `query_filter.py` 与搜索
+
+查询能力：
+- legacy keyword：`-query "timeout"`
+- legacy provider scope：`-query "codex,kimi:timeout"`
+- structured query：`-query "bug provider:codex role:user path:. limit:20"`
+- path-scoped URI：`agents://.?q=refactor&providers=codex,claude&roles=user&limit=20`
+- full-text search：`--search "auth timeout"`，由 `search_index.py` 优先提供 FTS5 索引，必要时回退文件扫描
+
+### 5.6 `collect` 模块
+
+collect 模式入口：
+- `collect_workflow.py`：参数校验、dry-run、保存路径、进度编排。
+- `collect.py`：事件收集、chunk planning、摘要合并、tree reduction。
+- `collect_llm.py`：AI 请求。
+- `collect_models.py`：`pm` 和 `insight` 输出字段。
 
 ---
 
@@ -169,50 +314,36 @@ agent-dump/
 
 ### 6.1 支持新的 AI 工具
 
-新增 AI 工具支持必须遵循以下架构约束（非示例，是强规范）：
+新增 provider 必须遵循 `BaseAgent` contract。
 
-#### 架构要求
-
-1. **每个 agent 对应一个 Parser 类**
-   - 位置：`src/agent_dump/parsers/<agent_name>.py`
-   - 基类：建议抽象基类定义统一接口（待实现）
-
-2. **Parser 必须实现统一接口**：
-   ```python
-   class BaseParser(ABC):
-       @abstractmethod
-       def list_sessions(self, days: int = 7) -> List[Dict]:
-           """列出最近 N 天的会话"""
-           pass
-       
-       @abstractmethod
-       def load_session(self, session_id: str) -> Dict:
-           """加载指定会话的完整数据"""
-           pass
-       
-       @property
-       @abstractmethod
-       def db_path(self) -> Path:
-           """返回数据库路径"""
-           pass
-   ```
-
-3. **禁止在 cli.py 写数据库逻辑**：
-   - CLI 层通过 `parser.db_path` 获取路径
-   - 所有 SQL 查询封装在 Parser 类内部
-
-4. **注册新 agent 的步骤**：
-   - 创建 `parsers/newagent.py` 实现 `BaseParser`
-   - 在 `db.py` 的 `find_db_path()` 中添加新路径
-   - 在 `cli.py` 的 `--agent` 参数 choices 中添加新选项
-   - 在 `exporter.py` 中根据 `agent` 类型选择对应 Parser
+步骤：
+1. 在 `src/agent_dump/agents/<agent_name>.py` 创建 `BaseAgent` 子类。
+2. 实现 `scan()`、`is_available()`、`get_sessions()`、`get_session_data()`、`export_session()`。
+3. 实现 `get_search_roots()`，让诊断信息显示真实搜索路径。
+4. 在 `src/agent_dump/agent_registry.py` 添加 `AgentRegistration`，声明 `name`、`display_name`、`factory`、`uri_schemes`、`location_line`。
+5. 在 `src/agent_dump/agents/__init__.py` 导出 provider。
+6. 若该 provider 属于稳定库 API，在 `src/agent_dump/__init__.py` 导出，并更新本文件第 2 节、README 与 `tests/test_version.py`。
+7. 为 provider 增加 `tests/test_agents/test_<agent>.py`，并在 `tests/test_agents/test_contracts.py` 补充合约用例。
+8. 更新 `tests/test_scanner.py` 的 provider 数量或名称断言。
+9. 更新 README、`skills/agent-dump/SKILL.md`、`skills/agent-dump/references/cli-recipes.md` 的 URI、路径发现和能力边界。
 
 ### 6.2 添加新的导出格式
 
-1. 在 `exporter.py` 中创建新的导出函数
-2. 函数签名参考：`export_session_<format>(db_path, session, output_dir) -> Path`
-3. 在 `cli.py` 中添加 `--format` 选项
-4. 在 `exporter.py` 中根据 format 选择对应导出函数
+步骤：
+1. 在 `cli_shared.VALID_FORMATS` 添加格式名，必要时添加 `FORMAT_ALIASES`。
+2. 在 `rendering.export_session_in_format()` 增加分发。
+3. 若格式有模式限制，更新 `validate_formats_for_mode()` 或 `validate_uri_agent_formats()`。
+4. 为 CLI 解析、分发、成功导出和错误路径补测试。
+5. 更新 README 与 skill recipes。
+
+### 6.3 添加新的 CLI 模式
+
+步骤：
+1. `cli.py` 添加参数和顶层分发。
+2. 新建或复用 `*_workflow.py`，把流程依赖封装为 dataclass / Protocol，便于测试。
+3. 复用逻辑进入 `cli_shared.py`。
+4. 增加 `tests/test_cli.py` 分发测试和对应 workflow 测试。
+5. 更新 README 与 skill recipes 的行为矩阵。
 
 ---
 
@@ -221,33 +352,26 @@ agent-dump/
 ### 7.1 测试边界约束
 
 - **CLI 相关逻辑必须通过 mock 验证**：
-  - mock `sys.argv` 测试参数解析
-  - mock `questionary.checkbox` 测试交互式选择
+  - mock `sys.argv` 测试参数解析与模式分发
+  - mock workflow handler 测试分发
+  - mock `questionary.select` / `questionary.checkbox` 测试交互式选择
   - mock `sys.stdin` 测试简单输入模式
 
-- **数据库访问必须用临时 SQLite**：
-  ```python
-  # 正确：使用临时内存数据库
-  @pytest.fixture
-  def temp_db():
-      conn = sqlite3.connect(":memory:")
-      # 创建 schema
-      yield conn
-      conn.close()
-  
-  # 错误：不要访问真实用户目录
-  # db_path = Path.home() / ".local/share/opencode/opencode.db"
-  ```
+- **Provider 测试必须使用临时数据源**：
+  - OpenCode 使用 `tmp_path` 创建临时 SQLite 数据库。
+  - Cursor 使用 `tmp_path` 创建临时 `state.vscdb` 与 workspaceStorage。
+  - Codex / Kimi / Claude Code 使用 `tmp_path` 创建临时 JSONL 文件。
+  - 使用 `monkeypatch` 注入 `CODEX_HOME`、`KIMI_SHARE_DIR`、`CLAUDE_CONFIG_DIR`、`CURSOR_DATA_PATH` 或 `Path.home()`。
 
 - **不允许真实访问用户目录**：
-  - 禁止读取 `~/.local/share/opencode/opencode.db`
-  - 禁止写入真实 `~/sessions` 目录
-  - 使用 `tmp_path` fixture 进行文件操作测试
+  - 禁止读取真实 `~/.codex`、`~/.claude`、`~/.kimi`、`~/.local/share/opencode`、Cursor 用户目录。
+  - 禁止写入真实 `~/sessions`。
+  - 文件写入测试使用 `tmp_path`。
 
 ### 7.2 测试命令
 
 ```bash
-# 运行所有测试、查看测试覆盖率报告
+# 运行所有测试
 just test
 
 # 详细输出
@@ -273,52 +397,42 @@ just lint-format   # ruff format
 
 ---
 
-## 8. 数据库结构（OpenCode Current Schema）
+## 8. Provider 数据源说明
 
-> ⚠️ **注意**：以下 schema 仅针对 **OpenCode 当前版本**。这是具体实现细节，**不是抽象接口**。未来 OpenCode 版本可能变动，不保证向后兼容。
+本节记录当前 provider 的数据源事实，用于测试和定位。Schema 细节属于 provider 内部实现。
 
-### 8.1 Session 表
+### 8.1 OpenCode
 
-```sql
-CREATE TABLE session (
-    id TEXT PRIMARY KEY,
-    title TEXT,
-    time_created INTEGER,  -- 毫秒时间戳
-    time_updated INTEGER,  -- 毫秒时间戳
-    slug TEXT,
-    directory TEXT,
-    version INTEGER,
-    summary_files TEXT
-);
-```
+- 路径：`XDG_DATA_HOME/opencode/opencode.db`、Windows data 目录、`~/.local/share/opencode/opencode.db`、`data/opencode/opencode.db`
+- 存储：SQLite
+- 当前表：`session`、`message`、`part`
+- 时间戳：毫秒时间戳，读取时转换为 `datetime`
+- JSON 字段：`message.data`、`part.data`
 
-### 8.2 Message 表
+### 8.2 Codex
 
-```sql
-CREATE TABLE message (
-    id TEXT PRIMARY KEY,
-    session_id TEXT,
-    time_created INTEGER,
-    data TEXT  -- JSON 格式
-);
-```
+- 路径：`CODEX_HOME/sessions`、`~/.codex/sessions`、`data/codex`
+- 存储：JSONL
+- URI：`codex://<session_id>`、`codex://threads/<session_id>`
 
-### 8.3 Part 表
+### 8.3 Kimi
 
-```sql
-CREATE TABLE part (
-    id TEXT PRIMARY KEY,
-    message_id TEXT,
-    time_created INTEGER,
-    data TEXT  -- JSON 格式
-);
-```
+- 路径：`KIMI_SHARE_DIR/sessions`、`~/.kimi/sessions`、`data/kimi`
+- 存储：JSONL
+- URI：`kimi://<session_id>`
 
-### 8.4 注意事项
+### 8.4 Claude Code
 
-- **时间戳**：数据库存储的是毫秒时间戳，Python datetime 需要转换（除以 1000）
-- **JSON 字段**：`message.data` 和 `part.data` 是 JSON 字符串，需 `json.loads()` 解析
-- **Schema 变更**：如 OpenCode 更新 schema，需同步更新查询逻辑
+- 路径：`CLAUDE_CONFIG_DIR/projects`、`~/.claude/projects`、`data/claudecode`
+- 存储：JSONL
+- URI：`claude://<session_id>`
+
+### 8.5 Cursor
+
+- 路径：`CURSOR_DATA_PATH` 或 Cursor 默认用户目录下的 `workspaceStorage`，并读取 `globalStorage/state.vscdb`
+- 存储：SQLite `cursorDiskKV`
+- URI：`cursor://<requestid>`
+- 能力边界：Cursor URI 支持 `json` 与 `print`
 
 ---
 
@@ -337,13 +451,21 @@ CREATE TABLE part (
 import questionary
 from questionary import Style
 
+from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.rendering import format_session_metadata_summary
+
+
+def build_session_choices(sessions: list[Session], agent: BaseAgent):
+    choices = []
+    for session in sessions:
+        label = agent.get_formatted_title(session)
+        summary = format_session_metadata_summary(agent, session)
+        choices.append(questionary.Choice(title=f"  {label}\n    {summary}", value=session))
+    return choices
+
+
 # 创建选项
-choices = []
-for session in sessions:
-    title = session["title"][:60] + ("..." if len(session["title"]) > 60 else "")
-    time_str = session["created_formatted"]
-    label = f"{title} ({time_str})"
-    choices.append(questionary.Choice(title=label, value=session))
+choices = build_session_choices(sessions, agent)
 
 # 创建问题
 q = questionary.checkbox(
@@ -396,7 +518,7 @@ selected = q.ask()
 # 测试交互式选择需要 mock questionary.checkbox
 with mock.patch("questionary.checkbox") as mock_checkbox:
     mock_checkbox.return_value.ask.return_value = sessions
-    result = select_sessions_interactive(sessions)
+    result = select_sessions_interactive(sessions, agent)
 ```
 
 ### 9.6 用户体验
@@ -434,7 +556,10 @@ uv add --dev package-name
 
 - `pyproject.toml` - 项目配置和依赖
 - `ruff.toml` - 代码风格配置
-- `README.md` - 用户文档（中文）
+- `README.md` - 英文用户文档
+- `README_zh.md` - 中文用户文档
+- `skills/agent-dump/SKILL.md` - Codex skill 主说明
+- `skills/agent-dump/references/cli-recipes.md` - CLI 命令模板和行为矩阵
 - `justfile` - 自动化命令
 
 ---
@@ -444,8 +569,10 @@ uv add --dev package-name
 在提交变更前，确认以下事项：
 
 - [ ] 没有破坏 `__init__.py` 导出的公开 API
+- [ ] 公开 API 声明与 `src/agent_dump/__init__.py::__all__` 一致
 - [ ] 新增函数有对应的单元测试
 - [ ] CLI 变更同步更新了 `test_cli.py`
-- [ ] 数据库测试使用临时 SQLite，没有访问真实用户目录
+- [ ] Provider 测试使用临时数据源，没有访问真实用户目录
+- [ ] README 与 skill recipes 已同步 CLI 能力边界
 - [ ] 代码通过 `just isok` 检查
-- [ ] 如修改了本文档相关章节，同步更新 AGENTS.md
+- [ ] 如修改架构、provider 或 CLI 模式，同步更新本文件

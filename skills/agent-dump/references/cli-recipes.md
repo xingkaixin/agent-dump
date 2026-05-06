@@ -21,6 +21,8 @@ uv run agent-dump --list
 uv run agent-dump --list -days 7
 uv run agent-dump --list -query "error"
 uv run agent-dump --list -query "codex,kimi:error"
+uv run agent-dump --list -query "bug provider:codex role:user path:. limit:20"
+uv run agent-dump --list "agents://.?q=refactor&providers=codex,claude&roles=user&limit=20"
 uv run agent-dump --list --lang en
 ```
 
@@ -35,6 +37,7 @@ uv run agent-dump codex://<session_id>
 uv run agent-dump codex://threads/<session_id>
 uv run agent-dump kimi://<session_id>
 uv run agent-dump claude://<session_id>
+uv run agent-dump cursor://<request_id>
 
 # 导出单会话
 uv run agent-dump codex://<session_id> --format json --output ./my-sessions
@@ -42,6 +45,7 @@ uv run agent-dump codex://<session_id> --format md --output ./my-sessions
 uv run agent-dump codex://<session_id> --format print,json --output ./my-sessions
 uv run agent-dump codex://<session_id> --format print,json --summary --output ./my-sessions
 uv run agent-dump codex://<session_id> --format json,markdown,raw --output ./my-sessions
+uv run agent-dump cursor://<request_id> --format print,json --output ./my-sessions
 ```
 
 ### 汇总分析（collect）
@@ -50,6 +54,9 @@ uv run agent-dump codex://<session_id> --format json,markdown,raw --output ./my-
 uv run agent-dump --collect
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
+uv run agent-dump --collect --collect-mode insight
+uv run agent-dump --collect "agents://.?q=refactor&providers=codex,claude"
+uv run agent-dump --collect --dry-run --save ./reports
 ```
 
 ### 统计（stats）
@@ -92,20 +99,29 @@ uv run agent-dump --config edit
 - `codex`
 - `kimi`
 - `claudecode`
+- `cursor`
 
 示例：
 
 ```bash
 uv run agent-dump --list -query "timeout"
 uv run agent-dump --list -query "codex,kimi:timeout"
+uv run agent-dump --list -query "bug provider:codex role:user path:. limit:20"
+uv run agent-dump "agents://.?q=timeout&providers=codex,claude&roles=user&limit=20"
 ```
+
+结构化查询字段：
+- `provider:` 限定 provider，支持逗号分隔；`claude` 会映射到 `claudecode`。
+- `role:` 限定消息角色，支持逗号分隔。
+- `path:` / `cwd:` 限定项目路径，支持相对路径、绝对路径和 `~`。
+- `limit:` 对最终全局匹配结果集截断。
 
 ### `--search`（全文搜索）
 
 - 基于 SQLite FTS5 的本地全文搜索，覆盖标题、消息、reasoning、tool state。
 - 双分词器：`unicode61` 处理西文，`trigram` 处理 CJK 与模糊匹配。
 - 索引基于源文件 mtime 增量更新；FTS5 不可用时回退到 O(n) 文件扫描。
-- 可与 `--list` 组合使用；不能与 URI、`--interactive`、`--collect`、`--stats` 同时使用。
+- 作为列表搜索模式使用，可与 `--list`、`-days`、`-query` 组合。
 
 示例：
 
@@ -119,13 +135,14 @@ uv run agent-dump --search "auth" --list -days 30
 
 | 场景 | 默认格式 | 关键规则 |
 |---|---|---|
-| URI 模式（给定 `uri`） | `print` | 可显式改为 `json/markdown/raw`，也可组合 `print,json`；支持 `codex://threads/<session_id>` |
+| URI 模式（给定 session URI） | `print` | 可显式改为 `json/markdown/raw`，也可组合 `print,json`；支持 `codex://threads/<session_id>`；Cursor URI 支持 `json/print` |
+| `agents://` 查询 URI | N/A | 可配合 list、interactive 或 collect 使用；支持 `q/providers/roles/limit` |
 | 非 URI 模式 | `json` | 主要配合 `--interactive` 使用 |
 | `--list` 模式 | N/A | 仅列出，不导出；`--format/--output` 会被忽略并警告 |
 | `--interactive` 模式 | `json` | 支持 `json/markdown/raw`，不接受 `print` |
-| `--stats` 模式 | N/A | 不能与 URI/`--interactive`/`--list`/`--collect` 同时使用 |
-| `--collect` 模式 | N/A | 不能与 URI/`--interactive`/`--list` 同时使用 |
-| `--search` 模式 | N/A | 不能与 URI/`--interactive`/`--collect`/`--stats` 同时使用。可与 `--list` 组合 |
+| `--stats` 模式 | N/A | 推荐独立使用；支持 `-days` 与 `-query` |
+| `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；支持 `--collect-mode pm/insight`、`--dry-run`、`--save`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
+| `--search` 模式 | N/A | 作为列表搜索模式使用；可与 `--list`、`-days`、`-query` 组合 |
 | `--reindex` | N/A | 独立的索引维护命令，不应与其他模式标志组合 |
 
 补充：
@@ -133,6 +150,7 @@ uv run agent-dump --search "auth" --list -days 30
 - `--lang` 支持 `en` 与 `zh`。
 - `md` 是 `markdown` 的别名。
 - `--summary` 仅 URI 模式可用，且需 `--format` 包含 `json`。
+- `--collect-mode` 默认 `pm`，`insight` 用于作者洞察视角。
 
 ## 4) 常见错误与处理
 
@@ -149,6 +167,7 @@ uv run agent-dump --search "auth" --list -days 30
    - `codex://threads/<session_id>`
    - `kimi://<session_id>`
    - `claude://<session_id>`
+   - `cursor://<request_id>`
 2. 确认 `<session_id>` 非空。
 
 ### URI 协议与实际会话来源不匹配
@@ -185,15 +204,15 @@ uv run agent-dump --search "auth" --list -days 30
 
 处理：
 1. 改为 `keyword` 或 `agent1,agent2:keyword`。
-2. 将 agent 名称改为 `opencode/codex/kimi/claudecode` 中的合法值。
+2. 将 agent 名称改为 `opencode/codex/kimi/claudecode/cursor` 中的合法值。
 
 ### collect 模式参数冲突
 
 现象：
-- `--collect` 与 URI、`--interactive` 或 `--list` 同时出现。
+- `--collect` 与普通 session URI、`--interactive` 或 `--list` 同时出现。
 
 处理：
-1. 仅保留 `--collect` 与可选的 `-since/-until`。
+1. 保留 `--collect` 与可选的 `agents://...` 查询 URI、`-since/-until`、`--collect-mode`、`--dry-run`、`--save`。
 2. 将导出/列表操作拆成单独命令执行。
 
 ### summary 配置缺失或不完整

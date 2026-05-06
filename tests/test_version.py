@@ -5,8 +5,9 @@
 from importlib.metadata import version
 from pathlib import Path
 
-import agent_dump
 import pytest
+
+import agent_dump
 from agent_dump import __version__
 from agent_dump.__about__ import __version__ as about_version
 
@@ -20,6 +21,25 @@ def _is_editable_import() -> bool:
 def test_runtime_version_re_exports_about_version() -> None:
     """测试包顶层版本号与单一版本源一致"""
     assert __version__ == about_version
+
+
+def test_top_level_public_api_matches_declared_exports() -> None:
+    """测试顶层公开 API 声明保持可导入。"""
+    expected_exports = {
+        "__version__",
+        "AgentScanner",
+        "BaseAgent",
+        "Session",
+        "OpenCodeAgent",
+        "CodexAgent",
+        "KimiAgent",
+        "ClaudeCodeAgent",
+        "CursorAgent",
+    }
+
+    assert set(agent_dump.__all__) == expected_exports
+    for name in expected_exports:
+        assert hasattr(agent_dump, name)
 
 
 def test_installed_metadata_version_matches_runtime_version() -> None:

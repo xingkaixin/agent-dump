@@ -2,7 +2,7 @@
 
 # Agent Dump
 
-AI Coding Assistant Session Export Tool - Supports exporting session data from multiple AI coding tools to JSON format.
+AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw session data from multiple AI coding tools, with direct URI printing.
 
 ## Supported AI Tools
 
@@ -10,6 +10,7 @@ AI Coding Assistant Session Export Tool - Supports exporting session data from m
 - **Claude Code** - Anthropic's AI coding tool
 - **Codex** - OpenAI's command-line AI coding assistant
 - **Kimi** - Moonshot AI assistant
+- **Cursor** - Cursor composer sessions
 - **More Tools** - PRs are welcome to support other AI coding tools
 
 ## Features
@@ -17,7 +18,7 @@ AI Coding Assistant Session Export Tool - Supports exporting session data from m
 - **Interactive Selection**: Provides a friendly command-line interactive interface using questionary
 - **Multi-Agent Support**: Automatically scan session data from multiple AI tools
 - **Batch Export**: Supports exporting all sessions from the last N days
-- **Specific Export**: Export specific sessions by session ID
+- **Specific Export**: Export specific sessions by URI
 - **Session List**: Only list sessions without exporting them
 - **Direct Text Dump**: View session content directly in terminal via URI (e.g., `agent-dump opencode://session-id`)
 - **Statistics**: Exports include statistics such as token usage and cost
@@ -34,6 +35,7 @@ AI Coding Assistant Session Export Tool - Supports exporting session data from m
 - **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **OpenCode**: `XDG_DATA_HOME/opencode` -> Windows data directory (`LOCALAPPDATA/opencode` or `APPDATA/opencode`) -> `~/.local/share/opencode` -> `data/opencode`
+- **Cursor**: `CURSOR_DATA_PATH` or Cursor's default user `workspaceStorage`, with `globalStorage/state.vscdb`
 
 Notes:
 
@@ -203,7 +205,7 @@ uv run agent-dump -query error                # Auto-activates list mode
 # - `codex,kimi:error` remains the legacy agent-scoped query syntax.
 # - Structured mode is activated only when a known key appears: provider / role / path / cwd / limit.
 # - `role:...` constrains keyword matching to messages of those roles.
-# - `limit:...` truncates the final global matched result set, not per-agent pagination.
+# - `limit:...` truncates the final global matched result set.
 
 # URI mode - Direct text dump
 uv run agent-dump opencode://<session-id>     # View OpenCode session content
@@ -235,6 +237,7 @@ uv run agent-dump --stats -days 30           # Show session stats for last 30 da
 uv run agent-dump --collect
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
+uv run agent-dump --collect --collect-mode insight
 uv run agent-dump --collect --save ./reports
 uv run agent-dump --collect --save ./reports/weekly.md
 uv run agent-dump --collect --save /tmp/agent-dump-reports
@@ -278,8 +281,9 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `-q`, `-query` | Query filter. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print lightweight session metadata for discovery; does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
+| `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
-| `--stats` | Show session usage statistics for the last N days, grouped by agent and time. Supports `-days`. Cannot be combined with other modes. | - |
+| `--stats` | Show session usage statistics for the last N days, grouped by agent and time. Supports `-days` and `-query`; use it as a standalone mode. | - |
 | `--search` | Full-text search across session titles, messages, reasoning, and tool state using local SQLite FTS5. Supports CJK via dual tokenizer (`unicode61` + `trigram`). Auto-fallback to file scan when index is stale or FTS5 unavailable. Can be combined with `--list`. | - |
 | `--reindex` | Force rebuild of the full-text search index. Use when index is corrupted or after manual session data changes. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
@@ -293,6 +297,39 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `-p`, `-page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
 | `-output`, `--output` | Output directory. For `json/raw`, priority is `--output` > `config.toml` `[export].output` > `./sessions`. Relative paths are resolved from the current working directory. Markdown keeps using `./sessions` unless `--output` is explicitly passed. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
 | `-h, --help` | Show help message | - |
+
+### Library Usage
+
+The top-level public API matches `agent_dump.__all__`:
+
+| Symbol | Description |
+|--------|-------------|
+| `__version__` | Package version |
+| `AgentScanner` | Scans every provider in the current registry |
+| `BaseAgent` | Provider abstract base class |
+| `Session` | Unified session data model |
+| `OpenCodeAgent` | OpenCode provider |
+| `CodexAgent` | Codex provider |
+| `KimiAgent` | Kimi provider |
+| `ClaudeCodeAgent` | Claude Code provider |
+| `CursorAgent` | Cursor provider |
+
+```python
+from pathlib import Path
+
+from agent_dump import AgentScanner
+
+scanner = AgentScanner()
+
+for agent in scanner.get_available_agents():
+    sessions = agent.get_sessions(days=7)
+    if not sessions:
+        continue
+
+    output_dir = Path("./sessions") / agent.name
+    exported_path = agent.export_session(sessions[0], output_dir)
+    print(f"{agent.display_name}: {exported_path}")
+```
 
 ### collect configuration file
 
@@ -342,25 +379,38 @@ deny = [
 ```text
 .
 ├── src/
-│   └── agent_dump/          # Main package directory
-│       ├── __init__.py      # Package initialization
-│       ├── __main__.py      # python -m agent_dump entry point
-│       ├── cli.py           # Command-line interface
-│       ├── scanner.py       # Agent scanner
-│       ├── selector.py      # Interactive selection
-│       └── agents/          # Agent modules directory
-│           ├── __init__.py  # Agent exports
-│           ├── base.py      # BaseAgent abstract class
-│           ├── opencode.py  # OpenCode Agent
-│           ├── claudecode.py # Claude Code Agent
-│           ├── codex.py     # Codex Agent
-│           └── kimi.py      # Kimi Agent
-├── tests/                   # Test directory
-├── pyproject.toml           # Project configuration
-├── justfile                 # Automated commands
-├── ruff.toml                # Code style configuration
-└── sessions/                # Export directory
-    └── {agent-name}/        # Exported files categorized by tool
+│   └── agent_dump/             # Main package directory
+│       ├── __init__.py         # Top-level public API
+│       ├── __about__.py        # Single version source
+│       ├── __main__.py         # python -m agent_dump entry point
+│       ├── agent_registry.py   # Provider registry
+│       ├── cli.py              # Argument parsing and mode dispatch
+│       ├── cli_shared.py       # Shared CLI helpers
+│       ├── session_workflow.py # list / interactive / query workflow
+│       ├── uri_workflow.py     # URI workflow
+│       ├── collect_workflow.py # collect workflow
+│       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch
+│       ├── query_filter.py     # Query parsing and filtering
+│       ├── search_index.py     # FTS5 search index
+│       ├── scanner.py          # Agent scanner
+│       ├── selector.py         # Interactive selection
+│       └── agents/             # Provider modules directory
+│           ├── __init__.py     # Provider exports
+│           ├── base.py         # BaseAgent and Session
+│           ├── opencode.py     # OpenCode Agent
+│           ├── claudecode.py   # Claude Code Agent
+│           ├── codex.py        # Codex Agent
+│           ├── cursor.py       # Cursor Agent
+│           └── kimi.py         # Kimi Agent
+├── tests/                      # Test directory
+├── skills/agent-dump/          # Codex skill docs
+├── npm/                        # npm wrapper and platform packages
+├── web/                        # Static site
+├── pyproject.toml              # Project configuration
+├── justfile                    # Automated commands
+├── ruff.toml                   # Code style configuration
+└── sessions/                   # Default export directory
+    └── {agent-name}/           # Exported files categorized by tool
         └── ses_xxx.json
 ```
 
