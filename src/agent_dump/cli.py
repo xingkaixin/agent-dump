@@ -61,11 +61,14 @@ from agent_dump.i18n import Keys, i18n, setup_i18n
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import (
     QuerySpec,
+    SearchSessionMatch,
     filter_sessions,
     filter_sessions_by_query,
     limit_query_matches,
+    limit_search_matches,
     parse_query,
     parse_query_uri,
+    search_sessions_by_query,
 )
 from agent_dump.rendering import (
     apply_summary_to_json_export as _apply_summary_to_json_export,
@@ -731,6 +734,38 @@ def collect_query_matches(
     for agent, session in limited_pairs:
         grouped.setdefault(agent.name, []).append(session)
     return grouped
+
+
+def collect_search_matches(
+    agents: list[BaseAgent],
+    *,
+    days: int,
+    spec: QuerySpec,
+) -> list[SearchSessionMatch]:
+    """Collect ranked search matches for all agents."""
+    matches: list[SearchSessionMatch] = []
+    for agent in agents:
+        sessions = agent.get_sessions(days=days)
+        matches.extend(search_sessions_by_query(agent, sessions, spec))
+    return limit_search_matches(matches, spec.limit)
+
+
+def display_search_results(matches: list[SearchSessionMatch]) -> None:
+    """Render full-text search results with snippet evidence."""
+    if not matches:
+        print(i18n.t(Keys.SEARCH_NO_RESULTS))
+        return
+
+    for index, match in enumerate(matches, start=1):
+        title = match.agent.get_formatted_title(match.session)
+        uri = match.agent.get_session_uri(match.session)
+        updated = to_local_datetime(match.session.updated_at).strftime("%Y-%m-%d %H:%M:%S %Z")
+        print(f"\n{index}. {title}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_PROVIDER)}: {match.agent.display_name}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_UPDATED)}: {updated}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_URI)}: {uri}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_RANK)}: {match.rank:.6g}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_SNIPPET)}: {match.snippet}")
 
 
 def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mode: bool) -> None:
@@ -1403,6 +1438,14 @@ def main():
                 )
             )
             return 0 if args.list else 1
+
+    if args.search and query_spec is not None:
+        warn_list_ignored_options(output_specified=output_specified, format_specified=format_specified)
+        print(i18n.t(Keys.SEARCH_HEADER, days=args.days, query=render_query_summary(query_spec)))
+        print("-" * 60)
+        display_search_results(collect_search_matches(available_agents, days=args.days, spec=query_spec))
+        print("\n" + "=" * 60)
+        return 0
 
     matched_sessions_by_agent: dict[str, list[Session]] = {}
     if query_spec:

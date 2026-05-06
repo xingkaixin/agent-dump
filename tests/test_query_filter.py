@@ -14,13 +14,17 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.query_filter import (
     QuerySpec,
+    SearchSessionMatch,
     extract_session_project_path,
     filter_sessions,
     filter_sessions_by_query,
+    limit_search_matches,
     limit_query_matches,
     parse_query,
     parse_query_uri,
+    search_sessions_by_query,
 )
+from agent_dump.search_index import SearchResult
 
 
 class DummyAgent(BaseAgent):
@@ -485,6 +489,104 @@ class TestFilterSessionsByQuery:
         assert result == [session]
 
 
+class TestSearchSessionsByQuery:
+    def test_indexed_search_preserves_snippet_and_rank(self, tmp_path):
+        agent = DummyAgent(name="codex")
+        session = make_session("s1", "Auth timeout", tmp_path / "s1.jsonl")
+        index = mock.MagicMock()
+        index.is_available = True
+        index.search.return_value = [
+            SearchResult(
+                agent_name="codex",
+                session_id="s1",
+                title="Auth timeout",
+                snippet="...**auth** timeout during login...",
+                rank=3.25,
+            )
+        ]
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
+            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="auth timeout"))
+
+        assert result == [
+            SearchSessionMatch(
+                agent=agent,
+                session=session,
+                snippet="...**auth** timeout during login...",
+                rank=3.25,
+            )
+        ]
+        index.update.assert_called_once_with(agent, [session])
+        index.search.assert_called_once_with("auth timeout", agent_names={"codex"})
+
+    def test_indexed_search_filters_to_scoped_sessions_without_truncating_index_update(self, tmp_path):
+        agent = DummyAgent(name="codex")
+        scoped = make_session("s1", "Scoped", tmp_path / "s1.jsonl")
+        scoped.metadata = {"cwd": str(tmp_path / "repo")}
+        outside = make_session("s2", "Outside", tmp_path / "s2.jsonl")
+        outside.metadata = {"cwd": str(tmp_path / "other")}
+        index = mock.MagicMock()
+        index.is_available = True
+        index.search.return_value = [
+            SearchResult(agent_name="codex", session_id="s1", title="Scoped", snippet="**bug**", rank=1.0),
+            SearchResult(agent_name="codex", session_id="s2", title="Outside", snippet="**bug**", rank=2.0),
+        ]
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
+            result = search_sessions_by_query(
+                agent,
+                [scoped, outside],
+                make_query_spec(keyword="bug", project_path=tmp_path / "repo"),
+            )
+
+        assert [match.session.id for match in result] == ["s1"]
+        index.update.assert_called_once_with(agent, [scoped, outside])
+
+    def test_fallback_search_builds_english_snippet_when_fts_unavailable(self, tmp_path):
+        session = make_session("s1", "Auth session", tmp_path / "s1.jsonl")
+        agent = DummyAgent(
+            name="codex",
+            session_data={
+                "s1": {
+                    "messages": [
+                        {"role": "user", "parts": [{"type": "text", "text": "login failed after auth timeout"}]},
+                    ]
+                }
+            },
+        )
+        index = mock.MagicMock()
+        index.is_available = False
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
+            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="auth timeout"))
+
+        assert len(result) == 1
+        assert result[0].snippet == "login failed after **auth timeout**"
+        assert result[0].rank == 0.0
+
+    def test_fallback_search_builds_cjk_snippet_when_fts_unavailable(self, tmp_path):
+        session = make_session("s1", "无关标题", tmp_path / "s1.jsonl")
+        agent = DummyAgent(
+            name="codex",
+            session_data={
+                "s1": {
+                    "messages": [
+                        {"role": "user", "parts": [{"type": "text", "text": "修复认证模块的问题"}]},
+                    ]
+                }
+            },
+        )
+        index = mock.MagicMock()
+        index.is_available = False
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
+            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="认证"))
+
+        assert len(result) == 1
+        assert result[0].snippet == "修复**认证**模块的问题"
+        assert result[0].rank == 0.0
+
+
 class TestLimitQueryMatches:
     def test_limit_matches_applies_global_sort(self, tmp_path):
         agent_a = DummyAgent(name="codex")
@@ -497,6 +599,36 @@ class TestLimitQueryMatches:
         result = limit_query_matches([(agent_a, session_a), (agent_b, session_b)], 1)
 
         assert [(agent.name, session.id) for agent, session in result] == [("kimi", "s2")]
+
+
+class TestLimitSearchMatches:
+    def test_limit_search_matches_sorts_by_rank_time_and_provider(self, tmp_path):
+        codex = DummyAgent(name="codex")
+        kimi = DummyAgent(name="kimi")
+        older_high_rank = make_session("s1", "high", tmp_path / "s1.jsonl")
+        older_high_rank.updated_at = datetime(2026, 1, 1, 10, 0, 0)
+        newer_low_rank = make_session("s2", "low", tmp_path / "s2.jsonl")
+        newer_low_rank.updated_at = datetime(2026, 1, 1, 12, 0, 0)
+        tie_newer = make_session("s3", "tie newer", tmp_path / "s3.jsonl")
+        tie_newer.updated_at = datetime(2026, 1, 1, 11, 0, 0)
+        tie_older = make_session("s4", "tie older", tmp_path / "s4.jsonl")
+        tie_older.updated_at = datetime(2026, 1, 1, 9, 0, 0)
+
+        result = limit_search_matches(
+            [
+                SearchSessionMatch(agent=kimi, session=newer_low_rank, snippet="low", rank=0.5),
+                SearchSessionMatch(agent=codex, session=tie_older, snippet="tie", rank=1.0),
+                SearchSessionMatch(agent=kimi, session=tie_newer, snippet="tie", rank=1.0),
+                SearchSessionMatch(agent=codex, session=older_high_rank, snippet="high", rank=2.0),
+            ],
+            limit=3,
+        )
+
+        assert [(match.agent.name, match.session.id) for match in result] == [
+            ("codex", "s1"),
+            ("kimi", "s3"),
+            ("codex", "s4"),
+        ]
 
 
 class TestExtractSessionProjectPath:

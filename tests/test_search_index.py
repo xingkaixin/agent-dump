@@ -273,6 +273,7 @@ class TestSearchIndex:
         # Short CJK (2 chars) uses unicode61
         results = index.search("认证")
         assert len(results) == 1
+        assert results[0].snippet == "修复**认证**模块的问题"
 
         # Longer CJK (3+ chars) uses trigram
         results = index.search("修复问题")

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import time
 from typing import Any
@@ -54,6 +55,26 @@ def _preprocess_for_unicode61(text: str) -> str:
         result.append(char)
         prev_was_cjk = is_cjk
     return "".join(result)
+
+
+def _cleanup_unicode61_snippet(snippet: str) -> str:
+    """Remove CJK tokenization spaces from highlighted snippets."""
+    cleaned = " ".join(snippet.split())
+    replacements = (
+        (re.compile(r"\*\*([\u4e00-\u9fff]+)\*\*\s+\*\*([\u4e00-\u9fff]+)\*\*"), r"**\1\2**"),
+        (re.compile(r"([\u4e00-\u9fff])\s+([\u4e00-\u9fff])"), r"\1\2"),
+        (re.compile(r"([\u4e00-\u9fff])\s+(\*\*[\u4e00-\u9fff])"), r"\1\2"),
+        (re.compile(r"([\u4e00-\u9fff]\*\*)\s+([\u4e00-\u9fff])"), r"\1\2"),
+    )
+    changed = True
+    while changed:
+        changed = False
+        for pattern, replacement in replacements:
+            updated = pattern.sub(replacement, cleaned)
+            if updated != cleaned:
+                changed = True
+                cleaned = updated
+    return cleaned
 
 
 def _get_default_index_path() -> Path:
@@ -460,7 +481,7 @@ class SearchIndex:
                 snippet = row["snippet"]
                 # Clean up spaces inserted by CJK preprocessing
                 if snippet and fts_table == "sessions_fts":
-                    snippet = " ".join(snippet.split())
+                    snippet = _cleanup_unicode61_snippet(snippet)
 
                 results.append(
                     SearchResult(

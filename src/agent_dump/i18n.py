@@ -105,6 +105,13 @@ class Keys:
     CLI_VERSION_HELP = "CLI_VERSION_HELP"
     CLI_FORMAT_INVALID = "CLI_FORMAT_INVALID"
     SEARCH_INDEX_NOT_AVAILABLE = "SEARCH_INDEX_NOT_AVAILABLE"
+    SEARCH_HEADER = "SEARCH_HEADER"
+    SEARCH_NO_RESULTS = "SEARCH_NO_RESULTS"
+    SEARCH_RESULT_PROVIDER = "SEARCH_RESULT_PROVIDER"
+    SEARCH_RESULT_UPDATED = "SEARCH_RESULT_UPDATED"
+    SEARCH_RESULT_URI = "SEARCH_RESULT_URI"
+    SEARCH_RESULT_RANK = "SEARCH_RESULT_RANK"
+    SEARCH_RESULT_SNIPPET = "SEARCH_RESULT_SNIPPET"
     REINDEX_START = "REINDEX_START"
     REINDEX_AGENT_DONE = "REINDEX_AGENT_DONE"
     REINDEX_DONE = "REINDEX_DONE"
@@ -289,6 +296,13 @@ TRANSLATIONS = {
         Keys.CLI_VERSION_HELP: "Show version and exit (-v, --version)",
         Keys.CLI_FORMAT_INVALID: "invalid format list: {value}",
         Keys.SEARCH_INDEX_NOT_AVAILABLE: "⚠️  Full-text search is not available (SQLite FTS5 not supported).",
+        Keys.SEARCH_HEADER: "🔎 Search results from last {days} days matching '{query}':\n",
+        Keys.SEARCH_NO_RESULTS: "   (No search results)",
+        Keys.SEARCH_RESULT_PROVIDER: "Provider",
+        Keys.SEARCH_RESULT_UPDATED: "Updated",
+        Keys.SEARCH_RESULT_URI: "URI",
+        Keys.SEARCH_RESULT_RANK: "Rank",
+        Keys.SEARCH_RESULT_SNIPPET: "Snippet",
         Keys.REINDEX_START: "🔄 Rebuilding search index...",
         Keys.REINDEX_AGENT_DONE: "   ✓ {agent}: indexed {count} sessions",
         Keys.REINDEX_DONE: "✅ Index rebuild complete. Total indexed: {count} sessions.",
@@ -464,6 +478,13 @@ TRANSLATIONS = {
         Keys.CLI_VERSION_HELP: "显示版本号并退出（-v, --version）",
         Keys.CLI_FORMAT_INVALID: "无效的格式列表: {value}",
         Keys.SEARCH_INDEX_NOT_AVAILABLE: "⚠️  全文搜索不可用（SQLite 不支持 FTS5）。",
+        Keys.SEARCH_HEADER: "🔎 搜索最近 {days} 天内匹配「{query}」的会话:\n",
+        Keys.SEARCH_NO_RESULTS: "   (无搜索结果)",
+        Keys.SEARCH_RESULT_PROVIDER: "来源",
+        Keys.SEARCH_RESULT_UPDATED: "更新时间",
+        Keys.SEARCH_RESULT_URI: "URI",
+        Keys.SEARCH_RESULT_RANK: "匹配度",
+        Keys.SEARCH_RESULT_SNIPPET: "命中片段",
         Keys.REINDEX_START: "🔄 正在重建搜索索引...",
         Keys.REINDEX_AGENT_DONE: "   ✓ {agent}: 已索引 {count} 个会话",
         Keys.REINDEX_DONE: "✅ 索引重建完成。共索引 {count} 个会话。",

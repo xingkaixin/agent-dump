@@ -14,6 +14,8 @@ from agent_dump.__about__ import __version__
 from agent_dump.agents.base import Session
 from agent_dump.cli import (
     collect_query_matches,
+    collect_search_matches,
+    display_search_results,
     display_sessions_list,
     expand_shortcut_argv,
     export_sessions,
@@ -35,7 +37,7 @@ from agent_dump.collect import CollectProgressEvent
 from agent_dump.config import ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
-from agent_dump.query_filter import QuerySpec
+from agent_dump.query_filter import QuerySpec, SearchSessionMatch
 
 
 def make_session(
@@ -207,6 +209,48 @@ class TestQueryHelpers:
         assert {name: [session.id for session in sessions] for name, sessions in matched.items()} == {
             "kimi": ["s-new"]
         }
+
+    def test_collect_search_matches_applies_global_rank_sort_and_limit(self):
+        older = make_session("s-old", "old", created_at=datetime(2026, 1, 1, 10, 0, 0))
+        newer = make_session("s-new", "new", created_at=datetime(2026, 1, 1, 11, 0, 0))
+
+        agent_a = mock.MagicMock()
+        agent_a.name = "codex"
+        agent_a.get_sessions.return_value = [older]
+
+        agent_b = mock.MagicMock()
+        agent_b.name = "kimi"
+        agent_b.get_sessions.return_value = [newer]
+
+        match_a = SearchSessionMatch(agent=agent_a, session=older, snippet="old", rank=0.5)
+        match_b = SearchSessionMatch(agent=agent_b, session=newer, snippet="new", rank=2.0)
+
+        with mock.patch("agent_dump.cli.search_sessions_by_query", side_effect=[[match_a], [match_b]]):
+            result = collect_search_matches([agent_a, agent_b], days=7, spec=make_query_spec(keyword="bug", limit=1))
+
+        assert [(match.agent.name, match.session.id) for match in result] == [("kimi", "s-new")]
+
+    def test_display_search_results_shows_snippet_uri_updated_provider_and_rank(self, capsys):
+        session = make_session("s1", "Auth Timeout", created_at=datetime(2026, 1, 1, 10, 0, 0))
+        agent = mock.MagicMock()
+        agent.display_name = "Codex"
+        agent.get_formatted_title.return_value = "Auth Timeout (2026-01-01 10:00)"
+        agent.get_session_uri.return_value = "codex://s1"
+        match = SearchSessionMatch(
+            agent=agent,
+            session=session,
+            snippet="login failed after **auth timeout**",
+            rank=2.5,
+        )
+
+        display_search_results([match])
+
+        output = capsys.readouterr().out
+        assert "Codex" in output
+        assert "codex://s1" in output
+        assert "2026-01-01" in output
+        assert "2.5" in output
+        assert "login failed after **auth timeout**" in output
 
 
 class TestFindSessionById:
@@ -1470,6 +1514,43 @@ class TestMain:
         captured = capsys.readouterr()
         assert "匹配「报错」" in captured.out
 
+    def test_main_search_uses_dedicated_result_rendering(self, capsys):
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            known_agent = mock.MagicMock()
+            known_agent.name = "codex"
+            mock_scanner.agents = [known_agent]
+
+            session = make_session("s1", "Auth Timeout")
+            agent = mock.MagicMock()
+            agent.name = "codex"
+            agent.display_name = "Codex"
+            agent.get_formatted_title.return_value = "Auth Timeout (2026-01-01 12:00)"
+            agent.get_session_uri.return_value = "codex://s1"
+            mock_scanner.get_available_agents.return_value = [agent]
+            mock_scanner_class.return_value = mock_scanner
+
+            match = SearchSessionMatch(
+                agent=agent,
+                session=session,
+                snippet="login failed after **auth timeout**",
+                rank=2.5,
+            )
+            with mock.patch("agent_dump.cli.collect_search_matches", return_value=[match]) as mock_collect:
+                with mock.patch("agent_dump.cli.display_sessions_list") as mock_display_sessions:
+                    with mock.patch("sys.argv", ["agent-dump", "--search", "auth timeout", "--lang", "zh"]):
+                        result = main()
+
+        assert result == 0
+        spec = mock_collect.call_args.kwargs["spec"]
+        assert spec.keyword == "auth timeout"
+        mock_display_sessions.assert_not_called()
+        captured = capsys.readouterr()
+        assert "搜索最近 7 天内匹配「auth timeout」的会话" in captured.out
+        assert "命中片段" in captured.out
+        assert "login failed after **auth timeout**" in captured.out
+        assert "codex://s1" in captured.out
+
     def test_main_list_mode_with_query_filters_sessions(self, capsys):
         """测试 --list + -query 会调用过滤逻辑"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
@@ -1496,11 +1577,13 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli.filter_sessions", return_value=[session2]) as mock_filter:
-                with mock.patch("sys.argv", ["agent-dump", "--list", "-query", "error"]):
-                    result = main()
+                with mock.patch("agent_dump.cli.display_search_results") as mock_display_search:
+                    with mock.patch("sys.argv", ["agent-dump", "--list", "-query", "error"]):
+                        result = main()
 
         assert result == 0
         mock_filter.assert_called_once_with(mock_agent, sessions, "error")
+        mock_display_search.assert_not_called()
         captured = capsys.readouterr()
         assert "OpenCode (1 个会话)" in captured.out
 

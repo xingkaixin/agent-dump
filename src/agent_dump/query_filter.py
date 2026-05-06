@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts
-from agent_dump.search_index import SearchIndex
+from agent_dump.search_index import SearchIndex, _extract_session_searchable_text
 from agent_dump.time_utils import normalize_datetime_utc
 
 AGENT_ALIASES = {
@@ -31,6 +31,16 @@ class QuerySpec:
     project_path: Path | None
     roles: set[str] | None
     limit: int | None
+
+
+@dataclass(frozen=True)
+class SearchSessionMatch:
+    """Search match preserving ranking and snippet evidence."""
+
+    agent: BaseAgent
+    session: Session
+    snippet: str
+    rank: float
 
 
 def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
@@ -147,6 +157,45 @@ def limit_query_matches(matches: list[tuple[BaseAgent, Session]], limit: int | N
     if limit is None or limit >= len(matches):
         return matches
     sorted_matches = sorted(matches, key=_query_match_sort_key)
+    return sorted_matches[:limit]
+
+
+def search_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: QuerySpec) -> list[SearchSessionMatch]:
+    """Search sessions while preserving snippets and rank."""
+    if spec.agent_names is not None and agent.name not in spec.agent_names:
+        return []
+
+    keyword = (spec.keyword or "").strip()
+    if not keyword:
+        return []
+
+    scoped_sessions = sessions
+    if spec.project_path is not None:
+        scoped_sessions = [
+            session
+            for session in scoped_sessions
+            if (
+                (session_path := extract_session_project_path(session)) is not None
+                and is_path_scope_match(spec.project_path, session_path)
+            )
+        ]
+
+    if spec.roles is not None:
+        scoped_sessions = _filter_sessions_by_role(agent, scoped_sessions, spec.roles, keyword)
+        return _fallback_search_matches(agent, scoped_sessions, keyword)
+
+    indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, keyword)
+    if indexed is not None:
+        return indexed
+
+    return _fallback_search_matches(agent, scoped_sessions, keyword)
+
+
+def limit_search_matches(matches: list[SearchSessionMatch], limit: int | None) -> list[SearchSessionMatch]:
+    """Apply stable ranking and one global search limit."""
+    sorted_matches = sorted(matches, key=_search_match_sort_key)
+    if limit is None or limit >= len(sorted_matches):
+        return sorted_matches
     return sorted_matches[:limit]
 
 
@@ -506,6 +555,87 @@ def _query_match_sort_key(item: tuple[BaseAgent, Session]) -> tuple[float, float
     updated_at = normalize_datetime_utc(session.updated_at)
     created_at = normalize_datetime_utc(session.created_at)
     return (-updated_at.timestamp(), -created_at.timestamp(), agent.name, session.id)
+
+
+def _search_match_sort_key(match: SearchSessionMatch) -> tuple[float, float, float, str, str]:
+    updated_at = normalize_datetime_utc(match.session.updated_at)
+    created_at = normalize_datetime_utc(match.session.created_at)
+    return (-match.rank, -updated_at.timestamp(), -created_at.timestamp(), match.agent.name, match.session.id)
+
+
+def _try_indexed_search_matches(
+    agent: BaseAgent,
+    all_sessions: list[Session],
+    scoped_sessions: list[Session],
+    keyword: str,
+) -> list[SearchSessionMatch] | None:
+    """Try indexed search while retaining SearchResult metadata."""
+    try:
+        index = SearchIndex()
+        if not index.is_available:
+            return None
+
+        index.update(agent, all_sessions)
+        scoped_by_id = {session.id: session for session in scoped_sessions}
+        results = index.search(keyword, agent_names={agent.name})
+        matches: list[SearchSessionMatch] = []
+        for result in results:
+            session = scoped_by_id.get(result.session_id)
+            if session is None:
+                continue
+            snippet = result.snippet or _build_keyword_snippet(session.title, keyword) or session.title
+            matches.append(
+                SearchSessionMatch(
+                    agent=agent,
+                    session=session,
+                    snippet=snippet,
+                    rank=result.rank,
+                )
+            )
+        return matches
+    except Exception:
+        return None
+
+
+def _fallback_search_matches(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[SearchSessionMatch]:
+    matches: list[SearchSessionMatch] = []
+    for session in sessions:
+        title_snippet = _build_keyword_snippet(session.title, keyword)
+        if title_snippet is not None:
+            matches.append(SearchSessionMatch(agent=agent, session=session, snippet=title_snippet, rank=1.0))
+            continue
+
+        content = _extract_session_searchable_text(agent, session)
+        content_snippet = _build_keyword_snippet(content, keyword)
+        if content_snippet is not None:
+            matches.append(SearchSessionMatch(agent=agent, session=session, snippet=content_snippet, rank=0.0))
+
+    return matches
+
+
+def _build_keyword_snippet(text: str, keyword: str, context_chars: int = 48) -> str | None:
+    normalized_text = " ".join(text.split())
+    normalized_keyword = " ".join(keyword.split())
+    if not normalized_text or not normalized_keyword:
+        return None
+
+    match_index = normalized_text.lower().find(normalized_keyword.lower())
+    if match_index < 0:
+        return None
+
+    match_end = match_index + len(normalized_keyword)
+    start = max(0, match_index - context_chars)
+    end = min(len(normalized_text), match_end + context_chars)
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(normalized_text) else ""
+    snippet = (
+        normalized_text[start:match_index]
+        + "**"
+        + normalized_text[match_index:match_end]
+        + "**"
+        + normalized_text[match_end:end]
+    )
+    return prefix + snippet + suffix
 
 
 def _try_indexed_search(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session] | None:
