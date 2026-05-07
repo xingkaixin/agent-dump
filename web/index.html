@@ -6,12 +6,12 @@
     <meta name="theme-color" content="#fdfcfc" />
     <meta
       name="description"
-      content="Agent Dump is a CLI tool to list, dump, export, summarize, and search AI coding sessions from Claude Code, Codex, Kimi, OpenCode, and Cursor. Install via npm, uv, or run with npx/uvx."
+      content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor."
     />
     <meta name="keywords" content="agent-dump, AI session export, Claude Code sessions, Codex sessions, Cursor sessions, AI coding tool, session dump, CLI export, developer tool" />
     <meta name="author" content="xingkaixin" />
     <meta name="robots" content="index, follow" />
-    <title>Agent Dump | Session Export for AI Coding Tools</title>
+    <title>Agent Dump | Export AI Coding Sessions from CLI</title>
     <link rel="canonical" href="https://agent-dump.xingkaixin.me/" />
     <link rel="icon" type="image/png" href="./assets/logo.png" />
     <link rel="apple-touch-icon" href="./assets/logo.png" />
@@ -20,41 +20,98 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://agent-dump.xingkaixin.me/" />
     <meta property="og:site_name" content="Agent Dump" />
-    <meta property="og:title" content="Agent Dump | Session Export for AI Coding Tools" />
-    <meta property="og:description" content="CLI tool to list, dump, export, summarize, and search AI coding sessions from Claude Code, Codex, Kimi, OpenCode, and Cursor. One command for all your AI tools." />
+    <meta property="og:title" content="Agent Dump | Export AI Coding Sessions from CLI" />
+    <meta property="og:description" content="CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor." />
     <meta property="og:image" content="https://agent-dump.xingkaixin.me/assets/logo.png" />
     <meta property="og:image:alt" content="Agent Dump logo" />
+    <meta property="og:locale" content="en_US" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Agent Dump | Session Export for AI Coding Tools" />
-    <meta name="twitter:description" content="CLI tool to list, dump, export, summarize, and search AI coding sessions from Claude Code, Codex, Kimi, OpenCode, and Cursor." />
+    <meta name="twitter:title" content="Agent Dump | Export AI Coding Sessions from CLI" />
+    <meta name="twitter:description" content="CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor." />
     <meta name="twitter:image" content="https://agent-dump.xingkaixin.me/assets/logo.png" />
 
     <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "Agent Dump",
-      "applicationCategory": "DeveloperApplication",
-      "operatingSystem": "macOS, Linux, Windows",
-      "description": "CLI tool to list, dump, export, summarize, and search AI coding sessions from Claude Code, Codex, Kimi, OpenCode, and Cursor.",
-      "url": "https://agent-dump.xingkaixin.me/",
-      "downloadUrl": "https://www.npmjs.com/package/@agent-dump/cli",
-      "softwareVersion": "0.9.0",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "author": {
-        "@type": "Person",
-        "name": "xingkaixin",
-        "url": "https://github.com/xingkaixin"
-      },
-      "codeRepository": "https://github.com/xingkaixin/agent-dump",
-      "license": "https://github.com/xingkaixin/agent-dump/blob/main/LICENSE"
+      "@graph": [
+        {
+          "@type": "Person",
+          "@id": "https://agent-dump.xingkaixin.me/#author",
+          "name": "xingkaixin",
+          "url": "https://github.com/xingkaixin",
+          "sameAs": [
+            "https://github.com/xingkaixin"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://agent-dump.xingkaixin.me/#website",
+          "name": "Agent Dump",
+          "url": "https://agent-dump.xingkaixin.me/",
+          "description": "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions.",
+          "publisher": {
+            "@id": "https://agent-dump.xingkaixin.me/#author"
+          }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://agent-dump.xingkaixin.me/#software",
+          "name": "Agent Dump",
+          "applicationCategory": "DeveloperApplication",
+          "applicationSubCategory": "Command-line developer tool",
+          "operatingSystem": "macOS, Linux, Windows",
+          "description": "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor.",
+          "url": "https://agent-dump.xingkaixin.me/",
+          "downloadUrl": [
+            "https://www.npmjs.com/package/@agent-dump/cli",
+            "https://pypi.org/project/agent-dump/"
+          ],
+          "softwareVersion": "0.9.0",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "author": {
+            "@id": "https://agent-dump.xingkaixin.me/#author"
+          },
+          "codeRepository": "https://github.com/xingkaixin/agent-dump",
+          "license": "https://github.com/xingkaixin/agent-dump/blob/main/LICENSE"
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://agent-dump.xingkaixin.me/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is Agent Dump?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, Kimi, OpenCode, and Cursor so developers can inspect session history from one CLI."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Which AI coding tools does Agent Dump support?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Agent Dump supports Codex, Claude Code, Kimi, OpenCode, and Cursor. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do you install Agent Dump?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Install Agent Dump globally with uv tool install agent-dump or npm install -g @agent-dump/cli. You can also run it directly with uvx agent-dump --help, npx @agent-dump/cli --help, or bunx @agent-dump/cli --help."
+              }
+            }
+          ]
+        }
+      ]
     }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -104,6 +161,9 @@
         <p class="description" data-i18n="heroDescription">
           List, dump, export, summarize, and search sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor.
         </p>
+        <p class="answer-summary" data-i18n="answerSummary">
+          Agent Dump gives developers one command-line interface for local AI coding session history across five tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.
+        </p>
         <p class="release-meta">
           <span data-i18n="versionLabel">Version</span>
           <a
@@ -134,7 +194,30 @@
 
       <section id="install" class="install-section">
         <h2 data-i18n="installHeading">Install</h2>
-        <div class="install-groups" data-install-grid></div>
+        <div class="install-groups" data-install-grid>
+          <div class="install-group">
+            <p class="install-group-label" data-i18n="installGlobalLabel">Install globally</p>
+            <div class="command-line">
+              <span class="prompt" aria-hidden="true">$</span>
+              <pre class="command-code">uv tool install agent-dump</pre>
+            </div>
+            <div class="command-line">
+              <span class="prompt" aria-hidden="true">$</span>
+              <pre class="command-code">npm install -g @agent-dump/cli</pre>
+            </div>
+          </div>
+          <div class="install-group">
+            <p class="install-group-label" data-i18n="installRunLabel">Run without installing</p>
+            <div class="command-line">
+              <span class="prompt" aria-hidden="true">$</span>
+              <pre class="command-code">uvx agent-dump --help</pre>
+            </div>
+            <div class="command-line">
+              <span class="prompt" aria-hidden="true">$</span>
+              <pre class="command-code">npx @agent-dump/cli --help</pre>
+            </div>
+          </div>
+        </div>
         <div class="skill-block">
           <p class="skill-label" data-i18n="skillNote">Or add as an agent skill:</p>
           <div class="command-line">
@@ -153,6 +236,34 @@
               </span>
             </button>
           </div>
+        </div>
+      </section>
+
+      <section id="capabilities" class="content-section">
+        <h2 data-i18n="capabilitiesHeading">What Agent Dump does</h2>
+        <ul class="feature-list" aria-label="Agent Dump capabilities">
+          <li data-i18n="capabilityProviders">Reads local sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor.</li>
+          <li data-i18n="capabilityExport">Exports sessions as JSON, Markdown, raw files, or direct terminal output.</li>
+          <li data-i18n="capabilitySearch">Searches recent session history and filters by provider, role, path, or query URI.</li>
+          <li data-i18n="capabilityCollect">Collects high-signal session summaries for project management and insight reports.</li>
+        </ul>
+      </section>
+
+      <section id="faq" class="content-section">
+        <h2 data-i18n="faqHeading">Agent Dump FAQ</h2>
+        <div class="faq-list">
+          <article>
+            <h3 data-i18n="faqWhatQuestion">What is Agent Dump?</h3>
+            <p data-i18n="faqWhatAnswer">Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, Kimi, OpenCode, and Cursor so developers can inspect session history from one CLI.</p>
+          </article>
+          <article>
+            <h3 data-i18n="faqSupportQuestion">Which AI coding tools does Agent Dump support?</h3>
+            <p data-i18n="faqSupportAnswer">Agent Dump supports Codex, Claude Code, Kimi, OpenCode, and Cursor. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows.</p>
+          </article>
+          <article>
+            <h3 data-i18n="faqInstallQuestion">How do you install Agent Dump?</h3>
+            <p data-i18n="faqInstallAnswer">Install Agent Dump globally with <code>uv tool install agent-dump</code> or <code>npm install -g @agent-dump/cli</code>. You can also run it directly with <code>uvx agent-dump --help</code>, <code>npx @agent-dump/cli --help</code>, or <code>bunx @agent-dump/cli --help</code>.</p>
+          </article>
         </div>
       </section>
     </main>
