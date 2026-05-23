@@ -141,6 +141,34 @@ def _truncate_excerpt(text: str, limit: int = 280) -> str:
     return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
 
 
+def _compact_tool_json(value: Any, *, limit: int = 180) -> str:
+    compact = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return _truncate_excerpt(compact, limit=limit)
+
+
+def _extract_tool_output_preview(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        normalized = _normalize_text(value)
+        if normalized.startswith("Wall time:") and " Output:" in normalized:
+            return normalized.split(" Output:", 1)[0]
+        return normalized
+    if isinstance(value, dict):
+        text = value.get("text")
+        if isinstance(text, str) and text.strip():
+            return _extract_tool_output_preview(text)
+        for key in ("output", "content", "message", "error"):
+            preview = _extract_tool_output_preview(value.get(key))
+            if preview:
+                return preview
+        return _compact_tool_json(value)
+    if isinstance(value, list):
+        previews = [_extract_tool_output_preview(item) for item in value[:3]]
+        return " | ".join(preview for preview in previews if preview)
+    return str(value).strip()
+
+
 def _dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_ITEMS_PER_FIELD) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -319,16 +347,27 @@ def _extract_part_text(part: dict[str, Any]) -> str:
         tool_name = str(part.get("tool") or part.get("name") or "").strip()
         title = str(part.get("title", "")).strip()
         state = part.get("state")
-        output = part.get("output")
         fragments = [fragment for fragment in (tool_name, title) if fragment]
-        if isinstance(state, (dict, list)):
-            fragments.append(json.dumps(state, ensure_ascii=False))
-        elif isinstance(state, str) and state.strip():
-            fragments.append(state.strip())
-        if isinstance(output, (dict, list)):
-            fragments.append(json.dumps(output, ensure_ascii=False))
-        elif isinstance(output, str) and output.strip():
-            fragments.append(output.strip())
+
+        if isinstance(state, dict):
+            arguments = state.get("arguments")
+            if arguments is not None:
+                fragments.append(f"args={_compact_tool_json(arguments)}")
+            status = state.get("status")
+            if isinstance(status, str) and status.strip():
+                fragments.append(f"status={status.strip()}")
+            output = state.get("output", part.get("output"))
+        else:
+            output = part.get("output")
+            if isinstance(state, list):
+                fragments.append(f"state={_compact_tool_json(state)}")
+            elif isinstance(state, str) and state.strip():
+                fragments.append(f"state={_truncate_excerpt(state.strip(), limit=120)}")
+
+        if output is not None:
+            output_preview = _extract_tool_output_preview(output)
+            if output_preview:
+                fragments.append(f"output={_truncate_excerpt(output_preview, limit=180)}")
         return " | ".join(fragment for fragment in fragments if fragment)
     return ""
 

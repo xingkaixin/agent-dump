@@ -127,6 +127,37 @@ class TestCollectExtraction:
         assert events[0].files == ("/repo/app.py",)
         assert events[2].tool_name == "read_file"
 
+    def test_extract_collect_events_compacts_tool_output(self):
+        session_data = {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "parts": [
+                        {
+                            "type": "tool",
+                            "tool": "exec_command",
+                            "state": {
+                                "arguments": {"cmd": "sed -n '1,80p' app.py"},
+                                "output": [
+                                    {
+                                        "type": "text",
+                                        "text": "Wall time: 0.1 seconds\nOutput:\n" + "x" * 1000,
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            ]
+        }
+
+        events, truncated = extract_collect_events(session_data)
+
+        assert truncated is False
+        assert events[0].text == (
+            'exec_command | args={"cmd":"sed -n \'1,80p\' app.py"} | output=Wall time: 0.1 seconds'
+        )
+
     def test_extract_collect_events_falls_back_when_empty(self):
         events, truncated = extract_collect_events({"messages": []}, fallback_text="fallback text")
 
@@ -547,13 +578,15 @@ class TestCollectStructuredSummary:
         assert result["topics"] == ["A"]
 
     def test_request_structured_summary_from_llm_retries_then_raises(self):
-        with mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="not json"):
-            with pytest.raises(RuntimeError, match="chunk-1"):
-                request_structured_summary_from_llm(
-                    self._config(),
-                    "prompt",
-                    context_label="chunk-1",
-                )
+        with (
+            mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="not json"),
+            pytest.raises(RuntimeError, match="chunk-1"),
+        ):
+            request_structured_summary_from_llm(
+                self._config(),
+                "prompt",
+                context_label="chunk-1",
+            )
 
     def test_request_structured_summary_payload_openai_uses_json_schema(self):
         response = mock.MagicMock()
@@ -575,18 +608,20 @@ class TestCollectStructuredSummary:
         log_path = tmp_path / "collect.log"
         logger = CollectLogger(enabled=True, path=log_path, run_id="run-1")
 
-        with mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="not json"):
-            with pytest.raises(RuntimeError, match="chunk-1"):
-                request_structured_summary_from_llm(
-                    self._config(),
-                    "prompt",
-                    context_label="chunk-1",
-                    logger=logger,
-                    phase="chunk_summary",
-                    session_uri="codex://s-1",
-                    chunk_index=1,
-                    chunk_total=2,
-                )
+        with (
+            mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="not json"),
+            pytest.raises(RuntimeError, match="chunk-1"),
+        ):
+            request_structured_summary_from_llm(
+                self._config(),
+                "prompt",
+                context_label="chunk-1",
+                logger=logger,
+                phase="chunk_summary",
+                session_uri="codex://s-1",
+                chunk_index=1,
+                chunk_total=2,
+            )
 
         records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
         assert [record["event"] for record in records] == ["llm_request", "llm_response", "llm_parse_error", "llm_request", "llm_response", "llm_parse_error"]
@@ -693,13 +728,15 @@ class TestCollectStructuredSummary:
         assert summaries[0].summary_data["errors"] == ["E2"]
 
     def test_summarize_collect_entries_raises_wrapped_session_uri(self):
-        with mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="bad json"):
-            with pytest.raises(RuntimeError, match="codex://s-1"):
-                summarize_collect_entries(
-                    config=self._config(),
-                    planned_entries=[self._planned_entry()],
-                    summary_concurrency=1,
-                )
+        with (
+            mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="bad json"),
+            pytest.raises(RuntimeError, match="codex://s-1"),
+        ):
+            summarize_collect_entries(
+                config=self._config(),
+                planned_entries=[self._planned_entry()],
+                summary_concurrency=1,
+            )
 
     def test_reduce_collect_summaries_tree_reduction(self):
         summaries = [
@@ -798,9 +835,11 @@ class TestCollectLLM:
             model="claude-3-7-sonnet",
             api_key="ak-test",
         )
-        with mock.patch("urllib.request.urlopen", side_effect=RuntimeError("boom")):
-            with pytest.raises(RuntimeError):
-                request_summary_from_llm(config, "prompt")
+        with (
+            mock.patch("urllib.request.urlopen", side_effect=RuntimeError("boom")),
+            pytest.raises(RuntimeError),
+        ):
+            request_summary_from_llm(config, "prompt")
 
 
 class TestCollectOutput:
