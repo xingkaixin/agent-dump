@@ -2,6 +2,24 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.9.1] - 2026-05-24
+
+### Changed
+
+- **Collect tool output previews**
+  - Compacted tool-call state and output previews in collect event text so AI summaries receive concise arguments, status, and output snippets instead of large raw payloads
+  - Shortened common command-output wrappers in collect previews to reduce prompt noise while preserving useful execution context
+
+
+### Fixed
+
+- **OpenCode session export performance**
+  - Batched OpenCode `part` queries by message ID to avoid repeated per-message database queries when exporting sessions with many messages
+
+- **Provider-scoped URI lookup**
+  - Scoped URI session lookup to the parsed provider name so matching session IDs in other providers cannot be returned for a provider-specific URI
+
+
 ## [0.9.0] - 2026-05-06
 
 ### Added
@@ -627,6 +645,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.9.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.1
 [0.9.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.0
 [0.8.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.8.0
 [0.7.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.7.0

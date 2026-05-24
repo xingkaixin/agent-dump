@@ -1,5 +1,23 @@
 # 更新日志
 
+## [0.9.1] - 2026-05-24
+
+### 变更
+
+- **Collect 工具输出预览**
+  - 压缩 collect 事件文本中的工具调用 state 与 output 预览，让 AI 摘要接收精简后的参数、状态和输出片段，而不是大段原始 payload
+  - 缩短常见命令输出包装文本，降低 collect prompt 噪音，同时保留有用的执行上下文
+
+
+### 问题修复
+
+- **OpenCode 会话导出性能**
+  - 按 message ID 批量查询 OpenCode `part` 记录，避免导出大量消息时重复执行逐消息数据库查询
+
+- **按 provider 限定 URI 查找**
+  - URI 会话查找现在会限定在解析出的 provider 内，避免不同 provider 中存在相同 session ID 时返回错误会话
+
+
 ## [0.9.0] - 2026-05-06
 
 ### 新增功能
@@ -631,6 +649,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.9.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.1
 [0.9.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.0
 [0.8.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.8.0
 [0.7.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.7.0
