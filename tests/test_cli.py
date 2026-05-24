@@ -839,7 +839,11 @@ class TestMain:
                     result = main()
 
             assert result == 0
-            mock_find.assert_called_once_with(mock_scanner, "019c8d87-ecc4-7080-bde9-3e257c97cb99")
+            mock_find.assert_called_once_with(
+                mock_scanner,
+                "019c8d87-ecc4-7080-bde9-3e257c97cb99",
+                agent_name="codex",
+            )
 
             captured = capsys.readouterr()
             assert "# Session Dump" in captured.out

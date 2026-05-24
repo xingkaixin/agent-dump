@@ -209,6 +209,22 @@ class TestFindSessionById:
 
         assert result is None
 
+    def test_find_session_by_id_limits_to_agent_name(self):
+        scanner = mock.MagicMock()
+        codex_agent = mock.MagicMock()
+        codex_agent.name = "codex"
+        opencode_agent = mock.MagicMock()
+        opencode_agent.name = "opencode"
+        target_session = mock.MagicMock(id="target")
+        opencode_agent.get_sessions.return_value = [target_session]
+        scanner.get_available_agents.return_value = [codex_agent, opencode_agent]
+
+        result = find_session_by_id(scanner, "target", agent_name="opencode")
+
+        assert result == (opencode_agent, target_session)
+        codex_agent.get_sessions.assert_not_called()
+        opencode_agent.get_sessions.assert_called_once_with(days=3650)
+
     def test_find_session_by_id_cursor_matches_request_id(self):
         """测试 Cursor 会按 metadata.request_id 命中"""
         scanner = mock.MagicMock()

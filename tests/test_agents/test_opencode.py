@@ -2,10 +2,10 @@
 测试 agents/opencode.py 模块
 """
 
-import json
-import sqlite3
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
+import sqlite3
 from unittest import mock
 
 import pytest
@@ -603,6 +603,92 @@ class TestOpenCodeAgent:
         assert json_path.name == "session-raw.json"
         assert raw_path.name == "session-raw.raw.json"
         assert json.loads(json_path.read_text(encoding="utf-8")) == json.loads(raw_path.read_text(encoding="utf-8"))
+
+    def test_get_session_data_batches_part_query(self, tmp_path):
+        agent = OpenCodeAgent()
+        db_path = tmp_path / "opencode.db"
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.executescript(
+            """
+            CREATE TABLE session (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                time_created INTEGER,
+                time_updated INTEGER,
+                slug TEXT,
+                directory TEXT,
+                version INTEGER,
+                summary_files TEXT
+            );
+            CREATE TABLE message (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                time_created INTEGER,
+                data TEXT
+            );
+            CREATE TABLE part (
+                id TEXT PRIMARY KEY,
+                message_id TEXT,
+                time_created INTEGER,
+                data TEXT
+            );
+            """
+        )
+
+        now = int(datetime.now().timestamp() * 1000)
+        cursor.execute(
+            "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("session-001", "Test", now, now, "test", "/test", 1, "file.py"),
+        )
+        for index in range(3):
+            message_id = f"msg-{index}"
+            cursor.execute(
+                "INSERT INTO message VALUES (?, ?, ?, ?)",
+                (
+                    message_id,
+                    "session-001",
+                    now + index,
+                    json.dumps({"role": "assistant"}, ensure_ascii=False),
+                ),
+            )
+            cursor.execute(
+                "INSERT INTO part VALUES (?, ?, ?, ?)",
+                (
+                    f"part-{index}",
+                    message_id,
+                    now + index,
+                    json.dumps({"type": "text", "text": f"part {index}"}, ensure_ascii=False),
+                ),
+            )
+        conn.commit()
+        conn.close()
+
+        traced_statements: list[str] = []
+        original_connect = agent._connect_db
+
+        def _connect_with_trace():
+            traced_conn = original_connect()
+            traced_conn.set_trace_callback(traced_statements.append)
+            return traced_conn
+
+        agent.db_path = db_path
+        session = Session(
+            id="session-001",
+            title="Test",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=db_path,
+            metadata={},
+        )
+
+        with mock.patch.object(agent, "_connect_db", side_effect=_connect_with_trace):
+            data = agent.get_session_data(session)
+
+        part_selects = [statement for statement in traced_statements if "from part" in statement.lower()]
+        assert len(part_selects) == 1
+        assert [message["parts"][0]["text"] for message in data["messages"]] == ["part 0", "part 1", "part 2"]
 
     def test_get_session_head_extracts_model_message_count_and_subtargets(self, tmp_path):
         """测试 get_session_head 返回轻量摘要字段。"""

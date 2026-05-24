@@ -48,8 +48,13 @@ def parse_uri(uri: str) -> tuple[str, str] | None:
     return _parse_uri(uri)
 
 
-def find_session_by_id(scanner: AgentScanner, session_id: str) -> tuple[BaseAgent, Session] | None:
-    return _find_session_by_id(scanner, session_id)
+def find_session_by_id(
+    scanner: AgentScanner,
+    session_id: str,
+    *,
+    agent_name: str | None = None,
+) -> tuple[BaseAgent, Session] | None:
+    return _find_session_by_id(scanner, session_id, agent_name=agent_name)
 
 
 def render_session_text(uri: str, session_data: dict[str, Any]) -> str:

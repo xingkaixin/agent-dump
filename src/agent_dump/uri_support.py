@@ -26,9 +26,16 @@ def parse_uri(uri: str) -> tuple[str, str] | None:
     return scheme, session_id
 
 
-def find_session_by_id(scanner: AgentScanner, session_id: str) -> tuple[BaseAgent, Session] | None:
+def find_session_by_id(
+    scanner: AgentScanner,
+    session_id: str,
+    *,
+    agent_name: str | None = None,
+) -> tuple[BaseAgent, Session] | None:
     """Find a session by ID across all available agents."""
     available_agents = scanner.get_available_agents()
+    if agent_name is not None:
+        available_agents = [agent for agent in available_agents if agent.name == agent_name]
     if not available_agents:
         return None
 

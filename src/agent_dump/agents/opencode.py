@@ -184,8 +184,25 @@ class OpenCodeAgent(BaseAgent):
             "SELECT * FROM message WHERE session_id = ? ORDER BY time_created ASC",
             (session.id,),
         )
+        message_rows = cursor.fetchall()
+        parts_by_message_id: dict[str, list[sqlite3.Row]] = {str(row["id"]): [] for row in message_rows}
+        message_ids = list(parts_by_message_id)
 
-        for msg_row in cursor.fetchall():
+        for start in range(0, len(message_ids), 500):
+            chunk = message_ids[start : start + 500]
+            cursor.execute(
+                """
+                SELECT * FROM part
+                WHERE message_id IN (SELECT value FROM json_each(?))
+                ORDER BY message_id ASC, time_created ASC
+                """,
+                (json.dumps(chunk),),
+            )
+            for part_row in cursor.fetchall():
+                message_id = str(part_row["message_id"])
+                parts_by_message_id.setdefault(message_id, []).append(part_row)
+
+        for msg_row in message_rows:
             msg_data = json.loads(msg_row["data"])
 
             message = {
@@ -209,12 +226,7 @@ class OpenCodeAgent(BaseAgent):
             session_data["stats"]["total_input_tokens"] += tokens.get("input", 0)
             session_data["stats"]["total_output_tokens"] += tokens.get("output", 0)
 
-            cursor.execute(
-                "SELECT * FROM part WHERE message_id = ? ORDER BY time_created ASC",
-                (msg_row["id"],),
-            )
-
-            for part_row in cursor.fetchall():
+            for part_row in parts_by_message_id.get(str(msg_row["id"]), []):
                 part_data = json.loads(part_row["data"])
                 part = {
                     "type": part_data.get("type"),

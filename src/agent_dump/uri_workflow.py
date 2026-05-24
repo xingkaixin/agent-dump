@@ -24,7 +24,7 @@ class ExportConfigLike(Protocol):
 class UriModeDeps:
     scanner_factory: Callable[[], AgentScanner]
     parse_uri: Callable[[str], tuple[str, str] | None]
-    find_session_by_id: Callable[[AgentScanner, str], tuple[BaseAgent, Session] | None]
+    find_session_by_id: Callable[..., tuple[BaseAgent, Session] | None]
     render_session_head: Callable[[str, dict[str, Any]], str]
     maybe_generate_uri_summary: Callable[..., tuple[dict[str, Any] | None, str | None]]
     render_session_text: Callable[[str, dict[str, Any]], str]
@@ -71,7 +71,8 @@ def handle_uri_mode(
         deps.print_diagnostic(deps.build_no_agents_found_diagnostic(scanner))
         return 1
 
-    result = deps.find_session_by_id(scanner, session_id)
+    expected_agent_name = VALID_URI_SCHEMES.get(scheme)
+    result = deps.find_session_by_id(scanner, session_id, agent_name=expected_agent_name)
     if result is None:
         deps.print_diagnostic(
             session_not_found(
@@ -90,7 +91,6 @@ def handle_uri_mode(
 
     agent, session = result
 
-    expected_agent_name = VALID_URI_SCHEMES.get(scheme)
     if agent.name != expected_agent_name:
         deps.print_diagnostic(
             invalid_query_or_uri(
