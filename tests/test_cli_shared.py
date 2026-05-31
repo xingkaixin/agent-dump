@@ -4,6 +4,7 @@
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any, cast
 from unittest import mock
 
 import pytest
@@ -699,8 +700,11 @@ class TestTimeHelpers:
             make_session("month", "Month", created_at=(now_value - timedelta(days=20)).astimezone(timezone.utc)),
             make_session("older", "Older", created_at=(now_value - timedelta(days=40)).astimezone(timezone.utc)),
         ]
-        sessions[1].created_at = (now_value - timedelta(hours=2)).astimezone(timezone.utc).timestamp()
-        sessions[2].created_at = int((now_value - timedelta(hours=3)).astimezone(timezone.utc).timestamp() * 1000)
+        sessions[1].created_at = cast(Any, (now_value - timedelta(hours=2)).astimezone(timezone.utc).timestamp())
+        sessions[2].created_at = cast(
+            Any,
+            int((now_value - timedelta(hours=3)).astimezone(timezone.utc).timestamp() * 1000),
+        )
 
         with mock.patch("agent_dump.cli_shared.datetime") as mock_datetime:
             mock_datetime.now.return_value = now_value

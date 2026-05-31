@@ -4,6 +4,7 @@
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any, cast
 from unittest import mock
 
 import pytest
@@ -442,16 +443,16 @@ class TestTimeGrouping:
             Session(
                 id="today-seconds",
                 title="Today seconds",
-                created_at=today_seconds,  # type: ignore[arg-type]
-                updated_at=today_seconds,  # type: ignore[arg-type]
+                created_at=cast(Any, today_seconds),
+                updated_at=cast(Any, today_seconds),
                 source_path=Path("/test/path"),
                 metadata={},
             ),
             Session(
                 id="yesterday-ms",
                 title="Yesterday ms",
-                created_at=yesterday_ms,  # type: ignore[arg-type]
-                updated_at=yesterday_ms,  # type: ignore[arg-type]
+                created_at=cast(Any, yesterday_ms),
+                updated_at=cast(Any, yesterday_ms),
                 source_path=Path("/test/path"),
                 metadata={},
             ),
