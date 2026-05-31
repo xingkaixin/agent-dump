@@ -3,11 +3,11 @@
 """
 
 import json
-import os
-import sqlite3
 from pathlib import Path
+import sqlite3
 
 import pytest
+
 from agent_dump.i18n import i18n
 
 

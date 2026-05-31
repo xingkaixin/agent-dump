@@ -97,6 +97,7 @@ class TestParseUri:
         """测试 Cursor URI 解析"""
         assert parse_uri("cursor://request-001") == ("cursor", "request-001")
 
+
 class TestQueryHelpers:
     def test_render_query_summary_includes_structured_fields(self, tmp_path):
         summary = render_query_summary(
@@ -130,9 +131,7 @@ class TestQueryHelpers:
         with mock.patch("agent_dump.cli_shared.filter_sessions_by_query", side_effect=[[older], [newer]]):
             matched = collect_query_matches([agent_a, agent_b], days=7, spec=make_query_spec(keyword="bug", limit=1))
 
-        assert {name: [session.id for session in sessions] for name, sessions in matched.items()} == {
-            "kimi": ["s-new"]
-        }
+        assert {name: [session.id for session in sessions] for name, sessions in matched.items()} == {"kimi": ["s-new"]}
 
     def test_collect_search_matches_applies_global_rank_sort_and_limit(self):
         older = make_session("s-old", "old", created_at=datetime(2026, 1, 1, 10, 0, 0))
@@ -175,6 +174,7 @@ class TestQueryHelpers:
         assert "2026-01-01" in output
         assert "2.5" in output
         assert "login failed after **auth timeout**" in output
+
 
 class TestFindSessionById:
     """测试 find_session_by_id 函数"""
@@ -237,6 +237,7 @@ class TestFindSessionById:
 
         result = find_session_by_id(scanner, "request-xyz")
         assert result == (cursor_agent, session)
+
 
 class TestExportSessions:
     """测试 export_sessions 函数"""
@@ -359,6 +360,7 @@ class TestExportSessions:
         mock_agent.export_session.assert_called_once_with(session, json_root / "test_agent")
         mock_agent.export_raw_session.assert_called_once_with(session, raw_root / "test_agent")
 
+
 class TestFormatSpec:
     """测试格式解析辅助函数"""
 
@@ -373,6 +375,7 @@ class TestFormatSpec:
     def test_parse_format_spec_rejects_empty_part(self):
         with pytest.raises(ValueError):
             parse_format_spec("json,,raw")
+
 
 class TestRenderSessionText:
     """测试 render_session_text 函数"""
@@ -572,6 +575,7 @@ class TestRenderSessionText:
         assert "## 1. System" in output
         assert "System notice" in output
 
+
 class TestRenderSessionHead:
     """测试 render_session_head 函数"""
 
@@ -617,6 +621,7 @@ class TestRenderSessionHead:
         assert "Model: -" in output
         assert "Subtargets: " + ("B" * 45) + "..." in output
         assert "instruction" not in output
+
 
 class TestTimeHelpers:
     """测试时间相关辅助函数"""
@@ -694,12 +699,8 @@ class TestTimeHelpers:
             make_session("month", "Month", created_at=(now_value - timedelta(days=20)).astimezone(timezone.utc)),
             make_session("older", "Older", created_at=(now_value - timedelta(days=40)).astimezone(timezone.utc)),
         ]
-        setattr(sessions[1], "created_at", (now_value - timedelta(hours=2)).astimezone(timezone.utc).timestamp())
-        setattr(
-            sessions[2],
-            "created_at",
-            int((now_value - timedelta(hours=3)).astimezone(timezone.utc).timestamp() * 1000),
-        )
+        sessions[1].created_at = (now_value - timedelta(hours=2)).astimezone(timezone.utc).timestamp()
+        sessions[2].created_at = int((now_value - timedelta(hours=3)).astimezone(timezone.utc).timestamp() * 1000)
 
         with mock.patch("agent_dump.cli_shared.datetime") as mock_datetime:
             mock_datetime.now.return_value = now_value
@@ -737,6 +738,7 @@ class TestTimeHelpers:
 
         assert [session.id for session in groups["今天"]] == ["today-local"]
         assert [session.id for session in groups["昨天"]] == ["yesterday-local"]
+
 
 class TestDisplaySessionsList:
     """测试 display_sessions_list 函数"""

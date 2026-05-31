@@ -7,6 +7,8 @@ from agent_dump.config import (
     AIConfig,
     CollectConfig,
     ExportConfig,
+    LoggingConfig,
+    ShortcutConfig,
     get_config_path,
     handle_config_command,
     load_ai_config,
@@ -14,12 +16,10 @@ from agent_dump.config import (
     load_export_config,
     load_logging_config,
     load_shortcuts_config,
-    LoggingConfig,
     mask_api_key,
     prompt_edit_config,
-    ShortcutConfig,
-    write_config,
     write_ai_config,
+    write_config,
 )
 
 
@@ -80,12 +80,7 @@ class TestConfigReadWrite:
     def test_load_collect_config_reads_agent_deny_paths(self, tmp_path):
         path = tmp_path / "config.toml"
         path.write_text(
-            (
-                "[collect]\n"
-                "summary_concurrency = 8\n"
-                "\n[agent.claudecode]\n"
-                'deny = [\n  "/repo/a",\n  "/repo/b/sub"\n]\n'
-            ),
+            ('[collect]\nsummary_concurrency = 8\n\n[agent.claudecode]\ndeny = [\n  "/repo/a",\n  "/repo/b/sub"\n]\n'),
             encoding="utf-8",
         )
 
@@ -114,14 +109,7 @@ class TestConfigReadWrite:
     def test_load_collect_config_ignores_invalid_agent_deny(self, tmp_path):
         path = tmp_path / "config.toml"
         path.write_text(
-            (
-                "[collect]\n"
-                "summary_concurrency = 2\n"
-                "\n[agent.claudecode]\n"
-                "deny = bad\n"
-                "\n[agent.codex]\n"
-                "deny = []\n"
-            ),
+            ("[collect]\nsummary_concurrency = 2\n\n[agent.claudecode]\ndeny = bad\n\n[agent.codex]\ndeny = []\n"),
             encoding="utf-8",
         )
 
@@ -131,11 +119,7 @@ class TestConfigReadWrite:
         path = tmp_path / "config.toml"
         log_path = tmp_path / "logs" / "collect.jsonl"
         path.write_text(
-            (
-                "[logging]\n"
-                "enabled = false\n"
-                f'path = "{log_path}"\n'
-            ),
+            (f'[logging]\nenabled = false\npath = "{log_path}"\n'),
             encoding="utf-8",
         )
 
@@ -150,10 +134,7 @@ class TestConfigReadWrite:
     def test_load_export_config_reads_output(self, tmp_path):
         path = tmp_path / "config.toml"
         path.write_text(
-            (
-                "[export]\n"
-                'output = "../exports"\n'
-            ),
+            ('[export]\noutput = "../exports"\n'),
             encoding="utf-8",
         )
 
@@ -162,11 +143,7 @@ class TestConfigReadWrite:
     def test_load_shortcuts_config_reads_shortcuts(self, tmp_path):
         path = tmp_path / "config.toml"
         path.write_text(
-            (
-                "[shortcut.ob]\n"
-                'params = ["date"]\n'
-                'args = ["--collect", "--since", "{date}", "--until", "{date}"]\n'
-            ),
+            ('[shortcut.ob]\nparams = ["date"]\nargs = ["--collect", "--since", "{date}", "--until", "{date}"]\n'),
             encoding="utf-8",
         )
 

@@ -8,6 +8,7 @@ from unittest import mock
 
 import pytest
 
+from agent_dump.agents.base import Session
 from agent_dump.selector import (
     get_time_group,
     group_sessions,
@@ -17,7 +18,6 @@ from agent_dump.selector import (
     select_sessions_interactive,
     select_sessions_simple,
 )
-from agent_dump.agents.base import Session
 
 
 @pytest.fixture

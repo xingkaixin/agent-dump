@@ -146,7 +146,7 @@ class TestKimiAgent:
         kimi_root = agent.base_path.parent
         kimi_root.mkdir(parents=True, exist_ok=True)
         real_cwd = "/workspace/demo-project"
-        project_hash = hashlib.md5(real_cwd.encode("utf-8")).hexdigest()
+        project_hash = hashlib.md5(real_cwd.encode("utf-8")).hexdigest()  # noqa: S324
 
         kimi_json = {
             "work_dirs": [
@@ -185,7 +185,7 @@ class TestKimiAgent:
         agent.base_path = tmp_path / "sessions"
 
         real_cwd = "/workspace/demo-project"
-        project_hash = hashlib.md5(real_cwd.encode("utf-8")).hexdigest()
+        project_hash = hashlib.md5(real_cwd.encode("utf-8")).hexdigest()  # noqa: S324
         session_dir = agent.base_path / project_hash / "session1"
         session_dir.mkdir(parents=True)
 
@@ -412,8 +412,8 @@ class TestKimiAgent:
 
         context_path = session_dir / "context.jsonl"
         wire_path = session_dir / "wire.jsonl"
-        context_path.write_text("{\"role\":\"user\"}\n", encoding="utf-8")
-        wire_path.write_text("{\"wire\":true}\n", encoding="utf-8")
+        context_path.write_text('{"role":"user"}\n', encoding="utf-8")
+        wire_path.write_text('{"wire":true}\n', encoding="utf-8")
 
         session = Session(
             id="test-session",
@@ -436,7 +436,7 @@ class TestKimiAgent:
         session_dir.mkdir()
 
         wire_path = session_dir / "wire.jsonl"
-        wire_path.write_text("{\"wire\":true}\n", encoding="utf-8")
+        wire_path.write_text('{"wire":true}\n', encoding="utf-8")
 
         session = Session(
             id="test-session",
@@ -504,7 +504,7 @@ class TestKimiAgent:
                             "id": "call-001",
                             "function": {
                                 "name": "read_file",
-                                "arguments": "{\"path\": \"/workspace/a.py\"}",
+                                "arguments": '{"path": "/workspace/a.py"}',
                             },
                         },
                         {
@@ -512,7 +512,7 @@ class TestKimiAgent:
                             "id": "call-002",
                             "function": {
                                 "name": "shell",
-                                "arguments": "{\"cmd\": \"pwd\"}",
+                                "arguments": '{"cmd": "pwd"}',
                             },
                         },
                     ],
@@ -545,9 +545,7 @@ class TestKimiAgent:
             {"type": "text", "text": "<system>read ok</system>", "time_created": 0},
             {"type": "text", "text": "file body", "time_created": 0},
         ]
-        assert message["parts"][3]["state"]["output"] == [
-            {"type": "text", "text": "workspace path", "time_created": 0}
-        ]
+        assert message["parts"][3]["state"]["output"] == [{"type": "text", "text": "workspace path", "time_created": 0}]
 
     def test_context_tool_record_with_missing_call_id_becomes_fallback_tool_message(self, tmp_path):
         """测试缺少 tool_call_id 时退化为 fallback tool 消息"""
@@ -566,9 +564,7 @@ class TestKimiAgent:
 
         assert len(result["messages"]) == 2
         assert result["messages"][1]["role"] == "tool"
-        assert result["messages"][1]["parts"] == [
-            {"type": "text", "text": "orphan output", "time_created": 0}
-        ]
+        assert result["messages"][1]["parts"] == [{"type": "text", "text": "orphan output", "time_created": 0}]
 
     def test_context_tool_record_with_unknown_tool_call_id_becomes_fallback_tool_message(self, tmp_path):
         """测试未知 tool_call_id 时退化为 fallback tool 消息"""
@@ -585,7 +581,7 @@ class TestKimiAgent:
                         {
                             "type": "function",
                             "id": "call-001",
-                            "function": {"name": "read_file", "arguments": "{\"path\": \"a.py\"}"},
+                            "function": {"name": "read_file", "arguments": '{"path": "a.py"}'},
                         }
                     ],
                 },
@@ -636,7 +632,7 @@ class TestKimiAgent:
                             "id": "call-001",
                             "function": {
                                 "name": "shell",
-                                "arguments": "{\"cmd\": \"ls\", \"cwd\": \"/workspace\"}",
+                                "arguments": '{"cmd": "ls", "cwd": "/workspace"}',
                             },
                         }
                     ],
@@ -759,7 +755,7 @@ class TestKimiAgent:
                             "id": "todo-001",
                             "function": {
                                 "name": "SetTodoList",
-                                "arguments": "{\"items\": [\"a\"]}",
+                                "arguments": '{"items": ["a"]}',
                             },
                         }
                     ],
@@ -770,9 +766,7 @@ class TestKimiAgent:
         result = agent._get_session_data_from_context(make_session(session_dir))
 
         assert len(result["messages"]) == 1
-        assert result["messages"][0]["parts"] == [
-            {"type": "text", "text": "继续处理", "time_created": 0}
-        ]
+        assert result["messages"][0]["parts"] == [{"type": "text", "text": "继续处理", "time_created": 0}]
 
     def test_context_set_todo_list_tool_output_is_dropped(self, tmp_path):
         """测试 context 中 SetTodoList 的 output 会被直接丢弃"""
@@ -791,7 +785,7 @@ class TestKimiAgent:
                             "id": "todo-001",
                             "function": {
                                 "name": "SetTodoList",
-                                "arguments": "{\"items\": [\"a\"]}",
+                                "arguments": '{"items": ["a"]}',
                             },
                         }
                     ],
@@ -827,7 +821,7 @@ class TestKimiAgent:
                             "id": "read-001",
                             "function": {
                                 "name": "ReadFile",
-                                "arguments": "{\"path\": \"src/main.py\"}",
+                                "arguments": '{"path": "src/main.py"}',
                             },
                         },
                         {
@@ -835,7 +829,7 @@ class TestKimiAgent:
                             "id": "todo-001",
                             "function": {
                                 "name": "SetTodoList",
-                                "arguments": "{\"items\": [\"a\"]}",
+                                "arguments": '{"items": ["a"]}',
                             },
                         },
                     ],
@@ -900,7 +894,7 @@ class TestKimiAgent:
                         "payload": {
                             "type": "function",
                             "id": "call-001",
-                            "function": {"name": "read_file", "arguments": "{\"path\": \"/workspace/a.py\"}"},
+                            "function": {"name": "read_file", "arguments": '{"path": "/workspace/a.py"}'},
                         },
                     },
                 },
@@ -955,7 +949,7 @@ class TestKimiAgent:
                         "payload": {
                             "type": "function",
                             "id": "call-001",
-                            "function": {"name": "read_file", "arguments": "{\"path"},
+                            "function": {"name": "read_file", "arguments": '{"path'},
                         },
                     },
                 },
@@ -963,7 +957,7 @@ class TestKimiAgent:
                     "timestamp": 3.0,
                     "message": {
                         "type": "ToolCallPart",
-                        "payload": {"arguments_part": "\": \"/workspace/a.py\"}"},
+                        "payload": {"arguments_part": '": "/workspace/a.py"}'},
                     },
                 },
             ],
@@ -1040,7 +1034,7 @@ class TestKimiAgent:
                         "payload": {
                             "type": "function",
                             "id": "todo-001",
-                            "function": {"name": "SetTodoList", "arguments": "{\"items\": [\"a\"]}"},
+                            "function": {"name": "SetTodoList", "arguments": '{"items": ["a"]}'},
                         },
                     },
                 },
@@ -1091,7 +1085,7 @@ class TestKimiAgent:
                         "payload": {
                             "type": "function",
                             "id": "todo-001",
-                            "function": {"name": "SetTodoList", "arguments": "{\"items\": [\"a\"]}"},
+                            "function": {"name": "SetTodoList", "arguments": '{"items": ["a"]}'},
                         },
                     },
                 },
@@ -1112,9 +1106,7 @@ class TestKimiAgent:
 
         assert len(result["messages"]) == 2
         assert result["messages"][1]["role"] == "assistant"
-        assert result["messages"][1]["parts"] == [
-            {"type": "text", "text": "继续处理", "time_created": 2000}
-        ]
+        assert result["messages"][1]["parts"] == [{"type": "text", "text": "继续处理", "time_created": 2000}]
         assert "Todo list updated" not in json.dumps(result, ensure_ascii=False)
 
     def test_wire_non_ignored_tools_still_work_with_mapping(self, tmp_path):
@@ -1146,7 +1138,7 @@ class TestKimiAgent:
                         "payload": {
                             "type": "function",
                             "id": "read-001",
-                            "function": {"name": "ReadFile", "arguments": "{\"path\": \"src/main.py\"}"},
+                            "function": {"name": "ReadFile", "arguments": '{"path": "src/main.py"}'},
                         },
                     },
                 },
@@ -1157,7 +1149,7 @@ class TestKimiAgent:
                         "payload": {
                             "type": "function",
                             "id": "todo-001",
-                            "function": {"name": "SetTodoList", "arguments": "{\"items\": [\"a\"]}"},
+                            "function": {"name": "SetTodoList", "arguments": '{"items": ["a"]}'},
                         },
                     },
                 },
@@ -1211,7 +1203,10 @@ class TestKimiAgent:
                     },
                 },
                 {"timestamp": 2.0, "message": {"type": "StepBegin", "payload": {"n": 1}}},
-                {"timestamp": 3.0, "message": {"type": "StatusUpdate", "payload": {"token_usage": {"input_tokens": 1}}}},
+                {
+                    "timestamp": 3.0,
+                    "message": {"type": "StatusUpdate", "payload": {"token_usage": {"input_tokens": 1}}},
+                },
                 {"timestamp": 4.0, "message": {"type": "ApprovalRequest", "payload": {"id": "a"}}},
                 {"timestamp": 5.0, "message": {"type": "ApprovalResponse", "payload": {"id": "a"}}},
                 {"timestamp": 6.0, "message": {"type": "TurnEnd", "payload": {}}},
@@ -1277,7 +1272,7 @@ class TestKimiAgent:
                         {
                             "type": "function",
                             "id": "call-001",
-                            "function": {"name": "read_file", "arguments": "{\"path\": \"/workspace/x.py\"}"},
+                            "function": {"name": "read_file", "arguments": '{"path": "/workspace/x.py"}'},
                         }
                     ],
                 },

@@ -2,12 +2,12 @@
 测试 agents/cursor.py 模块
 """
 
+from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
 import sqlite3
 import sys
-from datetime import datetime, timezone
-from pathlib import Path
 
 from agent_dump.agents.cursor import CursorAgent
 
@@ -201,7 +201,7 @@ class TestCursorAgent:
         session = agent.get_sessions(days=7)[0]
         try:
             agent.export_raw_session(session, tmp_path / "out")
-            assert False, "expected NotImplementedError"
+            raise AssertionError("expected NotImplementedError")
         except NotImplementedError:
             assert True
 
@@ -244,7 +244,12 @@ class TestCursorAgent:
         _insert_kv(
             global_db,
             "bubbleId:composer-order:b-2",
-            {"requestId": "request-order", "type": 2, "text": "second", "timingInfo": {"clientRpcSendTime": now_ms + 20}},
+            {
+                "requestId": "request-order",
+                "type": 2,
+                "text": "second",
+                "timingInfo": {"clientRpcSendTime": now_ms + 20},
+            },
         )
         _insert_kv(
             global_db,
@@ -337,10 +342,7 @@ class TestCursorAgent:
         assert plan_part["approval_status"] == "fail"
         assert plan_part["output"] is None
         tool_names = [
-            part["tool"]
-            for message in data["messages"]
-            for part in message["parts"]
-            if part.get("type") == "tool"
+            part["tool"] for message in data["messages"] for part in message["parts"] if part.get("type") == "tool"
         ]
         assert "create_plan" not in tool_names
 
@@ -496,10 +498,7 @@ class TestCursorAgent:
         data = agent.get_session_data(session)
 
         texts = [
-            part["text"]
-            for message in data["messages"]
-            for part in message["parts"]
-            if part.get("type") == "text"
+            part["text"] for message in data["messages"] for part in message["parts"] if part.get("type") == "text"
         ]
         assert texts == ["hello", "assistant reply"]
         assert "[empty message]" not in texts
@@ -565,11 +564,11 @@ class TestCursorAgent:
         assert agent._to_datetime_utc("bad").tzinfo == timezone.utc
 
         fallback_ms = 100
+        assert agent._extract_timestamp({"createdAt": "2026-01-01T00:00:00Z"}, fallback_ms) == 1767225600000
         assert (
-            agent._extract_timestamp({"createdAt": "2026-01-01T00:00:00Z"}, fallback_ms)
-            == 1767225600000
+            agent._extract_timestamp({"createdAt": "bad", "timingInfo": {"clientSettleTime": "123.0"}}, fallback_ms)
+            == 123
         )
-        assert agent._extract_timestamp({"createdAt": "bad", "timingInfo": {"clientSettleTime": "123.0"}}, fallback_ms) == 123
         assert agent._extract_timestamp({"timingInfo": {"clientRpcSendTime": "bad"}}, fallback_ms) == fallback_ms
 
         assert agent._extract_text_content({"codeBlocks": [{"content": "code"}]}, "user") == "code"

@@ -37,5 +37,14 @@ line-ending = "lf"
 
 # --- 可选：对特定目录放宽规则 ---
 [lint.per-file-ignores]
-"tests/*" = ["S101"]   # 测试里允许 assert
+"tests/*.py" = [
+    "S101",   # 测试里允许 assert
+    "S108",   # 测试样例里允许硬编码临时路径
+    "SIM117", # mock/raises 嵌套在测试里通常更清晰
+]
+"tests/**/*.py" = [
+    "S101",
+    "S108",
+    "SIM117",
+]
 "scripts/*" = ["SIM"]  # 脚本可以更随意

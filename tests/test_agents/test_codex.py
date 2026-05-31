@@ -871,9 +871,7 @@ class TestCodexAgent:
         assert tool_part["time_created"] == 1767225602000
         assert tool_part["title"] == "bash"
         assert tool_part["state"]["arguments"] == {"cmd": "just isok"}
-        assert tool_part["state"]["output"] == [
-            {"type": "text", "text": "ok", "time_created": 1767225603000}
-        ]
+        assert tool_part["state"]["output"] == [{"type": "text", "text": "ok", "time_created": 1767225603000}]
 
     def test_tool_calls_attach_to_latest_assistant_text_until_next_assistant(self, tmp_path):
         """测试 tool 会归属到最近一条 assistant text，直到下一个 assistant text"""
@@ -1089,9 +1087,7 @@ class TestCodexAgent:
         assert notification_message["role"] == "assistant"
         assert notification_message["nickname"] == "Laplace"
         assert notification_message["subagent_id"] == "agent-001"
-        assert notification_message["parts"] == [
-            {"type": "text", "text": "最终结论", "time_created": 1767225603000}
-        ]
+        assert notification_message["parts"] == [{"type": "text", "text": "最终结论", "time_created": 1767225603000}]
 
     def test_multiple_subagents_do_not_cross_nickname_mapping(self, tmp_path):
         """测试多个 subagent 并存时 nickname 按 agent_id 匹配不串线"""
@@ -1462,9 +1458,7 @@ class TestCodexAgent:
         message = result["messages"][0]
         assert message["role"] == "tool"
         assert message["tool_call_id"] == "call-999"
-        assert message["parts"] == [
-            {"type": "text", "text": "orphan output", "time_created": 1767225600000}
-        ]
+        assert message["parts"] == [{"type": "text", "text": "orphan output", "time_created": 1767225600000}]
 
     def test_custom_apply_patch_tool_is_structured_and_backfilled(self, tmp_path):
         """测试 apply_patch 会解析为 patch tool，并回填 custom output"""
@@ -1672,9 +1666,7 @@ class TestCodexAgent:
         message = result["messages"][0]
         assert message["role"] == "tool"
         assert message["tool_call_id"] == "call-patch-404"
-        assert message["parts"] == [
-            {"type": "text", "text": "orphan custom output", "time_created": 1767225600000}
-        ]
+        assert message["parts"] == [{"type": "text", "text": "orphan custom output", "time_created": 1767225600000}]
 
     def test_plan_part_merges_rejected_user_response(self, tmp_path):
         """测试 plan 会合并后续拒绝 user 响应，并移除该 user 消息"""
@@ -1753,9 +1745,7 @@ class TestCodexAgent:
                 "payload": {
                     "type": "message",
                     "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": "PLEASE IMPLEMENT THIS PLAN:\n# 方案\n\n直接实现"}
-                    ],
+                    "content": [{"type": "input_text", "text": "PLEASE IMPLEMENT THIS PLAN:\n# 方案\n\n直接实现"}],
                 },
             },
         ]
@@ -1790,9 +1780,7 @@ class TestCodexAgent:
                     "payload": {
                         "type": "message",
                         "role": "assistant",
-                        "content": [
-                            {"type": "output_text", "text": "<proposed_plan>\n只做这一项\n</proposed_plan>"}
-                        ],
+                        "content": [{"type": "output_text", "text": "<proposed_plan>\n只做这一项\n</proposed_plan>"}],
                     },
                 }
             )
@@ -1862,12 +1850,7 @@ class TestCodexAgent:
 
         result = agent.get_session_data(session)
 
-        plan_parts = [
-            part
-            for message in result["messages"]
-            for part in message["parts"]
-            if part.get("type") == "plan"
-        ]
+        plan_parts = [part for message in result["messages"] for part in message["parts"] if part.get("type") == "plan"]
         assert len(plan_parts) == 2
         first_plan, second_plan = plan_parts
         assert first_plan["input"] == "plan a"
@@ -2179,9 +2162,7 @@ class TestCodexAgent:
         with open(result, encoding="utf-8") as f:
             exported = json.load(f)
 
-        exported_tool_names = [
-            part["tool"] for part in exported["messages"][0]["parts"] if part["type"] == "tool"
-        ]
+        exported_tool_names = [part["tool"] for part in exported["messages"][0]["parts"] if part["type"] == "tool"]
         assert exported_tool_names == ["subagent"]
 
     def test_skill_message_transforms_only_in_json_export(self, tmp_path):

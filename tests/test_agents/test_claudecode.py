@@ -862,9 +862,7 @@ class TestClaudeCodeAgent:
 
         assert len(result["messages"]) == 1
         assert result["messages"][0]["role"] == "assistant"
-        assert result["messages"][0]["parts"] == [
-            {"type": "text", "text": "先分析一下", "time_created": 1767225600000}
-        ]
+        assert result["messages"][0]["parts"] == [{"type": "text", "text": "先分析一下", "time_created": 1767225600000}]
 
     def test_get_session_data_backfills_regular_tool_output(self, tmp_path):
         """测试普通工具输出会回填到 assistant tool part。"""
@@ -1198,9 +1196,7 @@ class TestClaudeCodeAgent:
 
         assert len(result["messages"]) == 2
         assert result["messages"][1]["role"] == "user"
-        assert result["messages"][1]["parts"] == [
-            {"type": "text", "text": "请继续", "time_created": 1767225601000}
-        ]
+        assert result["messages"][1]["parts"] == [{"type": "text", "text": "请继续", "time_created": 1767225601000}]
         assert result["messages"][0]["parts"][0]["state"]["output"] == [
             {"type": "text", "text": "file content", "time_created": 1767225601000}
         ]
@@ -1363,7 +1359,7 @@ class TestClaudeCodeAgent:
                             {
                                 "type": "tool_result",
                                 "tool_use_id": "call-get",
-                                "content": "{\"iid\":\"600999.SH\"}",
+                                "content": '{"iid":"600999.SH"}',
                             }
                         ],
                     },
@@ -1395,7 +1391,7 @@ class TestClaudeCodeAgent:
                             {
                                 "type": "tool_result",
                                 "tool_use_id": "call-quote",
-                                "content": "[{\"最新价\":\"16.93\"}]",
+                                "content": '[{"最新价":"16.93"}]',
                             }
                         ],
                     },
@@ -1427,8 +1423,8 @@ class TestClaudeCodeAgent:
         assert exported["messages"][2]["parts"][0]["tool"] == "Skill"
         assert exported["messages"][2]["parts"][0]["state"]["status"] == "success"
         assert exported["messages"][3]["parts"][0]["state"]["output"] == [
-            {"type": "text", "text": "{\"iid\":\"600999.SH\"}", "time_created": 1770884831000}
+            {"type": "text", "text": '{"iid":"600999.SH"}', "time_created": 1770884831000}
         ]
         assert exported["messages"][4]["parts"][0]["state"]["output"] == [
-            {"type": "text", "text": "[{\"最新价\":\"16.93\"}]", "time_created": 1770884835000}
+            {"type": "text", "text": '[{"最新价":"16.93"}]', "time_created": 1770884835000}
         ]

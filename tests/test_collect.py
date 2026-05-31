@@ -353,7 +353,9 @@ class TestCollectEntries:
         agent.display_name = "OpenCode"
         agent.get_sessions.return_value = [session]
         agent.get_session_uri.return_value = "opencode://cross-day"
-        agent.get_session_data.return_value = {"messages": [{"role": "user", "parts": [{"type": "text", "text": "修复"}]}]}
+        agent.get_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "修复"}]}]
+        }
 
         entries, truncated = collect_entries(
             agents=[agent],
@@ -567,7 +569,7 @@ class TestCollectStructuredSummary:
     def test_request_structured_summary_from_llm_parses_json_fence(self):
         with mock.patch(
             "agent_dump.collect.request_structured_summary_payload_from_llm",
-            return_value="```json\n{\"topics\":[\"A\"]}\n```",
+            return_value='```json\n{"topics":["A"]}\n```',
         ):
             result = request_structured_summary_from_llm(
                 self._config(),
@@ -624,7 +626,14 @@ class TestCollectStructuredSummary:
             )
 
         records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
-        assert [record["event"] for record in records] == ["llm_request", "llm_response", "llm_parse_error", "llm_request", "llm_response", "llm_parse_error"]
+        assert [record["event"] for record in records] == [
+            "llm_request",
+            "llm_response",
+            "llm_parse_error",
+            "llm_request",
+            "llm_response",
+            "llm_parse_error",
+        ]
         assert records[-1]["session_uri"] == "codex://s-1"
         assert records[-1]["phase"] == "chunk_summary"
         assert records[-1]["response_preview"] == "not json"
@@ -650,7 +659,12 @@ class TestCollectStructuredSummary:
 
         records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
         assert result["topics"] == ["A"]
-        assert [record["event"] for record in records] == ["llm_request", "llm_request_error", "llm_request", "llm_response"]
+        assert [record["event"] for record in records] == [
+            "llm_request",
+            "llm_request_error",
+            "llm_request",
+            "llm_response",
+        ]
 
     def test_build_collect_session_prompt_contains_required_sections(self):
         prompt = build_collect_session_prompt(self._entry(), source_truncated=False)
@@ -670,7 +684,9 @@ class TestCollectStructuredSummary:
                 return '{"topics":["T1"],"key_actions":["A1"]}'
             return '{"topics":["T2"],"errors":["E2"]}'
 
-        with mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect):
+        with mock.patch(
+            "agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect
+        ):
             summaries = summarize_collect_entries(
                 config=self._config(),
                 planned_entries=[entry1, entry2],
@@ -1057,7 +1073,9 @@ class TestCollectInsightMode:
         )
         with mock.patch("urllib.request.urlopen", return_value=response) as mock_urlopen:
             result = request_structured_summary_payload_from_llm(
-                config, "prompt", summary_fields=INSIGHT_SUMMARY_FIELDS,
+                config,
+                "prompt",
+                summary_fields=INSIGHT_SUMMARY_FIELDS,
             )
 
         assert result == '{"scene":["S1"],"stuck":[],"turning":["L1"]}'

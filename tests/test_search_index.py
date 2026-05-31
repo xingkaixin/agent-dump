@@ -4,12 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
-import pytest
-
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.search_index import (
     SearchIndex,
-    SearchResult,
     _build_fts_query,
     _extract_related_source_paths,
     _extract_session_searchable_text,
@@ -154,45 +151,58 @@ class TestExtractSourceMtime:
 
 class TestExtractSessionSearchableText:
     def test_extracts_text_parts(self):
-        agent = DummyAgent(session_data={
-            "s1": {
-                "messages": [
-                    {"role": "user", "parts": [{"type": "text", "text": "Hello world"}]},
-                    {"role": "assistant", "parts": [{"type": "text", "text": "Hi there"}]},
-                ]
+        agent = DummyAgent(
+            session_data={
+                "s1": {
+                    "messages": [
+                        {"role": "user", "parts": [{"type": "text", "text": "Hello world"}]},
+                        {"role": "assistant", "parts": [{"type": "text", "text": "Hi there"}]},
+                    ]
+                }
             }
-        })
+        )
         session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
         text = _extract_session_searchable_text(agent, session)
         assert "Hello world" in text
         assert "Hi there" in text
 
     def test_extracts_reasoning(self):
-        agent = DummyAgent(session_data={
-            "s1": {
-                "messages": [
-                    {"role": "assistant", "parts": [{"type": "reasoning", "text": "Let me think"}]},
-                ]
+        agent = DummyAgent(
+            session_data={
+                "s1": {
+                    "messages": [
+                        {"role": "assistant", "parts": [{"type": "reasoning", "text": "Let me think"}]},
+                    ]
+                }
             }
-        })
+        )
         session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
         text = _extract_session_searchable_text(agent, session)
         assert "Let me think" in text
 
     def test_extracts_tool_state(self):
-        agent = DummyAgent(session_data={
-            "s1": {
-                "messages": [
-                    {"role": "assistant", "parts": [
-                        {"type": "tool", "tool": "bash", "state": {
-                            "arguments": {"command": "ls -la"},
-                            "output": [{"type": "text", "text": "file1.txt"}],
-                            "prompt": "run bash",
-                        }}
-                    ]}
-                ]
+        agent = DummyAgent(
+            session_data={
+                "s1": {
+                    "messages": [
+                        {
+                            "role": "assistant",
+                            "parts": [
+                                {
+                                    "type": "tool",
+                                    "tool": "bash",
+                                    "state": {
+                                        "arguments": {"command": "ls -la"},
+                                        "output": [{"type": "text", "text": "file1.txt"}],
+                                        "prompt": "run bash",
+                                    },
+                                }
+                            ],
+                        }
+                    ]
+                }
             }
-        })
+        )
         session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
         text = _extract_session_searchable_text(agent, session)
         assert "ls -la" in text
@@ -211,9 +221,9 @@ class TestExtractSessionSearchableText:
 class TestSearchIndex:
     def test_incremental_adds_new_sessions(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword hit"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword hit"}]}]}}
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -228,9 +238,9 @@ class TestSearchIndex:
 
     def test_incremental_skips_unchanged(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}}
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -243,9 +253,9 @@ class TestSearchIndex:
         import time
 
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "old"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "old"}]}]}}
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -261,10 +271,12 @@ class TestSearchIndex:
 
     def test_incremental_caches_source_mtime_within_update(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "one"}]}]},
-            "s2": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "two"}]}]},
-        })
+        agent = DummyAgent(
+            session_data={
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "one"}]}]},
+                "s2": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "two"}]}]},
+            }
+        )
         shared_source = tmp_path / "shared.db"
         shared_source.write_text("data")
         session1 = make_session("s1", "Test 1", shared_source)
@@ -277,9 +289,9 @@ class TestSearchIndex:
 
     def test_delete_stale_sessions(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}}
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -293,9 +305,11 @@ class TestSearchIndex:
 
     def test_search_multi_keyword(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "error timeout bug"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "error timeout bug"}]}]}
+            }
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -306,9 +320,11 @@ class TestSearchIndex:
 
     def test_search_cjk(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "修复认证模块的问题"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "修复认证模块的问题"}]}]}
+            }
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -325,9 +341,18 @@ class TestSearchIndex:
 
     def test_search_snippet(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "the quick brown fox jumps over the lazy dog"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={
+                "s1": {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "parts": [{"type": "text", "text": "the quick brown fox jumps over the lazy dog"}],
+                        }
+                    ]
+                }
+            }
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -340,12 +365,14 @@ class TestSearchIndex:
 
     def test_search_with_agent_filter(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent1 = DummyAgent(name="codex", session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "codex keyword"}]}]}
-        })
-        agent2 = DummyAgent(name="kimi", session_data={
-            "s2": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "kimi keyword"}]}]}
-        })
+        agent1 = DummyAgent(
+            name="codex",
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "codex keyword"}]}]}},
+        )
+        agent2 = DummyAgent(
+            name="kimi",
+            session_data={"s2": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "kimi keyword"}]}]}},
+        )
         session1 = make_session("s1", "Test1", tmp_path / "s1.jsonl")
         session2 = make_session("s2", "Test2", tmp_path / "s2.jsonl")
         session1.source_path.write_text("data")
@@ -360,9 +387,9 @@ class TestSearchIndex:
 
     def test_clear_agent(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}}
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -375,9 +402,9 @@ class TestSearchIndex:
 
     def test_rebuild(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}}
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -388,9 +415,9 @@ class TestSearchIndex:
 
     def test_get_stats(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}}
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
 
@@ -414,9 +441,11 @@ class TestQueryFilterIntegration:
         from agent_dump.query_filter import filter_sessions
 
         index = SearchIndex(tmp_path / "index.db")
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "indexed keyword"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "indexed keyword"}]}]}
+            }
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("data")
         index.update(agent, [session])
@@ -428,9 +457,11 @@ class TestQueryFilterIntegration:
     def test_filter_sessions_fallback_when_index_fails(self, tmp_path):
         from agent_dump.query_filter import filter_sessions
 
-        agent = DummyAgent(session_data={
-            "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "fallback keyword"}]}]}
-        })
+        agent = DummyAgent(
+            session_data={
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "fallback keyword"}]}]}
+            }
+        )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("fallback keyword")
 
