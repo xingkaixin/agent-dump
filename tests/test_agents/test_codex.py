@@ -62,6 +62,7 @@ class TestCodexAgent:
             claude_root=tmp_path / ".claude",
             kimi_root=tmp_path / ".kimi",
             opencode_root=tmp_path / ".local" / "share" / "opencode",
+            pi_root=tmp_path / ".pi",
         )
 
         with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):
@@ -93,6 +94,7 @@ class TestCodexAgent:
             claude_root=tmp_path / ".claude",
             kimi_root=tmp_path / ".kimi",
             opencode_root=tmp_path / ".local" / "share" / "opencode",
+            pi_root=tmp_path / ".pi",
         )
 
         with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):
@@ -128,6 +130,7 @@ class TestCodexAgent:
             claude_root=tmp_path / ".claude",
             kimi_root=tmp_path / ".kimi",
             opencode_root=tmp_path / ".local" / "share" / "opencode",
+            pi_root=tmp_path / ".pi",
         )
 
         with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):

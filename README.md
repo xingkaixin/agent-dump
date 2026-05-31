@@ -11,6 +11,7 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 - **Codex** - OpenAI's command-line AI coding assistant
 - **Kimi** - Moonshot AI assistant
 - **Cursor** - Cursor composer sessions
+- **Pi** - Earendil's AI coding agent
 - **More Tools** - PRs are welcome to support other AI coding tools
 
 ## Features
@@ -38,6 +39,7 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **OpenCode**: `XDG_DATA_HOME/opencode` -> Windows data directory (`LOCALAPPDATA/opencode` or `APPDATA/opencode`) -> `~/.local/share/opencode` -> `data/opencode`
 - **Cursor**: `CURSOR_DATA_PATH` or Cursor's default user `workspaceStorage`, with `globalStorage/state.vscdb`
+- **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
 
 Notes:
 
@@ -138,6 +140,7 @@ Supported URI schemes:
 - `kimi://<session_id>` - Kimi sessions
 - `claude://<session_id>` - Claude Code sessions
 - `cursor://<requestid>` - Cursor sessions (`requestid` is used as URI identifier)
+- `pi://<session_id>` - Pi sessions
 
 ### Typical Errors
 
@@ -215,6 +218,7 @@ uv run agent-dump codex://<session-id>        # View Codex session content
 uv run agent-dump kimi://<session-id>         # View Kimi session content
 uv run agent-dump claude://<session-id>       # View Claude Code session content
 uv run agent-dump cursor://<request-id>       # View Cursor session content
+uv run agent-dump pi://<session-id>           # View Pi session content
 uv run agent-dump codex://<session-id> --head # View lightweight session metadata before exporting
 uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
 uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file
@@ -317,6 +321,7 @@ The top-level public API matches `agent_dump.__all__`:
 | `KimiAgent` | Kimi provider |
 | `ClaudeCodeAgent` | Claude Code provider |
 | `CursorAgent` | Cursor provider |
+| `PiAgent` | Pi provider |
 
 ```python
 from pathlib import Path
@@ -405,7 +410,8 @@ deny = [
 │           ├── claudecode.py   # Claude Code Agent
 │           ├── codex.py        # Codex Agent
 │           ├── cursor.py       # Cursor Agent
-│           └── kimi.py         # Kimi Agent
+│           ├── kimi.py         # Kimi Agent
+│           └── pi.py           # Pi Agent
 ├── tests/                      # Test directory
 ├── skills/agent-dump/          # Codex skill docs
 ├── npm/                        # npm wrapper and platform packages

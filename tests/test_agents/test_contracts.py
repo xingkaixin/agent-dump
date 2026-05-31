@@ -19,6 +19,7 @@ from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
+from agent_dump.agents.pi import PiAgent
 from agent_dump.diagnostics import DiagnosticFileNotFoundError
 from agent_dump.rendering import export_session_in_format, format_session_metadata_summary, render_session_head
 
@@ -277,7 +278,7 @@ def _build_kimi_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Pro
     kimi_root = tmp_path / "kimi-root"
     sessions_root = kimi_root / "sessions"
     cwd = "/workspace/kimi-contract"
-    project_hash = hashlib.md5(cwd.encode("utf-8")).hexdigest()
+    project_hash = hashlib.md5(cwd.encode("utf-8")).hexdigest()  # noqa: S324
     session_dir = sessions_root / project_hash / "kimi-contract"
     session_dir.mkdir(parents=True)
     monkeypatch.setenv("KIMI_SHARE_DIR", str(kimi_root))
@@ -466,12 +467,74 @@ def _build_cursor_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> P
     )
 
 
+def _build_pi_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ProviderContractFixture:
+    now = datetime.now(timezone.utc)
+    pi_home = tmp_path / "pi-home"
+    sessions_dir = pi_home / "agent" / "sessions" / "--workspace-pi-contract--"
+    sessions_dir.mkdir(parents=True)
+    monkeypatch.setenv("PI_HOME", str(pi_home))
+
+    session_path = sessions_dir / "20260101_pi-contract.jsonl"
+    _write_jsonl(
+        session_path,
+        [
+            {
+                "type": "session",
+                "version": 3,
+                "id": "pi-contract",
+                "timestamp": now.isoformat(),
+                "cwd": "/workspace/pi-contract",
+            },
+            {
+                "type": "message",
+                "id": "pi-user",
+                "parentId": None,
+                "timestamp": now.isoformat(),
+                "message": {"role": "user", "content": "Pi prompt"},
+            },
+            {
+                "type": "session_info",
+                "id": "pi-info",
+                "parentId": "pi-user",
+                "timestamp": now.isoformat(),
+                "name": "Pi Contract",
+            },
+            {
+                "type": "message",
+                "id": "pi-assistant",
+                "parentId": "pi-user",
+                "timestamp": now.isoformat(),
+                "message": {
+                    "role": "assistant",
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "content": [{"type": "text", "text": "Pi answer"}],
+                },
+            },
+        ],
+    )
+
+    return ProviderContractFixture(
+        agent=PiAgent(),
+        session_id="pi-contract",
+        uri="pi://pi-contract",
+        title="Pi Contract",
+        location="/workspace/pi-contract",
+        model="claude-sonnet-4-5",
+        head_message_count=2,
+        data_message_count=2,
+        texts=("Pi prompt", "Pi answer"),
+        remove_source=lambda: session_path.unlink(),
+    )
+
+
 CONTRACT_BUILDERS: tuple[ProviderBuilder, ...] = (
     _build_codex_contract,
     _build_claude_contract,
     _build_kimi_contract,
     _build_opencode_contract,
     _build_cursor_contract,
+    _build_pi_contract,
 )
 
 

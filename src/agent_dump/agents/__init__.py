@@ -8,6 +8,7 @@ from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
+from agent_dump.agents.pi import PiAgent
 
 __all__ = [
     "BaseAgent",
@@ -17,4 +18,5 @@ __all__ = [
     "KimiAgent",
     "ClaudeCodeAgent",
     "CursorAgent",
+    "PiAgent",
 ]

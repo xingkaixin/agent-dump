@@ -72,6 +72,7 @@ class ProviderRoots:
     claude_root: Path
     kimi_root: Path
     opencode_root: Path
+    pi_root: Path
 
     @classmethod
     def from_env_or_home(
@@ -89,6 +90,7 @@ class ProviderRoots:
         codex_root = _get_env_path(resolved_environ, "CODEX_HOME") or resolved_home / ".codex"
         claude_root = _get_env_path(resolved_environ, "CLAUDE_CONFIG_DIR") or resolved_home / ".claude"
         kimi_root = _get_env_path(resolved_environ, "KIMI_SHARE_DIR") or resolved_home / ".kimi"
+        pi_root = _get_env_path(resolved_environ, "PI_HOME") or resolved_home / ".pi"
         data_home = _get_data_home(
             home=resolved_home,
             environ=resolved_environ,
@@ -101,4 +103,5 @@ class ProviderRoots:
             claude_root=claude_root,
             kimi_root=kimi_root,
             opencode_root=opencode_root,
+            pi_root=pi_root,
         )

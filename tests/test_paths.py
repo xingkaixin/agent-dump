@@ -15,6 +15,7 @@ class TestProviderRoots:
             "CODEX_HOME": str(tmp_path / "codex-home"),
             "CLAUDE_CONFIG_DIR": str(tmp_path / "claude-home"),
             "KIMI_SHARE_DIR": str(tmp_path / "kimi-home"),
+            "PI_HOME": str(tmp_path / "pi-home"),
             "XDG_DATA_HOME": str(tmp_path / "xdg-data"),
         }
 
@@ -27,6 +28,7 @@ class TestProviderRoots:
         assert roots.codex_root == tmp_path / "codex-home"
         assert roots.claude_root == tmp_path / "claude-home"
         assert roots.kimi_root == tmp_path / "kimi-home"
+        assert roots.pi_root == tmp_path / "pi-home"
         assert roots.opencode_root == tmp_path / "xdg-data" / "opencode"
 
     def test_ignores_empty_env_values(self, tmp_path):
@@ -36,6 +38,7 @@ class TestProviderRoots:
                 "CODEX_HOME": "",
                 "CLAUDE_CONFIG_DIR": "",
                 "KIMI_SHARE_DIR": "",
+                "PI_HOME": "",
                 "XDG_DATA_HOME": "",
             },
             is_windows=False,
@@ -44,6 +47,7 @@ class TestProviderRoots:
         assert roots.codex_root == tmp_path / "home" / ".codex"
         assert roots.claude_root == tmp_path / "home" / ".claude"
         assert roots.kimi_root == tmp_path / "home" / ".kimi"
+        assert roots.pi_root == tmp_path / "home" / ".pi"
         assert roots.opencode_root == tmp_path / "home" / ".local" / "share" / "opencode"
 
     def test_uses_local_app_data_on_windows(self, tmp_path):
@@ -74,6 +78,7 @@ class TestProviderRoots:
         assert roots.codex_root == tmp_path / "home" / ".codex"
         assert roots.claude_root == tmp_path / "home" / ".claude"
         assert roots.kimi_root == tmp_path / "home" / ".kimi"
+        assert roots.pi_root == tmp_path / "home" / ".pi"
         assert roots.opencode_root == tmp_path / "home" / ".local" / "share" / "opencode"
 
 

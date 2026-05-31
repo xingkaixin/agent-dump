@@ -35,6 +35,7 @@ def test_top_level_public_api_matches_declared_exports() -> None:
         "KimiAgent",
         "ClaudeCodeAgent",
         "CursorAgent",
+        "PiAgent",
     }
 
     assert set(agent_dump.__all__) == expected_exports

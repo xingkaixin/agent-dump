@@ -80,6 +80,7 @@ class TestClaudeCodeAgent:
             claude_root=tmp_path / "missing-claude-root",
             kimi_root=tmp_path / ".kimi",
             opencode_root=tmp_path / ".local" / "share" / "opencode",
+            pi_root=tmp_path / ".pi",
         )
 
         with mock.patch("agent_dump.agents.claudecode.ProviderRoots.from_env_or_home", return_value=roots):

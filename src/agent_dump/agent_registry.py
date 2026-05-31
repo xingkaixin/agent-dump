@@ -9,6 +9,7 @@ from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
+from agent_dump.agents.pi import PiAgent
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,13 @@ AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
         uri_schemes=("cursor",),
         location_line="  - Cursor: CURSOR_DATA_PATH or ~/Library/Application Support/Cursor/User/*",
     ),
+    AgentRegistration(
+        name="pi",
+        display_name="Pi",
+        factory=PiAgent,
+        uri_schemes=("pi",),
+        location_line="  - Pi: PI_HOME/agent/sessions or ~/.pi/agent/sessions",
+    ),
 )
 
 
@@ -74,13 +82,16 @@ def get_uri_scheme_map() -> dict[str, str]:
 def get_supported_agent_locations() -> list[str]:
     """Return storage location help text for all supported agents."""
     lines = [registration.location_line for registration in AGENT_REGISTRATIONS]
-    lines.append("  - Local development fallback: data/opencode, data/codex, data/kimi, data/claudecode")
+    lines.append("  - Local development fallback: data/opencode, data/codex, data/kimi, data/claudecode, data/pi")
     return lines
 
 
 def get_supported_uri_examples() -> list[str]:
     """Return user-facing URI examples."""
-    examples = [f"  - {scheme}://<session_id>" for scheme in get_uri_scheme_map()]
-    examples.insert(2, "  - codex://threads/<session_id>")
-    examples[-1] = "  - cursor://<requestid>"
+    examples = []
+    for scheme in get_uri_scheme_map():
+        identifier = "<requestid>" if scheme == "cursor" else "<session_id>"
+        examples.append(f"  - {scheme}://{identifier}")
+        if scheme == "codex":
+            examples.append("  - codex://threads/<session_id>")
     return examples

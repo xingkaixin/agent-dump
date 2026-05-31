@@ -38,6 +38,7 @@ uv run agent-dump codex://threads/<session_id>
 uv run agent-dump kimi://<session_id>
 uv run agent-dump claude://<session_id>
 uv run agent-dump cursor://<request_id>
+uv run agent-dump pi://<session_id>
 
 # 导出单会话
 uv run agent-dump codex://<session_id> --format json --output ./my-sessions
@@ -101,6 +102,7 @@ uv run agent-dump --config edit
 - `kimi`
 - `claudecode`
 - `cursor`
+- `pi`
 
 示例：
 
@@ -170,6 +172,7 @@ uv run agent-dump --search "auth" --list -days 30
    - `kimi://<session_id>`
    - `claude://<session_id>`
    - `cursor://<request_id>`
+   - `pi://<session_id>`
 2. 确认 `<session_id>` 非空。
 
 ### URI 协议与实际会话来源不匹配
@@ -206,7 +209,7 @@ uv run agent-dump --search "auth" --list -days 30
 
 处理：
 1. 改为 `keyword` 或 `agent1,agent2:keyword`。
-2. 将 agent 名称改为 `opencode/codex/kimi/claudecode/cursor` 中的合法值。
+2. 将 agent 名称改为 `opencode/codex/kimi/claudecode/cursor/pi` 中的合法值。
 
 ### collect 模式参数冲突
 

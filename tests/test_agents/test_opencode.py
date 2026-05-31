@@ -47,6 +47,7 @@ class TestOpenCodeAgent:
             claude_root=tmp_path / ".claude",
             kimi_root=tmp_path / ".kimi",
             opencode_root=opencode_root,
+            pi_root=tmp_path / ".pi",
         )
 
         with mock.patch("agent_dump.agents.opencode.ProviderRoots.from_env_or_home", return_value=roots):
@@ -67,6 +68,7 @@ class TestOpenCodeAgent:
             claude_root=tmp_path / ".claude",
             kimi_root=tmp_path / ".kimi",
             opencode_root=opencode_root,
+            pi_root=tmp_path / ".pi",
         )
 
         with mock.patch("agent_dump.agents.opencode.ProviderRoots.from_env_or_home", return_value=roots):
@@ -87,6 +89,7 @@ class TestOpenCodeAgent:
             claude_root=tmp_path / ".claude",
             kimi_root=tmp_path / ".kimi",
             opencode_root=tmp_path / "missing-opencode-root",
+            pi_root=tmp_path / ".pi",
         )
 
         with mock.patch("agent_dump.agents.opencode.ProviderRoots.from_env_or_home", return_value=roots):

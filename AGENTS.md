@@ -53,6 +53,7 @@
 | `KimiAgent` | `agent_dump.agents.kimi` | Kimi provider |
 | `ClaudeCodeAgent` | `agent_dump.agents.claudecode` | Claude Code provider |
 | `CursorAgent` | `agent_dump.agents.cursor` | Cursor provider |
+| `PiAgent` | `agent_dump.agents.pi` | Pi provider |
 
 ### 2.2 内部实现（Internal Implementation）
 
@@ -189,6 +190,7 @@ agent-dump/
 │       ├── kimi.py              # Kimi JSONL provider
 │       ├── claudecode.py        # Claude Code JSONL provider
 │       ├── cursor.py            # Cursor SQLite provider
+│       ├── pi.py                # Pi JSONL provider
 │       ├── jsonl_scan.py        # JSONL 扫描辅助
 │       └── title_fallback.py    # 标题回退策略
 ├── tests/
@@ -273,6 +275,7 @@ class BaseAgent(ABC):
 | `kimi` | Kimi | `kimi://` |
 | `claudecode` | Claude Code | `claude://` |
 | `cursor` | Cursor | `cursor://` |
+| `pi` | Pi | `pi://` |
 
 `AgentScanner` 只从 registry 创建 provider。新增 provider 的入口是 registry。
 
@@ -361,7 +364,7 @@ collect 模式入口：
   - OpenCode 使用 `tmp_path` 创建临时 SQLite 数据库。
   - Cursor 使用 `tmp_path` 创建临时 `state.vscdb` 与 workspaceStorage。
   - Codex / Kimi / Claude Code 使用 `tmp_path` 创建临时 JSONL 文件。
-  - 使用 `monkeypatch` 注入 `CODEX_HOME`、`KIMI_SHARE_DIR`、`CLAUDE_CONFIG_DIR`、`CURSOR_DATA_PATH` 或 `Path.home()`。
+  - 使用 `monkeypatch` 注入 `CODEX_HOME`、`KIMI_SHARE_DIR`、`CLAUDE_CONFIG_DIR`、`CURSOR_DATA_PATH`、`PI_HOME` 或 `Path.home()`。
 
 - **不允许真实访问用户目录**：
   - 禁止读取真实 `~/.codex`、`~/.claude`、`~/.kimi`、`~/.local/share/opencode`、Cursor 用户目录。
@@ -433,6 +436,13 @@ just lint-format   # ruff format
 - 存储：SQLite `cursorDiskKV`
 - URI：`cursor://<requestid>`
 - 能力边界：Cursor URI 支持 `json` 与 `print`
+
+### 8.6 Pi
+
+- 路径：`PI_HOME/agent/sessions`、`~/.pi/agent/sessions`、`data/pi`
+- 存储：JSONL
+- URI：`pi://<session_id>`
+- 当前格式：首行为 `type=session` header，后续 entry 通过 `id` / `parentId` 形成树形结构
 
 ---
 
