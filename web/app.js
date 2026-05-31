@@ -4,9 +4,9 @@ const translations = {
     eyebrow: "CLI · AI Session Export",
     heroTitle: "Export AI coding sessions.",
     heroDescription:
-      "List, dump, export, summarize, and search sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor.",
+      "List, dump, export, summarize, and search sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.",
     answerSummary:
-      "Agent Dump gives developers one command-line interface for local AI coding session history across five tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.",
+      "Agent Dump gives developers one command-line interface for local AI coding session history across six tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.",
     versionLabel: "Version",
     installHeading: "Install",
     installGlobalLabel: "Install globally",
@@ -14,7 +14,7 @@ const translations = {
     skillNote: "Or add as an agent skill:",
     capabilitiesHeading: "What Agent Dump does",
     capabilityProviders:
-      "Reads local sessions from Codex, Claude Code, Kimi, OpenCode, and Cursor.",
+      "Reads local sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.",
     capabilityExport:
       "Exports sessions as JSON, Markdown, raw files, or direct terminal output.",
     capabilitySearch:
@@ -24,10 +24,10 @@ const translations = {
     faqHeading: "Agent Dump FAQ",
     faqWhatQuestion: "What is Agent Dump?",
     faqWhatAnswer:
-      "Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, Kimi, OpenCode, and Cursor so developers can inspect session history from one CLI.",
+      "Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi so developers can inspect session history from one CLI.",
     faqSupportQuestion: "Which AI coding tools does Agent Dump support?",
     faqSupportAnswer:
-      "Agent Dump supports Codex, Claude Code, Kimi, OpenCode, and Cursor. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows.",
+      "Agent Dump supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows.",
     faqInstallQuestion: "How do you install Agent Dump?",
     faqInstallAnswer:
       "Install Agent Dump globally with uv tool install agent-dump or npm install -g @agent-dump/cli. You can also run it directly with uvx agent-dump --help, npx @agent-dump/cli --help, or bunx @agent-dump/cli --help.",
@@ -40,9 +40,9 @@ const translations = {
     eyebrow: "CLI · AI 会话导出",
     heroTitle: "导出 AI 编码会话。",
     heroDescription:
-      "一条 CLI 统一处理 Codex、Claude Code、Kimi、OpenCode 和 Cursor 的列表、直读、导出、汇总、搜索与统计。",
+      "一条 CLI 统一处理 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的列表、直读、导出、汇总、搜索与统计。",
     answerSummary:
-      "Agent Dump 为开发者提供一个统一的命令行入口，读取五类 AI 编码工具的本地会话历史，并输出可读导出、URI 直读、搜索结果、统计和汇总报告。",
+      "Agent Dump 为开发者提供一个统一的命令行入口，读取六类 AI 编码工具的本地会话历史，并输出可读导出、URI 直读、搜索结果、统计和汇总报告。",
     versionLabel: "当前版本",
     installHeading: "安装",
     installGlobalLabel: "全局安装",
@@ -50,7 +50,7 @@ const translations = {
     skillNote: "或作为 agent skill 添加：",
     capabilitiesHeading: "Agent Dump 能做什么",
     capabilityProviders:
-      "读取 Codex、Claude Code、Kimi、OpenCode 和 Cursor 的本地会话。",
+      "读取 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的本地会话。",
     capabilityExport:
       "导出 JSON、Markdown、raw 文件，或直接在终端打印会话内容。",
     capabilitySearch:
@@ -60,10 +60,10 @@ const translations = {
     faqHeading: "Agent Dump 常见问题",
     faqWhatQuestion: "Agent Dump 是什么？",
     faqWhatAnswer:
-      "Agent Dump 是一个用于列出、导出、搜索和汇总本地 AI 编码会话的命令行工具。它支持 Codex、Claude Code、Kimi、OpenCode 和 Cursor，让开发者用一个 CLI 查看会话历史。",
+      "Agent Dump 是一个用于列出、导出、搜索和汇总本地 AI 编码会话的命令行工具。它支持 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi，让开发者用一个 CLI 查看会话历史。",
     faqSupportQuestion: "Agent Dump 支持哪些 AI 编码工具？",
     faqSupportAnswer:
-      "Agent Dump 支持 Codex、Claude Code、Kimi、OpenCode 和 Cursor。它读取每个 provider 的本地会话源，并提供列表、URI 直读、导出、搜索、统计和 collect 工作流。",
+      "Agent Dump 支持 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi。它读取每个 provider 的本地会话源，并提供列表、URI 直读、导出、搜索、统计和 collect 工作流。",
     faqInstallQuestion: "如何安装 Agent Dump？",
     faqInstallAnswer:
       "可以用 uv tool install agent-dump 或 npm install -g @agent-dump/cli 全局安装 Agent Dump。也可以直接运行 uvx agent-dump --help、npx @agent-dump/cli --help 或 bunx @agent-dump/cli --help。",
@@ -123,6 +123,7 @@ const content = {
 const TYPING_COMMANDS = [
   "agent-dump --interactive",
   "agent-dump codex://threads/abc123 --format json",
+  "agent-dump pi://019e7978-b2ec --head",
   "agent-dump --search \"auth timeout\"",
   "agent-dump --stats -days 30",
   "agent-dump --collect --dry-run",

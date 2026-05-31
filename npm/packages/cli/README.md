@@ -57,6 +57,7 @@ agent-dump codex://threads/<session-id>
 agent-dump kimi://<session-id>
 agent-dump claude://<session-id>
 agent-dump cursor://<request-id>
+agent-dump pi://<session-id>
 agent-dump codex://<session-id> --head
 ```
 
@@ -100,10 +101,11 @@ agent-dump --config edit
 - `kimi://<session_id>` - Kimi sessions
 - `claude://<session_id>` - Claude Code sessions
 - `cursor://<requestid>` - Cursor sessions
+- `pi://<session_id>` - Pi sessions
 
 ## Key features
 
-- **Multi-agent support**: Scan and export sessions from OpenCode, Claude Code, Codex, Kimi, and Cursor
+- **Multi-agent support**: Scan and export sessions from OpenCode, Claude Code, Codex, Kimi, Cursor, and Pi
 - **Interactive selection**: Friendly CLI selector with time-based grouping
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` prints lightweight URI metadata for discovery

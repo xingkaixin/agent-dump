@@ -2,6 +2,28 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.10.0] - 2026-05-31
+
+### Added
+
+- **Pi provider support**
+  - Added `PiAgent` for Earendil Pi JSONL sessions under `PI_HOME/agent/sessions`, `~/.pi/agent/sessions`, and `data/pi`
+  - Added `pi://<session_id>` URI support for direct printing, JSON/Markdown/raw export, list/interactive flows, query filters, search, stats, and collect
+  - Converted Pi message entries, tool calls, tool results, bash executions, compactions, branch summaries, custom messages, and image parts into the unified session schema
+  - Preserved Pi tree metadata such as `entry_id`, `parent_id`, and `entry_type` in exported messages
+
+### Changed
+
+- **Provider registry and public API**
+  - Registered Pi in the central provider registry and path diagnostics
+  - Added `PiAgent` to the top-level public API exports and provider package exports
+  - Updated README, AGENTS, and skill recipes with Pi paths, provider names, URI examples, and capability boundaries
+
+### Tests
+
+- Added Pi unit coverage for path discovery, availability checks, metadata parsing, entry conversion, and JSON export
+- Extended provider contract, scanner, path, and public API regression tests to cover Pi
+
 ## [0.9.1] - 2026-05-24
 
 ### Changed
@@ -645,6 +667,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.10.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.0
 [0.9.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.1
 [0.9.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.0
 [0.8.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.8.0

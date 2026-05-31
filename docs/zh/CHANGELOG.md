@@ -1,5 +1,27 @@
 # 更新日志
 
+## [0.10.0] - 2026-05-31
+
+### 新增功能
+
+- **Pi provider 支持**
+  - 新增 `PiAgent`，支持读取 `PI_HOME/agent/sessions`、`~/.pi/agent/sessions` 与 `data/pi` 下的 Earendil Pi JSONL 会话
+  - 新增 `pi://<session_id>` URI，可用于直接打印、JSON/Markdown/raw 导出、列表/交互流程、query 过滤、搜索、统计与 collect
+  - 将 Pi 的 message entry、tool call、tool result、bash execution、compaction、branch summary、custom message 与 image part 转换为统一会话 schema
+  - 导出消息中保留 Pi 树形结构元数据，例如 `entry_id`、`parent_id` 与 `entry_type`
+
+### 变更
+
+- **Provider 注册表与公开 API**
+  - 在中央 provider registry 与路径诊断中注册 Pi
+  - 将 `PiAgent` 加入顶层公开 API 导出和 provider 包导出
+  - 更新 README、AGENTS 与 skill recipes，补充 Pi 路径、provider 名称、URI 示例与能力边界
+
+### 测试
+
+- 新增 Pi 单元测试，覆盖路径发现、可用性检查、元数据解析、entry 转换与 JSON 导出
+- 扩展 provider contract、scanner、path 与公开 API 回归测试，覆盖 Pi
+
 ## [0.9.1] - 2026-05-24
 
 ### 变更
@@ -649,6 +671,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.10.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.0
 [0.9.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.1
 [0.9.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.0
 [0.8.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.8.0
