@@ -152,7 +152,8 @@ class PiAgent(BaseAgent):
         for record in reversed(records):
             if record.get("type") != "session_info":
                 continue
-            name = normalize_title_text(record.get("name"))
+            raw_name = record.get("name")
+            name = normalize_title_text(raw_name) if isinstance(raw_name, str) else None
             if name:
                 return name
         return None
