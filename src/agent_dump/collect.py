@@ -141,34 +141,6 @@ def _truncate_excerpt(text: str, limit: int = 280) -> str:
     return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
 
 
-def _compact_tool_json(value: Any, *, limit: int = 180) -> str:
-    compact = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    return _truncate_excerpt(compact, limit=limit)
-
-
-def _extract_tool_output_preview(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        normalized = _normalize_text(value)
-        if normalized.startswith("Wall time:") and " Output:" in normalized:
-            return normalized.split(" Output:", 1)[0]
-        return normalized
-    if isinstance(value, dict):
-        text = value.get("text")
-        if isinstance(text, str) and text.strip():
-            return _extract_tool_output_preview(text)
-        for key in ("output", "content", "message", "error"):
-            preview = _extract_tool_output_preview(value.get(key))
-            if preview:
-                return preview
-        return _compact_tool_json(value)
-    if isinstance(value, list):
-        previews = [_extract_tool_output_preview(item) for item in value[:3]]
-        return " | ".join(preview for preview in previews if preview)
-    return str(value).strip()
-
-
 def _dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_ITEMS_PER_FIELD) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -343,32 +315,6 @@ def _extract_part_text(part: dict[str, Any]) -> str:
         return str(part.get("text", "")).strip()
     if part_type == "plan":
         return str(part.get("input", "")).strip()
-    if part_type == "tool":
-        tool_name = str(part.get("tool") or part.get("name") or "").strip()
-        title = str(part.get("title", "")).strip()
-        state = part.get("state")
-        fragments = [fragment for fragment in (tool_name, title) if fragment]
-
-        if isinstance(state, dict):
-            arguments = state.get("arguments")
-            if arguments is not None:
-                fragments.append(f"args={_compact_tool_json(arguments)}")
-            status = state.get("status")
-            if isinstance(status, str) and status.strip():
-                fragments.append(f"status={status.strip()}")
-            output = state.get("output", part.get("output"))
-        else:
-            output = part.get("output")
-            if isinstance(state, list):
-                fragments.append(f"state={_compact_tool_json(state)}")
-            elif isinstance(state, str) and state.strip():
-                fragments.append(f"state={_truncate_excerpt(state.strip(), limit=120)}")
-
-        if output is not None:
-            output_preview = _extract_tool_output_preview(output)
-            if output_preview:
-                fragments.append(f"output={_truncate_excerpt(output_preview, limit=180)}")
-        return " | ".join(fragment for fragment in fragments if fragment)
     return ""
 
 
@@ -434,22 +380,16 @@ def extract_collect_events(
                 continue
 
             role = str(message.get("role", "unknown")).lower()
+            if role not in {"user", "assistant"}:
+                continue
+
             parts = message.get("parts", [])
-            if role != "tool" and isinstance(parts, list):
+            if isinstance(parts, list):
                 for part in parts:
                     if not isinstance(part, dict):
                         continue
                     part_type = str(part.get("type", ""))
                     if part_type == "tool":
-                        tool_name = str(part.get("tool") or part.get("name") or part.get("title") or "tool").strip()
-                        _append_event(
-                            _build_collect_event(
-                                "tool_call",
-                                role,
-                                _extract_part_text(part),
-                                tool_name=tool_name or "tool",
-                            )
-                        )
                         continue
 
                     part_text = _extract_part_text(part)
@@ -458,19 +398,11 @@ def extract_collect_events(
                         _append_event(_build_collect_event(kind, role, part_text))
 
             content_parts = get_text_content_parts(message)
-            if role != "tool" and not parts and content_parts:
+            if not parts and content_parts:
                 for content in content_parts:
                     kind = _classify_text_event(role, content)
                     if kind is not None:
                         _append_event(_build_collect_event(kind, role, content))
-
-            if role == "tool":
-                tool_call_id = str(message.get("tool_call_id", "")).strip()
-                content = "\n".join(content_parts) if content_parts else json.dumps(message, ensure_ascii=False)
-                label = f"{tool_call_id}: {content}" if tool_call_id else content
-                kind = _classify_text_event(role, label)
-                if kind is not None:
-                    _append_event(_build_collect_event(kind, role, label))
 
     if not events:
         fallback = _normalize_text(fallback_text)

@@ -120,14 +120,12 @@ class TestCollectExtraction:
         assert [event.kind for event in events] == [
             "user_intent",
             "decision",
-            "tool_call",
             "code",
-            "error",
         ]
         assert events[0].files == ("/repo/app.py",)
-        assert events[2].tool_name == "read_file"
+        assert all(event.tool_name is None for event in events)
 
-    def test_extract_collect_events_compacts_tool_output(self):
+    def test_extract_collect_events_ignores_tool_only_sessions(self):
         session_data = {
             "messages": [
                 {
@@ -151,12 +149,49 @@ class TestCollectExtraction:
             ]
         }
 
+        events, truncated = extract_collect_events(session_data, fallback_text="fallback text")
+
+        assert truncated is False
+        assert len(events) == 1
+        assert events[0].kind == "fallback"
+        assert events[0].text == "fallback text"
+
+    def test_extract_collect_events_ignores_tool_messages_and_parts(self):
+        session_data = {
+            "messages": [
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "text": "请修复 /repo/app.py 的失败"}],
+                },
+                {
+                    "role": "assistant",
+                    "parts": [
+                        {"type": "text", "text": "我会先定位相关代码。"},
+                        {
+                            "type": "tool",
+                            "tool": "exec_command",
+                            "state": {
+                                "arguments": {"cmd": "pytest"},
+                                "output": "FAILED tests/test_app.py",
+                            },
+                        },
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "call-1",
+                    "parts": [{"type": "text", "text": "Traceback: FileNotFoundError in /repo/app.py"}],
+                },
+            ]
+        }
+
         events, truncated = extract_collect_events(session_data)
 
         assert truncated is False
-        assert events[0].text == (
-            'exec_command | args={"cmd":"sed -n \'1,80p\' app.py"} | output=Wall time: 0.1 seconds'
-        )
+        assert [event.role for event in events] == ["user", "assistant"]
+        assert [event.kind for event in events] == ["user_intent", "assistant_key"]
+        assert "exec_command" not in "\n".join(event.text for event in events)
+        assert "Traceback" not in "\n".join(event.text for event in events)
 
     def test_extract_collect_events_falls_back_when_empty(self):
         events, truncated = extract_collect_events({"messages": []}, fallback_text="fallback text")
