@@ -2,6 +2,14 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.10.1] - 2026-06-08
+
+### Fixed
+
+- **Collect event extraction**
+  - Ignore tool-role messages and tool parts when building collect summaries so raw tool output does not dominate the summary context
+  - Fall back to the provided session text when a session contains only tool events
+
 ## [0.10.0] - 2026-05-31
 
 ### Added
@@ -667,6 +675,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.10.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.1
 [0.10.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.0
 [0.9.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.1
 [0.9.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.0

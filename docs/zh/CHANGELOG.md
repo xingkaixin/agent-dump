@@ -1,5 +1,13 @@
 # 更新日志
 
+## [0.10.1] - 2026-06-08
+
+### 问题修复
+
+- **Collect 事件提取**
+  - 构建 collect 摘要时忽略 tool role 消息和 tool part，避免原始工具输出占据摘要上下文
+  - 当会话只包含工具事件时，回退使用传入的会话文本
+
 ## [0.10.0] - 2026-05-31
 
 ### 新增功能
@@ -671,6 +679,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.10.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.1
 [0.10.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.0
 [0.9.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.1
 [0.9.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.0
