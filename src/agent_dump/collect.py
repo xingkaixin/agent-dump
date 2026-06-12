@@ -594,6 +594,7 @@ def build_collect_chunk_prompt(
             "2. 不要做价值判断或锐评，只描述发生了什么。",
             "3. 同一事实不要换说法重复写。",
             "4. 如果某个字段没有对应内容，返回空数组。",
+            "5. 字符串内部如需引用英文双引号，必须按 JSON 规则转义，或改用中文引号。",
         ]
     else:
         lines = [
@@ -607,6 +608,7 @@ def build_collect_chunk_prompt(
             "3. errors 只放错误/异常/失败。",
             "4. files 只放文件路径。",
             "5. tools_used 只放工具名。",
+            "6. 字符串内部如需引用英文双引号，必须按 JSON 规则转义，或改用中文引号。",
         ]
     lines.extend(
         [
@@ -658,6 +660,32 @@ def request_summary_from_llm(config: AIConfig, prompt: str, *, timeout_seconds: 
     return _request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
 
 
+def _build_structured_summary_retry_prompt(
+    *,
+    original_prompt: str,
+    invalid_response: str,
+    parse_error: Exception,
+    mode: str,
+) -> str:
+    fields = collect_fields_for(mode)
+    return "\n".join(
+        [
+            original_prompt,
+            "",
+            "上一轮输出不是合法 JSON，不能被解析。",
+            f"解析错误: {parse_error}",
+            "请重新生成完整结果，仍然只输出一个 JSON 对象。",
+            f"JSON 只能包含这些字段: {', '.join(fields)}。",
+            "每个字段必须是字符串数组；没有内容时返回空数组。",
+            "不要输出 Markdown，不要解释，不要保留无效片段。",
+            "字符串内部如需引用英文双引号，必须按 JSON 规则转义，或改用中文引号。",
+            "",
+            "上一轮无效输出预览：",
+            _truncate_log_preview(invalid_response, limit=1200),
+        ]
+    )
+
+
 def request_structured_summary_from_llm(
     config: AIConfig,
     prompt: str,
@@ -677,6 +705,7 @@ def request_structured_summary_from_llm(
     attempts = retry_count + 1
     last_error: Exception | None = None
     last_error_kind = "parse"
+    current_prompt = prompt
     for _ in range(attempts):
         request_id = str(uuid4())
         if logger is not None:
@@ -689,12 +718,12 @@ def request_structured_summary_from_llm(
                 session_uri=session_uri,
                 chunk_index=chunk_index,
                 chunk_total=chunk_total,
-                prompt_chars=len(prompt),
+                prompt_chars=len(current_prompt),
             )
         try:
             response = request_structured_summary_payload_from_llm(
                 config,
-                prompt,
+                current_prompt,
                 timeout_seconds=timeout_seconds,
                 summary_fields=summary_fields,
             )
@@ -744,6 +773,12 @@ def request_structured_summary_from_llm(
                     error=str(exc),
                     response_preview=_truncate_log_preview(response),
                 )
+            current_prompt = _build_structured_summary_retry_prompt(
+                original_prompt=prompt,
+                invalid_response=response,
+                parse_error=exc,
+                mode=mode,
+            )
     if last_error_kind == "request":
         raise RuntimeError(f"{context_label}: structured summary request failed: {last_error}") from last_error
     raise RuntimeError(f"{context_label}: invalid structured summary response: {last_error}") from last_error
