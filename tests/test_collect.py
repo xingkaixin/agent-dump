@@ -436,6 +436,7 @@ class TestCollectEntries:
             until_date=now.date(),
             query_spec=make_query_spec(project_path=Path("/repo/app")),
             render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
+            local_tz=timezone.utc,
         )
 
         assert truncated is False
@@ -481,6 +482,7 @@ class TestCollectEntries:
             until_date=now.date(),
             query_spec=make_query_spec(keyword="refactor", limit=1),
             render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
+            local_tz=timezone.utc,
         )
 
         assert truncated is False
@@ -624,6 +626,25 @@ class TestCollectStructuredSummary:
                 "prompt",
                 context_label="chunk-1",
             )
+
+    def test_request_structured_summary_from_llm_retries_with_parse_feedback(self):
+        invalid_response = '{"topics":["英文改为"Control app sounds.""]}'
+        responses = [invalid_response, '{"topics":["英文文案改为 Control app sounds."]}']
+
+        with mock.patch(
+            "agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=responses
+        ) as mock_request:
+            result = request_structured_summary_from_llm(
+                self._config(),
+                "original prompt",
+                context_label="chunk-1",
+            )
+
+        retry_prompt = mock_request.call_args_list[1].args[1]
+        assert result["topics"] == ["英文文案改为 Control app sounds."]
+        assert "上一轮输出不是合法 JSON" in retry_prompt
+        assert "字符串内部如需引用英文双引号" in retry_prompt
+        assert invalid_response in retry_prompt
 
     def test_request_structured_summary_payload_openai_uses_json_schema(self):
         response = mock.MagicMock()
@@ -976,6 +997,7 @@ class TestCollectInsightMode:
         assert "turning" in prompt
         assert "JSON 必须只包含这些字段: scene, stuck, turning" in prompt
         assert "session_uri: codex://s-1" in prompt
+        assert "字符串内部如需引用英文双引号" in prompt
 
     def test_build_collect_chunk_prompt_pm_mode_unchanged(self):
         prompt = build_collect_chunk_prompt(
