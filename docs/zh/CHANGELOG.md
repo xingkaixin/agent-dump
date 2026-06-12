@@ -1,5 +1,18 @@
 # 更新日志
 
+## [0.10.2] - 2026-06-13
+
+### 问题修复
+
+- **Collect 结构化摘要**
+  - 结构化摘要返回非法 JSON 时，retry 会带上解析错误和无效响应预览，而不是重复同一个 prompt
+  - 收紧 collect 摘要 prompt，要求 JSON 字符串中的英文双引号必须转义，或改用中文引号
+
+### 测试
+
+- 增加未转义英文双引号导致 JSON 损坏的回归测试
+- 将时区敏感的 collect query 测试固定到 UTC，避免本地跨日时失败
+
 ## [0.10.1] - 2026-06-08
 
 ### 问题修复
@@ -679,6 +692,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.10.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.2
 [0.10.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.1
 [0.10.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.0
 [0.9.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.1
