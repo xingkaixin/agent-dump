@@ -2,6 +2,19 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.10.2] - 2026-06-13
+
+### Fixed
+
+- **Collect structured summaries**
+  - Retry invalid structured summary responses with parser feedback and an invalid-response preview instead of repeating the same prompt
+  - Tighten collect summary prompts so JSON string values escape embedded double quotes or use Chinese quotation marks
+
+### Tests
+
+- Added regression coverage for malformed JSON summary responses with unescaped double quotes
+- Pinned timezone-sensitive collect query tests to UTC so they remain stable across local date boundaries
+
 ## [0.10.1] - 2026-06-08
 
 ### Fixed
@@ -675,6 +688,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.10.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.2
 [0.10.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.1
 [0.10.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.0
 [0.9.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.9.1
