@@ -2,6 +2,19 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.10.3] - 2026-06-14
+
+### Changed
+
+- **SQLite query performance**
+  - Reused already-loaded Cursor bubble rows when resolving session request IDs, avoiding duplicate per-composer SQLite reads during session listing
+  - Deleted search index FTS rows directly by session or agent instead of selecting row IDs and deleting each row one at a time
+
+### Tests
+
+- Added regression coverage for Cursor session listing query count
+- Added regression coverage to keep search index cleanup to one FTS delete per table
+
 ## [0.10.2] - 2026-06-13
 
 ### Fixed
@@ -688,6 +701,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.10.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.3
 [0.10.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.2
 [0.10.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.1
 [0.10.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.0
