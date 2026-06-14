@@ -1,5 +1,18 @@
 # 更新日志
 
+## [0.10.3] - 2026-06-14
+
+### 变更
+
+- **SQLite 查询性能**
+  - Cursor 列表读取会话时复用已加载的 bubble rows 来解析 request ID，避免每个 composer 重复查询 SQLite
+  - 搜索索引清理 FTS 记录时改为按 session 或 agent 直接删除，不再先查询 row ID 再逐行删除
+
+### 测试
+
+- 增加 Cursor 会话列表查询次数的回归测试
+- 增加搜索索引清理每个 FTS 表只执行一次删除的回归测试
+
 ## [0.10.2] - 2026-06-13
 
 ### 问题修复
@@ -692,6 +705,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.10.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.3
 [0.10.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.2
 [0.10.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.1
 [0.10.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.0
