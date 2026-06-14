@@ -400,6 +400,42 @@ class TestSearchIndex:
         assert deleted == 1
         assert len(index.search("keyword")) == 0
 
+    def test_clear_agent_deletes_fts_rows_per_table(self, tmp_path):
+        class TracedSearchIndex(SearchIndex):
+            def __init__(self, db_path: Path | None = None) -> None:
+                super().__init__(db_path)
+                self.delete_statements: list[str] = []
+
+            def _get_connection(self):
+                conn = super()._get_connection()
+                conn.set_trace_callback(
+                    lambda sql: (
+                        self.delete_statements.append(sql) if sql.startswith("DELETE FROM sessions_fts") else None
+                    )
+                )
+                return conn
+
+        index = TracedSearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(
+            session_data={
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "one keyword"}]}]},
+                "s2": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "two keyword"}]}]},
+            }
+        )
+        session1 = make_session("s1", "Test 1", tmp_path / "s1.jsonl")
+        session2 = make_session("s2", "Test 2", tmp_path / "s2.jsonl")
+        session1.source_path.write_text("data")
+        session2.source_path.write_text("data")
+
+        index.update(agent, [session1, session2])
+        index.delete_statements.clear()
+
+        deleted = index.clear_agent("codex")
+
+        assert deleted == 2
+        assert len(index.delete_statements) == 2
+        assert all("rowid =" not in statement for statement in index.delete_statements)
+
     def test_rebuild(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
         agent = DummyAgent(

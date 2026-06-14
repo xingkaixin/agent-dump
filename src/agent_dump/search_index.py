@@ -235,28 +235,18 @@ _FTS_TABLES = ("sessions_fts", "sessions_fts_trigram")
 
 def _delete_fts_by_session(conn: sqlite3.Connection, fts_table: str, session_id: str, agent_name: str) -> None:
     """Delete FTS rows for a specific session."""
-    cursor = conn.execute(
-        f"SELECT rowid FROM {fts_table} WHERE session_id = ? AND agent_name = ?",
+    conn.execute(
+        f"DELETE FROM {fts_table} WHERE session_id = ? AND agent_name = ?",
         (session_id, agent_name),
     )
-    for row in cursor.fetchall():
-        conn.execute(
-            f"DELETE FROM {fts_table} WHERE rowid = ?",
-            (row["rowid"],),
-        )
 
 
 def _delete_fts_by_agent(conn: sqlite3.Connection, fts_table: str, agent_name: str) -> None:
     """Delete FTS rows for a specific agent."""
-    cursor = conn.execute(
-        f"SELECT rowid FROM {fts_table} WHERE agent_name = ?",
+    conn.execute(
+        f"DELETE FROM {fts_table} WHERE agent_name = ?",
         (agent_name,),
     )
-    for row in cursor.fetchall():
-        conn.execute(
-            f"DELETE FROM {fts_table} WHERE rowid = ?",
-            (row["rowid"],),
-        )
 
 
 class SearchIndex:

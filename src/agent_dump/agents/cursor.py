@@ -103,9 +103,8 @@ class CursorAgent(BaseAgent):
             return None
         return data if isinstance(data, dict) else None
 
-    def _extract_request_id_from_bubbles(self, composer_id: str) -> str | None:
-        rows = self._get_bubble_rows(composer_id)
-        for row in rows:
+    def _extract_request_id_from_bubbles(self, bubble_rows: list[sqlite3.Row]) -> str | None:
+        for row in bubble_rows:
             bubble = self._parse_json(row["value"])
             if not bubble:
                 continue
@@ -222,7 +221,7 @@ class CursorAgent(BaseAgent):
             updated_raw = composer.get("updatedAt") or composer.get("lastUpdatedAt") or composer.get("lastSendTime")
             updated_at = self._to_datetime_utc(updated_raw if updated_raw is not None else created_raw)
             bubble_rows = self._get_bubble_rows(composer_id)
-            request_id = self._extract_request_id_from_bubbles(composer_id) or composer_id
+            request_id = self._extract_request_id_from_bubbles(bubble_rows) or composer_id
             metadata = self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id)
             self._augment_session_metadata_from_bubbles(metadata, bubble_rows)
 

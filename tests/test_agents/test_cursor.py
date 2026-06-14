@@ -97,6 +97,41 @@ class TestCursorAgent:
         assert sessions[0].metadata["message_count"] == 1
         assert agent.get_session_uri(sessions[0]) == "cursor://request-1"
 
+    def test_get_sessions_reuses_bubble_rows_for_request_id(self, monkeypatch, tmp_path):
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+
+        created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        for index in range(2):
+            composer_id = f"composer-{index}"
+            request_id = f"request-{index}"
+            _insert_kv(
+                global_db,
+                f"composerData:{composer_id}",
+                {"composerId": composer_id, "createdAt": created_at_ms, "name": f"Session {index}"},
+            )
+            _insert_kv(
+                global_db,
+                f"bubbleId:{composer_id}:b1",
+                {"requestId": request_id, "type": 1, "text": "hello"},
+            )
+
+        agent = CursorAgent()
+        assert agent.is_available() is True
+
+        query_calls = []
+        original_query_global = agent._query_global
+
+        def counting_query_global(sql, params):
+            query_calls.append((sql, params))
+            return original_query_global(sql, params)
+
+        monkeypatch.setattr(agent, "_query_global", counting_query_global)
+
+        sessions = agent.get_sessions(days=7)
+
+        assert {session.id for session in sessions} == {"request-0", "request-1"}
+        assert len(query_calls) == 3
+
     def test_get_session_data_extracts_messages_and_tool(self, monkeypatch, tmp_path):
         _, global_db = self._create_layout(monkeypatch, tmp_path)
 
