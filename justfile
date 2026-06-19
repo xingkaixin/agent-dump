@@ -89,9 +89,14 @@ publish:
 # Build and publish package in one step
 build-and-publish: build publish
 
+# Pre-render the static landing page (en + zh) from web/i18n.mjs
+build-web:
+    @echo "🛠️ Building landing page..."
+    node web/build-site.mjs
+    @echo "✅ Landing page built!"
+
 # Deploy the static web site to Cloudflare Pages
-deploy-web:
+deploy-web: build-web
     @echo "🌐 Deploying web/ to Cloudflare Pages..."
-    npm --prefix npm run sync-version
     wrangler pages deploy web --project-name=agent-dump --commit-dirty=true
     @echo "✅ Web deployment complete!"

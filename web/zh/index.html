@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hans">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#fdfcfc" />
-    <meta name="description" content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi." />
-    <meta name="keywords" content="agent-dump, AI session export, Claude Code sessions, Codex sessions, Cursor sessions, Pi sessions, AI coding tool, session dump, CLI export, developer tool" />
+    <meta name="description" content="Agent Dump 是一个命令行工具，用于列出、导出、搜索和汇总 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的 AI 编码会话。" />
+    <meta name="keywords" content="agent-dump, AI 会话导出, Claude Code 会话, Codex 会话, Cursor 会话, Pi 会话, AI 编码工具, 会话导出, CLI 工具, 开发者工具" />
     <meta name="author" content="xingkaixin" />
     <meta name="robots" content="index, follow" />
-    <title>Agent Dump | Export AI Coding Sessions from CLI</title>
-    <link rel="canonical" href="https://agent-dump.xingkaixin.me/" />
+    <title>Agent Dump | AI 编码会话导出工具</title>
+    <link rel="canonical" href="https://agent-dump.xingkaixin.me/zh/" />
     <link rel="alternate" hreflang="en" href="https://agent-dump.xingkaixin.me/" />
     <link rel="alternate" hreflang="zh-Hans" href="https://agent-dump.xingkaixin.me/zh/" />
     <link rel="alternate" hreflang="x-default" href="https://agent-dump.xingkaixin.me/" />
@@ -18,22 +18,22 @@
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://agent-dump.xingkaixin.me/" />
+    <meta property="og:url" content="https://agent-dump.xingkaixin.me/zh/" />
     <meta property="og:site_name" content="Agent Dump" />
-    <meta property="og:title" content="Agent Dump | Export AI Coding Sessions from CLI" />
-    <meta property="og:description" content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi." />
+    <meta property="og:title" content="Agent Dump | AI 编码会话导出工具" />
+    <meta property="og:description" content="Agent Dump 是一个命令行工具，用于列出、导出、搜索和汇总 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的 AI 编码会话。" />
     <meta property="og:image" content="https://agent-dump.xingkaixin.me/assets/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="631" />
-    <meta property="og:image:alt" content="Agent Dump CLI exporting AI coding sessions to readable files" />
-    <meta property="og:locale" content="en_US" />
+    <meta property="og:image:alt" content="Agent Dump CLI 将 AI 编码会话导出为可读文件" />
+    <meta property="og:locale" content="zh_CN" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Agent Dump | Export AI Coding Sessions from CLI" />
-    <meta name="twitter:description" content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi." />
+    <meta name="twitter:title" content="Agent Dump | AI 编码会话导出工具" />
+    <meta name="twitter:description" content="Agent Dump 是一个命令行工具，用于列出、导出、搜索和汇总 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的 AI 编码会话。" />
     <meta name="twitter:image" content="https://agent-dump.xingkaixin.me/assets/og-image.png" />
-    <meta name="twitter:image:alt" content="Agent Dump CLI exporting AI coding sessions to readable files" />
+    <meta name="twitter:image:alt" content="Agent Dump CLI 将 AI 编码会话导出为可读文件" />
 
     <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
@@ -51,11 +51,11 @@
     },
     {
       "@type": "WebSite",
-      "@id": "https://agent-dump.xingkaixin.me/#website",
+      "@id": "https://agent-dump.xingkaixin.me/zh/#website",
       "name": "Agent Dump",
-      "url": "https://agent-dump.xingkaixin.me/",
-      "inLanguage": "en",
-      "description": "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions.",
+      "url": "https://agent-dump.xingkaixin.me/zh/",
+      "inLanguage": "zh-Hans",
+      "description": "Agent Dump 是一个用于列出、导出、搜索和汇总 AI 编码会话的命令行工具。",
       "publisher": {
         "@id": "https://agent-dump.xingkaixin.me/#author"
       }
@@ -67,9 +67,9 @@
       "applicationCategory": "DeveloperApplication",
       "applicationSubCategory": "Command-line developer tool",
       "operatingSystem": "macOS, Linux, Windows",
-      "description": "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.",
-      "inLanguage": "en",
-      "url": "https://agent-dump.xingkaixin.me/",
+      "description": "Agent Dump 是一个命令行工具，用于列出、导出、搜索和汇总 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的 AI 编码会话。",
+      "inLanguage": "zh-Hans",
+      "url": "https://agent-dump.xingkaixin.me/zh/",
       "downloadUrl": [
         "https://www.npmjs.com/package/@agent-dump/cli",
         "https://pypi.org/project/agent-dump/"
@@ -88,31 +88,31 @@
     },
     {
       "@type": "FAQPage",
-      "@id": "https://agent-dump.xingkaixin.me/#faq",
-      "inLanguage": "en",
+      "@id": "https://agent-dump.xingkaixin.me/zh/#faq",
+      "inLanguage": "zh-Hans",
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "What is Agent Dump?",
+          "name": "Agent Dump 是什么？",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi so developers can inspect session history from one CLI."
+            "text": "Agent Dump 是一个用于列出、导出、搜索和汇总本地 AI 编码会话的命令行工具。它支持 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi，让开发者用一个 CLI 查看会话历史。"
           }
         },
         {
           "@type": "Question",
-          "name": "Which AI coding tools does Agent Dump support?",
+          "name": "Agent Dump 支持哪些 AI 编码工具？",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Agent Dump supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows."
+            "text": "Agent Dump 支持 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi。它读取每个 provider 的本地会话源，并提供列表、URI 直读、导出、搜索、统计和 collect 工作流。"
           }
         },
         {
           "@type": "Question",
-          "name": "How do you install Agent Dump?",
+          "name": "如何安装 Agent Dump？",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Install Agent Dump globally with uv tool install agent-dump or npm install -g @agent-dump/cli. You can also run it directly with uvx agent-dump --help, npx @agent-dump/cli --help, or bunx @agent-dump/cli --help."
+            "text": "可以用 uv tool install agent-dump 或 npm install -g @agent-dump/cli 全局安装 Agent Dump。也可以直接运行 uvx agent-dump --help、npx @agent-dump/cli --help 或 bunx @agent-dump/cli --help。"
           }
         }
       ]
@@ -134,32 +134,32 @@
     ></script>
     <script src="/app.js" defer></script>
   </head>
-  <body data-copy="Copy" data-copied="Copied">
-    <a class="skip-link" href="#main">Skip to content</a>
+  <body data-copy="复制" data-copied="已复制">
+    <a class="skip-link" href="#main">跳到正文</a>
 
     <header class="topbar">
-      <a class="brand" href="/" aria-label="Agent Dump home">
+      <a class="brand" href="/zh/" aria-label="Agent Dump home">
         <img src="/assets/logo.png" alt="" width="32" height="32" />
         <strong>Agent Dump</strong>
       </a>
 
-      <div class="segmented-control" role="group" aria-label="Language switch">
-        <a class="segmented-button" href="/" data-lang="en" aria-pressed="true" aria-current="page">EN</a>
-        <a class="segmented-button" href="/zh/" data-lang="zh" aria-pressed="false">中文</a>
+      <div class="segmented-control" role="group" aria-label="语言切换">
+        <a class="segmented-button" href="/" data-lang="en" aria-pressed="false">EN</a>
+        <a class="segmented-button" href="/zh/" data-lang="zh" aria-pressed="true" aria-current="page">中文</a>
       </div>
     </header>
 
     <main id="main">
       <section id="hero" class="hero">
-        <p class="eyebrow">CLI · AI Session Export</p>
-        <h1>Export AI coding sessions.</h1>
-        <p class="description">List, dump, export, summarize, and search sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.</p>
-        <p class="answer-summary">Agent Dump gives developers one command-line interface for local AI coding session history across six tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.</p>
+        <p class="eyebrow">CLI · AI 会话导出</p>
+        <h1>导出 AI 编码会话。</h1>
+        <p class="description">一条 CLI 统一处理 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的列表、直读、导出、汇总、搜索与统计。</p>
+        <p class="answer-summary">Agent Dump 为开发者提供一个统一的命令行入口，读取六类 AI 编码工具的本地会话历史，并输出可读导出、URI 直读、搜索结果、统计和汇总报告。</p>
         <p class="release-meta">
-          <span>Version</span>
+          <span>当前版本</span>
           <a
             class="release-link"
-            href="https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md"
+            href="https://github.com/xingkaixin/agent-dump/blob/main/docs/zh/CHANGELOG.md"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -183,10 +183,10 @@
       </section>
 
       <section id="install" class="install-section">
-        <h2>Install</h2>
+        <h2>安装</h2>
         <div class="install-groups">
         <div class="install-group">
-          <p class="install-group-label">Install globally</p>
+          <p class="install-group-label">全局安装</p>
           <div>
             <div class="tab-list" role="tablist">
             <button type="button" class="tab-button" role="tab" aria-selected="true">uv</button>
@@ -198,7 +198,7 @@
             <div class="command-line">
               <span class="prompt" aria-hidden="true">$</span>
               <pre class="command-code">uv tool install agent-dump</pre>
-              <button type="button" class="copy-button" data-copy-inline="uv tool install agent-dump" aria-label="Copy" title="Copy">
+              <button type="button" class="copy-button" data-copy-inline="uv tool install agent-dump" aria-label="复制" title="复制">
                 <span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span>
               </button>
             </div>
@@ -207,7 +207,7 @@
             <div class="command-line">
               <span class="prompt" aria-hidden="true">$</span>
               <pre class="command-code">npm install -g @agent-dump/cli</pre>
-              <button type="button" class="copy-button" data-copy-inline="npm install -g @agent-dump/cli" aria-label="Copy" title="Copy">
+              <button type="button" class="copy-button" data-copy-inline="npm install -g @agent-dump/cli" aria-label="复制" title="复制">
                 <span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span>
               </button>
             </div>
@@ -216,7 +216,7 @@
             <div class="command-line">
               <span class="prompt" aria-hidden="true">$</span>
               <pre class="command-code">pnpm add -g @agent-dump/cli</pre>
-              <button type="button" class="copy-button" data-copy-inline="pnpm add -g @agent-dump/cli" aria-label="Copy" title="Copy">
+              <button type="button" class="copy-button" data-copy-inline="pnpm add -g @agent-dump/cli" aria-label="复制" title="复制">
                 <span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span>
               </button>
             </div>
@@ -225,7 +225,7 @@
             <div class="command-line">
               <span class="prompt" aria-hidden="true">$</span>
               <pre class="command-code">bun add -g @agent-dump/cli</pre>
-              <button type="button" class="copy-button" data-copy-inline="bun add -g @agent-dump/cli" aria-label="Copy" title="Copy">
+              <button type="button" class="copy-button" data-copy-inline="bun add -g @agent-dump/cli" aria-label="复制" title="复制">
                 <span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span>
               </button>
             </div>
@@ -233,7 +233,7 @@
           </div>
         </div>
         <div class="install-group">
-          <p class="install-group-label">Run without installing</p>
+          <p class="install-group-label">免安装运行</p>
           <div>
             <div class="tab-list" role="tablist">
             <button type="button" class="tab-button" role="tab" aria-selected="true">uvx</button>
@@ -244,7 +244,7 @@
             <div class="command-line">
               <span class="prompt" aria-hidden="true">$</span>
               <pre class="command-code">uvx agent-dump --help</pre>
-              <button type="button" class="copy-button" data-copy-inline="uvx agent-dump --help" aria-label="Copy" title="Copy">
+              <button type="button" class="copy-button" data-copy-inline="uvx agent-dump --help" aria-label="复制" title="复制">
                 <span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span>
               </button>
             </div>
@@ -253,7 +253,7 @@
             <div class="command-line">
               <span class="prompt" aria-hidden="true">$</span>
               <pre class="command-code">npx @agent-dump/cli --help</pre>
-              <button type="button" class="copy-button" data-copy-inline="npx @agent-dump/cli --help" aria-label="Copy" title="Copy">
+              <button type="button" class="copy-button" data-copy-inline="npx @agent-dump/cli --help" aria-label="复制" title="复制">
                 <span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span>
               </button>
             </div>
@@ -262,7 +262,7 @@
             <div class="command-line">
               <span class="prompt" aria-hidden="true">$</span>
               <pre class="command-code">bunx @agent-dump/cli --help</pre>
-              <button type="button" class="copy-button" data-copy-inline="bunx @agent-dump/cli --help" aria-label="Copy" title="Copy">
+              <button type="button" class="copy-button" data-copy-inline="bunx @agent-dump/cli --help" aria-label="复制" title="复制">
                 <span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span>
               </button>
             </div>
@@ -271,7 +271,7 @@
         </div>
         </div>
         <div class="skill-block">
-          <p class="skill-label">Or add as an agent skill:</p>
+          <p class="skill-label">或作为 agent skill 添加：</p>
           <div class="command-line">
             <span class="prompt" aria-hidden="true">$</span>
             <pre id="skill-install" class="command-code">npx skills add xingkaixin/agent-dump</pre>
@@ -279,8 +279,8 @@
               type="button"
               class="copy-button"
               data-copy-target="skill-install"
-              aria-label="Copy"
-              title="Copy"
+              aria-label="复制"
+              title="复制"
             >
               <span class="button-icon-stack" aria-hidden="true">
                 <span class="copy-icon"></span>
@@ -292,29 +292,29 @@
       </section>
 
       <section id="capabilities" class="content-section">
-        <h2>What Agent Dump does</h2>
-        <ul class="feature-list" aria-label="Agent Dump capabilities">
-          <li>Reads local sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.</li>
-          <li>Exports sessions as JSON, Markdown, raw files, or direct terminal output.</li>
-          <li>Searches recent session history and filters by provider, role, path, or query URI.</li>
-          <li>Collects high-signal session summaries for project management and insight reports.</li>
+        <h2>Agent Dump 能做什么</h2>
+        <ul class="feature-list" aria-label="Agent Dump 能力">
+          <li>读取 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的本地会话。</li>
+          <li>导出 JSON、Markdown、raw 文件，或直接在终端打印会话内容。</li>
+          <li>搜索近期会话历史，并按 provider、role、path 或 query URI 过滤。</li>
+          <li>收集高信号会话摘要，生成项目管理和洞察报告。</li>
         </ul>
       </section>
 
       <section id="faq" class="content-section">
-        <h2>Agent Dump FAQ</h2>
+        <h2>Agent Dump 常见问题</h2>
         <div class="faq-list">
           <article>
-            <h3>What is Agent Dump?</h3>
-            <p>Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi so developers can inspect session history from one CLI.</p>
+            <h3>Agent Dump 是什么？</h3>
+            <p>Agent Dump 是一个用于列出、导出、搜索和汇总本地 AI 编码会话的命令行工具。它支持 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi，让开发者用一个 CLI 查看会话历史。</p>
           </article>
           <article>
-            <h3>Which AI coding tools does Agent Dump support?</h3>
-            <p>Agent Dump supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows.</p>
+            <h3>Agent Dump 支持哪些 AI 编码工具？</h3>
+            <p>Agent Dump 支持 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi。它读取每个 provider 的本地会话源，并提供列表、URI 直读、导出、搜索、统计和 collect 工作流。</p>
           </article>
           <article>
-            <h3>How do you install Agent Dump?</h3>
-            <p>Install Agent Dump globally with uv tool install agent-dump or npm install -g @agent-dump/cli. You can also run it directly with uvx agent-dump --help, npx @agent-dump/cli --help, or bunx @agent-dump/cli --help.</p>
+            <h3>如何安装 Agent Dump？</h3>
+            <p>可以用 uv tool install agent-dump 或 npm install -g @agent-dump/cli 全局安装 Agent Dump。也可以直接运行 uvx agent-dump --help、npx @agent-dump/cli --help 或 bunx @agent-dump/cli --help。</p>
           </article>
         </div>
       </section>
