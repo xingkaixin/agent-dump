@@ -1,150 +1,18 @@
-const translations = {
-  en: {
-    skipLink: "Skip to content",
-    eyebrow: "CLI · AI Session Export",
-    heroTitle: "Export AI coding sessions.",
-    heroDescription:
-      "List, dump, export, summarize, and search sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.",
-    answerSummary:
-      "Agent Dump gives developers one command-line interface for local AI coding session history across six tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.",
-    versionLabel: "Version",
-    installHeading: "Install",
-    installGlobalLabel: "Install globally",
-    installRunLabel: "Run without installing",
-    skillNote: "Or add as an agent skill:",
-    capabilitiesHeading: "What Agent Dump does",
-    capabilityProviders:
-      "Reads local sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.",
-    capabilityExport:
-      "Exports sessions as JSON, Markdown, raw files, or direct terminal output.",
-    capabilitySearch:
-      "Searches recent session history and filters by provider, role, path, or query URI.",
-    capabilityCollect:
-      "Collects high-signal session summaries for project management and insight reports.",
-    faqHeading: "Agent Dump FAQ",
-    faqWhatQuestion: "What is Agent Dump?",
-    faqWhatAnswer:
-      "Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi so developers can inspect session history from one CLI.",
-    faqSupportQuestion: "Which AI coding tools does Agent Dump support?",
-    faqSupportAnswer:
-      "Agent Dump supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows.",
-    faqInstallQuestion: "How do you install Agent Dump?",
-    faqInstallAnswer:
-      "Install Agent Dump globally with uv tool install agent-dump or npm install -g @agent-dump/cli. You can also run it directly with uvx agent-dump --help, npx @agent-dump/cli --help, or bunx @agent-dump/cli --help.",
-    footerGithub: "GitHub",
-    copy: "Copy",
-    copied: "Copied",
-  },
-  zh: {
-    skipLink: "跳到正文",
-    eyebrow: "CLI · AI 会话导出",
-    heroTitle: "导出 AI 编码会话。",
-    heroDescription:
-      "一条 CLI 统一处理 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的列表、直读、导出、汇总、搜索与统计。",
-    answerSummary:
-      "Agent Dump 为开发者提供一个统一的命令行入口，读取六类 AI 编码工具的本地会话历史，并输出可读导出、URI 直读、搜索结果、统计和汇总报告。",
-    versionLabel: "当前版本",
-    installHeading: "安装",
-    installGlobalLabel: "全局安装",
-    installRunLabel: "免安装运行",
-    skillNote: "或作为 agent skill 添加：",
-    capabilitiesHeading: "Agent Dump 能做什么",
-    capabilityProviders:
-      "读取 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi 的本地会话。",
-    capabilityExport:
-      "导出 JSON、Markdown、raw 文件，或直接在终端打印会话内容。",
-    capabilitySearch:
-      "搜索近期会话历史，并按 provider、role、path 或 query URI 过滤。",
-    capabilityCollect:
-      "收集高信号会话摘要，生成项目管理和洞察报告。",
-    faqHeading: "Agent Dump 常见问题",
-    faqWhatQuestion: "Agent Dump 是什么？",
-    faqWhatAnswer:
-      "Agent Dump 是一个用于列出、导出、搜索和汇总本地 AI 编码会话的命令行工具。它支持 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi，让开发者用一个 CLI 查看会话历史。",
-    faqSupportQuestion: "Agent Dump 支持哪些 AI 编码工具？",
-    faqSupportAnswer:
-      "Agent Dump 支持 Codex、Claude Code、Kimi、OpenCode、Cursor 和 Pi。它读取每个 provider 的本地会话源，并提供列表、URI 直读、导出、搜索、统计和 collect 工作流。",
-    faqInstallQuestion: "如何安装 Agent Dump？",
-    faqInstallAnswer:
-      "可以用 uv tool install agent-dump 或 npm install -g @agent-dump/cli 全局安装 Agent Dump。也可以直接运行 uvx agent-dump --help、npx @agent-dump/cli --help 或 bunx @agent-dump/cli --help。",
-    footerGithub: "GitHub",
-    copy: "复制",
-    copied: "已复制",
-  },
-};
-
-const content = {
-  install: {
-    en: [
-      {
-        label: "Install globally",
-        labelKey: "installGlobalLabel",
-        tabs: [
-          { label: "uv", code: "uv tool install agent-dump" },
-          { label: "npm", code: "npm install -g @agent-dump/cli" },
-          { label: "pnpm", code: "pnpm add -g @agent-dump/cli" },
-          { label: "bun", code: "bun add -g @agent-dump/cli" },
-        ],
-      },
-      {
-        label: "Run without installing",
-        labelKey: "installRunLabel",
-        tabs: [
-          { label: "uvx", code: "uvx agent-dump --help" },
-          { label: "npx", code: "npx @agent-dump/cli --help" },
-          { label: "bunx", code: "bunx @agent-dump/cli --help" },
-        ],
-      },
-    ],
-    zh: [
-      {
-        label: "全局安装",
-        labelKey: "installGlobalLabel",
-        tabs: [
-          { label: "uv", code: "uv tool install agent-dump" },
-          { label: "npm", code: "npm install -g @agent-dump/cli" },
-          { label: "pnpm", code: "pnpm add -g @agent-dump/cli" },
-          { label: "bun", code: "bun add -g @agent-dump/cli" },
-        ],
-      },
-      {
-        label: "免安装运行",
-        labelKey: "installRunLabel",
-        tabs: [
-          { label: "uvx", code: "uvx agent-dump --help" },
-          { label: "npx", code: "npx @agent-dump/cli --help" },
-          { label: "bunx", code: "bunx @agent-dump/cli --help" },
-        ],
-      },
-    ],
-  },
-};
-
-const TYPING_COMMANDS = [
-  "agent-dump --interactive",
-  "agent-dump codex://threads/abc123 --format json",
-  "agent-dump pi://019e7978-b2ec --head",
-  "agent-dump --search \"auth timeout\"",
-  "agent-dump --stats -days 30",
-  "agent-dump --collect --dry-run",
-];
+// Behavior layer only. All text and version content is pre-rendered at build time
+// (see build-site.mjs + i18n.mjs); this script only drives interactions.
 
 const TYPING_SPEED = 55;
 const DELETE_SPEED = 28;
 const PAUSE_AFTER_TYPE = 2200;
 const PAUSE_AFTER_DELETE = 400;
-const webData = window.AGENT_DUMP_WEB_DATA ?? {
-  version: "0.0.0",
-  changelogUrl: {
-    en: "https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md",
-    zh: "https://github.com/xingkaixin/agent-dump/blob/main/docs/zh/CHANGELOG.md",
-  },
-};
+
+const copyLabel = document.body.dataset.copy ?? "Copy";
+const copiedLabel = document.body.dataset.copied ?? "Copied";
 
 class TypeWriter {
-  constructor(element) {
+  constructor(element, commands) {
     this.element = element;
-    this.commands = TYPING_COMMANDS;
+    this.commands = commands;
     this.index = 0;
     this.charIndex = 0;
     this.isDeleting = false;
@@ -153,19 +21,6 @@ class TypeWriter {
 
   start() {
     this.tick();
-  }
-
-  stop() {
-    clearTimeout(this.timeoutId);
-  }
-
-  reset() {
-    this.stop();
-    this.index = 0;
-    this.charIndex = 0;
-    this.isDeleting = false;
-    this.element.textContent = "";
-    this.timeoutId = setTimeout(() => this.tick(), 300);
   }
 
   tick() {
@@ -196,137 +51,18 @@ class TypeWriter {
   }
 }
 
-// DOM refs
-const langButtons = Array.from(document.querySelectorAll("[data-lang-toggle]"));
-const i18nNodes = Array.from(document.querySelectorAll("[data-i18n]"));
-const installGrid = document.querySelector("[data-install-grid]");
-const copyButtons = Array.from(document.querySelectorAll("[data-copy-target]"));
-const typedText = document.getElementById("typed-text");
-const releaseVersion = document.getElementById("release-version");
-const releaseLink = document.getElementById("release-link");
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-let currentLang = localStorage.getItem("agent-dump-lang") || "en";
-let typeWriter = null;
-
-function getChangelogUrl(lang) {
-  return webData.changelogUrl[lang] ?? webData.changelogUrl.en;
-}
-
-function renderInstall(lang) {
-  installGrid.textContent = "";
-  content.install[lang].forEach((group) => {
-    const div = document.createElement("div");
-    div.className = "install-group";
-
-    const label = document.createElement("p");
-    label.className = "install-group-label";
-    label.textContent = translations[lang][group.labelKey];
-
-    div.append(label, createTabbedCodeBlock(group.tabs));
-    installGrid.append(div);
-  });
-}
-
-function createTabbedCodeBlock(tabs) {
-  const shell = document.createElement("div");
-
-  const tabList = document.createElement("div");
-  tabList.className = "tab-list";
-  tabList.setAttribute("role", "tablist");
-
-  const panels = [];
-  const tabButtons = [];
-
-  tabs.forEach((tab, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "tab-button";
-    button.setAttribute("role", "tab");
-    button.setAttribute("aria-selected", String(index === 0));
-    button.textContent = tab.label;
-
-    const panel = document.createElement("div");
-    panel.classList.add("tab-panel");
-    panel.hidden = index !== 0;
-    panel.append(createCommandLine(tab.code));
-
-    button.addEventListener("click", () => {
-      tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(i === index)));
-      panels.forEach((p, i) => { p.hidden = i !== index; });
+function setupTabs() {
+  document.querySelectorAll(".tab-list").forEach((tabList) => {
+    const shell = tabList.parentElement;
+    const buttons = Array.from(tabList.querySelectorAll(".tab-button"));
+    const panels = Array.from(shell.querySelectorAll(".tab-panel"));
+    buttons.forEach((button, index) => {
+      button.addEventListener("click", () => {
+        buttons.forEach((b, i) => b.setAttribute("aria-selected", String(i === index)));
+        panels.forEach((p, i) => { p.hidden = i !== index; });
+      });
     });
-
-    tabButtons.push(button);
-    panels.push(panel);
-    tabList.append(button);
   });
-
-  shell.append(tabList);
-  panels.forEach((p) => shell.append(p));
-  return shell;
-}
-
-function createCommandLine(code) {
-  const line = document.createElement("div");
-  line.className = "command-line";
-
-  const prompt = document.createElement("span");
-  prompt.className = "prompt";
-  prompt.setAttribute("aria-hidden", "true");
-  prompt.textContent = "$";
-
-  const pre = document.createElement("pre");
-  pre.className = "command-code";
-  pre.textContent = code;
-
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "copy-button";
-  button.dataset.copyInline = code;
-  button.setAttribute("aria-label", translations[currentLang].copy);
-  button.innerHTML =
-    '<span class="button-icon-stack" aria-hidden="true"><span class="copy-icon"></span><span class="check-icon"></span></span>';
-  button.addEventListener("click", handleCopy);
-
-  line.append(prompt, pre, button);
-  return line;
-}
-
-function applyLanguage(lang) {
-  currentLang = lang;
-  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-  document.title =
-    lang === "zh"
-      ? "Agent Dump | AI 编码会话导出工具"
-      : "Agent Dump | Session Export for AI Coding Tools";
-
-  i18nNodes.forEach((node) => {
-    const key = node.dataset.i18n;
-    if (translations[lang][key] !== undefined) {
-      node.textContent = translations[lang][key];
-    }
-  });
-
-  langButtons.forEach((btn) => {
-    btn.setAttribute("aria-pressed", String(btn.dataset.langToggle === lang));
-  });
-
-  renderInstall(lang);
-
-  if (releaseVersion) {
-    releaseVersion.textContent = `v${webData.version}`;
-  }
-
-  if (releaseLink) {
-    releaseLink.href = getChangelogUrl(lang);
-  }
-
-  document.querySelectorAll(".copy-button").forEach((btn) => {
-    btn.setAttribute("aria-label", translations[lang].copy);
-    btn.setAttribute("title", translations[lang].copy);
-  });
-
-  localStorage.setItem("agent-dump-lang", lang);
 }
 
 async function handleCopy(event) {
@@ -343,12 +79,12 @@ async function handleCopy(event) {
       fallbackCopyText(text);
     }
     button.dataset.copied = "true";
-    button.setAttribute("aria-label", translations[currentLang].copied);
-    button.setAttribute("title", translations[currentLang].copied);
+    button.setAttribute("aria-label", copiedLabel);
+    button.setAttribute("title", copiedLabel);
     window.setTimeout(() => {
       button.dataset.copied = "false";
-      button.setAttribute("aria-label", translations[currentLang].copy);
-      button.setAttribute("title", translations[currentLang].copy);
+      button.setAttribute("aria-label", copyLabel);
+      button.setAttribute("title", copyLabel);
     }, 2000);
   } catch {
     button.dataset.copied = "false";
@@ -366,27 +102,18 @@ function fallbackCopyText(text) {
   textarea.remove();
 }
 
-// Init
-langButtons.forEach((btn) => {
-  btn.addEventListener("click", () => applyLanguage(btn.dataset.langToggle));
-});
+setupTabs();
+document.querySelectorAll(".copy-button").forEach((btn) => btn.addEventListener("click", handleCopy));
 
-if (releaseLink) {
-  releaseLink.addEventListener("click", () => {
-    releaseLink.href = getChangelogUrl(currentLang);
-  });
-}
-
-copyButtons.forEach((btn) => btn.addEventListener("click", handleCopy));
-
-applyLanguage(currentLang);
-
-// Start typing animation
+const typedText = document.getElementById("typed-text");
 if (typedText) {
-  if (reducedMotion) {
-    typedText.textContent = TYPING_COMMANDS[0];
-  } else {
-    typeWriter = new TypeWriter(typedText);
-    typeWriter.start();
+  const commands = JSON.parse(typedText.dataset.commands ?? "[]");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (commands.length) {
+    if (reducedMotion) {
+      typedText.textContent = commands[0];
+    } else {
+      new TypeWriter(typedText, commands).start();
+    }
   }
 }

@@ -3,12 +3,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import vm from "node:vm";
+import { buildFiles, readVersion } from "../../web/build-site.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
 const aboutFile = path.resolve(repoRoot, "src", "agent_dump", "__about__.py");
-const webVersionDataFile = path.resolve(repoRoot, "web", "version-data.js");
 
 function parseVersion(source) {
   const match = source.match(/__version__\s*=\s*"([^"]+)"/);
@@ -16,21 +15,35 @@ function parseVersion(source) {
   return match[1];
 }
 
-async function loadWebVersionData() {
-  const source = await fs.readFile(webVersionDataFile, "utf8");
-  const context = { window: {} };
-  vm.runInNewContext(source, context);
-  return JSON.parse(JSON.stringify(context.window.AGENT_DUMP_WEB_DATA));
-}
+const npmRoot = path.resolve(repoRoot, "npm");
+const packageFiles = [
+  path.resolve(npmRoot, "package.json"),
+  path.resolve(npmRoot, "packages", "cli", "package.json"),
+  path.resolve(npmRoot, "packages", "cli-darwin-x64", "package.json"),
+  path.resolve(npmRoot, "packages", "cli-darwin-arm64", "package.json"),
+  path.resolve(npmRoot, "packages", "cli-linux-x64", "package.json"),
+  path.resolve(npmRoot, "packages", "cli-win32-x64", "package.json"),
+];
 
-test("web version data stays aligned with the Python version source", async () => {
-  const aboutSource = await fs.readFile(aboutFile, "utf8");
-  const version = parseVersion(aboutSource);
-  const webData = await loadWebVersionData();
+test("npm workspace versions stay aligned with the Python version source", async () => {
+  const version = parseVersion(await fs.readFile(aboutFile, "utf8"));
+  for (const file of packageFiles) {
+    const pkg = JSON.parse(await fs.readFile(file, "utf8"));
+    assert.equal(pkg.version, version, `${path.relative(repoRoot, file)} is out of sync`);
+  }
+});
 
-  assert.equal(webData.version, version);
-  assert.deepEqual(webData.changelogUrl, {
-    en: "https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md",
-    zh: "https://github.com/xingkaixin/agent-dump/blob/main/docs/zh/CHANGELOG.md"
-  });
+// lastmod is a build-time timestamp, not content; ignore it when comparing.
+const stripLastmod = (text) => text.replace(/<lastmod>[^<]*<\/lastmod>/g, "<lastmod/>");
+
+test("committed landing page is up to date with web/i18n.mjs and the version source", async () => {
+  const version = await readVersion();
+  for (const [relPath, expected] of buildFiles(version)) {
+    const actual = await fs.readFile(path.resolve(repoRoot, relPath), "utf8");
+    assert.equal(
+      stripLastmod(actual),
+      stripLastmod(expected),
+      `${relPath} is stale; run \`just build-web\``,
+    );
+  }
 });
