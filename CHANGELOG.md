@@ -2,6 +2,30 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.11.0] - 2026-06-23
+
+### Added
+
+- **ZCode provider support**
+  - Added `ZCodeAgent` for ZCode SQLite sessions at the macOS and Windows default database paths
+  - Added `zcode://<session_id>` URI support for direct printing, JSON/Markdown/raw export, list/interactive flows, query filters, search, stats, and collect
+  - Added ZCode to the provider registry, path diagnostics, top-level public API exports, README, and skill recipes
+
+- **Bilingual web landing pages**
+  - Added build-time pre-rendering for English `/` and Simplified Chinese `/zh/` landing pages
+  - Added localized metadata, `hreflang` alternates, structured data, sitemap entries, and an Open Graph image for the static landing page
+
+### Changed
+
+- **Release and web build flow**
+  - Added `just build-web` and made web deployment rebuild the pre-rendered landing pages before deploying
+  - Updated npm version-sync checks so committed landing pages must stay aligned with `web/i18n.mjs` and the Python version source
+
+### Tests
+
+- Added ZCode provider, contract, scanner, query, CLI, and public API regression coverage
+- Added npm test coverage for package-version alignment and stale landing-page output
+
 ## [0.10.3] - 2026-06-14
 
 ### Changed
@@ -701,6 +725,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.11.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.0
 [0.10.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.3
 [0.10.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.2
 [0.10.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.1

@@ -217,6 +217,7 @@ uv run agent-dump -query error                # Auto-activates list mode
 
 # URI mode - Direct text dump
 uv run agent-dump opencode://<session-id>     # View OpenCode session content
+uv run agent-dump zcode://<session-id>        # View ZCode session content
 uv run agent-dump codex://<session-id>        # View Codex session content
 uv run agent-dump kimi://<session-id>         # View Kimi session content
 uv run agent-dump claude://<session-id>       # View Claude Code session content

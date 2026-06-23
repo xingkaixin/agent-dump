@@ -52,6 +52,7 @@ agent-dump --list -query error
 
 ```bash
 agent-dump opencode://<session-id>
+agent-dump zcode://<session-id>
 agent-dump codex://<session-id>
 agent-dump codex://threads/<session-id>
 agent-dump kimi://<session-id>
@@ -96,6 +97,7 @@ agent-dump --config edit
 ## Supported URI schemes
 
 - `opencode://<session_id>` - OpenCode sessions
+- `zcode://<session_id>` - ZCode sessions
 - `codex://<session_id>` - Codex sessions
 - `codex://threads/<session_id>` - Codex sessions
 - `kimi://<session_id>` - Kimi sessions
@@ -105,7 +107,7 @@ agent-dump --config edit
 
 ## Key features
 
-- **Multi-agent support**: Scan and export sessions from OpenCode, Claude Code, Codex, Kimi, Cursor, and Pi
+- **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, and Pi
 - **Interactive selection**: Friendly CLI selector with time-based grouping
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` prints lightweight URI metadata for discovery

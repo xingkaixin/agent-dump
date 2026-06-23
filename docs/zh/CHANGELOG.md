@@ -1,5 +1,29 @@
 # 更新日志
 
+## [0.11.0] - 2026-06-23
+
+### 新增功能
+
+- **ZCode provider 支持**
+  - 新增 `ZCodeAgent`，支持读取 macOS 与 Windows 默认数据库路径中的 ZCode SQLite 会话
+  - 新增 `zcode://<session_id>` URI，可用于直接打印、JSON/Markdown/raw 导出、列表/交互流程、query 过滤、搜索、统计与 collect
+  - 将 ZCode 加入 provider registry、路径诊断、顶层公开 API 导出、README 与 skill recipes
+
+- **双语网页落地页**
+  - 新增英文 `/` 与简体中文 `/zh/` 落地页的构建时预渲染
+  - 为静态落地页新增本地化 metadata、`hreflang` alternate、结构化数据、sitemap 条目与 Open Graph 图片
+
+### 变更
+
+- **发布与网页构建流程**
+  - 新增 `just build-web`，并让网页部署前自动重建预渲染落地页
+  - 更新 npm 版本同步检查，确保提交的落地页与 `web/i18n.mjs` 和 Python 版本源保持一致
+
+### 测试
+
+- 新增 ZCode provider、contract、scanner、query、CLI 与公开 API 回归测试
+- 新增 npm 测试，覆盖 package 版本对齐与落地页生成结果过期检测
+
 ## [0.10.3] - 2026-06-14
 
 ### 变更
@@ -705,6 +729,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.11.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.0
 [0.10.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.3
 [0.10.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.2
 [0.10.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.1
