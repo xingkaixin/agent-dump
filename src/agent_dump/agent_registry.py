@@ -10,6 +10,7 @@ from agent_dump.agents.cursor import CursorAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.pi import PiAgent
+from agent_dump.agents.zcode import ZCodeAgent
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,13 @@ AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
         factory=OpenCodeAgent,
         uri_schemes=("opencode",),
         location_line="  - OpenCode: XDG_DATA_HOME/opencode/opencode.db or ~/.local/share/opencode/opencode.db",
+    ),
+    AgentRegistration(
+        name="zcode",
+        display_name="ZCode",
+        factory=ZCodeAgent,
+        uri_schemes=("zcode",),
+        location_line="  - ZCode: ~/.zcode/cli/db/db.sqlite on macOS or %USERPROFILE%\\.zcode\\cli\\db\\db.sqlite on Windows",
     ),
     AgentRegistration(
         name="codex",

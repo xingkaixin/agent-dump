@@ -141,8 +141,8 @@ def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | No
     if not sessions:
         return []
 
-    if agent.name == "opencode":
-        return _filter_opencode_sessions(agent, sessions, query)
+    if agent.name in {"opencode", "zcode"}:
+        return _filter_sqlite_message_part_sessions(agent, sessions, query)
 
     # Try indexed full-text search first
     indexed = _try_indexed_search(agent, sessions, query)
@@ -365,7 +365,7 @@ def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
     )
 
 
-def _filter_opencode_sessions(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session]:
+def _filter_sqlite_message_part_sessions(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session]:
     db_path = getattr(agent, "db_path", None)
     if not isinstance(db_path, Path):
         return _filter_sessions_from_source_or_data(agent, sessions, keyword)

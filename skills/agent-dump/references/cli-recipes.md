@@ -33,6 +33,7 @@ uv run agent-dump --list --lang en
 ```bash
 # 默认 print 到终端
 uv run agent-dump opencode://<session_id>
+uv run agent-dump zcode://<session_id>
 uv run agent-dump codex://<session_id>
 uv run agent-dump codex://threads/<session_id>
 uv run agent-dump kimi://<session_id>
@@ -98,6 +99,7 @@ uv run agent-dump --config edit
 
 当前 agent 名称：
 - `opencode`
+- `zcode`
 - `codex`
 - `kimi`
 - `claudecode`
@@ -167,6 +169,7 @@ uv run agent-dump --search "auth" --list -days 30
 处理：
 1. 改为受支持格式：
    - `opencode://<session_id>`
+   - `zcode://<session_id>`
    - `codex://<session_id>`
    - `codex://threads/<session_id>`
    - `kimi://<session_id>`
@@ -209,7 +212,7 @@ uv run agent-dump --search "auth" --list -days 30
 
 处理：
 1. 改为 `keyword` 或 `agent1,agent2:keyword`。
-2. 将 agent 名称改为 `opencode/codex/kimi/claudecode/cursor/pi` 中的合法值。
+2. 将 agent 名称改为 `opencode/zcode/codex/kimi/claudecode/cursor/pi` 中的合法值。
 
 ### collect 模式参数冲突
 

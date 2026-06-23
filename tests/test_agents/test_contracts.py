@@ -20,6 +20,7 @@ from agent_dump.agents.cursor import CursorAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.pi import PiAgent
+from agent_dump.agents.zcode import ZCodeAgent
 from agent_dump.diagnostics import DiagnosticFileNotFoundError
 from agent_dump.rendering import export_session_in_format, format_session_metadata_summary, render_session_head
 
@@ -152,6 +153,105 @@ def _create_opencode_db(path: Path, now_ms: int) -> None:
             "INSERT INTO part VALUES (?, ?, ?, ?)",
             [
                 (part_id, message_id, created_at, json.dumps(payload, ensure_ascii=False))
+                for part_id, message_id, created_at, payload in parts
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _create_zcode_db(path: Path, now_ms: int) -> None:
+    conn = sqlite3.connect(path)
+    try:
+        cur = conn.cursor()
+        cur.executescript(
+            """
+            CREATE TABLE session (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                directory TEXT NOT NULL,
+                path TEXT,
+                title TEXT NOT NULL,
+                version TEXT NOT NULL,
+                summary_files TEXT,
+                time_created INTEGER NOT NULL,
+                time_updated INTEGER NOT NULL,
+                task_type TEXT NOT NULL DEFAULT 'interactive',
+                title_source TEXT NOT NULL DEFAULT 'first_input'
+            );
+            CREATE TABLE message (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                time_created INTEGER NOT NULL,
+                time_updated INTEGER NOT NULL,
+                data TEXT NOT NULL
+            );
+            CREATE TABLE part (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                time_created INTEGER NOT NULL,
+                time_updated INTEGER NOT NULL,
+                data TEXT NOT NULL
+            );
+            """
+        )
+        cur.execute(
+            """
+            INSERT INTO session (
+                id, project_id, slug, directory, path, title, version, summary_files,
+                time_created, time_updated, task_type, title_source
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "zcode-contract",
+                "proj-zcode-contract",
+                "zcode-contract",
+                "/workspace/zcode-contract",
+                "/workspace/zcode-contract",
+                "ZCode Contract",
+                "0.14.8",
+                '["web/app.tsx"]',
+                now_ms,
+                now_ms + 1000,
+                "interactive",
+                "first_input",
+            ),
+        )
+        messages = [
+            ("zcode-user", now_ms, {"role": "user", "modelID": "GLM-5.2"}),
+            ("zcode-assistant", now_ms + 1000, {"role": "assistant", "modelID": "GLM-5.2"}),
+        ]
+        cur.executemany(
+            "INSERT INTO message VALUES (?, ?, ?, ?, ?)",
+            [
+                (message_id, "zcode-contract", created_at, created_at, json.dumps(payload, ensure_ascii=False))
+                for message_id, created_at, payload in messages
+            ],
+        )
+        parts = [
+            ("zcode-user-part", "zcode-user", now_ms, {"type": "text", "text": "ZCode prompt"}),
+            (
+                "zcode-assistant-part",
+                "zcode-assistant",
+                now_ms + 1000,
+                {"type": "text", "text": "ZCode answer"},
+            ),
+        ]
+        cur.executemany(
+            "INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    part_id,
+                    message_id,
+                    "zcode-contract",
+                    created_at,
+                    created_at,
+                    json.dumps(payload, ensure_ascii=False),
+                )
                 for part_id, message_id, created_at, payload in parts
             ],
         )
@@ -338,6 +438,30 @@ def _build_opencode_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
         texts=("OpenCode prompt", "OpenCode answer"),
         remove_source=lambda: db_path.unlink(),
         subtargets=("src/main.py",),
+    )
+
+
+def _build_zcode_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ProviderContractFixture:
+    now = _now_ms()
+    zcode_home = tmp_path / "zcode-home"
+    db_path = zcode_home / ".zcode" / "cli" / "db" / "db.sqlite"
+    db_path.parent.mkdir(parents=True)
+    monkeypatch.setattr("agent_dump.agents.zcode.sys.platform", "darwin")
+    monkeypatch.setattr("agent_dump.agents.zcode.Path.home", lambda: zcode_home)
+    _create_zcode_db(db_path, now)
+
+    return ProviderContractFixture(
+        agent=ZCodeAgent(),
+        session_id="zcode-contract",
+        uri="zcode://zcode-contract",
+        title="ZCode Contract",
+        location="/workspace/zcode-contract",
+        model="GLM-5.2",
+        head_message_count=2,
+        data_message_count=2,
+        texts=("ZCode prompt", "ZCode answer"),
+        remove_source=lambda: db_path.unlink(),
+        subtargets=("web/app.tsx",),
     )
 
 
@@ -533,6 +657,7 @@ CONTRACT_BUILDERS: tuple[ProviderBuilder, ...] = (
     _build_claude_contract,
     _build_kimi_contract,
     _build_opencode_contract,
+    _build_zcode_contract,
     _build_cursor_contract,
     _build_pi_contract,
 )
