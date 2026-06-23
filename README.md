@@ -7,6 +7,7 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 ## Supported AI Tools
 
 - **OpenCode** - Open source AI coding assistant
+- **ZCode** - ZCode coding assistant sessions
 - **Claude Code** - Anthropic's AI coding tool
 - **Codex** - OpenAI's command-line AI coding assistant
 - **Kimi** - Moonshot AI assistant
@@ -32,12 +33,13 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 
 ## Path Discovery
 
-`agent-dump` resolves session roots in this order: official environment variable, tool default directory, then local development fallback under `data/<agent>`.
+`agent-dump` resolves most session roots in this order: official environment variable, tool default directory, then local development fallback under `data/<agent>`. ZCode currently uses only its macOS/Windows default database path.
 
 - **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
 - **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **OpenCode**: `XDG_DATA_HOME/opencode` -> Windows data directory (`LOCALAPPDATA/opencode` or `APPDATA/opencode`) -> `~/.local/share/opencode` -> `data/opencode`
+- **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
 - **Cursor**: `CURSOR_DATA_PATH` or Cursor's default user `workspaceStorage`, with `globalStorage/state.vscdb`
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
 
@@ -135,6 +137,7 @@ uv run agent-dump opencode://session-id-abc123
 
 Supported URI schemes:
 - `opencode://<session_id>` - OpenCode sessions
+- `zcode://<session_id>` - ZCode sessions
 - `codex://<session_id>` - Codex sessions
 - `codex://threads/<session_id>` - Codex sessions
 - `kimi://<session_id>` - Kimi sessions
@@ -317,6 +320,7 @@ The top-level public API matches `agent_dump.__all__`:
 | `BaseAgent` | Provider abstract base class |
 | `Session` | Unified session data model |
 | `OpenCodeAgent` | OpenCode provider |
+| `ZCodeAgent` | ZCode provider |
 | `CodexAgent` | Codex provider |
 | `KimiAgent` | Kimi provider |
 | `ClaudeCodeAgent` | Claude Code provider |
@@ -407,6 +411,7 @@ deny = [
 │           ├── __init__.py     # Provider exports
 │           ├── base.py         # BaseAgent and Session
 │           ├── opencode.py     # OpenCode Agent
+│           ├── zcode.py        # ZCode Agent
 │           ├── claudecode.py   # Claude Code Agent
 │           ├── codex.py        # Codex Agent
 │           ├── cursor.py       # Cursor Agent

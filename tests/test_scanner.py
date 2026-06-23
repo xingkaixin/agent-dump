@@ -13,9 +13,10 @@ class TestAgentScanner:
     def test_init(self):
         """测试初始化时创建所有 agent"""
         scanner = AgentScanner()
-        assert len(scanner.agents) == 6
+        assert len(scanner.agents) == 7
         agent_names = [a.name for a in scanner.agents]
         assert "opencode" in agent_names
+        assert "zcode" in agent_names
         assert "codex" in agent_names
         assert "kimi" in agent_names
         assert "claudecode" in agent_names
@@ -172,5 +173,5 @@ class TestAgentScanner:
         elapsed = time.monotonic() - start
 
         assert len(result) == len(scanner.agents)
-        # 6 个 agent 各 0.1s，若串行需 0.6s；并发应远小于 0.6s
+        # 7 个 agent 各 0.1s，若串行需 0.7s；并发应远小于 0.7s
         assert elapsed < 0.35

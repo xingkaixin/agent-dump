@@ -882,6 +882,7 @@ class TestMain:
             assert "KIMI_SHARE_DIR/sessions" in captured.out
             assert "CLAUDE_CONFIG_DIR/projects" in captured.out
             assert "XDG_DATA_HOME/opencode/opencode.db" in captured.out
+            assert ".zcode/cli/db/db.sqlite" in captured.out
 
     def test_main_uri_mode_codex_threads_variant(self, capsys):
         """测试 URI 模式支持 codex://threads/<id> 变体"""

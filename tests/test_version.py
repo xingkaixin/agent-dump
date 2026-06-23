@@ -31,6 +31,7 @@ def test_top_level_public_api_matches_declared_exports() -> None:
         "BaseAgent",
         "Session",
         "OpenCodeAgent",
+        "ZCodeAgent",
         "CodexAgent",
         "KimiAgent",
         "ClaudeCodeAgent",

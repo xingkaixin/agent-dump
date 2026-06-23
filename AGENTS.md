@@ -23,7 +23,7 @@
 ### 1.3 数据安全约束
 
 - **Provider 数据源只读访问**：导出、搜索、统计、collect 均只读取本地会话源
-- **Provider schema 只在对应 Agent 内处理**：OpenCode/Cursor 的 SQLite 细节、JSONL provider 的文件结构都封装在各自 Agent
+- **Provider schema 只在对应 Agent 内处理**：OpenCode/ZCode/Cursor 的 SQLite 细节、JSONL provider 的文件结构都封装在各自 Agent
 - **不得删除或修改用户数据**：禁止对用户会话目录、数据库、JSONL 源文件执行写入或清理
 - **临时文件必须清理**：使用 `tempfile` 模块并确保清理
 
@@ -49,6 +49,7 @@
 | `BaseAgent` | `agent_dump.agents.base` | Provider 实现的抽象基类 |
 | `Session` | `agent_dump.agents.base` | 统一会话数据模型 |
 | `OpenCodeAgent` | `agent_dump.agents.opencode` | OpenCode provider |
+| `ZCodeAgent` | `agent_dump.agents.zcode` | ZCode provider |
 | `CodexAgent` | `agent_dump.agents.codex` | Codex provider |
 | `KimiAgent` | `agent_dump.agents.kimi` | Kimi provider |
 | `ClaudeCodeAgent` | `agent_dump.agents.claudecode` | Claude Code provider |
@@ -186,6 +187,7 @@ agent-dump/
 │       ├── __init__.py          # provider 导出
 │       ├── base.py              # BaseAgent 与 Session
 │       ├── opencode.py          # OpenCode SQLite provider
+│       ├── zcode.py             # ZCode SQLite provider
 │       ├── codex.py             # Codex JSONL provider
 │       ├── kimi.py              # Kimi JSONL provider
 │       ├── claudecode.py        # Claude Code JSONL provider
@@ -271,6 +273,7 @@ class BaseAgent(ABC):
 | provider name | display name | URI scheme |
 |---------------|--------------|------------|
 | `opencode` | OpenCode | `opencode://` |
+| `zcode` | ZCode | `zcode://` |
 | `codex` | Codex | `codex://`、`codex://threads/` |
 | `kimi` | Kimi | `kimi://` |
 | `claudecode` | Claude Code | `claude://` |
@@ -361,13 +364,13 @@ collect 模式入口：
   - mock `sys.stdin` 测试简单输入模式
 
 - **Provider 测试必须使用临时数据源**：
-  - OpenCode 使用 `tmp_path` 创建临时 SQLite 数据库。
+  - OpenCode / ZCode 使用 `tmp_path` 创建临时 SQLite 数据库。
   - Cursor 使用 `tmp_path` 创建临时 `state.vscdb` 与 workspaceStorage。
   - Codex / Kimi / Claude Code 使用 `tmp_path` 创建临时 JSONL 文件。
   - 使用 `monkeypatch` 注入 `CODEX_HOME`、`KIMI_SHARE_DIR`、`CLAUDE_CONFIG_DIR`、`CURSOR_DATA_PATH`、`PI_HOME` 或 `Path.home()`。
 
 - **不允许真实访问用户目录**：
-  - 禁止读取真实 `~/.codex`、`~/.claude`、`~/.kimi`、`~/.local/share/opencode`、Cursor 用户目录。
+  - 禁止读取真实 `~/.codex`、`~/.claude`、`~/.kimi`、`~/.local/share/opencode`、`~/.zcode`、Cursor 用户目录。
   - 禁止写入真实 `~/sessions`。
   - 文件写入测试使用 `tmp_path`。
 
@@ -412,32 +415,42 @@ just lint-format   # ruff format
 - 时间戳：毫秒时间戳，读取时转换为 `datetime`
 - JSON 字段：`message.data`、`part.data`
 
-### 8.2 Codex
+### 8.2 ZCode
+
+- 路径：macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`
+- Linux：无默认 ZCode 会话路径
+- 存储：SQLite
+- 当前核心表：`session`、`message`、`part`
+- 时间戳：毫秒时间戳，读取时转换为 `datetime`
+- JSON 字段：`message.data`、`part.data`
+- URI：`zcode://<session_id>`
+
+### 8.3 Codex
 
 - 路径：`CODEX_HOME/sessions`、`~/.codex/sessions`、`data/codex`
 - 存储：JSONL
 - URI：`codex://<session_id>`、`codex://threads/<session_id>`
 
-### 8.3 Kimi
+### 8.4 Kimi
 
 - 路径：`KIMI_SHARE_DIR/sessions`、`~/.kimi/sessions`、`data/kimi`
 - 存储：JSONL
 - URI：`kimi://<session_id>`
 
-### 8.4 Claude Code
+### 8.5 Claude Code
 
 - 路径：`CLAUDE_CONFIG_DIR/projects`、`~/.claude/projects`、`data/claudecode`
 - 存储：JSONL
 - URI：`claude://<session_id>`
 
-### 8.5 Cursor
+### 8.6 Cursor
 
 - 路径：`CURSOR_DATA_PATH` 或 Cursor 默认用户目录下的 `workspaceStorage`，并读取 `globalStorage/state.vscdb`
 - 存储：SQLite `cursorDiskKV`
 - URI：`cursor://<requestid>`
 - 能力边界：Cursor URI 支持 `json` 与 `print`
 
-### 8.6 Pi
+### 8.7 Pi
 
 - 路径：`PI_HOME/agent/sessions`、`~/.pi/agent/sessions`、`data/pi`
 - 存储：JSONL

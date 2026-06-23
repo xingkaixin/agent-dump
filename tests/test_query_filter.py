@@ -12,6 +12,7 @@ import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.agents.opencode import OpenCodeAgent
+from agent_dump.agents.zcode import ZCodeAgent
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
@@ -271,8 +272,15 @@ class TestFilterSessions:
         assert result == [session]
         mock_get_session_data.assert_called_once_with(session)
 
-    def test_filter_opencode_with_sql_match(self, tmp_path):
-        db_path = tmp_path / "opencode.db"
+    @pytest.mark.parametrize(
+        ("agent_cls", "db_name"),
+        (
+            (OpenCodeAgent, "opencode.db"),
+            (ZCodeAgent, "db.sqlite"),
+        ),
+    )
+    def test_filter_sqlite_message_part_provider_with_sql_match(self, agent_cls, db_name, tmp_path):
+        db_path = tmp_path / db_name
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute(
@@ -329,7 +337,7 @@ class TestFilterSessions:
         conn.commit()
         conn.close()
 
-        agent = OpenCodeAgent()
+        agent = agent_cls()
         agent.db_path = db_path
         sessions = [
             make_session("s1", "Normal title", db_path),

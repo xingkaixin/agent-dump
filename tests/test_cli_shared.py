@@ -98,6 +98,10 @@ class TestParseUri:
         """测试 Cursor URI 解析"""
         assert parse_uri("cursor://request-001") == ("cursor", "request-001")
 
+    def test_parse_uri_zcode(self):
+        """测试 ZCode URI 解析"""
+        assert parse_uri("zcode://sess-001") == ("zcode", "sess-001")
+
 
 class TestQueryHelpers:
     def test_render_query_summary_includes_structured_fields(self, tmp_path):

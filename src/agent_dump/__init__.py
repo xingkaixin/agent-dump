@@ -10,6 +10,7 @@ __all__ = [
     "BaseAgent",
     "Session",
     "OpenCodeAgent",
+    "ZCodeAgent",
     "CodexAgent",
     "KimiAgent",
     "ClaudeCodeAgent",
@@ -24,4 +25,5 @@ from agent_dump.agents.cursor import CursorAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.pi import PiAgent
+from agent_dump.agents.zcode import ZCodeAgent
 from agent_dump.scanner import AgentScanner
