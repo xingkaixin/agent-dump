@@ -185,6 +185,7 @@ uv run agent-dump -query 报错                 # 自动启用列表模式
 
 # URI 模式 - 直接查看会话内容
 uv run agent-dump opencode://<session-id>     # 查看 OpenCode 会话内容
+uv run agent-dump zcode://<session-id>        # 查看 ZCode 会话内容
 uv run agent-dump codex://<session-id>        # 查看 Codex 会话内容
 uv run agent-dump kimi://<session-id>         # 查看 Kimi 会话内容
 uv run agent-dump claude://<session-id>       # 查看 Claude Code 会话内容

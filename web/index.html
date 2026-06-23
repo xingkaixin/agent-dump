@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#fdfcfc" />
-    <meta name="description" content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi." />
-    <meta name="keywords" content="agent-dump, AI session export, Claude Code sessions, Codex sessions, Cursor sessions, Pi sessions, AI coding tool, session dump, CLI export, developer tool" />
+    <meta name="description" content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi." />
+    <meta name="keywords" content="agent-dump, AI session export, Claude Code sessions, Codex sessions, ZCode sessions, Cursor sessions, Pi sessions, AI coding tool, session dump, CLI export, developer tool" />
     <meta name="author" content="xingkaixin" />
     <meta name="robots" content="index, follow" />
     <title>Agent Dump | Export AI Coding Sessions from CLI</title>
@@ -21,7 +21,7 @@
     <meta property="og:url" content="https://agent-dump.xingkaixin.me/" />
     <meta property="og:site_name" content="Agent Dump" />
     <meta property="og:title" content="Agent Dump | Export AI Coding Sessions from CLI" />
-    <meta property="og:description" content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi." />
+    <meta property="og:description" content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi." />
     <meta property="og:image" content="https://agent-dump.xingkaixin.me/assets/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="631" />
@@ -31,7 +31,7 @@
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Agent Dump | Export AI Coding Sessions from CLI" />
-    <meta name="twitter:description" content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi." />
+    <meta name="twitter:description" content="Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi." />
     <meta name="twitter:image" content="https://agent-dump.xingkaixin.me/assets/og-image.png" />
     <meta name="twitter:image:alt" content="Agent Dump CLI exporting AI coding sessions to readable files" />
 
@@ -67,14 +67,14 @@
       "applicationCategory": "DeveloperApplication",
       "applicationSubCategory": "Command-line developer tool",
       "operatingSystem": "macOS, Linux, Windows",
-      "description": "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.",
+      "description": "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi.",
       "inLanguage": "en",
       "url": "https://agent-dump.xingkaixin.me/",
       "downloadUrl": [
         "https://www.npmjs.com/package/@agent-dump/cli",
         "https://pypi.org/project/agent-dump/"
       ],
-      "softwareVersion": "0.10.3",
+      "softwareVersion": "0.11.0",
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -96,7 +96,7 @@
           "name": "What is Agent Dump?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi so developers can inspect session history from one CLI."
+            "text": "Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi so developers can inspect session history from one CLI."
           }
         },
         {
@@ -104,7 +104,7 @@
           "name": "Which AI coding tools does Agent Dump support?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Agent Dump supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows."
+            "text": "Agent Dump supports Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows."
           }
         },
         {
@@ -153,8 +153,8 @@
       <section id="hero" class="hero">
         <p class="eyebrow">CLI · AI Session Export</p>
         <h1>Export AI coding sessions.</h1>
-        <p class="description">List, dump, export, summarize, and search sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.</p>
-        <p class="answer-summary">Agent Dump gives developers one command-line interface for local AI coding session history across six tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.</p>
+        <p class="description">List, dump, export, summarize, and search sessions from Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi.</p>
+        <p class="answer-summary">Agent Dump gives developers one command-line interface for local AI coding session history across seven tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.</p>
         <p class="release-meta">
           <span>Version</span>
           <a
@@ -163,7 +163,7 @@
             target="_blank"
             rel="noopener noreferrer"
           >
-            <span>v0.10.3</span>
+            <span>v0.11.0</span>
           </a>
         </p>
 
@@ -176,7 +176,7 @@
           <div class="terminal-body">
             <div class="terminal-line">
               <span class="prompt" aria-hidden="true">$</span>
-              <span id="typed-text" class="typed-text" aria-live="off" data-commands="[&quot;agent-dump --interactive&quot;,&quot;agent-dump codex://threads/abc123 --format json&quot;,&quot;agent-dump pi://019e7978-b2ec --head&quot;,&quot;agent-dump --search \&quot;auth timeout\&quot;&quot;,&quot;agent-dump --stats -days 30&quot;,&quot;agent-dump --collect --dry-run&quot;]"></span><span class="cursor" aria-hidden="true"></span>
+              <span id="typed-text" class="typed-text" aria-live="off" data-commands="[&quot;agent-dump --interactive&quot;,&quot;agent-dump zcode://sess-abc123 --format json&quot;,&quot;agent-dump codex://threads/abc123 --format json&quot;,&quot;agent-dump pi://019e7978-b2ec --head&quot;,&quot;agent-dump --search \&quot;auth timeout\&quot;&quot;,&quot;agent-dump --stats -days 30&quot;,&quot;agent-dump --collect --dry-run&quot;]"></span><span class="cursor" aria-hidden="true"></span>
             </div>
           </div>
         </div>
@@ -294,7 +294,7 @@
       <section id="capabilities" class="content-section">
         <h2>What Agent Dump does</h2>
         <ul class="feature-list" aria-label="Agent Dump capabilities">
-          <li>Reads local sessions from Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi.</li>
+          <li>Reads local sessions from Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi.</li>
           <li>Exports sessions as JSON, Markdown, raw files, or direct terminal output.</li>
           <li>Searches recent session history and filters by provider, role, path, or query URI.</li>
           <li>Collects high-signal session summaries for project management and insight reports.</li>
@@ -306,11 +306,11 @@
         <div class="faq-list">
           <article>
             <h3>What is Agent Dump?</h3>
-            <p>Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi so developers can inspect session history from one CLI.</p>
+            <p>Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi so developers can inspect session history from one CLI.</p>
           </article>
           <article>
             <h3>Which AI coding tools does Agent Dump support?</h3>
-            <p>Agent Dump supports Codex, Claude Code, Kimi, OpenCode, Cursor, and Pi. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows.</p>
+            <p>Agent Dump supports Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows.</p>
           </article>
           <article>
             <h3>How do you install Agent Dump?</h3>
