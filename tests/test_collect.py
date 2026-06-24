@@ -616,6 +616,19 @@ class TestCollectStructuredSummary:
 
         assert result["topics"] == ["A"]
 
+    def test_request_structured_summary_from_llm_parses_first_json_object(self):
+        with mock.patch(
+            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            return_value='{"topics":["A"]}\n{"topics":["ignored"]}',
+        ):
+            result = request_structured_summary_from_llm(
+                self._config(),
+                "prompt",
+                context_label="chunk-1",
+            )
+
+        assert result["topics"] == ["A"]
+
     def test_request_structured_summary_from_llm_retries_then_raises(self):
         with (
             mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="not json"),
@@ -661,6 +674,7 @@ class TestCollectStructuredSummary:
         body = json.loads(mock_urlopen.call_args.args[0].data.decode("utf-8"))
         assert body["response_format"]["type"] == "json_schema"
         assert body["response_format"]["json_schema"] == build_summary_json_schema()
+        assert body["max_tokens"] == 4096
 
     def test_request_structured_summary_from_llm_logs_parse_error(self, tmp_path):
         log_path = tmp_path / "collect.log"
@@ -692,7 +706,9 @@ class TestCollectStructuredSummary:
         ]
         assert records[-1]["session_uri"] == "codex://s-1"
         assert records[-1]["phase"] == "chunk_summary"
+        assert records[-1]["response_chars"] == len("not json")
         assert records[-1]["response_preview"] == "not json"
+        assert records[-1]["response_tail_preview"] == "not json"
 
     def test_request_structured_summary_from_llm_retries_request_error(self, tmp_path):
         log_path = tmp_path / "collect.log"
@@ -799,6 +815,41 @@ class TestCollectStructuredSummary:
         assert summaries[0].summary_data["topics"] == ["T1", "T2", "T3"]
         assert summaries[0].summary_data["errors"] == ["E2"]
 
+    def test_summarize_collect_entries_falls_back_when_session_merge_fails(self, tmp_path):
+        entry = self._entry()
+        event = CollectEvent(kind="assistant_key", role="assistant", text="event")
+        planned_entry = PlannedCollectEntry(collect_entry=entry, chunks=((event,), (event,)))
+        log_path = tmp_path / "collect.log"
+        logger = CollectLogger(enabled=True, path=log_path, run_id="run-1")
+        responses = iter(
+            [
+                '{"topics":["T1"],"key_actions":["A1"]}',
+                '{"topics":["T2"],"key_actions":["A2"]}',
+                "bad json",
+                "bad json",
+            ]
+        )
+
+        with (
+            mock.patch("agent_dump.collect.SESSION_MERGE_LLM_THRESHOLD", 1),
+            mock.patch(
+                "agent_dump.collect.request_structured_summary_payload_from_llm",
+                side_effect=lambda *args, **kwargs: next(responses),
+            ),
+        ):
+            summaries = summarize_collect_entries(
+                config=self._config(),
+                planned_entries=[planned_entry],
+                summary_concurrency=1,
+                logger=logger,
+            )
+
+        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        assert summaries[0].summary_data["topics"] == ["T1", "T2"]
+        assert summaries[0].summary_data["key_actions"] == ["A1", "A2"]
+        assert records[-1]["event"] == "llm_merge_fallback"
+        assert records[-1]["phase"] == "session_merge"
+
     def test_summarize_collect_entries_raises_wrapped_session_uri(self):
         with (
             mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="bad json"),
@@ -847,6 +898,51 @@ class TestCollectStructuredSummary:
         tree_events = [event for event in progress if event.stage == "tree_reduction"]
         assert tree_events[0].current == 0
         assert tree_events[-1].current == tree_events[-1].total
+
+    def test_reduce_collect_summaries_falls_back_when_group_merge_fails(self, tmp_path):
+        session_summaries = [
+            SessionSummaryEntry(
+                index=index,
+                collect_entry=CollectEntry(
+                    date_value=date(2026, 3, 5),
+                    created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
+                    agent_name="codex",
+                    agent_display_name="Codex",
+                    session_id=f"s-{index}",
+                    session_uri=f"codex://s-{index}",
+                    session_title=f"task-{index}",
+                    project_directory="/repo",
+                    events=(CollectEvent(kind="user_intent", role="user", text="修复"),),
+                    is_truncated=False,
+                ),
+                summary_data=normalize_summary_payload({"topics": [f"T{index}"]}),
+                chunk_count=1,
+                source_truncated=False,
+            )
+            for index in range(2)
+        ]
+        log_path = tmp_path / "collect.log"
+        logger = CollectLogger(enabled=True, path=log_path, run_id="run-1")
+        responses = iter(["bad json", "bad json"])
+
+        with (
+            mock.patch("agent_dump.collect.SESSION_MERGE_LLM_THRESHOLD", 1),
+            mock.patch(
+                "agent_dump.collect.request_structured_summary_payload_from_llm",
+                side_effect=lambda *args, **kwargs: next(responses),
+            ),
+        ):
+            aggregate = reduce_collect_summaries(
+                config=self._config(),
+                session_summaries=session_summaries,
+                group_size=2,
+                logger=logger,
+            )
+
+        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        assert aggregate.summary_data["topics"] == ["T0", "T1"]
+        assert records[-1]["event"] == "llm_merge_fallback"
+        assert records[-1]["phase"] == "group_merge"
 
     def test_build_collect_final_prompt_contains_required_sections(self):
         aggregate = CollectAggregate(
@@ -1139,3 +1235,4 @@ class TestCollectInsightMode:
         body = json.loads(mock_urlopen.call_args.args[0].data.decode("utf-8"))
         schema = body["response_format"]["json_schema"]
         assert set(schema["schema"]["properties"]) == {"scene", "stuck", "turning"}
+        assert body["max_tokens"] == 4096

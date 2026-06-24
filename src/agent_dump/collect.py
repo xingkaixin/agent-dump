@@ -136,6 +136,11 @@ def _truncate_log_preview(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
     return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
 
 
+def _truncate_log_tail(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
+    normalized = text.strip()
+    return normalized if len(normalized) <= limit else f"...{normalized[-limit + 3 :].lstrip()}"
+
+
 def _truncate_excerpt(text: str, limit: int = 280) -> str:
     normalized = text.strip()
     return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
@@ -212,15 +217,23 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     if first_brace != -1 and last_brace > first_brace:
         candidates.append(stripped[first_brace : last_brace + 1])
 
+    decoder = json.JSONDecoder()
+    decode_errors: list[str] = []
     for candidate in candidates:
         if not candidate:
             continue
         try:
-            loaded = json.loads(candidate)
-        except json.JSONDecodeError:
+            loaded, _ = decoder.raw_decode(candidate.strip())
+        except json.JSONDecodeError as exc:
+            decode_errors.append(
+                f"{exc.msg} at line {exc.lineno} column {exc.colno} char {exc.pos} of {len(candidate)}"
+            )
             continue
         if isinstance(loaded, dict):
             return cast(dict[str, Any], loaded)
+    details = "; ".join(_dedupe_preserve_order(decode_errors, limit=3))
+    if details:
+        raise ValueError(f"response is not valid JSON object: {details}")
     raise ValueError("response is not valid JSON object")
 
 
@@ -771,7 +784,9 @@ def request_structured_summary_from_llm(
                     chunk_index=chunk_index,
                     chunk_total=chunk_total,
                     error=str(exc),
+                    response_chars=len(response),
                     response_preview=_truncate_log_preview(response),
+                    response_tail_preview=_truncate_log_tail(response),
                 )
             current_prompt = _build_structured_summary_retry_prompt(
                 original_prompt=prompt,
@@ -869,17 +884,27 @@ def _summarize_collect_entry(
 
     merged = merge_summary_payloads(chunk_payloads, mode=mode)
     if len(chunk_payloads) > 1 and _summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
-        merged = request_structured_summary_from_llm(
-            config,
-            build_collect_merge_prompt(entry=entry, payloads=chunk_payloads, merge_label="session", mode=mode),
-            context_label=f"{entry.session_uri} session merge",
-            timeout_seconds=timeout_seconds,
-            logger=logger,
-            phase="session_merge",
-            session_uri=entry.session_uri,
-            chunk_total=len(chunks),
-            mode=mode,
-        )
+        try:
+            merged = request_structured_summary_from_llm(
+                config,
+                build_collect_merge_prompt(entry=entry, payloads=chunk_payloads, merge_label="session", mode=mode),
+                context_label=f"{entry.session_uri} session merge",
+                timeout_seconds=timeout_seconds,
+                logger=logger,
+                phase="session_merge",
+                session_uri=entry.session_uri,
+                chunk_total=len(chunks),
+                mode=mode,
+            )
+        except RuntimeError as exc:
+            if logger is not None:
+                logger.log(
+                    "llm_merge_fallback",
+                    phase="session_merge",
+                    session_uri=entry.session_uri,
+                    chunk_total=len(chunks),
+                    error=str(exc),
+                )
     emit_collect_progress(
         on_session_merged,
         stage="merge_sessions",
@@ -1072,21 +1097,32 @@ def reduce_collect_summaries(
             merged = merge_summary_payloads(payloads, mode=mode)
             if _summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
                 dummy_entry = session_summaries[min(start, len(session_summaries) - 1)].collect_entry
-                merged = request_structured_summary_from_llm(
-                    config,
-                    build_collect_merge_prompt(
-                        entry=dummy_entry,
-                        payloads=payloads,
-                        merge_label=f"group-level-{reduction_depth}",
+                try:
+                    merged = request_structured_summary_from_llm(
+                        config,
+                        build_collect_merge_prompt(
+                            entry=dummy_entry,
+                            payloads=payloads,
+                            merge_label=f"group-level-{reduction_depth}",
+                            mode=mode,
+                        ),
+                        context_label=f"group merge level {reduction_depth} index {start // group_size + 1}",
+                        timeout_seconds=timeout_seconds,
+                        logger=logger,
+                        phase="group_merge",
+                        session_uri=dummy_entry.session_uri,
                         mode=mode,
-                    ),
-                    context_label=f"group merge level {reduction_depth} index {start // group_size + 1}",
-                    timeout_seconds=timeout_seconds,
-                    logger=logger,
-                    phase="group_merge",
-                    session_uri=dummy_entry.session_uri,
-                    mode=mode,
-                )
+                    )
+                except RuntimeError as exc:
+                    if logger is not None:
+                        logger.log(
+                            "llm_merge_fallback",
+                            phase="group_merge",
+                            session_uri=dummy_entry.session_uri,
+                            level=reduction_depth,
+                            group_index=start // group_size + 1,
+                            error=str(exc),
+                        )
             next_level.append(
                 GroupSummaryEntry(
                     level=reduction_depth,
