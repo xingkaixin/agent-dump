@@ -7,6 +7,8 @@ from urllib import error, request
 from agent_dump.collect_models import SUMMARY_FIELDS
 from agent_dump.config import AIConfig
 
+STRUCTURED_SUMMARY_MAX_TOKENS = 4096
+
 
 def request_summary_from_llm(config: AIConfig, prompt: str, *, timeout_seconds: int = 90) -> str:
     """Call provider API and return markdown summary."""
@@ -98,6 +100,7 @@ def _request_openai_structured_summary(
         ],
         "temperature": 0.2,
         "enable_thinking": False,
+        "max_tokens": STRUCTURED_SUMMARY_MAX_TOKENS,
         "response_format": {
             "type": "json_schema",
             "json_schema": build_summary_json_schema(summary_fields),
