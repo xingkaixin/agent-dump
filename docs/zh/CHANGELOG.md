@@ -1,5 +1,18 @@
 # 更新日志
 
+## [0.11.1] - 2026-06-25
+
+### 问题修复
+
+- **Collect 结构化摘要合并**
+  - 结构化 LLM 响应中存在额外尾随文本或对象时，只解析第一个 JSON object，避免可用摘要被误判为非法
+  - session 级或 group 级 LLM 合并重试后仍返回非法 JSON 时，回退到确定性的本地 payload 合并，避免整个 collect 运行失败
+  - 将 OpenAI 结构化摘要响应限制为 4096 tokens，降低过长 completion 产生非法合并输出的概率
+
+### 诊断
+
+- 记录非法结构化响应的字符数、头部预览和尾部预览，便于排查 collect 解析失败
+
 ## [0.11.0] - 2026-06-23
 
 ### 新增功能
@@ -729,6 +742,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.11.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.1
 [0.11.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.0
 [0.10.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.3
 [0.10.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.2

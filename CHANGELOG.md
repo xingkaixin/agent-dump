@@ -2,6 +2,19 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.11.1] - 2026-06-25
+
+### Fixed
+
+- **Collect structured summary merging**
+  - Parse the first JSON object from structured LLM responses so extra trailing text or objects do not invalidate an otherwise usable summary
+  - Fall back to deterministic local payload merging when session-level or group-level LLM merge retries still return malformed JSON, instead of failing the full collect run
+  - Cap OpenAI structured summary responses at 4096 tokens to reduce malformed merge output from overlong completions
+
+### Diagnostics
+
+- Log invalid structured response length, head preview, and tail preview to make collect parse failures easier to inspect
+
 ## [0.11.0] - 2026-06-23
 
 ### Added
@@ -725,6 +738,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.11.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.1
 [0.11.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.0
 [0.10.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.3
 [0.10.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.2
