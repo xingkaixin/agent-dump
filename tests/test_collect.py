@@ -1,9 +1,12 @@
 """collect 模块测试。"""
 
 from datetime import date, datetime, timedelta, timezone
+from email.message import Message
+import io
 import json
 from pathlib import Path
 from unittest import mock
+from urllib import error as urllib_error
 
 import pytest
 
@@ -676,6 +679,48 @@ class TestCollectStructuredSummary:
         assert body["response_format"]["json_schema"] == build_summary_json_schema()
         assert body["max_tokens"] == 4096
 
+    def test_request_openai_retries_without_enable_thinking_on_rejection(self):
+        """测试 OpenAI 端点拒绝 enable_thinking 参数时剔除后重试一次"""
+        rejection = urllib_error.HTTPError(
+            "https://api.openai.com/v1/chat/completions",
+            400,
+            "Bad Request",
+            Message(),
+            io.BytesIO(b'{"error": {"message": "Unrecognized request argument supplied: enable_thinking"}}'),
+        )
+        response = mock.MagicMock()
+        response.read.return_value = json.dumps({"choices": [{"message": {"content": "# summary"}}]}).encode("utf-8")
+        response.__enter__.return_value = response
+        response.__exit__.return_value = None
+
+        with mock.patch("urllib.request.urlopen", side_effect=[rejection, response]) as mock_urlopen:
+            result = request_summary_from_llm(self._config(), "prompt")
+
+        assert result == "# summary"
+        assert mock_urlopen.call_count == 2
+        first_body = json.loads(mock_urlopen.call_args_list[0].args[0].data.decode("utf-8"))
+        retry_body = json.loads(mock_urlopen.call_args_list[1].args[0].data.decode("utf-8"))
+        assert "enable_thinking" in first_body
+        assert "enable_thinking" not in retry_body
+
+    def test_request_openai_does_not_retry_unrelated_http_errors(self):
+        """测试与 enable_thinking 无关的 HTTP 错误不触发重试"""
+        rejection = urllib_error.HTTPError(
+            "https://api.openai.com/v1/chat/completions",
+            401,
+            "Unauthorized",
+            Message(),
+            io.BytesIO(b'{"error": {"message": "Invalid API key"}}'),
+        )
+
+        with (
+            mock.patch("urllib.request.urlopen", side_effect=rejection) as mock_urlopen,
+            pytest.raises(RuntimeError, match="HTTP 401"),
+        ):
+            request_summary_from_llm(self._config(), "prompt")
+
+        assert mock_urlopen.call_count == 1
+
     def test_request_structured_summary_from_llm_logs_parse_error(self, tmp_path):
         log_path = tmp_path / "collect.log"
         logger = CollectLogger(enabled=True, path=log_path, run_id="run-1")
@@ -860,6 +905,39 @@ class TestCollectStructuredSummary:
                 planned_entries=[self._planned_entry()],
                 summary_concurrency=1,
             )
+
+    def test_summarize_collect_entries_skips_failed_session_and_keeps_others(self, tmp_path, capsys):
+        """测试单个会话摘要失败时跳过该会话，其余会话正常返回"""
+        entry_ok = self._planned_entry(session_id="s-ok")
+        entry_bad = self._planned_entry(session_id="s-bad")
+        log_path = tmp_path / "collect.log"
+        logger = CollectLogger(enabled=True, path=log_path, run_id="run-1")
+
+        def _summary_side_effect(config, prompt, *, timeout_seconds=90, **_kwargs):
+            del config, timeout_seconds
+            if "codex://s-bad" in prompt:
+                return "bad json"
+            return '{"topics":["T1"]}'
+
+        with mock.patch(
+            "agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect
+        ):
+            summaries = summarize_collect_entries(
+                config=self._config(),
+                planned_entries=[entry_ok, entry_bad],
+                summary_concurrency=1,
+                logger=logger,
+            )
+
+        assert [item.collect_entry.session_id for item in summaries] == ["s-ok"]
+        assert summaries[0].summary_data["topics"] == ["T1"]
+        captured = capsys.readouterr()
+        assert "codex://s-bad" in captured.err
+        assert "1 个会话摘要失败" in captured.err
+        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        failure_records = [record for record in records if record["event"] == "session_summary_failed"]
+        assert len(failure_records) == 1
+        assert failure_records[0]["session_uri"] == "codex://s-bad"
 
     def test_reduce_collect_summaries_tree_reduction(self):
         summaries = [
