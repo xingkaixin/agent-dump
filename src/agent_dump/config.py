@@ -496,6 +496,8 @@ def write_config(
 
     content = "\n\n".join(section for section in sections if section).rstrip()
     config_path.write_text(f"{content}\n" if content else "", encoding="utf-8")
+    # 文件包含 api_key，收紧为仅属主可读写
+    config_path.chmod(0o600)
     return config_path
 
 

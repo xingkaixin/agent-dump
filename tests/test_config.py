@@ -1,7 +1,10 @@
 """配置模块测试。"""
 
+import os
 from pathlib import Path
 from unittest import mock
+
+import pytest
 
 from agent_dump.config import (
     AIConfig,
@@ -227,6 +230,21 @@ class TestConfigReadWrite:
         write_ai_config(original, path)
 
         assert load_ai_config(path) == original
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions only")
+    def test_write_config_restricts_permissions(self, tmp_path):
+        path = tmp_path / "config.toml"
+        write_ai_config(
+            AIConfig(
+                provider="openai",
+                base_url="https://api.openai.com/v1",
+                model="gpt-4.1-mini",
+                api_key="sk-test-123",
+            ),
+            path,
+        )
+
+        assert path.stat().st_mode & 0o777 == 0o600
 
     def test_mask_api_key(self):
         assert mask_api_key("") == ""
