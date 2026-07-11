@@ -2,9 +2,9 @@
 Codex agent handler
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Iterable, Iterator
 from contextlib import suppress
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
@@ -12,12 +12,13 @@ import sys
 from threading import Lock
 from typing import Any
 
-from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.jsonl_scan import file_modified_since, read_jsonl_scan_metadata
+from agent_dump.agents.base import Session
+from agent_dump.agents.file_sessions import FileSessionAgent
+from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
-from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
+from agent_dump.paths import ProviderRoots, SearchRoot
 
 CODEX_TOOL_TITLE_MAP = {
     "exec_command": "bash",
@@ -31,18 +32,24 @@ SUBAGENT_NOTIFICATION_PATTERN = re.compile(r"<subagent_notification>\s*(.*?)\s*<
 PLAN_APPROVAL_PREFIX = "PLEASE IMPLEMENT THIS PLAN"
 
 
-class CodexAgent(BaseAgent):
+class CodexAgent(FileSessionAgent):
     """Handler for Codex sessions"""
 
     def __init__(self):
         super().__init__("codex", "Codex")
-        self.base_path: Path | None = None
         self._titles_cache: dict[str, str] | None = None
         self._titles_cache_lock = Lock()
 
-    def _find_base_path(self) -> Path | None:
-        """Find the Codex sessions directory"""
-        return first_existing_search_root(*self.get_search_roots())
+    def _iter_session_files(self) -> Iterator[Path]:
+        if self.base_path is None:
+            return iter(())
+        return self.base_path.rglob("*.jsonl")
+
+    def _session_file_candidates(self, session_id: str) -> Iterable[Path]:
+        if self.base_path is None:
+            return ()
+        # 文件名格式 rollout-{timestamp}-{sessionId}.jsonl
+        return self.base_path.rglob(f"*-{session_id}.jsonl")
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         roots = ProviderRoots.from_env_or_home()
@@ -87,65 +94,6 @@ class CodexAgent(BaseAgent):
         """Get session title from session index by session ID."""
         titles = self._load_titles_cache()
         return titles.get(session_id)
-
-    def is_available(self) -> bool:
-        """Check if Codex sessions exist"""
-        self.base_path = self._find_base_path()
-        if not self.base_path:
-            return False
-        return next(self.base_path.rglob("*.jsonl"), None) is not None
-
-    def scan(self) -> list[Session]:
-        """Scan for all available sessions"""
-        if not self.is_available():
-            return []
-        return self.get_sessions(days=3650)
-
-    def get_sessions(self, days: int = 7) -> list[Session]:
-        """Get sessions from the last N days"""
-        if not self.base_path:
-            return []
-
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
-        sessions = []
-        jsonl_files = [
-            jsonl_file
-            for jsonl_file in self.base_path.rglob("*.jsonl")
-            if file_modified_since(jsonl_file, cutoff_time)
-        ]
-        if not jsonl_files:
-            return []
-
-        max_workers = min(32, len(jsonl_files))
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(self._parse_session_file, jsonl_file): jsonl_file for jsonl_file in jsonl_files}
-            for future in as_completed(futures):
-                jsonl_file = futures[future]
-                try:
-                    session = future.result()
-                    if session and self._normalize_datetime_utc(session.created_at) >= cutoff_time:
-                        sessions.append(session)
-                except Exception as e:
-                    print(f"警告: 解析会话文件失败 {jsonl_file}: {e}", file=sys.stderr)
-                    continue
-
-        return sorted(sessions, key=lambda s: self._normalize_datetime_utc(s.created_at), reverse=True)
-
-    def _normalize_datetime_utc(self, value: datetime) -> datetime:
-        """Normalize datetime to timezone-aware UTC for safe comparisons."""
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
-
-    def find_session_by_id(self, session_id: str) -> Session | None:
-        """Locate one session by its filename suffix before falling back to a full scan."""
-        if self.base_path:
-            # 文件名格式 rollout-{timestamp}-{sessionId}.jsonl
-            for file_path in self.base_path.rglob(f"*-{session_id}.jsonl"):
-                session = self._parse_session_file(file_path)
-                if session is not None and session.id == session_id:
-                    return session
-        return super().find_session_by_id(session_id)
 
     def _extract_session_id_from_filename(self, file_path: Path) -> str:
         """Extract session ID from Codex filename

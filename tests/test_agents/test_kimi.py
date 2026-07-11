@@ -5,6 +5,7 @@
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 from unittest import mock
 
@@ -335,6 +336,27 @@ class TestKimiAgent:
 
         assert len(result) == 1
         assert result[0].id == "new-session"
+
+    def test_get_sessions_ignores_metadata_file_mtime(self, tmp_path):
+        """测试 metadata.json 的 mtime 很旧但内容时间在窗口内时仍返回（不做 mtime 剪枝）"""
+        agent = KimiAgent()
+        agent.base_path = tmp_path
+
+        session_dir = tmp_path / "recent"
+        session_dir.mkdir()
+        write_metadata(
+            session_dir,
+            session_id="recent-session",
+            title="Recent",
+            wire_mtime=datetime.now().timestamp(),
+        )
+        (session_dir / "wire.jsonl").touch()
+        old_time = (datetime.now() - timedelta(days=30)).timestamp()
+        os.utime(session_dir / "metadata.json", (old_time, old_time))
+
+        result = agent.get_sessions(days=7)
+
+        assert [session.id for session in result] == ["recent-session"]
 
     def test_get_sessions_sorted_by_time(self, tmp_path):
         """测试会话按时间倒序排列"""

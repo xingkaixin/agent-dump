@@ -2,34 +2,47 @@
 Claude Code agent handler
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Iterable, Iterator
 from contextlib import suppress
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sys
 from threading import Lock
 from typing import Any
 
-from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.jsonl_scan import file_modified_since, read_jsonl_scan_metadata
+from agent_dump.agents.base import Session
+from agent_dump.agents.file_sessions import FileSessionAgent
+from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
-from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
+from agent_dump.paths import ProviderRoots, SearchRoot
 
 
-class ClaudeCodeAgent(BaseAgent):
+class ClaudeCodeAgent(FileSessionAgent):
     """Handler for Claude Code sessions"""
 
     def __init__(self):
         super().__init__("claudecode", "Claude Code")
-        self.base_path: Path | None = None
         self._sessions_index_cache: dict[str, dict] = {}
         self._sessions_index_lock = Lock()
 
-    def _find_base_path(self) -> Path | None:
-        """Find the Claude Code projects directory"""
-        return first_existing_search_root(*self.get_search_roots())
+    def _iter_session_files(self) -> Iterator[Path]:
+        # 会话文件位于 <base_path>/<project_dir>/<session_id>.jsonl
+        if self.base_path is None:
+            return
+        for project_dir in self.base_path.iterdir():
+            if not project_dir.is_dir():
+                continue
+            for jsonl_file in project_dir.glob("*.jsonl"):
+                if jsonl_file.name == "sessions-index.json":
+                    continue
+                yield jsonl_file
+
+    def _session_file_candidates(self, session_id: str) -> Iterable[Path]:
+        if self.base_path is None:
+            return ()
+        return self.base_path.glob(f"*/{session_id}.jsonl")
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         roots = ProviderRoots.from_env_or_home()
@@ -67,73 +80,6 @@ class ClaudeCodeAgent(BaseAgent):
 
         return self._sessions_index_cache.get(cache_key)
 
-    def is_available(self) -> bool:
-        """Check if Claude Code sessions exist"""
-        self.base_path = self._find_base_path()
-        if not self.base_path:
-            return False
-        # Check for jsonl files in project directories
-        for project_dir in self.base_path.iterdir():
-            if project_dir.is_dir() and next(project_dir.glob("*.jsonl"), None) is not None:
-                return True
-        return False
-
-    def scan(self) -> list[Session]:
-        """Scan for all available sessions"""
-        if not self.is_available():
-            return []
-        return self.get_sessions(days=3650)
-
-    def get_sessions(self, days: int = 7) -> list[Session]:
-        """Get sessions from the last N days"""
-        if not self.base_path:
-            return []
-
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
-        sessions = []
-        session_files: list[tuple[Path, Path]] = []
-
-        # Iterate through project directories
-        for project_dir in self.base_path.iterdir():
-            if not project_dir.is_dir():
-                continue
-
-            # Find all jsonl files (excluding index files)
-            for jsonl_file in project_dir.glob("*.jsonl"):
-                if jsonl_file.name == "sessions-index.json":
-                    continue
-                if not file_modified_since(jsonl_file, cutoff_time):
-                    continue
-
-                session_files.append((jsonl_file, project_dir))
-
-        if not session_files:
-            return []
-
-        max_workers = min(32, len(session_files))
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(self._parse_session_file, jsonl_file, project_dir): (jsonl_file, project_dir)
-                for jsonl_file, project_dir in session_files
-            }
-            for future in as_completed(futures):
-                jsonl_file, _ = futures[future]
-                try:
-                    session = future.result()
-                    if session and self._normalize_datetime_utc(session.created_at) >= cutoff_time:
-                        sessions.append(session)
-                except Exception as e:
-                    print(f"警告: 解析会话文件失败 {jsonl_file}: {e}", file=sys.stderr)
-                    continue
-
-        return sorted(sessions, key=lambda s: self._normalize_datetime_utc(s.created_at), reverse=True)
-
-    def _normalize_datetime_utc(self, value: datetime) -> datetime:
-        """Normalize datetime to timezone-aware UTC for safe comparisons."""
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
-
     def _extract_scan_metadata(
         self, records: list[dict[str, Any]], fallback_created_at: datetime, *, scanned_all: bool
     ) -> tuple[datetime, int | None, str | None]:
@@ -163,8 +109,9 @@ class ClaudeCodeAgent(BaseAgent):
 
         return updated_at, message_count if scanned_all else None, model
 
-    def _parse_session_file(self, file_path: Path, project_dir: Path) -> Session | None:
+    def _parse_session_file(self, file_path: Path) -> Session | None:
         """Parse a single Claude Code session file"""
+        project_dir = file_path.parent
         try:
             scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)
             first_line = scan.first_record
@@ -218,16 +165,6 @@ class ClaudeCodeAgent(BaseAgent):
             )
         except Exception:
             return None
-
-    def find_session_by_id(self, session_id: str) -> Session | None:
-        """Locate one session by filename before falling back to a full scan."""
-        if self.base_path:
-            # 会话文件位于 <base_path>/<project_dir>/<session_id>.jsonl
-            for file_path in self.base_path.glob(f"*/{session_id}.jsonl"):
-                session = self._parse_session_file(file_path, file_path.parent)
-                if session is not None and session.id == session_id:
-                    return session
-        return super().find_session_by_id(session_id)
 
     def get_session_uri(self, session: Session) -> str:
         """Get the agent session URI for a session - Claude uses 'claude://' scheme"""

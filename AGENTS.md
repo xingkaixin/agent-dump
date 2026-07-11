@@ -193,6 +193,7 @@ agent-dump/
 │       ├── claudecode.py        # Claude Code JSONL provider
 │       ├── cursor.py            # Cursor SQLite provider
 │       ├── pi.py                # Pi JSONL provider
+│       ├── file_sessions.py     # 文件型 provider 共享基类（扫描/剪枝/并行解析/定位）
 │       ├── jsonl_scan.py        # JSONL 扫描辅助
 │       └── title_fallback.py    # 标题回退策略
 ├── tests/
@@ -325,8 +326,8 @@ collect 模式入口：
 新增 provider 必须遵循 `BaseAgent` contract。
 
 步骤：
-1. 在 `src/agent_dump/agents/<agent_name>.py` 创建 `BaseAgent` 子类。
-2. 实现 `scan()`、`is_available()`、`get_sessions()`、`get_session_data()`、`export_session()`。
+1. 在 `src/agent_dump/agents/<agent_name>.py` 创建 `BaseAgent` 子类。会话以文件形式存储的 provider 应继承 `FileSessionAgent`，只需实现 `_iter_session_files()` 与 `_parse_session_file()`（可选 `_session_file_candidates()` 加速 URI 定位）。
+2. 实现 `scan()`、`is_available()`、`get_sessions()`、`get_session_data()`、`export_session()`（继承 `FileSessionAgent` 时前三个由基类提供）。
 3. 实现 `get_search_roots()`，让诊断信息显示真实搜索路径。
 4. 在 `src/agent_dump/agent_registry.py` 添加 `AgentRegistration`，声明 `name`、`display_name`、`factory`、`uri_schemes`、`location_line`。
 5. 在 `src/agent_dump/agents/__init__.py` 导出 provider。

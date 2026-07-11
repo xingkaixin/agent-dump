@@ -195,7 +195,7 @@ class TestClaudeCodeAgent:
         file_path = project_dir / "session.jsonl"
         file_path.write_text("")
 
-        result = agent._parse_session_file(file_path, project_dir)
+        result = agent._parse_session_file(file_path)
 
         assert result is None
 
@@ -214,7 +214,7 @@ class TestClaudeCodeAgent:
         }
         file_path.write_text(json.dumps(data) + "\n")
 
-        result = agent._parse_session_file(file_path, project_dir)
+        result = agent._parse_session_file(file_path)
 
         assert result is not None
         assert isinstance(result, Session)
@@ -243,7 +243,7 @@ class TestClaudeCodeAgent:
         ]
         write_jsonl(file_path, records)
 
-        result = agent._parse_session_file(file_path, project_dir)
+        result = agent._parse_session_file(file_path)
 
         assert result is not None
         assert result.updated_at == datetime(2026, 1, 1, 0, 0, 5, tzinfo=timezone.utc)
@@ -307,7 +307,7 @@ class TestClaudeCodeAgent:
             return wrapped
 
         with mock.patch("builtins.open", counting_open):
-            result = agent._parse_session_file(file_path, project_dir)
+            result = agent._parse_session_file(file_path)
 
         assert result is not None
         assert result.title == "Large File Title"
@@ -370,7 +370,7 @@ class TestClaudeCodeAgent:
         file_path = project_dir / "session-001.jsonl"
         file_path.write_text(json.dumps({"timestamp": datetime.now(timezone.utc).isoformat()}) + "\n")
 
-        result = agent._parse_session_file(file_path, project_dir)
+        result = agent._parse_session_file(file_path)
 
         assert result is not None
         assert result.title == "Index Title"
@@ -393,7 +393,7 @@ class TestClaudeCodeAgent:
             ],
         )
 
-        result = agent._parse_session_file(file_path, project_dir)
+        result = agent._parse_session_file(file_path)
 
         assert result is not None
         assert result.title == "demo-app"
@@ -415,7 +415,7 @@ class TestClaudeCodeAgent:
             ],
         )
 
-        result = agent._parse_session_file(file_path, project_dir)
+        result = agent._parse_session_file(file_path)
 
         assert result is not None
         assert result.title == "project-fallback"
