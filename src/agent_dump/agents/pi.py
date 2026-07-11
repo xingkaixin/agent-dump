@@ -1,18 +1,19 @@
 """Pi agent handler."""
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Iterable, Iterator
 from contextlib import suppress
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sys
 from typing import Any
 
-from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.jsonl_scan import file_modified_since, read_jsonl_scan_metadata
+from agent_dump.agents.base import Session
+from agent_dump.agents.file_sessions import FileSessionAgent
+from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
-from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
+from agent_dump.paths import ProviderRoots, SearchRoot
 
 PI_TOOL_TITLE_MAP = {
     "bash": "bash",
@@ -23,16 +24,11 @@ PI_TOOL_TITLE_MAP = {
 }
 
 
-class PiAgent(BaseAgent):
+class PiAgent(FileSessionAgent):
     """Handler for Pi coding agent sessions."""
 
     def __init__(self):
         super().__init__("pi", "Pi")
-        self.base_path: Path | None = None
-
-    def _find_base_path(self) -> Path | None:
-        """Find the Pi sessions directory."""
-        return first_existing_search_root(*self.get_search_roots())
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         roots = ProviderRoots.from_env_or_home()
@@ -41,58 +37,16 @@ class PiAgent(BaseAgent):
             SearchRoot("local development fallback", Path("data/pi")),
         )
 
-    def is_available(self) -> bool:
-        """Check if Pi sessions exist."""
-        self.base_path = self._find_base_path()
-        if not self.base_path:
-            return False
-        return next(self.base_path.rglob("*.jsonl"), None) is not None
+    def _iter_session_files(self) -> Iterator[Path]:
+        if self.base_path is None:
+            return iter(())
+        return self.base_path.rglob("*.jsonl")
 
-    def scan(self) -> list[Session]:
-        """Scan for all available sessions."""
-        if not self.is_available():
-            return []
-        return self.get_sessions(days=3650)
-
-    def get_sessions(self, days: int = 7) -> list[Session]:
-        """Get sessions from the last N days."""
-        if not self.base_path:
-            return []
-
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
-        jsonl_files = [
-            jsonl_file
-            for jsonl_file in self.base_path.rglob("*.jsonl")
-            if file_modified_since(jsonl_file, cutoff_time)
-        ]
-        if not jsonl_files:
-            return []
-
-        sessions: list[Session] = []
-        max_workers = min(32, len(jsonl_files))
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(self._parse_session_file, path): path for path in jsonl_files}
-            for future in as_completed(futures):
-                path = futures[future]
-                try:
-                    session = future.result()
-                except Exception as e:
-                    print(f"警告: 解析会话文件失败 {path}: {e}", file=sys.stderr)
-                    continue
-                if session and session.created_at >= cutoff_time:
-                    sessions.append(session)
-
-        return sorted(sessions, key=lambda item: item.created_at, reverse=True)
-
-    def find_session_by_id(self, session_id: str) -> Session | None:
-        """Locate one session by filename before falling back to a full scan."""
-        if self.base_path:
-            # 文件名以 session id 结尾（如 20260101_{id}.jsonl）；header id 不一致时走全量扫描回退
-            for file_path in self.base_path.rglob(f"*{session_id}.jsonl"):
-                session = self._parse_session_file(file_path)
-                if session is not None and session.id == session_id:
-                    return session
-        return super().find_session_by_id(session_id)
+    def _session_file_candidates(self, session_id: str) -> Iterable[Path]:
+        if self.base_path is None:
+            return ()
+        # 文件名以 session id 结尾（如 20260101_{id}.jsonl）；header id 不一致时走全量扫描回退
+        return self.base_path.rglob(f"*{session_id}.jsonl")
 
     def _parse_session_file(self, file_path: Path) -> Session | None:
         """Parse lightweight metadata from one Pi session file."""
