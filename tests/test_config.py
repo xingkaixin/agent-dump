@@ -1,7 +1,10 @@
 """配置模块测试。"""
 
+import os
 from pathlib import Path
 from unittest import mock
+
+import pytest
 
 from agent_dump.config import (
     AIConfig,
@@ -175,6 +178,73 @@ class TestConfigReadWrite:
                 args=("--collect", "--since", "{date}", "--until", "{date}"),
             )
         }
+
+    def test_load_ai_config_preserves_hash_in_quoted_value(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[ai]\n"
+                'provider = "openai"\n'
+                'base_url = "https://api.openai.com/v1"\n'
+                'model = "gpt-4.1-mini"\n'
+                'api_key = "sk-abc#def"  # trailing comment\n'
+            ),
+            encoding="utf-8",
+        )
+
+        config = load_ai_config(path)
+        assert config is not None
+        assert config.api_key == "sk-abc#def"
+
+    def test_load_collect_config_deny_path_containing_comma(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            ('[agent.claudecode]\ndeny = ["/repo/a, with comma", "/repo/b"]\n'),
+            encoding="utf-8",
+        )
+
+        assert load_collect_config(path) == CollectConfig(
+            agent_denies={"claudecode": ("/repo/a, with comma", "/repo/b")},
+        )
+
+    def test_load_falls_back_to_lenient_parser_for_invalid_toml(self, tmp_path):
+        path = tmp_path / "config.toml"
+        # 旧版本写出的 Windows 路径未转义反斜杠，不是合法 TOML
+        path.write_text(
+            ('[logging]\nenabled = false\npath = "C:\\Users\\kevin\\collect.log"\n'),
+            encoding="utf-8",
+        )
+
+        config = load_logging_config(path)
+        assert config.enabled is False
+        assert config.path == Path("C:\\Users\\kevin\\collect.log")
+
+    def test_write_and_load_round_trip_special_characters(self, tmp_path):
+        path = tmp_path / "config.toml"
+        original = AIConfig(
+            provider="openai",
+            base_url="https://api.openai.com/v1",
+            model="gpt-4.1-mini",
+            api_key='sk-"quoted"#hash\\slash',
+        )
+        write_ai_config(original, path)
+
+        assert load_ai_config(path) == original
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions only")
+    def test_write_config_restricts_permissions(self, tmp_path):
+        path = tmp_path / "config.toml"
+        write_ai_config(
+            AIConfig(
+                provider="openai",
+                base_url="https://api.openai.com/v1",
+                model="gpt-4.1-mini",
+                api_key="sk-test-123",
+            ),
+            path,
+        )
+
+        assert path.stat().st_mode & 0o777 == 0o600
 
     def test_mask_api_key(self):
         assert mask_api_key("") == ""
