@@ -7,6 +7,7 @@ from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import sys
 from threading import Lock
 from typing import Any
 
@@ -120,7 +121,7 @@ class ClaudeCodeAgent(BaseAgent):
                     if session and self._normalize_datetime_utc(session.created_at) >= cutoff_time:
                         sessions.append(session)
                 except Exception as e:
-                    print(f"警告: 解析会话文件失败 {jsonl_file}: {e}")
+                    print(f"警告: 解析会话文件失败 {jsonl_file}: {e}", file=sys.stderr)
                     continue
 
         return sorted(sessions, key=lambda s: self._normalize_datetime_utc(s.created_at), reverse=True)
@@ -228,7 +229,7 @@ class ClaudeCodeAgent(BaseAgent):
                 records.append(json.loads(line))
             return self._extract_title_from_records(records)
         except Exception as e:
-            print(f"警告: 提取标题失败: {e}")
+            print(f"警告: 提取标题失败: {e}", file=sys.stderr)
 
         return None
 
@@ -297,7 +298,7 @@ class ClaudeCodeAgent(BaseAgent):
                         assistant_state,
                     )
                 except Exception as e:
-                    print(f"警告: 转换消息格式失败: {e}")
+                    print(f"警告: 转换消息格式失败: {e}", file=sys.stderr)
                     continue
 
         stats["message_count"] = len(messages)

@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import re
+import sys
 from threading import Lock
 from typing import Any
 
@@ -77,7 +78,7 @@ class CodexAgent(BaseAgent):
                                 if normalized:
                                     titles[session_id] = normalized
                 except Exception as e:
-                    print(f"警告: 加载标题缓存失败: {e}")
+                    print(f"警告: 加载标题缓存失败: {e}", file=sys.stderr)
 
             self._titles_cache = titles
             return titles
@@ -121,7 +122,7 @@ class CodexAgent(BaseAgent):
                     if session and self._normalize_datetime_utc(session.created_at) >= cutoff_time:
                         sessions.append(session)
                 except Exception as e:
-                    print(f"警告: 解析会话文件失败 {jsonl_file}: {e}")
+                    print(f"警告: 解析会话文件失败 {jsonl_file}: {e}", file=sys.stderr)
                     continue
 
         return sorted(sessions, key=lambda s: self._normalize_datetime_utc(s.created_at), reverse=True)
@@ -250,7 +251,7 @@ class CodexAgent(BaseAgent):
                 records.append(json.loads(line))
             return self._extract_title_from_records(records)
         except Exception as e:
-            print(f"警告: 提取标题失败: {e}")
+            print(f"警告: 提取标题失败: {e}", file=sys.stderr)
 
         return None
 
@@ -350,7 +351,7 @@ class CodexAgent(BaseAgent):
                     )
                     self._accumulate_token_stats(stats, data)
                 except Exception as e:
-                    print(f"警告: 转换消息格式失败: {e}")
+                    print(f"警告: 转换消息格式失败: {e}", file=sys.stderr)
                     continue
 
         self._finalize_pending_plan(messages, pending_plan_location)

@@ -5,6 +5,7 @@ from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -72,7 +73,7 @@ class PiAgent(BaseAgent):
                 try:
                     session = future.result()
                 except Exception as e:
-                    print(f"警告: 解析会话文件失败 {path}: {e}")
+                    print(f"警告: 解析会话文件失败 {path}: {e}", file=sys.stderr)
                     continue
                 if session and session.created_at >= cutoff_time:
                     sessions.append(session)
@@ -240,7 +241,7 @@ class PiAgent(BaseAgent):
                 try:
                     record = json.loads(line)
                 except json.JSONDecodeError as e:
-                    print(f"警告: 转换 Pi 记录失败: {e}")
+                    print(f"警告: 转换 Pi 记录失败: {e}", file=sys.stderr)
                     continue
 
                 if record.get("type") == "session" and not header:

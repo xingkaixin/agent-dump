@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -139,7 +140,7 @@ class KimiAgent(BaseAgent):
                 if session and session.created_at >= cutoff_time:
                     sessions.append(session)
             except Exception as e:
-                print(f"警告: 解析会话文件失败 {metadata_file}: {e}")
+                print(f"警告: 解析会话文件失败 {metadata_file}: {e}", file=sys.stderr)
                 continue
 
         return sorted(sessions, key=lambda s: s.created_at, reverse=True)
@@ -592,7 +593,7 @@ class KimiAgent(BaseAgent):
                 try:
                     record = json.loads(line)
                 except json.JSONDecodeError as e:
-                    print(f"警告: 转换 context 记录失败: {e}")
+                    print(f"警告: 转换 context 记录失败: {e}", file=sys.stderr)
                     continue
                 self._convert_context_record(
                     record,
@@ -731,7 +732,7 @@ class KimiAgent(BaseAgent):
                 try:
                     data = json.loads(line)
                 except json.JSONDecodeError as e:
-                    print(f"警告: 转换 wire 记录失败: {e}")
+                    print(f"警告: 转换 wire 记录失败: {e}", file=sys.stderr)
                     continue
 
                 message = data.get("message", {})
