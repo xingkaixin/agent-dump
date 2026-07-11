@@ -227,7 +227,7 @@ agent-dump/
 职责：
 - 解析 `argparse` 参数。
 - 根据 `uri`、`--collect`、`--stats`、`--reindex`、`--list`、`--interactive` 选择模式。
-- 装配 workflow 依赖对象。
+- 作为装配根，向 workflow 注入真实变化的依赖（scanner、LLM 请求）。
 - 处理顶层参数冲突、退出码、诊断输出。
 
 约束：
@@ -350,7 +350,7 @@ collect 模式入口：
 
 步骤：
 1. `cli.py` 添加参数和顶层分发。
-2. 新建或复用 `*_workflow.py`，把流程依赖封装为 dataclass / Protocol，便于测试。
+2. 新建或复用 `*_workflow.py`。稳定协作者（渲染、导出、诊断、查询解析等）直接 import；只把真实会变化的依赖（scanner 工厂、LLM 请求、交互 IO）声明为带生产默认值的关键字参数，由 cli.py 装配根传入。测试通过关键字参数替换真 seam，或用 `monkeypatch.setattr("agent_dump.<workflow>.<name>", ...)` 替换稳定协作者。
 3. 复用逻辑进入 `cli_shared.py`。
 4. 增加 `tests/test_cli.py` 分发测试和对应 workflow 测试。
 5. 更新 README 与 skill recipes 的行为矩阵。
