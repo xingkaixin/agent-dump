@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 from typing import Any
@@ -6,6 +7,19 @@ from typing import Any
 FULL_SCAN_BYTE_LIMIT = 256 * 1024
 HEAD_SCAN_BYTE_LIMIT = 64 * 1024
 TAIL_SCAN_BYTE_LIMIT = 64 * 1024
+
+
+def file_modified_since(file_path: Path, cutoff: datetime) -> bool:
+    """Whether a session file may contain sessions created after the cutoff.
+
+    Session JSONL files are append-only, so mtime >= created_at and files
+    last modified before the cutoff can be skipped without opening them.
+    """
+    try:
+        mtime = file_path.stat().st_mtime
+    except OSError:
+        return True
+    return datetime.fromtimestamp(mtime, tz=timezone.utc) >= cutoff
 
 
 @dataclass(frozen=True)

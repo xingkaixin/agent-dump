@@ -13,7 +13,7 @@ from threading import Lock
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
+from agent_dump.agents.jsonl_scan import file_modified_since, read_jsonl_scan_metadata
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
@@ -108,7 +108,11 @@ class CodexAgent(BaseAgent):
 
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
         sessions = []
-        jsonl_files = list(self.base_path.rglob("*.jsonl"))
+        jsonl_files = [
+            jsonl_file
+            for jsonl_file in self.base_path.rglob("*.jsonl")
+            if file_modified_since(jsonl_file, cutoff_time)
+        ]
         if not jsonl_files:
             return []
 

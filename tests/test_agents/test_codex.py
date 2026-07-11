@@ -4,6 +4,7 @@
 
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 from unittest import mock
 
@@ -797,6 +798,46 @@ class TestCodexAgent:
             for message in messages
             for part in message.get("parts", [])
         )
+
+    def test_get_sessions_skips_files_older_than_cutoff_without_parsing(self, tmp_path):
+        """测试 mtime 早于 cutoff 的文件不进入解析"""
+        agent = CodexAgent()
+        agent.base_path = tmp_path
+        agent._titles_cache = {}
+
+        recent_time = datetime.now(timezone.utc)
+        old_time = recent_time - timedelta(days=30)
+
+        recent_file = tmp_path / "rollout-recent.jsonl"
+        recent_file.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "timestamp": recent_time.isoformat(),
+                    "payload": {"id": "recent", "timestamp": recent_time.isoformat()},
+                }
+            )
+            + "\n"
+        )
+        old_file = tmp_path / "rollout-old.jsonl"
+        old_file.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "timestamp": old_time.isoformat(),
+                    "payload": {"id": "old", "timestamp": old_time.isoformat()},
+                }
+            )
+            + "\n"
+        )
+        os.utime(old_file, (old_time.timestamp(), old_time.timestamp()))
+
+        with mock.patch.object(agent, "_parse_session_file", wraps=agent._parse_session_file) as spy:
+            result = agent.get_sessions(days=7)
+
+        assert [session.id for session in result] == ["recent"]
+        parsed_files = {call.args[0] for call in spy.call_args_list}
+        assert parsed_files == {recent_file}
 
     def test_find_session_by_id_locates_file_by_name(self, tmp_path):
         """测试按文件名后缀直接定位会话，未命中返回 None"""
