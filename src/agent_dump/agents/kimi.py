@@ -2,7 +2,8 @@
 Kimi agent handler
 """
 
-from datetime import datetime, timedelta, timezone
+from collections.abc import Iterator
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -10,9 +11,10 @@ import shutil
 import sys
 from typing import Any
 
-from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.base import Session
+from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.diagnostics import source_missing
-from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
+from agent_dump.paths import ProviderRoots, SearchRoot
 
 KIMI_TOOL_TITLE_MAP = {
     "ReadFile": "read",
@@ -26,16 +28,24 @@ KIMI_TOOL_TITLE_MAP = {
 KIMI_IGNORED_TOOLS = {"SetTodoList"}
 
 
-class KimiAgent(BaseAgent):
+class KimiAgent(FileSessionAgent):
     """Handler for Kimi sessions"""
 
     def __init__(self):
         super().__init__("kimi", "Kimi")
-        self.base_path: Path | None = None
 
-    def _find_base_path(self) -> Path | None:
-        """Find the Kimi sessions directory"""
-        return first_existing_search_root(*self.get_search_roots())
+    def _iter_session_files(self) -> Iterator[Path]:
+        if self.base_path is None:
+            return iter(())
+        return self.base_path.rglob("metadata.json")
+
+    def _parse_session_file(self, file_path: Path) -> Session | None:
+        return self._parse_session(file_path)
+
+    def _should_scan_file(self, file_path: Path, cutoff: datetime) -> bool:
+        # created_at 来自 metadata 内容（wire_mtime），metadata.json 的 mtime 不可作剪枝依据
+        del file_path, cutoff
+        return True
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         roots = ProviderRoots.from_env_or_home()
@@ -112,38 +122,6 @@ class KimiAgent(BaseAgent):
                 "若只需要可读导出，改用 `--format json` 或 `--format markdown`。",
             ),
         )
-
-    def is_available(self) -> bool:
-        """Check if Kimi sessions exist"""
-        self.base_path = self._find_base_path()
-        if not self.base_path:
-            return False
-        return next(self.base_path.rglob("metadata.json"), None) is not None
-
-    def scan(self) -> list[Session]:
-        """Scan for all available sessions"""
-        if not self.is_available():
-            return []
-        return self.get_sessions(days=3650)
-
-    def get_sessions(self, days: int = 7) -> list[Session]:
-        """Get sessions from the last N days"""
-        if not self.base_path:
-            return []
-
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
-        sessions = []
-
-        for metadata_file in self.base_path.rglob("metadata.json"):
-            try:
-                session = self._parse_session(metadata_file)
-                if session and session.created_at >= cutoff_time:
-                    sessions.append(session)
-            except Exception as e:
-                print(f"警告: 解析会话文件失败 {metadata_file}: {e}", file=sys.stderr)
-                continue
-
-        return sorted(sessions, key=lambda s: s.created_at, reverse=True)
 
     def _parse_session(self, metadata_path: Path) -> Session | None:
         """Parse a Kimi session from metadata file"""
