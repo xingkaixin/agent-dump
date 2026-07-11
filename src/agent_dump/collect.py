@@ -669,9 +669,26 @@ def build_collect_merge_prompt(
     return "\n".join(lines)
 
 
-def request_summary_from_llm(config: AIConfig, prompt: str, *, timeout_seconds: int = 90) -> str:
-    """Call provider API and return markdown summary."""
-    return _request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
+def request_summary_from_llm(
+    config: AIConfig,
+    prompt: str,
+    *,
+    timeout_seconds: int = 90,
+    retry_count: int = 1,
+) -> str:
+    """Call provider API and return markdown summary, retrying transient failures.
+
+    最终 Markdown 渲染是管线末端的单次调用，失败会丢弃整个运行的成果，因此默认重试一次。
+    """
+    last_error: Exception | None = None
+    for _ in range(retry_count + 1):
+        try:
+            return _request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+    if last_error is None:
+        raise RuntimeError("summary request failed without an error")
+    raise last_error
 
 
 def _build_structured_summary_retry_prompt(

@@ -10,6 +10,7 @@ from unittest import mock
 import pytest
 
 from agent_dump.agents.base import Session
+from agent_dump.agents.cursor import CursorAgent
 from agent_dump.cli_shared import (
     collect_query_matches,
     collect_search_matches,
@@ -23,7 +24,9 @@ from agent_dump.cli_shared import (
     render_query_summary,
     render_session_head,
     render_session_text,
+    validate_uri_agent_formats,
 )
+from agent_dump.diagnostics import DiagnosticError
 from agent_dump.query_filter import QuerySpec, SearchSessionMatch
 
 
@@ -363,6 +366,25 @@ class TestExportSessions:
 
         mock_agent.export_session.assert_called_once_with(session, json_root / "test_agent")
         mock_agent.export_raw_session.assert_called_once_with(session, raw_root / "test_agent")
+
+
+class TestValidateUriAgentFormats:
+    """测试按 provider 声明校验 URI 导出格式"""
+
+    def test_provider_without_restrictions_accepts_all_formats(self):
+        agent = mock.MagicMock()
+        agent.unsupported_uri_formats = frozenset()
+
+        validate_uri_agent_formats(agent, ["json", "markdown", "raw", "print"])
+
+    def test_provider_restrictions_raise_capability_error(self):
+        agent = CursorAgent()
+
+        with pytest.raises(DiagnosticError) as excinfo:
+            validate_uri_agent_formats(agent, ["json", "raw"])
+
+        assert excinfo.value.capability_gap is not None
+        assert "Cursor URI 仅支持 json 与 print" in excinfo.value.capability_gap
 
 
 class TestFormatSpec:

@@ -2315,6 +2315,7 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "cursor"
             mock_agent.display_name = "Cursor"
+            mock_agent.unsupported_uri_formats = frozenset({"raw", "markdown"})
             mock_session = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner

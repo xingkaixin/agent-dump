@@ -10,6 +10,7 @@ from urllib import error as urllib_error
 
 import pytest
 
+from agent_dump import collect_llm
 from agent_dump.collect import (
     CollectAggregate,
     CollectEntry,
@@ -681,6 +682,30 @@ class TestCollectStructuredSummary:
         assert body["response_format"]["json_schema"] == build_summary_json_schema()
         assert body["max_tokens"] == 4096
 
+    def test_request_summary_from_llm_retries_transient_failure(self):
+        """测试摘要请求瞬时失败会重试一次"""
+        with mock.patch(
+            "agent_dump.collect._request_summary_from_llm",
+            side_effect=[RuntimeError("boom"), "# summary"],
+        ) as mocked:
+            result = request_summary_from_llm(self._config(), "prompt")
+
+        assert result == "# summary"
+        assert mocked.call_count == 2
+
+    def test_request_summary_from_llm_raises_after_retries(self):
+        """测试重试耗尽后抛出最后一次错误"""
+        with (
+            mock.patch(
+                "agent_dump.collect._request_summary_from_llm",
+                side_effect=RuntimeError("boom"),
+            ) as mocked,
+            pytest.raises(RuntimeError, match="boom"),
+        ):
+            request_summary_from_llm(self._config(), "prompt")
+
+        assert mocked.call_count == 2
+
     def test_request_openai_retries_without_enable_thinking_on_rejection(self):
         """测试 OpenAI 端点拒绝 enable_thinking 参数时剔除后重试一次"""
         rejection = urllib_error.HTTPError(
@@ -706,7 +731,7 @@ class TestCollectStructuredSummary:
         assert "enable_thinking" not in retry_body
 
     def test_request_openai_does_not_retry_unrelated_http_errors(self):
-        """测试与 enable_thinking 无关的 HTTP 错误不触发重试"""
+        """测试传输层对与 enable_thinking 无关的 HTTP 错误不做参数剔除重试"""
         rejection = urllib_error.HTTPError(
             "https://api.openai.com/v1/chat/completions",
             401,
@@ -719,7 +744,7 @@ class TestCollectStructuredSummary:
             mock.patch("urllib.request.urlopen", side_effect=rejection) as mock_urlopen,
             pytest.raises(RuntimeError, match="HTTP 401"),
         ):
-            request_summary_from_llm(self._config(), "prompt")
+            collect_llm.request_summary_from_llm(self._config(), "prompt")
 
         assert mock_urlopen.call_count == 1
 

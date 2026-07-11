@@ -378,16 +378,15 @@ def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mod
 
 
 def validate_uri_agent_formats(agent: BaseAgent, formats: list[str]) -> None:
-    if agent.name != "cursor":
-        return
-    unsupported = [fmt for fmt in formats if fmt in {"raw", "markdown"}]
+    unsupported = [fmt for fmt in formats if fmt in agent.unsupported_uri_formats]
     if unsupported:
         requested = ",".join(unsupported)
+        supported = " 与 ".join(sorted(VALID_FORMATS - agent.unsupported_uri_formats))
         raise unsupported_capability(
-            "当前 URI 请求了 Cursor 不支持的导出能力。",
-            capability_gap=f"Cursor URI 仅支持 json 与 print；当前请求了 {requested}",
+            f"当前 URI 请求了 {agent.display_name} 不支持的导出能力。",
+            capability_gap=f"{agent.display_name} URI 仅支持 {supported}；当前请求了 {requested}",
             next_steps=(
-                "移除 `raw` 或 `markdown`，改用 `json` 或 `print`。",
+                f"移除 {'、'.join(f'`{fmt}`' for fmt in unsupported)}，改用支持的格式。",
                 "若需要进一步处理，先导出 JSON 再做转换。",
             ),
         )
