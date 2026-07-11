@@ -1,6 +1,10 @@
 import argparse
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
+import threading
 from typing import Any, cast
 
 from agent_dump.agent_registry import (
@@ -238,6 +242,40 @@ def export_sessions_for_formats(
                 print(render_diagnostic(diagnostic, t=i18n.t))
 
     return exported
+
+
+@contextmanager
+def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
+    """Show loading status for long-running operations."""
+    if not sys.stderr.isatty():
+        print(message, file=sys.stderr)
+        yield
+        return
+
+    stop_event = threading.Event()
+    spinner_frames = "|/-\\"
+
+    def _write_frame(frame: str) -> None:
+        sys.stderr.write(f"\r{frame} {message}")
+        sys.stderr.flush()
+
+    def _spin() -> None:
+        idx = 0
+        while not stop_event.wait(interval_seconds):
+            _write_frame(spinner_frames[idx % len(spinner_frames)])
+            idx += 1
+
+    spinner_thread = threading.Thread(target=_spin, daemon=True)
+    _write_frame(spinner_frames[0])
+    spinner_thread.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
+        spinner_thread.join(timeout=max(0.3, interval_seconds * 3))
+        clear_width = len(message) + 4
+        sys.stderr.write("\r" + (" " * clear_width) + "\r")
+        sys.stderr.flush()
 
 
 def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:

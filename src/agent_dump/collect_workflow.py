@@ -1,47 +1,44 @@
 """Collect mode workflow orchestration."""
 
 import argparse
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
-from typing import Any
+import sys
+import threading
+from typing import cast
 
 from agent_dump.agents.base import BaseAgent
-from agent_dump.query_filter import QuerySpec
+from agent_dump.collect import (
+    build_collect_final_prompt,
+    build_collect_run_stats,
+    collect_entries,
+    create_collect_logger,
+    emit_collect_progress,
+    plan_collect_entries,
+    reduce_collect_summaries,
+    request_summary_from_llm,
+    resolve_collect_date_range,
+    summarize_collect_entries,
+    write_collect_markdown,
+)
+from agent_dump.collect_models import CollectProgressEvent, CollectRunStats
+from agent_dump.config import (
+    AIConfig,
+    load_ai_config,
+    load_collect_config,
+    load_logging_config,
+    validate_ai_config,
+)
+from agent_dump.i18n import Keys, i18n
+from agent_dump.query_filter import QuerySpec, parse_query_uri
+from agent_dump.rendering import render_session_text
+from agent_dump.scanner import AgentScanner
 
 
 def _collect_default_filename(*, since_date: date, until_date: date) -> str:
     return f"agent-dump-collect-{since_date.strftime('%Y%m%d')}-{until_date.strftime('%Y%m%d')}.md"
-
-
-@dataclass(frozen=True)
-class CollectWorkflowDeps:
-    """Injected dependencies for collect mode orchestration."""
-
-    resolve_collect_date_range: Callable[..., tuple[date, date]]
-    load_ai_config: Callable[[], Any]
-    validate_ai_config: Callable[[Any], tuple[bool, list[str]]]
-    load_collect_config: Callable[[], Any]
-    load_logging_config: Callable[[], Any]
-    create_collect_logger: Callable[[Any], Any]
-    scanner_factory: Callable[[], Any]
-    show_collect_progress: Callable[[], Any]
-    collect_entries: Callable[..., tuple[list[Any], bool]]
-    plan_collect_entries: Callable[..., tuple[list[Any], int]]
-    build_collect_run_stats: Callable[..., Any]
-    summarize_collect_entries: Callable[..., list[Any]]
-    emit_collect_progress: Callable[..., None]
-    reduce_collect_summaries: Callable[..., Any]
-    build_collect_final_prompt: Callable[..., str]
-    request_summary_from_llm: Callable[..., str]
-    write_collect_markdown: Callable[..., Path]
-    resolve_collect_save_path: Callable[..., Path | None]
-    render_session_text: Callable[[str, dict[str, Any]], str]
-    parse_query_uri: Callable[[str | None, set[str], Path | None], QuerySpec | None]
-    collect_fields_for: Callable[[str], tuple[str, ...]]
-    i18n_t: Callable[..., str]
-    keys: Any
 
 
 def resolve_collect_save_path(save: str | None, *, since_date: date, until_date: date) -> Path | None:
@@ -66,93 +63,199 @@ def preview_collect_save_path(save: str | None, *, since_date: date, until_date:
     return Path.cwd() / _collect_default_filename(since_date=since_date, until_date=until_date)
 
 
-def _format_collect_dry_run_preview(
-    *,
-    run_stats: Any,
-    output_path: Path,
-    t: Callable[..., str],
-    keys: Any,
-) -> str:
+def _format_collect_progress(event: CollectProgressEvent) -> str:
+    """Format one collect progress event for stderr."""
+    if event.stage == "collect_start":
+        return i18n.t(Keys.COLLECT_PROGRESS_START, since=event.since, until=event.until)
+    if event.stage == "collect_overview":
+        breakdown = ", ".join(
+            f"{agent_name} {count}" for agent_name, count in (event.agent_session_counts or {}).items()
+        )
+        overview = i18n.t(
+            Keys.COLLECT_PROGRESS_OVERVIEW,
+            session_count=event.session_count or event.current,
+            chunk_count=event.chunk_count or 0,
+            concurrency=event.concurrency or 1,
+        )
+        if not breakdown:
+            return overview
+        return "\n".join([overview, i18n.t(Keys.COLLECT_PROGRESS_AGENT_BREAKDOWN, breakdown=breakdown)])
+    if event.stage == "scan_sessions":
+        return i18n.t(Keys.COLLECT_PROGRESS_SCAN_SESSIONS, current=event.current, total=event.total)
+    if event.stage == "plan_chunks":
+        if event.current >= event.total:
+            return i18n.t(
+                Keys.COLLECT_PROGRESS_PLAN_CHUNKS_DONE,
+                session_count=event.current,
+                chunk_count=event.chunk_total or 0,
+            )
+        return i18n.t(Keys.COLLECT_PROGRESS_PLAN_CHUNKS, current=event.current, total=event.total)
+    if event.stage == "summarize_chunks":
+        return i18n.t(
+            Keys.COLLECT_PROGRESS_SUMMARIZE_CHUNKS,
+            current=event.current,
+            total=event.total,
+            concurrency=event.concurrency or 1,
+        )
+    if event.stage == "merge_sessions":
+        return i18n.t(Keys.COLLECT_PROGRESS_MERGE_SESSIONS, current=event.current, total=event.total)
+    if event.stage == "tree_reduction":
+        level = event.level or 1
+        return i18n.t(Keys.COLLECT_PROGRESS_TREE_REDUCTION, level=level, current=event.current, total=event.total)
+    if event.stage == "render_final":
+        return i18n.t(Keys.COLLECT_PROGRESS_RENDER_FINAL, current=event.current, total=event.total)
+    if event.stage == "write_output":
+        return i18n.t(Keys.COLLECT_PROGRESS_WRITE_OUTPUT, current=event.current, total=event.total)
+    return event.message
+
+
+@contextmanager
+def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
+    """Show collect multi-stage progress on stderr."""
+    is_tty = sys.stderr.isatty()
+    stop_event = threading.Event()
+    progress_lock = threading.Lock()
+    spinner_frames = "|/-\\"
+    spinner_thread: threading.Thread | None = None
+    last_rendered = ""
+
+    def _clear_tty_line(text: str) -> None:
+        width = len(text) + 4
+        sys.stderr.write("\r" + (" " * width) + "\r")
+
+    def _update(event: CollectProgressEvent) -> None:
+        nonlocal last_rendered
+        text = _format_collect_progress(event)
+        if event.stage in {"collect_start", "collect_overview"}:
+            if is_tty:
+                with progress_lock:
+                    if last_rendered:
+                        _clear_tty_line(last_rendered)
+                    print(text, file=sys.stderr)
+            else:
+                print(text, file=sys.stderr)
+            return
+        with progress_lock:
+            last_rendered = text
+        if is_tty:
+            return
+        print(text, file=sys.stderr)
+
+    if is_tty:
+
+        def _spin() -> None:
+            idx = 0
+            while not stop_event.wait(0.1):
+                with progress_lock:
+                    text = last_rendered
+                    if not text:
+                        continue
+                    sys.stderr.write(f"\r{spinner_frames[idx % len(spinner_frames)]} {text}")
+                    sys.stderr.flush()
+                idx += 1
+
+        spinner_thread = threading.Thread(target=_spin, daemon=True)
+        spinner_thread.start()
+
+    try:
+        yield _update
+    finally:
+        if is_tty:
+            stop_event.set()
+            if spinner_thread is not None:
+                spinner_thread.join(timeout=0.3)
+        if last_rendered and is_tty:
+            with progress_lock:
+                _clear_tty_line(last_rendered)
+                sys.stderr.write(last_rendered)
+                sys.stderr.write("\n")
+                sys.stderr.flush()
+
+
+def _format_collect_dry_run_preview(*, run_stats: CollectRunStats, output_path: Path) -> str:
     breakdown = ", ".join(
         f"{agent_name} {count}" for agent_name, count in sorted(run_stats.agent_session_counts.items())
     )
     return "\n".join(
         [
-            t(keys.COLLECT_DRY_RUN_HEADER),
-            t(keys.COLLECT_DRY_RUN_DATE_RANGE, since=run_stats.since, until=run_stats.until),
-            t(keys.COLLECT_DRY_RUN_PROVIDER_BREAKDOWN, breakdown=breakdown),
-            t(keys.COLLECT_DRY_RUN_SESSION_COUNT, count=run_stats.session_count),
-            t(keys.COLLECT_DRY_RUN_CHUNK_COUNT, count=run_stats.chunk_count),
-            t(keys.COLLECT_DRY_RUN_CONCURRENCY, concurrency=run_stats.concurrency),
-            t(keys.COLLECT_DRY_RUN_SAVE_PATH, path=str(output_path)),
+            i18n.t(Keys.COLLECT_DRY_RUN_HEADER),
+            i18n.t(Keys.COLLECT_DRY_RUN_DATE_RANGE, since=run_stats.since, until=run_stats.until),
+            i18n.t(Keys.COLLECT_DRY_RUN_PROVIDER_BREAKDOWN, breakdown=breakdown),
+            i18n.t(Keys.COLLECT_DRY_RUN_SESSION_COUNT, count=run_stats.session_count),
+            i18n.t(Keys.COLLECT_DRY_RUN_CHUNK_COUNT, count=run_stats.chunk_count),
+            i18n.t(Keys.COLLECT_DRY_RUN_CONCURRENCY, concurrency=run_stats.concurrency),
+            i18n.t(Keys.COLLECT_DRY_RUN_SAVE_PATH, path=str(output_path)),
         ]
     )
 
 
-def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> int:
+def handle_collect_mode(
+    args: argparse.Namespace,
+    *,
+    scanner_factory: Callable[[], AgentScanner] = AgentScanner,
+    request_summary: Callable[..., str] = request_summary_from_llm,
+) -> int:
     """Handle `--collect` flow."""
-    keys = deps.keys
-    t = deps.i18n_t
     dry_run = bool(getattr(args, "dry_run", False))
 
     if args.interactive or args.list:
-        print(t(keys.COLLECT_MODE_CONFLICT))
+        print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
         return 1
 
     if args.uri and not args.uri.startswith("agents://"):
-        print(t(keys.COLLECT_MODE_CONFLICT))
+        print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
         return 1
 
     try:
-        since_date, until_date = deps.resolve_collect_date_range(args.since, args.until)
+        since_date, until_date = resolve_collect_date_range(args.since, args.until)
     except ValueError as exc:
         if str(exc) == "since_after_until":
-            print(t(keys.COLLECT_DATE_RANGE_INVALID))
+            print(i18n.t(Keys.COLLECT_DATE_RANGE_INVALID))
         else:
-            print(t(keys.COLLECT_DATE_FORMAT_INVALID))
+            print(i18n.t(Keys.COLLECT_DATE_FORMAT_INVALID))
         return 1
 
-    config = None
+    config: AIConfig | None = None
     if not dry_run:
-        config = deps.load_ai_config()
-        valid, errors = deps.validate_ai_config(config)
+        config = load_ai_config()
+        valid, errors = validate_ai_config(config)
         if not valid or config is None:
             if "missing_file" in errors:
-                print(t(keys.COLLECT_CONFIG_MISSING))
+                print(i18n.t(Keys.COLLECT_CONFIG_MISSING))
             else:
-                print(t(keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(errors)))
-            print(t(keys.COLLECT_CONFIG_HINT))
+                print(i18n.t(Keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(errors)))
+            print(i18n.t(Keys.COLLECT_CONFIG_HINT))
             return 1
 
-    collect_config = deps.load_collect_config()
+    collect_config = load_collect_config()
     collect_logger = None
     if not dry_run:
-        logging_config = deps.load_logging_config()
-        collect_logger = deps.create_collect_logger(logging_config)
+        logging_config = load_logging_config()
+        collect_logger = create_collect_logger(logging_config)
 
-    scanner = deps.scanner_factory()
+    scanner = scanner_factory()
     valid_agents = {agent.name for agent in scanner.agents}
     query_spec: QuerySpec | None = None
     if args.uri:
         try:
-            query_spec = deps.parse_query_uri(args.uri, valid_agents, Path.cwd())
+            query_spec = parse_query_uri(args.uri, valid_agents, Path.cwd())
         except ValueError as exc:
-            print(t(keys.QUERY_INVALID, error=exc))
+            print(i18n.t(Keys.QUERY_INVALID, error=exc))
             return 1
         if query_spec is None:
-            print(t(keys.COLLECT_MODE_CONFLICT))
+            print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
             return 1
 
     available_agents: list[BaseAgent] = scanner.get_available_agents()
     if not available_agents:
-        print(t(keys.NO_AGENTS_FOUND))
+        print(i18n.t(Keys.NO_AGENTS_FOUND))
         return 1
 
     collect_mode = getattr(args, "collect_mode", "pm")
     phase = "read"
     try:
-        with deps.show_collect_progress() as update_progress:
-            deps.emit_collect_progress(
+        with show_collect_progress() as update_progress:
+            emit_collect_progress(
                 update_progress,
                 stage="collect_start",
                 current=0,
@@ -161,17 +264,17 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 since=since_date.isoformat(),
                 until=until_date.isoformat(),
             )
-            entries, has_truncated = deps.collect_entries(
+            entries, has_truncated = collect_entries(
                 agents=available_agents,
                 since_date=since_date,
                 until_date=until_date,
                 collect_config=collect_config,
                 query_spec=query_spec,
-                render_session_text_fn=deps.render_session_text,
+                render_session_text_fn=render_session_text,
                 progress_callback=update_progress,
             )
             if not entries:
-                print(t(keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
+                print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
                 return 1
 
             if collect_logger is not None:
@@ -183,15 +286,15 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                     agent_count=len(available_agents),
                     session_count=len(entries),
                 )
-            planned_entries, _ = deps.plan_collect_entries(entries, progress_callback=update_progress)
-            run_stats = deps.build_collect_run_stats(
+            planned_entries, _ = plan_collect_entries(entries, progress_callback=update_progress)
+            run_stats = build_collect_run_stats(
                 entries=entries,
                 planned_entries=planned_entries,
                 since_date=since_date,
                 until_date=until_date,
                 summary_concurrency=collect_config.summary_concurrency,
             )
-            deps.emit_collect_progress(
+            emit_collect_progress(
                 update_progress,
                 stage="collect_overview",
                 current=run_stats.session_count,
@@ -209,14 +312,14 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                     _format_collect_dry_run_preview(
                         run_stats=run_stats,
                         output_path=preview_collect_save_path(args.save, since_date=since_date, until_date=until_date),
-                        t=t,
-                        keys=keys,
                     )
                 )
                 return 0
             phase = "summarize"
-            session_summaries = deps.summarize_collect_entries(
-                config=config,
+            # dry-run 已在上方返回；非 dry-run 路径的 config 已通过校验
+            ai_config = cast(AIConfig, config)
+            session_summaries = summarize_collect_entries(
+                config=ai_config,
                 planned_entries=planned_entries,
                 summary_concurrency=collect_config.summary_concurrency,
                 progress_callback=update_progress,
@@ -225,59 +328,49 @@ def handle_collect_mode(args: argparse.Namespace, deps: CollectWorkflowDeps) -> 
                 mode=collect_mode,
             )
             phase = "render"
-            deps.emit_collect_progress(
-                update_progress, stage="render_final", current=0, total=2, message="render final"
-            )
-            aggregate = deps.reduce_collect_summaries(
-                config=config,
+            emit_collect_progress(update_progress, stage="render_final", current=0, total=2, message="render final")
+            aggregate = reduce_collect_summaries(
+                config=ai_config,
                 session_summaries=session_summaries,
                 progress_callback=update_progress,
                 timeout_seconds=collect_config.summary_timeout_seconds,
                 logger=collect_logger,
                 mode=collect_mode,
             )
-            deps.emit_collect_progress(
-                update_progress, stage="render_final", current=1, total=2, message="render final"
-            )
-            prompt = deps.build_collect_final_prompt(
+            emit_collect_progress(update_progress, stage="render_final", current=1, total=2, message="render final")
+            prompt = build_collect_final_prompt(
                 since_date=since_date,
                 until_date=until_date,
                 aggregate=aggregate,
                 has_truncated=has_truncated,
                 mode=collect_mode,
             )
-            markdown = deps.request_summary_from_llm(
-                config,
+            markdown = request_summary(
+                ai_config,
                 prompt,
                 timeout_seconds=collect_config.summary_timeout_seconds,
             )
-            deps.emit_collect_progress(
-                update_progress, stage="render_final", current=2, total=2, message="render final"
-            )
-            deps.emit_collect_progress(
-                update_progress, stage="write_output", current=0, total=1, message="write output"
-            )
+            emit_collect_progress(update_progress, stage="render_final", current=2, total=2, message="render final")
+            emit_collect_progress(update_progress, stage="write_output", current=0, total=1, message="write output")
             phase = "write"
-            output_path = deps.write_collect_markdown(
+            output_path = write_collect_markdown(
                 markdown,
                 since_date=since_date,
                 until_date=until_date,
-                output_path=deps.resolve_collect_save_path(args.save, since_date=since_date, until_date=until_date),
+                output_path=resolve_collect_save_path(args.save, since_date=since_date, until_date=until_date),
             )
-            deps.emit_collect_progress(
-                update_progress, stage="write_output", current=1, total=1, message="write output"
-            )
+            emit_collect_progress(update_progress, stage="write_output", current=1, total=1, message="write output")
     except Exception as exc:
         if collect_logger is not None:
             collect_logger.log("collect_run_fail", phase=phase, error=str(exc))
         if phase == "read":
-            print(t(keys.COLLECT_READ_FAILED, error=exc))
+            print(i18n.t(Keys.COLLECT_READ_FAILED, error=exc))
         else:
-            print(t(keys.COLLECT_API_FAILED, error=exc))
+            print(i18n.t(Keys.COLLECT_API_FAILED, error=exc))
         return 1
 
     if collect_logger is not None:
         collect_logger.log("collect_run_finish", output_path=str(output_path), session_count=len(entries))
     print(markdown)
-    print(t(keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
+    print(i18n.t(Keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
     return 0

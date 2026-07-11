@@ -16,10 +16,9 @@ from agent_dump.cli import (
     expand_shortcut_argv,
     handle_collect_mode,
     main,
-    resolve_collect_save_path,
-    show_collect_progress,
 )
 from agent_dump.collect import CollectProgressEvent
+from agent_dump.collect_workflow import resolve_collect_save_path, show_collect_progress
 from agent_dump.config import CollectConfig, ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
@@ -207,9 +206,9 @@ class TestMain:
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             with mock.patch(
-                "agent_dump.cli.select_sessions_interactive", return_value=[session]
+                "agent_dump.session_workflow.select_sessions_interactive", return_value=[session]
             ) as mock_select_sessions:
-                with mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[]):
+                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[]):
                     with mock.patch("sys.argv", ["agent-dump", "agents://.?providers=codex", "--interactive"]):
                         result = main()
 
@@ -273,14 +272,14 @@ class TestMain:
         mock_planned_entry.chunks = (mock.MagicMock(),)
         mock_logger = mock.MagicMock()
 
-        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+        with mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock_config):
             with mock.patch(
-                "agent_dump.cli.load_collect_config",
+                "agent_dump.collect_workflow.load_collect_config",
                 return_value=mock.MagicMock(summary_concurrency=1, summary_timeout_seconds=30),
             ):
-                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                with mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 known_agent = mock.MagicMock()
@@ -291,26 +290,26 @@ class TestMain:
                                 mock_scanner.get_available_agents.return_value = [available_agent]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
-                                    "agent_dump.cli.collect_entries", return_value=([mock_entry], False)
+                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
                                 ) as mock_collect:
                                     with mock.patch(
-                                        "agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 1)
+                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 1)
                                     ):
                                         with mock.patch(
-                                            "agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]
+                                            "agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]
                                         ):
                                             with mock.patch(
-                                                "agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.cli.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
                                                         return_value="# collect",
                                                     ):
                                                         with mock.patch(
-                                                            "agent_dump.cli.write_collect_markdown",
+                                                            "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=tmp_path / "collect.md",
                                                         ):
                                                             result = handle_collect_mode(args)
@@ -349,17 +348,17 @@ class TestMain:
         mock_scanner.get_available_agents.return_value = [available_agent]
 
         with (
-            mock.patch("agent_dump.cli.load_ai_config") as mock_load_ai,
-            mock.patch("agent_dump.cli.validate_ai_config") as mock_validate_ai,
-            mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config),
-            mock.patch("agent_dump.cli.load_logging_config") as mock_load_logging,
-            mock.patch("agent_dump.cli.create_collect_logger") as mock_create_logger,
+            mock.patch("agent_dump.collect_workflow.load_ai_config") as mock_load_ai,
+            mock.patch("agent_dump.collect_workflow.validate_ai_config") as mock_validate_ai,
+            mock.patch("agent_dump.collect_workflow.load_collect_config", return_value=collect_config),
+            mock.patch("agent_dump.collect_workflow.load_logging_config") as mock_load_logging,
+            mock.patch("agent_dump.collect_workflow.create_collect_logger") as mock_create_logger,
             mock.patch("agent_dump.cli.AgentScanner", return_value=mock_scanner),
-            mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)),
-            mock.patch("agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 2)),
-            mock.patch("agent_dump.cli.summarize_collect_entries") as mock_summarize,
+            mock.patch("agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)),
+            mock.patch("agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 2)),
+            mock.patch("agent_dump.collect_workflow.summarize_collect_entries") as mock_summarize,
             mock.patch("agent_dump.cli.request_summary_from_llm") as mock_request_summary,
-            mock.patch("agent_dump.cli.write_collect_markdown") as mock_write,
+            mock.patch("agent_dump.collect_workflow.write_collect_markdown") as mock_write,
         ):
             result = handle_collect_mode(args)
 
@@ -443,12 +442,12 @@ class TestMain:
         mock_scanner.get_available_agents.return_value = [codex_agent, claude_agent]
 
         with (
-            mock.patch("agent_dump.cli.load_ai_config") as mock_load_ai,
-            mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config),
+            mock.patch("agent_dump.collect_workflow.load_ai_config") as mock_load_ai,
+            mock.patch("agent_dump.collect_workflow.load_collect_config", return_value=collect_config),
             mock.patch("agent_dump.cli.AgentScanner", return_value=mock_scanner),
-            mock.patch("agent_dump.cli.summarize_collect_entries") as mock_summarize,
+            mock.patch("agent_dump.collect_workflow.summarize_collect_entries") as mock_summarize,
             mock.patch("agent_dump.cli.request_summary_from_llm") as mock_request_summary,
-            mock.patch("agent_dump.cli.write_collect_markdown") as mock_write,
+            mock.patch("agent_dump.collect_workflow.write_collect_markdown") as mock_write,
         ):
             result = handle_collect_mode(args)
 
@@ -484,20 +483,20 @@ class TestMain:
         collect_config = mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90)
         mock_logger = mock.MagicMock()
 
-        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
-            with mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config):
-                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+        with mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock_config):
+            with mock.patch("agent_dump.collect_workflow.load_collect_config", return_value=collect_config):
+                with mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
-                                    "agent_dump.cli.collect_entries", return_value=([mock_entry], False)
+                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
                                 ) as mock_collect:
                                     with mock.patch(
-                                        "agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 3)
+                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 3)
                                     ):
 
                                         def _summarize_collect_entries(**kwargs):
@@ -538,14 +537,14 @@ class TestMain:
                                             return [mock.MagicMock()]
 
                                         with mock.patch(
-                                            "agent_dump.cli.summarize_collect_entries",
+                                            "agent_dump.collect_workflow.summarize_collect_entries",
                                             side_effect=_summarize_collect_entries,
                                         ):
                                             with mock.patch(
-                                                "agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.cli.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
@@ -555,7 +554,7 @@ class TestMain:
                                                             tmp_path / "agent-dump-collect-20260305-20260305.md"
                                                         )
                                                         with mock.patch(
-                                                            "agent_dump.cli.write_collect_markdown",
+                                                            "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=output_path,
                                                         ):
                                                             result = handle_collect_mode(args)
@@ -590,37 +589,37 @@ class TestMain:
         output_path = tmp_path / "reports" / "report.md"
         mock_logger = mock.MagicMock()
 
-        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+        with mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock_config):
             with mock.patch(
-                "agent_dump.cli.load_collect_config",
+                "agent_dump.collect_workflow.load_collect_config",
                 return_value=mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90),
             ):
-                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                with mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                                 mock_scanner_class.return_value = mock_scanner
-                                with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
+                                with mock.patch("agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)):
                                     with mock.patch(
-                                        "agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 1)
+                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 1)
                                     ):
                                         with mock.patch(
-                                            "agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]
+                                            "agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]
                                         ):
                                             with mock.patch(
-                                                "agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.cli.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
                                                         return_value="# collect",
                                                     ):
                                                         with mock.patch(
-                                                            "agent_dump.cli.write_collect_markdown",
+                                                            "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=output_path,
                                                         ) as mock_write:
                                                             result = handle_collect_mode(args)
@@ -649,39 +648,39 @@ class TestMain:
         output_path = Path("collect.md")
         mock_logger = mock.MagicMock()
 
-        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+        with mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock_config):
             with mock.patch(
-                "agent_dump.cli.load_collect_config",
+                "agent_dump.collect_workflow.load_collect_config",
                 return_value=mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90),
             ):
-                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                with mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [cursor_agent]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
-                                    "agent_dump.cli.collect_entries", return_value=([mock.MagicMock()], False)
+                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock.MagicMock()], False)
                                 ) as mock_collect:
                                     with mock.patch(
-                                        "agent_dump.cli.plan_collect_entries", return_value=([mock.MagicMock()], 1)
+                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock.MagicMock()], 1)
                                     ):
                                         with mock.patch(
-                                            "agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]
+                                            "agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]
                                         ):
                                             with mock.patch(
-                                                "agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.cli.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
                                                         return_value="# collect",
                                                     ):
                                                         with mock.patch(
-                                                            "agent_dump.cli.write_collect_markdown",
+                                                            "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=output_path,
                                                         ):
                                                             result = handle_collect_mode(args)
@@ -702,20 +701,20 @@ class TestMain:
         mock_logger = mock.MagicMock()
 
         with (
-            mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()),
+            mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock.MagicMock()),
             mock.patch(
-                "agent_dump.cli.load_collect_config",
+                "agent_dump.collect_workflow.load_collect_config",
                 return_value=mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90),
             ),
-            mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()),
+            mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()),
         ):
-            with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+            with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                     with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                         mock_scanner = mock.MagicMock()
                         mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                         mock_scanner_class.return_value = mock_scanner
-                        with mock.patch("agent_dump.cli.collect_entries", side_effect=RuntimeError("boom")):
+                        with mock.patch("agent_dump.collect_workflow.collect_entries", side_effect=RuntimeError("boom")):
                             result = handle_collect_mode(args)
 
         assert result == 1
@@ -838,7 +837,7 @@ class TestMain:
         fake_stderr = FakeStderr()
         expected_progress = "正在总结内容：已完成 1/2 个单元，并发 2"
 
-        with mock.patch("sys.stderr", fake_stderr), mock.patch("agent_dump.cli.threading.Thread", FakeThread):
+        with mock.patch("sys.stderr", fake_stderr), mock.patch("agent_dump.collect_workflow.threading.Thread", FakeThread):
             with show_collect_progress() as update_progress:
                 update_progress(
                     CollectProgressEvent(
@@ -898,7 +897,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id") as mock_find:
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id") as mock_find:
                 mock_find.return_value = (mock_agent, mock_session)
 
                 with mock.patch(
@@ -960,7 +959,7 @@ class TestMain:
             mock_scanner.agents = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=None):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=None):
                 with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
                     result = main()
 
@@ -982,7 +981,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id") as mock_find:
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id") as mock_find:
                 mock_find.return_value = (mock_agent, mock.MagicMock())
 
                 with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
@@ -1005,7 +1004,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id") as mock_find:
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id") as mock_find:
                 mock_find.return_value = (mock_agent, mock.MagicMock())
 
                 with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
@@ -1036,7 +1035,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id") as mock_find:
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id") as mock_find:
                 mock_find.return_value = (mock_agent, mock.MagicMock())
 
                 with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--head"]):
@@ -1223,7 +1222,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.display_sessions_list", return_value=True):
+            with mock.patch("agent_dump.session_workflow.display_sessions_list", return_value=True):
                 with mock.patch("sys.argv", ["agent-dump", "--list"]):
                     result = main()
 
@@ -1244,8 +1243,8 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+            with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
@@ -1272,9 +1271,9 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [agent1, agent2]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_agent_interactive") as mock_select_agent:
-                with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select_session:
-                    with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+            with mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent:
+                with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select_session:
+                    with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                         mock_select_agent.return_value = agent2
                         mock_select_session.return_value = [mock.MagicMock()]
                         mock_export.return_value = [Path("test.json")]
@@ -1296,7 +1295,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [agent1, agent2]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_agent_interactive", return_value=None):
+            with mock.patch("agent_dump.session_workflow.select_agent_interactive", return_value=None):
                 with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                     result = main()
 
@@ -1336,7 +1335,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
+            with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                 mock_select.return_value = []
 
                 with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
@@ -1358,8 +1357,8 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+            with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
@@ -1430,8 +1429,8 @@ class TestMain:
                 snippet="login failed after **auth timeout**",
                 rank=2.5,
             )
-            with mock.patch("agent_dump.cli.collect_search_matches", return_value=[match]) as mock_collect:
-                with mock.patch("agent_dump.cli.display_sessions_list") as mock_display_sessions:
+            with mock.patch("agent_dump.session_workflow.collect_search_matches", return_value=[match]) as mock_collect:
+                with mock.patch("agent_dump.session_workflow.display_sessions_list") as mock_display_sessions:
                     with mock.patch("sys.argv", ["agent-dump", "--search", "auth timeout", "--lang", "zh"]):
                         result = main()
 
@@ -1471,7 +1470,7 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli_shared.filter_sessions", return_value=[session2]) as mock_filter:
-                with mock.patch("agent_dump.cli.display_search_results") as mock_display_search:
+                with mock.patch("agent_dump.session_workflow.display_search_results") as mock_display_search:
                     with mock.patch("sys.argv", ["agent-dump", "--list", "-query", "error"]):
                         result = main()
 
@@ -1515,16 +1514,16 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             selected_session = mock.MagicMock()
-            with mock.patch("agent_dump.cli.select_agent_interactive", return_value=agent2) as mock_select_agent:
+            with mock.patch("agent_dump.session_workflow.select_agent_interactive", return_value=agent2) as mock_select_agent:
                 with mock.patch(
                     "agent_dump.cli_shared.filter_sessions",
                     side_effect=[[selected_session], [mock.MagicMock()]],
                 ) as mock_filter:
                     with mock.patch(
-                        "agent_dump.cli.select_sessions_interactive",
+                        "agent_dump.session_workflow.select_sessions_interactive",
                         return_value=[selected_session],
                     ):
-                        with mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[Path("a.json")]):
+                        with mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]):
                             with mock.patch(
                                 "sys.argv",
                                 ["agent-dump", "--interactive", "-query", "codex,kimi:bug"],
@@ -1560,8 +1559,8 @@ class TestMain:
 
             selected_sessions = [mock.MagicMock()]
             with mock.patch("agent_dump.cli_shared.filter_sessions", return_value=selected_sessions) as mock_filter:
-                with mock.patch("agent_dump.cli.select_sessions_interactive", return_value=selected_sessions):
-                    with mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[Path("a.json")]):
+                with mock.patch("agent_dump.session_workflow.select_sessions_interactive", return_value=selected_sessions):
+                    with mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]):
                         with mock.patch(
                             "sys.argv",
                             ["agent-dump", "--interactive", "-days", "3", "-query", "bug"],
@@ -1667,7 +1666,7 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli_shared.filter_sessions", side_effect=[[], []]) as mock_filter:
-                with mock.patch("agent_dump.cli.select_agent_interactive") as mock_select_agent:
+                with mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent:
                     with mock.patch("sys.argv", ["agent-dump", "--interactive", "-query", "codex,kimi:bug"]):
                         result = main()
 
@@ -1708,10 +1707,10 @@ class TestMain:
                     "agent_dump.cli_shared.filter_sessions_by_query",
                     side_effect=[[codex_session], [kimi_session]],
                 ) as mock_filter,
-                mock.patch("agent_dump.cli.select_agent_interactive") as mock_select_agent,
+                mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent,
             ):
-                with mock.patch("agent_dump.cli.select_sessions_interactive", return_value=[kimi_session]):
-                    with mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[Path("a.json")]):
+                with mock.patch("agent_dump.session_workflow.select_sessions_interactive", return_value=[kimi_session]):
+                    with mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]):
                         with mock.patch(
                             "sys.argv",
                             ["agent-dump", "--interactive", "-query", "bug limit:1 provider:codex,kimi"],
@@ -1755,12 +1754,12 @@ class TestMain:
                     "agent_dump.cli_shared.filter_sessions",
                     side_effect=[[selected_session], []],
                 ) as mock_filter,
-                mock.patch("agent_dump.cli.select_agent_interactive") as mock_select_agent,
+                mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent,
                 mock.patch(
-                    "agent_dump.cli.select_sessions_interactive",
+                    "agent_dump.session_workflow.select_sessions_interactive",
                     return_value=[selected_session],
                 ),
-                mock.patch("agent_dump.cli.export_sessions_for_formats", return_value=[Path("a.json")]),
+                mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]),
             ):
                 with mock.patch("sys.argv", ["agent-dump", "--interactive", "-query", "codex,kimi:bug"]):
                     result = main()
@@ -1788,8 +1787,8 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+            with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
@@ -1816,8 +1815,8 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+            with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.json")]
 
@@ -1846,8 +1845,8 @@ class TestMain:
             with mock.patch(
                 "agent_dump.cli.load_export_config", return_value=ExportConfig(output=str(configured_output))
             ):
-                with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                    with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+                with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                    with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                         mock_select.return_value = [mock.MagicMock()]
                         mock_export.return_value = [configured_output / "opencode" / "test.json"]
 
@@ -1877,8 +1876,8 @@ class TestMain:
             with mock.patch(
                 "agent_dump.cli.load_export_config", return_value=ExportConfig(output=str(configured_output))
             ):
-                with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                    with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+                with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                    with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                         mock_select.return_value = [mock.MagicMock()]
                         mock_export.return_value = [Path("test.md")]
 
@@ -1903,8 +1902,8 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+            with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("test.md")]
 
@@ -1949,8 +1948,8 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+            with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("a.json"), Path("a.md"), Path("a.raw.json")]
 
@@ -1994,8 +1993,8 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+            with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("a.raw.json")]
 
@@ -2070,7 +2069,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch(
                     "sys.argv",
                     ["agent-dump", "codex://session-001", "--format", "json", "--output", str(output_root)],
@@ -2102,7 +2101,7 @@ class TestMain:
             with mock.patch(
                 "agent_dump.cli.load_export_config", return_value=ExportConfig(output=str(configured_output))
             ):
-                with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                     with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--format", "json"]):
                         result = main()
 
@@ -2132,7 +2131,7 @@ class TestMain:
             with mock.patch(
                 "agent_dump.cli.load_export_config", return_value=ExportConfig(output=str(configured_output))
             ):
-                with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                     with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--format", "markdown"]):
                         result = main()
 
@@ -2179,7 +2178,7 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with (
-                mock.patch("agent_dump.cli.find_session_by_id", return_value=(agent, session)),
+                mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(agent, session)),
                 mock.patch(
                     "sys.argv",
                     ["agent-dump", "claude://session-001", "--format", "json", "--output", str(output_root)],
@@ -2213,7 +2212,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch(
                     "sys.argv",
                     ["agent-dump", "codex://session-001", "-format", "md", "-output", str(output_root)],
@@ -2250,7 +2249,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch(
                     "sys.argv",
                     ["agent-dump", "codex://session-001", "--format", "print,json", "--output", str(output_root)],
@@ -2286,7 +2285,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch(
                     "sys.argv",
                     [
@@ -2320,7 +2319,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch("sys.argv", ["agent-dump", "cursor://request-001", "--format", "raw"]):
                     result = main()
 
@@ -2346,7 +2345,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch(
                     "sys.argv",
                     [
@@ -2384,7 +2383,7 @@ class TestMain:
                 next_steps=("重新运行 `agent-dump --list` 检查该会话是否仍可见。",),
             )
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--format", "raw"]):
                     result = main()
 
@@ -2418,9 +2417,9 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(True, [])):
                         with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# summary markdown"):
                             with mock.patch(
                                 "sys.argv",
@@ -2469,9 +2468,9 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(True, [])):
                         with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# summary markdown"):
                             with mock.patch(
                                 "sys.argv",
@@ -2513,7 +2512,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch(
                     "sys.argv",
                     [
@@ -2555,9 +2554,9 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.cli.load_ai_config", return_value=None):
-                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(False, ["missing_file"])):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=None):
+                    with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(False, ["missing_file"])):
                         with mock.patch(
                             "sys.argv",
                             [
@@ -2600,9 +2599,9 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(False, ["model", "api_key"])):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(False, ["model", "api_key"])):
                         with mock.patch(
                             "sys.argv",
                             [
@@ -2646,9 +2645,9 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(True, [])):
                         with mock.patch("agent_dump.cli.request_summary_from_llm", side_effect=RuntimeError("boom")):
                             with mock.patch(
                                 "sys.argv",
@@ -2721,8 +2720,8 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli.select_sessions_interactive") as mock_select:
-                with mock.patch("agent_dump.cli.export_sessions_for_formats") as mock_export:
+            with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
+                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
                     mock_export.return_value = [Path("a.json")]
 
