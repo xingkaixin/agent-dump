@@ -14,27 +14,11 @@ from typing import Any
 
 from agent_dump.__about__ import __version__
 from agent_dump.cli_shared import (
-    DEFAULT_OUTPUT_BASE_DIR,
-    apply_query_filter,
-    build_no_agents_found_diagnostic as _build_no_agents_found_diagnostic,
-    collect_query_matches,
-    collect_search_matches,
-    display_search_results,
-    display_sessions_list,
-    export_sessions_for_formats,
-    format_session_metadata_summary,
-    get_supported_agent_locations,
-    group_sessions_by_time,
     is_option_specified,
-    parse_format_spec,
     print_diagnostic as _print_diagnostic,
-    render_agent_search_roots as _render_agent_search_roots,
-    render_query_summary,
     render_session_text,
     resolve_effective_formats,
-    resolve_output_base_dir,
     validate_formats_for_mode,
-    warn_list_ignored_options,
 )
 from agent_dump.collect import (
     CollectProgressEvent,
@@ -75,38 +59,21 @@ from agent_dump.maintenance_workflow import (
     handle_reindex_mode as _handle_reindex_mode,
     handle_stats_mode as _handle_stats_mode,
 )
-from agent_dump.query_filter import QuerySpec, parse_query, parse_query_uri
+from agent_dump.query_filter import QuerySpec, parse_query_uri
 from agent_dump.scanner import AgentScanner
-from agent_dump.selector import select_agent_interactive, select_sessions_interactive
-from agent_dump.session_workflow import SessionModeDeps, handle_session_modes as _handle_session_modes
+from agent_dump.session_workflow import handle_session_modes as _handle_session_modes
 from agent_dump.uri_workflow import handle_uri_mode as _handle_uri_mode
 
 __all__ = (
-    "DEFAULT_OUTPUT_BASE_DIR",
-    "apply_query_filter",
-    "collect_query_matches",
-    "collect_search_matches",
-    "display_search_results",
-    "display_sessions_list",
     "expand_shortcut_argv",
-    "export_sessions_for_formats",
-    "format_session_metadata_summary",
-    "get_supported_agent_locations",
-    "group_sessions_by_time",
     "handle_collect_mode",
     "handle_reindex_mode",
+    "handle_session_modes",
     "handle_stats_mode",
-    "is_option_specified",
+    "handle_uri_mode",
     "main",
-    "parse_format_spec",
-    "render_query_summary",
-    "render_session_text",
     "resolve_collect_save_path",
-    "resolve_effective_formats",
-    "resolve_output_base_dir",
     "show_collect_progress",
-    "validate_formats_for_mode",
-    "warn_list_ignored_options",
 )
 
 
@@ -349,26 +316,6 @@ def handle_reindex_mode(args: argparse.Namespace) -> int:
     return _handle_reindex_mode(args, scanner_factory=AgentScanner, search_index_factory=SearchIndex)
 
 
-def _build_session_deps() -> SessionModeDeps:
-    return SessionModeDeps(
-        scanner_factory=AgentScanner,
-        parse_query=parse_query,
-        collect_query_matches=collect_query_matches,
-        collect_search_matches=collect_search_matches,
-        display_search_results=display_search_results,
-        display_sessions_list=display_sessions_list,
-        select_agent_interactive=select_agent_interactive,
-        select_sessions_interactive=select_sessions_interactive,
-        export_sessions_for_formats=export_sessions_for_formats,
-        resolve_output_base_dir=resolve_output_base_dir,
-        render_query_summary=render_query_summary,
-        warn_list_ignored_options=warn_list_ignored_options,
-        print_diagnostic=_print_diagnostic,
-        build_no_agents_found_diagnostic=_build_no_agents_found_diagnostic,
-        render_agent_search_roots=_render_agent_search_roots,
-    )
-
-
 def handle_uri_mode(
     args: argparse.Namespace,
     *,
@@ -404,7 +351,7 @@ def handle_session_modes(
         output_formats=output_formats,
         export_config=export_config,
         print_help=print_help,
-        deps=_build_session_deps(),
+        scanner_factory=AgentScanner,
     )
 
 

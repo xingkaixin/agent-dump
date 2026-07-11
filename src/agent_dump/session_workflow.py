@@ -1,37 +1,30 @@
 import argparse
 from collections.abc import Callable
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.diagnostics import DiagnosticError, invalid_query_or_uri, root_not_found
+from agent_dump.cli_shared import (
+    build_no_agents_found_diagnostic,
+    collect_query_matches,
+    collect_search_matches,
+    display_search_results,
+    display_sessions_list,
+    export_sessions_for_formats,
+    print_diagnostic,
+    render_agent_search_roots,
+    render_query_summary,
+    resolve_output_base_dir,
+    warn_list_ignored_options,
+)
+from agent_dump.diagnostics import invalid_query_or_uri, root_not_found
 from agent_dump.i18n import Keys, i18n
-from agent_dump.query_filter import QuerySpec, SearchSessionMatch
+from agent_dump.query_filter import QuerySpec, parse_query
 from agent_dump.scanner import AgentScanner
+from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 
 
 class ExportConfigLike(Protocol):
     output: str
-
-
-@dataclass(frozen=True)
-class SessionModeDeps:
-    scanner_factory: Callable[[], AgentScanner]
-    parse_query: Callable[..., QuerySpec | None]
-    collect_query_matches: Callable[..., dict[str, list[Session]]]
-    collect_search_matches: Callable[..., list[SearchSessionMatch]]
-    display_search_results: Callable[[list[SearchSessionMatch]], None]
-    display_sessions_list: Callable[..., bool]
-    select_agent_interactive: Callable[..., BaseAgent | None]
-    select_sessions_interactive: Callable[..., list[Session]]
-    export_sessions_for_formats: Callable[..., list[Path]]
-    resolve_output_base_dir: Callable[..., Path]
-    render_query_summary: Callable[[QuerySpec], str]
-    warn_list_ignored_options: Callable[[bool, bool], None]
-    print_diagnostic: Callable[[DiagnosticError], None]
-    build_no_agents_found_diagnostic: Callable[[AgentScanner], DiagnosticError]
-    render_agent_search_roots: Callable[..., tuple[str, ...]]
 
 
 def handle_session_modes(
@@ -43,7 +36,7 @@ def handle_session_modes(
     output_formats: list[str],
     export_config: ExportConfigLike,
     print_help: Callable[[], None],
-    deps: SessionModeDeps,
+    scanner_factory: Callable[[], AgentScanner] = AgentScanner,
 ) -> int | None:
     if args.search:
         args.list = True
@@ -58,15 +51,15 @@ def handle_session_modes(
     print("🚀 Agent Session Exporter\n")
     print("=" * 60 + "\n")
 
-    scanner = deps.scanner_factory()
+    scanner = scanner_factory()
     valid_agents = {agent.name for agent in scanner.agents}
     if query_uri_spec is not None:
         query_spec = query_uri_spec
     else:
         try:
-            query_spec = deps.parse_query(args.query, valid_agents=valid_agents)
+            query_spec = parse_query(args.query, valid_agents=valid_agents)
         except ValueError as e:
-            deps.print_diagnostic(
+            print_diagnostic(
                 invalid_query_or_uri(
                     "查询条件无效。",
                     details=(str(e),),
@@ -99,16 +92,16 @@ def handle_session_modes(
     available_agents = scanner.get_available_agents()
 
     if not available_agents:
-        deps.print_diagnostic(deps.build_no_agents_found_diagnostic(scanner))
+        print_diagnostic(build_no_agents_found_diagnostic(scanner))
         return None
 
     if query_spec and query_spec.agent_names:
         available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
         if not available_agents:
-            deps.print_diagnostic(
+            print_diagnostic(
                 root_not_found(
                     "查询范围内没有可用 provider。",
-                    searched_roots=deps.render_agent_search_roots(scanner.agents),
+                    searched_roots=render_agent_search_roots(scanner.agents),
                     details=(f"query providers: {','.join(sorted(query_spec.agent_names))}",),
                     next_steps=(
                         "确认这些 provider 在本机上确实存在会话数据。",
@@ -119,16 +112,16 @@ def handle_session_modes(
             return 0 if args.list else 1
 
     if args.search and query_spec is not None:
-        deps.warn_list_ignored_options(output_specified, format_specified)
-        print(i18n.t(Keys.SEARCH_HEADER, days=args.days, query=deps.render_query_summary(query_spec)))
+        warn_list_ignored_options(output_specified, format_specified)
+        print(i18n.t(Keys.SEARCH_HEADER, days=args.days, query=render_query_summary(query_spec)))
         print("-" * 60)
-        deps.display_search_results(deps.collect_search_matches(available_agents, days=args.days, spec=query_spec))
+        display_search_results(collect_search_matches(available_agents, days=args.days, spec=query_spec))
         print("\n" + "=" * 60)
         return 0
 
     matched_sessions_by_agent: dict[str, list[Session]] = {}
     if query_spec:
-        matched_sessions_by_agent = deps.collect_query_matches(available_agents, days=args.days, spec=query_spec)
+        matched_sessions_by_agent = collect_query_matches(available_agents, days=args.days, spec=query_spec)
 
     if args.list:
         return _handle_list_mode(
@@ -138,7 +131,6 @@ def handle_session_modes(
             available_agents=available_agents,
             output_specified=output_specified,
             format_specified=format_specified,
-            deps=deps,
         )
 
     return _handle_interactive_mode(
@@ -149,7 +141,6 @@ def handle_session_modes(
         output_specified=output_specified,
         output_formats=output_formats,
         export_config=export_config,
-        deps=deps,
     )
 
 
@@ -161,11 +152,10 @@ def _handle_list_mode(
     available_agents: list[BaseAgent],
     output_specified: bool,
     format_specified: bool,
-    deps: SessionModeDeps,
 ) -> int:
-    deps.warn_list_ignored_options(output_specified, format_specified)
+    warn_list_ignored_options(output_specified, format_specified)
     if query_spec:
-        print(i18n.t(Keys.LIST_HEADER_FILTERED, days=args.days, query=deps.render_query_summary(query_spec)))
+        print(i18n.t(Keys.LIST_HEADER_FILTERED, days=args.days, query=render_query_summary(query_spec)))
     else:
         print(i18n.t(Keys.LIST_HEADER, days=args.days))
     print("-" * 60)
@@ -177,7 +167,7 @@ def _handle_list_mode(
         print(f"\n📁 {agent.display_name} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
 
         if sessions:
-            should_quit = deps.display_sessions_list(
+            should_quit = display_sessions_list(
                 agent,
                 sessions,
                 page_size=max(len(sessions), 1),
@@ -205,7 +195,6 @@ def _handle_interactive_mode(
     output_specified: bool,
     output_formats: list[str],
     export_config: ExportConfigLike,
-    deps: SessionModeDeps,
 ) -> int:
     interactive_agents = available_agents
     session_counts: dict[str, int] | None = None
@@ -223,7 +212,7 @@ def _handle_interactive_mode(
                 i18n.t(
                     Keys.NO_SESSIONS_MATCHING_KEYWORD,
                     days=args.days,
-                    query=deps.render_query_summary(query_spec),
+                    query=render_query_summary(query_spec),
                 )
             )
             return 1
@@ -232,7 +221,7 @@ def _handle_interactive_mode(
         selected_agent = interactive_agents[0]
         print(i18n.t(Keys.AUTO_SELECT_AGENT, agent_name=selected_agent.display_name))
     else:
-        selected_agent = deps.select_agent_interactive(
+        selected_agent = select_agent_interactive(
             interactive_agents,
             days=args.days,
             session_counts=session_counts,
@@ -249,9 +238,7 @@ def _handle_interactive_mode(
 
     if not sessions:
         if query_spec:
-            print(
-                i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, query=deps.render_query_summary(query_spec))
-            )
+            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, query=render_query_summary(query_spec)))
         else:
             print(i18n.t(Keys.NO_SESSIONS_FOUND, days=args.days))
         return 1
@@ -262,7 +249,7 @@ def _handle_interactive_mode(
                 Keys.SESSIONS_FOUND_FILTERED,
                 count=len(sessions),
                 days=args.days,
-                query=deps.render_query_summary(query_spec),
+                query=render_query_summary(query_spec),
             )
         )
     else:
@@ -272,7 +259,7 @@ def _handle_interactive_mode(
         print(i18n.t(Keys.MANY_SESSIONS_WARNING, count=len(sessions)))
         print(i18n.t(Keys.MANY_SESSIONS_EXAMPLE))
 
-    selected_sessions = deps.select_sessions_interactive(
+    selected_sessions = select_sessions_interactive(
         sessions,
         selected_agent,
         show_metadata_summary=show_metadata_summary,
@@ -284,7 +271,7 @@ def _handle_interactive_mode(
     print(i18n.t(Keys.SESSIONS_SELECTED_COUNT, count=len(selected_sessions)))
 
     output_base_dirs = {
-        output_format: deps.resolve_output_base_dir(
+        output_format: resolve_output_base_dir(
             cli_output=args.output,
             output_specified=output_specified,
             export_output=export_config.output,
@@ -295,14 +282,14 @@ def _handle_interactive_mode(
     primary_output_format = output_formats[0] if output_formats else "json"
     output_base_dir = output_base_dirs.get(
         primary_output_format,
-        deps.resolve_output_base_dir(
+        resolve_output_base_dir(
             cli_output=args.output,
             output_specified=output_specified,
             export_output=export_config.output,
             output_format=primary_output_format,
         ),
     )
-    exported = deps.export_sessions_for_formats(
+    exported = export_sessions_for_formats(
         selected_agent,
         selected_sessions,
         output_formats,
