@@ -9,7 +9,7 @@ import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
+from agent_dump.agents.jsonl_scan import file_modified_since, read_jsonl_scan_metadata
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
@@ -60,7 +60,11 @@ class PiAgent(BaseAgent):
             return []
 
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
-        jsonl_files = list(self.base_path.rglob("*.jsonl"))
+        jsonl_files = [
+            jsonl_file
+            for jsonl_file in self.base_path.rglob("*.jsonl")
+            if file_modified_since(jsonl_file, cutoff_time)
+        ]
         if not jsonl_files:
             return []
 
