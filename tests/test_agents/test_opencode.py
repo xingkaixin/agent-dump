@@ -195,6 +195,36 @@ class TestOpenCodeAgent:
         assert result[0].metadata["message_count"] == 1
         assert result[0].metadata["model"] == "gpt-5"
 
+    def test_get_session_data_skips_malformed_rows_and_warns_to_stderr(self, populated_db, capsys):
+        """测试损坏的 message/part 行被跳过并向 stderr 告警，有效数据保留"""
+        conn = sqlite3.connect(populated_db)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)",
+            ("msg-bad", "session-001", 1704067300000, "{not-json"),
+        )
+        cursor.execute(
+            "INSERT INTO part (id, message_id, time_created, data) VALUES (?, ?, ?, ?)",
+            ("part-bad", "msg-001", 1704067300000, None),
+        )
+        conn.commit()
+        conn.close()
+
+        agent = OpenCodeAgent()
+        agent.db_path = populated_db
+        session = agent.find_session_by_id("session-001")
+        assert session is not None
+
+        data = agent.get_session_data(session)
+
+        assert data["stats"]["message_count"] == 1
+        assert [message["id"] for message in data["messages"]] == ["msg-001"]
+        assert [part["type"] for part in data["messages"][0]["parts"]] == ["text"]
+        captured = capsys.readouterr()
+        assert "msg-bad" in captured.err
+        assert "part-bad" in captured.err
+        assert captured.out == ""
+
     def test_find_session_by_id_uses_sql_lookup(self, populated_db):
         """测试 find_session_by_id 按主键直查，且不受时间窗限制"""
         agent = OpenCodeAgent()
