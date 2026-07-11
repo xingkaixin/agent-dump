@@ -69,6 +69,33 @@ class TestPiAgent:
         with mock.patch.object(agent, "_find_base_path", return_value=sessions_dir):
             assert agent.is_available() is True
 
+    def test_find_session_by_id_locates_file_by_suffix(self, tmp_path):
+        """测试按文件名后缀（日期前缀 + id）直接定位会话"""
+        agent = PiAgent()
+        agent.base_path = tmp_path
+        now = datetime.now(timezone.utc)
+        session_path = tmp_path / "--workspace--" / "20260101_pi-session.jsonl"
+        session_path.parent.mkdir()
+        _write_jsonl(
+            session_path,
+            [
+                {
+                    "type": "session",
+                    "version": 3,
+                    "id": "pi-session",
+                    "timestamp": now.isoformat(),
+                    "cwd": "/workspace/pi",
+                }
+            ],
+        )
+
+        found = agent.find_session_by_id("pi-session")
+
+        assert found is not None
+        assert found.id == "pi-session"
+        assert found.source_path == session_path
+        assert agent.find_session_by_id("missing") is None
+
     def test_parse_session_file_valid(self, tmp_path):
         agent = PiAgent()
         now = datetime.now(timezone.utc)

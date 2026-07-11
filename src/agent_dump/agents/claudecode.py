@@ -217,6 +217,16 @@ class ClaudeCodeAgent(BaseAgent):
         except Exception:
             return None
 
+    def find_session_by_id(self, session_id: str) -> Session | None:
+        """Locate one session by filename before falling back to a full scan."""
+        if self.base_path:
+            # 会话文件位于 <base_path>/<project_dir>/<session_id>.jsonl
+            for file_path in self.base_path.glob(f"*/{session_id}.jsonl"):
+                session = self._parse_session_file(file_path, file_path.parent)
+                if session is not None and session.id == session_id:
+                    return session
+        return super().find_session_by_id(session_id)
+
     def get_session_uri(self, session: Session) -> str:
         """Get the agent session URI for a session - Claude uses 'claude://' scheme"""
         return f"claude://{session.id}"

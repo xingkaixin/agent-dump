@@ -798,6 +798,55 @@ class TestCodexAgent:
             for part in message.get("parts", [])
         )
 
+    def test_find_session_by_id_locates_file_by_name(self, tmp_path):
+        """测试按文件名后缀直接定位会话，未命中返回 None"""
+        agent = CodexAgent()
+        agent.base_path = tmp_path
+        agent._titles_cache = {}
+        session_id = "019c213e-c251-73a3-af66-0ec9d7cb9e29"
+        session_file = tmp_path / "2026" / f"rollout-2026-02-03T10-04-47-{session_id}.jsonl"
+        session_file.parent.mkdir(parents=True)
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "timestamp": "2026-02-03T10:04:47Z",
+                    "payload": {"id": session_id, "timestamp": "2026-02-03T10:04:47Z", "cwd": "/repo"},
+                }
+            )
+            + "\n"
+        )
+
+        found = agent.find_session_by_id(session_id)
+
+        assert found is not None
+        assert found.id == session_id
+        assert found.source_path == session_file
+        assert agent.find_session_by_id("00000000-0000-0000-0000-000000000000") is None
+
+    def test_find_session_by_id_falls_back_to_scan_when_filename_differs(self, tmp_path):
+        """测试 payload id 与文件名不一致时回退全量扫描命中"""
+        agent = CodexAgent()
+        agent.base_path = tmp_path
+        agent._titles_cache = {}
+        payload_id = "aaaaaaaa-c251-73a3-af66-0ec9d7cb9e29"
+        session_file = tmp_path / "rollout-2026-02-03T10-04-47-bbbbbbbb-0000-0000-0000-000000000000.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "timestamp": "2026-02-03T10:04:47Z",
+                    "payload": {"id": payload_id, "timestamp": "2026-02-03T10:04:47Z"},
+                }
+            )
+            + "\n"
+        )
+
+        found = agent.find_session_by_id(payload_id)
+
+        assert found is not None
+        assert found.id == payload_id
+
     def test_get_session_data_malformed_line_warns_to_stderr(self, tmp_path, capsys):
         """测试损坏的 JSONL 行只向 stderr 输出警告，不污染 stdout"""
         agent = CodexAgent()
