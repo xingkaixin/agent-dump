@@ -98,7 +98,7 @@ class TestStatsMode:
         scanner.get_available_agents.return_value = [agent]
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            with mock.patch("agent_dump.cli.apply_query_filter", return_value=[session]):
+            with mock.patch("agent_dump.maintenance_workflow.apply_query_filter", return_value=[session]):
                 result = handle_stats_mode(args)
 
         assert result == 0

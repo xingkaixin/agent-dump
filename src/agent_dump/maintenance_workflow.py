@@ -1,42 +1,40 @@
 import argparse
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.diagnostics import DiagnosticError, invalid_query_or_uri, root_not_found
+from agent_dump.cli_shared import (
+    apply_query_filter,
+    build_no_agents_found_diagnostic,
+    group_sessions_by_time,
+    print_diagnostic,
+    render_agent_search_roots,
+)
+from agent_dump.diagnostics import invalid_query_or_uri, root_not_found
 from agent_dump.i18n import Keys, i18n
-from agent_dump.query_filter import QuerySpec
+from agent_dump.query_filter import QuerySpec, parse_query
 from agent_dump.scanner import AgentScanner
+from agent_dump.search_index import SearchIndex
 
 
-@dataclass(frozen=True)
-class MaintenanceModeDeps:
-    scanner_factory: Callable[[], AgentScanner]
-    search_index_factory: Callable[[], Any]
-    parse_query: Callable[..., QuerySpec | None]
-    apply_query_filter: Callable[[BaseAgent, list[Session], QuerySpec | None], list[Session]]
-    group_sessions_by_time: Callable[[list[Session]], dict[str, list[Session]]]
-    print_diagnostic: Callable[[DiagnosticError], None]
-    build_no_agents_found_diagnostic: Callable[[AgentScanner], DiagnosticError]
-    render_agent_search_roots: Callable[..., tuple[str, ...]]
-
-
-def handle_stats_mode(args: argparse.Namespace, *, deps: MaintenanceModeDeps) -> int:
-    scanner = deps.scanner_factory()
+def handle_stats_mode(
+    args: argparse.Namespace,
+    *,
+    scanner_factory: Callable[[], AgentScanner] = AgentScanner,
+) -> int:
+    scanner = scanner_factory()
     available_agents = scanner.get_available_agents()
 
     if not available_agents:
-        deps.print_diagnostic(deps.build_no_agents_found_diagnostic(scanner))
+        print_diagnostic(build_no_agents_found_diagnostic(scanner))
         return 1
 
     query_spec: QuerySpec | None = None
     if args.query:
         valid_agents = {agent.name for agent in scanner.agents}
         try:
-            query_spec = deps.parse_query(args.query, valid_agents=valid_agents)
+            query_spec = parse_query(args.query, valid_agents=valid_agents)
         except ValueError as e:
-            deps.print_diagnostic(
+            print_diagnostic(
                 invalid_query_or_uri(
                     "查询条件无效。",
                     details=(str(e),),
@@ -51,10 +49,10 @@ def handle_stats_mode(args: argparse.Namespace, *, deps: MaintenanceModeDeps) ->
     if query_spec and query_spec.agent_names:
         available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
         if not available_agents:
-            deps.print_diagnostic(
+            print_diagnostic(
                 root_not_found(
                     "查询范围内没有可用 provider。",
-                    searched_roots=deps.render_agent_search_roots(scanner.agents),
+                    searched_roots=render_agent_search_roots(scanner.agents),
                     details=(f"query providers: {','.join(sorted(query_spec.agent_names))}",),
                     next_steps=(
                         "确认这些 provider 在本机上确实存在会话数据。",
@@ -68,7 +66,7 @@ def handle_stats_mode(args: argparse.Namespace, *, deps: MaintenanceModeDeps) ->
     for agent in available_agents:
         sessions = agent.get_sessions(days=args.days)
         if query_spec is not None:
-            sessions = deps.apply_query_filter(agent, sessions, query_spec)
+            sessions = apply_query_filter(agent, sessions, query_spec)
         for session in sessions:
             all_sessions.append((agent, session))
 
@@ -107,7 +105,7 @@ def handle_stats_mode(args: argparse.Namespace, *, deps: MaintenanceModeDeps) ->
             print(f"  {name}: {stats['sessions']} {i18n.t(Keys.SESSION_COUNT_SUFFIX)}")
     print()
 
-    grouped = deps.group_sessions_by_time([session for _, session in all_sessions])
+    grouped = group_sessions_by_time([session for _, session in all_sessions])
     if grouped:
         print(i18n.t(Keys.STATS_BY_TIME))
         for label, sessions in grouped.items():
@@ -116,15 +114,20 @@ def handle_stats_mode(args: argparse.Namespace, *, deps: MaintenanceModeDeps) ->
     return 0
 
 
-def handle_reindex_mode(args: argparse.Namespace, *, deps: MaintenanceModeDeps) -> int:
-    scanner = deps.scanner_factory()
+def handle_reindex_mode(
+    args: argparse.Namespace,
+    *,
+    scanner_factory: Callable[[], AgentScanner] = AgentScanner,
+    search_index_factory: Callable[[], SearchIndex] = SearchIndex,
+) -> int:
+    scanner = scanner_factory()
     available_agents = scanner.get_available_agents()
 
     if not available_agents:
-        deps.print_diagnostic(deps.build_no_agents_found_diagnostic(scanner))
+        print_diagnostic(build_no_agents_found_diagnostic(scanner))
         return 1
 
-    index = deps.search_index_factory()
+    index = search_index_factory()
     if not index.is_available:
         print(i18n.t(Keys.SEARCH_INDEX_NOT_AVAILABLE))
         return 1

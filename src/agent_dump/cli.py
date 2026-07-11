@@ -82,7 +82,6 @@ from agent_dump.diagnostics import (
 )
 from agent_dump.i18n import Keys, i18n, setup_i18n
 from agent_dump.maintenance_workflow import (
-    MaintenanceModeDeps,
     handle_reindex_mode as _handle_reindex_mode,
     handle_stats_mode as _handle_stats_mode,
 )
@@ -450,27 +449,15 @@ def handle_collect_mode(args: argparse.Namespace) -> int:
     )
 
 
-def _build_maintenance_deps() -> MaintenanceModeDeps:
-    from agent_dump.search_index import SearchIndex
-
-    return MaintenanceModeDeps(
-        scanner_factory=AgentScanner,
-        search_index_factory=SearchIndex,
-        parse_query=parse_query,
-        apply_query_filter=apply_query_filter,
-        group_sessions_by_time=group_sessions_by_time,
-        print_diagnostic=_print_diagnostic,
-        build_no_agents_found_diagnostic=_build_no_agents_found_diagnostic,
-        render_agent_search_roots=_render_agent_search_roots,
-    )
-
-
 def handle_stats_mode(args: argparse.Namespace) -> int:
-    return _handle_stats_mode(args, deps=_build_maintenance_deps())
+    return _handle_stats_mode(args, scanner_factory=AgentScanner)
 
 
 def handle_reindex_mode(args: argparse.Namespace) -> int:
-    return _handle_reindex_mode(args, deps=_build_maintenance_deps())
+    # 延迟解析 SearchIndex，保持测试可通过 patch 源模块替换
+    from agent_dump.search_index import SearchIndex
+
+    return _handle_reindex_mode(args, scanner_factory=AgentScanner, search_index_factory=SearchIndex)
 
 
 def _build_uri_deps() -> UriModeDeps:
