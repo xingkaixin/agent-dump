@@ -14,6 +14,8 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.diagnostics import source_missing, unsupported_capability
 from agent_dump.paths import SearchRoot
 
+_EPOCH_UTC = datetime.fromtimestamp(0, tz=timezone.utc)
+
 
 class CursorAgent(BaseAgent):
     """Handler for Cursor sessions stored in SQLite."""
@@ -128,7 +130,7 @@ class CursorAgent(BaseAgent):
             return title.strip()
         return f"Cursor Session {composer_id[:8]}"
 
-    def _to_datetime_utc(self, value: Any) -> datetime:
+    def _parse_datetime_utc(self, value: Any) -> datetime | None:
         if isinstance(value, str):
             if "T" in value:
                 try:
@@ -138,13 +140,21 @@ class CursorAgent(BaseAgent):
             try:
                 value = float(value)
             except ValueError:
-                return datetime.now(timezone.utc)
+                return None
         if isinstance(value, (int, float)):
             ts = float(value)
             if ts > 1e12:
                 ts /= 1000.0
             return datetime.fromtimestamp(ts, tz=timezone.utc)
-        return datetime.now(timezone.utc)
+        return None
+
+    def _resolve_session_times(self, composer: dict[str, Any]) -> tuple[datetime, datetime]:
+        """Resolve created/updated times; unknown timestamps degrade to epoch instead of 'now'."""
+        created = self._parse_datetime_utc(composer.get("createdAt"))
+        updated_raw = composer.get("updatedAt") or composer.get("lastUpdatedAt") or composer.get("lastSendTime")
+        updated = self._parse_datetime_utc(updated_raw)
+        created_at = created or updated or _EPOCH_UTC
+        return created_at, (updated or created_at)
 
     def _build_session_metadata(self, composer: dict[str, Any], *, composer_id: str, request_id: str) -> dict[str, Any]:
         metadata: dict[str, Any] = {
@@ -213,13 +223,10 @@ class CursorAgent(BaseAgent):
             if not composer:
                 continue
 
-            created_raw = composer.get("createdAt")
-            created_at = self._to_datetime_utc(created_raw)
+            created_at, updated_at = self._resolve_session_times(composer)
             if created_at < cutoff:
                 continue
 
-            updated_raw = composer.get("updatedAt") or composer.get("lastUpdatedAt") or composer.get("lastSendTime")
-            updated_at = self._to_datetime_utc(updated_raw if updated_raw is not None else created_raw)
             bubble_rows = self._get_bubble_rows(composer_id)
             request_id = self._extract_request_id_from_bubbles(bubble_rows) or composer_id
             metadata = self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id)
@@ -244,10 +251,7 @@ class CursorAgent(BaseAgent):
         request_id: str,
         composer: dict[str, Any],
     ) -> Session:
-        created_raw = composer.get("createdAt")
-        created_at = self._to_datetime_utc(created_raw)
-        updated_raw = composer.get("updatedAt") or composer.get("lastUpdatedAt") or composer.get("lastSendTime")
-        updated_at = self._to_datetime_utc(updated_raw if updated_raw is not None else created_raw)
+        created_at, updated_at = self._resolve_session_times(composer)
         metadata = self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id)
         self._augment_session_metadata_from_bubbles(metadata, self._get_bubble_rows(composer_id))
         return Session(

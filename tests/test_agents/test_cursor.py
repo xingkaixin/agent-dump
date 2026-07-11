@@ -323,6 +323,41 @@ class TestCursorAgent:
         assert matched.id == "request-other"
         assert matched.metadata["composer_id"] == "composer-any-req"
 
+    def test_get_sessions_unparseable_created_at_is_not_treated_as_now(self, monkeypatch, tmp_path):
+        """测试 createdAt 无法解析时不再伪装成当前时间混入结果"""
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        _insert_kv(
+            global_db,
+            "composerData:composer-bad-time",
+            {"composerId": "composer-bad-time", "createdAt": "not-a-timestamp", "name": "Bad Time"},
+        )
+
+        agent = CursorAgent()
+
+        assert agent.get_sessions(days=7) == []
+
+    def test_get_sessions_falls_back_to_updated_at_when_created_at_invalid(self, monkeypatch, tmp_path):
+        """测试 createdAt 非法但 updatedAt 有效时用 updatedAt 兜底"""
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        updated_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-updated-only",
+            {
+                "composerId": "composer-updated-only",
+                "createdAt": "not-a-timestamp",
+                "updatedAt": updated_ms,
+                "name": "Updated Only",
+            },
+        )
+
+        agent = CursorAgent()
+        sessions = agent.get_sessions(days=7)
+
+        assert len(sessions) == 1
+        assert sessions[0].created_at == sessions[0].updated_at
+        assert int(sessions[0].created_at.timestamp() * 1000) == updated_ms
+
     def test_find_session_by_id_resolves_request_id_and_composer_fallback(self, monkeypatch, tmp_path):
         """测试 find_session_by_id 优先按 request id 定位，无 bubble 时回退全量扫描"""
         _, global_db = self._create_layout(monkeypatch, tmp_path)
@@ -626,9 +661,10 @@ class TestCursorAgent:
         assert agent._extract_title({"title": "Title Fallback"}, "composer-abc") == "Title Fallback"
         assert agent._extract_title({}, "composer-abc") == "Cursor Session composer"
 
-        assert agent._to_datetime_utc("1741140000000") == datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc)
-        assert agent._to_datetime_utc("1741140000") == datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc)
-        assert agent._to_datetime_utc("bad").tzinfo == timezone.utc
+        assert agent._parse_datetime_utc("1741140000000") == datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc)
+        assert agent._parse_datetime_utc("1741140000") == datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc)
+        assert agent._parse_datetime_utc("bad") is None
+        assert agent._parse_datetime_utc(None) is None
 
         fallback_ms = 100
         assert agent._extract_timestamp({"createdAt": "2026-01-01T00:00:00Z"}, fallback_ms) == 1767225600000
