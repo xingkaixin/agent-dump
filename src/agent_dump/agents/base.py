@@ -73,6 +73,17 @@ class BaseAgent(ABC):
         """Get the agent session URI for a session"""
         return f"{self.name}://{session.id}"
 
+    def find_session_by_id(self, session_id: str) -> Session | None:
+        """Find one session by id.
+
+        Default implementation scans all sessions; providers should override
+        with a direct lookup when their storage supports it.
+        """
+        for session in self.get_sessions(days=3650):
+            if session.id == session_id:
+                return session
+        return None
+
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         """Return provider roots checked during discovery."""
         return ()

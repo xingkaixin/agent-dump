@@ -1,7 +1,7 @@
 """URI parsing and session lookup helpers."""
 
-from concurrent.futures import ThreadPoolExecutor
 import re
+import sys
 
 from agent_dump.agent_registry import get_uri_scheme_map
 from agent_dump.agents.base import BaseAgent, Session
@@ -32,40 +32,18 @@ def find_session_by_id(
     *,
     agent_name: str | None = None,
 ) -> tuple[BaseAgent, Session] | None:
-    """Find a session by ID across all available agents."""
+    """Find a session by ID via provider-level lookups."""
     available_agents = scanner.get_available_agents()
     if agent_name is not None:
         available_agents = [agent for agent in available_agents if agent.name == agent_name]
-    if not available_agents:
-        return None
 
-    # Fetch sessions concurrently to speed up URI resolution
-    agent_sessions: list[tuple[BaseAgent, list[Session]]] = []
-    with ThreadPoolExecutor(max_workers=len(available_agents)) as executor:
-        futures = [executor.submit(agent.get_sessions, days=3650) for agent in available_agents]
-        for i, future in enumerate(futures):
-            try:
-                sessions = future.result()
-            except Exception:
-                sessions = []
-            agent_sessions.append((available_agents[i], sessions))
-
-    for agent, sessions in agent_sessions:
-        for session in sessions:
-            if session.id == session_id:
-                return agent, session
-            if agent.name == "cursor" and session.metadata.get("request_id") == session_id:
-                return agent, session
-
-        if agent.name != "cursor":
+    for agent in available_agents:
+        try:
+            session = agent.find_session_by_id(session_id)
+        except Exception as exc:
+            print(f"警告: {agent.display_name} 查找会话失败: {exc}", file=sys.stderr)
             continue
-
-        finder = getattr(agent, "find_session_by_request_id", None)
-        if not callable(finder):
-            continue
-
-        matched_session = finder(session_id)
-        if isinstance(matched_session, Session):
-            return agent, matched_session
+        if session is not None:
+            return agent, session
 
     return None

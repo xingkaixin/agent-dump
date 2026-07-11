@@ -189,25 +189,25 @@ class TestFindSessionById:
         scanner = mock.MagicMock()
 
         agent1 = mock.MagicMock()
-        agent1.get_sessions.return_value = [mock.MagicMock(id="s1"), mock.MagicMock(id="s2")]
+        agent1.find_session_by_id.return_value = None
 
         target_session = mock.MagicMock(id="target")
         agent2 = mock.MagicMock()
-        agent2.get_sessions.return_value = [target_session]
+        agent2.find_session_by_id.return_value = target_session
 
         scanner.get_available_agents.return_value = [agent1, agent2]
 
         result = find_session_by_id(scanner, "target")
 
         assert result == (agent2, target_session)
-        agent1.get_sessions.assert_called_once_with(days=3650)
-        agent2.get_sessions.assert_called_once_with(days=3650)
+        agent1.find_session_by_id.assert_called_once_with("target")
+        agent2.find_session_by_id.assert_called_once_with("target")
 
     def test_find_session_by_id_not_found(self):
         """测试找不到会话时返回 None"""
         scanner = mock.MagicMock()
         agent = mock.MagicMock()
-        agent.get_sessions.return_value = [mock.MagicMock(id="s1")]
+        agent.find_session_by_id.return_value = None
         scanner.get_available_agents.return_value = [agent]
 
         result = find_session_by_id(scanner, "missing")
@@ -221,27 +221,28 @@ class TestFindSessionById:
         opencode_agent = mock.MagicMock()
         opencode_agent.name = "opencode"
         target_session = mock.MagicMock(id="target")
-        opencode_agent.get_sessions.return_value = [target_session]
+        opencode_agent.find_session_by_id.return_value = target_session
         scanner.get_available_agents.return_value = [codex_agent, opencode_agent]
 
         result = find_session_by_id(scanner, "target", agent_name="opencode")
 
         assert result == (opencode_agent, target_session)
-        codex_agent.get_sessions.assert_not_called()
-        opencode_agent.get_sessions.assert_called_once_with(days=3650)
+        codex_agent.find_session_by_id.assert_not_called()
+        opencode_agent.find_session_by_id.assert_called_once_with("target")
 
-    def test_find_session_by_id_cursor_matches_request_id(self):
-        """测试 Cursor 会按 metadata.request_id 命中"""
+    def test_find_session_by_id_skips_agent_lookup_errors(self):
+        """测试单个 agent 查找抛错时跳过并继续"""
         scanner = mock.MagicMock()
-        cursor_agent = mock.MagicMock()
-        cursor_agent.name = "cursor"
-        session = mock.MagicMock(id="composer-like-id")
-        session.metadata = {"request_id": "request-xyz"}
-        cursor_agent.get_sessions.return_value = [session]
-        scanner.get_available_agents.return_value = [cursor_agent]
+        broken_agent = mock.MagicMock()
+        broken_agent.find_session_by_id.side_effect = RuntimeError("boom")
+        target_session = mock.MagicMock(id="target")
+        ok_agent = mock.MagicMock()
+        ok_agent.find_session_by_id.return_value = target_session
+        scanner.get_available_agents.return_value = [broken_agent, ok_agent]
 
-        result = find_session_by_id(scanner, "request-xyz")
-        assert result == (cursor_agent, session)
+        result = find_session_by_id(scanner, "target")
+
+        assert result == (ok_agent, target_session)
 
 
 class TestExportSessions:
