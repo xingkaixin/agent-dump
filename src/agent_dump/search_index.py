@@ -16,6 +16,7 @@ from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts
+from agent_dump.time_utils import normalize_datetime_utc
 
 
 @dataclass(frozen=True)
@@ -95,14 +96,16 @@ def _has_fts5(conn: sqlite3.Connection) -> bool:
         return False
 
 
-def _extract_source_mtime(source_path: Path, related_paths: tuple[Path, ...] = ()) -> float:
-    """Get modification time for a source path (file or directory)."""
-    mtimes: list[float] = []
-    if not source_path.exists():
-        return max((_path_mtime(path) for path in related_paths), default=0.0)
-    mtimes.append(source_path.stat().st_mtime)
-    mtimes.extend(_path_mtime(path) for path in related_paths)
-    return max(mtimes, default=0.0)
+def _session_updated_signal(session: Session) -> float:
+    """Per-session change signal: updated_at plus mtimes of related source files.
+
+    Source-file mtime is deliberately not used: SQLite providers share one
+    database file across all sessions, so its mtime cannot identify which
+    session changed.
+    """
+    signals = [normalize_datetime_utc(session.updated_at).timestamp()]
+    signals.extend(_path_mtime(path) for path in _extract_related_source_paths(session))
+    return max(signals)
 
 
 def _path_mtime(path: Path) -> float:
@@ -275,13 +278,15 @@ class SearchIndex:
         return conn
 
     def _check_schema_ok(self, conn: sqlite3.Connection) -> bool:
-        """Check if existing schema has all required columns."""
+        """Check if existing schema keys sessions by (agent, session_id)."""
         try:
             cursor = conn.execute("PRAGMA table_info(index_state)")
-            columns = {row["name"] for row in cursor.fetchall()}
-            return "session_id" in columns
+            rows = cursor.fetchall()
         except Exception:
             return False
+        columns = {row["name"] for row in rows}
+        pk_columns = {row["name"] for row in rows if row["pk"]}
+        return "updated_signal" in columns and pk_columns == {"agent", "session_id"}
 
     def _drop_all_tables(self, conn: sqlite3.Connection) -> None:
         """Drop all index tables for schema rebuild."""
@@ -305,11 +310,12 @@ class SearchIndex:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS index_state (
-                    source_path TEXT PRIMARY KEY,
                     agent TEXT NOT NULL,
                     session_id TEXT NOT NULL,
-                    mtime REAL NOT NULL,
-                    indexed_at REAL NOT NULL
+                    source_path TEXT NOT NULL,
+                    updated_signal REAL NOT NULL,
+                    indexed_at REAL NOT NULL,
+                    PRIMARY KEY (agent, session_id)
                 )
                 """
             )
@@ -358,43 +364,33 @@ class SearchIndex:
         try:
             # Get currently indexed sessions for this agent
             cursor = conn.execute(
-                "SELECT source_path, session_id, mtime FROM index_state WHERE agent = ?",
+                "SELECT session_id, updated_signal FROM index_state WHERE agent = ?",
                 (agent.name,),
             )
-            indexed = {
-                row["source_path"]: {"session_id": row["session_id"], "mtime": row["mtime"]}
-                for row in cursor.fetchall()
-            }
+            indexed = {row["session_id"]: row["updated_signal"] for row in cursor.fetchall()}
 
             # Determine which sessions need updating
-            current_paths: set[str] = set()
+            current_ids: set[str] = set()
             to_update: list[tuple[Session, float]] = []
-            mtime_cache: dict[tuple[str, tuple[str, ...]], float] = {}
-
             for session in sessions:
-                path_str = str(session.source_path)
-                current_paths.add(path_str)
-                related_paths = _extract_related_source_paths(session)
-                cache_key = (path_str, tuple(str(path) for path in related_paths))
-                if cache_key not in mtime_cache:
-                    mtime_cache[cache_key] = _extract_source_mtime(session.source_path, related_paths)
-                current_mtime = mtime_cache[cache_key]
-
-                if path_str not in indexed or abs(indexed[path_str]["mtime"] - current_mtime) > 0.001:
-                    to_update.append((session, current_mtime))
+                current_ids.add(session.id)
+                signal = _session_updated_signal(session)
+                if session.id not in indexed or abs(indexed[session.id] - signal) > 0.001:
+                    to_update.append((session, signal))
 
             # Remove stale entries
-            stale_paths = [p for p in indexed if p not in current_paths]
-            for path in stale_paths:
-                session_id = indexed[path]["session_id"]
-                conn.execute("DELETE FROM index_state WHERE source_path = ?", (path,))
+            stale_ids = [session_id for session_id in indexed if session_id not in current_ids]
+            for session_id in stale_ids:
+                conn.execute(
+                    "DELETE FROM index_state WHERE agent = ? AND session_id = ?",
+                    (agent.name, session_id),
+                )
                 for fts_table in _FTS_TABLES:
                     _delete_fts_by_session(conn, fts_table, session_id, agent.name)
                 removed += 1
 
             # Update changed/new entries
-            for session, mtime in to_update:
-                path_str = str(session.source_path)
+            for session, signal in to_update:
                 text = _extract_session_searchable_text(agent, session)
 
                 # Delete old FTS entries for this session if updating
@@ -417,12 +413,12 @@ class SearchIndex:
 
                 # Update index state
                 conn.execute(
-                    """INSERT INTO index_state (source_path, agent, session_id, mtime, indexed_at)
+                    """INSERT INTO index_state (agent, session_id, source_path, updated_signal, indexed_at)
                        VALUES (?, ?, ?, ?, ?)
-                       ON CONFLICT(source_path) DO UPDATE SET
-                       agent=excluded.agent, session_id=excluded.session_id,
-                       mtime=excluded.mtime, indexed_at=excluded.indexed_at""",
-                    (path_str, agent.name, session.id, mtime, time.time()),
+                       ON CONFLICT(agent, session_id) DO UPDATE SET
+                       source_path=excluded.source_path,
+                       updated_signal=excluded.updated_signal, indexed_at=excluded.indexed_at""",
+                    (agent.name, session.id, str(session.source_path), signal, time.time()),
                 )
                 added += 1
 

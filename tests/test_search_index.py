@@ -1,7 +1,8 @@
 """Tests for search_index.py module."""
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import sqlite3
 from unittest import mock
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -10,11 +11,11 @@ from agent_dump.search_index import (
     _build_fts_query,
     _extract_related_source_paths,
     _extract_session_searchable_text,
-    _extract_source_mtime,
     _has_cjk,
     _has_fts5,
     _select_fts_table,
     _serialize_for_search,
+    _session_updated_signal,
 )
 
 
@@ -104,33 +105,27 @@ class TestSerializeForSearch:
         assert _serialize_for_search({"key": "value"}) == '{"key": "value"}'
 
 
-class TestExtractSourceMtime:
-    def test_file_mtime(self, tmp_path):
-        file_path = tmp_path / "test.txt"
-        file_path.write_text("hello")
-        mtime = _extract_source_mtime(file_path)
-        assert mtime > 0
+class TestSessionUpdatedSignal:
+    def test_signal_uses_updated_at(self, tmp_path):
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
 
-    def test_directory_max_mtime(self, tmp_path):
-        sub = tmp_path / "sub"
-        sub.mkdir()
-        (sub / "a.txt").write_text("a")
-        mtime = _extract_source_mtime(tmp_path)
-        assert mtime > 0
+        assert _session_updated_signal(session) == session.updated_at.replace(tzinfo=timezone.utc).timestamp()
 
-    def test_nonexistent_returns_zero(self, tmp_path):
-        assert _extract_source_mtime(tmp_path / "missing") == 0.0
-
-    def test_directory_mtime_uses_related_paths_without_recursive_scan(self, tmp_path):
+    def test_related_paths_raise_signal(self, tmp_path):
         session_dir = tmp_path / "session"
         session_dir.mkdir()
         context_file = session_dir / "context.jsonl"
         context_file.write_text("context")
+        session = make_session("s1", "Test", session_dir)
+        session.metadata = {"context_file": str(context_file)}
 
-        with mock.patch.object(Path, "rglob", side_effect=AssertionError("recursive scan should not run")):
-            mtime = _extract_source_mtime(session_dir, (context_file,))
+        assert _session_updated_signal(session) >= context_file.stat().st_mtime
 
-        assert mtime >= context_file.stat().st_mtime
+    def test_missing_related_paths_fall_back_to_updated_at(self, tmp_path):
+        session = make_session("s1", "Test", tmp_path / "session")
+        session.metadata = {"context_file": str(tmp_path / "missing.jsonl")}
+
+        assert _session_updated_signal(session) == session.updated_at.replace(tzinfo=timezone.utc).timestamp()
 
     def test_extract_related_source_paths_from_session_metadata(self, tmp_path):
         session_dir = tmp_path / "session"
@@ -249,9 +244,7 @@ class TestSearchIndex:
         assert added == 0
         assert removed == 0
 
-    def test_incremental_detects_mtime_change(self, tmp_path):
-        import time
-
+    def test_incremental_detects_updated_at_change(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
         agent = DummyAgent(
             session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "old"}]}]}}
@@ -261,20 +254,20 @@ class TestSearchIndex:
 
         index.update(agent, [session])
 
-        # Change data and update mtime
         agent._session_data["s1"]["messages"][0]["parts"][0]["text"] = "new keyword"
-        time.sleep(0.01)
-        session.source_path.write_text("new data")
+        session.updated_at = session.updated_at + timedelta(minutes=5)
 
         added, removed = index.update(agent, [session])
         assert added == 1
+        assert len(index.search("new")) == 1
 
-    def test_incremental_caches_source_mtime_within_update(self, tmp_path):
+    def test_sessions_sharing_source_path_are_indexed_independently(self, tmp_path):
+        """SQLite provider 的所有会话共享同一 db 文件，索引身份必须按 session id 区分"""
         index = SearchIndex(tmp_path / "index.db")
         agent = DummyAgent(
             session_data={
-                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "one"}]}]},
-                "s2": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "two"}]}]},
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "alpha"}]}]},
+                "s2": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "bravo"}]}]},
             }
         )
         shared_source = tmp_path / "shared.db"
@@ -282,10 +275,50 @@ class TestSearchIndex:
         session1 = make_session("s1", "Test 1", shared_source)
         session2 = make_session("s2", "Test 2", shared_source)
 
-        with mock.patch("agent_dump.search_index._extract_source_mtime", return_value=123.0) as mtime:
-            index.update(agent, [session1, session2])
+        added, removed = index.update(agent, [session1, session2])
+        assert (added, removed) == (2, 0)
+        assert len(index.search("alpha")) == 1
+        assert len(index.search("bravo")) == 1
 
-        assert mtime.call_count == 1
+        # 只更新 s2：s1 不应被重建
+        session2.updated_at = session2.updated_at + timedelta(minutes=5)
+        added, removed = index.update(agent, [session1, session2])
+        assert (added, removed) == (1, 0)
+
+        # 只保留 s1：仅 s2 的索引行被清除
+        added, removed = index.update(agent, [session1])
+        assert (added, removed) == (0, 1)
+        assert len(index.search("alpha")) == 1
+        assert len(index.search("bravo")) == 0
+
+    def test_old_schema_is_migrated_on_initialize(self, tmp_path):
+        """旧版按 source_path 主键的索引库会被重建为按 (agent, session_id)"""
+        db_path = tmp_path / "index.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE index_state (
+                source_path TEXT PRIMARY KEY,
+                agent TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                mtime REAL NOT NULL,
+                indexed_at REAL NOT NULL
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        index = SearchIndex(db_path)
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}}
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        session.source_path.write_text("data")
+
+        added, removed = index.update(agent, [session])
+        assert (added, removed) == (1, 0)
+        assert len(index.search("keyword")) == 1
 
     def test_delete_stale_sessions(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
