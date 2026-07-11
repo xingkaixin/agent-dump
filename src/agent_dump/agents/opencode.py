@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
+import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -159,9 +160,25 @@ class OpenCodeAgent(BaseAgent):
             },
         )
 
+    def _parse_json_dict(self, raw: Any) -> dict[str, Any] | None:
+        """Parse a JSON object column; return None for NULL, invalid JSON, or non-object payloads."""
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
     def get_session_data(self, session: Session) -> dict:
         """Get session data as a dictionary"""
         conn = self._connect_db()
+        try:
+            return self._build_session_data(conn, session)
+        finally:
+            conn.close()
+
+    def _build_session_data(self, conn: sqlite3.Connection, session: Session) -> dict:
         cursor = conn.cursor()
 
         session_data = {
@@ -205,7 +222,10 @@ class OpenCodeAgent(BaseAgent):
                 parts_by_message_id.setdefault(message_id, []).append(part_row)
 
         for msg_row in message_rows:
-            msg_data = json.loads(msg_row["data"])
+            msg_data = self._parse_json_dict(msg_row["data"])
+            if msg_data is None:
+                print(f"警告: 解析消息数据失败 message={msg_row['id']}", file=sys.stderr)
+                continue
 
             message = {
                 "id": msg_row["id"],
@@ -229,7 +249,10 @@ class OpenCodeAgent(BaseAgent):
             session_data["stats"]["total_output_tokens"] += tokens.get("output", 0)
 
             for part_row in parts_by_message_id.get(str(msg_row["id"]), []):
-                part_data = json.loads(part_row["data"])
+                part_data = self._parse_json_dict(part_row["data"])
+                if part_data is None:
+                    print(f"警告: 解析消息分段数据失败 part={part_row['id']}", file=sys.stderr)
+                    continue
                 part = {
                     "type": part_data.get("type"),
                     "time_created": part_row["time_created"],
@@ -250,8 +273,6 @@ class OpenCodeAgent(BaseAgent):
                 message["parts"].append(part)
 
             session_data["messages"].append(message)
-
-        conn.close()
 
         return session_data
 
