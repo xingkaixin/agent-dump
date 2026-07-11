@@ -9,7 +9,7 @@ from pathlib import Path
 import sqlite3
 import sys
 
-from agent_dump.agents.cursor import CursorAgent
+from agent_dump.agents.cursor import CursorAgent, _key_prefix_bounds
 
 
 def _create_cursor_global_db(path: Path) -> None:
@@ -322,6 +322,16 @@ class TestCursorAgent:
         assert matched is not None
         assert matched.id == "request-other"
         assert matched.metadata["composer_id"] == "composer-any-req"
+
+    def test_key_prefix_bounds_covers_exactly_prefix_matches(self):
+        """测试范围边界与 LIKE 前缀匹配语义一致"""
+        lower, upper = _key_prefix_bounds("bubbleId:abc:")
+
+        assert lower == "bubbleId:abc:"
+        assert upper == "bubbleId:abc;"
+        assert lower <= "bubbleId:abc:b1" < upper
+        assert not (lower <= "bubbleId:abcd:x" < upper)
+        assert not (lower <= "composerData:abc" < upper)
 
     def test_get_sessions_unparseable_created_at_is_not_treated_as_now(self, monkeypatch, tmp_path):
         """测试 createdAt 无法解析时不再伪装成当前时间混入结果"""

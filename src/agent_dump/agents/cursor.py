@@ -17,6 +17,15 @@ from agent_dump.paths import SearchRoot
 _EPOCH_UTC = datetime.fromtimestamp(0, tz=timezone.utc)
 
 
+def _key_prefix_bounds(prefix: str) -> tuple[str, str]:
+    """Return [lower, upper) bounds equivalent to `key LIKE '{prefix}%'`.
+
+    Range comparisons use the primary-key index, while LIKE with the default
+    case-insensitive collation forces a full table scan per query.
+    """
+    return prefix, prefix[:-1] + chr(ord(prefix[-1]) + 1)
+
+
 class CursorAgent(BaseAgent):
     """Handler for Cursor sessions stored in SQLite."""
 
@@ -116,9 +125,10 @@ class CursorAgent(BaseAgent):
         return None
 
     def _get_bubble_rows(self, composer_id: str) -> list[sqlite3.Row]:
+        lower, upper = _key_prefix_bounds(f"bubbleId:{composer_id}:")
         return self._query_global(
-            "SELECT key, value FROM cursorDiskKV WHERE key LIKE ? ORDER BY key",
-            (f"bubbleId:{composer_id}:%",),
+            "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key",
+            (lower, upper),
         )
 
     def _extract_title(self, composer: dict[str, Any], composer_id: str) -> str:
@@ -211,9 +221,10 @@ class CursorAgent(BaseAgent):
         if not self.global_db_path:
             return []
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        lower, upper = _key_prefix_bounds("composerData:")
         rows = self._query_global(
-            "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%' ORDER BY rowid DESC",
-            (),
+            "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY rowid DESC",
+            (lower, upper),
         )
         sessions: list[Session] = []
         for row in rows:
@@ -267,9 +278,10 @@ class CursorAgent(BaseAgent):
         """Resolve any bubble-level requestId to its owning composer session."""
         if (not self.global_db_path or not self.global_db_path.exists()) and not self.is_available():
             return None
+        lower, upper = _key_prefix_bounds("bubbleId:")
         rows = self._query_global(
-            "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'bubbleId:%' AND value LIKE ? ORDER BY rowid DESC",
-            (f"%{request_id}%",),
+            "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? AND value LIKE ? ORDER BY rowid DESC",
+            (lower, upper, f"%{request_id}%"),
         )
         composer_id: str | None = None
         for row in rows:
@@ -661,9 +673,10 @@ class CursorAgent(BaseAgent):
         composer_id = session.metadata.get("composer_id")
         if not isinstance(composer_id, str) or not composer_id:
             composer_id = session.id
+        lower, upper = _key_prefix_bounds(f"bubbleId:{composer_id}:")
         bubble_rows = self._query_global(
-            "SELECT key, value FROM cursorDiskKV WHERE key LIKE ? ORDER BY rowid ASC",
-            (f"bubbleId:{composer_id}:%",),
+            "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY rowid ASC",
+            (lower, upper),
         )
 
         total_input_tokens = 0
@@ -837,9 +850,10 @@ class CursorAgent(BaseAgent):
                 if isinstance(model_name, str) and model_name.strip():
                     head["model"] = model_name.strip()
 
+        lower, upper = _key_prefix_bounds(f"bubbleId:{composer_id}:")
         rows = self._query_global(
-            "SELECT value FROM cursorDiskKV WHERE key LIKE ? ORDER BY key",
-            (f"bubbleId:{composer_id}:%",),
+            "SELECT value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key",
+            (lower, upper),
         )
         message_count = 0
         for row in rows:
