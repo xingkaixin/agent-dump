@@ -29,7 +29,6 @@ from agent_dump.query_filter import (
 from agent_dump.rendering import (
     apply_summary_to_json_export as _apply_summary_to_json_export,
     export_session_in_format as _export_session_in_format,
-    export_session_markdown as _export_session_markdown,
     format_session_metadata_summary as _format_session_metadata_summary,
     render_session_head as _render_session_head,
     render_session_text as _render_session_text,
@@ -71,29 +70,6 @@ def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
 
 def apply_summary_to_json_export(output_path: Path, summary_markdown: str) -> None:
     _apply_summary_to_json_export(output_path, summary_markdown)
-
-
-def format_relative_time(time_value: datetime | float) -> str:
-    if isinstance(time_value, (int, float)):
-        time_value = datetime.fromtimestamp(time_value)
-
-    now = datetime.now()
-    delta = now - time_value
-
-    if delta.days == 0:
-        if delta.seconds < 3600:
-            minutes = delta.seconds // 60
-            return i18n.t(Keys.TIME_MINUTES_AGO, minutes=minutes) if minutes > 0 else i18n.t(Keys.TIME_JUST_NOW)
-        hours = delta.seconds // 3600
-        return i18n.t(Keys.TIME_HOURS_AGO, hours=hours)
-    if delta.days == 1:
-        return i18n.t(Keys.TIME_YESTERDAY)
-    if delta.days < 7:
-        return i18n.t(Keys.TIME_DAYS_AGO, days=delta.days)
-    if delta.days < 30:
-        weeks = delta.days // 7
-        return i18n.t(Keys.TIME_WEEKS_AGO, weeks=weeks)
-    return time_value.strftime("%Y-%m-%d")
 
 
 def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
@@ -194,14 +170,6 @@ def display_sessions_list(
     return False
 
 
-def export_sessions(agent: BaseAgent, sessions: list[Session], output_base_dir: Path) -> list[Path]:
-    return export_sessions_for_formats(agent, sessions, ["json"], output_base_dir)
-
-
-def export_session_markdown(uri: str, session_data: dict, session_id: str, output_dir: Path) -> Path:
-    return _export_session_markdown(uri, session_data, session_id, output_dir)
-
-
 def export_session_in_format(
     agent: BaseAgent,
     session: Session,
@@ -266,14 +234,10 @@ def export_sessions_for_formats(
                 )
             except Exception as e:
                 print(i18n.t(Keys.EXPORT_ERROR_FORMAT, title=session.title[:50], format=output_format, error=str(e)))
-                diagnostic = e if isinstance(e, DiagnosticError) else _wrap_runtime_fetch_error(e, agent=agent)
+                diagnostic = e if isinstance(e, DiagnosticError) else wrap_runtime_fetch_error(e, agent=agent)
                 print(render_diagnostic(diagnostic, t=i18n.t))
 
     return exported
-
-
-def export_sessions_markdown(agent: BaseAgent, sessions: list[Session], output_base_dir: Path) -> list[Path]:
-    return export_sessions_for_formats(agent, sessions, ["markdown"], output_base_dir)
 
 
 def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:
@@ -498,7 +462,3 @@ def wrap_runtime_fetch_error(exc: Exception, *, agent: BaseAgent | None = None) 
     )
 
 
-_render_agent_search_roots = render_agent_search_roots
-_print_diagnostic = print_diagnostic
-_build_no_agents_found_diagnostic = build_no_agents_found_diagnostic
-_wrap_runtime_fetch_error = wrap_runtime_fetch_error

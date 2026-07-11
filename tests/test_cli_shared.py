@@ -15,10 +15,8 @@ from agent_dump.cli_shared import (
     collect_search_matches,
     display_search_results,
     display_sessions_list,
-    export_sessions,
     export_sessions_for_formats,
     find_session_by_id,
-    format_relative_time,
     group_sessions_by_time,
     parse_format_spec,
     parse_uri,
@@ -258,7 +256,7 @@ class TestExportSessions:
 
         mock_agent.export_session.return_value = tmp_path / "test_agent" / "session-001.json"
 
-        result = export_sessions(mock_agent, [mock_session], tmp_path)
+        result = export_sessions_for_formats(mock_agent, [mock_session], ["json"], tmp_path)
 
         assert len(result) == 1
         mock_agent.export_session.assert_called_once_with(mock_session, tmp_path / "test_agent")
@@ -279,7 +277,7 @@ class TestExportSessions:
             tmp_path / "test_agent" / "session-002.json",
         ]
 
-        result = export_sessions(mock_agent, sessions, tmp_path)
+        result = export_sessions_for_formats(mock_agent, sessions, ["json"], tmp_path)
 
         assert len(result) == 2
         assert mock_agent.export_session.call_count == 2
@@ -301,7 +299,7 @@ class TestExportSessions:
             Exception("Export failed"),
         ]
 
-        result = export_sessions(mock_agent, sessions, tmp_path)
+        result = export_sessions_for_formats(mock_agent, sessions, ["json"], tmp_path)
 
         assert len(result) == 1
         captured = capsys.readouterr()
@@ -318,7 +316,7 @@ class TestExportSessions:
         output_dir = tmp_path / "new_output"
         mock_agent.export_session.return_value = output_dir / "test_agent" / "session.json"
 
-        export_sessions(mock_agent, [mock_session], output_dir)
+        export_sessions_for_formats(mock_agent, [mock_session], ["json"], output_dir)
 
         assert (output_dir / "test_agent").exists()
 
@@ -631,57 +629,6 @@ class TestRenderSessionHead:
 
 class TestTimeHelpers:
     """测试时间相关辅助函数"""
-
-    @staticmethod
-    def _format_with_fixed_now(time_value, now_value):
-        with mock.patch("agent_dump.cli_shared.datetime") as mock_datetime:
-            mock_datetime.now.return_value = now_value
-            mock_datetime.fromtimestamp.side_effect = datetime.fromtimestamp
-            return format_relative_time(time_value)
-
-    def test_format_relative_time_just_now(self):
-        """测试刚刚分支"""
-        now_value = datetime(2026, 1, 1, 12, 0, 0)
-        result = self._format_with_fixed_now(now_value, now_value)
-        assert result == "刚刚"
-
-    def test_format_relative_time_minutes_with_timestamp(self):
-        """测试分钟分支（数字时间戳输入）"""
-        now_value = datetime(2026, 1, 1, 12, 0, 0)
-        seconds_ts = (now_value - timedelta(minutes=5)).timestamp()
-        result = self._format_with_fixed_now(seconds_ts, now_value)
-        assert result == "5 分钟前"
-
-    def test_format_relative_time_hours(self):
-        """测试小时分支"""
-        now_value = datetime(2026, 1, 1, 12, 0, 0)
-        result = self._format_with_fixed_now(now_value - timedelta(hours=3), now_value)
-        assert result == "3 小时前"
-
-    def test_format_relative_time_yesterday(self):
-        """测试昨天分支"""
-        now_value = datetime(2026, 1, 10, 12, 0, 0)
-        result = self._format_with_fixed_now(now_value - timedelta(days=1), now_value)
-        assert result == "昨天"
-
-    def test_format_relative_time_days(self):
-        """测试天分支"""
-        now_value = datetime(2026, 1, 10, 12, 0, 0)
-        result = self._format_with_fixed_now(now_value - timedelta(days=3), now_value)
-        assert result == "3 天前"
-
-    def test_format_relative_time_weeks(self):
-        """测试周分支"""
-        now_value = datetime(2026, 2, 1, 12, 0, 0)
-        result = self._format_with_fixed_now(now_value - timedelta(days=14), now_value)
-        assert result == "2 周前"
-
-    def test_format_relative_time_date(self):
-        """测试日期分支"""
-        now_value = datetime(2026, 2, 1, 12, 0, 0)
-        old_time = now_value - timedelta(days=40)
-        result = self._format_with_fixed_now(old_time, now_value)
-        assert result == old_time.strftime("%Y-%m-%d")
 
     def test_group_sessions_by_time_all_buckets(self):
         """测试按时间分组包含所有分组与时间戳转换"""

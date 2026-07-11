@@ -34,8 +34,11 @@ test:
     uv run pytest -q
     @echo "✅ Tests complete!"
 
-# Run lint check test
-isok: lint-fix lint-format check test
+# Auto-fix lint issues and format code
+fix: lint-fix lint-format
+
+# Run the same checks as CI: lint, type check, test (no file mutation)
+isok: lint check test
 
 # Run the agent-dump CLI
 run:
