@@ -12,6 +12,13 @@ from agent_dump.i18n import i18n
 
 
 @pytest.fixture(autouse=True)
+def isolated_search_index_cache(tmp_path_factory, monkeypatch):
+    """所有测试的搜索索引写入临时目录，避免读写真实用户缓存并防止跨测试污染。"""
+    cache_dir = tmp_path_factory.mktemp("xdg-cache")
+    monkeypatch.setenv("XDG_CACHE_HOME", str(cache_dir))
+
+
+@pytest.fixture(autouse=True)
 def set_language_zh(monkeypatch):
     # Force language to Chinese for all tests to match existing assertions
     # Patch detect_language to always return 'zh' so setup_i18n() in main() doesn't overwrite it to 'en'
