@@ -1,9 +1,12 @@
 """collect 模块测试。"""
 
 from datetime import date, datetime, timedelta, timezone
+from email.message import Message
+import io
 import json
 from pathlib import Path
 from unittest import mock
+from urllib import error as urllib_error
 
 import pytest
 
@@ -675,6 +678,48 @@ class TestCollectStructuredSummary:
         assert body["response_format"]["type"] == "json_schema"
         assert body["response_format"]["json_schema"] == build_summary_json_schema()
         assert body["max_tokens"] == 4096
+
+    def test_request_openai_retries_without_enable_thinking_on_rejection(self):
+        """测试 OpenAI 端点拒绝 enable_thinking 参数时剔除后重试一次"""
+        rejection = urllib_error.HTTPError(
+            "https://api.openai.com/v1/chat/completions",
+            400,
+            "Bad Request",
+            Message(),
+            io.BytesIO(b'{"error": {"message": "Unrecognized request argument supplied: enable_thinking"}}'),
+        )
+        response = mock.MagicMock()
+        response.read.return_value = json.dumps({"choices": [{"message": {"content": "# summary"}}]}).encode("utf-8")
+        response.__enter__.return_value = response
+        response.__exit__.return_value = None
+
+        with mock.patch("urllib.request.urlopen", side_effect=[rejection, response]) as mock_urlopen:
+            result = request_summary_from_llm(self._config(), "prompt")
+
+        assert result == "# summary"
+        assert mock_urlopen.call_count == 2
+        first_body = json.loads(mock_urlopen.call_args_list[0].args[0].data.decode("utf-8"))
+        retry_body = json.loads(mock_urlopen.call_args_list[1].args[0].data.decode("utf-8"))
+        assert "enable_thinking" in first_body
+        assert "enable_thinking" not in retry_body
+
+    def test_request_openai_does_not_retry_unrelated_http_errors(self):
+        """测试与 enable_thinking 无关的 HTTP 错误不触发重试"""
+        rejection = urllib_error.HTTPError(
+            "https://api.openai.com/v1/chat/completions",
+            401,
+            "Unauthorized",
+            Message(),
+            io.BytesIO(b'{"error": {"message": "Invalid API key"}}'),
+        )
+
+        with (
+            mock.patch("urllib.request.urlopen", side_effect=rejection) as mock_urlopen,
+            pytest.raises(RuntimeError, match="HTTP 401"),
+        ):
+            request_summary_from_llm(self._config(), "prompt")
+
+        assert mock_urlopen.call_count == 1
 
     def test_request_structured_summary_from_llm_logs_parse_error(self, tmp_path):
         log_path = tmp_path / "collect.log"

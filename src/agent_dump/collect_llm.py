@@ -50,6 +50,17 @@ def _read_openai_response_content(data: dict[str, Any]) -> str:
 
 
 def _request_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_seconds: int) -> dict[str, Any]:
+    try:
+        return _post_openai_json(config, payload, timeout_seconds=timeout_seconds)
+    except RuntimeError as exc:
+        # enable_thinking 只有 Qwen 系端点认识；OpenAI 官方 API 会拒绝未知参数，剔除后重试一次
+        if "enable_thinking" in payload and "enable_thinking" in str(exc):
+            retry_payload = {key: value for key, value in payload.items() if key != "enable_thinking"}
+            return _post_openai_json(config, retry_payload, timeout_seconds=timeout_seconds)
+        raise
+
+
+def _post_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_seconds: int) -> dict[str, Any]:
     body = json.dumps(payload).encode("utf-8")
     url = f"{_normalize_base_url(config.base_url)}/chat/completions"
     req = request.Request(  # noqa: S310
