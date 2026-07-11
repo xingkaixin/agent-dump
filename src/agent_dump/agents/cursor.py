@@ -29,6 +29,9 @@ def _key_prefix_bounds(prefix: str) -> tuple[str, str]:
 class CursorAgent(BaseAgent):
     """Handler for Cursor sessions stored in SQLite."""
 
+    # Cursor 会话没有独立原始文件，markdown 渲染也未适配其数据形态
+    unsupported_uri_formats = frozenset({"raw", "markdown"})
+
     def __init__(self):
         super().__init__("cursor", "Cursor")
         self.global_db_path: Path | None = None

@@ -29,6 +29,9 @@ class Session:
 class BaseAgent(ABC):
     """Abstract base class for agent handlers"""
 
+    #: URI 模式下该 provider 不支持的导出格式
+    unsupported_uri_formats: frozenset[str] = frozenset()
+
     def __init__(self, name: str, display_name: str):
         self.name = name
         self.display_name = display_name
