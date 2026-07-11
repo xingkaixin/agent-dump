@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import sys
 import time
 from typing import Any
 
@@ -235,6 +236,9 @@ def _select_fts_table(keyword: str) -> str:
 
 _FTS_TABLES = ("sessions_fts", "sessions_fts_trigram")
 
+# 待索引会话数达到该阈值时向 stderr 提示进度（关键词过滤会隐式建索引，首次运行可能较慢）
+_INDEX_PROGRESS_THRESHOLD = 10
+
 
 def _delete_fts_by_session(conn: sqlite3.Connection, fts_table: str, session_id: str, agent_name: str) -> None:
     """Delete FTS rows for a specific session."""
@@ -388,6 +392,12 @@ class SearchIndex:
                 for fts_table in _FTS_TABLES:
                     _delete_fts_by_session(conn, fts_table, session_id, agent.name)
                 removed += 1
+
+            if len(to_update) >= _INDEX_PROGRESS_THRESHOLD:
+                print(
+                    f"正在更新 {agent.display_name} 的搜索索引（{len(to_update)} 个会话，首次运行可能较慢）…",
+                    file=sys.stderr,
+                )
 
             # Update changed/new entries
             for session, signal in to_update:

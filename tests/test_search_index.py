@@ -261,6 +261,39 @@ class TestSearchIndex:
         assert added == 1
         assert len(index.search("new")) == 1
 
+    def test_update_hints_progress_for_bulk_indexing(self, tmp_path, capsys):
+        """测试待索引会话达到阈值时向 stderr 提示进度"""
+        index = SearchIndex(tmp_path / "index.db")
+        session_data = {
+            f"s{i}": {"messages": [{"role": "user", "parts": [{"type": "text", "text": f"content {i}"}]}]}
+            for i in range(10)
+        }
+        agent = DummyAgent(session_data=session_data)
+        sessions = []
+        for i in range(10):
+            session = make_session(f"s{i}", f"Test {i}", tmp_path / f"s{i}.jsonl")
+            session.source_path.write_text("data")
+            sessions.append(session)
+
+        index.update(agent, sessions)
+
+        captured = capsys.readouterr()
+        assert "正在更新 Dummy-codex 的搜索索引（10 个会话" in captured.err
+        assert captured.out == ""
+
+    def test_update_stays_silent_for_small_increments(self, tmp_path, capsys):
+        """测试少量增量更新不输出进度提示"""
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "one"}]}]}}
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        session.source_path.write_text("data")
+
+        index.update(agent, [session])
+
+        assert capsys.readouterr().err == ""
+
     def test_sessions_sharing_source_path_are_indexed_independently(self, tmp_path):
         """SQLite provider 的所有会话共享同一 db 文件，索引身份必须按 session id 区分"""
         index = SearchIndex(tmp_path / "index.db")
