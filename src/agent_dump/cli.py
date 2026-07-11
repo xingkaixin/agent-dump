@@ -13,38 +13,28 @@ import threading
 from typing import Any
 
 from agent_dump.__about__ import __version__
-from agent_dump.agent_registry import get_supported_uri_examples
-from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
     DEFAULT_OUTPUT_BASE_DIR,
-    VALID_URI_SCHEMES,
     apply_query_filter,
-    apply_summary_to_json_export,
     build_no_agents_found_diagnostic as _build_no_agents_found_diagnostic,
     collect_query_matches,
     collect_search_matches,
     display_search_results,
     display_sessions_list,
-    export_session_in_format,
     export_sessions_for_formats,
-    find_session_by_id,
     format_session_metadata_summary,
     get_supported_agent_locations,
     group_sessions_by_time,
     is_option_specified,
     parse_format_spec,
-    parse_uri,
     print_diagnostic as _print_diagnostic,
     render_agent_search_roots as _render_agent_search_roots,
     render_query_summary,
-    render_session_head,
     render_session_text,
     resolve_effective_formats,
     resolve_output_base_dir,
     validate_formats_for_mode,
-    validate_uri_agent_formats,
     warn_list_ignored_options,
-    wrap_runtime_fetch_error as _wrap_runtime_fetch_error,
 )
 from agent_dump.collect import (
     CollectProgressEvent,
@@ -89,21 +79,17 @@ from agent_dump.query_filter import QuerySpec, parse_query, parse_query_uri
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 from agent_dump.session_workflow import SessionModeDeps, handle_session_modes as _handle_session_modes
-from agent_dump.uri_workflow import UriModeDeps, handle_uri_mode as _handle_uri_mode
+from agent_dump.uri_workflow import handle_uri_mode as _handle_uri_mode
 
 __all__ = (
     "DEFAULT_OUTPUT_BASE_DIR",
-    "VALID_URI_SCHEMES",
     "apply_query_filter",
-    "apply_summary_to_json_export",
     "collect_query_matches",
     "collect_search_matches",
     "display_search_results",
     "display_sessions_list",
     "expand_shortcut_argv",
-    "export_session_in_format",
     "export_sessions_for_formats",
-    "find_session_by_id",
     "format_session_metadata_summary",
     "get_supported_agent_locations",
     "group_sessions_by_time",
@@ -113,17 +99,13 @@ __all__ = (
     "is_option_specified",
     "main",
     "parse_format_spec",
-    "parse_uri",
     "render_query_summary",
-    "render_session_head",
     "render_session_text",
     "resolve_collect_save_path",
     "resolve_effective_formats",
     "resolve_output_base_dir",
     "show_collect_progress",
-    "show_loading",
     "validate_formats_for_mode",
-    "validate_uri_agent_formats",
     "warn_list_ignored_options",
 )
 
@@ -208,40 +190,6 @@ def expand_shortcut_argv(argv: list[str]) -> list[str]:
     variables = _build_shortcut_variables(shortcut.params, tuple(value_tokens))
     expanded_args = [_render_shortcut_arg(arg, variables) for arg in shortcut.args]
     return prefix + expanded_args + remainder
-
-
-@contextmanager
-def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
-    """Show loading status for long-running operations."""
-    if not sys.stderr.isatty():
-        print(message, file=sys.stderr)
-        yield
-        return
-
-    stop_event = threading.Event()
-    spinner_frames = "|/-\\"
-
-    def _write_frame(frame: str) -> None:
-        sys.stderr.write(f"\r{frame} {message}")
-        sys.stderr.flush()
-
-    def _spin() -> None:
-        idx = 0
-        while not stop_event.wait(interval_seconds):
-            _write_frame(spinner_frames[idx % len(spinner_frames)])
-            idx += 1
-
-    spinner_thread = threading.Thread(target=_spin, daemon=True)
-    _write_frame(spinner_frames[0])
-    spinner_thread.start()
-    try:
-        yield
-    finally:
-        stop_event.set()
-        spinner_thread.join(timeout=max(0.3, interval_seconds * 3))
-        clear_width = len(message) + 4
-        sys.stderr.write("\r" + (" " * clear_width) + "\r")
-        sys.stderr.flush()
 
 
 def _format_collect_progress(event: CollectProgressEvent) -> str:
@@ -353,65 +301,6 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
                 sys.stderr.flush()
 
 
-def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
-    """Build a single-session summary prompt for URI mode."""
-    return "\n".join(
-        [
-            "你是一个严谨的会话总结助手。",
-            "请基于下面的单个会话内容输出 Markdown 总结。",
-            "要求：",
-            "1. 只基于给定内容，不要编造。",
-            "2. 总结关键目标、主要改动、风险/异常、结果。",
-            "3. 若信息不足，明确指出。",
-            "",
-            f"会话 URI: {uri}",
-            "",
-            "会话内容：",
-            rendered_session_text,
-        ]
-    )
-
-
-def maybe_generate_uri_summary(
-    *,
-    enabled: bool,
-    output_formats: list[str],
-    uri: str,
-    agent: BaseAgent,
-    session: Session,
-    session_data: dict[str, Any] | None,
-) -> tuple[dict[str, Any] | None, str | None]:
-    """Best-effort URI summary generation. Returns possibly-loaded session_data and summary."""
-    if not enabled:
-        return session_data, None
-
-    if "json" not in output_formats:
-        print(i18n.t(Keys.URI_SUMMARY_NO_JSON_WARNING))
-        return session_data, None
-
-    config = load_ai_config()
-    valid, errors = validate_ai_config(config)
-    if not valid or config is None:
-        if "missing_file" in errors:
-            print(i18n.t(Keys.URI_SUMMARY_CONFIG_MISSING_WARNING))
-        else:
-            print(i18n.t(Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING, fields=",".join(errors)))
-        return session_data, None
-
-    effective_session_data = session_data if session_data is not None else agent.get_session_data(session)
-    rendered = render_session_text(uri, effective_session_data)
-    prompt = build_uri_summary_prompt(uri, rendered)
-
-    try:
-        with show_loading(i18n.t(Keys.URI_SUMMARY_LOADING)):
-            summary_markdown = request_summary_from_llm(config, prompt)
-    except Exception as e:
-        print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
-        return effective_session_data, None
-
-    return effective_session_data, summary_markdown
-
-
 def resolve_collect_save_path(save: str | None, *, since_date: date, until_date: date) -> Path | None:
     """Resolve collect output path from an optional save spec."""
     return _resolve_collect_save_path(save, since_date=since_date, until_date=until_date)
@@ -460,26 +349,6 @@ def handle_reindex_mode(args: argparse.Namespace) -> int:
     return _handle_reindex_mode(args, scanner_factory=AgentScanner, search_index_factory=SearchIndex)
 
 
-def _build_uri_deps() -> UriModeDeps:
-    return UriModeDeps(
-        scanner_factory=AgentScanner,
-        parse_uri=parse_uri,
-        find_session_by_id=find_session_by_id,
-        render_session_head=render_session_head,
-        maybe_generate_uri_summary=maybe_generate_uri_summary,
-        render_session_text=render_session_text,
-        export_session_in_format=export_session_in_format,
-        apply_summary_to_json_export=apply_summary_to_json_export,
-        resolve_output_base_dir=resolve_output_base_dir,
-        validate_uri_agent_formats=validate_uri_agent_formats,
-        print_diagnostic=_print_diagnostic,
-        build_no_agents_found_diagnostic=_build_no_agents_found_diagnostic,
-        wrap_runtime_fetch_error=_wrap_runtime_fetch_error,
-        render_agent_search_roots=_render_agent_search_roots,
-        get_supported_uri_examples=get_supported_uri_examples,
-    )
-
-
 def _build_session_deps() -> SessionModeDeps:
     return SessionModeDeps(
         scanner_factory=AgentScanner,
@@ -512,7 +381,8 @@ def handle_uri_mode(
         output_formats=output_formats,
         output_specified=output_specified,
         export_config=export_config,
-        deps=_build_uri_deps(),
+        scanner_factory=AgentScanner,
+        request_summary=request_summary_from_llm,
     )
 
 
