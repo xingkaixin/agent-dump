@@ -4,11 +4,19 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
+import sys
+from typing import Any
 
 import questionary
 from questionary import Style
 
 from agent_dump.i18n import Keys, i18n
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    # Python 3.10 无 tomllib；手写解析器无法正确处理引号内的 '#' 与转义，必须用标准解析器
+    import tomli as tomllib
 
 
 @dataclass(frozen=True)
@@ -132,7 +140,9 @@ def _parse_toml_value(value: str) -> str | tuple[str, ...]:
     return _strip_quotes(value)
 
 
-def _parse_bool(value: str | tuple[str, ...], default: bool) -> bool:
+def _parse_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
     if not isinstance(value, str):
         return default
     normalized = value.strip().lower()
@@ -141,6 +151,27 @@ def _parse_bool(value: str | tuple[str, ...], default: bool) -> bool:
     if normalized in {"false", "0", "no", "off"}:
         return False
     return default
+
+
+def _coerce_positive_int(value: Any, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value if value > 0 else default
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = int(value)
+        except ValueError:
+            return default
+        if parsed > 0:
+            return parsed
+    return default
+
+
+def _coerce_str_tuple(value: Any) -> tuple[str, ...] | None:
+    if isinstance(value, (list, tuple)):
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    return None
 
 
 def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str | tuple[str, ...]]]:
@@ -189,8 +220,27 @@ def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str | tuple[st
     return parsed
 
 
-def _read_config_sections(config_path: Path) -> dict[str, dict[str, str | tuple[str, ...]]]:
-    return _parse_simple_toml_sections(config_path.read_text(encoding="utf-8"))
+def _flatten_toml_sections(data: dict[str, Any], prefix: str = "") -> dict[str, dict[str, Any]]:
+    """Flatten nested TOML tables into dotted section names like `agent.claudecode`."""
+    sections: dict[str, dict[str, Any]] = {}
+    leaves = {key: value for key, value in data.items() if not isinstance(value, dict)}
+    if prefix:
+        sections[prefix] = leaves
+    for key, value in data.items():
+        if isinstance(value, dict):
+            child_prefix = f"{prefix}.{key}" if prefix else key
+            sections.update(_flatten_toml_sections(value, child_prefix))
+    return sections
+
+
+def _read_config_sections(config_path: Path) -> dict[str, dict[str, Any]]:
+    text = config_path.read_text(encoding="utf-8")
+    try:
+        parsed = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        # 旧版本写出的配置可能不是合法 TOML（如未转义的 Windows 路径），降级用宽松解析器读取
+        return _parse_simple_toml_sections(text)
+    return _flatten_toml_sections(parsed)
 
 
 def load_ai_config(path: Path | None = None) -> AIConfig | None:
@@ -223,24 +273,8 @@ def load_collect_config(path: Path | None = None) -> CollectConfig:
 
     sections = _read_config_sections(config_path)
     parsed = sections.get("collect", {})
-    concurrency = DEFAULT_COLLECT_SUMMARY_CONCURRENCY
-    timeout_seconds = 90
-    raw_concurrency = parsed.get("summary_concurrency", "")
-    raw_timeout_seconds = parsed.get("summary_timeout_seconds", "")
-    if isinstance(raw_concurrency, str) and raw_concurrency.strip():
-        try:
-            parsed_concurrency = int(raw_concurrency)
-        except ValueError:
-            parsed_concurrency = DEFAULT_COLLECT_SUMMARY_CONCURRENCY
-        if parsed_concurrency > 0:
-            concurrency = parsed_concurrency
-    if isinstance(raw_timeout_seconds, str) and raw_timeout_seconds.strip():
-        try:
-            parsed_timeout_seconds = int(raw_timeout_seconds)
-        except ValueError:
-            parsed_timeout_seconds = 90
-        if parsed_timeout_seconds > 0:
-            timeout_seconds = parsed_timeout_seconds
+    concurrency = _coerce_positive_int(parsed.get("summary_concurrency"), DEFAULT_COLLECT_SUMMARY_CONCURRENCY)
+    timeout_seconds = _coerce_positive_int(parsed.get("summary_timeout_seconds"), 90)
 
     agent_denies: dict[str, tuple[str, ...]] = {}
     for section_name, values in sections.items():
@@ -249,11 +283,9 @@ def load_collect_config(path: Path | None = None) -> CollectConfig:
         agent_name = section_name.partition(".")[2].strip()
         if not agent_name:
             continue
-        raw_deny = values.get("deny")
-        if isinstance(raw_deny, tuple):
-            deny_paths = tuple(item.strip() for item in raw_deny if item.strip())
-            if deny_paths:
-                agent_denies[agent_name] = deny_paths
+        deny_paths = _coerce_str_tuple(values.get("deny"))
+        if deny_paths:
+            agent_denies[agent_name] = deny_paths
 
     return CollectConfig(
         summary_concurrency=concurrency,
@@ -305,14 +337,9 @@ def load_shortcuts_config(path: Path | None = None) -> dict[str, ShortcutConfig]
         if not shortcut_name:
             continue
 
-        raw_params = values.get("params")
-        raw_args = values.get("args")
-        if not isinstance(raw_params, tuple) or not isinstance(raw_args, tuple):
-            continue
-
-        params = tuple(item.strip() for item in raw_params if item.strip())
-        args = tuple(item.strip() for item in raw_args if item.strip())
-        if not args:
+        params = _coerce_str_tuple(values.get("params"))
+        args = _coerce_str_tuple(values.get("args"))
+        if params is None or not args:
             continue
         shortcuts[shortcut_name] = ShortcutConfig(params=params, args=args)
 

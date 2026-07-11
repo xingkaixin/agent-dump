@@ -176,6 +176,46 @@ class TestConfigReadWrite:
             )
         }
 
+    def test_load_ai_config_preserves_hash_in_quoted_value(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                "[ai]\n"
+                'provider = "openai"\n'
+                'base_url = "https://api.openai.com/v1"\n'
+                'model = "gpt-4.1-mini"\n'
+                'api_key = "sk-abc#def"  # trailing comment\n'
+            ),
+            encoding="utf-8",
+        )
+
+        config = load_ai_config(path)
+        assert config is not None
+        assert config.api_key == "sk-abc#def"
+
+    def test_load_collect_config_deny_path_containing_comma(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            ('[agent.claudecode]\ndeny = ["/repo/a, with comma", "/repo/b"]\n'),
+            encoding="utf-8",
+        )
+
+        assert load_collect_config(path) == CollectConfig(
+            agent_denies={"claudecode": ("/repo/a, with comma", "/repo/b")},
+        )
+
+    def test_load_falls_back_to_lenient_parser_for_invalid_toml(self, tmp_path):
+        path = tmp_path / "config.toml"
+        # 旧版本写出的 Windows 路径未转义反斜杠，不是合法 TOML
+        path.write_text(
+            ('[logging]\nenabled = false\npath = "C:\\Users\\kevin\\collect.log"\n'),
+            encoding="utf-8",
+        )
+
+        config = load_logging_config(path)
+        assert config.enabled is False
+        assert config.path == Path("C:\\Users\\kevin\\collect.log")
+
     def test_mask_api_key(self):
         assert mask_api_key("") == ""
         assert mask_api_key("abcdef") == "******"
