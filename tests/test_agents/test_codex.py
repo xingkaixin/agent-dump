@@ -798,6 +798,39 @@ class TestCodexAgent:
             for part in message.get("parts", [])
         )
 
+    def test_get_session_data_malformed_line_warns_to_stderr(self, tmp_path, capsys):
+        """测试损坏的 JSONL 行只向 stderr 输出警告，不污染 stdout"""
+        agent = CodexAgent()
+        session_file = tmp_path / "test-malformed.jsonl"
+        valid_line = json.dumps(
+            {
+                "type": "response_item",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello"}],
+                },
+            }
+        )
+        session_file.write_text(valid_line + "\n{not-json}\n")
+
+        session = Session(
+            id="malformed",
+            title="Malformed Session",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_file,
+            metadata={"cwd": "/test", "cli_version": "1.0"},
+        )
+
+        result = agent.get_session_data(session)
+
+        assert len(result["messages"]) == 1
+        captured = capsys.readouterr()
+        assert "警告" in captured.err
+        assert captured.out == ""
+
     def test_get_session_data_uses_record_timestamps_and_merges_tool_output(self, tmp_path):
         """测试消息时间戳使用原始记录时间，并按 call_id 合并 tool output"""
         agent = CodexAgent()
