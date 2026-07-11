@@ -861,6 +861,39 @@ class TestCollectStructuredSummary:
                 summary_concurrency=1,
             )
 
+    def test_summarize_collect_entries_skips_failed_session_and_keeps_others(self, tmp_path, capsys):
+        """测试单个会话摘要失败时跳过该会话，其余会话正常返回"""
+        entry_ok = self._planned_entry(session_id="s-ok")
+        entry_bad = self._planned_entry(session_id="s-bad")
+        log_path = tmp_path / "collect.log"
+        logger = CollectLogger(enabled=True, path=log_path, run_id="run-1")
+
+        def _summary_side_effect(config, prompt, *, timeout_seconds=90, **_kwargs):
+            del config, timeout_seconds
+            if "codex://s-bad" in prompt:
+                return "bad json"
+            return '{"topics":["T1"]}'
+
+        with mock.patch(
+            "agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect
+        ):
+            summaries = summarize_collect_entries(
+                config=self._config(),
+                planned_entries=[entry_ok, entry_bad],
+                summary_concurrency=1,
+                logger=logger,
+            )
+
+        assert [item.collect_entry.session_id for item in summaries] == ["s-ok"]
+        assert summaries[0].summary_data["topics"] == ["T1"]
+        captured = capsys.readouterr()
+        assert "codex://s-bad" in captured.err
+        assert "1 个会话摘要失败" in captured.err
+        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        failure_records = [record for record in records if record["event"] == "session_summary_failed"]
+        assert len(failure_records) == 1
+        assert failure_records[0]["session_uri"] == "codex://s-bad"
+
     def test_reduce_collect_summaries_tree_reduction(self):
         summaries = [
             SessionSummaryEntry(

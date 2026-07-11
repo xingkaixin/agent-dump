@@ -7,6 +7,7 @@ from datetime import date, datetime, tzinfo
 import json
 from pathlib import Path
 import re
+import sys
 import threading
 from typing import Any, cast
 from uuid import uuid4
@@ -947,6 +948,8 @@ def summarize_collect_entries(
     merge_progress_lock = threading.Lock()
     summarized_chunks = 0
     merged_sessions = 0
+    failed_sessions = 0
+    last_error: Exception | None = None
 
     emit_collect_progress(
         progress_callback,
@@ -1021,8 +1024,19 @@ def summarize_collect_entries(
             done, _ = wait(tuple(future_to_index), return_when=FIRST_COMPLETED)
             for future in done:
                 index = future_to_index.pop(future)
-                result = future.result()
-                results[index] = result
+                try:
+                    results[index] = future.result()
+                except Exception as exc:  # noqa: BLE001
+                    failed_sessions += 1
+                    last_error = exc
+                    entry = planned_entries[index].collect_entry
+                    print(f"警告: 会话摘要失败，已跳过 {entry.session_uri}: {exc}", file=sys.stderr)
+                    if logger is not None:
+                        logger.log(
+                            "session_summary_failed",
+                            session_uri=entry.session_uri,
+                            error=str(exc),
+                        )
 
                 try:
                     next_index, next_entry = next(pending_entries)
@@ -1030,7 +1044,12 @@ def summarize_collect_entries(
                     continue
                 future_to_index[executor.submit(_summarize, next_index, next_entry)] = next_index
 
-    return [item for item in results if item is not None]
+    summaries = [item for item in results if item is not None]
+    if not summaries and last_error is not None:
+        raise last_error
+    if failed_sessions:
+        print(f"警告: {failed_sessions} 个会话摘要失败，最终报告不包含这些会话。", file=sys.stderr)
+    return summaries
 
 
 def _build_summary_bucket_lines(
