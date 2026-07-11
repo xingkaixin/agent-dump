@@ -2,11 +2,9 @@
 Query parsing and session filtering helpers.
 """
 
-from contextlib import suppress
 from dataclasses import dataclass
 import json
 from pathlib import Path
-import sqlite3
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -141,8 +139,9 @@ def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | No
     if not sessions:
         return []
 
-    if agent.name in {"opencode", "zcode"}:
-        return _filter_sqlite_message_part_sessions(agent, sessions, query)
+    provider_matched = agent.filter_sessions_by_keyword(sessions, query)
+    if provider_matched is not None:
+        return provider_matched
 
     # Try indexed full-text search first
     indexed = _try_indexed_search(agent, sessions, query)
@@ -363,52 +362,6 @@ def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
         roles=roles,
         limit=limit,
     )
-
-
-def _filter_sqlite_message_part_sessions(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session]:
-    db_path = getattr(agent, "db_path", None)
-    if not isinstance(db_path, Path):
-        return _filter_sessions_from_source_or_data(agent, sessions, keyword)
-
-    like_pattern = f"%{keyword}%"
-    matched_ids: set[str] = set()
-    session_ids = [session.id for session in sessions]
-
-    conn: sqlite3.Connection | None = None
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        for chunk in _chunk_ids(session_ids, size=200):
-            cursor.execute(
-                """
-                SELECT DISTINCT s.id
-                FROM session s
-                LEFT JOIN message m ON m.session_id = s.id
-                LEFT JOIN part p ON p.message_id = m.id
-                WHERE s.id IN (SELECT value FROM json_each(?))
-                  AND (
-                    LOWER(COALESCE(s.title, '')) LIKE ?
-                    OR LOWER(COALESCE(m.data, '')) LIKE ?
-                    OR LOWER(COALESCE(p.data, '')) LIKE ?
-                  )
-                """,
-                [json.dumps(chunk), like_pattern, like_pattern, like_pattern],
-            )
-            matched_ids.update(str(row["id"]) for row in cursor.fetchall())
-    except Exception:
-        return _filter_sessions_from_source_or_data(agent, sessions, keyword)
-    finally:
-        if conn is not None:
-            with suppress(Exception):
-                conn.close()
-
-    return [session for session in sessions if session.id in matched_ids]
-
-
-def _chunk_ids(ids: list[str], size: int) -> list[list[str]]:
-    return [ids[i : i + size] for i in range(0, len(ids), size)]
 
 
 def _filter_sessions_from_source_or_data(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session]:

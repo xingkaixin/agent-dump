@@ -84,6 +84,15 @@ class BaseAgent(ABC):
                 return session
         return None
 
+    def filter_sessions_by_keyword(self, sessions: list[Session], keyword: str) -> list[Session] | None:
+        """Filter sessions by keyword inside the provider's storage.
+
+        Return None when the provider has no storage-level fast path;
+        callers then fall back to index- or file-based matching.
+        """
+        del sessions, keyword
+        return None
+
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         """Return provider roots checked during discovery."""
         return ()

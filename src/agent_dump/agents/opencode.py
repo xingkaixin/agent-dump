@@ -14,6 +14,11 @@ from agent_dump.diagnostics import source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 
 
+def _escape_like(text: str) -> str:
+    """Escape LIKE wildcards so user keywords match literally."""
+    return text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+
+
 class OpenCodeAgent(BaseAgent):
     """Handler for OpenCode sessions"""
 
@@ -84,6 +89,46 @@ class OpenCodeAgent(BaseAgent):
         finally:
             conn.close()
         return sessions[0] if sessions else None
+
+    def filter_sessions_by_keyword(self, sessions: list[Session], keyword: str) -> list[Session] | None:
+        """Match a keyword against titles, message data, and part data in SQL."""
+        if not self.db_path:
+            return None
+
+        like_pattern = f"%{_escape_like(keyword.strip().lower())}%"
+        matched_ids: set[str] = set()
+        session_ids = [session.id for session in sessions]
+
+        try:
+            conn = self._connect_db()
+        except Exception:
+            return None
+        try:
+            cursor = conn.cursor()
+            for start in range(0, len(session_ids), 200):
+                chunk = session_ids[start : start + 200]
+                cursor.execute(
+                    r"""
+                    SELECT DISTINCT s.id
+                    FROM session s
+                    LEFT JOIN message m ON m.session_id = s.id
+                    LEFT JOIN part p ON p.message_id = m.id
+                    WHERE s.id IN (SELECT value FROM json_each(?))
+                      AND (
+                        LOWER(COALESCE(s.title, '')) LIKE ? ESCAPE '\'
+                        OR LOWER(COALESCE(m.data, '')) LIKE ? ESCAPE '\'
+                        OR LOWER(COALESCE(p.data, '')) LIKE ? ESCAPE '\'
+                      )
+                    """,
+                    [json.dumps(chunk), like_pattern, like_pattern, like_pattern],
+                )
+                matched_ids.update(str(row["id"]) for row in cursor.fetchall())
+        except Exception:
+            return None
+        finally:
+            conn.close()
+
+        return [session for session in sessions if session.id in matched_ids]
 
     def _select_sessions(
         self, conn: sqlite3.Connection, *, where_sql: str, params: tuple[Any, ...]
