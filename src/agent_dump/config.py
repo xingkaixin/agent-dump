@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+import json
 import os
 from pathlib import Path
 import sys
@@ -373,6 +374,11 @@ def mask_api_key(value: str) -> str:
     return f"{value[:3]}{'*' * (len(value) - 6)}{value[-3:]}"
 
 
+def _toml_string(value: str) -> str:
+    # json.dumps 的字符串转义规则是 TOML 基本字符串的子集，可直接复用
+    return json.dumps(value, ensure_ascii=False)
+
+
 def _render_collect_section(config: CollectConfig) -> str:
     lines = [
         "[collect]",
@@ -388,7 +394,7 @@ def _render_collect_section(config: CollectConfig) -> str:
                 f"[agent.{agent_name}]",
                 "deny = [",
                 *[
-                    f'  "{deny_path}"' + ("," if index < len(deny_paths) - 1 else "")
+                    f"  {_toml_string(deny_path)}" + ("," if index < len(deny_paths) - 1 else "")
                     for index, deny_path in enumerate(deny_paths)
                 ],
                 "]",
@@ -403,7 +409,7 @@ def _render_logging_section(config: LoggingConfig) -> str:
         [
             "[logging]",
             f"enabled = {'true' if config.enabled else 'false'}",
-            f'path = "{path}"',
+            f"path = {_toml_string(str(path))}",
         ]
     )
 
@@ -412,7 +418,7 @@ def _render_export_section(config: ExportConfig) -> str:
     return "\n".join(
         [
             "[export]",
-            f'output = "{config.output}"',
+            f"output = {_toml_string(config.output)}",
         ]
     )
 
@@ -421,11 +427,12 @@ def _render_shortcuts_sections(shortcuts: dict[str, ShortcutConfig]) -> str:
     sections: list[str] = []
     for shortcut_name, shortcut in shortcuts.items():
         params_lines = [
-            f'  "{param}"' + ("," if index < len(shortcut.params) - 1 else "")
+            f"  {_toml_string(param)}" + ("," if index < len(shortcut.params) - 1 else "")
             for index, param in enumerate(shortcut.params)
         ]
         args_lines = [
-            f'  "{arg}"' + ("," if index < len(shortcut.args) - 1 else "") for index, arg in enumerate(shortcut.args)
+            f"  {_toml_string(arg)}" + ("," if index < len(shortcut.args) - 1 else "")
+            for index, arg in enumerate(shortcut.args)
         ]
         sections.extend(
             [
@@ -463,10 +470,10 @@ def write_config(
         sections.append(
             (
                 "[ai]\n"
-                f'provider = "{ai_config.provider}"\n'
-                f'base_url = "{ai_config.base_url}"\n'
-                f'model = "{ai_config.model}"\n'
-                f'api_key = "{ai_config.api_key}"\n'
+                f"provider = {_toml_string(ai_config.provider)}\n"
+                f"base_url = {_toml_string(ai_config.base_url)}\n"
+                f"model = {_toml_string(ai_config.model)}\n"
+                f"api_key = {_toml_string(ai_config.api_key)}\n"
             ).rstrip()
         )
     if config_path.exists() or existing_collect != CollectConfig():

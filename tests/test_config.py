@@ -216,6 +216,18 @@ class TestConfigReadWrite:
         assert config.enabled is False
         assert config.path == Path("C:\\Users\\kevin\\collect.log")
 
+    def test_write_and_load_round_trip_special_characters(self, tmp_path):
+        path = tmp_path / "config.toml"
+        original = AIConfig(
+            provider="openai",
+            base_url="https://api.openai.com/v1",
+            model="gpt-4.1-mini",
+            api_key='sk-"quoted"#hash\\slash',
+        )
+        write_ai_config(original, path)
+
+        assert load_ai_config(path) == original
+
     def test_mask_api_key(self):
         assert mask_api_key("") == ""
         assert mask_api_key("abcdef") == "******"
