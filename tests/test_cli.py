@@ -16,10 +16,9 @@ from agent_dump.cli import (
     expand_shortcut_argv,
     handle_collect_mode,
     main,
-    resolve_collect_save_path,
-    show_collect_progress,
 )
 from agent_dump.collect import CollectProgressEvent
+from agent_dump.collect_workflow import resolve_collect_save_path, show_collect_progress
 from agent_dump.config import CollectConfig, ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
@@ -273,14 +272,14 @@ class TestMain:
         mock_planned_entry.chunks = (mock.MagicMock(),)
         mock_logger = mock.MagicMock()
 
-        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+        with mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock_config):
             with mock.patch(
-                "agent_dump.cli.load_collect_config",
+                "agent_dump.collect_workflow.load_collect_config",
                 return_value=mock.MagicMock(summary_concurrency=1, summary_timeout_seconds=30),
             ):
-                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                with mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 known_agent = mock.MagicMock()
@@ -291,26 +290,26 @@ class TestMain:
                                 mock_scanner.get_available_agents.return_value = [available_agent]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
-                                    "agent_dump.cli.collect_entries", return_value=([mock_entry], False)
+                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
                                 ) as mock_collect:
                                     with mock.patch(
-                                        "agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 1)
+                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 1)
                                     ):
                                         with mock.patch(
-                                            "agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]
+                                            "agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]
                                         ):
                                             with mock.patch(
-                                                "agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.cli.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
                                                         return_value="# collect",
                                                     ):
                                                         with mock.patch(
-                                                            "agent_dump.cli.write_collect_markdown",
+                                                            "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=tmp_path / "collect.md",
                                                         ):
                                                             result = handle_collect_mode(args)
@@ -349,17 +348,17 @@ class TestMain:
         mock_scanner.get_available_agents.return_value = [available_agent]
 
         with (
-            mock.patch("agent_dump.cli.load_ai_config") as mock_load_ai,
-            mock.patch("agent_dump.cli.validate_ai_config") as mock_validate_ai,
-            mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config),
-            mock.patch("agent_dump.cli.load_logging_config") as mock_load_logging,
-            mock.patch("agent_dump.cli.create_collect_logger") as mock_create_logger,
+            mock.patch("agent_dump.collect_workflow.load_ai_config") as mock_load_ai,
+            mock.patch("agent_dump.collect_workflow.validate_ai_config") as mock_validate_ai,
+            mock.patch("agent_dump.collect_workflow.load_collect_config", return_value=collect_config),
+            mock.patch("agent_dump.collect_workflow.load_logging_config") as mock_load_logging,
+            mock.patch("agent_dump.collect_workflow.create_collect_logger") as mock_create_logger,
             mock.patch("agent_dump.cli.AgentScanner", return_value=mock_scanner),
-            mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)),
-            mock.patch("agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 2)),
-            mock.patch("agent_dump.cli.summarize_collect_entries") as mock_summarize,
+            mock.patch("agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)),
+            mock.patch("agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 2)),
+            mock.patch("agent_dump.collect_workflow.summarize_collect_entries") as mock_summarize,
             mock.patch("agent_dump.cli.request_summary_from_llm") as mock_request_summary,
-            mock.patch("agent_dump.cli.write_collect_markdown") as mock_write,
+            mock.patch("agent_dump.collect_workflow.write_collect_markdown") as mock_write,
         ):
             result = handle_collect_mode(args)
 
@@ -443,12 +442,12 @@ class TestMain:
         mock_scanner.get_available_agents.return_value = [codex_agent, claude_agent]
 
         with (
-            mock.patch("agent_dump.cli.load_ai_config") as mock_load_ai,
-            mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config),
+            mock.patch("agent_dump.collect_workflow.load_ai_config") as mock_load_ai,
+            mock.patch("agent_dump.collect_workflow.load_collect_config", return_value=collect_config),
             mock.patch("agent_dump.cli.AgentScanner", return_value=mock_scanner),
-            mock.patch("agent_dump.cli.summarize_collect_entries") as mock_summarize,
+            mock.patch("agent_dump.collect_workflow.summarize_collect_entries") as mock_summarize,
             mock.patch("agent_dump.cli.request_summary_from_llm") as mock_request_summary,
-            mock.patch("agent_dump.cli.write_collect_markdown") as mock_write,
+            mock.patch("agent_dump.collect_workflow.write_collect_markdown") as mock_write,
         ):
             result = handle_collect_mode(args)
 
@@ -484,20 +483,20 @@ class TestMain:
         collect_config = mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90)
         mock_logger = mock.MagicMock()
 
-        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
-            with mock.patch("agent_dump.cli.load_collect_config", return_value=collect_config):
-                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+        with mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock_config):
+            with mock.patch("agent_dump.collect_workflow.load_collect_config", return_value=collect_config):
+                with mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
-                                    "agent_dump.cli.collect_entries", return_value=([mock_entry], False)
+                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
                                 ) as mock_collect:
                                     with mock.patch(
-                                        "agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 3)
+                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 3)
                                     ):
 
                                         def _summarize_collect_entries(**kwargs):
@@ -538,14 +537,14 @@ class TestMain:
                                             return [mock.MagicMock()]
 
                                         with mock.patch(
-                                            "agent_dump.cli.summarize_collect_entries",
+                                            "agent_dump.collect_workflow.summarize_collect_entries",
                                             side_effect=_summarize_collect_entries,
                                         ):
                                             with mock.patch(
-                                                "agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.cli.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
@@ -555,7 +554,7 @@ class TestMain:
                                                             tmp_path / "agent-dump-collect-20260305-20260305.md"
                                                         )
                                                         with mock.patch(
-                                                            "agent_dump.cli.write_collect_markdown",
+                                                            "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=output_path,
                                                         ):
                                                             result = handle_collect_mode(args)
@@ -590,37 +589,37 @@ class TestMain:
         output_path = tmp_path / "reports" / "report.md"
         mock_logger = mock.MagicMock()
 
-        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+        with mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock_config):
             with mock.patch(
-                "agent_dump.cli.load_collect_config",
+                "agent_dump.collect_workflow.load_collect_config",
                 return_value=mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90),
             ):
-                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                with mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                                 mock_scanner_class.return_value = mock_scanner
-                                with mock.patch("agent_dump.cli.collect_entries", return_value=([mock_entry], False)):
+                                with mock.patch("agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)):
                                     with mock.patch(
-                                        "agent_dump.cli.plan_collect_entries", return_value=([mock_planned_entry], 1)
+                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 1)
                                     ):
                                         with mock.patch(
-                                            "agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]
+                                            "agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]
                                         ):
                                             with mock.patch(
-                                                "agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.cli.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
                                                         return_value="# collect",
                                                     ):
                                                         with mock.patch(
-                                                            "agent_dump.cli.write_collect_markdown",
+                                                            "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=output_path,
                                                         ) as mock_write:
                                                             result = handle_collect_mode(args)
@@ -649,39 +648,39 @@ class TestMain:
         output_path = Path("collect.md")
         mock_logger = mock.MagicMock()
 
-        with mock.patch("agent_dump.cli.load_ai_config", return_value=mock_config):
+        with mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock_config):
             with mock.patch(
-                "agent_dump.cli.load_collect_config",
+                "agent_dump.collect_workflow.load_collect_config",
                 return_value=mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90),
             ):
-                with mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                        with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+                with mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                        with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [cursor_agent]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
-                                    "agent_dump.cli.collect_entries", return_value=([mock.MagicMock()], False)
+                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock.MagicMock()], False)
                                 ) as mock_collect:
                                     with mock.patch(
-                                        "agent_dump.cli.plan_collect_entries", return_value=([mock.MagicMock()], 1)
+                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock.MagicMock()], 1)
                                     ):
                                         with mock.patch(
-                                            "agent_dump.cli.summarize_collect_entries", return_value=[mock.MagicMock()]
+                                            "agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]
                                         ):
                                             with mock.patch(
-                                                "agent_dump.cli.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.cli.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
                                                         return_value="# collect",
                                                     ):
                                                         with mock.patch(
-                                                            "agent_dump.cli.write_collect_markdown",
+                                                            "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=output_path,
                                                         ):
                                                             result = handle_collect_mode(args)
@@ -702,20 +701,20 @@ class TestMain:
         mock_logger = mock.MagicMock()
 
         with (
-            mock.patch("agent_dump.cli.load_ai_config", return_value=mock.MagicMock()),
+            mock.patch("agent_dump.collect_workflow.load_ai_config", return_value=mock.MagicMock()),
             mock.patch(
-                "agent_dump.cli.load_collect_config",
+                "agent_dump.collect_workflow.load_collect_config",
                 return_value=mock.MagicMock(summary_concurrency=4, summary_timeout_seconds=90),
             ),
-            mock.patch("agent_dump.cli.load_logging_config", return_value=mock.MagicMock()),
+            mock.patch("agent_dump.collect_workflow.load_logging_config", return_value=mock.MagicMock()),
         ):
-            with mock.patch("agent_dump.cli.create_collect_logger", return_value=mock_logger):
-                with mock.patch("agent_dump.cli.validate_ai_config", return_value=(True, [])):
+            with mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=mock_logger):
+                with mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])):
                     with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                         mock_scanner = mock.MagicMock()
                         mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                         mock_scanner_class.return_value = mock_scanner
-                        with mock.patch("agent_dump.cli.collect_entries", side_effect=RuntimeError("boom")):
+                        with mock.patch("agent_dump.collect_workflow.collect_entries", side_effect=RuntimeError("boom")):
                             result = handle_collect_mode(args)
 
         assert result == 1
@@ -838,7 +837,7 @@ class TestMain:
         fake_stderr = FakeStderr()
         expected_progress = "正在总结内容：已完成 1/2 个单元，并发 2"
 
-        with mock.patch("sys.stderr", fake_stderr), mock.patch("agent_dump.cli.threading.Thread", FakeThread):
+        with mock.patch("sys.stderr", fake_stderr), mock.patch("agent_dump.collect_workflow.threading.Thread", FakeThread):
             with show_collect_progress() as update_progress:
                 update_progress(
                     CollectProgressEvent(

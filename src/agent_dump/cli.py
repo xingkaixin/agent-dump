@@ -3,52 +3,23 @@ Command-line interface for agent-dump
 """
 
 import argparse
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
 from string import Formatter
 import sys
-import threading
 from typing import Any
 
 from agent_dump.__about__ import __version__
 from agent_dump.cli_shared import (
     is_option_specified,
     print_diagnostic as _print_diagnostic,
-    render_session_text,
     resolve_effective_formats,
     validate_formats_for_mode,
 )
-from agent_dump.collect import (
-    CollectProgressEvent,
-    build_collect_final_prompt,
-    build_collect_run_stats,
-    collect_entries,
-    create_collect_logger,
-    emit_collect_progress,
-    plan_collect_entries,
-    reduce_collect_summaries,
-    request_summary_from_llm,
-    resolve_collect_date_range,
-    summarize_collect_entries,
-    write_collect_markdown,
-)
-from agent_dump.collect_models import collect_fields_for
-from agent_dump.collect_workflow import (
-    CollectWorkflowDeps,
-    handle_collect_mode as _handle_collect_mode,
-    resolve_collect_save_path as _resolve_collect_save_path,
-)
-from agent_dump.config import (
-    handle_config_command,
-    load_ai_config,
-    load_collect_config,
-    load_export_config,
-    load_logging_config,
-    load_shortcuts_config,
-    validate_ai_config,
-)
+from agent_dump.collect import request_summary_from_llm
+from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
+from agent_dump.config import handle_config_command, load_export_config, load_shortcuts_config
 from agent_dump.diagnostics import (
     ParsedUri,
     invalid_query_or_uri,
@@ -72,8 +43,6 @@ __all__ = (
     "handle_stats_mode",
     "handle_uri_mode",
     "main",
-    "resolve_collect_save_path",
-    "show_collect_progress",
 )
 
 
@@ -159,150 +128,9 @@ def expand_shortcut_argv(argv: list[str]) -> list[str]:
     return prefix + expanded_args + remainder
 
 
-def _format_collect_progress(event: CollectProgressEvent) -> str:
-    """Format one collect progress event for stderr."""
-    if event.stage == "collect_start":
-        return i18n.t(Keys.COLLECT_PROGRESS_START, since=event.since, until=event.until)
-    if event.stage == "collect_overview":
-        breakdown = ", ".join(
-            f"{agent_name} {count}" for agent_name, count in (event.agent_session_counts or {}).items()
-        )
-        overview = i18n.t(
-            Keys.COLLECT_PROGRESS_OVERVIEW,
-            session_count=event.session_count or event.current,
-            chunk_count=event.chunk_count or 0,
-            concurrency=event.concurrency or 1,
-        )
-        if not breakdown:
-            return overview
-        return "\n".join([overview, i18n.t(Keys.COLLECT_PROGRESS_AGENT_BREAKDOWN, breakdown=breakdown)])
-    if event.stage == "scan_sessions":
-        return i18n.t(Keys.COLLECT_PROGRESS_SCAN_SESSIONS, current=event.current, total=event.total)
-    if event.stage == "plan_chunks":
-        if event.current >= event.total:
-            return i18n.t(
-                Keys.COLLECT_PROGRESS_PLAN_CHUNKS_DONE,
-                session_count=event.current,
-                chunk_count=event.chunk_total or 0,
-            )
-        return i18n.t(Keys.COLLECT_PROGRESS_PLAN_CHUNKS, current=event.current, total=event.total)
-    if event.stage == "summarize_chunks":
-        return i18n.t(
-            Keys.COLLECT_PROGRESS_SUMMARIZE_CHUNKS,
-            current=event.current,
-            total=event.total,
-            concurrency=event.concurrency or 1,
-        )
-    if event.stage == "merge_sessions":
-        return i18n.t(Keys.COLLECT_PROGRESS_MERGE_SESSIONS, current=event.current, total=event.total)
-    if event.stage == "tree_reduction":
-        level = event.level or 1
-        return i18n.t(Keys.COLLECT_PROGRESS_TREE_REDUCTION, level=level, current=event.current, total=event.total)
-    if event.stage == "render_final":
-        return i18n.t(Keys.COLLECT_PROGRESS_RENDER_FINAL, current=event.current, total=event.total)
-    if event.stage == "write_output":
-        return i18n.t(Keys.COLLECT_PROGRESS_WRITE_OUTPUT, current=event.current, total=event.total)
-    return event.message
-
-
-@contextmanager
-def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
-    """Show collect multi-stage progress on stderr."""
-    is_tty = sys.stderr.isatty()
-    stop_event = threading.Event()
-    progress_lock = threading.Lock()
-    spinner_frames = "|/-\\"
-    spinner_thread: threading.Thread | None = None
-    last_rendered = ""
-
-    def _clear_tty_line(text: str) -> None:
-        width = len(text) + 4
-        sys.stderr.write("\r" + (" " * width) + "\r")
-
-    def _update(event: CollectProgressEvent) -> None:
-        nonlocal last_rendered
-        text = _format_collect_progress(event)
-        if event.stage in {"collect_start", "collect_overview"}:
-            if is_tty:
-                with progress_lock:
-                    if last_rendered:
-                        _clear_tty_line(last_rendered)
-                    print(text, file=sys.stderr)
-            else:
-                print(text, file=sys.stderr)
-            return
-        with progress_lock:
-            last_rendered = text
-        if is_tty:
-            return
-        print(text, file=sys.stderr)
-
-    if is_tty:
-
-        def _spin() -> None:
-            idx = 0
-            while not stop_event.wait(0.1):
-                with progress_lock:
-                    text = last_rendered
-                    if not text:
-                        continue
-                    sys.stderr.write(f"\r{spinner_frames[idx % len(spinner_frames)]} {text}")
-                    sys.stderr.flush()
-                idx += 1
-
-        spinner_thread = threading.Thread(target=_spin, daemon=True)
-        spinner_thread.start()
-
-    try:
-        yield _update
-    finally:
-        if is_tty:
-            stop_event.set()
-            if spinner_thread is not None:
-                spinner_thread.join(timeout=0.3)
-        if last_rendered and is_tty:
-            with progress_lock:
-                _clear_tty_line(last_rendered)
-                sys.stderr.write(last_rendered)
-                sys.stderr.write("\n")
-                sys.stderr.flush()
-
-
-def resolve_collect_save_path(save: str | None, *, since_date: date, until_date: date) -> Path | None:
-    """Resolve collect output path from an optional save spec."""
-    return _resolve_collect_save_path(save, since_date=since_date, until_date=until_date)
-
-
 def handle_collect_mode(args: argparse.Namespace) -> int:
     """Handle `--collect` flow."""
-    return _handle_collect_mode(
-        args,
-        CollectWorkflowDeps(
-            resolve_collect_date_range=resolve_collect_date_range,
-            load_ai_config=load_ai_config,
-            validate_ai_config=validate_ai_config,
-            load_collect_config=load_collect_config,
-            load_logging_config=load_logging_config,
-            create_collect_logger=create_collect_logger,
-            scanner_factory=AgentScanner,
-            show_collect_progress=show_collect_progress,
-            collect_entries=collect_entries,
-            plan_collect_entries=plan_collect_entries,
-            build_collect_run_stats=build_collect_run_stats,
-            summarize_collect_entries=summarize_collect_entries,
-            emit_collect_progress=emit_collect_progress,
-            reduce_collect_summaries=reduce_collect_summaries,
-            build_collect_final_prompt=build_collect_final_prompt,
-            request_summary_from_llm=request_summary_from_llm,
-            write_collect_markdown=write_collect_markdown,
-            resolve_collect_save_path=resolve_collect_save_path,
-            render_session_text=render_session_text,
-            parse_query_uri=parse_query_uri,
-            collect_fields_for=collect_fields_for,
-            i18n_t=i18n.t,
-            keys=Keys,
-        ),
-    )
+    return _handle_collect_mode(args, scanner_factory=AgentScanner, request_summary=request_summary_from_llm)
 
 
 def handle_stats_mode(args: argparse.Namespace) -> int:
