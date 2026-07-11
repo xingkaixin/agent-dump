@@ -118,7 +118,7 @@ class KimiAgent(BaseAgent):
         self.base_path = self._find_base_path()
         if not self.base_path:
             return False
-        return len(list(self.base_path.rglob("metadata.json"))) > 0
+        return next(self.base_path.rglob("metadata.json"), None) is not None
 
     def scan(self) -> list[Session]:
         """Scan for all available sessions"""
