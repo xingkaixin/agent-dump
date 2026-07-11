@@ -173,6 +173,30 @@ class TestBaseAgent:
         agent = ConcreteAgent()
         assert isinstance(agent, BaseAgent)
 
+    def test_find_session_by_id_default_scans_sessions(self):
+        """测试默认 find_session_by_id 全量扫描并按 id 匹配"""
+        agent = ConcreteAgent()
+        target = Session(
+            id="target",
+            title="Target",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=Path("/test"),
+            metadata={},
+        )
+        other = Session(
+            id="other",
+            title="Other",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=Path("/test"),
+            metadata={},
+        )
+        agent._sessions = [other, target]
+
+        assert agent.find_session_by_id("target") is target
+        assert agent.find_session_by_id("missing") is None
+
     def test_get_session_summary_fields(self):
         """测试默认摘要字段提取"""
         agent = ConcreteAgent()

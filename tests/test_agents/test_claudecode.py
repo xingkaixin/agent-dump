@@ -420,6 +420,25 @@ class TestClaudeCodeAgent:
         assert result is not None
         assert result.title == "project-fallback"
 
+    def test_find_session_by_id_locates_file_in_project_dir(self, tmp_path):
+        """测试按 <project>/<session_id>.jsonl 直接定位会话"""
+        agent = ClaudeCodeAgent()
+        agent.base_path = tmp_path
+
+        project_dir = tmp_path / "project1"
+        project_dir.mkdir()
+        session_file = project_dir / "session-abc.jsonl"
+        session_file.write_text(
+            json.dumps({"timestamp": datetime.now(timezone.utc).isoformat(), "cwd": "/repo"}) + "\n"
+        )
+
+        found = agent.find_session_by_id("session-abc")
+
+        assert found is not None
+        assert found.id == "session-abc"
+        assert found.source_path == session_file
+        assert agent.find_session_by_id("missing") is None
+
     def test_get_sessions_filtered_by_days(self, tmp_path):
         """测试按天数过滤会话"""
         agent = ClaudeCodeAgent()

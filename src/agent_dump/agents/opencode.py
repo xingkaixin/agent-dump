@@ -64,26 +64,36 @@ class OpenCodeAgent(BaseAgent):
         if not self.db_path:
             return []
 
-        conn = self._connect_db()
-        cursor = conn.cursor()
-
         cutoff_time = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
 
+        conn = self._connect_db()
+        try:
+            return self._select_sessions(conn, where_sql="s.time_created >= ?", params=(cutoff_time,))
+        finally:
+            conn.close()
+
+    def find_session_by_id(self, session_id: str) -> Session | None:
+        """Look up one session directly by primary key."""
+        if not self.db_path:
+            return None
+
+        conn = self._connect_db()
+        try:
+            sessions = self._select_sessions(conn, where_sql="s.id = ?", params=(session_id,))
+        finally:
+            conn.close()
+        return sessions[0] if sessions else None
+
+    def _select_sessions(
+        self, conn: sqlite3.Connection, *, where_sql: str, params: tuple[Any, ...]
+    ) -> list[Session]:
+        """Query sessions with an internal WHERE clause and build Session models."""
+        cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'message'")
         has_message_table = cursor.fetchone() is not None
 
         if has_message_table:
-            cursor.execute(
-                """
-                SELECT 
-                    s.id,
-                    s.title,
-                    s.time_created,
-                    s.time_updated,
-                    s.slug,
-                    s.directory,
-                    s.version,
-                    s.summary_files,
+            metadata_columns = """
                     (
                         SELECT COUNT(*)
                         FROM message m
@@ -95,17 +105,16 @@ class OpenCodeAgent(BaseAgent):
                         WHERE m.session_id = s.id AND m.data LIKE '%"modelID"%'
                         ORDER BY m.time_created DESC
                         LIMIT 1
-                    ) AS model_message_data
-                FROM session s
-                WHERE s.time_created >= ?
-                ORDER BY s.time_created DESC
-                """,
-                (cutoff_time,),
-            )
+                    ) AS model_message_data"""
         else:
-            cursor.execute(
-                """
-                SELECT 
+            metadata_columns = """
+                    0 AS message_count,
+                    NULL AS model_message_data"""
+
+        # where_sql 与 metadata_columns 都是本文件内的固定常量，参数全部占位符化
+        cursor.execute(
+            f"""
+                SELECT
                     s.id,
                     s.title,
                     s.time_created,
@@ -113,49 +122,42 @@ class OpenCodeAgent(BaseAgent):
                     s.slug,
                     s.directory,
                     s.version,
-                    s.summary_files,
-                    0 AS message_count,
-                    NULL AS model_message_data
+                    s.summary_files,{metadata_columns}
                 FROM session s
-                WHERE s.time_created >= ?
+                WHERE {where_sql}
                 ORDER BY s.time_created DESC
-                """,
-                (cutoff_time,),
-            )
+                """,  # noqa: S608
+            params,
+        )
+        return [self._build_session_from_row(row) for row in cursor.fetchall()]
 
-        sessions = []
-        for row in cursor.fetchall():
-            model: str | None = None
-            raw_model_message = row["model_message_data"]
-            if isinstance(raw_model_message, str) and raw_model_message.strip():
-                try:
-                    model_data = json.loads(raw_model_message)
-                except json.JSONDecodeError:
-                    model_data = {}
-                model_id = model_data.get("modelID") if isinstance(model_data, dict) else None
-                if isinstance(model_id, str) and model_id.strip():
-                    model = model_id.strip()
+    def _build_session_from_row(self, row: sqlite3.Row) -> Session:
+        model: str | None = None
+        raw_model_message = row["model_message_data"]
+        if isinstance(raw_model_message, str) and raw_model_message.strip():
+            try:
+                model_data = json.loads(raw_model_message)
+            except json.JSONDecodeError:
+                model_data = {}
+            model_id = model_data.get("modelID") if isinstance(model_data, dict) else None
+            if isinstance(model_id, str) and model_id.strip():
+                model = model_id.strip()
 
-            sessions.append(
-                Session(
-                    id=row["id"],
-                    title=row["title"] or "Untitled",
-                    created_at=datetime.fromtimestamp(row["time_created"] / 1000, tz=timezone.utc),
-                    updated_at=datetime.fromtimestamp(row["time_updated"] / 1000, tz=timezone.utc),
-                    source_path=self.db_path,
-                    metadata={
-                        "slug": row["slug"],
-                        "directory": row["directory"],
-                        "version": row["version"],
-                        "summary_files": row["summary_files"],
-                        "model": model,
-                        "message_count": row["message_count"],
-                    },
-                )
-            )
-
-        conn.close()
-        return sessions
+        return Session(
+            id=row["id"],
+            title=row["title"] or "Untitled",
+            created_at=datetime.fromtimestamp(row["time_created"] / 1000, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(row["time_updated"] / 1000, tz=timezone.utc),
+            source_path=self.db_path if self.db_path else Path(""),
+            metadata={
+                "slug": row["slug"],
+                "directory": row["directory"],
+                "version": row["version"],
+                "summary_files": row["summary_files"],
+                "model": model,
+                "message_count": row["message_count"],
+            },
+        )
 
     def get_session_data(self, session: Session) -> dict:
         """Get session data as a dictionary"""

@@ -323,6 +323,38 @@ class TestCursorAgent:
         assert matched.id == "request-other"
         assert matched.metadata["composer_id"] == "composer-any-req"
 
+    def test_find_session_by_id_resolves_request_id_and_composer_fallback(self, monkeypatch, tmp_path):
+        """测试 find_session_by_id 优先按 request id 定位，无 bubble 时回退全量扫描"""
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-with-req",
+            {"composerId": "composer-with-req", "createdAt": now_ms, "name": "With Request"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:composer-with-req:b1",
+            {"requestId": "request-fast", "type": 1, "text": "hello"},
+        )
+        _insert_kv(
+            global_db,
+            "composerData:composer-empty",
+            {"composerId": "composer-empty", "createdAt": now_ms, "name": "No Bubbles"},
+        )
+
+        agent = CursorAgent()
+
+        by_request = agent.find_session_by_id("request-fast")
+        assert by_request is not None
+        assert by_request.id == "request-fast"
+
+        by_composer = agent.find_session_by_id("composer-empty")
+        assert by_composer is not None
+        assert by_composer.id == "composer-empty"
+
+        assert agent.find_session_by_id("missing") is None
+
     def test_get_session_data_converts_create_plan_to_plan_part(self, monkeypatch, tmp_path):
         _, global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)

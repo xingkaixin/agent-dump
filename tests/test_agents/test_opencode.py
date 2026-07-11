@@ -195,6 +195,26 @@ class TestOpenCodeAgent:
         assert result[0].metadata["message_count"] == 1
         assert result[0].metadata["model"] == "gpt-5"
 
+    def test_find_session_by_id_uses_sql_lookup(self, populated_db):
+        """测试 find_session_by_id 按主键直查，且不受时间窗限制"""
+        agent = OpenCodeAgent()
+        agent.db_path = populated_db
+
+        # populated_db 中的会话创建于 2024 年，早已超出默认 7 天窗口
+        session = agent.find_session_by_id("session-001")
+        assert session is not None
+        assert session.id == "session-001"
+        assert session.metadata["message_count"] == 1
+
+        assert agent.find_session_by_id("missing") is None
+
+    def test_find_session_by_id_no_db(self):
+        """测试没有数据库时 find_session_by_id 返回 None"""
+        agent = OpenCodeAgent()
+        agent.db_path = None
+
+        assert agent.find_session_by_id("session-001") is None
+
     def test_get_sessions_parses_epoch_as_utc(self, tmp_path):
         """测试 epoch 毫秒会被解析为 UTC aware datetime"""
         agent = OpenCodeAgent()

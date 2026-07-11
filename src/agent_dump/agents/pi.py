@@ -80,6 +80,16 @@ class PiAgent(BaseAgent):
 
         return sorted(sessions, key=lambda item: item.created_at, reverse=True)
 
+    def find_session_by_id(self, session_id: str) -> Session | None:
+        """Locate one session by filename before falling back to a full scan."""
+        if self.base_path:
+            # 文件名以 session id 结尾（如 20260101_{id}.jsonl）；header id 不一致时走全量扫描回退
+            for file_path in self.base_path.rglob(f"*{session_id}.jsonl"):
+                session = self._parse_session_file(file_path)
+                if session is not None and session.id == session_id:
+                    return session
+        return super().find_session_by_id(session_id)
+
     def _parse_session_file(self, file_path: Path) -> Session | None:
         """Parse lightweight metadata from one Pi session file."""
         scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)

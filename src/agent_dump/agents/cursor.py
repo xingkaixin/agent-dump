@@ -295,6 +295,13 @@ class CursorAgent(BaseAgent):
             composer=composer,
         )
 
+    def find_session_by_id(self, session_id: str) -> Session | None:
+        """Resolve request ids via bubble lookup before falling back to a full scan."""
+        matched = self.find_session_by_request_id(session_id)
+        if matched is not None:
+            return matched
+        return super().find_session_by_id(session_id)
+
     def get_session_uri(self, session: Session) -> str:
         """Use request id as URI anchor for Cursor."""
         request_id = session.metadata.get("request_id") or session.id

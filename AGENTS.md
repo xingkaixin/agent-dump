@@ -261,6 +261,7 @@ class BaseAgent(ABC):
 
 可选扩展点：
 - `get_session_uri(session)`：默认返回 `<agent>://<session.id>`。
+- `find_session_by_id(session_id)`：URI 定位使用。默认全量扫描后按 id 匹配；provider 应尽量用直接查找（SQL 主键、文件名定位）覆盖。
 - `get_search_roots()`：结构化诊断和路径发现使用。
 - `get_session_head(session)`：URI `--head` 使用。
 - `get_session_summary_fields(session)`：列表和交互视图元数据摘要使用。

@@ -133,6 +133,16 @@ class CodexAgent(BaseAgent):
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
 
+    def find_session_by_id(self, session_id: str) -> Session | None:
+        """Locate one session by its filename suffix before falling back to a full scan."""
+        if self.base_path:
+            # 文件名格式 rollout-{timestamp}-{sessionId}.jsonl
+            for file_path in self.base_path.rglob(f"*-{session_id}.jsonl"):
+                session = self._parse_session_file(file_path)
+                if session is not None and session.id == session_id:
+                    return session
+        return super().find_session_by_id(session_id)
+
     def _extract_session_id_from_filename(self, file_path: Path) -> str:
         """Extract session ID from Codex filename
 
