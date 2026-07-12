@@ -1,5 +1,39 @@
 # 更新日志
 
+## [0.11.2] - 2026-07-12
+
+### 问题修复
+
+- **配置文件安全与解析**
+  - 使用 `tomllib`（Python 3.10 使用 `tomli`）解析有效 TOML 配置，同时保留对历史非法配置文件的回退处理
+  - 写入配置值时正确转义引号、反斜杠和 `#` 字符
+  - 将配置文件权限限制为 `0600`，因为其中可能包含 API key
+
+- **Provider 与导出健壮性**
+  - 将 provider 解析 warning 输出到 stderr，避免 URI/会话内容重定向到文件时混入诊断信息
+  - 导出 OpenCode 会话时跳过损坏的 message/part 行，避免单条坏数据导致整个会话失败
+  - Cursor 会话使用可靠的时间戳回退，不再把无法解析的时间伪装成当前时间
+  - 当接口拒绝不支持的 `enable_thinking` 参数时，自动移除该参数重试 OpenAI 请求
+  - collect 中单个会话摘要失败时保留其他成功结果，并对最终摘要请求重试一次
+
+### 性能
+
+- 存储支持时直接解析 provider 会话 URI，避免扫描大量历史会话
+- 解析 JSONL 前按文件修改时间剪枝旧文件
+- Cursor SQLite 查询改用索引键范围，SQLite provider 的关键词过滤下沉到 provider 内部
+- 搜索索引按 provider 和 session 标识记录状态，并自动重建旧 schema 索引
+- 通过 `FileSessionAgent` 复用文件型 provider 的扫描、文件名定位、mtime 剪枝和并行解析逻辑
+
+### 变更
+
+- 由 provider 声明不支持的 URI 导出格式，shared CLI 不再硬编码 provider 名称
+- 首次搜索需要索引至少 10 个会话时，在 stderr 输出进度提示
+- 简化 workflow 依赖注入，仅暴露真实运行时 seam，让稳定协作者保留在各自模块内部
+
+### 测试
+
+- 扩展配置解析与权限、provider 定位与导出、collect 容错、搜索索引和 CLI workflow 的回归测试
+
 ## [0.11.1] - 2026-06-25
 
 ### 问题修复
@@ -742,6 +776,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.11.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.2
 [0.11.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.1
 [0.11.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.0
 [0.10.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.3

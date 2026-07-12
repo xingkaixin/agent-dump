@@ -2,6 +2,40 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.11.2] - 2026-07-12
+
+### Fixed
+
+- **Configuration file safety and parsing**
+  - Parse valid TOML configuration with `tomllib` (or `tomli` on Python 3.10), while retaining a fallback for legacy invalid files
+  - Escape quotes, backslashes, and `#` characters when writing configuration values
+  - Restrict the configuration file permissions to `0600` because it can contain an API key
+
+- **Provider and export robustness**
+  - Keep provider parse warnings on stderr so URI/session output remains safe to pipe into a file
+  - Skip malformed OpenCode message and part rows during export instead of failing the whole session
+  - Use honest timestamp fallbacks for Cursor sessions instead of making unknown timestamps look current
+  - Retry OpenAI requests without the unsupported `enable_thinking` parameter when an endpoint rejects it
+  - Skip failed collect session summaries while preserving successful results, and retry the final summary once
+
+### Performance
+
+- Resolve provider session URIs directly when storage supports it, avoiding broad historical scans
+- Prune old JSONL files by modification time before parsing them
+- Use indexed key ranges for Cursor SQLite queries and provider-owned keyword filtering for SQLite agents
+- Key search index state by provider and session, with automatic rebuilding for the old schema
+- Share file-backed provider scanning, filename lookup, mtime pruning, and parallel parsing through `FileSessionAgent`
+
+### Changed
+
+- Providers now declare unsupported URI export formats instead of the shared CLI hardcoding provider names
+- Show a stderr progress hint when a first search needs to index at least 10 sessions
+- Simplify workflow dependency injection to expose only real runtime seams and keep stable collaborators local
+
+### Tests
+
+- Expanded regression coverage for configuration parsing and permissions, provider lookup/export behavior, collect fault tolerance, search indexing, and CLI workflows
+
 ## [0.11.1] - 2026-06-25
 
 ### Fixed
@@ -738,6 +772,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.11.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.2
 [0.11.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.1
 [0.11.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.0
 [0.10.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.10.3
