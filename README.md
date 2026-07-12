@@ -388,6 +388,8 @@ deny = [
 
 `[shortcut.<name>]` defines a reusable shortcut preset. `params` declares positional input names. `args` declares the expanded CLI argv template. When `date` is provided, `{year}` / `{month}` / `{year_month}` are derived automatically.
 
+When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and restricts the file to owner-only permissions (`0600`) because it may contain an API key.
+
 ## Project Structure
 
 ```text
