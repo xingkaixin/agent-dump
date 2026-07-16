@@ -11,6 +11,7 @@ from typing import Any
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
+from agent_dump.agents.message_assembly import build_message, build_text_part, build_tool_part
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot
@@ -302,10 +303,10 @@ class PiAgent(FileSessionAgent):
             summary = str(record.get("summary", "")).strip()
             if not summary:
                 return None
-            return self._build_message(
+            return build_message(
                 message_id=self._entry_message_id(record, seq),
                 role="compaction",
-                parts=[self._build_text_part(summary, timestamp_ms)],
+                parts=[build_text_part(summary, timestamp_ms)],
                 time_created=timestamp_ms,
                 extra=extra,
             )
@@ -314,10 +315,10 @@ class PiAgent(FileSessionAgent):
             summary = str(record.get("summary", "")).strip()
             if not summary:
                 return None
-            return self._build_message(
+            return build_message(
                 message_id=self._entry_message_id(record, seq),
                 role="branch_summary",
-                parts=[self._build_text_part(summary, timestamp_ms)],
+                parts=[build_text_part(summary, timestamp_ms)],
                 time_created=timestamp_ms,
                 extra=extra,
             )
@@ -326,7 +327,7 @@ class PiAgent(FileSessionAgent):
             parts = self._normalize_content_parts(record.get("content"), timestamp_ms)
             if not parts:
                 return None
-            return self._build_message(
+            return build_message(
                 message_id=self._entry_message_id(record, seq),
                 role="custom",
                 parts=parts,
@@ -352,7 +353,7 @@ class PiAgent(FileSessionAgent):
             output = str(message.get("output", ""))
             if not command and not output.strip():
                 return None
-            return self._build_message(
+            return build_message(
                 message_id=self._entry_message_id(record, seq),
                 role="tool",
                 mode="tool",
@@ -361,7 +362,7 @@ class PiAgent(FileSessionAgent):
                         tool_name="bash",
                         call_id=self._entry_message_id(record, seq),
                         arguments={"command": command},
-                        output=[self._build_text_part(output, timestamp_ms)] if output.strip() else [],
+                        output=[build_text_part(output, timestamp_ms)] if output.strip() else [],
                         timestamp_ms=timestamp_ms,
                     )
                 ],
@@ -380,7 +381,7 @@ class PiAgent(FileSessionAgent):
                     state_extra={"is_error": bool(message.get("isError", False))},
                 )
             ]
-            return self._build_message(
+            return build_message(
                 message_id=self._entry_message_id(record, seq),
                 role="tool",
                 mode="tool",
@@ -391,11 +392,11 @@ class PiAgent(FileSessionAgent):
 
         if role == "branchSummary":
             text = str(message.get("summary", "")).strip()
-            parts = [self._build_text_part(text, timestamp_ms)] if text else []
+            parts = [build_text_part(text, timestamp_ms)] if text else []
             normalized_role = "branch_summary"
         elif role == "compactionSummary":
             text = str(message.get("summary", "")).strip()
-            parts = [self._build_text_part(text, timestamp_ms)] if text else []
+            parts = [build_text_part(text, timestamp_ms)] if text else []
             normalized_role = "compaction"
         elif role == "custom":
             parts = self._normalize_content_parts(message.get("content"), timestamp_ms)
@@ -407,7 +408,7 @@ class PiAgent(FileSessionAgent):
         if not parts:
             return None
 
-        return self._build_message(
+        return build_message(
             message_id=self._entry_message_id(record, seq),
             role=normalized_role,
             agent="pi" if normalized_role == "assistant" else None,
@@ -421,7 +422,7 @@ class PiAgent(FileSessionAgent):
 
     def _normalize_content_parts(self, content: Any, timestamp_ms: int) -> list[dict[str, Any]]:
         if isinstance(content, str):
-            return [self._build_text_part(content, timestamp_ms)] if content.strip() else []
+            return [build_text_part(content, timestamp_ms)] if content.strip() else []
 
         if not isinstance(content, list):
             return []
@@ -430,7 +431,7 @@ class PiAgent(FileSessionAgent):
         for item in content:
             if isinstance(item, str):
                 if item.strip():
-                    parts.append(self._build_text_part(item, timestamp_ms))
+                    parts.append(build_text_part(item, timestamp_ms))
                 continue
             if not isinstance(item, dict):
                 continue
@@ -439,11 +440,11 @@ class PiAgent(FileSessionAgent):
             if part_type == "text":
                 text = str(item.get("text", "")).strip()
                 if text:
-                    parts.append(self._build_text_part(text, timestamp_ms))
+                    parts.append(build_text_part(text, timestamp_ms))
             elif part_type == "thinking":
                 text = str(item.get("thinking", "")).strip()
                 if text:
-                    parts.append(self._build_text_part(text, timestamp_ms, part_type="reasoning"))
+                    parts.append(build_text_part(text, timestamp_ms, part_type="reasoning"))
             elif part_type == "toolCall":
                 tool_name = str(item.get("name", "")).strip()
                 call_id = str(item.get("id", "")).strip()
@@ -486,43 +487,6 @@ class PiAgent(FileSessionAgent):
                     fragments.append(str(item.get("thinking", "")))
         return " ".join(fragment for fragment in fragments if fragment)
 
-    def _build_message(
-        self,
-        *,
-        message_id: str,
-        role: str,
-        parts: list[dict[str, Any]],
-        time_created: int,
-        agent: str | None = None,
-        mode: str | None = None,
-        model: str | None = None,
-        provider: str | None = None,
-        extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        message = {
-            "id": message_id,
-            "role": role,
-            "agent": agent,
-            "mode": mode,
-            "model": model,
-            "provider": provider,
-            "time_created": time_created,
-            "time_completed": None,
-            "tokens": {},
-            "cost": 0,
-            "parts": parts,
-        }
-        if extra:
-            message.update(extra)
-        return message
-
-    def _build_text_part(self, text: str, timestamp_ms: int, part_type: str = "text") -> dict[str, Any]:
-        return {
-            "type": part_type,
-            "text": text,
-            "time_created": timestamp_ms,
-        }
-
     def _build_tool_part(
         self,
         *,
@@ -539,14 +503,13 @@ class PiAgent(FileSessionAgent):
         }
         if state_extra:
             state.update(state_extra)
-        return {
-            "type": "tool",
-            "tool": tool_name,
-            "callID": call_id,
-            "title": PI_TOOL_TITLE_MAP.get(tool_name, tool_name),
-            "state": state,
-            "time_created": timestamp_ms,
-        }
+        return build_tool_part(
+            tool_name=tool_name,
+            call_id=call_id,
+            title=PI_TOOL_TITLE_MAP.get(tool_name, tool_name),
+            state=state,
+            timestamp_ms=timestamp_ms,
+        )
 
     def _entry_message_id(self, record: dict[str, Any], seq: int) -> str:
         entry_id = str(record.get("id", "")).strip()
