@@ -55,6 +55,7 @@ PATH_PATTERN = re.compile(
     r"(?:(?:[A-Za-z]:)?[\\/][^\s'\"`]+|(?:\./|\../|~?/)?[\w.-]+(?:/[\w.-]+)+)",
 )
 SUMMARY_JSON_PATTERN = re.compile(r"```json\s*(\{[\s\S]*?\})\s*```", re.IGNORECASE)
+_MAX_SESSION_PARSE_WORKERS = 32
 
 
 def parse_user_date(value: str) -> date:
@@ -516,35 +517,40 @@ def collect_entries(
         message="scan sessions",
     )
 
-    for index, (agent, session, session_date) in enumerate(matched_sessions, start=1):
+    def _collect_entry(matched_session: tuple[BaseAgent, Session, date]) -> CollectEntry:
+        agent, session, session_date = matched_session
         session_data = agent.get_session_data(session)
         uri = agent.get_session_uri(session)
         fallback_text = render_session_text_fn(uri, session_data)
         events, truncated = extract_collect_events(session_data, fallback_text=fallback_text)
-        has_truncated = has_truncated or truncated
-
-        entries.append(
-            CollectEntry(
-                date_value=session_date,
-                created_at=session.created_at,
-                agent_name=agent.name,
-                agent_display_name=agent.display_name,
-                session_id=session.id,
-                session_title=session.title,
-                session_uri=uri,
-                project_directory=str(session.metadata.get("cwd") or session.metadata.get("directory") or ""),
-                events=events,
-                is_truncated=truncated,
-            )
-        )
-        emit_collect_progress(
-            progress_callback,
-            stage="scan_sessions",
-            current=index,
-            total=total,
-            message="scan sessions",
+        return CollectEntry(
+            date_value=session_date,
+            created_at=session.created_at,
+            agent_name=agent.name,
+            agent_display_name=agent.display_name,
+            session_id=session.id,
+            session_title=session.title,
             session_uri=uri,
+            project_directory=str(session.metadata.get("cwd") or session.metadata.get("directory") or ""),
+            events=events,
+            is_truncated=truncated,
         )
+
+    if matched_sessions:
+        max_workers = min(_MAX_SESSION_PARSE_WORKERS, total)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            collected_entries = executor.map(_collect_entry, matched_sessions)
+            for index, entry in enumerate(collected_entries, start=1):
+                entries.append(entry)
+                has_truncated = has_truncated or entry.is_truncated
+                emit_collect_progress(
+                    progress_callback,
+                    stage="scan_sessions",
+                    current=index,
+                    total=total,
+                    message="scan sessions",
+                    session_uri=entry.session_uri,
+                )
 
     entries.sort(key=lambda item: normalize_datetime_utc(item.created_at))
     return entries, has_truncated
