@@ -213,6 +213,9 @@ uv run agent-dump --reindex                         # 强制重建搜索索引
 uv run agent-dump --stats                     # 显示最近 7 天会话统计
 uv run agent-dump --stats -days 30            # 显示最近 30 天会话统计
 
+# Provider 能力矩阵（只读；--capabilities 是别名）
+uv run agent-dump --providers
+
 # collect 模式（按时间段汇总并调用 AI 总结）
 uv run agent-dump --collect
 uv run agent-dump --collect -days 7
@@ -266,6 +269,7 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |
 | `--dry-run` | 与 `--collect` 搭配使用，预览 provider 分布、session 数、chunk 数、并发配置、日期范围和保存路径，跳过 AI 请求和文件写入。 | - |
 | `--stats` | 显示最近 N 天会话使用统计，按 Agent 和时间分组。支持 `-days` 与 `-query`，推荐独立使用。 | - |
+| `--providers`, `--capabilities` | 显示已注册 provider 的能力矩阵，包括 URI scheme、支持及不支持的导出格式、存储级关键词快路径和本地搜索路径是否存在。不扫描会话。 | - |
 | `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。双分词器（`unicode61` + `trigram`）支持 CJK。索引过期或 FTS5 不可用时自动回退到文件扫描。可与 `--list` 组合。 | - |
 | `--reindex` | 强制重建全文搜索索引。索引损坏或手动修改会话数据后使用。 | - |
 | `--shortcut` | 运行已配置的快捷预设。示例：`agent-dump --shortcut ob 20260408` | - |

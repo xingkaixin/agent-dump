@@ -245,6 +245,9 @@ uv run agent-dump --reindex                        # Force rebuild search index
 uv run agent-dump --stats                    # Show session stats for last 7 days
 uv run agent-dump --stats -days 30           # Show session stats for last 30 days
 
+# Provider capabilities (read-only; --capabilities is an alias)
+uv run agent-dump --providers
+
 # collect mode (time-range summary with AI)
 uv run agent-dump --collect
 uv run agent-dump --collect -days 7
@@ -298,6 +301,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
 | `--stats` | Show session usage statistics for the last N days, grouped by agent and time. Supports `-days` and `-query`; use it as a standalone mode. | - |
+| `--providers`, `--capabilities` | Show the registered provider capability matrix, including URI schemes, supported and unsupported export formats, storage-level keyword fast paths, and whether local search roots exist. Does not scan sessions. | - |
 | `--search` | Full-text search across session titles, messages, reasoning, and tool state using local SQLite FTS5. Supports CJK via dual tokenizer (`unicode61` + `trigram`). Auto-fallback to file scan when index is stale or FTS5 unavailable. Can be combined with `--list`. | - |
 | `--reindex` | Force rebuild of the full-text search index. Use when index is corrupted or after manual session data changes. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |

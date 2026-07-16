@@ -68,7 +68,7 @@
 | `session_workflow.py` | list / interactive / query 会话工作流 |
 | `uri_workflow.py` | 单 URI 查看、head、summary、单会话导出 |
 | `collect_workflow.py` | collect 模式编排、dry-run、保存路径解析 |
-| `maintenance_workflow.py` | stats 与 reindex 模式 |
+| `maintenance_workflow.py` | providers capability、stats 与 reindex 模式 |
 | `rendering.py` | print/head/markdown 渲染与 format 导出分发 |
 | `query_filter.py` | `-query` 与 `agents://` 查询 URI 解析、过滤、搜索匹配 |
 | `search_index.py` | SQLite FTS5 搜索索引 |
@@ -226,7 +226,7 @@ agent-dump/
 
 职责：
 - 解析 `argparse` 参数。
-- 根据 `uri`、`--collect`、`--stats`、`--reindex`、`--list`、`--interactive` 选择模式。
+- 根据 `uri`、`--collect`、`--providers`、`--stats`、`--reindex`、`--list`、`--interactive` 选择模式。
 - 作为装配根，向 workflow 注入真实变化的依赖（scanner、LLM 请求）。
 - 处理顶层参数冲突、退出码、诊断输出。
 

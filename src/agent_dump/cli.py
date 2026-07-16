@@ -27,6 +27,7 @@ from agent_dump.diagnostics import (
 )
 from agent_dump.i18n import Keys, i18n, setup_i18n
 from agent_dump.maintenance_workflow import (
+    handle_providers_mode as _handle_providers_mode,
     handle_reindex_mode as _handle_reindex_mode,
     handle_stats_mode as _handle_stats_mode,
 )
@@ -38,6 +39,7 @@ from agent_dump.uri_workflow import handle_uri_mode as _handle_uri_mode
 __all__ = (
     "expand_shortcut_argv",
     "handle_collect_mode",
+    "handle_providers_mode",
     "handle_reindex_mode",
     "handle_session_modes",
     "handle_stats_mode",
@@ -137,6 +139,10 @@ def handle_stats_mode(args: argparse.Namespace) -> int:
     return _handle_stats_mode(args, scanner_factory=AgentScanner)
 
 
+def handle_providers_mode() -> int:
+    return _handle_providers_mode()
+
+
 def handle_reindex_mode(args: argparse.Namespace) -> int:
     # 延迟解析 SearchIndex，保持测试可通过 patch 源模块替换
     from agent_dump.search_index import SearchIndex
@@ -183,7 +189,7 @@ def handle_session_modes(
     )
 
 
-def main():
+def main() -> int | None:
     """Main entry point"""
 
     # Pre-parse language argument
@@ -252,6 +258,12 @@ def main():
     )
     parser.add_argument("--dry-run", action="store_true", help=i18n.t(Keys.CLI_DRY_RUN_HELP))
     parser.add_argument("--stats", action="store_true", help=i18n.t(Keys.CLI_STATS_HELP))
+    parser.add_argument(
+        "--providers",
+        "--capabilities",
+        action="store_true",
+        help=i18n.t(Keys.CLI_PROVIDERS_HELP),
+    )
     parser.add_argument("--shortcut", type=str, default=None, help=i18n.t(Keys.CLI_SHORTCUT_HELP))
     parser.add_argument("-since", "--since", type=str, default=None, help=i18n.t(Keys.CLI_SINCE_HELP))
     parser.add_argument("-until", "--until", type=str, default=None, help=i18n.t(Keys.CLI_UNTIL_HELP))
@@ -322,6 +334,9 @@ def main():
         help=i18n.t(Keys.CLI_VERSION_HELP),
     )
     args = parser.parse_args(argv)
+    if args.providers:
+        return handle_providers_mode()
+
     query_uri_spec: QuerySpec | None = None
     if args.uri and args.uri.startswith("agents://"):
         valid_agents = {agent.name for agent in AgentScanner().agents}
