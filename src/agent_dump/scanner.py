@@ -4,6 +4,7 @@ Scanner for agent tools
 
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+import sys
 from typing import TypeVar
 
 from agent_dump.agent_registry import create_registered_agents
@@ -28,12 +29,24 @@ class AgentScanner:
 
     def _run_concurrently(
         self, fn: Callable[[BaseAgent], T], agents: list[BaseAgent] | None = None
-    ) -> list[tuple[BaseAgent, T]]:
+    ) -> list[tuple[BaseAgent, T | None]]:
         """Execute a function for all agents concurrently and return results in registration order."""
         targets = agents if agents is not None else self.agents
         with ThreadPoolExecutor(max_workers=len(targets)) as executor:
             futures = [executor.submit(fn, agent) for agent in targets]
-            return [(targets[i], future.result()) for i, future in enumerate(futures)]
+            results: list[tuple[BaseAgent, T | None]] = []
+            for i, future in enumerate(futures):
+                agent = targets[i]
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    print(
+                        f"警告: {agent.display_name} provider 操作失败: {type(exc).__name__}: {exc}",
+                        file=sys.stderr,
+                    )
+                    result = None
+                results.append((agent, result))
+            return results
 
     def scan(self) -> dict[str, list[Session]]:
         """
