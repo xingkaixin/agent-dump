@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
+import threading
 from unittest import mock
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -230,6 +231,54 @@ class TestSearchIndex:
         assert len(results) == 1
         assert results[0].session_id == "s1"
         assert results[0].title == "Test"
+
+    def test_update_extracts_sessions_concurrently_before_serial_writes(self, tmp_path) -> None:
+        class ThreadTracingSearchIndex(SearchIndex):
+            def __init__(self, db_path: Path) -> None:
+                super().__init__(db_path)
+                self.sql_threads: set[int] = set()
+
+            def _get_connection(self) -> sqlite3.Connection:
+                conn = super()._get_connection()
+                conn.set_trace_callback(self._record_sql_thread)
+                return conn
+
+            def _record_sql_thread(self, _sql: str) -> None:
+                self.sql_threads.add(threading.get_ident())
+
+        index = ThreadTracingSearchIndex(tmp_path / "index.db")
+        agent = DummyAgent()
+        sessions = [
+            make_session("s1", "Test 1", tmp_path / "s1.jsonl"),
+            make_session("s2", "Test 2", tmp_path / "s2.jsonl"),
+        ]
+        for session in sessions:
+            session.source_path.write_text("data")
+
+        release_reads = threading.Event()
+        read_lock = threading.Lock()
+        started_sessions: set[str] = set()
+        worker_threads: set[int] = set()
+        calling_thread = threading.get_ident()
+
+        def extract_text(_agent: BaseAgent, session: Session) -> str:
+            with read_lock:
+                started_sessions.add(session.id)
+                worker_threads.add(threading.get_ident())
+                if len(started_sessions) == 2:
+                    release_reads.set()
+            if not release_reads.wait(timeout=5):
+                raise AssertionError("search index reads did not overlap")
+            return f"keyword {session.id}"
+
+        with mock.patch("agent_dump.search_index._extract_session_searchable_text", side_effect=extract_text):
+            added, removed = index.update(agent, sessions)
+
+        assert (added, removed) == (2, 0)
+        assert len(worker_threads) == 2
+        assert calling_thread not in worker_threads
+        assert index.sql_threads == {calling_thread}
+        assert {result.session_id for result in index.search("keyword")} == {"s1", "s2"}
 
     def test_incremental_skips_unchanged(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
