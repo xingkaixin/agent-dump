@@ -881,7 +881,7 @@ class CursorAgent(BaseAgent):
         """Export a single Cursor session to JSON."""
         session_data = self.get_session_data(session)
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / f"{session.id}.json"
+        output_path = self._build_output_path(session, output_dir, ".json")
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(session_data, f, ensure_ascii=False, indent=2)
         return output_path

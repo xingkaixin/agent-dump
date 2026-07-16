@@ -10,6 +10,7 @@ import shutil
 from typing import Any, cast
 
 from agent_dump.diagnostics import source_missing, unsupported_capability
+from agent_dump.export_paths import build_session_output_path
 from agent_dump.paths import SearchRoot
 from agent_dump.time_utils import to_local_datetime
 
@@ -141,9 +142,13 @@ class BaseAgent(ABC):
             "updated_at": to_local_datetime(session.updated_at).strftime("%Y-%m-%d %H:%M"),
         }
 
+    def _build_output_path(self, session: Session, output_dir: Path, suffix: str) -> Path:
+        """Build a safe output path for a session export."""
+        return build_session_output_path(output_dir, session.id, suffix)
+
     def _build_raw_output_path(self, session: Session, output_dir: Path, suffix: str = ".raw.jsonl") -> Path:
         """Build output path for raw session export."""
-        return output_dir / f"{session.id}{suffix}"
+        return self._build_output_path(session, output_dir, suffix)
 
     def export_raw_session(self, session: Session, output_dir: Path) -> Path:
         """Export the original session file when one exists."""
