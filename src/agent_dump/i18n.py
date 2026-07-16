@@ -103,6 +103,7 @@ class Keys:
     CLI_STATS_HELP = "CLI_STATS_HELP"
     CLI_SEARCH_HELP = "CLI_SEARCH_HELP"
     CLI_REINDEX_HELP = "CLI_REINDEX_HELP"
+    CLI_PROVIDERS_HELP = "CLI_PROVIDERS_HELP"
     CLI_VERSION_HELP = "CLI_VERSION_HELP"
     CLI_FORMAT_INVALID = "CLI_FORMAT_INVALID"
     SEARCH_INDEX_NOT_AVAILABLE = "SEARCH_INDEX_NOT_AVAILABLE"
@@ -116,6 +117,18 @@ class Keys:
     REINDEX_START = "REINDEX_START"
     REINDEX_AGENT_DONE = "REINDEX_AGENT_DONE"
     REINDEX_DONE = "REINDEX_DONE"
+    PROVIDERS_HEADER = "PROVIDERS_HEADER"
+    PROVIDERS_TABLE_HEADER = "PROVIDERS_TABLE_HEADER"
+    PROVIDERS_ROW = "PROVIDERS_ROW"
+    PROVIDERS_YES = "PROVIDERS_YES"
+    PROVIDERS_NO = "PROVIDERS_NO"
+    PROVIDERS_NONE = "PROVIDERS_NONE"
+    PROVIDERS_ROOT_COUNT = "PROVIDERS_ROOT_COUNT"
+    PROVIDERS_SEARCH_ROOTS = "PROVIDERS_SEARCH_ROOTS"
+    PROVIDERS_ROOT_NONE = "PROVIDERS_ROOT_NONE"
+    PROVIDERS_ROOT_EXISTS = "PROVIDERS_ROOT_EXISTS"
+    PROVIDERS_ROOT_MISSING = "PROVIDERS_ROOT_MISSING"
+    PROVIDERS_ROOT_ROW = "PROVIDERS_ROOT_ROW"
     LIST_IGNORE_FORMAT = "LIST_IGNORE_FORMAT"
     LIST_IGNORE_OUTPUT = "LIST_IGNORE_OUTPUT"
     INTERACTIVE_FORMAT_INVALID = "INTERACTIVE_FORMAT_INVALID"
@@ -302,6 +315,7 @@ TRANSLATIONS = {
         Keys.CLI_STATS_HELP: "Show session usage statistics",
         Keys.CLI_SEARCH_HELP: "Full-text search keyword (searches message content via index)",
         Keys.CLI_REINDEX_HELP: "Force rebuild the full-text search index",
+        Keys.CLI_PROVIDERS_HELP: "Show provider capabilities and local search roots",
         Keys.CLI_VERSION_HELP: "Show version and exit (-v, --version)",
         Keys.CLI_FORMAT_INVALID: "invalid format list: {value}",
         Keys.SEARCH_INDEX_NOT_AVAILABLE: "⚠️  Full-text search is not available (SQLite FTS5 not supported).",
@@ -315,6 +329,18 @@ TRANSLATIONS = {
         Keys.REINDEX_START: "🔄 Rebuilding search index...",
         Keys.REINDEX_AGENT_DONE: "   ✓ {agent}: indexed {count} sessions",
         Keys.REINDEX_DONE: "✅ Index rebuild complete. Total indexed: {count} sessions.",
+        Keys.PROVIDERS_HEADER: "Provider capabilities",
+        Keys.PROVIDERS_TABLE_HEADER: "Provider | URI | Formats | Keyword fast path | Search roots | Unsupported",
+        Keys.PROVIDERS_ROW: "{provider} | {uri} | {formats} | {keyword} | {roots} | {unsupported}",
+        Keys.PROVIDERS_YES: "yes",
+        Keys.PROVIDERS_NO: "no",
+        Keys.PROVIDERS_NONE: "none",
+        Keys.PROVIDERS_ROOT_COUNT: "{existing}/{total} found",
+        Keys.PROVIDERS_SEARCH_ROOTS: "Search roots",
+        Keys.PROVIDERS_ROOT_NONE: "  - [unavailable] no default path on this platform",
+        Keys.PROVIDERS_ROOT_EXISTS: "found",
+        Keys.PROVIDERS_ROOT_MISSING: "missing",
+        Keys.PROVIDERS_ROOT_ROW: "  - [{status}] {label}: {path}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list mode ignores -format/--format.",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list mode ignores -output/--output.",
         Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive mode does not support print; use json, markdown, or raw.",
@@ -492,6 +518,7 @@ TRANSLATIONS = {
         Keys.CLI_STATS_HELP: "显示会话使用统计",
         Keys.CLI_SEARCH_HELP: "全文搜索关键词（通过索引搜索消息内容）",
         Keys.CLI_REINDEX_HELP: "强制重建全文搜索索引",
+        Keys.CLI_PROVIDERS_HELP: "显示 provider 能力矩阵与本地搜索路径",
         Keys.CLI_VERSION_HELP: "显示版本号并退出（-v, --version）",
         Keys.CLI_FORMAT_INVALID: "无效的格式列表: {value}",
         Keys.SEARCH_INDEX_NOT_AVAILABLE: "⚠️  全文搜索不可用（SQLite 不支持 FTS5）。",
@@ -505,6 +532,18 @@ TRANSLATIONS = {
         Keys.REINDEX_START: "🔄 正在重建搜索索引...",
         Keys.REINDEX_AGENT_DONE: "   ✓ {agent}: 已索引 {count} 个会话",
         Keys.REINDEX_DONE: "✅ 索引重建完成。共索引 {count} 个会话。",
+        Keys.PROVIDERS_HEADER: "Provider 能力矩阵",
+        Keys.PROVIDERS_TABLE_HEADER: "Provider | URI | 导出格式 | 存储级关键词快路径 | 搜索路径 | 不支持",
+        Keys.PROVIDERS_ROW: "{provider} | {uri} | {formats} | {keyword} | {roots} | {unsupported}",
+        Keys.PROVIDERS_YES: "是",
+        Keys.PROVIDERS_NO: "否",
+        Keys.PROVIDERS_NONE: "无",
+        Keys.PROVIDERS_ROOT_COUNT: "已找到 {existing}/{total}",
+        Keys.PROVIDERS_SEARCH_ROOTS: "搜索路径",
+        Keys.PROVIDERS_ROOT_NONE: "  - [不可用] 当前平台无默认路径",
+        Keys.PROVIDERS_ROOT_EXISTS: "已找到",
+        Keys.PROVIDERS_ROOT_MISSING: "未找到",
+        Keys.PROVIDERS_ROOT_ROW: "  - [{status}] {label}: {path}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list 模式会忽略 -format/--format 参数。",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list 模式会忽略 -output/--output 参数。",
         Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive 模式不支持 print；可用格式为 json、markdown、raw。",

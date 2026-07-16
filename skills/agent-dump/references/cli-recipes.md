@@ -70,6 +70,15 @@ uv run agent-dump --stats
 uv run agent-dump --stats -days 30
 ```
 
+### Provider 能力发现
+
+```bash
+uv run agent-dump --providers
+uv run agent-dump --capabilities
+```
+
+输出包含 URI scheme、支持及不支持的导出格式、存储级关键词快路径，以及逐项本地搜索路径状态；不会扫描会话内容。
+
 ### 搜索（search）
 
 ```bash
@@ -147,6 +156,7 @@ uv run agent-dump --search "auth" --list -days 30
 | `--list` 模式 | N/A | 仅列出，不导出；`--format/--output` 会被忽略并警告 |
 | `--interactive` 模式 | `json` | 支持 `json/markdown/raw`，不接受 `print` |
 | `--stats` 模式 | N/A | 推荐独立使用；支持 `-days` 与 `-query` |
+| `--providers` / `--capabilities` | N/A | 只读展示全部注册 provider 的能力与本地路径状态，不扫描会话 |
 | `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；支持 `-days`、`-since/-until`、`--collect-mode pm/insight`、`--dry-run`、`--save`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
 | `--search` 模式 | N/A | 作为列表搜索模式使用；可与 `--list`、`-days`、`-query` 组合 |
 | `--reindex` | N/A | 独立的索引维护命令，不应与其他模式标志组合 |

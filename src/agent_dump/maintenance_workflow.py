@@ -1,8 +1,10 @@
 import argparse
 from collections.abc import Callable
 
+from agent_dump.agent_registry import AGENT_REGISTRATIONS, AgentRegistration
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
+    VALID_FORMATS,
     apply_query_filter,
     build_no_agents_found_diagnostic,
     group_sessions_by_time,
@@ -14,6 +16,51 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import QuerySpec, parse_query
 from agent_dump.scanner import AgentScanner
 from agent_dump.search_index import SearchIndex
+
+
+def handle_providers_mode(
+    *,
+    registrations: tuple[AgentRegistration, ...] | None = None,
+) -> int:
+    """Render provider capabilities without scanning session data."""
+    effective_registrations = registrations if registrations is not None else AGENT_REGISTRATIONS
+    provider_rows = []
+    print(i18n.t(Keys.PROVIDERS_HEADER))
+    print()
+    print(i18n.t(Keys.PROVIDERS_TABLE_HEADER))
+    print("--- | --- | --- | --- | --- | ---")
+
+    for registration in effective_registrations:
+        agent = registration.factory()
+        root_states = tuple((root, root.path.exists()) for root in agent.get_search_roots())
+        existing_roots = sum(exists for _, exists in root_states)
+        supported_formats = sorted(VALID_FORMATS - agent.unsupported_uri_formats)
+        unsupported_formats = sorted(agent.unsupported_uri_formats)
+        has_keyword_fast_path = type(agent).filter_sessions_by_keyword is not BaseAgent.filter_sessions_by_keyword
+        provider_rows.append((registration, root_states))
+        print_row = i18n.t(
+            Keys.PROVIDERS_ROW,
+            provider=registration.display_name,
+            uri=", ".join(f"{scheme}://" for scheme in registration.uri_schemes),
+            formats=", ".join(supported_formats),
+            keyword=i18n.t(Keys.PROVIDERS_YES if has_keyword_fast_path else Keys.PROVIDERS_NO),
+            roots=i18n.t(Keys.PROVIDERS_ROOT_COUNT, existing=existing_roots, total=len(root_states)),
+            unsupported=", ".join(unsupported_formats) or i18n.t(Keys.PROVIDERS_NONE),
+        )
+        print(print_row)
+
+    print()
+    print(i18n.t(Keys.PROVIDERS_SEARCH_ROOTS))
+    for registration, root_states in provider_rows:
+        print(f"{registration.display_name}:")
+        if not root_states:
+            print(i18n.t(Keys.PROVIDERS_ROOT_NONE))
+            continue
+        for root, exists in root_states:
+            status_key = Keys.PROVIDERS_ROOT_EXISTS if exists else Keys.PROVIDERS_ROOT_MISSING
+            print(i18n.t(Keys.PROVIDERS_ROOT_ROW, status=i18n.t(status_key), label=root.label, path=root.path))
+
+    return 0
 
 
 def handle_stats_mode(

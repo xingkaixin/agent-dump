@@ -7,8 +7,12 @@ from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
+from agent_dump.agent_registry import AgentRegistration
 from agent_dump.agents.base import Session
+from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.cli import handle_reindex_mode, handle_stats_mode
+from agent_dump.maintenance_workflow import handle_providers_mode as render_provider_capabilities
+from agent_dump.paths import SearchRoot
 
 
 def make_session(
@@ -140,3 +144,31 @@ class TestReindexMode:
         assert result == 0
         index.rebuild.assert_called_once_with(agent, [session])
         assert "索引重建完成" in capsys.readouterr().out
+
+
+class TestProvidersMode:
+    def test_providers_marks_each_search_root_status(self, capsys, tmp_path) -> None:
+        existing_root = tmp_path / "sessions"
+        existing_root.mkdir()
+        missing_root = tmp_path / "missing"
+        agent = OpenCodeAgent()
+        registration = AgentRegistration(
+            name="opencode",
+            display_name="OpenCode",
+            factory=lambda: agent,
+            uri_schemes=("opencode",),
+            location_line="",
+        )
+
+        roots = (
+            SearchRoot("existing root", existing_root),
+            SearchRoot("missing root", missing_root),
+        )
+        with mock.patch.object(agent, "get_search_roots", return_value=roots):
+            result = render_provider_capabilities(registrations=(registration,))
+
+        assert result == 0
+        output = capsys.readouterr().out
+        assert "已找到 1/2" in output
+        assert f"[已找到] existing root: {existing_root}" in output
+        assert f"[未找到] missing root: {missing_root}" in output

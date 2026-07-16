@@ -146,6 +146,37 @@ class TestMain:
         assert result == 0
         mock_handle.assert_called_once_with("view")
 
+    @pytest.mark.parametrize("option", ["--providers", "--capabilities"])
+    def test_main_dispatches_providers_mode(self, option: str) -> None:
+        with mock.patch("agent_dump.cli.handle_providers_mode", return_value=0) as mock_handle:
+            with mock.patch("sys.argv", ["agent-dump", option]):
+                result = main()
+
+        assert result == 0
+        mock_handle.assert_called_once_with()
+
+    def test_main_providers_shows_registered_capabilities_without_scanning(
+        self,
+        capsys,
+        monkeypatch,
+    ) -> None:
+        monkeypatch.setattr(Path, "exists", lambda _path: False)
+        monkeypatch.setattr("agent_dump.agents.zcode.sys.platform", "linux")
+
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner:
+            with mock.patch("sys.argv", ["agent-dump", "--providers"]):
+                result = main()
+
+        assert result == 0
+        mock_scanner.assert_not_called()
+        output = capsys.readouterr().out
+        for provider in ("OpenCode", "ZCode", "Codex", "Kimi", "Claude Code", "Cursor", "Pi"):
+            assert provider in output
+        assert "Cursor | cursor:// | json, print | 否 | 已找到 0/2 | markdown, raw" in output
+        assert "OpenCode | opencode:// | json, markdown, print, raw | 是" in output
+        assert "ZCode:" in output
+        assert "当前平台无默认路径" in output
+
     def test_main_dispatches_collect_mode(self):
         with mock.patch("agent_dump.cli.handle_collect_mode", return_value=0) as mock_handle:
             with mock.patch("sys.argv", ["agent-dump", "--collect"]):
