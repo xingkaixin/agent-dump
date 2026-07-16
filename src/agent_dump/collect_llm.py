@@ -1,22 +1,67 @@
 """LLM transport helpers for collect mode."""
 
 import json
+import sys
 from typing import Any, cast
 from urllib import error, request
+from urllib.parse import urlsplit
 
 from agent_dump.collect_models import SUMMARY_FIELDS
 from agent_dump.config import AIConfig
 
 STRUCTURED_SUMMARY_MAX_TOKENS = 4096
+SENSITIVE_REQUEST_HEADERS = frozenset({"authorization", "x-api-key"})
 
 
-def request_summary_from_llm(config: AIConfig, prompt: str, *, timeout_seconds: int = 90) -> str:
-    """Call provider API and return markdown summary."""
+def _warn_if_insecure_base_url(base_url: str) -> None:
+    if urlsplit(base_url).scheme.lower() == "https":
+        return
+    print("警告: AI base_url 未使用 HTTPS，api_key 可能以明文传输。", file=sys.stderr)
+
+
+def _url_origin(url: str) -> tuple[str, str, int | None]:
+    parsed = urlsplit(url)
+    default_port = {"http": 80, "https": 443}.get(parsed.scheme.lower())
+    return parsed.scheme.lower(), (parsed.hostname or "").lower(), parsed.port or default_port
+
+
+class _CredentialSafeRedirectHandler(request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> request.Request | None:
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is None or _url_origin(req.full_url) == _url_origin(newurl):
+            return redirected
+
+        for name, _ in redirected.header_items():
+            if name.lower() in SENSITIVE_REQUEST_HEADERS:
+                redirected.remove_header(name)
+        return redirected
+
+
+def _open_url(req: request.Request, *, timeout_seconds: int) -> Any:
+    opener = request.build_opener(_CredentialSafeRedirectHandler())
+    return opener.open(req, timeout=timeout_seconds)  # noqa: S310
+
+
+def _request_provider_summary(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
     if config.provider == "openai":
         return _request_openai(config, prompt, timeout_seconds=timeout_seconds)
     if config.provider == "anthropic":
         return _request_anthropic(config, prompt, timeout_seconds=timeout_seconds)
     raise RuntimeError(f"Unsupported provider: {config.provider}")
+
+
+def request_summary_from_llm(config: AIConfig, prompt: str, *, timeout_seconds: int = 90) -> str:
+    """Call provider API and return markdown summary."""
+    _warn_if_insecure_base_url(config.base_url)
+    return _request_provider_summary(config, prompt, timeout_seconds=timeout_seconds)
 
 
 def request_structured_summary_payload_from_llm(
@@ -27,11 +72,12 @@ def request_structured_summary_payload_from_llm(
     summary_fields: tuple[str, ...] | None = None,
 ) -> str:
     """Call provider API and return one structured summary payload string."""
+    _warn_if_insecure_base_url(config.base_url)
     if config.provider == "openai":
         return _request_openai_structured_summary(
             config, prompt, timeout_seconds=timeout_seconds, summary_fields=summary_fields
         )
-    return request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
+    return _request_provider_summary(config, prompt, timeout_seconds=timeout_seconds)
 
 
 def _normalize_base_url(base_url: str) -> str:
@@ -74,7 +120,7 @@ def _post_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_seco
     )
 
     try:
-        with request.urlopen(req, timeout=timeout_seconds) as resp:  # noqa: S310
+        with _open_url(req, timeout_seconds=timeout_seconds) as resp:
             return cast(dict[str, Any], json.loads(resp.read().decode("utf-8")))
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
@@ -144,7 +190,7 @@ def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -
     )
 
     try:
-        with request.urlopen(req, timeout=timeout_seconds) as resp:  # noqa: S310
+        with _open_url(req, timeout_seconds=timeout_seconds) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
