@@ -13,6 +13,13 @@ from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
+from agent_dump.agents.message_assembly import (
+    backfill_tool_state,
+    build_fallback_tool_message,
+    build_message,
+    build_text_part,
+    build_tool_part,
+)
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot
 
@@ -210,43 +217,6 @@ class KimiAgent(FileSessionAgent):
         shutil.copy2(source_path, output_path)
         return output_path
 
-    def _build_message(
-        self,
-        *,
-        message_id: str,
-        role: str,
-        parts: list[dict],
-        agent: str | None = None,
-        mode: str | None = None,
-        time_created: int = 0,
-        extra: dict[str, Any] | None = None,
-    ) -> dict:
-        """Build one unified message."""
-        message = {
-            "id": message_id,
-            "role": role,
-            "agent": agent,
-            "mode": mode,
-            "model": None,
-            "provider": None,
-            "time_created": time_created,
-            "time_completed": None,
-            "tokens": {},
-            "cost": 0,
-            "parts": parts,
-        }
-        if extra:
-            message.update(extra)
-        return message
-
-    def _build_text_part(self, text: str, time_created: int = 0) -> dict:
-        """Build one text part."""
-        return {
-            "type": "text",
-            "text": text,
-            "time_created": time_created,
-        }
-
     def _map_tool_title(self, tool_name: str) -> str:
         """Map Kimi tool names to unified short titles."""
         return KIMI_TOOL_TITLE_MAP.get(tool_name, tool_name)
@@ -319,21 +289,13 @@ class KimiAgent(FileSessionAgent):
             text = str(item.get("think", ""))
             if not text.strip():
                 return None
-            return {
-                "type": "reasoning",
-                "text": text,
-                "time_created": 0,
-            }
+            return build_text_part(text, part_type="reasoning")
 
         if part_type == "text":
             text = str(item.get("text", ""))
             if not text.strip():
                 return None
-            return {
-                "type": "text",
-                "text": text,
-                "time_created": 0,
-            }
+            return build_text_part(text)
 
         return None
 
@@ -349,7 +311,7 @@ class KimiAgent(FileSessionAgent):
     def _normalize_tool_output_parts(self, content: Any) -> list[dict]:
         """Normalize tool output content to text parts."""
         if isinstance(content, str):
-            return [self._build_text_part(content)] if content.strip() else []
+            return [build_text_part(content)] if content.strip() else []
 
         if isinstance(content, list):
             parts: list[dict] = []
@@ -357,27 +319,27 @@ class KimiAgent(FileSessionAgent):
                 if isinstance(item, dict) and item.get("type") == "text":
                     text = str(item.get("text", ""))
                     if text.strip():
-                        parts.append(self._build_text_part(text))
+                        parts.append(build_text_part(text))
                 elif isinstance(item, str) and item.strip():
-                    parts.append(self._build_text_part(item))
+                    parts.append(build_text_part(item))
             return parts
 
         if content is None:
             return []
 
         text = str(content)
-        return [self._build_text_part(text)] if text.strip() else []
+        return [build_text_part(text)] if text.strip() else []
 
     def _normalize_wire_tool_output_parts(self, return_value: Any) -> list[dict]:
         """Normalize wire tool output content to text parts."""
         if return_value is None:
             return []
         if isinstance(return_value, str):
-            return [self._build_text_part(return_value)] if return_value.strip() else []
+            return [build_text_part(return_value)] if return_value.strip() else []
         if isinstance(return_value, (dict, list)):
-            return [self._build_text_part(json.dumps(return_value, ensure_ascii=False, indent=2))]
+            return [build_text_part(json.dumps(return_value, ensure_ascii=False, indent=2))]
         text = str(return_value)
-        return [self._build_text_part(text)] if text.strip() else []
+        return [build_text_part(text)] if text.strip() else []
 
     def _convert_context_tool_call(self, tool_call: dict[str, Any]) -> dict | None:
         """Convert one assistant tool call from context.jsonl."""
@@ -393,17 +355,16 @@ class KimiAgent(FileSessionAgent):
         if not tool_name or not call_id:
             return None
 
-        return {
-            "type": "tool",
-            "tool": tool_name,
-            "callID": call_id,
-            "title": self._map_tool_title(tool_name),
-            "state": {
+        return build_tool_part(
+            tool_name=tool_name,
+            call_id=call_id,
+            title=self._map_tool_title(tool_name),
+            state={
                 "arguments": self._normalize_tool_arguments(function.get("arguments")),
                 "output": None,
             },
-            "time_created": 0,
-        }
+            timestamp_ms=0,
+        )
 
     def _convert_context_user_message(self, record: dict[str, Any], seq: int) -> dict | None:
         """Convert one user record from context.jsonl."""
@@ -412,10 +373,10 @@ class KimiAgent(FileSessionAgent):
         if not text.strip():
             return None
 
-        return self._build_message(
+        return build_message(
             message_id=f"context-{seq}",
             role="user",
-            parts=[self._build_text_part(text)],
+            parts=[build_text_part(text)],
         )
 
     def _build_context_assistant_message(
@@ -456,7 +417,7 @@ class KimiAgent(FileSessionAgent):
         if not parts:
             return None, {}
 
-        message = self._build_message(
+        message = build_message(
             message_id=f"context-{seq}",
             role="assistant",
             agent="kimi",
@@ -464,45 +425,6 @@ class KimiAgent(FileSessionAgent):
             parts=parts,
         )
         return message, tool_indexes
-
-    def _build_fallback_tool_message(
-        self,
-        *,
-        message_id: str,
-        tool_call_id: str | None,
-        output_parts: list[dict],
-    ) -> dict | None:
-        """Build fallback tool message when tool output cannot be associated."""
-        if not output_parts:
-            return None
-
-        extra = {"tool_call_id": tool_call_id} if tool_call_id else None
-        return self._build_message(
-            message_id=message_id,
-            role="tool",
-            parts=output_parts,
-            extra=extra,
-        )
-
-    def _backfill_tool_output(
-        self,
-        output_parts: list[dict],
-        tool_call_id: str,
-        messages: list[dict],
-        pending_tool_calls: dict[str, tuple[int, int]],
-    ) -> bool:
-        """Backfill tool output into the corresponding assistant tool part."""
-        if not output_parts or not tool_call_id:
-            return False
-
-        location = pending_tool_calls.get(tool_call_id)
-        if location is None:
-            return False
-
-        message_index, part_index = location
-        state = messages[message_index]["parts"][part_index].setdefault("state", {})
-        state["output"] = output_parts
-        return True
 
     def _convert_context_record(
         self,
@@ -538,12 +460,20 @@ class KimiAgent(FileSessionAgent):
             if tool_call_id and tool_call_id in ignored_tool_call_ids:
                 return
             output_parts = self._normalize_tool_output_parts(record.get("content"))
-            if self._backfill_tool_output(output_parts, tool_call_id, messages, pending_tool_calls):
+            if (
+                backfill_tool_state(
+                    messages,
+                    pending_tool_calls,
+                    call_id=tool_call_id,
+                    output_parts=output_parts,
+                )
+                is not None
+            ):
                 return
-            fallback_message = self._build_fallback_tool_message(
+            fallback_message = build_fallback_tool_message(
                 message_id=f"context-{seq}",
-                tool_call_id=tool_call_id or None,
                 output_parts=output_parts,
+                tool_call_id=tool_call_id or None,
             )
             if fallback_message:
                 messages.append(fallback_message)
@@ -587,7 +517,7 @@ class KimiAgent(FileSessionAgent):
 
     def _create_wire_assistant_message(self, message_id: str) -> dict:
         """Create one assistant message for wire state machine."""
-        return self._build_message(
+        return build_message(
             message_id=message_id,
             role="assistant",
             agent="kimi",
@@ -612,23 +542,11 @@ class KimiAgent(FileSessionAgent):
         if part_type == "think":
             text = str(payload.get("think", ""))
             if text.strip():
-                assistant_message["parts"].append(
-                    {
-                        "type": "reasoning",
-                        "text": text,
-                        "time_created": timestamp_ms,
-                    }
-                )
+                assistant_message["parts"].append(build_text_part(text, timestamp_ms, part_type="reasoning"))
         elif part_type == "text":
             text = str(payload.get("text", ""))
             if text.strip():
-                assistant_message["parts"].append(
-                    {
-                        "type": "text",
-                        "text": text,
-                        "time_created": timestamp_ms,
-                    }
-                )
+                assistant_message["parts"].append(build_text_part(text, timestamp_ms))
 
     def _create_wire_tool_part(
         self, payload: dict[str, Any], timestamp_ms: int
@@ -647,17 +565,16 @@ class KimiAgent(FileSessionAgent):
         normalized_arguments = self._normalize_tool_arguments(raw_arguments)
         buffer = raw_arguments if isinstance(raw_arguments, str) and isinstance(normalized_arguments, str) else None
 
-        tool_part = {
-            "type": "tool",
-            "tool": tool_name,
-            "callID": call_id,
-            "title": self._map_tool_title(tool_name),
-            "state": {
+        tool_part = build_tool_part(
+            tool_name=tool_name,
+            call_id=call_id,
+            title=self._map_tool_title(tool_name),
+            state={
                 "arguments": normalized_arguments,
                 "output": None,
             },
-            "time_created": timestamp_ms,
-        }
+            timestamp_ms=timestamp_ms,
+        )
         return tool_part, call_id, buffer
 
     def _append_wire_tool_call_part(
@@ -726,10 +643,10 @@ class KimiAgent(FileSessionAgent):
                         text = str(user_input[0].get("text", ""))
                     if text.strip():
                         messages.append(
-                            self._build_message(
+                            build_message(
                                 message_id=f"wire-{seq}",
                                 role="user",
-                                parts=[self._build_text_part(text, timestamp_ms)],
+                                parts=[build_text_part(text, timestamp_ms)],
                                 time_created=timestamp_ms,
                             )
                         )
@@ -785,12 +702,20 @@ class KimiAgent(FileSessionAgent):
                     if tool_call_id and tool_call_id in ignored_tool_call_ids:
                         continue
                     output_parts = self._normalize_wire_tool_output_parts(payload.get("return_value"))
-                    if self._backfill_tool_output(output_parts, tool_call_id, messages, pending_tool_calls):
+                    if (
+                        backfill_tool_state(
+                            messages,
+                            pending_tool_calls,
+                            call_id=tool_call_id,
+                            output_parts=output_parts,
+                        )
+                        is not None
+                    ):
                         continue
-                    fallback_message = self._build_fallback_tool_message(
+                    fallback_message = build_fallback_tool_message(
                         message_id=f"wire-{seq}",
-                        tool_call_id=tool_call_id or None,
                         output_parts=output_parts,
+                        tool_call_id=tool_call_id or None,
                     )
                     if fallback_message:
                         messages.append(fallback_message)
