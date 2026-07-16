@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts
-from agent_dump.search_index import SearchIndex, _extract_session_searchable_text
+from agent_dump.search_index import SearchIndex, extract_session_searchable_text
 from agent_dump.time_utils import normalize_datetime_utc
 
 AGENT_ALIASES = {
@@ -558,7 +558,7 @@ def _fallback_search_matches(agent: BaseAgent, sessions: list[Session], keyword:
             matches.append(SearchSessionMatch(agent=agent, session=session, snippet=title_snippet, rank=1.0))
             continue
 
-        content = _extract_session_searchable_text(agent, session)
+        content = extract_session_searchable_text(agent, session)
         content_snippet = _build_keyword_snippet(content, keyword)
         if content_snippet is not None:
             matches.append(SearchSessionMatch(agent=agent, session=session, snippet=content_snippet, rank=0.0))
