@@ -230,7 +230,7 @@ def main():
 
     parser = argparse.ArgumentParser(description=i18n.t(Keys.CLI_DESC))
     parser.add_argument("uri", nargs="?", help=i18n.t(Keys.CLI_URI_HELP))
-    parser.add_argument("-d", "-days", type=int, default=7, dest="days", help=i18n.t(Keys.CLI_DAYS_HELP))
+    parser.add_argument("-d", "-days", type=int, default=None, dest="days", help=i18n.t(Keys.CLI_DAYS_HELP))
     parser.add_argument(
         "-output",
         "--output",
@@ -364,6 +364,8 @@ def main():
         return handle_config_command(args.config_action)
     if args.collect:
         return handle_collect_mode(args)
+    if args.days is None:
+        args.days = 7
     if args.stats:
         return handle_stats_mode(args)
     if args.reindex:

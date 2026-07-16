@@ -247,6 +247,7 @@ uv run agent-dump --stats -days 30           # Show session stats for last 30 da
 
 # collect mode (time-range summary with AI)
 uv run agent-dump --collect
+uv run agent-dump --collect -days 7
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
 uv run agent-dump --collect --collect-mode insight
@@ -261,6 +262,7 @@ uv run agent-dump --shortcut ob 20260408
 # Note: --collect converts each session into high-signal events, plans chunks by budget,
 #       requests fixed JSON summaries per chunk, merges them deterministically per session,
 #       then uses tree reduction for the final aggregate before rendering Markdown.
+# Note: collect date precedence is explicit -since/-until, then explicit -days, then today only.
 # Note: --collect --dry-run completes scanning, query filtering, and chunk planning, then
 #       prints provider breakdown, session/chunk counts, concurrency, dates, and save path preview.
 # Note: during --collect, stderr shows multi-stage progress such as scan_sessions,
@@ -289,7 +291,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 |-----------|-------------|---------|
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive` | Run in interactive mode to select and export sessions | - |
-| `-d`, `-days` | Query sessions from the last N days | 7 |
+| `-d`, `-days` | Query sessions from the last N days. In collect mode, applies when `-since/-until` are omitted. | 7 outside collect; today only in collect |
 | `-q`, `-query` | Query filter. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print lightweight session metadata for discovery; does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |

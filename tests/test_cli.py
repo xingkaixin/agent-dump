@@ -153,6 +153,15 @@ class TestMain:
 
         assert result == 0
         mock_handle.assert_called_once()
+        assert mock_handle.call_args.args[0].days is None
+
+    def test_main_dispatches_collect_days(self) -> None:
+        with mock.patch("agent_dump.cli.handle_collect_mode", return_value=0) as mock_handle:
+            with mock.patch("sys.argv", ["agent-dump", "--collect", "-days", "30"]):
+                result = main()
+
+        assert result == 0
+        assert mock_handle.call_args.args[0].days == 30
 
     def test_main_dispatches_collect_dry_run(self):
         with mock.patch("agent_dump.cli.handle_collect_mode", return_value=0) as mock_handle:
@@ -254,6 +263,27 @@ class TestMain:
         result = handle_collect_mode(args)
         assert result == 1
         assert "--collect 不能与 URI/--interactive/--list 同时使用" in capsys.readouterr().out
+
+    def test_collect_mode_passes_days_to_date_range(self) -> None:
+        args = argparse.Namespace(
+            collect=True,
+            uri=None,
+            interactive=False,
+            list=False,
+            days=30,
+            since=None,
+            until=None,
+            save=None,
+        )
+
+        with mock.patch(
+            "agent_dump.collect_workflow.resolve_collect_date_range",
+            side_effect=ValueError("invalid date"),
+        ) as mock_resolve:
+            result = handle_collect_mode(args)
+
+        assert result == 1
+        mock_resolve.assert_called_once_with(None, None, days=30)
 
     def test_collect_mode_accepts_agents_query_uri(self, tmp_path):
         args = argparse.Namespace(

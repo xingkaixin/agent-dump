@@ -3,7 +3,7 @@
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from datetime import date, datetime, tzinfo
+from datetime import date, datetime, timedelta, tzinfo
 import json
 from pathlib import Path
 import re
@@ -72,6 +72,7 @@ def resolve_collect_date_range(
     since: str | None,
     until: str | None,
     *,
+    days: int | None = None,
     today: date | None = None,
     local_tz: tzinfo | None = None,
 ) -> tuple[date, date]:
@@ -79,6 +80,8 @@ def resolve_collect_date_range(
     effective_today = today or get_local_today(local_tz)
 
     if not since and not until:
+        if days is not None:
+            return effective_today - timedelta(days=days), effective_today
         return effective_today, effective_today
 
     if since and until:
