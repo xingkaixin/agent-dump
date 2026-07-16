@@ -63,6 +63,7 @@ class ShortcutConfig:
 
 
 DEFAULT_COLLECT_SUMMARY_CONCURRENCY = 4
+PRIVATE_CONFIG_MODE = 0o600
 
 
 def get_default_log_path(
@@ -495,9 +496,11 @@ def write_config(
         sections.append(_render_shortcuts_sections(existing_shortcuts))
 
     content = "\n\n".join(section for section in sections if section).rstrip()
-    config_path.write_text(f"{content}\n" if content else "", encoding="utf-8")
-    # 文件包含 api_key，收紧为仅属主可读写
-    config_path.chmod(0o600)
+    rendered_content = f"{content}\n" if content else ""
+    write_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    with os.fdopen(os.open(config_path, write_flags, PRIVATE_CONFIG_MODE), "w", encoding="utf-8") as config_file:
+        config_path.chmod(PRIVATE_CONFIG_MODE)
+        config_file.write(rendered_content)
     return config_path
 
 

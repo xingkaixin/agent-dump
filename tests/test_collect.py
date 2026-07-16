@@ -673,7 +673,7 @@ class TestCollectStructuredSummary:
         response.__enter__.return_value = response
         response.__exit__.return_value = None
 
-        with mock.patch("urllib.request.urlopen", return_value=response) as mock_urlopen:
+        with mock.patch("agent_dump.collect_llm._open_url", return_value=response) as mock_urlopen:
             result = request_structured_summary_payload_from_llm(self._config(), "prompt")
 
         assert result == '{"topics":["A"]}'
@@ -720,7 +720,7 @@ class TestCollectStructuredSummary:
         response.__enter__.return_value = response
         response.__exit__.return_value = None
 
-        with mock.patch("urllib.request.urlopen", side_effect=[rejection, response]) as mock_urlopen:
+        with mock.patch("agent_dump.collect_llm._open_url", side_effect=[rejection, response]) as mock_urlopen:
             result = request_summary_from_llm(self._config(), "prompt")
 
         assert result == "# summary"
@@ -741,7 +741,7 @@ class TestCollectStructuredSummary:
         )
 
         with (
-            mock.patch("urllib.request.urlopen", side_effect=rejection) as mock_urlopen,
+            mock.patch("agent_dump.collect_llm._open_url", side_effect=rejection) as mock_urlopen,
             pytest.raises(RuntimeError, match="HTTP 401"),
         ):
             collect_llm.request_summary_from_llm(self._config(), "prompt")
@@ -1096,7 +1096,7 @@ class TestCollectLLM:
         response.__enter__.return_value = response
         response.__exit__.return_value = None
 
-        with mock.patch("urllib.request.urlopen", return_value=response):
+        with mock.patch("agent_dump.collect_llm._open_url", return_value=response):
             result = request_summary_from_llm(config, "prompt")
 
         assert result == "# summary"
@@ -1109,7 +1109,7 @@ class TestCollectLLM:
             api_key="ak-test",
         )
         with (
-            mock.patch("urllib.request.urlopen", side_effect=RuntimeError("boom")),
+            mock.patch("agent_dump.collect_llm._open_url", side_effect=RuntimeError("boom")),
             pytest.raises(RuntimeError),
         ):
             request_summary_from_llm(config, "prompt")
@@ -1329,7 +1329,7 @@ class TestCollectInsightMode:
             model="gpt-4.1-mini",
             api_key="sk-test",
         )
-        with mock.patch("urllib.request.urlopen", return_value=response) as mock_urlopen:
+        with mock.patch("agent_dump.collect_llm._open_url", return_value=response) as mock_urlopen:
             result = request_structured_summary_payload_from_llm(
                 config,
                 "prompt",
