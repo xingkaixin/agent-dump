@@ -10,13 +10,15 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.search_index import (
     SearchIndex,
     _build_fts_query,
-    _extract_related_source_paths,
     _extract_session_searchable_text,
     _has_cjk,
     _has_fts5,
     _select_fts_table,
     _serialize_for_search,
-    _session_updated_signal,
+)
+from agent_dump.session_data import (
+    extract_related_source_paths as _extract_related_source_paths,
+    session_updated_signal as _session_updated_signal,
 )
 
 
@@ -26,6 +28,7 @@ class DummyAgent(BaseAgent):
     def __init__(self, name: str = "codex", session_data: dict[str, dict] | None = None):
         super().__init__(name=name, display_name=f"Dummy-{name}")
         self._session_data = session_data or {}
+        self.data_reads = 0
 
     def scan(self) -> list[Session]:
         return []
@@ -40,6 +43,7 @@ class DummyAgent(BaseAgent):
         raise NotImplementedError
 
     def get_session_data(self, session: Session) -> dict:
+        self.data_reads += 1
         return self._session_data.get(session.id, {})
 
 
@@ -226,6 +230,8 @@ class TestSearchIndex:
         added, removed = index.update(agent, [session])
         assert added == 1
         assert removed == 0
+        assert agent.get_cached_session_data(session)["messages"][0]["role"] == "user"
+        assert agent.data_reads == 1
 
         results = index.search("keyword")
         assert len(results) == 1

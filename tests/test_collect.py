@@ -325,7 +325,7 @@ class TestCollectEntries:
         agent.display_name = "Codex"
         agent.get_sessions.return_value = [in_range, out_range]
         agent.get_session_uri.side_effect = lambda s: f"codex://{s.id}"
-        agent.get_session_data.return_value = {
+        agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "修复 /repo/a.py 报错"}]}]
         }
 
@@ -385,7 +385,7 @@ class TestCollectEntries:
         agent.name = "codex"
         agent.display_name = "Codex"
         agent.get_sessions.return_value = [newer, older]
-        agent.get_session_data.side_effect = get_session_data
+        agent.get_cached_session_data.side_effect = get_session_data
         agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
         progress: list[CollectProgressEvent] = []
 
@@ -431,7 +431,7 @@ class TestCollectEntries:
         claude_agent.display_name = "Claude Code"
         claude_agent.get_sessions.return_value = [denied_root, denied_child, allowed]
         claude_agent.get_session_uri.side_effect = lambda s: f"claude://{s.id}"
-        claude_agent.get_session_data.return_value = {
+        claude_agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "处理仓库问题"}]}]
         }
 
@@ -447,7 +447,7 @@ class TestCollectEntries:
         codex_agent.display_name = "Codex"
         codex_agent.get_sessions.return_value = [codex_session]
         codex_agent.get_session_uri.side_effect = lambda s: f"codex://{s.id}"
-        codex_agent.get_session_data.return_value = {
+        codex_agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "处理 codex 会话"}]}]
         }
 
@@ -478,7 +478,7 @@ class TestCollectEntries:
         agent.display_name = "OpenCode"
         agent.get_sessions.return_value = [session]
         agent.get_session_uri.return_value = "opencode://cross-day"
-        agent.get_session_data.return_value = {
+        agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "修复"}]}]
         }
 
@@ -516,7 +516,7 @@ class TestCollectEntries:
         agent.display_name = "Codex"
         agent.get_sessions.return_value = [matching, other]
         agent.get_session_uri.side_effect = lambda s: f"codex://{s.id}"
-        agent.get_session_data.return_value = {
+        agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "修复仓库问题"}]}]
         }
 
@@ -554,7 +554,7 @@ class TestCollectEntries:
         agent_a.get_sessions.return_value = [older]
         agent_a.get_session_uri.side_effect = lambda s: f"codex://{s.id}"
         agent_a.filter_sessions_by_keyword.return_value = None
-        agent_a.get_session_data.return_value = {
+        agent_a.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "refactor app"}]}]
         }
 
@@ -564,7 +564,7 @@ class TestCollectEntries:
         agent_b.get_sessions.return_value = [newer]
         agent_b.get_session_uri.side_effect = lambda s: f"kimi://{s.id}"
         agent_b.filter_sessions_by_keyword.return_value = None
-        agent_b.get_session_data.return_value = {
+        agent_b.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "refactor app"}]}]
         }
 

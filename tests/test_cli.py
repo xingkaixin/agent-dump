@@ -478,7 +478,7 @@ class TestMain:
         codex_agent.display_name = "Codex"
         codex_agent.get_sessions.return_value = [in_scope, out_of_scope]
         codex_agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
-        codex_agent.get_session_data.return_value = {
+        codex_agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "实现 dry-run"}]}]
         }
 
@@ -487,7 +487,7 @@ class TestMain:
         claude_agent.display_name = "Claude Code"
         claude_agent.get_sessions.return_value = [denied]
         claude_agent.get_session_uri.side_effect = lambda session: f"claude://{session.id}"
-        claude_agent.get_session_data.return_value = {
+        claude_agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "被 deny 的会话"}]}]
         }
         collect_config = CollectConfig(
@@ -517,8 +517,8 @@ class TestMain:
         mock_summarize.assert_not_called()
         mock_request_summary.assert_not_called()
         mock_write.assert_not_called()
-        codex_agent.get_session_data.assert_called_once_with(in_scope)
-        claude_agent.get_session_data.assert_not_called()
+        codex_agent.get_cached_session_data.assert_called_once_with(in_scope)
+        claude_agent.get_cached_session_data.assert_not_called()
         assert output_path.exists() is False
         output = capsys.readouterr().out
         assert "Provider 分布：Codex 1" in output

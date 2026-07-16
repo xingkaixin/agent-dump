@@ -2,8 +2,11 @@
 测试 agents/base.py 模块
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import os
 from pathlib import Path
+import threading
 from unittest import mock
 
 import pytest
@@ -53,6 +56,7 @@ class ConcreteAgent(BaseAgent):
         super().__init__("concrete", "Concrete Agent")
         self._available = True
         self._sessions = []
+        self.data_reads = 0
 
     def scan(self):
         return self._sessions
@@ -67,6 +71,7 @@ class ConcreteAgent(BaseAgent):
         return output_dir / f"{session.id}.json"
 
     def get_session_data(self, session):
+        self.data_reads += 1
         return {
             "id": session.id,
             "title": session.title,
@@ -82,6 +87,97 @@ class TestBaseAgent:
         agent = ConcreteAgent()
         assert agent.name == "concrete"
         assert agent.display_name == "Concrete Agent"
+
+    def test_cached_session_data_reads_once_for_unchanged_session(self, tmp_path):
+        agent = ConcreteAgent()
+        session = Session(
+            id="cached",
+            title="Cached",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=tmp_path / "cached.jsonl",
+            metadata={},
+        )
+
+        first = agent.get_cached_session_data(session)
+        second = agent.get_cached_session_data(session)
+
+        assert first is second
+        assert agent.data_reads == 1
+
+    def test_cached_session_data_reloads_when_related_file_mtime_changes(self, tmp_path):
+        context_file = tmp_path / "context.jsonl"
+        context_file.write_text("first", encoding="utf-8")
+        agent = ConcreteAgent()
+        session = Session(
+            id="changed",
+            title="Changed",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=tmp_path / "session",
+            metadata={"context_file": str(context_file)},
+        )
+
+        first = agent.get_cached_session_data(session)
+        initial_mtime = context_file.stat().st_mtime
+        os.utime(context_file, (initial_mtime + 1, initial_mtime + 1))
+        second = agent.get_cached_session_data(session)
+
+        assert first is not second
+        assert agent.data_reads == 2
+
+    def test_cached_session_data_coalesces_concurrent_reads(self, tmp_path):
+        agent = ConcreteAgent()
+        session = Session(
+            id="concurrent",
+            title="Concurrent",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=tmp_path / "concurrent.jsonl",
+            metadata={},
+        )
+        started = threading.Event()
+        release = threading.Event()
+
+        def load_session_data(_session: Session) -> dict[str, object]:
+            started.set()
+            if not release.wait(timeout=5):
+                raise AssertionError("cached read was not released")
+            return {"messages": []}
+
+        with mock.patch.object(agent, "get_session_data", side_effect=load_session_data) as load:
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = [executor.submit(agent.get_cached_session_data, session) for _ in range(4)]
+                assert started.wait(timeout=5)
+                release.set()
+                results = [future.result() for future in futures]
+
+        assert load.call_count == 1
+        assert all(result is results[0] for result in results)
+
+    def test_cached_session_data_retries_after_failed_read(self, tmp_path):
+        agent = ConcreteAgent()
+        session = Session(
+            id="retry",
+            title="Retry",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=tmp_path / "retry.jsonl",
+            metadata={},
+        )
+        expected = {"messages": []}
+
+        with mock.patch.object(
+            agent,
+            "get_session_data",
+            side_effect=[ValueError("temporary failure"), expected],
+        ) as load:
+            with pytest.raises(ValueError, match="temporary failure"):
+                agent.get_cached_session_data(session)
+            result = agent.get_cached_session_data(session)
+
+        assert result is expected
+        assert load.call_count == 2
 
     def test_get_formatted_title_short(self):
         """测试短标题格式化"""
