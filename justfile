@@ -34,11 +34,22 @@ test:
     uv run pytest -q
     @echo "✅ Tests complete!"
 
+# Run npm wrapper unit tests
+test-npm:
+    @echo "🧪 Running npm wrapper tests..."
+    npm --prefix npm test
+    @echo "✅ npm wrapper tests complete!"
+
 # Auto-fix lint issues and format code
 fix: lint-fix lint-format
 
-# Run the same checks as CI: lint, type check, test (no file mutation)
+# Run local CI checks with the current Python; include npm tests when Node.js is available
 isok: lint check test
+    @if command -v node >/dev/null 2>&1; then \
+        just test-npm; \
+    else \
+        echo "⏭️ Skipping npm wrapper tests (Node.js not found)"; \
+    fi
 
 # Run the agent-dump CLI
 run:
@@ -58,9 +69,7 @@ build-npm:
     @echo "✅ npm workspace is ready!"
 
 # Run npm wrapper unit tests and local packaging smoke checks
-test-npm-smoke:
-    @echo "🧪 Running npm wrapper tests..."
-    npm --prefix npm test
+test-npm-smoke: test-npm
     @echo "🧪 Running local npm smoke check..."
     npm --prefix npm run smoke
     @echo "✅ npm smoke checks complete!"

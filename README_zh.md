@@ -403,7 +403,7 @@ deny = [
 ## Development
 
 ```bash
-# 运行所有检查（lint、类型检查、测试）
+# 使用当前 Python 运行本地 CI 检查（Node.js 可用时包含 npm 测试）
 just isok
 
 # Lint code
