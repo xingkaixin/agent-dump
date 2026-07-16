@@ -45,6 +45,10 @@ dev = [
     "tomli>=2.0.0",
     "ty>=0.0.18",
 ]
+packaging = [
+    # Native release artifacts require a pinned builder for reproducibility.
+    "pyinstaller==6.21.0",
+]
 
 [build-system]
 requires = ["hatchling"]

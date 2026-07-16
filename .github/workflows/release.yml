@@ -116,7 +116,7 @@ jobs:
         env:
           PYINSTALLER_CONFIG_DIR: .pyinstaller
         run: >
-          uv run --with pyinstaller pyinstaller packaging/pyinstaller.spec
+          uv run --locked --group packaging pyinstaller packaging/pyinstaller.spec
           --clean
           --noconfirm
           --distpath dist/native/${{ matrix.target }}
