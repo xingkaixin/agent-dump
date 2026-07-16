@@ -70,6 +70,35 @@ class TestCollectDates:
         assert since == today
         assert until == today
 
+    def test_days_defaults_to_relative_window(self) -> None:
+        since, until = resolve_collect_date_range(None, None, days=7, today=date(2026, 3, 5))
+        assert since == date(2026, 2, 26)
+        assert until == date(2026, 3, 5)
+
+    @pytest.mark.parametrize(
+        ("since_value", "until_value", "expected_since", "expected_until"),
+        [
+            ("2026-03-01", "2026-03-03", date(2026, 3, 1), date(2026, 3, 3)),
+            ("2026-03-01", None, date(2026, 3, 1), date(2026, 3, 5)),
+            (None, "20260210", date(2026, 2, 1), date(2026, 2, 10)),
+        ],
+    )
+    def test_explicit_date_options_override_days(
+        self,
+        since_value: str | None,
+        until_value: str | None,
+        expected_since: date,
+        expected_until: date,
+    ) -> None:
+        since, until = resolve_collect_date_range(
+            since_value,
+            until_value,
+            days=30,
+            today=date(2026, 3, 5),
+        )
+        assert since == expected_since
+        assert until == expected_until
+
     def test_since_only_defaults_until_today(self):
         today = date(2026, 3, 5)
         since, until = resolve_collect_date_range("2026-03-01", None, today=today)

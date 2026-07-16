@@ -207,7 +207,11 @@ def handle_collect_mode(
         return 1
 
     try:
-        since_date, until_date = resolve_collect_date_range(args.since, args.until)
+        since_date, until_date = resolve_collect_date_range(
+            args.since,
+            args.until,
+            days=getattr(args, "days", None),
+        )
     except ValueError as exc:
         if str(exc) == "since_after_until":
             print(i18n.t(Keys.COLLECT_DATE_RANGE_INVALID))

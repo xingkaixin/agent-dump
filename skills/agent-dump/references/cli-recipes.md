@@ -55,6 +55,7 @@ uv run agent-dump codex://<session_id> --head
 
 ```bash
 uv run agent-dump --collect
+uv run agent-dump --collect -days 7
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
 uv run agent-dump --collect --collect-mode insight
@@ -146,7 +147,7 @@ uv run agent-dump --search "auth" --list -days 30
 | `--list` 模式 | N/A | 仅列出，不导出；`--format/--output` 会被忽略并警告 |
 | `--interactive` 模式 | `json` | 支持 `json/markdown/raw`，不接受 `print` |
 | `--stats` 模式 | N/A | 推荐独立使用；支持 `-days` 与 `-query` |
-| `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；支持 `--collect-mode pm/insight`、`--dry-run`、`--save`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
+| `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；支持 `-days`、`-since/-until`、`--collect-mode pm/insight`、`--dry-run`、`--save`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
 | `--search` 模式 | N/A | 作为列表搜索模式使用；可与 `--list`、`-days`、`-query` 组合 |
 | `--reindex` | N/A | 独立的索引维护命令，不应与其他模式标志组合 |
 
@@ -157,6 +158,7 @@ uv run agent-dump --search "auth" --list -days 30
 - `--head` 仅 URI 模式可用，用于查看轻量元数据，不能与 `--format` 或 `--summary` 组合。
 - `--summary` 仅 URI 模式可用，且需 `--format` 包含 `json`。
 - `--collect-mode` 默认 `pm`，`insight` 用于作者洞察视角。
+- `--collect` 日期优先级为显式 `-since/-until` > 显式 `-days` > 缺省当天。
 
 ## 4) 常见错误与处理
 
