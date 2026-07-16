@@ -4,6 +4,8 @@
 
 from unittest import mock
 
+import pytest
+
 from agent_dump.scanner import AgentScanner
 
 
@@ -103,6 +105,61 @@ class TestAgentScanner:
         assert len(available) == 2
         assert available[0] == scanner.agents[0]
         assert available[1] == scanner.agents[2]
+
+    @pytest.mark.parametrize(
+        ("failure_stage", "expected_error"),
+        [
+            ("availability", "PermissionError: permission denied"),
+            ("scan", "RuntimeError: database is corrupt"),
+        ],
+    )
+    def test_scan_isolates_provider_failures(
+        self,
+        failure_stage: str,
+        expected_error: str,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        scanner = AgentScanner()
+        broken_agent = scanner.agents[0]
+        healthy_agent = scanner.agents[1]
+        broken_agent.display_name = "Broken Provider"
+        healthy_agent.name = "healthy"
+        healthy_session = mock.MagicMock()
+
+        if failure_stage == "availability":
+            broken_agent.is_available = mock.MagicMock(side_effect=PermissionError("permission denied"))  # type: ignore
+        else:
+            broken_agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
+            broken_agent.scan = mock.MagicMock(side_effect=RuntimeError("database is corrupt"))  # type: ignore
+
+        healthy_agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
+        healthy_agent.scan = mock.MagicMock(return_value=[healthy_session])  # type: ignore
+        for agent in scanner.agents[2:]:
+            agent.is_available = mock.MagicMock(return_value=False)  # type: ignore
+
+        result = scanner.scan()
+
+        assert result == {"healthy": [healthy_session]}
+        warning = capsys.readouterr().err
+        assert warning.count("Broken Provider") == 1
+        assert expected_error in warning
+
+    def test_get_available_agents_isolates_provider_failures(self, capsys: pytest.CaptureFixture[str]) -> None:
+        scanner = AgentScanner()
+        broken_agent = scanner.agents[0]
+        healthy_agent = scanner.agents[1]
+        broken_agent.display_name = "Broken Provider"
+        broken_agent.is_available = mock.MagicMock(side_effect=OSError("unreadable directory"))  # type: ignore
+        healthy_agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
+        for agent in scanner.agents[2:]:
+            agent.is_available = mock.MagicMock(return_value=False)  # type: ignore
+
+        available = scanner.get_available_agents()
+
+        assert available == [healthy_agent]
+        warning = capsys.readouterr().err
+        assert warning.count("Broken Provider") == 1
+        assert "OSError: unreadable directory" in warning
 
     def test_get_agent_by_name_found(self):
         """测试通过名称获取存在的 agent"""
