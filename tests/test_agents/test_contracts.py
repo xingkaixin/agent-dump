@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+from agent_dump.agent_registry import AGENT_REGISTRATIONS
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.codex import CodexAgent
@@ -652,15 +653,21 @@ def _build_pi_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Provi
     )
 
 
-CONTRACT_BUILDERS: tuple[ProviderBuilder, ...] = (
-    _build_codex_contract,
-    _build_claude_contract,
-    _build_kimi_contract,
-    _build_opencode_contract,
-    _build_zcode_contract,
-    _build_cursor_contract,
-    _build_pi_contract,
-)
+CONTRACT_BUILDERS: dict[str, ProviderBuilder] = {
+    "opencode": _build_opencode_contract,
+    "zcode": _build_zcode_contract,
+    "codex": _build_codex_contract,
+    "kimi": _build_kimi_contract,
+    "claudecode": _build_claude_contract,
+    "cursor": _build_cursor_contract,
+    "pi": _build_pi_contract,
+}
+
+
+def test_contract_builders_cover_registered_providers() -> None:
+    registered_providers = {registration.name for registration in AGENT_REGISTRATIONS}
+
+    assert set(CONTRACT_BUILDERS) == registered_providers
 
 
 def _find_contract_session(fixture: ProviderContractFixture) -> Session:
@@ -671,14 +678,20 @@ def _find_contract_session(fixture: ProviderContractFixture) -> Session:
     return session
 
 
-@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS, ids=[builder.__name__ for builder in CONTRACT_BUILDERS])
+@pytest.mark.parametrize(
+    ("provider_name", "build_fixture"),
+    CONTRACT_BUILDERS.items(),
+    ids=CONTRACT_BUILDERS,
+)
 def test_provider_contract_scan_get_sessions_and_head(
+    provider_name: str,
     build_fixture: ProviderBuilder,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     fixture = build_fixture(monkeypatch, tmp_path)
 
+    assert fixture.agent.name == provider_name
     assert fixture.agent.is_available() is True
     assert fixture.session_id in {session.id for session in fixture.agent.scan()}
     session = _find_contract_session(fixture)
@@ -707,7 +720,7 @@ def test_provider_contract_scan_get_sessions_and_head(
     assert f"uri={fixture.uri}" in summary
 
 
-@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS, ids=[builder.__name__ for builder in CONTRACT_BUILDERS])
+@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
 def test_provider_contract_session_data_and_export_formats(
     build_fixture: ProviderBuilder,
     monkeypatch: pytest.MonkeyPatch,
@@ -748,7 +761,7 @@ def test_provider_contract_session_data_and_export_formats(
     assert fixture.texts[0] in markdown
 
 
-@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS, ids=[builder.__name__ for builder in CONTRACT_BUILDERS])
+@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
 def test_provider_contract_export_paths_contain_untrusted_session_ids(
     build_fixture: ProviderBuilder,
     monkeypatch: pytest.MonkeyPatch,
@@ -778,7 +791,7 @@ def test_provider_contract_export_paths_contain_untrusted_session_ids(
     assert not (tmp_path / "escaped.md").exists()
 
 
-@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS, ids=[builder.__name__ for builder in CONTRACT_BUILDERS])
+@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
 def test_provider_contract_missing_source_diagnostic(
     build_fixture: ProviderBuilder,
     monkeypatch: pytest.MonkeyPatch,
