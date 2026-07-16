@@ -5,6 +5,8 @@ import json
 import re
 from typing import Any
 
+from agent_dump.agents.message_assembly import build_message, build_text_part
+
 SKILL_NAME_PATTERN = re.compile(r"<name>\s*(.*?)\s*</name>", re.DOTALL)
 SUBAGENT_NOTIFICATION_PATTERN = re.compile(r"<subagent_notification>\s*(.*?)\s*</subagent_notification>", re.DOTALL)
 
@@ -14,24 +16,6 @@ class CodexMessageEnrichmentMixin(ABC):
 
     @abstractmethod
     def _try_parse_json_string(self, value: Any) -> Any | None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def _build_message(
-        self,
-        *,
-        message_id: str,
-        role: str,
-        time_created: int,
-        parts: list[dict[str, Any]],
-        agent: str | None = None,
-        mode: str | None = None,
-        extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def _build_text_part(self, text: str, timestamp_ms: int, part_type: str = "text") -> dict[str, Any]:
         raise NotImplementedError
 
     def _extract_subagent_prompt(self, arguments: Any) -> str:
@@ -89,11 +73,11 @@ class CodexMessageEnrichmentMixin(ABC):
         if nickname:
             extra["nickname"] = nickname
 
-        return self._build_message(
+        return build_message(
             message_id=message_id,
             role="assistant",
             time_created=timestamp_ms,
-            parts=[self._build_text_part(str(notification.get("text", "")), timestamp_ms)],
+            parts=[build_text_part(str(notification.get("text", "")), timestamp_ms)],
             extra=extra,
         )
 
@@ -219,7 +203,7 @@ class CodexMessageEnrichmentMixin(ABC):
         if skill_name is None:
             return None
 
-        return self._build_message(
+        return build_message(
             message_id=str(message.get("id", "")),
             role="assistant",
             time_created=int(message.get("time_created", 0)),

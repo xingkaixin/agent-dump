@@ -14,6 +14,13 @@ from typing import Any
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
+from agent_dump.agents.message_assembly import (
+    backfill_tool_state,
+    build_fallback_tool_message,
+    build_message,
+    build_text_part,
+    build_tool_part,
+)
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot
@@ -314,70 +321,24 @@ class ClaudeCodeAgent(FileSessionAgent):
         except Exception:
             return 0
 
-    def _build_message(
-        self,
-        *,
-        message_id: str,
-        role: str,
-        time_created: int,
-        parts: list[dict[str, Any]],
-        agent: str | None = None,
-        mode: str | None = None,
-        extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Build one unified message."""
-        message = {
-            "id": message_id,
-            "role": role,
-            "agent": agent,
-            "mode": mode,
-            "model": None,
-            "provider": None,
-            "time_created": time_created,
-            "time_completed": None,
-            "tokens": {},
-            "cost": 0,
-            "parts": parts,
-        }
-        if extra:
-            message.update(extra)
-        return message
-
-    def _build_text_part(self, text: str, timestamp_ms: int) -> dict[str, Any]:
-        """Build one text part."""
-        return {
-            "type": "text",
-            "text": text,
-            "time_created": timestamp_ms,
-        }
-
-    def _build_reasoning_part(self, text: str, timestamp_ms: int) -> dict[str, Any]:
-        """Build one reasoning part."""
-        return {
-            "type": "reasoning",
-            "text": text,
-            "time_created": timestamp_ms,
-        }
-
     def _build_tool_part(self, part: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
         """Build one tool part from Claude tool_use content."""
         tool_name = str(part.get("name", ""))
-        return {
-            "type": "tool",
-            "tool": tool_name,
-            "callID": str(part.get("id", "")),
-            "title": f"Tool: {tool_name}",
-            "state": {
+        return build_tool_part(
+            tool_name=tool_name,
+            call_id=str(part.get("id", "")),
+            title=f"Tool: {tool_name}",
+            state={
                 "input": part.get("input", {}),
                 "output": None,
             },
-            "time_created": timestamp_ms,
-        }
+            timestamp_ms=timestamp_ms,
+        )
 
     def _normalize_claude_tool_output(self, content: Any, timestamp_ms: int) -> list[dict[str, Any]]:
         """Normalize Claude tool output into text parts."""
         if isinstance(content, str):
-            return [self._build_text_part(content, timestamp_ms)] if content.strip() else []
+            return [build_text_part(content, timestamp_ms)] if content.strip() else []
 
         if isinstance(content, list):
             parts: list[dict[str, Any]] = []
@@ -385,21 +346,21 @@ class ClaudeCodeAgent(FileSessionAgent):
                 if isinstance(item, dict):
                     text = str(item.get("text", item.get("content", "")))
                     if text.strip():
-                        parts.append(self._build_text_part(text, timestamp_ms))
+                        parts.append(build_text_part(text, timestamp_ms))
                 elif isinstance(item, str) and item.strip():
-                    parts.append(self._build_text_part(item, timestamp_ms))
+                    parts.append(build_text_part(item, timestamp_ms))
             return parts
 
         if content is None:
             return []
 
         text = str(content)
-        return [self._build_text_part(text, timestamp_ms)] if text.strip() else []
+        return [build_text_part(text, timestamp_ms)] if text.strip() else []
 
     def _normalize_user_text_parts(self, content: Any, timestamp_ms: int) -> list[dict[str, Any]]:
         """Normalize user-visible text content into text parts."""
         if isinstance(content, str):
-            return [self._build_text_part(content, timestamp_ms)] if content.strip() else []
+            return [build_text_part(content, timestamp_ms)] if content.strip() else []
 
         if not isinstance(content, list):
             return []
@@ -412,9 +373,9 @@ class ClaudeCodeAgent(FileSessionAgent):
                     continue
                 text = str(item.get("text", ""))
                 if text.strip():
-                    parts.append(self._build_text_part(text, timestamp_ms))
+                    parts.append(build_text_part(text, timestamp_ms))
             elif isinstance(item, str) and item.strip():
-                parts.append(self._build_text_part(item, timestamp_ms))
+                parts.append(build_text_part(item, timestamp_ms))
         return parts
 
     def _message_has_part_type(self, message: dict[str, Any], part_type: str) -> bool:
@@ -457,7 +418,7 @@ class ClaudeCodeAgent(FileSessionAgent):
                 self._apply_assistant_metadata(message, msg)
                 return current_assistant_index
 
-        message = self._build_message(
+        message = build_message(
             message_id=message_id,
             role="assistant",
             agent="claude",
@@ -487,7 +448,7 @@ class ClaudeCodeAgent(FileSessionAgent):
                 self._apply_assistant_metadata(message, msg)
                 return current_assistant_index
 
-        message = self._build_message(
+        message = build_message(
             message_id=message_id,
             role="assistant",
             agent="claude",
@@ -515,7 +476,7 @@ class ClaudeCodeAgent(FileSessionAgent):
             self._apply_assistant_metadata(message, msg)
             return latest_assistant_text_index, len(message["parts"]) - 1
 
-        message = self._build_message(
+        message = build_message(
             message_id=message_id,
             role="assistant",
             agent="claude",
@@ -557,53 +518,21 @@ class ClaudeCodeAgent(FileSessionAgent):
         state_updates: dict[str, Any] | None = None,
     ) -> bool:
         """Backfill tool output and state updates into a matching tool part."""
-        if not call_id:
+        tool_part = backfill_tool_state(
+            messages,
+            pending_tool_calls,
+            call_id=call_id,
+            output_parts=output_parts,
+            state_updates=state_updates,
+        )
+        if tool_part is None:
             return False
 
-        location = pending_tool_calls.get(call_id)
-        if location is None:
-            return False
-
-        message_index, part_index = location
-        state = messages[message_index]["parts"][part_index].setdefault("state", {})
-
-        if output_parts:
-            existing_output = state.get("output")
-            if isinstance(existing_output, list):
-                existing_output.extend(output_parts)
-            elif existing_output is None:
-                state["output"] = list(output_parts)
-            else:
-                state["output"] = [existing_output, *output_parts]
-
-        if state_updates:
-            state.update(state_updates)
-
+        state = tool_part["state"]
         if output_parts and "status" not in state:
             state["status"] = "completed"
 
         return bool(output_parts or state_updates)
-
-    def _build_fallback_tool_message(
-        self,
-        *,
-        message_id: str,
-        timestamp_ms: int,
-        tool_call_id: str | None,
-        output_parts: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
-        """Build fallback tool message for unmatched tool output."""
-        if not output_parts:
-            return None
-
-        extra = {"tool_call_id": tool_call_id} if tool_call_id else None
-        return self._build_message(
-            message_id=message_id,
-            role="tool",
-            time_created=timestamp_ms,
-            parts=output_parts,
-            extra=extra,
-        )
 
     def _resolve_tool_call_id(
         self,
@@ -657,7 +586,7 @@ class ClaudeCodeAgent(FileSessionAgent):
                             message_id=message_id,
                             msg=msg,
                             timestamp_ms=timestamp_ms,
-                            part=self._build_reasoning_part(text, timestamp_ms),
+                            part=build_text_part(text, timestamp_ms, part_type="reasoning"),
                             current_assistant_index=current_assistant_index,
                         )
                     continue
@@ -670,7 +599,7 @@ class ClaudeCodeAgent(FileSessionAgent):
                             message_id=message_id,
                             msg=msg,
                             timestamp_ms=timestamp_ms,
-                            part=self._build_text_part(text, timestamp_ms),
+                            part=build_text_part(text, timestamp_ms),
                             current_assistant_index=current_assistant_index,
                         )
                         latest_assistant_text_index = current_assistant_index
@@ -724,7 +653,7 @@ class ClaudeCodeAgent(FileSessionAgent):
             if not parts:
                 return
             messages.append(
-                self._build_message(
+                build_message(
                     message_id=str(data.get("uuid", "")),
                     role="user",
                     time_created=timestamp_ms,
@@ -761,18 +690,18 @@ class ClaudeCodeAgent(FileSessionAgent):
             ):
                 continue
 
-            fallback_message = self._build_fallback_tool_message(
+            fallback_message = build_fallback_tool_message(
                 message_id=str(data.get("uuid", "")),
-                timestamp_ms=timestamp_ms,
-                tool_call_id=tool_call_id or None,
                 output_parts=output_parts,
+                time_created=timestamp_ms,
+                tool_call_id=tool_call_id or None,
             )
             if fallback_message:
                 messages.append(fallback_message)
 
         if visible_parts:
             messages.append(
-                self._build_message(
+                build_message(
                     message_id=str(data.get("uuid", "")),
                     role="user",
                     time_created=timestamp_ms,
@@ -838,11 +767,10 @@ class ClaudeCodeAgent(FileSessionAgent):
         timestamp_ms = self._parse_timestamp_ms(data)
         msg = data.get("message", {})
         output_parts = self._normalize_claude_tool_output(msg.get("content"), timestamp_ms)
-        fallback_message = self._build_fallback_tool_message(
+        fallback_message = build_fallback_tool_message(
             message_id=str(data.get("uuid", "")),
-            timestamp_ms=timestamp_ms,
-            tool_call_id=None,
             output_parts=output_parts,
+            time_created=timestamp_ms,
         )
         if fallback_message:
             messages.append(fallback_message)
