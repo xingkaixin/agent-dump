@@ -5,6 +5,7 @@ All SQL f-strings in this file use FTS5 virtual table names that are
 hardcoded internal constants (_FTS_TABLES), never user input.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import json
 import os
@@ -238,6 +239,7 @@ _FTS_TABLES = ("sessions_fts", "sessions_fts_trigram")
 
 # 待索引会话数达到该阈值时向 stderr 提示进度（关键词过滤会隐式建索引，首次运行可能较慢）
 _INDEX_PROGRESS_THRESHOLD = 10
+_MAX_INDEX_PARSE_WORKERS = 32
 
 
 def _delete_fts_by_session(conn: sqlite3.Connection, fts_table: str, session_id: str, agent_name: str) -> None:
@@ -399,10 +401,18 @@ class SearchIndex:
                     file=sys.stderr,
                 )
 
-            # Update changed/new entries
-            for session, signal in to_update:
-                text = _extract_session_searchable_text(agent, session)
+            def _extract_text(item: tuple[Session, float]) -> str:
+                session, _ = item
+                return _extract_session_searchable_text(agent, session)
 
+            searchable_texts: list[str] = []
+            if to_update:
+                max_workers = min(_MAX_INDEX_PARSE_WORKERS, len(to_update))
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    searchable_texts = list(executor.map(_extract_text, to_update))
+
+            # Update changed/new entries
+            for (session, signal), text in zip(to_update, searchable_texts, strict=True):
                 # Delete old FTS entries for this session if updating
                 for fts_table in _FTS_TABLES:
                     _delete_fts_by_session(conn, fts_table, session.id, agent.name)

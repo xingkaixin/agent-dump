@@ -5,12 +5,14 @@ from email.message import Message
 import io
 import json
 from pathlib import Path
+import threading
 from unittest import mock
 from urllib import error as urllib_error
 
 import pytest
 
 from agent_dump import collect_llm
+from agent_dump.agents.base import Session
 from agent_dump.collect import (
     CollectAggregate,
     CollectEntry,
@@ -345,6 +347,61 @@ class TestCollectEntries:
         assert [event.stage for event in progress] == ["scan_sessions", "scan_sessions"]
         assert progress[-1].current == 1
         assert progress[-1].total == 1
+
+    def test_collect_entries_parses_concurrently_and_preserves_order(self) -> None:
+        now = datetime.now(timezone.utc)
+        newer = Session(
+            id="newer",
+            title="newer",
+            created_at=now - timedelta(hours=1),
+            updated_at=now - timedelta(hours=1),
+            source_path=Path("/tmp/newer.jsonl"),
+            metadata={"cwd": "/repo/newer"},
+        )
+        older = Session(
+            id="older",
+            title="older",
+            created_at=now - timedelta(hours=2),
+            updated_at=now - timedelta(hours=2),
+            source_path=Path("/tmp/older.jsonl"),
+            metadata={"cwd": "/repo/older"},
+        )
+        release_reads = threading.Event()
+        read_lock = threading.Lock()
+        started_sessions: set[str] = set()
+        worker_threads: set[int] = set()
+
+        def get_session_data(session: Session) -> dict[str, object]:
+            with read_lock:
+                started_sessions.add(session.id)
+                worker_threads.add(threading.get_ident())
+                if len(started_sessions) == 2:
+                    release_reads.set()
+            if not release_reads.wait(timeout=5):
+                raise AssertionError("session reads did not overlap")
+            return {"messages": [{"role": "user", "content": f"work on {session.id}"}]}
+
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [newer, older]
+        agent.get_session_data.side_effect = get_session_data
+        agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+        progress: list[CollectProgressEvent] = []
+
+        entries, truncated = collect_entries(
+            agents=[agent],
+            since_date=(now - timedelta(days=1)).date(),
+            until_date=now.date(),
+            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
+            local_tz=timezone.utc,
+            progress_callback=progress.append,
+        )
+
+        assert truncated is False
+        assert len(worker_threads) == 2
+        assert [entry.session_id for entry in entries] == ["older", "newer"]
+        assert [event.session_uri for event in progress[1:]] == ["codex://newer", "codex://older"]
 
     def test_collect_entries_ignores_denied_agent_projects(self):
         now = datetime.now(timezone.utc)
