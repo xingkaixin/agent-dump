@@ -245,3 +245,23 @@ class TestBaseAgent:
         assert result["model"] == "gpt-5"
         assert result["message_count"] is None
         assert result["subtargets"] == []
+
+    def test_export_raw_session_keeps_untrusted_id_inside_output_dir(self, tmp_path):
+        agent = ConcreteAgent()
+        source_path = tmp_path / "source.jsonl"
+        source_path.write_text("{}\n", encoding="utf-8")
+        output_dir = tmp_path / "exports"
+        session = Session(
+            id=str(tmp_path / "escaped"),
+            title="Unsafe id",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=source_path,
+            metadata={},
+        )
+
+        result = agent.export_raw_session(session, output_dir)
+
+        assert result == output_dir / "escaped.raw.jsonl"
+        assert result.read_text(encoding="utf-8") == "{}\n"
+        assert not (tmp_path / "escaped.raw.jsonl").exists()

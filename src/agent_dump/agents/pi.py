@@ -243,7 +243,7 @@ class PiAgent(FileSessionAgent):
         """Export a single session to unified JSON format."""
         session_data = self.get_session_data(session)
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / f"{session.id}.json"
+        output_path = self._build_output_path(session, output_dir, ".json")
         output_path.write_text(json.dumps(session_data, ensure_ascii=False, indent=2), encoding="utf-8")
         return output_path
 

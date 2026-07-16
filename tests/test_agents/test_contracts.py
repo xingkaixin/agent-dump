@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -746,6 +746,36 @@ def test_provider_contract_session_data_and_export_formats(
     assert markdown_path.name == f"{fixture.session_id}.md"
     assert f"- URI: `{fixture.uri}`" in markdown
     assert fixture.texts[0] in markdown
+
+
+@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS, ids=[builder.__name__ for builder in CONTRACT_BUILDERS])
+def test_provider_contract_export_paths_contain_untrusted_session_ids(
+    build_fixture: ProviderBuilder,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fixture = build_fixture(monkeypatch, tmp_path)
+    session = _find_contract_session(fixture)
+    session_data = fixture.agent.get_session_data(session)
+    unsafe_session = replace(session, id=str(tmp_path / "escaped"))
+    monkeypatch.setattr(fixture.agent, "get_session_data", lambda _session: session_data)
+
+    json_dir = tmp_path / "safe" / "json"
+    json_path = fixture.agent.export_session(unsafe_session, json_dir)
+    assert json_path == json_dir / "escaped.json"
+
+    markdown_dir = tmp_path / "safe" / "markdown"
+    markdown_path = export_session_in_format(
+        fixture.agent,
+        unsafe_session,
+        markdown_dir,
+        "markdown",
+        session_data=session_data,
+        session_uri=fixture.uri,
+    )
+    assert markdown_path == markdown_dir / "escaped.md"
+    assert not (tmp_path / "escaped.json").exists()
+    assert not (tmp_path / "escaped.md").exists()
 
 
 @pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS, ids=[builder.__name__ for builder in CONTRACT_BUILDERS])

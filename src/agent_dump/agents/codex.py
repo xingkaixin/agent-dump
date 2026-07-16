@@ -363,7 +363,7 @@ class CodexAgent(FileSessionAgent):
             session_data["messages"] = self._prepare_json_export_messages(messages)
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / f"{session.id}.json"
+        output_path = self._build_output_path(session, output_dir, ".json")
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(session_data, f, ensure_ascii=False, indent=2)
 
