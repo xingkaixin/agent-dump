@@ -108,7 +108,7 @@ def _serialize_for_search(value: Any) -> str:
         return str(value)
 
 
-def _extract_session_searchable_text(agent: BaseAgent, session: Session) -> str:
+def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str:
     """Extract all searchable text from a session."""
     try:
         session_data = agent.get_cached_session_data(session)
@@ -376,7 +376,7 @@ class SearchIndex:
 
             def _extract_text(item: tuple[Session, float]) -> str:
                 session, _ = item
-                return _extract_session_searchable_text(agent, session)
+                return extract_session_searchable_text(agent, session)
 
             searchable_texts: list[str] = []
             if to_update:

@@ -10,11 +10,11 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.search_index import (
     SearchIndex,
     _build_fts_query,
-    _extract_session_searchable_text,
     _has_cjk,
     _has_fts5,
     _select_fts_table,
     _serialize_for_search,
+    extract_session_searchable_text,
 )
 from agent_dump.session_data import (
     extract_related_source_paths as _extract_related_source_paths,
@@ -162,7 +162,7 @@ class TestExtractSessionSearchableText:
             }
         )
         session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
-        text = _extract_session_searchable_text(agent, session)
+        text = extract_session_searchable_text(agent, session)
         assert "Hello world" in text
         assert "Hi there" in text
 
@@ -177,7 +177,7 @@ class TestExtractSessionSearchableText:
             }
         )
         session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
-        text = _extract_session_searchable_text(agent, session)
+        text = extract_session_searchable_text(agent, session)
         assert "Let me think" in text
 
     def test_extracts_tool_state(self):
@@ -204,7 +204,7 @@ class TestExtractSessionSearchableText:
             }
         )
         session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
-        text = _extract_session_searchable_text(agent, session)
+        text = extract_session_searchable_text(agent, session)
         assert "ls -la" in text
         assert "file1.txt" in text
         assert "run bash" in text
@@ -214,7 +214,7 @@ class TestExtractSessionSearchableText:
         source.write_text('{"message": {"role": "user", "content": "fallback text"}}')
         agent = DummyAgent(session_data={})
         session = make_session("s1", "Test", source)
-        text = _extract_session_searchable_text(agent, session)
+        text = extract_session_searchable_text(agent, session)
         assert "fallback text" in text
 
 
@@ -277,7 +277,7 @@ class TestSearchIndex:
                 raise AssertionError("search index reads did not overlap")
             return f"keyword {session.id}"
 
-        with mock.patch("agent_dump.search_index._extract_session_searchable_text", side_effect=extract_text):
+        with mock.patch("agent_dump.search_index.extract_session_searchable_text", side_effect=extract_text):
             added, removed = index.update(agent, sessions)
 
         assert (added, removed) == (2, 0)

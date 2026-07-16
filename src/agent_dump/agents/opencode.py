@@ -10,7 +10,7 @@ import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.diagnostics import source_missing
+from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 
 
@@ -42,18 +42,21 @@ class OpenCodeAgent(BaseAgent):
         self.db_path = self._find_db_path()
         return self.db_path is not None
 
+    def _missing_database_error(self, db_path: Path | None) -> DiagnosticError:
+        return source_missing(
+            "OpenCode database is missing",
+            missing_path=db_path or "opencode.db",
+            searched_roots=[root.render() for root in self.get_search_roots()],
+            next_steps=(
+                "确认 OpenCode 已在本机生成会话数据库。",
+                "若在测试或开发环境，检查 `data/opencode/opencode.db` 是否存在。",
+            ),
+        )
+
     def _connect_db(self) -> sqlite3.Connection:
         db_path = self.db_path
         if not db_path or not db_path.exists():
-            raise source_missing(
-                "OpenCode database is missing",
-                missing_path=db_path or "opencode.db",
-                searched_roots=[root.render() for root in self.get_search_roots()],
-                next_steps=(
-                    "确认 OpenCode 已在本机生成会话数据库。",
-                    "若在测试或开发环境，检查 `data/opencode/opencode.db` 是否存在。",
-                ),
-            )
+            raise self._missing_database_error(db_path)
 
         conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row

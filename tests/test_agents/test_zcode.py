@@ -5,7 +5,10 @@ import json
 from pathlib import Path
 import sqlite3
 
+import pytest
+
 from agent_dump.agents.zcode import ZCodeAgent
+from agent_dump.diagnostics import DiagnosticError
 
 
 def _now_ms() -> int:
@@ -170,6 +173,22 @@ def test_linux_has_no_default_zcode_root(monkeypatch, tmp_path) -> None:
 
     assert agent.get_search_roots() == ()
     assert agent._find_db_path() is None
+
+
+def test_missing_database_uses_zcode_diagnostic(monkeypatch, tmp_path) -> None:
+    agent = ZCodeAgent()
+    monkeypatch.setattr("agent_dump.agents.zcode.sys.platform", "darwin")
+    monkeypatch.setattr("agent_dump.agents.zcode.Path.home", lambda: tmp_path)
+
+    with pytest.raises(DiagnosticError) as exc_info:
+        agent._connect_db()
+
+    error = exc_info.value
+    assert isinstance(error, FileNotFoundError)
+    assert error.summary == "ZCode database is missing"
+    assert error.details == ("missing path: ~/.zcode/cli/db/db.sqlite",)
+    assert error.searched_roots == (f"macOS ~/.zcode db.sqlite: {tmp_path / '.zcode/cli/db/db.sqlite'}",)
+    assert "Linux 暂无 ZCode 默认会话路径。" in error.next_steps
 
 
 def test_get_sessions_and_export_from_zcode_db(tmp_path) -> None:
