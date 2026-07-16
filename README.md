@@ -411,11 +411,24 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 │       ├── session_workflow.py # list / interactive / query workflow
 │       ├── uri_workflow.py     # URI workflow
 │       ├── collect_workflow.py # collect workflow
+│       ├── maintenance_workflow.py # providers / stats / reindex workflows
+│       ├── collect.py          # Collect core logic
+│       ├── collect_llm.py      # Collect LLM requests
+│       ├── collect_models.py   # Collect output models
+│       ├── config.py           # TOML configuration
+│       ├── diagnostics.py      # Structured diagnostics
+│       ├── export_paths.py     # Safe export path construction
+│       ├── i18n.py             # English and Chinese messages
+│       ├── message_filter.py   # Shared message filtering
+│       ├── paths.py            # Search root models
 │       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch
 │       ├── query_filter.py     # Query parsing and filtering
 │       ├── search_index.py     # FTS5 search index
 │       ├── scanner.py          # Agent scanner
 │       ├── selector.py         # Interactive selection
+│       ├── session_data.py     # Request-scoped session data cache
+│       ├── time_utils.py       # Time and timezone helpers
+│       ├── uri_support.py      # URI parsing and session lookup
 │       └── agents/             # Provider modules directory
 │           ├── __init__.py     # Provider exports
 │           ├── base.py         # BaseAgent and Session
@@ -423,9 +436,15 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 │           ├── zcode.py        # ZCode Agent
 │           ├── claudecode.py   # Claude Code Agent
 │           ├── codex.py        # Codex Agent
+│           ├── codex_enrichment.py # Codex subagent and skill enrichment
+│           ├── codex_patch.py  # Codex apply_patch parser
 │           ├── cursor.py       # Cursor Agent
 │           ├── kimi.py         # Kimi Agent
-│           └── pi.py           # Pi Agent
+│           ├── pi.py           # Pi Agent
+│           ├── file_sessions.py # Shared file-backed provider base
+│           ├── jsonl_scan.py   # JSONL scan helpers
+│           ├── message_assembly.py # Normalized message builders
+│           └── title_fallback.py # Shared title fallback rules
 ├── tests/                      # Test directory
 ├── skills/agent-dump/          # Codex skill docs
 ├── npm/                        # npm wrapper and platform packages

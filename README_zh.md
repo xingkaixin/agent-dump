@@ -379,11 +379,24 @@ deny = [
 │       ├── session_workflow.py # list / interactive / query 工作流
 │       ├── uri_workflow.py     # URI 工作流
 │       ├── collect_workflow.py # collect 工作流
+│       ├── maintenance_workflow.py # providers / stats / reindex 工作流
+│       ├── collect.py          # collect 核心逻辑
+│       ├── collect_llm.py      # collect LLM 请求
+│       ├── collect_models.py   # collect 输出模型
+│       ├── config.py           # TOML 配置
+│       ├── diagnostics.py      # 结构化诊断
+│       ├── export_paths.py     # 安全导出路径构造
+│       ├── i18n.py             # 中英文文案
+│       ├── message_filter.py   # 共享消息过滤
+│       ├── paths.py            # 搜索根路径模型
 │       ├── rendering.py        # print/head/markdown/json/raw 渲染调度
 │       ├── query_filter.py     # 查询解析与过滤
 │       ├── search_index.py     # FTS5 搜索索引
 │       ├── scanner.py          # Agent 扫描器
 │       ├── selector.py         # 交互式选择
+│       ├── session_data.py     # 请求级会话数据缓存
+│       ├── time_utils.py       # 时间与时区工具
+│       ├── uri_support.py      # URI 解析与会话查找
 │       └── agents/             # Provider 模块目录
 │           ├── __init__.py     # Provider 导出
 │           ├── base.py         # BaseAgent 与 Session
@@ -391,9 +404,15 @@ deny = [
 │           ├── zcode.py        # ZCode Agent
 │           ├── claudecode.py   # Claude Code Agent
 │           ├── codex.py        # Codex Agent
+│           ├── codex_enrichment.py # Codex subagent 与 skill 增强
+│           ├── codex_patch.py  # Codex apply_patch 解析
 │           ├── cursor.py       # Cursor Agent
 │           ├── kimi.py         # Kimi Agent
-│           └── pi.py           # Pi Agent
+│           ├── pi.py           # Pi Agent
+│           ├── file_sessions.py # file-backed provider 共享基类
+│           ├── jsonl_scan.py   # JSONL 扫描辅助
+│           ├── message_assembly.py # 标准化消息构建器
+│           └── title_fallback.py # 共享标题回退规则
 ├── tests/                      # 测试目录
 ├── skills/agent-dump/          # Codex skill 文档
 ├── npm/                        # npm wrapper 与平台包
