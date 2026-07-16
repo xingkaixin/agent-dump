@@ -59,7 +59,7 @@ run:
 # Build a native binary for the current platform
 build-native:
     @echo "📦 Building native binary..."
-    PYINSTALLER_CONFIG_DIR=.pyinstaller UV_CACHE_DIR=.uv-cache uv run --with pyinstaller pyinstaller packaging/pyinstaller.spec --clean --noconfirm
+    PYINSTALLER_CONFIG_DIR=.pyinstaller UV_CACHE_DIR=.uv-cache uv run --locked --group packaging pyinstaller packaging/pyinstaller.spec --clean --noconfirm
     @echo "✅ Native binary build complete!"
 
 # Sync npm package versions from Python version metadata
