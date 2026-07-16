@@ -569,6 +569,37 @@ class TestKimiAgent:
         ]
         assert message["parts"][3]["state"]["output"] == [{"type": "text", "text": "workspace path", "time_created": 0}]
 
+    def test_context_repeated_tool_outputs_are_preserved_in_order(self, tmp_path):
+        """测试 Kimi 重复 tool output 按到达顺序累积。"""
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {
+                    "role": "assistant",
+                    "content": [],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "call-001",
+                            "function": {"name": "read_file", "arguments": "{}"},
+                        }
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "call-001", "content": "first"},
+                {"role": "tool", "tool_call_id": "call-001", "content": "second"},
+            ],
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert result["messages"][0]["parts"][0]["state"]["output"] == [
+            {"type": "text", "text": "first", "time_created": 0},
+            {"type": "text", "text": "second", "time_created": 0},
+        ]
+
     def test_context_tool_record_with_missing_call_id_becomes_fallback_tool_message(self, tmp_path):
         """测试缺少 tool_call_id 时退化为 fallback tool 消息"""
         agent = KimiAgent()

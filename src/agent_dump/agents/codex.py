@@ -17,6 +17,13 @@ from agent_dump.agents.codex_enrichment import CodexMessageEnrichmentMixin
 from agent_dump.agents.codex_patch import parse_apply_patch_input
 from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
+from agent_dump.agents.message_assembly import (
+    backfill_tool_state,
+    build_fallback_tool_message,
+    build_message,
+    build_text_part,
+    build_tool_part,
+)
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
@@ -446,43 +453,6 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         except json.JSONDecodeError:
             return None
 
-    def _build_message(
-        self,
-        *,
-        message_id: str,
-        role: str,
-        time_created: int,
-        parts: list[dict[str, Any]],
-        agent: str | None = None,
-        mode: str | None = None,
-        extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Build one unified message."""
-        message = {
-            "id": message_id,
-            "role": role,
-            "agent": agent,
-            "mode": mode,
-            "model": None,
-            "provider": None,
-            "time_created": time_created,
-            "time_completed": None,
-            "tokens": {},
-            "cost": 0,
-            "parts": parts,
-        }
-        if extra:
-            message.update(extra)
-        return message
-
-    def _build_text_part(self, text: str, timestamp_ms: int, part_type: str = "text") -> dict[str, Any]:
-        """Build one text-like part."""
-        return {
-            "type": part_type,
-            "text": text,
-            "time_created": timestamp_ms,
-        }
-
     def _build_plan_part(self, plan_text: str, timestamp_ms: int) -> dict[str, Any]:
         """Build one plan part."""
         return {
@@ -502,14 +472,13 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         timestamp_ms: int,
     ) -> dict[str, Any]:
         """Build one unified tool part."""
-        return {
-            "type": "tool",
-            "tool": tool_name,
-            "callID": call_id,
-            "title": self._map_tool_title(tool_name),
-            "state": {"arguments": arguments},
-            "time_created": timestamp_ms,
-        }
+        return build_tool_part(
+            tool_name=tool_name,
+            call_id=call_id,
+            title=self._map_tool_title(tool_name),
+            state={"arguments": arguments},
+            timestamp_ms=timestamp_ms,
+        )
 
     def _build_function_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
         """Build one tool part from a function_call payload."""
@@ -546,10 +515,10 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         if output is None:
             return []
         if isinstance(output, str):
-            return [self._build_text_part(output, timestamp_ms)]
+            return [build_text_part(output, timestamp_ms)]
         if isinstance(output, (dict, list)):
-            return [self._build_text_part(json.dumps(output, ensure_ascii=False, indent=2), timestamp_ms)]
-        return [self._build_text_part(str(output), timestamp_ms)]
+            return [build_text_part(json.dumps(output, ensure_ascii=False, indent=2), timestamp_ms)]
+        return [build_text_part(str(output), timestamp_ms)]
 
     def _normalize_custom_tool_output(self, output: Any, timestamp_ms: int) -> list[dict[str, Any]]:
         """Normalize custom tool output and prefer the user-facing output field."""
@@ -588,7 +557,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                 if plan_text is not None:
                     parts.append(self._build_plan_part(plan_text, timestamp_ms))
                     continue
-            parts.append(self._build_text_part(text, timestamp_ms))
+            parts.append(build_text_part(text, timestamp_ms))
 
         return parts
 
@@ -604,7 +573,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                 continue
             if item.get("type") != "summary_text":
                 continue
-            parts.append(self._build_text_part(str(item.get("text", "")), timestamp_ms, part_type="reasoning"))
+            parts.append(build_text_part(str(item.get("text", "")), timestamp_ms, part_type="reasoning"))
         return parts
 
     def _append_assistant_text_message(
@@ -628,7 +597,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             return len(messages) - 1
 
         messages.append(
-            self._build_message(
+            build_message(
                 message_id=message_id,
                 role="assistant",
                 agent="codex",
@@ -672,7 +641,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                 return current_assistant_index
 
         messages.append(
-            self._build_message(
+            build_message(
                 message_id=message_id,
                 role="assistant",
                 agent="codex",
@@ -771,7 +740,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             return latest_assistant_text_index, len(messages[latest_assistant_text_index]["parts"]) - 1
 
         messages.append(
-            self._build_message(
+            build_message(
                 message_id=str(timestamp_ms),
                 role="assistant",
                 time_created=timestamp_ms,
@@ -825,23 +794,15 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         subagent_nicknames: dict[str, str],
     ) -> bool:
         """Backfill tool output to its matching tool part."""
-        if not call_id or not output_parts:
+        tool_part = backfill_tool_state(
+            messages,
+            pending_tool_calls,
+            call_id=call_id,
+            output_parts=output_parts,
+        )
+        if tool_part is None:
             return False
 
-        location = pending_tool_calls.get(call_id)
-        if location is None:
-            return False
-
-        message_index, part_index = location
-        tool_part = messages[message_index]["parts"][part_index]
-        state = tool_part.setdefault("state", {})
-        existing_output = state.get("output")
-        if isinstance(existing_output, list):
-            existing_output.extend(output_parts)
-        elif existing_output is None:
-            state["output"] = list(output_parts)
-        else:
-            state["output"] = [existing_output, *output_parts]
         self._record_subagent_output(
             tool_part=tool_part,
             output_parts=output_parts,
@@ -851,27 +812,6 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             subagent_nicknames=subagent_nicknames,
         )
         return True
-
-    def _build_fallback_tool_message(
-        self,
-        *,
-        message_id: str,
-        timestamp_ms: int,
-        call_id: str,
-        output_parts: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
-        """Build a fallback tool message when output cannot be associated."""
-        if not output_parts:
-            return None
-
-        extra = {"tool_call_id": call_id} if call_id else None
-        return self._build_message(
-            message_id=message_id,
-            role="tool",
-            time_created=timestamp_ms,
-            parts=output_parts,
-            extra=extra,
-        )
 
     def _convert_record_to_messages(
         self,
@@ -946,7 +886,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                     return None, None, pending_plan_location
 
                 messages.append(
-                    self._build_message(
+                    build_message(
                         message_id=message_id,
                         role=role,
                         time_created=timestamp_ms,
@@ -1011,11 +951,11 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                 ):
                     return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
-                fallback = self._build_fallback_tool_message(
+                fallback = build_fallback_tool_message(
                     message_id=message_id,
-                    timestamp_ms=timestamp_ms,
-                    call_id=call_id,
                     output_parts=output_parts,
+                    time_created=timestamp_ms,
+                    tool_call_id=call_id,
                 )
                 if fallback:
                     messages.append(fallback)
@@ -1035,11 +975,11 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                 ):
                     return current_assistant_index, latest_assistant_text_index, pending_plan_location
 
-                fallback = self._build_fallback_tool_message(
+                fallback = build_fallback_tool_message(
                     message_id=message_id,
-                    timestamp_ms=timestamp_ms,
-                    call_id=call_id,
                     output_parts=output_parts,
+                    time_created=timestamp_ms,
+                    tool_call_id=call_id,
                 )
                 if fallback:
                     messages.append(fallback)
