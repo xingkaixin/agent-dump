@@ -70,3 +70,6 @@ skills-lock.json
 
 # worktree
 .worktree
+
+# Issue tracker generated files
+.issues
