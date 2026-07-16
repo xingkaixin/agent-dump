@@ -12,6 +12,7 @@ from typing import Any, cast
 from agent_dump.diagnostics import source_missing, unsupported_capability
 from agent_dump.export_paths import build_session_output_path
 from agent_dump.paths import SearchRoot
+from agent_dump.session_data import SessionDataCache
 from agent_dump.time_utils import to_local_datetime
 
 
@@ -36,6 +37,7 @@ class BaseAgent(ABC):
     def __init__(self, name: str, display_name: str):
         self.name = name
         self.display_name = display_name
+        self._session_data_cache = SessionDataCache()
 
     @abstractmethod
     def scan(self) -> list[Session]:
@@ -186,3 +188,7 @@ class BaseAgent(ABC):
         Returns dict with keys: id, title, messages, etc.
         """
         pass
+
+    def get_cached_session_data(self, session: Session) -> dict[str, Any]:
+        """Get session data once per change signal for this agent instance."""
+        return self._session_data_cache.get(self, session)

@@ -18,7 +18,7 @@ from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts
-from agent_dump.time_utils import normalize_datetime_utc
+from agent_dump.session_data import session_updated_signal as _session_updated_signal
 
 
 @dataclass(frozen=True)
@@ -98,33 +98,6 @@ def _has_fts5(conn: sqlite3.Connection) -> bool:
         return False
 
 
-def _session_updated_signal(session: Session) -> float:
-    """Per-session change signal: updated_at plus mtimes of related source files.
-
-    Source-file mtime is deliberately not used: SQLite providers share one
-    database file across all sessions, so its mtime cannot identify which
-    session changed.
-    """
-    signals = [normalize_datetime_utc(session.updated_at).timestamp()]
-    signals.extend(_path_mtime(path) for path in _extract_related_source_paths(session))
-    return max(signals)
-
-
-def _path_mtime(path: Path) -> float:
-    if not path.exists():
-        return 0.0
-    return path.stat().st_mtime
-
-
-def _extract_related_source_paths(session: Session) -> tuple[Path, ...]:
-    related_paths: list[Path] = []
-    for key in ("context_file", "wire_file"):
-        raw_path = session.metadata.get(key)
-        if isinstance(raw_path, str) and raw_path.strip():
-            related_paths.append(Path(raw_path))
-    return tuple(dict.fromkeys(related_paths))
-
-
 def _serialize_for_search(value: Any) -> str:
     """Serialize a value to searchable text."""
     if isinstance(value, str):
@@ -138,7 +111,7 @@ def _serialize_for_search(value: Any) -> str:
 def _extract_session_searchable_text(agent: BaseAgent, session: Session) -> str:
     """Extract all searchable text from a session."""
     try:
-        session_data = agent.get_session_data(session)
+        session_data = agent.get_cached_session_data(session)
     except Exception:
         return _fallback_extract_from_source(session.source_path)
 

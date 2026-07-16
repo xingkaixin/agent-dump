@@ -432,7 +432,7 @@ def _file_contains(file_path: Path, keyword: str) -> bool:
 
 def _match_session_data(agent: BaseAgent, session: Session, keyword: str) -> bool:
     try:
-        session_data = agent.get_session_data(session)
+        session_data = agent.get_cached_session_data(session)
     except Exception:
         return False
 
@@ -463,7 +463,7 @@ def _match_session_roles(
     keyword: str | None,
 ) -> bool:
     try:
-        session_data = agent.get_session_data(session)
+        session_data = agent.get_cached_session_data(session)
     except Exception:
         return False
 

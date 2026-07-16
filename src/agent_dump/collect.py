@@ -519,7 +519,7 @@ def collect_entries(
 
     def _collect_entry(matched_session: tuple[BaseAgent, Session, date]) -> CollectEntry:
         agent, session, session_date = matched_session
-        session_data = agent.get_session_data(session)
+        session_data = agent.get_cached_session_data(session)
         uri = agent.get_session_uri(session)
         fallback_text = render_session_text_fn(uri, session_data)
         events, truncated = extract_collect_events(session_data, fallback_text=fallback_text)
