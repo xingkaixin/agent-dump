@@ -2,6 +2,40 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.12.0] - 2026-07-18
+
+### Added
+
+- **Provider capability discovery**
+  - Added `--providers` and its `--capabilities` alias to show registered URI schemes, supported export formats, keyword fast paths, and local search-root status without scanning sessions
+- **Relative collect windows**
+  - Added explicit `-days N` support to collect mode, with date precedence of `-since/-until`, then explicit `-days`, then the existing today-only default
+
+### Fixed
+
+- **Export and credential security**
+  - Normalize untrusted session IDs to one filename component and reject JSON, raw, or Markdown export paths that escape the selected output directory
+  - Keep API credentials only on same-origin redirects and warn when collect requests use a non-HTTPS base URL
+  - Create and overwrite credential-bearing configuration files with owner-only permissions throughout the write operation
+- **Provider resilience and message fidelity**
+  - Isolate provider scan failures so one broken source no longer aborts discovery of healthy providers
+  - Preserve repeated Kimi tool outputs in arrival order instead of replacing earlier records for the same tool call
+
+### Performance
+
+- Parse independent collect sessions and search-index inputs concurrently while preserving deterministic result order
+- Cache parsed session data across indexing, query filtering, and collect, with concurrent-read coalescing and update-based invalidation
+
+### Changed
+
+- Centralized normalized message assembly across Codex, Claude Code, Pi, and Kimi while preserving provider-specific output contracts
+- Split Codex patch parsing and message enrichment into focused internal modules
+- Pinned the native packaging toolchain in the locked packaging dependency group used by local builds and release CI
+
+### Tests
+
+- Expanded shared provider contracts and regression coverage for export boundaries, credentials, filtering, URI summaries, localization, collect, search, and scanner fault isolation
+
 ## [0.11.2] - 2026-07-12
 
 ### Fixed
@@ -772,6 +806,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.12.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.12.0
 [0.11.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.2
 [0.11.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.1
 [0.11.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.0
