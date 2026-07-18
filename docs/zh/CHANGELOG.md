@@ -1,5 +1,39 @@
 # 更新日志
 
+## [0.12.0] - 2026-07-18
+
+### 新增功能
+
+- **Provider 能力发现**
+  - 新增 `--providers` 及其别名 `--capabilities`，无需扫描会话即可查看已注册的 URI scheme、支持的导出格式、关键词快路径和本地搜索根路径状态
+- **Collect 相对日期窗口**
+  - collect 模式新增显式 `-days N` 支持，日期优先级为 `-since/-until`，其次为显式 `-days`，最后保持原有的当天默认范围
+
+### 问题修复
+
+- **导出与凭据安全**
+  - 将不可信的 session ID 规范为单个文件名组件，并拒绝越出所选输出目录的 JSON、raw 或 Markdown 导出路径
+  - API 凭据仅在同源重定向时保留，collect 请求使用非 HTTPS base URL 时输出警告
+  - 创建和覆盖包含凭据的配置文件时，在整个写入过程中保持仅所有者可访问权限
+- **Provider 容错与消息完整性**
+  - 隔离 provider 扫描失败，单个损坏数据源不再中止其他正常 provider 的发现
+  - 按到达顺序保留 Kimi 重复的 tool output，不再用同一 tool call 的后续记录覆盖早期记录
+
+### 性能
+
+- 并行解析独立的 collect session 和搜索索引输入，同时保持确定性结果顺序
+- 在索引、query 过滤和 collect 之间缓存已解析的 session 数据，合并并发读取，并根据 session 更新信号失效
+
+### 变更
+
+- 统一 Codex、Claude Code、Pi 和 Kimi 的标准化消息组装逻辑，同时保持 provider 特定输出契约
+- 将 Codex patch 解析和消息增强拆分到聚焦的内部模块
+- 在本地构建与发布 CI 共用的锁定 packaging 依赖组中固定原生打包工具链
+
+### 测试
+
+- 扩展共享 provider 契约，并增加导出边界、凭据、过滤、URI 摘要、国际化、collect、搜索与 scanner 故障隔离的回归覆盖
+
 ## [0.11.2] - 2026-07-12
 
 ### 问题修复
@@ -776,6 +810,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.12.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.12.0
 [0.11.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.2
 [0.11.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.1
 [0.11.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.0

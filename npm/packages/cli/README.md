@@ -69,6 +69,13 @@ agent-dump --stats
 agent-dump --stats -days 30
 ```
 
+### Provider capabilities
+
+```bash
+agent-dump --providers
+agent-dump --capabilities
+```
+
 ### Search
 
 ```bash
@@ -81,6 +88,7 @@ agent-dump --reindex
 
 ```bash
 agent-dump --collect
+agent-dump --collect -days 7
 agent-dump --collect -since 2026-04-01 -until 2026-04-15
 agent-dump --collect --collect-mode insight
 agent-dump --collect --dry-run --save ./reports
@@ -112,7 +120,9 @@ agent-dump --config edit
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` prints lightweight URI metadata for discovery
 - **Statistics**: `--stats` shows session counts and message counts grouped by agent and time
+- **Provider capabilities**: `--providers` reports URI schemes, export formats, keyword fast paths, and local search-root status without scanning sessions
 - **AI collect**: `--collect` summarizes sessions over a date range using your configured LLM, with `pm` and `insight` modes
+- **Relative collect windows**: Explicit `-days N` selects today minus N days through today; `-since/-until` takes precedence, while collect without either remains today-only
 - **Collect dry-run**: `--collect --dry-run` previews provider breakdown, session/chunk counts, concurrency, and save path
 - **Full-text search**: `--search` uses local SQLite FTS5 with ranked results and highlighted snippets
 - **Structured queries**: `provider:`, `role:`, `path:`, `limit:` filters in `-query`
