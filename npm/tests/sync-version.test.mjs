@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildFiles, readVersion } from "../../web/build-site.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -30,20 +29,5 @@ test("npm workspace versions stay aligned with the Python version source", async
   for (const file of packageFiles) {
     const pkg = JSON.parse(await fs.readFile(file, "utf8"));
     assert.equal(pkg.version, version, `${path.relative(repoRoot, file)} is out of sync`);
-  }
-});
-
-// lastmod is a build-time timestamp, not content; ignore it when comparing.
-const stripLastmod = (text) => text.replace(/<lastmod>[^<]*<\/lastmod>/g, "<lastmod/>");
-
-test("committed landing page is up to date with web/i18n.mjs and the version source", async () => {
-  const version = await readVersion();
-  for (const [relPath, expected] of buildFiles(version)) {
-    const actual = await fs.readFile(path.resolve(repoRoot, relPath), "utf8");
-    assert.equal(
-      stripLastmod(actual),
-      stripLastmod(expected),
-      `${relPath} is stale; run \`just build-web\``,
-    );
   }
 });

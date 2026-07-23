@@ -101,14 +101,20 @@ publish:
 # Build and publish package in one step
 build-and-publish: build publish
 
-# Pre-render the static landing page (en + zh) from web/i18n.mjs
+# Build the static landing page (Astro, en + zh) into web/dist
 build-web:
     @echo "🛠️ Building landing page..."
-    node web/build-site.mjs
+    pnpm --dir web install --frozen-lockfile
+    pnpm --dir web build
     @echo "✅ Landing page built!"
 
-# Deploy the static web site to Cloudflare Pages
+# Run the landing page dev server
+dev-web:
+    @echo "🚀 Starting landing page dev server..."
+    pnpm --dir web dev
+
+# Deploy the built static site to Cloudflare Pages
 deploy-web: build-web
-    @echo "🌐 Deploying web/ to Cloudflare Pages..."
-    wrangler pages deploy web --project-name=agent-dump --commit-dirty=true
+    @echo "🌐 Deploying web/dist to Cloudflare Pages..."
+    wrangler pages deploy web/dist --project-name=agent-dump --commit-dirty=true
     @echo "✅ Web deployment complete!"
