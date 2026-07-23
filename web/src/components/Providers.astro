@@ -1,0 +1,58 @@
+---
+import { Icon } from "astro-icon/components";
+import { site, ui, providers, type Locale } from "../lib/i18n";
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const t = ui[locale];
+const more =
+  locale === "zh"
+    ? { title: "更多工具", note: "欢迎 PR" }
+    : { title: "More tools", note: "PRs welcome" };
+---
+
+<section id="providers" class="shell py-16 sm:py-20">
+  <div data-reveal class="max-w-[42ch]">
+    <h2 class="text-[clamp(1.35rem,3vw,1.9rem)] font-semibold tracking-[-0.01em] text-fg">
+      {t.providersHeading}
+    </h2>
+    <p class="mt-3 text-[14.5px] leading-relaxed text-muted">{t.providersNote}</p>
+  </div>
+
+  <ul class="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+    {
+      providers.map((p, i) => (
+        <li
+          data-reveal
+          style={`--reveal-delay: ${i * 45}ms`}
+          class="rounded-[var(--radius-md)] border border-line bg-surface/50 p-4 transition-colors duration-200 ease-out hover:border-line-strong"
+        >
+          <p class="font-mono text-[13.5px] font-medium text-fg">{p.name}</p>
+          <p class="mt-2 break-all font-mono text-[12px] text-accent">{p.example}</p>
+        </li>
+      ))
+    }
+    <li
+      data-reveal
+      style={`--reveal-delay: ${providers.length * 45}ms`}
+      class="flex flex-col justify-between rounded-[var(--radius-md)] border border-dashed border-line-strong p-4"
+    >
+      <a
+        href={`${site.repo}/pulls`}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="group flex h-full flex-col justify-between no-underline"
+      >
+        <span class="font-mono text-[13.5px] font-medium text-muted transition-colors duration-200 ease-out group-hover:text-fg">
+          {more.title}
+        </span>
+        <span class="mt-2 inline-flex items-center gap-1 font-mono text-[12px] text-subtle transition-colors duration-200 ease-out group-hover:text-accent">
+          {more.note}
+          <Icon name="ph:arrow-up-right" class="size-3.5" aria-hidden="true" />
+        </span>
+      </a>
+    </li>
+  </ul>
+</section>

@@ -1,0 +1,21 @@
+---
+import { ui, type Locale } from "../lib/i18n";
+import { Faq } from "./Faq";
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const t = ui[locale];
+---
+
+<section id="faq" class="shell py-16 sm:py-24">
+  <div data-reveal class="max-w-[46ch]">
+    <h2 class="text-[clamp(1.35rem,3vw,1.9rem)] font-semibold tracking-[-0.01em] text-fg">
+      {t.faqHeading}
+    </h2>
+  </div>
+  <div data-reveal class="mt-8 max-w-[46rem]">
+    <Faq client:visible items={t.faq} />
+  </div>
+</section>

@@ -1,0 +1,148 @@
+---
+import "@fontsource-variable/geist";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
+import "@fontsource/ibm-plex-mono/700.css";
+import "../styles/global.css";
+import { site, ui, LOCALES, type Locale } from "../lib/i18n";
+import { version } from "../lib/version";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = ui[locale];
+const canonical = new URL(site.paths[locale], site.origin).href;
+const ogImage = new URL(site.ogImage.path, site.origin).href;
+
+const alternates = [
+  ...LOCALES.map((loc) => ({
+    hreflang: ui[loc].htmlLang,
+    href: new URL(site.paths[loc], site.origin).href,
+  })),
+  { hreflang: "x-default", href: new URL(site.paths.en, site.origin).href },
+];
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Person",
+      "@id": `${site.origin}/#author`,
+      name: site.author.name,
+      url: site.author.url,
+      sameAs: [site.author.url],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${canonical}#website`,
+      name: "Agent Dump",
+      url: canonical,
+      inLanguage: t.htmlLang,
+      description: t.websiteDescription,
+      publisher: { "@id": `${site.origin}/#author` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${site.origin}/#software`,
+      name: "Agent Dump",
+      applicationCategory: "DeveloperApplication",
+      applicationSubCategory: "Command-line developer tool",
+      operatingSystem: "macOS, Linux, Windows",
+      description: t.softwareDescription,
+      inLanguage: t.htmlLang,
+      url: canonical,
+      downloadUrl: site.downloadUrls,
+      softwareVersion: version,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      author: { "@id": `${site.origin}/#author` },
+      codeRepository: site.repo,
+      license: site.license,
+    },
+    {
+      "@type": "FAQPage",
+      "@id": `${canonical}#faq`,
+      inLanguage: t.htmlLang,
+      mainEntity: t.faq.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: item.answer },
+      })),
+    },
+  ],
+};
+---
+
+<!doctype html>
+<html lang={t.htmlLang} dir={t.dir}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#faf8f4" />
+    <meta name="description" content={t.description} />
+    <meta name="keywords" content={t.keywords} />
+    <meta name="author" content={site.author.name} />
+    <meta name="robots" content="index, follow" />
+    <title>{t.title}</title>
+    <link rel="canonical" href={canonical} />
+    {alternates.map((alt) => <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />)}
+    <link rel="icon" type="image/png" href={site.logo} />
+    <link rel="apple-touch-icon" href={site.logo} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="Agent Dump" />
+    <meta property="og:title" content={t.title} />
+    <meta property="og:description" content={t.description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content={String(site.ogImage.width)} />
+    <meta property="og:image:height" content={String(site.ogImage.height)} />
+    <meta property="og:image:alt" content={t.ogImageAlt} />
+    <meta property="og:locale" content={t.ogLocale} />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={t.title} />
+    <meta name="twitter:description" content={t.description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={t.ogImageAlt} />
+
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(jsonLd, null, 2)} />
+
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        root.classList.add("js");
+        var theme = "light";
+        try {
+          var stored = localStorage.getItem("agent-dump-theme");
+          theme =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+        } catch (e) {}
+        root.setAttribute("data-theme", theme);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", theme === "dark" ? "#141109" : "#faf8f4");
+      })();
+    </script>
+
+    <script
+      is:inline
+      defer
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon={`{"token": "${site.cfBeaconToken}"}`}></script>
+  </head>
+  <body>
+    <a
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-sm focus:border focus:border-line-strong focus:bg-bg focus:px-4 focus:py-2"
+      href="#main">{t.skipLink}</a
+    >
+    <slot />
+  </body>
+</html>
