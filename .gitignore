@@ -59,6 +59,11 @@ wheels/
 /.pyinstaller
 
 
+# web landing page (Astro)
+/web/node_modules
+/web/.astro
+/web/dist
+
 # cloudflare
 .wrangler/
 
