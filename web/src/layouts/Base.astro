@@ -1,9 +1,6 @@
 ---
 import "@fontsource-variable/geist";
 import "@fontsource/ibm-plex-mono/400.css";
-import "@fontsource/ibm-plex-mono/500.css";
-import "@fontsource/ibm-plex-mono/600.css";
-import "@fontsource/ibm-plex-mono/700.css";
 import "../styles/global.css";
 import { site, ui, LOCALES, type Locale } from "../lib/i18n";
 import { version } from "../lib/version";
@@ -131,12 +128,6 @@ const jsonLd = {
         if (meta) meta.setAttribute("content", theme === "dark" ? "#141109" : "#faf8f4");
       })();
     </script>
-
-    <script
-      is:inline
-      defer
-      src="https://static.cloudflareinsights.com/beacon.min.js"
-      data-cf-beacon={`{"token": "${site.cfBeaconToken}"}`}></script>
   </head>
   <body>
     <a

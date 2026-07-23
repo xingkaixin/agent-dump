@@ -1,0 +1,48 @@
+---
+import type { OutputTone, TerminalScene } from "../lib/i18n";
+
+interface Props {
+  scene: TerminalScene;
+  label: string;
+}
+
+const { scene, label } = Astro.props;
+const toneClass: Record<OutputTone, string> = {
+  dim: "text-term-dim",
+  text: "text-term-fg",
+  ok: "text-phosphor",
+  scheme: "text-phosphor",
+};
+---
+
+<div
+  role="img"
+  aria-label={label}
+  class="overflow-hidden rounded-[var(--radius-lg)] border border-line-strong bg-term shadow-[0_24px_60px_-24px_rgba(0,0,0,0.5)]"
+>
+  <div class="flex items-center gap-2 border-b border-white/8 px-4 py-3">
+    <span class="size-2.5 rounded-full bg-white/15"></span>
+    <span class="size-2.5 rounded-full bg-white/15"></span>
+    <span class="size-2.5 rounded-full bg-white/15"></span>
+    <span class="ml-2 font-mono text-[11px] text-term-dim">agent-dump</span>
+  </div>
+  <div class="min-h-[13.5rem] px-4 py-4 font-mono text-[13px] leading-[1.7] sm:px-5">
+    <div class="flex items-baseline gap-2">
+      <span aria-hidden="true" class="text-phosphor">$</span>
+      <span class="text-term-fg">
+        {scene.command}
+        <span
+          aria-hidden="true"
+          class="ml-0.5 inline-block h-[1.05em] w-[0.55ch] translate-y-[0.15em] bg-term-fg align-baseline motion-safe:animate-[ad-blink_1s_steps(1)_infinite]"
+        ></span>
+      </span>
+    </div>
+    <div class="mt-2 grid gap-1">
+      {
+        scene.output.map((line) => (
+          <div class:list={["whitespace-pre", toneClass[line.tone]]}>{line.text}</div>
+        ))
+      }
+    </div>
+  </div>
+</div>

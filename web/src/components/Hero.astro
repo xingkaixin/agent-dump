@@ -1,7 +1,7 @@
 ---
 import { Icon } from "astro-icon/components";
 import { site, ui, terminalScenes, type Locale } from "../lib/i18n";
-import { Terminal } from "./Terminal";
+import Terminal from "./Terminal.astro";
 
 interface Props {
   locale: Locale;
@@ -48,7 +48,7 @@ const terminalLabel =
     </div>
 
     <div data-reveal style="--reveal-delay: 120ms">
-      <Terminal client:load scenes={terminalScenes} label={terminalLabel} />
+      <Terminal scene={terminalScenes[0]} label={terminalLabel} />
     </div>
   </div>
 </section>
