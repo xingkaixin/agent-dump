@@ -1,0 +1,19 @@
+# Agent Dump
+
+> Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions across Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi.
+
+## Documentation
+
+- [Project README](https://github.com/xingkaixin/agent-dump#readme): Installation, supported providers, URI formats, search, export, and collection workflows.
+- [Chinese landing page](https://agent-dump.xingkaixin.me/zh/): Simplified Chinese product overview and installation commands.
+- [Changelog](https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md): Release history and behavior changes.
+
+## Packages
+
+- [PyPI package](https://pypi.org/project/agent-dump/): Install Agent Dump with uv or pip.
+- [npm package](https://www.npmjs.com/package/@agent-dump/cli): Install the cross-platform CLI wrapper with npm, pnpm, or bun.
+
+## Source
+
+- [GitHub repository](https://github.com/xingkaixin/agent-dump): Source code, issues, and contribution history.
+- [License](https://github.com/xingkaixin/agent-dump/blob/main/LICENSE): Project license.
