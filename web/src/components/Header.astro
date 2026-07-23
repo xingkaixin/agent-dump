@@ -1,6 +1,6 @@
 ---
 import { site, ui, type Locale } from "../lib/i18n";
-import { ThemeToggle } from "./ThemeToggle";
+import { Icon } from "astro-icon/components";
 
 interface Props {
   locale: Locale;
@@ -21,7 +21,6 @@ const langs: { code: Locale; label: string }[] = [
     <a
       href={site.paths[locale]}
       class="group inline-flex items-center gap-2.5 no-underline"
-      aria-label="Agent Dump"
     >
       <img
         src={site.logo}
@@ -62,8 +61,48 @@ const langs: { code: Locale; label: string }[] = [
       </div>
 
       <div class="size-9 shrink-0">
-        <ThemeToggle client:only="react" label={t.themeLabel} />
+        <button
+          type="button"
+          data-theme-toggle
+          aria-label={t.themeLabel}
+          title={t.themeLabel}
+          class="grid size-9 cursor-pointer place-items-center rounded-[var(--radius-sm)] border border-line text-muted transition-[transform,color,background-color,border-color] duration-150 ease-out hover:border-line-strong hover:text-fg active:scale-95"
+        >
+          <span class="relative block size-[18px]">
+            <Icon
+              name="ph:sun-bold"
+              aria-hidden="true"
+              class="absolute inset-0 size-[18px] transition-[opacity,transform] duration-200 ease-out dark:scale-60 dark:-rotate-90 dark:opacity-0"
+            />
+            <Icon
+              name="ph:moon-bold"
+              aria-hidden="true"
+              class="absolute inset-0 size-[18px] rotate-90 scale-60 text-accent opacity-0 transition-[opacity,transform] duration-200 ease-out dark:rotate-0 dark:scale-100 dark:opacity-100"
+            />
+          </span>
+        </button>
       </div>
     </div>
   </div>
 </header>
+
+<script is:inline>
+  document.querySelectorAll("[data-theme-toggle]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var root = document.documentElement;
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        root.classList.add("theme-transition");
+        window.setTimeout(function () {
+          root.classList.remove("theme-transition");
+        }, 260);
+      }
+      root.setAttribute("data-theme", next);
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", next === "dark" ? "#141109" : "#faf8f4");
+      try {
+        localStorage.setItem("agent-dump-theme", next);
+      } catch (e) {}
+    });
+  });
+</script>
