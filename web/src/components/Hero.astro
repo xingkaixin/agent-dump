@@ -1,0 +1,54 @@
+---
+import { Icon } from "astro-icon/components";
+import { site, ui, terminalScenes, type Locale } from "../lib/i18n";
+import { Terminal } from "./Terminal";
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const t = ui[locale];
+const terminalLabel =
+  locale === "zh"
+    ? "运行 agent-dump 命令的终端演示"
+    : "Terminal demo running agent-dump commands";
+---
+
+<section id="hero" class="shell pt-14 pb-16 sm:pt-20 sm:pb-20">
+  <div class="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+    <div data-reveal>
+      <p class="mb-5 font-mono text-[12px] font-medium uppercase tracking-[0.16em] text-accent">
+        {t.eyebrow}
+      </p>
+      <h1 class="text-[clamp(2rem,5.5vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.02em] text-fg">
+        {t.heroTitle}{" "}
+        <span class="text-accent">{t.heroTitleAccent}</span>
+      </h1>
+      <p class="mt-5 max-w-[46ch] text-[15px] leading-relaxed text-muted">
+        {t.heroDescription}
+      </p>
+      <div class="mt-8 flex flex-wrap items-center gap-3">
+        <a
+          href="#install"
+          class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-accent px-4 py-2.5 text-[14px] font-medium text-accent-fg no-underline transition-[transform,filter] duration-150 ease-out hover:brightness-95 active:scale-[0.98]"
+        >
+          {t.ctaInstall}
+          <Icon name="ph:arrow-down" class="size-4" aria-hidden="true" />
+        </a>
+        <a
+          href={site.repo}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-line-strong px-4 py-2.5 text-[14px] font-medium text-fg no-underline transition-[transform,background-color] duration-150 ease-out hover:bg-surface active:scale-[0.98]"
+        >
+          <Icon name="ph:github-logo" class="size-4" aria-hidden="true" />
+          {t.ctaSource}
+        </a>
+      </div>
+    </div>
+
+    <div data-reveal style="--reveal-delay: 120ms">
+      <Terminal client:load scenes={terminalScenes} label={terminalLabel} />
+    </div>
+  </div>
+</section>

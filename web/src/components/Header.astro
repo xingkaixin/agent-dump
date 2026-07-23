@@ -1,0 +1,69 @@
+---
+import { site, ui, type Locale } from "../lib/i18n";
+import { ThemeToggle } from "./ThemeToggle";
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const t = ui[locale];
+
+const langs: { code: Locale; label: string }[] = [
+  { code: "en", label: "EN" },
+  { code: "zh", label: "中文" },
+];
+---
+
+<header
+  class="sticky top-0 z-40 border-b border-line bg-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-bg/70"
+>
+  <div class="shell flex h-16 items-center justify-between">
+    <a
+      href={site.paths[locale]}
+      class="group inline-flex items-center gap-2.5 no-underline"
+      aria-label="Agent Dump"
+    >
+      <img
+        src={site.logo}
+        alt=""
+        width="26"
+        height="26"
+        class="rounded-[var(--radius-xs)]"
+      />
+      <span class="font-mono text-[15px] font-semibold tracking-tight text-fg">agent-dump</span>
+    </a>
+
+    <div class="flex items-center gap-2.5">
+      <div
+        role="group"
+        aria-label={t.langLabel}
+        class="inline-flex overflow-hidden rounded-[var(--radius-sm)] border border-line"
+      >
+        {
+          langs.map((lang) => {
+            const current = lang.code === locale;
+            return (
+              <a
+                href={site.paths[lang.code]}
+                lang={lang.code === "zh" ? "zh-Hans" : "en"}
+                aria-current={current ? "page" : undefined}
+                class:list={[
+                  "px-2.5 py-1.5 font-mono text-[12px] no-underline transition-colors duration-150 ease-out",
+                  current
+                    ? "bg-fg text-bg"
+                    : "text-muted hover:bg-surface hover:text-fg",
+                ]}
+              >
+                {lang.label}
+              </a>
+            );
+          })
+        }
+      </div>
+
+      <div class="size-9 shrink-0">
+        <ThemeToggle client:only="react" label={t.themeLabel} />
+      </div>
+    </div>
+  </div>
+</header>

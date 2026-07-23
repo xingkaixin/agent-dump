@@ -1,0 +1,52 @@
+---
+import type { Locale } from "../lib/i18n";
+import Header from "./Header.astro";
+import Hero from "./Hero.astro";
+import Providers from "./Providers.astro";
+import Capabilities from "./Capabilities.astro";
+import InstallSection from "./InstallSection.astro";
+import FaqSection from "./FaqSection.astro";
+import Footer from "./Footer.astro";
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+---
+
+<Header locale={locale} />
+<main id="main" tabindex="-1" class="outline-none">
+  <Hero locale={locale} />
+  <Providers locale={locale} />
+  <Capabilities locale={locale} />
+  <InstallSection locale={locale} />
+  <FaqSection locale={locale} />
+</main>
+<Footer locale={locale} />
+
+<script is:inline>
+  (function () {
+    var els = document.querySelectorAll("[data-reveal]");
+    if (!els.length) return;
+    if (!("IntersectionObserver" in window)) {
+      els.forEach(function (el) {
+        el.classList.add("is-in");
+      });
+      return;
+    }
+    var io = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-in");
+            io.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
+    );
+    els.forEach(function (el) {
+      io.observe(el);
+    });
+  })();
+</script>

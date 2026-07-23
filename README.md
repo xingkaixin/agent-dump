@@ -448,7 +448,7 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 ├── tests/                      # Test directory
 ├── skills/agent-dump/          # Codex skill docs
 ├── npm/                        # npm wrapper and platform packages
-├── web/                        # Static site
+├── web/                        # Astro landing page (en + zh)
 ├── pyproject.toml              # Project configuration
 ├── justfile                    # Automated commands
 ├── ruff.toml                   # Code style configuration
