@@ -2,13 +2,14 @@
 Kimi agent handler
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
 import shutil
 import sys
+from threading import Lock
 from typing import Any
 
 from agent_dump.agents.base import Session
@@ -40,11 +41,20 @@ class KimiAgent(FileSessionAgent):
 
     def __init__(self):
         super().__init__("kimi", "Kimi")
+        self._work_dirs_by_hash: dict[str, str] | None = None
+        self._work_dirs_lock = Lock()
 
     def _iter_session_files(self) -> Iterator[Path]:
         if self.base_path is None:
             return iter(())
         return self.base_path.rglob("metadata.json")
+
+    def _session_file_candidates(self, session_id: str) -> Iterable[Path]:
+        if self.base_path is None:
+            return ()
+        # 目录结构是 sessions/<project_hash>/<session_id>/metadata.json，
+        # 少了这个直接定位，URI 模式会退化成 get_sessions(days=3650) 全量扫描
+        return self.base_path.glob(f"*/{session_id}/metadata.json")
 
     def _parse_session_file(self, file_path: Path) -> Session | None:
         return self._parse_session(file_path)
@@ -70,6 +80,39 @@ class KimiAgent(FileSessionAgent):
             "wire_file": wire_path if wire_path.exists() else None,
         }
 
+    def _load_work_dirs_by_hash(self) -> dict[str, str]:
+        """Build the md5(work dir) -> work dir map once per agent instance.
+
+        之前每解析一个会话都要重读 kimi.json 并对 work_dirs 逐项重算 MD5，
+        N 个会话 W 个工作目录就是 N 次文件读 + 最多 N·W 次摘要。
+        """
+        if self._work_dirs_by_hash is not None:
+            return self._work_dirs_by_hash
+
+        with self._work_dirs_lock:
+            if self._work_dirs_by_hash is not None:
+                return self._work_dirs_by_hash
+
+            mapping: dict[str, str] = {}
+            if self.base_path is not None:
+                kimi_json_path = self.base_path.parent / "kimi.json"
+                try:
+                    raw = json.loads(kimi_json_path.read_text(encoding="utf-8"))
+                    work_dirs = raw.get("work_dirs") if isinstance(raw, dict) else None
+                    for entry in work_dirs if isinstance(work_dirs, list) else ():
+                        if not isinstance(entry, dict):
+                            continue
+                        path = entry.get("path")
+                        if not isinstance(path, str):
+                            continue
+                        digest = hashlib.md5(path.encode("utf-8")).hexdigest()  # noqa: S324
+                        mapping[digest] = path
+                except (OSError, json.JSONDecodeError):
+                    mapping = {}
+
+            self._work_dirs_by_hash = mapping
+            return mapping
+
     def _resolve_cwd_from_project_hash(self, project_hash: str) -> str | None:
         """Resolve real cwd path from Kimi project hash.
 
@@ -77,34 +120,7 @@ class KimiAgent(FileSessionAgent):
         The project_hash is the MD5 hex digest of the working directory path,
         recorded in ~/.kimi/kimi.json under work_dirs.
         """
-        if not self.base_path:
-            return None
-
-        kimi_json_path = self.base_path.parent / "kimi.json"
-        if not kimi_json_path.exists():
-            return None
-
-        try:
-            with open(kimi_json_path, encoding="utf-8") as f:
-                data = json.load(f)
-
-            work_dirs = data.get("work_dirs", [])
-            if not isinstance(work_dirs, list):
-                return None
-
-            for entry in work_dirs:
-                if not isinstance(entry, dict):
-                    continue
-                path = entry.get("path")
-                if not isinstance(path, str):
-                    continue
-                hashed = hashlib.md5(  # noqa: S324
-                    path.encode("utf-8")
-                ).hexdigest()
-                if hashed == project_hash:
-                    return path
-        except Exception:
-            return None
+        return self._load_work_dirs_by_hash().get(project_hash)
 
     def _get_raw_source_path(self, session: Session) -> Path:
         """Pick the preferred raw source file for a Kimi session."""
