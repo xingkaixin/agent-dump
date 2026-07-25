@@ -2,6 +2,7 @@
 测试 agents/cursor.py 模块
 """
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import os
@@ -97,40 +98,132 @@ class TestCursorAgent:
         assert sessions[0].metadata["message_count"] == 1
         assert agent.get_session_uri(sessions[0]) == "cursor://request-1"
 
-    def test_get_sessions_reuses_bubble_rows_for_request_id(self, monkeypatch, tmp_path):
+    def test_get_sessions_query_count_is_independent_of_session_count(self, monkeypatch, tmp_path):
+        """AD-124：bubble 摘要走批量聚合，查询数不再随会话数增长。"""
         _, global_db = self._create_layout(monkeypatch, tmp_path)
 
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
-        for index in range(2):
-            composer_id = f"composer-{index}"
-            request_id = f"request-{index}"
+
+        def _seed(count: int) -> None:
+            for index in range(count):
+                composer_id = f"composer-{index}"
+                _insert_kv(
+                    global_db,
+                    f"composerData:{composer_id}",
+                    {"composerId": composer_id, "createdAt": created_at_ms, "name": f"Session {index}"},
+                )
+                for bubble in range(3):
+                    _insert_kv(
+                        global_db,
+                        f"bubbleId:{composer_id}:b{bubble}",
+                        {
+                            "requestId": f"request-{index}",
+                            "type": 1 if bubble % 2 == 0 else 2,
+                            "text": "hello",
+                            "modelInfo": {"modelName": "composer-2"},
+                        },
+                    )
+
+        def _count_statements(agent: CursorAgent) -> tuple[int, list]:
+            statements: list[str] = []
+            original_open = agent._open_global
+
+            @contextmanager
+            def counting_open():
+                with original_open() as conn:
+                    # sqlite3 自带的语句 trace，比包装 Connection.execute 可靠
+                    # （后者是只读属性）
+                    conn.set_trace_callback(statements.append)
+                    try:
+                        yield conn
+                    finally:
+                        conn.set_trace_callback(None)
+
+            # patch 打在实例上，两次测量各用一个新实例，无需 undo
+            # （undo 会连 _create_layout 的 Path.home / 环境变量 patch 一起撤掉）
+            monkeypatch.setattr(agent, "_open_global", counting_open)
+            return len(statements), agent.get_sessions(days=7)
+
+        _seed(2)
+        agent = CursorAgent()
+        assert agent.is_available() is True
+        two_count, two_sessions = _count_statements(agent)
+
+        assert {session.id for session in two_sessions} == {"request-0", "request-1"}
+        assert two_sessions[0].metadata["message_count"] == 3
+        assert two_sessions[0].metadata["model"] == "composer-2"
+
+        _seed(8)
+        agent = CursorAgent()
+        assert agent.is_available() is True
+        eight_count, eight_sessions = _count_statements(agent)
+
+        assert len(eight_sessions) == 8
+        assert eight_count == two_count, (
+            f"查询数应与会话数无关，2 个会话用了 {two_count} 条、8 个会话用了 {eight_count} 条"
+        )
+
+    def test_metadata_scan_is_bounded_to_the_first_bubbles(self, monkeypatch, tmp_path):
+        """AD-124：列表元数据只扫会话开头若干条 bubble，不再搬运整段正文。
+
+        这是一处刻意的语义收窄：修复前 requestId/model 会扫完全部 bubble。
+        """
+        from agent_dump.agents.cursor import _METADATA_BUBBLE_SCAN_LIMIT
+
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-0",
+            {"composerId": "composer-0", "createdAt": created_at_ms, "name": "Session"},
+        )
+        # 前 LIMIT 条都不带 modelInfo，只有远超上限的那条带
+        total = _METADATA_BUBBLE_SCAN_LIMIT + 5
+        for bubble in range(total):
+            payload: dict[str, object] = {"requestId": "request-0", "type": 1, "text": "hello"}
+            if bubble == total - 1:
+                payload["modelInfo"] = {"modelName": "late-model"}
+            _insert_kv(global_db, f"bubbleId:composer-0:b{bubble:04d}", payload)
+
+        agent = CursorAgent()
+        assert agent.is_available() is True
+        sessions = agent.get_sessions(days=7)
+
+        assert sessions[0].id == "request-0", "开头就有的 requestId 仍然拿得到"
+        assert sessions[0].metadata["model"] is None, "超出扫描上限的 model 不再被拾取"
+        assert sessions[0].metadata["message_count"] == total, "计数走 SQL 聚合，仍覆盖全部 bubble"
+
+    def test_get_sessions_falls_back_when_json1_is_unavailable(self, monkeypatch, tmp_path):
+        """老 SQLite 缺 JSON1 时退回逐会话解析，元数据结果必须一致。"""
+        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-0",
+            {"composerId": "composer-0", "createdAt": created_at_ms, "name": "Session"},
+        )
+        for bubble in range(3):
             _insert_kv(
                 global_db,
-                f"composerData:{composer_id}",
-                {"composerId": composer_id, "createdAt": created_at_ms, "name": f"Session {index}"},
-            )
-            _insert_kv(
-                global_db,
-                f"bubbleId:{composer_id}:b1",
-                {"requestId": request_id, "type": 1, "text": "hello"},
+                f"bubbleId:composer-0:b{bubble}",
+                {
+                    "requestId": "request-0",
+                    "type": 1 if bubble % 2 == 0 else 2,
+                    "text": "hello",
+                    "modelInfo": {"modelName": "composer-2"},
+                },
             )
 
         agent = CursorAgent()
         assert agent.is_available() is True
+        aggregated = agent.get_sessions(days=7)
 
-        query_calls = []
-        original_query_global = agent._query_global
+        monkeypatch.setattr(CursorAgent, "_count_messages_by_composer", lambda self, conn: None)
+        fallback = agent.get_sessions(days=7)
 
-        def counting_query_global(sql, params):
-            query_calls.append((sql, params))
-            return original_query_global(sql, params)
-
-        monkeypatch.setattr(agent, "_query_global", counting_query_global)
-
-        sessions = agent.get_sessions(days=7)
-
-        assert {session.id for session in sessions} == {"request-0", "request-1"}
-        assert len(query_calls) == 3
+        assert [s.id for s in fallback] == [s.id for s in aggregated]
+        assert fallback[0].metadata["message_count"] == aggregated[0].metadata["message_count"] == 3
+        assert fallback[0].metadata["model"] == aggregated[0].metadata["model"] == "composer-2"
 
     def test_get_session_data_extracts_messages_and_tool(self, monkeypatch, tmp_path):
         _, global_db = self._create_layout(monkeypatch, tmp_path)
