@@ -496,7 +496,31 @@ class CursorAgent(BaseAgent):
                 return model_name.strip()
         return None
 
-    def _build_subagent_completion_message(self, composer_id: str) -> dict[str, Any] | None:
+    def _build_subagent_completion_message(
+        self,
+        composer_id: str,
+        *,
+        expanding: frozenset[str],
+        subagent_memo: dict[str, dict[str, Any] | None],
+    ) -> dict[str, Any] | None:
+        if composer_id in expanding:
+            # subagentComposerId 来自 Cursor 的存储，A 引用 B 而 B 又引用 A 会让
+            # 展开无限递归；环上的引用退化成普通 tool call
+            return None
+        if composer_id in subagent_memo:
+            return subagent_memo[composer_id]
+
+        completion = self._expand_subagent(composer_id, expanding=expanding, subagent_memo=subagent_memo)
+        subagent_memo[composer_id] = completion
+        return completion
+
+    def _expand_subagent(
+        self,
+        composer_id: str,
+        *,
+        expanding: frozenset[str],
+        subagent_memo: dict[str, dict[str, Any] | None],
+    ) -> dict[str, Any] | None:
         composer = self._load_composer_by_id(composer_id)
         if not composer:
             return None
@@ -505,7 +529,11 @@ class CursorAgent(BaseAgent):
             request_id=composer_id,
             composer=composer,
         )
-        child_data = self.get_session_data(child_session)
+        child_data = self._build_session_data(
+            child_session,
+            expanding=expanding | {composer_id},
+            subagent_memo=subagent_memo,
+        )
         parts: list[dict[str, Any]] = []
         latest_time_created = 0
         for message in child_data.get("messages", []):
@@ -569,7 +597,12 @@ class CursorAgent(BaseAgent):
         return None
 
     def _extract_tool_part(
-        self, bubble: dict[str, Any], timestamp_ms: int
+        self,
+        bubble: dict[str, Any],
+        timestamp_ms: int,
+        *,
+        expanding: frozenset[str] = frozenset(),
+        subagent_memo: dict[str, dict[str, Any] | None] | None = None,
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         tool_data = bubble.get("toolFormerData")
         if not isinstance(tool_data, dict):
@@ -602,7 +635,11 @@ class CursorAgent(BaseAgent):
                 state["subagent_type"] = subagent_type
             subagent_id = self._extract_subagent_id(tool_data, result)
             if subagent_id:
-                subagent_completion = self._build_subagent_completion_message(subagent_id)
+                subagent_completion = self._build_subagent_completion_message(
+                    subagent_id,
+                    expanding=expanding,
+                    subagent_memo=subagent_memo if subagent_memo is not None else {},
+                )
                 if subagent_completion is not None and subagent_completion.get("model"):
                     state["model"] = subagent_completion["model"]
                 if subagent_completion is not None:
@@ -674,6 +711,22 @@ class CursorAgent(BaseAgent):
 
     def get_session_data(self, session: Session) -> dict:
         """Get Cursor session data as unified dictionary."""
+        return self._build_session_data(session, expanding=frozenset(), subagent_memo={})
+
+    def _build_session_data(
+        self,
+        session: Session,
+        *,
+        expanding: frozenset[str],
+        subagent_memo: dict[str, dict[str, Any] | None],
+    ) -> dict:
+        """Build session data, carrying the subagent-expansion context down the recursion.
+
+        `expanding` 是当前正在展开的 composer id 链，用于挡住 subagentComposerId
+        形成的引用环；`subagent_memo` 让同一次顶层调用里多个 tool part 指向同一个
+        subagent 时只解析一次。两者都随调用链传递而不是挂在实例上，因为
+        get_session_data 会被搜索索引的线程池并发调用。
+        """
         composer_id = session.metadata.get("composer_id")
         if not isinstance(composer_id, str) or not composer_id:
             composer_id = session.id
@@ -732,7 +785,9 @@ class CursorAgent(BaseAgent):
                 if isinstance(tool_data, dict) and tool_data.get("name") == "create_plan"
                 else None
             )
-            tool_part, subagent_completion = self._extract_tool_part(bubble, timestamp_ms)
+            tool_part, subagent_completion = self._extract_tool_part(
+                bubble, timestamp_ms, expanding=expanding, subagent_memo=subagent_memo
+            )
             parent_message_id = self._extract_tool_parent_message_id(bubble) if tool_part else None
 
             if text_content:
