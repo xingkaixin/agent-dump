@@ -250,3 +250,16 @@ def test_modes_report_diagnostic_when_no_provider_has_data(isolated_provider_hom
 
     assert exit_code == expected_exit_code
     assert "诊断信息" in captured.out
+
+
+def test_reindex_succeeds_on_a_cache_that_never_had_an_index(codex_session_tree, capsys):
+    """回归：rebuild() 先 clear 再 update，首次运行时 FTS 表尚不存在。
+
+    修复前 clear_agent() 未建表就 DELETE，抛
+    sqlite3.OperationalError: no such table: sessions_fts。
+    """
+    exit_code = run_cli("--reindex", "-d", "36500")
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Codex" in captured.out

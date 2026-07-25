@@ -496,6 +496,9 @@ class SearchIndex:
         if not self.is_available:
             return 0
 
+        # rebuild() 会先 clear 再 update，首次运行时表还不存在，必须先建表再 DELETE
+        self.ensure_initialized()
+
         conn = self._get_connection()
         try:
             for fts_table in _FTS_TABLES:
