@@ -16,6 +16,7 @@ from agent_dump.search_index import (
     _build_fts_query,
     _has_cjk,
     _has_fts5,
+    _preprocess_for_unicode61,
     _select_fts_table,
     _serialize_for_search,
     extract_session_searchable_text,
@@ -629,6 +630,46 @@ class TestQueryFilterIntegration:
         with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=Exception("boom")):
             results = filter_sessions(agent, [session], "fallback keyword")
             assert len(results) == 1
+
+
+def _legacy_preprocess_for_unicode61(text: str) -> str:
+    """AD-120 前的逐字符实现，作为正则改写的等价性基准。"""
+    result: list[str] = []
+    prev_was_cjk = False
+    for char in text:
+        is_cjk = "一" <= char <= "鿿"
+        if prev_was_cjk and is_cjk:
+            result.append(" ")
+        result.append(char)
+        prev_was_cjk = is_cjk
+    return "".join(result)
+
+
+class TestUnicode61Preprocessing:
+    """AD-120：逐字符循环改零宽断言正则，必须逐字节等价。"""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "",
+            "修",
+            "修复认证",
+            "abc修复def",
+            "修a复",
+            "修 复",
+            "fix 认证 timeout 超时问题",
+            "混合ASCII与中文123测试",
+            "emoji🎉不受影响的中文",
+            "换行\n分隔的中文\t制表",
+            "日本語のテキスト",  # 平假名/片假名不在 CJK 统一表意区间内
+        ],
+    )
+    def test_matches_legacy_char_loop(self, text):
+        assert _preprocess_for_unicode61(text) == _legacy_preprocess_for_unicode61(text)
+
+    def test_inserts_space_between_adjacent_cjk_only(self):
+        assert _preprocess_for_unicode61("修复认证") == "修 复 认 证"
+        assert _preprocess_for_unicode61("abc") == "abc"
 
 
 def _touched(session: Session) -> Session:

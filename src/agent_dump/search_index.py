@@ -43,6 +43,9 @@ def _has_cjk(text: str) -> bool:
     return any(_CJK_RANGE[0] <= char <= _CJK_RANGE[1] for char in text)
 
 
+_ADJACENT_CJK_BOUNDARY = re.compile(f"(?<=[{_CJK_RANGE[0]}-{_CJK_RANGE[1]}])(?=[{_CJK_RANGE[0]}-{_CJK_RANGE[1]}])")
+
+
 def _preprocess_for_unicode61(text: str) -> str:
     """Insert spaces between consecutive CJK characters.
 
@@ -52,15 +55,9 @@ def _preprocess_for_unicode61(text: str) -> str:
     between adjacent CJK characters, each character becomes its own token
     and can be matched independently.
     """
-    result: list[str] = []
-    prev_was_cjk = False
-    for char in text:
-        is_cjk = _CJK_RANGE[0] <= char <= _CJK_RANGE[1]
-        if prev_was_cjk and is_cjk:
-            result.append(" ")
-        result.append(char)
-        prev_was_cjk = is_cjk
-    return "".join(result)
+    # 零宽断言只在两个 CJK 字符之间插空格；逐字符 Python 循环会为会话正文构造一个
+    # 等长的单字符 list，1 字符 str 约 50-60 字节，代价是正文体积的数十倍
+    return _ADJACENT_CJK_BOUNDARY.sub(" ", text)
 
 
 def _cleanup_unicode61_snippet(snippet: str) -> str:
