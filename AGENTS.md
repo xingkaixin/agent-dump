@@ -74,6 +74,22 @@
 | `search_index.py` | SQLite FTS5 搜索索引 |
 | `selector.py` | 终端交互选择与非 TTY 输入回退 |
 | `config.py` | TOML 配置加载、编辑与校验 |
+| `coercion.py` | 不可信 provider 标量的容错转换（safe_int / safe_epoch_datetime） |
+| `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
+| `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
+| `session_data.py` | 请求级会话数据缓存，同一命令内同一会话只解析一次 |
+| `text_safety.py` | 第三方会话文本的输出净化（终端 / markdown / 文件名） |
+| `time_utils.py` | 时间与时区工具，全部转换的单一入口 |
+| `uri_support.py` | URI 解析与跨 provider 会话查找 |
+| `collect.py` | collect 事件提取、chunk 规划、摘要合并与 tree reduction |
+| `collect_llm.py` | collect 的 LLM 请求、错误分类与重试判定 |
+| `collect_progress.py` | collect 的日志、进度上报与 run stats |
+| `collect_summary.py` | collect 摘要 payload 的归一化、合并与 JSON 提取 |
+| `agents/message_assembly.py` | 统一 message/part 组装与 assistant 分组判断 |
+| `agents/jsonl_scan.py` | JSONL 头尾扫描与 ISO 时间戳解析 |
+| `agents/file_sessions.py` | 文件型 provider 共享基类（扫描 / 剪枝 / 并行解析 / 定位） |
+| `agents/codex_patch.py` | Codex apply_patch 解析 |
+| `agents/codex_enrichment.py` | Codex subagent / skill 消息增强 |
 
 ### 2.3 作为库使用示例
 
