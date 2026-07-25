@@ -2,6 +2,8 @@
 Cursor agent handler
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -12,7 +14,7 @@ from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.coercion import safe_epoch_datetime, safe_int
-from agent_dump.diagnostics import source_missing, unsupported_capability
+from agent_dump.diagnostics import DiagnosticError, source_missing, unsupported_capability
 from agent_dump.paths import SearchRoot
 
 _EPOCH_UTC = datetime.fromtimestamp(0, tz=timezone.utc)
@@ -25,6 +27,25 @@ def _key_prefix_bounds(prefix: str) -> tuple[str, str]:
     case-insensitive collation forces a full table scan per query.
     """
     return prefix, prefix[:-1] + chr(ord(prefix[-1]) + 1)
+
+
+# bubbleId:<composer_id>:<bubble_id> —— "bubbleId:" 长 9，故 composer_id 从第 10 个字符起，
+# 长度到其后第一个 ':' 为止。写成字面量，不做字符串拼接。
+#
+# 关键取舍：json_extract 只出现在 WHERE 里、输出仅 COUNT(*) 时约 0.3s/5 万 bubble；
+# 一旦让它出现在输出列（哪怕配 MIN(key) 取首个非空值），同样的数据要 3.7s——比在
+# Python 侧 json.loads 还慢。所以只有计数交给 SQL，取值仍在 Python 做。
+_BUBBLE_MESSAGE_COUNT_SQL = """
+    SELECT substr(key, 10, instr(substr(key, 10), ':') - 1) AS composer_id,
+           COUNT(*) AS message_count
+    FROM cursorDiskKV
+    WHERE key >= ? AND key < ? AND json_extract(value, '$.type') IN (1, 2)
+    GROUP BY composer_id
+"""
+
+# 列表元数据只需要首个带 requestId 的 bubble 和首个带 modelInfo.modelName 的 bubble，
+# 二者在真实数据里都出现在会话开头。取前 N 条足够，避免为两个字段搬运整段会话正文。
+_METADATA_BUBBLE_SCAN_LIMIT = 20
 
 
 class CursorAgent(BaseAgent):
@@ -78,27 +99,43 @@ class CursorAgent(BaseAgent):
             return []
         return self.get_sessions(days=3650)
 
-    def _query_global(self, sql: str, params: tuple[Any, ...]) -> list[sqlite3.Row]:
+    def _missing_global_db_error(self) -> DiagnosticError:
+        return source_missing(
+            "Cursor global database is missing",
+            missing_path=self.global_db_path or "state.vscdb",
+            searched_roots=[root.render() for root in self.get_search_roots()],
+            next_steps=(
+                "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。",
+                "重新运行 `agent-dump --list --agent cursor` 检查会话是否仍可见。",
+            ),
+        )
+
+    @contextmanager
+    def _open_global(self) -> Iterator[sqlite3.Connection]:
+        """Open one read-only connection to the global store."""
         db_path = self.global_db_path
         if not db_path or not db_path.exists():
-            raise source_missing(
-                "Cursor global database is missing",
-                missing_path=db_path or "state.vscdb",
-                searched_roots=[root.render() for root in self.get_search_roots()],
-                next_steps=(
-                    "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。",
-                    "重新运行 `agent-dump --list --agent cursor` 检查会话是否仍可见。",
-                ),
-            )
+            raise self._missing_global_db_error()
 
         conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
         try:
-            cursor = conn.cursor()
-            cursor.execute(sql, params)
-            return cursor.fetchall()
+            yield conn
         finally:
             conn.close()
+
+    def _query_global(
+        self, sql: str, params: tuple[Any, ...], *, conn: sqlite3.Connection | None = None
+    ) -> list[sqlite3.Row]:
+        """Run one query, reusing `conn` when the caller already holds one.
+
+        每次调用都新建连接的话，一次列表操作会为每个会话各开一个连接并做一次
+        path.resolve()；调用方在循环外持有连接即可省掉这笔固定开销。
+        """
+        if conn is not None:
+            return conn.execute(sql, params).fetchall()
+        with self._open_global() as owned:
+            return owned.execute(sql, params).fetchall()
 
     def _parse_json(self, raw: Any) -> dict[str, Any] | None:
         if raw is None:
@@ -118,21 +155,12 @@ class CursorAgent(BaseAgent):
             return None
         return data if isinstance(data, dict) else None
 
-    def _extract_request_id_from_bubbles(self, bubble_rows: list[sqlite3.Row]) -> str | None:
-        for row in bubble_rows:
-            bubble = self._parse_json(row["value"])
-            if not bubble:
-                continue
-            request_id = bubble.get("requestId")
-            if isinstance(request_id, str) and request_id.strip():
-                return request_id.strip()
-        return None
-
-    def _get_bubble_rows(self, composer_id: str) -> list[sqlite3.Row]:
+    def _get_bubble_rows(self, composer_id: str, *, conn: sqlite3.Connection | None = None) -> list[sqlite3.Row]:
         lower, upper = _key_prefix_bounds(f"bubbleId:{composer_id}:")
         return self._query_global(
             "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key",
             (lower, upper),
+            conn=conn,
         )
 
     def _extract_title(self, composer: dict[str, Any], composer_id: str) -> str:
@@ -198,16 +226,70 @@ class CursorAgent(BaseAgent):
                 return model_name.strip()
         return None
 
-    def _augment_session_metadata_from_bubbles(self, metadata: dict[str, Any], bubble_rows: list[sqlite3.Row]) -> None:
+    def _count_messages_by_composer(self, conn: sqlite3.Connection) -> dict[str, int] | None:
+        """Count each composer's user/assistant bubbles with one aggregate query.
+
+        逐会话统计要把所有 bubble 的完整正文搬进 Python 再 json.loads，只为得到一个
+        计数。JSON1 自 SQLite 3.38 起内建，老版本缺失时 json_extract 抛
+        OperationalError，此时返回 None 让调用方退回逐会话路径。
+        """
+        lower, upper = _key_prefix_bounds("bubbleId:")
+        try:
+            rows = conn.execute(_BUBBLE_MESSAGE_COUNT_SQL, (lower, upper)).fetchall()
+        except sqlite3.OperationalError:
+            return None
+        return {str(row["composer_id"]): safe_int(row["message_count"]) for row in rows}
+
+    def _scan_metadata_bubbles(self, composer_id: str, *, conn: sqlite3.Connection) -> tuple[str | None, str | None]:
+        """Read request id and model from this composer's first few bubbles."""
+        lower, upper = _key_prefix_bounds(f"bubbleId:{composer_id}:")
+        rows = self._query_global(
+            "SELECT value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key LIMIT ?",
+            (lower, upper, _METADATA_BUBBLE_SCAN_LIMIT),
+            conn=conn,
+        )
+
+        request_id: str | None = None
+        model: str | None = None
+        for row in rows:
+            bubble = self._parse_json(row["value"])
+            if not bubble:
+                continue
+            if request_id is None:
+                raw_request_id = bubble.get("requestId")
+                if isinstance(raw_request_id, str) and raw_request_id.strip():
+                    request_id = raw_request_id.strip()
+            if model is None:
+                model_info = bubble.get("modelInfo")
+                model_name = model_info.get("modelName") if isinstance(model_info, dict) else None
+                if isinstance(model_name, str) and model_name.strip():
+                    model = model_name.strip()
+            if request_id is not None and model is not None:
+                break
+        return request_id, model
+
+    def _summarize_bubbles(self, bubble_rows: list[sqlite3.Row]) -> tuple[str | None, int, str | None]:
+        """Return (request_id, message_count, model) from a single pass over the rows.
+
+        JSON1 缺失时的回退路径。之前取 requestId 与统计元数据
+        各自完整遍历并 json.loads 一遍同一批 bubble，等于每条 bubble 解析两次。
+        """
+        request_id: str | None = None
         message_count = 0
-        model = metadata.get("model")
+        model: str | None = None
+
         for row in bubble_rows:
             bubble = self._parse_json(row["value"])
             if not bubble:
                 continue
-            bubble_type = bubble.get("type")
-            if bubble_type in {1, 2}:
+
+            if bubble.get("type") in {1, 2}:
                 message_count += 1
+
+            if request_id is None:
+                raw_request_id = bubble.get("requestId")
+                if isinstance(raw_request_id, str) and raw_request_id.strip():
+                    request_id = raw_request_id.strip()
 
             if model is None:
                 model_info = bubble.get("modelInfo")
@@ -215,8 +297,15 @@ class CursorAgent(BaseAgent):
                 if isinstance(model_name, str) and model_name.strip():
                     model = model_name.strip()
 
+        return request_id, message_count, model
+
+    def _apply_bubble_summary(self, metadata: dict[str, Any], *, message_count: int, model: str | None) -> None:
         metadata["message_count"] = message_count
-        metadata["model"] = model
+        metadata["model"] = metadata.get("model") or model
+
+    def _augment_session_metadata_from_bubbles(self, metadata: dict[str, Any], bubble_rows: list[sqlite3.Row]) -> None:
+        _, message_count, model = self._summarize_bubbles(bubble_rows)
+        self._apply_bubble_summary(metadata, message_count=message_count, model=model)
 
     def get_sessions(self, days: int = 7) -> list[Session]:
         """Get Cursor sessions from the last N days."""
@@ -226,37 +315,47 @@ class CursorAgent(BaseAgent):
             return []
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         lower, upper = _key_prefix_bounds("composerData:")
-        rows = self._query_global(
-            "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY rowid DESC",
-            (lower, upper),
-        )
         sessions: list[Session] = []
-        for row in rows:
-            key = str(row["key"])
-            composer_id = key.split(":", 1)[1]
-            composer = self._parse_json(row["value"])
-            if not composer:
-                continue
 
-            created_at, updated_at = self._resolve_session_times(composer)
-            if created_at < cutoff:
-                continue
-
-            bubble_rows = self._get_bubble_rows(composer_id)
-            request_id = self._extract_request_id_from_bubbles(bubble_rows) or composer_id
-            metadata = self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id)
-            self._augment_session_metadata_from_bubbles(metadata, bubble_rows)
-
-            sessions.append(
-                Session(
-                    id=request_id,
-                    title=self._extract_title(composer, composer_id),
-                    created_at=created_at,
-                    updated_at=updated_at,
-                    source_path=self.global_db_path,
-                    metadata=metadata,
-                )
+        with self._open_global() as conn:
+            rows = self._query_global(
+                "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY rowid DESC",
+                (lower, upper),
+                conn=conn,
             )
+            message_counts = self._count_messages_by_composer(conn)
+            for row in rows:
+                key = str(row["key"])
+                composer_id = key.split(":", 1)[1]
+                composer = self._parse_json(row["value"])
+                if not composer:
+                    continue
+
+                created_at, updated_at = self._resolve_session_times(composer)
+                if created_at < cutoff:
+                    continue
+
+                if message_counts is not None:
+                    message_count = message_counts.get(composer_id, 0)
+                    bubble_request_id, bubble_model = self._scan_metadata_bubbles(composer_id, conn=conn)
+                else:
+                    bubble_request_id, message_count, bubble_model = self._summarize_bubbles(
+                        self._get_bubble_rows(composer_id, conn=conn)
+                    )
+                request_id = bubble_request_id or composer_id
+                metadata = self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id)
+                self._apply_bubble_summary(metadata, message_count=message_count, model=bubble_model)
+
+                sessions.append(
+                    Session(
+                        id=request_id,
+                        title=self._extract_title(composer, composer_id),
+                        created_at=created_at,
+                        updated_at=updated_at,
+                        source_path=self.global_db_path,
+                        metadata=metadata,
+                    )
+                )
         return sessions
 
     def _build_session_from_composer(
