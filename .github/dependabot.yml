@@ -1,0 +1,16 @@
+version: 2
+
+# workflow 里的 action 全部按 commit SHA 固定（见 .github/workflows/*.yml），
+# 这让可变 tag 无法成为通向发布环境的写入路径，代价是需要有东西推着升级。
+# Dependabot 会带着行尾注释里的版本号一起更新 SHA。
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ci
