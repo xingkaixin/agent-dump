@@ -1162,7 +1162,9 @@ class TestMain:
             with mock.patch("sys.argv", ["agent-dump", "--list", "--head"]):
                 result = main()
 
-        assert result is None
+        # 本测试关心的是那句警告；退出码 1 来自「无可用 provider」（mock 返回空列表），
+        # 与 --head 无关，见 AD-145 的退出码约定
+        assert result == 1
         assert "--head 仅支持 URI 模式" in capsys.readouterr().out
 
     def test_main_list_mode(self, capsys):

@@ -92,8 +92,10 @@ def handle_session_modes(
     available_agents = scanner.get_available_agents()
 
     if not available_agents:
+        # 退 1 而不是 None：这里走的是诊断通道（错误语义），而 --stats / --reindex /
+        # URI 模式在同一条件下已经退 1。约定见 README 的 Exit Codes 一节。
         print_diagnostic(build_no_agents_found_diagnostic(scanner))
-        return None
+        return 1
 
     if query_spec and query_spec.agent_names:
         available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
