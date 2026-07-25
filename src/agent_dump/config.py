@@ -593,65 +593,6 @@ def _simple_select(prompt: str, options: list[tuple[str, str]], default_value: s
     return options[index][1]
 
 
-def prompt_edit_ai_config(existing: AIConfig | None = None) -> AIConfig | None:
-    """Interactive edit flow, with non-terminal fallback."""
-    default_provider = existing.provider if existing else "openai"
-    default_base_url = existing.base_url if existing else ""
-    default_model = existing.model if existing else ""
-    default_api_key = existing.api_key if existing else ""
-
-    if _is_terminal():
-        provider = _ask_provider(default_provider)
-        if provider is None:
-            return None
-        base_url = _ask_text(i18n.t(Keys.CONFIG_INPUT_BASE_URL), default_base_url)
-        if base_url is None:
-            return None
-        model = _ask_text(i18n.t(Keys.CONFIG_INPUT_MODEL), default_model)
-        if model is None:
-            return None
-        api_key = _ask_text(i18n.t(Keys.CONFIG_INPUT_API_KEY), default_api_key, secret=True)
-        if api_key is None:
-            return None
-    else:
-        provider = _simple_select(
-            i18n.t(Keys.CONFIG_SELECT_PROVIDER),
-            [("OpenAI", "openai"), ("Anthropic", "anthropic")],
-            default_provider,
-        )
-        if provider is None:
-            return None
-        base_url_input = input(f"{i18n.t(Keys.CONFIG_INPUT_BASE_URL)} [{default_base_url}]: ").strip()
-        model_input = input(f"{i18n.t(Keys.CONFIG_INPUT_MODEL)} [{default_model}]: ").strip()
-        api_key_input = input(f"{i18n.t(Keys.CONFIG_INPUT_API_KEY)} [{mask_api_key(default_api_key)}]: ").strip()
-        base_url = base_url_input or default_base_url
-        model = model_input or default_model
-        api_key = api_key_input or default_api_key
-
-    candidate = AIConfig(
-        provider=provider.strip(),
-        base_url=base_url.strip(),
-        model=model.strip(),
-        api_key=api_key.strip(),
-    )
-
-    print(i18n.t(Keys.CONFIG_CONFIRM_TITLE))
-    print(i18n.t(Keys.CONFIG_CONFIRM_PROVIDER, provider=candidate.provider))
-    print(i18n.t(Keys.CONFIG_CONFIRM_BASE_URL, base_url=candidate.base_url))
-    print(i18n.t(Keys.CONFIG_CONFIRM_MODEL, model=candidate.model))
-    print(i18n.t(Keys.CONFIG_CONFIRM_API_KEY, api_key=mask_api_key(candidate.api_key)))
-
-    if _is_terminal():
-        if not _confirm(i18n.t(Keys.CONFIG_CONFIRM_WRITE)):
-            return None
-    else:
-        raw = input(f"{i18n.t(Keys.CONFIG_CONFIRM_WRITE)} (y/N): ").strip().lower()
-        if raw not in {"y", "yes"}:
-            return None
-
-    return candidate
-
-
 def _normalize_ai_candidate(candidate: AIConfig, existing: AIConfig | None) -> AIConfig | None:
     if candidate.base_url or candidate.model or candidate.api_key:
         return candidate

@@ -8,16 +8,8 @@ import os
 
 # Translation keys
 class Keys:
-    URI_INVALID_FORMAT = "URI_INVALID_FORMAT"
-    URI_SUPPORTED_FORMATS = "URI_SUPPORTED_FORMATS"
     NO_AGENTS_FOUND = "NO_AGENTS_FOUND"
-    SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
-    URI_SCHEME_MISMATCH = "URI_SCHEME_MISMATCH"
-    URI_BELONGS_TO = "URI_BELONGS_TO"
-    FETCH_DATA_FAILED = "FETCH_DATA_FAILED"
     QUERY_INVALID = "QUERY_INVALID"
-    SUPPORTED_AGENTS = "SUPPORTED_AGENTS"
-    NO_AGENTS_IN_QUERY = "NO_AGENTS_IN_QUERY"
     LIST_HEADER_FILTERED = "LIST_HEADER_FILTERED"
     LIST_HEADER = "LIST_HEADER"
     NO_SESSIONS_IN_DAYS = "NO_SESSIONS_IN_DAYS"
@@ -55,11 +47,6 @@ class Keys:
     TIME_THIS_MONTH = "TIME_THIS_MONTH"
     TIME_OLDER = "TIME_OLDER"
     TIME_UNKNOWN = "TIME_UNKNOWN"
-    TIME_MINUTES_AGO = "TIME_MINUTES_AGO"
-    TIME_JUST_NOW = "TIME_JUST_NOW"
-    TIME_HOURS_AGO = "TIME_HOURS_AGO"
-    TIME_DAYS_AGO = "TIME_DAYS_AGO"
-    TIME_WEEKS_AGO = "TIME_WEEKS_AGO"
 
     # Selector
     SELECT_AGENT_PROMPT = "SELECT_AGENT_PROMPT"
@@ -131,7 +118,6 @@ class Keys:
     PROVIDERS_ROOT_ROW = "PROVIDERS_ROOT_ROW"
     LIST_IGNORE_FORMAT = "LIST_IGNORE_FORMAT"
     LIST_IGNORE_OUTPUT = "LIST_IGNORE_OUTPUT"
-    INTERACTIVE_FORMAT_INVALID = "INTERACTIVE_FORMAT_INVALID"
     URI_EXPORT_SAVED = "URI_EXPORT_SAVED"
     URI_SUMMARY_NO_JSON_WARNING = "URI_SUMMARY_NO_JSON_WARNING"
     URI_SUMMARY_CONFIG_MISSING_WARNING = "URI_SUMMARY_CONFIG_MISSING_WARNING"
@@ -185,8 +171,6 @@ class Keys:
     COLLECT_DRY_RUN_CHUNK_COUNT = "COLLECT_DRY_RUN_CHUNK_COUNT"
     COLLECT_DRY_RUN_CONCURRENCY = "COLLECT_DRY_RUN_CONCURRENCY"
     COLLECT_DRY_RUN_SAVE_PATH = "COLLECT_DRY_RUN_SAVE_PATH"
-    COLLECT_SUMMARY_LOADING = "COLLECT_SUMMARY_LOADING"
-    COLLECT_SESSION_PROGRESS = "COLLECT_SESSION_PROGRESS"
     COLLECT_PROGRESS_START = "COLLECT_PROGRESS_START"
     COLLECT_PROGRESS_OVERVIEW = "COLLECT_PROGRESS_OVERVIEW"
     COLLECT_PROGRESS_AGENT_BREAKDOWN = "COLLECT_PROGRESS_AGENT_BREAKDOWN"
@@ -289,16 +273,8 @@ class Keys:
 
 TRANSLATIONS = {
     "en": {
-        Keys.URI_INVALID_FORMAT: "❌ Invalid URI format: {uri}",
-        Keys.URI_SUPPORTED_FORMATS: "\nSupported URI formats:",
         Keys.NO_AGENTS_FOUND: "❌ No available Agent Tools sessions found.",
-        Keys.SESSION_NOT_FOUND: "❌ Session not found: {uri}",
-        Keys.URI_SCHEME_MISMATCH: "❌ URI scheme mismatch: {uri}",
-        Keys.URI_BELONGS_TO: "   Session belongs to {agent_display_name}, but URI used {scheme}://",
-        Keys.FETCH_DATA_FAILED: "❌ Failed to fetch session data: {error}",
         Keys.QUERY_INVALID: "❌ Invalid query: {error}",
-        Keys.SUPPORTED_AGENTS: "\nSupported Agent Tools:",
-        Keys.NO_AGENTS_IN_QUERY: "⚠️  No available Agent Tools in query scope.",
         Keys.LIST_HEADER_FILTERED: "📋 Listing sessions from last {days} days matching '{query}':\n",
         Keys.LIST_HEADER: "📋 Listing sessions from last {days} days:\n",
         Keys.NO_SESSIONS_IN_DAYS: "   (No sessions in last {days} days)",
@@ -334,11 +310,6 @@ TRANSLATIONS = {
         Keys.TIME_THIS_MONTH: "This Month",
         Keys.TIME_OLDER: "Older",
         Keys.TIME_UNKNOWN: "Unknown Time",
-        Keys.TIME_MINUTES_AGO: "{minutes} mins ago",
-        Keys.TIME_JUST_NOW: "Just now",
-        Keys.TIME_HOURS_AGO: "{hours} hours ago",
-        Keys.TIME_DAYS_AGO: "{days} days ago",
-        Keys.TIME_WEEKS_AGO: "{weeks} weeks ago",
         Keys.SELECT_AGENT_PROMPT: "Select Agent Tool to export:",
         Keys.SELECT_INSTRUCTION: "\n↑↓ Move  |  Enter Select  |  q Quit",
         Keys.USER_CANCELLED: "⚠️  User cancelled, exiting.",
@@ -406,7 +377,6 @@ TRANSLATIONS = {
         Keys.PROVIDERS_ROOT_ROW: "  - [{status}] {label}: {path}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list mode ignores -format/--format.",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list mode ignores -output/--output.",
-        Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive mode does not support print; use json, markdown, or raw.",
         Keys.URI_EXPORT_SAVED: "✅ Exported session [{format}] to: {path}",
         Keys.URI_SUMMARY_NO_JSON_WARNING: "⚠️  --summary requires json in --format; summary is skipped.",
         Keys.URI_SUMMARY_CONFIG_MISSING_WARNING: "⚠️  --summary skipped: config file not found.",
@@ -460,8 +430,6 @@ TRANSLATIONS = {
         Keys.COLLECT_DRY_RUN_CHUNK_COUNT: "Chunks: {count}",
         Keys.COLLECT_DRY_RUN_CONCURRENCY: "Concurrency: {concurrency}",
         Keys.COLLECT_DRY_RUN_SAVE_PATH: "Save path: {path}",
-        Keys.COLLECT_SUMMARY_LOADING: "⏳ Calling AI to generate collect summary, please wait...",
-        Keys.COLLECT_SESSION_PROGRESS: "session summaries: {completed}/{total} ({percent}%)",
         Keys.COLLECT_PROGRESS_START: "Collect started: {since} ~ {until}",
         Keys.COLLECT_PROGRESS_OVERVIEW: "Processing {session_count} sessions in total, split into {chunk_count} summary units; concurrency {concurrency}",
         Keys.COLLECT_PROGRESS_AGENT_BREAKDOWN: "Agent breakdown: {breakdown}",
@@ -554,16 +522,8 @@ TRANSLATIONS = {
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
-        Keys.URI_INVALID_FORMAT: "❌ 无效的 URI 格式: {uri}",
-        Keys.URI_SUPPORTED_FORMATS: "\n支持的 URI 格式:",
         Keys.NO_AGENTS_FOUND: "❌ 未找到任何可用的 Agent Tools 会话。",
-        Keys.SESSION_NOT_FOUND: "❌ 未找到会话: {uri}",
-        Keys.URI_SCHEME_MISMATCH: "❌ URI scheme 与会话不匹配: {uri}",
-        Keys.URI_BELONGS_TO: "   该会话属于 {agent_display_name}，但 URI 使用了 {scheme}://",
-        Keys.FETCH_DATA_FAILED: "❌ 获取会话数据失败: {error}",
         Keys.QUERY_INVALID: "❌ 无效的查询条件: {error}",
-        Keys.SUPPORTED_AGENTS: "\n支持的 Agent Tools:",
-        Keys.NO_AGENTS_IN_QUERY: "⚠️  查询范围内没有可用的 Agent Tools。",
         Keys.LIST_HEADER_FILTERED: "📋 列出最近 {days} 天且匹配「{query}」的会话:\n",
         Keys.LIST_HEADER: "📋 列出最近 {days} 天的会话:\n",
         Keys.NO_SESSIONS_IN_DAYS: "   (最近 {days} 天内无会话)",
@@ -599,11 +559,6 @@ TRANSLATIONS = {
         Keys.TIME_THIS_MONTH: "本月",
         Keys.TIME_OLDER: "更早",
         Keys.TIME_UNKNOWN: "未知时间",
-        Keys.TIME_MINUTES_AGO: "{minutes} 分钟前",
-        Keys.TIME_JUST_NOW: "刚刚",
-        Keys.TIME_HOURS_AGO: "{hours} 小时前",
-        Keys.TIME_DAYS_AGO: "{days} 天前",
-        Keys.TIME_WEEKS_AGO: "{weeks} 周前",
         Keys.SELECT_AGENT_PROMPT: "选择要导出的 Agent Tool:",
         Keys.SELECT_INSTRUCTION: "\n↑↓ 移动  |  回车 选择  |  q 退出",
         Keys.USER_CANCELLED: "⚠️  用户取消操作，退出。",
@@ -671,7 +626,6 @@ TRANSLATIONS = {
         Keys.PROVIDERS_ROOT_ROW: "  - [{status}] {label}: {path}",
         Keys.LIST_IGNORE_FORMAT: "⚠️  --list 模式会忽略 -format/--format 参数。",
         Keys.LIST_IGNORE_OUTPUT: "⚠️  --list 模式会忽略 -output/--output 参数。",
-        Keys.INTERACTIVE_FORMAT_INVALID: "❌ --interactive 模式不支持 print；可用格式为 json、markdown、raw。",
         Keys.URI_EXPORT_SAVED: "✅ 已导出 [{format}] 到: {path}",
         Keys.URI_SUMMARY_NO_JSON_WARNING: "⚠️  --summary 需要 --format 中包含 json；已跳过 summary。",
         Keys.URI_SUMMARY_CONFIG_MISSING_WARNING: "⚠️  已跳过 --summary：未找到配置文件。",
@@ -724,8 +678,6 @@ TRANSLATIONS = {
         Keys.COLLECT_DRY_RUN_CHUNK_COUNT: "Chunk 数：{count}",
         Keys.COLLECT_DRY_RUN_CONCURRENCY: "并发配置：{concurrency}",
         Keys.COLLECT_DRY_RUN_SAVE_PATH: "保存路径：{path}",
-        Keys.COLLECT_SUMMARY_LOADING: "⏳ 正在调用 AI 生成汇总，请稍候...",
-        Keys.COLLECT_SESSION_PROGRESS: "会话摘要: {completed}/{total} ({percent}%)",
         Keys.COLLECT_PROGRESS_START: "Collect 任务开始：{since} ~ {until}",
         Keys.COLLECT_PROGRESS_OVERVIEW: "本次将处理 {session_count} 个 session，拆分为 {chunk_count} 个总结单元；并发 {concurrency}",
         Keys.COLLECT_PROGRESS_AGENT_BREAKDOWN: "Agent 分布：{breakdown}",

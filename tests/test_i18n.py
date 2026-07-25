@@ -117,3 +117,29 @@ class TestStrictFormatting:
         instance.lang = "en"
 
         assert instance.t("K", other="x") == "needs {missing}"
+
+
+class TestCatalogHasNoUnreferencedKeys:
+    """AD-142：死 key 每个都要在 Keys/en/zh 三处同步维护，parity 测试还会强制这份维护。"""
+
+    def test_every_key_is_referenced_outside_the_catalog(self):
+        """i18n.py 之外没有任何引用的 key 就是死 key。
+
+        不含 i18n.py 自身（它必然包含三处声明），也不含本测试文件（白名单会提到 key 名）。
+        """
+        from pathlib import Path
+
+        from agent_dump.i18n import Keys
+
+        repo_root = Path(__file__).resolve().parent.parent
+        sources = [
+            path
+            for path in list((repo_root / "src").rglob("*.py")) + list((repo_root / "tests").rglob("*.py"))
+            if path.name not in {"i18n.py", "test_i18n.py"}
+        ]
+        blob = "\n".join(path.read_text(encoding="utf-8") for path in sources)
+
+        declared = {name for name in dir(Keys) if name.isupper()}
+        unreferenced = {name for name in declared if name not in blob}
+
+        assert unreferenced == set(), f"以下 i18n key 已无引用，应删除: {sorted(unreferenced)}"

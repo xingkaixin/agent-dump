@@ -43,14 +43,6 @@ def _get_data_home(*, home: Path, environ: Mapping[str, str], is_windows: bool) 
     return home / ".local" / "share"
 
 
-def first_existing_path(*paths: Path) -> Path | None:
-    """Return the first existing path from candidates."""
-    for path in paths:
-        if path.exists():
-            return path
-    return None
-
-
 def first_existing_search_root(*roots: SearchRoot) -> Path | None:
     """Return the first existing root path from labeled candidates."""
     for root in roots:
