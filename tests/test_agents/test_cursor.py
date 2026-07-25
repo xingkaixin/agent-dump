@@ -892,3 +892,129 @@ class TestMalformedNumericFieldsInBubbles:
 
         assert agent._parse_datetime_utc(1704067200) == expected
         assert agent._parse_datetime_utc(1704067200000) == expected
+
+
+def _subagent_tool_bubble(target_composer_id: str, timestamp_ms: int, tool_call_id: str) -> dict:
+    """构造一个指向 target_composer_id 的 subagent tool bubble。"""
+    return {
+        "type": 2,
+        "timingInfo": {"clientRpcSendTime": timestamp_ms},
+        "toolFormerData": {
+            "name": "task_v2",
+            "status": "completed",
+            "toolCallId": tool_call_id,
+            "params": json.dumps({"description": "d", "prompt": "p", "subagentType": "explore"}),
+            "result": json.dumps({"agentId": target_composer_id}),
+            "additionalData": {"status": "success", "subagentComposerId": target_composer_id},
+        },
+    }
+
+
+class TestSubagentExpansionIsBounded:
+    """AD-123：subagentComposerId 来自不可信存储，展开必须有环检测与去重。"""
+
+    @staticmethod
+    def _layout(monkeypatch, tmp_path):
+        cursor_home = tmp_path / "home"
+        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        workspace_root = tmp_path / "workspaceStorage"
+        global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
+        workspace_root.mkdir(parents=True)
+        global_db.parent.mkdir(parents=True)
+        _create_cursor_global_db(global_db)
+        monkeypatch.setenv("CURSOR_DATA_PATH", str(workspace_root))
+        return global_db
+
+    def test_mutually_referencing_composers_do_not_recurse_forever(self, monkeypatch, tmp_path):
+        """A 引用 B、B 又引用 A：修复前是 RecursionError。"""
+        global_db = self._layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+
+        for name, other in (("composer-a", "composer-b"), ("composer-b", "composer-a")):
+            _insert_kv(global_db, f"composerData:{name}", {"composerId": name, "createdAt": now_ms, "name": name})
+            _insert_kv(
+                global_db,
+                f"bubbleId:{name}:t1",
+                _subagent_tool_bubble(other, now_ms + 1, f"tool-{name}"),
+            )
+
+        agent = CursorAgent()
+        agent.is_available()
+        session = agent._build_session_from_composer(
+            composer_id="composer-a",
+            request_id="composer-a",
+            composer={"composerId": "composer-a", "createdAt": now_ms, "name": "composer-a"},
+        )
+
+        data = agent.get_session_data(session)
+
+        assert isinstance(data, dict)
+        assert data["id"] == "composer-a"
+
+    def test_self_referencing_composer_is_not_expanded(self, monkeypatch, tmp_path):
+        global_db = self._layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:loop",
+            {"composerId": "loop", "createdAt": now_ms, "name": "loop"},
+        )
+        _insert_kv(global_db, "bubbleId:loop:t1", _subagent_tool_bubble("loop", now_ms + 1, "tool-loop"))
+
+        agent = CursorAgent()
+        agent.is_available()
+        session = agent._build_session_from_composer(
+            composer_id="loop",
+            request_id="loop",
+            composer={"composerId": "loop", "createdAt": now_ms, "name": "loop"},
+        )
+
+        data = agent.get_session_data(session)
+
+        assert isinstance(data, dict)
+
+    def test_repeated_reference_to_one_subagent_is_parsed_once(self, monkeypatch, tmp_path):
+        """同一次调用里两个 tool part 指向同一个 subagent，只应展开一次。"""
+        global_db = self._layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:parent",
+            {"composerId": "parent", "createdAt": now_ms, "name": "parent"},
+        )
+        for i in (1, 2):
+            _insert_kv(
+                global_db,
+                f"bubbleId:parent:t{i}",
+                _subagent_tool_bubble("worker", now_ms + i, f"tool-{i}"),
+            )
+        _insert_kv(
+            global_db,
+            "composerData:worker",
+            {"composerId": "worker", "createdAt": now_ms, "name": "worker"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:worker:c1",
+            {"type": 2, "text": "worker output", "timingInfo": {"clientRpcSendTime": now_ms}},
+        )
+
+        agent = CursorAgent()
+        agent.is_available()
+        session = agent._build_session_from_composer(
+            composer_id="parent",
+            request_id="parent",
+            composer={"composerId": "parent", "createdAt": now_ms, "name": "parent"},
+        )
+
+        expansions: list[str] = []
+        original = agent._expand_subagent
+        monkeypatch.setattr(
+            agent,
+            "_expand_subagent",
+            lambda composer_id, **kwargs: (expansions.append(composer_id), original(composer_id, **kwargs))[1],
+        )
+
+        agent.get_session_data(session)
+
+        assert expansions == ["worker"], "重复引用同一 subagent 必须命中 memo"
