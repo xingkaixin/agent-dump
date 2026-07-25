@@ -172,6 +172,8 @@ class Keys:
     COLLECT_CONFIG_MISSING = "COLLECT_CONFIG_MISSING"
     COLLECT_CONFIG_INCOMPLETE = "COLLECT_CONFIG_INCOMPLETE"
     COLLECT_CONFIG_HINT = "COLLECT_CONFIG_HINT"
+    COLLECT_CONFIG_BAD_SCHEME = "COLLECT_CONFIG_BAD_SCHEME"
+    COLLECT_CONFIG_PLAINTEXT_KEY = "COLLECT_CONFIG_PLAINTEXT_KEY"
     COLLECT_READ_FAILED = "COLLECT_READ_FAILED"
     COLLECT_NO_SESSIONS = "COLLECT_NO_SESSIONS"
     COLLECT_API_FAILED = "COLLECT_API_FAILED"
@@ -381,6 +383,11 @@ TRANSLATIONS = {
         Keys.COLLECT_CONFIG_MISSING: "❌ Collect requires config file.",
         Keys.COLLECT_CONFIG_INCOMPLETE: "❌ Collect config missing fields: {fields}",
         Keys.COLLECT_CONFIG_HINT: "Run: agent-dump -config edit",
+        Keys.COLLECT_CONFIG_BAD_SCHEME: "❌ ai.base_url must use http or https.",
+        Keys.COLLECT_CONFIG_PLAINTEXT_KEY: (
+            "❌ ai.base_url uses http, which would send api_key in cleartext. "
+            "Use https, or point base_url at localhost."
+        ),
         Keys.COLLECT_READ_FAILED: "❌ Failed to read sessions for collect: {error}",
         Keys.COLLECT_NO_SESSIONS: "⚠️  No sessions found in range {since} ~ {until}.",
         Keys.COLLECT_API_FAILED: "❌ AI summary request failed: {error}",
@@ -583,6 +590,11 @@ TRANSLATIONS = {
         Keys.COLLECT_DATE_RANGE_INVALID: "❌ 日期区间无效，since 必须小于等于 until。",
         Keys.COLLECT_CONFIG_MISSING: "❌ collect 模式需要配置文件。",
         Keys.COLLECT_CONFIG_INCOMPLETE: "❌ collect 配置缺少字段: {fields}",
+        Keys.COLLECT_CONFIG_BAD_SCHEME: "❌ ai.base_url 必须使用 http 或 https。",
+        Keys.COLLECT_CONFIG_PLAINTEXT_KEY: (
+            "❌ ai.base_url 使用 http，api_key 会以明文发送。"
+            "请改用 https，或把 base_url 指向本机 localhost。"
+        ),
         Keys.COLLECT_CONFIG_HINT: "请先执行: agent-dump -config edit",
         Keys.COLLECT_READ_FAILED: "❌ collect 读取会话失败: {error}",
         Keys.COLLECT_NO_SESSIONS: "⚠️  在 {since} ~ {until} 区间内未找到会话。",

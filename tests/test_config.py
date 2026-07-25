@@ -22,6 +22,7 @@ from agent_dump.config import (
     load_shortcuts_config,
     mask_api_key,
     prompt_edit_config,
+    validate_ai_config,
     write_ai_config,
     write_config,
 )
@@ -458,3 +459,60 @@ class TestConfigCommand:
         assert edited_ai.provider == "openai"
         assert edited_ai.model == "gpt-4.1-mini"
         assert edited_export == ExportConfig(output="./exports")
+
+
+class TestAiBaseUrlSchemeValidation:
+    """AD-130：base_url 的 scheme 必须先过白名单，明文带 key 要失败关闭。"""
+
+    @staticmethod
+    def _config(base_url: str, api_key: str = "sk-test") -> AIConfig:
+        return AIConfig(provider="openai", base_url=base_url, model="m", api_key=api_key)
+
+    @pytest.mark.parametrize(
+        "base_url",
+        ["https://api.example.com/v1", "https://api.example.com", "HTTPS://API.EXAMPLE.COM/v1"],
+    )
+    def test_https_is_accepted(self, base_url):
+        valid, errors = validate_ai_config(self._config(base_url))
+
+        assert valid, errors
+
+    @pytest.mark.parametrize(
+        "base_url",
+        ["file:///etc/passwd", "ftp://example.com", "gopher://example.com", "not-a-url"],
+    )
+    def test_non_http_schemes_are_rejected(self, base_url):
+        """未加白名单前这些值也能到达 urllib 的 opener。"""
+        valid, errors = validate_ai_config(self._config(base_url))
+
+        assert not valid
+        assert "base_url_scheme" in errors
+
+    @pytest.mark.parametrize("base_url", ["http://api.example.com/v1", "http://10.0.0.5:8080/v1"])
+    def test_http_with_a_key_to_a_remote_host_is_rejected(self, base_url):
+        valid, errors = validate_ai_config(self._config(base_url))
+
+        assert not valid
+        assert "base_url_plaintext_key" in errors
+
+    @pytest.mark.parametrize(
+        "base_url",
+        [
+            "http://localhost:11434/v1",
+            "http://127.0.0.1:8000/v1",
+            "http://[::1]:8000/v1",
+            "http://LOCALHOST:1234/v1",
+        ],
+    )
+    def test_http_to_loopback_is_allowed(self, base_url):
+        """本机 gateway 是明文的正当用例，必须留出这个口子。"""
+        valid, errors = validate_ai_config(self._config(base_url))
+
+        assert valid, errors
+
+    def test_http_without_a_key_reports_the_missing_key_not_the_scheme(self):
+        valid, errors = validate_ai_config(self._config("http://api.example.com/v1", api_key=""))
+
+        assert not valid
+        assert "api_key" in errors
+        assert "base_url_plaintext_key" not in errors

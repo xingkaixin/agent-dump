@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from agent_dump.collect_llm import request_summary_from_llm
+from agent_dump.collect_llm import LLMRequestError, is_retryable_error, request_summary_from_llm
 from agent_dump.config import AIConfig
 
 
@@ -90,9 +90,8 @@ def test_cross_origin_redirect_does_not_forward_credentials(
     assert result == "ok"
     assert credential_header in initial_headers
     assert credential_header not in redirected_headers
-    warning = capsys.readouterr().err
-    assert "base_url 未使用 HTTPS" in warning
-    assert "redacted-secret" not in warning
+    # 本测试只关心重定向不带走凭证；明文告警的边界由 TestInsecureBaseUrlWarning 覆盖
+    assert "redacted-secret" not in capsys.readouterr().err
 
 
 def test_same_origin_redirect_preserves_credentials(capsys: pytest.CaptureFixture[str]) -> None:
@@ -132,3 +131,61 @@ def test_same_origin_redirect_preserves_credentials(capsys: pytest.CaptureFixtur
     assert result == "ok"
     assert "authorization" in redirected_headers
     assert "redacted-secret" not in capsys.readouterr().err
+
+
+class TestRetryClassification:
+    """AD-130：只重试可能因重发而成功的失败。"""
+
+    @pytest.mark.parametrize("status", [429, 500, 502, 503, 504, 599])
+    def test_retryable_statuses(self, status):
+        assert is_retryable_error(LLMRequestError("x", status=status))
+
+    @pytest.mark.parametrize("status", [400, 401, 403, 404, 409, 422, 499])
+    def test_permanent_statuses(self, status):
+        assert not is_retryable_error(LLMRequestError("x", status=status))
+
+    def test_transport_failures_are_retryable(self):
+        assert is_retryable_error(LLMRequestError("connection reset", transport=True))
+
+    def test_error_without_status_or_transport_is_not_retryable(self):
+        assert not is_retryable_error(LLMRequestError("weird"))
+
+    def test_unrelated_exceptions_are_not_retryable(self):
+        assert not is_retryable_error(RuntimeError("missing content"))
+        assert not is_retryable_error(ValueError("bad"))
+
+    def test_status_is_preserved_for_reporting(self):
+        exc = LLMRequestError("OpenAI API HTTP 503: busy", status=503)
+
+        assert exc.status == 503
+        assert "503" in str(exc)
+
+
+class TestInsecureBaseUrlWarning:
+    """AD-130：明文告警只对远端 http 有意义；本机 http 是刻意允许的用例。"""
+
+    def test_remote_http_warns(self, capsys):
+        from agent_dump.collect_llm import _warn_if_insecure_base_url
+
+        _warn_if_insecure_base_url("http://api.example.com/v1")
+
+        assert "base_url 未使用 HTTPS" in capsys.readouterr().err
+
+    @pytest.mark.parametrize(
+        "base_url",
+        ["http://localhost:11434/v1", "http://127.0.0.1:8000/v1", "http://[::1]:8000/v1"],
+    )
+    def test_loopback_http_does_not_warn(self, base_url, capsys):
+        """否则本机 gateway 用户每个请求都会看到一行无从处理的告警。"""
+        from agent_dump.collect_llm import _warn_if_insecure_base_url
+
+        _warn_if_insecure_base_url(base_url)
+
+        assert capsys.readouterr().err == ""
+
+    def test_https_does_not_warn(self, capsys):
+        from agent_dump.collect_llm import _warn_if_insecure_base_url
+
+        _warn_if_insecure_base_url("https://api.example.com/v1")
+
+        assert capsys.readouterr().err == ""
