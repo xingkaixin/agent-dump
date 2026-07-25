@@ -83,11 +83,11 @@ def handle_stats_mode(
         except ValueError as e:
             print_diagnostic(
                 invalid_query_or_uri(
-                    "查询条件无效。",
+                    i18n.t(Keys.DIAG_QUERY_SPEC_INVALID),
                     details=(str(e),),
                     next_steps=(
-                        "使用 `关键词` 或 `agent1,agent2:关键词` 格式。",
-                        "如需路径作用域查询，改用 `agents://<path>?q=<keyword>&providers=<names>`。",
+                        i18n.t(Keys.DIAG_STEP_QUERY_FORMAT),
+                        i18n.t(Keys.DIAG_STEP_QUERY_URI_FOR_PATH),
                     ),
                 )
             )
@@ -98,12 +98,12 @@ def handle_stats_mode(
         if not available_agents:
             print_diagnostic(
                 root_not_found(
-                    "查询范围内没有可用 provider。",
+                    i18n.t(Keys.DIAG_NO_PROVIDER_IN_SCOPE),
                     searched_roots=render_agent_search_roots(scanner.agents),
                     details=(f"query providers: {','.join(sorted(query_spec.agent_names))}",),
                     next_steps=(
-                        "确认这些 provider 在本机上确实存在会话数据。",
-                        "放宽 providers 范围，或先不加 provider 过滤执行 `--list`。",
+                        i18n.t(Keys.DIAG_STEP_CONFIRM_PROVIDERS_HAVE_DATA),
+                        i18n.t(Keys.DIAG_STEP_WIDEN_PROVIDERS),
                     ),
                 )
             )

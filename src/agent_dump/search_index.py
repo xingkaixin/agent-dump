@@ -18,6 +18,7 @@ import time
 from typing import Any, TypeVar
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import get_text_content_parts
 from agent_dump.private_files import ensure_private_dir, ensure_private_file
 from agent_dump.session_data import session_updated_signal as _session_updated_signal
@@ -407,7 +408,7 @@ class SearchIndex:
 
             if len(to_update) >= _INDEX_PROGRESS_THRESHOLD:
                 print(
-                    f"正在更新 {agent.display_name} 的搜索索引（{len(to_update)} 个会话，首次运行可能较慢）…",
+                    i18n.t(Keys.INDEX_UPDATE_PROGRESS, agent=agent.display_name, count=len(to_update)),
                     file=sys.stderr,
                 )
 
@@ -440,8 +441,12 @@ class SearchIndex:
 
             if skipped:
                 print(
-                    f"警告: {agent.display_name} 有 {len(skipped)} 个会话读取失败，未写入索引，"
-                    f"下次运行会重试（示例: {', '.join(skipped[:3])}）",
+                    i18n.t(
+                        Keys.WARN_INDEX_SKIPPED_SESSIONS,
+                        agent=agent.display_name,
+                        count=len(skipped),
+                        examples=", ".join(skipped[:3]),
+                    ),
                     file=sys.stderr,
                 )
 

@@ -418,13 +418,18 @@ def validate_uri_agent_formats(agent: BaseAgent, formats: list[str]) -> None:
     unsupported = [fmt for fmt in formats if fmt in agent.unsupported_uri_formats]
     if unsupported:
         requested = ",".join(unsupported)
-        supported = " 与 ".join(sorted(VALID_FORMATS - agent.unsupported_uri_formats))
+        supported = ", ".join(sorted(VALID_FORMATS - agent.unsupported_uri_formats))
         raise unsupported_capability(
-            f"当前 URI 请求了 {agent.display_name} 不支持的导出能力。",
-            capability_gap=f"{agent.display_name} URI 仅支持 {supported}；当前请求了 {requested}",
+            i18n.t(Keys.DIAG_URI_CAPABILITY_GAP, agent=agent.display_name),
+            capability_gap=i18n.t(
+                Keys.DIAG_URI_CAPABILITY_DETAIL,
+                agent=agent.display_name,
+                supported=supported,
+                requested=requested,
+            ),
             next_steps=(
-                f"移除 {'、'.join(f'`{fmt}`' for fmt in unsupported)}，改用支持的格式。",
-                "若需要进一步处理，先导出 JSON 再做转换。",
+                i18n.t(Keys.DIAG_STEP_DROP_FORMATS, formats=", ".join(f"`{fmt}`" for fmt in unsupported)),
+                i18n.t(Keys.DIAG_STEP_EXPORT_JSON_FIRST),
             ),
         )
 
@@ -464,13 +469,20 @@ def build_no_agents_found_diagnostic(scanner: AgentScanner) -> DiagnosticError:
     if not searched_roots:
         searched_roots = tuple(location.strip() for location in get_supported_agent_locations())
     return root_not_found(
-        "未找到任何可用的本地会话数据。",
+        i18n.t(Keys.DIAG_NO_LOCAL_SESSIONS),
         searched_roots=searched_roots,
         next_steps=(
-            "确认对应 agent 已在本机生成过会话数据。",
-            "若使用自定义目录，检查相关环境变量是否指向正确位置。",
-            "若在开发环境，检查 `data/<agent>` 回退目录是否存在。",
+            i18n.t(Keys.DIAG_STEP_CHECK_AGENT_DATA),
+            i18n.t(Keys.DIAG_STEP_CHECK_ENV_VARS),
+            i18n.t(Keys.DIAG_STEP_CHECK_DEV_FALLBACK),
         ),
+    )
+
+
+def _runtime_fetch_next_steps() -> tuple[str, ...]:
+    return (
+        i18n.t(Keys.DIAG_STEP_CHECK_LOCAL_SOURCE),
+        i18n.t(Keys.DIAG_STEP_NARROW_WITH_LIST),
     )
 
 
@@ -478,21 +490,15 @@ def wrap_runtime_fetch_error(exc: Exception, *, agent: BaseAgent | None = None) 
     searched_roots = render_agent_search_roots([agent]) if agent is not None else ()
     return (
         invalid_query_or_uri(
-            "读取会话数据失败。",
+            i18n.t(Keys.DIAG_SESSION_READ_FAILED),
             details=(str(exc),),
-            next_steps=(
-                "检查本地会话源文件或数据库是否仍存在。",
-                "若问题持续，先用 `agent-dump --list` 缩小范围再重试。",
-            ),
+            next_steps=_runtime_fetch_next_steps(),
         )
         if not searched_roots
         else root_not_found(
-            "读取会话数据失败。",
+            i18n.t(Keys.DIAG_SESSION_READ_FAILED),
             details=(str(exc),),
             searched_roots=searched_roots,
-            next_steps=(
-                "检查本地会话源文件或数据库是否仍存在。",
-                "若问题持续，先用 `agent-dump --list` 缩小范围再重试。",
-            ),
+            next_steps=_runtime_fetch_next_steps(),
         )
     )

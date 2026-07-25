@@ -93,3 +93,63 @@ class TestLangFlagOverridesDetection:
         en_header = expect(Keys.LIST_HEADER, days=7)
 
         assert zh_header != en_header
+
+
+class TestDiagnosticsAreLocalized:
+    """AD-138：诊断是工具的主要失败面，此前整块是硬编码中文。"""
+
+    def test_no_local_session_data(self, language, isolated_provider_home, capsys):
+        run_cli("--list", "-d", "36500")
+        captured = capsys.readouterr()
+
+        assert expect_contains(captured.out, Keys.DIAGNOSTIC_HEADER)
+        assert expect_contains(captured.out, Keys.DIAG_NO_LOCAL_SESSIONS)
+        assert expect_contains(captured.out, Keys.DIAG_STEP_CHECK_AGENT_DATA)
+        assert expect_contains(captured.out, Keys.DIAGNOSTIC_SEARCHED_ROOTS)
+
+    def test_unparseable_uri(self, language, codex_session_tree, capsys):
+        exit_code = run_cli("not-a-supported-uri")
+        captured = capsys.readouterr()
+
+        assert exit_code == 1
+        assert expect_contains(captured.out, Keys.DIAG_URI_INVALID)
+        assert expect_contains(captured.out, Keys.DIAG_URI_UNPARSEABLE)
+
+    def test_unknown_session_id(self, language, codex_session_tree, capsys):
+        exit_code = run_cli("codex://no-such-session-id")
+        captured = capsys.readouterr()
+
+        assert exit_code == 1
+        assert expect_contains(captured.out, Keys.DIAG_SESSION_NOT_FOUND)
+        assert expect_contains(captured.out, Keys.DIAG_URI_SCANNED_NO_MATCH)
+
+    def test_unexpected_failure_wrapper(self, language, codex_session_tree, monkeypatch, capsys):
+        monkeypatch.setattr("agent_dump.cli._run", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+
+        exit_code = run_cli("--list")
+        captured = capsys.readouterr()
+
+        assert exit_code == 1
+        assert expect_contains(captured.out, Keys.DIAG_UNEXPECTED_FAILURE)
+        assert expect_contains(captured.out, Keys.DIAG_STEP_RETRY_ONCE)
+
+
+class TestWarningsAreLocalized:
+    def test_provider_failure_warning(self, language, codex_session_tree, monkeypatch, capsys):
+        from agent_dump.agents.claudecode import ClaudeCodeAgent
+
+        monkeypatch.setattr(ClaudeCodeAgent, "is_available", lambda self: True)
+        monkeypatch.setattr(
+            ClaudeCodeAgent, "get_sessions", lambda self, days=7: (_ for _ in ()).throw(ValueError("bad row"))
+        )
+
+        run_cli("--list", "-d", "36500")
+        captured = capsys.readouterr()
+
+        assert expect_contains(
+            captured.err,
+            Keys.WARN_PROVIDER_OPERATION_FAILED,
+            agent="Claude Code",
+            error_type="ValueError",
+            error="bad row",
+        )

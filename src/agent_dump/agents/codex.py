@@ -27,6 +27,7 @@ from agent_dump.agents.message_assembly import (
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
+from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
 from agent_dump.paths import ProviderRoots, SearchRoot
 
@@ -93,7 +94,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                                 if normalized:
                                     titles[session_id] = normalized
                 except Exception as e:
-                    print(f"警告: 加载标题缓存失败: {e}", file=sys.stderr)
+                    print(i18n.t(Keys.WARN_TITLE_CACHE_FAILED, error=e), file=sys.stderr)
 
             self._titles_cache = titles
             return titles
@@ -221,7 +222,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                 records.append(json.loads(line))
             return self._extract_title_from_records(records)
         except Exception as e:
-            print(f"警告: 提取标题失败: {e}", file=sys.stderr)
+            print(i18n.t(Keys.WARN_TITLE_EXTRACT_FAILED, error=e), file=sys.stderr)
 
         return None
 
@@ -324,7 +325,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                     )
                     self._accumulate_token_stats(stats, data)
                 except Exception as e:
-                    print(f"警告: 转换消息格式失败: {e}", file=sys.stderr)
+                    print(i18n.t(Keys.WARN_MESSAGE_CONVERT_FAILED, error=e), file=sys.stderr)
                     continue
 
         self._finalize_pending_plan(messages, pending_plan_location)

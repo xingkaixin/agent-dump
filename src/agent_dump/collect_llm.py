@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from agent_dump.collect_models import SUMMARY_FIELDS
 from agent_dump.config import AIConfig, is_loopback_host
+from agent_dump.i18n import Keys, i18n
 
 STRUCTURED_SUMMARY_MAX_TOKENS = 4096
 SENSITIVE_REQUEST_HEADERS = frozenset({"authorization", "x-api-key"})
@@ -52,7 +53,7 @@ def _warn_if_insecure_base_url(base_url: str) -> None:
     parsed = urlsplit(base_url)
     if parsed.scheme.lower() == "https" or is_loopback_host(parsed.hostname or ""):
         return
-    print("警告: AI base_url 未使用 HTTPS，api_key 可能以明文传输。", file=sys.stderr)
+    print(i18n.t(Keys.WARN_INSECURE_BASE_URL), file=sys.stderr)
 
 
 def _url_origin(url: str) -> tuple[str, str, int | None]:

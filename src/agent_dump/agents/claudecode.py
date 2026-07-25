@@ -23,6 +23,7 @@ from agent_dump.agents.message_assembly import (
 )
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
+from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
 
 
@@ -185,7 +186,7 @@ class ClaudeCodeAgent(FileSessionAgent):
                 records.append(json.loads(line))
             return self._extract_title_from_records(records)
         except Exception as e:
-            print(f"警告: 提取标题失败: {e}", file=sys.stderr)
+            print(i18n.t(Keys.WARN_TITLE_EXTRACT_FAILED, error=e), file=sys.stderr)
 
         return None
 
@@ -254,7 +255,7 @@ class ClaudeCodeAgent(FileSessionAgent):
                         assistant_state,
                     )
                 except Exception as e:
-                    print(f"警告: 转换消息格式失败: {e}", file=sys.stderr)
+                    print(i18n.t(Keys.WARN_MESSAGE_CONVERT_FAILED, error=e), file=sys.stderr)
                     continue
 
         stats["message_count"] = len(messages)

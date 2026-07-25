@@ -364,12 +364,12 @@ def _run() -> int | None:
         except ValueError as e:
             _print_diagnostic(
                 invalid_query_or_uri(
-                    "agents:// 查询无效。",
+                    i18n.t(Keys.DIAG_QUERY_URI_INVALID),
                     details=(str(e),),
                     parsed_uri=ParsedUri(raw=args.uri),
                     next_steps=(
-                        "检查 `agents://<path>?q=<keyword>&providers=<names>` 结构是否完整。",
-                        "不要把 `agents://...` 与 `-q/--query` 同时使用。",
+                        i18n.t(Keys.DIAG_STEP_CHECK_QUERY_URI_SHAPE),
+                        i18n.t(Keys.DIAG_STEP_NO_QUERY_URI_WITH_Q),
                     ),
                 )
             )
@@ -381,10 +381,10 @@ def _run() -> int | None:
     if args.query and is_query_uri_mode:
         _print_diagnostic(
             invalid_query_or_uri(
-                "查询参数组合无效。",
-                details=("agents:// 查询不能与 -q/--query 同时使用",),
+                i18n.t(Keys.DIAG_QUERY_COMBINATION_INVALID),
+                details=(i18n.t(Keys.DIAG_QUERY_URI_WITH_Q_DETAIL),),
                 parsed_uri=ParsedUri(raw=args.uri),
-                next_steps=("删除 `-q/--query`，或改用普通列表/交互模式。",),
+                next_steps=(i18n.t(Keys.DIAG_STEP_DROP_Q),),
             )
         )
         return 1
@@ -423,9 +423,9 @@ def _run() -> int | None:
             if str(e) == "interactive-print":
                 _print_diagnostic(
                     unsupported_capability(
-                        "当前模式不支持 print 导出。",
-                        capability_gap="--interactive 模式不支持 print；仅支持 json、markdown、raw",
-                        next_steps=("移除 `print`，改用 `json`、`markdown` 或 `raw`。",),
+                        i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_MODE),
+                        capability_gap=i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_DETAIL),
+                        next_steps=(i18n.t(Keys.DIAG_STEP_DROP_PRINT),),
                     )
                 )
                 return 1

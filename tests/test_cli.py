@@ -2427,7 +2427,10 @@ class TestMain:
         assert result == 1
         captured = capsys.readouterr()
         assert "缺失能力" in captured.out
-        assert "Cursor URI 仅支持 json 与 print" in captured.out
+        assert (
+            expect(LocaleKeys.DIAG_URI_CAPABILITY_DETAIL, agent="Cursor", supported="json, print", requested="raw")
+            in captured.out
+        )
 
     def test_main_uri_mode_cursor_json_print_success(self, capsys, tmp_path):
         """测试 Cursor URI 支持 json,print"""

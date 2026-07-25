@@ -208,6 +208,67 @@ class Keys:
     DIAGNOSTIC_SUMMARY = "DIAGNOSTIC_SUMMARY"
     DIAGNOSTIC_DETAILS = "DIAGNOSTIC_DETAILS"
     DIAGNOSTIC_SEARCHED_ROOTS = "DIAGNOSTIC_SEARCHED_ROOTS"
+
+    # provider / 运行时告警（AD-138）
+    WARN_SESSION_LOOKUP_FAILED = "WARN_SESSION_LOOKUP_FAILED"
+    WARN_PROVIDER_OPERATION_FAILED = "WARN_PROVIDER_OPERATION_FAILED"
+    WARN_SESSION_PARSE_FAILED = "WARN_SESSION_PARSE_FAILED"
+    WARN_TITLE_CACHE_FAILED = "WARN_TITLE_CACHE_FAILED"
+    WARN_TITLE_EXTRACT_FAILED = "WARN_TITLE_EXTRACT_FAILED"
+    WARN_MESSAGE_CONVERT_FAILED = "WARN_MESSAGE_CONVERT_FAILED"
+    WARN_CONTEXT_CONVERT_FAILED = "WARN_CONTEXT_CONVERT_FAILED"
+    WARN_WIRE_CONVERT_FAILED = "WARN_WIRE_CONVERT_FAILED"
+    WARN_PI_RECORD_CONVERT_FAILED = "WARN_PI_RECORD_CONVERT_FAILED"
+    WARN_MESSAGE_DATA_PARSE_FAILED = "WARN_MESSAGE_DATA_PARSE_FAILED"
+    WARN_PART_DATA_PARSE_FAILED = "WARN_PART_DATA_PARSE_FAILED"
+    WARN_INSECURE_BASE_URL = "WARN_INSECURE_BASE_URL"
+
+    # 诊断 summary / next_steps（AD-138）
+    DIAG_SESSION_NOT_FOUND = "DIAG_SESSION_NOT_FOUND"
+    DIAG_UNEXPECTED_FAILURE = "DIAG_UNEXPECTED_FAILURE"
+    DIAG_STEP_RETRY_ONCE = "DIAG_STEP_RETRY_ONCE"
+    DIAG_STEP_FILE_ISSUE = "DIAG_STEP_FILE_ISSUE"
+    DIAG_STEP_PICK_ANOTHER_SESSION = "DIAG_STEP_PICK_ANOTHER_SESSION"
+    DIAG_URI_CAPABILITY_GAP = "DIAG_URI_CAPABILITY_GAP"
+    DIAG_URI_CAPABILITY_DETAIL = "DIAG_URI_CAPABILITY_DETAIL"
+    DIAG_STEP_DROP_FORMATS = "DIAG_STEP_DROP_FORMATS"
+    DIAG_STEP_EXPORT_JSON_FIRST = "DIAG_STEP_EXPORT_JSON_FIRST"
+    DIAG_NO_LOCAL_SESSIONS = "DIAG_NO_LOCAL_SESSIONS"
+    DIAG_STEP_CHECK_AGENT_DATA = "DIAG_STEP_CHECK_AGENT_DATA"
+    DIAG_STEP_CHECK_ENV_VARS = "DIAG_STEP_CHECK_ENV_VARS"
+    DIAG_STEP_CHECK_DEV_FALLBACK = "DIAG_STEP_CHECK_DEV_FALLBACK"
+    DIAG_SESSION_READ_FAILED = "DIAG_SESSION_READ_FAILED"
+    DIAG_STEP_CHECK_LOCAL_SOURCE = "DIAG_STEP_CHECK_LOCAL_SOURCE"
+    DIAG_STEP_NARROW_WITH_LIST = "DIAG_STEP_NARROW_WITH_LIST"
+    DIAG_URI_INVALID = "DIAG_URI_INVALID"
+    DIAG_URI_UNPARSEABLE = "DIAG_URI_UNPARSEABLE"
+    DIAG_STEP_USE_SUPPORTED_SCHEME = "DIAG_STEP_USE_SUPPORTED_SCHEME"
+    DIAG_URI_SCANNED_NO_MATCH = "DIAG_URI_SCANNED_NO_MATCH"
+    DIAG_STEP_LIST_TO_CONFIRM = "DIAG_STEP_LIST_TO_CONFIRM"
+    DIAG_STEP_CHECK_URI_SESSION_ID = "DIAG_STEP_CHECK_URI_SESSION_ID"
+    DIAG_URI_SCHEME_MISMATCH = "DIAG_URI_SCHEME_MISMATCH"
+    DIAG_URI_BELONGS_TO = "DIAG_URI_BELONGS_TO"
+    DIAG_STEP_USE_THIS_URI = "DIAG_STEP_USE_THIS_URI"
+    DIAG_QUERY_URI_INVALID = "DIAG_QUERY_URI_INVALID"
+    DIAG_STEP_CHECK_QUERY_URI_SHAPE = "DIAG_STEP_CHECK_QUERY_URI_SHAPE"
+    DIAG_STEP_NO_QUERY_URI_WITH_Q = "DIAG_STEP_NO_QUERY_URI_WITH_Q"
+    DIAG_QUERY_COMBINATION_INVALID = "DIAG_QUERY_COMBINATION_INVALID"
+    DIAG_QUERY_URI_WITH_Q_DETAIL = "DIAG_QUERY_URI_WITH_Q_DETAIL"
+    DIAG_STEP_DROP_Q = "DIAG_STEP_DROP_Q"
+    DIAG_PRINT_UNSUPPORTED_MODE = "DIAG_PRINT_UNSUPPORTED_MODE"
+    DIAG_PRINT_UNSUPPORTED_DETAIL = "DIAG_PRINT_UNSUPPORTED_DETAIL"
+    DIAG_STEP_DROP_PRINT = "DIAG_STEP_DROP_PRINT"
+    DIAG_QUERY_SPEC_INVALID = "DIAG_QUERY_SPEC_INVALID"
+    DIAG_STEP_QUERY_FORMAT = "DIAG_STEP_QUERY_FORMAT"
+    DIAG_STEP_QUERY_URI_FOR_PATH = "DIAG_STEP_QUERY_URI_FOR_PATH"
+    DIAG_NO_PROVIDER_IN_SCOPE = "DIAG_NO_PROVIDER_IN_SCOPE"
+    DIAG_STEP_CONFIRM_PROVIDERS_HAVE_DATA = "DIAG_STEP_CONFIRM_PROVIDERS_HAVE_DATA"
+    DIAG_STEP_WIDEN_PROVIDERS = "DIAG_STEP_WIDEN_PROVIDERS"
+    INDEX_UPDATE_PROGRESS = "INDEX_UPDATE_PROGRESS"
+    WARN_INDEX_SKIPPED_SESSIONS = "WARN_INDEX_SKIPPED_SESSIONS"
+    WARN_INDEX_UNUSABLE = "WARN_INDEX_UNUSABLE"
+    WARN_SESSION_SUMMARY_SKIPPED = "WARN_SESSION_SUMMARY_SKIPPED"
+    WARN_SESSION_SUMMARY_FAILURES = "WARN_SESSION_SUMMARY_FAILURES"
     DIAGNOSTIC_PARSED_URI = "DIAGNOSTIC_PARSED_URI"
     DIAGNOSTIC_CAPABILITY_GAP = "DIAGNOSTIC_CAPABILITY_GAP"
     DIAGNOSTIC_NEXT_STEPS = "DIAGNOSTIC_NEXT_STEPS"
@@ -422,6 +483,63 @@ TRANSLATIONS = {
         Keys.DIAGNOSTIC_SUMMARY: "Summary",
         Keys.DIAGNOSTIC_DETAILS: "Details",
         Keys.DIAGNOSTIC_SEARCHED_ROOTS: "Searched roots",
+        Keys.WARN_SESSION_LOOKUP_FAILED: "⚠️  {agent} session lookup failed: {error}",
+        Keys.WARN_PROVIDER_OPERATION_FAILED: "⚠️  {agent} provider operation failed: {error_type}: {error}",
+        Keys.WARN_SESSION_PARSE_FAILED: "⚠️  Failed to parse session file {path}: {error}",
+        Keys.WARN_TITLE_CACHE_FAILED: "⚠️  Failed to load title cache: {error}",
+        Keys.WARN_TITLE_EXTRACT_FAILED: "⚠️  Failed to extract title: {error}",
+        Keys.WARN_MESSAGE_CONVERT_FAILED: "⚠️  Failed to convert message format: {error}",
+        Keys.WARN_CONTEXT_CONVERT_FAILED: "⚠️  Failed to convert context record: {error}",
+        Keys.WARN_WIRE_CONVERT_FAILED: "⚠️  Failed to convert wire record: {error}",
+        Keys.WARN_PI_RECORD_CONVERT_FAILED: "⚠️  Failed to convert Pi record: {error}",
+        Keys.WARN_MESSAGE_DATA_PARSE_FAILED: "⚠️  Failed to parse message data message={message_id}",
+        Keys.WARN_PART_DATA_PARSE_FAILED: "⚠️  Failed to parse message part data part={part_id}",
+        Keys.WARN_INSECURE_BASE_URL: "⚠️  AI base_url is not HTTPS; api_key may be sent in cleartext.",
+        Keys.DIAG_SESSION_NOT_FOUND: "No matching session found.",
+        Keys.DIAG_UNEXPECTED_FAILURE: "Command aborted with an unexpected error.",
+        Keys.DIAG_STEP_RETRY_ONCE: "Retry once to check whether the failure is transient.",
+        Keys.DIAG_STEP_FILE_ISSUE: "If it reproduces consistently, open an issue with the error type above and your command arguments.",
+        Keys.DIAG_STEP_PICK_ANOTHER_SESSION: "Pick another session, or fix the session id in the provider data.",
+        Keys.DIAG_URI_CAPABILITY_GAP: "The current URI requested an export capability {agent} does not support.",
+        Keys.DIAG_URI_CAPABILITY_DETAIL: "{agent} URI supports only {supported}; requested {requested}",
+        Keys.DIAG_STEP_DROP_FORMATS: "Remove {formats} and use a supported format.",
+        Keys.DIAG_STEP_EXPORT_JSON_FIRST: "For further processing, export JSON first and convert afterwards.",
+        Keys.DIAG_NO_LOCAL_SESSIONS: "No usable local session data found.",
+        Keys.DIAG_STEP_CHECK_AGENT_DATA: "Confirm the agent has produced session data on this machine.",
+        Keys.DIAG_STEP_CHECK_ENV_VARS: "If you use a custom directory, check that the relevant environment variable points at it.",
+        Keys.DIAG_STEP_CHECK_DEV_FALLBACK: "In a development environment, check whether the `data/<agent>` fallback directory exists.",
+        Keys.DIAG_SESSION_READ_FAILED: "Failed to read session data.",
+        Keys.DIAG_STEP_CHECK_LOCAL_SOURCE: "Check whether the local session source file or database still exists.",
+        Keys.DIAG_STEP_NARROW_WITH_LIST: "If it persists, narrow the scope with `agent-dump --list` and retry.",
+        Keys.DIAG_URI_INVALID: "Invalid URI format.",
+        Keys.DIAG_URI_UNPARSEABLE: "Cannot be parsed as the supported `<scheme>://<session_id>` form.",
+        Keys.DIAG_STEP_USE_SUPPORTED_SCHEME: "Use a supported URI scheme.",
+        Keys.DIAG_URI_SCANNED_NO_MATCH: "Scanned the currently available providers, but no session id matched.",
+        Keys.DIAG_STEP_LIST_TO_CONFIRM: "Run `agent-dump --list` to confirm the session still exists.",
+        Keys.DIAG_STEP_CHECK_URI_SESSION_ID: "Check that the session id in the URI is complete and belongs to that provider.",
+        Keys.DIAG_URI_SCHEME_MISMATCH: "The URI scheme does not match the actual session source.",
+        Keys.DIAG_URI_BELONGS_TO: "This session actually belongs to {agent}.",
+        Keys.DIAG_STEP_USE_THIS_URI: "Re-run with `{uri}`.",
+        Keys.DIAG_QUERY_URI_INVALID: "Invalid agents:// query.",
+        Keys.DIAG_STEP_CHECK_QUERY_URI_SHAPE: "Check that the `agents://<path>?q=<keyword>&providers=<names>` structure is complete.",
+        Keys.DIAG_STEP_NO_QUERY_URI_WITH_Q: "Do not combine `agents://...` with `-q/--query`.",
+        Keys.DIAG_QUERY_COMBINATION_INVALID: "Invalid query argument combination.",
+        Keys.DIAG_QUERY_URI_WITH_Q_DETAIL: "an agents:// query cannot be combined with -q/--query",
+        Keys.DIAG_STEP_DROP_Q: "Remove `-q/--query`, or switch to plain list/interactive mode.",
+        Keys.DIAG_PRINT_UNSUPPORTED_MODE: "The current mode does not support print export.",
+        Keys.DIAG_PRINT_UNSUPPORTED_DETAIL: "--interactive does not support print; only json, markdown and raw",
+        Keys.DIAG_STEP_DROP_PRINT: "Remove `print` and use `json`, `markdown` or `raw`.",
+        Keys.DIAG_QUERY_SPEC_INVALID: "Invalid query expression.",
+        Keys.DIAG_STEP_QUERY_FORMAT: "Use the `keyword` or `agent1,agent2:keyword` form.",
+        Keys.DIAG_STEP_QUERY_URI_FOR_PATH: "For a path-scoped query use `agents://<path>?q=<keyword>&providers=<names>`.",
+        Keys.DIAG_NO_PROVIDER_IN_SCOPE: "No usable provider within the query scope.",
+        Keys.DIAG_STEP_CONFIRM_PROVIDERS_HAVE_DATA: "Confirm those providers actually have session data on this machine.",
+        Keys.DIAG_STEP_WIDEN_PROVIDERS: "Widen the providers scope, or run `--list` without a provider filter first.",
+        Keys.INDEX_UPDATE_PROGRESS: "Updating the {agent} search index ({count} sessions; the first run can be slow)…",
+        Keys.WARN_INDEX_SKIPPED_SESSIONS: "⚠️  {agent}: {count} sessions could not be read and were not indexed; the next run retries them (e.g. {examples})",
+        Keys.WARN_INDEX_UNUSABLE: "⚠️  The {agent} search index is unusable ({error_type}: {error}); falling back to a file scan. Run `agent-dump --reindex` to rebuild it.",
+        Keys.WARN_SESSION_SUMMARY_SKIPPED: "⚠️  Session summary failed, skipped {uri}: {error}",
+        Keys.WARN_SESSION_SUMMARY_FAILURES: "⚠️  {count} session summaries failed; the final report omits those sessions.",
         Keys.DIAGNOSTIC_PARSED_URI: "Parsed URI",
         Keys.DIAGNOSTIC_CAPABILITY_GAP: "Capability gap",
         Keys.DIAGNOSTIC_NEXT_STEPS: "Next steps",
@@ -629,6 +747,63 @@ TRANSLATIONS = {
         Keys.DIAGNOSTIC_SUMMARY: "结论",
         Keys.DIAGNOSTIC_DETAILS: "证据",
         Keys.DIAGNOSTIC_SEARCHED_ROOTS: "已检查路径",
+        Keys.WARN_SESSION_LOOKUP_FAILED: "警告: {agent} 查找会话失败: {error}",
+        Keys.WARN_PROVIDER_OPERATION_FAILED: "警告: {agent} provider 操作失败: {error_type}: {error}",
+        Keys.WARN_SESSION_PARSE_FAILED: "警告: 解析会话文件失败 {path}: {error}",
+        Keys.WARN_TITLE_CACHE_FAILED: "警告: 加载标题缓存失败: {error}",
+        Keys.WARN_TITLE_EXTRACT_FAILED: "警告: 提取标题失败: {error}",
+        Keys.WARN_MESSAGE_CONVERT_FAILED: "警告: 转换消息格式失败: {error}",
+        Keys.WARN_CONTEXT_CONVERT_FAILED: "警告: 转换 context 记录失败: {error}",
+        Keys.WARN_WIRE_CONVERT_FAILED: "警告: 转换 wire 记录失败: {error}",
+        Keys.WARN_PI_RECORD_CONVERT_FAILED: "警告: 转换 Pi 记录失败: {error}",
+        Keys.WARN_MESSAGE_DATA_PARSE_FAILED: "警告: 解析消息数据失败 message={message_id}",
+        Keys.WARN_PART_DATA_PARSE_FAILED: "警告: 解析消息分段数据失败 part={part_id}",
+        Keys.WARN_INSECURE_BASE_URL: "警告: AI base_url 未使用 HTTPS，api_key 可能以明文传输。",
+        Keys.DIAG_SESSION_NOT_FOUND: "未找到匹配的会话。",
+        Keys.DIAG_UNEXPECTED_FAILURE: "命令因未预期的错误中止。",
+        Keys.DIAG_STEP_RETRY_ONCE: "重试一次以确认是否为瞬时故障。",
+        Keys.DIAG_STEP_FILE_ISSUE: "若可稳定复现，请带上上面的错误类型与命令参数提交 issue。",
+        Keys.DIAG_STEP_PICK_ANOTHER_SESSION: "选择其他会话，或修复 provider 数据中的 session id。",
+        Keys.DIAG_URI_CAPABILITY_GAP: "当前 URI 请求了 {agent} 不支持的导出能力。",
+        Keys.DIAG_URI_CAPABILITY_DETAIL: "{agent} URI 仅支持 {supported}；当前请求了 {requested}",
+        Keys.DIAG_STEP_DROP_FORMATS: "移除 {formats}，改用支持的格式。",
+        Keys.DIAG_STEP_EXPORT_JSON_FIRST: "若需要进一步处理，先导出 JSON 再做转换。",
+        Keys.DIAG_NO_LOCAL_SESSIONS: "未找到任何可用的本地会话数据。",
+        Keys.DIAG_STEP_CHECK_AGENT_DATA: "确认对应 agent 已在本机生成过会话数据。",
+        Keys.DIAG_STEP_CHECK_ENV_VARS: "若使用自定义目录，检查相关环境变量是否指向正确位置。",
+        Keys.DIAG_STEP_CHECK_DEV_FALLBACK: "若在开发环境，检查 `data/<agent>` 回退目录是否存在。",
+        Keys.DIAG_SESSION_READ_FAILED: "读取会话数据失败。",
+        Keys.DIAG_STEP_CHECK_LOCAL_SOURCE: "检查本地会话源文件或数据库是否仍存在。",
+        Keys.DIAG_STEP_NARROW_WITH_LIST: "若问题持续，先用 `agent-dump --list` 缩小范围再重试。",
+        Keys.DIAG_URI_INVALID: "URI 格式无效。",
+        Keys.DIAG_URI_UNPARSEABLE: "无法解析为受支持的 `<scheme>://<session_id>` 形式。",
+        Keys.DIAG_STEP_USE_SUPPORTED_SCHEME: "改用受支持的 URI scheme。",
+        Keys.DIAG_URI_SCANNED_NO_MATCH: "已扫描当前可用 provider，但未匹配到该 session id。",
+        Keys.DIAG_STEP_LIST_TO_CONFIRM: "先运行 `agent-dump --list` 确认该会话是否仍存在。",
+        Keys.DIAG_STEP_CHECK_URI_SESSION_ID: "检查 URI 中的 session id 是否完整且对应正确 provider。",
+        Keys.DIAG_URI_SCHEME_MISMATCH: "URI scheme 与实际会话来源不匹配。",
+        Keys.DIAG_URI_BELONGS_TO: "该会话实际属于 {agent}。",
+        Keys.DIAG_STEP_USE_THIS_URI: "改用 `{uri}` 重新执行。",
+        Keys.DIAG_QUERY_URI_INVALID: "agents:// 查询无效。",
+        Keys.DIAG_STEP_CHECK_QUERY_URI_SHAPE: "检查 `agents://<path>?q=<keyword>&providers=<names>` 结构是否完整。",
+        Keys.DIAG_STEP_NO_QUERY_URI_WITH_Q: "不要把 `agents://...` 与 `-q/--query` 同时使用。",
+        Keys.DIAG_QUERY_COMBINATION_INVALID: "查询参数组合无效。",
+        Keys.DIAG_QUERY_URI_WITH_Q_DETAIL: "agents:// 查询不能与 -q/--query 同时使用",
+        Keys.DIAG_STEP_DROP_Q: "删除 `-q/--query`，或改用普通列表/交互模式。",
+        Keys.DIAG_PRINT_UNSUPPORTED_MODE: "当前模式不支持 print 导出。",
+        Keys.DIAG_PRINT_UNSUPPORTED_DETAIL: "--interactive 模式不支持 print；仅支持 json、markdown、raw",
+        Keys.DIAG_STEP_DROP_PRINT: "移除 `print`，改用 `json`、`markdown` 或 `raw`。",
+        Keys.DIAG_QUERY_SPEC_INVALID: "查询条件无效。",
+        Keys.DIAG_STEP_QUERY_FORMAT: "使用 `关键词` 或 `agent1,agent2:关键词` 格式。",
+        Keys.DIAG_STEP_QUERY_URI_FOR_PATH: "如需路径作用域查询，改用 `agents://<path>?q=<keyword>&providers=<names>`。",
+        Keys.DIAG_NO_PROVIDER_IN_SCOPE: "查询范围内没有可用 provider。",
+        Keys.DIAG_STEP_CONFIRM_PROVIDERS_HAVE_DATA: "确认这些 provider 在本机上确实存在会话数据。",
+        Keys.DIAG_STEP_WIDEN_PROVIDERS: "放宽 providers 范围，或先不加 provider 过滤执行 `--list`。",
+        Keys.INDEX_UPDATE_PROGRESS: "正在更新 {agent} 的搜索索引（{count} 个会话，首次运行可能较慢）…",
+        Keys.WARN_INDEX_SKIPPED_SESSIONS: "警告: {agent} 有 {count} 个会话读取失败，未写入索引，下次运行会重试（示例: {examples}）",
+        Keys.WARN_INDEX_UNUSABLE: "警告: {agent} 的搜索索引不可用（{error_type}: {error}），本次改用文件扫描；可运行 `agent-dump --reindex` 重建索引。",
+        Keys.WARN_SESSION_SUMMARY_SKIPPED: "警告: 会话摘要失败，已跳过 {uri}: {error}",
+        Keys.WARN_SESSION_SUMMARY_FAILURES: "警告: {count} 个会话摘要失败，最终报告不包含这些会话。",
         Keys.DIAGNOSTIC_PARSED_URI: "解析后的 URI",
         Keys.DIAGNOSTIC_CAPABILITY_GAP: "缺失能力",
         Keys.DIAGNOSTIC_NEXT_STEPS: "下一步",

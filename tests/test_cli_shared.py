@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 from unittest import mock
 
+from locale_helpers import Keys, expect
 import pytest
 
 from agent_dump.agents.base import Session
@@ -384,7 +385,10 @@ class TestValidateUriAgentFormats:
             validate_uri_agent_formats(agent, ["json", "raw"])
 
         assert excinfo.value.capability_gap is not None
-        assert "Cursor URI 仅支持 json 与 print" in excinfo.value.capability_gap
+        assert (
+            expect(Keys.DIAG_URI_CAPABILITY_DETAIL, agent="Cursor", supported="json, print", requested="raw")
+            == excinfo.value.capability_gap
+        )
 
 
 class TestFormatSpec:

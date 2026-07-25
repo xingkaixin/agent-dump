@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agent_dump.i18n import Keys
+from agent_dump.i18n import Keys, i18n
 
 
 @dataclass(frozen=True)
@@ -89,7 +89,7 @@ def session_not_found(
 ) -> DiagnosticError:
     return DiagnosticFileNotFoundError(
         code="session_not_found",
-        summary="未找到匹配的会话。",
+        summary=i18n.t(Keys.DIAG_SESSION_NOT_FOUND),
         details=tuple(details),
         searched_roots=tuple(searched_roots),
         parsed_uri=ParsedUri(raw=raw_uri, scheme=scheme, session_id=session_id),
@@ -136,11 +136,11 @@ def unexpected_failure(exc: BaseException) -> DiagnosticError:
     """Wrap an unanticipated exception so the CLI reports it as a diagnostic."""
     return DiagnosticError(
         code="unexpected_failure",
-        summary="命令因未预期的错误中止。",
+        summary=i18n.t(Keys.DIAG_UNEXPECTED_FAILURE),
         details=(f"{type(exc).__name__}: {exc}",),
         next_steps=(
-            "重试一次以确认是否为瞬时故障。",
-            "若可稳定复现，请带上上面的错误类型与命令参数提交 issue。",
+            i18n.t(Keys.DIAG_STEP_RETRY_ONCE),
+            i18n.t(Keys.DIAG_STEP_FILE_ISSUE),
         ),
     )
 

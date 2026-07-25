@@ -40,6 +40,7 @@ from agent_dump.collect_models import (
     collect_fields_for,
 )
 from agent_dump.config import AIConfig, CollectConfig, LoggingConfig
+from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.query_filter import QuerySpec, filter_sessions_by_query, limit_query_matches
 from agent_dump.scanner import sessions_per_agent
@@ -1067,7 +1068,7 @@ def summarize_collect_entries(
                     failed_sessions += 1
                     last_error = exc
                     entry = planned_entries[index].collect_entry
-                    print(f"警告: 会话摘要失败，已跳过 {entry.session_uri}: {exc}", file=sys.stderr)
+                    print(i18n.t(Keys.WARN_SESSION_SUMMARY_SKIPPED, uri=entry.session_uri, error=exc), file=sys.stderr)
                     if logger is not None:
                         logger.log(
                             "session_summary_failed",
@@ -1085,7 +1086,7 @@ def summarize_collect_entries(
     if not summaries and last_error is not None:
         raise last_error
     if failed_sessions:
-        print(f"警告: {failed_sessions} 个会话摘要失败，最终报告不包含这些会话。", file=sys.stderr)
+        print(i18n.t(Keys.WARN_SESSION_SUMMARY_FAILURES, count=failed_sessions), file=sys.stderr)
     return summaries
 
 
