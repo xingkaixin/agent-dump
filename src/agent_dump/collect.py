@@ -371,10 +371,14 @@ def _classify_text_event(role: str, text: str) -> str | None:
 def extract_collect_events(
     session_data: dict[str, Any],
     *,
-    fallback_text: str = "",
+    fallback_text_fn: Callable[[], str] | None = None,
     char_budget: int = EVENT_EXTRACT_CHAR_BUDGET,
 ) -> tuple[tuple[CollectEvent, ...], bool]:
-    """Extract deterministic high-signal events from one session."""
+    """Extract deterministic high-signal events from one session.
+
+    fallback_text_fn 只在会话一个事件都提取不出来时才被调用。渲染整段会话正文的
+    代价与会话体积同阶，而绝大多数会话都有事件，提前算好等于白付。
+    """
     events: list[CollectEvent] = []
     used_chars = 0
     truncated = False
@@ -424,7 +428,7 @@ def extract_collect_events(
                         _append_event(_build_collect_event(kind, role, content))
 
     if not events:
-        fallback = _normalize_text(fallback_text)
+        fallback = _normalize_text(fallback_text_fn() if fallback_text_fn is not None else "")
         _append_event(_build_collect_event("fallback", "system", fallback or "(empty session)"))
 
     return tuple(events), truncated
@@ -521,8 +525,10 @@ def collect_entries(
         agent, session, session_date = matched_session
         session_data = agent.get_cached_session_data(session)
         uri = agent.get_session_uri(session)
-        fallback_text = render_session_text_fn(uri, session_data)
-        events, truncated = extract_collect_events(session_data, fallback_text=fallback_text)
+        events, truncated = extract_collect_events(
+            session_data,
+            fallback_text_fn=lambda: render_session_text_fn(uri, session_data),
+        )
         return CollectEntry(
             date_value=session_date,
             created_at=session.created_at,

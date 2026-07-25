@@ -184,7 +184,7 @@ class TestCollectExtraction:
             ]
         }
 
-        events, truncated = extract_collect_events(session_data, fallback_text="fallback text")
+        events, truncated = extract_collect_events(session_data, fallback_text_fn=lambda: "fallback text")
 
         assert truncated is False
         assert len(events) == 1
@@ -229,7 +229,7 @@ class TestCollectExtraction:
         assert "Traceback" not in "\n".join(event.text for event in events)
 
     def test_extract_collect_events_falls_back_when_empty(self):
-        events, truncated = extract_collect_events({"messages": []}, fallback_text="fallback text")
+        events, truncated = extract_collect_events({"messages": []}, fallback_text_fn=lambda: "fallback text")
 
         assert truncated is False
         assert len(events) == 1
@@ -1427,3 +1427,40 @@ class TestCollectInsightMode:
         schema = body["response_format"]["json_schema"]
         assert set(schema["schema"]["properties"]) == {"scene", "stuck", "turning"}
         assert body["max_tokens"] == 4096
+
+
+class TestFallbackRenderingIsLazy:
+    """AD-126：渲染整段会话正文只在真的没有事件时才该发生。"""
+
+    def test_fallback_is_not_rendered_when_events_exist(self):
+        calls: list[int] = []
+        session_data = {
+            "messages": [
+                {"role": "user", "parts": [{"type": "text", "text": "修复登录超时"}]},
+                {"role": "assistant", "parts": [{"type": "text", "text": "先复现"}]},
+            ]
+        }
+
+        events, _ = extract_collect_events(
+            session_data,
+            fallback_text_fn=lambda: (calls.append(1), "never used")[1],
+        )
+
+        assert events, "该会话本应产出事件"
+        assert calls == [], "有事件时不得调用 fallback 渲染"
+
+    def test_fallback_is_rendered_for_an_empty_session(self):
+        calls: list[int] = []
+
+        events, _ = extract_collect_events(
+            {"messages": []},
+            fallback_text_fn=lambda: (calls.append(1), "recovered text")[1],
+        )
+
+        assert calls == [1], "空会话必须调用一次 fallback 渲染"
+        assert events[0].text == "recovered text"
+
+    def test_missing_fallback_fn_yields_the_empty_marker(self):
+        events, _ = extract_collect_events({"messages": []})
+
+        assert events[0].text == "(empty session)"

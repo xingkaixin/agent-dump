@@ -25,6 +25,7 @@ from agent_dump.agents.message_assembly import (
     build_tool_part,
 )
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
+from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
 from agent_dump.paths import ProviderRoots, SearchRoot
@@ -264,16 +265,19 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _accumulate_token_stats(self, stats: dict[str, int], data: dict[str, Any]) -> None:
         """Update stats from one raw record when token usage is present."""
-        if "token_count" not in str(data):
+        # 曾用 `"token_count" not in str(data)` 做前置过滤，但那会把每条记录（含数百 KB
+        # 的工具输出）先 repr 成字符串再丢掉，比产生它的 json.loads 还贵。下面的结构化
+        # 取值本身就是真实条件。
+        payload = data.get("payload")
+        info = payload.get("info") if isinstance(payload, dict) else None
+        if not isinstance(info, dict):
             return
 
-        info = data.get("payload", {}).get("info", {})
-        if not info:
+        token_usage = info.get("total_token_usage")
+        if not isinstance(token_usage, dict):
             return
-
-        token_usage = info.get("total_token_usage", {})
-        stats["total_input_tokens"] += token_usage.get("input_tokens", 0)
-        stats["total_output_tokens"] += token_usage.get("output_tokens", 0)
+        stats["total_input_tokens"] += safe_int(token_usage.get("input_tokens"))
+        stats["total_output_tokens"] += safe_int(token_usage.get("output_tokens"))
 
     def _prepare_json_export_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         transformed_messages = self._transform_skill_messages_for_json_export(messages)
