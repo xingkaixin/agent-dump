@@ -108,8 +108,13 @@ def _serialize_for_search(value: Any) -> str:
         return str(value)
 
 
-def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str:
-    """Extract all searchable text from a session."""
+def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str | None:
+    """Extract all searchable text from a session, or None when it could not be read.
+
+    None 与 "" 的区别是刻意的：`""` 表示会话确实没有可搜索内容，可以正常记为
+    已索引；`None` 表示这次读取失败了，调用方必须跳过 index_state 写入，否则
+    一次瞬时失败会被永久缓存成「已索引且最新」，该会话在之后所有搜索里静默消失。
+    """
     try:
         session_data = agent.get_cached_session_data(session)
     except Exception:
@@ -167,21 +172,26 @@ def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str:
     return "\n\n".join(text_parts)
 
 
-def _fallback_extract_from_source(source_path: Path) -> str:
-    """Fallback: read text directly from source files."""
+# 只有按会话切分的文本源才能整文件读取。SQLite provider 的 source_path 是整个
+# 数据库（opencode.py:200、cursor.py:255），把它当文本读会把全库内容索引到单个
+# session id 下，造成跨会话结果污染并让索引膨胀。
+_PER_SESSION_TEXT_SUFFIXES = frozenset({".jsonl", ".json", ".txt", ".md", ".log"})
+
+
+def _fallback_extract_from_source(source_path: Path) -> str | None:
+    """Read text straight from a per-session source, or None when that is not possible."""
     try:
-        if source_path.is_file():
-            with open(source_path, encoding="utf-8", errors="ignore") as f:
-                return f.read()
         if source_path.is_dir():
-            parts = []
-            for jsonl_file in sorted(source_path.glob("*.jsonl")):
-                with open(jsonl_file, encoding="utf-8", errors="ignore") as f:
-                    parts.append(f.read())
-            return "\n".join(parts)
-    except Exception:  # noqa: S110
-        pass
-    return ""
+            parts = [
+                jsonl_file.read_text(encoding="utf-8", errors="ignore")
+                for jsonl_file in sorted(source_path.glob("*.jsonl"))
+            ]
+            return "\n".join(parts) if parts else None
+        if source_path.is_file() and source_path.suffix.lower() in _PER_SESSION_TEXT_SUFFIXES:
+            return source_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    return None
 
 
 def _build_fts_query(keyword: str) -> str:
@@ -352,6 +362,7 @@ class SearchIndex:
         conn = self._get_connection()
         added = 0
         removed = 0
+        skipped: list[str] = []
 
         try:
             # Get currently indexed sessions for this agent
@@ -387,7 +398,7 @@ class SearchIndex:
                     file=sys.stderr,
                 )
 
-            def _extract_text(item: tuple[Session, float]) -> str:
+            def _extract_text(item: tuple[Session, float]) -> str | None:
                 session, _ = item
                 return extract_session_searchable_text(agent, session)
 
@@ -399,6 +410,11 @@ class SearchIndex:
                     texts = list(executor.map(_extract_text, batch))
 
                 for (session, signal), text in zip(batch, texts, strict=True):
+                    if text is None:
+                        # 读失败：不写 index_state，让下一次运行重试，而不是把失败
+                        # 缓存成「已索引」导致该会话永久搜不到
+                        skipped.append(session.id)
+                        continue
                     self._write_session_rows(
                         conn,
                         agent_name=agent.name,
@@ -408,6 +424,13 @@ class SearchIndex:
                         already_indexed=session.id in indexed,
                     )
                     added += 1
+
+            if skipped:
+                print(
+                    f"警告: {agent.display_name} 有 {len(skipped)} 个会话读取失败，未写入索引，"
+                    f"下次运行会重试（示例: {', '.join(skipped[:3])}）",
+                    file=sys.stderr,
+                )
 
             conn.commit()
         finally:

@@ -559,6 +559,8 @@ def _fallback_search_matches(agent: BaseAgent, sessions: list[Session], keyword:
             continue
 
         content = extract_session_searchable_text(agent, session)
+        if content is None:
+            continue
         content_snippet = _build_keyword_snippet(content, keyword)
         if content_snippet is not None:
             matches.append(SearchSessionMatch(agent=agent, session=session, snippet=content_snippet, rank=0.0))

@@ -52,6 +52,13 @@ class DummyAgent(BaseAgent):
         return self._session_data.get(session.id, {})
 
 
+def require_text(agent: BaseAgent, session: Session) -> str:
+    """提取正文并断言这次读取没有失败（None 表示读失败，见 AD-121）。"""
+    text = extract_session_searchable_text(agent, session)
+    assert text is not None, "会话正文提取失败"
+    return text
+
+
 def make_session(session_id: str, title: str, source_path: Path) -> Session:
     return Session(
         id=session_id,
@@ -167,7 +174,7 @@ class TestExtractSessionSearchableText:
             }
         )
         session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
-        text = extract_session_searchable_text(agent, session)
+        text = require_text(agent, session)
         assert "Hello world" in text
         assert "Hi there" in text
 
@@ -182,7 +189,7 @@ class TestExtractSessionSearchableText:
             }
         )
         session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
-        text = extract_session_searchable_text(agent, session)
+        text = require_text(agent, session)
         assert "Let me think" in text
 
     def test_extracts_tool_state(self):
@@ -209,7 +216,7 @@ class TestExtractSessionSearchableText:
             }
         )
         session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
-        text = extract_session_searchable_text(agent, session)
+        text = require_text(agent, session)
         assert "ls -la" in text
         assert "file1.txt" in text
         assert "run bash" in text
@@ -219,7 +226,7 @@ class TestExtractSessionSearchableText:
         source.write_text('{"message": {"role": "user", "content": "fallback text"}}')
         agent = DummyAgent(session_data={})
         session = make_session("s1", "Test", source)
-        text = extract_session_searchable_text(agent, session)
+        text = require_text(agent, session)
         assert "fallback text" in text
 
 
@@ -767,3 +774,103 @@ class TestIndexBuildSpansMultipleBatches:
 
         assert added == total
         assert index.get_stats()["codex"]["sessions"] == total
+
+
+class FailingAgent(DummyAgent):
+    """get_session_data 恒抛异常，模拟瞬时读失败。"""
+
+    def get_session_data(self, session: Session) -> dict:
+        raise OSError("transient read failure")
+
+
+class TestExtractionFailureIsNotRecordedAsIndexed:
+    """AD-121：失败被写成 index_state 会让会话永久搜不到。"""
+
+    def test_returns_none_when_source_is_a_shared_database(self, tmp_path):
+        """SQLite provider 的 source_path 是整库文件，不能当文本回退读取。"""
+        db_path = tmp_path / "opencode.db"
+        db_path.write_bytes(b"SQLite format 3\x00" + b"other sessions content" * 100)
+        session = make_session("s1", "Test", db_path)
+
+        assert extract_session_searchable_text(FailingAgent(), session) is None
+
+    def test_returns_text_when_source_is_a_per_session_jsonl(self, tmp_path):
+        source = tmp_path / "session.jsonl"
+        source.write_text('{"content": "per session text"}', encoding="utf-8")
+        session = make_session("s1", "Test", source)
+
+        text = extract_session_searchable_text(FailingAgent(), session)
+
+        assert text is not None and "per session text" in text
+
+    def test_returns_none_when_source_is_missing(self, tmp_path):
+        session = make_session("s1", "Test", tmp_path / "gone.jsonl")
+
+        assert extract_session_searchable_text(FailingAgent(), session) is None
+
+    def test_empty_session_yields_empty_string_not_none(self):
+        """会话确实没有内容与读失败必须区分开，否则空会话每次都被重解析。"""
+        agent = DummyAgent(session_data={"s1": {"messages": []}})
+        session = make_session("s1", "Test", Path("/tmp/s1.jsonl"))
+
+        assert extract_session_searchable_text(agent, session) == ""
+
+    def test_failed_session_is_retried_on_the_next_run(self, tmp_path):
+        db_path = tmp_path / "opencode.db"
+        db_path.write_bytes(b"SQLite format 3\x00")
+        session = make_session("s1", "标题", db_path)
+        index = SearchIndex(tmp_path / "index.db")
+
+        added, _ = index.update(FailingAgent(name="opencode"), [session])
+
+        assert added == 0
+        assert index.get_stats() == {}, "读失败的会话不得留下 index_state 行"
+
+        # 同一个会话在源恢复后必须仍被视为待索引
+        working = DummyAgent(
+            name="opencode",
+            session_data={"s1": {"messages": [{"role": "user", "content": "恢复后的内容"}]}},
+        )
+        added, _ = index.update(working, [session])
+
+        assert added == 1
+        assert index.get_stats()["opencode"]["sessions"] == 1
+
+    def test_empty_session_is_recorded_and_not_reparsed(self, tmp_path):
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        session = make_session("s1", "标题", source)
+        agent = DummyAgent(session_data={"s1": {"messages": []}})
+        index = SearchIndex(tmp_path / "index.db")
+
+        added, _ = index.update(agent, [session])
+        assert added == 1
+
+        reads_after_first = agent.data_reads
+        index.update(agent, [session])
+
+        assert agent.data_reads == reads_after_first, "未变更的空会话不应被重新解析"
+
+    def test_skipped_sessions_are_reported_on_stderr(self, tmp_path, capsys):
+        db_path = tmp_path / "opencode.db"
+        db_path.write_bytes(b"SQLite format 3\x00")
+        sessions = [make_session(f"s{i}", f"标题{i}", db_path) for i in range(2)]
+        index = SearchIndex(tmp_path / "index.db")
+
+        index.update(FailingAgent(name="opencode"), sessions)
+        captured = capsys.readouterr()
+
+        assert "2 个会话读取失败" in captured.err
+
+
+class TestFallbackSearchHandlesUnreadableSessions:
+    """AD-121：query_filter 的兜底匹配也要能吃 None。"""
+
+    def test_unreadable_session_is_skipped_not_crashed(self, tmp_path):
+        from agent_dump.query_filter import _fallback_search_matches
+
+        db_path = tmp_path / "opencode.db"
+        db_path.write_bytes(b"SQLite format 3\x00")
+        sessions = [make_session("s1", "无关标题", db_path)]
+
+        assert _fallback_search_matches(FailingAgent(name="opencode"), sessions, "keyword") == []
