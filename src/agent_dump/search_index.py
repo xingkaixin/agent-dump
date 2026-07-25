@@ -19,6 +19,7 @@ from typing import Any, TypeVar
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts
+from agent_dump.private_files import ensure_private_dir, ensure_private_file
 from agent_dump.session_data import session_updated_signal as _session_updated_signal
 
 _T = TypeVar("_T")
@@ -259,7 +260,7 @@ class SearchIndex:
 
     def __init__(self, db_path: Path | None = None) -> None:
         self._db_path = db_path or _get_default_index_path()
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(self._db_path.parent)
         self._available: bool | None = None
 
     @property
@@ -267,6 +268,7 @@ class SearchIndex:
         """Check if FTS5 is available."""
         if self._available is None:
             conn = sqlite3.connect(self._db_path)
+            ensure_private_file(self._db_path)
             try:
                 self._available = _has_fts5(conn)
             finally:
@@ -276,6 +278,8 @@ class SearchIndex:
     def _get_connection(self) -> sqlite3.Connection:
         """Get a database connection with row factory."""
         conn = sqlite3.connect(self._db_path)
+        # sqlite3 按 umask 建库文件；索引里是全部会话正文，必须收紧到仅所有者可读
+        ensure_private_file(self._db_path)
         conn.row_factory = sqlite3.Row
         return conn
 

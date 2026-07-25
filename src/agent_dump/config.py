@@ -12,6 +12,7 @@ import questionary
 from questionary import Style
 
 from agent_dump.i18n import Keys, i18n
+from agent_dump.private_files import PRIVATE_FILE_MODE
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -63,7 +64,7 @@ class ShortcutConfig:
 
 
 DEFAULT_COLLECT_SUMMARY_CONCURRENCY = 4
-PRIVATE_CONFIG_MODE = 0o600
+PRIVATE_CONFIG_MODE = PRIVATE_FILE_MODE
 
 
 def get_default_log_path(
