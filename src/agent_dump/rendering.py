@@ -8,6 +8,7 @@ from typing import Any
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.export_paths import build_session_output_path
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
+from agent_dump.text_safety import safe_body_text, safe_display_text
 from agent_dump.time_utils import to_local_datetime
 
 HEAD_FIELDS = (
@@ -51,7 +52,8 @@ def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
     merged_head["uri"] = uri
 
     for label, key in HEAD_FIELDS:
-        lines.append(f"- {label}: {_normalize_head_value(merged_head.get(key))}")
+        # head 的字段值（标题、cwd、model）同样来自 provider payload，且每项占一行
+        lines.append(f"- {label}: {safe_display_text(_normalize_head_value(merged_head.get(key)))}")
 
     return "\n".join(lines)
 
@@ -71,7 +73,8 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
         for content in contents:
             if not content:
                 continue
-            lines.append(content)
+            # 该函数同时服务 URI print 与 markdown 导出，净化放这里覆盖两条出口
+            lines.append(safe_body_text(content))
             lines.append("")
         msg_idx += 1
 

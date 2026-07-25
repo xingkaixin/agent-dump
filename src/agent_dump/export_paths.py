@@ -3,6 +3,7 @@
 from pathlib import Path, PurePosixPath
 
 from agent_dump.diagnostics import DiagnosticError, unsupported_capability
+from agent_dump.text_safety import has_unsafe_line_characters
 
 
 def _unsafe_session_id_error(session_id: str, reason: str) -> DiagnosticError:
@@ -19,8 +20,9 @@ def safe_session_filename(session_id: str) -> str:
     filename = PurePosixPath(session_id.replace("\\", "/")).name
     if filename in {"", ".", ".."}:
         raise _unsafe_session_id_error(session_id, "no usable filename component")
-    if "\0" in filename:
-        raise _unsafe_session_id_error(session_id, "filename contains a null byte")
+    if has_unsafe_line_characters(filename):
+        # 之前只拦 NUL，于是 CR/LF/ESC 能存活进文件名，而该文件名随后会被回显到终端
+        raise _unsafe_session_id_error(session_id, "filename contains a control character")
     return filename
 
 

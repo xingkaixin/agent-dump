@@ -38,6 +38,7 @@ from agent_dump.rendering import (
     render_session_text as _render_session_text,
 )
 from agent_dump.scanner import AgentScanner, sessions_per_agent
+from agent_dump.text_safety import safe_display_text
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
 from agent_dump.uri_support import find_session_by_id as _find_session_by_id, parse_uri as _parse_uri
 
@@ -137,13 +138,13 @@ def display_sessions_list(
 
         for i in range(start_idx, end_idx):
             session = sessions[i]
-            title = agent.get_formatted_title(session)
+            title = safe_display_text(agent.get_formatted_title(session))
             if show_metadata_summary:
-                summary = format_session_metadata_summary(agent, session)
+                summary = safe_display_text(format_session_metadata_summary(agent, session))
                 print(f"   • {title}")
                 print(f"     {summary}")
             else:
-                uri = agent.get_session_uri(session)
+                uri = safe_display_text(agent.get_session_uri(session))
                 print(f"   • {title} {uri}")
 
         if show_pagination and total_pages > 1:
@@ -398,12 +399,12 @@ def display_search_results(matches: list[SearchSessionMatch]) -> None:
         title = match.agent.get_formatted_title(match.session)
         uri = match.agent.get_session_uri(match.session)
         updated = to_local_datetime(match.session.updated_at).strftime("%Y-%m-%d %H:%M:%S %Z")
-        print(f"\n{index}. {title}")
+        print(f"\n{index}. {safe_display_text(title)}")
         print(f"   {i18n.t(Keys.SEARCH_RESULT_PROVIDER)}: {match.agent.display_name}")
         print(f"   {i18n.t(Keys.SEARCH_RESULT_UPDATED)}: {updated}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_URI)}: {uri}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_URI)}: {safe_display_text(uri)}")
         print(f"   {i18n.t(Keys.SEARCH_RESULT_RANK)}: {match.rank:.6g}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_SNIPPET)}: {match.snippet}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_SNIPPET)}: {safe_display_text(match.snippet)}")
 
 
 def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mode: bool) -> None:
