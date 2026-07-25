@@ -147,6 +147,44 @@ uv run agent-dump opencode://session-id-abc123
 - `cursor://<requestid>` - Cursor 会话（`requestid` 作为 URI 标识符）
 - `pi://<session_id>` - Pi 会话
 
+### 典型错误
+
+`agent-dump` 输出可操作的结构化诊断，而不是一行笼统的失败信息。文案跟随 CLI locale
+（`--lang en|zh`）。常见示例：
+
+```text
+诊断信息
+结论: 未找到任何可用的本地会话数据。
+已检查路径:
+  - Codex: CODEX_HOME/sessions: /Users/me/.codex/sessions
+  - OpenCode: XDG/LOCALAPPDATA opencode.db: /Users/me/.local/share/opencode/opencode.db
+下一步:
+  - 确认对应 agent 已在本机生成过会话数据。
+  - 若使用自定义目录，检查相关环境变量是否指向正确位置。
+```
+
+```text
+诊断信息
+结论: 未找到匹配的会话。
+解析后的 URI: codex://session-123
+  - scheme: codex
+  - session_id: session-123
+证据:
+  - 已扫描当前可用 provider，但未匹配到该 session id。
+下一步:
+  - 先运行 `agent-dump --list` 确认该会话是否仍存在。
+  - 检查 URI 中的 session id 是否完整且对应正确 provider。
+```
+
+```text
+诊断信息
+结论: 当前 URI 请求了 Cursor 不支持的导出能力。
+缺失能力: Cursor URI 仅支持 json, print；当前请求了 raw
+下一步:
+  - 移除 `raw`，改用支持的格式。
+  - 若需要进一步处理，先导出 JSON 再做转换。
+```
+
 ### 命令行参数
 
 ```bash
@@ -272,6 +310,9 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `--providers`, `--capabilities` | 显示已注册 provider 的能力矩阵，包括 URI scheme、支持及不支持的导出格式、存储级关键词快路径和本地搜索路径是否存在。不扫描会话。 | - |
 | `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。每个词按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），多个词之间是 AND。双分词器（`unicode61` + `trigram`）支持 CJK。索引过期或 FTS5 不可用时自动回退到文件扫描；索引本身出错会在 stderr 提示并给出 `--reindex` 建议。可与 `--list` 组合。 | - |
 | `--reindex` | 强制重建全文搜索索引。索引损坏或手动修改会话数据后使用。 | - |
+| `--lang` | 强制 CLI 文案语言（`en` 或 `zh`），覆盖基于 `LANG`/`LC_ALL` 的自动检测。 | 自动检测 |
+| `--no-metadata-summary` | 在列表与交互视图中隐藏每个会话的元数据摘要行。 | 关闭 |
+| `-v`, `--version` | 打印版本号后退出。 | - |
 | `--shortcut` | 运行已配置的快捷预设。示例：`agent-dump --shortcut ob 20260408` | - |
 | `-since`, `--since` | collect 开始日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
 | `-until`, `--until` | collect 结束日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
