@@ -422,3 +422,77 @@ class TestInteractiveModeScansOnce:
         capsys.readouterr()
 
         assert sorted(scans) == ["claudecode", "codex"], f"每个 provider 应恰好扫一次，实际 {sorted(scans)}"
+
+
+class TestUntrustedTextCannotReachOutput:
+    """AD-132：会话内容由别的工具写入，控制字符不得抵达终端或导出文件。"""
+
+    def test_list_output_carries_no_control_characters(self, hostile_codex_session, capsys):
+        from agent_dump.text_safety import has_unsafe_body_characters
+
+        exit_code = run_cli("--list", "-d", "36500")
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert not has_unsafe_body_characters(captured.out), "列表输出仍含控制字符"
+        assert "HIJACKED" in captured.out, "净化应只剥离控制字符，不丢弃可见文本"
+
+    def test_uri_print_output_carries_no_control_characters(self, hostile_codex_session, capsys):
+        from agent_dump.text_safety import has_unsafe_body_characters
+
+        exit_code = run_cli(f"codex://{hostile_codex_session['session_id']}")
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert not has_unsafe_body_characters(captured.out)
+
+    def test_head_output_carries_no_control_characters(self, hostile_codex_session, capsys):
+        from agent_dump.text_safety import has_unsafe_body_characters
+
+        exit_code = run_cli(f"codex://{hostile_codex_session['session_id']}", "--head")
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert not has_unsafe_body_characters(captured.out)
+
+    def test_markdown_export_carries_no_control_characters(self, hostile_codex_session, tmp_path, capsys):
+        from agent_dump.text_safety import has_unsafe_body_characters
+
+        out = tmp_path / "md"
+        exit_code = run_cli(
+            f"codex://{hostile_codex_session['session_id']}", "-format", "markdown", "-output", str(out)
+        )
+        capsys.readouterr()
+
+        assert exit_code == 0
+        content = read_only_file(out, ".md").read_text(encoding="utf-8")
+        assert not has_unsafe_body_characters(content), "导出的 markdown 仍含控制字符"
+        assert "答复正文" in content, "正文的可见内容必须完整保留"
+        assert "\n" in content, "正文换行是内容的一部分，不能被压掉"
+
+    def test_search_output_carries_no_control_characters(self, hostile_codex_session, capsys):
+        from agent_dump.text_safety import has_unsafe_body_characters
+
+        exit_code = run_cli("--search", "答复正文", "-d", "36500")
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert not has_unsafe_body_characters(captured.out)
+
+
+class TestControlCharactersInSessionIdAreRejected:
+    """AD-132：文件名此前只拦 NUL，CR/LF/ESC 能存活并被回显。"""
+
+    @pytest.mark.parametrize("bad_id", ["ok\rmalicious", "ok\nmalicious", "ok\x1b[2Kmalicious", "ok\x00malicious"])
+    def test_control_characters_are_refused(self, bad_id):
+        from agent_dump.diagnostics import DiagnosticError
+        from agent_dump.export_paths import safe_session_filename
+
+        with pytest.raises(DiagnosticError):
+            safe_session_filename(bad_id)
+
+    @pytest.mark.parametrize("good_id", ["019c213e-c251-73a3", "session_1", "会话-1"])
+    def test_ordinary_ids_still_work(self, good_id):
+        from agent_dump.export_paths import safe_session_filename
+
+        assert safe_session_filename(good_id) == good_id

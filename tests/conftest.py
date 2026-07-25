@@ -288,3 +288,49 @@ def two_provider_tree(codex_session_tree: dict[str, object]) -> dict[str, object
         encoding="utf-8",
     )
     return {**codex_session_tree, "claude_session_id": session_id}
+
+
+@pytest.fixture
+def hostile_codex_session(isolated_provider_home: Path) -> dict[str, object]:
+    """会话标题与消息正文里带控制字符，模拟被别的工具写入的恶意 payload。"""
+    session_id = "029c213e-c251-73a3-af66-0ec9d7cb9e30"
+    sessions_dir = isolated_provider_home / ".codex" / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    session_file = sessions_dir / f"rollout-2026-07-21T10-00-00-{session_id}.jsonl"
+
+    hostile_title = "正常标题\x1b[2K\rHIJACKED"
+    hostile_body = "答复正文\x1b]8;;http://example.invalid\x07伪装链接\u202e反转"
+    session_file.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "session_meta",
+                        "payload": {
+                            "id": session_id,
+                            "timestamp": "2026-07-21T10:00:00Z",
+                            "cwd": "/workspace/demo",
+                            "cli_version": "1.0.0",
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "response_item",
+                        "timestamp": "2026-07-21T10:00:05Z",
+                        "payload": {
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": hostile_body}],
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (isolated_provider_home / ".codex" / "session_index.jsonl").write_text(
+        json.dumps({"id": session_id, "thread_name": hostile_title}) + "\n", encoding="utf-8"
+    )
+    return {"home": isolated_provider_home, "session_id": session_id, "session_file": session_file}
