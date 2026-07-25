@@ -232,23 +232,15 @@ class TestDefaultOutputLocation:
         assert exported.is_file()
 
 
-@pytest.mark.parametrize(
-    ("flag", "expected_exit_code"),
-    [
-        # characterization：同样的「无可用 provider」条件下退出码并不一致——
-        # session_workflow.py:96 返回 None（即 0），而 maintenance_workflow.py 的
-        # stats/reindex 路径返回 1。此处固化现状，是否统一见 AD-145。
-        ("--list", 0),
-        ("--stats", 1),
-        ("--reindex", 1),
-    ],
-)
-def test_modes_report_diagnostic_when_no_provider_has_data(isolated_provider_home, flag, expected_exit_code, capsys):
-    """空 home 下各模式输出诊断而不是崩溃。"""
+# AD-145：「无可用 provider」是一种失败——命令做不到被要求的事，且这条路径走的是
+# 诊断通道（错误语义）。三个模式现已一致退 1。
+@pytest.mark.parametrize("flag", ["--list", "--stats", "--reindex"])
+def test_modes_report_diagnostic_when_no_provider_has_data(isolated_provider_home, flag, capsys):
+    """空 home 下各模式输出诊断并以 1 退出，脚本能检测到。"""
     exit_code = run_cli(flag, "-d", "36500")
     captured = capsys.readouterr()
 
-    assert exit_code == expected_exit_code
+    assert exit_code == 1, f"{flag} 在无 provider 数据时应退 1"
     assert "诊断信息" in captured.out
 
 
@@ -496,3 +488,57 @@ class TestControlCharactersInSessionIdAreRejected:
         from agent_dump.export_paths import safe_session_filename
 
         assert safe_session_filename(good_id) == good_id
+
+
+class TestExitCodeConvention:
+    """AD-145：退出码约定，钉成可执行的矩阵而不是散落在各测试里的断言。
+
+    0 = 命令做到了被要求的事（哪怕结果集为空）
+    1 = 命令做不到（本机无 provider 数据、URI 未解析、参数组合非法）
+    2 = argparse 的用法错误
+    """
+
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            pytest.param(("--list", "-d", "1"), id="window-excludes-everything"),
+            pytest.param(("--list", "-q", "zzznosuchtokenzzz", "-d", "36500"), id="keyword-miss"),
+            pytest.param(("--search", "zzznosuchtokenzzz", "-d", "36500"), id="search-miss"),
+            pytest.param(("--stats", "-d", "1"), id="stats-window-empty"),
+            pytest.param(("--providers",), id="capability-matrix"),
+        ],
+    )
+    def test_zero_when_the_command_succeeded_with_an_empty_result(self, codex_session_tree, argv, capsys):
+        """「没有匹配的东西」不是失败——provider 可用，命令也确实执行了。"""
+        exit_code = run_cli(*argv)
+        capsys.readouterr()
+
+        assert exit_code == 0
+
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            pytest.param(("codex://no-such-session-id",), id="unresolvable-uri"),
+            pytest.param(("nosuchtool://abc",), id="unknown-scheme"),
+        ],
+    )
+    def test_one_when_the_command_could_not_do_what_was_asked(self, codex_session_tree, argv, capsys):
+        exit_code = run_cli(*argv)
+        capsys.readouterr()
+
+        assert exit_code == 1
+
+    @pytest.mark.parametrize("flag", ["--list", "--stats", "--reindex"])
+    def test_one_when_no_provider_data_exists_at_all(self, isolated_provider_home, flag, capsys):
+        """这是 AD-145 修的那处：--list 曾在此退 0，而同条件下另两个退 1。"""
+        exit_code = run_cli(flag, "-d", "36500")
+        capsys.readouterr()
+
+        assert exit_code == 1
+
+    def test_two_for_argparse_usage_errors(self, codex_session_tree, capsys):
+        with pytest.raises(SystemExit) as excinfo:
+            run_cli(f"codex://{codex_session_tree['session_id']}", "-format", "totally-invalid")
+        capsys.readouterr()
+
+        assert excinfo.value.code == 2

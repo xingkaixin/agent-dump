@@ -183,7 +183,18 @@ Next steps:
   - For further processing, export JSON first and convert afterwards.
 ```
 
-### Command-line Arguments
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | The command did what was asked — including when the result set is legitimately empty (no sessions in the `-days` window, a keyword or `--search` that matched nothing). |
+| `1` | The command could not do what was asked: no provider data exists on this machine, a URI did not resolve to a session, or an argument combination is invalid. |
+| `2` | Argument usage error, raised by `argparse` (unknown flag, invalid `--format` value). |
+
+This makes `agent-dump --list && ...` meaningful: it succeeds when sessions were
+listed and fails when there is nothing to list because no provider has data.
+
+## Command-line Arguments
 
 ```bash
 # Display help
