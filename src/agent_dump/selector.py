@@ -69,29 +69,22 @@ def group_sessions(sessions: list[Session]) -> dict[str, list[Session]]:
     return ordered_groups
 
 
-def _get_agent_session_count(agent: BaseAgent, days: int, session_counts: dict[str, int] | None = None) -> int:
-    """Get session count for an agent, optionally from precomputed counts."""
-    if session_counts is not None:
-        return session_counts.get(agent.name, 0)
+def select_agent_interactive(agents: list[BaseAgent], session_counts: dict[str, int]) -> BaseAgent | None:
+    """Let user select an agent tool interactively.
 
-    sessions = agent.get_sessions(days=days)
-    return len(sessions)
-
-
-def select_agent_interactive(
-    agents: list[BaseAgent], days: int = 7, session_counts: dict[str, int] | None = None
-) -> BaseAgent | None:
-    """Let user select an agent tool interactively"""
+    session_counts 是必填的：selector 属于 UI 层，不得自己去扫 provider
+    （AGENTS.md §1.4）。调用方本来就要扫一次，把计数传进来即可。
+    """
     if not agents:
         print(i18n.t(Keys.NO_AGENTS_FOUND))
         return None
 
     if not is_terminal():
-        return select_agent_simple(agents, days=days, session_counts=session_counts)
+        return select_agent_simple(agents, session_counts)
 
     choices = []
     for agent in agents:
-        count = _get_agent_session_count(agent, days=days, session_counts=session_counts)
+        count = session_counts.get(agent.name, 0)
         label = f"{agent.display_name} ({count} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})"
         choices.append(questionary.Choice(title=label, value=agent))
 
@@ -129,14 +122,12 @@ def select_agent_interactive(
     return selected
 
 
-def select_agent_simple(
-    agents: list[BaseAgent], days: int = 7, session_counts: dict[str, int] | None = None
-) -> BaseAgent | None:
+def select_agent_simple(agents: list[BaseAgent], session_counts: dict[str, int]) -> BaseAgent | None:
     """Simple agent selection for non-terminal environments"""
     print(i18n.t(Keys.AVAILABLE_AGENTS))
     print("-" * 80)
     for i, agent in enumerate(agents, 1):
-        count = _get_agent_session_count(agent, days=days, session_counts=session_counts)
+        count = session_counts.get(agent.name, 0)
         print(f"{i}. {agent.display_name} ({count} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
     print()
 

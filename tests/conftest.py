@@ -252,3 +252,39 @@ def populated_db(mock_db_path: Path) -> Path:
     conn.commit()
     conn.close()
     return mock_db_path
+
+
+@pytest.fixture
+def two_provider_tree(codex_session_tree: dict[str, object]) -> dict[str, object]:
+    """在 codex 之外再造一个可用的 Claude Code provider。
+
+    很多分层/扫描次数的问题只在「有多个 provider 可选」时才出现——单 provider 会
+    走自动选中分支，绕开 selector。
+    """
+    home = codex_session_tree["home"]
+    assert isinstance(home, Path)
+    project_dir = home / ".claude" / "projects" / "demo-project"
+    project_dir.mkdir(parents=True)
+    session_id = "claude-session-0001"
+    (project_dir / f"{session_id}.jsonl").write_text(
+        "\n".join(
+            json.dumps(record)
+            for record in (
+                {
+                    "type": "user",
+                    "timestamp": "2026-07-20T11:00:00Z",
+                    "cwd": "/workspace/demo",
+                    "version": "1.0.0",
+                    "message": {"role": "user", "content": "检查缓存失效"},
+                },
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-07-20T11:00:10Z",
+                    "message": {"role": "assistant", "content": [{"type": "text", "text": "先看 TTL 配置"}]},
+                },
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {**codex_session_tree, "claude_session_id": session_id}

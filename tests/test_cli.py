@@ -1625,7 +1625,7 @@ class TestMain:
         assert result == 0
         scoped_agents = mock_select_agent.call_args[0][0]
         assert [agent.name for agent in scoped_agents] == ["codex", "kimi"]
-        assert mock_select_agent.call_args.kwargs["session_counts"] == {"codex": 1, "kimi": 1}
+        assert mock_select_agent.call_args[0][1] == {"codex": 1, "kimi": 1}
         assert mock_filter.call_count == 2
         assert mock_filter.call_args_list[0] == mock.call(agent2, agent2_sessions, "bug")
         assert mock_filter.call_args_list[1] == mock.call(agent3, agent3_sessions, "bug")

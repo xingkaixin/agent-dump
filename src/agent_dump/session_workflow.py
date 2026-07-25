@@ -199,45 +199,45 @@ def _handle_interactive_mode(
     output_formats: list[str],
     export_config: ExportConfigLike,
 ) -> int:
-    interactive_agents = available_agents
-    session_counts: dict[str, int] | None = None
     show_metadata_summary = not args.no_metadata_summary
 
+    # 一次取全，选中后直接复用；之前无 query 时 selector 会为标签逐个扫 provider，
+    # 用户选完再把选中的 provider 完整扫第二遍
     if query_spec:
-        session_counts = {
-            agent.name: len(matched_sessions_by_agent[agent.name])
+        sessions_by_agent = {
+            agent.name: matched_sessions_by_agent[agent.name]
             for agent in available_agents
             if agent.name in matched_sessions_by_agent
         }
-        interactive_agents = [agent for agent in available_agents if agent.name in matched_sessions_by_agent]
-        if not interactive_agents:
-            print(
-                i18n.t(
-                    Keys.NO_SESSIONS_MATCHING_KEYWORD,
-                    days=args.days,
-                    query=render_query_summary(query_spec),
-                )
+    else:
+        sessions_by_agent = {
+            agent.name: sessions for agent, sessions in sessions_per_agent(available_agents, args.days)
+        }
+
+    session_counts = {name: len(sessions) for name, sessions in sessions_by_agent.items()}
+    interactive_agents = [agent for agent in available_agents if agent.name in sessions_by_agent]
+
+    if query_spec and not interactive_agents:
+        print(
+            i18n.t(
+                Keys.NO_SESSIONS_MATCHING_KEYWORD,
+                days=args.days,
+                query=render_query_summary(query_spec),
             )
-            return 1
+        )
+        return 1
 
     if len(interactive_agents) == 1:
         selected_agent = interactive_agents[0]
         print(i18n.t(Keys.AUTO_SELECT_AGENT, agent_name=selected_agent.display_name))
     else:
-        selected_agent = select_agent_interactive(
-            interactive_agents,
-            days=args.days,
-            session_counts=session_counts,
-        )
+        selected_agent = select_agent_interactive(interactive_agents, session_counts)
         if not selected_agent:
             print("\n" + i18n.t(Keys.NO_AGENT_SELECTED))
             return 1
         print(i18n.t(Keys.AGENT_SELECTED, agent_name=selected_agent.display_name))
 
-    if query_spec:
-        sessions = matched_sessions_by_agent.get(selected_agent.name, [])
-    else:
-        sessions = dict(sessions_per_agent([selected_agent], args.days))[selected_agent]
+    sessions = sessions_by_agent.get(selected_agent.name, [])
 
     if not sessions:
         if query_spec:
