@@ -13,13 +13,14 @@ from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
-from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
+from agent_dump.agents.jsonl_scan import parse_iso_timestamp_ms, read_jsonl_scan_metadata
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
     build_fallback_tool_message,
     build_message,
     build_text_part,
     build_tool_part,
+    try_append_to_assistant_group,
 )
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
@@ -302,14 +303,8 @@ class ClaudeCodeAgent(FileSessionAgent):
         return head
 
     def _parse_timestamp_ms(self, data: dict[str, Any]) -> int:
-        """Parse one Claude record timestamp into milliseconds."""
-        timestamp_str = str(data.get("timestamp", "")).strip()
-        if not timestamp_str:
-            return 0
-        try:
-            return int(datetime.fromisoformat(timestamp_str.replace("Z", "+00:00")).timestamp() * 1000)
-        except Exception:
-            return 0
+        """Parse record timestamp into milliseconds."""
+        return parse_iso_timestamp_ms(data.get("timestamp"))
 
     def _build_tool_part(self, part: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
         """Build one tool part from Claude tool_use content."""
@@ -368,17 +363,6 @@ class ClaudeCodeAgent(FileSessionAgent):
                 parts.append(build_text_part(item, timestamp_ms))
         return parts
 
-    def _message_has_part_type(self, message: dict[str, Any], part_type: str) -> bool:
-        """Whether a message already contains the given part type."""
-        return any(part.get("type") == part_type for part in message.get("parts", []))
-
-    def _append_part_if_new(self, message: dict[str, Any], part: dict[str, Any]) -> None:
-        """Append a part unless it duplicates the current tail part."""
-        parts = message.get("parts", [])
-        if parts and parts[-1] == part:
-            return
-        parts.append(part)
-
     def _apply_assistant_metadata(self, message: dict[str, Any], msg: dict[str, Any]) -> None:
         """Apply model/usage metadata to an assistant message when available."""
         model = msg.get("model")
@@ -399,14 +383,15 @@ class ClaudeCodeAgent(FileSessionAgent):
         current_assistant_index: int | None,
     ) -> int:
         """Append reasoning to the active assistant group or create a new one."""
-        if current_assistant_index is not None:
-            message = messages[current_assistant_index]
-            has_text = self._message_has_part_type(message, "text")
-            has_tool = self._message_has_part_type(message, "tool")
-            if not has_text and not has_tool:
-                self._append_part_if_new(message, part)
-                self._apply_assistant_metadata(message, msg)
-                return current_assistant_index
+        folded = try_append_to_assistant_group(
+            messages,
+            current_assistant_index=current_assistant_index,
+            parts=(part,),
+            blocking_part_types=("text", "tool"),
+            on_message=lambda existing: self._apply_assistant_metadata(existing, msg),
+        )
+        if folded is not None:
+            return folded
 
         message = build_message(
             message_id=message_id,
@@ -430,13 +415,15 @@ class ClaudeCodeAgent(FileSessionAgent):
         current_assistant_index: int | None,
     ) -> int:
         """Append text to the active assistant group or create a new one."""
-        if current_assistant_index is not None:
-            message = messages[current_assistant_index]
-            has_tool = self._message_has_part_type(message, "tool")
-            if not has_tool:
-                self._append_part_if_new(message, part)
-                self._apply_assistant_metadata(message, msg)
-                return current_assistant_index
+        folded = try_append_to_assistant_group(
+            messages,
+            current_assistant_index=current_assistant_index,
+            parts=(part,),
+            blocking_part_types=("tool",),
+            on_message=lambda existing: self._apply_assistant_metadata(existing, msg),
+        )
+        if folded is not None:
+            return folded
 
         message = build_message(
             message_id=message_id,
