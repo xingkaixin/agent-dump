@@ -331,7 +331,7 @@ collect 模式入口：
 1. 在 `src/agent_dump/agents/<agent_name>.py` 创建 `BaseAgent` 子类。会话以文件形式存储的 provider 应继承 `FileSessionAgent`，只需实现 `_iter_session_files()` 与 `_parse_session_file()`（可选 `_session_file_candidates()` 加速 URI 定位）。
 2. 实现 `scan()`、`is_available()`、`get_sessions()`、`get_session_data()`（继承 `FileSessionAgent` 时前三个由基类提供）。`export_session()` 由 `BaseAgent` 统一实现，只在需要导出专属变换时覆盖 `_json_export_payload()`（覆盖时必须先浅拷贝，基类返回的是请求级缓存里的共享 dict）。
 3. 实现 `get_search_roots()`，让诊断信息显示真实搜索路径。
-4. 在 `src/agent_dump/agent_registry.py` 添加 `AgentRegistration`，声明 `name`、`display_name`、`factory`、`uri_schemes`、`location_line`。
+4. 在 `src/agent_dump/agent_registry.py` 添加 `AgentRegistration`，声明 `name`、`display_name`、`factory`、`uri_schemes`、`location_line`；若该 provider 的 URI 带路径前缀（如 `codex://threads/<id>`）或 session id 用别的名字（如 Cursor 的 requestId），一并声明 `uri_path_prefixes` 与 `uri_identifier_label`——parse_uri 与 URI 示例都由这些字段驱动，不要在共享模块里加 provider 分支。
 5. 在 `src/agent_dump/agents/__init__.py` 导出 provider。
 6. 若该 provider 属于稳定库 API，在 `src/agent_dump/__init__.py` 导出，并更新本文件第 2 节、README 与 `tests/test_version.py`。
 7. 为 provider 增加 `tests/test_agents/test_<agent>.py`，并在 `tests/test_agents/test_contracts.py` 补充合约用例。

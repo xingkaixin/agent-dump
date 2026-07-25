@@ -3,7 +3,7 @@
 import re
 import sys
 
-from agent_dump.agent_registry import get_uri_scheme_map
+from agent_dump.agent_registry import get_uri_path_prefixes, get_uri_scheme_map
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
 from agent_dump.scanner import AgentScanner
@@ -19,10 +19,12 @@ def parse_uri(uri: str) -> tuple[str, str] | None:
     if scheme not in get_uri_scheme_map():
         return None
 
-    if scheme == "codex" and session_id.startswith("threads/"):
-        session_id = session_id.removeprefix("threads/")
-        if not session_id:
-            return None
+    for prefix in get_uri_path_prefixes().get(scheme, ()):
+        if session_id.startswith(prefix):
+            session_id = session_id.removeprefix(prefix)
+            if not session_id:
+                return None
+            break
 
     return scheme, session_id
 
