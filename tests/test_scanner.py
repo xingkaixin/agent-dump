@@ -4,6 +4,7 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
+import threading
 from unittest import mock
 
 import pytest
@@ -212,29 +213,52 @@ class TestAgentScanner:
             assert agent.display_name in captured.out
 
     def test_scan_runs_concurrently(self):
-        """测试并发扫描确实并行执行，总时间接近最慢单个 agent 的时间"""
-        import time
+        """并发性用结构性断言，而不是墙钟阈值。
 
+        原实现让 7 个 agent 各 time.sleep(0.1) 后断言 elapsed < 0.35。在共享的 CI
+        runner 上乘以 5 条 Python matrix 是典型的间歇性红灯，还固定付 0.1s 真实睡眠。
+        改用 Barrier：要求 7 个 scan 都到达同一屏障后才有任何一个返回——串行执行
+        永远无法满足这个条件，所以它比时间比较更强，且不依赖机器负载。
+        """
         scanner = AgentScanner()
+        agent_count = len(scanner.agents)
+        # timeout 只是防止实现真的串行时把测试挂死，不参与正确性判断
+        barrier = threading.Barrier(agent_count, timeout=10)
+        arrivals: list[str] = []
+        lock = threading.Lock()
 
-        def make_delayed_scan(delay: float):
+        def make_scan(agent_name: str):
             def _scan():
-                time.sleep(delay)
+                with lock:
+                    arrivals.append(agent_name)
+                barrier.wait()
                 return [mock.MagicMock()]
 
             return _scan
 
         for agent in scanner.agents:
             agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
-            agent.scan = make_delayed_scan(0.1)
+            agent.scan = make_scan(agent.name)
 
-        start = time.monotonic()
         result = scanner.scan()
-        elapsed = time.monotonic() - start
 
-        assert len(result) == len(scanner.agents)
-        # 7 个 agent 各 0.1s，若串行需 0.7s；并发应远小于 0.7s
-        assert elapsed < 0.35
+        assert len(result) == agent_count
+        assert sorted(arrivals) == sorted(agent.name for agent in scanner.agents)
+
+    def test_scan_isolates_a_provider_that_raises(self):
+        """并发路径下单个 provider 抛异常仍只影响它自己。"""
+        scanner = AgentScanner()
+        for index, agent in enumerate(scanner.agents):
+            agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
+            if index == 0:
+                agent.scan = mock.MagicMock(side_effect=ValueError("bad row"))  # type: ignore
+            else:
+                agent.scan = mock.MagicMock(return_value=[mock.MagicMock()])  # type: ignore
+
+        result = scanner.scan()
+
+        assert len(result) == len(scanner.agents) - 1
+        assert scanner.agents[0].name not in result
 
 
 class ExplodingAgent(BaseAgent):
