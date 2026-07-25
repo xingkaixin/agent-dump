@@ -12,10 +12,7 @@ from typing import cast
 from agent_dump.agents.base import BaseAgent
 from agent_dump.collect import (
     build_collect_final_prompt,
-    build_collect_run_stats,
     collect_entries,
-    create_collect_logger,
-    emit_collect_progress,
     plan_collect_entries,
     reduce_collect_summaries,
     request_summary_from_llm,
@@ -24,6 +21,11 @@ from agent_dump.collect import (
     write_collect_markdown,
 )
 from agent_dump.collect_models import CollectProgressEvent, CollectRunStats
+from agent_dump.collect_progress import (
+    build_collect_run_stats,
+    create_collect_logger,
+    emit_collect_progress,
+)
 from agent_dump.config import (
     AIConfig,
     load_ai_config,

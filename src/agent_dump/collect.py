@@ -4,12 +4,11 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import date, datetime, timedelta, tzinfo
-import json
 from pathlib import Path
 import re
 import sys
 import threading
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -23,8 +22,6 @@ from agent_dump.collect_models import (
     CHUNK_TARGET_CHARS,
     EVENT_EXTRACT_CHAR_BUDGET,
     GROUP_SIZE,
-    MAX_LOG_PREVIEW_CHARS,
-    MAX_SUMMARY_ITEMS_PER_FIELD,
     SESSION_MERGE_LLM_THRESHOLD,
     SUMMARY_PARSE_RETRY_COUNT,
     SUPPORTED_DATE_FORMATS,
@@ -33,13 +30,27 @@ from agent_dump.collect_models import (
     CollectEvent,
     CollectLogger,
     CollectProgressEvent,
-    CollectRunStats,
     GroupSummaryEntry,
     PlannedCollectEntry,
     SessionSummaryEntry,
     collect_fields_for,
 )
-from agent_dump.config import AIConfig, CollectConfig, LoggingConfig
+from agent_dump.collect_progress import (
+    _truncate_log_preview,
+    _truncate_log_tail,
+    emit_collect_progress,
+)
+from agent_dump.collect_summary import (
+    _dedupe_preserve_order,
+    _extract_json_object,
+    _normalize_text,
+    _serialize_summary_payload,
+    _summary_payload_size,
+    empty_summary_payload,
+    merge_summary_payloads,
+    normalize_summary_payload,
+)
+from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.query_filter import QuerySpec, filter_sessions_by_query, limit_query_matches
@@ -135,194 +146,14 @@ def _is_session_denied(session: Session, deny_paths: tuple[str, ...]) -> bool:
     return False
 
 
-def _normalize_text(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def _truncate_log_preview(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
-    normalized = text.strip()
-    return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
-
-
-def _truncate_log_tail(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
-    normalized = text.strip()
-    return normalized if len(normalized) <= limit else f"...{normalized[-limit + 3 :].lstrip()}"
-
-
 def _truncate_excerpt(text: str, limit: int = 280) -> str:
     normalized = text.strip()
     return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
 
 
-def _dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_ITEMS_PER_FIELD) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for value in values:
-        normalized = _normalize_text(value)
-        if not normalized:
-            continue
-        lowered = normalized.casefold()
-        if lowered in seen:
-            continue
-        seen.add(lowered)
-        result.append(normalized)
-        if len(result) >= limit:
-            break
-    return result
-
-
-def empty_summary_payload(mode: str = "pm") -> dict[str, list[str]]:
-    """Create one empty structured summary payload."""
-    return {field_name: [] for field_name in collect_fields_for(mode)}
-
-
-def normalize_summary_payload(payload: dict[str, Any], *, mode: str = "pm") -> dict[str, list[str]]:
-    """Normalize unknown payload to the fixed summary schema."""
-    fields = collect_fields_for(mode)
-    normalized: dict[str, list[str]] = {field_name: [] for field_name in fields}
-    for field_name in fields:
-        raw_value = payload.get(field_name, [])
-        values: list[str]
-        if isinstance(raw_value, list):
-            values = [str(item) for item in raw_value if str(item).strip()]
-        elif isinstance(raw_value, str) and raw_value.strip():
-            values = [raw_value]
-        else:
-            values = []
-        normalized[field_name] = _dedupe_preserve_order(values)
-    return normalized
-
-
-def merge_summary_payloads(
-    payloads: Iterable[dict[str, list[str]]],
-    *,
-    max_items_per_field: int = MAX_SUMMARY_ITEMS_PER_FIELD,
-    mode: str = "pm",
-) -> dict[str, list[str]]:
-    """Merge structured summaries deterministically."""
-    fields = collect_fields_for(mode)
-    merged: dict[str, list[str]] = {field_name: [] for field_name in fields}
-    for field_name in fields:
-        items: list[str] = []
-        for payload in payloads:
-            items.extend(payload.get(field_name, []))
-        merged[field_name] = _dedupe_preserve_order(items, limit=max_items_per_field)
-    return merged
-
-
-def _summary_payload_size(payload: dict[str, list[str]]) -> int:
-    return sum(len(items) for items in payload.values())
-
-
-def _extract_json_object(text: str) -> dict[str, Any]:
-    match = SUMMARY_JSON_PATTERN.search(text)
-    candidates = [match.group(1)] if match else []
-    candidates.append(text.strip())
-
-    stripped = text.strip()
-    first_brace = stripped.find("{")
-    last_brace = stripped.rfind("}")
-    if first_brace != -1 and last_brace > first_brace:
-        candidates.append(stripped[first_brace : last_brace + 1])
-
-    decoder = json.JSONDecoder()
-    decode_errors: list[str] = []
-    for candidate in candidates:
-        if not candidate:
-            continue
-        try:
-            loaded, _ = decoder.raw_decode(candidate.strip())
-        except json.JSONDecodeError as exc:
-            decode_errors.append(
-                f"{exc.msg} at line {exc.lineno} column {exc.colno} char {exc.pos} of {len(candidate)}"
-            )
-            continue
-        if isinstance(loaded, dict):
-            return cast(dict[str, Any], loaded)
-    details = "; ".join(_dedupe_preserve_order(decode_errors, limit=3))
-    if details:
-        raise ValueError(f"response is not valid JSON object: {details}")
-    raise ValueError("response is not valid JSON object")
-
-
-def _serialize_summary_payload(payload: dict[str, list[str]]) -> str:
-    return json.dumps(payload, ensure_ascii=False, indent=2)
-
-
 def build_summary_json_schema(mode: str = "pm") -> dict[str, Any]:
     """Build one fixed schema for collect structured summaries."""
     return _build_summary_json_schema(collect_fields_for(mode))
-
-
-def create_collect_logger(config: LoggingConfig | None) -> CollectLogger:
-    """Create a collect logger from config."""
-    if config is None or not config.enabled:
-        return CollectLogger(enabled=False, run_id=str(uuid4()))
-    return CollectLogger(enabled=True, path=config.path, run_id=str(uuid4()))
-
-
-def emit_collect_progress(
-    progress_callback: Callable[[CollectProgressEvent], None] | None,
-    *,
-    stage: str,
-    current: int,
-    total: int,
-    message: str,
-    session_uri: str | None = None,
-    chunk_index: int | None = None,
-    chunk_total: int | None = None,
-    level: int | None = None,
-    session_count: int | None = None,
-    chunk_count: int | None = None,
-    concurrency: int | None = None,
-    since: str | None = None,
-    until: str | None = None,
-    agent_session_counts: dict[str, int] | None = None,
-) -> None:
-    """Emit one collect progress event when callback is configured."""
-    if progress_callback is None:
-        return
-    progress_callback(
-        CollectProgressEvent(
-            stage=stage,
-            current=current,
-            total=total,
-            message=message,
-            session_uri=session_uri,
-            chunk_index=chunk_index,
-            chunk_total=chunk_total,
-            level=level,
-            session_count=session_count,
-            chunk_count=chunk_count,
-            concurrency=concurrency,
-            since=since,
-            until=until,
-            agent_session_counts=agent_session_counts,
-        )
-    )
-
-
-def build_collect_run_stats(
-    *,
-    entries: list[CollectEntry],
-    planned_entries: list[PlannedCollectEntry],
-    since_date: date,
-    until_date: date,
-    summary_concurrency: int,
-) -> CollectRunStats:
-    """Build one user-facing collect workload summary."""
-    agent_session_counts: dict[str, int] = {}
-    for entry in entries:
-        agent_session_counts[entry.agent_display_name] = agent_session_counts.get(entry.agent_display_name, 0) + 1
-
-    return CollectRunStats(
-        since=since_date.isoformat(),
-        until=until_date.isoformat(),
-        agent_session_counts=agent_session_counts,
-        session_count=len(entries),
-        chunk_count=sum(len(item.chunks) for item in planned_entries),
-        concurrency=max(1, summary_concurrency),
-    )
 
 
 def _find_paths_in_text(text: str) -> list[str]:
