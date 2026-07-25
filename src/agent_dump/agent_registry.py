@@ -22,6 +22,12 @@ class AgentRegistration:
     factory: Callable[[], BaseAgent]
     uri_schemes: tuple[str, ...]
     location_line: str
+    # 该 provider 额外接受的 URI 路径前缀，如 codex 的 `codex://threads/<id>`。
+    # 之前这个形状硬编码在 uri_support.parse_uri 与 get_supported_uri_examples 里，
+    # 违反「provider schema 只在对应 Agent 内处理」，也让 registry 不是它被文档化的单一真源。
+    uri_path_prefixes: tuple[str, ...] = ()
+    # URI 示例里 session id 占位符的写法；Cursor 用的是 bubble 级的 requestId。
+    uri_identifier_label: str = "<session_id>"
 
 
 AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
@@ -44,6 +50,7 @@ AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
         display_name="Codex",
         factory=CodexAgent,
         uri_schemes=("codex",),
+        uri_path_prefixes=("threads/",),
         location_line="  - Codex: CODEX_HOME/sessions or ~/.codex/sessions",
     ),
     AgentRegistration(
@@ -65,6 +72,7 @@ AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
         display_name="Cursor",
         factory=CursorAgent,
         uri_schemes=("cursor",),
+        uri_identifier_label="<requestid>",
         location_line="  - Cursor: CURSOR_DATA_PATH or ~/Library/Application Support/Cursor/User/*",
     ),
     AgentRegistration(
@@ -94,12 +102,23 @@ def get_supported_agent_locations() -> list[str]:
     return lines
 
 
+def get_uri_path_prefixes() -> dict[str, tuple[str, ...]]:
+    """Return scheme to accepted URI path prefixes mapping."""
+    return {
+        scheme: registration.uri_path_prefixes
+        for registration in AGENT_REGISTRATIONS
+        for scheme in registration.uri_schemes
+    }
+
+
 def get_supported_uri_examples() -> list[str]:
-    """Return user-facing URI examples."""
+    """Return user-facing URI examples, driven entirely by the registry."""
     examples = []
-    for scheme in get_uri_scheme_map():
-        identifier = "<requestid>" if scheme == "cursor" else "<session_id>"
-        examples.append(f"  - {scheme}://{identifier}")
-        if scheme == "codex":
-            examples.append("  - codex://threads/<session_id>")
+    for registration in AGENT_REGISTRATIONS:
+        for scheme in registration.uri_schemes:
+            examples.append(f"  - {scheme}://{registration.uri_identifier_label}")
+            examples.extend(
+                f"  - {scheme}://{prefix}{registration.uri_identifier_label}"
+                for prefix in registration.uri_path_prefixes
+            )
     return examples

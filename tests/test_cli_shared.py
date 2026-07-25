@@ -794,3 +794,93 @@ class TestDisplaySessionsList:
         assert result is False
         captured = capsys.readouterr()
         assert "还有 1 个会话未显示" in captured.out
+
+
+class TestUriShapesComeFromTheRegistry:
+    """AD-140：URI 形状此前硬编码在 uri_support 与 agent_registry 的 if 分支里。
+
+    AGENTS.md §1.3/§3.3 声明 provider schema 只在对应 Agent 内处理、URI scheme 由
+    AGENT_REGISTRATIONS 统一声明；那两处 `if scheme == ...` 直接违反了这一点，
+    也让新增「session id 带路径前缀」的 provider 必须改共享模块。
+    """
+
+    def test_no_provider_name_is_hardcoded_in_uri_parsing(self):
+        """parse_uri 不得再出现按 provider 名字分支的代码。"""
+        from pathlib import Path
+
+        source = Path("src/agent_dump/uri_support.py").read_text(encoding="utf-8")
+
+        for provider in ("codex", "cursor", "kimi", "claudecode", "opencode", "zcode", "pi"):
+            assert f'"{provider}"' not in source, f"uri_support 仍硬编码了 provider 名 {provider!r}"
+
+    def test_no_provider_name_is_hardcoded_in_uri_examples(self):
+        from pathlib import Path
+        import re
+
+        source = Path("src/agent_dump/agent_registry.py").read_text(encoding="utf-8")
+        examples_fn = source[source.index("def get_supported_uri_examples") :]
+        examples_fn = examples_fn[: examples_fn.index("\ndef ")] if "\ndef " in examples_fn else examples_fn
+
+        assert not re.search(r'scheme == "', examples_fn), "URI 示例仍按 scheme 名字分支"
+
+    def test_path_prefixes_are_declared_on_the_registration(self):
+        from agent_dump.agent_registry import get_uri_path_prefixes
+
+        prefixes = get_uri_path_prefixes()
+
+        assert prefixes["codex"] == ("threads/",)
+        assert prefixes["cursor"] == ()
+
+    def test_codex_threads_prefix_still_parses(self):
+        assert parse_uri("codex://threads/abc-123") == ("codex", "abc-123")
+        assert parse_uri("codex://abc-123") == ("codex", "abc-123")
+
+    def test_empty_id_after_a_prefix_is_rejected(self):
+        assert parse_uri("codex://threads/") is None
+
+    def test_prefix_is_only_stripped_for_the_declaring_scheme(self):
+        """`threads/` 只对 codex 有意义；其他 provider 不该被剥前缀。"""
+        assert parse_uri("kimi://threads/abc") == ("kimi", "threads/abc")
+
+    def test_examples_cover_every_registered_scheme_and_prefix(self):
+        from agent_dump.agent_registry import AGENT_REGISTRATIONS, get_supported_uri_examples
+
+        examples = get_supported_uri_examples()
+
+        for registration in AGENT_REGISTRATIONS:
+            for scheme in registration.uri_schemes:
+                assert f"  - {scheme}://{registration.uri_identifier_label}" in examples
+                for prefix in registration.uri_path_prefixes:
+                    assert f"  - {scheme}://{prefix}{registration.uri_identifier_label}" in examples
+
+    def test_cursor_example_uses_its_own_identifier_label(self):
+        from agent_dump.agent_registry import get_supported_uri_examples
+
+        examples = get_supported_uri_examples()
+
+        assert "  - cursor://<requestid>" in examples
+        assert "  - cursor://<session_id>" not in examples
+
+    def test_a_new_prefix_needs_no_change_outside_the_registry(self, monkeypatch):
+        """新增带路径前缀的 provider 只该改 registry。"""
+        from agent_dump.agent_registry import AGENT_REGISTRATIONS
+
+        patched = tuple(
+            (
+                type(registration)(
+                    name=registration.name,
+                    display_name=registration.display_name,
+                    factory=registration.factory,
+                    uri_schemes=registration.uri_schemes,
+                    location_line=registration.location_line,
+                    uri_path_prefixes=("runs/",),
+                    uri_identifier_label=registration.uri_identifier_label,
+                )
+                if registration.name == "kimi"
+                else registration
+            )
+            for registration in AGENT_REGISTRATIONS
+        )
+        monkeypatch.setattr("agent_dump.agent_registry.AGENT_REGISTRATIONS", patched)
+
+        assert parse_uri("kimi://runs/session-9") == ("kimi", "session-9")
