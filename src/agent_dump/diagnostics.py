@@ -130,6 +130,19 @@ def source_missing(
     )
 
 
+def unexpected_failure(exc: BaseException) -> DiagnosticError:
+    """Wrap an unanticipated exception so the CLI reports it as a diagnostic."""
+    return DiagnosticError(
+        code="unexpected_failure",
+        summary="命令因未预期的错误中止。",
+        details=(f"{type(exc).__name__}: {exc}",),
+        next_steps=(
+            "重试一次以确认是否为瞬时故障。",
+            "若可稳定复现，请带上上面的错误类型与命令参数提交 issue。",
+        ),
+    )
+
+
 def render_diagnostic(error: DiagnosticError, *, t) -> str:
     """Render one diagnostic block with stable field labels."""
     lines = [t("DIAGNOSTIC_HEADER"), f"{t('DIAGNOSTIC_SUMMARY')}: {error.summary}"]
