@@ -3,10 +3,11 @@
 default:
     @just --list --unsorted
 
-# Run code linting with Ruff
+# Run code linting and formatting checks with Ruff
 lint:
     @echo "🔍 Running code linting..."
     uv run ruff check .
+    uv run ruff format --check .
     @echo "✅ Lint check complete!"
 
 # Auto-fix linting issues with Ruff
@@ -33,6 +34,12 @@ test:
     @echo "🧪 Running tests..."
     uv run pytest -q
     @echo "✅ Tests complete!"
+
+# Run tests with coverage measurement and enforce the floor
+cov:
+    @echo "🧪 Running tests with coverage..."
+    uv run pytest -q --cov=src --cov-report=term-missing
+    @echo "✅ Coverage check complete!"
 
 # Run npm wrapper unit tests
 test-npm:

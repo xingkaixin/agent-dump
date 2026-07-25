@@ -390,7 +390,25 @@ uv run pytest -v
 
 # 运行特定测试
 uv run pytest -k "test_name"
+
+# 测量覆盖率并检查下限（CI 只在一条 leg 上跑）
+just cov
 ```
+
+pytest 配置只有一处：`pyproject.toml` 的 `[tool.pytest.ini_options]`。不要新增
+`pytest.ini`/`setup.cfg`/`tox.ini`——pytest 只认一个配置文件，新增会静默覆盖它。
+覆盖率刻意不在默认 addopts 里：`pytest -k one_test` 会打印一份接近 0% 的全包报告。
+
+### 7.4 两个类型检查器的分工
+
+`just check` 同时跑 pyright 与 ty，作用域刻意不同：
+
+- **pyright**：只看 `src`（`pyproject.toml` 的 `include`），对生产代码用较严的推断。
+- **ty**：看全仓，包含 `tests`。测试里有若干刻意违反类型的写法（实例化抽象类以验证
+  它确实不可实例化、monkeypatch 实例属性、已知非 None 的 `base_path`），让 pyright
+  覆盖它们需要 5 处 `# type: ignore`，收益不抵噪音。
+
+新增检查器或改动作用域时同步本节。
 
 ### 7.3 代码风格
 
@@ -401,9 +419,9 @@ just lint-fix      # ruff check --fix
 just lint-format   # ruff format
 ```
 
-- 使用 Ruff 进行代码检查和格式化
-- 配置位于 `ruff.toml`
-- 单行最大长度 100
+- 使用 Ruff 进行代码检查和格式化，`just lint` 同时校验 check 与 format
+- 配置位于 `ruff.toml`，`tests/` 也在检查范围内（相关放宽见 `per-file-ignores`）
+- 单行最大长度 120
 - 使用双引号
 
 ---
