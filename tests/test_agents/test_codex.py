@@ -2337,3 +2337,69 @@ class TestCodexAgent:
         assert converted["role"] == "assistant"
         assert converted["mode"] == "tool"
         assert converted["parts"][0]["tool"] == "skill"
+
+
+class TestTokenStatsAccumulation:
+    """AD-126：token 统计不得为了做前置判断把整条记录 repr 成字符串。"""
+
+    def test_accumulates_from_structured_payload(self):
+        agent = CodexAgent()
+        stats = {"total_input_tokens": 0, "total_output_tokens": 0}
+
+        agent._accumulate_token_stats(
+            stats,
+            {"payload": {"info": {"total_token_usage": {"input_tokens": 10, "output_tokens": 4}}}},
+        )
+
+        assert stats == {"total_input_tokens": 10, "total_output_tokens": 4}
+
+    @pytest.mark.parametrize(
+        "record",
+        [
+            {},
+            {"payload": None},
+            {"payload": "not-a-dict"},
+            {"payload": {}},
+            {"payload": {"info": None}},
+            {"payload": {"info": {}}},
+            {"payload": {"info": {"total_token_usage": None}}},
+            {"payload": {"info": {"total_token_usage": "nope"}}},
+        ],
+    )
+    def test_records_without_usable_usage_are_ignored(self, record):
+        agent = CodexAgent()
+        stats = {"total_input_tokens": 0, "total_output_tokens": 0}
+
+        agent._accumulate_token_stats(stats, record)
+
+        assert stats == {"total_input_tokens": 0, "total_output_tokens": 0}
+
+    def test_non_numeric_counts_degrade_to_zero(self):
+        agent = CodexAgent()
+        stats = {"total_input_tokens": 0, "total_output_tokens": 0}
+
+        agent._accumulate_token_stats(
+            stats,
+            {"payload": {"info": {"total_token_usage": {"input_tokens": "abc", "output_tokens": None}}}},
+        )
+
+        assert stats == {"total_input_tokens": 0, "total_output_tokens": 0}
+
+    def test_record_is_never_stringified(self, monkeypatch):
+        """曾经的 `"token_count" not in str(data)` 会对每条记录做一次 repr。"""
+
+        class TrackingDict(dict):
+            stringified = 0
+
+            def __repr__(self) -> str:
+                TrackingDict.stringified += 1
+                return super().__repr__()
+
+        agent = CodexAgent()
+        stats = {"total_input_tokens": 0, "total_output_tokens": 0}
+        record = TrackingDict({"payload": {"info": {"total_token_usage": {"input_tokens": 1, "output_tokens": 2}}}})
+
+        agent._accumulate_token_stats(stats, record)
+
+        assert TrackingDict.stringified == 0
+        assert stats == {"total_input_tokens": 1, "total_output_tokens": 2}
