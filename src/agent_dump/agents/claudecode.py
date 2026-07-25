@@ -300,17 +300,6 @@ class ClaudeCodeAgent(FileSessionAgent):
             head["model"] = model
         return head
 
-    def export_session(self, session: Session, output_dir: Path) -> Path:
-        """Export a single session to unified JSON format"""
-        session_data = self.get_session_data(session)
-
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = self._build_output_path(session, output_dir, ".json")
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(session_data, f, ensure_ascii=False, indent=2)
-
-        return output_path
-
     def _parse_timestamp_ms(self, data: dict[str, Any]) -> int:
         """Parse one Claude record timestamp into milliseconds."""
         timestamp_str = str(data.get("timestamp", "")).strip()

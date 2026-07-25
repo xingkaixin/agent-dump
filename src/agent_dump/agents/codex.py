@@ -362,19 +362,15 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         head["message_count"] = message_count
         return head
 
-    def export_session(self, session: Session, output_dir: Path) -> Path:
-        """Export a single session to unified JSON format"""
-        session_data = self.get_session_data(session)
+    def _json_export_payload(self, session: Session) -> dict[str, Any]:
+        """Apply Codex's JSON-export-only message transforms on a copy of the cached data."""
+        # 必须浅拷贝：基类返回的是请求级缓存里的共享 dict，直接改 messages 会让
+        # 同一条命令里的 markdown 渲染看到被改过的消息
+        session_data = dict(super()._json_export_payload(session))
         messages = session_data.get("messages")
         if isinstance(messages, list):
             session_data["messages"] = self._prepare_json_export_messages(messages)
-
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = self._build_output_path(session, output_dir, ".json")
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(session_data, f, ensure_ascii=False, indent=2)
-
-        return output_path
+        return session_data
 
     def _parse_timestamp_ms(self, data: dict[str, Any]) -> int:
         """Parse record timestamp into milliseconds."""

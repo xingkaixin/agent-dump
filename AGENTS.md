@@ -269,6 +269,7 @@ class BaseAgent(ABC):
 - `get_session_head(session)`：URI `--head` 使用。
 - `get_session_summary_fields(session)`：列表和交互视图元数据摘要使用。
 - `export_raw_session(session, output_dir)`：默认复制原始单文件，目录型 source 会返回能力缺失诊断。
+- `_json_export_payload(session)`：JSON 导出的数据来源，默认返回 `get_cached_session_data(session)`。Codex 覆盖它以施加导出专属的消息变换。
 
 ### 5.3 `agent_registry.py`
 
@@ -328,7 +329,7 @@ collect 模式入口：
 
 步骤：
 1. 在 `src/agent_dump/agents/<agent_name>.py` 创建 `BaseAgent` 子类。会话以文件形式存储的 provider 应继承 `FileSessionAgent`，只需实现 `_iter_session_files()` 与 `_parse_session_file()`（可选 `_session_file_candidates()` 加速 URI 定位）。
-2. 实现 `scan()`、`is_available()`、`get_sessions()`、`get_session_data()`、`export_session()`（继承 `FileSessionAgent` 时前三个由基类提供）。
+2. 实现 `scan()`、`is_available()`、`get_sessions()`、`get_session_data()`（继承 `FileSessionAgent` 时前三个由基类提供）。`export_session()` 由 `BaseAgent` 统一实现，只在需要导出专属变换时覆盖 `_json_export_payload()`（覆盖时必须先浅拷贝，基类返回的是请求级缓存里的共享 dict）。
 3. 实现 `get_search_roots()`，让诊断信息显示真实搜索路径。
 4. 在 `src/agent_dump/agent_registry.py` 添加 `AgentRegistration`，声明 `name`、`display_name`、`factory`、`uri_schemes`、`location_line`。
 5. 在 `src/agent_dump/agents/__init__.py` 导出 provider。

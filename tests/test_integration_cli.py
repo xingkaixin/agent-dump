@@ -323,3 +323,68 @@ class TestTopLevelErrorHandling:
             run_cli("--version")
 
         assert excinfo.value.code == 0
+
+
+class TestSessionDataIsParsedOncePerCommand:
+    """AD-125：单条命令内同一会话只应完整解析一次。"""
+
+    @staticmethod
+    def _count_parses(monkeypatch) -> list[str]:
+        from agent_dump.agents.codex import CodexAgent
+
+        parses: list[str] = []
+        original = CodexAgent.get_session_data
+
+        def counting(self, session):
+            parses.append(session.id)
+            return original(self, session)
+
+        monkeypatch.setattr(CodexAgent, "get_session_data", counting)
+        return parses
+
+    def test_uri_json_and_print_parses_once(self, codex_session_tree, tmp_path, monkeypatch, capsys):
+        parses = self._count_parses(monkeypatch)
+        uri = f"codex://{codex_session_tree['session_id']}"
+
+        exit_code = run_cli(uri, "-format", "json,print", "-output", str(tmp_path / "o1"))
+        capsys.readouterr()
+
+        assert exit_code == 0
+        assert len(parses) == 1, f"json+print 应只解析一次，实际 {len(parses)} 次"
+
+    def test_uri_json_and_markdown_parses_once(self, codex_session_tree, tmp_path, monkeypatch, capsys):
+        parses = self._count_parses(monkeypatch)
+        uri = f"codex://{codex_session_tree['session_id']}"
+
+        exit_code = run_cli(uri, "-format", "json,markdown", "-output", str(tmp_path / "o2"))
+        capsys.readouterr()
+
+        assert exit_code == 0
+        assert len(parses) == 1, f"json+markdown 应只解析一次，实际 {len(parses)} 次"
+
+    def test_query_match_then_export_parses_once(self, codex_session_tree, tmp_path, monkeypatch, capsys):
+        """关键词匹配已解析过，导出不应再解析一遍。"""
+        parses = self._count_parses(monkeypatch)
+
+        exit_code = run_cli(
+            "--list", "-q", "登录超时", "-d", "36500", "-format", "json", "-output", str(tmp_path / "o3")
+        )
+        capsys.readouterr()
+
+        assert exit_code == 0
+        assert len(parses) == 1, f"查询+导出应只解析一次，实际 {len(parses)} 次"
+
+    def test_codex_json_export_does_not_corrupt_the_cached_data(
+        self, codex_session_tree, tmp_path, monkeypatch, capsys
+    ):
+        """Codex 的 JSON 导出变换必须作用在副本上，不能污染 markdown 看到的数据。"""
+        uri = f"codex://{codex_session_tree['session_id']}"
+        out = tmp_path / "o4"
+
+        exit_code = run_cli(uri, "-format", "json,markdown", "-output", str(out))
+        capsys.readouterr()
+
+        assert exit_code == 0
+        markdown = read_only_file(out, ".md").read_text(encoding="utf-8")
+        assert codex_session_tree["user_text"] in markdown
+        assert codex_session_tree["assistant_text"] in markdown

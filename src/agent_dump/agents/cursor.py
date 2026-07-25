@@ -1032,15 +1032,6 @@ class CursorAgent(BaseAgent):
         head["message_count"] = message_count
         return head
 
-    def export_session(self, session: Session, output_dir: Path) -> Path:
-        """Export a single Cursor session to JSON."""
-        session_data = self.get_session_data(session)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = self._build_output_path(session, output_dir, ".json")
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(session_data, f, ensure_ascii=False, indent=2)
-        return output_path
-
     def export_raw_session(self, session: Session, output_dir: Path) -> Path:
         raise unsupported_capability(
             "raw export is not supported for Cursor sessions",

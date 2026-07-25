@@ -170,7 +170,7 @@ def export_session_in_format(
     if output_format == "raw":
         return agent.export_raw_session(session, output_dir)
     if output_format == "markdown":
-        effective_session_data = session_data if session_data is not None else agent.get_session_data(session)
+        effective_session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
         effective_session_uri = session_uri if session_uri is not None else agent.get_session_uri(session)
         return export_session_markdown(effective_session_uri, effective_session_data, session.id, output_dir)
 

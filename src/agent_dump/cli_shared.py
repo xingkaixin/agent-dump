@@ -216,7 +216,7 @@ def export_sessions_for_formats(
                 output_dir = format_base_dir / agent.name
                 output_dir.mkdir(parents=True, exist_ok=True)
                 if output_format == "markdown":
-                    session_data = session_data if session_data is not None else agent.get_session_data(session)
+                    session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
                     session_uri = session_uri if session_uri is not None else agent.get_session_uri(session)
 
                 output_path = export_session_in_format(
