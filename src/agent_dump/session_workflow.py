@@ -19,7 +19,7 @@ from agent_dump.cli_shared import (
 from agent_dump.diagnostics import invalid_query_or_uri, root_not_found
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import QuerySpec, parse_query
-from agent_dump.scanner import AgentScanner
+from agent_dump.scanner import AgentScanner, sessions_per_agent
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 
 
@@ -161,9 +161,12 @@ def _handle_list_mode(
     print("-" * 60)
 
     show_metadata_summary = not args.no_metadata_summary
-    for agent in available_agents:
-        sessions = matched_sessions_by_agent.get(agent.name, []) if query_spec else agent.get_sessions(days=args.days)
-
+    listed = (
+        [(agent, matched_sessions_by_agent.get(agent.name, [])) for agent in available_agents]
+        if query_spec
+        else sessions_per_agent(available_agents, args.days)
+    )
+    for agent, sessions in listed:
         print(f"\n📁 {agent.display_name} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
 
         if sessions:
@@ -234,7 +237,7 @@ def _handle_interactive_mode(
     if query_spec:
         sessions = matched_sessions_by_agent.get(selected_agent.name, [])
     else:
-        sessions = selected_agent.get_sessions(days=args.days)
+        sessions = dict(sessions_per_agent([selected_agent], args.days))[selected_agent]
 
     if not sessions:
         if query_spec:

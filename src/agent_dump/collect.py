@@ -41,6 +41,7 @@ from agent_dump.collect_models import (
 from agent_dump.config import AIConfig, CollectConfig, LoggingConfig
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.query_filter import QuerySpec, filter_sessions_by_query, limit_query_matches
+from agent_dump.scanner import sessions_per_agent
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
 GREETING_PATTERN = re.compile(r"^(hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok\b)", re.IGNORECASE)
@@ -487,9 +488,8 @@ def collect_entries(
     matched_sessions: list[tuple[BaseAgent, Session, date]] = []
     limited_candidates: list[tuple[BaseAgent, Session]] = []
 
-    for agent in agents:
-        days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
-        sessions = agent.get_sessions(days=days_span)
+    days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
+    for agent, sessions in sessions_per_agent(agents, days_span):
         deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
         if deny_paths:
             sessions = [session for session in sessions if not _is_session_denied(session, deny_paths)]

@@ -2,7 +2,7 @@
 Scanner for agent tools
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 import sys
 from typing import TypeVar
@@ -12,6 +12,40 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
 
 T = TypeVar("T")
+
+
+def run_per_agent(fn: Callable[[BaseAgent], T], agents: Sequence[BaseAgent]) -> list[tuple[BaseAgent, T | None]]:
+    """Run fn for every agent concurrently, isolating per-provider failures.
+
+    一个 provider 抛异常只让它自己的结果变成 None 并向 stderr 告警，其余 provider
+    照常返回。结果顺序与传入顺序一致。
+    """
+    if not agents:
+        return []
+
+    with ThreadPoolExecutor(max_workers=len(agents)) as executor:
+        futures = [executor.submit(fn, agent) for agent in agents]
+        results: list[tuple[BaseAgent, T | None]] = []
+        for agent, future in zip(agents, futures, strict=True):
+            try:
+                result = future.result()
+            except Exception as exc:
+                print(
+                    f"警告: {agent.display_name} provider 操作失败: {type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                )
+                result = None
+            results.append((agent, result))
+        return results
+
+
+def sessions_per_agent(agents: Sequence[BaseAgent], days: int) -> list[tuple[BaseAgent, list[Session]]]:
+    """Fetch each agent's sessions, degrading a failed provider to an empty list.
+
+    裸 `agent.get_sessions()` 循环会让一个 provider 的坏数据崩掉整条命令；这里把
+    失败收敛成「该 provider 没有会话」，其余 provider 的结果仍然可用。
+    """
+    return [(agent, sessions or []) for agent, sessions in run_per_agent(lambda a: a.get_sessions(days=days), agents)]
 
 
 class AgentScanner:
@@ -28,25 +62,10 @@ class AgentScanner:
         return None
 
     def _run_concurrently(
-        self, fn: Callable[[BaseAgent], T], agents: list[BaseAgent] | None = None
+        self, fn: Callable[[BaseAgent], T], agents: Sequence[BaseAgent] | None = None
     ) -> list[tuple[BaseAgent, T | None]]:
         """Execute a function for all agents concurrently and return results in registration order."""
-        targets = agents if agents is not None else self.agents
-        with ThreadPoolExecutor(max_workers=len(targets)) as executor:
-            futures = [executor.submit(fn, agent) for agent in targets]
-            results: list[tuple[BaseAgent, T | None]] = []
-            for i, future in enumerate(futures):
-                agent = targets[i]
-                try:
-                    result = future.result()
-                except Exception as exc:
-                    print(
-                        f"警告: {agent.display_name} provider 操作失败: {type(exc).__name__}: {exc}",
-                        file=sys.stderr,
-                    )
-                    result = None
-                results.append((agent, result))
-            return results
+        return run_per_agent(fn, agents if agents is not None else self.agents)
 
     def scan(self) -> dict[str, list[Session]]:
         """

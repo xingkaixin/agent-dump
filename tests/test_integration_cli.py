@@ -263,3 +263,63 @@ def test_reindex_succeeds_on_a_cache_that_never_had_an_index(codex_session_tree,
 
     assert exit_code == 0
     assert "Codex" in captured.out
+
+
+class TestProviderFailureIsolation:
+    """AD-122：一个 provider 的坏数据不得让整条命令带 traceback 退出。"""
+
+    def test_list_still_reports_healthy_provider_when_another_raises(self, codex_session_tree, monkeypatch, capsys):
+        from agent_dump.agents.claudecode import ClaudeCodeAgent
+
+        monkeypatch.setattr(ClaudeCodeAgent, "is_available", lambda self: True)
+        monkeypatch.setattr(
+            ClaudeCodeAgent,
+            "get_sessions",
+            lambda self, days=7: (_ for _ in ()).throw(ValueError("malformed row")),
+        )
+
+        exit_code = run_cli("--list", "-d", "36500")
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert codex_session_tree["title"] in captured.out, "健康 provider 的结果必须照常出现"
+        assert "Claude Code" in captured.err and "ValueError" in captured.err
+
+
+class TestTopLevelErrorHandling:
+    """AD-122：漏到最外层的异常必须渲染成诊断，而不是 traceback。"""
+
+    def test_unexpected_exception_becomes_a_diagnostic(self, codex_session_tree, monkeypatch, capsys):
+        monkeypatch.setattr(
+            "agent_dump.cli._run",
+            lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        exit_code = run_cli("--list")
+        captured = capsys.readouterr()
+
+        assert exit_code == 1
+        assert "诊断信息" in captured.out
+        assert "RuntimeError: boom" in captured.out
+
+    def test_diagnostic_error_is_rendered_without_the_generic_wrapper(self, codex_session_tree, monkeypatch, capsys):
+        from agent_dump.diagnostics import root_not_found
+
+        def _raise():
+            raise root_not_found("自定义诊断。", searched_roots=("root-a",))
+
+        monkeypatch.setattr("agent_dump.cli._run", _raise)
+
+        exit_code = run_cli("--list")
+        captured = capsys.readouterr()
+
+        assert exit_code == 1
+        assert "自定义诊断。" in captured.out
+        assert "未预期的错误" not in captured.out
+
+    def test_system_exit_still_propagates(self, codex_session_tree):
+        """argparse 的 --help / -v / usage error 依赖 SystemExit 原样抛出。"""
+        with pytest.raises(SystemExit) as excinfo:
+            run_cli("--version")
+
+        assert excinfo.value.code == 0

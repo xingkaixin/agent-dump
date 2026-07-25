@@ -21,8 +21,10 @@ from agent_dump.collect import request_summary_from_llm
 from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
 from agent_dump.config import handle_config_command, load_export_config, load_shortcuts_config
 from agent_dump.diagnostics import (
+    DiagnosticError,
     ParsedUri,
     invalid_query_or_uri,
+    unexpected_failure,
     unsupported_capability,
 )
 from agent_dump.i18n import Keys, i18n, setup_i18n
@@ -190,7 +192,24 @@ def handle_session_modes(
 
 
 def main() -> int | None:
-    """Main entry point"""
+    """Main entry point.
+
+    只在这里做顶层兜底：任何漏到最外层的异常都渲染成诊断块，而不是给用户一段
+    traceback。SystemExit 必须原样放行，argparse 的 --help / -v / usage error
+    依赖它。
+    """
+    try:
+        return _run()
+    except DiagnosticError as exc:
+        _print_diagnostic(exc)
+        return 1
+    except Exception as exc:  # noqa: BLE001 - 顶层兜底，转成诊断后以退出码 1 结束
+        _print_diagnostic(unexpected_failure(exc))
+        return 1
+
+
+def _run() -> int | None:
+    """Parse arguments and dispatch to the selected mode."""
 
     # Pre-parse language argument
     lang_arg = None

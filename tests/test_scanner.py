@@ -2,11 +2,14 @@
 测试 scanner.py 模块
 """
 
+from datetime import datetime, timezone
+from pathlib import Path
 from unittest import mock
 
 import pytest
 
-from agent_dump.scanner import AgentScanner
+from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.scanner import AgentScanner, sessions_per_agent
 
 
 class TestAgentScanner:
@@ -232,3 +235,73 @@ class TestAgentScanner:
         assert len(result) == len(scanner.agents)
         # 7 个 agent 各 0.1s，若串行需 0.7s；并发应远小于 0.7s
         assert elapsed < 0.35
+
+
+class ExplodingAgent(BaseAgent):
+    """get_sessions 抛异常，模拟一个 provider 的存储里有坏数据。"""
+
+    def __init__(self, name: str = "broken"):
+        super().__init__(name=name, display_name=f"Broken-{name}")
+
+    def scan(self) -> list[Session]:
+        return []
+
+    def is_available(self) -> bool:
+        return True
+
+    def get_sessions(self, days: int = 7) -> list[Session]:
+        raise ValueError("malformed row in provider store")
+
+    def export_session(self, session: Session, output_dir: Path) -> Path:
+        raise NotImplementedError
+
+    def get_session_data(self, session: Session) -> dict:
+        return {}
+
+
+class HealthyAgent(ExplodingAgent):
+    def __init__(self, name: str = "healthy", count: int = 2):
+        super().__init__(name=name)
+        self._count = count
+
+    def get_sessions(self, days: int = 7) -> list[Session]:
+        return [
+            Session(
+                id=f"{self.name}-{i}",
+                title=f"session {i}",
+                created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                source_path=Path("/tmp/x.jsonl"),
+                metadata={},
+            )
+            for i in range(self._count)
+        ]
+
+
+class TestSessionsPerAgent:
+    """AD-122：一个 provider 失败不得带走其余 provider。"""
+
+    def test_one_failing_provider_does_not_hide_the_others(self, capsys):
+        agents = [HealthyAgent("a", 2), ExplodingAgent("b"), HealthyAgent("c", 3)]
+
+        results = sessions_per_agent(agents, days=7)
+        captured = capsys.readouterr()
+
+        assert [(agent.name, len(sessions)) for agent, sessions in results] == [("a", 2), ("b", 0), ("c", 3)]
+        assert "Broken-b" in captured.err
+        assert "ValueError" in captured.err
+
+    def test_preserves_input_order(self):
+        agents = [HealthyAgent(name, 1) for name in ("z", "m", "a")]
+
+        assert [agent.name for agent, _ in sessions_per_agent(agents, days=7)] == ["z", "m", "a"]
+
+    def test_empty_agent_list_is_handled(self):
+        assert sessions_per_agent([], days=7) == []
+
+    def test_a_provider_returning_no_sessions_is_not_treated_as_failure(self, capsys):
+        results = sessions_per_agent([HealthyAgent("empty", 0)], days=7)
+        captured = capsys.readouterr()
+
+        assert results == [(results[0][0], [])]
+        assert "警告" not in captured.err, "空结果与失败必须区分开"

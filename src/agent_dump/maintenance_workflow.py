@@ -14,7 +14,7 @@ from agent_dump.cli_shared import (
 from agent_dump.diagnostics import invalid_query_or_uri, root_not_found
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import QuerySpec, parse_query
-from agent_dump.scanner import AgentScanner
+from agent_dump.scanner import AgentScanner, sessions_per_agent
 from agent_dump.search_index import SearchIndex
 
 
@@ -110,8 +110,7 @@ def handle_stats_mode(
             return 0
 
     all_sessions: list[tuple[BaseAgent, Session]] = []
-    for agent in available_agents:
-        sessions = agent.get_sessions(days=args.days)
+    for agent, sessions in sessions_per_agent(available_agents, args.days):
         if query_spec is not None:
             sessions = apply_query_filter(agent, sessions, query_spec)
         for session in sessions:
@@ -183,8 +182,7 @@ def handle_reindex_mode(
     print()
 
     total_indexed = 0
-    for agent in available_agents:
-        sessions = agent.get_sessions(days=args.days)
+    for agent, sessions in sessions_per_agent(available_agents, args.days):
         if not sessions:
             continue
         added = index.rebuild(agent, sessions)

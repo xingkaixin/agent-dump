@@ -13,6 +13,7 @@ from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
 from agent_dump.agents.message_assembly import build_message, build_text_part, build_tool_part
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
+from agent_dump.coercion import safe_epoch_datetime
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot
 
@@ -142,7 +143,7 @@ class PiAgent(FileSessionAgent):
 
     def _parse_datetime(self, value: Any) -> datetime | None:
         if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return datetime.fromtimestamp(value / 1000, tz=timezone.utc)
+            return safe_epoch_datetime(value, unit="ms")
         if not isinstance(value, str):
             return None
         normalized = value.strip()
