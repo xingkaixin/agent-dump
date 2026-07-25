@@ -171,7 +171,7 @@ def select_sessions_interactive(
         choices.append(
             Choice(
                 title=i18n.t(Keys.GROUP_TITLE, group_name=group_name, count=len(group_sessions_list)),
-                disabled="分组标题",
+                disabled=i18n.t(Keys.GROUP_HEADER_DISABLED_HINT),
             )
         )
 

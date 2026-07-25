@@ -280,6 +280,28 @@ class Keys:
     DIAG_STEP_ZCODE_DB_EXISTS = "DIAG_STEP_ZCODE_DB_EXISTS"
     DIAG_STEP_ZCODE_DB_PATHS = "DIAG_STEP_ZCODE_DB_PATHS"
     DIAG_STEP_ZCODE_NO_LINUX = "DIAG_STEP_ZCODE_NO_LINUX"
+
+    # 查询摘要 / 查询解析错误 / patch 解析错误（AD-146 追加）
+    QUERY_SUMMARY_PATH = "QUERY_SUMMARY_PATH"
+    QUERY_SUMMARY_KEYWORD = "QUERY_SUMMARY_KEYWORD"
+    QUERY_SUMMARY_ALL_SESSIONS = "QUERY_SUMMARY_ALL_SESSIONS"
+    QUERY_ERROR_EMPTY_SPEC = "QUERY_ERROR_EMPTY_SPEC"
+    QUERY_ERROR_UNKNOWN_AGENT = "QUERY_ERROR_UNKNOWN_AGENT"
+    QUERY_ERROR_EMPTY_KEYWORD = "QUERY_ERROR_EMPTY_KEYWORD"
+    QUERY_ERROR_EMPTY_PATH = "QUERY_ERROR_EMPTY_PATH"
+    QUERY_ERROR_EMPTY_PROVIDERS = "QUERY_ERROR_EMPTY_PROVIDERS"
+    QUERY_ERROR_EMPTY_ROLES = "QUERY_ERROR_EMPTY_ROLES"
+    QUERY_ERROR_EMPTY_LIMIT = "QUERY_ERROR_EMPTY_LIMIT"
+    QUERY_ERROR_LIMIT_NOT_POSITIVE = "QUERY_ERROR_LIMIT_NOT_POSITIVE"
+    QUERY_ERROR_UNKNOWN_FIELD = "QUERY_ERROR_UNKNOWN_FIELD"
+    QUERY_ERROR_DUPLICATE_PATH = "QUERY_ERROR_DUPLICATE_PATH"
+    QUERY_ERROR_DUPLICATE_LIMIT = "QUERY_ERROR_DUPLICATE_LIMIT"
+    PATCH_ERROR_EMPTY = "PATCH_ERROR_EMPTY"
+    PATCH_ERROR_MISSING_HEADER = "PATCH_ERROR_MISSING_HEADER"
+    PATCH_ERROR_MISSING_FOOTER = "PATCH_ERROR_MISSING_FOOTER"
+    PATCH_ERROR_BAD_OPERATION = "PATCH_ERROR_BAD_OPERATION"
+    PATCH_ERROR_BAD_LINE = "PATCH_ERROR_BAD_LINE"
+    GROUP_HEADER_DISABLED_HINT = "GROUP_HEADER_DISABLED_HINT"
     DIAGNOSTIC_PARSED_URI = "DIAGNOSTIC_PARSED_URI"
     DIAGNOSTIC_CAPABILITY_GAP = "DIAGNOSTIC_CAPABILITY_GAP"
     DIAGNOSTIC_NEXT_STEPS = "DIAGNOSTIC_NEXT_STEPS"
@@ -560,6 +582,26 @@ TRANSLATIONS = {
         Keys.DIAG_STEP_ZCODE_DB_EXISTS: "Confirm ZCode has produced a session database on this macOS or Windows machine.",
         Keys.DIAG_STEP_ZCODE_DB_PATHS: "On macOS check `~/.zcode/cli/db/db.sqlite`; on Windows check `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`.",
         Keys.DIAG_STEP_ZCODE_NO_LINUX: "Linux has no default ZCode session path.",
+        Keys.QUERY_SUMMARY_PATH: "path={path}",
+        Keys.QUERY_SUMMARY_KEYWORD: "keyword={keyword}",
+        Keys.QUERY_SUMMARY_ALL_SESSIONS: "all sessions",
+        Keys.QUERY_ERROR_EMPTY_SPEC: "query expression cannot be empty",
+        Keys.QUERY_ERROR_UNKNOWN_AGENT: "unknown agent name: {name}",
+        Keys.QUERY_ERROR_EMPTY_KEYWORD: "query keyword cannot be empty",
+        Keys.QUERY_ERROR_EMPTY_PATH: "query path cannot be empty",
+        Keys.QUERY_ERROR_EMPTY_PROVIDERS: "providers cannot be empty",
+        Keys.QUERY_ERROR_EMPTY_ROLES: "roles cannot be empty",
+        Keys.QUERY_ERROR_EMPTY_LIMIT: "limit cannot be empty",
+        Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE: "limit must be a positive integer",
+        Keys.QUERY_ERROR_UNKNOWN_FIELD: "unknown query field: {field}",
+        Keys.QUERY_ERROR_DUPLICATE_PATH: "path/cwd may only be given once",
+        Keys.QUERY_ERROR_DUPLICATE_LIMIT: "limit may only be given once",
+        Keys.PATCH_ERROR_EMPTY: "patch is empty",
+        Keys.PATCH_ERROR_MISSING_HEADER: "patch is missing the Begin Patch header",
+        Keys.PATCH_ERROR_MISSING_FOOTER: "patch is missing the End Patch footer",
+        Keys.PATCH_ERROR_BAD_OPERATION: "cannot parse patch operation header: {line}",
+        Keys.PATCH_ERROR_BAD_LINE: "cannot parse patch line: {line}",
+        Keys.GROUP_HEADER_DISABLED_HINT: "group header",
         Keys.DIAGNOSTIC_PARSED_URI: "Parsed URI",
         Keys.DIAGNOSTIC_CAPABILITY_GAP: "Capability gap",
         Keys.DIAGNOSTIC_NEXT_STEPS: "Next steps",
@@ -833,6 +875,26 @@ TRANSLATIONS = {
         Keys.DIAG_STEP_ZCODE_DB_EXISTS: "确认 ZCode 已在 macOS 或 Windows 本机生成会话数据库。",
         Keys.DIAG_STEP_ZCODE_DB_PATHS: "macOS 检查 `~/.zcode/cli/db/db.sqlite`；Windows 检查 `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`。",
         Keys.DIAG_STEP_ZCODE_NO_LINUX: "Linux 暂无 ZCode 默认会话路径。",
+        Keys.QUERY_SUMMARY_PATH: "路径={path}",
+        Keys.QUERY_SUMMARY_KEYWORD: "关键词={keyword}",
+        Keys.QUERY_SUMMARY_ALL_SESSIONS: "全部会话",
+        Keys.QUERY_ERROR_EMPTY_SPEC: "查询条件不能为空",
+        Keys.QUERY_ERROR_UNKNOWN_AGENT: "未知 agent 名称: {name}",
+        Keys.QUERY_ERROR_EMPTY_KEYWORD: "查询关键词不能为空",
+        Keys.QUERY_ERROR_EMPTY_PATH: "查询路径不能为空",
+        Keys.QUERY_ERROR_EMPTY_PROVIDERS: "providers 不能为空",
+        Keys.QUERY_ERROR_EMPTY_ROLES: "roles 不能为空",
+        Keys.QUERY_ERROR_EMPTY_LIMIT: "limit 不能为空",
+        Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE: "limit 必须是正整数",
+        Keys.QUERY_ERROR_UNKNOWN_FIELD: "未知查询字段: {field}",
+        Keys.QUERY_ERROR_DUPLICATE_PATH: "path/cwd 只能指定一次",
+        Keys.QUERY_ERROR_DUPLICATE_LIMIT: "limit 只能指定一次",
+        Keys.PATCH_ERROR_EMPTY: "patch 为空",
+        Keys.PATCH_ERROR_MISSING_HEADER: "patch 缺少 Begin Patch 头",
+        Keys.PATCH_ERROR_MISSING_FOOTER: "patch 缺少 End Patch 尾",
+        Keys.PATCH_ERROR_BAD_OPERATION: "无法解析 patch 操作头: {line}",
+        Keys.PATCH_ERROR_BAD_LINE: "无法解析 patch 行: {line}",
+        Keys.GROUP_HEADER_DISABLED_HINT: "分组标题",
         Keys.DIAGNOSTIC_PARSED_URI: "解析后的 URI",
         Keys.DIAGNOSTIC_CAPABILITY_GAP: "缺失能力",
         Keys.DIAGNOSTIC_NEXT_STEPS: "下一步",

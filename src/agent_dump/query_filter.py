@@ -56,7 +56,7 @@ def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
 
     query = raw.strip()
     if not query:
-        raise ValueError("查询条件不能为空")
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_SPEC))
 
     if _contains_structured_query_terms(query):
         return _parse_structured_query(raw=query, valid_agents=valid_agents)
@@ -84,10 +84,10 @@ def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
 
             if unknown_agents:
                 unknown = ",".join(sorted(set(unknown_agents)))
-                raise ValueError(f"未知 agent 名称: {unknown}")
+                raise ValueError(i18n.t(Keys.QUERY_ERROR_UNKNOWN_AGENT, name=unknown))
 
             if not keyword:
-                raise ValueError("查询关键词不能为空")
+                raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_KEYWORD))
 
             return QuerySpec(
                 agent_names=normalized_agents,
@@ -210,7 +210,7 @@ def _normalize_agent_name(name: str, valid_agents: set[str]) -> str | None:
 def _parse_query_uri_project_path(parsed_uri, cwd: Path | None) -> Path:
     raw_path = f"{parsed_uri.netloc}{parsed_uri.path}".strip()
     if not raw_path:
-        raise ValueError("查询路径不能为空")
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_PATH))
     return normalize_project_path(raw_path, cwd=cwd)
 
 
@@ -224,7 +224,7 @@ def _extract_single_query_param(params: dict[str, list[str]], name: str) -> str 
 def _parse_provider_scope(raw: str, valid_agents: set[str]) -> set[str]:
     provider_names = [name.strip().lower() for name in raw.split(",") if name.strip()]
     if not provider_names:
-        raise ValueError("providers 不能为空")
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_PROVIDERS))
 
     normalized_agents: set[str] = set()
     unknown_agents: list[str] = []
@@ -237,7 +237,7 @@ def _parse_provider_scope(raw: str, valid_agents: set[str]) -> set[str]:
 
     if unknown_agents:
         unknown = ",".join(sorted(set(unknown_agents)))
-        raise ValueError(f"未知 agent 名称: {unknown}")
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_UNKNOWN_AGENT, name=unknown))
 
     return normalized_agents
 
@@ -245,27 +245,27 @@ def _parse_provider_scope(raw: str, valid_agents: set[str]) -> set[str]:
 def _parse_roles(raw: str) -> set[str]:
     role_names = {name.strip().lower() for name in raw.split(",") if name.strip()}
     if not role_names:
-        raise ValueError("roles 不能为空")
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_ROLES))
     return role_names
 
 
 def _parse_limit(raw: str) -> int:
     normalized = raw.strip()
     if not normalized:
-        raise ValueError("limit 不能为空")
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_LIMIT))
     try:
         value = int(normalized)
     except ValueError as exc:
-        raise ValueError("limit 必须是正整数") from exc
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE)) from exc
     if value <= 0:
-        raise ValueError("limit 必须是正整数")
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE))
     return value
 
 
 def normalize_project_path(value: str, cwd: Path | None = None) -> Path:
     normalized = value.strip()
     if not normalized:
-        raise ValueError("查询路径不能为空")
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_PATH))
 
     path = Path(normalized).expanduser()
     if not path.is_absolute():
@@ -336,7 +336,7 @@ def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
 
         normalized_key = key.strip().lower()
         if normalized_key not in STRUCTURED_QUERY_KEYS:
-            raise ValueError(f"未知查询字段: {key.strip()}")
+            raise ValueError(i18n.t(Keys.QUERY_ERROR_UNKNOWN_FIELD, field=key.strip()))
 
         normalized_value = value.strip()
         if normalized_key == "provider":
@@ -347,12 +347,12 @@ def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
             continue
         if normalized_key in QUERY_PATH_KEYS:
             if project_path is not None:
-                raise ValueError("path/cwd 只能指定一次")
+                raise ValueError(i18n.t(Keys.QUERY_ERROR_DUPLICATE_PATH))
             project_path = normalize_project_path(normalized_value)
             continue
         if normalized_key == "limit":
             if limit is not None:
-                raise ValueError("limit 只能指定一次")
+                raise ValueError(i18n.t(Keys.QUERY_ERROR_DUPLICATE_LIMIT))
             limit = _parse_limit(normalized_value)
             continue
 
