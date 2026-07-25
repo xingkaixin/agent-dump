@@ -78,3 +78,45 @@ class TestJustLintGatesFormatting:
 
         assert "\ncov:" in justfile
         assert "--cov=src" in justfile
+
+
+class TestDependencyPinning:
+    """AD-143：门禁 CI 与 release 的工具必须固定版本。"""
+
+    def test_type_checkers_are_pinned(self):
+        """ty 是 0.0.x；未固定时一个新默认规则就能在代码不变的情况下让发布卡住。"""
+        dev_deps = _read_toml("pyproject.toml")["dependency-groups"]["dev"]
+        ty_specs = [d for d in dev_deps if d.startswith("ty")]
+
+        assert ty_specs, "ty 应在 dev 依赖里"
+        assert all("==" in spec or "~=" in spec for spec in ty_specs), f"ty 必须固定版本（当前 {ty_specs}）"
+
+    def test_packaging_toolchain_stays_pinned(self):
+        """AD-114 固定 PyInstaller 是为了二进制可复现，别被无意放开。"""
+        packaging = _read_toml("pyproject.toml")["dependency-groups"]["packaging"]
+
+        assert any("pyinstaller==" in spec for spec in packaging)
+
+    def test_prompt_toolkit_is_justified_in_place(self):
+        """代码不直接 import 它，保留的理由必须写在旁边（AGENTS.md §1.2）。"""
+        content = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        block = content[content.index("dependencies = [") : content.index("[project.urls]")]
+
+        assert "prompt-toolkit" in block
+        assert "key_bindings" in block, "保留未直接 import 的依赖需注明必要性"
+
+
+class TestCiHasNoDeadSteps:
+    def test_no_all_extras_flag(self):
+        """pyproject 未定义 optional-dependencies，--all-extras 是 no-op 却暗示 extras 存在。"""
+        assert "optional-dependencies" not in (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        for workflow in ("ci.yml", "release.yml"):
+            content = (REPO_ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+            assert "--all-extras" not in content, f"{workflow} 仍有 no-op 的 --all-extras"
+
+    def test_no_python_version_removal_step(self):
+        """.python-version 既未被跟踪也不存在，那个 rm -f 恒为 no-op。"""
+        assert not (REPO_ROOT / ".python-version").exists()
+        content = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+        assert "rm -f .python-version" not in content

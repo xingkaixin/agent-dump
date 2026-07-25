@@ -32,9 +32,6 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Remove .python-version
-        run: rm -f .python-version
-
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
@@ -42,7 +39,7 @@ jobs:
         uses: extractions/setup-just@dd310ad5a97d8e7b41793f8ef055398d51ad4de6 # v2
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev --python ${{ matrix.python-version }}
+        run: uv sync --dev --python ${{ matrix.python-version }}
 
       - name: Lint
         run: just lint

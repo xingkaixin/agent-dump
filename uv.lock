@@ -38,7 +38,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=5.0.0" },
     { name = "ruff", specifier = ">=0.15.2" },
     { name = "tomli", specifier = ">=2.0.0" },
-    { name = "ty", specifier = ">=0.0.18" },
+    { name = "ty", specifier = "==0.0.40" },
 ]
 packaging = [{ name = "pyinstaller", specifier = "==6.21.0" }]
 

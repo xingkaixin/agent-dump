@@ -21,6 +21,9 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
+    # 代码不直接 import prompt-toolkit，但 selector.py 依赖它经 questionary 暴露的
+    # `q.application.key_bindings`（见 AGENTS.md §9.3）。questionary 自身只要求
+    # >=2.0,<4.0，这条更紧的下界用来阻止解析到 3.0 以下、该键绑定 API 不同的版本。
     "prompt-toolkit>=3.0.0",
     "questionary>=2.0.0",
     # tomllib 在 Python 3.11 才进入标准库；3.10 需要 tomli 才能正确解析 config.toml
@@ -43,7 +46,9 @@ dev = [
     "ruff>=0.15.2",
     # pyright 以 pythonVersion=3.10 分析，需要 tomli 可解析
     "tomli>=2.0.0",
-    "ty>=0.0.18",
+    # ty 仍是 0.0.x：一个带新默认规则的发布会在代码毫无变化时让 CI 与 release 变红，
+    # 所以像 packaging 组的 pyinstaller 一样固定，升级走 Dependabot/人工。
+    "ty==0.0.40",
 ]
 packaging = [
     # Native release artifacts require a pinned builder for reproducibility.
