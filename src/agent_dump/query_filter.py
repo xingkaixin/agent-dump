@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import get_text_content_parts
 from agent_dump.search_index import SearchIndex, extract_session_searchable_text
 from agent_dump.time_utils import normalize_datetime_utc
@@ -561,8 +562,12 @@ def _warn_index_unusable(agent: BaseAgent, exc: BaseException) -> None:
     区别只在于：不可用是静默的正常状态，出错是要说出来的异常状态。
     """
     print(
-        f"警告: {agent.display_name} 的搜索索引不可用（{type(exc).__name__}: {exc}），"
-        "本次改用文件扫描；可运行 `agent-dump --reindex` 重建索引。",
+        i18n.t(
+            Keys.WARN_INDEX_UNUSABLE,
+            agent=agent.display_name,
+            error_type=type(exc).__name__,
+            error=exc,
+        ),
         file=sys.stderr,
     )
 

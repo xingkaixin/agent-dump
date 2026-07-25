@@ -5,6 +5,7 @@ import sys
 
 from agent_dump.agent_registry import get_uri_scheme_map
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.i18n import Keys, i18n
 from agent_dump.scanner import AgentScanner
 
 
@@ -41,7 +42,7 @@ def find_session_by_id(
         try:
             session = agent.find_session_by_id(session_id)
         except Exception as exc:
-            print(f"警告: {agent.display_name} 查找会话失败: {exc}", file=sys.stderr)
+            print(i18n.t(Keys.WARN_SESSION_LOOKUP_FAILED, agent=agent.display_name, error=exc), file=sys.stderr)
             continue
         if session is not None:
             return agent, session

@@ -113,11 +113,11 @@ def handle_uri_mode(
     if uri_result is None:
         print_diagnostic(
             invalid_query_or_uri(
-                "URI 格式无效。",
-                details=("无法解析为受支持的 `<scheme>://<session_id>` 形式。",),
+                i18n.t(Keys.DIAG_URI_INVALID),
+                details=(i18n.t(Keys.DIAG_URI_UNPARSEABLE),),
                 parsed_uri=ParsedUri(raw=args.uri),
                 next_steps=(
-                    "改用受支持的 URI scheme。",
+                    i18n.t(Keys.DIAG_STEP_USE_SUPPORTED_SCHEME),
                     *[example.strip() for example in get_supported_uri_examples()],
                 ),
             )
@@ -142,10 +142,10 @@ def handle_uri_mode(
                 scheme=scheme,
                 session_id=session_id,
                 searched_roots=render_agent_search_roots(scanner.agents),
-                details=("已扫描当前可用 provider，但未匹配到该 session id。",),
+                details=(i18n.t(Keys.DIAG_URI_SCANNED_NO_MATCH),),
                 next_steps=(
-                    "先运行 `agent-dump --list` 确认该会话是否仍存在。",
-                    "检查 URI 中的 session id 是否完整且对应正确 provider。",
+                    i18n.t(Keys.DIAG_STEP_LIST_TO_CONFIRM),
+                    i18n.t(Keys.DIAG_STEP_CHECK_URI_SESSION_ID),
                 ),
             )
         )
@@ -156,10 +156,10 @@ def handle_uri_mode(
     if agent.name != expected_agent_name:
         print_diagnostic(
             invalid_query_or_uri(
-                "URI scheme 与实际会话来源不匹配。",
-                details=(f"该会话实际属于 {agent.display_name}。",),
+                i18n.t(Keys.DIAG_URI_SCHEME_MISMATCH),
+                details=(i18n.t(Keys.DIAG_URI_BELONGS_TO, agent=agent.display_name),),
                 parsed_uri=ParsedUri(raw=args.uri, scheme=scheme, session_id=session_id),
-                next_steps=(f"改用 `{agent.get_session_uri(session)}` 重新执行。",),
+                next_steps=(i18n.t(Keys.DIAG_STEP_USE_THIS_URI, uri=agent.get_session_uri(session)),),
             )
         )
         return 1

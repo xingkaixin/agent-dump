@@ -31,7 +31,12 @@ def run_per_agent(fn: Callable[[BaseAgent], T], agents: Sequence[BaseAgent]) -> 
                 result = future.result()
             except Exception as exc:
                 print(
-                    f"警告: {agent.display_name} provider 操作失败: {type(exc).__name__}: {exc}",
+                    i18n.t(
+                        Keys.WARN_PROVIDER_OPERATION_FAILED,
+                        agent=agent.display_name,
+                        error_type=type(exc).__name__,
+                        error=exc,
+                    ),
                     file=sys.stderr,
                 )
                 result = None

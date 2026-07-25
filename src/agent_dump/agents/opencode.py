@@ -12,6 +12,7 @@ from typing import Any
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.coercion import safe_epoch_datetime
 from agent_dump.diagnostics import DiagnosticError, source_missing
+from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 
 
@@ -274,7 +275,7 @@ class OpenCodeAgent(BaseAgent):
         for msg_row in message_rows:
             msg_data = self._parse_json_dict(msg_row["data"])
             if msg_data is None:
-                print(f"警告: 解析消息数据失败 message={msg_row['id']}", file=sys.stderr)
+                print(i18n.t(Keys.WARN_MESSAGE_DATA_PARSE_FAILED, message_id=msg_row["id"]), file=sys.stderr)
                 continue
 
             message = {
@@ -301,7 +302,7 @@ class OpenCodeAgent(BaseAgent):
             for part_row in parts_by_message_id.get(str(msg_row["id"]), []):
                 part_data = self._parse_json_dict(part_row["data"])
                 if part_data is None:
-                    print(f"警告: 解析消息分段数据失败 part={part_row['id']}", file=sys.stderr)
+                    print(i18n.t(Keys.WARN_PART_DATA_PARSE_FAILED, part_id=part_row["id"]), file=sys.stderr)
                     continue
                 part = {
                     "type": part_data.get("type"),

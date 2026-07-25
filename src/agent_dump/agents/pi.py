@@ -15,6 +15,7 @@ from agent_dump.agents.message_assembly import build_message, build_text_part, b
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime
 from agent_dump.diagnostics import source_missing
+from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
 
 PI_TOOL_TITLE_MAP = {
@@ -211,7 +212,7 @@ class PiAgent(FileSessionAgent):
                 try:
                     record = json.loads(line)
                 except json.JSONDecodeError as e:
-                    print(f"警告: 转换 Pi 记录失败: {e}", file=sys.stderr)
+                    print(i18n.t(Keys.WARN_PI_RECORD_CONVERT_FAILED, error=e), file=sys.stderr)
                     continue
 
                 if record.get("type") == "session" and not header:

@@ -22,6 +22,7 @@ from agent_dump.agents.message_assembly import (
     build_tool_part,
 )
 from agent_dump.diagnostics import source_missing
+from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
 
 KIMI_TOOL_TITLE_MAP = {
@@ -517,7 +518,7 @@ class KimiAgent(FileSessionAgent):
                 try:
                     record = json.loads(line)
                 except json.JSONDecodeError as e:
-                    print(f"警告: 转换 context 记录失败: {e}", file=sys.stderr)
+                    print(i18n.t(Keys.WARN_CONTEXT_CONVERT_FAILED, error=e), file=sys.stderr)
                     continue
                 self._convert_context_record(
                     record,
@@ -643,7 +644,7 @@ class KimiAgent(FileSessionAgent):
                 try:
                     data = json.loads(line)
                 except json.JSONDecodeError as e:
-                    print(f"警告: 转换 wire 记录失败: {e}", file=sys.stderr)
+                    print(i18n.t(Keys.WARN_WIRE_CONVERT_FAILED, error=e), file=sys.stderr)
                     continue
 
                 message = data.get("message", {})

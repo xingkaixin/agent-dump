@@ -3,6 +3,7 @@
 from pathlib import Path, PurePosixPath
 
 from agent_dump.diagnostics import DiagnosticError, unsupported_capability
+from agent_dump.i18n import Keys, i18n
 from agent_dump.text_safety import has_unsafe_line_characters
 
 
@@ -11,7 +12,7 @@ def _unsafe_session_id_error(session_id: str, reason: str) -> DiagnosticError:
         "session id cannot be used as an export filename",
         capability_gap="session id does not produce a safe filename",
         details=(f"session id: {session_id!r}", f"reason: {reason}"),
-        next_steps=("选择其他会话，或修复 provider 数据中的 session id。",),
+        next_steps=(i18n.t(Keys.DIAG_STEP_PICK_ANOTHER_SESSION),),
     )
 
 

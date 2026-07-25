@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 from unittest import mock
 
+from locale_helpers import Keys, expect
 import pytest
 
 from agent_dump.agents.base import Session
@@ -263,7 +264,7 @@ class TestSelectSessionsInteractive:
         result = select_sessions_interactive([], mock_agent)
         assert result == []
         captured = capsys.readouterr()
-        assert "No sessions found" in captured.out
+        assert expect(Keys.NO_SESSIONS_IN_RANGE) in captured.out
 
     def test_non_terminal_uses_simple_mode(self, mock_agent, sample_sessions):
         """测试非终端环境使用简单模式"""

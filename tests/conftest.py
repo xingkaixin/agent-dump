@@ -29,6 +29,15 @@ def _force_language(monkeypatch: pytest.MonkeyPatch, lang: str) -> None:
 
 
 @pytest.fixture(autouse=True)
+def strict_i18n_formatting(monkeypatch):
+    """让 i18n 的占位符不匹配在测试里直接失败。
+
+    生产实现刻意宽容（漏出模板胜过崩掉命令），但那样一个 `{days}` 会静默交给用户。
+    """
+    monkeypatch.setattr("agent_dump.i18n.STRICT_FORMATTING", True)
+
+
+@pytest.fixture(autouse=True)
 def set_language_zh(monkeypatch):
     """默认锁定 zh，以匹配套件里既有的中文字面量断言。
 

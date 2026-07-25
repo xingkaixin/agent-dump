@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agent_dump.i18n import Keys, i18n
+
 
 @dataclass(frozen=True)
 class ParsedUri:
@@ -87,7 +89,7 @@ def session_not_found(
 ) -> DiagnosticError:
     return DiagnosticFileNotFoundError(
         code="session_not_found",
-        summary="未找到匹配的会话。",
+        summary=i18n.t(Keys.DIAG_SESSION_NOT_FOUND),
         details=tuple(details),
         searched_roots=tuple(searched_roots),
         parsed_uri=ParsedUri(raw=raw_uri, scheme=scheme, session_id=session_id),
@@ -134,39 +136,39 @@ def unexpected_failure(exc: BaseException) -> DiagnosticError:
     """Wrap an unanticipated exception so the CLI reports it as a diagnostic."""
     return DiagnosticError(
         code="unexpected_failure",
-        summary="命令因未预期的错误中止。",
+        summary=i18n.t(Keys.DIAG_UNEXPECTED_FAILURE),
         details=(f"{type(exc).__name__}: {exc}",),
         next_steps=(
-            "重试一次以确认是否为瞬时故障。",
-            "若可稳定复现，请带上上面的错误类型与命令参数提交 issue。",
+            i18n.t(Keys.DIAG_STEP_RETRY_ONCE),
+            i18n.t(Keys.DIAG_STEP_FILE_ISSUE),
         ),
     )
 
 
 def render_diagnostic(error: DiagnosticError, *, t) -> str:
     """Render one diagnostic block with stable field labels."""
-    lines = [t("DIAGNOSTIC_HEADER"), f"{t('DIAGNOSTIC_SUMMARY')}: {error.summary}"]
+    lines = [t(Keys.DIAGNOSTIC_HEADER), f"{t(Keys.DIAGNOSTIC_SUMMARY)}: {error.summary}"]
 
     if error.parsed_uri is not None:
-        lines.append(f"{t('DIAGNOSTIC_PARSED_URI')}: {error.parsed_uri.raw}")
+        lines.append(f"{t(Keys.DIAGNOSTIC_PARSED_URI)}: {error.parsed_uri.raw}")
         if error.parsed_uri.scheme:
             lines.append(f"  - scheme: {error.parsed_uri.scheme}")
         if error.parsed_uri.session_id:
             lines.append(f"  - session_id: {error.parsed_uri.session_id}")
 
     if error.details:
-        lines.append(f"{t('DIAGNOSTIC_DETAILS')}:")
+        lines.append(f"{t(Keys.DIAGNOSTIC_DETAILS)}:")
         lines.extend(f"  - {detail}" for detail in error.details if detail)
 
     if error.searched_roots:
-        lines.append(f"{t('DIAGNOSTIC_SEARCHED_ROOTS')}:")
+        lines.append(f"{t(Keys.DIAGNOSTIC_SEARCHED_ROOTS)}:")
         lines.extend(f"  - {root}" for root in error.searched_roots if root)
 
     if error.capability_gap:
-        lines.append(f"{t('DIAGNOSTIC_CAPABILITY_GAP')}: {error.capability_gap}")
+        lines.append(f"{t(Keys.DIAGNOSTIC_CAPABILITY_GAP)}: {error.capability_gap}")
 
     if error.next_steps:
-        lines.append(f"{t('DIAGNOSTIC_NEXT_STEPS')}:")
+        lines.append(f"{t(Keys.DIAGNOSTIC_NEXT_STEPS)}:")
         lines.extend(f"  - {step}" for step in error.next_steps if step)
 
     return "\n".join(lines)
