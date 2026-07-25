@@ -82,7 +82,7 @@ def maybe_generate_uri_summary(
             print(i18n.t(Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING, fields=",".join(errors)))
         return session_data, None
 
-    effective_session_data = session_data if session_data is not None else agent.get_session_data(session)
+    effective_session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
     rendered = render_session_text(uri, effective_session_data)
     prompt = build_uri_summary_prompt(uri, rendered)
 
@@ -182,7 +182,7 @@ def handle_uri_mode(
             request_summary=request_summary,
         )
         if "print" in output_formats:
-            session_data = session_data if session_data is not None else agent.get_session_data(session)
+            session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
             output = render_session_text(args.uri, session_data)
             print(output)
             had_success = True

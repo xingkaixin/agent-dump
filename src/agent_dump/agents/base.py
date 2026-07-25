@@ -5,6 +5,7 @@ Base agent handler interface
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
+import json
 from pathlib import Path
 import shutil
 from typing import Any, cast
@@ -61,13 +62,22 @@ class BaseAgent(ABC):
         """
         pass
 
-    @abstractmethod
     def export_session(self, session: Session, output_dir: Path) -> Path:
+        """Export a single session to unified JSON. Returns the exported file path."""
+        payload = self._json_export_payload(session)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = self._build_output_path(session, output_dir, ".json")
+        output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return output_path
+
+    def _json_export_payload(self, session: Session) -> dict[str, Any]:
+        """Data to serialize for JSON export.
+
+        走请求级缓存，同一条命令里 print/markdown/search 已经解析过的会话不再重解析。
+        需要做导出专属变换的 provider 覆盖此方法，并且必须先浅拷贝——缓存返回的是
+        共享可变 dict，直接改键会污染其他消费者看到的同一份数据。
         """
-        Export a single session to JSON.
-        Returns the path to the exported file.
-        """
-        pass
+        return self.get_cached_session_data(session)
 
     def get_formatted_title(self, session: Session) -> str:
         """Get formatted title for display"""

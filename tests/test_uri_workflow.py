@@ -57,7 +57,7 @@ def test_maybe_generate_uri_summary_dispatches_rendered_session(
     assert called_config is config
     assert "会话 URI: codex://session-001" in prompt
     assert "## 1. User\n\nHello" in prompt
-    agent.get_session_data.assert_not_called()
+    agent.get_cached_session_data.assert_not_called()
 
 
 def test_maybe_generate_uri_summary_returns_loaded_data_when_request_fails(
@@ -67,7 +67,7 @@ def test_maybe_generate_uri_summary_returns_loaded_data_when_request_fails(
     config = AIConfig(provider="openai", base_url="https://example.com", model="model", api_key="key")
     session_data = {"messages": []}
     agent = mock.Mock()
-    agent.get_session_data.return_value = session_data
+    agent.get_cached_session_data.return_value = agent.get_session_data.return_value = session_data
     session = mock.Mock()
     request_summary = mock.Mock(side_effect=RuntimeError("service unavailable"))
     monkeypatch.setattr("agent_dump.uri_workflow.load_ai_config", lambda: config)
@@ -85,5 +85,5 @@ def test_maybe_generate_uri_summary_returns_loaded_data_when_request_fails(
 
     assert loaded_data is session_data
     assert summary is None
-    agent.get_session_data.assert_called_once_with(session)
+    agent.get_cached_session_data.assert_called_once_with(session)
     assert "AI 总结请求失败: service unavailable" in capsys.readouterr().out

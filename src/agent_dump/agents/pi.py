@@ -241,14 +241,6 @@ class PiAgent(FileSessionAgent):
             "messages": messages,
         }
 
-    def export_session(self, session: Session, output_dir: Path) -> Path:
-        """Export a single session to unified JSON format."""
-        session_data = self.get_session_data(session)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = self._build_output_path(session, output_dir, ".json")
-        output_path.write_text(json.dumps(session_data, ensure_ascii=False, indent=2), encoding="utf-8")
-        return output_path
-
     def _empty_stats(self) -> dict[str, int | float]:
         return {
             "total_cost": 0,

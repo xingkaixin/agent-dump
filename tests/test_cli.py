@@ -354,16 +354,20 @@ class TestMain:
                                     "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
                                 ) as mock_collect:
                                     with mock.patch(
-                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 1)
+                                        "agent_dump.collect_workflow.plan_collect_entries",
+                                        return_value=([mock_planned_entry], 1),
                                     ):
                                         with mock.patch(
-                                            "agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]
+                                            "agent_dump.collect_workflow.summarize_collect_entries",
+                                            return_value=[mock.MagicMock()],
                                         ):
                                             with mock.patch(
-                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries",
+                                                return_value=mock.MagicMock(),
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt",
+                                                    return_value="prompt",
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
@@ -557,7 +561,8 @@ class TestMain:
                                     "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
                                 ) as mock_collect:
                                     with mock.patch(
-                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 3)
+                                        "agent_dump.collect_workflow.plan_collect_entries",
+                                        return_value=([mock_planned_entry], 3),
                                     ):
 
                                         def _summarize_collect_entries(**kwargs):
@@ -602,10 +607,12 @@ class TestMain:
                                             side_effect=_summarize_collect_entries,
                                         ):
                                             with mock.patch(
-                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries",
+                                                return_value=mock.MagicMock(),
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt",
+                                                    return_value="prompt",
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
@@ -662,18 +669,24 @@ class TestMain:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                                 mock_scanner_class.return_value = mock_scanner
-                                with mock.patch("agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)):
+                                with mock.patch(
+                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
+                                ):
                                     with mock.patch(
-                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 1)
+                                        "agent_dump.collect_workflow.plan_collect_entries",
+                                        return_value=([mock_planned_entry], 1),
                                     ):
                                         with mock.patch(
-                                            "agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]
+                                            "agent_dump.collect_workflow.summarize_collect_entries",
+                                            return_value=[mock.MagicMock()],
                                         ):
                                             with mock.patch(
-                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries",
+                                                return_value=mock.MagicMock(),
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt",
+                                                    return_value="prompt",
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
@@ -722,19 +735,24 @@ class TestMain:
                                 mock_scanner.get_available_agents.return_value = [cursor_agent]
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
-                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock.MagicMock()], False)
+                                    "agent_dump.collect_workflow.collect_entries",
+                                    return_value=([mock.MagicMock()], False),
                                 ) as mock_collect:
                                     with mock.patch(
-                                        "agent_dump.collect_workflow.plan_collect_entries", return_value=([mock.MagicMock()], 1)
+                                        "agent_dump.collect_workflow.plan_collect_entries",
+                                        return_value=([mock.MagicMock()], 1),
                                     ):
                                         with mock.patch(
-                                            "agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]
+                                            "agent_dump.collect_workflow.summarize_collect_entries",
+                                            return_value=[mock.MagicMock()],
                                         ):
                                             with mock.patch(
-                                                "agent_dump.collect_workflow.reduce_collect_summaries", return_value=mock.MagicMock()
+                                                "agent_dump.collect_workflow.reduce_collect_summaries",
+                                                return_value=mock.MagicMock(),
                                             ):
                                                 with mock.patch(
-                                                    "agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"
+                                                    "agent_dump.collect_workflow.build_collect_final_prompt",
+                                                    return_value="prompt",
                                                 ):
                                                     with mock.patch(
                                                         "agent_dump.cli.request_summary_from_llm",
@@ -775,7 +793,9 @@ class TestMain:
                         mock_scanner = mock.MagicMock()
                         mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
                         mock_scanner_class.return_value = mock_scanner
-                        with mock.patch("agent_dump.collect_workflow.collect_entries", side_effect=RuntimeError("boom")):
+                        with mock.patch(
+                            "agent_dump.collect_workflow.collect_entries", side_effect=RuntimeError("boom")
+                        ):
                             result = handle_collect_mode(args)
 
         assert result == 1
@@ -898,7 +918,10 @@ class TestMain:
         fake_stderr = FakeStderr()
         expected_progress = "正在总结内容：已完成 1/2 个单元，并发 2"
 
-        with mock.patch("sys.stderr", fake_stderr), mock.patch("agent_dump.collect_workflow.threading.Thread", FakeThread):
+        with (
+            mock.patch("sys.stderr", fake_stderr),
+            mock.patch("agent_dump.collect_workflow.threading.Thread", FakeThread),
+        ):
             with show_collect_progress() as update_progress:
                 update_progress(
                     CollectProgressEvent(
@@ -952,7 +975,9 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.return_value = {"messages": []}
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
+                "messages": []
+            }
 
             mock_session = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = [mock_agent]
@@ -1061,7 +1086,9 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.side_effect = RuntimeError("read error")
+            mock_agent.get_cached_session_data.side_effect = mock_agent.get_session_data.side_effect = RuntimeError(
+                "read error"
+            )
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
@@ -1103,7 +1130,7 @@ class TestMain:
                     result = main()
 
         assert result == 0
-        mock_agent.get_session_data.assert_not_called()
+        mock_agent.get_cached_session_data.assert_not_called()
         captured = capsys.readouterr()
         assert "# Session Head" in captured.out
         assert "Message Count: 12" in captured.out
@@ -1575,7 +1602,9 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             selected_session = mock.MagicMock()
-            with mock.patch("agent_dump.session_workflow.select_agent_interactive", return_value=agent2) as mock_select_agent:
+            with mock.patch(
+                "agent_dump.session_workflow.select_agent_interactive", return_value=agent2
+            ) as mock_select_agent:
                 with mock.patch(
                     "agent_dump.cli_shared.filter_sessions",
                     side_effect=[[selected_session], [mock.MagicMock()]],
@@ -1584,7 +1613,9 @@ class TestMain:
                         "agent_dump.session_workflow.select_sessions_interactive",
                         return_value=[selected_session],
                     ):
-                        with mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]):
+                        with mock.patch(
+                            "agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]
+                        ):
                             with mock.patch(
                                 "sys.argv",
                                 ["agent-dump", "--interactive", "-query", "codex,kimi:bug"],
@@ -1620,8 +1651,12 @@ class TestMain:
 
             selected_sessions = [mock.MagicMock()]
             with mock.patch("agent_dump.cli_shared.filter_sessions", return_value=selected_sessions) as mock_filter:
-                with mock.patch("agent_dump.session_workflow.select_sessions_interactive", return_value=selected_sessions):
-                    with mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]):
+                with mock.patch(
+                    "agent_dump.session_workflow.select_sessions_interactive", return_value=selected_sessions
+                ):
+                    with mock.patch(
+                        "agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]
+                    ):
                         with mock.patch(
                             "sys.argv",
                             ["agent-dump", "--interactive", "-days", "3", "-query", "bug"],
@@ -1771,7 +1806,9 @@ class TestMain:
                 mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent,
             ):
                 with mock.patch("agent_dump.session_workflow.select_sessions_interactive", return_value=[kimi_session]):
-                    with mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]):
+                    with mock.patch(
+                        "agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]
+                    ):
                         with mock.patch(
                             "sys.argv",
                             ["agent-dump", "--interactive", "-query", "bug limit:1 provider:codex,kimi"],
@@ -2179,7 +2216,7 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.return_value = {
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
                 "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
             }
 
@@ -2260,7 +2297,7 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.return_value = {
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
                 "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
             }
 
@@ -2295,7 +2332,7 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.return_value = {
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
                 "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
             }
 
@@ -2331,7 +2368,9 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.return_value = {"messages": []}
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
+                "messages": []
+            }
 
             mock_session = mock.MagicMock()
             mock_session.id = "session-001"
@@ -2396,7 +2435,7 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "cursor"
             mock_agent.display_name = "Cursor"
-            mock_agent.get_session_data.return_value = {
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
                 "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hi"}]}]
             }
             mock_session = mock.MagicMock()
@@ -2461,7 +2500,9 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.return_value = {"messages": []}
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
+                "messages": []
+            }
 
             mock_session = mock.MagicMock()
             mock_session.id = "session-001"
@@ -2510,7 +2551,7 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.return_value = {
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
                 "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
             }
 
@@ -2561,7 +2602,7 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.return_value = {
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
                 "messages": [{"role": "user", "parts": [{"type": "text", "text": "Hello"}]}]
             }
 
@@ -2617,7 +2658,9 @@ class TestMain:
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=None):
-                    with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(False, ["missing_file"])):
+                    with mock.patch(
+                        "agent_dump.uri_workflow.validate_ai_config", return_value=(False, ["missing_file"])
+                    ):
                         with mock.patch(
                             "sys.argv",
                             [
@@ -2662,7 +2705,9 @@ class TestMain:
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
-                    with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(False, ["model", "api_key"])):
+                    with mock.patch(
+                        "agent_dump.uri_workflow.validate_ai_config", return_value=(False, ["model", "api_key"])
+                    ):
                         with mock.patch(
                             "sys.argv",
                             [
@@ -2690,7 +2735,9 @@ class TestMain:
             mock_agent = mock.MagicMock()
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_session_data.return_value = {"messages": []}
+            mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
+                "messages": []
+            }
             mock_session = mock.MagicMock()
             mock_session.id = "session-001"
 
