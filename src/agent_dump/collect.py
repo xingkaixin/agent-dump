@@ -15,6 +15,7 @@ from uuid import uuid4
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.collect_llm import (
     build_summary_json_schema as _build_summary_json_schema,
+    is_retryable_error,
     request_structured_summary_payload_from_llm as _request_structured_summary_payload_from_llm,
     request_summary_from_llm as _request_summary_from_llm,
 )
@@ -696,11 +697,15 @@ def request_summary_from_llm(
     最终 Markdown 渲染是管线末端的单次调用，失败会丢弃整个运行的成果，因此默认重试一次。
     """
     last_error: Exception | None = None
-    for _ in range(retry_count + 1):
+    for attempt in range(retry_count + 1):
         try:
             return _request_summary_from_llm(config, prompt, timeout_seconds=timeout_seconds)
         except Exception as exc:  # noqa: BLE001
             last_error = exc
+            # 只重试可能因重发而成功的失败。对 400/401/403 这类永久错误重发非幂等的
+            # POST，只是把每个 chunk 的延迟与计费翻倍。
+            if attempt < retry_count and not is_retryable_error(exc):
+                break
     if last_error is None:
         raise RuntimeError("summary request failed without an error")
     raise last_error

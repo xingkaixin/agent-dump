@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import sys
 from typing import Any
+from urllib.parse import urlsplit
 
 import questionary
 from questionary import Style
@@ -349,6 +350,15 @@ def load_shortcuts_config(path: Path | None = None) -> dict[str, ShortcutConfig]
     return shortcuts
 
 
+SUPPORTED_AI_URL_SCHEMES = frozenset({"http", "https"})
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+
+
+def is_loopback_host(host: str) -> bool:
+    """Whether a hostname refers to this machine."""
+    return host.strip().lower().strip("[]") in {h.strip("[]") for h in _LOOPBACK_HOSTS}
+
+
 def validate_ai_config(config: AIConfig | None) -> tuple[bool, list[str]]:
     """Validate collect-required AI config."""
     if config is None:
@@ -363,6 +373,16 @@ def validate_ai_config(config: AIConfig | None) -> tuple[bool, list[str]]:
         errors.append("model")
     if not config.api_key:
         errors.append("api_key")
+
+    if config.base_url:
+        parsed = urlsplit(config.base_url)
+        scheme = parsed.scheme.lower()
+        if scheme not in SUPPORTED_AI_URL_SCHEMES:
+            # 未加白名单前 file:// / ftp:// 之类的值也能走到 urllib 的 opener
+            errors.append("base_url_scheme")
+        elif scheme == "http" and config.api_key and not is_loopback_host(parsed.hostname or ""):
+            # 明文发 API key 只在指向本机网关时才是可接受的取舍
+            errors.append("base_url_plaintext_key")
 
     return len(errors) == 0, errors
 

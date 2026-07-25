@@ -7,14 +7,50 @@ from urllib import error, request
 from urllib.parse import urlsplit
 
 from agent_dump.collect_models import SUMMARY_FIELDS
-from agent_dump.config import AIConfig
+from agent_dump.config import AIConfig, is_loopback_host
 
 STRUCTURED_SUMMARY_MAX_TOKENS = 4096
 SENSITIVE_REQUEST_HEADERS = frozenset({"authorization", "x-api-key"})
 
 
+class LLMRequestError(RuntimeError):
+    """One failed LLM call, carrying enough detail to decide on a retry.
+
+    status 是 HTTP 状态码（无响应的连接/超时故障为 None）。retryable 由此判定：
+    对 400/401/403 这类永久失败重发非幂等的 POST，只会让每个 chunk 的延迟和计费翻倍。
+    """
+
+    def __init__(self, message: str, *, status: int | None = None, transport: bool = False) -> None:
+        super().__init__(message)
+        self.status = status
+        self.transport = transport
+
+    @property
+    def retryable(self) -> bool:
+        if self.transport:
+            return True
+        if self.status is None:
+            return False
+        return self.status == 429 or 500 <= self.status < 600
+
+
+def is_retryable_error(exc: BaseException) -> bool:
+    """Whether re-sending the same request could plausibly succeed."""
+    if isinstance(exc, LLMRequestError):
+        return exc.retryable
+    # 未分类的异常（响应解析失败等）保守视为不可重试，避免白付一次调用
+    return False
+
+
 def _warn_if_insecure_base_url(base_url: str) -> None:
-    if urlsplit(base_url).scheme.lower() == "https":
+    """Warn when a request would carry the key over cleartext to a remote host.
+
+    validate_ai_config 现在会直接拒绝「http + 有 key + 非 loopback」的配置，所以这里
+    只剩兜底作用：留给任何绕过校验的调用路径。指向本机的 http 是刻意允许的取舍，
+    不再为它每次请求都刷一行告警。
+    """
+    parsed = urlsplit(base_url)
+    if parsed.scheme.lower() == "https" or is_loopback_host(parsed.hostname or ""):
         return
     print("警告: AI base_url 未使用 HTTPS，api_key 可能以明文传输。", file=sys.stderr)
 
@@ -98,9 +134,11 @@ def _read_openai_response_content(data: dict[str, Any]) -> str:
 def _request_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_seconds: int) -> dict[str, Any]:
     try:
         return _post_openai_json(config, payload, timeout_seconds=timeout_seconds)
-    except RuntimeError as exc:
-        # enable_thinking 只有 Qwen 系端点认识；OpenAI 官方 API 会拒绝未知参数，剔除后重试一次
-        if "enable_thinking" in payload and "enable_thinking" in str(exc):
+    except LLMRequestError as exc:
+        # enable_thinking 只有 Qwen 系端点认识；OpenAI 官方 API 会以 4xx 拒绝未知参数，
+        # 剔除后重试一次。限定在客户端错误上，避免 5xx/超时也走这条特殊路径。
+        rejected_parameter = exc.status is not None and 400 <= exc.status < 500
+        if rejected_parameter and "enable_thinking" in payload and "enable_thinking" in str(exc):
             retry_payload = {key: value for key, value in payload.items() if key != "enable_thinking"}
             return _post_openai_json(config, retry_payload, timeout_seconds=timeout_seconds)
         raise
@@ -124,9 +162,9 @@ def _post_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_seco
             return cast(dict[str, Any], json.loads(resp.read().decode("utf-8")))
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
-        raise RuntimeError(f"OpenAI API HTTP {exc.code}: {detail}") from exc
+        raise LLMRequestError(f"OpenAI API HTTP {exc.code}: {detail}", status=exc.code) from exc
     except error.URLError as exc:
-        raise RuntimeError(f"OpenAI API request failed: {exc}") from exc
+        raise LLMRequestError(f"OpenAI API request failed: {exc}", transport=True) from exc
 
 
 def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
@@ -194,9 +232,9 @@ def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -
             data = json.loads(resp.read().decode("utf-8"))
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
-        raise RuntimeError(f"Anthropic API HTTP {exc.code}: {detail}") from exc
+        raise LLMRequestError(f"Anthropic API HTTP {exc.code}: {detail}", status=exc.code) from exc
     except error.URLError as exc:
-        raise RuntimeError(f"Anthropic API request failed: {exc}") from exc
+        raise LLMRequestError(f"Anthropic API request failed: {exc}", transport=True) from exc
 
     try:
         content = data["content"][0]["text"]

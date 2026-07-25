@@ -78,6 +78,10 @@ def maybe_generate_uri_summary(
     if not valid or config is None:
         if "missing_file" in errors:
             print(i18n.t(Keys.URI_SUMMARY_CONFIG_MISSING_WARNING))
+        elif "base_url_scheme" in errors:
+            print(i18n.t(Keys.COLLECT_CONFIG_BAD_SCHEME))
+        elif "base_url_plaintext_key" in errors:
+            print(i18n.t(Keys.COLLECT_CONFIG_PLAINTEXT_KEY))
         else:
             print(i18n.t(Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING, fields=",".join(errors)))
         return session_data, None

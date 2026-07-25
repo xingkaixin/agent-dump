@@ -43,6 +43,7 @@ from agent_dump.collect import (
     summarize_collect_entries,
     write_collect_markdown,
 )
+from agent_dump.collect_llm import LLMRequestError
 from agent_dump.collect_models import INSIGHT_SUMMARY_FIELDS, SUMMARY_FIELDS, collect_fields_for
 from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.query_filter import QuerySpec
@@ -769,26 +770,72 @@ class TestCollectStructuredSummary:
         assert body["max_tokens"] == 4096
 
     def test_request_summary_from_llm_retries_transient_failure(self):
-        """测试摘要请求瞬时失败会重试一次"""
+        """连接/超时类失败会重试一次。"""
+        transient = LLMRequestError("connection reset", transport=True)
         with mock.patch(
             "agent_dump.collect._request_summary_from_llm",
-            side_effect=[RuntimeError("boom"), "# summary"],
+            side_effect=[transient, "# summary"],
         ) as mocked:
             result = request_summary_from_llm(self._config(), "prompt")
 
         assert result == "# summary"
         assert mocked.call_count == 2
 
-    def test_request_summary_from_llm_raises_after_retries(self):
-        """测试重试耗尽后抛出最后一次错误"""
+    def test_request_summary_from_llm_retries_server_errors(self):
+        with mock.patch(
+            "agent_dump.collect._request_summary_from_llm",
+            side_effect=[LLMRequestError("HTTP 503", status=503), "# summary"],
+        ) as mocked:
+            assert request_summary_from_llm(self._config(), "prompt") == "# summary"
+        assert mocked.call_count == 2
+
+    def test_request_summary_from_llm_retries_rate_limits(self):
+        with mock.patch(
+            "agent_dump.collect._request_summary_from_llm",
+            side_effect=[LLMRequestError("HTTP 429", status=429), "# summary"],
+        ) as mocked:
+            assert request_summary_from_llm(self._config(), "prompt") == "# summary"
+        assert mocked.call_count == 2
+
+    @pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
+    def test_permanent_failures_are_not_retried(self, status):
+        """AD-130：对永久失败重发非幂等 POST 只会让延迟与计费翻倍。"""
         with (
             mock.patch(
                 "agent_dump.collect._request_summary_from_llm",
-                side_effect=RuntimeError("boom"),
+                side_effect=LLMRequestError(f"HTTP {status}", status=status),
             ) as mocked,
-            pytest.raises(RuntimeError, match="boom"),
+            pytest.raises(LLMRequestError),
         ):
             request_summary_from_llm(self._config(), "prompt")
+
+        assert mocked.call_count == 1, f"HTTP {status} 不应重试"
+
+    def test_unclassified_errors_are_not_retried(self):
+        """未分类异常（如响应解析失败）保守视为不可重试。"""
+        with (
+            mock.patch(
+                "agent_dump.collect._request_summary_from_llm",
+                side_effect=RuntimeError("response missing content"),
+            ) as mocked,
+            pytest.raises(RuntimeError, match="response missing content"),
+        ):
+            request_summary_from_llm(self._config(), "prompt")
+
+        assert mocked.call_count == 1
+
+    def test_request_summary_from_llm_raises_after_retries(self):
+        """可重试错误在重试耗尽后抛出最后一次错误。"""
+        with (
+            mock.patch(
+                "agent_dump.collect._request_summary_from_llm",
+                side_effect=LLMRequestError("boom", transport=True),
+            ) as mocked,
+            pytest.raises(LLMRequestError, match="boom"),
+        ):
+            request_summary_from_llm(self._config(), "prompt")
+
+        assert mocked.call_count == 2
 
         assert mocked.call_count == 2
 
