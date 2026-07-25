@@ -37,7 +37,7 @@ from agent_dump.rendering import (
     render_session_head as _render_session_head,
     render_session_text as _render_session_text,
 )
-from agent_dump.scanner import AgentScanner
+from agent_dump.scanner import AgentScanner, sessions_per_agent
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
 from agent_dump.uri_support import find_session_by_id as _find_session_by_id, parse_uri as _parse_uri
 
@@ -366,8 +366,7 @@ def collect_query_matches(
     spec: QuerySpec,
 ) -> dict[str, list[Session]]:
     matched_pairs: list[tuple[BaseAgent, Session]] = []
-    for agent in agents:
-        sessions = agent.get_sessions(days=days)
+    for agent, sessions in sessions_per_agent(agents, days):
         matched_sessions = apply_query_filter(agent, sessions, spec)
         matched_pairs.extend((agent, session) for session in matched_sessions)
 
@@ -385,8 +384,7 @@ def collect_search_matches(
     spec: QuerySpec,
 ) -> list[SearchSessionMatch]:
     matches: list[SearchSessionMatch] = []
-    for agent in agents:
-        sessions = agent.get_sessions(days=days)
+    for agent, sessions in sessions_per_agent(agents, days):
         matches.extend(search_sessions_by_query(agent, sessions, spec))
     return limit_search_matches(matches, spec.limit)
 

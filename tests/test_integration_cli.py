@@ -263,3 +263,24 @@ def test_reindex_succeeds_on_a_cache_that_never_had_an_index(codex_session_tree,
 
     assert exit_code == 0
     assert "Codex" in captured.out
+
+
+class TestProviderFailureIsolation:
+    """AD-122：一个 provider 的坏数据不得让整条命令带 traceback 退出。"""
+
+    def test_list_still_reports_healthy_provider_when_another_raises(self, codex_session_tree, monkeypatch, capsys):
+        from agent_dump.agents.claudecode import ClaudeCodeAgent
+
+        monkeypatch.setattr(ClaudeCodeAgent, "is_available", lambda self: True)
+        monkeypatch.setattr(
+            ClaudeCodeAgent,
+            "get_sessions",
+            lambda self, days=7: (_ for _ in ()).throw(ValueError("malformed row")),
+        )
+
+        exit_code = run_cli("--list", "-d", "36500")
+        captured = capsys.readouterr()
+
+        assert exit_code == 0
+        assert codex_session_tree["title"] in captured.out, "健康 provider 的结果必须照常出现"
+        assert "Claude Code" in captured.err and "ValueError" in captured.err
