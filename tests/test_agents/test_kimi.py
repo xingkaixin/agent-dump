@@ -1476,3 +1476,116 @@ class TestKimiAgent:
         assert exported["stats"]["total_input_tokens"] == 10
         assert exported["stats"]["total_output_tokens"] == 20
         assert exported["stats"]["total_tokens"] == 0
+
+
+def _build_kimi_home(tmp_path: Path, *, work_dirs: list[str], sessions_per_dir: int = 1) -> Path:
+    """造一个带 kimi.json 与 sessions/<project_hash>/<session_id>/ 的 KIMI_SHARE_DIR。"""
+    kimi_home = tmp_path / ".kimi"
+    sessions_root = kimi_home / "sessions"
+    (kimi_home).mkdir(parents=True, exist_ok=True)
+    (kimi_home / "kimi.json").write_text(
+        json.dumps({"work_dirs": [{"path": path} for path in work_dirs]}), encoding="utf-8"
+    )
+    for path in work_dirs:
+        project_hash = hashlib.md5(path.encode("utf-8")).hexdigest()  # noqa: S324
+        for index in range(sessions_per_dir):
+            session_dir = sessions_root / project_hash / f"session-{project_hash[:6]}-{index}"
+            session_dir.mkdir(parents=True)
+            write_metadata(session_dir, session_id=session_dir.name, title=f"会话 {index}")
+            write_jsonl(session_dir / "wire.jsonl", [{"type": "user", "content": "hello"}])
+    return kimi_home
+
+
+class TestWorkDirHashMapIsMemoized:
+    """AD-127：kimi.json 与 MD5 摘要表应只构建一次，而不是每会话一次。"""
+
+    def test_digests_are_computed_once_per_work_dir_not_per_session(self, monkeypatch, tmp_path):
+        """统计 MD5 次数而不是文件读次数：前者是真正随会话数增长的那笔成本。"""
+        work_dirs = ["/w/a", "/w/b"]
+        kimi_home = _build_kimi_home(tmp_path, work_dirs=work_dirs, sessions_per_dir=5)
+        monkeypatch.setenv("KIMI_SHARE_DIR", str(kimi_home))
+
+        digests: list[bytes] = []
+        original_md5 = hashlib.md5
+
+        def counting_md5(data=b"", **kwargs):
+            digests.append(data)
+            return original_md5(data, **kwargs)
+
+        monkeypatch.setattr("agent_dump.agents.kimi.hashlib.md5", counting_md5)
+
+        agent = KimiAgent()
+        assert agent.is_available() is True
+        sessions = agent.get_sessions(days=36500)
+
+        assert len(sessions) == 10
+        assert len(digests) == len(work_dirs), (
+            f"每个工作目录只该算一次摘要（共 {len(work_dirs)} 个），10 个会话实际算了 {len(digests)} 次"
+        )
+
+    def test_cwd_is_resolved_from_the_hash(self, monkeypatch, tmp_path):
+        kimi_home = _build_kimi_home(tmp_path, work_dirs=["/w/project-a"])
+        monkeypatch.setenv("KIMI_SHARE_DIR", str(kimi_home))
+
+        agent = KimiAgent()
+        agent.is_available()
+        sessions = agent.get_sessions(days=36500)
+
+        assert [s.metadata.get("cwd") for s in sessions] == ["/w/project-a"]
+
+    def test_missing_kimi_json_yields_no_cwd_and_does_not_raise(self, monkeypatch, tmp_path):
+        kimi_home = _build_kimi_home(tmp_path, work_dirs=["/w/a"])
+        (kimi_home / "kimi.json").unlink()
+        monkeypatch.setenv("KIMI_SHARE_DIR", str(kimi_home))
+
+        agent = KimiAgent()
+        agent.is_available()
+        sessions = agent.get_sessions(days=36500)
+
+        assert len(sessions) == 1
+        assert sessions[0].metadata.get("cwd") is None
+
+    def test_malformed_kimi_json_is_tolerated(self, monkeypatch, tmp_path):
+        kimi_home = _build_kimi_home(tmp_path, work_dirs=["/w/a"])
+        (kimi_home / "kimi.json").write_text("{not json", encoding="utf-8")
+        monkeypatch.setenv("KIMI_SHARE_DIR", str(kimi_home))
+
+        agent = KimiAgent()
+        agent.is_available()
+
+        assert agent._load_work_dirs_by_hash() == {}
+
+
+class TestSessionFileCandidates:
+    """AD-127：URI 定位应直接命中目录，而不是全量扫描。"""
+
+    def test_find_session_by_id_does_not_full_scan(self, monkeypatch, tmp_path):
+        kimi_home = _build_kimi_home(tmp_path, work_dirs=["/w/a", "/w/b"], sessions_per_dir=3)
+        monkeypatch.setenv("KIMI_SHARE_DIR", str(kimi_home))
+
+        agent = KimiAgent()
+        assert agent.is_available() is True
+        target = agent.get_sessions(days=36500)[0]
+
+        fresh = KimiAgent()
+        assert fresh.is_available() is True
+        scans: list[int] = []
+        monkeypatch.setattr(
+            KimiAgent,
+            "get_sessions",
+            lambda self, days=7: (scans.append(days), [])[1],
+        )
+
+        found = fresh.find_session_by_id(target.id)
+
+        assert found is not None and found.id == target.id
+        assert scans == [], "命中候选路径后不应再回退到全量扫描"
+
+    def test_unknown_id_returns_none(self, monkeypatch, tmp_path):
+        kimi_home = _build_kimi_home(tmp_path, work_dirs=["/w/a"])
+        monkeypatch.setenv("KIMI_SHARE_DIR", str(kimi_home))
+
+        agent = KimiAgent()
+        agent.is_available()
+
+        assert agent.find_session_by_id("no-such-session") is None
