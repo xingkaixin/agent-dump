@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from unittest import mock
 
+from locale_helpers import Keys as LocaleKeys, expect
 import pytest
 
 from agent_dump.__about__ import __version__
@@ -1031,7 +1032,7 @@ class TestMain:
         assert result == 1
         captured = capsys.readouterr()
         assert "未找到任何可用的本地会话数据" in captured.out
-        assert "searched roots" in captured.out
+        assert expect(LocaleKeys.DIAGNOSTIC_SEARCHED_ROOTS) in captured.out
         assert f"Codex: CODEX_HOME/sessions: {tmp_path / 'codex'}" in captured.out
 
     def test_main_uri_mode_session_not_found(self, capsys, tmp_path):
@@ -2491,7 +2492,7 @@ class TestMain:
         captured = capsys.readouterr()
         assert "raw session source is missing" in captured.out
         assert f"missing path: {tmp_path / 'missing.jsonl'}" in captured.out
-        assert "searched roots" in captured.out
+        assert expect(LocaleKeys.DIAGNOSTIC_SEARCHED_ROOTS) in captured.out
 
     def test_main_uri_mode_json_with_summary_success(self, capsys, tmp_path):
         """测试 URI + json + --summary 成功写入 summary 字段"""

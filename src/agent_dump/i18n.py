@@ -491,16 +491,16 @@ TRANSLATIONS = {
         Keys.USER_CANCELLED: "⚠️  用户取消操作，退出。",
         Keys.AVAILABLE_AGENTS: "可用的 Agent Tools:",
         Keys.SELECT_AGENT_NUMBER: "选择 Agent Tool 编号:",
-        Keys.NO_INPUT_EXITING: "⚠️  No input provided. Exiting.",
-        Keys.INVALID_SELECTION: "⚠️  Invalid selection: {selection}",
-        Keys.INVALID_INPUT_NUMBER: "⚠️  Invalid input. Please enter a number.",
-        Keys.NO_SESSIONS_IN_RANGE: "No sessions found in the specified time range.",
+        Keys.NO_INPUT_EXITING: "⚠️  未收到输入，已退出。",
+        Keys.INVALID_SELECTION: "⚠️  选择无效: {selection}",
+        Keys.INVALID_INPUT_NUMBER: "⚠️  输入无效，请输入一个数字。",
+        Keys.NO_SESSIONS_IN_RANGE: "指定时间范围内没有会话。",
         Keys.GROUP_TITLE: "─── {group_name} ({count} 个) ───",
         Keys.SELECT_SESSIONS_PROMPT: "选择要导出的会话:",
         Keys.CHECKBOX_INSTRUCTION: "\n↑↓ 移动  |  空格 选择/取消  |  回车 确认  |  q 退出",
-        Keys.AVAILABLE_SESSIONS: "Available sessions:",
-        Keys.ENTER_SESSION_NUMBERS: "Enter session numbers to export (comma-separated, e.g., '1,3,5' or 'all'):",
-        Keys.INVALID_INPUT_NUMBERS: "⚠️  Invalid input. Please enter numbers separated by commas.",
+        Keys.AVAILABLE_SESSIONS: "可用会话:",
+        Keys.ENTER_SESSION_NUMBERS: "输入要导出的会话编号（逗号分隔，如 '1,3,5'，或 'all'）:",
+        Keys.INVALID_INPUT_NUMBERS: "⚠️  输入无效，请输入以逗号分隔的数字。",
         Keys.CLI_DESC: "导出 Agent 会话",
         Keys.CLI_URI_HELP: "要导出的 Agent 会话 URI，或使用 agents://<path>?q=<关键词>&providers=<名称>&roles=<名称>&limit=<数量> 做路径作用域查询",
         Keys.CLI_DAYS_HELP: "回溯最近几天的会话（默认 7；collect 未指定时仅当天）",
@@ -607,7 +607,7 @@ TRANSLATIONS = {
         Keys.COLLECT_DRY_RUN_CONCURRENCY: "并发配置：{concurrency}",
         Keys.COLLECT_DRY_RUN_SAVE_PATH: "保存路径：{path}",
         Keys.COLLECT_SUMMARY_LOADING: "⏳ 正在调用 AI 生成汇总，请稍候...",
-        Keys.COLLECT_SESSION_PROGRESS: "session summaries: {completed}/{total} ({percent}%)",
+        Keys.COLLECT_SESSION_PROGRESS: "会话摘要: {completed}/{total} ({percent}%)",
         Keys.COLLECT_PROGRESS_START: "Collect 任务开始：{since} ~ {until}",
         Keys.COLLECT_PROGRESS_OVERVIEW: "本次将处理 {session_count} 个 session，拆分为 {chunk_count} 个总结单元；并发 {concurrency}",
         Keys.COLLECT_PROGRESS_AGENT_BREAKDOWN: "Agent 分布：{breakdown}",
@@ -628,7 +628,7 @@ TRANSLATIONS = {
         Keys.DIAGNOSTIC_HEADER: "诊断信息",
         Keys.DIAGNOSTIC_SUMMARY: "结论",
         Keys.DIAGNOSTIC_DETAILS: "证据",
-        Keys.DIAGNOSTIC_SEARCHED_ROOTS: "searched roots",
+        Keys.DIAGNOSTIC_SEARCHED_ROOTS: "已检查路径",
         Keys.DIAGNOSTIC_PARSED_URI: "解析后的 URI",
         Keys.DIAGNOSTIC_CAPABILITY_GAP: "缺失能力",
         Keys.DIAGNOSTIC_NEXT_STEPS: "下一步",
@@ -643,6 +643,10 @@ TRANSLATIONS = {
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     },
 }
+
+
+# 测试期置 True（见 tests/conftest.py），让 t() 的占位符不匹配直接抛错
+STRICT_FORMATTING = False
 
 
 class I18n:
@@ -690,6 +694,10 @@ class I18n:
             try:
                 return msg.format(**kwargs)
             except KeyError:
+                # 生产环境宁可漏出模板也不要因文案问题崩掉命令；测试期开启严格模式，
+                # 让占位符不匹配在 CI 失败，而不是把字面 {days} 交给用户
+                if STRICT_FORMATTING:
+                    raise
                 return msg
         return msg
 

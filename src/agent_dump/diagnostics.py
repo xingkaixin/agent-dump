@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agent_dump.i18n import Keys
+
 
 @dataclass(frozen=True)
 class ParsedUri:
@@ -145,28 +147,28 @@ def unexpected_failure(exc: BaseException) -> DiagnosticError:
 
 def render_diagnostic(error: DiagnosticError, *, t) -> str:
     """Render one diagnostic block with stable field labels."""
-    lines = [t("DIAGNOSTIC_HEADER"), f"{t('DIAGNOSTIC_SUMMARY')}: {error.summary}"]
+    lines = [t(Keys.DIAGNOSTIC_HEADER), f"{t(Keys.DIAGNOSTIC_SUMMARY)}: {error.summary}"]
 
     if error.parsed_uri is not None:
-        lines.append(f"{t('DIAGNOSTIC_PARSED_URI')}: {error.parsed_uri.raw}")
+        lines.append(f"{t(Keys.DIAGNOSTIC_PARSED_URI)}: {error.parsed_uri.raw}")
         if error.parsed_uri.scheme:
             lines.append(f"  - scheme: {error.parsed_uri.scheme}")
         if error.parsed_uri.session_id:
             lines.append(f"  - session_id: {error.parsed_uri.session_id}")
 
     if error.details:
-        lines.append(f"{t('DIAGNOSTIC_DETAILS')}:")
+        lines.append(f"{t(Keys.DIAGNOSTIC_DETAILS)}:")
         lines.extend(f"  - {detail}" for detail in error.details if detail)
 
     if error.searched_roots:
-        lines.append(f"{t('DIAGNOSTIC_SEARCHED_ROOTS')}:")
+        lines.append(f"{t(Keys.DIAGNOSTIC_SEARCHED_ROOTS)}:")
         lines.extend(f"  - {root}" for root in error.searched_roots if root)
 
     if error.capability_gap:
-        lines.append(f"{t('DIAGNOSTIC_CAPABILITY_GAP')}: {error.capability_gap}")
+        lines.append(f"{t(Keys.DIAGNOSTIC_CAPABILITY_GAP)}: {error.capability_gap}")
 
     if error.next_steps:
-        lines.append(f"{t('DIAGNOSTIC_NEXT_STEPS')}:")
+        lines.append(f"{t(Keys.DIAGNOSTIC_NEXT_STEPS)}:")
         lines.extend(f"  - {step}" for step in error.next_steps if step)
 
     return "\n".join(lines)

@@ -1,5 +1,7 @@
 """测试诊断错误渲染。"""
 
+from locale_helpers import Keys, expect
+
 from agent_dump.diagnostics import DiagnosticError, ParsedUri, render_diagnostic
 from agent_dump.i18n import i18n
 
@@ -11,7 +13,7 @@ class TestDiagnostics:
 
         assert "结论: 示例错误" in rendered
         assert "证据" not in rendered
-        assert "searched roots" not in rendered
+        assert expect(Keys.DIAGNOSTIC_SEARCHED_ROOTS) not in rendered
 
     def test_render_diagnostic_includes_all_sections(self):
         i18n.set_language("zh")
@@ -29,6 +31,6 @@ class TestDiagnostics:
 
         assert "解析后的 URI: codex://session-1" in rendered
         assert "证据:" in rendered
-        assert "searched roots:" in rendered
+        assert f"{expect(Keys.DIAGNOSTIC_SEARCHED_ROOTS)}:" in rendered
         assert "缺失能力: raw export is unsupported" in rendered
         assert "下一步:" in rendered
