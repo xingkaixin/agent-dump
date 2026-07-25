@@ -2,8 +2,11 @@
 
 from dataclasses import dataclass
 from datetime import date, datetime
+import json
 from pathlib import Path
 from typing import Any
+
+from agent_dump.private_files import open_private_append
 
 SUPPORTED_DATE_FORMATS = ("%Y-%m-%d", "%Y%m%d")
 SUMMARY_FIELDS = (
@@ -154,16 +157,14 @@ class CollectLogger:
         if not self.enabled or self.path is None:
             return
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
             record = {
                 "timestamp": datetime.now().astimezone().isoformat(),
                 "event": event,
                 "run_id": self.run_id,
                 **payload,
             }
-            with self.path.open("a", encoding="utf-8") as handle:
-                import json
-
+            # 日志里含模型输出片段，与搜索索引同样按私有文件处理
+            with open_private_append(self.path) as handle:
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
         except OSError:
             return
