@@ -19,17 +19,35 @@ def isolated_search_index_cache(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(cache_dir))
 
 
+def _force_language(monkeypatch: pytest.MonkeyPatch, lang: str) -> None:
+    """Pin the CLI locale for one test.
+
+    detect_language 也要 patch，否则 main() 里的 setup_i18n() 会按机器 locale 覆盖它。
+    """
+    monkeypatch.setattr("agent_dump.i18n.I18n.detect_language", lambda self: lang)
+    i18n.set_language(lang)
+
+
 @pytest.fixture(autouse=True)
 def set_language_zh(monkeypatch):
-    # Force language to Chinese for all tests to match existing assertions
-    # Patch detect_language to always return 'zh' so setup_i18n() in main() doesn't overwrite it to 'en'
-    monkeypatch.setattr("agent_dump.i18n.I18n.detect_language", lambda self: "zh")
+    """默认锁定 zh，以匹配套件里既有的中文字面量断言。
 
-    # Also set initial state
-    i18n.set_language("zh")
+    需要验证其他 locale 的测试请用 `use_language` fixture 覆盖；新增涉及 i18n 文案的
+    断言请改用 tests/locale_helpers.py 的 expect()，不要再写死字面量。
+    """
+    _force_language(monkeypatch, "zh")
     yield
-    # Reset to default (en) after test
     i18n.set_language("en")
+
+
+@pytest.fixture
+def use_language(monkeypatch):
+    """Return a callable that switches the CLI locale within one test."""
+
+    def _use(lang: str) -> None:
+        _force_language(monkeypatch, lang)
+
+    return _use
 
 
 @pytest.fixture
