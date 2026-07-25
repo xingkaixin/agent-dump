@@ -2,6 +2,7 @@
 测试配置和共享 fixtures
 """
 
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sqlite3
@@ -29,6 +30,88 @@ def set_language_zh(monkeypatch):
     yield
     # Reset to default (en) after test
     i18n.set_language("en")
+
+
+@pytest.fixture
+def isolated_provider_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """把全部 provider 的路径发现指向临时 home，禁止触达真实用户会话目录。
+
+    覆盖三条发现渠道：官方环境变量、Path.home() 派生的默认目录（HOME 生效于
+    ProviderRoots、zcode、cursor 与 config.toml），以及 `data/<agent>` 这个相对
+    CWD 的本地开发回退（靠 chdir 到空目录中和）。
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(home / ".local" / "share"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+    monkeypatch.setenv("CURSOR_DATA_PATH", str(home / "cursor-data"))
+    for env_var in ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "KIMI_SHARE_DIR", "PI_HOME", "LOCALAPPDATA", "APPDATA"):
+        monkeypatch.delenv(env_var, raising=False)
+    return home
+
+
+def _codex_record(timestamp: str, payload: dict) -> str:
+    return json.dumps({"type": "response_item", "timestamp": timestamp, "payload": payload})
+
+
+@pytest.fixture
+def codex_session_tree(isolated_provider_home: Path) -> dict[str, object]:
+    """在临时 home 下写一个真实可解析的 Codex 会话文件。
+
+    返回 session id、文件路径与预期正文片段，供集成测试断言真实产物内容。
+    """
+    session_id = "019c213e-c251-73a3-af66-0ec9d7cb9e29"
+    sessions_dir = isolated_provider_home / ".codex" / "sessions" / "2026" / "07"
+    sessions_dir.mkdir(parents=True)
+    session_file = sessions_dir / f"rollout-2026-07-20T10-04-47-{session_id}.jsonl"
+
+    created = datetime(2026, 7, 20, 10, 4, 47, tzinfo=timezone.utc)
+    lines = [
+        json.dumps(
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": session_id,
+                    "timestamp": created.isoformat().replace("+00:00", "Z"),
+                    "cwd": "/workspace/demo",
+                    "cli_version": "1.2.3",
+                    "model_provider": "openai",
+                },
+            }
+        ),
+        _codex_record(
+            "2026-07-20T10:05:00Z",
+            {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "帮我修复登录超时"}]},
+        ),
+        _codex_record(
+            "2026-07-20T10:05:10Z",
+            {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "先复现该超时"}]},
+        ),
+        _codex_record(
+            "2026-07-20T10:05:20Z",
+            {"type": "function_call", "name": "exec_command", "call_id": "call-1", "arguments": {"cmd": "just test"}},
+        ),
+        _codex_record(
+            "2026-07-20T10:05:30Z",
+            {"type": "function_call_output", "call_id": "call-1", "output": "3 passed"},
+        ),
+    ]
+    session_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    index_file = isolated_provider_home / ".codex" / "session_index.jsonl"
+    index_file.write_text(json.dumps({"id": session_id, "thread_name": "修复登录超时"}) + "\n", encoding="utf-8")
+
+    return {
+        "home": isolated_provider_home,
+        "session_id": session_id,
+        "session_file": session_file,
+        "title": "修复登录超时",
+        "user_text": "帮我修复登录超时",
+        "assistant_text": "先复现该超时",
+    }
 
 
 @pytest.fixture
