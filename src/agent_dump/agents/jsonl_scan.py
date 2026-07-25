@@ -120,3 +120,22 @@ def _parse_jsonl_records(lines: list[str]) -> list[dict[str, Any]]:
         if data is not None:
             records.append(data)
     return records
+
+
+def parse_iso_timestamp_ms(value: Any) -> int:
+    """Parse an ISO-8601 timestamp (with or without a `Z`) into epoch milliseconds.
+
+    没有时区信息的时间戳按 UTC 解释。直接对 naive datetime 调 .timestamp() 会让 Python
+    按**本机时区**解释它，同一份会话数据在不同时区的机器上会得到相差数小时的时间戳；
+    codex 与 claudecode 之前各自的实现都有这个问题，pi 的版本是对的。
+    """
+    text = str(value or "").strip()
+    if not text:
+        return 0
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return int(parsed.timestamp() * 1000)

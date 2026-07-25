@@ -1,9 +1,13 @@
+import pytest
+
+from agent_dump.agents.jsonl_scan import parse_iso_timestamp_ms
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
     build_fallback_tool_message,
     build_message,
     build_text_part,
     build_tool_part,
+    try_append_to_assistant_group,
 )
 
 
@@ -118,3 +122,127 @@ def test_backfill_tool_state_merges_output_and_state_updates():
         )
         is None
     )
+
+
+class TestTryAppendToAssistantGroup:
+    """AD-139：codex 与 claudecode 之前各自维护一份这段判断。"""
+
+    @staticmethod
+    def _assistant(parts: list[dict]) -> dict:
+        return {"role": "assistant", "parts": list(parts)}
+
+    def test_no_active_group_returns_none(self):
+        assert (
+            try_append_to_assistant_group(
+                [], current_assistant_index=None, parts=({"type": "text"},), blocking_part_types=("tool",)
+            )
+            is None
+        )
+
+    def test_folds_into_an_unblocked_group(self):
+        messages = [self._assistant([{"type": "reasoning"}])]
+
+        folded = try_append_to_assistant_group(
+            messages,
+            current_assistant_index=0,
+            parts=({"type": "text", "text": "hi"},),
+            blocking_part_types=("tool",),
+        )
+
+        assert folded == 0
+        assert [p["type"] for p in messages[0]["parts"]] == ["reasoning", "text"]
+
+    @pytest.mark.parametrize("blocker", ["text", "tool"])
+    def test_a_blocking_part_forces_a_new_group(self, blocker):
+        messages = [self._assistant([{"type": blocker}])]
+
+        folded = try_append_to_assistant_group(
+            messages,
+            current_assistant_index=0,
+            parts=({"type": "reasoning"},),
+            blocking_part_types=("text", "tool"),
+        )
+
+        assert folded is None
+        assert len(messages[0]["parts"]) == 1, "被阻塞时不得改动原消息"
+
+    def test_identical_tail_part_is_not_duplicated(self):
+        part = {"type": "text", "text": "same"}
+        messages = [self._assistant([part])]
+
+        try_append_to_assistant_group(
+            messages, current_assistant_index=0, parts=(dict(part),), blocking_part_types=("tool",)
+        )
+
+        assert len(messages[0]["parts"]) == 1
+
+    def test_on_message_runs_only_when_folding_succeeds(self):
+        calls: list[dict] = []
+        blocked = [self._assistant([{"type": "tool"}])]
+
+        try_append_to_assistant_group(
+            blocked,
+            current_assistant_index=0,
+            parts=({"type": "text"},),
+            blocking_part_types=("tool",),
+            on_message=calls.append,
+        )
+        assert calls == [], "未并入时不应执行后处理"
+
+        open_group = [self._assistant([{"type": "reasoning"}])]
+        try_append_to_assistant_group(
+            open_group,
+            current_assistant_index=0,
+            parts=({"type": "text"},),
+            blocking_part_types=("tool",),
+            on_message=calls.append,
+        )
+        assert calls == [open_group[0]]
+
+    def test_multiple_parts_are_all_appended(self):
+        messages = [self._assistant([])]
+
+        try_append_to_assistant_group(
+            messages,
+            current_assistant_index=0,
+            parts=({"type": "text", "text": "a"}, {"type": "text", "text": "b"}),
+            blocking_part_types=("tool",),
+        )
+
+        assert [p["text"] for p in messages[0]["parts"]] == ["a", "b"]
+
+
+class TestParseIsoTimestampMs:
+    """AD-139：三份解析器合一，并修正 naive 时间戳被按本机时区解释的问题。"""
+
+    def test_utc_with_z_suffix(self):
+        assert parse_iso_timestamp_ms("2026-07-20T10:00:00Z") == 1784541600000
+
+    def test_explicit_offset(self):
+        assert parse_iso_timestamp_ms("2026-07-20T19:00:00+09:00") == 1784541600000
+
+    def test_naive_is_read_as_utc_not_local_time(self):
+        """codex/claudecode 之前直接对 naive datetime 调 .timestamp()，Python 会按本机
+        时区解释，同一份数据在不同时区的机器上相差数小时。"""
+        assert parse_iso_timestamp_ms("2026-07-20T10:00:00") == parse_iso_timestamp_ms("2026-07-20T10:00:00Z")
+
+    def test_naive_result_is_independent_of_the_machine_timezone(self, monkeypatch):
+        import time
+
+        baseline = parse_iso_timestamp_ms("2026-07-20T10:00:00")
+        monkeypatch.setenv("TZ", "Asia/Tokyo")
+        if hasattr(time, "tzset"):
+            time.tzset()
+        try:
+            assert parse_iso_timestamp_ms("2026-07-20T10:00:00") == baseline
+        finally:
+            monkeypatch.undo()
+            if hasattr(time, "tzset"):
+                time.tzset()
+
+    @pytest.mark.parametrize("value", ["", None, "   ", "not-a-timestamp", "2026-13-45T99:99:99Z", 0])
+    def test_unusable_values_yield_zero(self, value):
+        assert parse_iso_timestamp_ms(value) == 0
+
+    def test_subsecond_precision_is_kept(self):
+        assert parse_iso_timestamp_ms("2026-07-20T10:00:00.250Z") == 1784541600250

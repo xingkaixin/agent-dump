@@ -1,5 +1,6 @@
 """Shared builders for the normalized session message contract."""
 
+from collections.abc import Callable, Sequence
 from typing import Any
 
 
@@ -108,3 +109,47 @@ def backfill_tool_state(
     if state_updates:
         state.update(state_updates)
     return tool_part
+
+
+def message_has_part_type(message: dict[str, Any], part_type: str) -> bool:
+    """Whether a message already contains a given part type."""
+    return any(part.get("type") == part_type for part in message.get("parts", []))
+
+
+def append_part_if_new(message: dict[str, Any], part: dict[str, Any]) -> None:
+    """Append a part unless it duplicates the current tail part."""
+    parts = message.get("parts", [])
+    if parts and parts[-1] == part:
+        return
+    parts.append(part)
+
+
+def try_append_to_assistant_group(
+    messages: list[dict[str, Any]],
+    *,
+    current_assistant_index: int | None,
+    parts: Sequence[dict[str, Any]],
+    blocking_part_types: Sequence[str],
+    on_message: Callable[[dict[str, Any]], None] | None = None,
+) -> int | None:
+    """Fold parts into the active assistant group, or return None if a new one is needed.
+
+    这是 codex 与 claudecode 之前各自维护一份的那段判断：只要当前 assistant 组还没有
+    出现 blocking_part_types 里的 part，后续 reasoning/text 就并入同一组，否则另起一组。
+    「新建消息」那半边各 provider 差异是真实的（codex 有相邻同内容去重，claudecode 要
+    套 assistant 元数据），所以只共享判断，不强行统一构造。
+
+    on_message 让调用方在成功并入后对该消息做后处理（claudecode 用它套元数据）。
+    """
+    if current_assistant_index is None:
+        return None
+
+    message = messages[current_assistant_index]
+    if any(message_has_part_type(message, part_type) for part_type in blocking_part_types):
+        return None
+
+    for part in parts:
+        append_part_if_new(message, part)
+    if on_message is not None:
+        on_message(message)
+    return current_assistant_index

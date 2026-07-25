@@ -16,13 +16,15 @@ from agent_dump.agents.base import Session
 from agent_dump.agents.codex_enrichment import CodexMessageEnrichmentMixin
 from agent_dump.agents.codex_patch import parse_apply_patch_input
 from agent_dump.agents.file_sessions import FileSessionAgent
-from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
+from agent_dump.agents.jsonl_scan import parse_iso_timestamp_ms, read_jsonl_scan_metadata
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
     build_fallback_tool_message,
     build_message,
     build_text_part,
     build_tool_part,
+    message_has_part_type,
+    try_append_to_assistant_group,
 )
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_int
@@ -379,16 +381,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _parse_timestamp_ms(self, data: dict[str, Any]) -> int:
         """Parse record timestamp into milliseconds."""
-        timestamp_str = str(data.get("timestamp", "")).strip()
-        if not timestamp_str:
-            return 0
-
-        try:
-            parsed = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-        except ValueError:
-            return 0
-
-        return int(parsed.timestamp() * 1000)
+        return parse_iso_timestamp_ms(data.get("timestamp"))
 
     def _map_tool_title(self, tool_name: str) -> str:
         """Map Codex tool names to unified short titles."""
@@ -608,17 +601,6 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         )
         return len(messages) - 1
 
-    def _message_has_part_type(self, message: dict[str, Any], part_type: str) -> bool:
-        """Whether a message already contains a given part type."""
-        return any(part.get("type") == part_type for part in message.get("parts", []))
-
-    def _append_part_if_new(self, message: dict[str, Any], part: dict[str, Any]) -> None:
-        """Append a part unless it duplicates the current tail part."""
-        parts = message.get("parts", [])
-        if parts and parts[-1] == part:
-            return
-        parts.append(part)
-
     def _append_assistant_reasoning(
         self,
         messages: list[dict[str, Any]],
@@ -632,14 +614,14 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         if not parts:
             return current_assistant_index
 
-        if current_assistant_index is not None:
-            message = messages[current_assistant_index]
-            has_text = self._message_has_part_type(message, "text")
-            has_tool = self._message_has_part_type(message, "tool")
-            if not has_text and not has_tool:
-                for part in parts:
-                    self._append_part_if_new(message, part)
-                return current_assistant_index
+        folded = try_append_to_assistant_group(
+            messages,
+            current_assistant_index=current_assistant_index,
+            parts=parts,
+            blocking_part_types=("text", "tool"),
+        )
+        if folded is not None:
+            return folded
 
         messages.append(
             build_message(
@@ -665,13 +647,14 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         if not parts:
             return current_assistant_index
 
-        if current_assistant_index is not None:
-            message = messages[current_assistant_index]
-            has_tool = self._message_has_part_type(message, "tool")
-            if not has_tool:
-                for part in parts:
-                    self._append_part_if_new(message, part)
-                return current_assistant_index
+        folded = try_append_to_assistant_group(
+            messages,
+            current_assistant_index=current_assistant_index,
+            parts=parts,
+            blocking_part_types=("tool",),
+        )
+        if folded is not None:
+            return folded
 
         assistant_index = self._append_assistant_text_message(
             messages,
@@ -700,7 +683,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _message_contains_plan_part(self, message: dict[str, Any]) -> bool:
         """Whether one message contains a plan part."""
-        return self._message_has_part_type(message, "plan")
+        return message_has_part_type(message, "plan")
 
     def _extract_visible_user_text(self, parts: list[dict[str, Any]]) -> str | None:
         """Extract visible text from user parts."""
