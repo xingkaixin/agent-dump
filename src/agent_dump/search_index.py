@@ -5,6 +5,7 @@ All SQL f-strings in this file use FTS5 virtual table names that are
 hardcoded internal constants (_FTS_TABLES), never user input.
 """
 
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import json
@@ -14,11 +15,13 @@ import re
 import sqlite3
 import sys
 import time
-from typing import Any
+from typing import Any, TypeVar
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.message_filter import get_text_content_parts
 from agent_dump.session_data import session_updated_signal as _session_updated_signal
+
+_T = TypeVar("_T")
 
 
 @dataclass(frozen=True)
@@ -213,10 +216,23 @@ _FTS_TABLES = ("sessions_fts", "sessions_fts_trigram")
 # 待索引会话数达到该阈值时向 stderr 提示进度（关键词过滤会隐式建索引，首次运行可能较慢）
 _INDEX_PROGRESS_THRESHOLD = 10
 _MAX_INDEX_PARSE_WORKERS = 32
+# 每批同时驻留内存的会话正文数量上限，与解析并行度对齐
+_INDEX_BATCH_SIZE = 32
+
+
+def _batched(items: list[_T], size: int) -> Iterator[list[_T]]:
+    """Yield fixed-size slices; itertools.batched needs Python 3.12."""
+    for start in range(0, len(items), size):
+        yield items[start : start + size]
 
 
 def _delete_fts_by_session(conn: sqlite3.Connection, fts_table: str, session_id: str, agent_name: str) -> None:
-    """Delete FTS rows for a specific session."""
+    """Delete FTS rows for a specific session.
+
+    agent_name/session_id 在两张 FTS5 表里都是 UNINDEXED，这个 DELETE 只能全表
+    扫内容行，每行都是一整段会话正文。调用方必须先确认该会话确实已被索引过，
+    否则首次建索引时第 k 次插入前的空删除要扫过前 k-1 行，整体退化成 O(N²)。
+    """
     conn.execute(
         f"DELETE FROM {fts_table} WHERE session_id = ? AND agent_name = ?",
         (session_id, agent_name),
@@ -378,42 +394,23 @@ class SearchIndex:
                 session, _ = item
                 return extract_session_searchable_text(agent, session)
 
-            searchable_texts: list[str] = []
-            if to_update:
-                max_workers = min(_MAX_INDEX_PARSE_WORKERS, len(to_update))
+            # 分批解析并即时写入：一次性 list(executor.map(...)) 会让全部待索引会话
+            # 的正文同时驻留内存，会话历史大的用户可能直接 OOM
+            for batch in _batched(to_update, _INDEX_BATCH_SIZE):
+                max_workers = min(_MAX_INDEX_PARSE_WORKERS, len(batch))
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    searchable_texts = list(executor.map(_extract_text, to_update))
+                    texts = list(executor.map(_extract_text, batch))
 
-            # Update changed/new entries
-            for (session, signal), text in zip(to_update, searchable_texts, strict=True):
-                # Delete old FTS entries for this session if updating
-                for fts_table in _FTS_TABLES:
-                    _delete_fts_by_session(conn, fts_table, session.id, agent.name)
-
-                # Preprocess for unicode61 CJK support
-                title_unicode = _preprocess_for_unicode61(session.title)
-                text_unicode = _preprocess_for_unicode61(text)
-
-                # Insert into FTS tables
-                conn.execute(
-                    "INSERT INTO sessions_fts (agent_name, session_id, title, content) VALUES (?, ?, ?, ?)",
-                    (agent.name, session.id, title_unicode, text_unicode),
-                )
-                conn.execute(
-                    "INSERT INTO sessions_fts_trigram (agent_name, session_id, title, content) VALUES (?, ?, ?, ?)",
-                    (agent.name, session.id, session.title, text),
-                )
-
-                # Update index state
-                conn.execute(
-                    """INSERT INTO index_state (agent, session_id, source_path, updated_signal, indexed_at)
-                       VALUES (?, ?, ?, ?, ?)
-                       ON CONFLICT(agent, session_id) DO UPDATE SET
-                       source_path=excluded.source_path,
-                       updated_signal=excluded.updated_signal, indexed_at=excluded.indexed_at""",
-                    (agent.name, session.id, str(session.source_path), signal, time.time()),
-                )
-                added += 1
+                for (session, signal), text in zip(batch, texts, strict=True):
+                    self._write_session_rows(
+                        conn,
+                        agent_name=agent.name,
+                        session=session,
+                        signal=signal,
+                        text=text,
+                        already_indexed=session.id in indexed,
+                    )
+                    added += 1
 
             conn.commit()
         finally:
@@ -490,6 +487,38 @@ class SearchIndex:
             conn.close()
 
         return results
+
+    def _write_session_rows(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        agent_name: str,
+        session: Session,
+        signal: float,
+        text: str,
+        already_indexed: bool,
+    ) -> None:
+        """Replace one session's rows in both FTS tables and its index_state row."""
+        if already_indexed:
+            for fts_table in _FTS_TABLES:
+                _delete_fts_by_session(conn, fts_table, session.id, agent_name)
+
+        conn.execute(
+            "INSERT INTO sessions_fts (agent_name, session_id, title, content) VALUES (?, ?, ?, ?)",
+            (agent_name, session.id, _preprocess_for_unicode61(session.title), _preprocess_for_unicode61(text)),
+        )
+        conn.execute(
+            "INSERT INTO sessions_fts_trigram (agent_name, session_id, title, content) VALUES (?, ?, ?, ?)",
+            (agent_name, session.id, session.title, text),
+        )
+        conn.execute(
+            """INSERT INTO index_state (agent, session_id, source_path, updated_signal, indexed_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(agent, session_id) DO UPDATE SET
+               source_path=excluded.source_path,
+               updated_signal=excluded.updated_signal, indexed_at=excluded.indexed_at""",
+            (agent_name, session.id, str(session.source_path), signal, time.time()),
+        )
 
     def clear_agent(self, agent_name: str) -> int:
         """Remove all index entries for an agent. Returns deleted count."""

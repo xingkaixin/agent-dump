@@ -6,9 +6,13 @@ import sqlite3
 import threading
 from unittest import mock
 
+import pytest
+
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.search_index import (
+    _INDEX_BATCH_SIZE,
     SearchIndex,
+    _batched,
     _build_fts_query,
     _has_cjk,
     _has_fts5,
@@ -625,3 +629,100 @@ class TestQueryFilterIntegration:
         with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=Exception("boom")):
             results = filter_sessions(agent, [session], "fallback keyword")
             assert len(results) == 1
+
+
+def _touched(session: Session) -> Session:
+    """返回 updated_at 前进一小时的同一会话，用于触发索引更新。"""
+    return Session(
+        id=session.id,
+        title=session.title,
+        created_at=session.created_at,
+        updated_at=session.updated_at + timedelta(hours=1),
+        source_path=session.source_path,
+        metadata=session.metadata,
+    )
+
+
+class TestBatched:
+    def test_splits_into_fixed_size_slices(self):
+        assert list(_batched([1, 2, 3, 4, 5], 2)) == [[1, 2], [3, 4], [5]]
+
+    def test_empty_input_yields_nothing(self):
+        assert list(_batched([], 4)) == []
+
+
+class TestIndexBuildAvoidsRedundantDeletes:
+    """AD-120：FTS5 表里 session_id 是 UNINDEXED，空删除会全表扫描。"""
+
+    def test_first_build_issues_no_delete(self, tmp_path, monkeypatch):
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        sessions = [make_session(f"s{i}", f"标题{i}", source) for i in range(5)]
+        agent = DummyAgent(session_data={s.id: {"messages": []} for s in sessions})
+
+        calls: list[str] = []
+        monkeypatch.setattr(
+            "agent_dump.search_index._delete_fts_by_session",
+            lambda conn, fts_table, session_id, agent_name: calls.append(session_id),
+        )
+
+        index = SearchIndex(tmp_path / "index.db")
+        added, _ = index.update(agent, sessions)
+
+        assert added == 5
+        assert calls == [], "首次索引的会话此前没有 FTS 行，不应触发任何 DELETE"
+
+    def test_reindexing_a_changed_session_still_deletes_old_rows(self, tmp_path, monkeypatch):
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        session = make_session("s1", "标题", source)
+        agent = DummyAgent(session_data={"s1": {"messages": []}})
+
+        index = SearchIndex(tmp_path / "index.db")
+        index.update(agent, [session])
+
+        calls: list[str] = []
+        monkeypatch.setattr(
+            "agent_dump.search_index._delete_fts_by_session",
+            lambda conn, fts_table, session_id, agent_name: calls.append(session_id),
+        )
+        # updated_signal 取 session.updated_at 与 metadata 里 per-session 文件的
+        # mtime，不看 source_path，所以必须推进 updated_at 才算「有变更」
+        index.update(agent, [_touched(session)])
+
+        assert calls == ["s1", "s1"], "已索引过的会话更新时必须先删掉两张表的旧行"
+
+    def test_reindex_keeps_exactly_one_row_per_session_across_updates(self, tmp_path):
+        source = tmp_path / "s.jsonl"
+        source.write_text("认证超时", encoding="utf-8")
+        agent = DummyAgent(session_data={"s1": {"messages": [{"role": "user", "content": "认证超时"}]}})
+        index = SearchIndex(tmp_path / "index.db")
+
+        first = make_session("s1", "认证", source)
+        index.update(agent, [first])
+        index.update(agent, [_touched(first)])
+
+        conn = sqlite3.connect(tmp_path / "index.db")
+        try:
+            for table in ("sessions_fts", "sessions_fts_trigram"):
+                count = conn.execute(f"SELECT COUNT(*) FROM {table} WHERE session_id = 's1'").fetchone()[0]
+                assert count == 1, f"{table} 出现重复行会让搜索结果重复"
+        finally:
+            conn.close()
+
+
+class TestIndexBuildSpansMultipleBatches:
+    """AD-120：分批消费不能漏掉任何会话。"""
+
+    def test_all_sessions_indexed_when_count_exceeds_batch_size(self, tmp_path):
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        total = _INDEX_BATCH_SIZE * 2 + 3
+        sessions = [make_session(f"s{i}", f"标题{i}", source) for i in range(total)]
+        agent = DummyAgent(session_data={s.id: {"messages": []} for s in sessions})
+
+        index = SearchIndex(tmp_path / "index.db")
+        added, _ = index.update(agent, sessions)
+
+        assert added == total
+        assert index.get_stats()["codex"]["sessions"] == total
