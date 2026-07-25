@@ -11,6 +11,7 @@ import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.coercion import safe_epoch_datetime, safe_int
 from agent_dump.diagnostics import source_missing, unsupported_capability
 from agent_dump.paths import SearchRoot
 
@@ -155,10 +156,10 @@ class CursorAgent(BaseAgent):
             except ValueError:
                 return None
         if isinstance(value, (int, float)):
-            ts = float(value)
-            if ts > 1e12:
-                ts /= 1000.0
-            return datetime.fromtimestamp(ts, tz=timezone.utc)
+            # Cursor 同一字段既可能存秒也可能存毫秒，1e12 秒约合公元 33658 年，
+            # 超过即判定为毫秒
+            unit = "ms" if float(value) > 1e12 else "s"
+            return safe_epoch_datetime(value, unit=unit)
         return None
 
     def _resolve_session_times(self, composer: dict[str, Any]) -> tuple[datetime, datetime]:
@@ -465,7 +466,7 @@ class CursorAgent(BaseAgent):
                             {
                                 "type": "text",
                                 "text": text.strip(),
-                                "time_created": int(item.get("time_created") or timestamp_ms),
+                                "time_created": safe_int(item.get("time_created"), timestamp_ms),
                             }
                         )
             return parts
@@ -519,7 +520,7 @@ class CursorAgent(BaseAgent):
                 stripped = text.strip()
                 if not stripped or stripped in {"[empty message]", "[corrupted message]"}:
                     continue
-                part_time_created = int(part.get("time_created") or message.get("time_created") or 0)
+                part_time_created = safe_int(part.get("time_created"), safe_int(message.get("time_created")))
                 parts.append(
                     {
                         "type": "text",
@@ -662,13 +663,13 @@ class CursorAgent(BaseAgent):
     def _extract_tokens(self, bubble: dict[str, Any]) -> tuple[int, int]:
         token_count = bubble.get("tokenCount")
         if isinstance(token_count, dict):
-            return int(token_count.get("inputTokens") or 0), int(token_count.get("outputTokens") or 0)
+            return safe_int(token_count.get("inputTokens")), safe_int(token_count.get("outputTokens"))
         usage = bubble.get("usage")
         if isinstance(usage, dict):
-            return int(usage.get("input_tokens") or 0), int(usage.get("output_tokens") or 0)
+            return safe_int(usage.get("input_tokens")), safe_int(usage.get("output_tokens"))
         cws = bubble.get("contextWindowStatusAtCreation")
         if isinstance(cws, dict) and cws.get("tokensUsed") is not None:
-            return int(cws.get("tokensUsed") or 0), 0
+            return safe_int(cws.get("tokensUsed")), 0
         return 0, 0
 
     def get_session_data(self, session: Session) -> dict:

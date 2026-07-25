@@ -244,3 +244,18 @@ class TestPiAgent:
 
         assert output_path.name == "pi-session.json"
         assert json.loads(output_path.read_text(encoding="utf-8"))["id"] == "pi-session"
+
+
+class TestMalformedTimestamps:
+    """AD-122：越界的 epoch 值不得让 pi provider 抛异常。"""
+
+    def test_out_of_range_timestamp_yields_none_instead_of_raising(self):
+        agent = PiAgent()
+
+        assert agent._parse_datetime(1e30) is None
+        assert agent._parse_datetime(-1e30) is None
+
+    def test_normal_millisecond_timestamp_still_parses(self):
+        agent = PiAgent()
+
+        assert agent._parse_datetime(1704067200000) == datetime(2024, 1, 1, tzinfo=timezone.utc)

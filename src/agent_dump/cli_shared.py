@@ -495,5 +495,3 @@ def wrap_runtime_fetch_error(exc: Exception, *, agent: BaseAgent | None = None) 
             ),
         )
     )
-
-

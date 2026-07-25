@@ -10,6 +10,7 @@ import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.coercion import safe_epoch_datetime
 from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 
@@ -17,6 +18,9 @@ from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_ro
 def _escape_like(text: str) -> str:
     """Escape LIKE wildcards so user keywords match literally."""
     return text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+
+
+_EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 
 
 class OpenCodeAgent(BaseAgent):
@@ -133,9 +137,7 @@ class OpenCodeAgent(BaseAgent):
 
         return [session for session in sessions if session.id in matched_ids]
 
-    def _select_sessions(
-        self, conn: sqlite3.Connection, *, where_sql: str, params: tuple[Any, ...]
-    ) -> list[Session]:
+    def _select_sessions(self, conn: sqlite3.Connection, *, where_sql: str, params: tuple[Any, ...]) -> list[Session]:
         """Query sessions with an internal WHERE clause and build Session models."""
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'message'")
@@ -195,8 +197,8 @@ class OpenCodeAgent(BaseAgent):
         return Session(
             id=row["id"],
             title=row["title"] or "Untitled",
-            created_at=datetime.fromtimestamp(row["time_created"] / 1000, tz=timezone.utc),
-            updated_at=datetime.fromtimestamp(row["time_updated"] / 1000, tz=timezone.utc),
+            created_at=safe_epoch_datetime(row["time_created"], unit="ms") or _EPOCH,
+            updated_at=safe_epoch_datetime(row["time_updated"], unit="ms") or _EPOCH,
             source_path=self.db_path if self.db_path else Path(""),
             metadata={
                 "slug": row["slug"],

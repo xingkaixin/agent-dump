@@ -998,3 +998,35 @@ class TestOpenCodeAgent:
 
         assert data["messages"][0]["parts"][0]["type"] == "step-start"
         assert data["messages"][0]["parts"][0]["reason"] == "starting_step"
+
+
+class TestMalformedRowsDoNotKillTheProvider:
+    """AD-122：坏行只让该字段退化，不得让整个 provider 抛异常。"""
+
+    # NULL 不在此列：`NULL >= ?` 在 SQLite 里求值为 NULL，这类行在 get_sessions 的
+    # WHERE 子句就被滤掉，到不了 Python 侧的转换；文本值则因 SQLite 的类型序被判为
+    # 大于整数而通过 WHERE，正是会打到 datetime 转换的那批
+    @pytest.mark.parametrize("bad_value", ["not-a-number", "", "9" * 30])
+    def test_non_numeric_timestamp_degrades_to_epoch(self, tmp_path, bad_value):
+        db_path = tmp_path / "opencode.db"
+        conn = sqlite3.connect(db_path)
+        conn.executescript("""
+            CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, time_created, time_updated,
+                                  slug TEXT, directory TEXT, version INTEGER, summary_files TEXT);
+            CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+            CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, time_created INTEGER, data TEXT);
+        """)
+        conn.execute(
+            "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("s-bad", "坏时间戳", bad_value, bad_value, "slug", "/d", 1, ""),
+        )
+        conn.commit()
+        conn.close()
+
+        agent = OpenCodeAgent()
+        agent.db_path = db_path
+
+        sessions = agent.scan()
+
+        assert [s.id for s in sessions] == ["s-bad"]
+        assert sessions[0].created_at == datetime.fromtimestamp(0, tz=timezone.utc)

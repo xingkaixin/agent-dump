@@ -862,3 +862,33 @@ class TestCursorAgent:
 
         _insert_raw_kv(global_db, "composerData:orphan-composer", "[]")
         assert agent.find_session_by_request_id("orphan-request") is None
+
+
+class TestMalformedNumericFieldsInBubbles:
+    """AD-122：bubble 里的非数字 token 计数不得让 cursor provider 抛异常。"""
+
+    def test_non_numeric_token_counts_degrade_to_zero(self):
+        agent = CursorAgent()
+
+        assert agent._extract_tokens({"tokenCount": {"inputTokens": "abc", "outputTokens": None}}) == (0, 0)
+        assert agent._extract_tokens({"usage": {"input_tokens": [], "output_tokens": {}}}) == (0, 0)
+        assert agent._extract_tokens({"contextWindowStatusAtCreation": {"tokensUsed": "x"}}) == (0, 0)
+
+    def test_usable_token_counts_are_preserved(self):
+        agent = CursorAgent()
+
+        assert agent._extract_tokens({"tokenCount": {"inputTokens": 12, "outputTokens": 34}}) == (12, 34)
+        assert agent._extract_tokens({"tokenCount": {"inputTokens": "12", "outputTokens": "34"}}) == (12, 34)
+
+    def test_out_of_range_composer_timestamp_yields_none(self):
+        agent = CursorAgent()
+
+        assert agent._parse_datetime_utc(1e30) is None
+
+    def test_second_and_millisecond_timestamps_both_parse(self):
+        """Cursor 同一字段两种单位共存，阈值 1e12 秒（约公元 33658 年）以上判为毫秒。"""
+        agent = CursorAgent()
+        expected = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+        assert agent._parse_datetime_utc(1704067200) == expected
+        assert agent._parse_datetime_utc(1704067200000) == expected

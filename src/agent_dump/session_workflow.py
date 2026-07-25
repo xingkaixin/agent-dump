@@ -167,7 +167,6 @@ def _handle_list_mode(
         else sessions_per_agent(available_agents, args.days)
     )
     for agent, sessions in listed:
-
         print(f"\n📁 {agent.display_name} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
 
         if sessions:
