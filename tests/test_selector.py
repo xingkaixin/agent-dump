@@ -93,7 +93,7 @@ class TestSelectAgentSimple:
         agents = [mock_agent]
 
         with mock.patch("builtins.input", return_value="1"):
-            result = select_agent_simple(agents)
+            result = select_agent_simple(agents, {"test_agent": 1})
 
         assert result == mock_agent
 
@@ -103,7 +103,7 @@ class TestSelectAgentSimple:
         agents = [mock_agent]
 
         with mock.patch("builtins.input", return_value="5"):
-            result = select_agent_simple(agents)
+            result = select_agent_simple(agents, {"test_agent": 1})
 
         assert result is None
 
@@ -113,7 +113,7 @@ class TestSelectAgentSimple:
         agents = [mock_agent]
 
         with mock.patch("builtins.input", return_value="invalid"):
-            result = select_agent_simple(agents)
+            result = select_agent_simple(agents, {"test_agent": 1})
 
         assert result is None
 
@@ -123,7 +123,7 @@ class TestSelectAgentSimple:
         agents = [mock_agent]
 
         with mock.patch("builtins.input", side_effect=EOFError()):
-            result = select_agent_simple(agents)
+            result = select_agent_simple(agents, {"test_agent": 1})
 
         assert result is None
 
@@ -132,7 +132,7 @@ class TestSelectAgentSimple:
         agents = [mock_agent]
 
         with mock.patch("builtins.input", return_value="1"):
-            result = select_agent_simple(agents, days=7, session_counts={"test_agent": 5})
+            result = select_agent_simple(agents, {"test_agent": 5})
 
         assert result == mock_agent
         mock_agent.get_sessions.assert_not_called()
@@ -202,7 +202,7 @@ class TestSelectAgentInteractive:
 
     def test_empty_agents(self, capsys):
         """测试空 agent 列表"""
-        result = select_agent_interactive([])
+        result = select_agent_interactive([], {})
         assert result is None
         captured = capsys.readouterr()
         assert "未找到任何可用的 Agent Tools" in captured.out
@@ -214,9 +214,9 @@ class TestSelectAgentInteractive:
         with mock.patch("agent_dump.selector.is_terminal", return_value=False):
             with mock.patch("agent_dump.selector.select_agent_simple") as mock_simple:
                 mock_simple.return_value = mock_agent
-                result = select_agent_interactive(agents)
+                result = select_agent_interactive(agents, {"test_agent": 1})
 
-        mock_simple.assert_called_once_with(agents, days=7, session_counts=None)
+        mock_simple.assert_called_once_with(agents, {"test_agent": 1})
         assert result == mock_agent
 
     def test_terminal_interactive_selection(self, mock_agent):
@@ -226,7 +226,7 @@ class TestSelectAgentInteractive:
         with mock.patch("agent_dump.selector.is_terminal", return_value=True):
             with mock.patch("questionary.select") as mock_select:
                 mock_select.return_value.ask.return_value = mock_agent
-                result = select_agent_interactive(agents)
+                result = select_agent_interactive(agents, {"test_agent": 1})
 
         assert result == mock_agent
 
@@ -237,7 +237,7 @@ class TestSelectAgentInteractive:
         with mock.patch("agent_dump.selector.is_terminal", return_value=True):
             with mock.patch("questionary.select") as mock_select:
                 mock_select.return_value.ask.side_effect = KeyboardInterrupt()
-                result = select_agent_interactive(agents)
+                result = select_agent_interactive(agents, {"test_agent": 1})
 
         assert result is None
         captured = capsys.readouterr()
@@ -250,7 +250,7 @@ class TestSelectAgentInteractive:
         with mock.patch("agent_dump.selector.is_terminal", return_value=True):
             with mock.patch("questionary.select") as mock_select:
                 mock_select.return_value.ask.return_value = None
-                result = select_agent_interactive(agents)
+                result = select_agent_interactive(agents, {"test_agent": 1})
 
         assert result is None
 
@@ -328,9 +328,8 @@ class TestSelectSessionsInteractive:
 class TestSelectAgentInteractiveEdgeCases:
     """测试 select_agent_interactive 边界情况"""
 
-    def test_agent_scan_count_display(self, mock_agent):
-        """测试显示 agent 的会话数量"""
-        mock_agent.get_sessions.return_value = [mock.MagicMock(), mock.MagicMock(), mock.MagicMock()]
+    def test_agent_label_shows_the_supplied_count(self, mock_agent):
+        """标签里的会话数直接取自传入的 session_counts。"""
         agents = [mock_agent]
 
         with mock.patch("agent_dump.selector.is_terminal", return_value=True):
@@ -338,31 +337,41 @@ class TestSelectAgentInteractiveEdgeCases:
                 with mock.patch("questionary.Choice") as mock_choice:
                     mock_choice.return_value = mock.MagicMock()
                     mock_select.return_value.ask.return_value = mock_agent
-                    select_agent_interactive(agents)
+                    select_agent_interactive(agents, {"test_agent": 3})
 
-        # Verify Choice was called with correct label format
         mock_choice.assert_called_once()
         call_args = mock_choice.call_args
         assert "3 个会话" in call_args.kwargs.get("title", "") or any("3 个会话" in str(arg) for arg in call_args.args)
 
-    def test_agent_count_uses_precomputed_session_counts(self, mock_agent):
-        """测试传入 session_counts 时不再调用 get_sessions"""
-        agents = [mock_agent]
+    @pytest.mark.parametrize("terminal", [True, False])
+    def test_selector_never_touches_a_provider(self, mock_agent, terminal, monkeypatch):
+        """AD-128：selector 是 UI 层，不得访问 provider（AGENTS.md §1.4）。"""
 
+        def _forbidden(*args, **kwargs):
+            raise AssertionError("selector 不得调用 provider 方法")
+
+        for method in ("get_sessions", "scan", "is_available", "get_session_data"):
+            monkeypatch.setattr(mock_agent, method, _forbidden)
+
+        with mock.patch("agent_dump.selector.is_terminal", return_value=terminal):
+            with mock.patch("questionary.select") as mock_select:
+                mock_select.return_value.ask.return_value = mock_agent
+                with mock.patch("builtins.input", return_value="1"):
+                    result = select_agent_interactive([mock_agent], {"test_agent": 7})
+
+        assert result is mock_agent
+
+    def test_missing_count_renders_as_zero(self, mock_agent):
+        """计数缺失时显示 0，而不是回头去扫 provider。"""
         with mock.patch("agent_dump.selector.is_terminal", return_value=True):
             with mock.patch("questionary.select") as mock_select:
                 with mock.patch("questionary.Choice") as mock_choice:
                     mock_choice.return_value = mock.MagicMock()
                     mock_select.return_value.ask.return_value = mock_agent
-                    select_agent_interactive(
-                        agents,
-                        days=7,
-                        session_counts={"test_agent": 2},
-                    )
+                    select_agent_interactive([mock_agent], {})
 
-        mock_agent.get_sessions.assert_not_called()
         call_args = mock_choice.call_args
-        assert "2 个会话" in call_args.kwargs.get("title", "") or any("2 个会话" in str(arg) for arg in call_args.args)
+        assert "0 个会话" in call_args.kwargs.get("title", "") or any("0 个会话" in str(arg) for arg in call_args.args)
 
     def test_session_display_format(self, mock_agent, sample_sessions):
         """测试会话显示格式"""

@@ -388,3 +388,37 @@ class TestSessionDataIsParsedOncePerCommand:
         markdown = read_only_file(out, ".md").read_text(encoding="utf-8")
         assert codex_session_tree["user_text"] in markdown
         assert codex_session_tree["assistant_text"] in markdown
+
+
+class TestInteractiveModeScansOnce:
+    """AD-128：交互模式不得把同一个 provider 扫两遍。"""
+
+    def test_interactive_without_query_scans_each_provider_once(self, two_provider_tree, monkeypatch, capsys):
+        """两个 provider 可选时才会走 selector；单 provider 会自动选中并绕开它。
+
+        这里刻意不 mock selector——修复前的重复扫描恰恰发生在 selector 内部渲染
+        「(N 个会话)」标签的时候。非 TTY 环境走 select_agent_simple，只需 mock input。
+        修复前：['claudecode', 'codex', 'codex']（选中的 provider 被扫第二遍）。
+        """
+        # codex 与 claudecode 都继承 FileSessionAgent 的 get_sessions，
+        # 打在 BaseAgent 上会被子类实现绕过
+        from agent_dump.agents.file_sessions import FileSessionAgent
+
+        scans: list[str] = []
+        original = FileSessionAgent.get_sessions
+
+        def counting(self, days=7):
+            scans.append(self.name)
+            return original(self, days)
+
+        monkeypatch.setattr(FileSessionAgent, "get_sessions", counting)
+        monkeypatch.setattr(
+            "agent_dump.session_workflow.select_sessions_interactive",
+            lambda sessions, agent, show_metadata_summary=True: [],
+        )
+
+        with mock.patch("builtins.input", return_value="1"):
+            run_cli("--interactive", "-d", "36500")
+        capsys.readouterr()
+
+        assert sorted(scans) == ["claudecode", "codex"], f"每个 provider 应恰好扫一次，实际 {sorted(scans)}"

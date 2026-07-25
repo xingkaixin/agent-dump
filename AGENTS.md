@@ -31,7 +31,7 @@
 
 - **cli.py 只负责参数解析和工作流调度**：业务逻辑必须下沉到具体模块
 - **Provider 读取逻辑禁止写入 cli.py**：所有会话发现、读取、导出实现封装在 `BaseAgent` 子类
-- **UI 逻辑与业务逻辑分离**：selector 层不得直接操作数据库或文件系统
+- **UI 逻辑与业务逻辑分离**：selector 层不得直接操作数据库或文件系统，也不得调用 provider 方法；会话数等展示数据由调用方计算后传入（`select_agent_interactive(agents, session_counts)`）
 - **跨模式共享逻辑进入 cli_shared.py**：URI、format、渲染、导出调度等复用入口集中维护
 
 ---
