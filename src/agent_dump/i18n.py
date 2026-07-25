@@ -592,8 +592,7 @@ TRANSLATIONS = {
         Keys.COLLECT_CONFIG_INCOMPLETE: "❌ collect 配置缺少字段: {fields}",
         Keys.COLLECT_CONFIG_BAD_SCHEME: "❌ ai.base_url 必须使用 http 或 https。",
         Keys.COLLECT_CONFIG_PLAINTEXT_KEY: (
-            "❌ ai.base_url 使用 http，api_key 会以明文发送。"
-            "请改用 https，或把 base_url 指向本机 localhost。"
+            "❌ ai.base_url 使用 http，api_key 会以明文发送。请改用 https，或把 base_url 指向本机 localhost。"
         ),
         Keys.COLLECT_CONFIG_HINT: "请先执行: agent-dump -config edit",
         Keys.COLLECT_READ_FAILED: "❌ collect 读取会话失败: {error}",

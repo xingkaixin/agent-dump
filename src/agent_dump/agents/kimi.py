@@ -757,4 +757,3 @@ class KimiAgent(FileSessionAgent):
         if context_path.exists():
             return self._get_session_data_from_context(session)
         return self._get_session_data_from_wire(session)
-

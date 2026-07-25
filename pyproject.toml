@@ -81,7 +81,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+# 覆盖率刻意不进默认 addopts：`pytest -k one_test` 会打印一份接近 0% 的全包报告，
+# 读起来像失败。用 `just cov` 单独测量。
+addopts = "--tb=short"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
@@ -92,6 +94,7 @@ omit = [
 ]
 
 [tool.coverage.report]
+fail_under = 85
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
