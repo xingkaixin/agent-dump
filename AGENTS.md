@@ -379,6 +379,16 @@ collect 模式入口：
   - 禁止写入真实 `~/sessions`。
   - 文件写入测试使用 `tmp_path`。
 
+### 7.1a i18n 断言约定
+
+- **不要新写死中文（或英文）字面量断言**：用 `tests/locale_helpers.py` 的
+  `expect(Keys.X, **kwargs)` / `expect_contains(output, Keys.X, **kwargs)`
+  按当前 locale 解析期望文案，这样 i18n 改文案时测试不用跟着改。
+- **默认 locale 仍是 zh**：`conftest.py` 的 autouse `set_language_zh` 保持既有断言可用。
+- **要验证其他 locale** 用 `use_language` fixture；跨 locale 参数化见
+  `tests/test_cli_locales.py`（它是 en 路径的唯一端到端覆盖）。
+- 注意区分「i18n 文案」与「fixture 里的中文测试数据」：后者是测试数据，不该改。
+
 ### 7.2 测试命令
 
 ```bash
