@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from agent_dump.i18n import Keys, i18n
+
 
 def parse_apply_patch_input(raw_input: str) -> dict[str, Any]:
     """Parse apply_patch input into a structured patch payload."""
@@ -10,9 +12,9 @@ def parse_apply_patch_input(raw_input: str) -> dict[str, Any]:
 
     try:
         if not lines:
-            raise ValueError("patch 为空")
+            raise ValueError(i18n.t(Keys.PATCH_ERROR_EMPTY))
         if lines[0] != "*** Begin Patch":
-            raise ValueError("patch 缺少 Begin Patch 头")
+            raise ValueError(i18n.t(Keys.PATCH_ERROR_MISSING_HEADER))
 
         index = 1
         operations: list[dict[str, Any]] = []
@@ -54,10 +56,10 @@ def parse_apply_patch_input(raw_input: str) -> dict[str, Any]:
                     operation["action"] = "update"
                 operations.append(operation)
                 continue
-            raise ValueError(f"无法解析 patch 操作头: {line}")
+            raise ValueError(i18n.t(Keys.PATCH_ERROR_BAD_OPERATION, line=line))
 
         if not saw_end_patch:
-            raise ValueError("patch 缺少 End Patch 尾")
+            raise ValueError(i18n.t(Keys.PATCH_ERROR_MISSING_FOOTER))
 
         result["content"] = _build_patch_content_blocks(operations)
         return result
@@ -143,7 +145,7 @@ def _parse_patch_hunks(lines: list[str], start_index: int, operation: dict[str, 
             _append_patch_line(operation, header=current_header, kind="context", text=line[1:])
             index += 1
             continue
-        raise ValueError(f"无法解析 patch 行: {line}")
+        raise ValueError(i18n.t(Keys.PATCH_ERROR_BAD_LINE, line=line))
 
     return index
 

@@ -15,6 +15,7 @@ from typing import Any
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.coercion import safe_epoch_datetime, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing, unsupported_capability
+from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
 
 _EPOCH_UTC = datetime.fromtimestamp(0, tz=timezone.utc)
@@ -105,8 +106,8 @@ class CursorAgent(BaseAgent):
             missing_path=self.global_db_path or "state.vscdb",
             searched_roots=[root.render() for root in self.get_search_roots()],
             next_steps=(
-                "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。",
-                "重新运行 `agent-dump --list --agent cursor` 检查会话是否仍可见。",
+                i18n.t(Keys.DIAG_STEP_CURSOR_DB_EXISTS),
+                i18n.t(Keys.DIAG_STEP_CURSOR_LIST_TO_CHECK),
             ),
         )
 
@@ -1038,8 +1039,8 @@ class CursorAgent(BaseAgent):
             capability_gap="Cursor stores session state in SQLite, not as one raw session file",
             details=(f"session id: {session.id}",),
             next_steps=(
-                "改用 `--format json` 或 `--format print`。",
-                "若需要定位数据源，请检查 Cursor 用户目录下的 SQLite 数据库。",
+                i18n.t(Keys.DIAG_STEP_USE_JSON_OR_PRINT),
+                i18n.t(Keys.DIAG_STEP_CURSOR_INSPECT_SQLITE),
             ),
         )
 

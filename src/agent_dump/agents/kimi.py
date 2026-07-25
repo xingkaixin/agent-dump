@@ -142,8 +142,8 @@ class KimiAgent(FileSessionAgent):
             missing_path=session.source_path,
             searched_roots=[str(path) for path in checked],
             next_steps=(
-                "确认该会话目录下至少存在 `context.jsonl` 或 `wire.jsonl`。",
-                "若只需要可读导出，改用 `--format json` 或 `--format markdown`。",
+                i18n.t(Keys.DIAG_STEP_KIMI_NEEDS_JSONL),
+                i18n.t(Keys.DIAG_STEP_READABLE_EXPORT_INSTEAD),
             ),
         )
 
@@ -224,8 +224,8 @@ class KimiAgent(FileSessionAgent):
                 missing_path=source_path,
                 searched_roots=[str(session.source_path / "context.jsonl"), str(session.source_path / "wire.jsonl")],
                 next_steps=(
-                    "确认原始 Kimi 会话文件没有被移动或清理。",
-                    "重新运行 `agent-dump --list` 检查该会话是否仍可见。",
+                    i18n.t(Keys.DIAG_STEP_KIMI_SOURCE_INTACT),
+                    i18n.t(Keys.DIAG_STEP_LIST_TO_CHECK_VISIBLE),
                 ),
             )
 
@@ -504,8 +504,8 @@ class KimiAgent(FileSessionAgent):
                 missing_path=context_path,
                 searched_roots=[str(session.source_path / "context.jsonl"), str(session.source_path / "wire.jsonl")],
                 next_steps=(
-                    "确认会话目录中的 `context.jsonl` 未被清理。",
-                    "如果只有 `wire.jsonl`，请改走 wire 兼容路径或重新导出该会话。",
+                    i18n.t(Keys.DIAG_STEP_KIMI_CONTEXT_INTACT),
+                    i18n.t(Keys.DIAG_STEP_KIMI_WIRE_FALLBACK),
                 ),
             )
 
@@ -627,8 +627,8 @@ class KimiAgent(FileSessionAgent):
                 missing_path=wire_path,
                 searched_roots=[str(session.source_path / "context.jsonl"), str(session.source_path / "wire.jsonl")],
                 next_steps=(
-                    "确认会话目录中的 `wire.jsonl` 未被清理。",
-                    "如果只有 `context.jsonl`，请改走 context 导出路径。",
+                    i18n.t(Keys.DIAG_STEP_KIMI_WIRE_INTACT),
+                    i18n.t(Keys.DIAG_STEP_KIMI_CONTEXT_FALLBACK),
                 ),
             )
 

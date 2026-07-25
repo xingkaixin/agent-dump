@@ -197,8 +197,8 @@ class PiAgent(FileSessionAgent):
                 missing_path=session.source_path,
                 searched_roots=[root.render() for root in self.get_search_roots()],
                 next_steps=(
-                    "确认 Pi 会话文件仍在 `PI_HOME/agent/sessions` 或本地开发数据目录。",
-                    "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。",
+                    i18n.t(Keys.DIAG_STEP_PI_SESSION_LOCATION),
+                    i18n.t(Keys.DIAG_STEP_LIST_TO_CHECK_ID),
                 ),
             )
 

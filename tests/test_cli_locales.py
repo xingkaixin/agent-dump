@@ -8,11 +8,23 @@ detect_language（i18n.py:660-674）对任何非 zh 的机器 locale 返回 "en"
 改写时这些测试不需要跟着改。
 """
 
+from pathlib import Path
+
 from locale_helpers import ALL_LANGUAGES, Keys, expect, expect_contains
 import pytest
 from test_integration_cli import read_only_file, run_cli
 
 from agent_dump.i18n import i18n
+
+
+def _session(session_id: str, source_path: Path):
+    """构造一个真实 Session；export_raw_session 会用 id 拼输出路径，Mock 不行。"""
+    from datetime import datetime, timezone
+
+    from agent_dump.agents.base import Session
+
+    now = datetime(2026, 7, 20, tzinfo=timezone.utc)
+    return Session(id=session_id, title="t", created_at=now, updated_at=now, source_path=source_path, metadata={})
 
 
 @pytest.fixture(params=ALL_LANGUAGES)
@@ -153,3 +165,65 @@ class TestWarningsAreLocalized:
             error_type="ValueError",
             error="bad row",
         )
+
+
+class TestProviderDiagnosticsAreLocalized:
+    """AD-146：provider 专属的 next_steps 只在该 provider 数据缺失时出现。"""
+
+    def test_missing_raw_source_next_steps(self, language, codex_session_tree, tmp_path):
+        """源文件缺失时 base.py 的 source_missing 诊断。
+
+        不走 CLI：删掉唯一的会话文件会让整个 provider 变为不可用，拿到的是
+        「无本地会话数据」而不是这一条。
+        """
+        from agent_dump.agents.codex import CodexAgent
+        from agent_dump.diagnostics import DiagnosticError
+
+        session = _session("s1", tmp_path / "gone.jsonl")
+        with pytest.raises(DiagnosticError) as excinfo:
+            CodexAgent().export_raw_session(session, tmp_path / "out")
+
+        assert expect(Keys.DIAG_STEP_RAW_SOURCE_LOCAL) in excinfo.value.next_steps
+        assert expect(Keys.DIAG_STEP_LIST_TO_CHECK_VISIBLE) in excinfo.value.next_steps
+
+    def test_cursor_unsupported_format_next_steps(self, language, codex_session_tree, capsys):
+        """Cursor 的 raw 导出能力缺失诊断来自 cursor.py。"""
+        from agent_dump.agents.cursor import CursorAgent
+        from agent_dump.diagnostics import DiagnosticError
+
+        agent = CursorAgent()
+        with pytest.raises(DiagnosticError) as excinfo:
+            agent.export_raw_session(_session("x", Path("/tmp/x.db")), Path("/tmp"))
+
+        assert expect(Keys.DIAG_STEP_USE_JSON_OR_PRINT) in excinfo.value.next_steps
+        assert expect(Keys.DIAG_STEP_CURSOR_INSPECT_SQLITE) in excinfo.value.next_steps
+
+    def test_opencode_missing_database_next_steps(self, language, isolated_provider_home, capsys):
+        from agent_dump.agents.opencode import OpenCodeAgent
+        from agent_dump.diagnostics import DiagnosticError
+
+        agent = OpenCodeAgent()
+        with pytest.raises(DiagnosticError) as excinfo:
+            agent._connect_db()
+
+        assert expect(Keys.DIAG_STEP_OPENCODE_DB_EXISTS) in excinfo.value.next_steps
+        assert expect(Keys.DIAG_STEP_OPENCODE_DEV_DB) in excinfo.value.next_steps
+
+    def test_zcode_missing_database_next_steps(self, language, isolated_provider_home):
+        from agent_dump.agents.zcode import ZCodeAgent
+
+        error = ZCodeAgent()._missing_database_error(None)
+
+        assert expect(Keys.DIAG_STEP_ZCODE_DB_EXISTS) in error.next_steps
+        assert expect(Keys.DIAG_STEP_ZCODE_NO_LINUX) in error.next_steps
+
+    def test_kimi_missing_jsonl_next_steps(self, language, isolated_provider_home):
+        from agent_dump.agents.kimi import KimiAgent
+        from agent_dump.diagnostics import DiagnosticError
+
+        session = _session("s1", Path(str(isolated_provider_home)) / "missing")
+        with pytest.raises(DiagnosticError) as excinfo:
+            KimiAgent().export_raw_session(session, Path(str(isolated_provider_home)) / "out")
+
+        assert expect(Keys.DIAG_STEP_KIMI_NEEDS_JSONL) in excinfo.value.next_steps
+        assert expect(Keys.DIAG_STEP_READABLE_EXPORT_INSTEAD) in excinfo.value.next_steps

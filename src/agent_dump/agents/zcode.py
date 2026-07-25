@@ -5,6 +5,7 @@ import sys
 
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.diagnostics import DiagnosticError, source_missing
+from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
 
 
@@ -29,9 +30,9 @@ class ZCodeAgent(OpenCodeAgent):
             missing_path=db_path or "~/.zcode/cli/db/db.sqlite",
             searched_roots=[root.render() for root in self.get_search_roots()],
             next_steps=(
-                "确认 ZCode 已在 macOS 或 Windows 本机生成会话数据库。",
-                "macOS 检查 `~/.zcode/cli/db/db.sqlite`；Windows 检查 `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`。",
-                "Linux 暂无 ZCode 默认会话路径。",
+                i18n.t(Keys.DIAG_STEP_ZCODE_DB_EXISTS),
+                i18n.t(Keys.DIAG_STEP_ZCODE_DB_PATHS),
+                i18n.t(Keys.DIAG_STEP_ZCODE_NO_LINUX),
             ),
         )
 

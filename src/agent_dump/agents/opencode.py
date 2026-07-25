@@ -53,8 +53,8 @@ class OpenCodeAgent(BaseAgent):
             missing_path=db_path or "opencode.db",
             searched_roots=[root.render() for root in self.get_search_roots()],
             next_steps=(
-                "确认 OpenCode 已在本机生成会话数据库。",
-                "若在测试或开发环境，检查 `data/opencode/opencode.db` 是否存在。",
+                i18n.t(Keys.DIAG_STEP_OPENCODE_DB_EXISTS),
+                i18n.t(Keys.DIAG_STEP_OPENCODE_DEV_DB),
             ),
         )
 

@@ -223,8 +223,8 @@ class ClaudeCodeAgent(FileSessionAgent):
                 missing_path=session.source_path,
                 searched_roots=[root.render() for root in self.get_search_roots()],
                 next_steps=(
-                    "确认 Claude Code 会话文件仍位于 projects 目录下。",
-                    "重新运行 `agent-dump --list` 确认该会话是否仍存在。",
+                    i18n.t(Keys.DIAG_STEP_CLAUDE_SESSION_LOCATION),
+                    i18n.t(Keys.DIAG_STEP_LIST_TO_CHECK_EXISTS),
                 ),
             )
 

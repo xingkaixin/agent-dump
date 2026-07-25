@@ -336,9 +336,9 @@ def render_query_summary(spec: QuerySpec) -> str:
 
     parts: list[str] = []
     if spec.project_path is not None:
-        parts.append(f"路径={spec.project_path}")
+        parts.append(i18n.t(Keys.QUERY_SUMMARY_PATH, path=spec.project_path))
     if spec.keyword:
-        parts.append(f"关键词={spec.keyword}")
+        parts.append(i18n.t(Keys.QUERY_SUMMARY_KEYWORD, keyword=spec.keyword))
     if spec.agent_names:
         providers = ",".join(sorted(spec.agent_names))
         parts.append(f"providers={providers}")
@@ -347,7 +347,7 @@ def render_query_summary(spec: QuerySpec) -> str:
         parts.append(f"roles={roles}")
     if spec.limit is not None:
         parts.append(f"limit={spec.limit}")
-    return "；".join(parts) if parts else "全部会话"
+    return "；".join(parts) if parts else i18n.t(Keys.QUERY_SUMMARY_ALL_SESSIONS)
 
 
 def apply_query_filter(agent: BaseAgent, sessions: list[Session], spec: QuerySpec | None) -> list[Session]:
