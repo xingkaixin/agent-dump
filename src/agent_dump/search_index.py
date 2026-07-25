@@ -195,18 +195,27 @@ def _fallback_extract_from_source(source_path: Path) -> str | None:
     return None
 
 
-def _build_fts_query(keyword: str) -> str:
-    """Build FTS5 MATCH query from user input."""
-    keyword = keyword.strip()
-    if not keyword:
+def _build_fts_query(keyword: str, *, split_cjk: bool = False) -> str:
+    """Build a syntactically valid FTS5 MATCH expression from user input.
+
+    每个词都作为 FTS5 字符串字面量引用，词之间是 FTS5 默认的隐式 AND，因此任何输入
+    都不可能构成语法错误。
+
+    之前的实现在关键词含 AND/OR/NOT/NEAR/*/" 时原样透传，于是一个不配对的引号就会让
+    MATCH 报语法错误，被上层的兜底吞掉，静默退化成子串扫描——匹配语义不同、还慢得多，
+    而用户得不到任何解释。文档描述的一直是关键词搜索（README 的 --search 一节），
+    操作符语法从未被承诺过，所以这里按文档收敛而不是新增开关。
+
+    split_cjk 对应 unicode61 表：索引侧把相邻 CJK 字符拆成独立 token，查询侧必须同样
+    拆开并各自引用。若先引用再拆分，"修复问题" 会变成要求四字相邻的短语，
+    而原本的语义是四个字符各自 AND。
+    """
+    normalized = _preprocess_for_unicode61(keyword) if split_cjk else keyword
+    terms = normalized.split()
+    if not terms:
         return ""
-
-    # Pass through if user provided explicit FTS5 syntax
-    if any(op in keyword for op in ("AND ", "OR ", "NOT ", "NEAR ", "*", '"')):
-        return keyword
-
-    # FTS5 default: spaces between terms are implicit AND
-    return keyword
+    # FTS5 字符串字面量里的双引号用重复一次来转义
+    return " ".join('"{}"'.format(term.replace('"', '""')) for term in terms)
 
 
 def _select_fts_table(keyword: str) -> str:
@@ -453,15 +462,13 @@ class SearchIndex:
             return []
 
         self.ensure_initialized()
-        fts_query = _build_fts_query(keyword)
+        fts_table = _select_fts_table(keyword)
+        fts_query = _build_fts_query(
+            keyword,
+            split_cjk=fts_table == "sessions_fts" and _has_cjk(keyword),
+        )
         if not fts_query:
             return []
-
-        fts_table = _select_fts_table(keyword)
-
-        # Preprocess CJK query for unicode61 matching
-        if fts_table == "sessions_fts" and _has_cjk(keyword):
-            fts_query = _preprocess_for_unicode61(fts_query)
 
         conn = self._get_connection()
         results: list[SearchResult] = []

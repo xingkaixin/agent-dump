@@ -302,7 +302,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
 | `--stats` | Show session usage statistics for the last N days, grouped by agent and time. Supports `-days` and `-query`; use it as a standalone mode. | - |
 | `--providers`, `--capabilities` | Show the registered provider capability matrix, including URI schemes, supported and unsupported export formats, storage-level keyword fast paths, and whether local search roots exist. Does not scan sessions. | - |
-| `--search` | Full-text search across session titles, messages, reasoning, and tool state using local SQLite FTS5. Supports CJK via dual tokenizer (`unicode61` + `trigram`). Auto-fallback to file scan when index is stale or FTS5 unavailable. Can be combined with `--list`. | - |
+| `--search` | Full-text search across session titles, messages, reasoning, and tool state using local SQLite FTS5. Every term is matched literally (FTS5 operator syntax such as `AND`/`NEAR`/`*` is not interpreted), and multiple terms are combined with AND. Supports CJK via dual tokenizer (`unicode61` + `trigram`). Auto-fallback to file scan when index is stale or FTS5 unavailable; index errors are reported on stderr with a `--reindex` hint. Can be combined with `--list`. | - |
 | `--reindex` | Force rebuild of the full-text search index. Use when index is corrupted or after manual session data changes. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
 | `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |

@@ -5,6 +5,7 @@ Query parsing and session filtering helpers.
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import sys
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -546,8 +547,24 @@ def _try_indexed_search_matches(
                 )
             )
         return matches
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - 索引出问题时退回文件扫描，但必须让用户看见
+        _warn_index_unusable(agent, exc)
         return None
+
+
+def _warn_index_unusable(agent: BaseAgent, exc: BaseException) -> None:
+    """Report a real index failure instead of silently degrading to a file scan.
+
+    「索引不可用」（SQLite 没编译 FTS5）与「索引出错」（库被锁、损坏、写失败）此前都被
+    同一个 except Exception 吞掉并当作前者，于是坏索引永远不会被报告，也就永远不会被
+    重建。这里仍然宽捕获——退回文件扫描比让整条命令崩掉更有用——但一定告警，
+    区别只在于：不可用是静默的正常状态，出错是要说出来的异常状态。
+    """
+    print(
+        f"警告: {agent.display_name} 的搜索索引不可用（{type(exc).__name__}: {exc}），"
+        "本次改用文件扫描；可运行 `agent-dump --reindex` 重建索引。",
+        file=sys.stderr,
+    )
 
 
 def _fallback_search_matches(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[SearchSessionMatch]:
@@ -604,5 +621,6 @@ def _try_indexed_search(agent: BaseAgent, sessions: list[Session], keyword: str)
         results = index.search(keyword, agent_names={agent.name})
         matched_ids = {r.session_id for r in results}
         return [s for s in sessions if s.id in matched_ids]
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - 索引出问题时退回文件扫描，但必须让用户看见
+        _warn_index_unusable(agent, exc)
         return None
