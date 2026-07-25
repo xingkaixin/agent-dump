@@ -100,18 +100,40 @@ class TestSelectFtsTable:
 
 
 class TestBuildFtsQuery:
-    def test_empty_returns_empty(self):
-        assert _build_fts_query("") == ""
+    """AD-133：每个词都引用为字面量，任何输入都不该构成 FTS5 语法错误。"""
 
-    def test_passthrough_operators(self):
-        assert _build_fts_query("hello AND world") == "hello AND world"
-        assert _build_fts_query('"exact phrase"') == '"exact phrase"'
+    @pytest.mark.parametrize("keyword", ["", "   ", "\t\n"])
+    def test_blank_returns_empty(self, keyword):
+        assert _build_fts_query(keyword) == ""
 
-    def test_simple_keyword(self):
-        assert _build_fts_query("hello") == "hello"
+    def test_single_term_is_quoted(self):
+        assert _build_fts_query("hello") == '"hello"'
 
-    def test_multi_word(self):
-        assert _build_fts_query("hello world") == "hello world"
+    def test_terms_are_quoted_individually(self):
+        """词之间保持 FTS5 默认的隐式 AND。"""
+        assert _build_fts_query("hello world") == '"hello" "world"'
+
+    def test_operators_become_literal_terms(self):
+        """文档只承诺关键词搜索；操作符透传是意外行为，且是语法错误的来源。"""
+        assert _build_fts_query("hello AND world") == '"hello" "AND" "world"'
+
+    def test_embedded_quotes_are_escaped(self):
+        assert _build_fts_query('say "hi"') == '"say" """hi"""'
+
+    @pytest.mark.parametrize(
+        "keyword",
+        ['unbalanced "quote', "trailing operator AND", "NEAR(", "*", "a* b*", '"""', "^caret", "-dash"],
+    )
+    def test_any_input_produces_a_query_sqlite_accepts(self, keyword, tmp_path):
+        """修复前这些输入会让 MATCH 报语法错误，被兜底吞掉后静默退化成子串扫描。"""
+        index = SearchIndex(tmp_path / "index.db")
+        index.ensure_initialized()
+
+        # 不抛异常即证明表达式语法合法
+        assert index.search(keyword) == [] or True
+
+    def test_cjk_terms_are_quoted(self):
+        assert _build_fts_query("认证 超时") == '"认证" "超时"'
 
 
 class TestSerializeForSearch:
@@ -874,3 +896,66 @@ class TestFallbackSearchHandlesUnreadableSessions:
         sessions = [make_session("s1", "无关标题", db_path)]
 
         assert _fallback_search_matches(FailingAgent(name="opencode"), sessions, "keyword") == []
+
+
+class TestIndexFailureIsReported:
+    """AD-133：索引出错必须说出来，而不是与「没有索引」混为一谈。"""
+
+    def test_index_error_warns_and_still_falls_back(self, tmp_path, capsys):
+        from agent_dump.query_filter import filter_sessions
+
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "fallback kw"}]}]}}
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        session.source_path.write_text("fallback kw", encoding="utf-8")
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=sqlite3.DatabaseError("db is locked")):
+            results = filter_sessions(agent, [session], "fallback kw")
+        captured = capsys.readouterr()
+
+        assert len(results) == 1, "退回文件扫描仍应给出结果"
+        assert "搜索索引不可用" in captured.err
+        assert "DatabaseError" in captured.err
+        assert "--reindex" in captured.err
+
+    def test_missing_fts5_support_is_not_reported_as_an_error(self, tmp_path, capsys):
+        """没编译 FTS5 是正常状态，不该每次查询都刷告警。"""
+        from agent_dump.query_filter import filter_sessions
+
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "fallback kw"}]}]}}
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        session.source_path.write_text("fallback kw", encoding="utf-8")
+
+        with mock.patch.object(SearchIndex, "is_available", new_callable=mock.PropertyMock, return_value=False):
+            filter_sessions(agent, [session], "fallback kw")
+        captured = capsys.readouterr()
+
+        assert captured.err == ""
+
+
+class TestHyphenatedKeywordsAreSearchable:
+    """AD-133：连字符关键词此前会让 FTS5 报 `no such column: <后半段>`。"""
+
+    @pytest.mark.parametrize("keyword", ["auth-timeout", "other-hit", "feature-flag", "x-api-key"])
+    def test_hyphenated_keyword_matches(self, keyword, tmp_path):
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": keyword}]}]}}
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        session.source_path.write_text(keyword, encoding="utf-8")
+        index = SearchIndex(tmp_path / "index.db")
+        index.update(agent, [session])
+
+        results = index.search(keyword)
+
+        assert [r.session_id for r in results] == ["s1"], f"{keyword!r} 应能命中"
+
+    def test_hyphenated_query_no_longer_raises_a_column_error(self, tmp_path):
+        """修复前 `SELECT ... MATCH 'other-hit'` 抛 OperationalError: no such column: hit。"""
+        index = SearchIndex(tmp_path / "index.db")
+        index.ensure_initialized()
+
+        assert index.search("other-hit") == []

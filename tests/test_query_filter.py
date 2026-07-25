@@ -243,7 +243,14 @@ class TestFilterSessions:
         assert result == []
         mock_get_session_data.assert_not_called()
 
-    def test_filter_directory_prefers_wire_file(self, tmp_path):
+    def test_filter_directory_session_searches_every_jsonl(self, tmp_path):
+        """目录型会话（Kimi）的兜底提取会读目录下所有 *.jsonl。
+
+        本测试原名 `..._prefers_wire_file` 并断言 "other-hit" 匹配不到，但那只是因为
+        AD-133 之前带连字符的关键词会让 FTS5 报 `no such column: hit` 并被静默吞掉。
+        _fallback_extract_from_source（search_index.py:188）对目录是 glob("*.jsonl")，
+        从来没有偏好 wire.jsonl 的逻辑。
+        """
         session_dir = tmp_path / "session"
         session_dir.mkdir()
         (session_dir / "wire.jsonl").write_text("wire-hit", encoding="utf-8")
@@ -251,11 +258,9 @@ class TestFilterSessions:
         session = make_session("s1", "普通标题", session_dir)
         agent = DummyAgent(name="kimi")
 
-        result = filter_sessions(agent, [session], "wire-hit")
-        assert result == [session]
-
-        result = filter_sessions(agent, [session], "other-hit")
-        assert result == []
+        assert filter_sessions(agent, [session], "wire-hit") == [session]
+        assert filter_sessions(agent, [session], "other-hit") == [session]
+        assert filter_sessions(agent, [session], "absent-token") == []
 
     def test_filter_binary_like_source_falls_back_to_session_data(self, tmp_path):
         source_path = tmp_path / "state.vscdb"
