@@ -12,6 +12,7 @@ from typing import Any, cast
 
 from agent_dump.diagnostics import source_missing, unsupported_capability
 from agent_dump.export_paths import build_session_output_path
+from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
 from agent_dump.session_data import SessionDataCache
 from agent_dump.time_utils import to_local_datetime
@@ -171,8 +172,8 @@ class BaseAgent(ABC):
                 missing_path=source_path,
                 searched_roots=[root.render() for root in self.get_search_roots()],
                 next_steps=(
-                    "确认原始会话文件仍在本地。",
-                    "重新运行 `agent-dump --list` 检查该会话是否仍可见。",
+                    i18n.t(Keys.DIAG_STEP_RAW_SOURCE_LOCAL),
+                    i18n.t(Keys.DIAG_STEP_LIST_TO_CHECK_VISIBLE),
                 ),
             )
         if not source_path.is_file():
@@ -181,8 +182,8 @@ class BaseAgent(ABC):
                 capability_gap="session source is a directory, not a single raw file",
                 details=(f"source path: {source_path}",),
                 next_steps=(
-                    "改用 `--format json` 或 `--format markdown`。",
-                    "若需要原始文件，请检查该 provider 是否有独立 raw 文件。",
+                    i18n.t(Keys.DIAG_STEP_USE_JSON_OR_MARKDOWN),
+                    i18n.t(Keys.DIAG_STEP_CHECK_PROVIDER_HAS_RAW),
                 ),
             )
 

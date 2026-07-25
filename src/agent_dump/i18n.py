@@ -253,6 +253,33 @@ class Keys:
     WARN_INDEX_UNUSABLE = "WARN_INDEX_UNUSABLE"
     WARN_SESSION_SUMMARY_SKIPPED = "WARN_SESSION_SUMMARY_SKIPPED"
     WARN_SESSION_SUMMARY_FAILURES = "WARN_SESSION_SUMMARY_FAILURES"
+
+    # provider 专属诊断的 next_steps（AD-146）
+    DIAG_STEP_RAW_SOURCE_LOCAL = "DIAG_STEP_RAW_SOURCE_LOCAL"
+    DIAG_STEP_LIST_TO_CHECK_VISIBLE = "DIAG_STEP_LIST_TO_CHECK_VISIBLE"
+    DIAG_STEP_USE_JSON_OR_MARKDOWN = "DIAG_STEP_USE_JSON_OR_MARKDOWN"
+    DIAG_STEP_CHECK_PROVIDER_HAS_RAW = "DIAG_STEP_CHECK_PROVIDER_HAS_RAW"
+    DIAG_STEP_CODEX_SESSION_LOCATION = "DIAG_STEP_CODEX_SESSION_LOCATION"
+    DIAG_STEP_LIST_TO_CHECK_ID = "DIAG_STEP_LIST_TO_CHECK_ID"
+    DIAG_STEP_CLAUDE_SESSION_LOCATION = "DIAG_STEP_CLAUDE_SESSION_LOCATION"
+    DIAG_STEP_LIST_TO_CHECK_EXISTS = "DIAG_STEP_LIST_TO_CHECK_EXISTS"
+    DIAG_STEP_KIMI_NEEDS_JSONL = "DIAG_STEP_KIMI_NEEDS_JSONL"
+    DIAG_STEP_READABLE_EXPORT_INSTEAD = "DIAG_STEP_READABLE_EXPORT_INSTEAD"
+    DIAG_STEP_KIMI_SOURCE_INTACT = "DIAG_STEP_KIMI_SOURCE_INTACT"
+    DIAG_STEP_KIMI_CONTEXT_INTACT = "DIAG_STEP_KIMI_CONTEXT_INTACT"
+    DIAG_STEP_KIMI_WIRE_FALLBACK = "DIAG_STEP_KIMI_WIRE_FALLBACK"
+    DIAG_STEP_KIMI_WIRE_INTACT = "DIAG_STEP_KIMI_WIRE_INTACT"
+    DIAG_STEP_KIMI_CONTEXT_FALLBACK = "DIAG_STEP_KIMI_CONTEXT_FALLBACK"
+    DIAG_STEP_PI_SESSION_LOCATION = "DIAG_STEP_PI_SESSION_LOCATION"
+    DIAG_STEP_CURSOR_DB_EXISTS = "DIAG_STEP_CURSOR_DB_EXISTS"
+    DIAG_STEP_CURSOR_LIST_TO_CHECK = "DIAG_STEP_CURSOR_LIST_TO_CHECK"
+    DIAG_STEP_USE_JSON_OR_PRINT = "DIAG_STEP_USE_JSON_OR_PRINT"
+    DIAG_STEP_CURSOR_INSPECT_SQLITE = "DIAG_STEP_CURSOR_INSPECT_SQLITE"
+    DIAG_STEP_OPENCODE_DB_EXISTS = "DIAG_STEP_OPENCODE_DB_EXISTS"
+    DIAG_STEP_OPENCODE_DEV_DB = "DIAG_STEP_OPENCODE_DEV_DB"
+    DIAG_STEP_ZCODE_DB_EXISTS = "DIAG_STEP_ZCODE_DB_EXISTS"
+    DIAG_STEP_ZCODE_DB_PATHS = "DIAG_STEP_ZCODE_DB_PATHS"
+    DIAG_STEP_ZCODE_NO_LINUX = "DIAG_STEP_ZCODE_NO_LINUX"
     DIAGNOSTIC_PARSED_URI = "DIAGNOSTIC_PARSED_URI"
     DIAGNOSTIC_CAPABILITY_GAP = "DIAGNOSTIC_CAPABILITY_GAP"
     DIAGNOSTIC_NEXT_STEPS = "DIAGNOSTIC_NEXT_STEPS"
@@ -508,6 +535,31 @@ TRANSLATIONS = {
         Keys.WARN_INDEX_UNUSABLE: "⚠️  The {agent} search index is unusable ({error_type}: {error}); falling back to a file scan. Run `agent-dump --reindex` to rebuild it.",
         Keys.WARN_SESSION_SUMMARY_SKIPPED: "⚠️  Session summary failed, skipped {uri}: {error}",
         Keys.WARN_SESSION_SUMMARY_FAILURES: "⚠️  {count} session summaries failed; the final report omits those sessions.",
+        Keys.DIAG_STEP_RAW_SOURCE_LOCAL: "Confirm the original session file is still on this machine.",
+        Keys.DIAG_STEP_LIST_TO_CHECK_VISIBLE: "Re-run `agent-dump --list` to check whether the session is still visible.",
+        Keys.DIAG_STEP_USE_JSON_OR_MARKDOWN: "Use `--format json` or `--format markdown` instead.",
+        Keys.DIAG_STEP_CHECK_PROVIDER_HAS_RAW: "If you need the original file, check whether this provider keeps a standalone raw file.",
+        Keys.DIAG_STEP_CODEX_SESSION_LOCATION: "Confirm the Codex session file is still under `CODEX_HOME/sessions` or the local development data directory.",
+        Keys.DIAG_STEP_LIST_TO_CHECK_ID: "Re-run `agent-dump --list` to confirm the session id still exists.",
+        Keys.DIAG_STEP_CLAUDE_SESSION_LOCATION: "Confirm the Claude Code session file is still under the projects directory.",
+        Keys.DIAG_STEP_LIST_TO_CHECK_EXISTS: "Re-run `agent-dump --list` to confirm the session still exists.",
+        Keys.DIAG_STEP_KIMI_NEEDS_JSONL: "Confirm the session directory holds at least `context.jsonl` or `wire.jsonl`.",
+        Keys.DIAG_STEP_READABLE_EXPORT_INSTEAD: "For a readable export, use `--format json` or `--format markdown`.",
+        Keys.DIAG_STEP_KIMI_SOURCE_INTACT: "Confirm the original Kimi session file has not been moved or cleaned up.",
+        Keys.DIAG_STEP_KIMI_CONTEXT_INTACT: "Confirm `context.jsonl` in the session directory has not been cleaned up.",
+        Keys.DIAG_STEP_KIMI_WIRE_FALLBACK: "If only `wire.jsonl` exists, use the wire-compatible path or re-export this session.",
+        Keys.DIAG_STEP_KIMI_WIRE_INTACT: "Confirm `wire.jsonl` in the session directory has not been cleaned up.",
+        Keys.DIAG_STEP_KIMI_CONTEXT_FALLBACK: "If only `context.jsonl` exists, use the context export path.",
+        Keys.DIAG_STEP_PI_SESSION_LOCATION: "Confirm the Pi session file is still under `PI_HOME/agent/sessions` or the local development data directory.",
+        Keys.DIAG_STEP_CURSOR_DB_EXISTS: "Confirm `globalStorage/state.vscdb` still exists under the Cursor user directory.",
+        Keys.DIAG_STEP_CURSOR_LIST_TO_CHECK: "Re-run `agent-dump --list --agent cursor` to check whether sessions are still visible.",
+        Keys.DIAG_STEP_USE_JSON_OR_PRINT: "Use `--format json` or `--format print` instead.",
+        Keys.DIAG_STEP_CURSOR_INSPECT_SQLITE: "To locate the data source, inspect the SQLite database under the Cursor user directory.",
+        Keys.DIAG_STEP_OPENCODE_DB_EXISTS: "Confirm OpenCode has produced a session database on this machine.",
+        Keys.DIAG_STEP_OPENCODE_DEV_DB: "In a test or development environment, check whether `data/opencode/opencode.db` exists.",
+        Keys.DIAG_STEP_ZCODE_DB_EXISTS: "Confirm ZCode has produced a session database on this macOS or Windows machine.",
+        Keys.DIAG_STEP_ZCODE_DB_PATHS: "On macOS check `~/.zcode/cli/db/db.sqlite`; on Windows check `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`.",
+        Keys.DIAG_STEP_ZCODE_NO_LINUX: "Linux has no default ZCode session path.",
         Keys.DIAGNOSTIC_PARSED_URI: "Parsed URI",
         Keys.DIAGNOSTIC_CAPABILITY_GAP: "Capability gap",
         Keys.DIAGNOSTIC_NEXT_STEPS: "Next steps",
@@ -756,6 +808,31 @@ TRANSLATIONS = {
         Keys.WARN_INDEX_UNUSABLE: "警告: {agent} 的搜索索引不可用（{error_type}: {error}），本次改用文件扫描；可运行 `agent-dump --reindex` 重建索引。",
         Keys.WARN_SESSION_SUMMARY_SKIPPED: "警告: 会话摘要失败，已跳过 {uri}: {error}",
         Keys.WARN_SESSION_SUMMARY_FAILURES: "警告: {count} 个会话摘要失败，最终报告不包含这些会话。",
+        Keys.DIAG_STEP_RAW_SOURCE_LOCAL: "确认原始会话文件仍在本地。",
+        Keys.DIAG_STEP_LIST_TO_CHECK_VISIBLE: "重新运行 `agent-dump --list` 检查该会话是否仍可见。",
+        Keys.DIAG_STEP_USE_JSON_OR_MARKDOWN: "改用 `--format json` 或 `--format markdown`。",
+        Keys.DIAG_STEP_CHECK_PROVIDER_HAS_RAW: "若需要原始文件，请检查该 provider 是否有独立 raw 文件。",
+        Keys.DIAG_STEP_CODEX_SESSION_LOCATION: "确认 Codex 会话文件仍在 `CODEX_HOME/sessions` 或本地开发数据目录。",
+        Keys.DIAG_STEP_LIST_TO_CHECK_ID: "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。",
+        Keys.DIAG_STEP_CLAUDE_SESSION_LOCATION: "确认 Claude Code 会话文件仍位于 projects 目录下。",
+        Keys.DIAG_STEP_LIST_TO_CHECK_EXISTS: "重新运行 `agent-dump --list` 确认该会话是否仍存在。",
+        Keys.DIAG_STEP_KIMI_NEEDS_JSONL: "确认该会话目录下至少存在 `context.jsonl` 或 `wire.jsonl`。",
+        Keys.DIAG_STEP_READABLE_EXPORT_INSTEAD: "若只需要可读导出，改用 `--format json` 或 `--format markdown`。",
+        Keys.DIAG_STEP_KIMI_SOURCE_INTACT: "确认原始 Kimi 会话文件没有被移动或清理。",
+        Keys.DIAG_STEP_KIMI_CONTEXT_INTACT: "确认会话目录中的 `context.jsonl` 未被清理。",
+        Keys.DIAG_STEP_KIMI_WIRE_FALLBACK: "如果只有 `wire.jsonl`，请改走 wire 兼容路径或重新导出该会话。",
+        Keys.DIAG_STEP_KIMI_WIRE_INTACT: "确认会话目录中的 `wire.jsonl` 未被清理。",
+        Keys.DIAG_STEP_KIMI_CONTEXT_FALLBACK: "如果只有 `context.jsonl`，请改走 context 导出路径。",
+        Keys.DIAG_STEP_PI_SESSION_LOCATION: "确认 Pi 会话文件仍在 `PI_HOME/agent/sessions` 或本地开发数据目录。",
+        Keys.DIAG_STEP_CURSOR_DB_EXISTS: "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。",
+        Keys.DIAG_STEP_CURSOR_LIST_TO_CHECK: "重新运行 `agent-dump --list --agent cursor` 检查会话是否仍可见。",
+        Keys.DIAG_STEP_USE_JSON_OR_PRINT: "改用 `--format json` 或 `--format print`。",
+        Keys.DIAG_STEP_CURSOR_INSPECT_SQLITE: "若需要定位数据源，请检查 Cursor 用户目录下的 SQLite 数据库。",
+        Keys.DIAG_STEP_OPENCODE_DB_EXISTS: "确认 OpenCode 已在本机生成会话数据库。",
+        Keys.DIAG_STEP_OPENCODE_DEV_DB: "若在测试或开发环境，检查 `data/opencode/opencode.db` 是否存在。",
+        Keys.DIAG_STEP_ZCODE_DB_EXISTS: "确认 ZCode 已在 macOS 或 Windows 本机生成会话数据库。",
+        Keys.DIAG_STEP_ZCODE_DB_PATHS: "macOS 检查 `~/.zcode/cli/db/db.sqlite`；Windows 检查 `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`。",
+        Keys.DIAG_STEP_ZCODE_NO_LINUX: "Linux 暂无 ZCode 默认会话路径。",
         Keys.DIAGNOSTIC_PARSED_URI: "解析后的 URI",
         Keys.DIAGNOSTIC_CAPABILITY_GAP: "缺失能力",
         Keys.DIAGNOSTIC_NEXT_STEPS: "下一步",
