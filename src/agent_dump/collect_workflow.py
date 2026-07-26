@@ -28,9 +28,7 @@ from agent_dump.collect_progress import (
 )
 from agent_dump.config import (
     AIConfig,
-    load_ai_config,
-    load_collect_config,
-    load_logging_config,
+    load_config_document,
     validate_ai_config,
 )
 from agent_dump.i18n import Keys, i18n
@@ -221,9 +219,10 @@ def handle_collect_mode(
             print(i18n.t(Keys.COLLECT_DATE_FORMAT_INVALID))
         return 1
 
+    config_document = load_config_document()
     config: AIConfig | None = None
     if not dry_run:
-        config = load_ai_config()
+        config = config_document.ai_config()
         valid, errors = validate_ai_config(config)
         if not valid or config is None:
             if "missing_file" in errors:
@@ -237,10 +236,10 @@ def handle_collect_mode(
             print(i18n.t(Keys.COLLECT_CONFIG_HINT))
             return 1
 
-    collect_config = load_collect_config()
+    collect_config = config_document.collect_config()
     collect_logger = None
     if not dry_run:
-        logging_config = load_logging_config()
+        logging_config = config_document.logging_config()
         collect_logger = create_collect_logger(logging_config)
 
     scanner = scanner_factory()

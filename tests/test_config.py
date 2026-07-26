@@ -7,6 +7,7 @@ from unittest import mock
 
 import pytest
 
+import agent_dump.config as config_module
 from agent_dump.config import (
     AIConfig,
     CollectConfig,
@@ -17,6 +18,7 @@ from agent_dump.config import (
     handle_config_command,
     load_ai_config,
     load_collect_config,
+    load_config_document,
     load_export_config,
     load_logging_config,
     load_shortcuts_config,
@@ -233,6 +235,59 @@ class TestConfigReadWrite:
 
         assert load_ai_config(path) == original
 
+    def test_write_preserves_unknown_keys_sections_and_nested_tables(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text(
+            (
+                'root_feature = "keep"\n'
+                "\n[ai]\n"
+                'provider = "openai"\n'
+                'base_url = "https://old.example/v1"\n'
+                'model = "old-model"\n'
+                'api_key = "old-key"\n'
+                'future_knob = "keep"\n'
+                "\n[collect]\n"
+                "summary_concurrency = 8\n"
+                'future_mode = "keep"\n'
+                "\n[future]\n"
+                "enabled = true\n"
+                'flags = ["a", "b"]\n'
+                'rules = [{ name = "first", enabled = true }]\n'
+                "\n[future.nested]\n"
+                'mode = "keep"\n'
+            ),
+            encoding="utf-8",
+        )
+
+        write_ai_config(
+            AIConfig(
+                provider="anthropic",
+                base_url="https://api.anthropic.com/v1",
+                model="claude",
+                api_key="new-key",
+            ),
+            path,
+        )
+
+        document = load_config_document(path)
+        assert document.ai_config() == AIConfig(
+            provider="anthropic",
+            base_url="https://api.anthropic.com/v1",
+            model="claude",
+            api_key="new-key",
+        )
+        assert document.sections[""]["root_feature"] == "keep"
+        assert document.sections["ai"]["future_knob"] == "keep"
+        assert document.sections["collect"]["future_mode"] == "keep"
+        assert document.sections["future"] == {
+            "enabled": True,
+            "flags": ["a", "b"],
+            "rules": [{"name": "first", "enabled": True}],
+        }
+        assert document.sections["future.nested"] == {"mode": "keep"}
+        assert "logging" not in document.sections
+        assert "export" not in document.sections
+
     @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions only")
     def test_write_config_restricts_permissions(self, tmp_path):
         path = tmp_path / "config.toml"
@@ -321,8 +376,14 @@ class TestConfigCommand:
         )
         monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
 
-        result = handle_config_command("view")
+        with mock.patch(
+            "agent_dump.config._read_config_sections",
+            wraps=config_module._read_config_sections,
+        ) as read_sections:
+            result = handle_config_command("view")
+
         assert result == 0
+        read_sections.assert_called_once_with(path)
         out = capsys.readouterr().out
         assert "当前配置" in out
         assert "sk-*****123" in out
