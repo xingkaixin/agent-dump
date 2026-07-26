@@ -75,7 +75,7 @@
 | `query_filter.py` | QuerySpec 解析、QuerySessionMatch 匹配证据、过滤与全局 limit |
 | `search_index.py` | SQLite FTS5 搜索索引 |
 | `selector.py` | 终端交互选择与非 TTY 输入回退 |
-| `config.py` | TOML 配置加载、编辑与校验 |
+| `config.py` | `ConfigurationDocument` TOML 快照、兼容投影、保留式更新与校验 |
 | `coercion.py` | 不可信 provider 标量的容错转换（safe_int / safe_epoch_datetime） |
 | `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |

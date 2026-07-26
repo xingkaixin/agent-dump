@@ -1,10 +1,14 @@
 """Configuration management for collect mode."""
 
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import date, datetime, time
 import json
+import math
 import os
 from pathlib import Path
+import re
 import sys
 from typing import Any
 from urllib.parse import urlsplit
@@ -62,6 +66,83 @@ class ShortcutConfig:
 
     params: tuple[str, ...] = ()
     args: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ConfigurationDocument:
+    """One parsed configuration snapshot with lossless semantic updates."""
+
+    path: Path
+    sections: dict[str, dict[str, Any]]
+
+    def ai_config(self) -> AIConfig | None:
+        parsed = self.sections.get("ai")
+        if parsed is None:
+            return None
+        provider = parsed.get("provider", "")
+        base_url = parsed.get("base_url", "")
+        model = parsed.get("model", "")
+        api_key = parsed.get("api_key", "")
+        return AIConfig(
+            provider=provider.strip() if isinstance(provider, str) else "",
+            base_url=base_url.strip() if isinstance(base_url, str) else "",
+            model=model.strip() if isinstance(model, str) else "",
+            api_key=api_key.strip() if isinstance(api_key, str) else "",
+        )
+
+    def collect_config(self) -> CollectConfig:
+        parsed = self.sections.get("collect", {})
+        concurrency = _coerce_positive_int(
+            parsed.get("summary_concurrency"),
+            DEFAULT_COLLECT_SUMMARY_CONCURRENCY,
+        )
+        timeout_seconds = _coerce_positive_int(parsed.get("summary_timeout_seconds"), 90)
+        agent_denies: dict[str, tuple[str, ...]] = {}
+        for section_name, values in self.sections.items():
+            if not section_name.startswith("agent."):
+                continue
+            agent_name = section_name.partition(".")[2].strip()
+            if not agent_name:
+                continue
+            deny_paths = _coerce_str_tuple(values.get("deny"))
+            if deny_paths:
+                agent_denies[agent_name] = deny_paths
+        return CollectConfig(
+            summary_concurrency=concurrency,
+            summary_timeout_seconds=timeout_seconds,
+            agent_denies=agent_denies,
+        )
+
+    def logging_config(self) -> LoggingConfig:
+        default_path = _default_log_path_for_config(self.path)
+        parsed = self.sections.get("logging", {})
+        enabled = _parse_bool(parsed.get("enabled", "true"), True)
+        raw_path = parsed.get("path")
+        if isinstance(raw_path, str) and raw_path.strip():
+            return LoggingConfig(enabled=enabled, path=Path(raw_path).expanduser())
+        return LoggingConfig(enabled=enabled, path=default_path)
+
+    def export_config(self) -> ExportConfig:
+        parsed = self.sections.get("export", {})
+        raw_output = parsed.get("output", "")
+        if isinstance(raw_output, str):
+            return ExportConfig(output=raw_output.strip())
+        return ExportConfig()
+
+    def shortcuts_config(self) -> dict[str, ShortcutConfig]:
+        shortcuts: dict[str, ShortcutConfig] = {}
+        for section_name, values in self.sections.items():
+            if not section_name.startswith("shortcut."):
+                continue
+            shortcut_name = section_name.partition(".")[2].strip()
+            if not shortcut_name:
+                continue
+            params = _coerce_str_tuple(values.get("params"))
+            args = _coerce_str_tuple(values.get("args"))
+            if params is None or not args:
+                continue
+            shortcuts[shortcut_name] = ShortcutConfig(params=params, args=args)
+        return shortcuts
 
 
 DEFAULT_COLLECT_SUMMARY_CONCURRENCY = 4
@@ -206,9 +287,6 @@ def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str | tuple[st
             parsed.setdefault(current_section, {})
             continue
 
-        if current_section is None:
-            continue
-
         key, sep, value = line.partition("=")
         if not sep:
             continue
@@ -219,7 +297,7 @@ def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str | tuple[st
             pending_array_key = normalized_key
             pending_array_lines = [normalized_value]
             continue
-        parsed.setdefault(current_section, {})[normalized_key] = _parse_toml_value(normalized_value)
+        parsed.setdefault(current_section or "", {})[normalized_key] = _parse_toml_value(normalized_value)
 
     return parsed
 
@@ -228,7 +306,7 @@ def _flatten_toml_sections(data: dict[str, Any], prefix: str = "") -> dict[str, 
     """Flatten nested TOML tables into dotted section names like `agent.claudecode`."""
     sections: dict[str, dict[str, Any]] = {}
     leaves = {key: value for key, value in data.items() if not isinstance(value, dict)}
-    if prefix:
+    if leaves:
         sections[prefix] = leaves
     for key, value in data.items():
         if isinstance(value, dict):
@@ -247,107 +325,40 @@ def _read_config_sections(config_path: Path) -> dict[str, dict[str, Any]]:
     return _flatten_toml_sections(parsed)
 
 
-def load_ai_config(path: Path | None = None) -> AIConfig | None:
-    """Load AI config if file exists and parseable."""
+def load_config_document(path: Path | None = None) -> ConfigurationDocument:
+    """Read one complete configuration snapshot."""
     config_path = path if path is not None else get_config_path()
     if not config_path.exists():
-        return None
-
-    sections = _read_config_sections(config_path)
-    if "ai" not in sections:
-        return None
-    parsed = sections["ai"]
-    provider = parsed.get("provider", "")
-    base_url = parsed.get("base_url", "")
-    model = parsed.get("model", "")
-    api_key = parsed.get("api_key", "")
-    return AIConfig(
-        provider=provider.strip() if isinstance(provider, str) else "",
-        base_url=base_url.strip() if isinstance(base_url, str) else "",
-        model=model.strip() if isinstance(model, str) else "",
-        api_key=api_key.strip() if isinstance(api_key, str) else "",
+        return ConfigurationDocument(path=config_path, sections={})
+    return ConfigurationDocument(
+        path=config_path,
+        sections=_read_config_sections(config_path),
     )
+
+
+def load_ai_config(path: Path | None = None) -> AIConfig | None:
+    """Load AI config if file exists and parseable."""
+    return load_config_document(path).ai_config()
 
 
 def load_collect_config(path: Path | None = None) -> CollectConfig:
     """Load collect config with defaults for missing or invalid values."""
-    config_path = path if path is not None else get_config_path()
-    if not config_path.exists():
-        return CollectConfig()
-
-    sections = _read_config_sections(config_path)
-    parsed = sections.get("collect", {})
-    concurrency = _coerce_positive_int(parsed.get("summary_concurrency"), DEFAULT_COLLECT_SUMMARY_CONCURRENCY)
-    timeout_seconds = _coerce_positive_int(parsed.get("summary_timeout_seconds"), 90)
-
-    agent_denies: dict[str, tuple[str, ...]] = {}
-    for section_name, values in sections.items():
-        if not section_name.startswith("agent."):
-            continue
-        agent_name = section_name.partition(".")[2].strip()
-        if not agent_name:
-            continue
-        deny_paths = _coerce_str_tuple(values.get("deny"))
-        if deny_paths:
-            agent_denies[agent_name] = deny_paths
-
-    return CollectConfig(
-        summary_concurrency=concurrency,
-        summary_timeout_seconds=timeout_seconds,
-        agent_denies=agent_denies,
-    )
+    return load_config_document(path).collect_config()
 
 
 def load_logging_config(path: Path | None = None) -> LoggingConfig:
     """Load logging config with defaults for missing or invalid values."""
-    config_path = path if path is not None else get_config_path()
-    default_path = _default_log_path_for_config(config_path)
-    if not config_path.exists():
-        return LoggingConfig(path=default_path)
-
-    parsed = _read_config_sections(config_path).get("logging", {})
-    enabled = _parse_bool(parsed.get("enabled", "true"), True)
-    raw_path = parsed.get("path")
-    if isinstance(raw_path, str) and raw_path.strip():
-        return LoggingConfig(enabled=enabled, path=Path(raw_path).expanduser())
-    return LoggingConfig(enabled=enabled, path=default_path)
+    return load_config_document(path).logging_config()
 
 
 def load_export_config(path: Path | None = None) -> ExportConfig:
     """Load export config with defaults for missing or invalid values."""
-    config_path = path if path is not None else get_config_path()
-    if not config_path.exists():
-        return ExportConfig()
-
-    parsed = _read_config_sections(config_path).get("export", {})
-    raw_output = parsed.get("output", "")
-    if isinstance(raw_output, str):
-        return ExportConfig(output=raw_output.strip())
-    return ExportConfig()
+    return load_config_document(path).export_config()
 
 
 def load_shortcuts_config(path: Path | None = None) -> dict[str, ShortcutConfig]:
     """Load configured shortcut presets."""
-    config_path = path if path is not None else get_config_path()
-    if not config_path.exists():
-        return {}
-
-    sections = _read_config_sections(config_path)
-    shortcuts: dict[str, ShortcutConfig] = {}
-    for section_name, values in sections.items():
-        if not section_name.startswith("shortcut."):
-            continue
-        shortcut_name = section_name.partition(".")[2].strip()
-        if not shortcut_name:
-            continue
-
-        params = _coerce_str_tuple(values.get("params"))
-        args = _coerce_str_tuple(values.get("args"))
-        if params is None or not args:
-            continue
-        shortcuts[shortcut_name] = ShortcutConfig(params=params, args=args)
-
-    return shortcuts
+    return load_config_document(path).shortcuts_config()
 
 
 SUPPORTED_AI_URL_SCHEMES = frozenset({"http", "https"})
@@ -401,123 +412,110 @@ def _toml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def _render_collect_section(config: CollectConfig) -> str:
-    lines = [
-        "[collect]",
-        f"summary_concurrency = {config.summary_concurrency}",
-        f"summary_timeout_seconds = {config.summary_timeout_seconds}",
-    ]
-    for agent_name, deny_paths in config.agent_denies.items():
-        if not deny_paths:
+_BARE_TOML_KEY = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _toml_key(value: str) -> str:
+    return value if _BARE_TOML_KEY.fullmatch(value) else _toml_string(value)
+
+
+def _toml_value(value: Any) -> str:
+    if isinstance(value, str):
+        return _toml_string(value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if math.isnan(value):
+            return "nan"
+        if math.isinf(value):
+            return "inf" if value > 0 else "-inf"
+        return repr(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, (date, time)):
+        return value.isoformat()
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_toml_value(item) for item in value) + "]"
+    if isinstance(value, dict):
+        items = ", ".join(f"{_toml_key(str(key))} = {_toml_value(item)}" for key, item in value.items())
+        return "{ " + items + " }"
+    raise TypeError(f"unsupported TOML value: {type(value).__name__}")
+
+
+def _render_config_sections(sections: dict[str, dict[str, Any]]) -> str:
+    rendered_sections: list[str] = []
+    root_values = sections.get("", {})
+    if root_values:
+        rendered_sections.append(
+            "\n".join(f"{_toml_key(key)} = {_toml_value(value)}" for key, value in root_values.items())
+        )
+
+    for section_name, values in sections.items():
+        if not section_name:
             continue
-        lines.extend(
-            [
-                "",
-                f"[agent.{agent_name}]",
-                "deny = [",
-                *[
-                    f"  {_toml_string(deny_path)}" + ("," if index < len(deny_paths) - 1 else "")
-                    for index, deny_path in enumerate(deny_paths)
-                ],
-                "]",
-            ]
-        )
-    return "\n".join(lines)
+        section_header = ".".join(_toml_key(part) for part in section_name.split("."))
+        lines = [f"[{section_header}]"]
+        lines.extend(f"{_toml_key(key)} = {_toml_value(value)}" for key, value in values.items())
+        rendered_sections.append("\n".join(lines))
+
+    content = "\n\n".join(rendered_sections).rstrip()
+    return f"{content}\n" if content else ""
 
 
-def _render_logging_section(config: LoggingConfig) -> str:
-    path = config.path if config.path is not None else get_default_log_path()
-    return "\n".join(
-        [
-            "[logging]",
-            f"enabled = {'true' if config.enabled else 'false'}",
-            f"path = {_toml_string(str(path))}",
-        ]
-    )
-
-
-def _render_export_section(config: ExportConfig) -> str:
-    return "\n".join(
-        [
-            "[export]",
-            f"output = {_toml_string(config.output)}",
-        ]
-    )
-
-
-def _render_shortcuts_sections(shortcuts: dict[str, ShortcutConfig]) -> str:
-    sections: list[str] = []
-    for shortcut_name, shortcut in shortcuts.items():
-        params_lines = [
-            f"  {_toml_string(param)}" + ("," if index < len(shortcut.params) - 1 else "")
-            for index, param in enumerate(shortcut.params)
-        ]
-        args_lines = [
-            f"  {_toml_string(arg)}" + ("," if index < len(shortcut.args) - 1 else "")
-            for index, arg in enumerate(shortcut.args)
-        ]
-        sections.extend(
-            [
-                f"[shortcut.{shortcut_name}]",
-                "params = [",
-                *params_lines,
-                "]",
-                "args = [",
-                *args_lines,
-                "]",
-                "",
-            ]
-        )
-    if sections and not sections[-1]:
-        sections.pop()
-    return "\n".join(sections)
+def _replace_known_values(
+    sections: dict[str, dict[str, Any]],
+    section_name: str,
+    *,
+    known_keys: frozenset[str],
+    values: dict[str, Any] | None,
+) -> None:
+    section = sections.setdefault(section_name, {})
+    for key in known_keys:
+        section.pop(key, None)
+    if values is not None:
+        section.update(values)
+    if not section:
+        sections.pop(section_name, None)
 
 
 def write_config(
     ai_config: AIConfig | None,
     export_config: ExportConfig | None = None,
     path: Path | None = None,
+    *,
+    document: ConfigurationDocument | None = None,
 ) -> Path:
-    """Persist config sections to TOML file."""
+    """Update known config keys while preserving the complete document."""
     config_path = path if path is not None else get_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    existing_collect = load_collect_config(config_path)
-    existing_logging = load_logging_config(config_path)
-    existing_export = load_export_config(config_path)
-    existing_shortcuts = load_shortcuts_config(config_path)
-    effective_export = export_config if export_config is not None else existing_export
-
-    sections: list[str] = []
-    if ai_config is not None:
-        sections.append(
-            (
-                "[ai]\n"
-                f"provider = {_toml_string(ai_config.provider)}\n"
-                f"base_url = {_toml_string(ai_config.base_url)}\n"
-                f"model = {_toml_string(ai_config.model)}\n"
-                f"api_key = {_toml_string(ai_config.api_key)}\n"
-            ).rstrip()
+    snapshot = document if document is not None else load_config_document(config_path)
+    sections = deepcopy(snapshot.sections)
+    _replace_known_values(
+        sections,
+        "ai",
+        known_keys=frozenset({"provider", "base_url", "model", "api_key"}),
+        values=(
+            {
+                "provider": ai_config.provider,
+                "base_url": ai_config.base_url,
+                "model": ai_config.model,
+                "api_key": ai_config.api_key,
+            }
+            if ai_config is not None
+            else None
+        ),
+    )
+    if export_config is not None:
+        _replace_known_values(
+            sections,
+            "export",
+            known_keys=frozenset({"output"}),
+            values={"output": export_config.output},
         )
-    if config_path.exists() or existing_collect != CollectConfig():
-        sections.append(_render_collect_section(existing_collect))
-    if config_path.exists() or existing_logging != LoggingConfig():
-        sections.append(
-            _render_logging_section(
-                LoggingConfig(
-                    enabled=existing_logging.enabled,
-                    path=existing_logging.path
-                    if existing_logging.path is not None
-                    else _default_log_path_for_config(config_path),
-                )
-            )
-        )
-    if config_path.exists() or effective_export != ExportConfig():
-        sections.append(_render_export_section(effective_export))
-    if existing_shortcuts:
-        sections.append(_render_shortcuts_sections(existing_shortcuts))
 
-    content = "\n\n".join(section for section in sections if section).rstrip()
-    rendered_content = f"{content}\n" if content else ""
+    rendered_content = _render_config_sections(sections)
     write_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
     with os.fdopen(os.open(config_path, write_flags, PRIVATE_CONFIG_MODE), "w", encoding="utf-8") as config_file:
         config_path.chmod(PRIVATE_CONFIG_MODE)
@@ -682,8 +680,9 @@ def prompt_edit_config(
 def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input) -> int:
     """Handle `--config view|edit` command flow."""
     config_path = get_config_path()
-    existing = load_ai_config(config_path)
-    existing_export = load_export_config(config_path)
+    document = load_config_document(config_path)
+    existing = document.ai_config()
+    existing_export = document.export_config()
 
     if action == "view":
         if not config_path.exists():
@@ -709,9 +708,9 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
                     output=existing_export.output or "./sessions (default)",
                 )
             )
-            collect_config = load_collect_config(config_path)
-            logging_config = load_logging_config(config_path)
-            shortcuts_config = load_shortcuts_config(config_path)
+            collect_config = document.collect_config()
+            logging_config = document.logging_config()
+            shortcuts_config = document.shortcuts_config()
             print(f"  collect.summary_concurrency: {collect_config.summary_concurrency}")
             print(f"  collect.summary_timeout_seconds: {collect_config.summary_timeout_seconds}")
             print(f"  logging.enabled: {logging_config.enabled}")
@@ -735,6 +734,6 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
         print(i18n.t(Keys.CONFIG_INVALID_FIELDS, fields=", ".join(errors)))
         return 1
 
-    path = write_config(edited_ai, edited_export, config_path)
+    path = write_config(edited_ai, edited_export, config_path, document=document)
     print(i18n.t(Keys.CONFIG_SAVED, path=str(path)))
     return 0
