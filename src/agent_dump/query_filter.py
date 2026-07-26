@@ -34,13 +34,17 @@ class QuerySpec:
 
 
 @dataclass(frozen=True)
-class SearchSessionMatch:
-    """Search match preserving ranking and snippet evidence."""
+class QuerySessionMatch:
+    """A session selected by a query together with its matching evidence."""
 
     agent: BaseAgent
     session: Session
     snippet: str
     rank: float
+    matched_role: str | None = None
+
+
+SearchSessionMatch = QuerySessionMatch
 
 
 def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
@@ -153,23 +157,19 @@ def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | No
     return _filter_sessions_from_source_or_data(agent, sessions, query)
 
 
-def limit_query_matches(matches: list[tuple[BaseAgent, Session]], limit: int | None) -> list[tuple[BaseAgent, Session]]:
-    """Apply one global limit across matched agent sessions."""
-    if limit is None or limit >= len(matches):
-        return matches
-    sorted_matches = sorted(matches, key=_query_match_sort_key)
-    return sorted_matches[:limit]
-
-
 def search_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: QuerySpec) -> list[SearchSessionMatch]:
     """Search sessions while preserving snippets and rank."""
+    if not (spec.keyword or "").strip():
+        return []
+    return query_session_matches(agent, sessions, spec)
+
+
+def query_session_matches(agent: BaseAgent, sessions: list[Session], spec: QuerySpec) -> list[SearchSessionMatch]:
+    """Apply a query while preserving the evidence used to select each session."""
     if spec.agent_names is not None and agent.name not in spec.agent_names:
         return []
 
     keyword = (spec.keyword or "").strip()
-    if not keyword:
-        return []
-
     scoped_sessions = sessions
     if spec.project_path is not None:
         scoped_sessions = [
@@ -182,8 +182,13 @@ def search_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: Qu
         ]
 
     if spec.roles is not None:
-        scoped_sessions = _filter_sessions_by_role(agent, scoped_sessions, spec.roles, keyword)
-        return _fallback_search_matches(agent, scoped_sessions, keyword)
+        return _role_search_matches(agent, scoped_sessions, spec.roles, keyword or None)
+
+    if not keyword:
+        return [
+            SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
+            for session in scoped_sessions
+        ]
 
     indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, keyword)
     if indexed is not None:
@@ -198,6 +203,16 @@ def limit_search_matches(matches: list[SearchSessionMatch], limit: int | None) -
     if limit is None or limit >= len(sorted_matches):
         return sorted_matches
     return sorted_matches[:limit]
+
+
+def limit_query_session_matches(
+    matches: list[SearchSessionMatch],
+    limit: int | None,
+) -> list[SearchSessionMatch]:
+    """Apply list/collect recency ordering and one global limit to query evidence."""
+    if limit is None or limit >= len(matches):
+        return matches
+    return sorted(matches, key=_query_evidence_sort_key)[:limit]
 
 
 def _normalize_agent_name(name: str, valid_agents: set[str]) -> str | None:
@@ -289,26 +304,7 @@ def filter_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: Qu
     """Apply structured query spec to one agent's sessions."""
     if spec is None:
         return sessions
-    if spec.agent_names is not None and agent.name not in spec.agent_names:
-        return []
-
-    filtered = sessions
-    if spec.project_path is not None:
-        filtered = [
-            session
-            for session in filtered
-            if (
-                (session_path := extract_session_project_path(session)) is not None
-                and is_path_scope_match(spec.project_path, session_path)
-            )
-        ]
-
-    if spec.roles is not None:
-        filtered = _filter_sessions_by_role(agent, filtered, spec.roles, spec.keyword)
-    elif spec.keyword is not None:
-        filtered = filter_sessions(agent, filtered, spec.keyword)
-
-    return filtered
+    return [match.session for match in query_session_matches(agent, sessions, spec)]
 
 
 def _contains_structured_query_terms(query: str) -> bool:
@@ -442,36 +438,45 @@ def _match_session_data(agent: BaseAgent, session: Session, keyword: str) -> boo
     return keyword in content.lower()
 
 
-def _filter_sessions_by_role(
+def _role_search_matches(
     agent: BaseAgent,
     sessions: list[Session],
     roles: set[str],
     keyword: str | None,
-) -> list[Session]:
-    matched: list[Session] = []
-    normalized_keyword = keyword.strip().lower() if keyword is not None else None
-
+) -> list[SearchSessionMatch]:
+    matches: list[SearchSessionMatch] = []
     for session in sessions:
-        if _match_session_roles(agent, session, roles, normalized_keyword):
-            matched.append(session)
+        evidence = _find_role_evidence(agent, session, roles, keyword)
+        if evidence is None:
+            continue
+        role, snippet = evidence
+        matches.append(
+            SearchSessionMatch(
+                agent=agent,
+                session=session,
+                snippet=snippet,
+                rank=0.0,
+                matched_role=role,
+            )
+        )
 
-    return matched
+    return matches
 
 
-def _match_session_roles(
+def _find_role_evidence(
     agent: BaseAgent,
     session: Session,
     roles: set[str],
     keyword: str | None,
-) -> bool:
+) -> tuple[str, str] | None:
     try:
         session_data = agent.get_cached_session_data(session)
     except Exception:
-        return False
+        return None
 
     messages = session_data.get("messages")
     if not isinstance(messages, list):
-        return False
+        return None
 
     for message in messages:
         if not isinstance(message, dict):
@@ -479,12 +484,14 @@ def _match_session_roles(
         role = str(message.get("role", "")).strip().lower()
         if role not in roles:
             continue
+        text = _extract_message_search_text(message)
         if keyword is None:
-            return True
-        if keyword in _extract_message_search_text(message).lower():
-            return True
+            return role, _build_evidence_excerpt(text)
+        snippet = _build_keyword_snippet(text, keyword)
+        if snippet is not None:
+            return role, snippet
 
-    return False
+    return None
 
 
 def _extract_message_search_text(message: dict[str, Any]) -> str:
@@ -505,11 +512,15 @@ def _extract_message_search_text(message: dict[str, Any]) -> str:
     return "\n".join(contents)
 
 
-def _query_match_sort_key(item: tuple[BaseAgent, Session]) -> tuple[float, float, str, str]:
-    agent, session = item
-    updated_at = normalize_datetime_utc(session.updated_at)
-    created_at = normalize_datetime_utc(session.created_at)
-    return (-updated_at.timestamp(), -created_at.timestamp(), agent.name, session.id)
+def _query_evidence_sort_key(match: SearchSessionMatch) -> tuple[float, float, str, str]:
+    updated_at = normalize_datetime_utc(match.session.updated_at)
+    created_at = normalize_datetime_utc(match.session.created_at)
+    return (
+        -updated_at.timestamp(),
+        -created_at.timestamp(),
+        match.agent.name,
+        match.session.id,
+    )
 
 
 def _search_match_sort_key(match: SearchSessionMatch) -> tuple[float, float, float, str, str]:
@@ -613,6 +624,13 @@ def _build_keyword_snippet(text: str, keyword: str, context_chars: int = 48) -> 
         + normalized_text[match_end:end]
     )
     return prefix + snippet + suffix
+
+
+def _build_evidence_excerpt(text: str, context_chars: int = 96) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= context_chars:
+        return normalized
+    return normalized[:context_chars].rstrip() + "..."
 
 
 def _try_indexed_search(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session] | None:

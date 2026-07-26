@@ -1592,13 +1592,17 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli_shared.filter_sessions", return_value=[session2]) as mock_filter:
+            with mock.patch(
+                "agent_dump.cli_shared.query_session_matches",
+                return_value=[SearchSessionMatch(mock_agent, session2, "error", 0.0)],
+            ) as mock_filter:
                 with mock.patch("agent_dump.session_workflow.display_search_results") as mock_display_search:
                     with mock.patch("sys.argv", ["agent-dump", "--list", "-query", "error"]):
                         result = main()
 
         assert result == 0
-        mock_filter.assert_called_once_with(mock_agent, sessions, "error")
+        assert mock_filter.call_args.args[:2] == (mock_agent, sessions)
+        assert mock_filter.call_args.args[2].keyword == "error"
         mock_display_search.assert_not_called()
         captured = capsys.readouterr()
         assert "OpenCode (1 个会话)" in captured.out
@@ -1637,12 +1641,16 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             selected_session = mock.MagicMock()
+            kimi_session = mock.MagicMock()
             with mock.patch(
                 "agent_dump.session_workflow.select_agent_interactive", return_value=agent2
             ) as mock_select_agent:
                 with mock.patch(
-                    "agent_dump.cli_shared.filter_sessions",
-                    side_effect=[[selected_session], [mock.MagicMock()]],
+                    "agent_dump.cli_shared.query_session_matches",
+                    side_effect=[
+                        [SearchSessionMatch(agent2, selected_session, "bug", 0.0)],
+                        [SearchSessionMatch(agent3, kimi_session, "bug", 0.0)],
+                    ],
                 ) as mock_filter:
                     with mock.patch(
                         "agent_dump.session_workflow.select_sessions_interactive",
@@ -1663,8 +1671,8 @@ class TestMain:
         assert [agent.name for agent in scoped_agents] == ["codex", "kimi"]
         assert mock_select_agent.call_args[0][1] == {"codex": 1, "kimi": 1}
         assert mock_filter.call_count == 2
-        assert mock_filter.call_args_list[0] == mock.call(agent2, agent2_sessions, "bug")
-        assert mock_filter.call_args_list[1] == mock.call(agent3, agent3_sessions, "bug")
+        assert mock_filter.call_args_list[0].args[:2] == (agent2, agent2_sessions)
+        assert mock_filter.call_args_list[1].args[:2] == (agent3, agent3_sessions)
         captured = capsys.readouterr()
         assert "已选择: Codex" in captured.out
 
@@ -1686,7 +1694,10 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             selected_sessions = [mock.MagicMock()]
-            with mock.patch("agent_dump.cli_shared.filter_sessions", return_value=selected_sessions) as mock_filter:
+            with mock.patch(
+                "agent_dump.cli_shared.query_session_matches",
+                return_value=[SearchSessionMatch(mock_agent, selected_sessions[0], "bug", 0.0)],
+            ) as mock_filter:
                 with mock.patch(
                     "agent_dump.session_workflow.select_sessions_interactive", return_value=selected_sessions
                 ):
@@ -1702,7 +1713,8 @@ class TestMain:
 
         assert result == 0
         mock_agent.get_sessions.assert_called_once_with(days=3)
-        mock_filter.assert_called_once_with(mock_agent, sessions, "bug")
+        assert mock_filter.call_args.args[:2] == (mock_agent, sessions)
+        assert mock_filter.call_args.args[2].keyword == "bug"
 
     def test_main_invalid_query_with_unknown_agent(self, capsys):
         """测试 query 中包含未知 agent 时返回错误"""
@@ -1763,7 +1775,10 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli_shared.filter_sessions_by_query", return_value=[session]) as mock_filter:
+            with mock.patch(
+                "agent_dump.cli_shared.query_session_matches",
+                return_value=[SearchSessionMatch(mock_agent, session, "bug", 0.0, "user")],
+            ) as mock_filter:
                 with mock.patch("sys.argv", ["agent-dump", "--list", "-query", "bug role:user path:."]):
                     result = main()
 
@@ -1798,7 +1813,7 @@ class TestMain:
             mock_scanner.get_available_agents.return_value = [agent_codex, agent_kimi]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("agent_dump.cli_shared.filter_sessions", side_effect=[[], []]) as mock_filter:
+            with mock.patch("agent_dump.cli_shared.query_session_matches", side_effect=[[], []]) as mock_filter:
                 with mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent:
                     with mock.patch("sys.argv", ["agent-dump", "--interactive", "-query", "codex,kimi:bug"]):
                         result = main()
@@ -1837,8 +1852,11 @@ class TestMain:
 
             with (
                 mock.patch(
-                    "agent_dump.cli_shared.filter_sessions_by_query",
-                    side_effect=[[codex_session], [kimi_session]],
+                    "agent_dump.cli_shared.query_session_matches",
+                    side_effect=[
+                        [SearchSessionMatch(agent_codex, codex_session, "bug", 0.0)],
+                        [SearchSessionMatch(agent_kimi, kimi_session, "bug", 0.0)],
+                    ],
                 ) as mock_filter,
                 mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent,
             ):
@@ -1887,8 +1905,11 @@ class TestMain:
             selected_session = mock.MagicMock()
             with (
                 mock.patch(
-                    "agent_dump.cli_shared.filter_sessions",
-                    side_effect=[[selected_session], []],
+                    "agent_dump.cli_shared.query_session_matches",
+                    side_effect=[
+                        [SearchSessionMatch(agent_codex, selected_session, "bug", 0.0)],
+                        [],
+                    ],
                 ) as mock_filter,
                 mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent,
                 mock.patch(
@@ -1905,8 +1926,8 @@ class TestMain:
 
         assert result == 0
         assert mock_filter.call_count == 2
-        assert mock_filter.call_args_list[0] == mock.call(agent_codex, codex_sessions, "bug")
-        assert mock_filter.call_args_list[1] == mock.call(agent_kimi, kimi_sessions, "bug")
+        assert mock_filter.call_args_list[0].args[:2] == (agent_codex, codex_sessions)
+        assert mock_filter.call_args_list[1].args[:2] == (agent_kimi, kimi_sessions)
         mock_select_agent.assert_not_called()
         captured = capsys.readouterr()
         assert "自动选择: Codex" in captured.out

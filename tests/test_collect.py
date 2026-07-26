@@ -585,6 +585,52 @@ class TestCollectEntries:
         assert truncated is False
         assert [(entry.agent_name, entry.session_id) for entry in entries] == [("kimi", "s-new")]
 
+    def test_collect_entries_projects_only_role_evidence_matches(self):
+        now = datetime.now(timezone.utc)
+        matching = mock.MagicMock()
+        matching.id = "s-assistant"
+        matching.title = "assistant match"
+        matching.created_at = now - timedelta(minutes=30)
+        matching.updated_at = now - timedelta(minutes=30)
+        matching.metadata = {"cwd": "/repo/app"}
+
+        excluded = mock.MagicMock()
+        excluded.id = "s-user"
+        excluded.title = "user match"
+        excluded.created_at = now - timedelta(hours=1)
+        excluded.updated_at = now - timedelta(hours=1)
+        excluded.metadata = {"cwd": "/repo/app"}
+
+        session_data = {
+            "s-assistant": {
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "parts": [{"type": "text", "text": "fatal assistant evidence"}],
+                    }
+                ]
+            },
+            "s-user": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "fatal user evidence"}]}]},
+        }
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [matching, excluded]
+        agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+        agent.get_cached_session_data.side_effect = lambda session: session_data[session.id]
+
+        entries, truncated = collect_entries(
+            agents=[agent],
+            since_date=(now - timedelta(days=1)).date(),
+            until_date=now.date(),
+            query_spec=make_query_spec(keyword="fatal", roles={"assistant"}),
+            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
+            local_tz=timezone.utc,
+        )
+
+        assert truncated is False
+        assert [entry.session_id for entry in entries] == ["s-assistant"]
+
     def test_plan_collect_entries_reports_chunk_totals(self):
         entries = [
             CollectEntry(

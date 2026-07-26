@@ -27,8 +27,9 @@ from agent_dump.query_filter import (
     SearchSessionMatch,
     filter_sessions,
     filter_sessions_by_query,
-    limit_query_matches,
+    limit_query_session_matches,
     limit_search_matches,
+    query_session_matches,
     search_sessions_by_query,
 )
 from agent_dump.rendering import (
@@ -366,15 +367,14 @@ def collect_query_matches(
     days: int,
     spec: QuerySpec,
 ) -> dict[str, list[Session]]:
-    matched_pairs: list[tuple[BaseAgent, Session]] = []
+    matches: list[SearchSessionMatch] = []
     for agent, sessions in sessions_per_agent(agents, days):
-        matched_sessions = apply_query_filter(agent, sessions, spec)
-        matched_pairs.extend((agent, session) for session in matched_sessions)
+        matches.extend(query_session_matches(agent, sessions, spec))
 
-    limited_pairs = limit_query_matches(matched_pairs, spec.limit)
+    limited_matches = limit_query_session_matches(matches, spec.limit)
     grouped: dict[str, list[Session]] = {}
-    for agent, session in limited_pairs:
-        grouped.setdefault(agent.name, []).append(session)
+    for match in limited_matches:
+        grouped.setdefault(match.agent.name, []).append(match.session)
     return grouped
 
 

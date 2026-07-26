@@ -53,7 +53,12 @@ from agent_dump.collect_summary import (
 from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
-from agent_dump.query_filter import QuerySpec, filter_sessions_by_query, limit_query_matches
+from agent_dump.query_filter import (
+    QuerySpec,
+    SearchSessionMatch,
+    limit_query_session_matches,
+    query_session_matches,
+)
 from agent_dump.scanner import sessions_per_agent
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
@@ -323,27 +328,39 @@ def collect_entries(
     resolved_local_tz = local_tz or get_local_timezone()
     resolved_collect_config = collect_config or CollectConfig()
     matched_sessions: list[tuple[BaseAgent, Session, date]] = []
-    limited_candidates: list[tuple[BaseAgent, Session]] = []
+    candidate_matches: list[SearchSessionMatch] = []
 
     days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
     for agent, sessions in sessions_per_agent(agents, days_span):
         deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
         if deny_paths:
             sessions = [session for session in sessions if not _is_session_denied(session, deny_paths)]
-        if query_spec is not None:
-            sessions = filter_sessions_by_query(agent, sessions, query_spec)
-
-        for session in sessions:
+        matches = (
+            query_session_matches(agent, sessions, query_spec)
+            if query_spec is not None
+            else [
+                SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
+                for session in sessions
+            ]
+        )
+        for match in matches:
+            session = match.session
             session_date = _session_local_date(session, resolved_local_tz)
             if session_date < since_date or session_date > until_date:
                 continue
-            limited_candidates.append((agent, session))
+            candidate_matches.append(match)
 
     if query_spec is not None:
-        limited_candidates = limit_query_matches(limited_candidates, query_spec.limit)
+        candidate_matches = limit_query_session_matches(candidate_matches, query_spec.limit)
 
-    for agent, session in limited_candidates:
-        matched_sessions.append((agent, session, _session_local_date(session, resolved_local_tz)))
+    for match in candidate_matches:
+        matched_sessions.append(
+            (
+                match.agent,
+                match.session,
+                _session_local_date(match.session, resolved_local_tz),
+            )
+        )
 
     total = len(matched_sessions)
     emit_collect_progress(

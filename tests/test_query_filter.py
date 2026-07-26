@@ -19,10 +19,11 @@ from agent_dump.query_filter import (
     extract_session_project_path,
     filter_sessions,
     filter_sessions_by_query,
-    limit_query_matches,
+    limit_query_session_matches,
     limit_search_matches,
     parse_query,
     parse_query_uri,
+    query_session_matches,
     search_sessions_by_query,
 )
 from agent_dump.search_index import SearchResult
@@ -599,19 +600,76 @@ class TestSearchSessionsByQuery:
         assert result[0].snippet == "修复**认证**模块的问题"
         assert result[0].rank == 0.0
 
+    def test_role_search_snippet_only_uses_allowed_message_evidence(self, tmp_path):
+        session = make_session("s1", "session", tmp_path / "s1.jsonl")
+        agent = DummyAgent(
+            name="codex",
+            session_data={
+                "s1": {
+                    "messages": [
+                        {"role": "user", "parts": [{"type": "text", "text": "fatal user evidence"}]},
+                        {
+                            "role": "assistant",
+                            "parts": [{"type": "text", "text": "fatal assistant evidence"}],
+                        },
+                    ]
+                }
+            },
+        )
+
+        with mock.patch("agent_dump.query_filter.SearchIndex") as index_factory:
+            result = search_sessions_by_query(
+                agent,
+                [session],
+                make_query_spec(keyword="fatal", roles={"assistant"}),
+            )
+
+        assert result == [
+            SearchSessionMatch(
+                agent=agent,
+                session=session,
+                snippet="**fatal** assistant evidence",
+                rank=0.0,
+                matched_role="assistant",
+            )
+        ]
+        index_factory.assert_not_called()
+
+    def test_role_query_without_keyword_preserves_role_evidence(self, tmp_path):
+        session = make_session("s1", "session", tmp_path / "s1.jsonl")
+        agent = DummyAgent(
+            name="codex",
+            session_data={
+                "s1": {
+                    "messages": [
+                        {"role": "tool", "parts": [{"type": "text", "text": "ran tests"}]},
+                    ]
+                }
+            },
+        )
+
+        result = query_session_matches(agent, [session], make_query_spec(roles={"tool"}))
+
+        assert result[0].session is session
+        assert result[0].matched_role == "tool"
+        assert result[0].snippet == "ran tests"
+
 
 class TestLimitQueryMatches:
-    def test_limit_matches_applies_global_sort(self, tmp_path):
-        agent_a = DummyAgent(name="codex")
-        agent_b = DummyAgent(name="kimi")
-        session_a = make_session("s1", "a", tmp_path / "a.jsonl")
-        session_a.updated_at = datetime(2026, 1, 1, 10, 0, 0)
-        session_b = make_session("s2", "b", tmp_path / "b.jsonl")
-        session_b.updated_at = datetime(2026, 1, 1, 11, 0, 0)
+    def test_limit_query_session_matches_preserves_selected_evidence(self, tmp_path):
+        agent = DummyAgent(name="codex")
+        older = make_session("s-old", "old", tmp_path / "old.jsonl")
+        older.updated_at = datetime(2026, 1, 1, 10, 0, 0)
+        newer = make_session("s-new", "new", tmp_path / "new.jsonl")
+        newer.updated_at = datetime(2026, 1, 1, 11, 0, 0)
+        matches = [
+            SearchSessionMatch(agent, older, "**bug** old", 0.0, "user"),
+            SearchSessionMatch(agent, newer, "**bug** new", 0.0, "assistant"),
+        ]
 
-        result = limit_query_matches([(agent_a, session_a), (agent_b, session_b)], 1)
+        result = limit_query_session_matches(matches, 1)
 
-        assert [(agent.name, session.id) for agent, session in result] == [("kimi", "s2")]
+        assert result == [matches[1]]
 
 
 class TestLimitSearchMatches:
