@@ -72,7 +72,7 @@
 | `maintenance_workflow.py` | providers capability、stats 与 reindex 模式 |
 | `rendering.py` | print/head/markdown 渲染与 format 导出分发 |
 | `exporting.py` | 跨 URI / interactive 模式的统一导出执行与结构化 outcome |
-| `query_filter.py` | `-query` 与 `agents://` 查询 URI 解析、过滤、搜索匹配 |
+| `query_filter.py` | QuerySpec 解析、QuerySessionMatch 匹配证据、过滤与全局 limit |
 | `search_index.py` | SQLite FTS5 搜索索引 |
 | `selector.py` | 终端交互选择与非 TTY 输入回退 |
 | `config.py` | TOML 配置加载、编辑与校验 |
@@ -330,6 +330,10 @@ class BaseAgent(ABC):
 - structured query：`-query "bug provider:codex role:user path:. limit:20"`
 - path-scoped URI：`agents://.?q=refactor&providers=codex,claude&roles=user&limit=20`
 - full-text search：`--search "auth timeout"`，由 `search_index.py` 优先提供 FTS5 索引，必要时回退文件扫描
+
+查询内部先保留 `QuerySessionMatch`（session、snippet、rank、matched role）证据；
+list 与 collect 只在各自边界投影为 `Session`。带 `role:` 的查询从允许角色的消息
+直接生成 snippet，不使用缺少角色维度的 FTS 索引证据。
 
 ### 5.6 `collect` 模块
 
