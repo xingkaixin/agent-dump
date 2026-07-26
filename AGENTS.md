@@ -65,6 +65,7 @@
 | `agent_registry.py` | 注册 provider、URI scheme、用户可见路径说明 |
 | `cli.py` | 参数解析、模式选择、依赖装配 |
 | `cli_shared.py` | CLI 共享能力：URI、format、导出调度、诊断渲染 |
+| `command_plan.py` | 将 CLI 参数归一化为闭集操作、默认值与有效格式 |
 | `session_workflow.py` | list / interactive / query 会话工作流 |
 | `uri_workflow.py` | 单 URI 查看、head、summary、单会话导出 |
 | `collect_workflow.py` | collect 模式编排、dry-run、保存路径解析 |
@@ -181,6 +182,7 @@ agent-dump/
 │   ├── agent_registry.py        # provider 注册表
 │   ├── cli.py                   # CLI 参数解析与模式分发
 │   ├── cli_shared.py            # CLI 共享工具
+│   ├── command_plan.py           # CLI 操作、默认值与格式归一化
 │   ├── session_workflow.py      # list / interactive / query 工作流
 │   ├── uri_workflow.py          # URI 工作流
 │   ├── collect_workflow.py      # collect 工作流

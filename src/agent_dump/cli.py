@@ -3,7 +3,6 @@ Command-line interface for agent-dump
 """
 
 import argparse
-from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
 from string import Formatter
@@ -14,11 +13,15 @@ from agent_dump.__about__ import __version__
 from agent_dump.cli_shared import (
     is_option_specified,
     print_diagnostic as _print_diagnostic,
-    resolve_effective_formats,
-    validate_formats_for_mode,
 )
 from agent_dump.collect import request_summary_from_llm
 from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
+from agent_dump.command_plan import (
+    CommandMode,
+    CommandPlanError,
+    CommandPlanErrorCode,
+    build_command_plan,
+)
 from agent_dump.config import handle_config_command, load_export_config, load_shortcuts_config
 from agent_dump.diagnostics import (
     DiagnosticError,
@@ -172,21 +175,21 @@ def handle_uri_mode(
 def handle_session_modes(
     args: argparse.Namespace,
     *,
+    is_list_mode: bool,
     query_uri_spec: QuerySpec | None,
     output_specified: bool,
     format_specified: bool,
     output_formats: list[str],
     export_config: Any,
-    print_help: Callable[[], None],
 ) -> int | None:
     return _handle_session_modes(
         args,
+        is_list_mode=is_list_mode,
         query_uri_spec=query_uri_spec,
         output_specified=output_specified,
         format_specified=format_specified,
         output_formats=output_formats,
         export_config=export_config,
-        print_help=print_help,
         scanner_factory=AgentScanner,
     )
 
@@ -375,63 +378,61 @@ def _run() -> int | None:
             )
             return 1
 
-    is_query_uri_mode = query_uri_spec is not None
-    is_uri_mode = bool(args.uri) and not is_query_uri_mode
-
-    if args.query and is_query_uri_mode:
+    try:
+        plan = build_command_plan(
+            args,
+            query_uri_spec=query_uri_spec,
+            format_specified=format_specified,
+        )
+    except CommandPlanError as exc:
+        if exc.code is CommandPlanErrorCode.QUERY_COMBINATION_INVALID:
+            _print_diagnostic(
+                invalid_query_or_uri(
+                    i18n.t(Keys.DIAG_QUERY_COMBINATION_INVALID),
+                    details=(i18n.t(Keys.DIAG_QUERY_URI_WITH_Q_DETAIL),),
+                    parsed_uri=ParsedUri(raw=args.uri),
+                    next_steps=(i18n.t(Keys.DIAG_STEP_DROP_Q),),
+                )
+            )
+            return 1
+        if exc.code is CommandPlanErrorCode.URI_HEAD_WITH_FORMAT:
+            print(i18n.t(Keys.URI_HEAD_WITH_FORMAT_ERROR))
+            return 1
+        if exc.code is CommandPlanErrorCode.URI_HEAD_WITH_SUMMARY:
+            print(i18n.t(Keys.URI_HEAD_WITH_SUMMARY_ERROR))
+            return 1
         _print_diagnostic(
-            invalid_query_or_uri(
-                i18n.t(Keys.DIAG_QUERY_COMBINATION_INVALID),
-                details=(i18n.t(Keys.DIAG_QUERY_URI_WITH_Q_DETAIL),),
-                parsed_uri=ParsedUri(raw=args.uri),
-                next_steps=(i18n.t(Keys.DIAG_STEP_DROP_Q),),
+            unsupported_capability(
+                i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_MODE),
+                capability_gap=i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_DETAIL),
+                next_steps=(i18n.t(Keys.DIAG_STEP_DROP_PRINT),),
             )
         )
         return 1
+    except ValueError:
+        parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=args.format or ""))
 
-    if args.summary and not is_uri_mode:
+    if args.summary and not plan.is_uri_mode:
         print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
-    if args.head and not is_uri_mode:
+    if args.head and not plan.is_uri_mode:
         print(i18n.t(Keys.HEAD_IGNORED_NON_URI_WARNING))
 
-    if args.config_action:
+    if plan.mode is CommandMode.CONFIG:
         return handle_config_command(args.config_action)
-    if args.collect:
+    if plan.mode is CommandMode.COLLECT:
         return handle_collect_mode(args)
-    if args.days is None:
-        args.days = 7
-    if args.stats:
+    args.days = plan.days
+    if plan.mode is CommandMode.STATS:
         return handle_stats_mode(args)
-    if args.reindex:
+    if plan.mode is CommandMode.REINDEX:
         return handle_reindex_mode(args)
+    if plan.mode is CommandMode.HELP:
+        parser.print_help()
+        return None
 
     export_config = load_export_config()
-
-    if is_uri_mode and args.head:
-        if format_specified:
-            print(i18n.t(Keys.URI_HEAD_WITH_FORMAT_ERROR))
-            return 1
-        if args.summary:
-            print(i18n.t(Keys.URI_HEAD_WITH_SUMMARY_ERROR))
-            return 1
-        output_formats: list[str] = []
-    else:
-        try:
-            output_formats = resolve_effective_formats(args, is_uri_mode=is_uri_mode, format_specified=format_specified)
-            validate_formats_for_mode(output_formats, is_uri_mode=is_uri_mode, is_list_mode=args.list)
-        except ValueError as e:
-            if str(e) == "interactive-print":
-                _print_diagnostic(
-                    unsupported_capability(
-                        i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_MODE),
-                        capability_gap=i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_DETAIL),
-                        next_steps=(i18n.t(Keys.DIAG_STEP_DROP_PRINT),),
-                    )
-                )
-                return 1
-            parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=args.format or ""))
-
-    if is_uri_mode:
+    output_formats = list(plan.output_formats)
+    if plan.is_uri_mode:
         return handle_uri_mode(
             args,
             output_formats=output_formats,
@@ -441,12 +442,12 @@ def _run() -> int | None:
 
     return handle_session_modes(
         args,
+        is_list_mode=plan.is_list_mode,
         query_uri_spec=query_uri_spec,
         output_specified=output_specified,
         format_specified=format_specified,
         output_formats=output_formats,
         export_config=export_config,
-        print_help=parser.print_help,
     )
 
 
