@@ -139,6 +139,18 @@ class TestKimiAgent:
 
         assert result is True
 
+    def test_discovery_is_reused_across_read_entry_points(self, tmp_path):
+        agent = KimiAgent()
+        sessions_dir = tmp_path / "sessions"
+        sessions_dir.mkdir()
+        finder = mock.MagicMock(return_value=sessions_dir)
+
+        with mock.patch.object(agent, "_find_base_path", finder):
+            assert agent.is_available() is False
+            assert agent.get_sessions(days=7) == []
+
+        finder.assert_called_once_with()
+
     def test_resolve_cwd_from_project_hash_returns_path_when_matched(self, tmp_path):
         """测试能正确从 kimi.json 解析 project hash 对应的 cwd"""
         agent = KimiAgent()

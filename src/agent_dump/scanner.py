@@ -14,50 +14,11 @@ from agent_dump.i18n import Keys, i18n
 T = TypeVar("T")
 
 
-def run_per_agent(fn: Callable[[BaseAgent], T], agents: Sequence[BaseAgent]) -> list[tuple[BaseAgent, T | None]]:
-    """Run fn for every agent concurrently, isolating per-provider failures.
-
-    一个 provider 抛异常只让它自己的结果变成 None 并向 stderr 告警，其余 provider
-    照常返回。结果顺序与传入顺序一致。
-    """
-    if not agents:
-        return []
-
-    with ThreadPoolExecutor(max_workers=len(agents)) as executor:
-        futures = [executor.submit(fn, agent) for agent in agents]
-        results: list[tuple[BaseAgent, T | None]] = []
-        for agent, future in zip(agents, futures, strict=True):
-            try:
-                result = future.result()
-            except Exception as exc:
-                print(
-                    i18n.t(
-                        Keys.WARN_PROVIDER_OPERATION_FAILED,
-                        agent=agent.display_name,
-                        error_type=type(exc).__name__,
-                        error=exc,
-                    ),
-                    file=sys.stderr,
-                )
-                result = None
-            results.append((agent, result))
-        return results
-
-
-def sessions_per_agent(agents: Sequence[BaseAgent], days: int) -> list[tuple[BaseAgent, list[Session]]]:
-    """Fetch each agent's sessions, degrading a failed provider to an empty list.
-
-    裸 `agent.get_sessions()` 循环会让一个 provider 的坏数据崩掉整条命令；这里把
-    失败收敛成「该 provider 没有会话」，其余 provider 的结果仍然可用。
-    """
-    return [(agent, sessions or []) for agent, sessions in run_per_agent(lambda a: a.get_sessions(days=days), agents)]
-
-
 class AgentScanner:
     """Scanner for all supported agent tools"""
 
-    def __init__(self):
-        self.agents: list[BaseAgent] = create_registered_agents()
+    def __init__(self, agents: Sequence[BaseAgent] | None = None):
+        self.agents = list(agents) if agents is not None else create_registered_agents()
 
     @staticmethod
     def _scan_single_agent(agent: BaseAgent) -> list[Session] | None:
@@ -67,10 +28,38 @@ class AgentScanner:
         return None
 
     def _run_concurrently(
-        self, fn: Callable[[BaseAgent], T], agents: Sequence[BaseAgent] | None = None
+        self,
+        fn: Callable[[BaseAgent], T],
+        agents: Sequence[BaseAgent] | None = None,
+        *,
+        format_error: Callable[[BaseAgent, Exception], str] | None = None,
     ) -> list[tuple[BaseAgent, T | None]]:
-        """Execute a function for all agents concurrently and return results in registration order."""
-        return run_per_agent(fn, agents if agents is not None else self.agents)
+        """Execute one provider operation concurrently in registration order."""
+        selected_agents = list(agents) if agents is not None else self.agents
+        if not selected_agents:
+            return []
+
+        with ThreadPoolExecutor(max_workers=len(selected_agents)) as executor:
+            futures = [executor.submit(fn, agent) for agent in selected_agents]
+            results: list[tuple[BaseAgent, T | None]] = []
+            for agent, future in zip(selected_agents, futures, strict=True):
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    message = (
+                        format_error(agent, exc)
+                        if format_error is not None
+                        else i18n.t(
+                            Keys.WARN_PROVIDER_OPERATION_FAILED,
+                            agent=agent.display_name,
+                            error_type=type(exc).__name__,
+                            error=exc,
+                        )
+                    )
+                    print(message, file=sys.stderr)
+                    result = None
+                results.append((agent, result))
+            return results
 
     def scan(self) -> dict[str, list[Session]]:
         """
@@ -98,9 +87,56 @@ class AgentScanner:
         results = self._run_concurrently(lambda agent: agent.is_available())
         return [agent for agent, available in results if available]
 
+    def get_sessions(
+        self,
+        days: int = 7,
+        *,
+        agents: Sequence[BaseAgent] | None = None,
+    ) -> list[tuple[BaseAgent, list[Session]]]:
+        """List sessions concurrently, degrading a failed provider to an empty result."""
+        return [
+            (agent, sessions or [])
+            for agent, sessions in self._run_concurrently(
+                lambda selected: selected.get_sessions(days=days),
+                agents,
+            )
+        ]
+
+    def find_session_by_id(
+        self,
+        session_id: str,
+        *,
+        agent_name: str | None = None,
+    ) -> tuple[BaseAgent, Session] | None:
+        """Locate a session across providers with per-provider failure isolation."""
+        candidates = [agent for agent in self.agents if agent_name is None or agent.name == agent_name]
+        results = self._run_concurrently(
+            lambda agent: agent.find_session_by_id(session_id),
+            candidates,
+            format_error=lambda agent, exc: i18n.t(
+                Keys.WARN_SESSION_LOOKUP_FAILED,
+                agent=agent.display_name,
+                error=exc,
+            ),
+        )
+        return next(
+            ((agent, session) for agent, session in results if session is not None),
+            None,
+        )
+
     def get_agent_by_name(self, name: str) -> BaseAgent | None:
         """Get agent by name"""
         for agent in self.agents:
             if agent.name == name:
                 return agent if agent.is_available() else None
         return None
+
+
+def run_per_agent(fn: Callable[[BaseAgent], T], agents: Sequence[BaseAgent]) -> list[tuple[BaseAgent, T | None]]:
+    """Compatibility adapter for callers outside the Scanner interface."""
+    return AgentScanner(agents)._run_concurrently(fn)
+
+
+def sessions_per_agent(agents: Sequence[BaseAgent], days: int) -> list[tuple[BaseAgent, list[Session]]]:
+    """Compatibility adapter for callers outside the Scanner interface."""
+    return AgentScanner(agents).get_sessions(days)

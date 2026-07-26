@@ -119,19 +119,31 @@ class TestOpenCodeAgent:
         assert result is True
         assert agent.db_path == db_path
 
-    def test_scan_no_db(self):
+    def test_discovery_is_reused_across_availability_checks(self, tmp_path):
+        agent = OpenCodeAgent()
+        db_path = tmp_path / "opencode.db"
+        db_path.touch()
+        finder = mock.MagicMock(return_value=db_path)
+
+        with mock.patch.object(agent, "_find_db_path", finder):
+            assert agent.is_available() is True
+            assert agent.is_available() is True
+
+        finder.assert_called_once_with()
+
+    def test_scan_no_db(self, monkeypatch):
         """测试没有数据库时 scan 返回空列表"""
         agent = OpenCodeAgent()
-        agent.db_path = None
+        monkeypatch.setattr(agent, "_find_db_path", lambda: None)
 
         result = agent.scan()
 
         assert result == []
 
-    def test_get_sessions_no_db(self):
+    def test_get_sessions_no_db(self, monkeypatch):
         """测试没有数据库时 get_sessions 返回空列表"""
         agent = OpenCodeAgent()
-        agent.db_path = None
+        monkeypatch.setattr(agent, "_find_db_path", lambda: None)
 
         result = agent.get_sessions(days=7)
 
@@ -256,10 +268,10 @@ class TestOpenCodeAgent:
 
         assert agent.find_session_by_id("missing") is None
 
-    def test_find_session_by_id_no_db(self):
+    def test_find_session_by_id_no_db(self, monkeypatch):
         """测试没有数据库时 find_session_by_id 返回 None"""
         agent = OpenCodeAgent()
-        agent.db_path = None
+        monkeypatch.setattr(agent, "_find_db_path", lambda: None)
 
         assert agent.find_session_by_id("session-001") is None
 

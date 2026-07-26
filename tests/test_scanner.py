@@ -1,11 +1,8 @@
-"""
-测试 scanner.py 模块
-"""
+"""Scanner module tests."""
 
 from datetime import datetime, timezone
 from pathlib import Path
 import threading
-from unittest import mock
 
 import pytest
 
@@ -13,319 +10,245 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.scanner import AgentScanner, sessions_per_agent
 
 
-class TestAgentScanner:
-    """测试 AgentScanner 类"""
-
-    def test_init(self):
-        """测试初始化时创建所有 agent"""
-        scanner = AgentScanner()
-        assert len(scanner.agents) == 7
-        agent_names = [a.name for a in scanner.agents]
-        assert "opencode" in agent_names
-        assert "zcode" in agent_names
-        assert "codex" in agent_names
-        assert "kimi" in agent_names
-        assert "claudecode" in agent_names
-        assert "cursor" in agent_names
-        assert "pi" in agent_names
-
-    def test_scan_no_available_agents(self, capsys):
-        """测试没有可用 agent 时的扫描"""
-        scanner = AgentScanner()
-
-        # Mock 所有 agent 都不可用
-        for agent in scanner.agents:
-            agent.is_available = mock.MagicMock(return_value=False)  # type: ignore
-            agent.scan = mock.MagicMock(return_value=[])  # type: ignore
-
-        result = scanner.scan()
-
-        assert result == {}
-        captured = capsys.readouterr()
-        assert "正在扫描" in captured.out
-
-    def test_scan_with_available_agents(self, capsys):
-        """测试有可用的 agent 时的扫描"""
-        scanner = AgentScanner()
-
-        # 创建 mock sessions
-        mock_session = mock.MagicMock()
-        mock_session.id = "test-session"
-
-        # Mock 第一个 agent 可用且有会话
-        scanner.agents[0].is_available = mock.MagicMock(return_value=True)  # type: ignore
-        scanner.agents[0].scan = mock.MagicMock(return_value=[mock_session])  # type: ignore
-        scanner.agents[0].name = "opencode"
-        scanner.agents[0].display_name = "OpenCode"
-
-        # Mock 其他 agent 不可用
-        for agent in scanner.agents[1:]:
-            agent.is_available = mock.MagicMock(return_value=False)  # type: ignore
-            agent.scan = mock.MagicMock(return_value=[])  # type: ignore
-
-        result = scanner.scan()
-
-        assert "opencode" in result
-        assert len(result["opencode"]) == 1
-        captured = capsys.readouterr()
-        assert "OpenCode" in captured.out
-        assert "1 个会话" in captured.out
-
-    def test_scan_with_empty_sessions(self, capsys):
-        """测试 agent 可用但无会话时的扫描"""
-        scanner = AgentScanner()
-
-        # Mock 第一个 agent 可用但无会话
-        scanner.agents[0].is_available = mock.MagicMock(return_value=True)  # type: ignore
-        scanner.agents[0].scan = mock.MagicMock(return_value=[])  # type: ignore
-        scanner.agents[0].name = "opencode"
-        scanner.agents[0].display_name = "OpenCode"
-
-        # Mock 其他 agent 不可用
-        for agent in scanner.agents[1:]:
-            agent.is_available = mock.MagicMock(return_value=False)  # type: ignore
-            agent.scan = mock.MagicMock(return_value=[])  # type: ignore
-
-        result = scanner.scan()
-
-        assert result == {}
-        captured = capsys.readouterr()
-        assert "0 个会话" in captured.out
-
-    def test_get_available_agents(self):
-        """测试获取可用 agent 列表"""
-        scanner = AgentScanner()
-
-        # Mock 部分 agent 可用
-        scanner.agents[0].is_available = mock.MagicMock(return_value=True)  # type: ignore
-        scanner.agents[1].is_available = mock.MagicMock(return_value=False)  # type: ignore
-        scanner.agents[2].is_available = mock.MagicMock(return_value=True)  # type: ignore
-        scanner.agents[3].is_available = mock.MagicMock(return_value=False)  # type: ignore
-        for agent in scanner.agents[4:]:
-            agent.is_available = mock.MagicMock(return_value=False)  # type: ignore
-
-        available = scanner.get_available_agents()
-
-        assert len(available) == 2
-        assert available[0] == scanner.agents[0]
-        assert available[1] == scanner.agents[2]
-
-    @pytest.mark.parametrize(
-        ("failure_stage", "expected_error"),
-        [
-            ("availability", "PermissionError: permission denied"),
-            ("scan", "RuntimeError: database is corrupt"),
-        ],
+def make_session(session_id: str) -> Session:
+    timestamp = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    return Session(
+        id=session_id,
+        title=session_id,
+        created_at=timestamp,
+        updated_at=timestamp,
+        source_path=Path(f"/tmp/{session_id}.jsonl"),
+        metadata={},
     )
-    def test_scan_isolates_provider_failures(
+
+
+class FakeAgent(BaseAgent):
+    def __init__(
         self,
-        failure_stage: str,
-        expected_error: str,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        scanner = AgentScanner()
-        broken_agent = scanner.agents[0]
-        healthy_agent = scanner.agents[1]
-        broken_agent.display_name = "Broken Provider"
-        healthy_agent.name = "healthy"
-        healthy_session = mock.MagicMock()
-
-        if failure_stage == "availability":
-            broken_agent.is_available = mock.MagicMock(side_effect=PermissionError("permission denied"))  # type: ignore
-        else:
-            broken_agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
-            broken_agent.scan = mock.MagicMock(side_effect=RuntimeError("database is corrupt"))  # type: ignore
-
-        healthy_agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
-        healthy_agent.scan = mock.MagicMock(return_value=[healthy_session])  # type: ignore
-        for agent in scanner.agents[2:]:
-            agent.is_available = mock.MagicMock(return_value=False)  # type: ignore
-
-        result = scanner.scan()
-
-        assert result == {"healthy": [healthy_session]}
-        warning = capsys.readouterr().err
-        assert warning.count("Broken Provider") == 1
-        assert expected_error in warning
-
-    def test_get_available_agents_isolates_provider_failures(self, capsys: pytest.CaptureFixture[str]) -> None:
-        scanner = AgentScanner()
-        broken_agent = scanner.agents[0]
-        healthy_agent = scanner.agents[1]
-        broken_agent.display_name = "Broken Provider"
-        broken_agent.is_available = mock.MagicMock(side_effect=OSError("unreadable directory"))  # type: ignore
-        healthy_agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
-        for agent in scanner.agents[2:]:
-            agent.is_available = mock.MagicMock(return_value=False)  # type: ignore
-
-        available = scanner.get_available_agents()
-
-        assert available == [healthy_agent]
-        warning = capsys.readouterr().err
-        assert warning.count("Broken Provider") == 1
-        assert "OSError: unreadable directory" in warning
-
-    def test_get_agent_by_name_found(self):
-        """测试通过名称获取存在的 agent"""
-        scanner = AgentScanner()
-
-        # Mock opencode 可用
-        scanner.agents[0].is_available = mock.MagicMock(return_value=True)  # type: ignore
-
-        agent = scanner.get_agent_by_name("opencode")
-
-        assert agent is not None
-        assert agent.name == "opencode"
-
-    def test_get_agent_by_name_not_found(self):
-        """测试通过名称获取不存在的 agent"""
-        scanner = AgentScanner()
-
-        agent = scanner.get_agent_by_name("nonexistent")
-
-        assert agent is None
-
-    def test_get_agent_by_name_not_available(self):
-        """测试 agent 存在但不可用"""
-        scanner = AgentScanner()
-
-        # Mock opencode 不可用
-        scanner.agents[0].is_available = mock.MagicMock(return_value=False)  # type: ignore
-
-        agent = scanner.get_agent_by_name("opencode")
-
-        assert agent is None
-
-    def test_scan_with_multiple_agents(self, capsys):
-        """测试多个 agent 同时可用的情况"""
-        scanner = AgentScanner()
-
-        # Mock 所有 agent 都可用
-        for i, agent in enumerate(scanner.agents):
-            agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
-            agent.scan = mock.MagicMock(return_value=[mock.MagicMock()] * (i + 1))  # type: ignore
-
-        result = scanner.scan()
-
-        assert len(result) == len(scanner.agents)
-        captured = capsys.readouterr()
-        for agent in scanner.agents:
-            assert agent.display_name in captured.out
-
-    def test_scan_runs_concurrently(self):
-        """并发性用结构性断言，而不是墙钟阈值。
-
-        原实现让 7 个 agent 各 time.sleep(0.1) 后断言 elapsed < 0.35。在共享的 CI
-        runner 上乘以 5 条 Python matrix 是典型的间歇性红灯，还固定付 0.1s 真实睡眠。
-        改用 Barrier：要求 7 个 scan 都到达同一屏障后才有任何一个返回——串行执行
-        永远无法满足这个条件，所以它比时间比较更强，且不依赖机器负载。
-        """
-        scanner = AgentScanner()
-        agent_count = len(scanner.agents)
-        # timeout 只是防止实现真的串行时把测试挂死，不参与正确性判断
-        barrier = threading.Barrier(agent_count, timeout=10)
-        arrivals: list[str] = []
-        lock = threading.Lock()
-
-        def make_scan(agent_name: str):
-            def _scan():
-                with lock:
-                    arrivals.append(agent_name)
-                barrier.wait()
-                return [mock.MagicMock()]
-
-            return _scan
-
-        for agent in scanner.agents:
-            agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
-            agent.scan = make_scan(agent.name)
-
-        result = scanner.scan()
-
-        assert len(result) == agent_count
-        assert sorted(arrivals) == sorted(agent.name for agent in scanner.agents)
-
-    def test_scan_isolates_a_provider_that_raises(self):
-        """并发路径下单个 provider 抛异常仍只影响它自己。"""
-        scanner = AgentScanner()
-        for index, agent in enumerate(scanner.agents):
-            agent.is_available = mock.MagicMock(return_value=True)  # type: ignore
-            if index == 0:
-                agent.scan = mock.MagicMock(side_effect=ValueError("bad row"))  # type: ignore
-            else:
-                agent.scan = mock.MagicMock(return_value=[mock.MagicMock()])  # type: ignore
-
-        result = scanner.scan()
-
-        assert len(result) == len(scanner.agents) - 1
-        assert scanner.agents[0].name not in result
-
-
-class ExplodingAgent(BaseAgent):
-    """get_sessions 抛异常，模拟一个 provider 的存储里有坏数据。"""
-
-    def __init__(self, name: str = "broken"):
-        super().__init__(name=name, display_name=f"Broken-{name}")
+        name: str,
+        *,
+        available: bool = True,
+        sessions: tuple[Session, ...] = (),
+        lookup: Session | None = None,
+    ):
+        super().__init__(name, name.title())
+        self.available = available
+        self.sessions = sessions
+        self.lookup = lookup
+        self.availability_error: Exception | None = None
+        self.scan_error: Exception | None = None
+        self.sessions_error: Exception | None = None
+        self.lookup_error: Exception | None = None
+        self.scan_barrier: threading.Barrier | None = None
+        self.sessions_barrier: threading.Barrier | None = None
+        self.lookup_barrier: threading.Barrier | None = None
 
     def scan(self) -> list[Session]:
-        return []
+        if self.scan_error is not None:
+            raise self.scan_error
+        if self.scan_barrier is not None:
+            self.scan_barrier.wait()
+        return list(self.sessions)
 
     def is_available(self) -> bool:
-        return True
+        if self.availability_error is not None:
+            raise self.availability_error
+        return self.available
 
     def get_sessions(self, days: int = 7) -> list[Session]:
-        raise ValueError("malformed row in provider store")
+        del days
+        if self.sessions_error is not None:
+            raise self.sessions_error
+        if self.sessions_barrier is not None:
+            self.sessions_barrier.wait()
+        return list(self.sessions)
 
-    def export_session(self, session: Session, output_dir: Path) -> Path:
-        raise NotImplementedError
+    def find_session_by_id(self, session_id: str) -> Session | None:
+        del session_id
+        if self.lookup_error is not None:
+            raise self.lookup_error
+        if self.lookup_barrier is not None:
+            self.lookup_barrier.wait()
+        return self.lookup
 
     def get_session_data(self, session: Session) -> dict:
+        del session
         return {}
 
 
-class HealthyAgent(ExplodingAgent):
-    def __init__(self, name: str = "healthy", count: int = 2):
-        super().__init__(name=name)
-        self._count = count
+class TestAgentScanner:
+    def test_default_init_creates_registered_agents(self):
+        scanner = AgentScanner()
 
-    def get_sessions(self, days: int = 7) -> list[Session]:
-        return [
-            Session(
-                id=f"{self.name}-{i}",
-                title=f"session {i}",
-                created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                source_path=Path("/tmp/x.jsonl"),
-                metadata={},
-            )
-            for i in range(self._count)
+        assert [agent.name for agent in scanner.agents] == [
+            "opencode",
+            "zcode",
+            "codex",
+            "kimi",
+            "claudecode",
+            "cursor",
+            "pi",
         ]
 
+    def test_accepts_injected_agents(self):
+        agents = [FakeAgent("one"), FakeAgent("two")]
 
-class TestSessionsPerAgent:
-    """AD-122：一个 provider 失败不得带走其余 provider。"""
+        assert AgentScanner(agents).agents == agents
 
-    def test_one_failing_provider_does_not_hide_the_others(self, capsys):
-        agents = [HealthyAgent("a", 2), ExplodingAgent("b"), HealthyAgent("c", 3)]
+    def test_scan_reports_available_and_empty_agents(self, capsys):
+        session = make_session("one-session")
+        scanner = AgentScanner(
+            [
+                FakeAgent("one", sessions=(session,)),
+                FakeAgent("empty"),
+                FakeAgent("missing", available=False),
+            ]
+        )
 
-        results = sessions_per_agent(agents, days=7)
-        captured = capsys.readouterr()
+        result = scanner.scan()
 
-        assert [(agent.name, len(sessions)) for agent, sessions in results] == [("a", 2), ("b", 0), ("c", 3)]
-        assert "Broken-b" in captured.err
-        assert "ValueError" in captured.err
+        assert result == {"one": [session]}
+        output = capsys.readouterr().out
+        assert "One" in output
+        assert "1 个会话" in output
+        assert "Empty" in output
+        assert "0 个会话" in output
+        assert "Missing" not in output
 
-    def test_preserves_input_order(self):
-        agents = [HealthyAgent(name, 1) for name in ("z", "m", "a")]
+    @pytest.mark.parametrize(
+        ("failure_stage", "error"),
+        [
+            ("availability", PermissionError("permission denied")),
+            ("scan", RuntimeError("database is corrupt")),
+        ],
+    )
+    def test_scan_isolates_provider_failures(self, failure_stage, error, capsys):
+        broken = FakeAgent("broken")
+        healthy_session = make_session("healthy-session")
+        healthy = FakeAgent("healthy", sessions=(healthy_session,))
+        if failure_stage == "availability":
+            broken.availability_error = error
+        else:
+            broken.scan_error = error
 
-        assert [agent.name for agent, _ in sessions_per_agent(agents, days=7)] == ["z", "m", "a"]
+        result = AgentScanner([broken, healthy]).scan()
 
-    def test_empty_agent_list_is_handled(self):
+        assert result == {"healthy": [healthy_session]}
+        warning = capsys.readouterr().err
+        assert warning.count("Broken") == 1
+        assert f"{type(error).__name__}: {error}" in warning
+
+    def test_scan_runs_concurrently(self):
+        barrier = threading.Barrier(2, timeout=10)
+        agents = [
+            FakeAgent("one", sessions=(make_session("one"),)),
+            FakeAgent("two", sessions=(make_session("two"),)),
+        ]
+        for agent in agents:
+            agent.scan_barrier = barrier
+
+        result = AgentScanner(agents).scan()
+
+        assert list(result) == ["one", "two"]
+
+    def test_get_available_agents_preserves_order_and_isolates_failures(self, capsys):
+        first = FakeAgent("first")
+        broken = FakeAgent("broken")
+        broken.availability_error = OSError("unreadable directory")
+        unavailable = FakeAgent("unavailable", available=False)
+        last = FakeAgent("last")
+
+        available = AgentScanner([first, broken, unavailable, last]).get_available_agents()
+
+        assert available == [first, last]
+        assert "OSError: unreadable directory" in capsys.readouterr().err
+
+    def test_get_sessions_runs_concurrently_and_preserves_order(self):
+        barrier = threading.Barrier(2, timeout=10)
+        first = FakeAgent("first", sessions=(make_session("first-session"),))
+        second = FakeAgent("second", sessions=(make_session("second-session"),))
+        first.sessions_barrier = barrier
+        second.sessions_barrier = barrier
+
+        results = AgentScanner([first, second]).get_sessions(days=7)
+
+        assert [(agent.name, sessions[0].id) for agent, sessions in results] == [
+            ("first", "first-session"),
+            ("second", "second-session"),
+        ]
+
+    def test_get_sessions_isolates_provider_failures(self, capsys):
+        healthy = FakeAgent("healthy", sessions=(make_session("healthy-session"),))
+        broken = FakeAgent("broken")
+        broken.sessions_error = ValueError("malformed row")
+
+        results = AgentScanner([healthy, broken]).get_sessions(days=7)
+
+        assert [(agent.name, [session.id for session in sessions]) for agent, sessions in results] == [
+            ("healthy", ["healthy-session"]),
+            ("broken", []),
+        ]
+        assert "ValueError: malformed row" in capsys.readouterr().err
+
+    def test_find_session_runs_concurrently_and_uses_registration_order(self):
+        barrier = threading.Barrier(2, timeout=10)
+        first_session = make_session("first")
+        second_session = make_session("second")
+        first = FakeAgent("first", lookup=first_session)
+        second = FakeAgent("second", lookup=second_session)
+        first.lookup_barrier = barrier
+        second.lookup_barrier = barrier
+
+        result = AgentScanner([first, second]).find_session_by_id("target")
+
+        assert result == (first, first_session)
+
+    def test_find_session_filters_provider_and_isolates_failures(self, capsys):
+        skipped = FakeAgent("skipped", lookup=make_session("wrong"))
+        broken = FakeAgent("target")
+        broken.lookup_error = RuntimeError("corrupt lookup")
+        healthy_session = make_session("found")
+        healthy = FakeAgent("target", lookup=healthy_session)
+
+        result = AgentScanner([skipped, broken, healthy]).find_session_by_id(
+            "found",
+            agent_name="target",
+        )
+
+        assert result == (healthy, healthy_session)
+        warning = capsys.readouterr().err
+        assert "Target" in warning
+        assert "corrupt lookup" in warning
+
+    @pytest.mark.parametrize(
+        ("name", "available", "found"),
+        [
+            ("one", True, True),
+            ("one", False, False),
+            ("missing", True, False),
+        ],
+    )
+    def test_get_agent_by_name(self, name, available, found):
+        agent = FakeAgent("one", available=available)
+
+        result = AgentScanner([agent]).get_agent_by_name(name)
+
+        assert (result is agent) is found
+
+
+class TestSessionsPerAgentCompatibility:
+    def test_delegates_to_scanner_semantics(self, capsys):
+        first = FakeAgent("first", sessions=(make_session("first"),))
+        broken = FakeAgent("broken")
+        broken.sessions_error = ValueError("malformed row")
+
+        results = sessions_per_agent([first, broken], days=7)
+
+        assert [(agent.name, len(sessions)) for agent, sessions in results] == [
+            ("first", 1),
+            ("broken", 0),
+        ]
+        assert "ValueError" in capsys.readouterr().err
+
+    def test_empty_agent_list(self):
         assert sessions_per_agent([], days=7) == []
-
-    def test_a_provider_returning_no_sessions_is_not_treated_as_failure(self, capsys):
-        results = sessions_per_agent([HealthyAgent("empty", 0)], days=7)
-        captured = capsys.readouterr()
-
-        assert results == [(results[0][0], [])]
-        assert "警告" not in captured.err, "空结果与失败必须区分开"

@@ -96,8 +96,6 @@ class CursorAgent(BaseAgent):
 
     def scan(self) -> list[Session]:
         """Scan for all available Cursor sessions."""
-        if not self.is_available():
-            return []
         return self.get_sessions(days=3650)
 
     def _missing_global_db_error(self) -> DiagnosticError:

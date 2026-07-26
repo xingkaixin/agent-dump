@@ -19,7 +19,7 @@ from agent_dump.cli_shared import (
 from agent_dump.diagnostics import invalid_query_or_uri, root_not_found
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import QuerySpec, parse_query
-from agent_dump.scanner import AgentScanner, sessions_per_agent
+from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 
 
@@ -107,17 +107,25 @@ def handle_session_modes(
         warn_list_ignored_options(output_specified, format_specified)
         print(i18n.t(Keys.SEARCH_HEADER, days=args.days, query=render_query_summary(query_spec)))
         print("-" * 60)
-        display_search_results(collect_search_matches(available_agents, days=args.days, spec=query_spec))
+        display_search_results(
+            collect_search_matches(available_agents, days=args.days, spec=query_spec, scanner=scanner)
+        )
         print("\n" + "=" * 60)
         return 0
 
     matched_sessions_by_agent: dict[str, list[Session]] = {}
     if query_spec:
-        matched_sessions_by_agent = collect_query_matches(available_agents, days=args.days, spec=query_spec)
+        matched_sessions_by_agent = collect_query_matches(
+            available_agents,
+            days=args.days,
+            spec=query_spec,
+            scanner=scanner,
+        )
 
     if is_list_mode:
         return _handle_list_mode(
             args,
+            scanner=scanner,
             query_spec=query_spec,
             matched_sessions_by_agent=matched_sessions_by_agent,
             available_agents=available_agents,
@@ -127,6 +135,7 @@ def handle_session_modes(
 
     return _handle_interactive_mode(
         args,
+        scanner=scanner,
         query_spec=query_spec,
         matched_sessions_by_agent=matched_sessions_by_agent,
         available_agents=available_agents,
@@ -139,6 +148,7 @@ def handle_session_modes(
 def _handle_list_mode(
     args: argparse.Namespace,
     *,
+    scanner: AgentScanner,
     query_spec: QuerySpec | None,
     matched_sessions_by_agent: dict[str, list[Session]],
     available_agents: list[BaseAgent],
@@ -156,7 +166,7 @@ def _handle_list_mode(
     listed = (
         [(agent, matched_sessions_by_agent.get(agent.name, [])) for agent in available_agents]
         if query_spec
-        else sessions_per_agent(available_agents, args.days)
+        else scanner.get_sessions(args.days, agents=available_agents)
     )
     for agent, sessions in listed:
         print(f"\n📁 {agent.display_name} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
@@ -184,6 +194,7 @@ def _handle_list_mode(
 def _handle_interactive_mode(
     args: argparse.Namespace,
     *,
+    scanner: AgentScanner,
     query_spec: QuerySpec | None,
     matched_sessions_by_agent: dict[str, list[Session]],
     available_agents: list[BaseAgent],
@@ -203,7 +214,7 @@ def _handle_interactive_mode(
         }
     else:
         sessions_by_agent = {
-            agent.name: sessions for agent, sessions in sessions_per_agent(available_agents, args.days)
+            agent.name: sessions for agent, sessions in scanner.get_sessions(args.days, agents=available_agents)
         }
 
     session_counts = {name: len(sessions) for name, sessions in sessions_by_agent.items()}

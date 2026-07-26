@@ -274,6 +274,7 @@ def handle_collect_mode(
                 until=until_date.isoformat(),
             )
             entries, has_truncated = collect_entries(
+                scanner=scanner,
                 agents=available_agents,
                 since_date=since_date,
                 until_date=until_date,

@@ -59,7 +59,7 @@ from agent_dump.query_filter import (
     limit_query_session_matches,
     query_session_matches,
 )
-from agent_dump.scanner import sessions_per_agent
+from agent_dump.scanner import AgentScanner
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
 GREETING_PATTERN = re.compile(r"^(hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok\b)", re.IGNORECASE)
@@ -321,6 +321,7 @@ def collect_entries(
     render_session_text_fn,
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
+    scanner: AgentScanner | None = None,
 ) -> tuple[list[CollectEntry], bool]:
     """Collect session entries for range."""
     entries: list[CollectEntry] = []
@@ -331,7 +332,8 @@ def collect_entries(
     candidate_matches: list[SearchSessionMatch] = []
 
     days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
-    for agent, sessions in sessions_per_agent(agents, days_span):
+    session_scanner = scanner if scanner is not None else AgentScanner(agents)
+    for agent, sessions in session_scanner.get_sessions(days_span, agents=agents):
         deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
         if deny_paths:
             sessions = [session for session in sessions if not _is_session_denied(session, deny_paths)]

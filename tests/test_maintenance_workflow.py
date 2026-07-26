@@ -15,6 +15,13 @@ from agent_dump.maintenance_workflow import handle_providers_mode as render_prov
 from agent_dump.paths import SearchRoot
 
 
+def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
+    scanner.get_sessions.side_effect = lambda days=7, *, agents=None: [
+        (agent, agent.get_sessions(days=days))
+        for agent in (agents if agents is not None else scanner.get_available_agents.return_value)
+    ]
+
+
 def make_session(
     session_id: str,
     title: str,
@@ -41,6 +48,7 @@ class TestStatsMode:
         args = argparse.Namespace(days=7, query=None)
         scanner = mock.MagicMock()
         scanner.get_available_agents.return_value = []
+        configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             result = handle_stats_mode(args)
@@ -58,6 +66,7 @@ class TestStatsMode:
         scanner = mock.MagicMock()
         scanner.agents = [agent]
         scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             result = handle_stats_mode(args)
@@ -78,6 +87,7 @@ class TestStatsMode:
         scanner = mock.MagicMock()
         scanner.agents = [agent]
         scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             result = handle_stats_mode(args)
@@ -100,6 +110,7 @@ class TestStatsMode:
         scanner = mock.MagicMock()
         scanner.agents = [agent]
         scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             with mock.patch("agent_dump.maintenance_workflow.apply_query_filter", return_value=[session]):
@@ -115,6 +126,7 @@ class TestReindexMode:
         args = argparse.Namespace(days=7)
         scanner = mock.MagicMock()
         scanner.get_available_agents.return_value = []
+        configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             result = handle_reindex_mode(args)
@@ -132,6 +144,7 @@ class TestReindexMode:
         scanner = mock.MagicMock()
         scanner.agents = [agent]
         scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
 
         index = mock.MagicMock()
         index.is_available = True

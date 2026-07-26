@@ -27,6 +27,7 @@ class FileSessionAgent(BaseAgent):
     def __init__(self, name: str, display_name: str):
         super().__init__(name, display_name)
         self.base_path: Path | None = None
+        self._base_path_discovered = False
 
     @abstractmethod
     def _iter_session_files(self) -> Iterator[Path]:
@@ -48,21 +49,27 @@ class FileSessionAgent(BaseAgent):
     def _find_base_path(self) -> Path | None:
         return first_existing_search_root(*self.get_search_roots())
 
+    def _ensure_base_path(self) -> Path | None:
+        if self.base_path is not None:
+            self._base_path_discovered = True
+            return self.base_path
+        if not self._base_path_discovered:
+            self.base_path = self._find_base_path()
+            self._base_path_discovered = True
+        return self.base_path
+
     def is_available(self) -> bool:
-        self.base_path = self._find_base_path()
-        if not self.base_path:
+        if not self._ensure_base_path():
             return False
         return next(iter(self._iter_session_files()), None) is not None
 
     def scan(self) -> list[Session]:
         """Scan for all available sessions."""
-        if not self.is_available():
-            return []
         return self.get_sessions(days=3650)
 
     def get_sessions(self, days: int = 7) -> list[Session]:
         """Get sessions from the last N days."""
-        if not self.base_path:
+        if not self._ensure_base_path():
             return []
 
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
@@ -90,7 +97,7 @@ class FileSessionAgent(BaseAgent):
 
     def find_session_by_id(self, session_id: str) -> Session | None:
         """Try filename-based candidates before falling back to a full scan."""
-        if self.base_path:
+        if self._ensure_base_path():
             for file_path in self._session_file_candidates(session_id):
                 session = self._parse_session_file(file_path)
                 if session is not None and session.id == session_id:
