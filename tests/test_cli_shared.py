@@ -309,6 +309,23 @@ class TestExportSessions:
         captured = capsys.readouterr()
         assert "错误" in captured.out or "Export failed" in captured.out
 
+    def test_export_all_failed_returns_structured_failure(self, tmp_path):
+        mock_agent = mock.MagicMock()
+        mock_agent.name = "test_agent"
+        mock_agent.display_name = "Test Agent"
+        mock_agent.export_session.side_effect = RuntimeError("Export failed")
+
+        result = export_sessions_for_formats(
+            mock_agent,
+            [make_session("session-001", "Session 1")],
+            ["json"],
+            tmp_path,
+        )
+
+        assert result.all_failed is True
+        assert result.had_success is False
+        assert result.exported_paths == ()
+
     def test_export_creates_directory(self, tmp_path):
         """测试导出时创建输出目录"""
         mock_agent = mock.MagicMock()

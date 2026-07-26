@@ -1,14 +1,13 @@
 import argparse
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, Protocol
 
 from agent_dump.agent_registry import get_supported_uri_examples
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
     VALID_URI_SCHEMES,
-    apply_summary_to_json_export,
     build_no_agents_found_diagnostic,
-    export_session_in_format,
     find_session_by_id,
     parse_uri,
     print_diagnostic,
@@ -28,6 +27,7 @@ from agent_dump.diagnostics import (
     invalid_query_or_uri,
     session_not_found,
 )
+from agent_dump.exporting import execute_exports
 from agent_dump.i18n import Keys, i18n
 from agent_dump.scanner import AgentScanner
 
@@ -192,36 +192,49 @@ def handle_uri_mode(
             had_success = True
 
         file_formats = [fmt for fmt in output_formats if fmt != "print"]
-        for output_format in file_formats:
-            try:
-                output_dir = (
-                    resolve_output_base_dir(
-                        cli_output=args.output,
-                        output_specified=output_specified,
-                        export_output=export_config.output,
-                        output_format=output_format,
-                    )
-                    / agent.name
+
+        def _output_dir_for_format(output_format: str) -> Path:
+            return (
+                resolve_output_base_dir(
+                    cli_output=args.output,
+                    output_specified=output_specified,
+                    export_output=export_config.output,
+                    output_format=output_format,
                 )
-                output_path = export_session_in_format(
-                    agent,
-                    session,
-                    output_dir,
-                    output_format,
-                    session_data=session_data,
-                    session_uri=args.uri,
+                / agent.name
+            )
+
+        export_result = execute_exports(
+            agent,
+            [session],
+            file_formats,
+            _output_dir_for_format,
+            prepared_session_data={session.id: session_data} if session_data is not None else None,
+            session_uris={session.id: args.uri},
+            summaries={session.id: summary_markdown} if summary_markdown is not None else None,
+        )
+        for attempt in export_result.attempts:
+            if attempt.output_path is None:
+                error = attempt.error or RuntimeError("export failed without an error")
+                diagnostic = (
+                    error if isinstance(error, DiagnosticError) else wrap_runtime_fetch_error(error, agent=agent)
                 )
-                if output_format == "json" and summary_markdown is not None:
-                    try:
-                        apply_summary_to_json_export(output_path, summary_markdown)
-                        print(i18n.t(Keys.URI_SUMMARY_APPLIED, path=str(output_path)))
-                    except Exception as e:
-                        print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
-                print(i18n.t(Keys.URI_EXPORT_SAVED, path=str(output_path), format=output_format))
-                had_success = True
-            except Exception as e:
-                diagnostic = e if isinstance(e, DiagnosticError) else wrap_runtime_fetch_error(e, agent=agent)
                 print_diagnostic(diagnostic)
+                continue
+
+            if attempt.output_format == "json" and summary_markdown is not None:
+                if attempt.error is None:
+                    print(i18n.t(Keys.URI_SUMMARY_APPLIED, path=str(attempt.output_path)))
+                else:
+                    print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=attempt.error))
+            print(
+                i18n.t(
+                    Keys.URI_EXPORT_SAVED,
+                    path=str(attempt.output_path),
+                    format=attempt.output_format,
+                )
+            )
+        had_success = had_success or export_result.had_success
         return 0 if had_success else 1
     except Exception as e:
         diagnostic = e if isinstance(e, DiagnosticError) else wrap_runtime_fetch_error(e, agent=agent)
