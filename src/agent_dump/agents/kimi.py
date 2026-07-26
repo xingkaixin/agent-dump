@@ -147,6 +147,10 @@ class KimiAgent(FileSessionAgent):
             ),
         )
 
+    def get_session_change_sources(self, session: Session) -> tuple[Path, ...]:
+        """Map Kimi's context/wire files to the shared cache invalidation fact."""
+        return tuple(path for path in self._get_session_files(session.source_path).values() if path is not None)
+
     def _parse_session(self, metadata_path: Path) -> Session | None:
         """Parse a Kimi session from metadata file"""
         try:

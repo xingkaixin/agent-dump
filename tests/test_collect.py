@@ -468,6 +468,38 @@ class TestCollectEntries:
         assert [entry.session_id for entry in entries] == ["s-codex", "s-allowed"]
         assert [entry.agent_name for entry in entries] == ["codex", "claudecode"]
 
+    def test_collect_deny_does_not_treat_provider_project_as_working_directory(self):
+        now = datetime.now(timezone.utc)
+        session = mock.MagicMock()
+        session.id = "s-provider-project"
+        session.title = "provider project"
+        session.created_at = now - timedelta(hours=1)
+        session.updated_at = now - timedelta(hours=1)
+        session.source_path = Path("/provider/projects/repo/session.jsonl")
+        session.metadata = {"project": "/repo/denied"}
+
+        agent = mock.MagicMock()
+        agent.name = "claudecode"
+        agent.display_name = "Claude Code"
+        agent.get_sessions.return_value = [session]
+        agent.get_session_uri.return_value = "claude://s-provider-project"
+        agent.get_cached_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "provider project"}]}]
+        }
+
+        entries, truncated = collect_entries(
+            agents=[agent],
+            since_date=(now - timedelta(days=1)).date(),
+            until_date=now.date(),
+            collect_config=CollectConfig(agent_denies={"claudecode": ("/repo/denied",)}),
+            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
+            local_tz=timezone.utc,
+        )
+
+        assert truncated is False
+        assert [entry.session_id for entry in entries] == ["s-provider-project"]
+        assert entries[0].project_directory == ""
+
     def test_collect_entries_filters_by_user_local_date(self):
         local_tz = timezone(timedelta(hours=8))
         utc_time = datetime(2026, 3, 4, 18, 0, tzinfo=timezone.utc)

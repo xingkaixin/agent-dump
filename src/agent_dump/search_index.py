@@ -391,7 +391,7 @@ class SearchIndex:
             to_update: list[tuple[Session, float]] = []
             for session in sessions:
                 current_ids.add(session.id)
-                signal = _session_updated_signal(session)
+                signal = _session_updated_signal(agent, session)
                 if session.id not in indexed or abs(indexed[session.id] - signal) > 0.001:
                     to_update.append((session, signal))
 

@@ -702,6 +702,15 @@ def test_provider_contract_scan_get_sessions_and_head(
     assert session.updated_at.tzinfo is not None
     assert session.updated_at.utcoffset() == timezone.utc.utcoffset(session.updated_at)
     assert fixture.agent.get_session_uri(session) == fixture.uri
+    facts = fixture.agent.get_session_facts(session)
+    assert facts.session_source == session.source_path
+    assert facts.display_location == fixture.location
+    if provider_name == "cursor":
+        assert facts.working_directory is None
+    else:
+        assert facts.working_directory == Path(fixture.location)
+    if provider_name == "claudecode":
+        assert facts.provider_project == "project-contract"
 
     head = fixture.agent.get_session_head(session)
     assert head["uri"] == fixture.uri

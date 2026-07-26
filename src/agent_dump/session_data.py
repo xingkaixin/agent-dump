@@ -13,21 +13,12 @@ if TYPE_CHECKING:
     from agent_dump.agents.base import BaseAgent, Session
 
 
-def session_updated_signal(session: Session) -> float:
+def session_updated_signal(agent: BaseAgent, session: Session) -> float:
     """Return a change signal for one session without using shared database mtimes."""
     signals = [normalize_datetime_utc(session.updated_at).timestamp()]
-    signals.extend(_path_mtime(path) for path in extract_related_source_paths(session))
+    facts = agent.get_session_facts(session)
+    signals.extend(_path_mtime(path) for path in facts.change_sources)
     return max(signals)
-
-
-def extract_related_source_paths(session: Session) -> tuple[Path, ...]:
-    """Return per-session files that can invalidate parsed data."""
-    related_paths: list[Path] = []
-    for key in ("context_file", "wire_file"):
-        raw_path = session.metadata.get(key)
-        if isinstance(raw_path, str) and raw_path.strip():
-            related_paths.append(Path(raw_path))
-    return tuple(dict.fromkeys(related_paths))
 
 
 def _path_mtime(path: Path) -> float:
@@ -45,7 +36,7 @@ class SessionDataCache:
 
     def get(self, agent: BaseAgent, session: Session) -> dict[str, Any]:
         """Return parsed data, reloading when the session change signal differs."""
-        key = (agent.name, session.id, session_updated_signal(session))
+        key = (agent.name, session.id, session_updated_signal(agent, session))
         with self._lock:
             future = self._entries.get(key)
             should_load = future is None

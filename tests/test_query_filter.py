@@ -16,7 +16,7 @@ from agent_dump.agents.zcode import ZCodeAgent
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
-    extract_session_project_path,
+    extract_session_working_directory,
     filter_sessions,
     filter_sessions_by_query,
     limit_query_session_matches,
@@ -438,6 +438,16 @@ class TestFilterSessionsByQuery:
 
         assert filter_sessions_by_query(agent, [session], spec) == []
 
+    def test_path_scope_does_not_treat_provider_project_or_source_as_working_directory(self, tmp_path):
+        agent = DummyAgent(name="claudecode")
+        repo_root = tmp_path / "repo"
+        source = repo_root / "provider-project" / "s1.jsonl"
+        session = make_session("s1", "provider project only", source)
+        session.metadata = {"project": str(repo_root)}
+        spec = make_query_spec(project_path=repo_root)
+
+        assert filter_sessions_by_query(agent, [session], spec) == []
+
     def test_combines_path_scope_and_keyword(self, tmp_path):
         agent = DummyAgent(name="codex")
         session = make_session("s1", "refactor api", tmp_path / "s1.jsonl")
@@ -707,10 +717,10 @@ class TestExtractSessionProjectPath:
         session = make_session("s1", "session", tmp_path / "s1.jsonl")
         session.metadata = {"cwd": str(tmp_path / "repo"), "directory": str(tmp_path / "ignored")}
 
-        assert extract_session_project_path(session) == (tmp_path / "repo").resolve()
+        assert extract_session_working_directory(session) == (tmp_path / "repo").resolve()
 
     def test_uses_directory_when_cwd_missing(self, tmp_path):
         session = make_session("s1", "session", tmp_path / "s1.jsonl")
         session.metadata = {"directory": str(tmp_path / "repo")}
 
-        assert extract_session_project_path(session) == (tmp_path / "repo").resolve()
+        assert extract_session_working_directory(session) == (tmp_path / "repo").resolve()

@@ -262,6 +262,52 @@ class TestKimiAgent:
         assert result.metadata["context_file"] is None
         assert result.metadata["wire_file"] == str(session_dir / "wire.jsonl")
 
+    def test_session_change_sources_are_provider_owned(self, tmp_path):
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        context_path = session_dir / "context.jsonl"
+        wire_path = session_dir / "wire.jsonl"
+        context_path.touch()
+        wire_path.touch()
+        session = Session(
+            id="test-session",
+            title="Test Session",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=session_dir,
+            metadata={
+                "context_file": "provider-private-value-is-not-read-by-the-cache",
+                "wire_file": None,
+            },
+        )
+
+        assert agent.get_session_change_sources(session) == (context_path, wire_path)
+
+    def test_cached_session_data_reloads_when_wire_source_changes(self, tmp_path):
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        context_path = session_dir / "context.jsonl"
+        wire_path = session_dir / "wire.jsonl"
+        context_path.touch()
+        wire_path.touch()
+        session = make_session(session_dir)
+
+        with mock.patch.object(
+            agent,
+            "get_session_data",
+            side_effect=[{"read": 1}, {"read": 2}],
+        ) as load:
+            first = agent.get_cached_session_data(session)
+            changed_mtime = session.updated_at.replace(tzinfo=timezone.utc).timestamp() + 1
+            os.utime(wire_path, (changed_mtime, changed_mtime))
+            second = agent.get_cached_session_data(session)
+
+        assert first == {"read": 1}
+        assert second == {"read": 2}
+        assert load.call_count == 2
+
     def test_parse_session_parses_wire_mtime_as_utc(self, tmp_path):
         """测试 wire_mtime 会被解析为 UTC aware datetime"""
         agent = KimiAgent()

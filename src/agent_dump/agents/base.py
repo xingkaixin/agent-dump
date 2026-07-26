@@ -30,6 +30,40 @@ class Session:
     metadata: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class SessionFacts:
+    """Stable cross-provider facts derived from one Session."""
+
+    working_directory: Path | None
+    provider_project: str | None
+    session_source: Path
+    change_sources: tuple[Path, ...]
+
+    @property
+    def display_location(self) -> str:
+        if self.working_directory is not None:
+            return str(self.working_directory)
+        if self.provider_project is not None:
+            return self.provider_project
+        source = self.session_source
+        return str(source.parent if source.is_file() else source)
+
+
+def derive_session_facts(
+    session: Session,
+    *,
+    change_sources: tuple[Path, ...] = (),
+) -> SessionFacts:
+    """Derive stable facts from the canonical metadata populated by a provider."""
+    metadata = session.metadata
+    return SessionFacts(
+        working_directory=_metadata_path(metadata.get("cwd") or metadata.get("directory")),
+        provider_project=_metadata_text(metadata.get("project")),
+        session_source=session.source_path,
+        change_sources=tuple(dict.fromkeys(change_sources)),
+    )
+
+
 class BaseAgent(ABC):
     """Abstract base class for agent handlers"""
 
@@ -114,13 +148,22 @@ class BaseAgent(ABC):
         """Return provider roots checked during discovery."""
         return ()
 
+    def get_session_change_sources(self, session: Session) -> tuple[Path, ...]:
+        """Return provider-owned per-session sources that can invalidate cached data."""
+        del session
+        return ()
+
+    def get_session_facts(self, session: Session) -> SessionFacts:
+        """Map provider metadata to the stable facts shared workflows consume."""
+        return derive_session_facts(
+            session,
+            change_sources=self.get_session_change_sources(session),
+        )
+
     def get_session_head(self, session: Session) -> dict[str, Any]:
         """Get lightweight discovery metadata for one session."""
         metadata = session.metadata
-
-        cwd_or_project = metadata.get("cwd") or metadata.get("directory") or metadata.get("project")
-        if not isinstance(cwd_or_project, str) or not cwd_or_project.strip():
-            cwd_or_project = str(session.source_path.parent if session.source_path.is_file() else session.source_path)
+        facts = self.get_session_facts(session)
 
         return {
             "uri": self.get_session_uri(session),
@@ -128,7 +171,7 @@ class BaseAgent(ABC):
             "title": session.title,
             "created_at": session.created_at,
             "updated_at": session.updated_at,
-            "cwd_or_project": cwd_or_project,
+            "cwd_or_project": facts.display_location,
             "model": metadata.get("model") or metadata.get("model_provider"),
             "message_count": cast(
                 int | None,
@@ -139,16 +182,13 @@ class BaseAgent(ABC):
 
     def get_session_summary_fields(self, session: Session) -> dict[str, str | int | None]:
         """Return reduced metadata fields for list/selector display."""
-        cwd = session.metadata.get("cwd")
-        project = session.metadata.get("project")
-        directory = session.metadata.get("directory")
+        facts = self.get_session_facts(session)
         model = session.metadata.get("model")
         branch = session.metadata.get("branch")
         message_count = session.metadata.get("message_count")
 
-        location = project or cwd or directory
         return {
-            "cwd_project": str(location) if isinstance(location, str) and location.strip() else None,
+            "cwd_project": facts.display_location,
             "model": str(model) if isinstance(model, str) and model.strip() else None,
             "branch": str(branch) if isinstance(branch, str) and branch.strip() else None,
             "message_count": cast(int | None, message_count if isinstance(message_count, int) else None),
@@ -203,3 +243,15 @@ class BaseAgent(ABC):
     def get_cached_session_data(self, session: Session) -> dict[str, Any]:
         """Get session data once per change signal for this agent instance."""
         return self._session_data_cache.get(self, session)
+
+
+def _metadata_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _metadata_path(value: Any) -> Path | None:
+    text = _metadata_text(value)
+    return Path(text) if text is not None else None
