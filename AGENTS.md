@@ -70,6 +70,7 @@
 | `collect_workflow.py` | collect 模式编排、dry-run、保存路径解析 |
 | `maintenance_workflow.py` | providers capability、stats 与 reindex 模式 |
 | `rendering.py` | print/head/markdown 渲染与 format 导出分发 |
+| `exporting.py` | 跨 URI / interactive 模式的统一导出执行与结构化 outcome |
 | `query_filter.py` | `-query` 与 `agents://` 查询 URI 解析、过滤、搜索匹配 |
 | `search_index.py` | SQLite FTS5 搜索索引 |
 | `selector.py` | 终端交互选择与非 TTY 输入回退 |
@@ -194,6 +195,7 @@ agent-dump/
 │   ├── paths.py                 # 搜索根路径模型
 │   ├── query_filter.py          # 查询解析与过滤
 │   ├── rendering.py             # print/head/markdown/json/raw 渲染调度
+│   ├── exporting.py             # 统一导出执行与结构化 outcome
 │   ├── scanner.py               # AgentScanner
 │   ├── search_index.py          # FTS5 搜索索引
 │   ├── selector.py              # 交互式选择

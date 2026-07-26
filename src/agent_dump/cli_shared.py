@@ -19,6 +19,7 @@ from agent_dump.diagnostics import (
     root_not_found,
     unsupported_capability,
 )
+from agent_dump.exporting import ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import (
@@ -201,48 +202,47 @@ def export_sessions_for_formats(
     output_base_dir: Path,
     *,
     output_base_dirs: dict[str, Path] | None = None,
-) -> list[Path]:
+) -> ExportRunResult:
     print(i18n.t(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
-    exported: list[Path] = []
-    for session in sessions:
-        session_data: dict[str, Any] | None = None
-        session_uri: str | None = None
-        for output_format in formats:
-            try:
-                format_base_dir = (
-                    output_base_dirs.get(output_format, output_base_dir)
-                    if output_base_dirs is not None
-                    else output_base_dir
-                )
-                output_dir = format_base_dir / agent.name
-                output_dir.mkdir(parents=True, exist_ok=True)
-                if output_format == "markdown":
-                    session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
-                    session_uri = session_uri if session_uri is not None else agent.get_session_uri(session)
 
-                output_path = export_session_in_format(
-                    agent,
-                    session,
-                    output_dir,
-                    output_format,
-                    session_data=session_data,
-                    session_uri=session_uri,
-                )
-                exported.append(output_path)
-                print(
-                    i18n.t(
-                        Keys.EXPORT_SUCCESS_FORMAT,
-                        title=session.title[:50],
-                        format=output_format,
-                        filename=output_path.name,
-                    )
-                )
-            except Exception as e:
-                print(i18n.t(Keys.EXPORT_ERROR_FORMAT, title=session.title[:50], format=output_format, error=str(e)))
-                diagnostic = e if isinstance(e, DiagnosticError) else wrap_runtime_fetch_error(e, agent=agent)
-                print(render_diagnostic(diagnostic, t=i18n.t))
+    def _output_dir_for_format(output_format: str) -> Path:
+        format_base_dir = (
+            output_base_dirs.get(output_format, output_base_dir) if output_base_dirs is not None else output_base_dir
+        )
+        return format_base_dir / agent.name
 
-    return exported
+    result = execute_exports(
+        agent,
+        sessions,
+        formats,
+        _output_dir_for_format,
+        session_uris={session.id: agent.get_session_uri(session) for session in sessions},
+    )
+    for attempt in result.attempts:
+        if attempt.output_path is not None:
+            print(
+                i18n.t(
+                    Keys.EXPORT_SUCCESS_FORMAT,
+                    title=attempt.session.title[:50],
+                    format=attempt.output_format,
+                    filename=attempt.output_path.name,
+                )
+            )
+            continue
+
+        error = attempt.error or RuntimeError("export failed without an error")
+        print(
+            i18n.t(
+                Keys.EXPORT_ERROR_FORMAT,
+                title=attempt.session.title[:50],
+                format=attempt.output_format,
+                error=str(error),
+            )
+        )
+        diagnostic = error if isinstance(error, DiagnosticError) else wrap_runtime_fetch_error(error, agent=agent)
+        print(render_diagnostic(diagnostic, t=i18n.t))
+
+    return result
 
 
 @contextmanager

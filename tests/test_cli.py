@@ -26,6 +26,14 @@ from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import SearchSessionMatch
 
 
+def make_export_result(*paths: Path) -> mock.MagicMock:
+    result = mock.MagicMock()
+    result.exported_paths = paths
+    result.had_success = bool(paths)
+    result.__len__.return_value = len(paths)
+    return result
+
+
 def make_session(
     session_id: str,
     title: str,
@@ -249,11 +257,14 @@ class TestMain:
             with mock.patch(
                 "agent_dump.session_workflow.select_sessions_interactive", return_value=[session]
             ) as mock_select_sessions:
-                with mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[]):
+                with mock.patch(
+                    "agent_dump.session_workflow.export_sessions_for_formats",
+                    return_value=make_export_result(),
+                ):
                     with mock.patch("sys.argv", ["agent-dump", "agents://.?providers=codex", "--interactive"]):
                         result = main()
 
-        assert result == 0
+        assert result == 1
         assert mock_select_sessions.call_args.args[0] == [session]
 
     def test_main_expands_shortcut_before_collect(self):
@@ -1337,7 +1348,7 @@ class TestMain:
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                 with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
-                    mock_export.return_value = [Path("test.json")]
+                    mock_export.return_value = make_export_result(Path("test.json"))
 
                     with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                         main()
@@ -1367,7 +1378,7 @@ class TestMain:
                     with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                         mock_select_agent.return_value = agent2
                         mock_select_session.return_value = [mock.MagicMock()]
-                        mock_export.return_value = [Path("test.json")]
+                        mock_export.return_value = make_export_result(Path("test.json"))
 
                         with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                             main()
@@ -1451,7 +1462,7 @@ class TestMain:
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                 with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
-                    mock_export.return_value = [Path("test.json")]
+                    mock_export.return_value = make_export_result(Path("test.json"))
 
                     with mock.patch("sys.argv", ["agent-dump", "-days", "3"]):
                         main()
@@ -1617,7 +1628,8 @@ class TestMain:
                         return_value=[selected_session],
                     ):
                         with mock.patch(
-                            "agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]
+                            "agent_dump.session_workflow.export_sessions_for_formats",
+                            return_value=make_export_result(Path("a.json")),
                         ):
                             with mock.patch(
                                 "sys.argv",
@@ -1658,7 +1670,8 @@ class TestMain:
                     "agent_dump.session_workflow.select_sessions_interactive", return_value=selected_sessions
                 ):
                     with mock.patch(
-                        "agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]
+                        "agent_dump.session_workflow.export_sessions_for_formats",
+                        return_value=make_export_result(Path("a.json")),
                     ):
                         with mock.patch(
                             "sys.argv",
@@ -1810,7 +1823,8 @@ class TestMain:
             ):
                 with mock.patch("agent_dump.session_workflow.select_sessions_interactive", return_value=[kimi_session]):
                     with mock.patch(
-                        "agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]
+                        "agent_dump.session_workflow.export_sessions_for_formats",
+                        return_value=make_export_result(Path("a.json")),
                     ):
                         with mock.patch(
                             "sys.argv",
@@ -1860,7 +1874,10 @@ class TestMain:
                     "agent_dump.session_workflow.select_sessions_interactive",
                     return_value=[selected_session],
                 ),
-                mock.patch("agent_dump.session_workflow.export_sessions_for_formats", return_value=[Path("a.json")]),
+                mock.patch(
+                    "agent_dump.session_workflow.export_sessions_for_formats",
+                    return_value=make_export_result(Path("a.json")),
+                ),
             ):
                 with mock.patch("sys.argv", ["agent-dump", "--interactive", "-query", "codex,kimi:bug"]):
                     result = main()
@@ -1891,7 +1908,7 @@ class TestMain:
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                 with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
-                    mock_export.return_value = [Path("test.json")]
+                    mock_export.return_value = make_export_result(Path("test.json"))
 
                     with mock.patch("sys.argv", ["agent-dump", "--interactive", "--output", str(output_dir)]):
                         main()
@@ -1919,7 +1936,7 @@ class TestMain:
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                 with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
-                    mock_export.return_value = [Path("test.json")]
+                    mock_export.return_value = make_export_result(Path("test.json"))
 
                     with mock.patch("sys.argv", ["agent-dump", "--interactive", "-output", str(output_dir)]):
                         main()
@@ -1949,7 +1966,7 @@ class TestMain:
                 with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                     with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                         mock_select.return_value = [mock.MagicMock()]
-                        mock_export.return_value = [configured_output / "opencode" / "test.json"]
+                        mock_export.return_value = make_export_result(configured_output / "opencode" / "test.json")
 
                         with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                             main()
@@ -1980,7 +1997,7 @@ class TestMain:
                 with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                     with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                         mock_select.return_value = [mock.MagicMock()]
-                        mock_export.return_value = [Path("test.md")]
+                        mock_export.return_value = make_export_result(Path("test.md"))
 
                         with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "markdown"]):
                             main()
@@ -2006,7 +2023,7 @@ class TestMain:
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                 with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
-                    mock_export.return_value = [Path("test.md")]
+                    mock_export.return_value = make_export_result(Path("test.md"))
 
                     with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "md"]):
                         result = main()
@@ -2052,7 +2069,11 @@ class TestMain:
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                 with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
-                    mock_export.return_value = [Path("a.json"), Path("a.md"), Path("a.raw.json")]
+                    mock_export.return_value = make_export_result(
+                        Path("a.json"),
+                        Path("a.md"),
+                        Path("a.raw.json"),
+                    )
 
                     with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "json,markdown,raw"]):
                         result = main()
@@ -2097,7 +2118,7 @@ class TestMain:
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                 with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
-                    mock_export.return_value = [Path("a.raw.json")]
+                    mock_export.return_value = make_export_result(Path("a.raw.json"))
 
                     with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "raw"]):
                         result = main()
@@ -2837,7 +2858,7 @@ class TestMain:
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
                 with mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export:
                     mock_select.return_value = [mock.MagicMock()]
-                    mock_export.return_value = [Path("a.json")]
+                    mock_export.return_value = make_export_result(Path("a.json"))
 
                     with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
                         result = main()

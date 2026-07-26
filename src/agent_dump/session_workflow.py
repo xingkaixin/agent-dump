@@ -294,7 +294,7 @@ def _handle_interactive_mode(
             output_format=primary_output_format,
         ),
     )
-    exported = export_sessions_for_formats(
+    export_result = export_sessions_for_formats(
         selected_agent,
         selected_sessions,
         output_formats,
@@ -302,7 +302,7 @@ def _handle_interactive_mode(
         output_base_dirs=output_base_dirs,
     )
 
-    summary_paths = sorted({str(path.parent) for path in exported})
+    summary_paths = sorted({str(path.parent) for path in export_result.exported_paths})
     summary_path = ", ".join(summary_paths) if summary_paths else f"{output_base_dir}/{selected_agent.name}"
-    print(i18n.t(Keys.EXPORT_SUMMARY, count=len(exported), path=summary_path))
-    return 0
+    print(i18n.t(Keys.EXPORT_SUMMARY, count=len(export_result), path=summary_path))
+    return 0 if export_result.had_success else 1
