@@ -118,10 +118,11 @@ class TestBaseAgent:
             metadata={"context_file": str(context_file)},
         )
 
-        first = agent.get_cached_session_data(session)
-        initial_mtime = context_file.stat().st_mtime
-        os.utime(context_file, (initial_mtime + 1, initial_mtime + 1))
-        second = agent.get_cached_session_data(session)
+        with mock.patch.object(agent, "get_session_change_sources", return_value=(context_file,)):
+            first = agent.get_cached_session_data(session)
+            initial_mtime = context_file.stat().st_mtime
+            os.utime(context_file, (initial_mtime + 1, initial_mtime + 1))
+            second = agent.get_cached_session_data(session)
 
         assert first is not second
         assert agent.data_reads == 2
@@ -319,6 +320,60 @@ class TestBaseAgent:
             "message_count": 12,
             "updated_at": "2024-01-01 11:00",
         }
+
+    def test_get_session_facts_distinguishes_location_project_and_source(self):
+        agent = ConcreteAgent()
+        source = Path("/provider/projects/project-hash/session.jsonl")
+        session = Session(
+            id="test",
+            title="Test",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=source,
+            metadata={
+                "cwd": "/workspace/real",
+                "directory": "/workspace/legacy",
+                "project": "project-hash",
+            },
+        )
+
+        facts = agent.get_session_facts(session)
+
+        assert facts.working_directory == Path("/workspace/real")
+        assert facts.provider_project == "project-hash"
+        assert facts.session_source == source
+        assert facts.change_sources == ()
+        assert facts.display_location == "/workspace/real"
+        assert agent.get_session_head(session)["cwd_or_project"] == "/workspace/real"
+        assert agent.get_session_summary_fields(session)["cwd_project"] == "/workspace/real"
+
+    def test_get_session_facts_display_falls_back_without_conflating_source(self):
+        agent = ConcreteAgent()
+        project_session = Session(
+            id="project",
+            title="Project",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=Path("/provider/project/session.jsonl"),
+            metadata={"project": "provider-project"},
+        )
+        source_session = Session(
+            id="source",
+            title="Source",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=Path("/provider/source"),
+            metadata={},
+        )
+
+        project_facts = agent.get_session_facts(project_session)
+        source_facts = agent.get_session_facts(source_session)
+
+        assert project_facts.working_directory is None
+        assert project_facts.display_location == "provider-project"
+        assert source_facts.working_directory is None
+        assert source_facts.provider_project is None
+        assert source_facts.display_location == "/provider/source"
 
     def test_get_session_head_uses_default_fields(self):
         """测试默认 head 信息来自 Session 公共字段。"""

@@ -11,7 +11,7 @@ import threading
 from typing import Any
 from uuid import uuid4
 
-from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
 from agent_dump.collect_llm import (
     build_summary_json_schema as _build_summary_json_schema,
     is_retryable_error,
@@ -137,8 +137,8 @@ def _normalize_collect_project_path(value: str) -> Path | None:
 
 
 def _is_session_denied(session: Session, deny_paths: tuple[str, ...]) -> bool:
-    project_directory = str(session.metadata.get("cwd") or session.metadata.get("directory") or "")
-    session_path = _normalize_collect_project_path(project_directory)
+    working_directory = derive_session_facts(session).working_directory
+    session_path = _normalize_collect_project_path(str(working_directory or ""))
     if session_path is None:
         return False
 
@@ -387,7 +387,7 @@ def collect_entries(
             session_id=session.id,
             session_title=session.title,
             session_uri=uri,
-            project_directory=str(session.metadata.get("cwd") or session.metadata.get("directory") or ""),
+            project_directory=str(derive_session_facts(session).working_directory or ""),
             events=events,
             is_truncated=truncated,
         )

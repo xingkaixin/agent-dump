@@ -79,7 +79,7 @@
 | `coercion.py` | 不可信 provider 标量的容错转换（safe_int / safe_epoch_datetime） |
 | `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
-| `session_data.py` | 请求级会话数据缓存，同一命令内同一会话只解析一次 |
+| `session_data.py` | 请求级会话数据缓存，按 provider-owned change sources 失效 |
 | `text_safety.py` | 第三方会话文本的输出净化（终端 / markdown / 文件名） |
 | `time_utils.py` | 时间与时区工具，全部转换的单一入口 |
 | `uri_support.py` | URI 解析与跨 provider 会话查找 |
@@ -279,6 +279,11 @@ class BaseAgent(ABC):
     def export_session(self, session: Session, output_dir: Path) -> Path: ...
     def get_session_data(self, session: Session) -> dict: ...
 ```
+
+共享 workflow 通过 `derive_session_facts(session)` 读取 Working Directory、Provider
+Project 与 Session Source；缓存通过 `BaseAgent.get_session_facts(session)` 追加
+provider-owned change sources。调用方不得自行解释对应 metadata key。facts 按需
+派生，不在 `Session` 上重复存储。术语边界见 `CONTEXT.md`。
 
 可选扩展点：
 - `get_session_uri(session)`：默认返回 `<agent>://<session.id>`。

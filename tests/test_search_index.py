@@ -22,7 +22,6 @@ from agent_dump.search_index import (
     extract_session_searchable_text,
 )
 from agent_dump.session_data import (
-    extract_related_source_paths as _extract_related_source_paths,
     session_updated_signal as _session_updated_signal,
 )
 
@@ -148,7 +147,10 @@ class TestSessionUpdatedSignal:
     def test_signal_uses_updated_at(self, tmp_path):
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
 
-        assert _session_updated_signal(session) == session.updated_at.replace(tzinfo=timezone.utc).timestamp()
+        assert (
+            _session_updated_signal(DummyAgent(), session)
+            == session.updated_at.replace(tzinfo=timezone.utc).timestamp()
+        )
 
     def test_related_paths_raise_signal(self, tmp_path):
         session_dir = tmp_path / "session"
@@ -156,31 +158,20 @@ class TestSessionUpdatedSignal:
         context_file = session_dir / "context.jsonl"
         context_file.write_text("context")
         session = make_session("s1", "Test", session_dir)
-        session.metadata = {"context_file": str(context_file)}
+        agent = DummyAgent()
 
-        assert _session_updated_signal(session) >= context_file.stat().st_mtime
+        with mock.patch.object(agent, "get_session_change_sources", return_value=(context_file,)):
+            assert _session_updated_signal(agent, session) >= context_file.stat().st_mtime
 
     def test_missing_related_paths_fall_back_to_updated_at(self, tmp_path):
         session = make_session("s1", "Test", tmp_path / "session")
-        session.metadata = {"context_file": str(tmp_path / "missing.jsonl")}
+        agent = DummyAgent()
+        missing = tmp_path / "missing.jsonl"
 
-        assert _session_updated_signal(session) == session.updated_at.replace(tzinfo=timezone.utc).timestamp()
-
-    def test_extract_related_source_paths_from_session_metadata(self, tmp_path):
-        session_dir = tmp_path / "session"
-        context_file = session_dir / "context.jsonl"
-        wire_file = session_dir / "wire.jsonl"
-        session = make_session(
-            "s1",
-            "Test",
-            session_dir,
-        )
-        session.metadata = {
-            "context_file": str(context_file),
-            "wire_file": str(wire_file),
-        }
-
-        assert _extract_related_source_paths(session) == (context_file, wire_file)
+        with mock.patch.object(agent, "get_session_change_sources", return_value=(missing,)):
+            assert (
+                _session_updated_signal(agent, session) == session.updated_at.replace(tzinfo=timezone.utc).timestamp()
+            )
 
 
 class TestExtractSessionSearchableText:
