@@ -30,6 +30,7 @@ class OpenCodeAgent(BaseAgent):
     def __init__(self):
         super().__init__("opencode", "OpenCode")
         self.db_path: Path | None = None
+        self._db_path_discovered = False
 
     def _find_db_path(self) -> Path | None:
         """Find the OpenCode database path"""
@@ -44,8 +45,16 @@ class OpenCodeAgent(BaseAgent):
 
     def is_available(self) -> bool:
         """Check if OpenCode database exists"""
-        self.db_path = self._find_db_path()
-        return self.db_path is not None
+        return self._ensure_db_path() is not None
+
+    def _ensure_db_path(self) -> Path | None:
+        if self.db_path is not None:
+            self._db_path_discovered = True
+            return self.db_path
+        if not self._db_path_discovered:
+            self.db_path = self._find_db_path()
+            self._db_path_discovered = True
+        return self.db_path
 
     def _missing_database_error(self, db_path: Path | None) -> DiagnosticError:
         return source_missing(
@@ -69,13 +78,11 @@ class OpenCodeAgent(BaseAgent):
 
     def scan(self) -> list[Session]:
         """Scan for all available sessions"""
-        if not self.db_path:
-            return []
         return self.get_sessions(days=3650)  # ~10 years
 
     def get_sessions(self, days: int = 7) -> list[Session]:
         """Get sessions from the last N days"""
-        if not self.db_path:
+        if not self._ensure_db_path():
             return []
 
         cutoff_time = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
@@ -88,7 +95,7 @@ class OpenCodeAgent(BaseAgent):
 
     def find_session_by_id(self, session_id: str) -> Session | None:
         """Look up one session directly by primary key."""
-        if not self.db_path:
+        if not self._ensure_db_path():
             return None
 
         conn = self._connect_db()

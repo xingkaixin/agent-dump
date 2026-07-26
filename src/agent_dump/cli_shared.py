@@ -39,7 +39,7 @@ from agent_dump.rendering import (
     render_session_head as _render_session_head,
     render_session_text as _render_session_text,
 )
-from agent_dump.scanner import AgentScanner, sessions_per_agent
+from agent_dump.scanner import AgentScanner
 from agent_dump.text_safety import safe_display_text
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
 from agent_dump.uri_support import find_session_by_id as _find_session_by_id, parse_uri as _parse_uri
@@ -366,9 +366,11 @@ def collect_query_matches(
     *,
     days: int,
     spec: QuerySpec,
+    scanner: AgentScanner | None = None,
 ) -> dict[str, list[Session]]:
     matches: list[SearchSessionMatch] = []
-    for agent, sessions in sessions_per_agent(agents, days):
+    session_scanner = scanner if scanner is not None else AgentScanner(agents)
+    for agent, sessions in session_scanner.get_sessions(days, agents=agents):
         matches.extend(query_session_matches(agent, sessions, spec))
 
     limited_matches = limit_query_session_matches(matches, spec.limit)
@@ -383,9 +385,11 @@ def collect_search_matches(
     *,
     days: int,
     spec: QuerySpec,
+    scanner: AgentScanner | None = None,
 ) -> list[SearchSessionMatch]:
     matches: list[SearchSessionMatch] = []
-    for agent, sessions in sessions_per_agent(agents, days):
+    session_scanner = scanner if scanner is not None else AgentScanner(agents)
+    for agent, sessions in session_scanner.get_sessions(days, agents=agents):
         matches.extend(search_sessions_by_query(agent, sessions, spec))
     return limit_search_matches(matches, spec.limit)
 

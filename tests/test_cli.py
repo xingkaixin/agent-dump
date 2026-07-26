@@ -47,6 +47,13 @@ def make_config_document(
     return document
 
 
+def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
+    scanner.get_sessions.side_effect = lambda days=7, *, agents=None: [
+        (agent, agent.get_sessions(days=days))
+        for agent in (agents if agents is not None else scanner.get_available_agents.return_value)
+    ]
+
+
 def make_session(
     session_id: str,
     title: str,
@@ -243,6 +250,7 @@ class TestMain:
         agent.display_name = "Codex"
         agent.get_sessions.return_value = []
         scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             with mock.patch("sys.argv", ["agent-dump", "agents://.?q=bug&providers=codex"]):
@@ -286,6 +294,7 @@ class TestMain:
         agent.display_name = "Codex"
         agent.get_sessions.return_value = [session]
         scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             with mock.patch(
@@ -394,6 +403,7 @@ class TestMain:
                         available_agent.name = "codex"
                         mock_scanner.agents = [known_agent]
                         mock_scanner.get_available_agents.return_value = [available_agent]
+                        configure_scanner_sessions(mock_scanner)
                         mock_scanner_class.return_value = mock_scanner
                         with mock.patch(
                             "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
@@ -456,6 +466,7 @@ class TestMain:
         available_agent.name = "codex"
         mock_scanner.agents = [known_agent]
         mock_scanner.get_available_agents.return_value = [available_agent]
+        configure_scanner_sessions(mock_scanner)
         config_document = make_config_document(collect_config=collect_config)
 
         with (
@@ -554,6 +565,7 @@ class TestMain:
         known_claude.name = "claudecode"
         mock_scanner.agents = [known_codex, known_claude]
         mock_scanner.get_available_agents.return_value = [codex_agent, claude_agent]
+        configure_scanner_sessions(mock_scanner)
         config_document = make_config_document(collect_config=collect_config)
 
         with (
@@ -608,6 +620,7 @@ class TestMain:
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+                                configure_scanner_sessions(mock_scanner)
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
                                     "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
@@ -722,6 +735,7 @@ class TestMain:
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+                                configure_scanner_sessions(mock_scanner)
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
                                     "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
@@ -789,6 +803,7 @@ class TestMain:
                             with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                                 mock_scanner = mock.MagicMock()
                                 mock_scanner.get_available_agents.return_value = [cursor_agent]
+                                configure_scanner_sessions(mock_scanner)
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
                                     "agent_dump.collect_workflow.collect_entries",
@@ -822,6 +837,7 @@ class TestMain:
 
         assert result == 0
         assert mock_collect.call_args.kwargs["agents"] == [cursor_agent]
+        assert mock_collect.call_args.kwargs["scanner"] is mock_scanner
 
     def test_collect_mode_logs_failure(self, tmp_path):
         args = argparse.Namespace(
@@ -848,6 +864,7 @@ class TestMain:
                     with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
                         mock_scanner = mock.MagicMock()
                         mock_scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+                        configure_scanner_sessions(mock_scanner)
                         mock_scanner_class.return_value = mock_scanner
                         with mock.patch(
                             "agent_dump.collect_workflow.collect_entries", side_effect=RuntimeError("boom")
@@ -1010,6 +1027,7 @@ class TestMain:
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = []
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
@@ -1037,6 +1055,7 @@ class TestMain:
 
             mock_session = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id") as mock_find:
@@ -1075,6 +1094,7 @@ class TestMain:
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = []
+            configure_scanner_sessions(mock_scanner)
             mock_agent = mock.MagicMock()
             mock_agent.display_name = "Codex"
             mock_agent.get_search_roots.return_value = (SearchRoot("CODEX_HOME/sessions", tmp_path / "codex"),)
@@ -1095,6 +1115,7 @@ class TestMain:
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = [mock.MagicMock()]
+            configure_scanner_sessions(mock_scanner)
             mock_agent = mock.MagicMock()
             mock_agent.display_name = "Codex"
             mock_agent.get_search_roots.return_value = (SearchRoot("CODEX_HOME/sessions", tmp_path / "codex"),)
@@ -1121,6 +1142,7 @@ class TestMain:
             mock_agent.name = "opencode"
             mock_agent.display_name = "OpenCode"
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id") as mock_find:
@@ -1146,6 +1168,7 @@ class TestMain:
                 "read error"
             )
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id") as mock_find:
@@ -1177,6 +1200,7 @@ class TestMain:
                 "subtargets": ["worker-a", "worker-b"],
             }
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id") as mock_find:
@@ -1212,6 +1236,7 @@ class TestMain:
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = []
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--list", "--head"]):
@@ -1234,6 +1259,8 @@ class TestMain:
             mock_agent.get_sessions.return_value = [mock.MagicMock()]  # Use get_sessions instead of scan
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--list"]):
@@ -1277,6 +1304,8 @@ class TestMain:
             }
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--list", "-page-size", "1"]):
@@ -1310,6 +1339,8 @@ class TestMain:
             mock_agent.get_session_uri.return_value = "opencode://s1"
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--list", "--no-metadata-summary"]):
@@ -1327,6 +1358,7 @@ class TestMain:
             mock_agent.display_name = "OpenCode"
             mock_agent.get_sessions.return_value = []
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--list"]):
@@ -1349,6 +1381,7 @@ class TestMain:
             mock_agent.get_formatted_title.return_value = "Cursor Session"
             mock_agent.get_session_uri.return_value = "cursor://request-001"
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--list"]):
@@ -1366,6 +1399,7 @@ class TestMain:
             mock_agent.display_name = "OpenCode"
             mock_agent.get_sessions.return_value = [mock.MagicMock()]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.display_sessions_list", return_value=True):
@@ -1387,6 +1421,8 @@ class TestMain:
             mock_agent.get_sessions.return_value = [mock.MagicMock()]
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
@@ -1415,6 +1451,8 @@ class TestMain:
             agent2.get_sessions.return_value = [mock.MagicMock()]
 
             mock_scanner.get_available_agents.return_value = [agent1, agent2]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent:
@@ -1439,6 +1477,7 @@ class TestMain:
             agent2 = mock.MagicMock()
             agent2.display_name = "Codex"
             mock_scanner.get_available_agents.return_value = [agent1, agent2]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_agent_interactive", return_value=None):
@@ -1460,6 +1499,8 @@ class TestMain:
             mock_agent.get_sessions.return_value = []
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--interactive"]):
@@ -1479,6 +1520,8 @@ class TestMain:
             mock_agent.get_sessions.return_value = [mock.MagicMock()]
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
@@ -1501,6 +1544,8 @@ class TestMain:
             mock_agent.get_sessions.return_value = [mock.MagicMock()]
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
@@ -1521,6 +1566,7 @@ class TestMain:
             mock_agent.display_name = "OpenCode"
             mock_agent.get_sessions.return_value = []
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "-days", "3"]):
@@ -1544,6 +1590,8 @@ class TestMain:
             mock_agent.get_sessions.return_value = []
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "-query", "报错"]):
@@ -1567,6 +1615,7 @@ class TestMain:
             agent.get_formatted_title.return_value = "Auth Timeout (2026-01-01 12:00)"
             agent.get_session_uri.return_value = "codex://s1"
             mock_scanner.get_available_agents.return_value = [agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             match = SearchSessionMatch(
@@ -1613,6 +1662,8 @@ class TestMain:
             mock_agent.get_session_uri.side_effect = lambda s: f"opencode://{s.id}"
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch(
@@ -1661,6 +1712,8 @@ class TestMain:
             agent3.get_sessions.return_value = agent3_sessions
 
             mock_scanner.get_available_agents.return_value = [agent1, agent2, agent3]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             selected_session = mock.MagicMock()
@@ -1714,6 +1767,8 @@ class TestMain:
             mock_agent.get_sessions.return_value = sessions
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             selected_sessions = [mock.MagicMock()]
@@ -1750,6 +1805,7 @@ class TestMain:
             known_codex.name = "codex"
             mock_scanner.agents = [known_opencode, known_codex]
             mock_scanner.get_available_agents.return_value = [known_opencode]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "-query", "codex,unknown:bug"]):
@@ -1768,6 +1824,7 @@ class TestMain:
             known_agent.name = "codex"
             mock_scanner.agents = [known_agent]
             mock_scanner.get_available_agents.return_value = [known_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "-query", "bug provider:codex foo:bar"]):
@@ -1796,6 +1853,8 @@ class TestMain:
             mock_agent.get_session_uri.return_value = "codex://s1"
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch(
@@ -1834,6 +1893,8 @@ class TestMain:
             agent_kimi.get_sessions.return_value = [mock.MagicMock()]
 
             mock_scanner.get_available_agents.return_value = [agent_codex, agent_kimi]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.cli_shared.query_session_matches", side_effect=[[], []]) as mock_filter:
@@ -1871,6 +1932,8 @@ class TestMain:
             agent_kimi.get_sessions.return_value = [kimi_session]
 
             mock_scanner.get_available_agents.return_value = [agent_codex, agent_kimi]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with (
@@ -1923,6 +1986,8 @@ class TestMain:
             agent_kimi.get_sessions.return_value = kimi_sessions
 
             mock_scanner.get_available_agents.return_value = [agent_codex, agent_kimi]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             selected_session = mock.MagicMock()
@@ -1968,6 +2033,8 @@ class TestMain:
             mock_agent.get_sessions.return_value = [mock.MagicMock()]
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
@@ -1996,6 +2063,7 @@ class TestMain:
 
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
@@ -2023,6 +2091,7 @@ class TestMain:
 
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch(
@@ -2054,6 +2123,7 @@ class TestMain:
 
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch(
@@ -2083,6 +2153,7 @@ class TestMain:
 
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
@@ -2108,6 +2179,7 @@ class TestMain:
 
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--interactive", "-format", "print"]):
@@ -2129,6 +2201,7 @@ class TestMain:
 
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
@@ -2157,6 +2230,7 @@ class TestMain:
 
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--interactive", "-format", "json,print"]):
@@ -2178,6 +2252,7 @@ class TestMain:
 
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:
@@ -2209,6 +2284,7 @@ class TestMain:
             mock_agent.get_sessions.return_value = []
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--list", "-format", "md"]):
@@ -2227,6 +2303,7 @@ class TestMain:
             mock_agent.get_sessions.return_value = []
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--list", "-output", str(tmp_path / "x")]):
@@ -2254,6 +2331,8 @@ class TestMain:
             mock_agent.export_session.return_value = expected_output
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2283,6 +2362,8 @@ class TestMain:
             mock_agent.export_session.return_value = expected_output
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch(
@@ -2313,6 +2394,8 @@ class TestMain:
             mock_session.id = "session-001"
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch(
@@ -2362,6 +2445,7 @@ class TestMain:
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = [agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with (
@@ -2397,6 +2481,8 @@ class TestMain:
             expected_output = output_root / "codex" / "session-001.md"
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2434,6 +2520,8 @@ class TestMain:
             mock_agent.export_session.return_value = expected_output
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2472,6 +2560,8 @@ class TestMain:
             mock_agent.export_raw_session.return_value = raw_output
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2506,6 +2596,7 @@ class TestMain:
             mock_agent.unsupported_uri_formats = frozenset({"raw", "markdown"})
             mock_session = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2535,6 +2626,7 @@ class TestMain:
             expected_output = tmp_path / "out" / "cursor" / "request-001.json"
             mock_agent.export_session.return_value = expected_output
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2565,6 +2657,7 @@ class TestMain:
             mock_agent.display_name = "Codex"
             mock_session = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner.agents = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
@@ -2609,6 +2702,7 @@ class TestMain:
 
             mock_agent.export_session.side_effect = _export_json
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2660,6 +2754,7 @@ class TestMain:
 
             mock_agent.export_session.side_effect = _export_json
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2704,6 +2799,8 @@ class TestMain:
             expected_output = output_root / "codex" / "session-001.md"
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
+
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2746,6 +2843,7 @@ class TestMain:
 
             mock_agent.export_session.side_effect = _export_json
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2793,6 +2891,7 @@ class TestMain:
 
             mock_agent.export_session.side_effect = _export_json
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2843,6 +2942,7 @@ class TestMain:
 
             mock_agent.export_session.side_effect = _export_json
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
@@ -2879,6 +2979,7 @@ class TestMain:
             mock_agent.get_sessions.return_value = []
             mock_scanner.agents = [mock_agent]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--list", "--summary"]):
@@ -2918,6 +3019,7 @@ class TestMain:
             mock_agent.display_name = "OpenCode"
             mock_agent.get_sessions.return_value = [mock.MagicMock() for _ in range(101)]
             mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select:

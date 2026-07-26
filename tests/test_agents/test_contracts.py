@@ -671,11 +671,35 @@ def test_contract_builders_cover_registered_providers() -> None:
 
 
 def _find_contract_session(fixture: ProviderContractFixture) -> Session:
-    assert fixture.agent.is_available() is True
     sessions = fixture.agent.get_sessions(days=3650)
     session = next((item for item in sessions if item.id == fixture.session_id), None)
     assert session is not None, f"{fixture.agent.name} did not expose {fixture.session_id}"
     return session
+
+
+@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
+def test_provider_contract_get_sessions_without_availability_probe(
+    build_fixture: ProviderBuilder,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fixture = build_fixture(monkeypatch, tmp_path)
+
+    assert fixture.session_id in {session.id for session in fixture.agent.get_sessions(days=3650)}
+
+
+@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
+def test_provider_contract_find_without_availability_probe(
+    build_fixture: ProviderBuilder,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fixture = build_fixture(monkeypatch, tmp_path)
+
+    session = fixture.agent.find_session_by_id(fixture.session_id)
+
+    assert session is not None
+    assert session.id == fixture.session_id
 
 
 @pytest.mark.parametrize(

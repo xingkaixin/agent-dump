@@ -1,11 +1,9 @@
 """URI parsing and session lookup helpers."""
 
 import re
-import sys
 
 from agent_dump.agent_registry import get_uri_path_prefixes, get_uri_scheme_map
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.i18n import Keys, i18n
 from agent_dump.scanner import AgentScanner
 
 
@@ -35,18 +33,5 @@ def find_session_by_id(
     *,
     agent_name: str | None = None,
 ) -> tuple[BaseAgent, Session] | None:
-    """Find a session by ID via provider-level lookups."""
-    available_agents = scanner.get_available_agents()
-    if agent_name is not None:
-        available_agents = [agent for agent in available_agents if agent.name == agent_name]
-
-    for agent in available_agents:
-        try:
-            session = agent.find_session_by_id(session_id)
-        except Exception as exc:
-            print(i18n.t(Keys.WARN_SESSION_LOOKUP_FAILED, agent=agent.display_name, error=exc), file=sys.stderr)
-            continue
-        if session is not None:
-            return agent, session
-
-    return None
+    """Compatibility adapter for Scanner-owned session lookup."""
+    return scanner.find_session_by_id(session_id, agent_name=agent_name)

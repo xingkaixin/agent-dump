@@ -8,6 +8,10 @@ Agent Dump discovers read-only conversation records from coding assistants and d
 A supported coding assistant whose local records can be discovered and translated into Sessions.
 _Avoid_: Agent, when referring to the data source
 
+**Provider Discovery**:
+The Provider-owned resolution of its read-only source roots and Session records.
+_Avoid_: Availability probe, when referring to the complete lookup process
+
 **Session**:
 One Provider-owned recorded conversation, including its identity, time range, source, and transcript-derived facts.
 _Avoid_: Thread, Chat
@@ -44,6 +48,10 @@ _Avoid_: Export
 
 - A Provider maps its storage schema into stable Session facts. Shared workflows
   do not interpret Provider-private metadata keys.
+- A Provider read entry point performs its own Provider Discovery; callers do
+  not establish hidden state by probing availability first.
+- The Scanner coordinates availability, listing, and locating across Providers,
+  preserving Provider order while isolating failures.
 - Working Directory is the only filesystem fact used by path Query and Collect
   deny rules.
 - Provider Project may be shown when Working Directory is unavailable, but it
