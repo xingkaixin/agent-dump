@@ -240,6 +240,27 @@ class TestMain:
         assert "路径=" in captured.out
         agent.get_sessions.assert_called_once_with(days=7)
 
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            ["agent-dump", "--list", "--format", "print"],
+            ["agent-dump", "--search", "bug", "--format", "print"],
+            ["agent-dump", "-d", "3", "--format", "print"],
+            ["agent-dump", "-q", "bug", "--format", "print"],
+        ],
+    )
+    def test_main_validates_explicit_and_implicit_list_formats_consistently(self, argv):
+        with (
+            mock.patch("agent_dump.cli.load_export_config", return_value=ExportConfig()),
+            mock.patch("agent_dump.cli.handle_session_modes", return_value=0) as mock_handle,
+            mock.patch("sys.argv", argv),
+        ):
+            result = main()
+
+        assert result == 0
+        assert mock_handle.call_args.kwargs["is_list_mode"] is True
+        assert mock_handle.call_args.kwargs["output_formats"] == ["print"]
+
     def test_main_agents_query_uri_uses_filtered_sessions_in_interactive(self):
         scanner = mock.MagicMock()
         known_agent = mock.MagicMock()

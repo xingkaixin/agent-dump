@@ -30,24 +30,14 @@ class ExportConfigLike(Protocol):
 def handle_session_modes(
     args: argparse.Namespace,
     *,
+    is_list_mode: bool,
     query_uri_spec: QuerySpec | None,
     output_specified: bool,
     format_specified: bool,
     output_formats: list[str],
     export_config: ExportConfigLike,
-    print_help: Callable[[], None],
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
 ) -> int | None:
-    if args.search:
-        args.list = True
-
-    if not args.interactive and not args.list:
-        if args.days != 7 or args.query or query_uri_spec is not None:
-            args.list = True
-        else:
-            print_help()
-            return None
-
     print("🚀 Agent Session Exporter\n")
     print("=" * 60 + "\n")
 
@@ -111,7 +101,7 @@ def handle_session_modes(
                     ),
                 )
             )
-            return 0 if args.list else 1
+            return 0 if is_list_mode else 1
 
     if args.search and query_spec is not None:
         warn_list_ignored_options(output_specified, format_specified)
@@ -125,7 +115,7 @@ def handle_session_modes(
     if query_spec:
         matched_sessions_by_agent = collect_query_matches(available_agents, days=args.days, spec=query_spec)
 
-    if args.list:
+    if is_list_mode:
         return _handle_list_mode(
             args,
             query_spec=query_spec,
