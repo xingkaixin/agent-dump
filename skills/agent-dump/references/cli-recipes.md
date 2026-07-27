@@ -134,8 +134,9 @@ uv run agent-dump "agents://.?q=timeout&providers=codex,claude&roles=user&limit=
 ### `--search`（全文搜索）
 
 - 基于 SQLite FTS5 的本地全文搜索，覆盖标题、消息、reasoning、tool state。
+- 每个词按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），多个词之间是 AND。
 - 双分词器：`unicode61` 处理西文，`trigram` 处理 CJK 与模糊匹配。
-- 索引基于源文件 mtime 增量更新；FTS5 不可用时回退到 O(n) 文件扫描。
+- 索引基于源文件 mtime 增量更新；FTS5 不可用时回退到 O(n) 文件扫描；索引错误会在 stderr 提示并建议 `--reindex`。
 - 作为列表搜索模式使用，可与 `--list`、`-days`、`-query` 组合。
 
 示例：
@@ -163,12 +164,14 @@ uv run agent-dump --search "auth" --list -days 30
 
 补充：
 - `-p/-page-size` 参数目前在 `--list` 模式下保留兼容，不生效。
-- `--lang` 支持 `en` 与 `zh`。
+- `--lang` 支持 `en` 与 `zh`；诊断与用户可见文案跟随 locale。
 - `md` 是 `markdown` 的别名。
 - `--head` 仅 URI 模式可用，用于查看轻量元数据，不能与 `--format` 或 `--summary` 组合。
 - `--summary` 仅 URI 模式可用，且需 `--format` 包含 `json`。
 - `--collect-mode` 默认 `pm`，`insight` 用于作者洞察视角。
 - `--collect` 日期优先级为显式 `-since/-until` > 显式 `-days` > 缺省当天。
+- 结构化 `role:` 查询的 snippet 只来自允许角色的消息，不会混入无角色维度的 FTS 证据。
+- 退出码：`0` 成功（含合法空结果、交互式导出部分成功）；`1` 无法完成请求（无 provider 数据、URI 未命中、交互式导出全部失败、参数组合非法）；`2` 用法错误。
 
 ## 4) 常见错误与处理
 
@@ -203,15 +206,18 @@ uv run agent-dump --search "auth" --list -days 30
 
 现象：
 - 扫描后没有可用 agent 数据源。
+- `--list` / `--stats` / URI 等模式退出码为 `1`，并输出「未找到任何可用的本地会话数据」类诊断。
 
 处理：
 1. 确认本地对应工具已有会话数据目录。
 2. 重试 `uv run agent-dump --list` 进行快速探测。
+3. 不要把该退出码 `1` 与「时间窗内无会话」的退出码 `0` 混为一谈。
 
 ### 无匹配会话
 
 现象：
-- `-days` 时间窗内无会话，或 `-query` 过滤后为空。
+- `-days` 时间窗内无会话，或 `-query` / `--search` 过滤后为空。
+- 退出码仍为 `0`（合法空结果）。
 
 处理：
 1. 扩大时间窗（例如 `-days 30`）。

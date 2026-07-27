@@ -1,5 +1,48 @@
 # 更新日志
 
+## [0.13.0] - 2026-07-27
+
+### 问题修复
+
+- **CLI 退出码与导出结果**
+  - 本机没有任何可用 provider 数据时，`--list` 改为退出码 `1`，使 `agent-dump --list && ...` 在无可列内容时失败
+  - URI 与交互式导出统一 outcome 模型：每次尝试都保留路径与失败信息；交互式导出在全部请求输出失败时退出 `1`，同时保留部分成功结果
+  - 在格式与 URI 校验之前，将显式/隐式操作归一化为不可变的 command plan
+- **安全与本地数据卫生**
+  - 输出到终端、Markdown 与文件名之前，净化不可信的会话文本
+  - 工具自有派生会话文件与目录使用仅所有者可访问权限
+  - 配置编辑不再丢弃未知的顶层键、section 或嵌套 table
+- **搜索、查询与 collect 正确性**
+  - FTS5 查询按字面量词构建（不解释 `AND`/`NEAR`/`*` 等操作符语法）；索引错误输出到 stderr 并提示 `--reindex`
+  - 不再把内容提取失败的会话当作已成功索引
+  - 查询过滤全程保留 role 匹配证据，使 `role:` snippet 只来自允许角色的消息
+  - 校验 collect LLM endpoint，且仅对可重试失败重试
+- **Provider 容错与会话事实**
+  - 在所有会话读取路径隔离 provider 失败，单个损坏数据源不再中止其余 provider
+  - 限制 Cursor subagent 展开以防引用环，并约束列表阶段的 per-session 工作量
+  - 通过统一 session facts 边界派生工作目录、provider project、session source 与缓存失效来源
+  - 将无时区 ISO-8601 时间戳按 UTC 解析，保证跨机器的排序与 `-days` 过滤一致
+
+### 性能
+
+- 记忆化 Kimi 工作目录哈希，并增加 session id 直接定位路径
+- 去掉共享导出与过滤路径上多余的全量遍历
+- JSON 导出走请求级会话缓存
+- 修复搜索索引构建的平方复杂度，并限制峰值内存
+
+### 变更
+
+- 完成面向用户的 CLI 文案、诊断信息与 provider 下一步提示的 `en`/`zh` 本地化
+- 将 provider 发现、并发列表/定位、排序与失败隔离集中到 `AgentScanner`
+- URI 路径前缀与标识符标签改由 registry 注册数据驱动，不再在共享模块硬编码分支
+- 将 collect 的摘要 payload 与进度/统计层拆到独立模块
+- 产品落地页改用 Astro 重建（双语，版本号从 Python 包注入），并提升 Lighthouse 分数
+
+### 测试
+
+- 新增 CLI 端到端集成覆盖，以及可切换的英文 locale 路径测试
+- 扩展安全净化、FTS 查询构造、配置文档保留、session facts、导出 outcome、退出码约定与时间工具的回归覆盖
+
 ## [0.12.0] - 2026-07-18
 
 ### 新增功能
@@ -810,6 +853,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.13.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.13.0
 [0.12.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.12.0
 [0.11.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.2
 [0.11.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.1
