@@ -27,9 +27,9 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 - **Message Details**: Fully retains session messages, tool calls, and other details
 - **Smart Title Extraction**: Automatically extract session titles from agent metadata
 - **Session Statistics**: View usage statistics grouped by agent and time (`--stats`)
-- **Full-Text Search**: Local SQLite FTS5 search across session titles, messages, reasoning, and tool state (`--search`)
+- **Full-Text Search**: Local SQLite FTS5 search across session titles, messages, reasoning, and tool state (`--search`); terms are matched literally
 - **Ranked Search Evidence**: Search results include rank, URI, updated time, and highlighted snippets
-- **Actionable Diagnostics**: CLI errors show checked roots, parsed URI fields, capability gaps, and next steps
+- **Actionable Diagnostics**: CLI errors show checked roots, parsed URI fields, capability gaps, and next steps (localized via `--lang en|zh`)
 
 ## Path Discovery
 
@@ -187,8 +187,8 @@ Next steps:
 
 | Code | Meaning |
 |------|---------|
-| `0` | The command did what was asked — including when the result set is legitimately empty (no sessions in the `-days` window, a keyword or `--search` that matched nothing). |
-| `1` | The command could not do what was asked: no provider data exists on this machine, a URI did not resolve to a session, or an argument combination is invalid. |
+| `0` | The command did what was asked — including when the result set is legitimately empty (no sessions in the `-days` window, a keyword or `--search` that matched nothing), and when interactive export partially succeeds. |
+| `1` | The command could not do what was asked: no provider data exists on this machine, a URI did not resolve to a session, every requested interactive export failed, or an argument combination is invalid. |
 | `2` | Argument usage error, raised by `argparse` (unknown flag, invalid `--format` value). |
 
 This makes `agent-dump --list && ...` meaningful: it succeeds when sessions were

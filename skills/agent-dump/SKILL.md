@@ -57,8 +57,10 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - 保留用户显式给出的 `--head` 参数，用于 URI 轻量元数据查看。
 
 3. 执行并检查退出状态
-- 退出码 `0` 视为成功。
-- 非 `0` 视为失败，提炼关键报错并给出下一步修复建议。
+- 退出码 `0`：命令完成了被要求的事（包括时间窗/关键词本就无命中，以及交互式导出部分成功）。
+- 退出码 `1`：命令做不到被要求的事（本机无 provider 数据、URI 未命中、交互式导出全部失败、参数组合非法等）。
+- 退出码 `2`：`argparse` 用法错误（未知参数、非法 `--format` 等）。
+- 非 `0` 视为失败时，提炼关键报错并给出下一步修复建议；不要把「合法空结果」当成失败。
 
 4. 输出结果摘要
 - 说明执行模式（interactive/list/uri/collect/config）。
@@ -79,11 +81,12 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - `--collect` 日期优先级为显式 `-since/-until` > 显式 `-days` > 缺省当天。
 - `--collect` 与普通 session URI、`--interactive`、`--list` 组合时会报冲突。
 - `--stats` 支持 `-days` 与 `-query`。
-- `--search` 作为列表搜索模式使用，可与 `--list`、`-days`、`-query` 组合。
+- `--search` 作为列表搜索模式使用，可与 `--list`、`-days`、`-query` 组合；每个词按字面量匹配，不解释 FTS5 操作符语法（`AND`/`NEAR`/`*` 等），多词为 AND。
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。
 - `--providers` 是只读能力发现命令，不扫描会话；输出格式与路径能力均从 provider 声明派生。
 - 仅使用当前 CLI 已支持的 URI 协议：`opencode`、`zcode`、`codex`、`kimi`、`claude`、`cursor`、`pi`（其中 `claude` 对应 Claude Code）。
 - 路径作用域查询 URI 使用 `agents://<path>?q=<keyword>&providers=<names>&roles=<roles>&limit=<n>`。
+- `--list` 在本机完全没有 provider 数据时退出 `1`；时间窗或关键词无命中仍为 `0`。
 
 ## 参数与错误参考
 

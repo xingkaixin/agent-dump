@@ -2,6 +2,49 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [0.13.0] - 2026-07-27
+
+### Fixed
+
+- **CLI exit codes and export outcomes**
+  - `--list` now exits `1` when no usable local provider data exists, so `agent-dump --list && ...` fails when there is nothing to list
+  - Interactive and URI export paths share one outcome model: every attempt keeps its path and failure, and interactive export exits `1` when every requested output fails while still preserving partial-success results
+  - CLI modes are normalized into one immutable command plan before format and URI validation
+- **Security and local data hygiene**
+  - Sanitize untrusted session text before terminal, Markdown, and filename output
+  - Restrict permissions on tool-owned derived session files and directories (owner-only)
+  - Keep configuration edits from dropping unknown top-level keys, sections, or nested tables
+- **Search, query, and collect correctness**
+  - Build FTS5 queries as literal terms (operator syntax such as `AND`/`NEAR`/`*` is not interpreted); surface index errors on stderr with a `--reindex` hint
+  - Stop treating failed content extractions as successfully indexed
+  - Carry role-match evidence through query filtering so `role:` snippets come only from allowed messages
+  - Validate the collect LLM endpoint and retry only retryable request failures
+- **Provider resilience and session facts**
+  - Isolate provider failures across every session-fetch path so one broken source cannot abort the rest
+  - Bound Cursor subagent expansion against reference cycles and limit per-session work during listing
+  - Derive working directory, provider project, session source, and cache invalidation sources through one shared session-facts boundary
+  - Parse naive ISO-8601 provider timestamps as UTC so session order and `-days` filtering stay consistent across machines
+
+### Performance
+
+- Memoize Kimi work-directory hashing and add a direct session-id lookup path
+- Drop redundant full passes over session content in shared export and filtering paths
+- Route JSON export through the request-scoped session cache
+- Fix quadratic search-index builds and cap peak index memory
+
+### Changed
+
+- Finish localizing user-facing CLI text, diagnostics, and provider next-step hints for `en`/`zh`
+- Centralize provider discovery, concurrent listing/lookup, ordering, and failure isolation in `AgentScanner`
+- Drive URI path prefixes and identifier labels from registry registration data instead of shared hard-coded branches
+- Extract collect summary-payload and progress/stats layers into focused modules
+- Rebuild the product landing page with Astro (bilingual, version injected from the Python package) and improve Lighthouse scores
+
+### Tests
+
+- Add CLI end-to-end integration coverage and switchable English-locale path tests
+- Expand regression coverage for security sanitization, FTS query construction, config document preservation, session facts, export outcomes, exit-code conventions, and time utilities
+
 ## [0.12.0] - 2026-07-18
 
 ### Added
@@ -806,6 +849,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.13.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.13.0
 [0.12.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.12.0
 [0.11.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.2
 [0.11.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.1

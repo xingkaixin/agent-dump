@@ -124,12 +124,15 @@ agent-dump --config edit
 - **AI collect**: `--collect` summarizes sessions over a date range using your configured LLM, with `pm` and `insight` modes
 - **Relative collect windows**: Explicit `-days N` selects today minus N days through today; `-since/-until` takes precedence, while collect without either remains today-only
 - **Collect dry-run**: `--collect --dry-run` previews provider breakdown, session/chunk counts, concurrency, and save path
-- **Full-text search**: `--search` uses local SQLite FTS5 with ranked results and highlighted snippets
-- **Structured queries**: `provider:`, `role:`, `path:`, `limit:` filters in `-query`
+- **Full-text search**: `--search` uses local SQLite FTS5 with ranked results and highlighted snippets; every term is matched literally (FTS5 operator syntax is not interpreted)
+- **Structured queries**: `provider:`, `role:`, `path:`, `limit:` filters in `-query` (`role:` snippets come only from allowed messages)
 - **Scoped queries**: `agents://<path>?q=keyword&providers=codex,claude` for repo-scoped searches
 - **Multi-format export**: `--format json,markdown,raw,print` with `md` alias for markdown
+- **Localized CLI**: `--lang en|zh` for user-facing messages and diagnostics
+- **Predictable exit codes**: `0` success (including legitimately empty results), `1` could not complete the request, `2` usage error
 - **Config-driven**: `~/.config/agent-dump/config.toml` for AI provider, shortcuts, and agent deny-lists
 
 ## Documentation
 
 Full documentation and Python source: [xingkaixin/agent-dump](https://github.com/xingkaixin/agent-dump).
+Changelog: [CHANGELOG.md](https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md).
