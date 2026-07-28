@@ -131,7 +131,9 @@ class ClaudeCodeAgent(FileSessionAgent):
         project_dir = file_path.parent
         try:
             scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)
-            first_line = scan.first_record
+            # session_header 在首记录超过 head 窗口时给出空 dict：Claude/Codex 靠目录
+            # 布局与文件名识别会话，首记录只提供元数据，缺了就走既有的 mtime/目录名回退
+            first_line = scan.session_header
             if first_line is None:
                 return None
 
