@@ -29,6 +29,7 @@ from agent_dump.agents.message_assembly import (
     try_append_to_assistant_group,
 )
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
+from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
@@ -274,6 +275,7 @@ class ClaudeCodeAgent(FileSessionAgent):
         warn_skipped_records(scan)
 
         stats["message_count"] = len(messages)
+        self._accumulate_token_totals(stats, messages)
 
         return {
             "id": session.id,
@@ -374,6 +376,23 @@ class ClaudeCodeAgent(FileSessionAgent):
             elif isinstance(item, str) and item.strip():
                 parts.append(build_text_part(item, timestamp_ms))
         return parts
+
+    def _accumulate_token_totals(self, stats: dict[str, Any], messages: list[dict[str, Any]]) -> None:
+        """Sum usage from the assembled messages rather than from raw JSONL records.
+
+        一轮 assistant 回复会写出多条增量记录，按行累加会把同一份 usage 重复计入；
+        最终消息里每个 assistant 组只保留一份 usage，从这里汇总天然只算一次。
+
+        message["tokens"] 存的是 Anthropic 原样的 usage，字段名是 input_tokens /
+        output_tokens，与 cursor/opencode 的 input / output 不同——这里只读 Claude
+        自己的形状，不改动公开导出字段。
+        """
+        for message in messages:
+            tokens = message.get("tokens")
+            if not isinstance(tokens, dict):
+                continue
+            stats["total_input_tokens"] += safe_int(tokens.get("input_tokens"))
+            stats["total_output_tokens"] += safe_int(tokens.get("output_tokens"))
 
     def _apply_assistant_metadata(self, message: dict[str, Any], msg: dict[str, Any]) -> None:
         """Apply model/usage metadata to an assistant message when available."""
