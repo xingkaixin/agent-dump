@@ -151,6 +151,7 @@ CHINESE_LITERAL_EXEMPTIONS = {
     # 模型输出质量（见 AD-138 / AD-146 的范围说明）
     "collect.py",
     "collect_llm.py",
+    "prompt_safety.py",
     "uri_workflow.py",
     # i18n 目录本身
     "i18n.py",

@@ -54,6 +54,7 @@ from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
 from agent_dump.private_files import write_private_text
+from agent_dump.prompt_safety import data_envelope
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
@@ -492,20 +493,26 @@ def build_collect_chunk_prompt(
             "5. tools_used 只放工具名。",
             "6. 字符串内部如需引用英文双引号，必须按 JSON 规则转义，或改用中文引号。",
         ]
+    # title、project_directory 与事件正文都来自第三方会话；用 JSON envelope 包住，
+    # 让「这是待总结的数据」在结构上可辨识，而不是和上面的规则同处一段纯文本
+    metadata_body = "\n".join(
+        [
+            f"title: {entry.session_title}",
+            f"project_directory: {entry.project_directory or '(unknown)'}",
+            f"created_at: {to_local_datetime(entry.created_at, resolved_local_tz).isoformat()}",
+            f"chunk: {chunk_index + 1}/{chunk_total}",
+        ]
+    )
+    events_body = "\n".join(_render_event(event) for event in chunk_events)
     lines.extend(
         [
             "",
-            "会话元信息：",
-            f"- session_uri: {entry.session_uri}",
-            f"- title: {entry.session_title}",
-            f"- project_directory: {entry.project_directory or '(unknown)'}",
-            f"- created_at: {to_local_datetime(entry.created_at, resolved_local_tz).isoformat()}",
-            f"- chunk: {chunk_index + 1}/{chunk_total}",
+            f"session_uri: {entry.session_uri}",
             "",
-            "chunk events:",
+            data_envelope("session_metadata", source=entry.session_uri, body=metadata_body),
+            data_envelope("session_events", source=entry.session_uri, body=events_body),
         ]
     )
-    lines.extend(f"- {_render_event(event)}" for event in chunk_events)
     return "\n".join(lines)
 
 
@@ -532,8 +539,15 @@ def build_collect_merge_prompt(
         "待归并摘要：",
     ]
     for index, payload in enumerate(payloads, start=1):
-        lines.append(f"## summary {index}")
-        lines.append(_serialize_summary_payload(payload))
+        # 中间摘要是模型生成的派生数据，同样不可信：一次被接受的注入会顺着
+        # tree reduction 扩散到其他 Session 的报告里
+        lines.append(
+            data_envelope(
+                "untrusted_derived_summary",
+                source=f"{entry.session_uri}#summary-{index}",
+                body=_serialize_summary_payload(payload),
+            )
+        )
     return "\n".join(lines)
 
 

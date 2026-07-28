@@ -29,6 +29,7 @@ from agent_dump.diagnostics import (
 )
 from agent_dump.exporting import execute_exports
 from agent_dump.i18n import Keys, i18n
+from agent_dump.prompt_safety import UNTRUSTED_DATA_RULES, data_envelope
 from agent_dump.scanner import AgentScanner
 
 
@@ -47,10 +48,11 @@ def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
             "2. 总结关键目标、主要改动、风险/异常、结果。",
             "3. 若信息不足，明确指出。",
             "",
+            *UNTRUSTED_DATA_RULES,
+            "",
             f"会话 URI: {uri}",
             "",
-            "会话内容：",
-            rendered_session_text,
+            data_envelope("session_transcript", source=uri, body=rendered_session_text),
         ]
     )
 
