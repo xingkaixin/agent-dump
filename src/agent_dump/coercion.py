@@ -30,6 +30,28 @@ def safe_int(value: Any, default: int = 0) -> int:
     return default
 
 
+def safe_float(value: Any, default: float = 0.0) -> float:
+    """Coerce a provider value to float, falling back to default.
+
+    与 safe_int 同一套语义：bool 不是数值（True 会静默变成 1.0），NaN/Inf 不可累加
+    ——一次相加就能把整份统计变成 nan。
+    """
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        number = float(value)
+    elif isinstance(value, str):
+        try:
+            number = float(value.strip())
+        except ValueError:
+            return default
+    else:
+        return default
+    if number != number or number in (float("inf"), float("-inf")):
+        return default
+    return number
+
+
 def safe_epoch_datetime(value: Any, *, unit: str = "s") -> datetime | None:
     """Convert an epoch value to an aware UTC datetime, or None when unusable.
 

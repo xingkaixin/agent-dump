@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from agent_dump.coercion import safe_epoch_datetime, safe_int
+from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 
 
 class TestSafeInt:
@@ -59,3 +59,33 @@ class TestSafeEpochDatetime:
 
     def test_millisecond_value_read_as_seconds_is_still_bounded(self):
         assert safe_epoch_datetime(1704067200000, unit="s") is None
+
+
+class TestSafeFloat:
+    """AD-160：cost 等浮点统计要与 safe_int 同一套不可信值语义。"""
+
+    def test_numbers_pass_through(self):
+        assert safe_float(1.5) == 1.5
+        assert safe_float(3) == 3.0
+        assert safe_float("2.25") == 2.25
+        assert safe_float(" 2.25 ") == 2.25
+
+    def test_bool_is_not_a_number(self):
+        assert safe_float(True) == 0.0
+        assert safe_float(False) == 0.0
+
+    def test_nan_and_infinity_fall_back(self):
+        assert safe_float(float("nan")) == 0.0
+        assert safe_float(float("inf")) == 0.0
+        assert safe_float(float("-inf")) == 0.0
+        assert safe_float("nan") == 0.0
+        assert safe_float("inf") == 0.0
+
+    def test_unusable_values_fall_back(self):
+        assert safe_float(None) == 0.0
+        assert safe_float("abc") == 0.0
+        assert safe_float({}) == 0.0
+        assert safe_float([1.0]) == 0.0
+
+    def test_explicit_default(self):
+        assert safe_float(None, -1.0) == -1.0
