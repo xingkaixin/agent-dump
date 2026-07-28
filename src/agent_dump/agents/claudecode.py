@@ -33,7 +33,7 @@ class ClaudeCodeAgent(FileSessionAgent):
 
     def __init__(self):
         super().__init__("claudecode", "Claude Code")
-        self._sessions_index_cache: dict[str, dict] = {}
+        self._sessions_index_cache: dict[Path, dict[str, dict]] = {}
         self._sessions_index_lock = Lock()
 
     def _iter_session_files(self) -> Iterator[Path]:
@@ -75,19 +75,27 @@ class ClaudeCodeAgent(FileSessionAgent):
         except Exception:
             return {}
 
+    def _project_sessions_index(self, project_dir: Path) -> dict[str, dict]:
+        """Return a project's sessions index, loading it at most once per project.
+
+        缓存整张索引而不是逐条命中项：缺失 Session ID 同样命中缓存，否则每个缺失
+        ID 都要在锁内重读并展开整个索引，S 个文件对 E 个条目就是 O(S·E)，还会把
+        FileSessionAgent 的并行解析串行化。
+        """
+        cached = self._sessions_index_cache.get(project_dir)
+        if cached is not None:
+            return cached
+
+        with self._sessions_index_lock:
+            cached = self._sessions_index_cache.get(project_dir)
+            if cached is None:
+                cached = self._load_sessions_index(project_dir)
+                self._sessions_index_cache[project_dir] = cached
+        return cached
+
     def _get_session_metadata(self, session_id: str, project_dir: Path) -> dict | None:
         """Get session metadata from sessions-index.json"""
-        cache_key = f"{project_dir.name}:{session_id}"
-        if cache_key not in self._sessions_index_cache:
-            with self._sessions_index_lock:
-                if cache_key not in self._sessions_index_cache:
-                    # Load index for this project
-                    project_index = self._load_sessions_index(project_dir)
-                    # Update cache with all entries from this project
-                    for sid, entry in project_index.items():
-                        self._sessions_index_cache[f"{project_dir.name}:{sid}"] = entry
-
-        return self._sessions_index_cache.get(cache_key)
+        return self._project_sessions_index(project_dir).get(session_id)
 
     def _extract_scan_metadata(
         self, records: list[dict[str, Any]], fallback_created_at: datetime, *, scanned_all: bool
