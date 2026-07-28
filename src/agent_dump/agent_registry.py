@@ -73,7 +73,7 @@ AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
         factory=CursorAgent,
         uri_schemes=("cursor",),
         uri_identifier_label="<requestid>",
-        location_line="  - Cursor: CURSOR_DATA_PATH or ~/Library/Application Support/Cursor/User/*",
+        location_line="  - Cursor: ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
     ),
     AgentRegistration(
         name="pi",

@@ -469,11 +469,8 @@ def _build_zcode_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Pr
 def _build_cursor_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ProviderContractFixture:
     now = _now_ms()
     cursor_home = tmp_path / "cursor-home"
-    workspace_root = tmp_path / "workspaceStorage"
     global_db = _cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
-    workspace_root.mkdir(parents=True)
     global_db.parent.mkdir(parents=True)
-    monkeypatch.setenv("CURSOR_DATA_PATH", str(workspace_root))
     monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
     _create_cursor_global_db(global_db)
 
