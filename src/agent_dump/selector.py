@@ -11,6 +11,7 @@ from questionary import Choice, Style
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
 from agent_dump.rendering import format_session_metadata_summary
+from agent_dump.text_safety import safe_display_text
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
 
 
@@ -177,12 +178,14 @@ def select_sessions_interactive(
 
         # Add sessions in this group
         for session in group_sessions_list:
-            label = agent.get_formatted_title(session)
+            # 标题、summary、URI 全部来自第三方 Session；先逐个净化成单行，再由这里
+            # 加入有意的换行。对拼好的整块调 safe_display_text 会把布局一起压平。
+            label = safe_display_text(agent.get_formatted_title(session))
             if show_metadata_summary:
-                summary = format_session_metadata_summary(agent, session)
+                summary = safe_display_text(format_session_metadata_summary(agent, session))
                 title = f"  {label}\n    {summary}"
             else:
-                uri = agent.get_session_uri(session)
+                uri = safe_display_text(agent.get_session_uri(session))
                 title = f"  {label} {uri}"
             choices.append(questionary.Choice(title=title, value=session))
 
@@ -237,12 +240,12 @@ def select_sessions_simple(
     for group_name, group_sessions_list in groups.items():
         print(f"\n[{group_name}] ({len(group_sessions_list)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
         for session in group_sessions_list:
-            title = agent.get_formatted_title(session)
+            title = safe_display_text(agent.get_formatted_title(session))
             if show_metadata_summary:
                 print(f"{idx}. {title}")
-                print(f"    {format_session_metadata_summary(agent, session)}")
+                print(f"    {safe_display_text(format_session_metadata_summary(agent, session))}")
             else:
-                uri = agent.get_session_uri(session)
+                uri = safe_display_text(agent.get_session_uri(session))
                 print(f"{idx}. {title} {uri}")
             session_map[idx] = session
             idx += 1

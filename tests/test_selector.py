@@ -4,13 +4,15 @@
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest import mock
 
 from locale_helpers import Keys, expect
 import pytest
 
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import BaseAgent, Session
+import agent_dump.selector as selector_module
 from agent_dump.selector import (
     get_time_group,
     group_sessions,
@@ -20,6 +22,7 @@ from agent_dump.selector import (
     select_sessions_interactive,
     select_sessions_simple,
 )
+from agent_dump.text_safety import has_unsafe_body_characters
 
 
 @pytest.fixture
@@ -476,3 +479,90 @@ class TestTimeGrouping:
         assert list(groups.keys()) == ["今天", "昨天"]
         assert [session.id for session in groups["今天"]] == ["today-seconds"]
         assert [session.id for session in groups["昨天"]] == ["yesterday-ms"]
+
+
+class TestSelectorSanitizesUntrustedFields:
+    """AD-165：Provider title、summary 与 URI 都来自第三方会话。"""
+
+    POISON = "real\x1b[2K\rINJECTED\x1b]0;pwned\x07\x9b‮"
+
+    class _EvilAgent(BaseAgent):
+        def __init__(self, poison: str) -> None:
+            super().__init__("evil", "Evil")
+            self._poison = poison
+
+        def scan(self):
+            return []
+
+        def is_available(self) -> bool:
+            return True
+
+        def get_sessions(self, days: int = 7):
+            return []
+
+        def export_session(self, session, output_dir):
+            raise NotImplementedError
+
+        def get_session_data(self, session) -> dict:
+            return {}
+
+        def get_formatted_title(self, session) -> str:
+            return f"title {self._poison}"
+
+        def get_session_uri(self, session) -> str:
+            return f"evil://{self._poison}"
+
+    def _session(self):
+        now = datetime.now(timezone.utc)
+        return Session(
+            id="s1",
+            title=f"t {self.POISON}",
+            created_at=now,
+            updated_at=now,
+            source_path=Path("/tmp/x.jsonl"),
+            metadata={},
+        )
+
+    def test_non_tty_listing_strips_control_characters(self, monkeypatch, capsys):
+        monkeypatch.setattr("builtins.input", lambda *args: "")
+
+        select_sessions_simple([self._session()], self._EvilAgent(self.POISON), show_metadata_summary=False)
+
+        out = capsys.readouterr().out
+        assert not has_unsafe_body_characters(out)
+        assert "INJECTED" in out, "内容保留，移除的只是控制字符"
+
+    def test_non_tty_listing_with_summary_strips_control_characters(self, monkeypatch, capsys):
+        monkeypatch.setattr("builtins.input", lambda *args: "")
+
+        select_sessions_simple([self._session()], self._EvilAgent(self.POISON), show_metadata_summary=True)
+
+        out = capsys.readouterr().out
+        assert not has_unsafe_body_characters(out)
+
+    def test_tty_choice_titles_are_sanitized_but_keep_intentional_newlines(self, monkeypatch):
+        captured: dict[str, list] = {}
+
+        class _FakeQuestion:
+            application = SimpleNamespace(key_bindings=None)
+
+            def ask(self):
+                return []
+
+        def fake_checkbox(_message, *, choices, **_kwargs):
+            captured["choices"] = choices
+            return _FakeQuestion()
+
+        monkeypatch.setattr(selector_module, "is_terminal", lambda: True)
+        monkeypatch.setattr(selector_module.questionary, "checkbox", fake_checkbox)
+        monkeypatch.setattr(selector_module, "Style", lambda *a, **k: None)
+
+        select_sessions_interactive([self._session()], self._EvilAgent(self.POISON), show_metadata_summary=True)
+
+        titles = [choice.title for choice in captured["choices"] if isinstance(choice.title, str)]
+        session_titles = [title for title in titles if "INJECTED" in title]
+        assert session_titles, "会话行必须出现在 choices 中"
+        for title in session_titles:
+            assert not has_unsafe_body_characters(title)
+            # summary 模式下的换行是 selector 自己加的布局，必须保留
+            assert "\n" in title
