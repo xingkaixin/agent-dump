@@ -50,8 +50,14 @@ test-npm:
 # Auto-fix lint issues and format code
 fix: lint-fix lint-format
 
+# Fail when uv.lock no longer matches pyproject.toml
+lock-check:
+    @echo "🔍 Checking uv.lock is current..."
+    uv lock --check
+    @echo "✅ uv.lock matches pyproject.toml!"
+
 # Run local CI checks with the current Python; include npm tests when Node.js is available
-isok: lint check test
+isok: lock-check lint check test
     @if command -v node >/dev/null 2>&1; then \
         just test-npm; \
     else \

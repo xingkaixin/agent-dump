@@ -120,3 +120,54 @@ class TestCiHasNoDeadSteps:
         content = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
         assert "rm -f .python-version" not in content
+
+
+class TestVerificationConsumesTheCommittedLock:
+    """AD-174：uv sync/run 默认会重新锁定，验证过程绝不能修改 uv.lock。
+
+    临时 checkout 里的静默重锁不会出现在 PR diff，评审看到的解析结果与实际安装、
+    实际发布的就不是一回事了。
+    """
+
+    @staticmethod
+    def _workflow(name: str) -> str:
+        return (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("workflow", ["ci.yml", "release.yml"])
+    def test_every_uv_sync_is_locked(self, workflow):
+        content = self._workflow(workflow)
+        sync_lines = [
+            stripped
+            for line in content.splitlines()
+            if "uv sync" in (stripped := line.strip()) and not stripped.startswith("#")
+        ]
+
+        assert sync_lines, f"{workflow} 应当有 uv sync 步骤"
+        for line in sync_lines:
+            assert "--locked" in line, f"{workflow} 的 `{line}` 会在需要时静默重锁"
+
+    @pytest.mark.parametrize("workflow", ["ci.yml", "release.yml"])
+    def test_uv_locked_is_set_for_the_whole_workflow(self, workflow):
+        """--locked 只管 uv sync；后续的 uv run 需要 UV_LOCKED 才受同一约束。"""
+        content = self._workflow(workflow)
+
+        assert 'UV_LOCKED: "1"' in content, f"{workflow} 未设置 UV_LOCKED"
+
+    def test_isok_checks_the_lock_before_anything_else(self):
+        justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
+        isok_line = next(line for line in justfile.splitlines() if line.startswith("isok:"))
+
+        assert "lock-check" in isok_line, "本地主验证必须先确认 lock 未漂移"
+        assert isok_line.index("lock-check") < isok_line.index("lint")
+        assert "uv lock --check" in justfile
+
+    def test_dependency_upgrades_stay_out_of_verification(self):
+        """升级依赖是显式动作；验证 recipe 里出现 --upgrade 就等于每次验证都在改锁。"""
+        justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
+        verification_recipes = ("lock-check:", "lint:", "check:", "test:", "isok:")
+
+        for recipe in verification_recipes:
+            if recipe not in justfile:
+                continue
+            body = justfile.split(recipe, 1)[1].split("\n\n", 1)[0]
+            assert "--upgrade" not in body, f"{recipe} 不应在验证过程中升级依赖"
