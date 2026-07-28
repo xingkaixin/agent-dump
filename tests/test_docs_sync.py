@@ -6,6 +6,7 @@ AD-119 已经手工同步过一次 README 的结构树，几个月后 AGENTS.md 
 
 from pathlib import Path
 import re
+import shlex
 
 import pytest
 
@@ -111,3 +112,80 @@ class TestChangelogLinksResolve:
 
     def test_chinese_changelog_is_a_real_file(self):
         assert (REPO_ROOT / "docs" / "zh" / "CHANGELOG.md").is_file()
+
+
+class TestLandingPageMatchesTheRealCli:
+    """AD-177：landing page 自称是 truthful preview，那它的行为声明就得是真的。
+
+    只锁真实 CLI 的不变量——命令、字段标签、默认输出根、Provider URI scheme。
+    颜色、时间戳、排名数值这些会随环境变化，不进断言。
+    """
+
+    SCENES = (REPO_ROOT / "web" / "src" / "lib" / "i18n.ts").read_text(encoding="utf-8")
+
+    @staticmethod
+    def _scene_block() -> str:
+        content = TestLandingPageMatchesTheRealCli.SCENES
+        start = content.index("export const terminalScenes")
+        return content[start : content.index("];", start)]
+
+    def test_every_previewed_flag_exists_in_the_cli(self):
+        """预览里的 flag 从 cli.py 的 add_argument 校验，不在测试里重建一份参数表。"""
+        cli_source = (REPO_ROOT / "src" / "agent_dump" / "cli.py").read_text(encoding="utf-8")
+        declared = set(re.findall(r'add_argument\(\s*"(-{1,2}[a-z-]+)"', cli_source))
+        declared |= set(re.findall(r'add_argument\("[^"]+",\s*"(-{1,2}[a-z-]+)"', cli_source))
+
+        block = self._scene_block()
+        commands = re.findall(r"command: [\"'](agent-dump [^\"']+)[\"']", block)
+        assert commands, "至少要有一个终端场景"
+
+        for command in commands:
+            for token in shlex.split(command)[1:]:
+                if token.startswith("-"):
+                    assert token in declared, f"{command!r} 用了 CLI 没有的参数 {token}"
+
+    def test_the_markdown_scene_uses_the_real_default_output_root(self):
+        from agent_dump.cli_shared import DEFAULT_OUTPUT_BASE_DIR
+
+        block = self._scene_block()
+        root = DEFAULT_OUTPUT_BASE_DIR.name
+
+        assert f"{root}/codex/" in block, (
+            f"未传 --output 时导出落在 {DEFAULT_OUTPUT_BASE_DIR}/<provider>/，预览不能写别的路径"
+        )
+        assert "./exports/" not in block, "./exports 不是任何默认路径"
+
+    def test_previewed_uris_use_registered_schemes(self):
+        from agent_dump.agent_registry import AGENT_REGISTRATIONS
+
+        registered = {scheme for reg in AGENT_REGISTRATIONS for scheme in reg.uri_schemes}
+        block = self._scene_block()
+        previewed = set(re.findall(r"([a-z][a-z0-9]*)://", block))
+
+        unknown = sorted(previewed - registered)
+        assert unknown == [], f"预览里出现了未注册的 URI scheme: {unknown}"
+
+    def test_interactive_scene_shows_the_two_stage_selection(self, use_language):
+        """真实流程是先选 Provider 再选该 Provider 的会话，不是跨 Provider 的单一列表。"""
+        from agent_dump.i18n import Keys, i18n
+
+        use_language("en")
+        agent_prompt = i18n.t(Keys.SELECT_AGENT_PROMPT)
+        sessions_header = i18n.t(Keys.AVAILABLE_SESSIONS)
+
+        block = self._scene_block()
+        assert agent_prompt in block, "缺少选择 Provider 这一步"
+        assert sessions_header in block
+        assert block.index(agent_prompt) < block.index(sessions_header), "Provider 选择在会话列表之前"
+
+    def test_search_scene_uses_the_real_header_and_labels(self, use_language):
+        from agent_dump.i18n import Keys, i18n
+
+        use_language("en")
+        header = i18n.t(Keys.SEARCH_HEADER, days=7, query="auth timeout").strip().lstrip("🔎 ")
+
+        block = self._scene_block()
+        assert header in block, f"search header 与 CLI 不一致，实际是: {header!r}"
+        assert "ranked by relevance" not in block, "renderer 不打印这一行"
+        for label in ("Provider:", "URI:", "Snippet:"):
+            assert label in block, f"search 结果缺少真实字段标签 {label}"

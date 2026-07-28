@@ -57,37 +57,41 @@ export type TerminalScene = {
 };
 
 // Representative CLI sessions rendered under each typed command. This is a truthful
-// preview of what agent-dump prints, not a fabricated dashboard.
+// preview of what agent-dump prints, not a fabricated dashboard: the prompts, field
+// labels and default output path below are the ones the CLI actually produces.
+// tests/test_docs_sync.py checks the invariants that would silently rot here.
 export const terminalScenes: TerminalScene[] = [
   {
     command: "agent-dump --interactive",
     output: [
-      { text: "? Select sessions to export  (7 agents, 42 sessions)", tone: "dim" },
-      { text: "> claude   Refactor auth middleware        2h ago", tone: "text" },
-      { text: "  codex    Fix flaky pagination test       5h ago", tone: "text" },
-      { text: "  cursor   Wire up Stripe webhooks         yesterday", tone: "text" },
-      { text: "  zcode    Draft migration for sessions    2d ago", tone: "text" },
+      // 交互导出是两阶段的：先选 Provider，再选那个 Provider 的会话
+      { text: "Select Agent Tool to export:", tone: "dim" },
+      { text: "> Codex         24 sessions", tone: "text" },
+      { text: "  Claude Code   12 sessions", tone: "text" },
+      { text: "", tone: "dim" },
+      { text: "Available sessions:", tone: "dim" },
+      { text: "1. api (2026-07-28 13:04)", tone: "text" },
+      { text: "   cwd=work/api | msgs=2 | uri=codex://019c213e", tone: "dim" },
     ],
   },
   {
-    command: "agent-dump codex://threads/abc123 --format markdown",
+    command: "agent-dump codex://019c213e --format markdown",
     output: [
-      { text: "resolved  codex · thread abc123", tone: "scheme" },
-      { text: "export    12 messages · 3 tool calls", tone: "dim" },
-      { text: "wrote     ./exports/codex-abc123.md", tone: "ok" },
+      { text: "Exported session [markdown] to:", tone: "dim" },
+      { text: "sessions/codex/019c213e.md", tone: "ok" },
     ],
   },
   {
     command: 'agent-dump --search "auth timeout"',
     output: [
-      { text: "3 matches  ranked by relevance", tone: "dim" },
-      { text: "1  claude://9f2c   “...retry on auth timeout after...”", tone: "text" },
-      { text: "2  codex://7a11    “...timeout in the auth guard...”", tone: "text" },
-      { text: "3  cursor://req-3   “...auth token expired, timeout...”", tone: "text" },
+      { text: "Search results from last 7 days matching 'auth timeout':", tone: "dim" },
+      { text: "1. api (2026-07-28 13:04)", tone: "text" },
+      { text: "   Provider: Codex", tone: "dim" },
+      { text: "   URI: codex://019c213e", tone: "scheme" },
+      { text: "   Snippet: ...the **auth** **timeout** in the retry guard...", tone: "text" },
     ],
   },
 ];
-
 type UiStrings = {
   htmlLang: string;
   ogLocale: string;
