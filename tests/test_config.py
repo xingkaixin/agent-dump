@@ -24,6 +24,7 @@ from agent_dump.config import (
     load_shortcuts_config,
     mask_api_key,
     prompt_edit_config,
+    tomllib,
     validate_ai_config,
     write_ai_config,
     write_config,
@@ -276,17 +277,17 @@ class TestConfigReadWrite:
             model="claude",
             api_key="new-key",
         )
-        assert document.sections[""]["root_feature"] == "keep"
-        assert document.sections["ai"]["future_knob"] == "keep"
-        assert document.sections["collect"]["future_mode"] == "keep"
-        assert document.sections["future"] == {
+        assert document.sections[()]["root_feature"] == "keep"
+        assert document.sections[("ai",)]["future_knob"] == "keep"
+        assert document.sections[("collect",)]["future_mode"] == "keep"
+        assert document.sections[("future",)] == {
             "enabled": True,
             "flags": ["a", "b"],
             "rules": [{"name": "first", "enabled": True}],
         }
-        assert document.sections["future.nested"] == {"mode": "keep"}
-        assert "logging" not in document.sections
-        assert "export" not in document.sections
+        assert document.sections[("future", "nested")] == {"mode": "keep"}
+        assert ("logging",) not in document.sections
+        assert ("export",) not in document.sections
 
     @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions only")
     def test_write_config_restricts_permissions(self, tmp_path):
@@ -577,3 +578,93 @@ class TestAiBaseUrlSchemeValidation:
         assert not valid
         assert "api_key" in errors
         assert "base_url_plaintext_key" not in errors
+
+
+class TestTableKeyPathsSurviveRoundTrip:
+    """AD-164：所有合法 TOML table key segment 必须原样保持语义。"""
+
+    @staticmethod
+    def _round_trip(tmp_path: Path, original: str) -> tuple[dict, dict]:
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(original, encoding="utf-8")
+        document = load_config_document(config_path)
+        write_config(document.ai_config(), path=config_path, document=document)
+        return tomllib.loads(original), tomllib.loads(config_path.read_text(encoding="utf-8"))
+
+    def test_quoted_dotted_key_stays_one_segment(self, tmp_path):
+        before, after = self._round_trip(tmp_path, '["plugin.with.dot"]\nenabled = true\n')
+
+        assert after == before
+        assert "plugin.with.dot" in after, "含点的引号 key 不得被拆成三层表"
+        assert "plugin" not in after
+
+    def test_empty_table_is_preserved(self, tmp_path):
+        before, after = self._round_trip(tmp_path, "[empty]\n\n[other]\nx = 1\n")
+
+        assert after == before
+        assert after["empty"] == {}
+
+    def test_nested_empty_table_is_preserved(self, tmp_path):
+        before, after = self._round_trip(tmp_path, "[a.b.c]\n")
+
+        assert after == before
+
+    def test_array_of_tables_stays_equivalent(self, tmp_path):
+        before, after = self._round_trip(tmp_path, '[[items]]\nname = "one"\n\n[[items]]\nname = "two"\n')
+
+        assert after == before
+
+    def test_mixed_nesting_stays_equivalent(self, tmp_path):
+        original = 'root = "top"\n\n[a]\nx = 1\n\n[a.b]\ny = 2\n\n["a.b"]\nz = 3\n\n[empty]\n\n["quoted key"]\nw = 4\n'
+
+        before, after = self._round_trip(tmp_path, original)
+
+        assert after == before
+        assert after["a"] == {"x": 1, "b": {"y": 2}}
+        assert after["a.b"] == {"z": 3}, '[a.b] 与 ["a.b"] 是两张不同的表'
+        assert after["quoted key"] == {"w": 4}
+
+    def test_windows_path_values_survive(self, tmp_path):
+        original = '[export]\noutput = "C:\\\\Users\\\\kevin\\\\dumps"\n'
+
+        before, after = self._round_trip(tmp_path, original)
+
+        assert after == before
+
+    def test_known_projections_still_work(self, tmp_path):
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            '[ai]\nprovider = "openai"\nbase_url = "https://x"\nmodel = "m"\napi_key = "k"\n\n'
+            "[collect]\nsummary_concurrency = 4\n\n"
+            '[agent.claudecode]\ndeny = ["a", "b"]\n\n'
+            '[shortcut.today]\nparams = ["x"]\nargs = ["--days", "1"]\n\n'
+            "[logging]\nenabled = false\n\n"
+            '[export]\noutput = "/tmp/out"\n',
+            encoding="utf-8",
+        )
+
+        document = load_config_document(config_path)
+
+        ai = document.ai_config()
+        assert ai is not None and ai.provider == "openai"
+        collect = document.collect_config()
+        assert collect.summary_concurrency == 4
+        assert collect.agent_denies == {"claudecode": ("a", "b")}
+        assert document.shortcuts_config()["today"].args == ("--days", "1")
+        assert document.logging_config().enabled is False
+        assert document.export_config().output == "/tmp/out"
+
+    def test_legacy_parser_produces_the_same_structure(self, tmp_path):
+        """旧版写出的非法 TOML 走宽松 parser，结构必须与标准路径一致。"""
+        config_path = tmp_path / "config.toml"
+        # 未转义的 Windows 路径让标准解析器失败
+        config_path.write_text(
+            '[export]\noutput = "C:\\Users\\kevin"\n\n["plugin.with.dot"]\nenabled = true\n',
+            encoding="utf-8",
+        )
+
+        document = load_config_document(config_path)
+
+        assert ("export",) in document.sections
+        assert ("plugin.with.dot",) in document.sections, "宽松 parser 也不得按 . 拆引号 key"
+        assert ("plugin",) not in document.sections
