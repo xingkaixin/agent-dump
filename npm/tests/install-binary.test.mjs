@@ -26,6 +26,14 @@ const {
 } = require("../packages/cli/lib/install-binary.cjs");
 const { getBinarySpec } = require("../packages/cli/lib/targets.cjs");
 
+// 每个临时根都在创建时就注册清理：node:test 的 t.after() 在成功、assert 失败与
+// Promise reject 后都会执行，靠 finally 要在九处各写一遍，靠进程退出则什么都不清。
+async function tempRoot(t, prefix) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  return root;
+}
+
 function createTarEntry(name, content) {
   const header = Buffer.alloc(512, 0);
   header.write(name);
@@ -78,8 +86,8 @@ test("extractBinaryFromTarball reads the packaged executable from the tarball", 
   assert.deepEqual(extractBinaryFromTarball(tarball, spec), binary);
 });
 
-test("installBinary downloads, verifies and writes the vendored binary", async () => {
-  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-install-"));
+test("installBinary downloads, verifies and writes the vendored binary", async (t) => {
+  const packageRoot = await tempRoot(t, "agent-dump-install-");
   const version = "0.6.13";
   const spec = getBinarySpec("linux", "x64");
   const binary = Buffer.from("#!/usr/bin/env bash\necho help\n", "utf8");
@@ -132,8 +140,8 @@ test("installBinary downloads, verifies and writes the vendored binary", async (
   assert.deepEqual(await fs.readFile(vendorPath), binary);
 });
 
-test("installBinary fails on checksum mismatch", async () => {
-  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-install-mismatch-"));
+test("installBinary fails on checksum mismatch", async (t) => {
+  const packageRoot = await tempRoot(t, "agent-dump-install-mismatch-");
   const version = "0.6.13";
   const spec = getBinarySpec("win32", "x64");
   const tarball = createTarGz([
@@ -176,8 +184,8 @@ test("installBinary fails on checksum mismatch", async () => {
   );
 });
 
-test("ensureBinary returns an existing vendored binary that matches its checksum", async () => {
-  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-ensure-existing-"));
+test("ensureBinary returns an existing vendored binary that matches its checksum", async (t) => {
+  const packageRoot = await tempRoot(t, "agent-dump-ensure-existing-");
   const spec = getBinarySpec("linux", "x64");
   const vendorPath = getVendorBinaryPath(packageRoot, spec);
   const version = "0.6.13";
@@ -201,8 +209,8 @@ test("ensureBinary returns an existing vendored binary that matches its checksum
   assert.deepEqual(await fs.readFile(vendorPath), existing);
 });
 
-test("ensureBinary installs the vendored binary when it is missing", async () => {
-  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-ensure-install-"));
+test("ensureBinary installs the vendored binary when it is missing", async (t) => {
+  const packageRoot = await tempRoot(t, "agent-dump-ensure-install-");
   const version = "0.6.13";
   const spec = getBinarySpec("linux", "x64");
   const binary = Buffer.from("#!/usr/bin/env bash\necho installed\n", "utf8");
@@ -442,8 +450,8 @@ for (const [label, corrupt] of [
   ["a truncated file", Buffer.from("#!/usr/bin", "utf8")],
   ["a file with the wrong checksum", Buffer.from("something else entirely", "utf8")]
 ]) {
-  test(`ensureBinary repairs ${label}`, async () => {
-    const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-repair-"));
+  test(`ensureBinary repairs ${label}`, async (t) => {
+    const packageRoot = await tempRoot(t, "agent-dump-repair-");
     const binary = Buffer.from("#!/usr/bin/env bash\necho repaired\n", "utf8");
     const fixture = buildInstallFixture(binary);
     const vendorPath = getVendorBinaryPath(packageRoot, fixture.spec);
@@ -458,8 +466,8 @@ for (const [label, corrupt] of [
   });
 }
 
-test("a failed install leaves the previous complete binary in place", async () => {
-  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-keep-old-"));
+test("a failed install leaves the previous complete binary in place", async (t) => {
+  const packageRoot = await tempRoot(t, "agent-dump-keep-old-");
   const spec = getBinarySpec("linux", "x64");
   const vendorPath = getVendorBinaryPath(packageRoot, spec);
   const previous = Buffer.from("#!/usr/bin/env bash\necho previous\n", "utf8");
@@ -488,8 +496,8 @@ test("a failed install leaves the previous complete binary in place", async () =
   assert.deepEqual(await listTempSiblings(vendorPath), []);
 });
 
-test("publishBinaryAtomically never leaves a partial file at the final path", async () => {
-  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-atomic-"));
+test("publishBinaryAtomically never leaves a partial file at the final path", async (t) => {
+  const packageRoot = await tempRoot(t, "agent-dump-atomic-");
   const spec = getBinarySpec("linux", "x64");
   const vendorPath = getVendorBinaryPath(packageRoot, spec);
   const previous = Buffer.from("old-complete-binary", "utf8");
@@ -514,8 +522,8 @@ test("publishBinaryAtomically never leaves a partial file at the final path", as
   assert.deepEqual(await listTempSiblings(vendorPath), [], "失败时本次临时文件必须清理");
 });
 
-test("concurrent installs of the same version converge without leftovers", async () => {
-  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-concurrent-"));
+test("concurrent installs of the same version converge without leftovers", async (t) => {
+  const packageRoot = await tempRoot(t, "agent-dump-concurrent-");
   const binary = Buffer.from("#!/usr/bin/env bash\necho concurrent\n", "utf8");
   const fixture = buildInstallFixture(binary);
   const vendorPath = getVendorBinaryPath(packageRoot, fixture.spec);
@@ -529,8 +537,8 @@ test("concurrent installs of the same version converge without leftovers", async
   assert.deepEqual(await listTempSiblings(vendorPath), [], "并发安装不得留下临时文件");
 });
 
-test("a locked target reports that the binary is in use instead of corrupting it", async () => {
-  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-locked-"));
+test("a locked target reports that the binary is in use instead of corrupting it", async (t) => {
+  const packageRoot = await tempRoot(t, "agent-dump-locked-");
   const spec = getBinarySpec("linux", "x64");
   const vendorPath = getVendorBinaryPath(packageRoot, spec);
   const previous = Buffer.from("running-binary", "utf8");
