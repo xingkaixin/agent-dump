@@ -2,7 +2,7 @@
 测试 query_filter.py 模块
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sqlite3
@@ -541,7 +541,7 @@ class TestSearchSessionsByQuery:
             )
         ]
         index.update.assert_called_once_with(agent, [session])
-        index.search.assert_called_once_with("auth timeout", agent_names={"codex"})
+        index.search.assert_called_once_with("auth timeout", agent_names={"codex"}, limit=None)
 
     def test_indexed_search_filters_to_scoped_sessions_without_truncating_index_update(self, tmp_path):
         agent = DummyAgent(name="codex")
@@ -724,3 +724,42 @@ class TestExtractSessionProjectPath:
         session.metadata = {"directory": str(tmp_path / "repo")}
 
         assert extract_session_working_directory(session) == (tmp_path / "repo").resolve()
+
+
+class TestSearchLimitPushdownSafety:
+    """AD-154：只有在没有后置过滤时才允许把 limit 交给索引。"""
+
+    @staticmethod
+    def _run(spec, *, project_path=None):
+        agent = DummyAgent()
+        now = datetime.now(timezone.utc)
+        session = Session(
+            id="s1",
+            title="T",
+            created_at=now,
+            updated_at=now,
+            source_path=Path("/tmp/s1.jsonl"),
+            metadata={"cwd": "/work/project"},
+        )
+        index = mock.MagicMock()
+        index.is_available = True
+        index.search.return_value = []
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
+            search_sessions_by_query(agent, [session], spec)
+        return index
+
+    def test_plain_keyword_search_pushes_the_limit_down(self):
+        index = self._run(make_query_spec(keyword="alpha", limit=10))
+
+        assert index.search.call_args.kwargs["limit"] == 10
+
+    def test_project_scope_keeps_the_full_result_set(self):
+        """scope 过滤发生在拿到结果之后；先裁剪会把本该入选的会话挡在 top-L 之外。"""
+        index = self._run(make_query_spec(keyword="alpha", limit=10, project_path=Path("/work/project")))
+
+        assert index.search.call_args.kwargs["limit"] is None
+
+    def test_no_limit_stays_unlimited(self):
+        index = self._run(make_query_spec(keyword="alpha"))
+
+        assert index.search.call_args.kwargs["limit"] is None
