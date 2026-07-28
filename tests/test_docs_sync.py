@@ -11,6 +11,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_MD = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+# 两份 README 的架构地图是贡献者判断「逻辑该放哪」的依据；AGENTS.md 才是详细约束来源
+CONTRIBUTOR_MAPS = ("README.md", "README_zh.md")
 
 
 def _source_modules() -> set[str]:
@@ -50,6 +52,27 @@ class TestAgentsMdTreeCoversEveryModule:
         missing = sorted(name for name in expected if name not in table)
 
         assert missing == [], f"AGENTS.md §2.2 缺少这些内部模块: {missing}"
+
+    @pytest.mark.parametrize("doc", CONTRIBUTOR_MAPS)
+    def test_readme_structure_tree_lists_every_source_module(self, doc):
+        """AD-119 手工同步过一次，AGENTS.md 有门禁而 README 没有，于是只有 README 又漂了。"""
+        content = (REPO_ROOT / doc).read_text(encoding="utf-8")
+        missing = sorted(name for name in _source_modules() if name not in content)
+
+        assert missing == [], f"{doc} 的项目结构树缺少这些模块: {missing}"
+
+    def test_both_readmes_describe_the_same_modules(self):
+        """一份加了模块另一份没加，两种语言的读者会看到不同的架构。"""
+        modules = _source_modules()
+        english = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        chinese = (REPO_ROOT / "README_zh.md").read_text(encoding="utf-8")
+
+        only_english = sorted(name for name in modules if name in english and name not in chinese)
+        only_chinese = sorted(name for name in modules if name in chinese and name not in english)
+
+        assert (only_english, only_chinese) == ([], []), (
+            f"只在 README.md 里: {only_english}；只在 README_zh.md 里: {only_chinese}"
+        )
 
     def test_declared_line_length_matches_ruff(self):
         """文档写 100 而 ruff 配 120 时，照文档写的 agent 会按错的宽度换行。"""
