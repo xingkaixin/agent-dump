@@ -228,3 +228,68 @@ class TestWebIsInTheMainGate:
         assert "package_json_file: web/package.json" in content
         web_package_json = _read_json("web/package.json")
         assert web_package_json["packageManager"].startswith("pnpm@")
+
+
+class TestCiDoesNotRepeatVersionIndependentWork:
+    """AD-175：lint/typecheck 的结论不随运行时 Python 变化，跑五遍只是重复付钱。"""
+
+    @staticmethod
+    def _ci() -> str:
+        return (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    @classmethod
+    def _job(cls, name: str) -> str:
+        """取出一个 job 的正文。job 是 workflow 里唯一的两空格缩进顶层 key。"""
+        content = cls._ci()
+        marker = f"\n  {name}:\n"
+        assert marker in content, f"ci.yml 缺少 job {name}"
+        body = content.split(marker, 1)[1]
+        for line in body.splitlines(keepends=True):
+            if line.strip() and not line.startswith("    ") and not line.startswith("\t"):
+                return body[: body.index(line)]
+        return body
+
+    @classmethod
+    def _job_names(cls) -> list[str]:
+        return [
+            line.strip().rstrip(":")
+            for line in cls._ci().split("\njobs:\n", 1)[1].splitlines()
+            if line.startswith("  ") and not line.startswith("   ") and line.strip().endswith(":")
+        ]
+
+    def test_python_tests_still_cover_every_supported_version(self):
+        job = self._job("python-tests")
+
+        for version in ("3.10", "3.11", "3.12", "3.13", "3.14"):
+            assert f'"{version}"' in job, f"Python {version} 不在测试矩阵里"
+
+    def test_lint_and_typecheck_run_exactly_once(self):
+        quality = self._job("quality")
+        python_tests = self._job("python-tests")
+
+        assert "run: just lint" in quality
+        assert "run: just check" in quality
+        assert "matrix:" not in quality, "质量检查不该跟着 matrix 展开"
+        assert "run: just lint" not in python_tests, "lint 不该在每个 Python leg 重复"
+        assert "run: just check" not in python_tests, "typecheck 不该在每个 Python leg 重复"
+
+    def test_the_coverage_leg_does_not_also_run_a_plain_test(self):
+        """just cov 跑的就是完整测试集，再跑一次 just test 是同一批用例跑两遍。"""
+        job = self._job("python-tests")
+
+        assert "!= env.COVERAGE_PYTHON_VERSION" in job
+        assert "== env.COVERAGE_PYTHON_VERSION" in job
+        assert job.count("run: just test") == 1
+        assert job.count("run: just cov") == 1
+
+    def test_npm_and_web_are_their_own_jobs(self):
+        assert set(self._job_names()) == {"quality", "python-tests", "web", "npm-wrapper"}
+        assert "matrix:" not in self._job("web"), "Web 只需构建一次"
+        assert '"22"' in self._job("npm-wrapper")
+        assert '"24"' in self._job("npm-wrapper")
+
+    def test_no_job_sets_up_a_runtime_it_does_not_use(self):
+        """把不同 runtime 的环境事实混进一个 job，失败归因就不清楚了。"""
+        assert "setup-node" not in self._job("python-tests")
+        assert "setup-uv" not in self._job("npm-wrapper")
+        assert "setup-uv" not in self._job("web")

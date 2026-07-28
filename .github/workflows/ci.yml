@@ -13,9 +13,44 @@ on:
 # 安装的就对不上了。
 env:
   UV_LOCKED: "1"
+  # lint/typecheck 与运行时 Python 无关，固定一个版本即可
+  QUALITY_PYTHON_VERSION: "3.12"
+  # 唯一测量并门禁覆盖率的 leg
+  COVERAGE_PYTHON_VERSION: "3.12"
 
 jobs:
-  build:
+  quality:
+    name: Lint and type-check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      # ruff 与 pyright 的结论都不随运行时 Python 变化——pyright 的分析版本由
+      # pyproject 固定，ruff 读的是 target-version。跑五遍只是重复付钱。
+      - name: Set up Python ${{ env.QUALITY_PYTHON_VERSION }}
+        run: uv python install ${{ env.QUALITY_PYTHON_VERSION }}
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+
+      - name: Install dependencies
+        run: uv sync --locked --dev --python ${{ env.QUALITY_PYTHON_VERSION }}
+
+      - name: Lint
+        run: just lint
+
+      - name: Check
+        run: just check
+
+  python-tests:
     name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
@@ -47,18 +82,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --dev --python ${{ matrix.python-version }}
 
-      - name: Lint
-        run: just lint
-
-      - name: Check
-        run: just check
-
+      # coverage leg 跑的就是完整测试集，再跑一次 just test 是同一批用例跑两遍
       - name: Test
+        if: matrix.python-version != env.COVERAGE_PYTHON_VERSION
         run: just test
 
-      # 覆盖率只在一条 leg 上测量并门禁：五个版本各跑一遍只是重复付钱
-      - name: Coverage
-        if: matrix.python-version == '3.12'
+      - name: Test with coverage
+        if: matrix.python-version == env.COVERAGE_PYTHON_VERSION
         run: just cov
 
   web:
