@@ -17,6 +17,12 @@ else:  # Python 3.10 无 tomllib，与 config.py 采用同一守卫
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def _read_json(name: str) -> dict:
+    import json
+
+    return json.loads((REPO_ROOT / name).read_text(encoding="utf-8"))
+
+
 def _read_toml(name: str) -> dict:
     return tomllib.loads((REPO_ROOT / name).read_text(encoding="utf-8"))
 
@@ -171,3 +177,54 @@ class TestVerificationConsumesTheCommittedLock:
                 continue
             body = justfile.split(recipe, 1)[1].split("\n\n", 1)[0]
             assert "--upgrade" not in body, f"{recipe} 不应在验证过程中升级依赖"
+
+
+class TestWebIsInTheMainGate:
+    """AD-173：Web 有 check/build 却不在门禁里，toolchain 漂移会一路合并进主干。"""
+
+    @staticmethod
+    def _ci() -> str:
+        return (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    @staticmethod
+    def _justfile() -> str:
+        return (REPO_ROOT / "justfile").read_text(encoding="utf-8")
+
+    def test_ci_runs_the_web_check_and_build(self):
+        content = self._ci()
+
+        assert "pnpm --dir web check" in content
+        assert "pnpm --dir web build" in content
+
+    def test_web_installs_from_the_committed_lockfile(self):
+        """CI 的事实必须来自已提交的 lock，不是解析出的新版本。"""
+        assert "pnpm --dir web install --frozen-lockfile" in self._ci()
+
+    def test_web_job_is_not_inside_the_python_matrix(self):
+        """否则五个 Python leg 会各装一遍 Web 依赖。"""
+        content = self._ci()
+        web_job = content.split("\n  web:", 1)[1].split("\n  ", 1)[0]
+
+        assert "matrix.python-version" not in web_job
+        assert "\n  web:" in content, "Web 必须是独立 job"
+
+    def test_isok_has_a_matching_local_entry(self):
+        justfile = self._justfile()
+        isok_body = justfile.split("\nisok:", 1)[1].split("\n\n", 1)[0]
+
+        assert "\ncheck-web:" in justfile
+        assert "check-web" in isok_body, "本地主验证要有与 CI 相同的入口"
+
+    def test_local_web_entry_runs_the_same_commands_as_ci(self):
+        recipe = self._justfile().split("\ncheck-web:", 1)[1].split("\n\n", 1)[0]
+
+        for command in ("install --frozen-lockfile", "check", "build"):
+            assert command in recipe, f"check-web 缺少 {command}"
+
+    def test_pnpm_version_comes_from_the_package_manager_field(self):
+        """workflow 里再硬编码一遍 pnpm 版本，就会和 packageManager 各说各话。"""
+        content = self._ci()
+
+        assert "package_json_file: web/package.json" in content
+        web_package_json = _read_json("web/package.json")
+        assert web_package_json["packageManager"].startswith("pnpm@")
