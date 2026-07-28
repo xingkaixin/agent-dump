@@ -190,7 +190,11 @@ def query_session_matches(agent: BaseAgent, sessions: list[Session], spec: Query
             for session in scoped_sessions
         ]
 
-    indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, keyword)
+    # 只有在没有任何后置过滤时下推 limit：project scope 会在拿到结果之后再筛，
+    # 先裁剪就会把本该入选的会话挡在 top-L 之外。每个 Provider 取 top-L 后做全局
+    # L 路合并是正确的——全局前 L 里不可能出现某个 Provider 的第 L+1 条。
+    pushdown_limit = spec.limit if spec.project_path is None else None
+    indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, keyword, pushdown_limit)
     if indexed is not None:
         return indexed
 
@@ -534,6 +538,7 @@ def _try_indexed_search_matches(
     all_sessions: list[Session],
     scoped_sessions: list[Session],
     keyword: str,
+    limit: int | None = None,
 ) -> list[SearchSessionMatch] | None:
     """Try indexed search while retaining SearchResult metadata."""
     try:
@@ -543,7 +548,7 @@ def _try_indexed_search_matches(
 
         index.update(agent, all_sessions)
         scoped_by_id = {session.id: session for session in scoped_sessions}
-        results = index.search(keyword, agent_names={agent.name})
+        results = index.search(keyword, agent_names={agent.name}, limit=limit)
         matches: list[SearchSessionMatch] = []
         for result in results:
             session = scoped_by_id.get(result.session_id)

@@ -8,6 +8,7 @@ hardcoded internal constants (_FTS_TABLES), never user input.
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -22,6 +23,7 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import get_text_content_parts
 from agent_dump.private_files import ensure_private_dir, ensure_private_file
 from agent_dump.session_data import session_updated_signal as _session_updated_signal
+from agent_dump.time_utils import normalize_datetime_utc
 
 _T = TypeVar("_T")
 
@@ -246,6 +248,11 @@ _MAX_INDEX_PARSE_WORKERS = 32
 _INDEX_BATCH_SIZE = 32
 
 
+def _epoch_seconds(value: datetime) -> float:
+    """Session 时间统一成 epoch 秒，供 SQL 侧排序使用。"""
+    return normalize_datetime_utc(value).timestamp()
+
+
 def _batched(items: list[_T], size: int) -> Iterator[list[_T]]:
     """Yield fixed-size slices; itertools.batched needs Python 3.12."""
     for start in range(0, len(items), size):
@@ -303,7 +310,7 @@ class SearchIndex:
             return False
         columns = {row["name"] for row in rows}
         pk_columns = {row["name"] for row in rows if row["pk"]}
-        return "updated_signal" in columns and pk_columns == {"fts_rowid"}
+        return {"updated_signal", "session_updated_at"} <= columns and pk_columns == {"fts_rowid"}
 
     def _drop_all_tables(self, conn: sqlite3.Connection) -> None:
         """Drop all index tables for schema rebuild."""
@@ -335,6 +342,8 @@ class SearchIndex:
                     source_path TEXT NOT NULL,
                     updated_signal REAL NOT NULL,
                     indexed_at REAL NOT NULL,
+                    session_updated_at REAL NOT NULL,
+                    session_created_at REAL NOT NULL,
                     UNIQUE (agent, session_id)
                 )
                 """
@@ -466,8 +475,14 @@ class SearchIndex:
         keyword: str,
         *,
         agent_names: set[str] | None = None,
+        limit: int | None = None,
     ) -> list[SearchResult]:
-        """Search the index for sessions matching the keyword."""
+        """Search the index for sessions matching the keyword.
+
+        limit 由调用方在确认没有后置过滤时传入。排序在 SQL 里完整表达，包括
+        rank 之后的三级 tiebreak——只按 bm25 排序再 LIMIT 会让平局顺序随
+        SQLite 的行序漂移，翻页和「同一次搜索两次结果一致」都靠这个稳定序。
+        """
         if not self.is_available:
             return []
 
@@ -484,27 +499,28 @@ class SearchIndex:
         results: list[SearchResult] = []
 
         try:
+            filters = [f"{fts_table} MATCH ?"]
+            params: list[Any] = [fts_query]
             if agent_names:
-                placeholders = ",".join("?" * len(agent_names))
-                sql = f"""
-                    SELECT agent_name, session_id, title,
-                           snippet({fts_table}, 3, '**', '**', '...', 10) as snippet,
-                           bm25({fts_table}) as rank
-                    FROM {fts_table}
-                    WHERE {fts_table} MATCH ? AND agent_name IN ({placeholders})
-                    ORDER BY rank
-                    """
-                params = (fts_query,) + tuple(agent_names)
-            else:
-                sql = f"""
-                    SELECT agent_name, session_id, title,
-                           snippet({fts_table}, 3, '**', '**', '...', 10) as snippet,
-                           bm25({fts_table}) as rank
-                    FROM {fts_table}
-                    WHERE {fts_table} MATCH ?
-                    ORDER BY rank
-                    """
-                params = (fts_query,)
+                filters.append(f"f.agent_name IN ({','.join('?' * len(agent_names))})")
+                params.extend(sorted(agent_names))
+
+            limit_clause = ""
+            if limit is not None:
+                limit_clause = "LIMIT ?"
+                params.append(limit)
+
+            sql = f"""
+                SELECT f.agent_name, f.session_id, f.title,
+                       snippet({fts_table}, 3, '**', '**', '...', 10) as snippet,
+                       bm25({fts_table}) as rank
+                FROM {fts_table} f
+                JOIN index_state s ON s.fts_rowid = f.rowid
+                WHERE {" AND ".join(filters)}
+                ORDER BY rank, s.session_updated_at DESC, s.session_created_at DESC,
+                         f.agent_name, f.session_id
+                {limit_clause}
+                """
 
             cursor = conn.execute(sql, params)
 
@@ -546,18 +562,35 @@ class SearchIndex:
         """
         if fts_rowid is None:
             cursor = conn.execute(
-                """INSERT INTO index_state (agent, session_id, source_path, updated_signal, indexed_at)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (agent_name, session.id, str(session.source_path), signal, time.time()),
+                """INSERT INTO index_state (agent, session_id, source_path, updated_signal, indexed_at,
+                                            session_updated_at, session_created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    agent_name,
+                    session.id,
+                    str(session.source_path),
+                    signal,
+                    time.time(),
+                    _epoch_seconds(session.updated_at),
+                    _epoch_seconds(session.created_at),
+                ),
             )
             fts_rowid = cursor.lastrowid
         else:
             _delete_fts_rows(conn, [fts_rowid])
             conn.execute(
                 """UPDATE index_state
-                   SET source_path = ?, updated_signal = ?, indexed_at = ?
+                   SET source_path = ?, updated_signal = ?, indexed_at = ?,
+                       session_updated_at = ?, session_created_at = ?
                    WHERE fts_rowid = ?""",
-                (str(session.source_path), signal, time.time(), fts_rowid),
+                (
+                    str(session.source_path),
+                    signal,
+                    time.time(),
+                    _epoch_seconds(session.updated_at),
+                    _epoch_seconds(session.created_at),
+                    fts_rowid,
+                ),
             )
 
         conn.execute(

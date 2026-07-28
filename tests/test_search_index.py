@@ -1131,3 +1131,96 @@ class TestHyphenatedKeywordsAreSearchable:
         index.ensure_initialized()
 
         assert index.search("other-hit") == []
+
+
+class TestSearchLimitPushdown:
+    """AD-154：明确要 top-L 时不该把 M 条命中全部搬进 Python。"""
+
+    @staticmethod
+    def _seed(tmp_path, count: int, *, agent_name: str = "codex", minute_offset: int = 0):
+        source = tmp_path / f"{agent_name}.jsonl"
+        source.write_text("x", encoding="utf-8")
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        sessions = [
+            Session(
+                id=f"{agent_name}-{i}",
+                title=f"session {i}",
+                created_at=base + timedelta(minutes=i + minute_offset),
+                updated_at=base + timedelta(minutes=i + minute_offset),
+                source_path=source,
+                metadata={},
+            )
+            for i in range(count)
+        ]
+        agent = DummyAgent(
+            name=agent_name,
+            session_data={s.id: {"messages": [{"role": "user", "content": "common keyword"}]} for s in sessions},
+        )
+        return agent, sessions
+
+    def test_limit_returns_only_the_top_l(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent, sessions = self._seed(tmp_path, 50)
+        index.update(agent, sessions)
+
+        assert len(index.search("common", limit=10)) == 10
+
+    def test_no_limit_still_returns_every_hit(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent, sessions = self._seed(tmp_path, 50)
+        index.update(agent, sessions)
+
+        assert len(index.search("common")) == 50
+
+    def test_limited_results_are_the_prefix_of_the_unlimited_ones(self, tmp_path):
+        """下推不得改变顺序，否则 top-L 与全量排序的前 L 会是两组不同结果。"""
+        index = SearchIndex(tmp_path / "index.db")
+        agent, sessions = self._seed(tmp_path, 40)
+        index.update(agent, sessions)
+
+        everything = index.search("common")
+        top = index.search("common", limit=7)
+
+        assert [r.session_id for r in top] == [r.session_id for r in everything[:7]]
+
+    def test_tied_rank_order_is_stable_across_repeated_searches(self, tmp_path):
+        """全部命中 rank 相同，顺序只能由 updated/created/agent/session 决定。"""
+        index = SearchIndex(tmp_path / "index.db")
+        agent, sessions = self._seed(tmp_path, 30)
+        index.update(agent, sessions)
+
+        first = [r.session_id for r in index.search("common", limit=10)]
+        second = [r.session_id for r in index.search("common", limit=10)]
+
+        assert first == second
+        assert len(set(first)) == 10
+
+    def test_more_recent_sessions_win_a_rank_tie(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent, sessions = self._seed(tmp_path, 20)
+        index.update(agent, sessions)
+
+        top = index.search("common", limit=5)
+        updated_at_by_id = {s.id: s.updated_at for s in sessions}
+        ordered = [updated_at_by_id[r.session_id] for r in top]
+
+        assert ordered == sorted(ordered, reverse=True), "平局时应按 updated_at 由新到旧"
+
+    def test_limit_applies_per_agent_filter(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        codex_agent, codex_sessions = self._seed(tmp_path, 20, agent_name="codex")
+        claude_agent, claude_sessions = self._seed(tmp_path, 20, agent_name="claudecode", minute_offset=100)
+        index.update(codex_agent, codex_sessions)
+        index.update(claude_agent, claude_sessions)
+
+        scoped = index.search("common", agent_names={"codex"}, limit=5)
+
+        assert len(scoped) == 5
+        assert {r.agent_name for r in scoped} == {"codex"}
+
+    def test_limit_larger_than_the_hit_count_returns_everything(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent, sessions = self._seed(tmp_path, 3)
+        index.update(agent, sessions)
+
+        assert len(index.search("common", limit=100)) == 3
