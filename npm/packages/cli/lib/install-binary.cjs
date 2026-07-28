@@ -325,14 +325,65 @@ async function installBinary(options = {}) {
   }
 
   const vendorPath = getVendorBinaryPath(packageRoot, spec);
-  await fsp.mkdir(path.dirname(vendorPath), { recursive: true });
-  await fsp.writeFile(vendorPath, binaryBuffer);
+  await publishBinaryAtomically(vendorPath, binaryBuffer);
+  return vendorPath;
+}
 
-  if (!vendorPath.endsWith(".exe")) {
-    await fsp.chmod(vendorPath, 0o755);
+async function publishBinaryAtomically(vendorPath, binaryBuffer) {
+  await fsp.mkdir(path.dirname(vendorPath), { recursive: true });
+
+  // 同目录的唯一临时文件 + rename。直接写最终路径的话，一次中断或两个并发
+  // installer 就会留下截断/零字节文件，而此后每次启动都会把它当成已安装。
+  // 临时文件必须与目标同目录：跨设备 rename 不是原子的。
+  const tempPath = `${vendorPath}.${process.pid}-${crypto.randomBytes(6).toString("hex")}.tmp`;
+
+  try {
+    const handle = await fsp.open(tempPath, "w", 0o755);
+    try {
+      await handle.writeFile(binaryBuffer);
+      // rename 只保证目录项被原子替换，不保证内容已落盘
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+
+    if (!vendorPath.endsWith(".exe")) {
+      await fsp.chmod(tempPath, 0o755);
+    }
+
+    // 刻意不先 unlink 最终路径：那样会留出一个「什么都没有」的窗口，而且失败后
+    // 连旧的完整 binary 都没了
+    await fsp.rename(tempPath, vendorPath);
+  } catch (error) {
+    await fsp.rm(tempPath, { force: true });
+    if (error.code === "EPERM" || error.code === "EBUSY") {
+      // Windows 上正在运行的 binary 会锁住目标；旧文件仍然完好，说清楚即可
+      throw new Error(
+        `Could not replace ${vendorPath} because it is in use; close any running agent-dump and retry`
+      );
+    }
+    throw error;
   }
 
   return vendorPath;
+}
+
+async function isVendoredBinaryValid(vendorPath, options = {}) {
+  const spec = options.spec;
+  const packageRoot = options.packageRoot;
+
+  try {
+    const version = options.version || (await readPackageVersion(packageRoot, options));
+    const checksums = options.checksums || (await readChecksums(packageRoot, options));
+    const expectedChecksum = checksums?.[version]?.[spec.target];
+    if (!expectedChecksum) {
+      return false;
+    }
+    return sha256(await fsp.readFile(vendorPath)) === expectedChecksum;
+  } catch {
+    // 读不出来、清单缺失、版本对不上——都当作「需要重装」，而不是接受现状
+    return false;
+  }
 }
 
 async function ensureBinary(options = {}) {
@@ -341,8 +392,15 @@ async function ensureBinary(options = {}) {
   const packageRoot = options.packageRoot || getPackageRoot();
   const spec = options.spec || getBinarySpec(platform, arch);
 
-  if (isBinaryInstalled({ ...options, platform, arch, packageRoot, spec })) {
-    return getVendorBinaryPath(packageRoot, spec);
+  const vendorPath = getVendorBinaryPath(packageRoot, spec);
+
+  // 仅凭存在就接受，会让中断或并发留下的截断/零字节文件在之后每次启动被永久当成
+  // 已安装；bundled checksum 是判断「装好了」的唯一依据
+  if (
+    isBinaryInstalled({ ...options, platform, arch, packageRoot, spec }) &&
+    (await isVendoredBinaryValid(vendorPath, { ...options, packageRoot, spec }))
+  ) {
+    return vendorPath;
   }
 
   return installBinary({ ...options, platform, arch, packageRoot, spec });
@@ -380,6 +438,8 @@ module.exports = {
   installBinary,
   installBinaryFromPackage,
   isBinaryInstalled,
+  isVendoredBinaryValid,
+  publishBinaryAtomically,
   parseTarEntries,
   readChecksums,
   sha256,

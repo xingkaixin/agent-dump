@@ -20,6 +20,7 @@ const {
   getRegistryBaseUrl,
   getVendorBinaryPath,
   installBinary,
+  publishBinaryAtomically,
   sha256,
   withRetries
 } = require("../packages/cli/lib/install-binary.cjs");
@@ -175,25 +176,29 @@ test("installBinary fails on checksum mismatch", async () => {
   );
 });
 
-test("ensureBinary returns the existing vendored binary without downloading", async () => {
+test("ensureBinary returns an existing vendored binary that matches its checksum", async () => {
   const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-ensure-existing-"));
   const spec = getBinarySpec("linux", "x64");
   const vendorPath = getVendorBinaryPath(packageRoot, spec);
+  const version = "0.6.13";
+  const existing = Buffer.from("existing-binary", "utf8");
 
   await fs.mkdir(path.dirname(vendorPath), { recursive: true });
-  await fs.writeFile(vendorPath, "existing-binary", "utf8");
+  await fs.writeFile(vendorPath, existing);
 
   const ensuredPath = await ensureBinary({
     packageRoot,
     platform: "linux",
     arch: "x64",
+    version,
+    checksums: { [version]: { [spec.target]: sha256(existing) } },
     fetchBufferImpl: async () => {
-      throw new Error("ensureBinary should not download when the binary already exists");
+      throw new Error("ensureBinary should not download when the installed binary is valid");
     }
   });
 
   assert.equal(ensuredPath, vendorPath);
-  assert.equal(await fs.readFile(vendorPath, "utf8"), "existing-binary");
+  assert.deepEqual(await fs.readFile(vendorPath), existing);
 });
 
 test("ensureBinary installs the vendored binary when it is missing", async () => {
@@ -397,4 +402,154 @@ test("production defaults keep every limit switched on", () => {
   assert.ok(MAX_DECOMPRESSED_TAR_BYTES > MAX_COMPRESSED_TARBALL_BYTES);
   assert.ok(DEFAULT_IDLE_TIMEOUT_MS > 0);
   assert.ok(DEFAULT_TOTAL_TIMEOUT_MS > DEFAULT_IDLE_TIMEOUT_MS);
+});
+
+// AD-169：最终路径在任意时刻只能是旧的完整 binary 或新的完整 binary
+function buildInstallFixture(binary, version = "0.6.13") {
+  const spec = getBinarySpec("linux", "x64");
+  const tarball = createTarGz([
+    { name: "package/package.json", content: Buffer.from('{"name":"@agent-dump/cli-linux-x64"}') },
+    { name: "package/bin/agent-dump", content: binary }
+  ]);
+
+  return {
+    spec,
+    version,
+    options: {
+      platform: "linux",
+      arch: "x64",
+      version,
+      checksums: { [version]: { [spec.target]: sha256(binary) } },
+      fetchBufferImpl: async (url) =>
+        url.endsWith(".tgz")
+          ? tarball
+          : Buffer.from(
+              JSON.stringify({
+                versions: { [version]: { dist: { tarball: "https://example.test/pkg.tgz" } } }
+              })
+            )
+    }
+  };
+}
+
+async function listTempSiblings(vendorPath) {
+  const entries = await fs.readdir(path.dirname(vendorPath));
+  return entries.filter((name) => name.endsWith(".tmp"));
+}
+
+for (const [label, corrupt] of [
+  ["a zero-byte file", Buffer.alloc(0)],
+  ["a truncated file", Buffer.from("#!/usr/bin", "utf8")],
+  ["a file with the wrong checksum", Buffer.from("something else entirely", "utf8")]
+]) {
+  test(`ensureBinary repairs ${label}`, async () => {
+    const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-repair-"));
+    const binary = Buffer.from("#!/usr/bin/env bash\necho repaired\n", "utf8");
+    const fixture = buildInstallFixture(binary);
+    const vendorPath = getVendorBinaryPath(packageRoot, fixture.spec);
+
+    await fs.mkdir(path.dirname(vendorPath), { recursive: true });
+    await fs.writeFile(vendorPath, corrupt);
+
+    await ensureBinary({ ...fixture.options, packageRoot });
+
+    assert.deepEqual(await fs.readFile(vendorPath), binary, "a damaged binary must not be accepted forever");
+    assert.deepEqual(await listTempSiblings(vendorPath), []);
+  });
+}
+
+test("a failed install leaves the previous complete binary in place", async () => {
+  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-keep-old-"));
+  const spec = getBinarySpec("linux", "x64");
+  const vendorPath = getVendorBinaryPath(packageRoot, spec);
+  const previous = Buffer.from("#!/usr/bin/env bash\necho previous\n", "utf8");
+  const version = "0.6.13";
+
+  await fs.mkdir(path.dirname(vendorPath), { recursive: true });
+  await fs.writeFile(vendorPath, previous);
+
+  await assert.rejects(
+    ensureBinary({
+      packageRoot,
+      platform: "linux",
+      arch: "x64",
+      version,
+      // 期望的是新版本，既有文件因此校验失败并触发重装；重装本身再失败
+      checksums: { [version]: { [spec.target]: "0".repeat(64) } },
+      retries: 1,
+      retryDelayMs: 1,
+      fetchBufferImpl: async () => {
+        throw new Error("registry unreachable");
+      }
+    })
+  );
+
+  assert.deepEqual(await fs.readFile(vendorPath), previous, "旧的完整 binary 不得在失败路径上被删掉");
+  assert.deepEqual(await listTempSiblings(vendorPath), []);
+});
+
+test("publishBinaryAtomically never leaves a partial file at the final path", async () => {
+  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-atomic-"));
+  const spec = getBinarySpec("linux", "x64");
+  const vendorPath = getVendorBinaryPath(packageRoot, spec);
+  const previous = Buffer.from("old-complete-binary", "utf8");
+
+  await fs.mkdir(path.dirname(vendorPath), { recursive: true });
+  await fs.writeFile(vendorPath, previous);
+
+  const originalRename = fs.rename;
+  fs.rename = async () => {
+    // 在替换的那一刻观察最终路径：它必须还是旧的完整文件，不能是半截新文件
+    assert.deepEqual(await fs.readFile(vendorPath), previous);
+    throw Object.assign(new Error("interrupted"), { code: "EIO" });
+  };
+
+  try {
+    await assert.rejects(publishBinaryAtomically(vendorPath, Buffer.from("new-complete-binary", "utf8")));
+  } finally {
+    fs.rename = originalRename;
+  }
+
+  assert.deepEqual(await fs.readFile(vendorPath), previous);
+  assert.deepEqual(await listTempSiblings(vendorPath), [], "失败时本次临时文件必须清理");
+});
+
+test("concurrent installs of the same version converge without leftovers", async () => {
+  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-concurrent-"));
+  const binary = Buffer.from("#!/usr/bin/env bash\necho concurrent\n", "utf8");
+  const fixture = buildInstallFixture(binary);
+  const vendorPath = getVendorBinaryPath(packageRoot, fixture.spec);
+
+  const results = await Promise.all(
+    Array.from({ length: 6 }, () => installBinary({ ...fixture.options, packageRoot }))
+  );
+
+  assert.deepEqual(new Set(results), new Set([vendorPath]));
+  assert.deepEqual(await fs.readFile(vendorPath), binary);
+  assert.deepEqual(await listTempSiblings(vendorPath), [], "并发安装不得留下临时文件");
+});
+
+test("a locked target reports that the binary is in use instead of corrupting it", async () => {
+  const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-dump-locked-"));
+  const spec = getBinarySpec("linux", "x64");
+  const vendorPath = getVendorBinaryPath(packageRoot, spec);
+  const previous = Buffer.from("running-binary", "utf8");
+
+  await fs.mkdir(path.dirname(vendorPath), { recursive: true });
+  await fs.writeFile(vendorPath, previous);
+
+  const originalRename = fs.rename;
+  // Windows 上正在执行的 binary 会锁住目标路径
+  fs.rename = async () => {
+    throw Object.assign(new Error("locked"), { code: "EPERM" });
+  };
+
+  try {
+    await assert.rejects(publishBinaryAtomically(vendorPath, Buffer.from("new", "utf8")), /it is in use/);
+  } finally {
+    fs.rename = originalRename;
+  }
+
+  assert.deepEqual(await fs.readFile(vendorPath), previous);
+  assert.deepEqual(await listTempSiblings(vendorPath), []);
 });

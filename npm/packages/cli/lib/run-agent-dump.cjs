@@ -88,6 +88,12 @@ async function runCli(options = {}) {
   child.once("error", (error) => {
     cleanup();
     writeError(`Failed to start agent-dump binary: ${error.message}\n`);
+    if (error.code === "ENOEXEC" || error.code === "EACCES") {
+      // 这两个码基本只出现在 vendored binary 本身不对的时候。install 现在会校验
+      // checksum 并原子替换，所以重装就能修好——这里给出那一步，而不是让用户
+      // 对着一个无从下手的 spawn 错误。
+      writeError(`The vendored binary looks damaged; reinstall @agent-dump/cli to replace it.\n`);
+    }
     exit(1);
   });
 
