@@ -17,8 +17,22 @@ from agent_dump.coercion import safe_epoch_datetime, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing, unsupported_capability
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
+from agent_dump.time_utils import normalize_datetime_utc
 
 _EPOCH_UTC = datetime.fromtimestamp(0, tz=timezone.utc)
+
+
+def _parse_cursor_iso_utc(value: str) -> datetime | None:
+    """Parse one Cursor ISO timestamp as UTC, or None when it is not ISO.
+
+    Cursor 的 ISO 字段可能不带 offset。naive datetime 交给 astimezone() 或
+    timestamp() 会先按主机本地时区解释，同一份数据在 UTC 与 Asia/Shanghai 相差
+    8 小时；Session 时间和 bubble 时间必须共用这一个转换事实。
+    """
+    try:
+        return normalize_datetime_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    except ValueError:
+        return None
 
 
 def _key_prefix_bounds(prefix: str) -> tuple[str, str]:
@@ -178,10 +192,9 @@ class CursorAgent(BaseAgent):
     def _parse_datetime_utc(self, value: Any) -> datetime | None:
         if isinstance(value, str):
             if "T" in value:
-                try:
-                    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
-                except ValueError:
-                    pass
+                parsed = _parse_cursor_iso_utc(value)
+                if parsed is not None:
+                    return parsed
             try:
                 value = float(value)
             except ValueError:
@@ -457,10 +470,9 @@ class CursorAgent(BaseAgent):
     def _extract_timestamp(self, bubble: dict[str, Any], fallback_ms: int) -> int:
         created = bubble.get("createdAt")
         if isinstance(created, str):
-            try:
-                return int(datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp() * 1000)
-            except ValueError:
-                pass
+            parsed = _parse_cursor_iso_utc(created)
+            if parsed is not None:
+                return int(parsed.timestamp() * 1000)
         timing = bubble.get("timingInfo")
         if isinstance(timing, dict):
             for key in ("clientRpcSendTime", "clientSettleTime", "clientEndTime"):

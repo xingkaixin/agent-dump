@@ -9,6 +9,9 @@ import os
 from pathlib import Path
 import sqlite3
 import sys
+import time
+
+import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.cursor import _BUBBLE_RANGE_BATCH_SIZE, CursorAgent, _key_prefix_bounds
@@ -1314,3 +1317,67 @@ class TestDaysWindowAppliesBeforeBubbleAggregation:
 
         assert len(sessions) == total
         assert all(s.metadata["message_count"] == 1 for s in sessions)
+
+
+class TestNaiveIsoIsInterpretedAsUtc:
+    """AD-158：无 offset 的 Cursor ISO 时间在所有主机上按 UTC 解释。"""
+
+    NAIVE = "2026-01-01T00:00:00"
+    NAIVE_EPOCH_MS = 1767225600000
+
+    @pytest.mark.parametrize("tz_name", ["UTC", "Asia/Shanghai", "America/New_York"])
+    def test_session_and_bubble_agree_across_host_timezones(self, monkeypatch, tz_name):
+        monkeypatch.setenv("TZ", tz_name)
+        time.tzset()
+
+        agent = CursorAgent()
+        parsed = agent._parse_datetime_utc(self.NAIVE)
+
+        assert parsed is not None
+        assert parsed.isoformat() == "2026-01-01T00:00:00+00:00"
+        # Session 与 bubble 必须落在同一个瞬间，否则消息时间相对会话时间会整体漂移
+        assert int(parsed.timestamp() * 1000) == self.NAIVE_EPOCH_MS
+        assert agent._extract_timestamp({"createdAt": self.NAIVE}, 0) == self.NAIVE_EPOCH_MS
+
+    @pytest.mark.parametrize("tz_name", ["UTC", "Asia/Shanghai"])
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("2026-01-01T00:00:00Z", "2026-01-01T00:00:00+00:00"),
+            ("2026-01-01T00:00:00+08:00", "2025-12-31T16:00:00+00:00"),
+            ("2026-01-01T00:00:00-05:00", "2026-01-01T05:00:00+00:00"),
+            (1767225600, "2026-01-01T00:00:00+00:00"),
+            (1767225600000, "2026-01-01T00:00:00+00:00"),
+        ],
+    )
+    def test_explicit_offsets_and_epochs_are_unchanged(self, monkeypatch, tz_name, raw, expected):
+        monkeypatch.setenv("TZ", tz_name)
+        time.tzset()
+
+        parsed = CursorAgent()._parse_datetime_utc(raw)
+
+        assert parsed is not None
+        assert parsed.isoformat() == expected
+
+    @pytest.mark.parametrize("tz_name", ["UTC", "Asia/Shanghai"])
+    def test_days_boundary_does_not_drop_sessions_by_host_timezone(self, monkeypatch, tmp_path, tz_name):
+        """naive 时间按本地时区解释时，边界附近的 Session 会因主机时区被漏掉。"""
+        monkeypatch.setenv("TZ", tz_name)
+        time.tzset()
+
+        cursor_home = tmp_path / "home"
+        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
+        global_db.parent.mkdir(parents=True)
+        _create_cursor_global_db(global_db)
+
+        # 落在窗口内但距离 cutoff 不到一个时区偏移，本地时区解释会把它推到窗口外
+        created = datetime.now(tz=timezone.utc) - timedelta(days=1) + timedelta(hours=2)
+        _insert_kv(
+            global_db,
+            "composerData:edge",
+            {"composerId": "edge", "name": "Edge", "createdAt": created.replace(tzinfo=None).isoformat()},
+        )
+        _insert_kv(global_db, "bubbleId:edge:b0", {"type": 1, "text": "hi", "requestId": "req-edge"})
+
+        assert [s.id for s in CursorAgent().get_sessions(days=1)] == ["req-edge"]
