@@ -130,13 +130,3 @@ class AgentScanner:
             if agent.name == name:
                 return agent if agent.is_available() else None
         return None
-
-
-def run_per_agent(fn: Callable[[BaseAgent], T], agents: Sequence[BaseAgent]) -> list[tuple[BaseAgent, T | None]]:
-    """Compatibility adapter for callers outside the Scanner interface."""
-    return AgentScanner(agents)._run_concurrently(fn)
-
-
-def sessions_per_agent(agents: Sequence[BaseAgent], days: int) -> list[tuple[BaseAgent, list[Session]]]:
-    """Compatibility adapter for callers outside the Scanner interface."""
-    return AgentScanner(agents).get_sessions(days)
