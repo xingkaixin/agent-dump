@@ -3,14 +3,15 @@
 """
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
 import sqlite3
 import sys
 
-from agent_dump.agents.cursor import CursorAgent, _key_prefix_bounds
+from agent_dump.agents.base import Session
+from agent_dump.agents.cursor import _BUBBLE_RANGE_BATCH_SIZE, CursorAgent, _key_prefix_bounds
 
 
 def _create_cursor_global_db(path: Path) -> None:
@@ -215,7 +216,7 @@ class TestCursorAgent:
         assert agent.is_available() is True
         aggregated = agent.get_sessions(days=7)
 
-        monkeypatch.setattr(CursorAgent, "_count_messages_by_composer", lambda self, conn: None)
+        monkeypatch.setattr(CursorAgent, "_count_messages_by_composer", lambda self, conn, composer_ids: None)
         fallback = agent.get_sessions(days=7)
 
         assert [s.id for s in fallback] == [s.id for s in aggregated]
@@ -1188,3 +1189,128 @@ class TestDiscoveryDependsOnlyOnGlobalStore:
         assert len(rendered) == 1
         assert "state.vscdb" in rendered[0]
         assert not any("workspaceStorage" in line for line in rendered)
+
+
+class TestDaysWindowAppliesBeforeBubbleAggregation:
+    """AD-157：days 窗口必须先于 bubble 聚合生效。"""
+
+    @staticmethod
+    def _layout_with_history(monkeypatch, tmp_path, *, old_bubbles: int) -> Path:
+        cursor_home = tmp_path / "home"
+        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
+        global_db.parent.mkdir(parents=True)
+        _create_cursor_global_db(global_db)
+
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        old_ms = int((datetime.now(tz=timezone.utc) - timedelta(days=400)).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:recent",
+            {"composerId": "recent", "name": "Recent", "createdAt": now_ms, "lastUpdatedAt": now_ms},
+        )
+        for i in range(4):
+            _insert_kv(
+                global_db,
+                f"bubbleId:recent:{i:06d}",
+                {"type": 1, "text": "hi", "requestId": "req-recent", "modelInfo": {"modelName": "gpt-5"}},
+            )
+        _insert_kv(
+            global_db,
+            "composerData:ancient",
+            {"composerId": "ancient", "name": "Ancient", "createdAt": old_ms, "lastUpdatedAt": old_ms},
+        )
+        conn = sqlite3.connect(global_db)
+        conn.executemany(
+            "INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)",
+            [
+                (f"bubbleId:ancient:{i:08d}", json.dumps({"type": 1, "text": "x" * 100, "requestId": f"r{i}"}))
+                for i in range(old_bubbles)
+            ],
+        )
+        conn.commit()
+        conn.close()
+        return global_db
+
+    @staticmethod
+    def _count_scanned_rows(agent: CursorAgent, days: int) -> tuple[int, list[Session]]:
+        """统计 SQLite 实际访问的行数，比墙钟时间更稳定地反映扫描规模。"""
+        scanned = [0]
+        real_open = agent._open_global
+
+        @contextmanager
+        def counting_open():
+            with real_open() as conn:
+                conn.set_progress_handler(lambda: scanned.__setitem__(0, scanned[0] + 1) or 0, 100)
+                yield conn
+
+        object.__setattr__(agent, "_open_global", counting_open)
+        sessions = agent.get_sessions(days=days)
+        return scanned[0], sessions
+
+    def test_short_window_does_not_scan_excluded_history(self, monkeypatch, tmp_path):
+        self._layout_with_history(monkeypatch, tmp_path, old_bubbles=4000)
+
+        narrow_cost, narrow = self._count_scanned_rows(CursorAgent(), days=1)
+        wide_cost, wide = self._count_scanned_rows(CursorAgent(), days=3650)
+
+        assert [s.id for s in narrow] == ["req-recent"]
+        assert len(wide) == 2
+        assert narrow_cost * 5 < wide_cost, (
+            f"days=1 的代价（{narrow_cost}）应远低于全历史（{wide_cost}），否则窗口外的 bubble 仍被扫描"
+        )
+
+    def test_metadata_is_unchanged_by_the_window(self, monkeypatch, tmp_path):
+        self._layout_with_history(monkeypatch, tmp_path, old_bubbles=200)
+
+        recent = next(s for s in CursorAgent().get_sessions(days=1) if s.id == "req-recent")
+        from_full_scan = next(s for s in CursorAgent().get_sessions(days=3650) if s.id == "req-recent")
+
+        assert recent.metadata["message_count"] == from_full_scan.metadata["message_count"] == 4
+        assert recent.metadata["model"] == from_full_scan.metadata["model"] == "gpt-5"
+        assert recent.title == from_full_scan.title
+
+    def test_fallback_path_agrees_with_the_aggregate_path(self, monkeypatch, tmp_path):
+        self._layout_with_history(monkeypatch, tmp_path, old_bubbles=50)
+
+        aggregated = CursorAgent().get_sessions(days=3650)
+        monkeypatch.setattr(CursorAgent, "_count_messages_by_composer", lambda self, conn, composer_ids: None)
+        fallback = CursorAgent().get_sessions(days=3650)
+
+        assert [s.id for s in fallback] == [s.id for s in aggregated]
+        assert [s.metadata["message_count"] for s in fallback] == [s.metadata["message_count"] for s in aggregated]
+        assert [s.metadata["model"] for s in fallback] == [s.metadata["model"] for s in aggregated]
+
+    def test_more_composers_than_one_batch_are_all_counted(self, monkeypatch, tmp_path):
+        """composer 数超过单条 SQL 的批上限时不得漏计。"""
+        cursor_home = tmp_path / "home"
+        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
+        global_db.parent.mkdir(parents=True)
+        _create_cursor_global_db(global_db)
+
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        total = _BUBBLE_RANGE_BATCH_SIZE * 2 + 3
+        conn = sqlite3.connect(global_db)
+        for i in range(total):
+            conn.execute(
+                "INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)",
+                (
+                    f"composerData:c{i:04d}",
+                    json.dumps({"composerId": f"c{i:04d}", "name": f"S{i}", "createdAt": now_ms}),
+                ),
+            )
+            conn.execute(
+                "INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)",
+                (
+                    f"bubbleId:c{i:04d}:b0",
+                    json.dumps({"type": 1, "text": "hi", "requestId": f"req-{i:04d}"}),
+                ),
+            )
+        conn.commit()
+        conn.close()
+
+        sessions = CursorAgent().get_sessions(days=7)
+
+        assert len(sessions) == total
+        assert all(s.metadata["message_count"] == 1 for s in sessions)

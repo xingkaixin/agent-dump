@@ -40,9 +40,13 @@ _BUBBLE_MESSAGE_COUNT_SQL = """
     SELECT substr(key, 10, instr(substr(key, 10), ':') - 1) AS composer_id,
            COUNT(*) AS message_count
     FROM cursorDiskKV
-    WHERE key >= ? AND key < ? AND json_extract(value, '$.type') IN (1, 2)
+    WHERE ({key_ranges}) AND json_extract(value, '$.type') IN (1, 2)
     GROUP BY composer_id
 """
+
+# 一条 SQL 里最多放多少个 composer 的 key range。每个 range 占 2 个绑定参数和一层
+# OR 节点，批过大会撞上 SQLite 的变量数与表达式深度上限。
+_BUBBLE_RANGE_BATCH_SIZE = 100
 
 # 列表元数据只需要首个带 requestId 的 bubble 和首个带 modelInfo.modelName 的 bubble，
 # 二者在真实数据里都出现在会话开头。取前 N 条足够，避免为两个字段搬运整段会话正文。
@@ -225,19 +229,31 @@ class CursorAgent(BaseAgent):
                 return model_name.strip()
         return None
 
-    def _count_messages_by_composer(self, conn: sqlite3.Connection) -> dict[str, int] | None:
-        """Count each composer's user/assistant bubbles with one aggregate query.
+    def _count_messages_by_composer(self, conn: sqlite3.Connection, composer_ids: list[str]) -> dict[str, int] | None:
+        """Count user/assistant bubbles for exactly these composers.
 
         逐会话统计要把所有 bubble 的完整正文搬进 Python 再 json.loads，只为得到一个
         计数。JSON1 自 SQLite 3.38 起内建，老版本缺失时 json_extract 抛
         OperationalError，此时返回 None 让调用方退回逐会话路径。
+
+        只统计传入的 composer：每个 composer 的 bubble key 各占一段连续 range，
+        SQLite 对 OR 组合的 range 走 MULTI-INDEX OR，逐段用主键索引定位。扫整个
+        `bubbleId:` 前缀会让 days=1 也付出全部历史 bubble 的代价。
         """
-        lower, upper = _key_prefix_bounds("bubbleId:")
-        try:
-            rows = conn.execute(_BUBBLE_MESSAGE_COUNT_SQL, (lower, upper)).fetchall()
-        except sqlite3.OperationalError:
-            return None
-        return {str(row["composer_id"]): safe_int(row["message_count"]) for row in rows}
+        counts: dict[str, int] = {}
+        for start in range(0, len(composer_ids), _BUBBLE_RANGE_BATCH_SIZE):
+            batch = composer_ids[start : start + _BUBBLE_RANGE_BATCH_SIZE]
+            params: list[str] = []
+            for composer_id in batch:
+                params.extend(_key_prefix_bounds(f"bubbleId:{composer_id}:"))
+            key_ranges = " OR ".join("(key >= ? AND key < ?)" for _ in batch)
+            try:
+                rows = conn.execute(_BUBBLE_MESSAGE_COUNT_SQL.format(key_ranges=key_ranges), params).fetchall()
+            except sqlite3.OperationalError:
+                return None
+            for row in rows:
+                counts[str(row["composer_id"])] = safe_int(row["message_count"])
+        return counts
 
     def _scan_metadata_bubbles(self, composer_id: str, *, conn: sqlite3.Connection) -> tuple[str | None, str | None]:
         """Read request id and model from this composer's first few bubbles."""
@@ -321,7 +337,7 @@ class CursorAgent(BaseAgent):
                 (lower, upper),
                 conn=conn,
             )
-            message_counts = self._count_messages_by_composer(conn)
+            recent: list[tuple[str, dict[str, Any], datetime, datetime]] = []
             for row in rows:
                 key = str(row["key"])
                 composer_id = key.split(":", 1)[1]
@@ -332,7 +348,12 @@ class CursorAgent(BaseAgent):
                 created_at, updated_at = self._resolve_session_times(composer)
                 if created_at < cutoff:
                     continue
+                recent.append((composer_id, composer, created_at, updated_at))
 
+            # days 窗口必须先于 bubble 聚合生效，否则 days=1 也要扫过全部历史 bubble
+            message_counts = self._count_messages_by_composer(conn, [item[0] for item in recent])
+
+            for composer_id, composer, created_at, updated_at in recent:
                 if message_counts is not None:
                     message_count = message_counts.get(composer_id, 0)
                     bubble_request_id, bubble_model = self._scan_metadata_bubbles(composer_id, conn=conn)
