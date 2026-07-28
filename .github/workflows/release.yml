@@ -10,6 +10,8 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.12"
+  # 与 CI 同一约束：发布路径解析出来的必须就是已提交的 lock
+  UV_LOCKED: "1"
 
 jobs:
   validate:
@@ -33,7 +35,7 @@ jobs:
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
 
       - name: Install Python dependencies
-        run: uv sync --dev --python ${{ env.PYTHON_VERSION }}
+        run: uv sync --locked --dev --python ${{ env.PYTHON_VERSION }}
 
       - name: Set up Node 24
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -110,7 +112,7 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: Install Python dependencies
-        run: uv sync --dev --python ${{ env.PYTHON_VERSION }}
+        run: uv sync --locked --dev --python ${{ env.PYTHON_VERSION }}
 
       - name: Build native binary
         env:
@@ -162,7 +164,7 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: Install Python dependencies
-        run: uv sync --dev --python ${{ env.PYTHON_VERSION }}
+        run: uv sync --locked --dev --python ${{ env.PYTHON_VERSION }}
 
       - name: Set up Node 24
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
