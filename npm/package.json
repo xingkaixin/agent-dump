@@ -10,6 +10,7 @@
     "write-checksums": "node ./scripts/write-checksums.mjs",
     "stage-binaries": "node ./scripts/stage-binaries.mjs",
     "test": "node --test ./tests/*.test.mjs",
-    "smoke": "node ./scripts/smoke-install.mjs"
+    "smoke": "node ./scripts/smoke-install.mjs",
+    "validate-staged": "node ./scripts/validate-staged-binaries.mjs"
   }
 }

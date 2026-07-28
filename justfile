@@ -93,6 +93,16 @@ clean-build:
     uv run python -c "import shutil; import os; shutil.rmtree('dist') if os.path.exists('dist') else None"
     @echo "✅ Build artifacts cleaned!"
 
+# Install the built wheel into a clean venv and run its console entrypoint
+verify-wheel:
+    @echo "🔍 Verifying wheel installs and runs..."
+    uv run python packaging/verify_wheel.py
+    @echo "✅ Wheel verification complete!"
+
+# Verify every release artifact before anything is published
+verify-artifacts: verify-wheel test-npm-smoke
+    @echo "✅ Release artifacts verified!"
+
 # Build package wheel file
 build: clean-build
     @echo "📦 Building package..."
