@@ -54,7 +54,6 @@ class CollectEvent:
     role: str
     text: str
     files: tuple[str, ...] = ()
-    tool_name: str | None = None
 
 
 @dataclass(frozen=True)

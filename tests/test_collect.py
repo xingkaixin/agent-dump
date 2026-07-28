@@ -163,7 +163,6 @@ class TestCollectExtraction:
             "code",
         ]
         assert events[0].files == ("/repo/app.py",)
-        assert all(event.tool_name is None for event in events)
 
     def test_extract_collect_events_ignores_tool_only_sessions(self):
         session_data = {

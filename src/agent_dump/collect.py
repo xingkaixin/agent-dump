@@ -177,12 +177,12 @@ def _extract_part_text(part: dict[str, Any]) -> str:
     return ""
 
 
-def _build_collect_event(kind: str, role: str, text: str, *, tool_name: str | None = None) -> CollectEvent | None:
+def _build_collect_event(kind: str, role: str, text: str) -> CollectEvent | None:
     normalized_text = _truncate_excerpt(text)
     if not normalized_text:
         return None
     files = tuple(_find_paths_in_text(normalized_text))
-    return CollectEvent(kind=kind, role=role, text=normalized_text, files=files, tool_name=tool_name)
+    return CollectEvent(kind=kind, role=role, text=normalized_text, files=files)
 
 
 def _classify_text_event(role: str, text: str) -> str | None:
@@ -193,8 +193,6 @@ def _classify_text_event(role: str, text: str) -> str | None:
         return None
     if role == "user":
         return "user_intent"
-    if role == "tool":
-        return "error" if ERROR_PATTERN.search(normalized) else "tool_result"
     if CODE_BLOCK_PATTERN.search(text):
         return "code"
     if ERROR_PATTERN.search(normalized):
@@ -276,8 +274,6 @@ def extract_collect_events(
 
 def _render_event(event: CollectEvent) -> str:
     prefix = f"[{event.kind}] role={event.role}"
-    if event.tool_name:
-        prefix += f" tool={event.tool_name}"
     if event.files:
         prefix += f" files={','.join(event.files)}"
     return f"{prefix} text={event.text}"
