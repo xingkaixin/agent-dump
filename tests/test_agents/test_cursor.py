@@ -53,13 +53,10 @@ class TestCursorAgent:
     def _create_layout(monkeypatch, tmp_path):
         cursor_home = tmp_path / "home"
         monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
-        workspace_root = tmp_path / "workspaceStorage"
         global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
-        workspace_root.mkdir(parents=True)
         global_db.parent.mkdir(parents=True)
         _create_cursor_global_db(global_db)
-        monkeypatch.setenv("CURSOR_DATA_PATH", str(workspace_root))
-        return workspace_root, global_db
+        return global_db
 
     def test_is_available(self, monkeypatch, tmp_path):
         self._create_layout(monkeypatch, tmp_path)
@@ -68,7 +65,7 @@ class TestCursorAgent:
         assert agent.is_available() is True
 
     def test_get_sessions_uses_request_id(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
 
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
@@ -100,7 +97,7 @@ class TestCursorAgent:
 
     def test_get_sessions_query_count_is_independent_of_session_count(self, monkeypatch, tmp_path):
         """AD-124：bubble 摘要走批量聚合，查询数不再随会话数增长。"""
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
 
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
 
@@ -170,7 +167,7 @@ class TestCursorAgent:
         """
         from agent_dump.agents.cursor import _METADATA_BUBBLE_SCAN_LIMIT
 
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -195,7 +192,7 @@ class TestCursorAgent:
 
     def test_get_sessions_falls_back_when_json1_is_unavailable(self, monkeypatch, tmp_path):
         """老 SQLite 缺 JSON1 时退回逐会话解析，元数据结果必须一致。"""
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -226,7 +223,7 @@ class TestCursorAgent:
         assert fallback[0].metadata["model"] == aggregated[0].metadata["model"] == "composer-2"
 
     def test_get_session_data_extracts_messages_and_tool(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
 
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
@@ -277,7 +274,7 @@ class TestCursorAgent:
         assert tool_messages[0]["parts"][0]["tool"] == "subagent"
 
     def test_get_session_head_extracts_model_message_count_and_subtargets(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
 
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
@@ -311,7 +308,7 @@ class TestCursorAgent:
         assert head["subtargets"] == ["worker-1", "worker-2"]
 
     def test_export_raw_session_not_supported(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
 
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
@@ -334,7 +331,7 @@ class TestCursorAgent:
             assert True
 
     def test_get_sessions_skips_null_composer_value(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         conn = sqlite3.connect(global_db)
         cur = conn.cursor()
         cur.execute("INSERT OR REPLACE INTO cursorDiskKV(key, value) VALUES (?, ?)", ("composerData:null-one", None))
@@ -362,7 +359,7 @@ class TestCursorAgent:
         assert sessions[0].id == "request-ok"
 
     def test_get_session_data_sorts_by_created_time(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -392,7 +389,7 @@ class TestCursorAgent:
         assert data["messages"][1]["parts"][0]["text"] == "second"
 
     def test_find_session_by_request_id_supports_non_anchor_request(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -428,7 +425,7 @@ class TestCursorAgent:
 
     def test_get_sessions_unparseable_created_at_is_not_treated_as_now(self, monkeypatch, tmp_path):
         """测试 createdAt 无法解析时不再伪装成当前时间混入结果"""
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         _insert_kv(
             global_db,
             "composerData:composer-bad-time",
@@ -441,7 +438,7 @@ class TestCursorAgent:
 
     def test_get_sessions_falls_back_to_updated_at_when_created_at_invalid(self, monkeypatch, tmp_path):
         """测试 createdAt 非法但 updatedAt 有效时用 updatedAt 兜底"""
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         updated_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -463,7 +460,7 @@ class TestCursorAgent:
 
     def test_find_session_by_id_resolves_request_id_and_composer_fallback(self, monkeypatch, tmp_path):
         """测试 find_session_by_id 优先按 request id 定位，无 bubble 时回退全量扫描"""
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -494,7 +491,7 @@ class TestCursorAgent:
         assert agent.find_session_by_id("missing") is None
 
     def test_get_session_data_converts_create_plan_to_plan_part(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -552,7 +549,7 @@ class TestCursorAgent:
         assert "create_plan" not in tool_names
 
     def test_get_session_data_backfills_subagent_output(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -662,7 +659,7 @@ class TestCursorAgent:
         ]
 
     def test_get_session_data_skips_empty_assistant_bubble(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -709,7 +706,7 @@ class TestCursorAgent:
         assert "[empty message]" not in texts
 
     def test_get_session_data_inherits_model_from_user_turn(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -835,7 +832,7 @@ class TestCursorAgent:
         assert tool_part["state"]["error"] == "boom"
 
     def test_get_session_data_attaches_tool_to_parent_and_exports_usage(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -896,7 +893,7 @@ class TestCursorAgent:
         assert data["stats"]["context_usage_percent"] == 50
 
     def test_get_session_data_keeps_corrupted_and_alternate_text_shapes(self, monkeypatch, tmp_path):
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
             global_db,
@@ -934,7 +931,6 @@ class TestCursorAgent:
         assert head["message_count"] == 2
 
     def test_find_session_by_request_id_none_paths(self, monkeypatch, tmp_path):
-        monkeypatch.delenv("CURSOR_DATA_PATH", raising=False)
         cursor_home = tmp_path / "empty-home"
         monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
 
@@ -942,7 +938,7 @@ class TestCursorAgent:
         assert empty_agent.scan() == []
         assert empty_agent.find_session_by_request_id("missing") is None
 
-        _, global_db = self._create_layout(monkeypatch, tmp_path)
+        global_db = self._create_layout(monkeypatch, tmp_path)
         _insert_kv(
             global_db,
             "bubbleId:orphan-composer:b1",
@@ -1010,12 +1006,9 @@ class TestSubagentExpansionIsBounded:
     def _layout(monkeypatch, tmp_path):
         cursor_home = tmp_path / "home"
         monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
-        workspace_root = tmp_path / "workspaceStorage"
         global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
-        workspace_root.mkdir(parents=True)
         global_db.parent.mkdir(parents=True)
         _create_cursor_global_db(global_db)
-        monkeypatch.setenv("CURSOR_DATA_PATH", str(workspace_root))
         return global_db
 
     def test_mutually_referencing_composers_do_not_recurse_forever(self, monkeypatch, tmp_path):
@@ -1111,3 +1104,87 @@ class TestSubagentExpansionIsBounded:
         agent.get_session_data(session)
 
         assert expansions == ["worker"], "重复引用同一 subagent 必须命中 memo"
+
+
+class TestDiscoveryDependsOnlyOnGlobalStore:
+    """AD-156：可用性只由真正被读取的 state.vscdb 决定，且与调用顺序无关。"""
+
+    @staticmethod
+    def _home_without_store(monkeypatch, tmp_path) -> Path:
+        cursor_home = tmp_path / "home"
+        cursor_home.mkdir()
+        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        return cursor_home
+
+    @staticmethod
+    def _write_one_session(global_db: Path) -> None:
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        _insert_kv(
+            global_db,
+            "composerData:composer-1",
+            {"composerId": "composer-1", "name": "Only Global", "createdAt": now_ms, "lastUpdatedAt": now_ms},
+        )
+        _insert_kv(global_db, "bubbleId:composer-1:b1", {"type": 1, "text": "hi", "requestId": "req-1"})
+
+    def test_global_store_alone_is_enough(self, monkeypatch, tmp_path):
+        cursor_home = self._home_without_store(monkeypatch, tmp_path)
+        global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
+        global_db.parent.mkdir(parents=True)
+        _create_cursor_global_db(global_db)
+        self._write_one_session(global_db)
+
+        assert CursorAgent().is_available() is True
+        # 每个入口都用全新实例：可用性不得依赖同一实例上先跑过 is_available()
+        assert len(CursorAgent().get_sessions(days=7)) == 1
+        assert len(CursorAgent().scan()) == 1
+        assert CursorAgent().find_session_by_request_id("req-1") is not None
+
+    def test_workspace_storage_alone_is_not_enough(self, monkeypatch, tmp_path):
+        self._home_without_store(monkeypatch, tmp_path)
+        (tmp_path / "workspaceStorage").mkdir()
+
+        agent = CursorAgent()
+        assert agent.is_available() is False
+        assert agent.get_sessions(days=7) == []
+
+    def test_neither_source_present(self, monkeypatch, tmp_path):
+        self._home_without_store(monkeypatch, tmp_path)
+
+        agent = CursorAgent()
+        assert agent.is_available() is False
+        assert agent.scan() == []
+        assert agent.find_session_by_request_id("req-1") is None
+
+    def test_availability_check_does_not_change_read_results(self, monkeypatch, tmp_path):
+        cursor_home = self._home_without_store(monkeypatch, tmp_path)
+        global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
+        global_db.parent.mkdir(parents=True)
+        _create_cursor_global_db(global_db)
+        self._write_one_session(global_db)
+
+        fresh = CursorAgent()
+        primed = CursorAgent()
+        primed.is_available()
+
+        assert [s.id for s in fresh.get_sessions(days=7)] == [s.id for s in primed.get_sessions(days=7)]
+
+    def test_unreadable_store_is_not_reported_available(self, monkeypatch, tmp_path):
+        """存在但打不开的文件不能被报告为可用，否则 Scanner 会在更深处才失败。"""
+        cursor_home = self._home_without_store(monkeypatch, tmp_path)
+        global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
+        global_db.parent.mkdir(parents=True)
+        global_db.write_bytes(b"")
+
+        def refuse(*args, **kwargs):
+            raise sqlite3.OperationalError("unable to open database file")
+
+        monkeypatch.setattr("agent_dump.agents.cursor.sqlite3.connect", refuse)
+        assert CursorAgent().is_available() is False
+
+    def test_search_roots_only_list_the_store_that_is_read(self, monkeypatch, tmp_path):
+        self._home_without_store(monkeypatch, tmp_path)
+
+        rendered = [root.render() for root in CursorAgent().get_search_roots()]
+        assert len(rendered) == 1
+        assert "state.vscdb" in rendered[0]
+        assert not any("workspaceStorage" in line for line in rendered)

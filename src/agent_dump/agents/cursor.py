@@ -57,8 +57,6 @@ class CursorAgent(BaseAgent):
 
     def __init__(self):
         super().__init__("cursor", "Cursor")
-        self.global_db_path: Path | None = None
-        self.workspace_root: Path | None = None
 
     def _default_cursor_user_root(self) -> Path:
         home = Path.home()
@@ -71,28 +69,30 @@ class CursorAgent(BaseAgent):
             return home / "Library" / "Application Support" / "Cursor" / "User"
         return home / ".config" / "Cursor" / "User"
 
-    def _find_workspace_root(self) -> Path:
-        env_path = os.environ.get("CURSOR_DATA_PATH")
-        if env_path:
-            return Path(env_path).expanduser()
-        return self._default_cursor_user_root() / "workspaceStorage"
-
     def _find_global_db_path(self) -> Path:
         return self._default_cursor_user_root() / "globalStorage" / "state.vscdb"
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
-        workspace_root = self._find_workspace_root()
-        global_db_path = self._find_global_db_path()
-        return (
-            SearchRoot("CURSOR_DATA_PATH/workspaceStorage", workspace_root),
-            SearchRoot("Cursor global state.vscdb", global_db_path),
-        )
+        return (SearchRoot("Cursor global state.vscdb", self._find_global_db_path()),)
 
     def is_available(self) -> bool:
-        """Check whether Cursor global/workspace databases are available."""
-        self.workspace_root = self._find_workspace_root()
-        self.global_db_path = self._find_global_db_path()
-        return bool(self.global_db_path.exists() and self.workspace_root.exists())
+        """Cursor is readable exactly when its global store opens read-only.
+
+        每一条会话读取都只走 globalStorage/state.vscdb，所以可用性也只能由它决定。
+        路径是从环境纯计算出来的，不缓存成实例状态：曾经只有 is_available() 会写
+        global_db_path，于是 fresh get_sessions() 返回空，而先调 is_available()
+        的同一实例反而能读到数据。
+        """
+        db_path = self._find_global_db_path()
+        if not db_path.exists():
+            return False
+        try:
+            # 仅 exists() 不足以判定可读：损坏文件或缺少权限时读取会在更深处失败，
+            # 到那时 Scanner 已经把 Cursor 当作可用 Provider 报告出去了
+            sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True).close()
+        except (sqlite3.Error, OSError):
+            return False
+        return True
 
     def scan(self) -> list[Session]:
         """Scan for all available Cursor sessions."""
@@ -101,7 +101,7 @@ class CursorAgent(BaseAgent):
     def _missing_global_db_error(self) -> DiagnosticError:
         return source_missing(
             "Cursor global database is missing",
-            missing_path=self.global_db_path or "state.vscdb",
+            missing_path=self._find_global_db_path(),
             searched_roots=[root.render() for root in self.get_search_roots()],
             next_steps=(
                 i18n.t(Keys.DIAG_STEP_CURSOR_DB_EXISTS),
@@ -112,8 +112,8 @@ class CursorAgent(BaseAgent):
     @contextmanager
     def _open_global(self) -> Iterator[sqlite3.Connection]:
         """Open one read-only connection to the global store."""
-        db_path = self.global_db_path
-        if not db_path or not db_path.exists():
+        db_path = self._find_global_db_path()
+        if not db_path.exists():
             raise self._missing_global_db_error()
 
         conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
@@ -308,9 +308,8 @@ class CursorAgent(BaseAgent):
 
     def get_sessions(self, days: int = 7) -> list[Session]:
         """Get Cursor sessions from the last N days."""
-        if (not self.global_db_path or not self.workspace_root) and not self.is_available():
-            return []
-        if not self.global_db_path:
+        global_db_path = self._find_global_db_path()
+        if not global_db_path.exists():
             return []
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         lower, upper = _key_prefix_bounds("composerData:")
@@ -351,7 +350,7 @@ class CursorAgent(BaseAgent):
                         title=self._extract_title(composer, composer_id),
                         created_at=created_at,
                         updated_at=updated_at,
-                        source_path=self.global_db_path,
+                        source_path=global_db_path,
                         metadata=metadata,
                     )
                 )
@@ -372,13 +371,13 @@ class CursorAgent(BaseAgent):
             title=self._extract_title(composer, composer_id),
             created_at=created_at,
             updated_at=updated_at,
-            source_path=self.global_db_path if self.global_db_path else Path(""),
+            source_path=self._find_global_db_path(),
             metadata=metadata,
         )
 
     def find_session_by_request_id(self, request_id: str) -> Session | None:
         """Resolve any bubble-level requestId to its owning composer session."""
-        if (not self.global_db_path or not self.global_db_path.exists()) and not self.is_available():
+        if not self._find_global_db_path().exists():
             return None
         lower, upper = _key_prefix_bounds("bubbleId:")
         rows = self._query_global(

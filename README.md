@@ -40,7 +40,7 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **OpenCode**: `XDG_DATA_HOME/opencode` -> Windows data directory (`LOCALAPPDATA/opencode` or `APPDATA/opencode`) -> `~/.local/share/opencode` -> `data/opencode`
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
-- **Cursor**: `CURSOR_DATA_PATH` or Cursor's default user `workspaceStorage`, with `globalStorage/state.vscdb`
+- **Cursor**: Cursor's default user `globalStorage/state.vscdb`
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
 
 Notes:

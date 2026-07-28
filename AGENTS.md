@@ -404,9 +404,9 @@ collect 模式入口：
 
 - **Provider 测试必须使用临时数据源**：
   - OpenCode / ZCode 使用 `tmp_path` 创建临时 SQLite 数据库。
-  - Cursor 使用 `tmp_path` 创建临时 `state.vscdb` 与 workspaceStorage。
+  - Cursor 使用 `tmp_path` 创建临时 `state.vscdb`。
   - Codex / Kimi / Claude Code 使用 `tmp_path` 创建临时 JSONL 文件。
-  - 使用 `monkeypatch` 注入 `CODEX_HOME`、`KIMI_SHARE_DIR`、`CLAUDE_CONFIG_DIR`、`CURSOR_DATA_PATH`、`PI_HOME` 或 `Path.home()`。
+  - 使用 `monkeypatch` 注入 `CODEX_HOME`、`KIMI_SHARE_DIR`、`CLAUDE_CONFIG_DIR`、`PI_HOME` 或 `Path.home()`。
 
 - **不允许真实访问用户目录**：
   - 禁止读取真实 `~/.codex`、`~/.claude`、`~/.kimi`、`~/.local/share/opencode`、`~/.zcode`、Cursor 用户目录。
@@ -512,7 +512,7 @@ just lint-format   # ruff format
 
 ### 8.6 Cursor
 
-- 路径：`CURSOR_DATA_PATH` 或 Cursor 默认用户目录下的 `workspaceStorage`，并读取 `globalStorage/state.vscdb`
+- 路径：Cursor 默认用户目录下的 `globalStorage/state.vscdb`
 - 存储：SQLite `cursorDiskKV`
 - URI：`cursor://<requestid>`
 - 能力边界：Cursor URI 支持 `json` 与 `print`

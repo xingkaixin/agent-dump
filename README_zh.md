@@ -40,7 +40,7 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **OpenCode**: `XDG_DATA_HOME/opencode` -> Windows 数据目录 (`LOCALAPPDATA/opencode` 或 `APPDATA/opencode`) -> `~/.local/share/opencode` -> `data/opencode`
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
-- **Cursor**: `CURSOR_DATA_PATH` 或 Cursor 默认用户目录下的 `workspaceStorage`，并读取 `globalStorage/state.vscdb`
+- **Cursor**: Cursor 默认用户目录下的 `globalStorage/state.vscdb`
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
 
 注意：

@@ -74,7 +74,6 @@ def isolated_provider_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("XDG_DATA_HOME", str(home / ".local" / "share"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
-    monkeypatch.setenv("CURSOR_DATA_PATH", str(home / "cursor-data"))
     for env_var in ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "KIMI_SHARE_DIR", "PI_HOME", "LOCALAPPDATA", "APPDATA"):
         monkeypatch.delenv(env_var, raising=False)
     return home
