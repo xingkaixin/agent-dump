@@ -1,13 +1,14 @@
 """Permissions for the private files this tool creates under the user's home.
 
 config.toml 早已刻意写成 0600，但从会话数据派生出的东西体量大得多：搜索索引里有
-每个会话的每条消息与工具输出，collect 日志里有模型输出片段。它们默认按 umask 创建
-（通常是 0755 目录下的 0644 文件），在多用户或共享镜像的机器上等于把用户 AI 会话的
-完整可检索副本对本机所有账户开放。
+每个会话的每条消息与工具输出，collect 日志里有模型输出片段，Export 与 Collect Report
+里有完整提示词、源码与工具输出。它们默认按 umask 创建（通常是 0755 目录下的 0644
+文件），在多用户或共享镜像的机器上等于把用户 AI 会话的完整副本对本机所有账户开放。
 """
 
 import os
 from pathlib import Path
+import shutil
 
 PRIVATE_FILE_MODE = 0o600
 PRIVATE_DIR_MODE = 0o700
@@ -40,6 +41,51 @@ def ensure_private_file(path: Path) -> Path:
     if path.exists():
         _chmod_quietly(path, PRIVATE_FILE_MODE)
     return path
+
+
+def ensure_output_dir(path: Path) -> Path:
+    """Create an output directory tree, making only the parts this call creates private.
+
+    与 ensure_private_dir 的区别是刻意的：那个函数管的是本工具自有的目录（缓存、
+    日志），可以无条件收紧。导出目录可能是用户自己指定的既有目录，甚至是家目录，
+    对它 chmod 就越权了。只有本次调用真正新建出来的层级才设成 0700。
+    """
+    missing: list[Path] = []
+    probe = path
+    while not probe.exists():
+        missing.append(probe)
+        if probe.parent == probe:
+            break
+        probe = probe.parent
+
+    path.mkdir(parents=True, exist_ok=True)
+    for created in missing:
+        _chmod_quietly(created, PRIVATE_DIR_MODE)
+    return path
+
+
+def write_private_text(path: Path, text: str) -> Path:
+    """Write text to a file created owner-only, tightening an existing target."""
+    ensure_output_dir(path.parent)
+    # 用 os.open 带 mode 创建，避免文件先以 umask 权限存在、再被 chmod 收紧的窗口；
+    # 已存在的目标由 O_TRUNC 复用其旧 mode，所以还要显式收紧一次
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, PRIVATE_FILE_MODE)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    _chmod_quietly(path, PRIVATE_FILE_MODE)
+    return path
+
+
+def copy_private_file(source: Path, destination: Path) -> Path:
+    """Copy a file, then restrict the copy to its owner.
+
+    copy2 会连同源文件的 mode 一起复制，而 Provider Session Source 常常是 0644。
+    源文件本身绝不修改——那是 Provider 拥有的只读数据。
+    """
+    ensure_output_dir(destination.parent)
+    shutil.copy2(source, destination)
+    _chmod_quietly(destination, PRIVATE_FILE_MODE)
+    return destination
 
 
 def open_private_append(path: Path):

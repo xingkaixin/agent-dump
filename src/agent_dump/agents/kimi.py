@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
-import shutil
 import sys
 from threading import Lock
 from typing import Any
@@ -26,6 +25,7 @@ from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.private_files import copy_private_file, ensure_output_dir
 from agent_dump.text_safety import safe_display_text
 
 
@@ -242,10 +242,9 @@ class KimiAgent(FileSessionAgent):
                 ),
             )
 
-        output_dir.mkdir(parents=True, exist_ok=True)
+        ensure_output_dir(output_dir)
         output_path = self._build_raw_output_path(session, output_dir, suffix=".raw.jsonl")
-        shutil.copy2(source_path, output_path)
-        return output_path
+        return copy_private_file(source_path, output_path)
 
     def _map_tool_title(self, tool_name: str) -> str:
         """Map Kimi tool names to unified short titles."""

@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
-import shutil
 from typing import Any, cast
 
 from agent_dump.diagnostics import source_missing, unsupported_capability
 from agent_dump.export_paths import build_session_output_path
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
+from agent_dump.private_files import copy_private_file, ensure_output_dir, write_private_text
 from agent_dump.session_data import SessionDataCache
 from agent_dump.time_utils import to_local_datetime
 
@@ -100,10 +100,9 @@ class BaseAgent(ABC):
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to unified JSON. Returns the exported file path."""
         payload = self._json_export_payload(session)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        ensure_output_dir(output_dir)
         output_path = self._build_output_path(session, output_dir, ".json")
-        output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return output_path
+        return write_private_text(output_path, json.dumps(payload, ensure_ascii=False, indent=2))
 
     def _json_export_payload(self, session: Session) -> dict[str, Any]:
         """Data to serialize for JSON export.
@@ -227,10 +226,9 @@ class BaseAgent(ABC):
                 ),
             )
 
-        output_dir.mkdir(parents=True, exist_ok=True)
+        ensure_output_dir(output_dir)
         output_path = self._build_raw_output_path(session, output_dir)
-        shutil.copy2(source_path, output_path)
-        return output_path
+        return copy_private_file(source_path, output_path)
 
     @abstractmethod
     def get_session_data(self, session: Session) -> dict:
