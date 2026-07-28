@@ -122,6 +122,15 @@ jobs:
           --distpath dist/native/${{ matrix.target }}
           --workpath build/pyinstaller/${{ matrix.target }}
 
+      - name: Run the built binary on its target runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="dist/native/${{ matrix.target }}/${{ matrix.binary_name }}"
+          chmod +x "${binary}" || true
+          "${binary}" --version
+          "${binary}" --help > /dev/null
+
       - name: Upload native artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -211,6 +220,12 @@ jobs:
 
       - name: Build PyPI distributions
         run: uv build --no-sources
+
+      - name: Verify the wheel installs and runs
+        run: uv run python packaging/verify_wheel.py --expected-version "${PACKAGE_VERSION}"
+
+      - name: Verify the packed npm tarballs install and run
+        run: npm --prefix npm run smoke
 
       - name: Publish npm platform packages
         env:
