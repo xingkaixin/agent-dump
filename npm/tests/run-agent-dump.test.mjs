@@ -140,3 +140,38 @@ test("getForwardSignals keeps SIGBREAK only on Windows", () => {
   assert.deepEqual(getForwardSignals("linux"), ["SIGINT", "SIGTERM", "SIGHUP"]);
   assert.deepEqual(getForwardSignals("win32"), ["SIGINT", "SIGTERM", "SIGBREAK"]);
 });
+
+test("a damaged binary points the user at the reinstall that repairs it", async () => {
+  const errors = [];
+  const child = await runCli({
+    argv: [],
+    platform: "linux",
+    arch: "x64",
+    writeError: (text) => errors.push(text),
+    exit: () => {},
+    resolveBinaryImpl: () => "/vendor/agent-dump",
+    spawnImpl: () => new EventEmitter()
+  });
+
+  child.emit("error", Object.assign(new Error("Exec format error"), { code: "ENOEXEC" }));
+
+  assert.match(errors.join(""), /Failed to start agent-dump binary/);
+  assert.match(errors.join(""), /reinstall @agent-dump\/cli/);
+});
+
+test("an unrelated spawn failure does not claim the binary is damaged", async () => {
+  const errors = [];
+  const child = await runCli({
+    argv: [],
+    platform: "linux",
+    arch: "x64",
+    writeError: (text) => errors.push(text),
+    exit: () => {},
+    resolveBinaryImpl: () => "/vendor/agent-dump",
+    spawnImpl: () => new EventEmitter()
+  });
+
+  child.emit("error", Object.assign(new Error("too many open files"), { code: "EMFILE" }));
+
+  assert.doesNotMatch(errors.join(""), /reinstall/);
+});
