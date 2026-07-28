@@ -73,10 +73,13 @@ class ConfigurationDocument:
     """One parsed configuration snapshot with lossless semantic updates."""
 
     path: Path
-    sections: dict[str, dict[str, Any]]
+    # key 是结构化的 table path，不是点连接字符串：TOML 里 ["plugin.with.dot"] 是一个
+    # 含点的 key，[plugin.with.dot] 是三层表。拼成 "plugin.with.dot" 之后无从分辨，
+    # 写回时按 "." 拆分就会把前者变成后者。空 tuple 是根表。
+    sections: dict[tuple[str, ...], dict[str, Any]]
 
     def ai_config(self) -> AIConfig | None:
-        parsed = self.sections.get("ai")
+        parsed = self.sections.get(("ai",))
         if parsed is None:
             return None
         provider = parsed.get("provider", "")
@@ -91,18 +94,16 @@ class ConfigurationDocument:
         )
 
     def collect_config(self) -> CollectConfig:
-        parsed = self.sections.get("collect", {})
+        parsed = self.sections.get(("collect",), {})
         concurrency = _coerce_positive_int(
             parsed.get("summary_concurrency"),
             DEFAULT_COLLECT_SUMMARY_CONCURRENCY,
         )
         timeout_seconds = _coerce_positive_int(parsed.get("summary_timeout_seconds"), 90)
         agent_denies: dict[str, tuple[str, ...]] = {}
-        for section_name, values in self.sections.items():
-            if not section_name.startswith("agent."):
-                continue
-            agent_name = section_name.partition(".")[2].strip()
-            if not agent_name:
+        for section_path, values in self.sections.items():
+            agent_name = _child_of(section_path, "agent")
+            if agent_name is None:
                 continue
             deny_paths = _coerce_str_tuple(values.get("deny"))
             if deny_paths:
@@ -115,7 +116,7 @@ class ConfigurationDocument:
 
     def logging_config(self) -> LoggingConfig:
         default_path = _default_log_path_for_config(self.path)
-        parsed = self.sections.get("logging", {})
+        parsed = self.sections.get(("logging",), {})
         enabled = _parse_bool(parsed.get("enabled", "true"), True)
         raw_path = parsed.get("path")
         if isinstance(raw_path, str) and raw_path.strip():
@@ -123,7 +124,7 @@ class ConfigurationDocument:
         return LoggingConfig(enabled=enabled, path=default_path)
 
     def export_config(self) -> ExportConfig:
-        parsed = self.sections.get("export", {})
+        parsed = self.sections.get(("export",), {})
         raw_output = parsed.get("output", "")
         if isinstance(raw_output, str):
             return ExportConfig(output=raw_output.strip())
@@ -131,11 +132,9 @@ class ConfigurationDocument:
 
     def shortcuts_config(self) -> dict[str, ShortcutConfig]:
         shortcuts: dict[str, ShortcutConfig] = {}
-        for section_name, values in self.sections.items():
-            if not section_name.startswith("shortcut."):
-                continue
-            shortcut_name = section_name.partition(".")[2].strip()
-            if not shortcut_name:
+        for section_path, values in self.sections.items():
+            shortcut_name = _child_of(section_path, "shortcut")
+            if shortcut_name is None:
                 continue
             params = _coerce_str_tuple(values.get("params"))
             args = _coerce_str_tuple(values.get("args"))
@@ -259,10 +258,38 @@ def _coerce_str_tuple(value: Any) -> tuple[str, ...] | None:
     return None
 
 
-def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str | tuple[str, ...]]]:
+def _split_section_header(header: str) -> tuple[str, ...]:
+    """Split a table header into segments, keeping quoted segments whole.
+
+    宽松 parser 只在标准解析器失败时兜底，但它产出的结构必须和标准路径一致：
+    ["plugin.with.dot"] 是一个含点的 key，按 "." 无脑拆会变成三层表。
+    """
+    segments: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    for char in header:
+        if quote is not None:
+            if char == quote:
+                quote = None
+            else:
+                current.append(char)
+            continue
+        if char in ('"', "'"):
+            quote = char
+            continue
+        if char == ".":
+            segments.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    segments.append("".join(current).strip())
+    return tuple(segment for segment in segments if segment)
+
+
+def _parse_simple_toml_sections(text: str) -> dict[tuple[str, ...], dict[str, Any]]:
     """Parse minimal TOML sections without third-party deps."""
-    current_section: str | None = None
-    parsed: dict[str, dict[str, str | tuple[str, ...]]] = {}
+    current_section: tuple[str, ...] = ()
+    parsed: dict[tuple[str, ...], dict[str, Any]] = {}
     pending_array_key: str | None = None
     pending_array_lines: list[str] = []
 
@@ -275,15 +302,13 @@ def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str | tuple[st
             pending_array_lines.append(line.split("#", 1)[0].strip())
             if "]" not in line:
                 continue
-            parsed.setdefault(current_section or "", {})[pending_array_key] = _parse_toml_value(
-                " ".join(pending_array_lines)
-            )
+            parsed.setdefault(current_section, {})[pending_array_key] = _parse_toml_value(" ".join(pending_array_lines))
             pending_array_key = None
             pending_array_lines = []
             continue
 
         if line.startswith("[") and line.endswith("]"):
-            current_section = line[1:-1].strip()
+            current_section = _split_section_header(line[1:-1].strip())
             parsed.setdefault(current_section, {})
             continue
 
@@ -297,32 +322,40 @@ def _parse_simple_toml_sections(text: str) -> dict[str, dict[str, str | tuple[st
             pending_array_key = normalized_key
             pending_array_lines = [normalized_value]
             continue
-        parsed.setdefault(current_section or "", {})[normalized_key] = _parse_toml_value(normalized_value)
+        parsed.setdefault(current_section, {})[normalized_key] = _parse_toml_value(normalized_value)
 
     return parsed
 
 
-def _flatten_toml_sections(data: dict[str, Any], prefix: str = "") -> dict[str, dict[str, Any]]:
-    """Flatten nested TOML tables into dotted section names like `agent.claudecode`."""
-    sections: dict[str, dict[str, Any]] = {}
+def _collect_toml_sections(data: dict[str, Any], prefix: tuple[str, ...] = ()) -> dict[tuple[str, ...], dict[str, Any]]:
+    """Collect nested TOML tables keyed by their full segment path."""
+    sections: dict[tuple[str, ...], dict[str, Any]] = {}
     leaves = {key: value for key, value in data.items() if not isinstance(value, dict)}
-    if leaves:
+    children = {key: value for key, value in data.items() if isinstance(value, dict)}
+    # 空表也要作为事实留在快照里：`[empty]` 既没有叶子也没有子表，只按叶子保存会让它
+    # 在写回时整段消失。根表例外——没有 [] 这种 header，空根表不该渲染出任何东西。
+    if leaves or (prefix and not children):
         sections[prefix] = leaves
-    for key, value in data.items():
-        if isinstance(value, dict):
-            child_prefix = f"{prefix}.{key}" if prefix else key
-            sections.update(_flatten_toml_sections(value, child_prefix))
+    for key, value in children.items():
+        sections.update(_collect_toml_sections(value, (*prefix, key)))
     return sections
 
 
-def _read_config_sections(config_path: Path) -> dict[str, dict[str, Any]]:
+def _child_of(section_path: tuple[str, ...], parent: str) -> str | None:
+    """Return the child segment of a two-level `[parent.child]` table, or None."""
+    if len(section_path) != 2 or section_path[0] != parent:
+        return None
+    return section_path[1].strip() or None
+
+
+def _read_config_sections(config_path: Path) -> dict[tuple[str, ...], dict[str, Any]]:
     text = config_path.read_text(encoding="utf-8")
     try:
         parsed = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
         # 旧版本写出的配置可能不是合法 TOML（如未转义的 Windows 路径），降级用宽松解析器读取
         return _parse_simple_toml_sections(text)
-    return _flatten_toml_sections(parsed)
+    return _collect_toml_sections(parsed)
 
 
 def load_config_document(path: Path | None = None) -> ConfigurationDocument:
@@ -444,18 +477,19 @@ def _toml_value(value: Any) -> str:
     raise TypeError(f"unsupported TOML value: {type(value).__name__}")
 
 
-def _render_config_sections(sections: dict[str, dict[str, Any]]) -> str:
+def _render_config_sections(sections: dict[tuple[str, ...], dict[str, Any]]) -> str:
     rendered_sections: list[str] = []
-    root_values = sections.get("", {})
+    root_values = sections.get((), {})
     if root_values:
         rendered_sections.append(
             "\n".join(f"{_toml_key(key)} = {_toml_value(value)}" for key, value in root_values.items())
         )
 
-    for section_name, values in sections.items():
-        if not section_name:
+    for section_path, values in sections.items():
+        if not section_path:
             continue
-        section_header = ".".join(_toml_key(part) for part in section_name.split("."))
+        # 逐 segment 引用；先拼成一个字符串再按 "." 拆，就等于对结构做猜测
+        section_header = ".".join(_toml_key(segment) for segment in section_path)
         lines = [f"[{section_header}]"]
         lines.extend(f"{_toml_key(key)} = {_toml_value(value)}" for key, value in values.items())
         rendered_sections.append("\n".join(lines))
@@ -465,19 +499,19 @@ def _render_config_sections(sections: dict[str, dict[str, Any]]) -> str:
 
 
 def _replace_known_values(
-    sections: dict[str, dict[str, Any]],
-    section_name: str,
+    sections: dict[tuple[str, ...], dict[str, Any]],
+    section_path: tuple[str, ...],
     *,
     known_keys: frozenset[str],
     values: dict[str, Any] | None,
 ) -> None:
-    section = sections.setdefault(section_name, {})
+    section = sections.setdefault(section_path, {})
     for key in known_keys:
         section.pop(key, None)
     if values is not None:
         section.update(values)
     if not section:
-        sections.pop(section_name, None)
+        sections.pop(section_path, None)
 
 
 def write_config(
@@ -494,7 +528,7 @@ def write_config(
     sections = deepcopy(snapshot.sections)
     _replace_known_values(
         sections,
-        "ai",
+        ("ai",),
         known_keys=frozenset({"provider", "base_url", "model", "api_key"}),
         values=(
             {
@@ -510,7 +544,7 @@ def write_config(
     if export_config is not None:
         _replace_known_values(
             sections,
-            "export",
+            ("export",),
             known_keys=frozenset({"output"}),
             values={"output": export_config.output},
         )
