@@ -12,9 +12,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-!/npm/packages/cli/lib/
-!/npm/packages/cli/lib/*.cjs
+# Python 构建产物只出现在仓库根；不加 / 的话这条会吞掉任何层级的 lib/，
+# web/src/lib 与 npm/packages/cli/lib 都是源码目录
+/lib/
 lib64/
 parts/
 sdist/
