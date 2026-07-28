@@ -1647,3 +1647,30 @@ class TestSessionFileCandidates:
         agent.is_available()
 
         assert agent.find_session_by_id("no-such-session") is None
+
+
+class TestUntrustedUsageValuesDoNotBreakStats:
+    """AD-160：usage 由 Kimi 写入，任何标量形状都不能中断导出。"""
+
+    def test_bad_usage_values_are_coerced_and_good_ones_still_add_up(self, tmp_path):
+        session_dir = tmp_path / "session"
+        session_dir.mkdir()
+        (session_dir / "wire.jsonl").write_text(
+            "\n".join(
+                [
+                    json.dumps({"message": {"usage": {"input_tokens": 10, "output_tokens": 5}}}),
+                    json.dumps({"message": {"usage": {"input_tokens": "many", "output_tokens": None}}}),
+                    json.dumps({"message": {"usage": {"input_tokens": True, "output_tokens": 1e999}}}),
+                    json.dumps({"message": "not-an-object"}),
+                    "1",
+                    json.dumps({"message": {"usage": {"input_tokens": 7, "output_tokens": 2}}}),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        stats = KimiAgent()._extract_kimi_stats_from_wire(session_dir)
+
+        assert stats["total_input_tokens"] == 17, "非数值归零，正常值仍要累加"
+        assert stats["total_output_tokens"] == 7
