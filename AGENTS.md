@@ -83,6 +83,7 @@
 | `prompt_safety.py` | 摘要 prompt 的不可信数据隔离（system 规则 + JSON data envelope） |
 | `session_data.py` | 请求级会话数据缓存，按 provider-owned change sources 失效 |
 | `text_safety.py` | 第三方会话文本的输出净化（终端 / markdown / 文件名） |
+| `transcript.py` | 标准化消息的只读读取（role、正文、legacy content、tool / subagent facts） |
 | `time_utils.py` | 时间与时区工具，全部转换的单一入口 |
 | `uri_support.py` | URI 解析与 Scanner locate 兼容 adapter |
 | `collect.py` | collect 事件提取、chunk 规划、摘要合并与 tree reduction |
@@ -205,6 +206,7 @@ agent-dump/
 │   ├── search_index.py          # FTS5 搜索索引
 │   ├── selector.py              # 交互式选择
 │   ├── time_utils.py            # 时间与时区工具
+│   ├── transcript.py            # 标准化消息的只读读取
 │   ├── uri_support.py           # URI 解析与查找
 │   └── agents/
 │       ├── __init__.py          # provider 导出

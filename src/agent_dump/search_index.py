@@ -20,10 +20,10 @@ from typing import Any, TypeVar
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
-from agent_dump.message_filter import get_text_content_parts
 from agent_dump.private_files import ensure_private_dir, ensure_private_file
 from agent_dump.session_data import session_updated_signal as _session_updated_signal
 from agent_dump.time_utils import normalize_datetime_utc
+from agent_dump.transcript import read_message
 
 _T = TypeVar("_T")
 
@@ -142,40 +142,16 @@ def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str |
         if not isinstance(message, dict):
             continue
 
-        # Extract text from parts
-        contents = get_text_content_parts(message)
-
-        # Also extract content field (used by some agents)
-        raw_content = message.get("content")
-        if isinstance(raw_content, str) and raw_content.strip():
-            contents.append(raw_content)
-        elif isinstance(raw_content, list):
-            for item in raw_content:
-                if isinstance(item, str) and item.strip():
-                    contents.append(item)
-                elif isinstance(item, dict):
-                    text = str(item.get("text", "")).strip()
-                    if text:
-                        contents.append(text)
-
-        # Extract tool state
-        parts = message.get("parts", [])
-        if isinstance(parts, list):
-            for part in parts:
-                if not isinstance(part, dict):
-                    continue
-                if part.get("type") == "tool":
-                    state = part.get("state", {})
-                    if isinstance(state, dict):
-                        arguments = state.get("arguments")
-                        if arguments is not None:
-                            contents.append(_serialize_for_search(arguments))
-                        output = state.get("output")
-                        if output is not None:
-                            contents.append(_serialize_for_search(output))
-                        prompt = state.get("prompt")
-                        if prompt:
-                            contents.append(str(prompt))
+        transcript_message = read_message(message)
+        # 搜索索引的产品策略：正文之外，工具参数与输出也要能被搜到
+        contents = list(transcript_message.searchable_texts)
+        for call in transcript_message.tool_calls:
+            if call.arguments is not None:
+                contents.append(_serialize_for_search(call.arguments))
+            if call.output is not None:
+                contents.append(_serialize_for_search(call.output))
+            if call.prompt:
+                contents.append(call.prompt)
 
         for content in contents:
             if content and content.strip():

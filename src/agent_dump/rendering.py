@@ -7,10 +7,11 @@ from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.export_paths import build_session_output_path
-from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
+from agent_dump.message_filter import should_filter_message_for_export
 from agent_dump.private_files import ensure_output_dir, write_private_text
 from agent_dump.text_safety import safe_body_text, safe_display_text
 from agent_dump.time_utils import to_local_datetime
+from agent_dump.transcript import ToolCall, TranscriptMessage, read_message
 
 HEAD_FIELDS = (
     ("URI", "uri"),
@@ -79,13 +80,15 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
             lines.append("")
         msg_idx += 1
 
-    def _extract_subagent_prompt(part: dict[str, Any]) -> str:
-        state = part.get("state", {})
-        prompt = str(state.get("prompt", "")).strip()
-        if prompt:
-            return prompt
+    def _extract_subagent_prompt(call: ToolCall) -> str:
+        """Markdown 要展示可读的提示词，所以 prompt 缺失时回退到 arguments。
 
-        arguments = state.get("arguments")
+        这是渲染的产品策略，不是「这条消息里有什么」，所以留在这一层。
+        """
+        if call.prompt:
+            return call.prompt
+
+        arguments = call.arguments
         if isinstance(arguments, dict):
             prompt = str(arguments.get("message", "")).strip()
             if prompt:
@@ -95,10 +98,18 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
             return arguments.strip()
         return ""
 
+    def _append_subagent_sections(message: TranscriptMessage) -> None:
+        """subagent 提示词此前在 tool role 与 assistant 两个分支各展开了一遍。"""
+        for call in message.subagent_calls:
+            display = f"Assistant ({call.nickname})" if call.nickname else "Assistant"
+            prompt = _extract_subagent_prompt(call)
+            if prompt:
+                _append_section(display, [prompt])
+
     for msg in messages:
-        role = msg.get("role", "unknown")
-        role_normalized = str(role).lower()
-        content_parts = get_text_content_parts(msg)
+        message = read_message(msg)
+        role_normalized = message.role
+        content_parts = list(message.texts)
 
         if should_filter_message_for_export(msg):
             continue
@@ -108,24 +119,13 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
         elif role_normalized == "assistant":
             display_role = "Assistant"
         else:
-            display_role = str(role).capitalize()
+            display_role = str(msg.get("role", "unknown")).capitalize()
 
-        nickname = str(msg.get("nickname", "")).strip()
-        if nickname and role_normalized == "assistant":
-            display_role = f"Assistant ({nickname})"
+        if message.nickname and role_normalized == "assistant":
+            display_role = f"Assistant ({message.nickname})"
 
         if role_normalized == "tool":
-            parts = msg.get("parts", [])
-            if not isinstance(parts, list):
-                continue
-            for part in parts:
-                if not isinstance(part, dict) or part.get("type") != "tool" or part.get("tool") != "subagent":
-                    continue
-                part_nickname = str(part.get("nickname", "")).strip()
-                part_display_role = f"Assistant ({part_nickname})" if part_nickname else "Assistant"
-                prompt = _extract_subagent_prompt(part)
-                if prompt:
-                    _append_section(part_display_role, [prompt])
+            _append_subagent_sections(message)
             continue
 
         if content_parts:
@@ -134,19 +134,7 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
         if role_normalized != "assistant":
             continue
 
-        parts = msg.get("parts", [])
-        if not isinstance(parts, list):
-            continue
-
-        for part in parts:
-            if not isinstance(part, dict) or part.get("type") != "tool" or part.get("tool") != "subagent":
-                continue
-
-            part_nickname = str(part.get("nickname", "")).strip()
-            part_display_role = f"Assistant ({part_nickname})" if part_nickname else "Assistant"
-            prompt = _extract_subagent_prompt(part)
-            if prompt:
-                _append_section(part_display_role, [prompt])
+        _append_subagent_sections(message)
 
     return "\n".join(lines)
 
