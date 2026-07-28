@@ -17,6 +17,12 @@ else:  # Python 3.10 无 tomllib，与 config.py 采用同一守卫
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def _read_json(name: str) -> dict:
+    import json
+
+    return json.loads((REPO_ROOT / name).read_text(encoding="utf-8"))
+
+
 def _read_toml(name: str) -> dict:
     return tomllib.loads((REPO_ROOT / name).read_text(encoding="utf-8"))
 
@@ -214,3 +220,11 @@ class TestWebIsInTheMainGate:
 
         for command in ("install --frozen-lockfile", "check", "build"):
             assert command in recipe, f"check-web 缺少 {command}"
+
+    def test_pnpm_version_comes_from_the_package_manager_field(self):
+        """workflow 里再硬编码一遍 pnpm 版本，就会和 packageManager 各说各话。"""
+        content = self._ci()
+
+        assert "package_json_file: web/package.json" in content
+        web_package_json = _read_json("web/package.json")
+        assert web_package_json["packageManager"].startswith("pnpm@")
