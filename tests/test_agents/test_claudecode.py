@@ -934,6 +934,8 @@ class TestClaudeCodeAgent:
         assert assistant["role"] == "assistant"
         assert assistant["model"] == "claude-3-opus"
         assert assistant["tokens"] == {"input_tokens": 10, "output_tokens": 20}
+        assert result["stats"]["total_input_tokens"] == 10, "Session totals 必须与消息里的 usage 一致"
+        assert result["stats"]["total_output_tokens"] == 20
         assert [part["type"] for part in assistant["parts"]] == ["text", "tool"]
         assert assistant["parts"][1]["state"]["input"] == {"path": "src/main.py"}
         assert assistant["parts"][1]["state"]["output"] == [
@@ -1661,3 +1663,117 @@ class TestMalformedRecordsDoNotBreakTheSession:
         head = ClaudeCodeAgent().get_session_head(make_session(path))
 
         assert head["message_count"] == 2
+
+
+class TestSessionTokenTotals:
+    """AD-161：Session totals 必须反映最终标准化消息的 usage。"""
+
+    @staticmethod
+    def _assistant(uuid: str, text: str, usage: object, stamp: str = "2026-01-01T00:00:00Z") -> dict:
+        message: dict = {"role": "assistant", "content": [{"type": "text", "text": text}]}
+        if usage is not None:
+            message["usage"] = usage
+        return {"type": "assistant", "uuid": uuid, "timestamp": stamp, "message": message}
+
+    @staticmethod
+    def _tool_use(uuid: str, call_id: str, stamp: str) -> dict:
+        return {
+            "type": "assistant",
+            "uuid": uuid,
+            "timestamp": stamp,
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "tool_use", "name": "read_file", "id": call_id, "input": {}}],
+            },
+        }
+
+    def test_totals_sum_across_separate_assistant_messages(self, tmp_path):
+        session_file = tmp_path / "s.jsonl"
+        # tool part 会终止当前 assistant 组，两条回复因此是两条独立消息
+        write_jsonl(
+            session_file,
+            [
+                self._assistant("a1", "one", {"input_tokens": 10, "output_tokens": 20}),
+                self._tool_use("t1", "call-1", "2026-01-01T00:00:01Z"),
+                self._assistant("a2", "two", {"input_tokens": 3, "output_tokens": 4}, "2026-01-01T00:00:02Z"),
+            ],
+        )
+
+        stats = ClaudeCodeAgent().get_session_data(make_session(session_file))["stats"]
+
+        assert stats["total_input_tokens"] == 13
+        assert stats["total_output_tokens"] == 24
+
+    def test_grouped_assistant_records_are_counted_once(self, tmp_path):
+        """一轮回复的多条增量记录合成一条消息，usage 不得重复累计。"""
+        session_file = tmp_path / "s.jsonl"
+        write_jsonl(
+            session_file,
+            [
+                self._assistant("a1", "part one", {"input_tokens": 10, "output_tokens": 20}),
+                self._assistant("a1", "part two", {"input_tokens": 10, "output_tokens": 20}),
+                self._assistant("a1", "part three", {"input_tokens": 10, "output_tokens": 20}),
+            ],
+        )
+
+        result = ClaudeCodeAgent().get_session_data(make_session(session_file))
+
+        assert len(result["messages"]) == 1
+        assert result["stats"]["total_input_tokens"] == 10
+        assert result["stats"]["total_output_tokens"] == 20
+
+    def test_missing_usage_leaves_totals_at_zero_without_losing_content(self, tmp_path):
+        session_file = tmp_path / "s.jsonl"
+        write_jsonl(session_file, [self._assistant("a1", "no usage here", None)])
+
+        result = ClaudeCodeAgent().get_session_data(make_session(session_file))
+
+        assert result["stats"]["total_input_tokens"] == 0
+        assert result["stats"]["total_output_tokens"] == 0
+        assert "no usage here" in json.dumps(result, ensure_ascii=False)
+
+    @pytest.mark.parametrize(
+        "usage",
+        [
+            {"input_tokens": "many", "output_tokens": None},
+            {"input_tokens": True, "output_tokens": float("inf")},
+            {"input_tokens": [1], "output_tokens": {"n": 2}},
+            "not-an-object",
+            [10, 20],
+        ],
+    )
+    def test_malformed_usage_is_best_effort(self, tmp_path, usage):
+        session_file = tmp_path / "s.jsonl"
+        write_jsonl(
+            session_file,
+            [
+                self._assistant("a1", "bad usage", usage),
+                self._tool_use("t1", "call-1", "2026-01-01T00:00:01Z"),
+                self._assistant("a2", "good usage", {"input_tokens": 7, "output_tokens": 8}, "2026-01-01T00:00:02Z"),
+            ],
+        )
+
+        result = ClaudeCodeAgent().get_session_data(make_session(session_file))
+
+        assert result["stats"]["total_input_tokens"] == 7, "坏 usage 记 0，正常 usage 仍要累加"
+        assert result["stats"]["total_output_tokens"] == 8
+        assert "bad usage" in json.dumps(result, ensure_ascii=False), "统计问题不得吞掉消息内容"
+
+    def test_message_count_is_unchanged(self, tmp_path):
+        session_file = tmp_path / "s.jsonl"
+        write_jsonl(
+            session_file,
+            [
+                {
+                    "type": "user",
+                    "uuid": "u1",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "message": {"role": "user", "content": "hi"},
+                },
+                self._assistant("a1", "reply", {"input_tokens": 1, "output_tokens": 2}, "2026-01-01T00:00:01Z"),
+            ],
+        )
+
+        result = ClaudeCodeAgent().get_session_data(make_session(session_file))
+
+        assert result["stats"]["message_count"] == len(result["messages"]) == 2
