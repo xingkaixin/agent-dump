@@ -1544,3 +1544,63 @@ class TestSessionsIndexCache:
 
         assert len(loads) == 1, "并发查询同一 Project 只应触发一次加载"
         assert all(result is not None for result in results)
+
+
+class TestOversizedFirstRecordKeepsSessionVisible:
+    """AD-159：首记录超过 head 窗口的 Claude 会话仍必须可被发现。"""
+
+    @staticmethod
+    def _write_session(project_dir: Path, name: str, first_record_size: int) -> Path:
+        project_dir.mkdir(parents=True, exist_ok=True)
+        file_path = project_dir / f"{name}.jsonl"
+        first = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "cwd": "/work/project",
+            "version": "1.0.0",
+            "message": {"role": "user", "content": "x" * first_record_size},
+        }
+        second = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "message": {"role": "assistant", "content": "reply"},
+        }
+        write_jsonl(file_path, [first, second])
+        return file_path
+
+    def test_session_is_discovered_when_first_record_exceeds_the_head_window(self, tmp_path):
+        project_dir = tmp_path / "projects" / "-Users-kevin-work"
+        file_path = self._write_session(project_dir, "big-first", FULL_SCAN_BYTE_LIMIT + 1024)
+
+        agent = ClaudeCodeAgent()
+        session = agent._parse_session_file(file_path)
+
+        assert session is not None, "文件有有效内容，Session 不得从发现路径消失"
+        assert session.id == "big-first", "id 来自文件名，不依赖首记录"
+        assert session.title == "-Users-kevin-work", "标题回退到 Project 目录名"
+        assert session.metadata["project"] == "-Users-kevin-work"
+
+    def test_session_shows_up_in_scan(self, tmp_path):
+        projects = tmp_path / "projects"
+        self._write_session(projects / "-Users-kevin-work", "big-first", FULL_SCAN_BYTE_LIMIT + 1024)
+
+        agent = ClaudeCodeAgent()
+        agent.base_path = projects
+
+        assert [s.id for s in agent.scan()] == ["big-first"]
+
+    def test_normal_session_metadata_is_unchanged(self, tmp_path):
+        project_dir = tmp_path / "projects" / "-Users-kevin-work"
+        file_path = self._write_session(project_dir, "small-first", 100)
+
+        session = ClaudeCodeAgent()._parse_session_file(file_path)
+
+        assert session is not None
+        assert session.metadata["cwd"] == "/work/project", "小文件仍从首记录读取 cwd"
+        assert session.metadata["version"] == "1.0.0"
+
+    def test_empty_file_still_yields_no_session(self, tmp_path):
+        project_dir = tmp_path / "projects" / "-Users-kevin-work"
+        project_dir.mkdir(parents=True)
+        file_path = project_dir / "empty.jsonl"
+        file_path.write_text("", encoding="utf-8")
+
+        assert ClaudeCodeAgent()._parse_session_file(file_path) is None

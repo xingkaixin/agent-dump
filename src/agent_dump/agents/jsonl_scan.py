@@ -28,6 +28,22 @@ class JsonlScanMetadata:
     head_records: list[dict[str, Any]]
     tail_record: dict[str, Any] | None
     scanned_all: bool
+    # head 窗口里一个换行都没有：首记录本身比窗口还长，被当作不完整行丢弃了。
+    # 与「文件为空」「首行不是 JSON 对象」是不同的事实，必须能分辨。
+    oversized_head: bool = False
+
+    @property
+    def session_header(self) -> dict[str, Any] | None:
+        """Header fields for this session, or None when the file holds no session.
+
+        oversized_head 时返回空 dict 而不是 None：文件确实有会话内容，只是头部字段
+        读不到。调用方既有的缺字段回退（mtime、目录名、文件名）正好适用，不必每个
+        Provider 各写一遍「最小 Session」分支。靠首记录判定文件类型的 Provider
+        （Pi 要求 type == "session"）仍会拒绝空 dict——那时无从确认文件类型。
+        """
+        if self.first_record is not None:
+            return self.first_record
+        return {} if self.oversized_head else None
 
 
 def read_jsonl_scan_metadata(file_path: Path, *, head_line_limit: int) -> JsonlScanMetadata:
@@ -45,7 +61,7 @@ def read_jsonl_scan_metadata(file_path: Path, *, head_line_limit: int) -> JsonlS
             scanned_all=True,
         )
 
-    head_lines = _read_complete_head_lines(file_path, max_lines=head_line_limit)
+    head_lines, oversized_head = _read_complete_head_lines(file_path, max_lines=head_line_limit)
     head_records = _parse_jsonl_records(head_lines)
     tail_line = _read_last_complete_line(file_path)
     return JsonlScanMetadata(
@@ -53,6 +69,7 @@ def read_jsonl_scan_metadata(file_path: Path, *, head_line_limit: int) -> JsonlS
         head_records=head_records,
         tail_record=_parse_json_object(tail_line) if tail_line is not None else None,
         scanned_all=False,
+        oversized_head=oversized_head,
     )
 
 
@@ -65,18 +82,25 @@ def _read_all_lines(file_path: Path) -> list[str]:
     return lines
 
 
-def _read_complete_head_lines(file_path: Path, *, max_lines: int) -> list[str]:
+def _read_complete_head_lines(file_path: Path, *, max_lines: int) -> tuple[list[str], bool]:
+    """Read complete head lines, and whether the window was one oversized record.
+
+    第二个返回值只在窗口非空却一个换行都没有时为 True。窗口保持固定 64 KiB：
+    改用 readline() 就会为任意长的首行做无界读取，正是这里要避免的。
+    """
     with open(file_path, "rb") as f:
         chunk = f.read(HEAD_SCAN_BYTE_LIMIT)
 
     if not chunk:
-        return []
+        return [], False
 
     lines = chunk.splitlines()
     if not chunk.endswith((b"\n", b"\r")) and lines:
         lines = lines[:-1]
+        if not lines:
+            return [], True
 
-    return [_decode_line(line) for line in lines[:max_lines] if line.strip()]
+    return [_decode_line(line) for line in lines[:max_lines] if line.strip()], False
 
 
 def _read_last_complete_line(file_path: Path) -> str | None:
