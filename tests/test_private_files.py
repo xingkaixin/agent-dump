@@ -1,18 +1,25 @@
 """Tests for private_files.py 与派生数据文件的权限约束。"""
 
+from datetime import date, datetime, timezone
 import os
 from pathlib import Path
 import stat
 
 import pytest
 
+from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.collect import write_collect_markdown
 from agent_dump.private_files import (
     PRIVATE_DIR_MODE,
     PRIVATE_FILE_MODE,
+    copy_private_file,
+    ensure_output_dir,
     ensure_private_dir,
     ensure_private_file,
     open_private_append,
+    write_private_text,
 )
+from agent_dump.rendering import export_session_markdown
 
 posix_only = pytest.mark.skipif(os.name == "nt", reason="POSIX 权限位在 Windows 上无意义")
 
@@ -113,3 +120,123 @@ class TestDerivedDataFilePermissions:
         from agent_dump.config import PRIVATE_CONFIG_MODE
 
         assert PRIVATE_CONFIG_MODE == PRIVATE_FILE_MODE
+
+
+def _mode(path: Path) -> int:
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX modes are not meaningful on Windows")
+class TestExportsAndReportsArePrivate:
+    """AD-166：Export 与 Collect Report 含完整提示词、源码与工具输出。"""
+
+    @pytest.fixture(autouse=True)
+    def _permissive_umask(self):
+        previous = os.umask(0o022)
+        yield
+        os.umask(previous)
+
+    class _DummyAgent(BaseAgent):
+        def __init__(self) -> None:
+            super().__init__("dummy", "Dummy")
+
+        def scan(self):
+            return []
+
+        def is_available(self) -> bool:
+            return True
+
+        def get_sessions(self, days: int = 7):
+            return []
+
+        def get_session_data(self, session) -> dict:
+            return {"id": session.id, "messages": []}
+
+    @staticmethod
+    def _session(tmp_path: Path) -> Session:
+        source = tmp_path / "source.jsonl"
+        source.write_text('{"a": 1}\n', encoding="utf-8")
+        source.chmod(0o644)
+        now = datetime.now(timezone.utc)
+        return Session(id="s1", title="T", created_at=now, updated_at=now, source_path=source, metadata={})
+
+    def test_json_export_file_and_new_dir_are_owner_only(self, tmp_path):
+        output_dir = tmp_path / "sessions" / "dummy"
+
+        exported = self._DummyAgent().export_session(self._session(tmp_path), output_dir)
+
+        assert _mode(exported) == PRIVATE_FILE_MODE
+        assert _mode(output_dir) == PRIVATE_DIR_MODE
+
+    def test_raw_export_tightens_the_copy_without_touching_the_source(self, tmp_path):
+        session = self._session(tmp_path)
+
+        exported = self._DummyAgent().export_raw_session(session, tmp_path / "raw")
+
+        assert _mode(exported) == PRIVATE_FILE_MODE
+        assert _mode(session.source_path) == 0o644, "Provider Session Source 是只读数据，绝不修改"
+
+    def test_markdown_export_is_owner_only(self, tmp_path):
+        output_dir = tmp_path / "md"
+
+        exported = export_session_markdown("dummy://s1", {"id": "s1", "messages": []}, "s1", output_dir)
+
+        assert _mode(exported) == PRIVATE_FILE_MODE
+        assert _mode(output_dir) == PRIVATE_DIR_MODE
+
+    def test_collect_report_is_owner_only(self, tmp_path):
+        output_dir = tmp_path / "collect"
+
+        report = write_collect_markdown(
+            "# report",
+            since_date=date(2026, 1, 1),
+            until_date=date(2026, 1, 2),
+            output_dir=output_dir,
+        )
+
+        assert _mode(report) == PRIVATE_FILE_MODE
+        assert _mode(output_dir) == PRIVATE_DIR_MODE
+
+    def test_existing_output_dir_keeps_its_mode(self, tmp_path):
+        """用户显式指定的既有目录不该被本工具 chmod。"""
+        output_dir = tmp_path / "user-dir"
+        output_dir.mkdir()
+        # 刻意造一个宽权限的既有目录：断言的正是本工具不会去改它
+        os.chmod(output_dir, 0o755)  # noqa: S103
+
+        exported = self._DummyAgent().export_session(self._session(tmp_path), output_dir)
+
+        assert _mode(output_dir) == 0o755
+        assert _mode(exported) == PRIVATE_FILE_MODE, "既有目录里的新文件仍必须私有"
+
+    def test_only_newly_created_levels_are_tightened(self, tmp_path):
+        existing = tmp_path / "existing"
+        existing.mkdir()
+        os.chmod(existing, 0o755)  # noqa: S103
+
+        ensure_output_dir(existing / "a" / "b")
+
+        assert _mode(existing) == 0o755, "既有祖先目录不得被收紧"
+        assert _mode(existing / "a") == PRIVATE_DIR_MODE
+        assert _mode(existing / "a" / "b") == PRIVATE_DIR_MODE
+
+    def test_existing_world_readable_target_is_tightened_on_overwrite(self, tmp_path):
+        """升级前建出来的宽权限副本，覆盖时要收紧。"""
+        target = tmp_path / "old.md"
+        target.write_text("old", encoding="utf-8")
+        os.chmod(target, 0o644)
+
+        write_private_text(target, "new")
+
+        assert _mode(target) == PRIVATE_FILE_MODE
+        assert target.read_text(encoding="utf-8") == "new"
+
+    def test_copy_private_file_tightens_a_world_readable_source(self, tmp_path):
+        source = tmp_path / "src.jsonl"
+        source.write_text("data", encoding="utf-8")
+        os.chmod(source, 0o644)
+
+        copied = copy_private_file(source, tmp_path / "out" / "copy.jsonl")
+
+        assert _mode(copied) == PRIVATE_FILE_MODE
+        assert _mode(source) == 0o644

@@ -8,6 +8,7 @@ from typing import Any
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.export_paths import build_session_output_path
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
+from agent_dump.private_files import ensure_output_dir, write_private_text
 from agent_dump.text_safety import safe_body_text, safe_display_text
 from agent_dump.time_utils import to_local_datetime
 
@@ -152,10 +153,9 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
 
 def export_session_markdown(uri: str, session_data: dict[str, Any], session_id: str, output_dir: Path) -> Path:
     """Export a single session to Markdown."""
-    output_dir.mkdir(parents=True, exist_ok=True)
+    ensure_output_dir(output_dir)
     output_path = build_session_output_path(output_dir, session_id, ".md")
-    output_path.write_text(render_session_text(uri, session_data), encoding="utf-8")
-    return output_path
+    return write_private_text(output_path, render_session_text(uri, session_data))
 
 
 def export_session_in_format(

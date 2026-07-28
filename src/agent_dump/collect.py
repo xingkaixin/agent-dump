@@ -53,6 +53,7 @@ from agent_dump.collect_summary import (
 from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
+from agent_dump.private_files import write_private_text
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
@@ -1158,6 +1159,4 @@ def write_collect_markdown(
         base = output_dir if output_dir is not None else Path.cwd()
         path = base / f"agent-dump-collect-{since_date.strftime('%Y%m%d')}-{until_date.strftime('%Y%m%d')}.md"
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(markdown, encoding="utf-8")
-    return path
+    return write_private_text(path, markdown)
