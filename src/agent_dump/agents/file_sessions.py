@@ -11,6 +11,7 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.agents.jsonl_scan import file_modified_since
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import first_existing_search_root
+from agent_dump.text_safety import safe_display_text
 from agent_dump.time_utils import normalize_datetime_utc
 
 _MAX_SCAN_WORKERS = 32
@@ -88,7 +89,14 @@ class FileSessionAgent(BaseAgent):
                 try:
                     session = future.result()
                 except Exception as e:
-                    print(i18n.t(Keys.WARN_SESSION_PARSE_FAILED, path=path, error=e), file=sys.stderr)
+                    print(
+                        i18n.t(
+                            Keys.WARN_SESSION_PARSE_FAILED,
+                            path=safe_display_text(str(path)),
+                            error=safe_display_text(str(e)),
+                        ),
+                        file=sys.stderr,
+                    )
                     continue
                 if session and normalize_datetime_utc(session.created_at) >= cutoff_time:
                     sessions.append(session)

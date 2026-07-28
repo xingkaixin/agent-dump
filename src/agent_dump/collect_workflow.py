@@ -35,6 +35,7 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import QuerySpec, parse_query_uri
 from agent_dump.rendering import render_session_text
 from agent_dump.scanner import AgentScanner
+from agent_dump.text_safety import safe_body_text, safe_display_text
 
 
 def _collect_default_filename(*, since_date: date, until_date: date) -> str:
@@ -249,7 +250,7 @@ def handle_collect_mode(
         try:
             query_spec = parse_query_uri(args.uri, valid_agents, Path.cwd())
         except ValueError as exc:
-            print(i18n.t(Keys.QUERY_INVALID, error=exc))
+            print(i18n.t(Keys.QUERY_INVALID, error=safe_display_text(str(exc))))
             return 1
         if query_spec is None:
             print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
@@ -374,13 +375,15 @@ def handle_collect_mode(
         if collect_logger is not None:
             collect_logger.log("collect_run_fail", phase=phase, error=str(exc))
         if phase == "read":
-            print(i18n.t(Keys.COLLECT_READ_FAILED, error=exc))
+            print(i18n.t(Keys.COLLECT_READ_FAILED, error=safe_display_text(str(exc))))
         else:
-            print(i18n.t(Keys.COLLECT_API_FAILED, error=exc))
+            # 远端错误响应会被原样带进异常文本；先压成一行安全文本再进终端
+            print(i18n.t(Keys.COLLECT_API_FAILED, error=safe_display_text(str(exc))))
         return 1
 
     if collect_logger is not None:
         collect_logger.log("collect_run_finish", output_path=str(output_path), session_count=len(entries))
-    print(markdown)
+    # 模型生成的 Markdown 是多行正文：用 body-safe 保留换行与缩进，只剥掉 ANSI/OSC/bidi
+    print(safe_body_text(markdown))
     print(i18n.t(Keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
     return 0

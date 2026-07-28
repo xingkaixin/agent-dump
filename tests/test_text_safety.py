@@ -100,3 +100,64 @@ class TestUnsafeCharacterPredicates:
     @pytest.mark.parametrize("text", ["plain", "中文", "session-id-1", ""])
     def test_line_predicate_allows_ordinary_text(self, text):
         assert not has_unsafe_line_characters(text)
+
+
+# 覆盖 C0、C1、OSC、CR/LF 与 bidi override 五类攻击字符
+ESC_CLEAR_LINE = "\x1b[2K\rINJECTED"
+OSC_TITLE = "\x1b]0;pwned\x07"
+C1_CONTROL = "\x9b"
+BIDI_OVERRIDE = "‮"
+POISON = f"real{ESC_CLEAR_LINE}{OSC_TITLE}{C1_CONTROL}{BIDI_OVERRIDE}"
+
+
+class TestRemainingTerminalFieldsAreSanitized:
+    """AD-165：所有进入终端的动态标量都要经过净化，程序自身的布局要保留。"""
+
+    def test_diagnostic_strips_every_dynamic_field(self):
+        from agent_dump.diagnostics import DiagnosticError, ParsedUri, render_diagnostic
+        from agent_dump.i18n import i18n
+
+        error = DiagnosticError(
+            summary=f"summary {POISON}",
+            parsed_uri=ParsedUri(raw=f"evil://{POISON}", scheme=f"s{POISON}", session_id=f"id{POISON}"),
+            details=(f"detail {POISON}",),
+            searched_roots=(f"/root/{POISON}",),
+            capability_gap=f"gap {POISON}",
+            next_steps=(f"step {POISON}",),
+        )
+
+        rendered = render_diagnostic(error, t=i18n.t)
+
+        assert not has_unsafe_body_characters(rendered)
+        assert "INJECTED" in rendered, "内容本身要保留，被移除的只是控制字符"
+        # diagnostic 自己的 bullets 与分行是程序布局，不能被压平
+        assert rendered.count("\n") >= 6
+        assert "  - " in rendered
+
+    def test_provider_warning_is_one_safe_line(self, tmp_path, capsys):
+        from agent_dump.i18n import Keys, i18n
+
+        message = i18n.t(
+            Keys.WARN_SESSION_PARSE_FAILED,
+            path=safe_display_text(f"/tmp/{POISON}"),
+            error=safe_display_text(f"boom {POISON}"),
+        )
+
+        assert not has_unsafe_line_characters(message)
+        assert "\n" not in message
+
+    def test_body_text_keeps_markdown_layout(self):
+        markdown = f"# Title{ESC_CLEAR_LINE}\n\n- item one\n- item {OSC_TITLE}two\n\n```py\nx = 1\n```\n"
+
+        safe = safe_body_text(markdown)
+
+        assert not has_unsafe_body_characters(safe)
+        assert safe.count("\n") == markdown.count("\n"), "Markdown 换行全部保留，被移除的只有控制字符"
+        assert "```py\nx = 1\n```" in safe
+        assert "- item one" in safe
+
+    def test_display_text_collapses_only_the_scalar(self):
+        collapsed = safe_display_text(f"line one{ESC_CLEAR_LINE}\nline two")
+
+        assert not has_unsafe_line_characters(collapsed)
+        assert "\n" not in collapsed, "单行字段里的换行本身就是攻击面"

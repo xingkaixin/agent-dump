@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agent_dump.i18n import Keys, i18n
+from agent_dump.text_safety import safe_display_text
 
 
 @dataclass(frozen=True)
@@ -146,29 +147,34 @@ def unexpected_failure(exc: BaseException) -> DiagnosticError:
 
 
 def render_diagnostic(error: DiagnosticError, *, t) -> str:
-    """Render one diagnostic block with stable field labels."""
-    lines = [t(Keys.DIAGNOSTIC_HEADER), f"{t(Keys.DIAGNOSTIC_SUMMARY)}: {error.summary}"]
+    """Render one diagnostic block with stable field labels.
+
+    每个动态字段单独净化成一行：URI、路径、异常文本都来自第三方会话、环境路径或
+    远端响应，其中的 CR/ESC 足以改写已打印的行或伪造出一整块假诊断。i18n 标签是
+    静态文案，不参与净化。
+    """
+    lines = [t(Keys.DIAGNOSTIC_HEADER), f"{t(Keys.DIAGNOSTIC_SUMMARY)}: {safe_display_text(error.summary)}"]
 
     if error.parsed_uri is not None:
-        lines.append(f"{t(Keys.DIAGNOSTIC_PARSED_URI)}: {error.parsed_uri.raw}")
+        lines.append(f"{t(Keys.DIAGNOSTIC_PARSED_URI)}: {safe_display_text(error.parsed_uri.raw)}")
         if error.parsed_uri.scheme:
-            lines.append(f"  - scheme: {error.parsed_uri.scheme}")
+            lines.append(f"  - scheme: {safe_display_text(error.parsed_uri.scheme)}")
         if error.parsed_uri.session_id:
-            lines.append(f"  - session_id: {error.parsed_uri.session_id}")
+            lines.append(f"  - session_id: {safe_display_text(error.parsed_uri.session_id)}")
 
     if error.details:
         lines.append(f"{t(Keys.DIAGNOSTIC_DETAILS)}:")
-        lines.extend(f"  - {detail}" for detail in error.details if detail)
+        lines.extend(f"  - {safe_display_text(detail)}" for detail in error.details if detail)
 
     if error.searched_roots:
         lines.append(f"{t(Keys.DIAGNOSTIC_SEARCHED_ROOTS)}:")
-        lines.extend(f"  - {root}" for root in error.searched_roots if root)
+        lines.extend(f"  - {safe_display_text(root)}" for root in error.searched_roots if root)
 
     if error.capability_gap:
-        lines.append(f"{t(Keys.DIAGNOSTIC_CAPABILITY_GAP)}: {error.capability_gap}")
+        lines.append(f"{t(Keys.DIAGNOSTIC_CAPABILITY_GAP)}: {safe_display_text(error.capability_gap)}")
 
     if error.next_steps:
         lines.append(f"{t(Keys.DIAGNOSTIC_NEXT_STEPS)}:")
-        lines.extend(f"  - {step}" for step in error.next_steps if step)
+        lines.extend(f"  - {safe_display_text(step)}" for step in error.next_steps if step)
 
     return "\n".join(lines)
