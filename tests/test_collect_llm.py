@@ -7,8 +7,10 @@ from typing import Any
 
 import pytest
 
+from agent_dump import collect_llm
 from agent_dump.collect_llm import LLMRequestError, is_retryable_error, request_summary_from_llm
 from agent_dump.config import AIConfig
+from agent_dump.prompt_safety import UNTRUSTED_DATA_RULES
 
 
 @contextmanager
@@ -189,3 +191,36 @@ class TestInsecureBaseUrlWarning:
         _warn_if_insecure_base_url("https://api.example.com/v1")
 
         assert capsys.readouterr().err == ""
+
+
+class TestSystemMessageDeclaresUntrustedData:
+    """AD-167：固定规则必须在 system message，与 user message 里的数据分处不同 role。"""
+
+    @staticmethod
+    def _captured_payload(monkeypatch, request_fn, *args, **kwargs) -> dict:
+        captured: dict = {}
+
+        def fake_request(config, payload, *, timeout_seconds):
+            captured.update(payload)
+            return {"choices": [{"message": {"content": '{"done": []}'}}]}
+
+        monkeypatch.setattr(collect_llm, "_request_openai_json", fake_request)
+        request_fn(*args, **kwargs)
+        return captured
+
+    @pytest.mark.parametrize(
+        "request_fn_name",
+        ["_request_openai", "_request_openai_structured_summary"],
+    )
+    def test_rules_live_in_the_system_message(self, monkeypatch, request_fn_name):
+        config = AIConfig(provider="openai", base_url="https://x", model="m", api_key="k")
+        request_fn = getattr(collect_llm, request_fn_name)
+
+        payload = self._captured_payload(monkeypatch, request_fn, config, "user prompt", timeout_seconds=1)
+
+        roles = {message["role"]: message["content"] for message in payload["messages"]}
+        assert set(roles) == {"system", "user"}
+        for rule in UNTRUSTED_DATA_RULES:
+            assert rule in roles["system"], "规则必须在 system，不能混进用户数据那一侧"
+            assert rule not in roles["user"]
+        assert roles["user"] == "user prompt", "user message 只承载数据，不被改写"

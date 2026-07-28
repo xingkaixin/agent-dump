@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from agent_dump.collect_models import SUMMARY_FIELDS
 from agent_dump.config import AIConfig, is_loopback_host
 from agent_dump.i18n import Keys, i18n
+from agent_dump.prompt_safety import summary_system_prompt
 
 STRUCTURED_SUMMARY_MAX_TOKENS = 4096
 SENSITIVE_REQUEST_HEADERS = frozenset({"authorization", "x-api-key"})
@@ -172,7 +173,7 @@ def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> s
     payload = {
         "model": config.model,
         "messages": [
-            {"role": "system", "content": "你是一个严谨的工作总结助手。"},
+            {"role": "system", "content": summary_system_prompt("你是一个严谨的工作总结助手。")},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.2,
@@ -191,7 +192,7 @@ def _request_openai_structured_summary(
     payload = {
         "model": config.model,
         "messages": [
-            {"role": "system", "content": "你是一个严谨的工作总结助手。"},
+            {"role": "system", "content": summary_system_prompt("你是一个严谨的工作总结助手。")},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.2,

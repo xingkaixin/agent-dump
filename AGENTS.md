@@ -80,6 +80,7 @@
 | `coercion.py` | 不可信 provider 标量的容错转换（safe_int / safe_epoch_datetime） |
 | `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
+| `prompt_safety.py` | 摘要 prompt 的不可信数据隔离（system 规则 + JSON data envelope） |
 | `session_data.py` | 请求级会话数据缓存，按 provider-owned change sources 失效 |
 | `text_safety.py` | 第三方会话文本的输出净化（终端 / markdown / 文件名） |
 | `time_utils.py` | 时间与时区工具，全部转换的单一入口 |
@@ -196,6 +197,7 @@ agent-dump/
 │   ├── i18n.py                  # 中英文文案
 │   ├── message_filter.py        # 消息过滤
 │   ├── paths.py                 # 搜索根路径模型
+│   ├── prompt_safety.py         # 摘要 prompt 的不可信数据隔离
 │   ├── query_filter.py          # 查询解析与过滤
 │   ├── rendering.py             # print/head/markdown/json/raw 渲染调度
 │   ├── exporting.py             # 统一导出执行与结构化 outcome
