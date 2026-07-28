@@ -478,7 +478,8 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 ## Development
 
 ```bash
-# Run local CI checks with the current Python (includes npm tests when Node.js is available)
+# Run local CI checks with the current Python
+# (includes npm tests when Node.js is available, and the landing page check when pnpm is)
 just isok
 
 # Lint code

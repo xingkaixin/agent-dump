@@ -50,6 +50,14 @@ test-npm:
 # Auto-fix lint issues and format code
 fix: lint-fix lint-format
 
+# Type-check and build the landing page from the committed lockfile
+check-web:
+    @echo "🔍 Checking landing page..."
+    pnpm --dir web install --frozen-lockfile
+    pnpm --dir web check
+    pnpm --dir web build
+    @echo "✅ Landing page check complete!"
+
 # Fail when uv.lock no longer matches pyproject.toml
 lock-check:
     @echo "🔍 Checking uv.lock is current..."
@@ -62,6 +70,11 @@ isok: lock-check lint check test
         just test-npm; \
     else \
         echo "⏭️ Skipping npm wrapper tests (Node.js not found)"; \
+    fi
+    @if command -v pnpm >/dev/null 2>&1; then \
+        just check-web; \
+    else \
+        echo "⏭️ Skipping landing page check (pnpm not found)"; \
     fi
 
 # Run the agent-dump CLI
