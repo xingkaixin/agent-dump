@@ -14,6 +14,7 @@ from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
+from agent_dump.agents.jsonl_scan import JsonlObjectScan, parse_object_line, warn_skipped_records
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
     build_fallback_tool_message,
@@ -21,9 +22,17 @@ from agent_dump.agents.message_assembly import (
     build_text_part,
     build_tool_part,
 )
+from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.text_safety import safe_display_text
+
+
+def _line_excerpt(line: str) -> str:
+    """One bounded, control-free excerpt of a rejected record, for diagnostics."""
+    return safe_display_text(line.strip(), limit=80)
+
 
 KIMI_TOOL_TITLE_MAP = {
     "ReadFile": "read",
@@ -255,19 +264,15 @@ class KimiAgent(FileSessionAgent):
             return None
 
         total_tokens: int | None = None
-        with open(raw_path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
+        scan = JsonlObjectScan(raw_path)
+        for data in scan:
+            if data.get("role") != "_usage":
+                continue
 
-                if data.get("role") != "_usage":
-                    continue
-
-                token_count = data.get("token_count")
-                if isinstance(token_count, (int, float)) and not isinstance(token_count, bool):
-                    total_tokens = int(token_count)
+            token_count = data.get("token_count")
+            if isinstance(token_count, (int, float)) and not isinstance(token_count, bool):
+                total_tokens = int(token_count)
+        warn_skipped_records(scan)
 
         return total_tokens
 
@@ -283,19 +288,19 @@ class KimiAgent(FileSessionAgent):
 
         wire_path = session_dir / "wire.jsonl"
         if wire_path.exists():
-            with open(wire_path, encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        data = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
+            scan = JsonlObjectScan(wire_path)
+            for data in scan:
+                message = data.get("message")
+                if not isinstance(message, dict):
+                    continue
+                token_usage = message.get("usage")
+                if not isinstance(token_usage, dict):
+                    continue
 
-                    token_usage = data.get("message", {}).get("usage", {})
-                    if not isinstance(token_usage, dict):
-                        continue
-
-                    stats["total_input_tokens"] += int(token_usage.get("input_tokens", 0))
-                    stats["total_output_tokens"] += int(token_usage.get("output_tokens", 0))
+                # usage 由 Kimi 写入，字段可能是字符串或 null；裸 int() 会中断整份导出
+                stats["total_input_tokens"] += safe_int(token_usage.get("input_tokens"))
+                stats["total_output_tokens"] += safe_int(token_usage.get("output_tokens"))
+            warn_skipped_records(scan)
 
         total_tokens = self._extract_kimi_total_tokens_from_raw(session_dir)
         if total_tokens is not None:
@@ -519,10 +524,9 @@ class KimiAgent(FileSessionAgent):
 
         with open(context_path, encoding="utf-8") as f:
             for seq, line in enumerate(f, start=1):
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError as e:
-                    print(i18n.t(Keys.WARN_CONTEXT_CONVERT_FAILED, error=e), file=sys.stderr)
+                record = parse_object_line(line)
+                if record is None:
+                    print(i18n.t(Keys.WARN_CONTEXT_CONVERT_FAILED, error=_line_excerpt(line)), file=sys.stderr)
                     continue
                 self._convert_context_record(
                     record,
@@ -645,13 +649,14 @@ class KimiAgent(FileSessionAgent):
 
         with open(wire_path, encoding="utf-8") as f:
             for seq, line in enumerate(f, start=1):
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError as e:
-                    print(i18n.t(Keys.WARN_WIRE_CONVERT_FAILED, error=e), file=sys.stderr)
+                data = parse_object_line(line)
+                if data is None:
+                    print(i18n.t(Keys.WARN_WIRE_CONVERT_FAILED, error=_line_excerpt(line)), file=sys.stderr)
                     continue
 
-                message = data.get("message", {})
+                message = data.get("message")
+                if not isinstance(message, dict):
+                    continue
                 msg_type = message.get("type", "")
                 payload = message.get("payload", {})
                 timestamp = data.get("timestamp", 0)

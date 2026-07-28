@@ -10,7 +10,7 @@ import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.coercion import safe_epoch_datetime
+from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
@@ -285,6 +285,13 @@ class OpenCodeAgent(BaseAgent):
                 print(i18n.t(Keys.WARN_MESSAGE_DATA_PARSE_FAILED, message_id=msg_row["id"]), file=sys.stderr)
                 continue
 
+            # time/tokens/cost 都由 OpenCode 写入：非 dict 的 time 会让 .get() 抛，
+            # 字符串 cost 会让累加抛 TypeError，一条坏消息就中断整个 Session
+            message_time = msg_data.get("time")
+            tokens = msg_data.get("tokens")
+            if not isinstance(tokens, dict):
+                tokens = {}
+
             message = {
                 "id": msg_row["id"],
                 "role": msg_data.get("role", "unknown"),
@@ -293,18 +300,16 @@ class OpenCodeAgent(BaseAgent):
                 "model": msg_data.get("modelID"),
                 "provider": msg_data.get("providerID"),
                 "time_created": msg_row["time_created"],
-                "time_completed": msg_data.get("time", {}).get("completed"),
-                "tokens": msg_data.get("tokens", {}),
+                "time_completed": message_time.get("completed") if isinstance(message_time, dict) else None,
+                "tokens": tokens,
                 "cost": msg_data.get("cost", 0),
                 "parts": [],
             }
 
             session_data["stats"]["message_count"] += 1
-            if message["cost"]:
-                session_data["stats"]["total_cost"] += message["cost"]
-            tokens = message["tokens"] or {}
-            session_data["stats"]["total_input_tokens"] += tokens.get("input", 0)
-            session_data["stats"]["total_output_tokens"] += tokens.get("output", 0)
+            session_data["stats"]["total_cost"] += safe_float(message["cost"])
+            session_data["stats"]["total_input_tokens"] += safe_int(tokens.get("input"))
+            session_data["stats"]["total_output_tokens"] += safe_int(tokens.get("output"))
 
             for part_row in parts_by_message_id.get(str(msg_row["id"]), []):
                 part_data = self._parse_json_dict(part_row["data"])

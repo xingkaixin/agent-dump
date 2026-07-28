@@ -1,8 +1,13 @@
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import sys
 from typing import Any
+
+from agent_dump.i18n import Keys, i18n
+from agent_dump.text_safety import safe_display_text
 
 FULL_SCAN_BYTE_LIMIT = 256 * 1024
 HEAD_SCAN_BYTE_LIMIT = 64 * 1024
@@ -70,6 +75,65 @@ def read_jsonl_scan_metadata(file_path: Path, *, head_line_limit: int) -> JsonlS
         tail_record=_parse_json_object(tail_line) if tail_line is not None else None,
         scanned_all=False,
         oversized_head=oversized_head,
+    )
+
+
+class JsonlObjectScan:
+    """Iterate a JSONL file's root objects, remembering which lines were skipped.
+
+    Provider store 由别的工具写入，一行完全可能是合法 JSON 却不是对象——`1`、`[]`、
+    `"text"` 都是。裸 json.loads() 之后直接 .get() 会抛 AttributeError，一条坏记录
+    就能中断整个 Session 的读取。这里只保证根是对象；嵌套 schema 仍由各 Provider
+    自己解释，共享层不碰 Provider 私有结构。
+
+    诊断按文件汇总而不是逐行打印：一个被截断或损坏的文件可能有成千上万条坏记录。
+    """
+
+    def __init__(self, file_path: Path) -> None:
+        self.file_path = file_path
+        self.skipped_lines: list[int] = []
+
+    def __iter__(self) -> Iterator[dict[str, Any]]:
+        with open(self.file_path, encoding="utf-8") as f:
+            for line_number, line in enumerate(f, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    self.skipped_lines.append(line_number)
+                    continue
+                if not isinstance(data, dict):
+                    self.skipped_lines.append(line_number)
+                    continue
+                yield data
+
+
+def parse_object_line(line: str) -> dict[str, Any] | None:
+    """Parse one JSONL line into its root object, or None when it is not one.
+
+    与 JsonlObjectScan 同一个事实的单行入口，给已经持有行、且自己负责诊断的调用方用。
+    """
+    return _parse_json_object(line)
+
+
+def parse_object_lines(lines: list[str]) -> list[dict[str, Any]]:
+    """Parse already-read lines into root objects, dropping anything that is not one."""
+    return _parse_jsonl_records(lines)
+
+
+def warn_skipped_records(scan: JsonlObjectScan) -> None:
+    """Report a file's skipped records once, after the scan is exhausted."""
+    if not scan.skipped_lines:
+        return
+    print(
+        i18n.t(
+            Keys.WARN_JSONL_RECORDS_SKIPPED,
+            path=safe_display_text(str(scan.file_path)),
+            count=len(scan.skipped_lines),
+            lines=", ".join(str(line) for line in scan.skipped_lines[:5]),
+        ),
+        file=sys.stderr,
     )
 
 

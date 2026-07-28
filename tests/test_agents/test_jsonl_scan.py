@@ -10,8 +10,11 @@ from agent_dump.agents.jsonl_scan import (
     FULL_SCAN_BYTE_LIMIT,
     HEAD_SCAN_BYTE_LIMIT,
     TAIL_SCAN_BYTE_LIMIT,
+    JsonlObjectScan,
     file_modified_since,
+    parse_object_line,
     read_jsonl_scan_metadata,
+    warn_skipped_records,
 )
 
 
@@ -139,3 +142,68 @@ class TestOversizedHeadRecord:
         assert read_bytes[0] <= HEAD_SCAN_BYTE_LIMIT + TAIL_SCAN_BYTE_LIMIT, (
             f"读取了 {read_bytes[0]} 字节，超出 head+tail 窗口"
         )
+
+
+class TestJsonlObjectScan:
+    """AD-160：合法但非对象的记录只能被跳过，不能中断整个文件的读取。"""
+
+    def test_non_object_roots_are_skipped_with_line_numbers(self, tmp_path):
+        file_path = tmp_path / "s.jsonl"
+        file_path.write_text(
+            '{"n": 1}\n1\n[]\n"text"\nnull\ntrue\n{"n": 2}\n',
+            encoding="utf-8",
+        )
+
+        scan = JsonlObjectScan(file_path)
+
+        assert list(scan) == [{"n": 1}, {"n": 2}], "坏记录前后的对象都必须保留"
+        assert scan.skipped_lines == [2, 3, 4, 5, 6]
+
+    def test_malformed_json_is_skipped_too(self, tmp_path):
+        file_path = tmp_path / "s.jsonl"
+        file_path.write_text('{"n": 1}\n{not json\n{"n": 2}\n', encoding="utf-8")
+
+        scan = JsonlObjectScan(file_path)
+
+        assert list(scan) == [{"n": 1}, {"n": 2}]
+        assert scan.skipped_lines == [2]
+
+    def test_blank_lines_are_not_counted_as_skipped(self, tmp_path):
+        file_path = tmp_path / "s.jsonl"
+        file_path.write_text('{"n": 1}\n\n   \n{"n": 2}\n', encoding="utf-8")
+
+        scan = JsonlObjectScan(file_path)
+
+        assert list(scan) == [{"n": 1}, {"n": 2}]
+        assert scan.skipped_lines == []
+
+    def test_clean_file_reports_nothing(self, tmp_path, capsys):
+        file_path = tmp_path / "s.jsonl"
+        file_path.write_text('{"n": 1}\n', encoding="utf-8")
+
+        scan = JsonlObjectScan(file_path)
+        list(scan)
+        warn_skipped_records(scan)
+
+        assert capsys.readouterr().err == ""
+
+    def test_diagnostic_is_one_sanitized_line_without_a_traceback(self, tmp_path, capsys):
+        file_path = tmp_path / "s\x1b[31m.jsonl"
+        file_path.write_text("1\n" * 50, encoding="utf-8")
+
+        scan = JsonlObjectScan(file_path)
+        list(scan)
+        warn_skipped_records(scan)
+
+        err = capsys.readouterr().err
+        assert err.count("\n") == 1, "成千上万条坏记录只能产生一条诊断"
+        assert "50" in err
+        assert "\x1b" not in err, "路径来自不可信输入，必须净化后才进终端"
+        assert "Traceback" not in err
+
+    def test_parse_object_line_rejects_non_objects(self, tmp_path):
+        assert parse_object_line('{"n": 1}') == {"n": 1}
+        assert parse_object_line("1") is None
+        assert parse_object_line("[]") is None
+        assert parse_object_line('"text"') is None
+        assert parse_object_line("{bad") is None

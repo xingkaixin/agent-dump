@@ -250,6 +250,7 @@ class Keys:
     DIAG_STEP_WIDEN_PROVIDERS = "DIAG_STEP_WIDEN_PROVIDERS"
     INDEX_UPDATE_PROGRESS = "INDEX_UPDATE_PROGRESS"
     WARN_INDEX_SKIPPED_SESSIONS = "WARN_INDEX_SKIPPED_SESSIONS"
+    WARN_JSONL_RECORDS_SKIPPED = "WARN_JSONL_RECORDS_SKIPPED"
     WARN_INDEX_UNUSABLE = "WARN_INDEX_UNUSABLE"
     WARN_SESSION_SUMMARY_SKIPPED = "WARN_SESSION_SUMMARY_SKIPPED"
     WARN_SESSION_SUMMARY_FAILURES = "WARN_SESSION_SUMMARY_FAILURES"
@@ -554,6 +555,7 @@ TRANSLATIONS = {
         Keys.DIAG_STEP_WIDEN_PROVIDERS: "Widen the providers scope, or run `--list` without a provider filter first.",
         Keys.INDEX_UPDATE_PROGRESS: "Updating the {agent} search index ({count} sessions; the first run can be slow)…",
         Keys.WARN_INDEX_SKIPPED_SESSIONS: "⚠️  {agent}: {count} sessions could not be read and were not indexed; the next run retries them (e.g. {examples})",
+        Keys.WARN_JSONL_RECORDS_SKIPPED: "⚠️  {path}: skipped {count} malformed records (lines {lines})",
         Keys.WARN_INDEX_UNUSABLE: "⚠️  The {agent} search index is unusable ({error_type}: {error}); falling back to a file scan. Run `agent-dump --reindex` to rebuild it.",
         Keys.WARN_SESSION_SUMMARY_SKIPPED: "⚠️  Session summary failed, skipped {uri}: {error}",
         Keys.WARN_SESSION_SUMMARY_FAILURES: "⚠️  {count} session summaries failed; the final report omits those sessions.",
@@ -847,6 +849,7 @@ TRANSLATIONS = {
         Keys.DIAG_STEP_WIDEN_PROVIDERS: "放宽 providers 范围，或先不加 provider 过滤执行 `--list`。",
         Keys.INDEX_UPDATE_PROGRESS: "正在更新 {agent} 的搜索索引（{count} 个会话，首次运行可能较慢）…",
         Keys.WARN_INDEX_SKIPPED_SESSIONS: "警告: {agent} 有 {count} 个会话读取失败，未写入索引，下次运行会重试（示例: {examples}）",
+        Keys.WARN_JSONL_RECORDS_SKIPPED: "警告: {path} 跳过了 {count} 条格式错误的记录（行 {lines}）",
         Keys.WARN_INDEX_UNUSABLE: "警告: {agent} 的搜索索引不可用（{error_type}: {error}），本次改用文件扫描；可运行 `agent-dump --reindex` 重建索引。",
         Keys.WARN_SESSION_SUMMARY_SKIPPED: "警告: 会话摘要失败，已跳过 {uri}: {error}",
         Keys.WARN_SESSION_SUMMARY_FAILURES: "警告: {count} 个会话摘要失败，最终报告不包含这些会话。",

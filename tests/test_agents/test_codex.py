@@ -2403,3 +2403,70 @@ class TestTokenStatsAccumulation:
 
         assert TrackingDict.stringified == 0
         assert stats == {"total_input_tokens": 1, "total_output_tokens": 2}
+
+
+class TestMalformedRecordsDoNotBreakTheSession:
+    """AD-160：合法但非对象的记录只跳过该条，前后内容都要保留。"""
+
+    @staticmethod
+    def _session(path):
+        now = datetime.now(timezone.utc)
+        return Session(id="s1", title="T", created_at=now, updated_at=now, source_path=path, metadata={})
+
+    @staticmethod
+    def _write(path):
+        path.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "timestamp": "2026-01-01T00:00:00Z",
+                            "type": "response_item",
+                            "payload": {
+                                "type": "message",
+                                "role": "user",
+                                "content": [{"type": "input_text", "text": "BEFORE"}],
+                            },
+                        }
+                    ),
+                    "1",
+                    "[]",
+                    '"text"',
+                    "null",
+                    "true",
+                    json.dumps(
+                        {
+                            "timestamp": "2026-01-01T00:00:01Z",
+                            "type": "response_item",
+                            "payload": {
+                                "type": "message",
+                                "role": "assistant",
+                                "content": [{"type": "output_text", "text": "AFTER"}],
+                            },
+                        }
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def test_get_session_data_keeps_records_around_the_bad_ones(self, tmp_path):
+        path = tmp_path / "rollout-2026-01-01T00-00-00-s1.jsonl"
+        self._write(path)
+
+        data = CodexAgent().get_session_data(self._session(path))
+
+        texts = [p["text"] for m in data["messages"] for p in m.get("parts", []) if p.get("type") == "text"]
+        assert texts == ["BEFORE", "AFTER"]
+
+    def test_get_session_head_does_not_raise(self, tmp_path, capsys):
+        path = tmp_path / "rollout-2026-01-01T00-00-00-s1.jsonl"
+        self._write(path)
+
+        head = CodexAgent().get_session_head(self._session(path))
+
+        assert head["message_count"] == 2
+        err = capsys.readouterr().err
+        assert "Traceback" not in err
+        assert "skipped 5 malformed records" in err or "跳过了 5 条" in err

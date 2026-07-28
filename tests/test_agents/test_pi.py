@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from unittest import mock
 
+from agent_dump.agents.base import Session
 from agent_dump.agents.pi import PiAgent
 from agent_dump.paths import ProviderRoots
 
@@ -259,3 +260,54 @@ class TestMalformedTimestamps:
         agent = PiAgent()
 
         assert agent._parse_datetime(1704067200000) == datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+
+class TestMalformedRecordsDoNotBreakTheSession:
+    """AD-160：合法但非对象的记录只跳过该条，前后内容都要保留。"""
+
+    @staticmethod
+    def _write(path):
+        path.write_text(
+            "\n".join(
+                [
+                    json.dumps({"type": "session", "id": "s1", "timestamp": "2026-01-01T00:00:00Z", "cwd": "/w"}),
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "message": {"role": "user", "content": [{"type": "text", "text": "BEFORE"}]},
+                        }
+                    ),
+                    "1",
+                    "[]",
+                    '"text"',
+                    json.dumps(
+                        {
+                            "type": "message",
+                            "message": {"role": "assistant", "content": [{"type": "text", "text": "AFTER"}]},
+                        }
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def test_get_session_data_keeps_records_around_the_bad_ones(self, tmp_path):
+        path = tmp_path / "20260101_s1.jsonl"
+        self._write(path)
+        now = datetime.now(timezone.utc)
+        session = Session(id="s1", title="T", created_at=now, updated_at=now, source_path=path, metadata={})
+
+        data = PiAgent().get_session_data(session)
+
+        serialized = json.dumps(data, ensure_ascii=False)
+        assert "BEFORE" in serialized
+        assert "AFTER" in serialized
+
+    def test_get_session_head_does_not_raise(self, tmp_path):
+        path = tmp_path / "20260101_s1.jsonl"
+        self._write(path)
+        now = datetime.now(timezone.utc)
+        session = Session(id="s1", title="T", created_at=now, updated_at=now, source_path=path, metadata={})
+
+        assert PiAgent().get_session_head(session)["message_count"] == 2

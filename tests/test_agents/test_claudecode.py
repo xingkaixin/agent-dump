@@ -1604,3 +1604,60 @@ class TestOversizedFirstRecordKeepsSessionVisible:
         file_path.write_text("", encoding="utf-8")
 
         assert ClaudeCodeAgent()._parse_session_file(file_path) is None
+
+
+class TestMalformedRecordsDoNotBreakTheSession:
+    """AD-160：合法但非对象的记录只跳过该条，前后内容都要保留。"""
+
+    @staticmethod
+    def _write(path):
+        stamp = datetime.now(timezone.utc).isoformat()
+        path.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "user",
+                            "uuid": "m1",
+                            "timestamp": stamp,
+                            "message": {"role": "user", "content": "BEFORE"},
+                        }
+                    ),
+                    "1",
+                    "[]",
+                    '"text"',
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "uuid": "m2",
+                            "timestamp": stamp,
+                            "message": {"role": "assistant", "content": [{"type": "text", "text": "AFTER"}]},
+                        }
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def test_get_session_data_keeps_records_around_the_bad_ones(self, tmp_path):
+        project_dir = tmp_path / "projects" / "-Users-kevin-work"
+        project_dir.mkdir(parents=True)
+        path = project_dir / "s1.jsonl"
+        self._write(path)
+
+        data = ClaudeCodeAgent().get_session_data(make_session(path))
+
+        serialized = json.dumps(data, ensure_ascii=False)
+        assert "BEFORE" in serialized
+        assert "AFTER" in serialized
+
+    def test_get_session_head_counts_only_real_messages(self, tmp_path):
+        project_dir = tmp_path / "projects" / "-Users-kevin-work"
+        project_dir.mkdir(parents=True)
+        path = project_dir / "s1.jsonl"
+        self._write(path)
+
+        head = ClaudeCodeAgent().get_session_head(make_session(path))
+
+        assert head["message_count"] == 2

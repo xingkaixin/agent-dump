@@ -3,20 +3,20 @@
 from collections.abc import Iterable, Iterator
 from contextlib import suppress
 from datetime import datetime, timezone
-import json
 from pathlib import Path
 import sys
 from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
-from agent_dump.agents.jsonl_scan import read_jsonl_scan_metadata
+from agent_dump.agents.jsonl_scan import JsonlObjectScan, read_jsonl_scan_metadata, warn_skipped_records
 from agent_dump.agents.message_assembly import build_message, build_text_part, build_tool_part
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.text_safety import safe_display_text
 
 PI_TOOL_TITLE_MAP = {
     "bash": "bash",
@@ -169,21 +169,17 @@ class PiAgent(FileSessionAgent):
         message_count = 0
         model = head.get("model")
 
-        with open(session.source_path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-
-                if record.get("type") != "message":
-                    continue
-                message_count += 1
-                message = record.get("message")
-                if isinstance(message, dict) and not model:
-                    raw_model = message.get("model")
-                    if isinstance(raw_model, str) and raw_model.strip():
-                        model = raw_model.strip()
+        scan = JsonlObjectScan(session.source_path)
+        for record in scan:
+            if record.get("type") != "message":
+                continue
+            message_count += 1
+            message = record.get("message")
+            if isinstance(message, dict) and not model:
+                raw_model = message.get("model")
+                if isinstance(raw_model, str) and raw_model.strip():
+                    model = raw_model.strip()
+        warn_skipped_records(scan)
 
         head["message_count"] = message_count
         head["model"] = model
@@ -207,24 +203,25 @@ class PiAgent(FileSessionAgent):
         header: dict[str, Any] = {}
         latest_session_name: str | None = None
 
-        with open(session.source_path, encoding="utf-8") as f:
-            for seq, line in enumerate(f, start=1):
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError as e:
-                    print(i18n.t(Keys.WARN_PI_RECORD_CONVERT_FAILED, error=e), file=sys.stderr)
-                    continue
-
+        scan = JsonlObjectScan(session.source_path)
+        for seq, record in enumerate(scan, start=1):
+            try:
                 if record.get("type") == "session" and not header:
                     header = record
                     continue
                 if record.get("type") == "session_info":
-                    latest_session_name = normalize_title_text(record.get("name")) or latest_session_name
+                    raw_name = record.get("name")
+                    if isinstance(raw_name, str):
+                        latest_session_name = normalize_title_text(raw_name) or latest_session_name
 
                 message = self._convert_entry_to_message(record, seq)
                 if message:
                     messages.append(message)
                 self._accumulate_stats(stats, record)
+            except Exception as e:
+                print(i18n.t(Keys.WARN_PI_RECORD_CONVERT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
+                continue
+        warn_skipped_records(scan)
 
         stats["message_count"] = len(messages)
         title = latest_session_name or session.title

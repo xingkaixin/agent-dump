@@ -16,7 +16,13 @@ from agent_dump.agents.base import Session
 from agent_dump.agents.codex_enrichment import CodexMessageEnrichmentMixin
 from agent_dump.agents.codex_patch import parse_apply_patch_input
 from agent_dump.agents.file_sessions import FileSessionAgent
-from agent_dump.agents.jsonl_scan import parse_iso_timestamp_ms, read_jsonl_scan_metadata
+from agent_dump.agents.jsonl_scan import (
+    JsonlObjectScan,
+    parse_iso_timestamp_ms,
+    parse_object_lines,
+    read_jsonl_scan_metadata,
+    warn_skipped_records,
+)
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
     build_fallback_tool_message,
@@ -32,6 +38,7 @@ from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
 from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.text_safety import safe_display_text
 
 CODEX_TOOL_TITLE_MAP = {
     "exec_command": "bash",
@@ -84,19 +91,15 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
             if session_index_path.exists():
                 try:
-                    with open(session_index_path, encoding="utf-8") as f:
-                        for line in f:
-                            if not line.strip():
-                                continue
-                            data = json.loads(line)
-                            session_id = data.get("id")
-                            thread_name = data.get("thread_name")
-                            if isinstance(session_id, str) and session_id.strip() and isinstance(thread_name, str):
-                                normalized = normalize_title_text(thread_name)
-                                if normalized:
-                                    titles[session_id] = normalized
+                    for data in JsonlObjectScan(session_index_path):
+                        session_id = data.get("id")
+                        thread_name = data.get("thread_name")
+                        if isinstance(session_id, str) and session_id.strip() and isinstance(thread_name, str):
+                            normalized = normalize_title_text(thread_name)
+                            if normalized:
+                                titles[session_id] = normalized
                 except Exception as e:
-                    print(i18n.t(Keys.WARN_TITLE_CACHE_FAILED, error=e), file=sys.stderr)
+                    print(i18n.t(Keys.WARN_TITLE_CACHE_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
 
             self._titles_cache = titles
             return titles
@@ -221,12 +224,9 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
     def _extract_title(self, lines: list[str]) -> str | None:
         """Extract title from the second user message in a session."""
         try:
-            records = []
-            for line in lines[:10]:
-                records.append(json.loads(line))
-            return self._extract_title_from_records(records)
+            return self._extract_title_from_records(parse_object_lines(lines[:10]))
         except Exception as e:
-            print(i18n.t(Keys.WARN_TITLE_EXTRACT_FAILED, error=e), file=sys.stderr)
+            print(i18n.t(Keys.WARN_TITLE_EXTRACT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
 
         return None
 
@@ -311,26 +311,26 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         pending_plan_location: tuple[int, int] | None = None
         stats = self._empty_stats()
 
-        with open(session.source_path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    data = json.loads(line)
-                    current_assistant_index, latest_assistant_text_index, pending_plan_location = (
-                        self._convert_record_to_messages(
-                            data=data,
-                            messages=messages,
-                            pending_tool_calls=pending_tool_calls,
-                            subagent_call_map=subagent_call_map,
-                            subagent_nicknames=subagent_nicknames,
-                            current_assistant_index=current_assistant_index,
-                            latest_assistant_text_index=latest_assistant_text_index,
-                            pending_plan_location=pending_plan_location,
-                        )
+        scan = JsonlObjectScan(session.source_path)
+        for data in scan:
+            try:
+                current_assistant_index, latest_assistant_text_index, pending_plan_location = (
+                    self._convert_record_to_messages(
+                        data=data,
+                        messages=messages,
+                        pending_tool_calls=pending_tool_calls,
+                        subagent_call_map=subagent_call_map,
+                        subagent_nicknames=subagent_nicknames,
+                        current_assistant_index=current_assistant_index,
+                        latest_assistant_text_index=latest_assistant_text_index,
+                        pending_plan_location=pending_plan_location,
                     )
-                    self._accumulate_token_stats(stats, data)
-                except Exception as e:
-                    print(i18n.t(Keys.WARN_MESSAGE_CONVERT_FAILED, error=e), file=sys.stderr)
-                    continue
+                )
+                self._accumulate_token_stats(stats, data)
+            except Exception as e:
+                print(i18n.t(Keys.WARN_MESSAGE_CONVERT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
+                continue
+        warn_skipped_records(scan)
 
         self._finalize_pending_plan(messages, pending_plan_location)
 
@@ -353,20 +353,19 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         head = super().get_session_head(session)
         message_count = 0
 
-        with open(session.source_path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
+        scan = JsonlObjectScan(session.source_path)
+        for data in scan:
+            payload = data.get("payload")
+            if not isinstance(payload, dict):
+                continue
 
-                payload = data.get("payload", {})
-                if payload.get("type") == "message":
-                    message_count += 1
+            if payload.get("type") == "message":
+                message_count += 1
 
-                model = payload.get("model")
-                if isinstance(model, str) and model.strip() and not head.get("model"):
-                    head["model"] = model.strip()
+            model = payload.get("model")
+            if isinstance(model, str) and model.strip() and not head.get("model"):
+                head["model"] = model.strip()
+        warn_skipped_records(scan)
 
         head["message_count"] = message_count
         return head

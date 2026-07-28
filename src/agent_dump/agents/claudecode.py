@@ -13,7 +13,13 @@ from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
-from agent_dump.agents.jsonl_scan import parse_iso_timestamp_ms, read_jsonl_scan_metadata
+from agent_dump.agents.jsonl_scan import (
+    JsonlObjectScan,
+    parse_iso_timestamp_ms,
+    parse_object_lines,
+    read_jsonl_scan_metadata,
+    warn_skipped_records,
+)
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
     build_fallback_tool_message,
@@ -26,6 +32,7 @@ from agent_dump.agents.title_fallback import basename_title, normalize_title_tex
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.text_safety import safe_display_text
 
 
 class ClaudeCodeAgent(FileSessionAgent):
@@ -192,12 +199,9 @@ class ClaudeCodeAgent(FileSessionAgent):
     def _extract_title(self, lines: list[str]) -> str | None:
         """Extract title from user messages"""
         try:
-            records = []
-            for line in lines[:20]:
-                records.append(json.loads(line))
-            return self._extract_title_from_records(records)
+            return self._extract_title_from_records(parse_object_lines(lines[:20]))
         except Exception as e:
-            print(i18n.t(Keys.WARN_TITLE_EXTRACT_FAILED, error=e), file=sys.stderr)
+            print(i18n.t(Keys.WARN_TITLE_EXTRACT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
 
         return None
 
@@ -253,21 +257,21 @@ class ClaudeCodeAgent(FileSessionAgent):
             "message_count": 0,
         }
 
-        with open(session.source_path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    data = json.loads(line)
-                    self._convert_claude_record(
-                        data,
-                        messages,
-                        pending_tool_calls,
-                        ignored_tool_call_ids,
-                        assistant_uuid_to_tool_calls,
-                        assistant_state,
-                    )
-                except Exception as e:
-                    print(i18n.t(Keys.WARN_MESSAGE_CONVERT_FAILED, error=e), file=sys.stderr)
-                    continue
+        scan = JsonlObjectScan(session.source_path)
+        for data in scan:
+            try:
+                self._convert_claude_record(
+                    data,
+                    messages,
+                    pending_tool_calls,
+                    ignored_tool_call_ids,
+                    assistant_uuid_to_tool_calls,
+                    assistant_state,
+                )
+            except Exception as e:
+                print(i18n.t(Keys.WARN_MESSAGE_CONVERT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
+                continue
+        warn_skipped_records(scan)
 
         stats["message_count"] = len(messages)
 
@@ -289,23 +293,21 @@ class ClaudeCodeAgent(FileSessionAgent):
         model: str | None = None
         message_count = 0
 
-        with open(session.source_path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
+        scan = JsonlObjectScan(session.source_path)
+        for data in scan:
+            message = data.get("message")
+            if not isinstance(message, dict):
+                continue
+            if message.get("role"):
+                message_count += 1
 
-                message = data.get("message", {})
-                if isinstance(message, dict) and message.get("role"):
-                    message_count += 1
+            if model:
+                continue
 
-                if model:
-                    continue
-
-                candidate = message.get("model")
-                if isinstance(candidate, str) and candidate.strip():
-                    model = candidate.strip()
+            candidate = message.get("model")
+            if isinstance(candidate, str) and candidate.strip():
+                model = candidate.strip()
+        warn_skipped_records(scan)
 
         head["message_count"] = message_count
         if model:
