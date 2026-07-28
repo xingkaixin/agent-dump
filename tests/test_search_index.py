@@ -8,6 +8,7 @@ from unittest import mock
 
 import pytest
 
+from agent_dump import search_index as search_index_module
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.search_index import (
     _INDEX_BATCH_SIZE,
@@ -579,8 +580,13 @@ class TestSearchIndex:
         deleted = index.clear_agent("codex")
 
         assert deleted == 2
-        assert len(index.delete_statements) == 2
-        assert all("rowid =" not in statement for statement in index.delete_statements)
+        assert {statement.split(" WHERE ")[0] for statement in index.delete_statements} == {
+            "DELETE FROM sessions_fts",
+            "DELETE FROM sessions_fts_trigram",
+        }, "两张表都必须被清空，否则另一张会留下孤儿行"
+        assert all("rowid = " in statement for statement in index.delete_statements), (
+            "UNINDEXED 列定位是全表扫描，clear 也必须走 rowid"
+        )
 
     def test_rebuild(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
@@ -704,12 +710,41 @@ def _touched(session: Session) -> Session:
     )
 
 
+def _fts_rowid_of(db_path: Path, agent: str, session_id: str) -> int:
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT fts_rowid FROM index_state WHERE agent = ? AND session_id = ?",
+            (agent, session_id),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None, f"{agent}/{session_id} 没有 index_state 行"
+    return row[0]
+
+
 class TestBatched:
     def test_splits_into_fixed_size_slices(self):
         assert list(_batched([1, 2, 3, 4, 5], 2)) == [[1, 2], [3, 4], [5]]
 
     def test_empty_input_yields_nothing(self):
         assert list(_batched([], 4)) == []
+
+
+def _spy_on_fts_deletes(monkeypatch) -> list[list[int]]:
+    """记录每次 FTS 删除的 rowid，同时保留真实删除。
+
+    纯打桩会让紧随其后的同 rowid 插入撞上 FTS5 唯一约束，反而测不到删除语义。
+    """
+    calls: list[list[int]] = []
+    real = search_index_module._delete_fts_rows
+
+    def spy(conn, rowids):
+        calls.append(list(rowids))
+        real(conn, rowids)
+
+    monkeypatch.setattr("agent_dump.search_index._delete_fts_rows", spy)
+    return calls
 
 
 class TestIndexBuildAvoidsRedundantDeletes:
@@ -721,11 +756,7 @@ class TestIndexBuildAvoidsRedundantDeletes:
         sessions = [make_session(f"s{i}", f"标题{i}", source) for i in range(5)]
         agent = DummyAgent(session_data={s.id: {"messages": []} for s in sessions})
 
-        calls: list[str] = []
-        monkeypatch.setattr(
-            "agent_dump.search_index._delete_fts_by_session",
-            lambda conn, fts_table, session_id, agent_name: calls.append(session_id),
-        )
+        calls = _spy_on_fts_deletes(monkeypatch)
 
         index = SearchIndex(tmp_path / "index.db")
         added, _ = index.update(agent, sessions)
@@ -742,16 +773,14 @@ class TestIndexBuildAvoidsRedundantDeletes:
         index = SearchIndex(tmp_path / "index.db")
         index.update(agent, [session])
 
-        calls: list[str] = []
-        monkeypatch.setattr(
-            "agent_dump.search_index._delete_fts_by_session",
-            lambda conn, fts_table, session_id, agent_name: calls.append(session_id),
-        )
+        indexed_rowid = _fts_rowid_of(tmp_path / "index.db", "codex", "s1")
+
+        calls = _spy_on_fts_deletes(monkeypatch)
         # updated_signal 取 session.updated_at 与 metadata 里 per-session 文件的
         # mtime，不看 source_path，所以必须推进 updated_at 才算「有变更」
         index.update(agent, [_touched(session)])
 
-        assert calls == ["s1", "s1"], "已索引过的会话更新时必须先删掉两张表的旧行"
+        assert calls == [[indexed_rowid]], "已索引过的会话更新时必须按稳定 rowid 删掉旧行"
 
     def test_reindex_keeps_exactly_one_row_per_session_across_updates(self, tmp_path):
         source = tmp_path / "s.jsonl"
@@ -770,6 +799,158 @@ class TestIndexBuildAvoidsRedundantDeletes:
                 assert count == 1, f"{table} 出现重复行会让搜索结果重复"
         finally:
             conn.close()
+
+
+class TestStableFtsRowid:
+    """AD-153：index_state 持有的 rowid 是两张 FTS 表的唯一定位方式。"""
+
+    def test_rowid_is_stable_across_reindex(self, tmp_path):
+        db_path = tmp_path / "index.db"
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        session = make_session("s1", "Test", source)
+        agent = DummyAgent(session_data={"s1": {"messages": [{"role": "user", "content": "keyword"}]}})
+
+        index = SearchIndex(db_path)
+        index.update(agent, [session])
+        first = _fts_rowid_of(db_path, "codex", "s1")
+        index.update(agent, [_touched(session)])
+
+        assert _fts_rowid_of(db_path, "codex", "s1") == first
+
+    def test_same_session_id_across_agents_gets_distinct_rowids(self, tmp_path):
+        db_path = tmp_path / "index.db"
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        session = make_session("shared", "Test", source)
+        index = SearchIndex(db_path)
+
+        for name, body in (("codex", "alpha"), ("claudecode", "bravo")):
+            agent = DummyAgent(name=name, session_data={"shared": {"messages": [{"role": "user", "content": body}]}})
+            index.update(agent, [session])
+
+        codex_rowid = _fts_rowid_of(db_path, "codex", "shared")
+        claude_rowid = _fts_rowid_of(db_path, "claudecode", "shared")
+        assert codex_rowid != claude_rowid, "rowid 必须全局唯一，否则两个 Provider 会互相覆盖 FTS 行"
+        assert {result.agent_name for result in index.search("alpha")} == {"codex"}
+        assert {result.agent_name for result in index.search("bravo")} == {"claudecode"}
+
+    def test_all_three_tables_share_one_row_per_session(self, tmp_path):
+        db_path = tmp_path / "index.db"
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        keep = make_session("keep", "Keep", source)
+        drop = make_session("drop", "Drop", source)
+        agent = DummyAgent(
+            session_data={
+                "keep": {"messages": [{"role": "user", "content": "alpha"}]},
+                "drop": {"messages": [{"role": "user", "content": "bravo"}]},
+            }
+        )
+
+        index = SearchIndex(db_path)
+        index.update(agent, [keep, drop])
+        index.update(agent, [_touched(keep)])
+
+        conn = sqlite3.connect(db_path)
+        try:
+            state_rowids = {row[0] for row in conn.execute("SELECT fts_rowid FROM index_state")}
+            for table in ("sessions_fts", "sessions_fts_trigram"):
+                fts_rowids = {row[0] for row in conn.execute(f"SELECT rowid FROM {table}")}
+                assert fts_rowids == state_rowids, f"{table} 与 index_state 出现孤儿行"
+        finally:
+            conn.close()
+        assert len(index.search("bravo")) == 0, "stale 会话的 FTS 行必须一并删除"
+
+    def test_reused_rowid_cannot_leak_a_deleted_session(self, tmp_path):
+        """AUTOINCREMENT 防止删掉末尾行后新会话拿到同一个 rowid。"""
+        db_path = tmp_path / "index.db"
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        first = make_session("first", "First", source)
+        second = make_session("second", "Second", source)
+        agent = DummyAgent(
+            session_data={
+                "first": {"messages": [{"role": "user", "content": "alpha"}]},
+                "second": {"messages": [{"role": "user", "content": "bravo"}]},
+            }
+        )
+
+        index = SearchIndex(db_path)
+        index.update(agent, [first])
+        removed_rowid = _fts_rowid_of(db_path, "codex", "first")
+        index.update(agent, [])
+        index.update(agent, [second])
+
+        assert _fts_rowid_of(db_path, "codex", "second") != removed_rowid
+
+    def test_full_reindex_cost_grows_near_linearly(self, tmp_path):
+        """按 UNINDEXED 列删除要全表扫内容行，全量更新退化为 O(N²)；按 rowid 是 O(N log N)。
+
+        用 VDBE 指令数而不是墙钟时间：同样的 SQL 与数据下它是确定值，不会因 CI
+        机器负载抖动而 flaky。
+        """
+
+        def steps_to_reindex_all(index_size: int) -> int:
+            db_path = tmp_path / f"index-{index_size}.db"
+            source = tmp_path / "s.jsonl"
+            source.write_text("x", encoding="utf-8")
+            sessions = [make_session(f"s{i}", f"Title {i}", source) for i in range(index_size)]
+            agent = DummyAgent(
+                session_data={s.id: {"messages": [{"role": "user", "content": f"body {s.id}"}]} for s in sessions}
+            )
+
+            counted: list[int] = [0]
+
+            class CountingSearchIndex(SearchIndex):
+                def _get_connection(self):
+                    conn = super()._get_connection()
+                    conn.set_progress_handler(lambda: counted.__setitem__(0, counted[0] + 1) or 0, 100)
+                    return conn
+
+            index = CountingSearchIndex(db_path)
+            index.update(agent, sessions)
+            counted[0] = 0
+            index.update(agent, [_touched(session) for session in sessions])
+            return counted[0]
+
+        small = steps_to_reindex_all(40)
+        large = steps_to_reindex_all(320)
+
+        # 规模放大 8 倍：O(N log N) 约 9.5 倍，O(N²) 约 64 倍
+        assert large < small * 20, f"全量重索引成本超线性放大（{small} → {large}），删除仍在全表扫描"
+
+    def test_legacy_composite_key_schema_is_rebuilt(self, tmp_path):
+        """AD-120 的 (agent, session_id) 主键库没有 rowid 列，必须整表重建。"""
+        db_path = tmp_path / "index.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE index_state (
+                agent TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                updated_signal REAL NOT NULL,
+                indexed_at REAL NOT NULL,
+                PRIMARY KEY (agent, session_id)
+            )
+            """
+        )
+        conn.execute("INSERT INTO index_state VALUES ('codex', 'stale', '/gone', 1.0, 1.0)")
+        conn.commit()
+        conn.close()
+
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        session = make_session("s1", "Test", source)
+        agent = DummyAgent(session_data={"s1": {"messages": [{"role": "user", "content": "keyword"}]}})
+
+        index = SearchIndex(db_path)
+        added, removed = index.update(agent, [session])
+
+        assert (added, removed) == (1, 0), "旧 schema 被重建后不应把已消失的旧行算作删除"
+        assert len(index.search("keyword")) == 1
+        assert _fts_rowid_of(db_path, "codex", "s1") > 0
 
 
 class TestIndexBuildSpansMultipleBatches:

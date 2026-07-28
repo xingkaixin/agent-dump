@@ -27,6 +27,14 @@ _T = TypeVar("_T")
 
 
 @dataclass(frozen=True)
+class _IndexedRow:
+    """An already-indexed session's freshness signal and its stable FTS rowid."""
+
+    signal: float
+    fts_rowid: int
+
+
+@dataclass(frozen=True)
 class SearchResult:
     """A single search result."""
 
@@ -244,25 +252,18 @@ def _batched(items: list[_T], size: int) -> Iterator[list[_T]]:
         yield items[start : start + size]
 
 
-def _delete_fts_by_session(conn: sqlite3.Connection, fts_table: str, session_id: str, agent_name: str) -> None:
-    """Delete FTS rows for a specific session.
+def _delete_fts_rows(conn: sqlite3.Connection, rowids: list[int]) -> None:
+    """Delete both FTS tables' rows for the given index_state rowids.
 
-    agent_name/session_id 在两张 FTS5 表里都是 UNINDEXED，这个 DELETE 只能全表
-    扫内容行，每行都是一整段会话正文。调用方必须先确认该会话确实已被索引过，
-    否则首次建索引时第 k 次插入前的空删除要扫过前 k-1 行，整体退化成 O(N²)。
+    agent_name/session_id 在两张 FTS5 表里都是 UNINDEXED，按它们定位只能全表扫
+    内容行，每行都是一整段会话正文；更新 K 个会话就是 O(K·N)。rowid 是 FTS5 的
+    主键，删除按 B-tree 定位，整体降到 O(K log N)。
     """
-    conn.execute(
-        f"DELETE FROM {fts_table} WHERE session_id = ? AND agent_name = ?",
-        (session_id, agent_name),
-    )
-
-
-def _delete_fts_by_agent(conn: sqlite3.Connection, fts_table: str, agent_name: str) -> None:
-    """Delete FTS rows for a specific agent."""
-    conn.execute(
-        f"DELETE FROM {fts_table} WHERE agent_name = ?",
-        (agent_name,),
-    )
+    if not rowids:
+        return
+    params = [(rowid,) for rowid in rowids]
+    for fts_table in _FTS_TABLES:
+        conn.executemany(f"DELETE FROM {fts_table} WHERE rowid = ?", params)
 
 
 class SearchIndex:
@@ -294,7 +295,7 @@ class SearchIndex:
         return conn
 
     def _check_schema_ok(self, conn: sqlite3.Connection) -> bool:
-        """Check if existing schema keys sessions by (agent, session_id)."""
+        """Check if existing schema keys sessions by a stable FTS rowid."""
         try:
             cursor = conn.execute("PRAGMA table_info(index_state)")
             rows = cursor.fetchall()
@@ -302,7 +303,7 @@ class SearchIndex:
             return False
         columns = {row["name"] for row in rows}
         pk_columns = {row["name"] for row in rows if row["pk"]}
-        return "updated_signal" in columns and pk_columns == {"agent", "session_id"}
+        return "updated_signal" in columns and pk_columns == {"fts_rowid"}
 
     def _drop_all_tables(self, conn: sqlite3.Connection) -> None:
         """Drop all index tables for schema rebuild."""
@@ -323,15 +324,18 @@ class SearchIndex:
             if has_index_state and not self._check_schema_ok(conn):
                 self._drop_all_tables(conn)
 
+            # AUTOINCREMENT 保证 rowid 永不复用：默认分配是 max(rowid)+1，删掉末尾行后
+            # 会重发同一个值，一旦某张 FTS 表残留旧行就会被新会话的正文静默污染
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS index_state (
+                    fts_rowid INTEGER PRIMARY KEY AUTOINCREMENT,
                     agent TEXT NOT NULL,
                     session_id TEXT NOT NULL,
                     source_path TEXT NOT NULL,
                     updated_signal REAL NOT NULL,
                     indexed_at REAL NOT NULL,
-                    PRIMARY KEY (agent, session_id)
+                    UNIQUE (agent, session_id)
                 )
                 """
             )
@@ -381,10 +385,10 @@ class SearchIndex:
         try:
             # Get currently indexed sessions for this agent
             cursor = conn.execute(
-                "SELECT session_id, updated_signal FROM index_state WHERE agent = ?",
+                "SELECT session_id, updated_signal, fts_rowid FROM index_state WHERE agent = ?",
                 (agent.name,),
             )
-            indexed = {row["session_id"]: row["updated_signal"] for row in cursor.fetchall()}
+            indexed = {row["session_id"]: _IndexedRow(row["updated_signal"], row["fts_rowid"]) for row in cursor}
 
             # Determine which sessions need updating
             current_ids: set[str] = set()
@@ -392,19 +396,19 @@ class SearchIndex:
             for session in sessions:
                 current_ids.add(session.id)
                 signal = _session_updated_signal(agent, session)
-                if session.id not in indexed or abs(indexed[session.id] - signal) > 0.001:
+                previous = indexed.get(session.id)
+                if previous is None or abs(previous.signal - signal) > 0.001:
                     to_update.append((session, signal))
 
             # Remove stale entries
-            stale_ids = [session_id for session_id in indexed if session_id not in current_ids]
-            for session_id in stale_ids:
-                conn.execute(
-                    "DELETE FROM index_state WHERE agent = ? AND session_id = ?",
-                    (agent.name, session_id),
+            stale_rowids = [row.fts_rowid for session_id, row in indexed.items() if session_id not in current_ids]
+            if stale_rowids:
+                _delete_fts_rows(conn, stale_rowids)
+                conn.executemany(
+                    "DELETE FROM index_state WHERE fts_rowid = ?",
+                    [(rowid,) for rowid in stale_rowids],
                 )
-                for fts_table in _FTS_TABLES:
-                    _delete_fts_by_session(conn, fts_table, session_id, agent.name)
-                removed += 1
+                removed = len(stale_rowids)
 
             if len(to_update) >= _INDEX_PROGRESS_THRESHOLD:
                 print(
@@ -429,13 +433,14 @@ class SearchIndex:
                         # 缓存成「已索引」导致该会话永久搜不到
                         skipped.append(session.id)
                         continue
+                    previous = indexed.get(session.id)
                     self._write_session_rows(
                         conn,
                         agent_name=agent.name,
                         session=session,
                         signal=signal,
                         text=text,
-                        already_indexed=session.id in indexed,
+                        fts_rowid=previous.fts_rowid if previous else None,
                     )
                     added += 1
 
@@ -532,28 +537,42 @@ class SearchIndex:
         session: Session,
         signal: float,
         text: str,
-        already_indexed: bool,
+        fts_rowid: int | None,
     ) -> None:
-        """Replace one session's rows in both FTS tables and its index_state row."""
-        if already_indexed:
-            for fts_table in _FTS_TABLES:
-                _delete_fts_by_session(conn, fts_table, session.id, agent_name)
+        """Replace one session's rows in both FTS tables and its index_state row.
+
+        fts_rowid 为 None 表示该会话此前没有索引行；此时先写 index_state 取得分配的
+        rowid，再用同一个 rowid 写两张 FTS 表，三张表因此始终一一对应。
+        """
+        if fts_rowid is None:
+            cursor = conn.execute(
+                """INSERT INTO index_state (agent, session_id, source_path, updated_signal, indexed_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (agent_name, session.id, str(session.source_path), signal, time.time()),
+            )
+            fts_rowid = cursor.lastrowid
+        else:
+            _delete_fts_rows(conn, [fts_rowid])
+            conn.execute(
+                """UPDATE index_state
+                   SET source_path = ?, updated_signal = ?, indexed_at = ?
+                   WHERE fts_rowid = ?""",
+                (str(session.source_path), signal, time.time(), fts_rowid),
+            )
 
         conn.execute(
-            "INSERT INTO sessions_fts (agent_name, session_id, title, content) VALUES (?, ?, ?, ?)",
-            (agent_name, session.id, _preprocess_for_unicode61(session.title), _preprocess_for_unicode61(text)),
+            "INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)",
+            (
+                fts_rowid,
+                agent_name,
+                session.id,
+                _preprocess_for_unicode61(session.title),
+                _preprocess_for_unicode61(text),
+            ),
         )
         conn.execute(
-            "INSERT INTO sessions_fts_trigram (agent_name, session_id, title, content) VALUES (?, ?, ?, ?)",
-            (agent_name, session.id, session.title, text),
-        )
-        conn.execute(
-            """INSERT INTO index_state (agent, session_id, source_path, updated_signal, indexed_at)
-               VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT(agent, session_id) DO UPDATE SET
-               source_path=excluded.source_path,
-               updated_signal=excluded.updated_signal, indexed_at=excluded.indexed_at""",
-            (agent_name, session.id, str(session.source_path), signal, time.time()),
+            "INSERT INTO sessions_fts_trigram (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)",
+            (fts_rowid, agent_name, session.id, session.title, text),
         )
 
     def clear_agent(self, agent_name: str) -> int:
@@ -566,12 +585,11 @@ class SearchIndex:
 
         conn = self._get_connection()
         try:
-            for fts_table in _FTS_TABLES:
-                _delete_fts_by_agent(conn, fts_table, agent_name)
-            cursor = conn.execute("DELETE FROM index_state WHERE agent = ? RETURNING source_path", (agent_name,))
-            deleted = len(cursor.fetchall())
+            cursor = conn.execute("DELETE FROM index_state WHERE agent = ? RETURNING fts_rowid", (agent_name,))
+            rowids = [row["fts_rowid"] for row in cursor.fetchall()]
+            _delete_fts_rows(conn, rowids)
             conn.commit()
-            return deleted
+            return len(rowids)
         finally:
             conn.close()
 
