@@ -7,7 +7,7 @@ import threading
 import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.scanner import AgentScanner, sessions_per_agent
+from agent_dump.scanner import AgentScanner
 
 
 def make_session(session_id: str) -> Session:
@@ -190,6 +190,9 @@ class TestAgentScanner:
         ]
         assert "ValueError: malformed row" in capsys.readouterr().err
 
+    def test_get_sessions_with_no_agents(self):
+        assert AgentScanner([]).get_sessions(days=7) == []
+
     def test_find_session_runs_concurrently_and_uses_registration_order(self):
         barrier = threading.Barrier(2, timeout=10)
         first_session = make_session("first")
@@ -234,21 +237,3 @@ class TestAgentScanner:
         result = AgentScanner([agent]).get_agent_by_name(name)
 
         assert (result is agent) is found
-
-
-class TestSessionsPerAgentCompatibility:
-    def test_delegates_to_scanner_semantics(self, capsys):
-        first = FakeAgent("first", sessions=(make_session("first"),))
-        broken = FakeAgent("broken")
-        broken.sessions_error = ValueError("malformed row")
-
-        results = sessions_per_agent([first, broken], days=7)
-
-        assert [(agent.name, len(sessions)) for agent, sessions in results] == [
-            ("first", 1),
-            ("broken", 0),
-        ]
-        assert "ValueError" in capsys.readouterr().err
-
-    def test_empty_agent_list(self):
-        assert sessions_per_agent([], days=7) == []
