@@ -205,7 +205,10 @@ class KimiAgent(FileSessionAgent):
             "id": session.id,
             "title": session.title,
             "slug": None,
-            "directory": str(session.source_path),
+            # directory 在统一 payload 里的语义是 Working Directory。Session Source 是
+            # 只读存储位置，两者是不同的事实——kimi.json 里已经解析出真实 cwd，未知时
+            # 留空，而不是拿存储路径顶替。
+            "directory": session.metadata.get("cwd") or "",
             "version": None,
             "time_created": int(session.created_at.timestamp() * 1000),
             "time_updated": int(session.updated_at.timestamp() * 1000),

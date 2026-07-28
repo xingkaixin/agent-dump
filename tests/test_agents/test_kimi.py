@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import Session, derive_session_facts
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.paths import ProviderRoots
 
@@ -1674,3 +1674,53 @@ class TestUntrustedUsageValuesDoNotBreakStats:
 
         assert stats["total_input_tokens"] == 17, "非数值归零，正常值仍要累加"
         assert stats["total_output_tokens"] == 7
+
+
+class TestExportDirectoryIsTheWorkingDirectory:
+    """AD-162：统一 payload 的 directory 是 Working Directory，不是 Session Source。"""
+
+    @staticmethod
+    def _session(tmp_path: Path, **metadata) -> Session:
+        session_dir = tmp_path / "session-dir"
+        session_dir.mkdir(exist_ok=True)
+        now = datetime.now(timezone.utc)
+        return Session(
+            id="s1",
+            title="T",
+            created_at=now,
+            updated_at=now,
+            source_path=session_dir,
+            metadata=metadata,
+        )
+
+    def test_uses_the_parsed_cwd(self, tmp_path):
+        session = self._session(tmp_path, cwd="/actual/repo")
+
+        payload = KimiAgent()._build_session_data(session, [], {})
+
+        assert payload["directory"] == "/actual/repo"
+
+    def test_missing_cwd_is_empty_rather_than_the_source_path(self, tmp_path):
+        session = self._session(tmp_path)
+
+        payload = KimiAgent()._build_session_data(session, [], {})
+
+        assert payload["directory"] == ""
+        assert str(session.source_path) not in payload["directory"]
+
+    def test_source_path_never_leaks_when_it_differs_from_cwd(self, tmp_path):
+        session = self._session(tmp_path, cwd="/work/project")
+
+        payload = KimiAgent()._build_session_data(session, [], {})
+        serialized = json.dumps(payload, ensure_ascii=False)
+
+        assert payload["directory"] == "/work/project"
+        assert str(session.source_path) not in serialized, "只读存储位置不得出现在导出里"
+
+    def test_matches_how_other_providers_read_directory(self, tmp_path):
+        """derive_session_facts 从 cwd/directory 推 Working Directory，两边必须一致。"""
+        session = self._session(tmp_path, cwd="/work/project")
+
+        payload = KimiAgent()._build_session_data(session, [], {})
+
+        assert payload["directory"] == str(derive_session_facts(session).working_directory)
