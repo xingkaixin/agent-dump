@@ -3,6 +3,9 @@ version: 2
 # workflow 里的 action 全部按 commit SHA 固定（见 .github/workflows/*.yml），
 # 这让可变 tag 无法成为通向发布环境的写入路径，代价是需要有东西推着升级。
 # Dependabot 会带着行尾注释里的版本号一起更新 SHA。
+#
+# 刻意不配置 npm/packages/cli：那个 wrapper 没有任何 dependencies 或
+# devDependencies，配上只会产生空扫描噪声。
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -14,3 +17,49 @@ updates:
           - "*"
     commit-message:
       prefix: ci
+
+  # pyproject 把 ty 与 pyinstaller 固定到确切版本，理由写的是「升级走 Dependabot/人工」，
+  # 但仓库此前并没有 uv 入口，那句话没有兑现的机制。
+  # uv 生态会连同 uv.lock 一起更新，AD-174 的 --locked 门禁因此校验的是真实解析结果。
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # patch/minor 合成一个 PR：逐个评审这类更新只是把同一份 CI 结果看很多遍。
+      # major 不属于任何分组，会各自单独开 PR——它们要读 changelog，不该混在例行升级里。
+      python-runtime:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      python-dev:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+
+  # Web 更新 PR 会经过 AD-173 的 frozen install + check + build 门禁
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      web-runtime:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      web-dev:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore
+      prefix-development: chore
