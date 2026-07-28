@@ -5,6 +5,8 @@
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import threading
+import time
 from unittest import mock
 
 import pytest
@@ -124,11 +126,9 @@ class TestClaudeCodeAgent:
     def test_get_session_metadata_from_cache(self, tmp_path):
         """测试从缓存获取会话元数据"""
         agent = ClaudeCodeAgent()
-        cache_key = "project1:session-001"
-        agent._sessions_index_cache[cache_key] = {"summary": "Cached Session"}
-
         project_dir = tmp_path / "project1"
         project_dir.mkdir()
+        agent._sessions_index_cache[project_dir] = {"session-001": {"summary": "Cached Session"}}
 
         result = agent._get_session_metadata("session-001", project_dir)
 
@@ -1447,3 +1447,100 @@ class TestClaudeCodeAgent:
         assert exported["messages"][4]["parts"][0]["state"]["output"] == [
             {"type": "text", "text": '[{"最新价":"16.93"}]', "time_created": 1770884835000}
         ]
+
+
+class TestSessionsIndexCache:
+    """AD-155：sessions-index 每个 Project 只加载一次，缺失结果同样被缓存。"""
+
+    @staticmethod
+    def _make_project(root: Path, name: str, session_ids: list[str]) -> Path:
+        project_dir = root / name
+        project_dir.mkdir(parents=True)
+        entries = [{"sessionId": sid, "summary": f"{name}:{sid}"} for sid in session_ids]
+        (project_dir / "sessions-index.json").write_text(json.dumps({"entries": entries}), encoding="utf-8")
+        return project_dir
+
+    @staticmethod
+    def _count_loads(agent: ClaudeCodeAgent) -> list[Path]:
+        loads: list[Path] = []
+        real = agent._load_sessions_index
+
+        def counting(project_dir: Path) -> dict[str, dict]:
+            loads.append(project_dir)
+            return real(project_dir)
+
+        object.__setattr__(agent, "_load_sessions_index", counting)
+        return loads
+
+    def test_missing_session_ids_do_not_reload_the_index(self, tmp_path):
+        project_dir = self._make_project(tmp_path, "project1", ["known"])
+        agent = ClaudeCodeAgent()
+        loads = self._count_loads(agent)
+
+        for i in range(3):
+            assert agent._get_session_metadata(f"missing-{i}", project_dir) is None
+
+        assert len(loads) == 1, "缺失 ID 必须命中缓存，否则每次查询都要重读整个索引"
+
+    def test_absent_index_file_is_cached(self, tmp_path):
+        project_dir = tmp_path / "project1"
+        project_dir.mkdir()
+        agent = ClaudeCodeAgent()
+        loads = self._count_loads(agent)
+
+        for _ in range(3):
+            assert agent._get_session_metadata("any", project_dir) is None
+
+        assert len(loads) == 1
+
+    def test_empty_index_is_cached(self, tmp_path):
+        project_dir = self._make_project(tmp_path, "project1", [])
+        agent = ClaudeCodeAgent()
+        loads = self._count_loads(agent)
+
+        for _ in range(3):
+            assert agent._get_session_metadata("any", project_dir) is None
+
+        assert len(loads) == 1
+
+    def test_same_project_name_under_different_roots_stays_isolated(self, tmp_path):
+        first = self._make_project(tmp_path / "a", "-Users-kevin-work", ["shared"])
+        second = self._make_project(tmp_path / "b", "-Users-kevin-work", ["shared"])
+        agent = ClaudeCodeAgent()
+
+        assert agent._get_session_metadata("shared", first) == {
+            "sessionId": "shared",
+            "summary": "-Users-kevin-work:shared",
+        }
+        # 两个 Project 目录同名但完整路径不同，缓存键必须是完整路径
+        assert agent._get_session_metadata("shared", second) is not None
+        assert agent._sessions_index_cache.keys() == {first, second}
+
+    def test_concurrent_queries_load_the_index_once(self, tmp_path):
+        project_dir = self._make_project(tmp_path, "project1", ["known"])
+        agent = ClaudeCodeAgent()
+        loads: list[Path] = []
+        real = agent._load_sessions_index
+        started = threading.Barrier(8)
+
+        def slow_load(path: Path) -> dict[str, dict]:
+            loads.append(path)
+            time.sleep(0.02)
+            return real(path)
+
+        object.__setattr__(agent, "_load_sessions_index", slow_load)
+
+        results: list[dict | None] = []
+
+        def query() -> None:
+            started.wait()
+            results.append(agent._get_session_metadata("known", project_dir))
+
+        threads = [threading.Thread(target=query) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert len(loads) == 1, "并发查询同一 Project 只应触发一次加载"
+        assert all(result is not None for result in results)
