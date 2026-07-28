@@ -1,3 +1,9 @@
 packages: []
+
+# pnpm 11 移除了 package.json 的 pnpm.onlyBuiltDependencies，改为在这里把每个包
+# 显式映射到 boolean。留成字符串占位等于没授权：pnpm 会把 esbuild 的 build script
+# 自动忽略，而干净安装拿不到它的原生二进制。
+# 未列出的包默认拒绝执行 build script，新依赖需要在这里显式过一次审查；
+# 不使用 dangerouslyAllowAllBuilds。
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
