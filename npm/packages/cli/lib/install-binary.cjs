@@ -12,6 +12,17 @@ const DEFAULT_REGISTRY_URL = "https://registry.npmjs.org";
 const DEFAULT_RETRY_COUNT = 5;
 const DEFAULT_RETRY_DELAY_MS = 3000;
 
+// 上限按当前真实产物定，留足余量但仍能挡住恶意响应：
+// registry metadata 现约 45 KB（每个版本约 3 KB），最大的 binary 是 linux-x64 的
+// 16.3 MB，压缩后约 6 MB。解压上限同时是 gzip bomb 的防线——64 MB 的压缩流按
+// 1000:1 能解出 64 GB。
+const MAX_METADATA_BYTES = 16 * 1024 * 1024;
+const MAX_COMPRESSED_TARBALL_BYTES = 64 * 1024 * 1024;
+const MAX_DECOMPRESSED_TAR_BYTES = 128 * 1024 * 1024;
+// 连接建立后 30 秒没有任何字节即判定停滞；整次取用最长 5 分钟，够慢网络下载 16 MB
+const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
+const DEFAULT_TOTAL_TIMEOUT_MS = 300_000;
+
 function getPackageRoot(rootDir = __dirname) {
   return path.resolve(rootDir, "..");
 }
@@ -35,46 +46,108 @@ function fetchBuffer(url, options = {}) {
   }
 
   const maxRedirects = options.maxRedirects ?? 5;
+  const maxBytes = options.maxBytes ?? MAX_COMPRESSED_TARBALL_BYTES;
+  const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+  // redirect 继承同一个绝对 deadline：否则每一跳都能重置预算，重定向链就成了无限期挂起
+  const deadline = options.deadline ?? Date.now() + (options.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS);
+
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let request = null;
+    let response = null;
+
+    const cleanup = () => {
+      clearTimeout(totalTimer);
+      // Node 的 setTimeout 只发事件，不 destroy 就不会关掉 socket——挂起的请求
+      // 永远不会 reject，外层重试也就永远轮不到
+      response?.destroy();
+      request?.destroy();
+    };
+
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    const succeed = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(totalTimer);
+      resolve(value);
+    };
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      settled = true;
+      reject(new Error(`Timed out before fetching ${url}`));
+      return;
+    }
+
+    const totalTimer = setTimeout(() => fail(new Error(`Timed out fetching ${url}`)), remaining);
+    totalTimer.unref?.();
+
     const transport = url.startsWith("https:") ? https : http;
-    const request = transport.get(
+    request = transport.get(
       url,
       {
         headers: options.headers
       },
-      (response) => {
-        const { statusCode = 0, headers } = response;
+      (res) => {
+        response = res;
+        const { statusCode = 0, headers } = res;
 
         if (statusCode >= 300 && statusCode < 400 && headers.location) {
-          response.resume();
           if (maxRedirects <= 0) {
-            reject(new Error(`Too many redirects while fetching ${url}`));
+            fail(new Error(`Too many redirects while fetching ${url}`));
             return;
           }
 
           const nextUrl = new URL(headers.location, url).toString();
-          resolve(fetchBuffer(nextUrl, { ...options, maxRedirects: maxRedirects - 1 }));
+          settled = true;
+          cleanup();
+          resolve(fetchBuffer(nextUrl, { ...options, maxRedirects: maxRedirects - 1, deadline, maxBytes }));
           return;
         }
 
         if (statusCode < 200 || statusCode >= 300) {
-          response.resume();
-          reject(new Error(`Request to ${url} failed with status ${statusCode}`));
+          fail(new Error(`Request to ${url} failed with status ${statusCode}`));
+          return;
+        }
+
+        const declared = Number.parseInt(headers["content-length"] ?? "", 10);
+        if (Number.isFinite(declared) && declared > maxBytes) {
+          fail(new Error(`Response for ${url} declares ${declared} bytes, over the ${maxBytes} byte limit`));
           return;
         }
 
         const chunks = [];
-        response.on("data", (chunk) => chunks.push(chunk));
-        response.on("end", () => resolve(Buffer.concat(chunks)));
+        let received = 0;
+        res.on("data", (chunk) => {
+          received += chunk.length;
+          // Content-Length 可以撒谎或缺失，逐 chunk 计数才是真正的上限
+          if (received > maxBytes) {
+            fail(new Error(`Response for ${url} exceeded the ${maxBytes} byte limit`));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.once("aborted", () => fail(new Error(`Connection aborted while fetching ${url}`)));
+        res.once("error", (error) => fail(error));
+        res.once("end", () => succeed(Buffer.concat(chunks)));
       }
     );
 
-    request.once("error", reject);
+    request.setTimeout(idleTimeoutMs, () => {
+      fail(new Error(`No data for ${idleTimeoutMs}ms while fetching ${url}`));
+    });
+    request.once("error", (error) => fail(error));
   });
 }
 
 async function fetchJson(url, options = {}) {
-  const buffer = await fetchBuffer(url, options);
+  const buffer = await fetchBuffer(url, { ...options, maxBytes: options.maxBytes ?? MAX_METADATA_BYTES });
   return JSON.parse(buffer.toString("utf8"));
 }
 
@@ -136,8 +209,22 @@ function parseTarEntries(tarBuffer) {
   return entries;
 }
 
-function extractBinaryFromTarball(tarballBuffer, spec) {
-  const tarBuffer = zlib.gunzipSync(tarballBuffer);
+function extractBinaryFromTarball(tarballBuffer, spec, options = {}) {
+  const maxOutputLength = options.maxDecompressedBytes ?? MAX_DECOMPRESSED_TAR_BYTES;
+
+  let tarBuffer;
+  try {
+    // 用 zlib 自带的输出上限：先无界解压再检查大小的话，内存早就已经用掉了
+    tarBuffer = zlib.gunzipSync(tarballBuffer, { maxOutputLength });
+  } catch (error) {
+    if (error.code === "ERR_BUFFER_TOO_LARGE") {
+      throw new Error(
+        `Package tarball for ${spec.packageName} decompresses past the ${maxOutputLength} byte limit`
+      );
+    }
+    throw error;
+  }
+
   const entries = parseTarEntries(tarBuffer);
   const entryName = `package/bin/${spec.executableName}`;
   const binaryBuffer = entries.get(entryName);
@@ -206,7 +293,7 @@ async function installBinary(options = {}) {
     const registryBaseUrl = options.registryBaseUrl || getRegistryBaseUrl(env);
     const metadataUrl = `${registryBaseUrl}/${encodeURIComponent(spec.packageName)}`;
     const metadata = await withRetries(
-      () => fetchJson(metadataUrl, options),
+      () => fetchJson(metadataUrl, { ...options, maxBytes: options.maxMetadataBytes ?? MAX_METADATA_BYTES }),
       {
         retries: options.retries,
         delayMs: options.retryDelayMs
@@ -220,7 +307,7 @@ async function installBinary(options = {}) {
 
     const tarballUrl = versionMetadata.dist.tarball;
     tarballBuffer = await withRetries(
-      () => fetchBuffer(tarballUrl, options),
+      () => fetchBuffer(tarballUrl, { ...options, maxBytes: options.maxTarballBytes ?? MAX_COMPRESSED_TARBALL_BYTES }),
       {
         retries: options.retries,
         delayMs: options.retryDelayMs
@@ -228,7 +315,7 @@ async function installBinary(options = {}) {
     );
   }
 
-  const binaryBuffer = extractBinaryFromTarball(tarballBuffer, spec);
+  const binaryBuffer = extractBinaryFromTarball(tarballBuffer, spec, options);
   const actualChecksum = sha256(binaryBuffer);
 
   if (actualChecksum !== expectedChecksum) {
@@ -275,9 +362,14 @@ async function installBinaryFromPackage() {
 }
 
 module.exports = {
+  DEFAULT_IDLE_TIMEOUT_MS,
   DEFAULT_REGISTRY_URL,
   DEFAULT_RETRY_COUNT,
   DEFAULT_RETRY_DELAY_MS,
+  DEFAULT_TOTAL_TIMEOUT_MS,
+  MAX_COMPRESSED_TARBALL_BYTES,
+  MAX_DECOMPRESSED_TAR_BYTES,
+  MAX_METADATA_BYTES,
   ensureBinary,
   extractBinaryFromTarball,
   fetchBuffer,

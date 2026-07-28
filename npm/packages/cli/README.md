@@ -5,6 +5,11 @@ Native `agent-dump` binaries for `bunx` and `npx`.
 The package downloads the matching native binary for the current platform during installation
 and verifies it against the published checksum manifest before exposing `agent-dump`.
 
+The download is bounded: each request has a 30s idle timeout and a 5 minute total deadline
+(shared across redirects), the response is capped by size, and the tarball is decompressed
+under an output limit. A stalled or oversized response fails the attempt and falls through to
+the existing retries instead of hanging the install.
+
 ```bash
 bunx @agent-dump/cli --help
 npx @agent-dump/cli --help
