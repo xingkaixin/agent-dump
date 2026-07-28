@@ -2,6 +2,15 @@
 
 [中文](docs/zh/CHANGELOG.md)
 
+## [Unreleased]
+
+### Changed
+
+- **npm package now requires Node.js 22 or newer** (was `>=18`). Node 18 and 20 are end-of-life
+  upstream and were never exercised by CI, so the old range promised compatibility that nothing
+  verified. CI now tests the npm wrapper on both the minimum supported LTS (22) and the release
+  runtime (24).
+
 ## [0.13.0] - 2026-07-27
 
 ### Fixed
