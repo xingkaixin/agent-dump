@@ -11,9 +11,9 @@ from urllib.parse import parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
 from agent_dump.i18n import Keys, i18n
-from agent_dump.message_filter import get_text_content_parts
 from agent_dump.search_index import SearchIndex, extract_session_searchable_text
 from agent_dump.time_utils import normalize_datetime_utc
+from agent_dump.transcript import read_message
 
 AGENT_ALIASES = {
     "claude": "claudecode",
@@ -499,21 +499,7 @@ def _find_role_evidence(
 
 
 def _extract_message_search_text(message: dict[str, Any]) -> str:
-    contents = get_text_content_parts(message)
-
-    raw_content = message.get("content")
-    if isinstance(raw_content, str) and raw_content.strip():
-        contents.append(raw_content)
-    elif isinstance(raw_content, list):
-        for item in raw_content:
-            if isinstance(item, str) and item.strip():
-                contents.append(item)
-            elif isinstance(item, dict):
-                text = str(item.get("text", "")).strip()
-                if text:
-                    contents.append(text)
-
-    return "\n".join(contents)
+    return "\n".join(read_message(message).searchable_texts)
 
 
 def _query_evidence_sort_key(match: SearchSessionMatch) -> tuple[float, float, str, str]:

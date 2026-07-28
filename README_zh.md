@@ -456,6 +456,7 @@ deny = [
 │       ├── session_data.py     # 请求级会话数据缓存
 │       ├── text_safety.py      # 第三方会话文本的输出净化
 │       ├── time_utils.py       # 时间与时区工具
+│       ├── transcript.py       # 标准化消息的只读读取
 │       ├── uri_support.py      # URI 解析与会话查找
 │       └── agents/             # Provider 模块目录
 │           ├── __init__.py     # Provider 导出

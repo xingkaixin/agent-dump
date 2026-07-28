@@ -52,7 +52,7 @@ from agent_dump.collect_summary import (
 )
 from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.i18n import Keys, i18n
-from agent_dump.message_filter import get_text_content_parts, should_filter_message_for_export
+from agent_dump.message_filter import should_filter_message_for_export
 from agent_dump.private_files import write_private_text
 from agent_dump.prompt_safety import data_envelope
 from agent_dump.query_filter import (
@@ -63,6 +63,7 @@ from agent_dump.query_filter import (
 )
 from agent_dump.scanner import AgentScanner
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
+from agent_dump.transcript import read_message
 
 GREETING_PATTERN = re.compile(r"^(hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok\b)", re.IGNORECASE)
 DECISION_PATTERN = re.compile(r"(决定|采用|改成|切换|方案|fix|修复|处理|实现|完成|done|resolved?)", re.IGNORECASE)
@@ -168,15 +169,6 @@ def _find_paths_in_text(text: str) -> list[str]:
     return _dedupe_preserve_order(candidates, limit=6)
 
 
-def _extract_part_text(part: dict[str, Any]) -> str:
-    part_type = str(part.get("type", ""))
-    if part_type in {"text", "reasoning"}:
-        return str(part.get("text", "")).strip()
-    if part_type == "plan":
-        return str(part.get("input", "")).strip()
-    return ""
-
-
 def _build_collect_event(kind: str, role: str, text: str) -> CollectEvent | None:
     normalized_text = _truncate_excerpt(text)
     if not normalized_text:
@@ -240,30 +232,21 @@ def extract_collect_events(
             if should_filter_message_for_export(message):
                 continue
 
-            role = str(message.get("role", "unknown")).lower()
+            transcript_message = read_message(message)
+            role = transcript_message.role
+            # collect 的产品策略：只看对话双方，工具调用不单独成为事件
             if role not in {"user", "assistant"}:
                 continue
 
-            parts = message.get("parts", [])
-            if isinstance(parts, list):
-                for part in parts:
-                    if not isinstance(part, dict):
-                        continue
-                    part_type = str(part.get("type", ""))
-                    if part_type == "tool":
-                        continue
+            for part_text in transcript_message.texts:
+                kind = _classify_text_event(role, part_text)
+                if kind is not None:
+                    _append_event(_build_collect_event(kind, role, part_text))
 
-                    part_text = _extract_part_text(part)
-                    kind = _classify_text_event(role, part_text)
-                    if kind is not None:
-                        _append_event(_build_collect_event(kind, role, part_text))
-
-            content_parts = get_text_content_parts(message)
-            if not parts and content_parts:
-                for content in content_parts:
-                    kind = _classify_text_event(role, content)
-                    if kind is not None:
-                        _append_event(_build_collect_event(kind, role, content))
+            # 此前这里还有一个 "没有 parts 时回退" 的分支，用的却是同样只读 parts 的
+            # get_text_content_parts——parts 为空时它必然也为空，那个分支从不可达。
+            # 用 Transcript 表达之后这一点变得显然，于是删掉；collect 依旧不读 legacy
+            # content，行为与迁移前一致。
 
     if not events:
         fallback = _normalize_text(fallback_text_fn() if fallback_text_fn is not None else "")

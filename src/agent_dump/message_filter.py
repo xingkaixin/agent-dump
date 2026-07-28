@@ -1,6 +1,10 @@
 """
 Shared message filtering helpers.
+
+「这条消息里有什么」由 transcript 回答；这里只保留「哪些消息不该导出」这条产品策略。
 """
+
+from agent_dump.transcript import read_message
 
 DEVELOPER_LIKE_USER_MARKERS = (
     "agents.md instructions for",
@@ -9,25 +13,6 @@ DEVELOPER_LIKE_USER_MARKERS = (
     "<permissions instructions>",
     "<collaboration_mode>",
 )
-
-
-def get_text_content_parts(message: dict) -> list[str]:
-    """Extract text-like parts from a message."""
-    content_parts: list[str] = []
-    parts = message.get("parts", [])
-
-    for part in parts:
-        part_type = part.get("type")
-        if part_type in ("text", "reasoning"):
-            text = str(part.get("text", "")).strip()
-            if text:
-                content_parts.append(text)
-        elif part_type == "plan":
-            text = str(part.get("input", "")).strip()
-            if text:
-                content_parts.append(text)
-
-    return content_parts
 
 
 def is_developer_like_user_message(role_normalized: str, content_parts: list[str]) -> bool:
@@ -45,8 +30,7 @@ def should_filter_message_for_export(message: dict) -> bool:
     if role_normalized == "developer":
         return True
 
-    content_parts = get_text_content_parts(message)
-    return is_developer_like_user_message(role_normalized, content_parts)
+    return is_developer_like_user_message(role_normalized, list(read_message(message).texts))
 
 
 def filter_messages_for_export(messages: list[dict]) -> list[dict]:

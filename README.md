@@ -454,6 +454,7 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 │       ├── session_data.py     # Request-scoped session data cache
 │       ├── text_safety.py      # Output sanitizing for third-party session text
 │       ├── time_utils.py       # Time and timezone helpers
+│       ├── transcript.py       # Read-only view over normalized messages
 │       ├── uri_support.py      # URI parsing and session lookup
 │       └── agents/             # Provider modules directory
 │           ├── __init__.py     # Provider exports

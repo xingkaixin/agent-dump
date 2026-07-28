@@ -2,24 +2,8 @@ import pytest
 
 from agent_dump.message_filter import (
     filter_messages_for_export,
-    get_text_content_parts,
     should_filter_message_for_export,
 )
-
-
-@pytest.mark.parametrize(
-    ("part", "expected"),
-    [
-        ({"type": "text", "text": "  user text  "}, ["user text"]),
-        ({"type": "reasoning", "text": "  model reasoning  "}, ["model reasoning"]),
-        ({"type": "plan", "input": "  implementation plan  "}, ["implementation plan"]),
-        ({"type": "tool", "text": "ignored tool output"}, []),
-        ({"type": "text", "text": "   "}, []),
-        ({"text": "missing type"}, []),
-    ],
-)
-def test_get_text_content_parts_handles_supported_part_types(part: dict[str, str], expected: list[str]) -> None:
-    assert get_text_content_parts({"parts": [part]}) == expected
 
 
 @pytest.mark.parametrize(
