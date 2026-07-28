@@ -426,6 +426,7 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 │       ├── agent_registry.py   # Provider registry
 │       ├── cli.py              # Argument parsing and mode dispatch
 │       ├── cli_shared.py       # Shared CLI helpers
+│       ├── command_plan.py     # Normalizes CLI arguments into one command plan
 │       ├── session_workflow.py # list / interactive / query workflow
 │       ├── uri_workflow.py     # URI workflow
 │       ├── collect_workflow.py # collect workflow
@@ -433,18 +434,25 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 │       ├── collect.py          # Collect core logic
 │       ├── collect_llm.py      # Collect LLM requests
 │       ├── collect_models.py   # Collect output models
+│       ├── collect_progress.py # Collect logging, progress and run stats
+│       ├── collect_summary.py  # Collect summary payload merge and JSON extraction
+│       ├── coercion.py         # Fault-tolerant conversion of untrusted provider scalars
 │       ├── config.py           # TOML configuration
 │       ├── diagnostics.py      # Structured diagnostics
 │       ├── export_paths.py     # Safe export path construction
 │       ├── i18n.py             # English and Chinese messages
 │       ├── message_filter.py   # Shared message filtering
 │       ├── paths.py            # Search root models
+│       ├── private_files.py     # Owner-only permissions for tool-created files
+│       ├── prompt_safety.py    # Untrusted data isolation in summary prompts
 │       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch
+│       ├── exporting.py        # Unified export execution and structured outcome
 │       ├── query_filter.py     # Query parsing and filtering
 │       ├── search_index.py     # FTS5 search index
 │       ├── scanner.py          # Agent scanner
 │       ├── selector.py         # Interactive selection
 │       ├── session_data.py     # Request-scoped session data cache
+│       ├── text_safety.py      # Output sanitizing for third-party session text
 │       ├── time_utils.py       # Time and timezone helpers
 │       ├── uri_support.py      # URI parsing and session lookup
 │       └── agents/             # Provider modules directory

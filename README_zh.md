@@ -428,6 +428,7 @@ deny = [
 │       ├── agent_registry.py   # provider 注册表
 │       ├── cli.py              # 参数解析与模式分发
 │       ├── cli_shared.py       # CLI 共享工具
+│       ├── command_plan.py     # 将 CLI 参数归一化为单一命令计划
 │       ├── session_workflow.py # list / interactive / query 工作流
 │       ├── uri_workflow.py     # URI 工作流
 │       ├── collect_workflow.py # collect 工作流
@@ -435,18 +436,25 @@ deny = [
 │       ├── collect.py          # collect 核心逻辑
 │       ├── collect_llm.py      # collect LLM 请求
 │       ├── collect_models.py   # collect 输出模型
+│       ├── collect_progress.py # collect 日志、进度上报与 run stats
+│       ├── collect_summary.py  # collect 摘要 payload 合并与 JSON 提取
+│       ├── coercion.py         # 不可信 provider 标量的容错转换
 │       ├── config.py           # TOML 配置
 │       ├── diagnostics.py      # 结构化诊断
 │       ├── export_paths.py     # 安全导出路径构造
 │       ├── i18n.py             # 中英文文案
 │       ├── message_filter.py   # 共享消息过滤
 │       ├── paths.py            # 搜索根路径模型
+│       ├── private_files.py     # 本工具创建文件的私有权限
+│       ├── prompt_safety.py    # 摘要 prompt 的不可信数据隔离
 │       ├── rendering.py        # print/head/markdown/json/raw 渲染调度
+│       ├── exporting.py        # 统一导出执行与结构化 outcome
 │       ├── query_filter.py     # 查询解析与过滤
 │       ├── search_index.py     # FTS5 搜索索引
 │       ├── scanner.py          # Agent 扫描器
 │       ├── selector.py         # 交互式选择
 │       ├── session_data.py     # 请求级会话数据缓存
+│       ├── text_safety.py      # 第三方会话文本的输出净化
 │       ├── time_utils.py       # 时间与时区工具
 │       ├── uri_support.py      # URI 解析与会话查找
 │       └── agents/             # Provider 模块目录
