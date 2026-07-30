@@ -18,6 +18,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 2. 免安装直跑
 - 适用于只想临时运行一次，或用户明确说不想装 Python。
 - 优先使用 `bunx @agent-dump/cli` 或 `npx @agent-dump/cli`。
+- 选择 `npx` 前先确认 Node.js 版本不低于 22；版本不足时改用可用的 `bunx` 或 `uvx`。
 - 示例：`bunx @agent-dump/cli --help`
 - 示例：`npx @agent-dump/cli --help`
 

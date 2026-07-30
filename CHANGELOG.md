@@ -4,12 +4,40 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-30
+
+### Fixed
+
+- **Security and local data privacy**
+  - Isolate untrusted session content and intermediate summaries from collect and URI-summary instructions with typed JSON envelopes and fixed system rules
+  - Sanitize the remaining dynamic terminal fields, including selector labels, diagnostics, provider warnings, collect errors, and generated report text
+  - Create JSON, raw, Markdown, and collect outputs with owner-only file permissions without changing user-owned source files or existing output directories
+- **Provider correctness and resilience**
+  - Discover Cursor from its read-only global store without requiring unrelated workspace storage, filter old composers before aggregating bubbles, and interpret naive timestamps as UTC
+  - Keep Codex and Claude Code sessions whose first JSONL record exceeds the bounded scan window
+  - Skip malformed non-object JSONL records and invalid numeric fields without losing otherwise readable sessions
+  - Accumulate Claude Code token totals correctly and report Kimi's actual working directory in exports
+  - Preserve quoted dotted TOML table names and empty tables during configuration edits
+- **npm installation reliability**
+  - Bound registry and tarball downloads by size, idle time, and total time, including decompression limits
+  - Install verified native binaries atomically and repair an existing binary when its checksum is invalid
+
+### Performance
+
+- Make search-index updates linear by deleting FTS rows through stable row IDs instead of scanning content rows per session
+- Push safe result limits and stable ordering into SQLite so broad top-N searches do not materialize every match
+- Cache each Claude Code project's full session index, including misses, and avoid collisions between equally named project directories
+- Apply Cursor's day window before bubble aggregation so excluded history no longer dominates short-window scans
+
 ### Changed
 
 - **npm package now requires Node.js 22 or newer** (was `>=18`). Node 18 and 20 are end-of-life
   upstream and were never exercised by CI, so the old range promised compatibility that nothing
   verified. CI now tests the npm wrapper on both the minimum supported LTS (22) and the release
   runtime (24).
+- Verify native binaries, wheels, and packed npm artifacts before the first publish step
+- Gate the Astro landing page's type check and production build in CI, and consume committed lockfiles without implicit re-resolution
+- Centralize normalized transcript reads while preserving each renderer, query, search, and collect workflow's existing content policy
 
 ## [0.13.0] - 2026-07-27
 
@@ -858,6 +886,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.14.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.14.0
 [0.13.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.13.0
 [0.12.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.12.0
 [0.11.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.2

@@ -2,11 +2,39 @@
 
 ## [未发布]
 
+## [0.14.0] - 2026-07-30
+
+### 问题修复
+
+- **安全与本地数据隐私**
+  - 使用带类型的 JSON 信封和固定 system 规则，将不可信会话内容及中间摘要与 collect、URI 摘要指令隔离
+  - 净化剩余动态终端字段，包括 selector 标签、诊断信息、provider 警告、collect 错误和生成的报告文本
+  - JSON、raw、Markdown 与 collect 输出使用仅所有者可访问的文件权限，且不修改用户源文件或已有输出目录权限
+- **Provider 正确性与容错**
+  - 只依赖只读 global store 发现 Cursor，不再要求无关的 workspace storage；先按日期过滤 composer 再聚合 bubble，并将无时区时间戳按 UTC 解释
+  - 保留首条 JSONL 记录超过有界扫描窗口的 Codex 与 Claude Code 会话
+  - 跳过根节点不是对象的畸形 JSONL 记录与非法数值字段，不再因此丢失其余可读会话
+  - 正确累计 Claude Code token 总量，并在 Kimi 导出中报告真实工作目录
+  - 配置编辑时保留带引号的点号 TOML table 名称和空 table
+- **npm 安装可靠性**
+  - 为 registry 与 tarball 下载增加大小、空闲时间和总时长限制，并限制解压后大小
+  - 原子安装校验后的原生二进制；已有二进制 checksum 无效时自动修复
+
+### 性能
+
+- 通过稳定 row ID 删除 FTS 行，使搜索索引更新从逐会话扫描内容行改为线性增长
+- 将安全的结果上限与稳定排序下推到 SQLite，避免宽泛的 top-N 搜索实例化全部匹配项
+- 按 Claude Code project 缓存完整 session index（含未命中），并避免同名 project 目录之间的缓存冲突
+- 在 bubble 聚合前应用 Cursor 日期窗口，使短时间窗扫描不再受已排除历史数据量支配
+
 ### 变更
 
 - **npm 包最低要求提升到 Node.js 22**（原为 `>=18`）。Node 18 与 20 上游已 EOL，且从未被 CI 实际验证，
   旧范围承诺的是没人验证过的兼容性。CI 现在同时在最低支持 LTS（22）与发布 runtime（24）上运行
   npm wrapper 测试。
+- 在首次发布前校验原生二进制、wheel 与打包后的 npm 制品
+- 在 CI 中执行 Astro 落地页类型检查与生产构建，并严格使用已提交的 lockfile，不再隐式重新解析
+- 统一标准化 transcript 的读取入口，同时保持 renderer、query、search 与 collect 各自现有的内容策略
 
 ## [0.13.0] - 2026-07-27
 
@@ -861,6 +889,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.14.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.14.0
 [0.13.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.13.0
 [0.12.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.12.0
 [0.11.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.11.2
