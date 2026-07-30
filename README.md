@@ -78,6 +78,8 @@ bunx @agent-dump/cli --help
 npx @agent-dump/cli --help
 ```
 
+The `npx` and global npm installation paths require Node.js 22 or newer.
+
 Supported native targets:
 
 - `darwin-x64`
