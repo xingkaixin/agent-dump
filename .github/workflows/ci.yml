@@ -102,7 +102,7 @@ jobs:
       # 版本从 web/package.json 的 packageManager 读取：pnpm 版本只有一处事实，
       # 不在 workflow 里再硬编码一遍
       - name: Set up pnpm
-        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
           package_json_file: web/package.json
 
