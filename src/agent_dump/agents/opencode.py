@@ -14,6 +14,7 @@ from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
+from agent_dump.private_files import write_private_text
 
 
 def _escape_like(text: str) -> str:
@@ -395,9 +396,6 @@ class OpenCodeAgent(BaseAgent):
         OpenCode stores sessions in SQLite, so raw export matches JSON export content
         while using a distinct filename.
         """
-        session_data = self.get_session_data(session)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        session_data = self.get_cached_session_data(session)
         output_path = self._build_raw_output_path(session, output_dir, suffix=".raw.json")
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(session_data, f, ensure_ascii=False, indent=2)
-        return output_path
+        return write_private_text(output_path, json.dumps(session_data, ensure_ascii=False, indent=2))

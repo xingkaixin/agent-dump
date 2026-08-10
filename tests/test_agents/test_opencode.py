@@ -4,8 +4,10 @@
 
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import sqlite3
+import stat
 from unittest import mock
 
 import pytest
@@ -13,6 +15,7 @@ import pytest
 from agent_dump.agents.base import Session
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.paths import ProviderRoots
+from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
 
 
 class TestOpenCodeAgent:
@@ -621,7 +624,6 @@ class TestOpenCodeAgent:
         agent = OpenCodeAgent()
         db_path = tmp_path / "opencode.db"
         output_dir = tmp_path / "output"
-        output_dir.mkdir()
 
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -680,12 +682,21 @@ class TestOpenCodeAgent:
             metadata={"slug": "raw-test", "directory": "/test", "version": 1, "summary_files": None},
         )
 
-        json_path = agent.export_session(session, output_dir)
-        raw_path = agent.export_raw_session(session, output_dir)
+        previous_umask = os.umask(0o022)
+        try:
+            with mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as get_session_data:
+                json_path = agent.export_session(session, output_dir)
+                raw_path = agent.export_raw_session(session, output_dir)
+        finally:
+            os.umask(previous_umask)
 
         assert json_path.name == "session-raw.json"
         assert raw_path.name == "session-raw.raw.json"
         assert json.loads(json_path.read_text(encoding="utf-8")) == json.loads(raw_path.read_text(encoding="utf-8"))
+        assert get_session_data.call_count == 1
+        if os.name != "nt":
+            assert stat.S_IMODE(output_dir.stat().st_mode) == PRIVATE_DIR_MODE
+            assert stat.S_IMODE(raw_path.stat().st_mode) == PRIVATE_FILE_MODE
 
     def test_get_session_data_batches_part_query(self, tmp_path):
         agent = OpenCodeAgent()

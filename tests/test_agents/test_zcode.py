@@ -2,13 +2,17 @@
 
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import sqlite3
+import stat
+from unittest import mock
 
 import pytest
 
 from agent_dump.agents.zcode import ZCodeAgent
 from agent_dump.diagnostics import DiagnosticError
+from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
 
 
 def _now_ms() -> int:
@@ -224,7 +228,17 @@ def test_get_sessions_and_export_from_zcode_db(tmp_path) -> None:
     assert head["message_count"] == 2
     assert head["subtargets"] == ["web/page.tsx"]
 
-    json_path = agent.export_session(session, tmp_path / "json")
-    raw_path = agent.export_raw_session(session, tmp_path / "raw")
+    previous_umask = os.umask(0o022)
+    try:
+        with mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as get_session_data:
+            json_path = agent.export_session(session, tmp_path / "json")
+            raw_path = agent.export_raw_session(session, tmp_path / "raw")
+    finally:
+        os.umask(previous_umask)
+
     assert json_path.name == "sess-zcode.json"
     assert raw_path.name == "sess-zcode.raw.json"
+    assert get_session_data.call_count == 1
+    if os.name != "nt":
+        assert stat.S_IMODE(raw_path.parent.stat().st_mode) == PRIVATE_DIR_MODE
+        assert stat.S_IMODE(raw_path.stat().st_mode) == PRIVATE_FILE_MODE
