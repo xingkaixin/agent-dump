@@ -21,6 +21,13 @@ from agent_dump.cli import (
 )
 from agent_dump.collect import CollectProgressEvent
 from agent_dump.collect_workflow import resolve_collect_save_path, show_collect_progress
+from agent_dump.command_plan import (
+    CollectOperation,
+    CommandMode,
+    CommandRequest,
+    SessionOperation,
+    build_command_plan,
+)
 from agent_dump.config import CollectConfig, ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
@@ -47,6 +54,25 @@ def make_config_document(
     document.collect_config.return_value = collect_config if collect_config is not None else CollectConfig()
     document.logging_config.return_value = logging_config if logging_config is not None else mock.MagicMock()
     return document
+
+
+def collect_operation_from(args: argparse.Namespace) -> CollectOperation:
+    plan = build_command_plan(
+        CommandRequest(
+            collect=True,
+            uri=getattr(args, "uri", None),
+            days=getattr(args, "days", None),
+            interactive=getattr(args, "interactive", False),
+            list_requested=getattr(args, "list", False),
+            since=getattr(args, "since", None),
+            until=getattr(args, "until", None),
+            save=getattr(args, "save", None),
+            dry_run=getattr(args, "dry_run", False),
+            collect_mode=getattr(args, "collect_mode", "pm"),
+        )
+    )
+    assert isinstance(plan.operation, CollectOperation)
+    return plan.operation
 
 
 def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
@@ -239,9 +265,9 @@ class TestMain:
                 result = main()
 
         assert result == 0
-        args = mock_handle.call_args.args[0]
-        assert args.collect is True
-        assert args.dry_run is True
+        operation = mock_handle.call_args.args[0]
+        assert isinstance(operation, CollectOperation)
+        assert operation.dry_run is True
 
     def test_main_agents_query_uri_conflicts_with_query_option(self, capsys):
         with mock.patch("sys.argv", ["agent-dump", "agents://.?q=bug", "-q", "fatal"]):
@@ -289,8 +315,10 @@ class TestMain:
             result = main()
 
         assert result == 0
-        assert mock_handle.call_args.kwargs["is_list_mode"] is True
-        assert mock_handle.call_args.kwargs["output_formats"] == ["print"]
+        operation = mock_handle.call_args.args[0]
+        assert isinstance(operation, SessionOperation)
+        assert operation.mode is CommandMode.LIST
+        assert operation.output_formats == ("print",)
 
     def test_main_agents_query_uri_uses_filtered_sessions_in_interactive(self):
         scanner = mock.MagicMock()
@@ -332,10 +360,10 @@ class TestMain:
                 result = main()
 
         assert result == 0
-        args = mock_handle.call_args.args[0]
-        assert args.collect is True
-        assert args.since == "20260408"
-        assert args.until == "20260408"
+        operation = mock_handle.call_args.args[0]
+        assert isinstance(operation, CollectOperation)
+        assert operation.since == "20260408"
+        assert operation.until == "20260408"
 
     def test_main_reports_shortcut_not_found(self, capsys):
         with mock.patch("agent_dump.cli.expand_shortcut_argv", side_effect=ValueError("shortcut_not_found:ob")):
@@ -360,17 +388,9 @@ class TestMain:
         assert "FORGED" in output
 
     def test_collect_mode_conflict(self, capsys):
-        args = argparse.Namespace(
-            collect=True,
-            uri="codex://session-001",
-            interactive=False,
-            list=False,
-            since=None,
-            until=None,
-            save=None,
-        )
+        with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--collect"]):
+            result = main()
 
-        result = handle_collect_mode(args)
         assert result == 1
         assert "--collect 不能与 URI/--interactive/--list 同时使用" in capsys.readouterr().out
 
@@ -390,7 +410,7 @@ class TestMain:
             "agent_dump.collect_workflow.resolve_collect_date_range",
             side_effect=ValueError("invalid date"),
         ) as mock_resolve:
-            result = handle_collect_mode(args)
+            result = handle_collect_mode(collect_operation_from(args))
 
         assert result == 1
         mock_resolve.assert_called_once_with(None, None, days=30)
@@ -456,7 +476,7 @@ class TestMain:
                                                     "agent_dump.collect_workflow.write_collect_markdown",
                                                     return_value=tmp_path / "collect.md",
                                                 ):
-                                                    result = handle_collect_mode(args)
+                                                    result = handle_collect_mode(collect_operation_from(args))
 
         assert result == 0
         query_spec = mock_collect.call_args.kwargs["query_spec"]
@@ -507,7 +527,7 @@ class TestMain:
             mock.patch("agent_dump.cli.request_summary_from_llm") as mock_request_summary,
             mock.patch("agent_dump.collect_workflow.write_collect_markdown") as mock_write,
         ):
-            result = handle_collect_mode(args)
+            result = handle_collect_mode(collect_operation_from(args))
 
         assert result == 0
         mock_load_document.assert_called_once_with()
@@ -601,7 +621,7 @@ class TestMain:
             mock.patch("agent_dump.cli.request_summary_from_llm") as mock_request_summary,
             mock.patch("agent_dump.collect_workflow.write_collect_markdown") as mock_write,
         ):
-            result = handle_collect_mode(args)
+            result = handle_collect_mode(collect_operation_from(args))
 
         assert result == 0
         config_document.ai_config.assert_not_called()
@@ -716,7 +736,7 @@ class TestMain:
                                                             "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=output_path,
                                                         ):
-                                                            result = handle_collect_mode(args)
+                                                            result = handle_collect_mode(collect_operation_from(args))
 
         assert result == 0
         assert mock_collect.call_args.kwargs["collect_config"] is collect_config
@@ -790,7 +810,7 @@ class TestMain:
                                                             "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=output_path,
                                                         ) as mock_write:
-                                                            result = handle_collect_mode(args)
+                                                            result = handle_collect_mode(collect_operation_from(args))
 
         assert result == 0
         mock_write.assert_called_once_with(
@@ -859,7 +879,7 @@ class TestMain:
                                                             "agent_dump.collect_workflow.write_collect_markdown",
                                                             return_value=output_path,
                                                         ):
-                                                            result = handle_collect_mode(args)
+                                                            result = handle_collect_mode(collect_operation_from(args))
 
         assert result == 0
         assert mock_collect.call_args.kwargs["agents"] == [cursor_agent]
@@ -895,7 +915,7 @@ class TestMain:
                         with mock.patch(
                             "agent_dump.collect_workflow.collect_entries", side_effect=RuntimeError("boom")
                         ):
-                            result = handle_collect_mode(args)
+                            result = handle_collect_mode(collect_operation_from(args))
 
         assert result == 1
         assert mock_logger.log.call_args_list[-1].args[0] == "collect_run_fail"

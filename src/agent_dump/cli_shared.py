@@ -1,4 +1,3 @@
-import argparse
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -272,12 +271,6 @@ def parse_format_spec(raw: str) -> list[str]:
         raise ValueError("empty format")
 
     return formats
-
-
-def resolve_effective_formats(args: argparse.Namespace, is_uri_mode: bool, format_specified: bool) -> list[str]:
-    if format_specified and args.format:
-        return parse_format_spec(args.format)
-    return ["print"] if is_uri_mode else ["json"]
 
 
 def render_query_summary(spec: QuerySpec) -> str:

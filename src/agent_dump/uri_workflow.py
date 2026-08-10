@@ -1,15 +1,11 @@
-import argparse
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
-from agent_dump.agent_registry import get_supported_uri_examples
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
-    VALID_URI_SCHEMES,
     build_no_agents_found_diagnostic,
     find_session_by_id,
-    parse_uri,
     print_diagnostic,
     render_agent_search_roots,
     render_session_head,
@@ -20,6 +16,7 @@ from agent_dump.cli_shared import (
     wrap_runtime_fetch_error,
 )
 from agent_dump.collect import request_summary_from_llm
+from agent_dump.command_plan import UriOperation
 from agent_dump.config import AIConfig, load_ai_config, validate_ai_config
 from agent_dump.diagnostics import (
     DiagnosticError,
@@ -36,7 +33,8 @@ from agent_dump.text_safety import safe_body_text
 
 
 class ExportConfigLike(Protocol):
-    output: str
+    @property
+    def output(self) -> str: ...
 
 
 def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
@@ -100,31 +98,12 @@ def maybe_generate_uri_summary(
 
 
 def handle_uri_mode(
-    args: argparse.Namespace,
+    operation: UriOperation,
     *,
-    output_formats: list[str],
-    output_specified: bool,
     export_config: ExportConfigLike,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
     request_summary: Callable[[AIConfig, str], str] = request_summary_from_llm,
 ) -> int:
-    uri_result = parse_uri(args.uri)
-    if uri_result is None:
-        print_diagnostic(
-            invalid_query_or_uri(
-                i18n.t(Keys.DIAG_URI_INVALID),
-                details=(i18n.t(Keys.DIAG_URI_UNPARSEABLE),),
-                parsed_uri=ParsedUri(raw=args.uri),
-                next_steps=(
-                    i18n.t(Keys.DIAG_STEP_USE_SUPPORTED_SCHEME),
-                    *[example.strip() for example in get_supported_uri_examples()],
-                ),
-            )
-        )
-        return 1
-
-    scheme, session_id = uri_result
-
     scanner = scanner_factory()
     available_agents = scanner.get_available_agents()
 
@@ -132,14 +111,17 @@ def handle_uri_mode(
         print_diagnostic(build_no_agents_found_diagnostic(scanner))
         return 1
 
-    expected_agent_name = VALID_URI_SCHEMES.get(scheme)
-    result = find_session_by_id(scanner, session_id, agent_name=expected_agent_name)
+    result = find_session_by_id(
+        scanner,
+        operation.session_id,
+        agent_name=operation.expected_agent_name,
+    )
     if result is None:
         print_diagnostic(
             session_not_found(
-                raw_uri=args.uri,
-                scheme=scheme,
-                session_id=session_id,
+                raw_uri=operation.raw_uri,
+                scheme=operation.scheme,
+                session_id=operation.session_id,
                 searched_roots=render_agent_search_roots(scanner.agents),
                 details=(i18n.t(Keys.DIAG_URI_SCANNED_NO_MATCH),),
                 next_steps=(
@@ -152,51 +134,55 @@ def handle_uri_mode(
 
     agent, session = result
 
-    if agent.name != expected_agent_name:
+    if agent.name != operation.expected_agent_name:
         print_diagnostic(
             invalid_query_or_uri(
                 i18n.t(Keys.DIAG_URI_SCHEME_MISMATCH),
                 details=(i18n.t(Keys.DIAG_URI_BELONGS_TO, agent=agent.display_name),),
-                parsed_uri=ParsedUri(raw=args.uri, scheme=scheme, session_id=session_id),
+                parsed_uri=ParsedUri(
+                    raw=operation.raw_uri,
+                    scheme=operation.scheme,
+                    session_id=operation.session_id,
+                ),
                 next_steps=(i18n.t(Keys.DIAG_STEP_USE_THIS_URI, uri=agent.get_session_uri(session)),),
             )
         )
         return 1
     try:
-        validate_uri_agent_formats(agent, output_formats)
+        validate_uri_agent_formats(agent, list(operation.output_formats))
     except DiagnosticError as e:
         print_diagnostic(e)
         return 1
 
     try:
         had_success = False
-        if args.head:
-            print(render_session_head(args.uri, agent.get_session_head(session)))
+        if operation.head:
+            print(render_session_head(operation.raw_uri, agent.get_session_head(session)))
             return 0
 
         session_data: dict[str, Any] | None = None
         session_data, summary_markdown = maybe_generate_uri_summary(
-            enabled=args.summary,
-            output_formats=output_formats,
-            uri=args.uri,
+            enabled=operation.summary,
+            output_formats=list(operation.output_formats),
+            uri=operation.raw_uri,
             agent=agent,
             session=session,
             session_data=session_data,
             request_summary=request_summary,
         )
-        if "print" in output_formats:
+        if "print" in operation.output_formats:
             session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
-            output = render_session_text(args.uri, session_data)
+            output = render_session_text(operation.raw_uri, session_data)
             print(safe_body_text(output))
             had_success = True
 
-        file_formats = [fmt for fmt in output_formats if fmt != "print"]
+        file_formats = [fmt for fmt in operation.output_formats if fmt != "print"]
 
         def _output_dir_for_format(output_format: str) -> Path:
             return (
                 resolve_output_base_dir(
-                    cli_output=args.output,
-                    output_specified=output_specified,
+                    cli_output=operation.output,
+                    output_specified=operation.output_specified,
                     export_output=export_config.output,
                     output_format=output_format,
                 )
@@ -209,7 +195,7 @@ def handle_uri_mode(
             file_formats,
             _output_dir_for_format,
             prepared_session_data={session.id: session_data} if session_data is not None else None,
-            session_uris={session.id: args.uri},
+            session_uris={session.id: operation.raw_uri},
             summaries={session.id: summary_markdown} if summary_markdown is not None else None,
         )
         for attempt in export_result.attempts:

@@ -1,6 +1,5 @@
 """Collect mode workflow orchestration."""
 
-import argparse
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date
@@ -26,13 +25,13 @@ from agent_dump.collect_progress import (
     create_collect_logger,
     emit_collect_progress,
 )
+from agent_dump.command_plan import CollectOperation
 from agent_dump.config import (
     AIConfig,
     load_config_document,
     validate_ai_config,
 )
 from agent_dump.i18n import Keys, i18n
-from agent_dump.query_filter import QuerySpec, parse_query_uri
 from agent_dump.rendering import render_session_text
 from agent_dump.scanner import AgentScanner
 from agent_dump.terminal_output import render_terminal_message
@@ -193,27 +192,17 @@ def _format_collect_dry_run_preview(*, run_stats: CollectRunStats, output_path: 
 
 
 def handle_collect_mode(
-    args: argparse.Namespace,
+    operation: CollectOperation,
     *,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
     request_summary: Callable[..., str] = request_summary_from_llm,
 ) -> int:
     """Handle `--collect` flow."""
-    dry_run = bool(getattr(args, "dry_run", False))
-
-    if args.interactive or args.list:
-        print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
-        return 1
-
-    if args.uri and not args.uri.startswith("agents://"):
-        print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
-        return 1
-
     try:
         since_date, until_date = resolve_collect_date_range(
-            args.since,
-            args.until,
-            days=getattr(args, "days", None),
+            operation.since,
+            operation.until,
+            days=operation.days,
         )
     except ValueError as exc:
         if str(exc) == "since_after_until":
@@ -224,7 +213,7 @@ def handle_collect_mode(
 
     config_document = load_config_document()
     config: AIConfig | None = None
-    if not dry_run:
+    if not operation.dry_run:
         config = config_document.ai_config()
         valid, errors = validate_ai_config(config)
         if not valid or config is None:
@@ -241,29 +230,16 @@ def handle_collect_mode(
 
     collect_config = config_document.collect_config()
     collect_logger = None
-    if not dry_run:
+    if not operation.dry_run:
         logging_config = config_document.logging_config()
         collect_logger = create_collect_logger(logging_config)
 
     scanner = scanner_factory()
-    valid_agents = {agent.name for agent in scanner.agents}
-    query_spec: QuerySpec | None = None
-    if args.uri:
-        try:
-            query_spec = parse_query_uri(args.uri, valid_agents, Path.cwd())
-        except ValueError as exc:
-            print(i18n.t(Keys.QUERY_INVALID, error=safe_display_text(str(exc))))
-            return 1
-        if query_spec is None:
-            print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
-            return 1
-
     available_agents: list[BaseAgent] = scanner.get_available_agents()
     if not available_agents:
         print(i18n.t(Keys.NO_AGENTS_FOUND))
         return 1
 
-    collect_mode = getattr(args, "collect_mode", "pm")
     phase = "read"
     try:
         with show_collect_progress() as update_progress:
@@ -282,7 +258,7 @@ def handle_collect_mode(
                 since_date=since_date,
                 until_date=until_date,
                 collect_config=collect_config,
-                query_spec=query_spec,
+                query_spec=operation.query_spec,
                 render_session_text_fn=render_session_text,
                 progress_callback=update_progress,
             )
@@ -320,11 +296,15 @@ def handle_collect_mode(
                 until=run_stats.until,
                 agent_session_counts=run_stats.agent_session_counts,
             )
-            if dry_run:
+            if operation.dry_run:
                 print(
                     _format_collect_dry_run_preview(
                         run_stats=run_stats,
-                        output_path=preview_collect_save_path(args.save, since_date=since_date, until_date=until_date),
+                        output_path=preview_collect_save_path(
+                            operation.save,
+                            since_date=since_date,
+                            until_date=until_date,
+                        ),
                     )
                 )
                 return 0
@@ -338,7 +318,7 @@ def handle_collect_mode(
                 progress_callback=update_progress,
                 timeout_seconds=collect_config.summary_timeout_seconds,
                 logger=collect_logger,
-                mode=collect_mode,
+                mode=operation.collect_mode,
             )
             phase = "render"
             emit_collect_progress(update_progress, stage="render_final", current=0, total=2, message="render final")
@@ -348,7 +328,7 @@ def handle_collect_mode(
                 progress_callback=update_progress,
                 timeout_seconds=collect_config.summary_timeout_seconds,
                 logger=collect_logger,
-                mode=collect_mode,
+                mode=operation.collect_mode,
             )
             emit_collect_progress(update_progress, stage="render_final", current=1, total=2, message="render final")
             prompt = build_collect_final_prompt(
@@ -356,7 +336,7 @@ def handle_collect_mode(
                 until_date=until_date,
                 aggregate=aggregate,
                 has_truncated=has_truncated,
-                mode=collect_mode,
+                mode=operation.collect_mode,
             )
             markdown = request_summary(
                 ai_config,
@@ -370,7 +350,11 @@ def handle_collect_mode(
                 markdown,
                 since_date=since_date,
                 until_date=until_date,
-                output_path=resolve_collect_save_path(args.save, since_date=since_date, until_date=until_date),
+                output_path=resolve_collect_save_path(
+                    operation.save,
+                    since_date=since_date,
+                    until_date=until_date,
+                ),
             )
             emit_collect_progress(update_progress, stage="write_output", current=1, total=1, message="write output")
     except Exception as exc:

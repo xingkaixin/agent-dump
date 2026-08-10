@@ -1,4 +1,3 @@
-import argparse
 from collections.abc import Callable
 from typing import Protocol
 
@@ -16,9 +15,10 @@ from agent_dump.cli_shared import (
     resolve_output_base_dir,
     warn_list_ignored_options,
 )
-from agent_dump.diagnostics import invalid_query_or_uri, root_not_found
+from agent_dump.command_plan import CommandMode, SessionOperation
+from agent_dump.diagnostics import root_not_found
 from agent_dump.i18n import Keys, i18n
-from agent_dump.query_filter import QuerySpec, parse_query
+from agent_dump.query_filter import QuerySpec
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 from agent_dump.terminal_output import render_terminal_message
@@ -26,17 +26,13 @@ from agent_dump.text_safety import safe_display_text
 
 
 class ExportConfigLike(Protocol):
-    output: str
+    @property
+    def output(self) -> str: ...
 
 
 def handle_session_modes(
-    args: argparse.Namespace,
+    operation: SessionOperation,
     *,
-    is_list_mode: bool,
-    query_uri_spec: QuerySpec | None,
-    output_specified: bool,
-    format_specified: bool,
-    output_formats: list[str],
     export_config: ExportConfigLike,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
 ) -> int | None:
@@ -44,42 +40,7 @@ def handle_session_modes(
     print("=" * 60 + "\n")
 
     scanner = scanner_factory()
-    valid_agents = {agent.name for agent in scanner.agents}
-    if query_uri_spec is not None:
-        query_spec = query_uri_spec
-    else:
-        try:
-            query_spec = parse_query(args.query, valid_agents=valid_agents)
-        except ValueError as e:
-            print_diagnostic(
-                invalid_query_or_uri(
-                    i18n.t(Keys.DIAG_QUERY_SPEC_INVALID),
-                    details=(str(e),),
-                    next_steps=(
-                        i18n.t(Keys.DIAG_STEP_QUERY_FORMAT),
-                        i18n.t(Keys.DIAG_STEP_QUERY_URI_FOR_PATH),
-                    ),
-                )
-            )
-            return 1
-
-    if args.search:
-        if query_spec is None:
-            query_spec = QuerySpec(
-                agent_names=None,
-                keyword=args.search,
-                project_path=None,
-                roles=None,
-                limit=None,
-            )
-        else:
-            query_spec = QuerySpec(
-                agent_names=query_spec.agent_names,
-                keyword=args.search,
-                project_path=query_spec.project_path,
-                roles=query_spec.roles,
-                limit=query_spec.limit,
-            )
+    query_spec = operation.query_spec
 
     available_agents = scanner.get_available_agents()
 
@@ -103,14 +64,20 @@ def handle_session_modes(
                     ),
                 )
             )
-            return 0 if is_list_mode else 1
+            return 0 if operation.mode is CommandMode.LIST else 1
 
-    if args.search and query_spec is not None:
-        warn_list_ignored_options(output_specified, format_specified)
-        print(render_terminal_message(Keys.SEARCH_HEADER, days=args.days, query=render_query_summary(query_spec)))
+    if operation.is_search and query_spec is not None:
+        warn_list_ignored_options(operation.output_specified, operation.format_specified)
+        print(
+            render_terminal_message(
+                Keys.SEARCH_HEADER,
+                days=operation.days,
+                query=render_query_summary(query_spec),
+            )
+        )
         print("-" * 60)
         display_search_results(
-            collect_search_matches(available_agents, days=args.days, spec=query_spec, scanner=scanner)
+            collect_search_matches(available_agents, days=operation.days, spec=query_spec, scanner=scanner)
         )
         print("\n" + "=" * 60)
         return 0
@@ -119,58 +86,55 @@ def handle_session_modes(
     if query_spec:
         matched_sessions_by_agent = collect_query_matches(
             available_agents,
-            days=args.days,
+            days=operation.days,
             spec=query_spec,
             scanner=scanner,
         )
 
-    if is_list_mode:
+    if operation.mode is CommandMode.LIST:
         return _handle_list_mode(
-            args,
+            operation,
             scanner=scanner,
             query_spec=query_spec,
             matched_sessions_by_agent=matched_sessions_by_agent,
             available_agents=available_agents,
-            output_specified=output_specified,
-            format_specified=format_specified,
         )
 
     return _handle_interactive_mode(
-        args,
+        operation,
         scanner=scanner,
         query_spec=query_spec,
         matched_sessions_by_agent=matched_sessions_by_agent,
         available_agents=available_agents,
-        output_specified=output_specified,
-        output_formats=output_formats,
         export_config=export_config,
     )
 
 
 def _handle_list_mode(
-    args: argparse.Namespace,
+    operation: SessionOperation,
     *,
     scanner: AgentScanner,
     query_spec: QuerySpec | None,
     matched_sessions_by_agent: dict[str, list[Session]],
     available_agents: list[BaseAgent],
-    output_specified: bool,
-    format_specified: bool,
 ) -> int:
-    warn_list_ignored_options(output_specified, format_specified)
+    warn_list_ignored_options(operation.output_specified, operation.format_specified)
     if query_spec:
         print(
-            render_terminal_message(Keys.LIST_HEADER_FILTERED, days=args.days, query=render_query_summary(query_spec))
+            render_terminal_message(
+                Keys.LIST_HEADER_FILTERED,
+                days=operation.days,
+                query=render_query_summary(query_spec),
+            )
         )
     else:
-        print(i18n.t(Keys.LIST_HEADER, days=args.days))
+        print(i18n.t(Keys.LIST_HEADER, days=operation.days))
     print("-" * 60)
 
-    show_metadata_summary = not args.no_metadata_summary
     listed = (
         [(agent, matched_sessions_by_agent.get(agent.name, [])) for agent in available_agents]
         if query_spec
-        else scanner.get_sessions(args.days, agents=available_agents)
+        else scanner.get_sessions(operation.days, agents=available_agents)
     )
     for agent, sessions in listed:
         print(f"\n📁 {safe_display_text(agent.display_name)} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
@@ -179,10 +143,10 @@ def _handle_list_mode(
             display_sessions_list(
                 agent,
                 sessions,
-                show_metadata_summary=show_metadata_summary,
+                show_metadata_summary=operation.show_metadata_summary,
             )
         else:
-            print(i18n.t(Keys.NO_SESSIONS_IN_DAYS, days=args.days))
+            print(i18n.t(Keys.NO_SESSIONS_IN_DAYS, days=operation.days))
 
     print("\n" + "=" * 60)
     print(i18n.t(Keys.HINT_INTERACTIVE))
@@ -191,18 +155,14 @@ def _handle_list_mode(
 
 
 def _handle_interactive_mode(
-    args: argparse.Namespace,
+    operation: SessionOperation,
     *,
     scanner: AgentScanner,
     query_spec: QuerySpec | None,
     matched_sessions_by_agent: dict[str, list[Session]],
     available_agents: list[BaseAgent],
-    output_specified: bool,
-    output_formats: list[str],
     export_config: ExportConfigLike,
 ) -> int:
-    show_metadata_summary = not args.no_metadata_summary
-
     # 一次取全，选中后直接复用；之前无 query 时 selector 会为标签逐个扫 provider，
     # 用户选完再把选中的 provider 完整扫第二遍
     if query_spec:
@@ -213,7 +173,7 @@ def _handle_interactive_mode(
         }
     else:
         sessions_by_agent = {
-            agent.name: sessions for agent, sessions in scanner.get_sessions(args.days, agents=available_agents)
+            agent.name: sessions for agent, sessions in scanner.get_sessions(operation.days, agents=available_agents)
         }
 
     session_counts = {name: len(sessions) for name, sessions in sessions_by_agent.items()}
@@ -223,7 +183,7 @@ def _handle_interactive_mode(
         print(
             render_terminal_message(
                 Keys.NO_SESSIONS_MATCHING_KEYWORD,
-                days=args.days,
+                days=operation.days,
                 query=render_query_summary(query_spec),
             )
         )
@@ -246,12 +206,12 @@ def _handle_interactive_mode(
             print(
                 render_terminal_message(
                     Keys.NO_SESSIONS_MATCHING_KEYWORD,
-                    days=args.days,
+                    days=operation.days,
                     query=render_query_summary(query_spec),
                 )
             )
         else:
-            print(i18n.t(Keys.NO_SESSIONS_FOUND, days=args.days))
+            print(i18n.t(Keys.NO_SESSIONS_FOUND, days=operation.days))
         return 1
 
     if query_spec:
@@ -259,12 +219,12 @@ def _handle_interactive_mode(
             render_terminal_message(
                 Keys.SESSIONS_FOUND_FILTERED,
                 count=len(sessions),
-                days=args.days,
+                days=operation.days,
                 query=render_query_summary(query_spec),
             )
         )
     else:
-        print(i18n.t(Keys.SESSIONS_FOUND, count=len(sessions), days=args.days))
+        print(i18n.t(Keys.SESSIONS_FOUND, count=len(sessions), days=operation.days))
 
     if len(sessions) > 100:
         print(i18n.t(Keys.MANY_SESSIONS_WARNING, count=len(sessions)))
@@ -273,7 +233,7 @@ def _handle_interactive_mode(
     selected_sessions = select_sessions_interactive(
         sessions,
         selected_agent,
-        show_metadata_summary=show_metadata_summary,
+        show_metadata_summary=operation.show_metadata_summary,
     )
     if not selected_sessions:
         print("\n" + i18n.t(Keys.NO_SESSION_SELECTED))
@@ -283,19 +243,19 @@ def _handle_interactive_mode(
 
     output_base_dirs = {
         output_format: resolve_output_base_dir(
-            cli_output=args.output,
-            output_specified=output_specified,
+            cli_output=operation.output,
+            output_specified=operation.output_specified,
             export_output=export_config.output,
             output_format=output_format,
         )
-        for output_format in output_formats
+        for output_format in operation.output_formats
     }
-    primary_output_format = output_formats[0] if output_formats else "json"
+    primary_output_format = operation.output_formats[0] if operation.output_formats else "json"
     output_base_dir = output_base_dirs.get(
         primary_output_format,
         resolve_output_base_dir(
-            cli_output=args.output,
-            output_specified=output_specified,
+            cli_output=operation.output,
+            output_specified=operation.output_specified,
             export_output=export_config.output,
             output_format=primary_output_format,
         ),
@@ -303,7 +263,7 @@ def _handle_interactive_mode(
     export_result = export_sessions_for_formats(
         selected_agent,
         selected_sessions,
-        output_formats,
+        list(operation.output_formats),
         output_base_dir,
         output_base_dirs=output_base_dirs,
     )
