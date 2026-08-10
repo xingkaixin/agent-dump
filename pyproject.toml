@@ -48,7 +48,7 @@ dev = [
     "tomli>=2.0.0",
     # ty 仍是 0.0.x：一个带新默认规则的发布会在代码毫无变化时让 CI 与 release 变红，
     # 所以像 packaging 组的 pyinstaller 一样固定，升级走 Dependabot/人工。
-    "ty==0.0.40",
+    "ty==0.0.69",
 ]
 packaging = [
     # Native release artifacts require a pinned builder for reproducibility.
