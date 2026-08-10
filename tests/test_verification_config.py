@@ -128,6 +128,27 @@ class TestCiHasNoDeadSteps:
         assert "rm -f .python-version" not in content
 
 
+class TestCiCancelsSupersededRuns:
+    @staticmethod
+    def _workflow_preamble(name: str) -> str:
+        content = (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+        return content.split("\njobs:\n", 1)[0]
+
+    def test_ci_cancels_only_an_older_run_with_the_same_identity(self):
+        preamble = self._workflow_preamble("ci.yml")
+        concurrency = preamble.split("\nconcurrency:\n", 1)[1].split("\nenv:\n", 1)[0]
+
+        assert "github.workflow" in concurrency
+        assert "github.event_name" in concurrency
+        assert "github.event.pull_request.number || github.ref" in concurrency
+        assert "cancel-in-progress: true" in concurrency
+
+    def test_release_does_not_share_the_ci_cancellation_group(self):
+        release_preamble = self._workflow_preamble("release.yml")
+
+        assert "github.event.pull_request.number || github.ref" not in release_preamble
+
+
 class TestVerificationConsumesTheCommittedLock:
     """AD-174：uv sync/run 默认会重新锁定，验证过程绝不能修改 uv.lock。
 
