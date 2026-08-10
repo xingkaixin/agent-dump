@@ -312,14 +312,14 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `-d`, `-days` | Query sessions from the last N days. In collect mode, applies when `-since/-until` are omitted. | 7 outside collect; today only in collect |
-| `-q`, `-query` | Query filter. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
+| `-q`, `-query` | Query filter. The keyword is one case-insensitive literal phrase after whitespace normalization, matched within a session title or logical transcript. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print lightweight session metadata for discovery; does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
 | `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
 | `--stats` | Show session usage statistics for the last N days, grouped by agent and time. Supports `-days` and `-query`; use it as a standalone mode. | - |
 | `--providers`, `--capabilities` | Show the registered provider capability matrix, including URI schemes, supported and unsupported export formats, storage-level keyword fast paths, and whether local search roots exist. Does not scan sessions. | - |
-| `--search` | Full-text search across session titles, messages, reasoning, and tool state using local SQLite FTS5. Every term is matched literally (FTS5 operator syntax such as `AND`/`NEAR`/`*` is not interpreted), and multiple terms are combined with AND. Supports CJK via dual tokenizer (`unicode61` + `trigram`). Auto-fallback to file scan when index is stale or FTS5 unavailable; index errors are reported on stderr with a `--reindex` hint. Can be combined with `--list`. | - |
+| `--search` | Full-text search across session titles, messages, reasoning, and tool state using local SQLite FTS5. Whitespace-delimited terms are matched literally (FTS5 operator syntax such as `AND`/`NEAR`/`*` is not interpreted), all distinct terms are required, and terms may occur in different corpus fields. CJK terms require literal adjacency. FTS5-unavailable and unsupported-tokenizer cases use the same in-process logical-text matcher; index errors are reported on stderr with a `--reindex` hint. Can be combined with `--list`. | - |
 | `--reindex` | Force rebuild of the full-text search index. Use when index is corrupted or after manual session data changes. | - |
 | `--lang` | Force the CLI message locale (`en` or `zh`). Overrides locale detection from `LANG`/`LC_ALL`. | auto-detected |
 | `--no-metadata-summary` | Hide the per-session metadata summary line in list and interactive views. | off |
@@ -450,6 +450,7 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 │       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch
 │       ├── exporting.py        # Unified export execution and structured outcome
 │       ├── query_filter.py     # Query parsing and filtering
+│       ├── query_semantics.py  # Literal Query/Search semantics and corpus
 │       ├── search_index.py     # FTS5 search index
 │       ├── scanner.py          # Agent scanner
 │       ├── selector.py         # Interactive selection

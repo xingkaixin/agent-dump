@@ -3,7 +3,6 @@ Query parsing and session filtering helpers.
 """
 
 from dataclasses import dataclass
-import json
 from pathlib import Path
 import sys
 from typing import Any
@@ -11,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
 from agent_dump.i18n import Keys, i18n
+from agent_dump.query_semantics import TextQuery, TextQueryMode
 from agent_dump.search_index import SearchIndex, extract_session_searchable_text
 from agent_dump.time_utils import normalize_datetime_utc
 from agent_dump.transcript import read_message
@@ -139,17 +139,16 @@ def parse_query_uri(raw_uri: str | None, valid_agents: set[str], cwd: Path | Non
 
 def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | None) -> list[Session]:
     """Filter sessions by keyword for one agent."""
-    query = (keyword or "").strip().lower()
-    if not query:
+    query = TextQuery.parse(keyword or "", TextQueryMode.KEYWORD)
+    if query.is_empty:
         return sessions
     if not sessions:
         return []
 
-    provider_matched = agent.filter_sessions_by_keyword(sessions, query)
+    provider_matched = agent.filter_sessions_by_keyword(sessions, query.literals[0])
     if provider_matched is not None:
         return provider_matched
 
-    # Try indexed full-text search first
     indexed = _try_indexed_search(agent, sessions, query)
     if indexed is not None:
         return indexed
@@ -161,15 +160,26 @@ def search_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: Qu
     """Search sessions while preserving snippets and rank."""
     if not (spec.keyword or "").strip():
         return []
-    return query_session_matches(agent, sessions, spec)
+    return _session_matches(agent, sessions, spec, mode=TextQueryMode.SEARCH_TERMS)
 
 
 def query_session_matches(agent: BaseAgent, sessions: list[Session], spec: QuerySpec) -> list[SearchSessionMatch]:
     """Apply a query while preserving the evidence used to select each session."""
+    return _session_matches(agent, sessions, spec, mode=TextQueryMode.KEYWORD)
+
+
+def _session_matches(
+    agent: BaseAgent,
+    sessions: list[Session],
+    spec: QuerySpec,
+    *,
+    mode: TextQueryMode,
+) -> list[SearchSessionMatch]:
     if spec.agent_names is not None and agent.name not in spec.agent_names:
         return []
 
     keyword = (spec.keyword or "").strip()
+    text_query = TextQuery.parse(keyword, mode)
     scoped_sessions = sessions
     if spec.project_path is not None:
         scoped_sessions = [
@@ -182,9 +192,14 @@ def query_session_matches(agent: BaseAgent, sessions: list[Session], spec: Query
         ]
 
     if spec.roles is not None:
-        return _role_search_matches(agent, scoped_sessions, spec.roles, keyword or None)
+        return _role_search_matches(
+            agent,
+            scoped_sessions,
+            spec.roles,
+            None if text_query.is_empty else text_query,
+        )
 
-    if not keyword:
+    if text_query.is_empty:
         return [
             SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
             for session in scoped_sessions
@@ -194,11 +209,11 @@ def query_session_matches(agent: BaseAgent, sessions: list[Session], spec: Query
     # 先裁剪就会把本该入选的会话挡在 top-L 之外。每个 Provider 取 top-L 后做全局
     # L 路合并是正确的——全局前 L 里不可能出现某个 Provider 的第 L+1 条。
     pushdown_limit = spec.limit if spec.project_path is None else None
-    indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, keyword, pushdown_limit)
+    indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, text_query, pushdown_limit)
     if indexed is not None:
         return indexed
 
-    return _fallback_search_matches(agent, scoped_sessions, keyword)
+    return _fallback_search_matches(agent, scoped_sessions, text_query)
 
 
 def limit_search_matches(matches: list[SearchSessionMatch], limit: int | None) -> list[SearchSessionMatch]:
@@ -366,91 +381,30 @@ def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
     )
 
 
-def _filter_sessions_from_source_or_data(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session]:
+def _filter_sessions_from_source_or_data(
+    agent: BaseAgent,
+    sessions: list[Session],
+    query: TextQuery,
+) -> list[Session]:
     matched: list[Session] = []
     for session in sessions:
-        if _match_title(session, keyword):
-            matched.append(session)
-            continue
-
-        if _has_searchable_source(session.source_path):
-            if _match_source_file(session.source_path, keyword):
-                matched.append(session)
-            continue
-
-        if _match_session_data(agent, session, keyword):
+        content = extract_session_searchable_text(agent, session)
+        fields = (session.title,) if content is None else (session.title, content)
+        if query.matches(fields):
             matched.append(session)
 
     return matched
-
-
-def _match_title(session: Session, keyword: str) -> bool:
-    return keyword in session.title.lower()
-
-
-def _has_searchable_source(source_path: Path) -> bool:
-    if source_path.is_file():
-        return _is_searchable_text_file(source_path)
-
-    if not source_path.is_dir():
-        return False
-
-    wire_file = source_path / "wire.jsonl"
-    if wire_file.exists():
-        return _is_searchable_text_file(wire_file)
-
-    return any(_is_searchable_text_file(jsonl_file) for jsonl_file in source_path.glob("*.jsonl"))
-
-
-def _is_searchable_text_file(file_path: Path) -> bool:
-    return file_path.suffix.lower() in {".jsonl", ".json", ".md", ".txt", ".log"}
-
-
-def _match_source_file(source_path: Path, keyword: str) -> bool:
-    try:
-        if source_path.is_file():
-            return _file_contains(source_path, keyword)
-        if source_path.is_dir():
-            wire_file = source_path / "wire.jsonl"
-            if wire_file.exists():
-                return _file_contains(wire_file, keyword)
-
-            for jsonl_file in source_path.glob("*.jsonl"):
-                if _file_contains(jsonl_file, keyword):
-                    return True
-    except Exception:
-        return False
-
-    return False
-
-
-def _file_contains(file_path: Path, keyword: str) -> bool:
-    with open(file_path, encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            if keyword in line.lower():
-                return True
-    return False
-
-
-def _match_session_data(agent: BaseAgent, session: Session, keyword: str) -> bool:
-    try:
-        session_data = agent.get_cached_session_data(session)
-    except Exception:
-        return False
-
-    content = json.dumps(session_data, ensure_ascii=False)
-    return keyword in content.lower()
 
 
 def _role_search_matches(
     agent: BaseAgent,
     sessions: list[Session],
     roles: set[str],
-    keyword: str | None,
+    query: TextQuery | None,
 ) -> list[SearchSessionMatch]:
     matches: list[SearchSessionMatch] = []
     for session in sessions:
-        evidence = _find_role_evidence(agent, session, roles, keyword)
+        evidence = _find_role_evidence(agent, session, roles, query)
         if evidence is None:
             continue
         role, snippet = evidence
@@ -471,7 +425,7 @@ def _find_role_evidence(
     agent: BaseAgent,
     session: Session,
     roles: set[str],
-    keyword: str | None,
+    query: TextQuery | None,
 ) -> tuple[str, str] | None:
     try:
         session_data = agent.get_cached_session_data(session)
@@ -489,10 +443,9 @@ def _find_role_evidence(
         if role not in roles:
             continue
         text = _extract_message_search_text(message)
-        if keyword is None:
+        if query is None:
             return role, _build_evidence_excerpt(text)
-        snippet = _build_keyword_snippet(text, keyword)
-        if snippet is not None:
+        if query.matches((text,)) and (snippet := query.build_snippet((text,))) is not None:
             return role, snippet
 
     return None
@@ -523,7 +476,7 @@ def _try_indexed_search_matches(
     agent: BaseAgent,
     all_sessions: list[Session],
     scoped_sessions: list[Session],
-    keyword: str,
+    query: TextQuery,
     limit: int | None = None,
 ) -> list[SearchSessionMatch] | None:
     """Try indexed search while retaining SearchResult metadata."""
@@ -534,13 +487,13 @@ def _try_indexed_search_matches(
 
         index.update(agent, all_sessions)
         scoped_by_id = {session.id: session for session in scoped_sessions}
-        results = index.search(keyword, agent_names={agent.name}, limit=limit)
+        results = index.search(query, agent_names={agent.name}, limit=limit)
         matches: list[SearchSessionMatch] = []
         for result in results:
             session = scoped_by_id.get(result.session_id)
             if session is None:
                 continue
-            snippet = result.snippet or _build_keyword_snippet(session.title, keyword) or session.title
+            snippet = result.snippet or query.build_snippet((session.title,)) or session.title
             matches.append(
                 SearchSessionMatch(
                     agent=agent,
@@ -574,47 +527,23 @@ def _warn_index_unusable(agent: BaseAgent, exc: BaseException) -> None:
     )
 
 
-def _fallback_search_matches(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[SearchSessionMatch]:
+def _fallback_search_matches(
+    agent: BaseAgent,
+    sessions: list[Session],
+    query: TextQuery | str,
+) -> list[SearchSessionMatch]:
+    text_query = query if isinstance(query, TextQuery) else TextQuery.parse(query, TextQueryMode.SEARCH_TERMS)
     matches: list[SearchSessionMatch] = []
     for session in sessions:
-        title_snippet = _build_keyword_snippet(session.title, keyword)
-        if title_snippet is not None:
-            matches.append(SearchSessionMatch(agent=agent, session=session, snippet=title_snippet, rank=1.0))
-            continue
-
         content = extract_session_searchable_text(agent, session)
-        if content is None:
+        fields = (session.title,) if content is None else (session.title, content)
+        if not text_query.matches(fields):
             continue
-        content_snippet = _build_keyword_snippet(content, keyword)
-        if content_snippet is not None:
-            matches.append(SearchSessionMatch(agent=agent, session=session, snippet=content_snippet, rank=0.0))
+        snippet = text_query.build_snippet(fields) or session.title
+        rank = 1.0 if text_query.matches((session.title,)) else 0.0
+        matches.append(SearchSessionMatch(agent=agent, session=session, snippet=snippet, rank=rank))
 
     return matches
-
-
-def _build_keyword_snippet(text: str, keyword: str, context_chars: int = 48) -> str | None:
-    normalized_text = " ".join(text.split())
-    normalized_keyword = " ".join(keyword.split())
-    if not normalized_text or not normalized_keyword:
-        return None
-
-    match_index = normalized_text.lower().find(normalized_keyword.lower())
-    if match_index < 0:
-        return None
-
-    match_end = match_index + len(normalized_keyword)
-    start = max(0, match_index - context_chars)
-    end = min(len(normalized_text), match_end + context_chars)
-    prefix = "..." if start > 0 else ""
-    suffix = "..." if end < len(normalized_text) else ""
-    snippet = (
-        normalized_text[start:match_index]
-        + "**"
-        + normalized_text[match_index:match_end]
-        + "**"
-        + normalized_text[match_end:end]
-    )
-    return prefix + snippet + suffix
 
 
 def _build_evidence_excerpt(text: str, context_chars: int = 96) -> str:
@@ -624,7 +553,7 @@ def _build_evidence_excerpt(text: str, context_chars: int = 96) -> str:
     return normalized[:context_chars].rstrip() + "..."
 
 
-def _try_indexed_search(agent: BaseAgent, sessions: list[Session], keyword: str) -> list[Session] | None:
+def _try_indexed_search(agent: BaseAgent, sessions: list[Session], query: TextQuery) -> list[Session] | None:
     """Try using the local search index. Returns None to fall back."""
     try:
         index = SearchIndex()
@@ -632,7 +561,7 @@ def _try_indexed_search(agent: BaseAgent, sessions: list[Session], keyword: str)
             return None
 
         index.update(agent, sessions)
-        results = index.search(keyword, agent_names={agent.name})
+        results = index.search(query, agent_names={agent.name})
         matched_ids = {r.session_id for r in results}
         return [s for s in sessions if s.id in matched_ids]
     except Exception as exc:  # noqa: BLE001 - 索引出问题时退回文件扫描，但必须让用户看见

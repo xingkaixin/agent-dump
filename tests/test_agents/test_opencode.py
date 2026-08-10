@@ -241,14 +241,13 @@ class TestOpenCodeAgent:
         assert captured.out == ""
 
     def test_filter_sessions_by_keyword_matches_literally(self, populated_db):
-        """测试关键词按字面匹配，LIKE 通配符被转义"""
+        """Provider 快路径与逻辑 transcript 使用同一套字面量语义。"""
         agent = OpenCodeAgent()
         agent.db_path = populated_db
         session = agent.find_session_by_id("session-001")
         assert session is not None
 
         assert agent.filter_sessions_by_keyword([session], "hello world") == [session]
-        # 通配符不再任意匹配：'h_llo%' 若未转义会命中 "Hello World"
         assert agent.filter_sessions_by_keyword([session], "h_llo%") == []
 
     def test_filter_sessions_by_keyword_without_db_returns_none(self):

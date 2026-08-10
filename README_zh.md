@@ -314,14 +314,14 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `uri` | 用于直接查看的 Agent Session URI（如 `opencode://session-id`），或作用域查询 URI，如 `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive` | 进入交互式模式选择和导出会话 | - |
 | `-d`, `-days` | 查询最近 N 天的会话。collect 模式下仅在未提供 `-since/-until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
-| `-q`, `-query` | 查询过滤。支持 legacy `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`），也支持结构化条件如 `bug provider:codex role:user path:. limit:20`。`cwd:` 是 `path:` 的别名。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
+| `-q`, `-query` | 查询过滤。关键词在归一化空白后作为一个不区分大小写的字面短语，在 Session 标题或逻辑 transcript 内匹配。支持 legacy `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`），也支持结构化条件如 `bug provider:codex role:user path:. limit:20`。`cwd:` 是 `path:` 的别名。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印轻量会话元数据用于发现，不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
 | `--collect` | 按日期范围采集会话 print 内容，可选通过 `agents://...` 查询 URI 约束范围。将会话转成高信号事件流，按固定 JSON schema 做 chunk 摘要，session 级 deterministic merge，再 tree-reduce 结构化结果生成最终 AI 总结。多阶段进度显示在 stderr。 | - |
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |
 | `--dry-run` | 与 `--collect` 搭配使用，预览 provider 分布、session 数、chunk 数、并发配置、日期范围和保存路径，跳过 AI 请求和文件写入。 | - |
 | `--stats` | 显示最近 N 天会话使用统计，按 Agent 和时间分组。支持 `-days` 与 `-query`，推荐独立使用。 | - |
 | `--providers`, `--capabilities` | 显示已注册 provider 的能力矩阵，包括 URI scheme、支持及不支持的导出格式、存储级关键词快路径和本地搜索路径是否存在。不扫描会话。 | - |
-| `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。每个词按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），多个词之间是 AND。双分词器（`unicode61` + `trigram`）支持 CJK。索引过期或 FTS5 不可用时自动回退到文件扫描；索引本身出错会在 stderr 提示并给出 `--reindex` 建议。可与 `--list` 组合。 | - |
+| `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。按空白切分的 distinct term 均按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），所有 term 都必须存在，但可以分别落在不同 corpus 字段；CJK term 必须连续。FTS5 不可用或 tokenizer 无法等价表达时使用同一套进程内逻辑文本 matcher；索引错误会在 stderr 提示并给出 `--reindex` 建议。可与 `--list` 组合。 | - |
 | `--reindex` | 强制重建全文搜索索引。索引损坏或手动修改会话数据后使用。 | - |
 | `--lang` | 强制 CLI 文案语言（`en` 或 `zh`），覆盖基于 `LANG`/`LC_ALL` 的自动检测。 | 自动检测 |
 | `--no-metadata-summary` | 在列表与交互视图中隐藏每个会话的元数据摘要行。 | 关闭 |
@@ -452,6 +452,7 @@ deny = [
 │       ├── rendering.py        # print/head/markdown/json/raw 渲染调度
 │       ├── exporting.py        # 统一导出执行与结构化 outcome
 │       ├── query_filter.py     # 查询解析与过滤
+│       ├── query_semantics.py  # Query/Search 字面语义与可搜索语料
 │       ├── search_index.py     # FTS5 搜索索引
 │       ├── scanner.py          # Agent 扫描器
 │       ├── selector.py         # 交互式选择
