@@ -356,16 +356,15 @@ class OpenCodeAgent(BaseAgent):
         try:
             cursor.execute("SELECT COUNT(*) AS count FROM message WHERE session_id = ?", (session.id,))
             row = cursor.fetchone()
-            head["message_count"] = int(row["count"]) if row else 0
+            head["message_count"] = safe_int(row["count"]) if row else 0
 
             cursor.execute(
                 "SELECT data FROM message WHERE session_id = ? ORDER BY time_created DESC",
                 (session.id,),
             )
             for model_row in cursor.fetchall():
-                try:
-                    payload = json.loads(model_row["data"])
-                except json.JSONDecodeError:
+                payload = self._parse_json_dict(model_row["data"])
+                if payload is None:
                     continue
                 model = payload.get("modelID")
                 if isinstance(model, str) and model.strip():

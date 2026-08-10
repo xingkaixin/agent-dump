@@ -874,6 +874,46 @@ class TestOpenCodeAgent:
         assert head["message_count"] == 2
         assert head["subtargets"] == ["a.py", "b.py"]
 
+    @pytest.mark.parametrize("bad_payload", [[], 1, "text", None])
+    def test_get_session_head_skips_non_object_message_payloads(self, tmp_path, bad_payload):
+        db_path = tmp_path / "opencode.db"
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.executescript(
+            """
+            CREATE TABLE message (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                time_created INTEGER,
+                data TEXT
+            );
+            """
+        )
+        cur.executemany(
+            "INSERT INTO message VALUES (?, ?, ?, ?)",
+            [
+                ("valid", "session-head", 1, json.dumps({"modelID": "gpt-valid"})),
+                ("bad", "session-head", 2, json.dumps(bad_payload)),
+            ],
+        )
+        conn.commit()
+        conn.close()
+        agent = OpenCodeAgent()
+        agent.db_path = db_path
+        session = Session(
+            id="session-head",
+            title="Head Session",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=db_path,
+            metadata={},
+        )
+
+        head = agent.get_session_head(session)
+
+        assert head["model"] == "gpt-valid"
+        assert head["message_count"] == 2
+
     def test_export_session_with_tool_parts(self, tmp_path):
         """测试导出包含 tool 类型的 part"""
         agent = OpenCodeAgent()
