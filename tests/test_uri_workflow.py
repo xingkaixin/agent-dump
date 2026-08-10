@@ -13,10 +13,9 @@ def test_build_uri_summary_prompt_isolates_the_transcript() -> None:
     transcript = "# Session Dump\n\n## 1. User\n\nHello"
     prompt = build_uri_summary_prompt("codex://session-001", transcript)
 
-    assert "你是一个严谨的会话总结助手。" in prompt
-    assert "会话 URI: codex://session-001" in prompt
+    assert "任务：严谨总结给定的单个会话。" in prompt
     for rule in UNTRUSTED_DATA_RULES:
-        assert rule in prompt
+        assert rule not in prompt, "固定安全规则属于 transport system message"
 
     envelope_line = next(line for line in prompt.splitlines() if line.startswith('{"untrusted_data"'))
     envelope = json.loads(envelope_line)
@@ -25,6 +24,7 @@ def test_build_uri_summary_prompt_isolates_the_transcript() -> None:
     assert envelope["content"] == transcript
     assert envelope["length"] == len(transcript)
     assert transcript not in prompt.replace(envelope_line, ""), "正文只能出现在 envelope 内"
+    assert "codex://session-001" not in prompt.replace(envelope_line, ""), "URI 也只能作为 envelope 来源"
 
 
 def test_uri_summary_prompt_cannot_be_escaped_by_forged_envelope_text() -> None:
@@ -63,7 +63,7 @@ def test_maybe_generate_uri_summary_dispatches_rendered_session(
     request_summary.assert_called_once()
     called_config, prompt = request_summary.call_args.args
     assert called_config is config
-    assert "会话 URI: codex://session-001" in prompt
+    assert '"source": "codex://session-001"' in prompt
     assert '"untrusted_data": "session_transcript"' in prompt
     assert "## 1. User" not in prompt.split('{"untrusted_data"')[0], "正文不得出现在 envelope 之外"
     agent.get_cached_session_data.assert_not_called()
