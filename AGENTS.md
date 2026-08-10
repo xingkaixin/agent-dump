@@ -66,7 +66,7 @@
 | `scanner.py` | Provider availability、session list / locate 编排与逐 provider 失败隔离 |
 | `cli.py` | 参数解析、模式选择、依赖装配 |
 | `cli_shared.py` | CLI 共享能力：URI、format、导出调度、诊断渲染 |
-| `command_plan.py` | 将 CLI 参数归一化为闭集操作、默认值与有效格式 |
+| `command_plan.py` | 将 `CommandRequest` 一次性归一化为闭集操作事实，解析 Query/URI 并校验模式、默认值与 modifier |
 | `session_workflow.py` | list / interactive / query 会话工作流 |
 | `uri_workflow.py` | 单 URI 查看、head、summary、单会话导出 |
 | `collect_workflow.py` | collect 模式编排、dry-run、保存路径解析 |
@@ -125,7 +125,9 @@ for agent in scanner.get_available_agents():
 
 ```
 CLI (cli.py)
-  ↓ 解析参数、加载配置、选择模式
+  ↓ 解析参数并投影为 CommandRequest
+Command plan (command_plan.py)
+  ↓ 一次性确定操作、Query/URI、默认值、格式与 modifier
 Session workflow (session_workflow.py)
   ↓ 创建扫描器
 AgentScanner (scanner.py)
@@ -187,7 +189,7 @@ agent-dump/
 │   ├── agent_registry.py        # provider 注册表
 │   ├── cli.py                   # CLI 参数解析与模式分发
 │   ├── cli_shared.py            # CLI 共享工具
-│   ├── command_plan.py           # CLI 操作、默认值与格式归一化
+│   ├── command_plan.py          # CLI 操作事实、Query/URI、默认值与 modifier 归一化
 │   ├── session_workflow.py      # list / interactive / query 工作流
 │   ├── uri_workflow.py          # URI 工作流
 │   ├── collect_workflow.py      # collect 工作流
@@ -258,12 +260,13 @@ agent-dump/
 
 职责：
 - 解析 `argparse` 参数。
-- 根据 `uri`、`--collect`、`--providers`、`--stats`、`--reindex`、`--list`、`--interactive` 选择模式。
+- 将 Namespace 显式投影为 `CommandRequest`，由 `command_plan.py` 选择模式并生成对应 operation。
 - 作为装配根，向 workflow 注入真实变化的依赖（scanner、LLM 请求）。
 - 处理顶层参数冲突、退出码、诊断输出。
 
 约束：
 - Provider 数据读取、导出、搜索实现必须下沉到 provider、workflow 或 shared 模块。
+- workflow 只接收对应 operation；不得同时传入 Namespace 与由它派生的平行标量，也不得重复解析 Query/URI。
 - 新 CLI 参数必须补充 `tests/test_cli.py` 覆盖。
 
 ### 5.2 `BaseAgent` 与 `Session`
@@ -403,11 +406,12 @@ collect 模式入口：
 ### 6.3 添加新的 CLI 模式
 
 步骤：
-1. `cli.py` 添加参数和顶层分发。
-2. 新建或复用 `*_workflow.py`。稳定协作者（渲染、导出、诊断、查询解析等）直接 import；只把真实会变化的依赖（scanner 工厂、LLM 请求、交互 IO）声明为带生产默认值的关键字参数，由 cli.py 装配根传入。测试通过关键字参数替换真 seam，或用 `monkeypatch.setattr("agent_dump.<workflow>.<name>", ...)` 替换稳定协作者。
-3. 复用逻辑进入 `cli_shared.py`。
-4. 增加 `tests/test_cli.py` 分发测试和对应 workflow 测试。
-5. 更新 README 与 skill recipes 的行为矩阵。
+1. `cli.py` 添加参数，并在 Namespace → `CommandRequest` 的唯一投影处记录原始事实。
+2. 在 `command_plan.py` 增加闭集 operation 及归一化/组合校验，再由 `cli.py` 顶层分发。
+3. 新建或复用 `*_workflow.py`。workflow 接收对应 operation；稳定协作者（渲染、导出、诊断等）直接 import；只把真实会变化的依赖（scanner 工厂、LLM 请求、交互 IO）声明为带生产默认值的关键字参数，由 cli.py 装配根传入。测试通过关键字参数替换真 seam，或用 `monkeypatch.setattr("agent_dump.<workflow>.<name>", ...)` 替换稳定协作者。
+4. 复用逻辑进入 `cli_shared.py`。
+5. 增加 `tests/test_command_plan.py` 纯归一化矩阵、`tests/test_cli.py` 分发测试和对应 workflow 测试。
+6. 更新 README 与 skill recipes 的行为矩阵。
 
 ---
 
