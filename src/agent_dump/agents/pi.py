@@ -167,27 +167,6 @@ class PiAgent(FileSessionAgent):
                 return int(parsed.timestamp() * 1000)
         return 0
 
-    def get_session_head(self, session: Session) -> dict[str, Any]:
-        head = super().get_session_head(session)
-        message_count = 0
-        model = head.get("model")
-
-        scan = JsonlObjectScan(session.source_path)
-        for record in scan:
-            if record.get("type") != "message":
-                continue
-            message_count += 1
-            message = record.get("message")
-            if isinstance(message, dict) and not model:
-                raw_model = message.get("model")
-                if isinstance(raw_model, str) and raw_model.strip():
-                    model = raw_model.strip()
-        warn_skipped_records(scan)
-
-        head["message_count"] = message_count
-        head["model"] = model
-        return head
-
     def get_session_data(self, session: Session) -> dict:
         """Get session data as a dictionary."""
         if not session.source_path.exists():

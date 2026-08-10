@@ -613,13 +613,13 @@ TRANSLATIONS = {
         Keys.STATS_HEADER: "📊 Session Statistics (last {days} days)",
         Keys.STATS_TOTAL_SESSIONS: "Total sessions: {count}",
         Keys.STATS_TOTAL_MESSAGES: "Total messages: {count}",
-        Keys.STATS_KNOWN_MESSAGES: "Known messages: {count} ({unknown_sessions} sessions have unknown counts)",
+        Keys.STATS_KNOWN_MESSAGES: "Known messages: {count} (unknown-count sessions: {unknown_sessions})",
         Keys.STATS_BY_AGENT: "By Agent",
         Keys.STATS_BY_TIME: "By Time",
         Keys.STATS_NO_SESSIONS: "No sessions found in the last {days} days.",
         Keys.STATS_AGENT_ROW: "  {name}: {sessions} sessions, {messages} messages",
         Keys.STATS_AGENT_ROW_WITH_UNKNOWN: (
-            "  {name}: {sessions} sessions, {messages} known messages, {unknown_sessions} sessions have unknown counts"
+            "  {name}: {sessions} sessions, {messages} known messages, unknown-count sessions: {unknown_sessions}"
         ),
         Keys.STATS_TIME_ROW: "  {label}: {count} sessions",
         Keys.MESSAGE_COUNT_UNKNOWN: "unknown",

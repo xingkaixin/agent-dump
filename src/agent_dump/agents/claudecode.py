@@ -290,32 +290,6 @@ class ClaudeCodeAgent(FileSessionAgent):
             "messages": messages,
         }
 
-    def get_session_head(self, session: Session) -> dict[str, Any]:
-        head = super().get_session_head(session)
-        model: str | None = None
-        message_count = 0
-
-        scan = JsonlObjectScan(session.source_path)
-        for data in scan:
-            message = data.get("message")
-            if not isinstance(message, dict):
-                continue
-            if message.get("role"):
-                message_count += 1
-
-            if model:
-                continue
-
-            candidate = message.get("model")
-            if isinstance(candidate, str) and candidate.strip():
-                model = candidate.strip()
-        warn_skipped_records(scan)
-
-        head["message_count"] = message_count
-        if model:
-            head["model"] = model
-        return head
-
     def _parse_timestamp_ms(self, data: dict[str, Any]) -> int:
         """Parse record timestamp into milliseconds."""
         return parse_iso_timestamp_ms(data.get("timestamp"))
