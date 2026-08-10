@@ -9,7 +9,6 @@ import os
 # Translation keys
 class Keys:
     NO_AGENTS_FOUND = "NO_AGENTS_FOUND"
-    QUERY_INVALID = "QUERY_INVALID"
     LIST_HEADER_FILTERED = "LIST_HEADER_FILTERED"
     LIST_HEADER = "LIST_HEADER"
     NO_SESSIONS_IN_DAYS = "NO_SESSIONS_IN_DAYS"
@@ -323,7 +322,6 @@ class Keys:
 TRANSLATIONS = {
     "en": {
         Keys.NO_AGENTS_FOUND: "❌ No available Agent Tools sessions found.",
-        Keys.QUERY_INVALID: "❌ Invalid query: {error}",
         Keys.LIST_HEADER_FILTERED: "📋 Listing sessions from last {days} days matching '{query}':\n",
         Keys.LIST_HEADER: "📋 Listing sessions from last {days} days:\n",
         Keys.NO_SESSIONS_IN_DAYS: "   (No sessions in last {days} days)",
@@ -619,7 +617,6 @@ TRANSLATIONS = {
     },
     "zh": {
         Keys.NO_AGENTS_FOUND: "❌ 未找到任何可用的 Agent Tools 会话。",
-        Keys.QUERY_INVALID: "❌ 无效的查询条件: {error}",
         Keys.LIST_HEADER_FILTERED: "📋 列出最近 {days} 天且匹配「{query}」的会话:\n",
         Keys.LIST_HEADER: "📋 列出最近 {days} 天的会话:\n",
         Keys.NO_SESSIONS_IN_DAYS: "   (最近 {days} 天内无会话)",

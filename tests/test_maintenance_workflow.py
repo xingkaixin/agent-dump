@@ -2,7 +2,6 @@
 测试 CLI 维护模式 workflow
 """
 
-import argparse
 from datetime import datetime
 from pathlib import Path
 from unittest import mock
@@ -14,8 +13,10 @@ from agent_dump.agent_registry import AgentRegistration
 from agent_dump.agents.base import Session, derive_session_facts
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.cli import handle_reindex_mode, handle_stats_mode
+from agent_dump.command_plan import ReindexOperation, StatsOperation
 from agent_dump.maintenance_workflow import handle_providers_mode as render_provider_capabilities
 from agent_dump.paths import SearchRoot
+from agent_dump.query_filter import QuerySpec
 from agent_dump.text_safety import has_unsafe_body_characters
 
 
@@ -51,20 +52,20 @@ class TestStatsMode:
     """测试 stats 命令"""
 
     def test_stats_no_agents_found(self, capsys):
-        args = argparse.Namespace(days=7, query=None)
+        operation = StatsOperation(days=7, query_spec=None)
         scanner = mock.MagicMock()
         scanner.get_available_agents.return_value = []
         configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            result = handle_stats_mode(args)
+            result = handle_stats_mode(operation)
 
         assert result == 1
         captured = capsys.readouterr()
         assert "未找到" in captured.out
 
     def test_stats_empty_sessions(self, capsys):
-        args = argparse.Namespace(days=7, query=None)
+        operation = StatsOperation(days=7, query_spec=None)
         agent = mock.MagicMock()
         agent.display_name = "Claude Code"
         agent.get_sessions.return_value = []
@@ -75,14 +76,14 @@ class TestStatsMode:
         configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            result = handle_stats_mode(args)
+            result = handle_stats_mode(operation)
 
         assert result == 0
         captured = capsys.readouterr()
         assert "未找到会话" in captured.out or "最近 7 天内未找到会话" in captured.out
 
     def test_stats_shows_counts(self, capsys):
-        args = argparse.Namespace(days=7, query=None)
+        operation = StatsOperation(days=7, query_spec=None)
         session1 = make_session("s1", "Session 1", metadata={"message_count": 10})
         session2 = make_session("s2", "Session 2", metadata={"message_count": 20})
 
@@ -96,7 +97,7 @@ class TestStatsMode:
         configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            result = handle_stats_mode(args)
+            result = handle_stats_mode(operation)
 
         assert result == 0
         captured = capsys.readouterr()
@@ -105,7 +106,7 @@ class TestStatsMode:
         assert "Claude Code: 2 个会话, 30 条消息" in captured.out
 
     def test_stats_preserves_an_exact_zero(self, capsys):
-        args = argparse.Namespace(days=7, query=None)
+        operation = StatsOperation(days=7, query_spec=None)
         session = make_session("s1", "Empty", metadata={"message_count": 0})
         agent = mock.MagicMock(display_name="Codex")
         agent.get_sessions.return_value = [session]
@@ -114,7 +115,7 @@ class TestStatsMode:
         configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            result = handle_stats_mode(args)
+            result = handle_stats_mode(operation)
 
         output = capsys.readouterr().out
         assert result == 0
@@ -124,7 +125,7 @@ class TestStatsMode:
     @pytest.mark.parametrize("language", ALL_LANGUAGES)
     def test_stats_marks_a_mixed_total_as_incomplete(self, language, use_language, capsys):
         use_language(language)
-        args = argparse.Namespace(days=7, query=None)
+        operation = StatsOperation(days=7, query_spec=None)
         sessions = [
             make_session("known", "Known", metadata={"message_count": 7}),
             make_session("unknown", "Unknown"),
@@ -136,7 +137,7 @@ class TestStatsMode:
         configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            result = handle_stats_mode(args)
+            result = handle_stats_mode(operation)
 
         output = capsys.readouterr().out
         assert result == 0
@@ -152,7 +153,7 @@ class TestStatsMode:
         assert not expect_contains(output, Keys.STATS_TOTAL_MESSAGES, count=7)
 
     def test_stats_distinguishes_all_unknown_from_exact_zero(self, capsys):
-        args = argparse.Namespace(days=7, query=None)
+        operation = StatsOperation(days=7, query_spec=None)
         sessions = [make_session("s1", "Unknown 1"), make_session("s2", "Unknown 2")]
         agent = mock.MagicMock(display_name="Codex")
         agent.get_sessions.return_value = sessions
@@ -161,7 +162,7 @@ class TestStatsMode:
         configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            result = handle_stats_mode(args)
+            result = handle_stats_mode(operation)
 
         output = capsys.readouterr().out
         assert result == 0
@@ -170,7 +171,7 @@ class TestStatsMode:
 
     def test_stats_sanitizes_provider_display_name(self, capsys):
         poison = "Provider\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
-        args = argparse.Namespace(days=7, query=None)
+        operation = StatsOperation(days=7, query_spec=None)
         session = make_session("s1", "Session", metadata={"message_count": 1})
         agent = mock.MagicMock()
         agent.display_name = poison
@@ -181,7 +182,7 @@ class TestStatsMode:
         configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            result = handle_stats_mode(args)
+            result = handle_stats_mode(operation)
 
         output = capsys.readouterr().out
         assert result == 0
@@ -189,7 +190,7 @@ class TestStatsMode:
         assert "FORGED" in output
 
     def test_stats_with_query_filter(self, capsys):
-        args = argparse.Namespace(days=7, query="bug")
+        operation = StatsOperation(days=7, query_spec=QuerySpec(None, "bug", None, None, None))
         session = make_session("s1", "Bug fix", metadata={"message_count": 5})
 
         agent = mock.MagicMock()
@@ -204,7 +205,7 @@ class TestStatsMode:
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             with mock.patch("agent_dump.maintenance_workflow.apply_query_filter", return_value=[session]):
-                result = handle_stats_mode(args)
+                result = handle_stats_mode(operation)
 
         assert result == 0
         captured = capsys.readouterr()
@@ -213,19 +214,19 @@ class TestStatsMode:
 
 class TestReindexMode:
     def test_reindex_no_agents_found(self, capsys):
-        args = argparse.Namespace(days=7)
+        operation = ReindexOperation(days=7)
         scanner = mock.MagicMock()
         scanner.get_available_agents.return_value = []
         configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            result = handle_reindex_mode(args)
+            result = handle_reindex_mode(operation)
 
         assert result == 1
         assert "未找到" in capsys.readouterr().out
 
     def test_reindex_rebuilds_available_agents(self, capsys):
-        args = argparse.Namespace(days=7)
+        operation = ReindexOperation(days=7)
         session = make_session("s1", "Session 1")
         agent = mock.MagicMock()
         agent.display_name = "Codex"
@@ -242,7 +243,7 @@ class TestReindexMode:
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
             with mock.patch("agent_dump.search_index.SearchIndex", return_value=index):
-                result = handle_reindex_mode(args)
+                result = handle_reindex_mode(operation)
 
         assert result == 0
         index.rebuild.assert_called_once_with(agent, [session])

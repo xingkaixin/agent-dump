@@ -7,9 +7,9 @@ from datetime import date, datetime
 from pathlib import Path
 from string import Formatter
 import sys
-from typing import Any
 
 from agent_dump.__about__ import __version__
+from agent_dump.agent_registry import get_supported_uri_examples
 from agent_dump.cli_shared import (
     is_option_specified,
     print_diagnostic as _print_diagnostic,
@@ -17,12 +17,20 @@ from agent_dump.cli_shared import (
 from agent_dump.collect import request_summary_from_llm
 from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
 from agent_dump.command_plan import (
+    CollectOperation,
     CommandMode,
     CommandPlanError,
     CommandPlanErrorCode,
+    CommandPlanWarning,
+    CommandRequest,
+    ConfigOperation,
+    ReindexOperation,
+    SessionOperation,
+    StatsOperation,
+    UriOperation,
     build_command_plan,
 )
-from agent_dump.config import handle_config_command, load_export_config, load_shortcuts_config
+from agent_dump.config import ExportConfig, handle_config_command, load_export_config, load_shortcuts_config
 from agent_dump.diagnostics import (
     DiagnosticError,
     ParsedUri,
@@ -36,7 +44,6 @@ from agent_dump.maintenance_workflow import (
     handle_reindex_mode as _handle_reindex_mode,
     handle_stats_mode as _handle_stats_mode,
 )
-from agent_dump.query_filter import QuerySpec, parse_query_uri
 from agent_dump.scanner import AgentScanner
 from agent_dump.session_workflow import handle_session_modes as _handle_session_modes
 from agent_dump.terminal_output import render_terminal_message
@@ -136,37 +143,33 @@ def expand_shortcut_argv(argv: list[str]) -> list[str]:
     return prefix + expanded_args + remainder
 
 
-def handle_collect_mode(args: argparse.Namespace) -> int:
+def handle_collect_mode(operation: CollectOperation) -> int:
     """Handle `--collect` flow."""
-    return _handle_collect_mode(args, scanner_factory=AgentScanner, request_summary=request_summary_from_llm)
+    return _handle_collect_mode(operation, scanner_factory=AgentScanner, request_summary=request_summary_from_llm)
 
 
-def handle_stats_mode(args: argparse.Namespace) -> int:
-    return _handle_stats_mode(args, scanner_factory=AgentScanner)
+def handle_stats_mode(operation: StatsOperation) -> int:
+    return _handle_stats_mode(operation, scanner_factory=AgentScanner)
 
 
 def handle_providers_mode() -> int:
     return _handle_providers_mode()
 
 
-def handle_reindex_mode(args: argparse.Namespace) -> int:
+def handle_reindex_mode(operation: ReindexOperation) -> int:
     # 延迟解析 SearchIndex，保持测试可通过 patch 源模块替换
     from agent_dump.search_index import SearchIndex
 
-    return _handle_reindex_mode(args, scanner_factory=AgentScanner, search_index_factory=SearchIndex)
+    return _handle_reindex_mode(operation, scanner_factory=AgentScanner, search_index_factory=SearchIndex)
 
 
 def handle_uri_mode(
-    args: argparse.Namespace,
+    operation: UriOperation,
     *,
-    output_formats: list[str],
-    output_specified: bool,
-    export_config: Any,
+    export_config: ExportConfig,
 ) -> int:
     return _handle_uri_mode(
-        args,
-        output_formats=output_formats,
-        output_specified=output_specified,
+        operation,
         export_config=export_config,
         scanner_factory=AgentScanner,
         request_summary=request_summary_from_llm,
@@ -174,24 +177,47 @@ def handle_uri_mode(
 
 
 def handle_session_modes(
-    args: argparse.Namespace,
+    operation: SessionOperation,
     *,
-    is_list_mode: bool,
-    query_uri_spec: QuerySpec | None,
-    output_specified: bool,
-    format_specified: bool,
-    output_formats: list[str],
-    export_config: Any,
+    export_config: ExportConfig,
 ) -> int | None:
     return _handle_session_modes(
-        args,
-        is_list_mode=is_list_mode,
-        query_uri_spec=query_uri_spec,
-        output_specified=output_specified,
-        format_specified=format_specified,
-        output_formats=output_formats,
+        operation,
         export_config=export_config,
         scanner_factory=AgentScanner,
+    )
+
+
+def _build_command_request(
+    args: argparse.Namespace,
+    *,
+    output_specified: bool,
+    format_specified: bool,
+) -> CommandRequest:
+    return CommandRequest(
+        uri=args.uri,
+        days=args.days,
+        output=args.output,
+        raw_format=args.format,
+        output_specified=output_specified,
+        format_specified=format_specified,
+        head=args.head,
+        summary=args.summary,
+        collect=args.collect,
+        collect_mode=args.collect_mode,
+        dry_run=args.dry_run,
+        stats=args.stats,
+        providers=args.providers,
+        reindex=args.reindex,
+        config_action=args.config_action,
+        list_requested=args.list,
+        interactive=args.interactive,
+        no_metadata_summary=args.no_metadata_summary,
+        query=args.query,
+        search=args.search,
+        since=args.since,
+        until=args.until,
+        save=args.save,
     )
 
 
@@ -364,20 +390,21 @@ def _run() -> int | None:
         help=i18n.t(Keys.CLI_VERSION_HELP),
     )
     args = parser.parse_args(argv)
-    if args.providers:
-        return handle_providers_mode()
+    request = _build_command_request(
+        args,
+        output_specified=output_specified,
+        format_specified=format_specified,
+    )
 
-    query_uri_spec: QuerySpec | None = None
-    if args.uri and args.uri.startswith("agents://"):
-        valid_agents = {agent.name for agent in AgentScanner().agents}
-        try:
-            query_uri_spec = parse_query_uri(args.uri, valid_agents=valid_agents, cwd=Path.cwd())
-        except ValueError as e:
+    try:
+        plan = build_command_plan(request, cwd=Path.cwd())
+    except CommandPlanError as exc:
+        if exc.code is CommandPlanErrorCode.QUERY_URI_INVALID:
             _print_diagnostic(
                 invalid_query_or_uri(
                     i18n.t(Keys.DIAG_QUERY_URI_INVALID),
-                    details=(str(e),),
-                    parsed_uri=ParsedUri(raw=args.uri),
+                    details=(exc.detail or exc.code.value,),
+                    parsed_uri=ParsedUri(raw=request.uri or ""),
                     next_steps=(
                         i18n.t(Keys.DIAG_STEP_CHECK_QUERY_URI_SHAPE),
                         i18n.t(Keys.DIAG_STEP_NO_QUERY_URI_WITH_Q),
@@ -385,21 +412,41 @@ def _run() -> int | None:
                 )
             )
             return 1
-
-    try:
-        plan = build_command_plan(
-            args,
-            query_uri_spec=query_uri_spec,
-            format_specified=format_specified,
-        )
-    except CommandPlanError as exc:
+        if exc.code is CommandPlanErrorCode.QUERY_SPEC_INVALID:
+            _print_diagnostic(
+                invalid_query_or_uri(
+                    i18n.t(Keys.DIAG_QUERY_SPEC_INVALID),
+                    details=(exc.detail or exc.code.value,),
+                    next_steps=(
+                        i18n.t(Keys.DIAG_STEP_QUERY_FORMAT),
+                        i18n.t(Keys.DIAG_STEP_QUERY_URI_FOR_PATH),
+                    ),
+                )
+            )
+            return 1
         if exc.code is CommandPlanErrorCode.QUERY_COMBINATION_INVALID:
             _print_diagnostic(
                 invalid_query_or_uri(
                     i18n.t(Keys.DIAG_QUERY_COMBINATION_INVALID),
                     details=(i18n.t(Keys.DIAG_QUERY_URI_WITH_Q_DETAIL),),
-                    parsed_uri=ParsedUri(raw=args.uri),
+                    parsed_uri=ParsedUri(raw=request.uri or ""),
                     next_steps=(i18n.t(Keys.DIAG_STEP_DROP_Q),),
+                )
+            )
+            return 1
+        if exc.code is CommandPlanErrorCode.COLLECT_MODE_CONFLICT:
+            print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
+            return 1
+        if exc.code is CommandPlanErrorCode.URI_INVALID:
+            _print_diagnostic(
+                invalid_query_or_uri(
+                    i18n.t(Keys.DIAG_URI_INVALID),
+                    details=(i18n.t(Keys.DIAG_URI_UNPARSEABLE),),
+                    parsed_uri=ParsedUri(raw=request.uri or ""),
+                    next_steps=(
+                        i18n.t(Keys.DIAG_STEP_USE_SUPPORTED_SCHEME),
+                        *[example.strip() for example in get_supported_uri_examples()],
+                    ),
                 )
             )
             return 1
@@ -409,6 +456,8 @@ def _run() -> int | None:
         if exc.code is CommandPlanErrorCode.URI_HEAD_WITH_SUMMARY:
             print(i18n.t(Keys.URI_HEAD_WITH_SUMMARY_ERROR))
             return 1
+        if exc.code is CommandPlanErrorCode.FORMAT_INVALID:
+            parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=request.raw_format or ""))
         _print_diagnostic(
             unsupported_capability(
                 i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_MODE),
@@ -417,46 +466,34 @@ def _run() -> int | None:
             )
         )
         return 1
-    except ValueError:
-        parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=args.format or ""))
 
-    if args.summary and not plan.is_uri_mode:
-        print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
-    if args.head and not plan.is_uri_mode:
-        print(i18n.t(Keys.HEAD_IGNORED_NON_URI_WARNING))
+    for warning in plan.warnings:
+        if warning is CommandPlanWarning.SUMMARY_IGNORED_NON_URI:
+            print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
+        elif warning is CommandPlanWarning.HEAD_IGNORED_NON_URI:
+            print(i18n.t(Keys.HEAD_IGNORED_NON_URI_WARNING))
 
-    if plan.mode is CommandMode.CONFIG:
-        return handle_config_command(args.config_action)
-    if plan.mode is CommandMode.COLLECT:
-        return handle_collect_mode(args)
-    args.days = plan.days
-    if plan.mode is CommandMode.STATS:
-        return handle_stats_mode(args)
-    if plan.mode is CommandMode.REINDEX:
-        return handle_reindex_mode(args)
+    operation = plan.operation
+    if plan.mode is CommandMode.PROVIDERS:
+        return handle_providers_mode()
+    if isinstance(operation, ConfigOperation):
+        return handle_config_command(operation.action)
+    if isinstance(operation, CollectOperation):
+        return handle_collect_mode(operation)
+    if isinstance(operation, StatsOperation):
+        return handle_stats_mode(operation)
+    if isinstance(operation, ReindexOperation):
+        return handle_reindex_mode(operation)
     if plan.mode is CommandMode.HELP:
         parser.print_help()
         return None
 
     export_config = load_export_config()
-    output_formats = list(plan.output_formats)
-    if plan.is_uri_mode:
-        return handle_uri_mode(
-            args,
-            output_formats=output_formats,
-            output_specified=output_specified,
-            export_config=export_config,
-        )
-
-    return handle_session_modes(
-        args,
-        is_list_mode=plan.is_list_mode,
-        query_uri_spec=query_uri_spec,
-        output_specified=output_specified,
-        format_specified=format_specified,
-        output_formats=output_formats,
-        export_config=export_config,
-    )
+    if isinstance(operation, UriOperation):
+        return handle_uri_mode(operation, export_config=export_config)
+    if isinstance(operation, SessionOperation):
+        return handle_session_modes(operation, export_config=export_config)
+    raise AssertionError(f"unhandled command mode: {plan.mode.value}")
 
 
 if __name__ == "__main__":

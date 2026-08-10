@@ -1,4 +1,3 @@
-import argparse
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -12,9 +11,9 @@ from agent_dump.cli_shared import (
     print_diagnostic,
     render_agent_search_roots,
 )
-from agent_dump.diagnostics import invalid_query_or_uri, root_not_found
+from agent_dump.command_plan import ReindexOperation, StatsOperation
+from agent_dump.diagnostics import root_not_found
 from agent_dump.i18n import Keys, i18n
-from agent_dump.query_filter import QuerySpec, parse_query
 from agent_dump.scanner import AgentScanner
 from agent_dump.search_index import SearchIndex
 from agent_dump.terminal_output import render_terminal_message
@@ -88,7 +87,7 @@ def handle_providers_mode(
 
 
 def handle_stats_mode(
-    args: argparse.Namespace,
+    operation: StatsOperation,
     *,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
 ) -> int:
@@ -99,23 +98,7 @@ def handle_stats_mode(
         print_diagnostic(build_no_agents_found_diagnostic(scanner))
         return 1
 
-    query_spec: QuerySpec | None = None
-    if args.query:
-        valid_agents = {agent.name for agent in scanner.agents}
-        try:
-            query_spec = parse_query(args.query, valid_agents=valid_agents)
-        except ValueError as e:
-            print_diagnostic(
-                invalid_query_or_uri(
-                    i18n.t(Keys.DIAG_QUERY_SPEC_INVALID),
-                    details=(str(e),),
-                    next_steps=(
-                        i18n.t(Keys.DIAG_STEP_QUERY_FORMAT),
-                        i18n.t(Keys.DIAG_STEP_QUERY_URI_FOR_PATH),
-                    ),
-                )
-            )
-            return 1
+    query_spec = operation.query_spec
 
     if query_spec and query_spec.agent_names:
         available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
@@ -134,14 +117,14 @@ def handle_stats_mode(
             return 0
 
     all_sessions: list[tuple[BaseAgent, Session]] = []
-    for agent, sessions in scanner.get_sessions(args.days, agents=available_agents):
+    for agent, sessions in scanner.get_sessions(operation.days, agents=available_agents):
         if query_spec is not None:
             sessions = apply_query_filter(agent, sessions, query_spec)
         for session in sessions:
             all_sessions.append((agent, session))
 
     if not all_sessions:
-        print(i18n.t(Keys.STATS_NO_SESSIONS, days=args.days))
+        print(i18n.t(Keys.STATS_NO_SESSIONS, days=operation.days))
         return 0
 
     total_stats = _MessageStats()
@@ -153,7 +136,7 @@ def handle_stats_mode(
         total_stats.add(message_count)
         agent_stats.setdefault(agent_name, _MessageStats()).add(message_count)
 
-    print(i18n.t(Keys.STATS_HEADER, days=args.days))
+    print(i18n.t(Keys.STATS_HEADER, days=operation.days))
     print()
     print(i18n.t(Keys.STATS_TOTAL_SESSIONS, count=total_stats.sessions))
     if total_stats.unknown_sessions:
@@ -202,7 +185,7 @@ def handle_stats_mode(
 
 
 def handle_reindex_mode(
-    args: argparse.Namespace,
+    operation: ReindexOperation,
     *,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
     search_index_factory: Callable[[], SearchIndex] = SearchIndex,
@@ -223,7 +206,7 @@ def handle_reindex_mode(
     print()
 
     total_indexed = 0
-    for agent, sessions in scanner.get_sessions(args.days, agents=available_agents):
+    for agent, sessions in scanner.get_sessions(operation.days, agents=available_agents):
         if not sessions:
             continue
         added = index.rebuild(agent, sessions)
