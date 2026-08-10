@@ -475,7 +475,7 @@ deny = [
 │           ├── kimi.py         # Kimi Agent
 │           ├── pi.py           # Pi Agent
 │           ├── file_sessions.py # file-backed provider 共享基类
-│           ├── jsonl_scan.py   # JSONL 扫描辅助
+│           ├── jsonl_scan.py   # 有界 JSONL 对象扫描与诊断
 │           ├── message_assembly.py # 标准化消息构建器
 │           └── title_fallback.py # 共享标题回退规则
 ├── tests/                      # 测试目录
