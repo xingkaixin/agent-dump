@@ -122,60 +122,21 @@ def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
 def display_sessions_list(
     agent: BaseAgent,
     sessions: list[Session],
-    page_size: int = 20,
-    show_pagination: bool = True,
     show_metadata_summary: bool = True,
-) -> bool:
-    total = len(sessions)
-
-    if total == 0:
+) -> None:
+    if not sessions:
         print(i18n.t(Keys.NO_SESSIONS_PAREN))
-        return False
+        return
 
-    current_page = 0
-    total_pages = (total + page_size - 1) // page_size
-
-    while True:
-        start_idx = current_page * page_size
-        end_idx = min(start_idx + page_size, total)
-
-        for i in range(start_idx, end_idx):
-            session = sessions[i]
-            title = safe_display_text(agent.get_formatted_title(session))
-            if show_metadata_summary:
-                summary = safe_display_text(format_session_metadata_summary(agent, session))
-                print(f"   • {title}")
-                print(f"     {summary}")
-            else:
-                uri = safe_display_text(agent.get_session_uri(session))
-                print(f"   • {title} {uri}")
-
-        if show_pagination and total_pages > 1:
-            print(
-                "\n   "
-                + i18n.t(Keys.PAGINATION_INFO, current=current_page + 1, total=total_pages, total_sessions=total)
-            )
-
-            if current_page < total_pages - 1:
-                print("   " + i18n.t(Keys.PAGINATION_PROMPT))
-                try:
-                    user_input = input("> ").strip().lower()
-                    if user_input == "q":
-                        return True
-                    current_page += 1
-                    print()
-                except (EOFError, KeyboardInterrupt):
-                    print()
-                    return True
-            else:
-                print("   " + i18n.t(Keys.PAGINATION_DONE))
-                break
+    for session in sessions:
+        title = safe_display_text(agent.get_formatted_title(session))
+        if show_metadata_summary:
+            summary = safe_display_text(format_session_metadata_summary(agent, session))
+            print(f"   • {title}")
+            print(f"     {summary}")
         else:
-            if total > page_size:
-                print("\n   " + i18n.t(Keys.PAGINATION_REMAINING, count=total - page_size))
-            break
-
-    return False
+            uri = safe_display_text(agent.get_session_uri(session))
+            print(f"   • {title} {uri}")
 
 
 def export_session_in_format(

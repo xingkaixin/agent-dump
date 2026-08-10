@@ -9,11 +9,13 @@ detect_language（i18n.py:660-674）对任何非 zh 的机器 locale 返回 "en"
 """
 
 from pathlib import Path
+from unittest import mock
 
 from locale_helpers import ALL_LANGUAGES, Keys, expect, expect_contains
 import pytest
 from test_integration_cli import read_only_file, run_cli
 
+from agent_dump.cli import main
 from agent_dump.i18n import i18n
 
 
@@ -32,6 +34,16 @@ def language(request, use_language):
     """把测试分别跑在 zh 与 en 两个 locale 下。"""
     use_language(request.param)
     return request.param
+
+
+class TestHelpIsLocalized:
+    def test_page_size_is_described_as_ignored_compatibility_input(self, language, capsys):
+        with mock.patch("sys.argv", ["agent-dump", "--lang", language, "--help"]), pytest.raises(SystemExit) as exc:
+            main()
+
+        assert exc.value.code == 0
+        output = capsys.readouterr().out
+        assert expect(Keys.CLI_PAGE_SIZE_HELP) in output
 
 
 class TestListModeIsLocalized:

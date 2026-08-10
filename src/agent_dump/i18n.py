@@ -32,10 +32,6 @@ class Keys:
     EXPORT_ERROR_FORMAT = "EXPORT_ERROR_FORMAT"
     EXPORT_SUMMARY = "EXPORT_SUMMARY"
     NO_SESSIONS_PAREN = "NO_SESSIONS_PAREN"
-    PAGINATION_INFO = "PAGINATION_INFO"
-    PAGINATION_PROMPT = "PAGINATION_PROMPT"
-    PAGINATION_DONE = "PAGINATION_DONE"
-    PAGINATION_REMAINING = "PAGINATION_REMAINING"
     SCANNING_AGENTS = "SCANNING_AGENTS"
     AGENT_FOUND = "AGENT_FOUND"
     AGENT_FOUND_EMPTY = "AGENT_FOUND_EMPTY"
@@ -350,10 +346,6 @@ TRANSLATIONS = {
         Keys.EXPORT_ERROR_FORMAT: "  ✗ {title}... [{format}] → Error: {error}",
         Keys.EXPORT_SUMMARY: "\n✅ Successfully exported {count} sessions to {path}/",
         Keys.NO_SESSIONS_PAREN: "   (No sessions)",
-        Keys.PAGINATION_INFO: "   Page {current}/{total} (Total {total_sessions} sessions)",
-        Keys.PAGINATION_PROMPT: "   Press Enter for more, or 'q' to quit",
-        Keys.PAGINATION_DONE: "   All sessions displayed",
-        Keys.PAGINATION_REMAINING: "   ... {count} more sessions not shown",
         Keys.SCANNING_AGENTS: "🔍 Scanning Agent Tools...\n",
         Keys.AGENT_FOUND: "   ✓ Found {name} ({count} sessions)",
         Keys.AGENT_FOUND_EMPTY: "   ⚠ Found {name} (0 sessions)",
@@ -389,7 +381,7 @@ TRANSLATIONS = {
         Keys.CLI_INTERACTIVE_HELP: "Run in interactive mode to select and export sessions",
         Keys.CLI_NO_METADATA_SUMMARY_HELP: "Hide high-signal metadata summary in list and interactive views",
         Keys.CLI_SAVE_HELP: "Collect output path: directory or .md file path (absolute or relative)",
-        Keys.CLI_PAGE_SIZE_HELP: "Number of sessions to display per page (default: 20)",
+        Keys.CLI_PAGE_SIZE_HELP: "Accepted for compatibility; currently ignored",
         Keys.CLI_QUERY_HELP: "Query filter. Supports legacy 'agent1,agent2:keyword' / 'keyword', or structured terms like 'bug provider:codex role:user path:. limit:20'; cannot be combined with agents:// query URIs",
         Keys.CLI_LANG_HELP: "Language (en, zh). Default: auto-detect",
         Keys.CLI_COLLECT_HELP: "Collect session prints by date range and summarize with AI",
@@ -650,10 +642,6 @@ TRANSLATIONS = {
         Keys.EXPORT_ERROR_FORMAT: "  ✗ {title}... [{format}] → 错误: {error}",
         Keys.EXPORT_SUMMARY: "\n✅ 成功导出 {count} 个会话到 {path}/",
         Keys.NO_SESSIONS_PAREN: "   (无会话)",
-        Keys.PAGINATION_INFO: "   第 {current}/{total} 页 (共 {total_sessions} 个会话)",
-        Keys.PAGINATION_PROMPT: "   按 Enter 查看更多，或输入 'q' 退出",
-        Keys.PAGINATION_DONE: "   已显示全部会话",
-        Keys.PAGINATION_REMAINING: "   ... 还有 {count} 个会话未显示",
         Keys.SCANNING_AGENTS: "🔍 正在扫描 Agent Tools...\n",
         Keys.AGENT_FOUND: "   ✓ 发现 {name} ({count} 个会话)",
         Keys.AGENT_FOUND_EMPTY: "   ⚠ 发现 {name} (0 个会话)",
@@ -690,7 +678,7 @@ TRANSLATIONS = {
         Keys.CLI_INTERACTIVE_HELP: "进入交互式模式选择并导出",
         Keys.CLI_NO_METADATA_SUMMARY_HELP: "在列表和交互视图中隐藏高信号元数据摘要",
         Keys.CLI_SAVE_HELP: "collect 输出路径：可传目录或 .md 文件路径（支持绝对/相对路径）",
-        Keys.CLI_PAGE_SIZE_HELP: "每页显示的会话数量 (默认: 20)",
+        Keys.CLI_PAGE_SIZE_HELP: "为兼容保留，当前不生效",
         Keys.CLI_LANG_HELP: "语言 (en, zh). 默认: 自动检测",
         Keys.CLI_COLLECT_HELP: "按日期收集会话 print 内容并调用 AI 生成总结",
         Keys.CLI_COLLECT_MODE_HELP: "收集输出模式: pm（项目管理）或 insight（作者洞察）",

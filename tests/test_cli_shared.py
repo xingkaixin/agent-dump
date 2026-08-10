@@ -839,52 +839,21 @@ class TestDisplaySessionsList:
 
     def test_display_sessions_list_empty(self, capsys):
         """测试空会话列表输出"""
-        result = display_sessions_list(self._build_agent(), [], page_size=2)
-        assert result is False
+        result = display_sessions_list(self._build_agent(), [])
+        assert result is None
         captured = capsys.readouterr()
         assert "(无会话)" in captured.out
 
-    def test_display_sessions_list_quit_on_q(self, capsys):
-        """测试分页模式输入 q 退出"""
+    def test_display_sessions_list_shows_every_session_without_reading_input(self, capsys):
         sessions = [make_session(f"s{i}", f"Session {i}") for i in range(3)]
 
-        with mock.patch("builtins.input", return_value="q"):
-            result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=True)
+        with mock.patch("builtins.input") as user_input:
+            result = display_sessions_list(self._build_agent(), sessions, show_metadata_summary=False)
 
-        assert result is True
+        assert result is None
+        user_input.assert_not_called()
         captured = capsys.readouterr()
-        assert "第 1/2 页" in captured.out
-
-    def test_display_sessions_list_handles_eof_interrupt(self, capsys):
-        """测试分页模式处理 EOFError"""
-        sessions = [make_session(f"s{i}", f"Session {i}") for i in range(3)]
-
-        with mock.patch("builtins.input", side_effect=EOFError):
-            result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=True)
-
-        assert result is True
-        captured = capsys.readouterr()
-        assert "按 Enter 查看更多" in captured.out
-
-    def test_display_sessions_list_show_all_pages(self, capsys):
-        """测试分页模式翻页直到结束"""
-        sessions = [make_session(f"s{i}", f"Session {i}") for i in range(3)]
-
-        with mock.patch("builtins.input", return_value=""):
-            result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=True)
-
-        assert result is False
-        captured = capsys.readouterr()
-        assert "已显示全部会话" in captured.out
-
-    def test_display_sessions_list_non_pagination_shows_remaining_hint(self, capsys):
-        """测试非分页模式提示剩余会话数"""
-        sessions = [make_session(f"s{i}", f"Session {i}") for i in range(3)]
-        result = display_sessions_list(self._build_agent(), sessions, page_size=2, show_pagination=False)
-
-        assert result is False
-        captured = capsys.readouterr()
-        assert "还有 1 个会话未显示" in captured.out
+        assert all(f"Session {index}" in captured.out for index in range(3))
 
 
 class TestUriShapesComeFromTheRegistry:
