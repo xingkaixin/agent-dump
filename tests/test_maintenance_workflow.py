@@ -13,6 +13,7 @@ from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.cli import handle_reindex_mode, handle_stats_mode
 from agent_dump.maintenance_workflow import handle_providers_mode as render_provider_capabilities
 from agent_dump.paths import SearchRoot
+from agent_dump.text_safety import has_unsafe_body_characters
 
 
 def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
@@ -97,6 +98,26 @@ class TestStatsMode:
         assert "总会话数: 2" in captured.out
         assert "总消息数: 30" in captured.out
         assert "Claude Code: 2 个会话, 30 条消息" in captured.out
+
+    def test_stats_sanitizes_provider_display_name(self, capsys):
+        poison = "Provider\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        args = argparse.Namespace(days=7, query=None)
+        session = make_session("s1", "Session", metadata={"message_count": 1})
+        agent = mock.MagicMock()
+        agent.display_name = poison
+        agent.get_sessions.return_value = [session]
+        scanner = mock.MagicMock()
+        scanner.agents = [agent]
+        scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            result = handle_stats_mode(args)
+
+        output = capsys.readouterr().out
+        assert result == 0
+        assert not has_unsafe_body_characters(output)
+        assert "FORGED" in output
 
     def test_stats_with_query_filter(self, capsys):
         args = argparse.Namespace(days=7, query="bug")
@@ -185,3 +206,23 @@ class TestProvidersMode:
         assert "已找到 1/2" in output
         assert f"[已找到] existing root: {existing_root}" in output
         assert f"[未找到] missing root: {missing_root}" in output
+
+    def test_providers_sanitizes_registration_and_search_root_fields(self, capsys, tmp_path) -> None:
+        poison = "Provider\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        agent = OpenCodeAgent()
+        registration = AgentRegistration(
+            name="opencode",
+            display_name=poison,
+            factory=lambda: agent,
+            uri_schemes=(poison,),
+            location_line="",
+        )
+        roots = (SearchRoot(poison, tmp_path / poison),)
+
+        with mock.patch.object(agent, "get_search_roots", return_value=roots):
+            result = render_provider_capabilities(registrations=(registration,))
+
+        output = capsys.readouterr().out
+        assert result == 0
+        assert not has_unsafe_body_characters(output)
+        assert "FORGED" in output

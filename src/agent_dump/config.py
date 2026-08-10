@@ -18,6 +18,8 @@ from questionary import Style
 
 from agent_dump.i18n import Keys, i18n
 from agent_dump.private_files import PRIVATE_FILE_MODE
+from agent_dump.terminal_output import render_terminal_message
+from agent_dump.text_safety import safe_display_text
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -599,20 +601,22 @@ def _ask_provider(default_provider: str) -> str | None:
 def _ask_text(prompt: str, default: str = "", *, secret: bool = False) -> str | None:
     style = _build_style()
     if secret:
-        return questionary.password(prompt, default=default, style=style).ask()
-    return questionary.text(prompt, default=default, style=style).ask()
+        return questionary.password(safe_display_text(prompt), default=default, style=style).ask()
+    safe_default = safe_display_text(default)
+    result = questionary.text(safe_display_text(prompt), default=safe_default, style=style).ask()
+    return default if result == safe_default else result
 
 
 def _confirm(prompt: str, default: bool = True) -> bool:
     style = _build_style()
-    result = questionary.confirm(prompt, default=default, style=style).ask()
+    result = questionary.confirm(safe_display_text(prompt), default=default, style=style).ask()
     return bool(result)
 
 
 def _simple_select(prompt: str, options: list[tuple[str, str]], default_value: str) -> str | None:
-    print(prompt)
+    print(safe_display_text(prompt))
     for idx, (label, _) in enumerate(options, start=1):
-        print(f"{idx}. {label}")
+        print(f"{idx}. {safe_display_text(label)}")
     raw = input(i18n.t(Keys.CONFIG_INPUT_PROMPT)).strip()
     if not raw:
         return default_value
@@ -668,10 +672,16 @@ def prompt_edit_config(
         )
         if provider is None:
             return (None, existing_export or ExportConfig())
-        base_url_input = input(f"{i18n.t(Keys.CONFIG_INPUT_BASE_URL)} [{default_base_url}]: ").strip()
-        model_input = input(f"{i18n.t(Keys.CONFIG_INPUT_MODEL)} [{default_model}]: ").strip()
-        api_key_input = input(f"{i18n.t(Keys.CONFIG_INPUT_API_KEY)} [{mask_api_key(default_api_key)}]: ").strip()
-        export_output_input = input(f"{i18n.t(Keys.CONFIG_INPUT_EXPORT_OUTPUT)} [{default_export_output}]: ").strip()
+        base_url_input = input(
+            f"{i18n.t(Keys.CONFIG_INPUT_BASE_URL)} [{safe_display_text(default_base_url)}]: "
+        ).strip()
+        model_input = input(f"{i18n.t(Keys.CONFIG_INPUT_MODEL)} [{safe_display_text(default_model)}]: ").strip()
+        api_key_input = input(
+            f"{i18n.t(Keys.CONFIG_INPUT_API_KEY)} [{safe_display_text(mask_api_key(default_api_key))}]: "
+        ).strip()
+        export_output_input = input(
+            f"{i18n.t(Keys.CONFIG_INPUT_EXPORT_OUTPUT)} [{safe_display_text(default_export_output)}]: "
+        ).strip()
         base_url = base_url_input or default_base_url
         model = model_input or default_model
         api_key = api_key_input or default_api_key
@@ -689,16 +699,31 @@ def prompt_edit_config(
     export_candidate = ExportConfig(output=export_output.strip())
 
     print(i18n.t(Keys.CONFIG_CONFIRM_TITLE))
-    print(i18n.t(Keys.CONFIG_CONFIRM_PROVIDER, provider=ai_candidate.provider if ai_candidate is not None else ""))
-    print(i18n.t(Keys.CONFIG_CONFIRM_BASE_URL, base_url=ai_candidate.base_url if ai_candidate is not None else ""))
-    print(i18n.t(Keys.CONFIG_CONFIRM_MODEL, model=ai_candidate.model if ai_candidate is not None else ""))
     print(
-        i18n.t(
+        render_terminal_message(
+            Keys.CONFIG_CONFIRM_PROVIDER,
+            provider=ai_candidate.provider if ai_candidate is not None else "",
+        )
+    )
+    print(
+        render_terminal_message(
+            Keys.CONFIG_CONFIRM_BASE_URL,
+            base_url=ai_candidate.base_url if ai_candidate is not None else "",
+        )
+    )
+    print(
+        render_terminal_message(
+            Keys.CONFIG_CONFIRM_MODEL,
+            model=ai_candidate.model if ai_candidate is not None else "",
+        )
+    )
+    print(
+        render_terminal_message(
             Keys.CONFIG_CONFIRM_API_KEY,
             api_key=mask_api_key(ai_candidate.api_key) if ai_candidate is not None else "",
         )
     )
-    print(i18n.t(Keys.CONFIG_CONFIRM_EXPORT_OUTPUT, output=export_candidate.output))
+    print(render_terminal_message(Keys.CONFIG_CONFIRM_EXPORT_OUTPUT, output=export_candidate.output))
 
     if _is_terminal():
         if not _confirm(i18n.t(Keys.CONFIG_CONFIRM_WRITE)):
@@ -720,24 +745,39 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
 
     if action == "view":
         if not config_path.exists():
-            print(i18n.t(Keys.CONFIG_NOT_FOUND, path=str(config_path)))
+            print(render_terminal_message(Keys.CONFIG_NOT_FOUND, path=config_path))
             raw = input_fn(i18n.t(Keys.CONFIG_PROMPT_CREATE) + " (y/N): ").strip().lower()
             if raw not in {"y", "yes"}:
                 return 1
             action = "edit"
         else:
-            print(i18n.t(Keys.CONFIG_VIEW_TITLE, path=str(config_path)))
-            print(i18n.t(Keys.CONFIG_CONFIRM_PROVIDER, provider=existing.provider if existing is not None else ""))
-            print(i18n.t(Keys.CONFIG_CONFIRM_BASE_URL, base_url=existing.base_url if existing is not None else ""))
-            print(i18n.t(Keys.CONFIG_CONFIRM_MODEL, model=existing.model if existing is not None else ""))
+            print(render_terminal_message(Keys.CONFIG_VIEW_TITLE, path=config_path))
             print(
-                i18n.t(
+                render_terminal_message(
+                    Keys.CONFIG_CONFIRM_PROVIDER,
+                    provider=existing.provider if existing is not None else "",
+                )
+            )
+            print(
+                render_terminal_message(
+                    Keys.CONFIG_CONFIRM_BASE_URL,
+                    base_url=existing.base_url if existing is not None else "",
+                )
+            )
+            print(
+                render_terminal_message(
+                    Keys.CONFIG_CONFIRM_MODEL,
+                    model=existing.model if existing is not None else "",
+                )
+            )
+            print(
+                render_terminal_message(
                     Keys.CONFIG_CONFIRM_API_KEY,
                     api_key=mask_api_key(existing.api_key) if existing is not None else "",
                 )
             )
             print(
-                i18n.t(
+                render_terminal_message(
                     Keys.CONFIG_CONFIRM_EXPORT_OUTPUT,
                     output=existing_export.output or "./sessions (default)",
                 )
@@ -748,14 +788,18 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
             print(f"  collect.summary_concurrency: {collect_config.summary_concurrency}")
             print(f"  collect.summary_timeout_seconds: {collect_config.summary_timeout_seconds}")
             print(f"  logging.enabled: {logging_config.enabled}")
-            print(f"  logging.path: {logging_config.path}")
+            print(f"  logging.path: {safe_display_text(str(logging_config.path))}")
             print(f"  shortcuts.count: {len(shortcuts_config)}")
             for shortcut_name, shortcut in shortcuts_config.items():
-                print(f"  shortcut.{shortcut_name}: params={list(shortcut.params)} args={list(shortcut.args)}")
+                print(
+                    safe_display_text(
+                        f"  shortcut.{shortcut_name}: params={list(shortcut.params)} args={list(shortcut.args)}"
+                    )
+                )
             return 0
 
     if action != "edit":
-        print(i18n.t(Keys.CONFIG_ACTION_INVALID, action=action))
+        print(render_terminal_message(Keys.CONFIG_ACTION_INVALID, action=action))
         return 1
 
     edited_ai, edited_export = prompt_edit_config(existing, existing_export)
@@ -765,9 +809,9 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
 
     ok, errors = validate_ai_config(edited_ai) if edited_ai is not None else (True, [])
     if not ok:
-        print(i18n.t(Keys.CONFIG_INVALID_FIELDS, fields=", ".join(errors)))
+        print(render_terminal_message(Keys.CONFIG_INVALID_FIELDS, fields=", ".join(errors)))
         return 1
 
     path = write_config(edited_ai, edited_export, config_path, document=document)
-    print(i18n.t(Keys.CONFIG_SAVED, path=str(path)))
+    print(render_terminal_message(Keys.CONFIG_SAVED, path=path))
     return 0

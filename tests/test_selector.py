@@ -141,6 +141,18 @@ class TestSelectAgentSimple:
         assert result == mock_agent
         mock_agent.get_sessions.assert_not_called()
 
+    def test_select_agent_simple_sanitizes_provider_name_and_invalid_input(self, mock_agent, capsys):
+        poison = "value\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        mock_agent.display_name = poison
+
+        with mock.patch("builtins.input", return_value=poison):
+            result = select_agent_simple([mock_agent], {"test_agent": 1})
+
+        output = capsys.readouterr().out
+        assert result is None
+        assert not has_unsafe_body_characters(output)
+        assert "FORGED" in output
+
 
 class TestSelectSessionsSimple:
     """测试 select_sessions_simple 函数"""
@@ -233,6 +245,20 @@ class TestSelectAgentInteractive:
                 result = select_agent_interactive(agents, {"test_agent": 1})
 
         assert result == mock_agent
+
+    def test_terminal_choice_sanitizes_provider_name(self, mock_agent):
+        poison = "value\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        mock_agent.display_name = poison
+
+        with mock.patch("agent_dump.selector.is_terminal", return_value=True):
+            with mock.patch("questionary.select") as mock_select:
+                mock_select.return_value.ask.return_value = mock_agent
+                select_agent_interactive([mock_agent], {"test_agent": 1})
+
+        choices = mock_select.call_args.kwargs["choices"]
+        assert len(choices) == 1
+        assert not has_unsafe_body_characters(choices[0].title)
+        assert "FORGED" in choices[0].title
 
     def test_terminal_keyboard_interrupt(self, mock_agent, capsys):
         """测试终端环境键盘中断"""

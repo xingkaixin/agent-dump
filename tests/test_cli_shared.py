@@ -25,6 +25,7 @@ from agent_dump.cli_shared import (
     render_query_summary,
     render_session_head,
     render_session_text,
+    show_loading,
     validate_uri_agent_formats,
 )
 from agent_dump.diagnostics import DiagnosticError
@@ -399,6 +400,17 @@ class TestExportSessions:
 
         mock_agent.export_session.assert_called_once_with(session, json_root / "test_agent")
         mock_agent.export_raw_session.assert_called_once_with(session, raw_root / "test_agent")
+
+
+def test_show_loading_sanitizes_non_tty_status(capsys):
+    poison = "loading\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+
+    with mock.patch("sys.stderr.isatty", return_value=False), show_loading(poison):
+        pass
+
+    output = capsys.readouterr().err
+    assert not has_unsafe_body_characters(output)
+    assert "FORGED" in output
 
 
 class TestValidateUriAgentFormats:

@@ -16,6 +16,7 @@ from agent_dump.agents.base import Session
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.paths import ProviderRoots
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
+from agent_dump.text_safety import has_unsafe_line_characters
 
 
 class TestOpenCodeAgent:
@@ -239,6 +240,32 @@ class TestOpenCodeAgent:
         assert "msg-bad" in captured.err
         assert "part-bad" in captured.err
         assert captured.out == ""
+
+    def test_get_session_data_sanitizes_malformed_row_ids(self, populated_db, capsys):
+        poison = "row\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        conn = sqlite3.connect(populated_db)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)",
+            (poison, "session-001", 1704067300000, "{not-json"),
+        )
+        cursor.execute(
+            "INSERT INTO part (id, message_id, time_created, data) VALUES (?, ?, ?, ?)",
+            (poison, "msg-001", 1704067300000, None),
+        )
+        conn.commit()
+        conn.close()
+
+        agent = OpenCodeAgent()
+        agent.db_path = populated_db
+        session = agent.find_session_by_id("session-001")
+        assert session is not None
+        agent.get_session_data(session)
+
+        lines = capsys.readouterr().err.splitlines()
+        assert len(lines) == 2
+        assert all(not has_unsafe_line_characters(line) for line in lines)
+        assert all("FORGED" in line for line in lines)
 
     def test_filter_sessions_by_keyword_matches_literally(self, populated_db):
         """Provider 快路径与逻辑 transcript 使用同一套字面量语义。"""
