@@ -32,6 +32,18 @@ _Avoid_: Working Directory
 The read-only file, directory, or database record from which a Session is derived.
 _Avoid_: Working Directory
 
+**Message Count Fact**:
+The number of messages known for a Session together with its Count Completeness.
+_Avoid_: Total Messages, when any selected Session has an unknown count
+
+**Count Completeness**:
+A closed state describing whether a Message Count Fact is `exact` or `unknown`.
+_Avoid_: Partial, until a Provider can produce a real partial-count state
+
+**Lightweight Head**:
+A Session metadata view projected from bounded Provider Discovery facts without reading the full transcript.
+_Avoid_: Summary, transcript preview
+
 **Query**:
 A set of criteria that selects Sessions by Provider, Working Directory, message role, keyword, or result limit.
 _Avoid_: Search, when referring to the full selection criteria
@@ -75,3 +87,7 @@ _Avoid_: Export
   search semantics.
 - Provider-owned related sources may participate in cache invalidation without
   becoming public Session fields.
+- List, Lightweight Head, and statistics project the same Message Count Fact;
+  they do not interpret Provider metadata independently.
+- An unknown Message Count Fact remains visible as unknown. Shared workflows do
+  not turn the sum of known counts into an apparently complete total.

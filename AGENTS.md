@@ -293,9 +293,10 @@ class BaseAgent(ABC):
 ```
 
 共享 workflow 通过 `derive_session_facts(session)` 读取 Working Directory、Provider
-Project 与 Session Source；缓存通过 `BaseAgent.get_session_facts(session)` 追加
-provider-owned change sources。调用方不得自行解释对应 metadata key。facts 按需
-派生，不在 `Session` 上重复存储。术语边界见 `CONTEXT.md`。
+Project、Session Source 与带 exact/unknown 完整度的 Message Count Fact；缓存通过
+`BaseAgent.get_session_facts(session)` 追加 provider-owned change sources。调用方不得自行
+解释对应 metadata key。facts 按需派生，不在 `Session` 上重复存储。术语边界见
+`CONTEXT.md`。
 
 `get_sessions()` 与 `find_session_by_id()` 是自包含读取入口，调用方不得依赖先调用
 `is_available()` 来初始化 provider 路径。跨 provider 的 availability、list、locate

@@ -5,8 +5,9 @@ import json
 from pathlib import Path, PurePath
 from typing import Any
 
-from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, Session
 from agent_dump.export_paths import build_session_output_path
+from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import should_filter_message_for_export
 from agent_dump.private_files import ensure_output_dir, write_private_text
 from agent_dump.text_safety import safe_body_text, safe_display_text
@@ -55,7 +56,14 @@ def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
 
     for label, key in HEAD_FIELDS:
         # head 的字段值（标题、cwd、model）同样来自 provider payload，且每项占一行
-        lines.append(f"- {label}: {safe_display_text(_normalize_head_value(merged_head.get(key)))}")
+        value = merged_head.get(key)
+        if (
+            key == "message_count"
+            and not isinstance(value, int)
+            and merged_head.get("message_count_completeness") == MessageCountCompleteness.UNKNOWN.value
+        ):
+            value = i18n.t(Keys.MESSAGE_COUNT_UNKNOWN)
+        lines.append(f"- {label}: {safe_display_text(_normalize_head_value(value))}")
 
     return "\n".join(lines)
 
@@ -221,6 +229,8 @@ def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
     message_count = fields.get("message_count")
     if isinstance(message_count, int):
         parts.append(f"msgs={message_count}")
+    elif fields.get("message_count_completeness") == MessageCountCompleteness.UNKNOWN.value:
+        parts.append(f"msgs={i18n.t(Keys.MESSAGE_COUNT_UNKNOWN)}")
 
     updated_at = fields.get("updated_at")
     if isinstance(updated_at, str) and updated_at.strip():
