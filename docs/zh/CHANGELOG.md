@@ -5,6 +5,7 @@
 ### 性能
 
 - 限制已完成 Session payload 的缓存数量，并在 Search/Collect 批量投影后释放完整数据，使内存随活动 worker 窗口而非全部 Session 历史增长
+- role 查询在每个 Provider 找到稳定排序的 top-limit 证据后停止，不再继续解析其余 Session
 
 ## [0.14.0] - 2026-07-30
 

@@ -198,6 +198,7 @@ def _session_matches(
             scoped_sessions,
             spec.roles,
             None if text_query.is_empty else text_query,
+            limit=spec.limit,
         )
 
     if text_query.is_empty:
@@ -230,7 +231,7 @@ def limit_query_session_matches(
     limit: int | None,
 ) -> list[SearchSessionMatch]:
     """Apply list/collect recency ordering and one global limit to query evidence."""
-    if limit is None or limit >= len(matches):
+    if limit is None:
         return matches
     return sorted(matches, key=_query_evidence_sort_key)[:limit]
 
@@ -402,9 +403,14 @@ def _role_search_matches(
     sessions: list[Session],
     roles: set[str],
     query: TextQuery | None,
+    *,
+    limit: int | None,
 ) -> list[SearchSessionMatch]:
+    candidates = (
+        sessions if limit is None else sorted(sessions, key=lambda session: _query_session_sort_key(agent, session))
+    )
     matches: list[SearchSessionMatch] = []
-    for session in sessions:
+    for session in candidates:
         evidence = _find_role_evidence(agent, session, roles, query)
         if evidence is None:
             continue
@@ -418,6 +424,8 @@ def _role_search_matches(
                 matched_role=role,
             )
         )
+        if limit is not None and len(matches) >= limit:
+            break
 
     return matches
 
@@ -456,13 +464,17 @@ def _extract_message_search_text(message: dict[str, Any]) -> str:
 
 
 def _query_evidence_sort_key(match: SearchSessionMatch) -> tuple[float, float, str, str]:
-    updated_at = normalize_datetime_utc(match.session.updated_at)
-    created_at = normalize_datetime_utc(match.session.created_at)
+    return _query_session_sort_key(match.agent, match.session)
+
+
+def _query_session_sort_key(agent: BaseAgent, session: Session) -> tuple[float, float, str, str]:
+    updated_at = normalize_datetime_utc(session.updated_at)
+    created_at = normalize_datetime_utc(session.created_at)
     return (
         -updated_at.timestamp(),
         -created_at.timestamp(),
-        match.agent.name,
-        match.session.id,
+        agent.name,
+        session.id,
     )
 
 
