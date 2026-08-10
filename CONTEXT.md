@@ -36,6 +36,18 @@ _Avoid_: Working Directory
 A set of criteria that selects Sessions by Provider, Working Directory, message role, keyword, or result limit.
 _Avoid_: Search, when referring to the full selection criteria
 
+**Query Keyword**:
+One case-insensitive literal phrase used by `-query` and `agents://`; whitespace is normalized before matching.
+_Avoid_: Search Terms
+
+**Search Terms**:
+The distinct whitespace-delimited literals supplied to `--search`; every term must occur, but terms may occur in different Searchable Corpus fields.
+_Avoid_: Query Keyword
+
+**Searchable Corpus**:
+A Session title plus the logical text exposed by its normalized transcript: message text, reasoning, and tool state.
+_Avoid_: Serialized Provider Source
+
 **Export**:
 A portable representation derived from a Session in a requested format.
 _Avoid_: Session Source
@@ -58,5 +70,8 @@ _Avoid_: Export
   is never treated as a filesystem path.
 - Session Source is the read-only origin and the final display fallback. It is
   never inferred to be the Working Directory.
+- Query and Search match logical Searchable Corpus fields. JSON escaping,
+  Provider-private metadata, and other serialized Source details are not user
+  search semantics.
 - Provider-owned related sources may participate in cache invalidation without
   becoming public Session fields.

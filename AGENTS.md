@@ -74,6 +74,7 @@
 | `rendering.py` | print/head/markdown 渲染与 format 导出分发 |
 | `exporting.py` | 跨 URI / interactive 模式的统一导出执行与结构化 outcome |
 | `query_filter.py` | QuerySpec 解析、QuerySessionMatch 匹配证据、过滤与全局 limit |
+| `query_semantics.py` | Query keyword、Search terms 与 Searchable Corpus 的统一字面匹配语义 |
 | `search_index.py` | SQLite FTS5 搜索索引 |
 | `selector.py` | 终端交互选择与非 TTY 输入回退 |
 | `config.py` | `ConfigurationDocument` TOML 快照、兼容投影、保留式更新与校验 |
@@ -200,6 +201,7 @@ agent-dump/
 │   ├── paths.py                 # 搜索根路径模型
 │   ├── prompt_safety.py         # 摘要 prompt 的不可信数据隔离
 │   ├── query_filter.py          # 查询解析与过滤
+│   ├── query_semantics.py       # Query/Search 字面语义与可搜索语料
 │   ├── rendering.py             # print/head/markdown/json/raw 渲染调度
 │   ├── exporting.py             # 统一导出执行与结构化 outcome
 │   ├── scanner.py               # Provider discovery、list / locate 与失败隔离
@@ -229,6 +231,7 @@ agent-dump/
 │   ├── test_config.py           # 配置测试
 │   ├── test_maintenance_workflow.py
 │   ├── test_query_filter.py
+│   ├── test_query_semantics.py
 │   ├── test_scanner.py
 │   ├── test_search_index.py
 │   ├── test_selector.py
@@ -343,7 +346,9 @@ provider-owned change sources。调用方不得自行解释对应 metadata key�
 - legacy provider scope：`-query "codex,kimi:timeout"`
 - structured query：`-query "bug provider:codex role:user path:. limit:20"`
 - path-scoped URI：`agents://.?q=refactor&providers=codex,claude&roles=user&limit=20`
-- full-text search：`--search "auth timeout"`，由 `search_index.py` 优先提供 FTS5 索引，必要时回退文件扫描
+- Query keyword：`-query` 与 `agents://...?q=` 将归一化后的输入视为一个字面短语。
+- Search terms：`--search "auth timeout"` 按空白解析 distinct 字面 term，全部 term 必须命中，且可跨标题与逻辑 transcript 字段。
+- full-text search：`search_index.py` 优先提供等价 FTS5 adapter；tokenizer 无法完整表达语义或 FTS5 不可用时使用同一进程内 matcher。
 
 查询内部先保留 `QuerySessionMatch`（session、snippet、rank、matched role）证据；
 list 与 collect 只在各自边界投影为 `Session`。带 `role:` 的查询从允许角色的消息
