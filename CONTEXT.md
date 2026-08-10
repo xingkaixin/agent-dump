@@ -87,6 +87,9 @@ _Avoid_: Export
   search semantics.
 - Provider-owned related sources may participate in cache invalidation without
   becoming public Session fields.
+- Full Session payloads are derived request data, not durable facts. Reuse reads
+  retain only a bounded working set; bulk projections lease payloads only until
+  their smaller Search or Collect output has been derived.
 - List, Lightweight Head, and statistics project the same Message Count Fact;
   they do not interpret Provider metadata independently.
 - An unknown Message Count Fact remains visible as unknown. Shared workflows do

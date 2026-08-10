@@ -454,7 +454,7 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 │       ├── search_index.py     # FTS5 search index
 │       ├── scanner.py          # Agent scanner
 │       ├── selector.py         # Interactive selection
-│       ├── session_data.py     # Request-scoped session data cache
+│       ├── session_data.py     # Bounded request cache and bulk-read leases
 │       ├── terminal_output.py  # Safe interpolation of dynamic terminal fields
 │       ├── text_safety.py      # Output sanitizing for third-party session text
 │       ├── time_utils.py       # Time and timezone helpers

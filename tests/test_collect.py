@@ -1,19 +1,23 @@
 """collect 模块测试。"""
 
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from email.message import Message
+import gc
 import io
 import json
 from pathlib import Path
 import threading
+import tracemalloc
 from unittest import mock
 from urllib import error as urllib_error
 
 import pytest
 
 from agent_dump import collect_llm
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.collect import (
+    _MAX_SESSION_PARSE_WORKERS,
     CollectAggregate,
     CollectEntry,
     CollectEvent,
@@ -69,6 +73,14 @@ def make_query_spec(
         roles=roles,
         limit=limit,
     )
+
+
+def configure_session_data_lease(agent: mock.MagicMock) -> None:
+    @contextmanager
+    def lease(session: Session):
+        yield agent.get_cached_session_data(session)
+
+    agent.lease_cached_session_data.side_effect = lease
 
 
 class TestCollectDates:
@@ -333,6 +345,7 @@ class TestCollectEntries:
         agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "修复 /repo/a.py 报错"}]}]
         }
+        configure_session_data_lease(agent)
 
         progress: list[CollectProgressEvent] = []
         entries, truncated = collect_entries(
@@ -392,6 +405,7 @@ class TestCollectEntries:
         agent.get_sessions.return_value = [newer, older]
         agent.get_cached_session_data.side_effect = get_session_data
         agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+        configure_session_data_lease(agent)
         progress: list[CollectProgressEvent] = []
 
         entries, truncated = collect_entries(
@@ -439,6 +453,7 @@ class TestCollectEntries:
         claude_agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "处理仓库问题"}]}]
         }
+        configure_session_data_lease(claude_agent)
 
         codex_session = mock.MagicMock()
         codex_session.id = "s-codex"
@@ -455,6 +470,7 @@ class TestCollectEntries:
         codex_agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "处理 codex 会话"}]}]
         }
+        configure_session_data_lease(codex_agent)
 
         entries, truncated = collect_entries(
             agents=[claude_agent, codex_agent],
@@ -486,6 +502,7 @@ class TestCollectEntries:
         agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "provider project"}]}]
         }
+        configure_session_data_lease(agent)
 
         entries, truncated = collect_entries(
             agents=[agent],
@@ -518,6 +535,7 @@ class TestCollectEntries:
         agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "修复"}]}]
         }
+        configure_session_data_lease(agent)
 
         entries, truncated = collect_entries(
             agents=[agent],
@@ -556,6 +574,7 @@ class TestCollectEntries:
         agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "修复仓库问题"}]}]
         }
+        configure_session_data_lease(agent)
 
         entries, truncated = collect_entries(
             agents=[agent],
@@ -594,6 +613,7 @@ class TestCollectEntries:
         agent_a.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "refactor app"}]}]
         }
+        configure_session_data_lease(agent_a)
 
         agent_b = mock.MagicMock()
         agent_b.name = "kimi"
@@ -604,6 +624,7 @@ class TestCollectEntries:
         agent_b.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "refactor app"}]}]
         }
+        configure_session_data_lease(agent_b)
 
         entries, truncated = collect_entries(
             agents=[agent_a, agent_b],
@@ -650,6 +671,7 @@ class TestCollectEntries:
         agent.get_sessions.return_value = [matching, excluded]
         agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
         agent.get_cached_session_data.side_effect = lambda session: session_data[session.id]
+        configure_session_data_lease(agent)
 
         entries, truncated = collect_entries(
             agents=[agent],
@@ -662,6 +684,66 @@ class TestCollectEntries:
 
         assert truncated is False
         assert [entry.session_id for entry in entries] == ["s-assistant"]
+
+    def test_full_payload_memory_does_not_accumulate_after_event_projection(self) -> None:
+        payload_size = 256 * 1024
+        now = datetime.now(timezone.utc)
+        sessions = [
+            Session(
+                id=f"session-{index}",
+                title=f"Session {index}",
+                created_at=now - timedelta(minutes=index),
+                updated_at=now - timedelta(minutes=index),
+                source_path=Path(f"/missing/session-{index}.jsonl"),
+                metadata={},
+            )
+            for index in range(100)
+        ]
+
+        class LargePayloadAgent(BaseAgent):
+            def __init__(self) -> None:
+                super().__init__(name="codex", display_name="Codex")
+                self.data_reads = 0
+                self._reads_lock = threading.Lock()
+
+            def scan(self) -> list[Session]:
+                return sessions
+
+            def is_available(self) -> bool:
+                return True
+
+            def get_sessions(self, days: int = 7) -> list[Session]:
+                return sessions
+
+            def get_session_data(self, session: Session) -> dict[str, object]:
+                with self._reads_lock:
+                    self.data_reads += 1
+                return {
+                    "padding": bytearray(payload_size),
+                    "messages": [{"role": "user", "content": f"work on {session.id}"}],
+                }
+
+        agent = LargePayloadAgent()
+        gc.collect()
+        tracemalloc.start()
+        baseline, _ = tracemalloc.get_traced_memory()
+        entries, truncated = collect_entries(
+            agents=[agent],
+            since_date=(now - timedelta(days=1)).date(),
+            until_date=now.date(),
+            render_session_text_fn=lambda _uri, _data: "",
+            local_tz=timezone.utc,
+        )
+        gc.collect()
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        assert truncated is False
+        assert len(entries) == len(sessions)
+        assert agent.data_reads == len(sessions)
+        assert not agent._session_data_cache._entries
+        assert current - baseline < payload_size * 8
+        assert peak - baseline < payload_size * (_MAX_SESSION_PARSE_WORKERS + 16)
 
     def test_plan_collect_entries_reports_chunk_totals(self):
         entries = [

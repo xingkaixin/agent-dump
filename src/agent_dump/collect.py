@@ -359,24 +359,24 @@ def collect_entries(
 
     def _collect_entry(matched_session: tuple[BaseAgent, Session, date]) -> CollectEntry:
         agent, session, session_date = matched_session
-        session_data = agent.get_cached_session_data(session)
-        uri = agent.get_session_uri(session)
-        events, truncated = extract_collect_events(
-            session_data,
-            fallback_text_fn=lambda: render_session_text_fn(uri, session_data),
-        )
-        return CollectEntry(
-            date_value=session_date,
-            created_at=session.created_at,
-            agent_name=agent.name,
-            agent_display_name=agent.display_name,
-            session_id=session.id,
-            session_title=session.title,
-            session_uri=uri,
-            project_directory=str(derive_session_facts(session).working_directory or ""),
-            events=events,
-            is_truncated=truncated,
-        )
+        with agent.lease_cached_session_data(session) as session_data:
+            uri = agent.get_session_uri(session)
+            events, truncated = extract_collect_events(
+                session_data,
+                fallback_text_fn=lambda: render_session_text_fn(uri, session_data),
+            )
+            return CollectEntry(
+                date_value=session_date,
+                created_at=session.created_at,
+                agent_name=agent.name,
+                agent_display_name=agent.display_name,
+                session_id=session.id,
+                session_title=session.title,
+                session_uri=uri,
+                project_directory=str(derive_session_facts(session).working_directory or ""),
+                events=events,
+                is_truncated=truncated,
+            )
 
     if matched_sessions:
         max_workers = min(_MAX_SESSION_PARSE_WORKERS, total)

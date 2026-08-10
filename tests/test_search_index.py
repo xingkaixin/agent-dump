@@ -1,9 +1,11 @@
 """Tests for search_index.py module."""
 
 from datetime import datetime, timedelta, timezone
+import gc
 from pathlib import Path
 import sqlite3
 import threading
+import tracemalloc
 from unittest import mock
 
 import pytest
@@ -244,8 +246,9 @@ class TestSearchIndex:
         added, removed = index.update(agent, [session])
         assert added == 1
         assert removed == 0
-        assert agent.get_cached_session_data(session)["messages"][0]["role"] == "user"
         assert agent.data_reads == 1
+        assert agent.get_cached_session_data(session)["messages"][0]["role"] == "user"
+        assert agent.data_reads == 2
 
         results = index.search("keyword")
         assert len(results) == 1
@@ -291,7 +294,7 @@ class TestSearchIndex:
                 raise AssertionError("search index reads did not overlap")
             return f"keyword {session.id}"
 
-        with mock.patch("agent_dump.search_index.extract_session_searchable_text", side_effect=extract_text):
+        with mock.patch("agent_dump.search_index.extract_session_searchable_text_once", side_effect=extract_text):
             added, removed = index.update(agent, sessions)
 
         assert (added, removed) == (2, 0)
@@ -1003,6 +1006,38 @@ class TestIndexBuildSpansMultipleBatches:
 
         assert added == total
         assert index.get_stats()["codex"]["sessions"] == total
+
+    def test_full_payload_memory_does_not_accumulate_across_batches(self, tmp_path) -> None:
+        payload_size = 256 * 1024
+        total = _INDEX_BATCH_SIZE * 3 + 4
+        source = tmp_path / "s.jsonl"
+        source.write_text("x", encoding="utf-8")
+        sessions = [make_session(f"s{index}", f"Title {index}", source) for index in range(total)]
+
+        class LargePayloadAgent(DummyAgent):
+            def get_session_data(self, session: Session) -> dict[str, object]:
+                self.data_reads += 1
+                return {
+                    "padding": bytearray(payload_size),
+                    "messages": [{"role": "user", "content": f"body {session.id}"}],
+                }
+
+        agent = LargePayloadAgent()
+        index = SearchIndex(tmp_path / "index.db")
+
+        gc.collect()
+        tracemalloc.start()
+        baseline, _ = tracemalloc.get_traced_memory()
+        added, _ = index.update(agent, sessions)
+        gc.collect()
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        assert added == total
+        assert agent.data_reads == total
+        assert not agent._session_data_cache._entries
+        assert current - baseline < payload_size * 8
+        assert peak - baseline < payload_size * (_INDEX_BATCH_SIZE + 16)
 
 
 class FailingAgent(DummyAgent):

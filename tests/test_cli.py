@@ -3,6 +3,7 @@
 """
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -53,6 +54,14 @@ def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
         (agent, agent.get_sessions(days=days))
         for agent in (agents if agents is not None else scanner.get_available_agents.return_value)
     ]
+
+
+def configure_session_data_lease(agent: mock.MagicMock) -> None:
+    @contextmanager
+    def lease(session: Session):
+        yield agent.get_cached_session_data(session)
+
+    agent.lease_cached_session_data.side_effect = lease
 
 
 def make_session(
@@ -560,6 +569,7 @@ class TestMain:
         codex_agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "实现 dry-run"}]}]
         }
+        configure_session_data_lease(codex_agent)
 
         claude_agent = mock.MagicMock()
         claude_agent.name = "claudecode"
@@ -569,6 +579,7 @@ class TestMain:
         claude_agent.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "被 deny 的会话"}]}]
         }
+        configure_session_data_lease(claude_agent)
         collect_config = CollectConfig(
             summary_concurrency=2,
             agent_denies={"claudecode": (str(cwd / "blocked"),)},
@@ -599,8 +610,8 @@ class TestMain:
         mock_summarize.assert_not_called()
         mock_request_summary.assert_not_called()
         mock_write.assert_not_called()
-        codex_agent.get_cached_session_data.assert_called_once_with(in_scope)
-        claude_agent.get_cached_session_data.assert_not_called()
+        codex_agent.lease_cached_session_data.assert_called_once_with(in_scope)
+        claude_agent.lease_cached_session_data.assert_not_called()
         assert output_path.exists() is False
         output = capsys.readouterr().out
         assert "Provider 分布：Codex 1" in output

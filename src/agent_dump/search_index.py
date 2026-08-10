@@ -126,6 +126,19 @@ def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str |
     except Exception:
         return _fallback_extract_from_source(session.source_path)
 
+    return _extract_searchable_text_from_data(session, session_data)
+
+
+def extract_session_searchable_text_once(agent: BaseAgent, session: Session) -> str | None:
+    """Extract searchable text while releasing the full parsed payload afterwards."""
+    try:
+        with agent.lease_cached_session_data(session) as session_data:
+            return _extract_searchable_text_from_data(session, session_data)
+    except Exception:
+        return _fallback_extract_from_source(session.source_path)
+
+
+def _extract_searchable_text_from_data(session: Session, session_data: dict[str, Any]) -> str | None:
     text = extract_transcript_searchable_text(session_data)
     if text is None:
         return _fallback_extract_from_source(session.source_path)
@@ -390,7 +403,7 @@ class SearchIndex:
 
             def _extract_text(item: tuple[Session, float]) -> str | None:
                 session, _ = item
-                return extract_session_searchable_text(agent, session)
+                return extract_session_searchable_text_once(agent, session)
 
             # 分批解析并即时写入：一次性 list(executor.map(...)) 会让全部待索引会话
             # 的正文同时驻留内存，会话历史大的用户可能直接 OOM

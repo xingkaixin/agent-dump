@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_semantics import TextQuery, TextQueryMode
-from agent_dump.search_index import SearchIndex, extract_session_searchable_text
+from agent_dump.search_index import SearchIndex, extract_session_searchable_text_once
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import normalize_datetime_utc
 from agent_dump.transcript import read_message
@@ -389,7 +389,7 @@ def _filter_sessions_from_source_or_data(
 ) -> list[Session]:
     matched: list[Session] = []
     for session in sessions:
-        content = extract_session_searchable_text(agent, session)
+        content = extract_session_searchable_text_once(agent, session)
         fields = (session.title,) if content is None else (session.title, content)
         if query.matches(fields):
             matched.append(session)
@@ -429,25 +429,24 @@ def _find_role_evidence(
     query: TextQuery | None,
 ) -> tuple[str, str] | None:
     try:
-        session_data = agent.get_cached_session_data(session)
+        with agent.lease_cached_session_data(session) as session_data:
+            messages = session_data.get("messages")
+            if not isinstance(messages, list):
+                return None
+
+            for message in messages:
+                if not isinstance(message, dict):
+                    continue
+                role = str(message.get("role", "")).strip().lower()
+                if role not in roles:
+                    continue
+                text = _extract_message_search_text(message)
+                if query is None:
+                    return role, _build_evidence_excerpt(text)
+                if query.matches((text,)) and (snippet := query.build_snippet((text,))) is not None:
+                    return role, snippet
     except Exception:
         return None
-
-    messages = session_data.get("messages")
-    if not isinstance(messages, list):
-        return None
-
-    for message in messages:
-        if not isinstance(message, dict):
-            continue
-        role = str(message.get("role", "")).strip().lower()
-        if role not in roles:
-            continue
-        text = _extract_message_search_text(message)
-        if query is None:
-            return role, _build_evidence_excerpt(text)
-        if query.matches((text,)) and (snippet := query.build_snippet((text,))) is not None:
-            return role, snippet
 
     return None
 
@@ -536,7 +535,7 @@ def _fallback_search_matches(
     text_query = query if isinstance(query, TextQuery) else TextQuery.parse(query, TextQueryMode.SEARCH_TERMS)
     matches: list[SearchSessionMatch] = []
     for session in sessions:
-        content = extract_session_searchable_text(agent, session)
+        content = extract_session_searchable_text_once(agent, session)
         fields = (session.title,) if content is None else (session.title, content)
         if not text_query.matches(fields):
             continue
