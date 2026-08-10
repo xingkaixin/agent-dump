@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 # uv sync 默认会在同步前重新锁定，uv run 也一样。验证过程绝不能修改 uv.lock：
 # 临时 checkout 里的静默重锁不会出现在 PR diff 中，评审看到的解析结果与实际
 # 安装的就对不上了。
