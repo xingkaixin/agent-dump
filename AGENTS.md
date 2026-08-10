@@ -653,6 +653,14 @@ just build
 just publish
 ```
 
+PEP 517 构建依赖不属于 runtime，也不由 `UV_LOCKED`/`uv.lock` 约束：
+
+- `packaging/build-constraints.in` 保存直接构建后端的精确版本，由 Dependabot 的 pip 入口更新。
+- `packaging/build-constraints.txt` 保存完整传递闭包与可信 hash，只能通过
+  `just update-build-constraints` 重新生成。
+- 本地 `just build`、CI quality job 与 release PyPI build 必须使用同一约束文件和
+  `--require-hashes`；不得关闭 PEP 517 build isolation。
+
 ### 添加依赖
 
 ```bash

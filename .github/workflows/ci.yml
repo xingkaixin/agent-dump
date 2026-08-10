@@ -54,6 +54,12 @@ jobs:
       - name: Check
         run: just check
 
+      - name: Build distributions
+        run: just build
+
+      - name: Verify wheel
+        run: just verify-wheel
+
   python-tests:
     name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest

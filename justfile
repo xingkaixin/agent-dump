@@ -109,7 +109,7 @@ logo:
 # Clean build artifacts
 clean-build:
     @echo "🧹 Cleaning build artifacts..."
-    uv run python -c "import shutil; import os; shutil.rmtree('dist') if os.path.exists('dist') else None"
+    uv run --no-project python -c "import shutil; import os; shutil.rmtree('dist') if os.path.exists('dist') else None"
     @echo "✅ Build artifacts cleaned!"
 
 # Install the built wheel into a clean venv and run its console entrypoint
@@ -122,10 +122,14 @@ verify-wheel:
 verify-artifacts: verify-wheel test-npm-smoke
     @echo "✅ Release artifacts verified!"
 
+# Refresh the reviewed PEP 517 dependency closure and distribution hashes
+update-build-constraints:
+    uv pip compile packaging/build-constraints.in --universal --generate-hashes --custom-compile-command "just update-build-constraints" --output-file packaging/build-constraints.txt
+
 # Build package wheel file
 build: clean-build
     @echo "📦 Building package..."
-    uv build --no-sources
+    uv build --no-sources --build-constraint packaging/build-constraints.txt --require-hashes
     @echo "✅ Build complete!"
 
 # Publish package to PyPI

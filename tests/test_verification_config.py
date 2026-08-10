@@ -112,6 +112,71 @@ class TestDependencyPinning:
         assert "key_bindings" in block, "保留未直接 import 的依赖需注明必要性"
 
 
+class TestBuildBackendIsReproducible:
+    @staticmethod
+    def _constraints() -> str:
+        return (REPO_ROOT / "packaging" / "build-constraints.txt").read_text(encoding="utf-8")
+
+    @classmethod
+    def _constraint_records(cls) -> list[str]:
+        logical_lines = cls._constraints().replace("\\\n", " ").splitlines()
+        return [line.strip() for line in logical_lines if line.strip() and not line.lstrip().startswith("#")]
+
+    def test_build_backend_requirement_has_a_version_policy(self):
+        requirements = _read_toml("pyproject.toml")["build-system"]["requires"]
+        hatchling = [requirement for requirement in requirements if requirement.startswith("hatchling")]
+
+        assert len(hatchling) == 1
+        assert hatchling[0] != "hatchling"
+        assert ">=" in hatchling[0]
+        assert "<2" in hatchling[0]
+
+    def test_every_build_requirement_is_exact_and_hashed(self):
+        records = self._constraint_records()
+
+        assert records
+        for record in records:
+            requirement = record.split("--hash=", 1)[0]
+            assert "==" in requirement, f"构建约束未固定版本: {record}"
+            assert "--hash=sha256:" in record, f"构建约束缺少可信 hash: {record}"
+
+    def test_constraint_input_and_generated_hatchling_pin_match(self):
+        source_pin = (REPO_ROOT / "packaging" / "build-constraints.in").read_text(encoding="utf-8").strip()
+
+        assert source_pin.startswith("hatchling==")
+        assert any(record.startswith(source_pin) for record in self._constraint_records())
+
+    def test_local_and_release_builds_use_the_same_hash_gate(self):
+        expected = "uv build --no-sources --build-constraint packaging/build-constraints.txt --require-hashes"
+        justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
+        release = (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+        assert expected in justfile
+        assert expected in release
+
+    def test_ci_builds_and_smokes_the_constrained_wheel(self):
+        ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        quality = ci.split("\n  quality:\n", 1)[1].split("\n  python-tests:\n", 1)[0]
+
+        assert "run: just build" in quality
+        assert "run: just verify-wheel" in quality
+
+    def test_constraint_refresh_has_a_dependabot_path(self):
+        justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
+        dependabot = (REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+
+        assert "update-build-constraints:" in justfile
+        assert "uv pip compile packaging/build-constraints.in" in justfile
+        assert "package-ecosystem: pip" in dependabot
+        assert "directory: /packaging" in dependabot
+
+    def test_clean_build_does_not_sync_the_project_before_the_hash_gate(self):
+        justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
+        clean_recipe = justfile.split("\nclean-build:", 1)[1].split("\n\n", 1)[0]
+
+        assert "uv run --no-project python" in clean_recipe
+
+
 class TestCiHasNoDeadSteps:
     def test_no_all_extras_flag(self):
         """pyproject 未定义 optional-dependencies，--all-extras 是 no-op 却暗示 extras 存在。"""
