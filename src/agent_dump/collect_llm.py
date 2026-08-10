@@ -10,8 +10,13 @@ from agent_dump.collect_models import SUMMARY_FIELDS
 from agent_dump.config import AIConfig, is_loopback_host
 from agent_dump.i18n import Keys, i18n
 from agent_dump.prompt_safety import summary_system_prompt
+from agent_dump.text_safety import safe_display_text
 
 STRUCTURED_SUMMARY_MAX_TOKENS = 4096
+# 64 bytes per output token leaves room for JSON and UTF-8 expansion while keeping hostile gateways bounded.
+LLM_RESPONSE_MAX_BYTES = 256 * 1024
+LLM_ERROR_BODY_MAX_BYTES = 4 * 1024
+_RESPONSE_READ_CHUNK_BYTES = 64 * 1024
 SENSITIVE_REQUEST_HEADERS = frozenset({"authorization", "x-api-key"})
 
 
@@ -22,13 +27,23 @@ class LLMRequestError(RuntimeError):
     对 400/401/403 这类永久失败重发非幂等的 POST，只会让每个 chunk 的延迟和计费翻倍。
     """
 
-    def __init__(self, message: str, *, status: int | None = None, transport: bool = False) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        transport: bool = False,
+        response_too_large: bool = False,
+    ) -> None:
         super().__init__(message)
         self.status = status
         self.transport = transport
+        self.response_too_large = response_too_large
 
     @property
     def retryable(self) -> bool:
+        if self.response_too_large:
+            return False
         if self.transport:
             return True
         if self.status is None:
@@ -122,6 +137,83 @@ def _normalize_base_url(base_url: str) -> str:
     return base_url.rstrip("/")
 
 
+class _ResponseTooLargeError(ValueError):
+    def __init__(self, *, limit_bytes: int, preview: bytes = b"") -> None:
+        super().__init__(f"response exceeded {limit_bytes} bytes")
+        self.limit_bytes = limit_bytes
+        self.preview = preview
+
+
+def _declared_content_length(response: Any) -> int | None:
+    headers = getattr(response, "headers", None)
+    if headers is None or not hasattr(headers, "get"):
+        return None
+    value = headers.get("Content-Length")
+    if not isinstance(value, (str, bytes)):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
+
+
+def _read_bounded_body(response: Any, *, limit_bytes: int) -> bytes:
+    declared_bytes = _declared_content_length(response)
+    if declared_bytes is not None and declared_bytes > limit_bytes:
+        raise _ResponseTooLargeError(limit_bytes=limit_bytes)
+
+    body = bytearray()
+    while True:
+        read_size = min(_RESPONSE_READ_CHUNK_BYTES, limit_bytes - len(body) + 1)
+        chunk = response.read(read_size)
+        if not chunk:
+            return bytes(body)
+        body.extend(chunk)
+        if len(body) > limit_bytes:
+            raise _ResponseTooLargeError(limit_bytes=limit_bytes, preview=bytes(body[:limit_bytes]))
+
+
+def _read_json_response(response: Any, *, provider_name: str) -> Any:
+    try:
+        body = _read_bounded_body(response, limit_bytes=LLM_RESPONSE_MAX_BYTES)
+    except _ResponseTooLargeError as exc:
+        raise LLMRequestError(
+            f"{provider_name} API response exceeded {exc.limit_bytes} bytes",
+            response_too_large=True,
+        ) from exc
+    return json.loads(body.decode("utf-8"))
+
+
+def _normalize_http_error(provider_name: str, exc: error.HTTPError) -> LLMRequestError:
+    try:
+        body = _read_bounded_body(exc, limit_bytes=LLM_ERROR_BODY_MAX_BYTES) if exc.fp else b""
+    except _ResponseTooLargeError as body_error:
+        preview = safe_display_text(body_error.preview.decode("utf-8", errors="replace"))
+        detail = f"response body exceeded {body_error.limit_bytes} bytes"
+        if preview:
+            detail = f"{detail}; preview: {preview}"
+        return LLMRequestError(
+            f"{provider_name} API HTTP {exc.code}: {detail}",
+            status=exc.code,
+            response_too_large=True,
+        )
+    except OSError as body_error:
+        detail = safe_display_text(str(body_error))
+        return LLMRequestError(
+            f"{provider_name} API HTTP {exc.code}: error body read failed: {detail}",
+            status=exc.code,
+        )
+
+    detail = safe_display_text(body.decode("utf-8", errors="replace")) or safe_display_text(str(exc))
+    return LLMRequestError(f"{provider_name} API HTTP {exc.code}: {detail}", status=exc.code)
+
+
+def _normalize_transport_error(provider_name: str, exc: OSError) -> LLMRequestError:
+    detail = safe_display_text(str(exc))
+    return LLMRequestError(f"{provider_name} API request failed: {detail}", transport=True)
+
+
 def _read_openai_response_content(data: dict[str, Any]) -> str:
     try:
         content = data["choices"][0]["message"]["content"]
@@ -161,12 +253,11 @@ def _post_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_seco
 
     try:
         with _open_url(req, timeout_seconds=timeout_seconds) as resp:
-            return cast(dict[str, Any], json.loads(resp.read().decode("utf-8")))
+            return cast(dict[str, Any], _read_json_response(resp, provider_name="OpenAI"))
     except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
-        raise LLMRequestError(f"OpenAI API HTTP {exc.code}: {detail}", status=exc.code) from exc
-    except error.URLError as exc:
-        raise LLMRequestError(f"OpenAI API request failed: {exc}", transport=True) from exc
+        raise _normalize_http_error("OpenAI", exc) from exc
+    except OSError as exc:
+        raise _normalize_transport_error("OpenAI", exc) from exc
 
 
 def _request_openai(config: AIConfig, prompt: str, *, timeout_seconds: int) -> str:
@@ -231,12 +322,11 @@ def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -
 
     try:
         with _open_url(req, timeout_seconds=timeout_seconds) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+            data = _read_json_response(resp, provider_name="Anthropic")
     except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
-        raise LLMRequestError(f"Anthropic API HTTP {exc.code}: {detail}", status=exc.code) from exc
-    except error.URLError as exc:
-        raise LLMRequestError(f"Anthropic API request failed: {exc}", transport=True) from exc
+        raise _normalize_http_error("Anthropic", exc) from exc
+    except OSError as exc:
+        raise _normalize_transport_error("Anthropic", exc) from exc
 
     try:
         content = data["content"][0]["text"]

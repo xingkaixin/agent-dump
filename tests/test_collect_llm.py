@@ -1,10 +1,13 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
+from email.message import Message
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import io
 import json
 from threading import Thread
 from typing import Any
 from unittest import mock
+from urllib import error as urllib_error
 
 import pytest
 
@@ -12,6 +15,21 @@ from agent_dump import collect_llm
 from agent_dump.collect_llm import LLMRequestError, is_retryable_error, request_summary_from_llm
 from agent_dump.config import AIConfig
 from agent_dump.prompt_safety import UNTRUSTED_DATA_RULES, summary_system_prompt
+from agent_dump.text_safety import has_unsafe_line_characters
+
+
+class _StreamingResponse(io.BytesIO):
+    def __init__(self, body: bytes, *, content_length: int | str | None = None) -> None:
+        super().__init__(body)
+        self.headers = {} if content_length is None else {"Content-Length": str(content_length)}
+        self.read_sizes: list[int] = []
+        self.bytes_read = 0
+
+    def read(self, size: int | None = -1, /) -> bytes:
+        self.read_sizes.append(-1 if size is None else size)
+        chunk = super().read(size)
+        self.bytes_read += len(chunk)
+        return chunk
 
 
 @contextmanager
@@ -164,6 +182,106 @@ class TestRetryClassification:
         assert "503" in str(exc)
 
 
+class TestBoundedResponses:
+    @staticmethod
+    def _config(provider: str = "openai") -> AIConfig:
+        return AIConfig(
+            provider=provider,
+            base_url="https://api.example.com/v1",
+            model="test-model",
+            api_key="redacted-secret",
+        )
+
+    def test_reader_accepts_a_body_exactly_at_the_limit(self) -> None:
+        response = _StreamingResponse(b"x" * 64, content_length=64)
+
+        assert collect_llm._read_bounded_body(response, limit_bytes=64) == b"x" * 64
+        assert response.read_sizes
+        assert all(size > 0 for size in response.read_sizes)
+
+    def test_response_limit_accommodates_a_large_valid_structured_payload(self) -> None:
+        content = json.dumps({"topics": ["总结" * 8192]}, ensure_ascii=False)
+        body = json.dumps({"choices": [{"message": {"content": content}}]}, ensure_ascii=False).encode("utf-8")
+        response = _StreamingResponse(body, content_length=len(body))
+
+        with mock.patch("agent_dump.collect_llm._open_url", return_value=response):
+            result = request_summary_from_llm(self._config(), "prompt")
+
+        assert result == content
+        assert len(body) < collect_llm.LLM_RESPONSE_MAX_BYTES
+        assert all(size > 0 for size in response.read_sizes)
+
+    def test_declared_oversized_success_body_is_rejected_without_reading(self) -> None:
+        response = _StreamingResponse(b"unused", content_length=collect_llm.LLM_RESPONSE_MAX_BYTES + 1)
+
+        with (
+            mock.patch("agent_dump.collect_llm._open_url", return_value=response),
+            pytest.raises(LLMRequestError, match="response exceeded") as raised,
+        ):
+            request_summary_from_llm(self._config(), "prompt")
+
+        assert not is_retryable_error(raised.value)
+        assert response.read_sizes == []
+
+    def test_streamed_oversized_success_body_stops_at_limit_plus_one(self) -> None:
+        limit = collect_llm.LLM_RESPONSE_MAX_BYTES
+        response = _StreamingResponse(b"x" * (limit + 4096))
+
+        with (
+            mock.patch("agent_dump.collect_llm._open_url", return_value=response),
+            pytest.raises(LLMRequestError, match="response exceeded") as raised,
+        ):
+            request_summary_from_llm(self._config(), "prompt")
+
+        assert not is_retryable_error(raised.value)
+        assert response.bytes_read == limit + 1
+        assert max(response.read_sizes) <= collect_llm._RESPONSE_READ_CHUNK_BYTES
+
+    def test_malformed_content_length_falls_back_to_bounded_streaming(self) -> None:
+        response = _StreamingResponse(b"payload", content_length="not-a-number")
+
+        assert collect_llm._read_bounded_body(response, limit_bytes=64) == b"payload"
+        assert response.read_sizes
+
+    def test_oversized_http_error_has_a_sanitized_bounded_preview(self) -> None:
+        body = b"bad\x1b[31m\n" + b"x" * collect_llm.LLM_ERROR_BODY_MAX_BYTES + b"remote-tail"
+        response = _StreamingResponse(body)
+        http_error = urllib_error.HTTPError(
+            "https://api.example.com/v1/chat/completions",
+            503,
+            "Service Unavailable",
+            Message(),
+            response,
+        )
+
+        with (
+            mock.patch("agent_dump.collect_llm._open_url", side_effect=http_error),
+            pytest.raises(LLMRequestError) as raised,
+        ):
+            request_summary_from_llm(self._config(), "prompt")
+
+        error_text = str(raised.value)
+        assert raised.value.status == 503
+        assert raised.value.response_too_large is True
+        assert not is_retryable_error(raised.value)
+        assert len(error_text) < 700
+        assert not has_unsafe_line_characters(error_text)
+        assert "remote-tail" not in error_text
+        assert "redacted-secret" not in error_text
+        assert response.bytes_read == collect_llm.LLM_ERROR_BODY_MAX_BYTES + 1
+
+    @pytest.mark.parametrize("transport_error", [TimeoutError("timed out"), ConnectionResetError("reset")])
+    def test_low_level_transport_errors_are_classified_for_retry(self, transport_error: OSError) -> None:
+        with (
+            mock.patch("agent_dump.collect_llm._open_url", side_effect=transport_error),
+            pytest.raises(LLMRequestError) as raised,
+        ):
+            request_summary_from_llm(self._config(), "prompt")
+
+        assert is_retryable_error(raised.value)
+        assert "redacted-secret" not in str(raised.value)
+
+
 class TestInsecureBaseUrlWarning:
     """AD-130：明文告警只对远端 http 有意义；本机 http 是刻意允许的用例。"""
 
@@ -229,7 +347,7 @@ class TestSystemMessageDeclaresUntrustedData:
 
     def test_anthropic_uses_the_same_system_safety_rules(self, monkeypatch):
         response = mock.MagicMock()
-        response.read.return_value = b'{"content":[{"text":"ok"}]}'
+        response.read.side_effect = io.BytesIO(b'{"content":[{"text":"ok"}]}').read
         response.__enter__.return_value = response
         response.__exit__.return_value = None
         captured: dict = {}
