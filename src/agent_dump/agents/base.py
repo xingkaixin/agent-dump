@@ -3,6 +3,8 @@ Base agent handler interface
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -274,6 +276,12 @@ class BaseAgent(ABC):
     def get_cached_session_data(self, session: Session) -> dict[str, Any]:
         """Get session data once per change signal for this agent instance."""
         return self._session_data_cache.get(self, session)
+
+    @contextmanager
+    def lease_cached_session_data(self, session: Session) -> Iterator[dict[str, Any]]:
+        """Keep parsed data only while one bulk consumer derives its smaller output."""
+        with self._session_data_cache.lease(self, session) as session_data:
+            yield session_data
 
 
 def _metadata_text(value: Any) -> str | None:
