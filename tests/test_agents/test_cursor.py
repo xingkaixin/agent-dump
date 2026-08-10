@@ -986,6 +986,16 @@ class TestMalformedNumericFieldsInBubbles:
         assert agent._parse_datetime_utc(1704067200) == expected
         assert agent._parse_datetime_utc(1704067200000) == expected
 
+    @pytest.mark.parametrize(
+        "value",
+        [10**400, -(10**400), float("nan"), float("inf"), float("-inf"), "1e1000000"],
+    )
+    def test_unrepresentable_timestamps_use_existing_fallbacks(self, value):
+        agent = CursorAgent()
+
+        assert agent._parse_datetime_utc(value) is None
+        assert agent._extract_timestamp({"timingInfo": {"clientRpcSendTime": value}}, 123) == 123
+
 
 def _subagent_tool_bubble(target_composer_id: str, timestamp_ms: int, tool_call_id: str) -> dict:
     """构造一个指向 target_composer_id 的 subagent tool bubble。"""

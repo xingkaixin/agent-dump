@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
+from agent_dump.coercion import safe_epoch_datetime
 from agent_dump.i18n import Keys, i18n
 from agent_dump.text_safety import safe_display_text
 
@@ -25,7 +26,8 @@ def file_modified_since(file_path: Path, cutoff: datetime) -> bool:
         mtime = file_path.stat().st_mtime
     except OSError:
         return True
-    return datetime.fromtimestamp(mtime, tz=timezone.utc) >= cutoff
+    modified_at = safe_epoch_datetime(mtime, unit="s")
+    return modified_at is None or modified_at >= cutoff
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,7 @@ from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import JsonlObjectScan, read_jsonl_scan_metadata, warn_skipped_records
 from agent_dump.agents.message_assembly import build_message, build_text_part, build_tool_part
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
-from agent_dump.coercion import safe_epoch_datetime
+from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
@@ -63,7 +63,10 @@ class PiAgent(FileSessionAgent):
             return None
 
         stat = file_path.stat()
-        fallback_created_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+        fallback_created_at = safe_epoch_datetime(stat.st_mtime, unit="s") or datetime.fromtimestamp(
+            0,
+            tz=timezone.utc,
+        )
         created_at = self._parse_datetime(header.get("timestamp")) or fallback_created_at
 
         metadata_records = list(scan.head_records)
@@ -266,18 +269,10 @@ class PiAgent(FileSessionAgent):
             stats["total_cost"] += self._float_value(cost.get("total"))
 
     def _int_value(self, value: Any) -> int:
-        if isinstance(value, bool):
-            return 0
-        if isinstance(value, (int, float)):
-            return int(value)
-        return 0
+        return safe_int(value)
 
     def _float_value(self, value: Any) -> float:
-        if isinstance(value, bool):
-            return 0
-        if isinstance(value, (int, float)):
-            return float(value)
-        return 0
+        return safe_float(value)
 
     def _convert_entry_to_message(self, record: dict[str, Any], seq: int) -> dict[str, Any] | None:
         entry_type = record.get("type")

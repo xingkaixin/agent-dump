@@ -4,6 +4,8 @@ import builtins
 from datetime import datetime, timedelta, timezone
 import json
 import os
+from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from agent_dump.agents.jsonl_scan import (
@@ -43,6 +45,13 @@ class TestFileModifiedSince:
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=7)
         assert file_modified_since(missing, cutoff) is True
+
+    def test_unrepresentable_mtime_keeps_file_without_raising(self, tmp_path):
+        file_path = tmp_path / "session.jsonl"
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+
+        with mock.patch.object(Path, "stat", return_value=SimpleNamespace(st_mtime=10**400)):
+            assert file_modified_since(file_path, cutoff) is True
 
 
 def _record(size: int, **extra) -> str:

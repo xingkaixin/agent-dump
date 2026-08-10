@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -262,6 +263,32 @@ class TestMalformedTimestamps:
         agent = PiAgent()
 
         assert agent._parse_datetime(1704067200000) == datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+    @pytest.mark.parametrize("value", [10**400, float("nan"), float("inf"), float("-inf")])
+    def test_stats_coercion_never_raises_for_unrepresentable_numbers(self, value):
+        agent = PiAgent()
+        expected_int = value if isinstance(value, int) else 0
+
+        assert agent._int_value(value) == expected_int
+        assert agent._float_value(value) == 0.0
+
+    def test_session_parse_uses_header_when_file_mtime_is_unrepresentable(self, tmp_path):
+        path = tmp_path / "20260101_s1.jsonl"
+        path.write_text(
+            json.dumps({"type": "session", "id": "s1", "timestamp": "2026-01-01T00:00:00Z", "cwd": "/w"}) + "\n",
+            encoding="utf-8",
+        )
+        file_size = path.stat().st_size
+
+        with mock.patch.object(
+            Path,
+            "stat",
+            return_value=SimpleNamespace(st_size=file_size, st_mtime=10**400),
+        ):
+            session = PiAgent()._parse_session_file(path)
+
+        assert session is not None
+        assert session.created_at == datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
 class TestMalformedRecordsDoNotBreakTheSession:
