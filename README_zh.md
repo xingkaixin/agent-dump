@@ -448,7 +448,7 @@ deny = [
 │       ├── message_filter.py   # 共享消息过滤
 │       ├── paths.py            # 搜索根路径模型
 │       ├── private_files.py     # 本工具创建文件的私有权限
-│       ├── prompt_safety.py    # 摘要 prompt 的不可信数据隔离
+│       ├── prompt_safety.py    # 摘要 request composition 与 typed data envelope
 │       ├── rendering.py        # print/head/markdown/json/raw 渲染调度
 │       ├── exporting.py        # 统一导出执行与结构化 outcome
 │       ├── query_filter.py     # 查询解析与过滤
