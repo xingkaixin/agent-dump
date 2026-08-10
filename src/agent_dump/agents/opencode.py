@@ -16,6 +16,7 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 from agent_dump.private_files import write_private_text
 from agent_dump.query_semantics import TextQuery, TextQueryMode, extract_transcript_searchable_text
+from agent_dump.terminal_output import render_terminal_message
 
 _EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 
@@ -262,7 +263,10 @@ class OpenCodeAgent(BaseAgent):
         for msg_row in message_rows:
             msg_data = self._parse_json_dict(msg_row["data"])
             if msg_data is None:
-                print(i18n.t(Keys.WARN_MESSAGE_DATA_PARSE_FAILED, message_id=msg_row["id"]), file=sys.stderr)
+                print(
+                    render_terminal_message(Keys.WARN_MESSAGE_DATA_PARSE_FAILED, message_id=msg_row["id"]),
+                    file=sys.stderr,
+                )
                 continue
 
             # time/tokens/cost 都由 OpenCode 写入：非 dict 的 time 会让 .get() 抛，
@@ -294,7 +298,10 @@ class OpenCodeAgent(BaseAgent):
             for part_row in parts_by_message_id.get(str(msg_row["id"]), []):
                 part_data = self._parse_json_dict(part_row["data"])
                 if part_data is None:
-                    print(i18n.t(Keys.WARN_PART_DATA_PARSE_FAILED, part_id=part_row["id"]), file=sys.stderr)
+                    print(
+                        render_terminal_message(Keys.WARN_PART_DATA_PARSE_FAILED, part_id=part_row["id"]),
+                        file=sys.stderr,
+                    )
                     continue
                 part = {
                     "type": part_data.get("type"),

@@ -39,6 +39,7 @@ from agent_dump.maintenance_workflow import (
 from agent_dump.query_filter import QuerySpec, parse_query_uri
 from agent_dump.scanner import AgentScanner
 from agent_dump.session_workflow import handle_session_modes as _handle_session_modes
+from agent_dump.terminal_output import render_terminal_message
 from agent_dump.uri_workflow import handle_uri_mode as _handle_uri_mode
 
 __all__ = (
@@ -241,15 +242,22 @@ def _run() -> int | None:
             return 1
         if message.startswith("shortcut_not_found:"):
             _, shortcut_name = message.split(":", 1)
-            print(i18n.t(Keys.SHORTCUT_NOT_FOUND, name=shortcut_name))
+            print(render_terminal_message(Keys.SHORTCUT_NOT_FOUND, name=shortcut_name))
             return 1
         if message.startswith("shortcut_args_mismatch:"):
             _, shortcut_name, expected, actual = message.split(":", 3)
-            print(i18n.t(Keys.SHORTCUT_ARGS_MISMATCH, name=shortcut_name, expected=expected, actual=actual))
+            print(
+                render_terminal_message(
+                    Keys.SHORTCUT_ARGS_MISMATCH,
+                    name=shortcut_name,
+                    expected=expected,
+                    actual=actual,
+                )
+            )
             return 1
         if message.startswith("unknown_variable:"):
             _, variable_name = message.split(":", 1)
-            print(i18n.t(Keys.SHORTCUT_UNKNOWN_VARIABLE, name=variable_name))
+            print(render_terminal_message(Keys.SHORTCUT_UNKNOWN_VARIABLE, name=variable_name))
             return 1
         raise
 

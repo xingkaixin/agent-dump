@@ -16,6 +16,8 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import QuerySpec, parse_query
 from agent_dump.scanner import AgentScanner
 from agent_dump.search_index import SearchIndex
+from agent_dump.terminal_output import render_terminal_message
+from agent_dump.text_safety import safe_display_text
 
 
 def handle_providers_mode(
@@ -38,7 +40,7 @@ def handle_providers_mode(
         unsupported_formats = sorted(agent.unsupported_uri_formats)
         has_keyword_fast_path = type(agent).filter_sessions_by_keyword is not BaseAgent.filter_sessions_by_keyword
         provider_rows.append((registration, root_states))
-        print_row = i18n.t(
+        print_row = render_terminal_message(
             Keys.PROVIDERS_ROW,
             provider=registration.display_name,
             uri=", ".join(f"{scheme}://" for scheme in registration.uri_schemes),
@@ -52,13 +54,20 @@ def handle_providers_mode(
     print()
     print(i18n.t(Keys.PROVIDERS_SEARCH_ROOTS))
     for registration, root_states in provider_rows:
-        print(f"{registration.display_name}:")
+        print(f"{safe_display_text(registration.display_name)}:")
         if not root_states:
             print(i18n.t(Keys.PROVIDERS_ROOT_NONE))
             continue
         for root, exists in root_states:
             status_key = Keys.PROVIDERS_ROOT_EXISTS if exists else Keys.PROVIDERS_ROOT_MISSING
-            print(i18n.t(Keys.PROVIDERS_ROOT_ROW, status=i18n.t(status_key), label=root.label, path=root.path))
+            print(
+                render_terminal_message(
+                    Keys.PROVIDERS_ROOT_ROW,
+                    status=i18n.t(status_key),
+                    label=root.label,
+                    path=root.path,
+                )
+            )
 
     return 0
 
@@ -146,9 +155,16 @@ def handle_stats_mode(
     for name in sorted(agent_stats):
         stats = agent_stats[name]
         if total_messages > 0:
-            print(i18n.t(Keys.STATS_AGENT_ROW, name=name, sessions=stats["sessions"], messages=stats["messages"]))
+            print(
+                render_terminal_message(
+                    Keys.STATS_AGENT_ROW,
+                    name=name,
+                    sessions=stats["sessions"],
+                    messages=stats["messages"],
+                )
+            )
         else:
-            print(f"  {name}: {stats['sessions']} {i18n.t(Keys.SESSION_COUNT_SUFFIX)}")
+            print(f"  {safe_display_text(name)}: {stats['sessions']} {i18n.t(Keys.SESSION_COUNT_SUFFIX)}")
     print()
 
     grouped = group_sessions_by_time([session for _, session in all_sessions])
@@ -187,7 +203,7 @@ def handle_reindex_mode(
             continue
         added = index.rebuild(agent, sessions)
         total_indexed += added
-        print(i18n.t(Keys.REINDEX_AGENT_DONE, agent=agent.display_name, count=added))
+        print(render_terminal_message(Keys.REINDEX_AGENT_DONE, agent=agent.display_name, count=added))
 
     print()
     print(i18n.t(Keys.REINDEX_DONE, count=total_indexed))

@@ -62,7 +62,7 @@ def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
 
 def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
     """Render session data as formatted text."""
-    lines = ["# Session Dump", "", f"- URI: `{uri}`", ""]
+    lines = ["# Session Dump", "", f"- URI: `{safe_display_text(uri)}`", ""]
     messages = session_data.get("messages", [])
     msg_idx = 1
 
@@ -70,7 +70,7 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
         nonlocal msg_idx
         if not contents:
             return
-        lines.append(f"## {msg_idx}. {display_role}")
+        lines.append(f"## {msg_idx}. {safe_display_text(display_role)}")
         lines.append("")
         for content in contents:
             if not content:

@@ -11,6 +11,7 @@ from questionary import Choice, Style
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
 from agent_dump.rendering import format_session_metadata_summary
+from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
 
@@ -86,7 +87,7 @@ def select_agent_interactive(agents: list[BaseAgent], session_counts: dict[str, 
     choices = []
     for agent in agents:
         count = session_counts.get(agent.name, 0)
-        label = f"{agent.display_name} ({count} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})"
+        label = f"{safe_display_text(agent.display_name)} ({count} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})"
         choices.append(questionary.Choice(title=label, value=agent))
 
     custom_style = Style(
@@ -129,7 +130,7 @@ def select_agent_simple(agents: list[BaseAgent], session_counts: dict[str, int])
     print("-" * 80)
     for i, agent in enumerate(agents, 1):
         count = session_counts.get(agent.name, 0)
-        print(f"{i}. {agent.display_name} ({count} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
+        print(f"{i}. {safe_display_text(agent.display_name)} ({count} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
     print()
 
     print(i18n.t(Keys.SELECT_AGENT_NUMBER))
@@ -144,7 +145,7 @@ def select_agent_simple(agents: list[BaseAgent], session_counts: dict[str, int])
         if 0 <= idx < len(agents):
             return agents[idx]
         else:
-            print(i18n.t(Keys.INVALID_SELECTION, selection=selection))
+            print(render_terminal_message(Keys.INVALID_SELECTION, selection=selection))
             return None
     except ValueError:
         print(i18n.t(Keys.INVALID_INPUT_NUMBER))

@@ -10,6 +10,8 @@ from typing import TypeVar
 from agent_dump.agent_registry import create_registered_agents
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
+from agent_dump.terminal_output import render_terminal_message
+from agent_dump.text_safety import safe_display_text
 
 T = TypeVar("T")
 
@@ -46,16 +48,15 @@ class AgentScanner:
                 try:
                     result = future.result()
                 except Exception as exc:
-                    message = (
-                        format_error(agent, exc)
-                        if format_error is not None
-                        else i18n.t(
+                    if format_error is None:
+                        message = render_terminal_message(
                             Keys.WARN_PROVIDER_OPERATION_FAILED,
                             agent=agent.display_name,
                             error_type=type(exc).__name__,
                             error=exc,
                         )
-                    )
+                    else:
+                        message = safe_display_text(format_error(agent, exc))
                     print(message, file=sys.stderr)
                     result = None
                 results.append((agent, result))
@@ -75,9 +76,9 @@ class AgentScanner:
             if sessions is not None:
                 if sessions:
                     results[agent.name] = sessions
-                    print(i18n.t(Keys.AGENT_FOUND, name=agent.display_name, count=len(sessions)))
+                    print(render_terminal_message(Keys.AGENT_FOUND, name=agent.display_name, count=len(sessions)))
                 else:
-                    print(i18n.t(Keys.AGENT_FOUND_EMPTY, name=agent.display_name))
+                    print(render_terminal_message(Keys.AGENT_FOUND_EMPTY, name=agent.display_name))
 
         print()
         return results

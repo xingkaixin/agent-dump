@@ -24,6 +24,7 @@ from agent_dump.search_index import (
 from agent_dump.session_data import (
     session_updated_signal as _session_updated_signal,
 )
+from agent_dump.text_safety import has_unsafe_line_characters
 
 
 class DummyAgent(BaseAgent):
@@ -670,7 +671,7 @@ class TestQueryFilterIntegration:
             results = filter_sessions(agent, [session], "indexed keyword")
             assert len(results) == 1
 
-    def test_filter_sessions_fallback_when_index_fails(self, tmp_path):
+    def test_filter_sessions_fallback_when_index_fails(self, tmp_path, capsys):
         from agent_dump.query_filter import filter_sessions
 
         agent = DummyAgent(
@@ -680,10 +681,16 @@ class TestQueryFilterIntegration:
         )
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
         session.source_path.write_text("fallback keyword")
+        poison = "value\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        agent.display_name = poison
 
-        with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=Exception("boom")):
+        with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=Exception(f"boom {poison}")):
             results = filter_sessions(agent, [session], "fallback keyword")
             assert len(results) == 1
+
+        warning = capsys.readouterr().err.rstrip("\n")
+        assert not has_unsafe_line_characters(warning)
+        assert "FORGED" in warning
 
 
 def _legacy_preprocess_for_unicode61(text: str) -> str:

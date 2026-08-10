@@ -40,6 +40,7 @@ from agent_dump.rendering import (
     render_session_text as _render_session_text,
 )
 from agent_dump.scanner import AgentScanner
+from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
 from agent_dump.uri_support import find_session_by_id as _find_session_by_id, parse_uri as _parse_uri
@@ -204,7 +205,7 @@ def export_sessions_for_formats(
     *,
     output_base_dirs: dict[str, Path] | None = None,
 ) -> ExportRunResult:
-    print(i18n.t(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
+    print(render_terminal_message(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
 
     def _output_dir_for_format(output_format: str) -> Path:
         format_base_dir = (
@@ -222,7 +223,7 @@ def export_sessions_for_formats(
     for attempt in result.attempts:
         if attempt.output_path is not None:
             print(
-                i18n.t(
+                render_terminal_message(
                     Keys.EXPORT_SUCCESS_FORMAT,
                     title=attempt.session.title[:50],
                     format=attempt.output_format,
@@ -232,14 +233,6 @@ def export_sessions_for_formats(
             continue
 
         error = attempt.error or RuntimeError("export failed without an error")
-        print(
-            i18n.t(
-                Keys.EXPORT_ERROR_FORMAT,
-                title=attempt.session.title[:50],
-                format=attempt.output_format,
-                error=str(error),
-            )
-        )
         diagnostic = error if isinstance(error, DiagnosticError) else wrap_runtime_fetch_error(error, agent=agent)
         print(render_diagnostic(diagnostic, t=i18n.t))
 
@@ -249,8 +242,9 @@ def export_sessions_for_formats(
 @contextmanager
 def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
     """Show loading status for long-running operations."""
+    safe_message = safe_display_text(message)
     if not sys.stderr.isatty():
-        print(message, file=sys.stderr)
+        print(safe_message, file=sys.stderr)
         yield
         return
 
@@ -258,7 +252,7 @@ def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
     spinner_frames = "|/-\\"
 
     def _write_frame(frame: str) -> None:
-        sys.stderr.write(f"\r{frame} {message}")
+        sys.stderr.write(f"\r{frame} {safe_message}")
         sys.stderr.flush()
 
     def _spin() -> None:
@@ -275,7 +269,7 @@ def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
     finally:
         stop_event.set()
         spinner_thread.join(timeout=max(0.3, interval_seconds * 3))
-        clear_width = len(message) + 4
+        clear_width = len(safe_message) + 4
         sys.stderr.write("\r" + (" " * clear_width) + "\r")
         sys.stderr.flush()
 
@@ -333,18 +327,18 @@ def render_query_summary(spec: QuerySpec) -> str:
         and spec.limit is None
         and spec.keyword
     ):
-        return spec.keyword
+        return safe_display_text(spec.keyword)
 
     parts: list[str] = []
     if spec.project_path is not None:
-        parts.append(i18n.t(Keys.QUERY_SUMMARY_PATH, path=spec.project_path))
+        parts.append(render_terminal_message(Keys.QUERY_SUMMARY_PATH, path=spec.project_path))
     if spec.keyword:
-        parts.append(i18n.t(Keys.QUERY_SUMMARY_KEYWORD, keyword=spec.keyword))
+        parts.append(render_terminal_message(Keys.QUERY_SUMMARY_KEYWORD, keyword=spec.keyword))
     if spec.agent_names:
-        providers = ",".join(sorted(spec.agent_names))
+        providers = safe_display_text(",".join(sorted(spec.agent_names)))
         parts.append(f"providers={providers}")
     if spec.roles:
-        roles = ",".join(sorted(spec.roles))
+        roles = safe_display_text(",".join(sorted(spec.roles)))
         parts.append(f"roles={roles}")
     if spec.limit is not None:
         parts.append(f"limit={spec.limit}")
@@ -404,7 +398,7 @@ def display_search_results(matches: list[SearchSessionMatch]) -> None:
         uri = match.agent.get_session_uri(match.session)
         updated = to_local_datetime(match.session.updated_at).strftime("%Y-%m-%d %H:%M:%S %Z")
         print(f"\n{index}. {safe_display_text(title)}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_PROVIDER)}: {match.agent.display_name}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_PROVIDER)}: {safe_display_text(match.agent.display_name)}")
         print(f"   {i18n.t(Keys.SEARCH_RESULT_UPDATED)}: {updated}")
         print(f"   {i18n.t(Keys.SEARCH_RESULT_URI)}: {safe_display_text(uri)}")
         print(f"   {i18n.t(Keys.SEARCH_RESULT_RANK)}: {match.rank:.6g}")

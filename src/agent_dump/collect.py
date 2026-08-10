@@ -63,6 +63,7 @@ from agent_dump.query_filter import (
     query_session_matches,
 )
 from agent_dump.scanner import AgentScanner
+from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 from agent_dump.transcript import read_message
 
@@ -917,7 +918,14 @@ def summarize_collect_entries(
                     failed_sessions += 1
                     last_error = exc
                     entry = planned_entries[index].collect_entry
-                    print(i18n.t(Keys.WARN_SESSION_SUMMARY_SKIPPED, uri=entry.session_uri, error=exc), file=sys.stderr)
+                    print(
+                        render_terminal_message(
+                            Keys.WARN_SESSION_SUMMARY_SKIPPED,
+                            uri=entry.session_uri,
+                            error=exc,
+                        ),
+                        file=sys.stderr,
+                    )
                     if logger is not None:
                         logger.log(
                             "session_summary_failed",

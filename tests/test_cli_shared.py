@@ -25,10 +25,12 @@ from agent_dump.cli_shared import (
     render_query_summary,
     render_session_head,
     render_session_text,
+    show_loading,
     validate_uri_agent_formats,
 )
 from agent_dump.diagnostics import DiagnosticError
 from agent_dump.query_filter import QuerySpec, SearchSessionMatch
+from agent_dump.text_safety import has_unsafe_body_characters
 
 
 def make_session(
@@ -184,6 +186,20 @@ class TestQueryHelpers:
         assert "2.5" in output
         assert "login failed after **auth timeout**" in output
 
+    def test_display_search_results_sanitizes_every_provider_owned_field(self, capsys):
+        poison = "value\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        session = make_session(poison, poison)
+        agent = mock.MagicMock()
+        agent.display_name = poison
+        agent.get_formatted_title.return_value = poison
+        agent.get_session_uri.return_value = poison
+
+        display_search_results([SearchSessionMatch(agent=agent, session=session, snippet=poison, rank=1.0)])
+
+        output = capsys.readouterr().out
+        assert not has_unsafe_body_characters(output)
+        assert "FORGED" in output
+
 
 class TestFindSessionById:
     """测试 find_session_by_id 函数"""
@@ -294,6 +310,21 @@ class TestExportSessions:
         captured = capsys.readouterr()
         assert "错误" in captured.out or "Export failed" in captured.out
 
+    def test_export_sanitizes_fields_and_emits_one_diagnostic_for_a_failure(self, tmp_path, capsys):
+        poison = "value\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        agent = mock.MagicMock()
+        agent.name = "test_agent"
+        agent.display_name = poison
+        agent.get_search_roots.return_value = ()
+        agent.export_session.side_effect = RuntimeError(f"Export failed {poison}")
+
+        export_sessions_for_formats(agent, [make_session("s1", poison)], ["json"], tmp_path)
+
+        output = capsys.readouterr().out
+        assert not has_unsafe_body_characters(output)
+        assert output.count("Export failed") == 1
+        assert output.count(expect(Keys.DIAGNOSTIC_HEADER)) == 1
+
     def test_export_all_failed_returns_structured_failure(self, tmp_path):
         mock_agent = mock.MagicMock()
         mock_agent.name = "test_agent"
@@ -371,6 +402,17 @@ class TestExportSessions:
         mock_agent.export_raw_session.assert_called_once_with(session, raw_root / "test_agent")
 
 
+def test_show_loading_sanitizes_non_tty_status(capsys):
+    poison = "loading\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+
+    with mock.patch("sys.stderr.isatty", return_value=False), show_loading(poison):
+        pass
+
+    output = capsys.readouterr().err
+    assert not has_unsafe_body_characters(output)
+    assert "FORGED" in output
+
+
 class TestValidateUriAgentFormats:
     """测试按 provider 声明校验 URI 导出格式"""
 
@@ -437,6 +479,24 @@ class TestRenderSessionText:
         assert "System instruction" not in output
         assert "## 1. User" in output
         assert "## 2. Assistant" in output
+
+    def test_render_session_text_sanitizes_uri_role_and_body_without_flattening_layout(self):
+        poison = "value\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        output = render_session_text(
+            f"codex://{poison}",
+            {
+                "messages": [
+                    {
+                        "role": poison,
+                        "parts": [{"type": "text", "text": f"line one{poison}\nline two"}],
+                    }
+                ]
+            },
+        )
+
+        assert not has_unsafe_body_characters(output)
+        assert "line one" in output and "\nline two" in output
+        assert output.count("\n") >= 5
 
     def test_render_session_text_skips_developer_like_user_context(self):
         """测试 URI 输出会过滤伪装成 user 的系统上下文"""

@@ -29,6 +29,7 @@ from agent_dump.config import (
     write_ai_config,
     write_config,
 )
+from agent_dump.text_safety import has_unsafe_body_characters
 
 
 class TestConfigPath:
@@ -395,6 +396,28 @@ class TestConfigCommand:
         assert f"logging.path: {default_log_path}" in out
         assert "shortcuts.count: 1" in out
         assert "shortcut.ob:" in out
+
+    def test_view_sanitizes_config_paths_models_and_shortcuts(self, tmp_path, capsys, monkeypatch):
+        poison = "value\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        path = tmp_path / "config.toml"
+        path.touch()
+        document = mock.MagicMock()
+        document.ai_config.return_value = AIConfig(poison, poison, poison, poison)
+        document.export_config.return_value = ExportConfig(output=poison)
+        document.collect_config.return_value = CollectConfig()
+        document.logging_config.return_value = LoggingConfig(path=Path(poison))
+        document.shortcuts_config.return_value = {
+            poison: ShortcutConfig(params=(poison,), args=(poison,)),
+        }
+        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
+        monkeypatch.setattr("agent_dump.config.load_config_document", lambda _path: document)
+
+        result = handle_config_command("view")
+
+        output = capsys.readouterr().out
+        assert result == 0
+        assert not has_unsafe_body_characters(output)
+        assert "FORGED" in output
 
     def test_view_missing_then_create(self, tmp_path, monkeypatch):
         path = tmp_path / "config.toml"
