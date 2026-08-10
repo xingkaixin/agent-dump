@@ -7,8 +7,11 @@ from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
+from locale_helpers import ALL_LANGUAGES, Keys, expect_contains
+import pytest
+
 from agent_dump.agent_registry import AgentRegistration
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import Session, derive_session_facts
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.cli import handle_reindex_mode, handle_stats_mode
 from agent_dump.maintenance_workflow import handle_providers_mode as render_provider_capabilities
@@ -17,6 +20,8 @@ from agent_dump.text_safety import has_unsafe_body_characters
 
 
 def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
+    for agent in scanner.get_available_agents.return_value:
+        agent.get_session_facts.side_effect = derive_session_facts
     scanner.get_sessions.side_effect = lambda days=7, *, agents=None: [
         (agent, agent.get_sessions(days=days))
         for agent in (agents if agents is not None else scanner.get_available_agents.return_value)
@@ -98,6 +103,70 @@ class TestStatsMode:
         assert "总会话数: 2" in captured.out
         assert "总消息数: 30" in captured.out
         assert "Claude Code: 2 个会话, 30 条消息" in captured.out
+
+    def test_stats_preserves_an_exact_zero(self, capsys):
+        args = argparse.Namespace(days=7, query=None)
+        session = make_session("s1", "Empty", metadata={"message_count": 0})
+        agent = mock.MagicMock(display_name="Codex")
+        agent.get_sessions.return_value = [session]
+        scanner = mock.MagicMock()
+        scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            result = handle_stats_mode(args)
+
+        output = capsys.readouterr().out
+        assert result == 0
+        assert expect_contains(output, Keys.STATS_TOTAL_MESSAGES, count=0)
+        assert expect_contains(output, Keys.STATS_AGENT_ROW, name="Codex", sessions=1, messages=0)
+
+    @pytest.mark.parametrize("language", ALL_LANGUAGES)
+    def test_stats_marks_a_mixed_total_as_incomplete(self, language, use_language, capsys):
+        use_language(language)
+        args = argparse.Namespace(days=7, query=None)
+        sessions = [
+            make_session("known", "Known", metadata={"message_count": 7}),
+            make_session("unknown", "Unknown"),
+        ]
+        agent = mock.MagicMock(display_name="Codex")
+        agent.get_sessions.return_value = sessions
+        scanner = mock.MagicMock()
+        scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            result = handle_stats_mode(args)
+
+        output = capsys.readouterr().out
+        assert result == 0
+        assert expect_contains(output, Keys.STATS_KNOWN_MESSAGES, count=7, unknown_sessions=1)
+        assert expect_contains(
+            output,
+            Keys.STATS_AGENT_ROW_WITH_UNKNOWN,
+            name="Codex",
+            sessions=2,
+            messages=7,
+            unknown_sessions=1,
+        )
+        assert not expect_contains(output, Keys.STATS_TOTAL_MESSAGES, count=7)
+
+    def test_stats_distinguishes_all_unknown_from_exact_zero(self, capsys):
+        args = argparse.Namespace(days=7, query=None)
+        sessions = [make_session("s1", "Unknown 1"), make_session("s2", "Unknown 2")]
+        agent = mock.MagicMock(display_name="Codex")
+        agent.get_sessions.return_value = sessions
+        scanner = mock.MagicMock()
+        scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            result = handle_stats_mode(args)
+
+        output = capsys.readouterr().out
+        assert result == 0
+        assert expect_contains(output, Keys.STATS_KNOWN_MESSAGES, count=0, unknown_sessions=2)
+        assert not expect_contains(output, Keys.STATS_TOTAL_MESSAGES, count=0)
 
     def test_stats_sanitizes_provider_display_name(self, capsys):
         poison = "Provider\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"

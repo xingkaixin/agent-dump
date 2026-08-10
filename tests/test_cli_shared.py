@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 from unittest import mock
 
-from locale_helpers import Keys, expect
+from locale_helpers import ALL_LANGUAGES, Keys, expect
 import pytest
 
 from agent_dump.agents.base import Session
@@ -19,6 +19,7 @@ from agent_dump.cli_shared import (
     display_sessions_list,
     export_sessions_for_formats,
     find_session_by_id,
+    format_session_metadata_summary,
     group_sessions_by_time,
     parse_format_spec,
     parse_uri,
@@ -713,6 +714,34 @@ class TestRenderSessionHead:
         assert "Model: -" in output
         assert "Subtargets: " + ("B" * 45) + "..." in output
         assert "instruction" not in output
+
+    @pytest.mark.parametrize("language", ALL_LANGUAGES)
+    def test_render_session_head_names_an_explicitly_unknown_count(self, language, use_language):
+        use_language(language)
+
+        output = render_session_head(
+            "codex://abc",
+            {
+                "message_count": None,
+                "message_count_completeness": "unknown",
+            },
+        )
+
+        assert f"Message Count: {expect(Keys.MESSAGE_COUNT_UNKNOWN)}" in output
+
+    @pytest.mark.parametrize("language", ALL_LANGUAGES)
+    def test_metadata_summary_names_an_explicitly_unknown_count(self, language, use_language):
+        use_language(language)
+        agent = mock.MagicMock()
+        agent.get_session_uri.return_value = "codex://abc"
+        agent.get_session_summary_fields.return_value = {
+            "message_count": None,
+            "message_count_completeness": "unknown",
+        }
+
+        output = format_session_metadata_summary(agent, make_session("abc", "Title"))
+
+        assert f"msgs={expect(Keys.MESSAGE_COUNT_UNKNOWN)}" in output
 
 
 class TestTimeHelpers:

@@ -349,27 +349,6 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             "messages": messages,
         }
 
-    def get_session_head(self, session: Session) -> dict[str, Any]:
-        head = super().get_session_head(session)
-        message_count = 0
-
-        scan = JsonlObjectScan(session.source_path)
-        for data in scan:
-            payload = data.get("payload")
-            if not isinstance(payload, dict):
-                continue
-
-            if payload.get("type") == "message":
-                message_count += 1
-
-            model = payload.get("model")
-            if isinstance(model, str) and model.strip() and not head.get("model"):
-                head["model"] = model.strip()
-        warn_skipped_records(scan)
-
-        head["message_count"] = message_count
-        return head
-
     def _json_export_payload(self, session: Session) -> dict[str, Any]:
         """Apply Codex's JSON-export-only message transforms on a copy of the cached data."""
         # 必须浅拷贝：基类返回的是请求级缓存里的共享 dict，直接改 messages 会让

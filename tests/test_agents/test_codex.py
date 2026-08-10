@@ -416,6 +416,10 @@ class TestCodexAgent:
         assert result.metadata["message_count"] is None
         assert read_bytes["count"] <= HEAD_SCAN_BYTE_LIMIT + TAIL_SCAN_BYTE_LIMIT
         assert read_bytes["count"] < session_file.stat().st_size // 2
+        with mock.patch("builtins.open", side_effect=AssertionError("unexpected read")):
+            head = agent.get_session_head(result)
+        assert head["message_count"] is None
+        assert head["message_count_completeness"] == "unknown"
 
     def test_get_sessions_filtered_by_days(self, tmp_path):
         """测试按天数过滤会话"""
@@ -669,8 +673,7 @@ class TestCodexAgent:
         assert output_dir.exists()
         assert result.exists()
 
-    def test_get_session_head_reads_message_count_and_model(self, tmp_path):
-        """测试 get_session_head 只读轻量信息。"""
+    def test_get_session_head_uses_discovery_facts_without_rescanning(self, tmp_path):
         session_file = tmp_path / "rollout-2026-01-01T00-00-00-session-001.jsonl"
         records = [
             {
@@ -691,13 +694,18 @@ class TestCodexAgent:
             created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             source_path=session_file,
-            metadata={"cwd": "/workspace/demo", "model_provider": "openai"},
+            metadata={
+                "cwd": "/workspace/demo",
+                "model": "gpt-5.4-mini",
+                "message_count": 2,
+            },
         )
 
-        head = CodexAgent().get_session_head(session)
+        with mock.patch("agent_dump.agents.codex.JsonlObjectScan", side_effect=AssertionError("unexpected scan")):
+            head = CodexAgent().get_session_head(session)
 
         assert head["cwd_or_project"] == "/workspace/demo"
-        assert head["model"] == "openai"
+        assert head["model"] == "gpt-5.4-mini"
         assert head["message_count"] == 2
 
     def test_export_raw_session_copies_original_jsonl(self, tmp_path):
@@ -2463,10 +2471,15 @@ class TestMalformedRecordsDoNotBreakTheSession:
     def test_get_session_head_does_not_raise(self, tmp_path, capsys):
         path = tmp_path / "rollout-2026-01-01T00-00-00-s1.jsonl"
         self._write(path)
+        agent = CodexAgent()
+        agent._titles_cache = {}
+        session = agent._parse_session_file(path)
+        assert session is not None
 
-        head = CodexAgent().get_session_head(self._session(path))
+        with mock.patch("agent_dump.agents.codex.JsonlObjectScan", side_effect=AssertionError("unexpected scan")):
+            head = agent.get_session_head(session)
 
         assert head["message_count"] == 2
+        assert head["message_count_completeness"] == "exact"
         err = capsys.readouterr().err
         assert "Traceback" not in err
-        assert "skipped 5 malformed records" in err or "跳过了 5 条" in err

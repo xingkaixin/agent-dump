@@ -316,6 +316,10 @@ class TestClaudeCodeAgent:
         assert result.metadata["message_count"] is None
         assert read_bytes["count"] <= HEAD_SCAN_BYTE_LIMIT + TAIL_SCAN_BYTE_LIMIT
         assert read_bytes["count"] < file_path.stat().st_size // 2
+        with mock.patch("builtins.open", side_effect=AssertionError("unexpected read")):
+            head = agent.get_session_head(result)
+        assert head["message_count"] is None
+        assert head["message_count_completeness"] == "unknown"
 
     def test_get_sessions_handles_mixed_naive_aware_datetime(self, tmp_path):
         """测试 get_sessions 能处理 naive/aware 混合时间"""
@@ -601,8 +605,7 @@ class TestClaudeCodeAgent:
         assert output_dir.exists()
         assert result.exists()
 
-    def test_get_session_head_extracts_message_count_and_model(self, tmp_path):
-        """测试 get_session_head 返回 Claude 轻量摘要。"""
+    def test_get_session_head_uses_discovery_facts_without_rescanning(self, tmp_path):
         session_file = tmp_path / "test-head.jsonl"
         write_jsonl(
             session_file,
@@ -625,10 +628,16 @@ class TestClaudeCodeAgent:
             created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             source_path=session_file,
-            metadata={"cwd": "/workspace/claude", "project": "demo"},
+            metadata={
+                "cwd": "/workspace/claude",
+                "project": "demo",
+                "model": "claude-sonnet-4.5",
+                "message_count": 2,
+            },
         )
 
-        head = ClaudeCodeAgent().get_session_head(session)
+        with mock.patch("agent_dump.agents.claudecode.JsonlObjectScan", side_effect=AssertionError("unexpected scan")):
+            head = ClaudeCodeAgent().get_session_head(session)
 
         assert head["cwd_or_project"] == "/workspace/claude"
         assert head["model"] == "claude-sonnet-4.5"
@@ -1660,7 +1669,11 @@ class TestMalformedRecordsDoNotBreakTheSession:
         path = project_dir / "s1.jsonl"
         self._write(path)
 
-        head = ClaudeCodeAgent().get_session_head(make_session(path))
+        agent = ClaudeCodeAgent()
+        session = agent._parse_session_file(path)
+        assert session is not None
+        with mock.patch("agent_dump.agents.claudecode.JsonlObjectScan", side_effect=AssertionError("unexpected scan")):
+            head = agent.get_session_head(session)
 
         assert head["message_count"] == 2
 

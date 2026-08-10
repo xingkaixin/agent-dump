@@ -1,8 +1,9 @@
 import argparse
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS, AgentRegistration
-from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, MessageCountFact, Session
 from agent_dump.cli_shared import (
     VALID_FORMATS,
     apply_query_filter,
@@ -18,6 +19,20 @@ from agent_dump.scanner import AgentScanner
 from agent_dump.search_index import SearchIndex
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
+
+
+@dataclass
+class _MessageStats:
+    sessions: int = 0
+    known_messages: int = 0
+    unknown_sessions: int = 0
+
+    def add(self, fact: MessageCountFact) -> None:
+        self.sessions += 1
+        if fact.completeness is MessageCountCompleteness.UNKNOWN:
+            self.unknown_sessions += 1
+            return
+        self.known_messages += fact.exact_value
 
 
 def handle_providers_mode(
@@ -129,42 +144,52 @@ def handle_stats_mode(
         print(i18n.t(Keys.STATS_NO_SESSIONS, days=args.days))
         return 0
 
-    total_sessions = len(all_sessions)
-    total_messages = 0
-    agent_stats: dict[str, dict[str, int]] = {}
+    total_stats = _MessageStats()
+    agent_stats: dict[str, _MessageStats] = {}
 
     for agent, session in all_sessions:
         agent_name = agent.display_name
-        if agent_name not in agent_stats:
-            agent_stats[agent_name] = {"sessions": 0, "messages": 0}
-        agent_stats[agent_name]["sessions"] += 1
-
-        message_count = session.metadata.get("message_count")
-        if isinstance(message_count, int):
-            agent_stats[agent_name]["messages"] += message_count
-            total_messages += message_count
+        message_count = agent.get_session_facts(session).message_count
+        total_stats.add(message_count)
+        agent_stats.setdefault(agent_name, _MessageStats()).add(message_count)
 
     print(i18n.t(Keys.STATS_HEADER, days=args.days))
     print()
-    print(i18n.t(Keys.STATS_TOTAL_SESSIONS, count=total_sessions))
-    if total_messages > 0:
-        print(i18n.t(Keys.STATS_TOTAL_MESSAGES, count=total_messages))
+    print(i18n.t(Keys.STATS_TOTAL_SESSIONS, count=total_stats.sessions))
+    if total_stats.unknown_sessions:
+        print(
+            i18n.t(
+                Keys.STATS_KNOWN_MESSAGES,
+                count=total_stats.known_messages,
+                unknown_sessions=total_stats.unknown_sessions,
+            )
+        )
+    else:
+        print(i18n.t(Keys.STATS_TOTAL_MESSAGES, count=total_stats.known_messages))
     print()
 
     print(i18n.t(Keys.STATS_BY_AGENT))
     for name in sorted(agent_stats):
         stats = agent_stats[name]
-        if total_messages > 0:
+        if stats.unknown_sessions:
+            print(
+                render_terminal_message(
+                    Keys.STATS_AGENT_ROW_WITH_UNKNOWN,
+                    name=name,
+                    sessions=stats.sessions,
+                    messages=stats.known_messages,
+                    unknown_sessions=stats.unknown_sessions,
+                )
+            )
+        else:
             print(
                 render_terminal_message(
                     Keys.STATS_AGENT_ROW,
                     name=name,
-                    sessions=stats["sessions"],
-                    messages=stats["messages"],
+                    sessions=stats.sessions,
+                    messages=stats.known_messages,
                 )
             )
-        else:
-            print(f"  {safe_display_text(name)}: {stats['sessions']} {i18n.t(Keys.SESSION_COUNT_SUFFIX)}")
     print()
 
     grouped = group_sessions_by_time([session for _, session in all_sessions])

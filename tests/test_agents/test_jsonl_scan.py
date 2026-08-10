@@ -60,6 +60,26 @@ def _record(size: int, **extra) -> str:
     return json.dumps({**payload, "pad": "x" * max(filler, 0)})
 
 
+class TestNonemptyLineCount:
+    def test_small_scan_counts_every_nonempty_source_line(self, tmp_path):
+        file_path = tmp_path / "s.jsonl"
+        file_path.write_text('{"n": 1}\n\nnot-json\n[]\n', encoding="utf-8")
+
+        scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)
+
+        assert scan.scanned_all is True
+        assert scan.nonempty_line_count == 3
+
+    def test_large_scan_marks_the_line_count_unknown(self, tmp_path):
+        file_path = tmp_path / "s.jsonl"
+        file_path.write_text(_record(FULL_SCAN_BYTE_LIMIT + 1024) + "\n", encoding="utf-8")
+
+        scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)
+
+        assert scan.scanned_all is False
+        assert scan.nonempty_line_count is None
+
+
 class TestOversizedHeadRecord:
     """AD-159：首记录超过 head 窗口不得让整个 Session 消失。"""
 
@@ -113,6 +133,7 @@ class TestOversizedHeadRecord:
 
         assert scan.oversized_head is False
         assert scan.session_header is None, "空文件没有会话，不得被当成可回退的 header"
+        assert scan.nonempty_line_count == 0
 
     def test_malformed_large_file_is_not_treated_as_a_session(self, tmp_path):
         """有换行但首行不是 JSON 对象：既有行为不变，仍视为无会话。"""

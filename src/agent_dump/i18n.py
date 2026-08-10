@@ -311,11 +311,14 @@ class Keys:
     STATS_HEADER = "STATS_HEADER"
     STATS_TOTAL_SESSIONS = "STATS_TOTAL_SESSIONS"
     STATS_TOTAL_MESSAGES = "STATS_TOTAL_MESSAGES"
+    STATS_KNOWN_MESSAGES = "STATS_KNOWN_MESSAGES"
     STATS_BY_AGENT = "STATS_BY_AGENT"
     STATS_BY_TIME = "STATS_BY_TIME"
     STATS_NO_SESSIONS = "STATS_NO_SESSIONS"
     STATS_AGENT_ROW = "STATS_AGENT_ROW"
+    STATS_AGENT_ROW_WITH_UNKNOWN = "STATS_AGENT_ROW_WITH_UNKNOWN"
     STATS_TIME_ROW = "STATS_TIME_ROW"
+    MESSAGE_COUNT_UNKNOWN = "MESSAGE_COUNT_UNKNOWN"
 
     # Misc
     SESSION_COUNT_SUFFIX = "SESSION_COUNT_SUFFIX"
@@ -610,11 +613,16 @@ TRANSLATIONS = {
         Keys.STATS_HEADER: "📊 Session Statistics (last {days} days)",
         Keys.STATS_TOTAL_SESSIONS: "Total sessions: {count}",
         Keys.STATS_TOTAL_MESSAGES: "Total messages: {count}",
+        Keys.STATS_KNOWN_MESSAGES: "Known messages: {count} (unknown-count sessions: {unknown_sessions})",
         Keys.STATS_BY_AGENT: "By Agent",
         Keys.STATS_BY_TIME: "By Time",
         Keys.STATS_NO_SESSIONS: "No sessions found in the last {days} days.",
         Keys.STATS_AGENT_ROW: "  {name}: {sessions} sessions, {messages} messages",
+        Keys.STATS_AGENT_ROW_WITH_UNKNOWN: (
+            "  {name}: {sessions} sessions, {messages} known messages, unknown-count sessions: {unknown_sessions}"
+        ),
         Keys.STATS_TIME_ROW: "  {label}: {count} sessions",
+        Keys.MESSAGE_COUNT_UNKNOWN: "unknown",
         Keys.SESSION_COUNT_SUFFIX: "sessions",
     },
     "zh": {
@@ -904,11 +912,16 @@ TRANSLATIONS = {
         Keys.STATS_HEADER: "📊 会话统计 (最近 {days} 天)",
         Keys.STATS_TOTAL_SESSIONS: "总会话数: {count}",
         Keys.STATS_TOTAL_MESSAGES: "总消息数: {count}",
+        Keys.STATS_KNOWN_MESSAGES: "已知消息数: {count}（{unknown_sessions} 个会话的消息数未知）",
         Keys.STATS_BY_AGENT: "按 Agent",
         Keys.STATS_BY_TIME: "按时间",
         Keys.STATS_NO_SESSIONS: "最近 {days} 天内未找到会话。",
         Keys.STATS_AGENT_ROW: "  {name}: {sessions} 个会话, {messages} 条消息",
+        Keys.STATS_AGENT_ROW_WITH_UNKNOWN: (
+            "  {name}: {sessions} 个会话, {messages} 条已知消息, {unknown_sessions} 个会话的消息数未知"
+        ),
         Keys.STATS_TIME_ROW: "  {label}: {count} 个会话",
+        Keys.MESSAGE_COUNT_UNKNOWN: "未知",
         Keys.SESSION_COUNT_SUFFIX: "个会话",
     },
 }

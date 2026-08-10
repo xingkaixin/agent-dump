@@ -5,9 +5,10 @@ Base agent handler interface
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 import json
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.diagnostics import source_missing, unsupported_capability
 from agent_dump.export_paths import build_session_output_path
@@ -30,6 +31,38 @@ class Session:
     metadata: dict[str, Any]
 
 
+class MessageCountCompleteness(str, Enum):
+    EXACT = "exact"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class MessageCountFact:
+    """One message count with explicit evidence completeness."""
+
+    value: int | None
+    completeness: MessageCountCompleteness
+
+    def __post_init__(self) -> None:
+        valid_count = isinstance(self.value, int) and not isinstance(self.value, bool) and self.value >= 0
+        if self.completeness is MessageCountCompleteness.EXACT and not valid_count:
+            raise ValueError("exact message count requires a non-negative integer")
+        if self.completeness is MessageCountCompleteness.UNKNOWN and self.value is not None:
+            raise ValueError("unknown message count cannot carry a value")
+
+    @property
+    def exact_value(self) -> int:
+        if self.completeness is not MessageCountCompleteness.EXACT or self.value is None:
+            raise ValueError("message count is not exact")
+        return self.value
+
+    @classmethod
+    def from_provider_value(cls, value: Any) -> "MessageCountFact":
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return cls(value=value, completeness=MessageCountCompleteness.EXACT)
+        return cls(value=None, completeness=MessageCountCompleteness.UNKNOWN)
+
+
 @dataclass(frozen=True)
 class SessionFacts:
     """Stable cross-provider facts derived from one Session."""
@@ -38,6 +71,7 @@ class SessionFacts:
     provider_project: str | None
     session_source: Path
     change_sources: tuple[Path, ...]
+    message_count: MessageCountFact
 
     @property
     def display_location(self) -> str:
@@ -61,6 +95,7 @@ def derive_session_facts(
         provider_project=_metadata_text(metadata.get("project")),
         session_source=session.source_path,
         change_sources=tuple(dict.fromkeys(change_sources)),
+        message_count=MessageCountFact.from_provider_value(metadata.get("message_count")),
     )
 
 
@@ -172,10 +207,8 @@ class BaseAgent(ABC):
             "updated_at": session.updated_at,
             "cwd_or_project": facts.display_location,
             "model": metadata.get("model") or metadata.get("model_provider"),
-            "message_count": cast(
-                int | None,
-                metadata.get("message_count") if isinstance(metadata.get("message_count"), int) else None,
-            ),
+            "message_count": facts.message_count.value,
+            "message_count_completeness": facts.message_count.completeness.value,
             "subtargets": [],
         }
 
@@ -184,13 +217,13 @@ class BaseAgent(ABC):
         facts = self.get_session_facts(session)
         model = session.metadata.get("model")
         branch = session.metadata.get("branch")
-        message_count = session.metadata.get("message_count")
 
         return {
             "cwd_project": facts.display_location,
             "model": str(model) if isinstance(model, str) and model.strip() else None,
             "branch": str(branch) if isinstance(branch, str) and branch.strip() else None,
-            "message_count": cast(int | None, message_count if isinstance(message_count, int) else None),
+            "message_count": facts.message_count.value,
+            "message_count_completeness": facts.message_count.completeness.value,
             "updated_at": to_local_datetime(session.updated_at).strftime("%Y-%m-%d %H:%M"),
         }
 

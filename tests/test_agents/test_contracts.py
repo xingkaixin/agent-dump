@@ -732,6 +732,7 @@ def test_provider_contract_scan_get_sessions_and_head(
         assert facts.working_directory == Path(fixture.location)
     if provider_name == "claudecode":
         assert facts.provider_project == "project-contract"
+    assert facts.message_count.exact_value == fixture.head_message_count
 
     head = fixture.agent.get_session_head(session)
     assert head["uri"] == fixture.uri
@@ -740,6 +741,7 @@ def test_provider_contract_scan_get_sessions_and_head(
     assert head["cwd_or_project"] == fixture.location
     assert head["model"] == fixture.model
     assert head["message_count"] == fixture.head_message_count
+    assert head["message_count_completeness"] == "exact"
     assert head["subtargets"] == list(fixture.subtargets)
 
     rendered = render_session_head(fixture.uri, head)

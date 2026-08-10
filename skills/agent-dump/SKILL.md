@@ -76,12 +76,12 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - `--format` 支持 `json,markdown,raw,print` 逗号组合，`md` 是 `markdown` 别名。
 - URI 模式默认输出为 `print`，可组合 `print,json`；非 URI 模式默认输出为 `json`。
 - Cursor URI 支持 `json` 与 `print`。
-- `--head` 仅支持 URI 模式，用于轻量元数据查看，不能与 `--format` 或 `--summary` 组合。
+- `--head` 仅支持 URI 模式，用于有界元数据查看，不重读完整正文；消息数可能明确为未知。不能与 `--format` 或 `--summary` 组合。
 - `--summary` 仅支持 URI 模式，且 `--format` 必须包含 `json`；不满足条件时仅警告并继续主流程。
 - `--collect` 可接受 `agents://...` 查询 URI，可使用 `--collect-mode pm|insight`、`--dry-run`、`--save`、`-days`、`-since/-until`。
 - `--collect` 日期优先级为显式 `-since/-until` > 显式 `-days` > 缺省当天。
 - `--collect` 与普通 session URI、`--interactive`、`--list` 组合时会报冲突。
-- `--stats` 支持 `-days` 与 `-query`。
+- `--stats` 支持 `-days` 与 `-query`；存在未知消息数时输出已知小计和未知会话数。
 - `-query` 与 `agents://...?q=` 的 keyword 是一个归一化空白后的字面短语。
 - `--search` 作为列表搜索模式使用，可与 `--list`、`-days`、`-query` 组合；按空白切分的 distinct term 均按字面量匹配，不解释 FTS5 操作符语法（`AND`/`NEAR`/`*` 等），全部 term 必须命中，CJK term 必须连续。
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。

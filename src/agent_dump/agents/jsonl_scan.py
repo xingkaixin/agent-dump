@@ -36,6 +36,7 @@ class JsonlScanMetadata:
     head_records: list[dict[str, Any]]
     tail_record: dict[str, Any] | None
     scanned_all: bool
+    nonempty_line_count: int | None
     # head 窗口里一个换行都没有：首记录本身比窗口还长，被当作不完整行丢弃了。
     # 与「文件为空」「首行不是 JSON 对象」是不同的事实，必须能分辨。
     oversized_head: bool = False
@@ -57,7 +58,13 @@ class JsonlScanMetadata:
 def read_jsonl_scan_metadata(file_path: Path, *, head_line_limit: int) -> JsonlScanMetadata:
     file_size = file_path.stat().st_size
     if file_size == 0:
-        return JsonlScanMetadata(first_record=None, head_records=[], tail_record=None, scanned_all=True)
+        return JsonlScanMetadata(
+            first_record=None,
+            head_records=[],
+            tail_record=None,
+            scanned_all=True,
+            nonempty_line_count=0,
+        )
 
     if file_size <= FULL_SCAN_BYTE_LIMIT:
         lines = _read_all_lines(file_path)
@@ -67,6 +74,7 @@ def read_jsonl_scan_metadata(file_path: Path, *, head_line_limit: int) -> JsonlS
             head_records=records,
             tail_record=records[-1] if records else None,
             scanned_all=True,
+            nonempty_line_count=len(lines),
         )
 
     head_lines, oversized_head = _read_complete_head_lines(file_path, max_lines=head_line_limit)
@@ -77,6 +85,7 @@ def read_jsonl_scan_metadata(file_path: Path, *, head_line_limit: int) -> JsonlS
         head_records=head_records,
         tail_record=_parse_json_object(tail_line) if tail_line is not None else None,
         scanned_all=False,
+        nonempty_line_count=None,
         oversized_head=oversized_head,
     )
 

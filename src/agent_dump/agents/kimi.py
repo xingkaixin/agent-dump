@@ -13,7 +13,12 @@ from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
-from agent_dump.agents.jsonl_scan import JsonlObjectScan, parse_object_line, warn_skipped_records
+from agent_dump.agents.jsonl_scan import (
+    JsonlObjectScan,
+    parse_object_line,
+    read_jsonl_scan_metadata,
+    warn_skipped_records,
+)
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
     build_fallback_tool_message,
@@ -187,6 +192,13 @@ class KimiAgent(FileSessionAgent):
 
             project_hash = session_dir.parent.name
             cwd = self._resolve_cwd_from_project_hash(project_hash)
+            raw_source = context_path if context_path is not None else wire_path
+            message_count = None
+            if raw_source is not None:
+                try:
+                    message_count = read_jsonl_scan_metadata(raw_source, head_line_limit=1).nonempty_line_count
+                except OSError:
+                    message_count = None
 
             return Session(
                 id=session_id,
@@ -199,6 +211,7 @@ class KimiAgent(FileSessionAgent):
                     "wire_file": str(wire_path) if wire_path else None,
                     "title_generated": metadata.get("title_generated", False),
                     "cwd": cwd,
+                    "message_count": message_count,
                 },
             )
         except Exception:
@@ -221,20 +234,6 @@ class KimiAgent(FileSessionAgent):
             "stats": stats,
             "messages": messages,
         }
-
-    def get_session_head(self, session: Session) -> dict[str, Any]:
-        head = super().get_session_head(session)
-
-        message_count = 0
-        raw_source = self._get_raw_source_path(session)
-        if raw_source.exists():
-            with open(raw_source, encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        message_count += 1
-
-        head["message_count"] = message_count
-        return head
 
     def export_raw_session(self, session: Session, output_dir: Path) -> Path:
         """Export the preferred raw Kimi session file."""

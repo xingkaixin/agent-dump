@@ -12,6 +12,7 @@ from unittest import mock
 import pytest
 
 from agent_dump.agents.base import Session, derive_session_facts
+from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.paths import ProviderRoots
 
@@ -211,6 +212,28 @@ class TestKimiAgent:
         result = agent._parse_session(metadata_path)
         assert result is not None
         assert result.metadata.get("cwd") == real_cwd
+        assert result.metadata["message_count"] == 1
+
+    def test_large_session_head_keeps_the_discovery_count_unknown(self, tmp_path):
+        agent = KimiAgent()
+        agent.base_path = tmp_path / "sessions"
+        session_dir = agent.base_path / "project" / "session1"
+        session_dir.mkdir(parents=True)
+        metadata_path = write_metadata(session_dir, session_id="s1")
+        context_path = session_dir / "context.jsonl"
+        context_path.write_text(
+            json.dumps({"role": "user", "pad": "x" * FULL_SCAN_BYTE_LIMIT}) + "\n",
+            encoding="utf-8",
+        )
+
+        session = agent._parse_session(metadata_path)
+
+        assert session is not None
+        assert session.metadata["message_count"] is None
+        with mock.patch("builtins.open", side_effect=AssertionError("unexpected read")):
+            head = agent.get_session_head(session)
+        assert head["message_count"] is None
+        assert head["message_count_completeness"] == "unknown"
 
     def test_get_session_head_uses_cwd_from_metadata(self, tmp_path):
         """测试 get_session_head 优先使用 metadata 中的真实 cwd"""
@@ -479,8 +502,7 @@ class TestKimiAgent:
         with pytest.raises(FileNotFoundError):
             agent.export_session(session, tmp_path)
 
-    def test_get_session_head_counts_raw_lines(self, tmp_path):
-        """测试 get_session_head 返回 Kimi 轻量摘要。"""
+    def test_get_session_head_uses_discovery_facts_without_rescanning(self, tmp_path):
         agent = KimiAgent()
         session_dir = tmp_path / "project1" / "session1"
         session_dir.mkdir(parents=True)
@@ -493,10 +515,11 @@ class TestKimiAgent:
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
             source_path=session_dir,
-            metadata={"context_file": str(context_path), "wire_file": None},
+            metadata={"context_file": str(context_path), "wire_file": None, "message_count": 2},
         )
 
-        head = agent.get_session_head(session)
+        with mock.patch("builtins.open", side_effect=AssertionError("unexpected read")):
+            head = agent.get_session_head(session)
 
         assert head["cwd_or_project"] == str(session_dir)
         assert head["message_count"] == 2

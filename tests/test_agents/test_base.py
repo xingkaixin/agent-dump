@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, MessageCountFact, Session
 
 
 class TestSession:
@@ -47,6 +47,29 @@ class TestSession:
         )
 
         assert session.metadata == {}
+
+
+class TestMessageCountFact:
+    @pytest.mark.parametrize("value", [None, True, -1, "12"])
+    def test_untrusted_values_are_unknown(self, value):
+        fact = MessageCountFact.from_provider_value(value)
+
+        assert fact.value is None
+        assert fact.completeness is MessageCountCompleteness.UNKNOWN
+
+    @pytest.mark.parametrize("value", [0, 12])
+    def test_non_negative_integers_are_exact(self, value):
+        fact = MessageCountFact.from_provider_value(value)
+
+        assert fact.value == value
+        assert fact.exact_value == value
+        assert fact.completeness is MessageCountCompleteness.EXACT
+
+    def test_unknown_count_cannot_be_read_as_exact(self):
+        fact = MessageCountFact.from_provider_value(None)
+
+        with pytest.raises(ValueError, match="not exact"):
+            _ = fact.exact_value
 
 
 class ConcreteAgent(BaseAgent):
@@ -318,6 +341,7 @@ class TestBaseAgent:
             "model": "gpt-5",
             "branch": None,
             "message_count": 12,
+            "message_count_completeness": "exact",
             "updated_at": "2024-01-01 11:00",
         }
 
@@ -343,6 +367,7 @@ class TestBaseAgent:
         assert facts.provider_project == "project-hash"
         assert facts.session_source == source
         assert facts.change_sources == ()
+        assert facts.message_count.completeness is MessageCountCompleteness.UNKNOWN
         assert facts.display_location == "/workspace/real"
         assert agent.get_session_head(session)["cwd_or_project"] == "/workspace/real"
         assert agent.get_session_summary_fields(session)["cwd_project"] == "/workspace/real"
@@ -395,6 +420,7 @@ class TestBaseAgent:
         assert result["cwd_or_project"] == "/workspace/project"
         assert result["model"] == "gpt-5"
         assert result["message_count"] is None
+        assert result["message_count_completeness"] == "unknown"
         assert result["subtargets"] == []
 
     def test_export_raw_session_keeps_untrusted_id_inside_output_dir(self, tmp_path):

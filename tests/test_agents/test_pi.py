@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 
 from agent_dump.agents.base import Session
+from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT
 from agent_dump.agents.pi import PiAgent
 from agent_dump.paths import ProviderRoots
 
@@ -162,6 +163,31 @@ class TestPiAgent:
         assert session.metadata["cwd"] == "/workspace/pi"
         assert session.metadata["model"] == "claude-sonnet-4-5"
         assert session.metadata["message_count"] == 2
+
+    def test_large_session_head_keeps_the_discovery_count_unknown(self, tmp_path):
+        agent = PiAgent()
+        session_path = tmp_path / "20260101_pi-session.jsonl"
+        header = {
+            "type": "session",
+            "version": 3,
+            "id": "pi-session",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "cwd": "/workspace/pi",
+        }
+        message = {
+            "type": "message",
+            "message": {"role": "user", "content": "x" * FULL_SCAN_BYTE_LIMIT},
+        }
+        _write_jsonl(session_path, [header, message])
+
+        session = agent._parse_session_file(session_path)
+
+        assert session is not None
+        assert session.metadata["message_count"] is None
+        with mock.patch("agent_dump.agents.pi.JsonlObjectScan", side_effect=AssertionError("unexpected scan")):
+            head = agent.get_session_head(session)
+        assert head["message_count"] is None
+        assert head["message_count_completeness"] == "unknown"
 
     def test_get_session_data_converts_pi_entries(self, tmp_path):
         agent = PiAgent()
@@ -336,10 +362,12 @@ class TestMalformedRecordsDoNotBreakTheSession:
     def test_get_session_head_does_not_raise(self, tmp_path):
         path = tmp_path / "20260101_s1.jsonl"
         self._write(path)
-        now = datetime.now(timezone.utc)
-        session = Session(id="s1", title="T", created_at=now, updated_at=now, source_path=path, metadata={})
+        agent = PiAgent()
+        session = agent._parse_session_file(path)
+        assert session is not None
 
-        assert PiAgent().get_session_head(session)["message_count"] == 2
+        with mock.patch("agent_dump.agents.pi.JsonlObjectScan", side_effect=AssertionError("unexpected scan")):
+            assert agent.get_session_head(session)["message_count"] == 2
 
 
 class TestPiRecordContracts:
