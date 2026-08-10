@@ -18,7 +18,7 @@ import time
 from typing import Any, TypeVar
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.i18n import Keys, i18n
+from agent_dump.i18n import Keys
 from agent_dump.private_files import ensure_private_dir, ensure_private_file
 from agent_dump.query_semantics import (
     TextQuery,
@@ -26,6 +26,7 @@ from agent_dump.query_semantics import (
     extract_transcript_searchable_text,
 )
 from agent_dump.session_data import session_updated_signal as _session_updated_signal
+from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import normalize_datetime_utc
 
 _T = TypeVar("_T")
@@ -379,7 +380,11 @@ class SearchIndex:
 
             if len(to_update) >= _INDEX_PROGRESS_THRESHOLD:
                 print(
-                    i18n.t(Keys.INDEX_UPDATE_PROGRESS, agent=agent.display_name, count=len(to_update)),
+                    render_terminal_message(
+                        Keys.INDEX_UPDATE_PROGRESS,
+                        agent=agent.display_name,
+                        count=len(to_update),
+                    ),
                     file=sys.stderr,
                 )
 
@@ -413,7 +418,7 @@ class SearchIndex:
 
             if skipped:
                 print(
-                    i18n.t(
+                    render_terminal_message(
                         Keys.WARN_INDEX_SKIPPED_SESSIONS,
                         agent=agent.display_name,
                         count=len(skipped),

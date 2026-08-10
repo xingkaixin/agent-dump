@@ -24,6 +24,7 @@ from agent_dump.config import CollectConfig, ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import SearchSessionMatch
+from agent_dump.text_safety import has_unsafe_line_characters
 
 
 def make_export_result(*paths: Path) -> mock.MagicMock:
@@ -948,6 +949,17 @@ class TestMain:
         assert "本次将处理 2 个 session，拆分为 5 个总结单元；并发 4" in captured.err
         assert "Agent 分布：Codex 2" in captured.err
         assert "正在生成最终总结：2/2" in captured.err
+
+    def test_show_collect_progress_sanitizes_unknown_stage_message(self, capsys):
+        poison = "progress\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+
+        with mock.patch("sys.stderr.isatty", return_value=False):
+            with show_collect_progress() as update_progress:
+                update_progress(CollectProgressEvent(stage="future_stage", current=0, total=1, message=poison))
+
+        lines = capsys.readouterr().err.splitlines()
+        assert lines == [line for line in lines if not has_unsafe_line_characters(line)]
+        assert "FORGED" in "\n".join(lines)
 
     def test_show_collect_progress_tty_finishes_with_newline(self, capsys):
         with mock.patch("sys.stderr.isatty", return_value=True), show_collect_progress() as update_progress:

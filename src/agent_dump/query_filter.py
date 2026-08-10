@@ -12,6 +12,7 @@ from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_semantics import TextQuery, TextQueryMode
 from agent_dump.search_index import SearchIndex, extract_session_searchable_text
+from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import normalize_datetime_utc
 from agent_dump.transcript import read_message
 
@@ -517,7 +518,7 @@ def _warn_index_unusable(agent: BaseAgent, exc: BaseException) -> None:
     区别只在于：不可用是静默的正常状态，出错是要说出来的异常状态。
     """
     print(
-        i18n.t(
+        render_terminal_message(
             Keys.WARN_INDEX_UNUSABLE,
             agent=agent.display_name,
             error_type=type(exc).__name__,

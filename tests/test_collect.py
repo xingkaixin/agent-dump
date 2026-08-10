@@ -51,6 +51,7 @@ from agent_dump.collect_summary import (
 )
 from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.query_filter import QuerySpec
+from agent_dump.text_safety import has_unsafe_line_characters
 
 
 def make_query_spec(
@@ -1207,6 +1208,33 @@ class TestCollectStructuredSummary:
         failure_records = [record for record in records if record["event"] == "session_summary_failed"]
         assert len(failure_records) == 1
         assert failure_records[0]["session_uri"] == "codex://s-bad"
+
+    def test_summarize_collect_entries_sanitizes_session_uri_and_remote_error(self, capsys):
+        poison = "value\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        entry_ok = self._planned_entry(session_id="s-ok")
+        entry_bad = self._planned_entry(session_id=f"s-bad-{poison}")
+
+        def _summary_side_effect(config, prompt, *, timeout_seconds=90, **_kwargs):
+            del config, timeout_seconds
+            if "s-bad-" in prompt:
+                raise RuntimeError(f"remote {poison}")
+            return '{"topics":["T1"]}'
+
+        with mock.patch(
+            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            side_effect=_summary_side_effect,
+        ):
+            summaries = summarize_collect_entries(
+                config=self._config(),
+                planned_entries=[entry_ok, entry_bad],
+                summary_concurrency=1,
+            )
+
+        assert [item.collect_entry.session_id for item in summaries] == ["s-ok"]
+        lines = capsys.readouterr().err.splitlines()
+        assert lines
+        assert all(not has_unsafe_line_characters(line) for line in lines)
+        assert "FORGED" in "\n".join(lines)
 
     def test_reduce_collect_summaries_tree_reduction(self):
         summaries = [

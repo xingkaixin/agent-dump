@@ -35,6 +35,7 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import QuerySpec, parse_query_uri
 from agent_dump.rendering import render_session_text
 from agent_dump.scanner import AgentScanner
+from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_body_text, safe_display_text
 
 
@@ -126,7 +127,7 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
 
     def _update(event: CollectProgressEvent) -> None:
         nonlocal last_rendered
-        text = _format_collect_progress(event)
+        text = safe_display_text(_format_collect_progress(event))
         if event.stage in {"collect_start", "collect_overview"}:
             if is_tty:
                 with progress_lock:
@@ -175,17 +176,18 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
 
 def _format_collect_dry_run_preview(*, run_stats: CollectRunStats, output_path: Path) -> str:
     breakdown = ", ".join(
-        f"{agent_name} {count}" for agent_name, count in sorted(run_stats.agent_session_counts.items())
+        f"{safe_display_text(agent_name)} {count}"
+        for agent_name, count in sorted(run_stats.agent_session_counts.items())
     )
     return "\n".join(
         [
             i18n.t(Keys.COLLECT_DRY_RUN_HEADER),
-            i18n.t(Keys.COLLECT_DRY_RUN_DATE_RANGE, since=run_stats.since, until=run_stats.until),
-            i18n.t(Keys.COLLECT_DRY_RUN_PROVIDER_BREAKDOWN, breakdown=breakdown),
-            i18n.t(Keys.COLLECT_DRY_RUN_SESSION_COUNT, count=run_stats.session_count),
-            i18n.t(Keys.COLLECT_DRY_RUN_CHUNK_COUNT, count=run_stats.chunk_count),
-            i18n.t(Keys.COLLECT_DRY_RUN_CONCURRENCY, concurrency=run_stats.concurrency),
-            i18n.t(Keys.COLLECT_DRY_RUN_SAVE_PATH, path=str(output_path)),
+            render_terminal_message(Keys.COLLECT_DRY_RUN_DATE_RANGE, since=run_stats.since, until=run_stats.until),
+            render_terminal_message(Keys.COLLECT_DRY_RUN_PROVIDER_BREAKDOWN, breakdown=breakdown),
+            render_terminal_message(Keys.COLLECT_DRY_RUN_SESSION_COUNT, count=run_stats.session_count),
+            render_terminal_message(Keys.COLLECT_DRY_RUN_CHUNK_COUNT, count=run_stats.chunk_count),
+            render_terminal_message(Keys.COLLECT_DRY_RUN_CONCURRENCY, concurrency=run_stats.concurrency),
+            render_terminal_message(Keys.COLLECT_DRY_RUN_SAVE_PATH, path=output_path),
         ]
     )
 
@@ -385,5 +387,5 @@ def handle_collect_mode(
         collect_logger.log("collect_run_finish", output_path=str(output_path), session_count=len(entries))
     # 模型生成的 Markdown 是多行正文：用 body-safe 保留换行与缩进，只剥掉 ANSI/OSC/bidi
     print(safe_body_text(markdown))
-    print(i18n.t(Keys.COLLECT_OUTPUT_SAVED, path=str(output_path)))
+    print(render_terminal_message(Keys.COLLECT_OUTPUT_SAVED, path=output_path))
     return 0

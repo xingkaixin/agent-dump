@@ -21,6 +21,8 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import QuerySpec, parse_query
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
+from agent_dump.terminal_output import render_terminal_message
+from agent_dump.text_safety import safe_display_text
 
 
 class ExportConfigLike(Protocol):
@@ -105,7 +107,7 @@ def handle_session_modes(
 
     if args.search and query_spec is not None:
         warn_list_ignored_options(output_specified, format_specified)
-        print(i18n.t(Keys.SEARCH_HEADER, days=args.days, query=render_query_summary(query_spec)))
+        print(render_terminal_message(Keys.SEARCH_HEADER, days=args.days, query=render_query_summary(query_spec)))
         print("-" * 60)
         display_search_results(
             collect_search_matches(available_agents, days=args.days, spec=query_spec, scanner=scanner)
@@ -157,7 +159,9 @@ def _handle_list_mode(
 ) -> int:
     warn_list_ignored_options(output_specified, format_specified)
     if query_spec:
-        print(i18n.t(Keys.LIST_HEADER_FILTERED, days=args.days, query=render_query_summary(query_spec)))
+        print(
+            render_terminal_message(Keys.LIST_HEADER_FILTERED, days=args.days, query=render_query_summary(query_spec))
+        )
     else:
         print(i18n.t(Keys.LIST_HEADER, days=args.days))
     print("-" * 60)
@@ -169,7 +173,7 @@ def _handle_list_mode(
         else scanner.get_sessions(args.days, agents=available_agents)
     )
     for agent, sessions in listed:
-        print(f"\n📁 {agent.display_name} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
+        print(f"\n📁 {safe_display_text(agent.display_name)} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
 
         if sessions:
             should_quit = display_sessions_list(
@@ -222,7 +226,7 @@ def _handle_interactive_mode(
 
     if query_spec and not interactive_agents:
         print(
-            i18n.t(
+            render_terminal_message(
                 Keys.NO_SESSIONS_MATCHING_KEYWORD,
                 days=args.days,
                 query=render_query_summary(query_spec),
@@ -232,26 +236,32 @@ def _handle_interactive_mode(
 
     if len(interactive_agents) == 1:
         selected_agent = interactive_agents[0]
-        print(i18n.t(Keys.AUTO_SELECT_AGENT, agent_name=selected_agent.display_name))
+        print(render_terminal_message(Keys.AUTO_SELECT_AGENT, agent_name=selected_agent.display_name))
     else:
         selected_agent = select_agent_interactive(interactive_agents, session_counts)
         if not selected_agent:
             print("\n" + i18n.t(Keys.NO_AGENT_SELECTED))
             return 1
-        print(i18n.t(Keys.AGENT_SELECTED, agent_name=selected_agent.display_name))
+        print(render_terminal_message(Keys.AGENT_SELECTED, agent_name=selected_agent.display_name))
 
     sessions = sessions_by_agent.get(selected_agent.name, [])
 
     if not sessions:
         if query_spec:
-            print(i18n.t(Keys.NO_SESSIONS_MATCHING_KEYWORD, days=args.days, query=render_query_summary(query_spec)))
+            print(
+                render_terminal_message(
+                    Keys.NO_SESSIONS_MATCHING_KEYWORD,
+                    days=args.days,
+                    query=render_query_summary(query_spec),
+                )
+            )
         else:
             print(i18n.t(Keys.NO_SESSIONS_FOUND, days=args.days))
         return 1
 
     if query_spec:
         print(
-            i18n.t(
+            render_terminal_message(
                 Keys.SESSIONS_FOUND_FILTERED,
                 count=len(sessions),
                 days=args.days,
@@ -305,5 +315,5 @@ def _handle_interactive_mode(
 
     summary_paths = sorted({str(path.parent) for path in export_result.exported_paths})
     summary_path = ", ".join(summary_paths) if summary_paths else f"{output_base_dir}/{selected_agent.name}"
-    print(i18n.t(Keys.EXPORT_SUMMARY, count=len(export_result), path=summary_path))
+    print(render_terminal_message(Keys.EXPORT_SUMMARY, count=len(export_result), path=summary_path))
     return 0 if export_result.had_success else 1

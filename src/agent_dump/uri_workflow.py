@@ -31,6 +31,8 @@ from agent_dump.exporting import execute_exports
 from agent_dump.i18n import Keys, i18n
 from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
 from agent_dump.scanner import AgentScanner
+from agent_dump.terminal_output import render_terminal_message
+from agent_dump.text_safety import safe_body_text
 
 
 class ExportConfigLike(Protocol):
@@ -80,7 +82,7 @@ def maybe_generate_uri_summary(
         elif "base_url_plaintext_key" in errors:
             print(i18n.t(Keys.COLLECT_CONFIG_PLAINTEXT_KEY))
         else:
-            print(i18n.t(Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING, fields=",".join(errors)))
+            print(render_terminal_message(Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING, fields=",".join(errors)))
         return session_data, None
 
     effective_session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
@@ -91,7 +93,7 @@ def maybe_generate_uri_summary(
         with show_loading(i18n.t(Keys.URI_SUMMARY_LOADING)):
             summary_markdown = request_summary(config, prompt)
     except Exception as e:
-        print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
+        print(render_terminal_message(Keys.URI_SUMMARY_API_FAILED_WARNING, error=e))
         return effective_session_data, None
 
     return effective_session_data, summary_markdown
@@ -185,7 +187,7 @@ def handle_uri_mode(
         if "print" in output_formats:
             session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
             output = render_session_text(args.uri, session_data)
-            print(output)
+            print(safe_body_text(output))
             had_success = True
 
         file_formats = [fmt for fmt in output_formats if fmt != "print"]
@@ -221,13 +223,13 @@ def handle_uri_mode(
 
             if attempt.output_format == "json" and summary_markdown is not None:
                 if attempt.error is None:
-                    print(i18n.t(Keys.URI_SUMMARY_APPLIED, path=str(attempt.output_path)))
+                    print(render_terminal_message(Keys.URI_SUMMARY_APPLIED, path=attempt.output_path))
                 else:
-                    print(i18n.t(Keys.URI_SUMMARY_API_FAILED_WARNING, error=attempt.error))
+                    print(render_terminal_message(Keys.URI_SUMMARY_API_FAILED_WARNING, error=attempt.error))
             print(
-                i18n.t(
+                render_terminal_message(
                     Keys.URI_EXPORT_SAVED,
-                    path=str(attempt.output_path),
+                    path=attempt.output_path,
                     format=attempt.output_format,
                 )
             )

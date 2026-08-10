@@ -5,6 +5,7 @@ import pytest
 
 from agent_dump.config import AIConfig
 from agent_dump.prompt_safety import UNTRUSTED_DATA_RULES
+from agent_dump.text_safety import has_unsafe_body_characters
 from agent_dump.uri_workflow import build_uri_summary_prompt, maybe_generate_uri_summary
 
 
@@ -96,3 +97,30 @@ def test_maybe_generate_uri_summary_returns_loaded_data_when_request_fails(
     assert summary is None
     agent.get_cached_session_data.assert_called_once_with(session)
     assert "AI 总结请求失败: service unavailable" in capsys.readouterr().out
+
+
+def test_maybe_generate_uri_summary_sanitizes_remote_error_at_stdout(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    poison = "failure\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+    config = AIConfig(provider="openai", base_url="https://example.com", model="model", api_key="key")
+    session_data = {"messages": []}
+    agent = mock.Mock()
+    session = mock.Mock()
+    monkeypatch.setattr("agent_dump.uri_workflow.load_ai_config", lambda: config)
+    monkeypatch.setattr("agent_dump.uri_workflow.validate_ai_config", lambda candidate: (candidate is config, []))
+
+    maybe_generate_uri_summary(
+        enabled=True,
+        output_formats=["json"],
+        uri="codex://session-001",
+        agent=agent,
+        session=session,
+        session_data=session_data,
+        request_summary=mock.Mock(side_effect=RuntimeError(poison)),
+    )
+
+    output = capsys.readouterr().out
+    assert not has_unsafe_body_characters(output)
+    assert "FORGED" in output
