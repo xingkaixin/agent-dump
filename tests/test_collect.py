@@ -864,9 +864,9 @@ class TestCollectStructuredSummary:
 
     def test_request_structured_summary_payload_openai_uses_json_schema(self):
         response = mock.MagicMock()
-        response.read.return_value = json.dumps({"choices": [{"message": {"content": '{"topics":["A"]}'}}]}).encode(
-            "utf-8"
-        )
+        response.read.side_effect = io.BytesIO(
+            json.dumps({"choices": [{"message": {"content": '{"topics":["A"]}'}}]}).encode("utf-8")
+        ).read
         response.__enter__.return_value = response
         response.__exit__.return_value = None
 
@@ -959,7 +959,9 @@ class TestCollectStructuredSummary:
             io.BytesIO(b'{"error": {"message": "Unrecognized request argument supplied: enable_thinking"}}'),
         )
         response = mock.MagicMock()
-        response.read.return_value = json.dumps({"choices": [{"message": {"content": "# summary"}}]}).encode("utf-8")
+        response.read.side_effect = io.BytesIO(
+            json.dumps({"choices": [{"message": {"content": "# summary"}}]}).encode("utf-8")
+        ).read
         response.__enter__.return_value = response
         response.__exit__.return_value = None
 
@@ -1363,7 +1365,7 @@ class TestCollectLLM:
             ]
         }
         response = mock.MagicMock()
-        response.read.return_value = json.dumps(payload).encode("utf-8")
+        response.read.side_effect = io.BytesIO(json.dumps(payload).encode("utf-8")).read
         response.__enter__.return_value = response
         response.__exit__.return_value = None
 
@@ -1593,9 +1595,11 @@ class TestCollectInsightMode:
 
     def test_request_structured_summary_payload_openai_insight_schema(self):
         response = mock.MagicMock()
-        response.read.return_value = json.dumps(
-            {"choices": [{"message": {"content": '{"scene":["S1"],"stuck":[],"turning":["L1"]}'}}]}
-        ).encode("utf-8")
+        response.read.side_effect = io.BytesIO(
+            json.dumps({"choices": [{"message": {"content": '{"scene":["S1"],"stuck":[],"turning":["L1"]}'}}]}).encode(
+                "utf-8"
+            )
+        ).read
         response.__enter__.return_value = response
         response.__exit__.return_value = None
 
