@@ -18,24 +18,18 @@ from agent_dump.prompt_safety import UNTRUSTED_DATA_RULES, summary_system_prompt
 from agent_dump.text_safety import has_unsafe_line_characters
 
 
-class _StreamingResponse:
+class _StreamingResponse(io.BytesIO):
     def __init__(self, body: bytes, *, content_length: int | str | None = None) -> None:
-        self._stream = io.BytesIO(body)
+        super().__init__(body)
         self.headers = {} if content_length is None else {"Content-Length": str(content_length)}
         self.read_sizes: list[int] = []
+        self.bytes_read = 0
 
-    def __enter__(self) -> "_StreamingResponse":
-        return self
-
-    def __exit__(self, *args: Any) -> None:
-        del args
-
-    def read(self, size: int = -1) -> bytes:
-        self.read_sizes.append(size)
-        return self._stream.read(size)
-
-    def close(self) -> None:
-        self._stream.close()
+    def read(self, size: int | None = -1, /) -> bytes:
+        self.read_sizes.append(-1 if size is None else size)
+        chunk = super().read(size)
+        self.bytes_read += len(chunk)
+        return chunk
 
 
 @contextmanager
@@ -240,7 +234,7 @@ class TestBoundedResponses:
             request_summary_from_llm(self._config(), "prompt")
 
         assert not is_retryable_error(raised.value)
-        assert response._stream.tell() == limit + 1
+        assert response.bytes_read == limit + 1
         assert max(response.read_sizes) <= collect_llm._RESPONSE_READ_CHUNK_BYTES
 
     def test_malformed_content_length_falls_back_to_bounded_streaming(self) -> None:
@@ -274,7 +268,7 @@ class TestBoundedResponses:
         assert not has_unsafe_line_characters(error_text)
         assert "remote-tail" not in error_text
         assert "redacted-secret" not in error_text
-        assert response._stream.tell() == collect_llm.LLM_ERROR_BODY_MAX_BYTES + 1
+        assert response.bytes_read == collect_llm.LLM_ERROR_BODY_MAX_BYTES + 1
 
     @pytest.mark.parametrize("transport_error", [TimeoutError("timed out"), ConnectionResetError("reset")])
     def test_low_level_transport_errors_are_classified_for_retry(self, transport_error: OSError) -> None:

@@ -1026,11 +1026,15 @@ class TestCollectStructuredSummary:
         assert records[-1]["response_chars"] == len("not json")
         assert records[-1]["response_preview"] == "not json"
         assert records[-1]["response_tail_preview"] == "not json"
+        assert records[2]["retry_kind"] == "parse_correction"
+        assert records[2]["parse_attempt"] == 1
+        assert records[3]["parse_attempt"] == 2
+        assert records[-1]["will_retry"] is False
 
     def test_request_structured_summary_from_llm_retries_request_error(self, tmp_path):
         log_path = tmp_path / "collect.log"
         logger = CollectLogger(enabled=True, path=log_path, run_id="run-1")
-        responses = iter([RuntimeError("The read operation timed out"), '{"topics":["A"]}'])
+        responses = iter([LLMRequestError("The read operation timed out", transport=True), '{"topics":["A"]}'])
 
         def _side_effect(*args, **kwargs):
             result = next(responses)
@@ -1054,6 +1058,67 @@ class TestCollectStructuredSummary:
             "llm_request",
             "llm_response",
         ]
+        assert records[1]["retryable"] is True
+        assert records[1]["will_retry"] is True
+        assert records[1]["retry_kind"] == "transport"
+        assert records[1]["transport_attempt"] == 1
+        assert records[2]["transport_attempt"] == 2
+
+    @pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
+    def test_structured_summary_does_not_retry_permanent_http_errors(self, status):
+        with (
+            mock.patch(
+                "agent_dump.collect.request_structured_summary_payload_from_llm",
+                side_effect=LLMRequestError(f"HTTP {status}", status=status),
+            ) as mocked,
+            pytest.raises(RuntimeError, match=f"HTTP {status}"),
+        ):
+            request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
+
+        assert mocked.call_count == 1
+
+    @pytest.mark.parametrize("status", [429, 500, 503])
+    def test_structured_summary_retries_retryable_http_errors(self, status):
+        with mock.patch(
+            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            side_effect=[LLMRequestError(f"HTTP {status}", status=status), '{"topics":["A"]}'],
+        ) as mocked:
+            result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
+
+        assert result["topics"] == ["A"]
+        assert mocked.call_count == 2
+
+    def test_structured_summary_does_not_retry_unclassified_request_errors(self):
+        with (
+            mock.patch(
+                "agent_dump.collect.request_structured_summary_payload_from_llm",
+                side_effect=RuntimeError("missing response content"),
+            ) as mocked,
+            pytest.raises(RuntimeError, match="missing response content"),
+        ):
+            request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
+
+        assert mocked.call_count == 1
+
+    def test_parse_correction_has_an_independent_transport_retry_budget(self):
+        responses = [
+            LLMRequestError("connection reset", transport=True),
+            "not json",
+            LLMRequestError("timed out", transport=True),
+            '{"topics":["recovered"]}',
+        ]
+        with mock.patch(
+            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            side_effect=responses,
+        ) as mocked:
+            result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
+
+        assert result["topics"] == ["recovered"]
+        assert mocked.call_count == 4
+        assert mocked.call_args_list[0].args[1] == "prompt"
+        assert mocked.call_args_list[1].args[1] == "prompt"
+        assert mocked.call_args_list[2].args[1] != "prompt"
+        assert mocked.call_args_list[3].args[1] == mocked.call_args_list[2].args[1]
 
     def test_build_collect_session_prompt_contains_required_sections(self):
         prompt = build_collect_session_prompt(self._entry(), source_truncated=False)
