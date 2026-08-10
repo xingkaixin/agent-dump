@@ -8,6 +8,9 @@ import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.scanner import AgentScanner
+from agent_dump.text_safety import has_unsafe_line_characters
+
+POISON = "real\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
 
 
 def make_session(session_id: str) -> Session:
@@ -137,6 +140,18 @@ class TestAgentScanner:
         warning = capsys.readouterr().err
         assert warning.count("Broken") == 1
         assert f"{type(error).__name__}: {error}" in warning
+
+    def test_scan_sanitizes_provider_and_exception_at_the_real_stderr_sink(self, capsys):
+        broken = FakeAgent("broken")
+        broken.display_name = f"Provider {POISON}"
+        broken.sessions_error = RuntimeError(f"failure {POISON}")
+
+        AgentScanner([broken]).get_sessions()
+
+        warning = capsys.readouterr().err
+        assert not has_unsafe_line_characters(warning.rstrip("\n"))
+        assert warning.count("\n") == 1
+        assert "FORGED" in warning
 
     def test_scan_runs_concurrently(self):
         barrier = threading.Barrier(2, timeout=10)
