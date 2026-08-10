@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Describe `-p`/`-page-size` truthfully as an ignored compatibility option and remove the unreachable pagination input loop
+
 ### Performance
 
 - Bound completed Session payload caching and release bulk Search/Collect reads after projection, so memory follows the active worker window instead of total Session history

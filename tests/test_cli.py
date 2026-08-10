@@ -1345,10 +1345,14 @@ class TestMain:
             configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump", "--list", "-page-size", "1"]):
+            with (
+                mock.patch("sys.argv", ["agent-dump", "--list", "-page-size", "1"]),
+                mock.patch("builtins.input") as user_input,
+            ):
                 main()
 
             captured = capsys.readouterr()
+            user_input.assert_not_called()
             assert "• Session 1" in captured.out
             assert "uri=opencode://s1" in captured.out
             assert "model=gpt-5" in captured.out

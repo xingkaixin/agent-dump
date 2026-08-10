@@ -176,16 +176,11 @@ def _handle_list_mode(
         print(f"\n📁 {safe_display_text(agent.display_name)} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
 
         if sessions:
-            should_quit = display_sessions_list(
+            display_sessions_list(
                 agent,
                 sessions,
-                page_size=max(len(sessions), 1),
-                show_pagination=False,
                 show_metadata_summary=show_metadata_summary,
             )
-            if should_quit:
-                print("\n" + "=" * 60)
-                return 0
         else:
             print(i18n.t(Keys.NO_SESSIONS_IN_DAYS, days=args.days))
 

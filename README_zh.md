@@ -216,7 +216,7 @@ uv run agent-dump 'agents://.?q=refactor&providers=codex,claude'  # 查询当前
 uv run agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # 结构化查询 URI
 uv run agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # 按绝对路径查询
 uv run agent-dump --interactive 'agents://~/work/repo?q=bug'  # 按路径作用域进入交互式选择
-uv run agent-dump --list -page-size 10        # 参数保留兼容，当前在 --list 模式下不生效
+uv run agent-dump --list -page-size 10        # 参数保留兼容，当前不生效
 
 # 交互式导出模式
 uv run agent-dump --interactive               # 交互模式（默认 7 天）
@@ -334,7 +334,7 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `-days` 或 `-query` 且未指定 `--interactive` 则自动启用） | - |
 | `-format`, `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`，兼容 `md` 别名。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略；`--head` 不能与此选项组合。Cursor URI 仅支持 `json` 和 `print`（不支持 `raw/markdown`）。 | - |
 | `-summary`, `--summary` | 仅 URI 模式生效。开启后仅在 `--format` 包含 `json` 且 AI 配置完整时生成 summary；否则仅 warning 并继续导出（不启用 summary）。AI 请求期间会在 stderr 显示 loading 提示。不能与 `--head` 组合。 | - |
-| `-p`, `-page-size` | 为兼容保留，当前在 `--list` 模式下不生效 | 20 |
+| `-p`, `-page-size` | 为兼容保留，当前不生效 | 20 |
 | `-output`, `--output` | 输出目录。`json/raw` 优先级：`--output` > `config.toml` `[export].output` > `./sessions`。相对路径从 agent-dump 执行目录解析。Markdown 仍使用 `./sessions`，除非显式传入 `--output`。`--list` 下会警告并忽略。 | `config export.output` 或 `./sessions` |
 | `-h, --help` | 显示帮助信息 | - |
 

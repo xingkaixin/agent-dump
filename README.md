@@ -214,7 +214,7 @@ uv run agent-dump 'agents://.?q=refactor&providers=codex,claude'  # Query recent
 uv run agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # Structured query URI
 uv run agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # Query by absolute path
 uv run agent-dump --interactive 'agents://~/work/repo?q=bug'  # Path-scoped interactive selection
-uv run agent-dump --list -page-size 10        # Accepted but currently ignored in --list mode
+uv run agent-dump --list -page-size 10        # Accepted for compatibility but currently ignored
 
 # Interactive export mode
 uv run agent-dump --interactive               # Interactive mode (default 7 days)
@@ -332,7 +332,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
 | `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor URI only supports `json` and `print` (no `raw/markdown`). | - |
 | `-summary`, `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. Cannot be combined with `--head`. | - |
-| `-p`, `-page-size` | Accepted for compatibility; currently ignored in `--list` mode | 20 |
+| `-p`, `-page-size` | Accepted for compatibility; currently ignored | 20 |
 | `-output`, `--output` | Output directory. For `json/raw`, priority is `--output` > `config.toml` `[export].output` > `./sessions`. Relative paths are resolved from the current working directory. Markdown keeps using `./sessions` unless `--output` is explicitly passed. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
 | `-h, --help` | Show help message | - |
 
