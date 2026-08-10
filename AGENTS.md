@@ -83,6 +83,7 @@
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
 | `prompt_safety.py` | 摘要 request composition：system 规则、typed JSON data envelope 与来源追踪 |
 | `session_data.py` | 请求级会话数据缓存，按 provider-owned change sources 失效 |
+| `terminal_output.py` | 终端单行 i18n 文案的安全动态字段插值，不负责 IO |
 | `text_safety.py` | 第三方会话文本的输出净化（终端 / markdown / 文件名） |
 | `transcript.py` | 标准化消息的只读读取（role、正文、legacy content、tool / subagent facts） |
 | `time_utils.py` | 时间与时区工具，全部转换的单一入口 |
@@ -207,6 +208,8 @@ agent-dump/
 │   ├── scanner.py               # Provider discovery、list / locate 与失败隔离
 │   ├── search_index.py          # FTS5 搜索索引
 │   ├── selector.py              # 交互式选择
+│   ├── terminal_output.py       # 终端动态字段安全插值
+│   ├── text_safety.py           # 第三方文本输出净化
 │   ├── time_utils.py            # 时间与时区工具
 │   ├── transcript.py            # 标准化消息的只读读取
 │   ├── uri_support.py           # URI 解析与查找

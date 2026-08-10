@@ -457,6 +457,7 @@ deny = [
 │       ├── scanner.py          # Agent 扫描器
 │       ├── selector.py         # 交互式选择
 │       ├── session_data.py     # 请求级会话数据缓存
+│       ├── terminal_output.py  # 终端动态字段安全插值
 │       ├── text_safety.py      # 第三方会话文本的输出净化
 │       ├── time_utils.py       # 时间与时区工具
 │       ├── transcript.py       # 标准化消息的只读读取
