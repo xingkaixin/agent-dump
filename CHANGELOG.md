@@ -7,6 +7,7 @@
 ### Performance
 
 - Bound completed Session payload caching and release bulk Search/Collect reads after projection, so memory follows the active worker window instead of total Session history
+- Stop role-scoped queries after each Provider finds its stable top-limit evidence instead of parsing every remaining Session
 
 ## [0.14.0] - 2026-07-30
 

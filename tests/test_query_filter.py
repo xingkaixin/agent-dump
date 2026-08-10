@@ -2,7 +2,7 @@
 测试 query_filter.py 模块
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
@@ -51,6 +51,16 @@ class DummyAgent(BaseAgent):
 
     def get_session_data(self, session: Session) -> dict:
         return self._session_data.get(session.id, {})
+
+
+class CountingAgent(DummyAgent):
+    def __init__(self, name: str = "codex", session_data: dict[str, dict] | None = None):
+        super().__init__(name=name, session_data=session_data)
+        self.data_reads = 0
+
+    def get_session_data(self, session: Session) -> dict:
+        self.data_reads += 1
+        return super().get_session_data(session)
 
 
 def make_session(session_id: str, title: str, source_path: Path) -> Session:
@@ -775,6 +785,181 @@ class TestSearchSessionsByQuery:
         assert result[0].snippet == "ran tests"
 
 
+class TestRoleLimitPushdown:
+    @staticmethod
+    def _session(
+        tmp_path: Path, session_id: str, updated_at: datetime, *, created_at: datetime | None = None
+    ) -> Session:
+        session = make_session(session_id, session_id, tmp_path / f"{session_id}.jsonl")
+        session.updated_at = updated_at
+        session.created_at = created_at or updated_at
+        return session
+
+    @staticmethod
+    def _data(sessions: list[Session], *, text: str = "matching evidence") -> dict[str, dict]:
+        return {
+            session.id: {"messages": [{"role": "user", "parts": [{"type": "text", "text": text}]}]}
+            for session in sessions
+        }
+
+    def test_high_hit_limit_reads_only_the_best_session(self, tmp_path) -> None:
+        now = datetime(2026, 8, 10, tzinfo=timezone.utc)
+        sessions = [self._session(tmp_path, f"s-{index:02d}", now - timedelta(minutes=index)) for index in range(30)]
+        sessions.reverse()
+        agent = CountingAgent(session_data=self._data(sessions))
+
+        result = query_session_matches(
+            agent,
+            sessions,
+            make_query_spec(keyword="matching", roles={"user"}, limit=1),
+        )
+
+        assert [match.session.id for match in result] == ["s-00"]
+        assert agent.data_reads == 1
+
+    def test_scan_stops_only_after_enough_actual_matches(self, tmp_path) -> None:
+        now = datetime(2026, 8, 10, tzinfo=timezone.utc)
+        sessions = [self._session(tmp_path, f"s-{index:02d}", now - timedelta(minutes=index)) for index in range(10)]
+        data = self._data(sessions)
+        for session in sessions[:5]:
+            data[session.id] = {"messages": [{"role": "user", "parts": [{"type": "text", "text": "not relevant"}]}]}
+        agent = CountingAgent(session_data=data)
+
+        result = query_session_matches(
+            agent,
+            list(reversed(sessions)),
+            make_query_spec(keyword="matching", roles={"user"}, limit=1),
+        )
+
+        assert [match.session.id for match in result] == ["s-05"]
+        assert agent.data_reads == 6
+
+    def test_no_match_still_reads_every_scoped_session(self, tmp_path) -> None:
+        now = datetime(2026, 8, 10, tzinfo=timezone.utc)
+        sessions = [self._session(tmp_path, f"s-{index:02d}", now - timedelta(minutes=index)) for index in range(10)]
+        agent = CountingAgent(session_data=self._data(sessions, text="not relevant"))
+
+        result = query_session_matches(
+            agent,
+            sessions,
+            make_query_spec(keyword="matching", roles={"user"}, limit=1),
+        )
+
+        assert result == []
+        assert agent.data_reads == len(sessions)
+
+    def test_no_limit_preserves_full_input_order(self, tmp_path) -> None:
+        now = datetime(2026, 8, 10, tzinfo=timezone.utc)
+        newer = self._session(tmp_path, "newer", now)
+        older = self._session(tmp_path, "older", now - timedelta(hours=1))
+        sessions = [older, newer]
+        agent = CountingAgent(session_data=self._data(sessions))
+
+        result = query_session_matches(
+            agent,
+            sessions,
+            make_query_spec(keyword="matching", roles={"user"}),
+        )
+
+        assert [match.session.id for match in result] == ["older", "newer"]
+        assert agent.data_reads == 2
+
+    def test_path_scope_is_applied_before_role_limit(self, tmp_path) -> None:
+        now = datetime(2026, 8, 10, tzinfo=timezone.utc)
+        outside = self._session(tmp_path, "outside", now)
+        outside.metadata = {"cwd": str(tmp_path / "outside")}
+        inside = self._session(tmp_path, "inside", now - timedelta(hours=1))
+        inside.metadata = {"cwd": str(tmp_path / "repo")}
+        sessions = [outside, inside]
+        agent = CountingAgent(session_data=self._data(sessions))
+
+        result = query_session_matches(
+            agent,
+            sessions,
+            make_query_spec(
+                keyword="matching",
+                project_path=tmp_path / "repo",
+                roles={"user"},
+                limit=1,
+            ),
+        )
+
+        assert [match.session.id for match in result] == ["inside"]
+        assert agent.data_reads == 1
+
+    def test_sort_key_normalizes_timezones_and_uses_created_at_then_id(self, tmp_path) -> None:
+        updated = datetime(2026, 8, 10, 12, tzinfo=timezone.utc)
+        created = datetime(2026, 8, 10, 11, tzinfo=timezone.utc)
+        id_later = self._session(tmp_path, "b", updated.replace(tzinfo=None), created_at=created.replace(tzinfo=None))
+        id_first = self._session(tmp_path, "a", updated, created_at=created)
+        created_first = self._session(tmp_path, "z", updated, created_at=created + timedelta(minutes=1))
+        sessions = [id_later, id_first, created_first]
+        agent = CountingAgent(session_data=self._data(sessions))
+
+        first = query_session_matches(agent, sessions, make_query_spec(roles={"user"}, limit=1))
+        second_agent = CountingAgent(session_data=self._data(sessions[:2]))
+        second = query_session_matches(second_agent, sessions[:2], make_query_spec(roles={"user"}, limit=1))
+
+        assert [match.session.id for match in first] == ["z"]
+        assert [match.session.id for match in second] == ["a"]
+
+    def test_per_provider_top_limit_matches_full_scan_oracle(self, tmp_path) -> None:
+        now = datetime(2026, 8, 10, tzinfo=timezone.utc)
+        codex_sessions = [
+            self._session(tmp_path, "c-old", now - timedelta(hours=4)),
+            self._session(tmp_path, "c-new", now),
+            self._session(tmp_path, "c-mid", now - timedelta(hours=2)),
+        ]
+        kimi_sessions = [
+            self._session(tmp_path, "k-old", now - timedelta(hours=5)),
+            self._session(tmp_path, "k-new", now - timedelta(hours=1)),
+            self._session(tmp_path, "k-mid", now - timedelta(hours=3)),
+        ]
+        optimized_agents = [
+            CountingAgent(name="codex", session_data=self._data(codex_sessions)),
+            CountingAgent(name="kimi", session_data=self._data(kimi_sessions)),
+        ]
+        full_agents = [
+            CountingAgent(name="codex", session_data=self._data(codex_sessions)),
+            CountingAgent(name="kimi", session_data=self._data(kimi_sessions)),
+        ]
+        session_groups = [codex_sessions, kimi_sessions]
+
+        optimized = limit_query_session_matches(
+            [
+                match
+                for agent, sessions in zip(optimized_agents, session_groups, strict=True)
+                for match in query_session_matches(
+                    agent,
+                    sessions,
+                    make_query_spec(keyword="matching", roles={"user"}, limit=2),
+                )
+            ],
+            2,
+        )
+        oracle = limit_query_session_matches(
+            [
+                match
+                for agent, sessions in zip(full_agents, session_groups, strict=True)
+                for match in query_session_matches(
+                    agent,
+                    sessions,
+                    make_query_spec(keyword="matching", roles={"user"}),
+                )
+            ],
+            2,
+        )
+
+        def project(matches: list[SearchSessionMatch]) -> list[tuple[str, str, str, float, str | None]]:
+            return [
+                (match.agent.name, match.session.id, match.snippet, match.rank, match.matched_role) for match in matches
+            ]
+
+        assert project(optimized) == project(oracle)
+        assert [agent.data_reads for agent in optimized_agents] == [2, 2]
+        assert [agent.data_reads for agent in full_agents] == [3, 3]
+
+
 class TestLimitQueryMatches:
     def test_limit_query_session_matches_preserves_selected_evidence(self, tmp_path):
         agent = DummyAgent(name="codex")
@@ -790,6 +975,21 @@ class TestLimitQueryMatches:
         result = limit_query_session_matches(matches, 1)
 
         assert result == [matches[1]]
+
+    def test_limit_sorts_even_when_it_does_not_truncate(self, tmp_path) -> None:
+        agent = DummyAgent(name="codex")
+        older = make_session("s-old", "old", tmp_path / "old.jsonl")
+        older.updated_at = datetime(2026, 1, 1, 10, 0, 0)
+        newer = make_session("s-new", "new", tmp_path / "new.jsonl")
+        newer.updated_at = datetime(2026, 1, 1, 11, 0, 0)
+        matches = [
+            SearchSessionMatch(agent, older, "old", 0.0, "user"),
+            SearchSessionMatch(agent, newer, "new", 0.0, "user"),
+        ]
+
+        result = limit_query_session_matches(matches, 5)
+
+        assert result == [matches[1], matches[0]]
 
 
 class TestLimitSearchMatches:
