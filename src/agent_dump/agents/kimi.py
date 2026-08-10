@@ -3,7 +3,7 @@ Kimi agent handler
 """
 
 from collections.abc import Iterable, Iterator
-from datetime import datetime, timezone
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -21,7 +21,7 @@ from agent_dump.agents.message_assembly import (
     build_text_part,
     build_tool_part,
 )
-from agent_dump.coercion import safe_int
+from agent_dump.coercion import safe_epoch_datetime, safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
@@ -165,6 +165,8 @@ class KimiAgent(FileSessionAgent):
         try:
             with open(metadata_path, encoding="utf-8") as f:
                 metadata = json.load(f)
+            if not isinstance(metadata, dict):
+                return None
 
             session_dir = metadata_path.parent
             session_files = self._get_session_files(session_dir)
@@ -177,8 +179,11 @@ class KimiAgent(FileSessionAgent):
             session_id = metadata.get("session_id", "")
             title = metadata.get("title", "Untitled Session")
             wire_mtime = metadata.get("wire_mtime")
-            created_at_ts = wire_mtime if isinstance(wire_mtime, (int, float)) else metadata_path.stat().st_mtime
-            created_at = datetime.fromtimestamp(created_at_ts, tz=timezone.utc)
+            created_at = safe_epoch_datetime(wire_mtime, unit="s")
+            if created_at is None:
+                created_at = safe_epoch_datetime(metadata_path.stat().st_mtime, unit="s")
+            if created_at is None:
+                return None
 
             project_hash = session_dir.parent.name
             cwd = self._resolve_cwd_from_project_hash(project_hash)
@@ -273,7 +278,7 @@ class KimiAgent(FileSessionAgent):
 
             token_count = data.get("token_count")
             if isinstance(token_count, (int, float)) and not isinstance(token_count, bool):
-                total_tokens = int(token_count)
+                total_tokens = safe_int(token_count, total_tokens if total_tokens is not None else 0)
         warn_skipped_records(scan)
 
         return total_tokens
@@ -661,13 +666,16 @@ class KimiAgent(FileSessionAgent):
                     continue
                 msg_type = message.get("type", "")
                 payload = message.get("payload", {})
+                if not isinstance(payload, dict):
+                    continue
                 timestamp = data.get("timestamp", 0)
-                timestamp_ms = int(timestamp * 1000) if isinstance(timestamp, (int, float)) else 0
+                parsed_timestamp = safe_epoch_datetime(timestamp, unit="s")
+                timestamp_ms = int(parsed_timestamp.timestamp() * 1000) if parsed_timestamp is not None else 0
 
                 if msg_type == "TurnBegin":
                     user_input = payload.get("user_input", [])
                     text = ""
-                    if user_input and isinstance(user_input, list):
+                    if user_input and isinstance(user_input, list) and isinstance(user_input[0], dict):
                         text = str(user_input[0].get("text", ""))
                     if text.strip():
                         messages.append(

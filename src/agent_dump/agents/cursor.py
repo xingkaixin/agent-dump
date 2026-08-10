@@ -13,7 +13,7 @@ import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.coercion import safe_epoch_datetime, safe_int
+from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing, unsupported_capability
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
@@ -190,20 +190,16 @@ class CursorAgent(BaseAgent):
         return f"Cursor Session {composer_id[:8]}"
 
     def _parse_datetime_utc(self, value: Any) -> datetime | None:
-        if isinstance(value, str):
-            if "T" in value:
-                parsed = _parse_cursor_iso_utc(value)
-                if parsed is not None:
-                    return parsed
-            try:
-                value = float(value)
-            except ValueError:
-                return None
-        if isinstance(value, (int, float)):
+        if isinstance(value, str) and "T" in value:
+            parsed = _parse_cursor_iso_utc(value)
+            if parsed is not None:
+                return parsed
+        if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+            number = safe_float(value, default=float("nan"))
             # Cursor 同一字段既可能存秒也可能存毫秒，1e12 秒约合公元 33658 年，
             # 超过即判定为毫秒
-            unit = "ms" if float(value) > 1e12 else "s"
-            return safe_epoch_datetime(value, unit=unit)
+            unit = "ms" if number > 1e12 else "s"
+            return safe_epoch_datetime(number, unit=unit)
         return None
 
     def _resolve_session_times(self, composer: dict[str, Any]) -> tuple[datetime, datetime]:
@@ -476,14 +472,9 @@ class CursorAgent(BaseAgent):
         timing = bubble.get("timingInfo")
         if isinstance(timing, dict):
             for key in ("clientRpcSendTime", "clientSettleTime", "clientEndTime"):
-                value = timing.get(key)
-                if isinstance(value, (int, float)):
-                    return int(value)
-                if isinstance(value, str):
-                    try:
-                        return int(float(value))
-                    except ValueError:
-                        continue
+                number = safe_float(timing.get(key), default=float("nan"))
+                if safe_epoch_datetime(number, unit="ms") is not None:
+                    return safe_int(number, fallback_ms)
         return fallback_ms
 
     def _extract_text_content(self, bubble: dict[str, Any], role: str) -> str | None:
@@ -983,7 +974,10 @@ class CursorAgent(BaseAgent):
             if subagent_completion is not None:
                 messages.append(subagent_completion)
 
-        messages = sorted(messages, key=lambda message: int(message.get("time_created") or fallback_created_ms))
+        messages = sorted(
+            messages,
+            key=lambda message: safe_int(message.get("time_created"), fallback_created_ms),
+        )
 
         usage_data = session.metadata.get("usage_data")
         usage_context_tokens = None

@@ -242,3 +242,25 @@ def test_get_sessions_and_export_from_zcode_db(tmp_path) -> None:
     if os.name != "nt":
         assert stat.S_IMODE(raw_path.parent.stat().st_mode) == PRIVATE_DIR_MODE
         assert stat.S_IMODE(raw_path.stat().st_mode) == PRIVATE_FILE_MODE
+
+
+def test_get_session_head_skips_non_object_message_payload(tmp_path) -> None:
+    agent = ZCodeAgent()
+    db_path = tmp_path / "db.sqlite"
+    _create_zcode_db(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?, ?)",
+            ("bad", "sess-zcode", _now_ms() + 2000, _now_ms() + 2000, "[]"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    agent.db_path = db_path
+    session = agent.get_sessions(days=3650)[0]
+
+    head = agent.get_session_head(session)
+
+    assert head["model"] == "GLM-5.2"
+    assert head["message_count"] == 3

@@ -338,6 +338,23 @@ class TestKimiAgent:
         assert result is not None
         assert result.created_at == datetime(2025, 3, 5, 2, 0, tzinfo=timezone.utc)
 
+    @pytest.mark.parametrize("wire_mtime", [10**400, float("nan"), float("inf"), float("-inf")])
+    def test_parse_session_falls_back_from_unrepresentable_wire_mtime(self, tmp_path, wire_mtime):
+        agent = KimiAgent()
+        session_dir = tmp_path / "session-bad-time"
+        session_dir.mkdir()
+        metadata_path = session_dir / "metadata.json"
+        metadata_path.write_text(
+            json.dumps({"session_id": "bad-time", "title": "Bad Time", "wire_mtime": wire_mtime}),
+            encoding="utf-8",
+        )
+        (session_dir / "wire.jsonl").touch()
+
+        result = agent._parse_session(metadata_path)
+
+        assert result is not None
+        assert result.created_at.tzinfo == timezone.utc
+
     def test_parse_session_no_context_and_no_wire(self, tmp_path):
         """测试既没有 context 也没有 wire 时返回 None"""
         agent = KimiAgent()
@@ -1456,6 +1473,35 @@ class TestKimiAgent:
         assert exported["stats"]["total_input_tokens"] == 10
         assert exported["stats"]["total_output_tokens"] == 20
         assert exported["stats"]["total_tokens"] == 0
+
+    def test_wire_reader_skips_bad_nested_payload_and_bounds_timestamps(self, tmp_path):
+        agent = KimiAgent()
+        output_dir = tmp_path / "output"
+        session_dir = tmp_path / "session-bad-wire"
+        session_dir.mkdir()
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {"timestamp": 1, "message": {"type": "TurnBegin", "payload": []}},
+                {
+                    "timestamp": 10**400,
+                    "message": {"type": "TurnBegin", "payload": {"user_input": [{"text": "AFTER"}]}},
+                },
+                {
+                    "timestamp": float("inf"),
+                    "message": {"type": "ContentPart", "payload": {"type": "text", "text": "ANSWER"}},
+                },
+            ],
+        )
+        session = make_session(session_dir, session_id="bad-wire", title="Bad Wire")
+
+        result = agent.export_session(session, output_dir)
+
+        exported = json.loads(result.read_text(encoding="utf-8"))
+        assert [message["role"] for message in exported["messages"]] == ["user", "assistant"]
+        assert all(message["time_created"] == 0 for message in exported["messages"])
+        assert "AFTER" in json.dumps(exported["messages"], ensure_ascii=False)
+        assert "ANSWER" in json.dumps(exported["messages"], ensure_ascii=False)
 
     def test_export_session_uses_last_usage_token_count_from_context(self, tmp_path):
         """测试导出时从 context.jsonl 的最后一条 _usage 提取会话总 token"""

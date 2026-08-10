@@ -6,12 +6,14 @@ from pathlib import Path
 import sys
 from typing import Any
 
+from agent_dump.coercion import safe_epoch_datetime
 from agent_dump.i18n import Keys, i18n
 from agent_dump.text_safety import safe_display_text
 
 FULL_SCAN_BYTE_LIMIT = 256 * 1024
 HEAD_SCAN_BYTE_LIMIT = 64 * 1024
 TAIL_SCAN_BYTE_LIMIT = 64 * 1024
+SKIPPED_LINE_SAMPLE_LIMIT = 5
 
 
 def file_modified_since(file_path: Path, cutoff: datetime) -> bool:
@@ -24,7 +26,8 @@ def file_modified_since(file_path: Path, cutoff: datetime) -> bool:
         mtime = file_path.stat().st_mtime
     except OSError:
         return True
-    return datetime.fromtimestamp(mtime, tz=timezone.utc) >= cutoff
+    modified_at = safe_epoch_datetime(mtime, unit="s")
+    return modified_at is None or modified_at >= cutoff
 
 
 @dataclass(frozen=True)
@@ -91,7 +94,13 @@ class JsonlObjectScan:
 
     def __init__(self, file_path: Path) -> None:
         self.file_path = file_path
-        self.skipped_lines: list[int] = []
+        self.skipped_count = 0
+        self.skipped_line_samples: tuple[int, ...] = ()
+
+    def _record_skipped_line(self, line_number: int) -> None:
+        self.skipped_count += 1
+        if len(self.skipped_line_samples) < SKIPPED_LINE_SAMPLE_LIMIT:
+            self.skipped_line_samples += (line_number,)
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
         with open(self.file_path, encoding="utf-8") as f:
@@ -101,10 +110,10 @@ class JsonlObjectScan:
                 try:
                     data = json.loads(line)
                 except json.JSONDecodeError:
-                    self.skipped_lines.append(line_number)
+                    self._record_skipped_line(line_number)
                     continue
                 if not isinstance(data, dict):
-                    self.skipped_lines.append(line_number)
+                    self._record_skipped_line(line_number)
                     continue
                 yield data
 
@@ -124,14 +133,14 @@ def parse_object_lines(lines: list[str]) -> list[dict[str, Any]]:
 
 def warn_skipped_records(scan: JsonlObjectScan) -> None:
     """Report a file's skipped records once, after the scan is exhausted."""
-    if not scan.skipped_lines:
+    if not scan.skipped_count:
         return
     print(
         i18n.t(
             Keys.WARN_JSONL_RECORDS_SKIPPED,
             path=safe_display_text(str(scan.file_path)),
-            count=len(scan.skipped_lines),
-            lines=", ".join(str(line) for line in scan.skipped_lines[:5]),
+            count=scan.skipped_count,
+            lines=", ".join(str(line) for line in scan.skipped_line_samples),
         ),
         file=sys.stderr,
     )

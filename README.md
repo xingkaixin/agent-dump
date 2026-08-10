@@ -473,7 +473,7 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 │           ├── kimi.py         # Kimi Agent
 │           ├── pi.py           # Pi Agent
 │           ├── file_sessions.py # Shared file-backed provider base
-│           ├── jsonl_scan.py   # JSONL scan helpers
+│           ├── jsonl_scan.py   # Bounded JSONL object scan and diagnostics
 │           ├── message_assembly.py # Normalized message builders
 │           └── title_fallback.py # Shared title fallback rules
 ├── tests/                      # Test directory

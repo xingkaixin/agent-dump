@@ -60,6 +60,10 @@ class TestSafeEpochDatetime:
     def test_millisecond_value_read_as_seconds_is_still_bounded(self):
         assert safe_epoch_datetime(1704067200000, unit="s") is None
 
+    @pytest.mark.parametrize("value", [10**400, -(10**400)])
+    def test_integer_too_large_for_float_returns_none(self, value):
+        assert safe_epoch_datetime(value, unit="s") is None
+
 
 class TestSafeFloat:
     """AD-160：cost 等浮点统计要与 safe_int 同一套不可信值语义。"""
@@ -89,3 +93,8 @@ class TestSafeFloat:
 
     def test_explicit_default(self):
         assert safe_float(None, -1.0) == -1.0
+
+    @pytest.mark.parametrize("value", [10**400, -(10**400), "1e1000000", "-1e1000000"])
+    def test_overflowing_values_fall_back(self, value):
+        assert safe_float(value) == 0.0
+        assert safe_float(value, -1.0) == -1.0

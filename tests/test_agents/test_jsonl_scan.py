@@ -4,6 +4,8 @@ import builtins
 from datetime import datetime, timedelta, timezone
 import json
 import os
+from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from agent_dump.agents.jsonl_scan import (
@@ -43,6 +45,13 @@ class TestFileModifiedSince:
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=7)
         assert file_modified_since(missing, cutoff) is True
+
+    def test_unrepresentable_mtime_keeps_file_without_raising(self, tmp_path):
+        file_path = tmp_path / "session.jsonl"
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+
+        with mock.patch.object(Path, "stat", return_value=SimpleNamespace(st_mtime=10**400)):
+            assert file_modified_since(file_path, cutoff) is True
 
 
 def _record(size: int, **extra) -> str:
@@ -157,7 +166,8 @@ class TestJsonlObjectScan:
         scan = JsonlObjectScan(file_path)
 
         assert list(scan) == [{"n": 1}, {"n": 2}], "坏记录前后的对象都必须保留"
-        assert scan.skipped_lines == [2, 3, 4, 5, 6]
+        assert scan.skipped_count == 5
+        assert scan.skipped_line_samples == (2, 3, 4, 5, 6)
 
     def test_malformed_json_is_skipped_too(self, tmp_path):
         file_path = tmp_path / "s.jsonl"
@@ -166,7 +176,8 @@ class TestJsonlObjectScan:
         scan = JsonlObjectScan(file_path)
 
         assert list(scan) == [{"n": 1}, {"n": 2}]
-        assert scan.skipped_lines == [2]
+        assert scan.skipped_count == 1
+        assert scan.skipped_line_samples == (2,)
 
     def test_blank_lines_are_not_counted_as_skipped(self, tmp_path):
         file_path = tmp_path / "s.jsonl"
@@ -175,7 +186,19 @@ class TestJsonlObjectScan:
         scan = JsonlObjectScan(file_path)
 
         assert list(scan) == [{"n": 1}, {"n": 2}]
-        assert scan.skipped_lines == []
+        assert scan.skipped_count == 0
+        assert scan.skipped_line_samples == ()
+
+    def test_skipped_record_state_is_bounded_independently_of_failure_count(self, tmp_path):
+        file_path = tmp_path / "s.jsonl"
+        file_path.write_text("1\n" * 10_000 + '{"n": 1}\n', encoding="utf-8")
+
+        scan = JsonlObjectScan(file_path)
+
+        assert list(scan) == [{"n": 1}]
+        assert scan.skipped_count == 10_000
+        assert scan.skipped_line_samples == (1, 2, 3, 4, 5)
+        assert all(not isinstance(value, list) for value in vars(scan).values())
 
     def test_clean_file_reports_nothing(self, tmp_path, capsys):
         file_path = tmp_path / "s.jsonl"
