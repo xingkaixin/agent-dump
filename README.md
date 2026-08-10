@@ -446,7 +446,7 @@ When `agent-dump` writes `config.toml`, it escapes TOML-sensitive characters and
 │       ├── message_filter.py   # Shared message filtering
 │       ├── paths.py            # Search root models
 │       ├── private_files.py     # Owner-only permissions for tool-created files
-│       ├── prompt_safety.py    # Untrusted data isolation in summary prompts
+│       ├── prompt_safety.py    # Safe summary request composition and typed data envelopes
 │       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch
 │       ├── exporting.py        # Unified export execution and structured outcome
 │       ├── query_filter.py     # Query parsing and filtering

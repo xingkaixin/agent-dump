@@ -4,6 +4,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import date, datetime, timedelta, tzinfo
+import json
 from pathlib import Path
 import re
 import sys
@@ -54,7 +55,7 @@ from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import should_filter_message_for_export
 from agent_dump.private_files import write_private_text
-from agent_dump.prompt_safety import data_envelope
+from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
@@ -443,7 +444,7 @@ def build_collect_chunk_prompt(
     fields = collect_fields_for(mode)
     if mode == "insight":
         lines = [
-            "你是一个会话事实提取助手，从用户视角提取关键片段。",
+            "任务：从用户视角提取给定 chunk 中的关键事实片段。",
             "请只基于给定 chunk 内容输出 JSON 对象，不要输出 Markdown，不要补充解释。",
             f"JSON 必须只包含这些字段: {', '.join(fields)}。",
             "每个字段都必须是字符串数组；没有内容时返回空数组。",
@@ -460,7 +461,7 @@ def build_collect_chunk_prompt(
         ]
     else:
         lines = [
-            "你是一个严谨的工作记录结构化摘要助手。",
+            "任务：为给定 chunk 生成严谨的工作记录结构化摘要。",
             "请只基于给定 chunk 内容输出 JSON 对象，不要输出 Markdown，不要补充解释。",
             f"JSON 必须只包含这些字段: {', '.join(fields)}。",
             "每个字段都必须是字符串数组；没有内容时返回空数组。",
@@ -472,8 +473,6 @@ def build_collect_chunk_prompt(
             "5. tools_used 只放工具名。",
             "6. 字符串内部如需引用英文双引号，必须按 JSON 规则转义，或改用中文引号。",
         ]
-    # title、project_directory 与事件正文都来自第三方会话；用 JSON envelope 包住，
-    # 让「这是待总结的数据」在结构上可辨识，而不是和上面的规则同处一段纯文本
     metadata_body = "\n".join(
         [
             f"title: {entry.session_title}",
@@ -483,16 +482,21 @@ def build_collect_chunk_prompt(
         ]
     )
     events_body = "\n".join(_render_event(event) for event in chunk_events)
-    lines.extend(
-        [
-            "",
-            f"session_uri: {entry.session_uri}",
-            "",
-            data_envelope("session_metadata", source=entry.session_uri, body=metadata_body),
-            data_envelope("session_events", source=entry.session_uri, body=events_body),
-        ]
+    return compose_summary_prompt(
+        lines,
+        data=(
+            UntrustedData(
+                kind="session_metadata",
+                source=f"{entry.session_uri}#chunk-{chunk_index + 1}/metadata",
+                body=metadata_body,
+            ),
+            UntrustedData(
+                kind="session_events",
+                source=f"{entry.session_uri}#chunk-{chunk_index + 1}/events",
+                body=events_body,
+            ),
+        ),
     )
-    return "\n".join(lines)
 
 
 def build_collect_merge_prompt(
@@ -505,29 +509,28 @@ def build_collect_merge_prompt(
     """Build prompt for session/group structured merge when deterministic merge is too large."""
     fields = collect_fields_for(mode)
     lines = [
-        "你是一个严谨的结构化摘要归并助手。",
+        "任务：严谨归并给定的多个结构化摘要。",
         "请把下面多个 JSON 摘要归并成一个 JSON 对象。",
         f"输出 JSON 仍然只能包含这些字段: {', '.join(fields)}。",
         "每个字段必须是字符串数组；没有内容时返回空数组。",
         "要求：去重、保留关键事实、压缩重复表述，不要输出字段之外的内容。",
         "",
-        "上下文：",
+        "归并上下文：",
         f"- merge_label: {merge_label}",
-        f"- session_uri: {entry.session_uri}",
-        "",
-        "待归并摘要：",
     ]
-    for index, payload in enumerate(payloads, start=1):
-        # 中间摘要是模型生成的派生数据，同样不可信：一次被接受的注入会顺着
-        # tree reduction 扩散到其他 Session 的报告里
-        lines.append(
-            data_envelope(
-                "untrusted_derived_summary",
-                source=f"{entry.session_uri}#summary-{index}",
-                body=_serialize_summary_payload(payload),
-            )
+    data = tuple(
+        UntrustedData(
+            kind="untrusted_derived_summary",
+            source=(
+                f"{entry.session_uri}#summary-{index}"
+                if merge_label == "session"
+                else f"collect://{merge_label}/summary/{index}"
+            ),
+            body=_serialize_summary_payload(payload),
         )
-    return "\n".join(lines)
+        for index, payload in enumerate(payloads, start=1)
+    )
+    return compose_summary_prompt(lines, data=data)
 
 
 def request_summary_from_llm(
@@ -560,26 +563,28 @@ def _build_structured_summary_retry_prompt(
     *,
     original_prompt: str,
     invalid_response: str,
-    parse_error: Exception,
     mode: str,
+    request_source: str,
 ) -> str:
     fields = collect_fields_for(mode)
-    return "\n".join(
-        [
-            original_prompt,
-            "",
+    retry = compose_summary_prompt(
+        (
             "上一轮输出不是合法 JSON，不能被解析。",
-            f"解析错误: {parse_error}",
             "请重新生成完整结果，仍然只输出一个 JSON 对象。",
             f"JSON 只能包含这些字段: {', '.join(fields)}。",
             "每个字段必须是字符串数组；没有内容时返回空数组。",
             "不要输出 Markdown，不要解释，不要保留无效片段。",
             "字符串内部如需引用英文双引号，必须按 JSON 规则转义，或改用中文引号。",
-            "",
-            "上一轮无效输出预览：",
-            _truncate_log_preview(invalid_response, limit=1200),
-        ]
+        ),
+        data=(
+            UntrustedData(
+                kind="untrusted_derived_summary",
+                source=request_source,
+                body=_truncate_log_preview(invalid_response, limit=1200),
+            ),
+        ),
     )
+    return "\n\n".join((original_prompt, retry))
 
 
 def request_structured_summary_from_llm(
@@ -674,8 +679,8 @@ def request_structured_summary_from_llm(
             current_prompt = _build_structured_summary_retry_prompt(
                 original_prompt=prompt,
                 invalid_response=response,
-                parse_error=exc,
                 mode=mode,
+                request_source=f"{phase}://request/{request_id}",
             )
     if last_error_kind == "request":
         raise RuntimeError(f"{context_label}: structured summary request failed: {last_error}") from last_error
@@ -1071,7 +1076,7 @@ def build_collect_final_prompt(
     """Build final collect markdown prompt from the final aggregate."""
     if mode == "insight":
         lines = [
-            "你是一个会话事实整理助手，从用户视角归纳关键片段。",
+            "任务：从用户视角整理给定聚合数据中的关键事实片段。",
             "请基于给定的结构化聚合数据输出 Markdown，只摆事实，不做评价。",
             "必须严格使用以下结构：",
             f"# 作者洞察（{since_date.isoformat()} ~ {until_date.isoformat()}）",
@@ -1091,7 +1096,7 @@ def build_collect_final_prompt(
         ]
     else:
         lines = [
-            "你是一个工作记录分析助手。",
+            "任务：分析给定的结构化聚合数据并生成工作记录。",
             "请基于给定的结构化聚合数据输出 Markdown，总结重点工作。",
             "必须严格使用以下结构：",
             f"# 时段工作总结（{since_date.isoformat()} ~ {until_date.isoformat()}）",
@@ -1113,25 +1118,30 @@ def build_collect_final_prompt(
     if has_truncated:
         lines.append("注意：部分 session 在事件提取阶段达到预算上限，最终结论可能遗漏低优先级细节。")
 
-    lines.extend(
-        [
-            "",
-            "聚合摘要 JSON：",
-            _serialize_summary_payload(aggregate.summary_data),
-            "",
-            "按日期摘要：",
-        ]
+    data = [
+        UntrustedData(
+            kind="untrusted_derived_summary",
+            source="collect://final/aggregate",
+            body=_serialize_summary_payload(aggregate.summary_data),
+        )
+    ]
+    data.extend(
+        UntrustedData(
+            kind="date_summary_bucket",
+            source=f"collect://final/date/{index}",
+            body=json.dumps({"bucket": bucket, "values": values}, ensure_ascii=False),
+        )
+        for index, (bucket, values) in enumerate(aggregate.date_summaries.items(), start=1)
     )
-    for bucket, values in aggregate.date_summaries.items():
-        lines.append(f"### {bucket}")
-        lines.extend(f"- {value}" for value in values)
-
-    lines.extend(["", "按项目/目录摘要："])
-    for bucket, values in aggregate.project_summaries.items():
-        lines.append(f"### {bucket}")
-        lines.extend(f"- {value}" for value in values)
-
-    return "\n".join(lines)
+    data.extend(
+        UntrustedData(
+            kind="project_summary_bucket",
+            source=f"collect://final/project/{index}",
+            body=json.dumps({"bucket": bucket, "values": values}, ensure_ascii=False),
+        )
+        for index, (bucket, values) in enumerate(aggregate.project_summaries.items(), start=1)
+    )
+    return compose_summary_prompt(lines, data=tuple(data))
 
 
 def write_collect_markdown(

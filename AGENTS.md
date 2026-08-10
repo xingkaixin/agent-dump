@@ -81,7 +81,7 @@
 | `coercion.py` | 不可信 provider 标量的容错转换（safe_int / safe_epoch_datetime） |
 | `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
-| `prompt_safety.py` | 摘要 prompt 的不可信数据隔离（system 规则 + JSON data envelope） |
+| `prompt_safety.py` | 摘要 request composition：system 规则、typed JSON data envelope 与来源追踪 |
 | `session_data.py` | 请求级会话数据缓存，按 provider-owned change sources 失效 |
 | `text_safety.py` | 第三方会话文本的输出净化（终端 / markdown / 文件名） |
 | `transcript.py` | 标准化消息的只读读取（role、正文、legacy content、tool / subagent facts） |
@@ -232,6 +232,7 @@ agent-dump/
 │   ├── test_maintenance_workflow.py
 │   ├── test_query_filter.py
 │   ├── test_query_semantics.py
+│   ├── test_prompt_safety.py
 │   ├── test_scanner.py
 │   ├── test_search_index.py
 │   ├── test_selector.py

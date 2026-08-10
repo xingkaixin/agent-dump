@@ -210,7 +210,7 @@ def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -
     payload = {
         "model": config.model,
         "max_tokens": 4096,
-        "system": "你是一个严谨的工作总结助手。",
+        "system": summary_system_prompt("你是一个严谨的工作总结助手。"),
         "messages": [
             {"role": "user", "content": prompt},
         ],

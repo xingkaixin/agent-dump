@@ -29,7 +29,7 @@ from agent_dump.diagnostics import (
 )
 from agent_dump.exporting import execute_exports
 from agent_dump.i18n import Keys, i18n
-from agent_dump.prompt_safety import UNTRUSTED_DATA_RULES, data_envelope
+from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
 from agent_dump.scanner import AgentScanner
 
 
@@ -39,21 +39,16 @@ class ExportConfigLike(Protocol):
 
 def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
     """Build a single-session summary prompt for URI mode."""
-    return "\n".join(
-        [
-            "你是一个严谨的会话总结助手。",
+    return compose_summary_prompt(
+        (
+            "任务：严谨总结给定的单个会话。",
             "请基于下面的单个会话内容输出 Markdown 总结。",
             "要求：",
             "1. 只基于给定内容，不要编造。",
             "2. 总结关键目标、主要改动、风险/异常、结果。",
             "3. 若信息不足，明确指出。",
-            "",
-            *UNTRUSTED_DATA_RULES,
-            "",
-            f"会话 URI: {uri}",
-            "",
-            data_envelope("session_transcript", source=uri, body=rendered_session_text),
-        ]
+        ),
+        data=(UntrustedData(kind="session_transcript", source=uri, body=rendered_session_text),),
     )
 
 

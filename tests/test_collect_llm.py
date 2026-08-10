@@ -4,13 +4,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from threading import Thread
 from typing import Any
+from unittest import mock
 
 import pytest
 
 from agent_dump import collect_llm
 from agent_dump.collect_llm import LLMRequestError, is_retryable_error, request_summary_from_llm
 from agent_dump.config import AIConfig
-from agent_dump.prompt_safety import UNTRUSTED_DATA_RULES
+from agent_dump.prompt_safety import UNTRUSTED_DATA_RULES, summary_system_prompt
 
 
 @contextmanager
@@ -223,4 +224,30 @@ class TestSystemMessageDeclaresUntrustedData:
         for rule in UNTRUSTED_DATA_RULES:
             assert rule in roles["system"], "规则必须在 system，不能混进用户数据那一侧"
             assert rule not in roles["user"]
+        assert roles["system"] == summary_system_prompt("你是一个严谨的工作总结助手。")
         assert roles["user"] == "user prompt", "user message 只承载数据，不被改写"
+
+    def test_anthropic_uses_the_same_system_safety_rules(self, monkeypatch):
+        response = mock.MagicMock()
+        response.read.return_value = b'{"content":[{"text":"ok"}]}'
+        response.__enter__.return_value = response
+        response.__exit__.return_value = None
+        captured: dict = {}
+
+        def fake_open(req, *, timeout_seconds):
+            del timeout_seconds
+            captured.update(json.loads(req.data.decode("utf-8")))
+            return response
+
+        monkeypatch.setattr(collect_llm, "_open_url", fake_open)
+        collect_llm._request_anthropic(
+            AIConfig(provider="anthropic", base_url="https://x", model="m", api_key="k"),
+            "user prompt",
+            timeout_seconds=1,
+        )
+
+        for rule in UNTRUSTED_DATA_RULES:
+            assert rule in captured["system"]
+            assert rule not in captured["messages"][0]["content"]
+        assert captured["system"] == summary_system_prompt("你是一个严谨的工作总结助手。")
+        assert captured["messages"] == [{"role": "user", "content": "user prompt"}]
