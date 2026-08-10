@@ -1,9 +1,31 @@
 from datetime import datetime, timezone
+import os
 from pathlib import Path
+import stat
 from unittest import mock
 
-from agent_dump.agents.base import Session
+import pytest
+
+from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.exporting import execute_exports
+from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
+
+
+class ExportingTestAgent(BaseAgent):
+    def __init__(self) -> None:
+        super().__init__("test", "Test")
+
+    def scan(self) -> list[Session]:
+        return []
+
+    def is_available(self) -> bool:
+        return True
+
+    def get_sessions(self, days: int = 7) -> list[Session]:
+        return []
+
+    def get_session_data(self, session: Session) -> dict:
+        return {"id": session.id, "messages": []}
 
 
 def make_session(session_id: str, title: str) -> Session:
@@ -52,3 +74,21 @@ def test_execute_exports_records_summary_failure_without_losing_file(tmp_path: P
     assert result.had_success is True
     assert result.exported_paths == (output_path,)
     assert isinstance(result.attempts[0].error, RuntimeError)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX modes are not meaningful on Windows")
+def test_execute_exports_keeps_new_artifacts_owner_only(tmp_path: Path) -> None:
+    output_dir = tmp_path / "sessions" / "test"
+    previous_umask = os.umask(0o022)
+    try:
+        result = execute_exports(
+            ExportingTestAgent(),
+            [make_session("session-001", "Session")],
+            ["json"],
+            lambda _: output_dir,
+        )
+    finally:
+        os.umask(previous_umask)
+
+    assert stat.S_IMODE(output_dir.stat().st_mode) == PRIVATE_DIR_MODE
+    assert stat.S_IMODE(result.exported_paths[0].stat().st_mode) == PRIVATE_FILE_MODE

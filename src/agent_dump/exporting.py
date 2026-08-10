@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.private_files import ensure_output_dir
 from agent_dump.rendering import apply_summary_to_json_export, export_session_in_format
 
 
@@ -60,8 +61,7 @@ def execute_exports(
             output_path: Path | None = None
             error: Exception | None = None
             try:
-                output_dir = output_dir_for_format(output_format)
-                output_dir.mkdir(parents=True, exist_ok=True)
+                output_dir = ensure_output_dir(output_dir_for_format(output_format))
                 if output_format == "markdown" and session.id not in loaded_session_data:
                     loaded_session_data[session.id] = agent.get_cached_session_data(session)
 
