@@ -43,6 +43,20 @@ updates:
       prefix: chore
       prefix-development: chore
 
+  # PEP 517 dependencies live outside uv.lock. Dependabot's pip-compile support
+  # updates the exact input pin together with the generated hashes.
+  - package-ecosystem: pip
+    directory: /packaging
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-build:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: chore
+
   # Web 更新 PR 会经过 AD-173 的 frozen install + check + build 门禁
   - package-ecosystem: npm
     directory: /web

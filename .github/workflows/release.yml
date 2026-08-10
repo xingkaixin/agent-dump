@@ -10,7 +10,7 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.12"
-  # 与 CI 同一约束：发布路径解析出来的必须就是已提交的 lock
+  # Project 依赖来自 uv.lock；PEP 517 依赖在 build step 由已提交的 hash constraints 约束。
   UV_LOCKED: "1"
 
 jobs:
@@ -221,7 +221,7 @@ jobs:
         run: node npm/scripts/write-checksums.mjs
 
       - name: Build PyPI distributions
-        run: uv build --no-sources
+        run: uv build --no-sources --build-constraint packaging/build-constraints.txt --require-hashes
 
       - name: Verify the wheel installs and runs
         run: uv run python packaging/verify_wheel.py --expected-version "${PACKAGE_VERSION}"
