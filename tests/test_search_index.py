@@ -10,6 +10,7 @@ import pytest
 
 from agent_dump import search_index as search_index_module
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.query_semantics import TextQuery, TextQueryMode
 from agent_dump.search_index import (
     _INDEX_BATCH_SIZE,
     SearchIndex,
@@ -18,8 +19,6 @@ from agent_dump.search_index import (
     _has_cjk,
     _has_fts5,
     _preprocess_for_unicode61,
-    _select_fts_table,
-    _serialize_for_search,
     extract_session_searchable_text,
 )
 from agent_dump.session_data import (
@@ -90,15 +89,6 @@ class TestHasCjk:
         assert _has_cjk("hello中文") is True
 
 
-class TestSelectFtsTable:
-    def test_cjk_uses_unicode(self):
-        assert _select_fts_table("修复问题") == "sessions_fts"
-        assert _select_fts_table("报错") == "sessions_fts"
-
-    def test_ascii_uses_trigram(self):
-        assert _select_fts_table("hello") == "sessions_fts_trigram"
-
-
 class TestBuildFtsQuery:
     """AD-133：每个词都引用为字面量，任何输入都不该构成 FTS5 语法错误。"""
 
@@ -135,13 +125,10 @@ class TestBuildFtsQuery:
     def test_cjk_terms_are_quoted(self):
         assert _build_fts_query("认证 超时") == '"认证" "超时"'
 
+    def test_split_cjk_keeps_each_user_term_as_one_phrase(self):
+        query = TextQuery.parse("认证 超时", TextQueryMode.SEARCH_TERMS)
 
-class TestSerializeForSearch:
-    def test_string_passthrough(self):
-        assert _serialize_for_search("hello") == "hello"
-
-    def test_dict_to_json(self):
-        assert _serialize_for_search({"key": "value"}) == '{"key": "value"}'
+        assert _build_fts_query(query, split_cjk=True) == '"认 证" "超 时"'
 
 
 class TestSessionUpdatedSignal:
@@ -465,6 +452,35 @@ class TestSearchIndex:
         results = index.search("error timeout")
         assert len(results) == 1
 
+    def test_search_terms_can_match_title_and_content(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(
+            session_data={
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "request timeout"}]}]}
+            }
+        )
+        session = make_session("s1", "Auth incident", tmp_path / "s1.jsonl")
+        session.source_path.write_text("data")
+
+        index.update(agent, [session])
+
+        assert [result.session_id for result in index.search("auth timeout")] == ["s1"]
+
+    def test_keyword_phrase_normalizes_source_whitespace(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(
+            session_data={
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "auth\n  timeout"}]}]}
+            }
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        session.source_path.write_text("data")
+        index.update(agent, [session])
+
+        query = TextQuery.parse("auth timeout", TextQueryMode.KEYWORD)
+
+        assert [result.session_id for result in index.search(query)] == ["s1"]
+
     def test_search_cjk(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
         agent = DummyAgent(
@@ -482,9 +498,21 @@ class TestSearchIndex:
         assert len(results) == 1
         assert results[0].snippet == "修复**认证**模块的问题"
 
-        # Longer CJK (3+ chars) uses trigram
+        # 一个 CJK term 必须是连续字面量，不能退化成「每个汉字都出现过」
         results = index.search("修复问题")
-        assert len(results) == 1
+        assert results == []
+
+    def test_search_cjk_does_not_join_unrelated_characters(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "认知经过证明"}]}]}}
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        session.source_path.write_text("data")
+
+        index.update(agent, [session])
+
+        assert index.search("认证") == []
 
     def test_search_snippet(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
@@ -1131,6 +1159,18 @@ class TestHyphenatedKeywordsAreSearchable:
         index.ensure_initialized()
 
         assert index.search("other-hit") == []
+
+    @pytest.mark.parametrize("keyword", ["*", "a*", '"hi"'])
+    def test_short_or_operator_like_terms_use_literal_scan(self, keyword, tmp_path):
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "content": f"literal {keyword} value"}]}},
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        session.source_path.write_text("{}", encoding="utf-8")
+        index = SearchIndex(tmp_path / "index.db")
+        index.update(agent, [session])
+
+        assert [result.session_id for result in index.search(keyword)] == ["s1"]
 
 
 class TestSearchLimitPushdown:

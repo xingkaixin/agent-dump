@@ -9,7 +9,6 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
-import json
 import os
 from pathlib import Path
 import re
@@ -21,9 +20,13 @@ from typing import Any, TypeVar
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
 from agent_dump.private_files import ensure_private_dir, ensure_private_file
+from agent_dump.query_semantics import (
+    TextQuery,
+    TextQueryMode,
+    extract_transcript_searchable_text,
+)
 from agent_dump.session_data import session_updated_signal as _session_updated_signal
 from agent_dump.time_utils import normalize_datetime_utc
-from agent_dump.transcript import read_message
 
 _T = TypeVar("_T")
 
@@ -110,16 +113,6 @@ def _has_fts5(conn: sqlite3.Connection) -> bool:
         return False
 
 
-def _serialize_for_search(value: Any) -> str:
-    """Serialize a value to searchable text."""
-    if isinstance(value, str):
-        return value
-    try:
-        return json.dumps(value, ensure_ascii=False)
-    except Exception:
-        return str(value)
-
-
 def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str | None:
     """Extract all searchable text from a session, or None when it could not be read.
 
@@ -132,32 +125,10 @@ def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str |
     except Exception:
         return _fallback_extract_from_source(session.source_path)
 
-    messages = session_data.get("messages")
-    if not isinstance(messages, list):
+    text = extract_transcript_searchable_text(session_data)
+    if text is None:
         return _fallback_extract_from_source(session.source_path)
-
-    text_parts: list[str] = []
-
-    for message in messages:
-        if not isinstance(message, dict):
-            continue
-
-        transcript_message = read_message(message)
-        # 搜索索引的产品策略：正文之外，工具参数与输出也要能被搜到
-        contents = list(transcript_message.searchable_texts)
-        for call in transcript_message.tool_calls:
-            if call.arguments is not None:
-                contents.append(_serialize_for_search(call.arguments))
-            if call.output is not None:
-                contents.append(_serialize_for_search(call.output))
-            if call.prompt:
-                contents.append(call.prompt)
-
-        for content in contents:
-            if content and content.strip():
-                text_parts.append(content.strip())
-
-    return "\n\n".join(text_parts)
+    return text
 
 
 # 只有按会话切分的文本源才能整文件读取。SQLite provider 的 source_path 是整个
@@ -182,7 +153,11 @@ def _fallback_extract_from_source(source_path: Path) -> str | None:
     return None
 
 
-def _build_fts_query(keyword: str, *, split_cjk: bool = False) -> str:
+def _build_fts_query(
+    keyword: str | TextQuery,
+    *,
+    split_cjk: bool = False,
+) -> str:
     """Build a syntactically valid FTS5 MATCH expression from user input.
 
     每个词都作为 FTS5 字符串字面量引用，词之间是 FTS5 默认的隐式 AND，因此任何输入
@@ -193,26 +168,33 @@ def _build_fts_query(keyword: str, *, split_cjk: bool = False) -> str:
     而用户得不到任何解释。文档描述的一直是关键词搜索（README 的 --search 一节），
     操作符语法从未被承诺过，所以这里按文档收敛而不是新增开关。
 
-    split_cjk 对应 unicode61 表：索引侧把相邻 CJK 字符拆成独立 token，查询侧必须同样
-    拆开并各自引用。若先引用再拆分，"修复问题" 会变成要求四字相邻的短语，
-    而原本的语义是四个字符各自 AND。
+    split_cjk 对应 unicode61 表：索引侧把相邻 CJK 字符拆成独立 token，查询侧也要拆开，
+    但一个用户 term 仍保留在同一个 FTS phrase 中。这样 `认证` 只生成 `"认 证"`，不会
+    退化成可在任意位置分别命中的 `"认" "证"`。
     """
-    normalized = _preprocess_for_unicode61(keyword) if split_cjk else keyword
-    terms = normalized.split()
-    if not terms:
+    query = keyword if isinstance(keyword, TextQuery) else TextQuery.parse(keyword, TextQueryMode.SEARCH_TERMS)
+    if query.is_empty:
         return ""
-    # FTS5 字符串字面量里的双引号用重复一次来转义
-    return " ".join('"{}"'.format(term.replace('"', '""')) for term in terms)
+    literals = tuple(_preprocess_for_unicode61(literal) for literal in query.literals) if split_cjk else query.literals
+    return " ".join('"{}"'.format(literal.replace('"', '""')) for literal in literals)
 
 
-def _select_fts_table(keyword: str) -> str:
-    """CJK queries always use unicode61 with preprocessing.
+def _is_cjk_literal(literal: str) -> bool:
+    return bool(literal) and all(_CJK_RANGE[0] <= char <= _CJK_RANGE[1] for char in literal)
 
-    Non-CJK queries use trigram for better substring matching.
-    """
-    if _has_cjk(keyword):
+
+def _select_query_fts_table(query: TextQuery) -> str | None:
+    if query.is_empty:
+        return None
+    if query.mode is TextQueryMode.KEYWORD and any(char.isspace() for char in query.literals[0]):
+        return None
+    if all(_is_cjk_literal(literal) for literal in query.literals):
         return "sessions_fts"
-    return "sessions_fts_trigram"
+    if not any(_has_cjk(literal) for literal in query.literals) and all(
+        len(literal) >= 3 for literal in query.literals
+    ):
+        return "sessions_fts_trigram"
+    return None
 
 
 _FTS_TABLES = ("sessions_fts", "sessions_fts_trigram")
@@ -448,7 +430,7 @@ class SearchIndex:
 
     def search(
         self,
-        keyword: str,
+        keyword: str | TextQuery,
         *,
         agent_names: set[str] | None = None,
         limit: int | None = None,
@@ -463,13 +445,30 @@ class SearchIndex:
             return []
 
         self.ensure_initialized()
-        fts_table = _select_fts_table(keyword)
-        fts_query = _build_fts_query(
-            keyword,
-            split_cjk=fts_table == "sessions_fts" and _has_cjk(keyword),
-        )
-        if not fts_query:
+        query = keyword if isinstance(keyword, TextQuery) else TextQuery.parse(keyword, TextQueryMode.SEARCH_TERMS)
+        if query.is_empty:
             return []
+        fts_table = _select_query_fts_table(query)
+        if fts_table is None:
+            return self._scan_literal_query(query, agent_names=agent_names, limit=limit)
+        return self._search_fts(query, fts_table=fts_table, agent_names=agent_names, limit=limit)
+
+    def _search_fts(
+        self,
+        query: TextQuery,
+        *,
+        fts_table: str,
+        agent_names: set[str] | None,
+        limit: int | None,
+    ) -> list[SearchResult]:
+        fts_query = _build_fts_query(query, split_cjk=fts_table == "sessions_fts")
+        raw_join = ""
+        raw_title = "f.title"
+        raw_content = "f.content"
+        if fts_table == "sessions_fts":
+            raw_join = "JOIN sessions_fts_trigram raw ON raw.rowid = f.rowid"
+            raw_title = "raw.title"
+            raw_content = "raw.content"
 
         conn = self._get_connection()
         results: list[SearchResult] = []
@@ -482,15 +481,16 @@ class SearchIndex:
                 params.extend(sorted(agent_names))
 
             limit_clause = ""
-            if limit is not None:
+            if limit is not None and fts_table == "sessions_fts_trigram":
                 limit_clause = "LIMIT ?"
                 params.append(limit)
 
             sql = f"""
-                SELECT f.agent_name, f.session_id, f.title,
+                SELECT f.agent_name, f.session_id, {raw_title} AS raw_title, {raw_content} AS raw_content,
                        snippet({fts_table}, 3, '**', '**', '...', 10) as snippet,
                        bm25({fts_table}) as rank
                 FROM {fts_table} f
+                {raw_join}
                 JOIN index_state s ON s.fts_rowid = f.rowid
                 WHERE {" AND ".join(filters)}
                 ORDER BY rank, s.session_updated_at DESC, s.session_created_at DESC,
@@ -502,24 +502,82 @@ class SearchIndex:
 
             # bm25 returns lower values for better matches, so we negate for ranking
             for row in cursor.fetchall():
+                fields = (row["raw_title"] or "", row["raw_content"] or "")
+                if not query.matches(fields):
+                    continue
                 snippet = row["snippet"]
-                # Clean up spaces inserted by CJK preprocessing
                 if snippet and fts_table == "sessions_fts":
                     snippet = _cleanup_unicode61_snippet(snippet)
+                if not snippet or not query.has_evidence(snippet):
+                    snippet = query.build_snippet(fields)
 
                 results.append(
                     SearchResult(
                         agent_name=row["agent_name"],
                         session_id=row["session_id"],
-                        title=row["title"] or "",
+                        title=row["raw_title"] or "",
                         snippet=snippet,
                         rank=-(row["rank"] or 0.0),
                     )
                 )
+                if limit is not None and len(results) >= limit:
+                    break
         finally:
             conn.close()
 
         return results
+
+    def _scan_literal_query(
+        self,
+        query: TextQuery,
+        *,
+        agent_names: set[str] | None,
+        limit: int | None,
+    ) -> list[SearchResult]:
+        conn = self._get_connection()
+        try:
+            filters: list[str] = []
+            params: list[Any] = []
+            if agent_names:
+                filters.append(f"f.agent_name IN ({','.join('?' * len(agent_names))})")
+                params.extend(sorted(agent_names))
+            where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+            rows = conn.execute(
+                f"""
+                SELECT f.agent_name, f.session_id, f.title, f.content,
+                       s.session_updated_at, s.session_created_at
+                FROM sessions_fts_trigram f
+                JOIN index_state s ON s.fts_rowid = f.rowid
+                {where_clause}
+                """,
+                params,
+            ).fetchall()
+        finally:
+            conn.close()
+
+        matched: list[tuple[float, float, float, SearchResult]] = []
+        for row in rows:
+            fields = (row["title"] or "", row["content"] or "")
+            if not query.matches(fields):
+                continue
+            rank = 1.0 if query.matches((fields[0],)) else 0.0
+            matched.append(
+                (
+                    -rank,
+                    -row["session_updated_at"],
+                    -row["session_created_at"],
+                    SearchResult(
+                        agent_name=row["agent_name"],
+                        session_id=row["session_id"],
+                        title=fields[0],
+                        snippet=query.build_snippet(fields),
+                        rank=rank,
+                    ),
+                )
+            )
+        matched.sort(key=lambda item: (item[0], item[1], item[2], item[3].agent_name, item[3].session_id))
+        results = [item[3] for item in matched]
+        return results if limit is None else results[:limit]
 
     def _write_session_rows(
         self,

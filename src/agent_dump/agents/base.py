@@ -135,10 +135,10 @@ class BaseAgent(ABC):
         return None
 
     def filter_sessions_by_keyword(self, sessions: list[Session], keyword: str) -> list[Session] | None:
-        """Filter sessions by keyword inside the provider's storage.
+        """Match one normalized literal phrase against the logical session corpus.
 
-        Return None when the provider has no storage-level fast path;
-        callers then fall back to index- or file-based matching.
+        A provider fast path must return the same hit set as the shared title and
+        transcript matcher. Return None when storage cannot express that contract.
         """
         del sessions, keyword
         return None

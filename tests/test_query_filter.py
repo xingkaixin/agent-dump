@@ -26,7 +26,8 @@ from agent_dump.query_filter import (
     query_session_matches,
     search_sessions_by_query,
 )
-from agent_dump.search_index import SearchResult
+from agent_dump.query_semantics import TextQuery, TextQueryMode
+from agent_dump.search_index import SearchIndex, SearchResult
 
 
 class DummyAgent(BaseAgent):
@@ -241,8 +242,34 @@ class TestFilterSessions:
         ):
             result = filter_sessions(agent, [session], "fatal")
 
+        assert result == [session]
+        mock_get_session_data.assert_called_once_with(session)
+
+    def test_filter_matches_logical_text_when_json_source_uses_unicode_escapes(self, tmp_path):
+        source_path = tmp_path / "s1.jsonl"
+        source_path.write_text(json.dumps({"text": "认证"}, ensure_ascii=True), encoding="utf-8")
+        session = make_session("s1", "普通标题", source_path)
+        agent = DummyAgent(
+            name="codex",
+            session_data={"s1": {"messages": [{"parts": [{"type": "text", "text": "认证"}]}]}},
+        )
+
+        with mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None):
+            result = filter_sessions(agent, [session], "认证")
+
+        assert result == [session]
+
+    def test_query_keyword_is_a_literal_phrase(self, tmp_path):
+        session = make_session("s1", "普通标题", tmp_path / "s1.jsonl")
+        agent = DummyAgent(
+            name="codex",
+            session_data={"s1": {"messages": [{"parts": [{"type": "text", "text": "auth failed before timeout"}]}]}},
+        )
+
+        with mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None):
+            result = filter_sessions(agent, [session], "auth timeout")
+
         assert result == []
-        mock_get_session_data.assert_not_called()
 
     def test_filter_directory_session_searches_every_jsonl(self, tmp_path):
         """目录型会话（Kimi）的兜底提取会读目录下所有 *.jsonl。
@@ -285,7 +312,7 @@ class TestFilterSessions:
             (ZCodeAgent, "db.sqlite"),
         ),
     )
-    def test_filter_sqlite_message_part_provider_with_sql_match(self, agent_cls, db_name, tmp_path):
+    def test_filter_sqlite_provider_matches_standardized_part_text(self, agent_cls, db_name, tmp_path):
         db_path = tmp_path / db_name
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -334,11 +361,11 @@ class TestFilterSessions:
         )
         cursor.execute(
             "INSERT INTO message VALUES (?, ?, ?, ?)",
-            ("m1", "s1", 1, json.dumps({"role": "user", "content": "Fatal issue"})),
+            ("m1", "s1", 1, json.dumps({"role": "user", "content": "provider-private-token"})),
         )
         cursor.execute(
             "INSERT INTO part VALUES (?, ?, ?, ?)",
-            ("p1", "m1", 1, json.dumps({"type": "text", "text": "关键字命中"})),
+            ("p1", "m1", 1, json.dumps({"type": "text", "text": "Fatal issue 关键字命中"})),
         )
         conn.commit()
         conn.close()
@@ -352,6 +379,8 @@ class TestFilterSessions:
 
         result = filter_sessions(agent, sessions, "fatal")
         assert [s.id for s in result] == ["s1"]
+        assert [s.id for s in filter_sessions(agent, sessions, "关键字")] == ["s1"]
+        assert filter_sessions(agent, sessions, "provider-private-token") == []
 
     def test_filter_opencode_with_sql_no_match(self, tmp_path):
         db_path = tmp_path / "opencode.db"
@@ -514,6 +543,52 @@ class TestFilterSessionsByQuery:
 
 
 class TestSearchSessionsByQuery:
+    @pytest.mark.parametrize(
+        ("keyword", "expected_ids"),
+        (
+            ("auth timeout", {"cross-fields"}),
+            (" auth   timeout auth ", {"cross-fields"}),
+            ("认证", {"cjk-adjacent"}),
+            ('AND NEAR * "quoted"', {"operators"}),
+        ),
+    )
+    def test_index_and_in_process_adapters_select_the_same_sessions(self, keyword, expected_ids, tmp_path):
+        sessions = [
+            make_session("cross-fields", "Auth incident", tmp_path / "cross-fields.jsonl"),
+            make_session("cjk-adjacent", "CJK exact", tmp_path / "cjk-adjacent.jsonl"),
+            make_session("cjk-separated", "CJK separated", tmp_path / "cjk-separated.jsonl"),
+            make_session("operators", "Operators", tmp_path / "operators.jsonl"),
+        ]
+        for session in sessions:
+            session.source_path.write_text("{}", encoding="utf-8")
+        agent = DummyAgent(
+            name="codex",
+            session_data={
+                "cross-fields": {
+                    "messages": [{"role": "user", "parts": [{"type": "text", "text": "request timeout"}]}]
+                },
+                "cjk-adjacent": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "修复认证模块"}]}]},
+                "cjk-separated": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "认知经过证明"}]}]},
+                "operators": {
+                    "messages": [{"role": "user", "parts": [{"type": "text", "text": 'literal AND NEAR * "quoted"'}]}]
+                },
+            },
+        )
+        index = SearchIndex(tmp_path / "index.db")
+        index.update(agent, sessions)
+        spec = make_query_spec(keyword=keyword)
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
+            indexed = search_sessions_by_query(agent, sessions, spec)
+        unavailable = mock.MagicMock()
+        unavailable.is_available = False
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=unavailable):
+            fallback = search_sessions_by_query(agent, sessions, spec)
+
+        indexed_ids = {match.session.id for match in indexed}
+        fallback_ids = {match.session.id for match in fallback}
+        assert indexed_ids == fallback_ids == expected_ids
+
     def test_indexed_search_preserves_snippet_and_rank(self, tmp_path):
         agent = DummyAgent(name="codex")
         session = make_session("s1", "Auth timeout", tmp_path / "s1.jsonl")
@@ -541,7 +616,11 @@ class TestSearchSessionsByQuery:
             )
         ]
         index.update.assert_called_once_with(agent, [session])
-        index.search.assert_called_once_with("auth timeout", agent_names={"codex"}, limit=None)
+        index.search.assert_called_once_with(
+            TextQuery.parse("auth timeout", TextQueryMode.SEARCH_TERMS),
+            agent_names={"codex"},
+            limit=None,
+        )
 
     def test_indexed_search_filters_to_scoped_sessions_without_truncating_index_update(self, tmp_path):
         agent = DummyAgent(name="codex")
@@ -585,8 +664,39 @@ class TestSearchSessionsByQuery:
             result = search_sessions_by_query(agent, [session], make_query_spec(keyword="auth timeout"))
 
         assert len(result) == 1
-        assert result[0].snippet == "login failed after **auth timeout**"
+        assert result[0].snippet == "login failed after **auth** timeout"
         assert result[0].rank == 0.0
+
+    def test_fallback_search_matches_terms_across_title_and_transcript(self, tmp_path):
+        session = make_session("s1", "Auth incident", tmp_path / "s1.jsonl")
+        agent = DummyAgent(
+            name="codex",
+            session_data={
+                "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "request timeout"}]}]}
+            },
+        )
+        index = mock.MagicMock()
+        index.is_available = False
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
+            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="auth timeout"))
+
+        assert [match.session.id for match in result] == ["s1"]
+        assert "auth" in result[0].snippet.lower()
+
+    def test_fallback_search_rejects_non_adjacent_cjk(self, tmp_path):
+        session = make_session("s1", "无关标题", tmp_path / "s1.jsonl")
+        agent = DummyAgent(
+            name="codex",
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "认知经过证明"}]}]}},
+        )
+        index = mock.MagicMock()
+        index.is_available = False
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
+            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="认证"))
+
+        assert result == []
 
     def test_fallback_search_builds_cjk_snippet_when_fts_unavailable(self, tmp_path):
         session = make_session("s1", "无关标题", tmp_path / "s1.jsonl")

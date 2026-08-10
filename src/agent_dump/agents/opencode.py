@@ -15,12 +15,7 @@ from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 from agent_dump.private_files import write_private_text
-
-
-def _escape_like(text: str) -> str:
-    """Escape LIKE wildcards so user keywords match literally."""
-    return text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-
+from agent_dump.query_semantics import TextQuery, TextQueryMode, extract_transcript_searchable_text
 
 _EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 
@@ -107,44 +102,28 @@ class OpenCodeAgent(BaseAgent):
         return sessions[0] if sessions else None
 
     def filter_sessions_by_keyword(self, sessions: list[Session], keyword: str) -> list[Session] | None:
-        """Match a keyword against titles, message data, and part data in SQL."""
+        """Match a literal phrase while reusing one read-only database connection."""
         if not self.db_path:
             return None
 
-        like_pattern = f"%{_escape_like(keyword.strip().lower())}%"
-        matched_ids: set[str] = set()
-        session_ids = [session.id for session in sessions]
-
+        query = TextQuery.parse(keyword, TextQueryMode.KEYWORD)
         try:
             conn = self._connect_db()
         except Exception:
             return None
         try:
-            cursor = conn.cursor()
-            for start in range(0, len(session_ids), 200):
-                chunk = session_ids[start : start + 200]
-                cursor.execute(
-                    r"""
-                    SELECT DISTINCT s.id
-                    FROM session s
-                    LEFT JOIN message m ON m.session_id = s.id
-                    LEFT JOIN part p ON p.message_id = m.id
-                    WHERE s.id IN (SELECT value FROM json_each(?))
-                      AND (
-                        LOWER(COALESCE(s.title, '')) LIKE ? ESCAPE '\'
-                        OR LOWER(COALESCE(m.data, '')) LIKE ? ESCAPE '\'
-                        OR LOWER(COALESCE(p.data, '')) LIKE ? ESCAPE '\'
-                      )
-                    """,
-                    [json.dumps(chunk), like_pattern, like_pattern, like_pattern],
-                )
-                matched_ids.update(str(row["id"]) for row in cursor.fetchall())
+            matched = []
+            for session in sessions:
+                transcript = extract_transcript_searchable_text(self._build_session_data(conn, session))
+                fields = (session.title,) if transcript is None else (session.title, transcript)
+                if query.matches(fields):
+                    matched.append(session)
         except Exception:
             return None
         finally:
             conn.close()
 
-        return [session for session in sessions if session.id in matched_ids]
+        return matched
 
     def _select_sessions(self, conn: sqlite3.Connection, *, where_sql: str, params: tuple[Any, ...]) -> list[Session]:
         """Query sessions with an internal WHERE clause and build Session models."""
