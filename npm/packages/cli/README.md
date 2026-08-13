@@ -125,14 +125,14 @@ agent-dump --config edit
 - **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, and Pi
 - **Interactive selection**: Friendly CLI selector with time-based grouping
 - **URI direct access**: View or export any session by its URI without searching
-- **Head metadata**: `--head` prints lightweight URI metadata for discovery
-- **Statistics**: `--stats` shows session counts and message counts grouped by agent and time
+- **Head metadata**: `--head` reuses bounded discovery metadata without rereading the transcript and marks incomplete message counts as unknown
+- **Statistics**: `--stats` shows session and message counts grouped by agent and time, reporting known subtotals separately from sessions with unknown counts
 - **Provider capabilities**: `--providers` reports URI schemes, export formats, keyword fast paths, and local search-root status without scanning sessions
 - **AI collect**: `--collect` summarizes sessions over a date range using your configured LLM, with `pm` and `insight` modes
 - **Relative collect windows**: Explicit `-days N` selects today minus N days through today; `-since/-until` takes precedence, while collect without either remains today-only
 - **Collect dry-run**: `--collect --dry-run` previews provider breakdown, session/chunk counts, concurrency, and save path
-- **Full-text search**: `--search` uses local SQLite FTS5 with ranked results and highlighted snippets; every term is matched literally (FTS5 operator syntax is not interpreted)
-- **Structured queries**: `provider:`, `role:`, `path:`, `limit:` filters in `-query` (`role:` snippets come only from allowed messages)
+- **Full-text search**: `--search` requires every distinct whitespace-delimited term, allows terms to match across corpus fields, keeps CJK matches contiguous, and gives FTS5 and in-process fallbacks the same literal semantics
+- **Structured queries**: `-query` treats its keyword as one normalized literal phrase and supports `provider:`, `role:`, `path:`, and `limit:` filters (`role:` snippets come only from allowed messages)
 - **Scoped queries**: `agents://<path>?q=keyword&providers=codex,claude` for repo-scoped searches
 - **Multi-format export**: `--format json,markdown,raw,print` with `md` alias for markdown
 - **Localized CLI**: `--lang en|zh` for user-facing messages and diagnostics
