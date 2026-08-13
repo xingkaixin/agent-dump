@@ -4,14 +4,34 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-13
+
 ### Fixed
 
-- Describe `-p`/`-page-size` truthfully as an ignored compatibility option and remove the unreachable pagination input loop
+- **Security and output boundaries**
+  - Keep every newly created JSON, raw, and Markdown export tree owner-only, including OpenCode and ZCode raw exports, without changing existing user-owned directories
+  - Isolate every collect and URI-summary input, intermediate summary, retry preview, and aggregate in typed, attributable JSON envelopes under fixed system rules
+  - Sanitize untrusted dynamic values at all terminal output sinks, including scanner, config, selector, maintenance, search, export, collect, and URI workflows
+- **Search and query correctness**
+  - Give provider fast paths, FTS5, and in-process fallbacks one literal matching model: normalized Query phrases, distinct AND-ed Search terms, cross-field matches, contiguous CJK, escaped Unicode, literal operator text, and stable limits
+- **Provider and statistics resilience**
+  - Reject non-finite, overflowing, and malformed external scalar or message values without losing valid sessions, and bound JSONL bad-record diagnostics to an exact total plus five samples
+  - Preserve whether message counts are exact or unknown through list, head, and stats so incomplete discovery is never reported as a complete total
+- **Collect reliability**
+  - Bound successful and error LLM response bodies, classify oversized responses as permanent, retry only classified transport failures, and separate transport retries from parse-correction attempts
+- **CLI behavior**
+  - Keep `-p`/`-page-size` as an ignored compatibility option while removing the unreachable pagination input path
 
 ### Performance
 
 - Bound completed Session payload caching and release bulk Search/Collect reads after projection, so memory follows the active worker window instead of total Session history
 - Stop role-scoped queries after each Provider finds its stable top-limit evidence instead of parsing every remaining Session
+- Keep file-backed `--head` reads O(1) by reusing bounded discovery facts instead of rereading complete transcripts
+
+### Changed
+
+- Normalize each CLI request once into a typed operation so Query, URI, defaults, validation, and workflow dispatch share one set of facts
+- Use one reviewed, hashed PEP 517 dependency closure for local, CI, and release builds, and cancel superseded CI runs
 
 ## [0.14.0] - 2026-07-30
 
@@ -895,6 +915,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.0
 [0.14.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.14.0
 [0.13.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.13.0
 [0.12.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.12.0

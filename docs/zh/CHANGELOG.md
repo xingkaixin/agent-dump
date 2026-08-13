@@ -2,14 +2,34 @@
 
 ## [未发布]
 
+## [0.15.0] - 2026-08-13
+
 ### 问题修复
 
-- 将 `-p`/`-page-size` 如实说明为不生效的兼容参数，并删除不可达的分页输入循环
+- **安全与输出边界**
+  - 确保新建的 JSON、raw 与 Markdown 导出目录和文件均仅所有者可访问，包括 OpenCode 与 ZCode raw 导出，且不修改用户已有目录的权限
+  - 将 collect 和 URI 摘要的所有输入、中间摘要、重试预览与聚合结果放入带类型和来源的 JSON 信封，并始终使用固定 system 规则
+  - 净化所有终端输出入口中的不可信动态字段，覆盖 scanner、config、selector、maintenance、search、export、collect 与 URI 工作流
+- **搜索与查询正确性**
+  - 让 Provider 快路径、FTS5 与进程内回退共用同一套字面匹配模型：归一化 Query 短语、distinct Search term 的 AND 语义、跨字段命中、连续 CJK、转义 Unicode、字面操作符文本和稳定 limit
+- **Provider 与统计容错**
+  - 拒绝非有限值、溢出值及畸形外部 scalar 或消息，同时保留其余有效会话；JSONL 坏记录诊断仅保留精确总数和前五个样本
+  - 在 list、head 与 stats 间保留消息数的 exact/unknown 完整度，不再把不完整发现结果显示为完整总数
+- **Collect 可靠性**
+  - 限制 LLM 成功与错误响应体大小，将超限响应判定为永久失败，仅重试已分类的传输故障，并分离传输重试与解析纠正次数
+- **CLI 行为**
+  - 保留 `-p`/`-page-size` 作为不生效的兼容参数，同时删除不可达的分页输入路径
 
 ### 性能
 
 - 限制已完成 Session payload 的缓存数量，并在 Search/Collect 批量投影后释放完整数据，使内存随活动 worker 窗口而非全部 Session 历史增长
 - role 查询在每个 Provider 找到稳定排序的 top-limit 证据后停止，不再继续解析其余 Session
+- file-backed `--head` 复用有界发现事实，不再重读完整 transcript，使读取保持 O(1)
+
+### 变更
+
+- 将每次 CLI 请求一次性归一化为 typed operation，使 Query、URI、默认值、校验与 workflow 分发共享同一组事实
+- 本地、CI 与 release 构建共用一份经过审查且带 hash 的 PEP 517 依赖闭包，并取消已被后续提交取代的 CI run
 
 ## [0.14.0] - 2026-07-30
 
@@ -898,6 +918,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.15.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.0
 [0.14.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.14.0
 [0.13.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.13.0
 [0.12.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.12.0
