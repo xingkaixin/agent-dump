@@ -63,6 +63,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # `astro check` 经由 @astrojs/language-server 调用 TypeScript 的 JS 编程 API，
+    # 而 TS 7 起的原生编译器不再导出这套 API（@astrojs/check 的 peer 范围也只写到
+    # ^6.0.0）。pnpm 对 peer 不匹配只告警不失败，于是这类升级不会在 install 阶段
+    # 被拦下，而是拖到 check 阶段崩掉——挡在这里比每次读一遍同样的 CI 日志便宜。
+    # 上游支持原生编译器后（withastro/roadmap#1321）删掉这条。
+    ignore:
+      - dependency-name: typescript
+        versions:
+          - ">=7"
     groups:
       web-runtime:
         dependency-type: production
