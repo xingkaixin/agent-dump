@@ -230,7 +230,7 @@ class OpenCodeAgent(BaseAgent):
             "time_updated": int(session.updated_at.timestamp() * 1000),
             "summary_files": session.metadata.get("summary_files"),
             "stats": {
-                "total_cost": 0,
+                "total_cost": 0.0,
                 "total_input_tokens": 0,
                 "total_output_tokens": 0,
                 "message_count": 0,
