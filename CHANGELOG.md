@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-08-16
+
+### Fixed
+
+- Declare the OpenCode raw export `total_cost` accumulator as a float so sessions without cost data report the same numeric type as sessions with costs
+
+### Changed
+
+- Refresh the reviewed PEP 517 build closure to `hatchling` 1.32.0 and move the pinned type checker to `ty` 0.0.70
+- Move the CI and release workflows to `astral-sh/setup-uv` v10
+- Move the landing page runtime to `astro` 7.2.1 and `motion` 13.1.0
+
 ## [0.15.0] - 2026-08-13
 
 ### Fixed
@@ -915,6 +927,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.1
 [0.15.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.0
 [0.14.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.14.0
 [0.13.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.13.0

@@ -2,6 +2,18 @@
 
 ## [未发布]
 
+## [0.15.1] - 2026-08-16
+
+### 问题修复
+
+- 将 OpenCode raw 导出的 `total_cost` 累加器声明为浮点数，使无成本数据的会话与有成本数据的会话输出相同的数值类型
+
+### 变更
+
+- 将经过审查的 PEP 517 构建闭包升级到 `hatchling` 1.32.0，固定的类型检查器升级到 `ty` 0.0.70
+- 将 CI 与 release 工作流升级到 `astral-sh/setup-uv` v10
+- 将落地页运行时升级到 `astro` 7.2.1 与 `motion` 13.1.0
+
 ## [0.15.0] - 2026-08-13
 
 ### 问题修复
@@ -918,6 +930,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.15.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.1
 [0.15.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.0
 [0.14.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.14.0
 [0.13.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.13.0
