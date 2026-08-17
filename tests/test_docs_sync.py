@@ -130,6 +130,18 @@ class TestNpmWrapperRuntimeContract:
         assert "Node.js 22" in content
 
 
+class TestWebDeploymentTooling:
+    def test_wrangler_is_exactly_pinned_and_invoked_locally(self) -> None:
+        manifest = json.loads((REPO_ROOT / "web" / "package.json").read_text(encoding="utf-8"))
+        justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
+        workspace = (REPO_ROOT / "web" / "pnpm-workspace.yaml").read_text(encoding="utf-8")
+        wrangler_version = manifest["devDependencies"]["wrangler"]
+
+        assert re.fullmatch(r"\d+\.\d+\.\d+", wrangler_version)
+        assert "pnpm --dir web exec wrangler pages deploy" in justfile
+        assert "  workerd: true" in workspace
+
+
 class TestChangelogLinksResolve:
     def test_english_changelog_symlink_is_not_self_referential(self):
         """曾经指向字面量 "CHANGELOG.md"，相对自身目录解析即指向自己，在每个 clone 里都是坏的。"""
