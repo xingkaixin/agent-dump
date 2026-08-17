@@ -8,6 +8,7 @@ from pathlib import Path
 import sqlite3
 from unittest import mock
 
+from locale_helpers import Keys, expect
 import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -147,6 +148,15 @@ class TestParseQuery:
     def test_parse_invalid_limit_raises(self):
         with pytest.raises(ValueError, match="limit 必须是正整数"):
             parse_query("role:user limit:0 bug", {"opencode", "codex", "kimi", "claudecode"})
+
+    def test_parse_limit_larger_than_sqlite_integer_raises(self):
+        with pytest.raises(ValueError) as exc_info:
+            parse_query(
+                "role:user limit:9223372036854775808 bug",
+                {"opencode", "codex", "kimi", "claudecode"},
+            )
+
+        assert str(exc_info.value) == expect(Keys.QUERY_ERROR_LIMIT_TOO_LARGE)
 
 
 class TestParseQueryUri:

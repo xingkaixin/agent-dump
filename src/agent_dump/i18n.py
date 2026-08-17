@@ -88,6 +88,7 @@ class Keys:
     CLI_PROVIDERS_HELP = "CLI_PROVIDERS_HELP"
     CLI_VERSION_HELP = "CLI_VERSION_HELP"
     CLI_FORMAT_INVALID = "CLI_FORMAT_INVALID"
+    CLI_DAYS_INVALID = "CLI_DAYS_INVALID"
     SEARCH_INDEX_NOT_AVAILABLE = "SEARCH_INDEX_NOT_AVAILABLE"
     SEARCH_HEADER = "SEARCH_HEADER"
     SEARCH_NO_RESULTS = "SEARCH_NO_RESULTS"
@@ -289,6 +290,7 @@ class Keys:
     QUERY_ERROR_EMPTY_ROLES = "QUERY_ERROR_EMPTY_ROLES"
     QUERY_ERROR_EMPTY_LIMIT = "QUERY_ERROR_EMPTY_LIMIT"
     QUERY_ERROR_LIMIT_NOT_POSITIVE = "QUERY_ERROR_LIMIT_NOT_POSITIVE"
+    QUERY_ERROR_LIMIT_TOO_LARGE = "QUERY_ERROR_LIMIT_TOO_LARGE"
     QUERY_ERROR_UNKNOWN_FIELD = "QUERY_ERROR_UNKNOWN_FIELD"
     QUERY_ERROR_DUPLICATE_PATH = "QUERY_ERROR_DUPLICATE_PATH"
     QUERY_ERROR_DUPLICATE_LIMIT = "QUERY_ERROR_DUPLICATE_LIMIT"
@@ -395,6 +397,7 @@ TRANSLATIONS = {
         Keys.CLI_PROVIDERS_HELP: "Show provider capabilities and local search roots",
         Keys.CLI_VERSION_HELP: "Show version and exit (-v, --version)",
         Keys.CLI_FORMAT_INVALID: "invalid format list: {value}",
+        Keys.CLI_DAYS_INVALID: "invalid lookback days: {value}; expected a positive value within the calendar range",
         Keys.SEARCH_INDEX_NOT_AVAILABLE: "⚠️  Full-text search is not available (SQLite FTS5 not supported).",
         Keys.SEARCH_HEADER: "🔎 Search results from last {days} days matching '{query}':\n",
         Keys.SEARCH_NO_RESULTS: "   (No search results)",
@@ -588,6 +591,7 @@ TRANSLATIONS = {
         Keys.QUERY_ERROR_EMPTY_ROLES: "roles cannot be empty",
         Keys.QUERY_ERROR_EMPTY_LIMIT: "limit cannot be empty",
         Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE: "limit must be a positive integer",
+        Keys.QUERY_ERROR_LIMIT_TOO_LARGE: "limit is too large",
         Keys.QUERY_ERROR_UNKNOWN_FIELD: "unknown query field: {field}",
         Keys.QUERY_ERROR_DUPLICATE_PATH: "path/cwd may only be given once",
         Keys.QUERY_ERROR_DUPLICATE_LIMIT: "limit may only be given once",
@@ -690,6 +694,7 @@ TRANSLATIONS = {
         Keys.CLI_PROVIDERS_HELP: "显示 provider 能力矩阵与本地搜索路径",
         Keys.CLI_VERSION_HELP: "显示版本号并退出（-v, --version）",
         Keys.CLI_FORMAT_INVALID: "无效的格式列表: {value}",
+        Keys.CLI_DAYS_INVALID: "无效的回溯天数: {value}；必须为日历范围内的正整数",
         Keys.SEARCH_INDEX_NOT_AVAILABLE: "⚠️  全文搜索不可用（SQLite 不支持 FTS5）。",
         Keys.SEARCH_HEADER: "🔎 搜索最近 {days} 天内匹配「{query}」的会话:\n",
         Keys.SEARCH_NO_RESULTS: "   (无搜索结果)",
@@ -882,6 +887,7 @@ TRANSLATIONS = {
         Keys.QUERY_ERROR_EMPTY_ROLES: "roles 不能为空",
         Keys.QUERY_ERROR_EMPTY_LIMIT: "limit 不能为空",
         Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE: "limit 必须是正整数",
+        Keys.QUERY_ERROR_LIMIT_TOO_LARGE: "limit 数值过大",
         Keys.QUERY_ERROR_UNKNOWN_FIELD: "未知查询字段: {field}",
         Keys.QUERY_ERROR_DUPLICATE_PATH: "path/cwd 只能指定一次",
         Keys.QUERY_ERROR_DUPLICATE_LIMIT: "limit 只能指定一次",

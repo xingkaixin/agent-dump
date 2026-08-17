@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import date
 from enum import Enum
 from pathlib import Path
 from typing import ClassVar
@@ -31,6 +32,7 @@ class CommandPlanErrorCode(Enum):
     URI_HEAD_WITH_SUMMARY = "uri-head-with-summary"
     FORMAT_INVALID = "format-invalid"
     INTERACTIVE_PRINT = "interactive-print"
+    DAYS_INVALID = "days-invalid"
 
 
 class CommandPlanWarning(Enum):
@@ -216,7 +218,7 @@ def _build_operation(
         if request.interactive or request.list_requested or (request.uri and query_uri_spec is None):
             raise CommandPlanError(CommandPlanErrorCode.COLLECT_MODE_CONFLICT)
         return CollectOperation(
-            days=request.days,
+            days=None if request.days is None else _validate_days(request.days),
             since=request.since,
             until=request.until,
             save=request.save,
@@ -313,7 +315,13 @@ def _build_session_operation(
 
 
 def _days_or_default(days: int | None) -> int:
-    return 7 if days is None else days
+    return 7 if days is None else _validate_days(days)
+
+
+def _validate_days(days: int) -> int:
+    if isinstance(days, bool) or days <= 0 or days >= date.today().toordinal():
+        raise CommandPlanError(CommandPlanErrorCode.DAYS_INVALID)
+    return days
 
 
 def _resolve_output_formats(request: CommandRequest, *, mode: CommandMode) -> tuple[str, ...]:
@@ -365,6 +373,6 @@ def _resolve_command_mode(request: CommandRequest, *, is_query_uri: bool) -> Com
         return CommandMode.LIST
     if request.interactive:
         return CommandMode.INTERACTIVE
-    if request.days not in {None, 7} or request.query or is_query_uri:
+    if request.days is not None or request.query or is_query_uri:
         return CommandMode.LIST
     return CommandMode.HELP

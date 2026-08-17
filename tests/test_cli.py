@@ -1619,7 +1619,8 @@ class TestMain:
 
             mock_agent.get_sessions.assert_called_once_with(days=3)
 
-    def test_main_days_without_mode_auto_switches_to_list(self, capsys):
+    @pytest.mark.parametrize("days", [3, 7])
+    def test_main_days_without_mode_auto_switches_to_list(self, capsys, days):
         """测试仅指定 -days 时自动进入 --list 模式"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
@@ -1630,12 +1631,19 @@ class TestMain:
             configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump", "-days", "3"]):
+            with mock.patch("sys.argv", ["agent-dump", "-days", str(days)]):
                 result = main()
 
         assert result == 0
         captured = capsys.readouterr()
-        assert "列出最近 3 天的会话" in captured.out
+        assert f"列出最近 {days} 天的会话" in captured.out
+
+    def test_main_rejects_days_outside_calendar_range(self, capsys):
+        with mock.patch("sys.argv", ["agent-dump", "-days", "0"]):
+            with pytest.raises(SystemExit):
+                main()
+
+        assert expect(LocaleKeys.CLI_DAYS_INVALID, value=0) in capsys.readouterr().err
 
     def test_main_query_without_mode_auto_switches_to_list(self, capsys):
         """测试仅指定 -query 时自动进入 --list 模式"""

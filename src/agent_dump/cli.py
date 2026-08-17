@@ -458,6 +458,8 @@ def _run() -> int | None:
             return 1
         if exc.code is CommandPlanErrorCode.FORMAT_INVALID:
             parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=request.raw_format or ""))
+        if exc.code is CommandPlanErrorCode.DAYS_INVALID:
+            parser.error(i18n.t(Keys.CLI_DAYS_INVALID, value=request.days))
         _print_diagnostic(
             unsupported_capability(
                 i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_MODE),
