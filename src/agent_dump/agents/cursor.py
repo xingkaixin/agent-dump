@@ -393,9 +393,23 @@ class CursorAgent(BaseAgent):
         request_id: str,
         composer: dict[str, Any],
     ) -> Session:
+        session = self._build_session_from_composer_metadata(
+            composer_id=composer_id,
+            request_id=request_id,
+            composer=composer,
+        )
+        self._augment_session_metadata_from_bubbles(session.metadata, self._get_bubble_rows(composer_id))
+        return session
+
+    def _build_session_from_composer_metadata(
+        self,
+        *,
+        composer_id: str,
+        request_id: str,
+        composer: dict[str, Any],
+    ) -> Session:
         created_at, updated_at = self._resolve_session_times(composer)
         metadata = self._build_session_metadata(composer, composer_id=composer_id, request_id=request_id)
-        self._augment_session_metadata_from_bubbles(metadata, self._get_bubble_rows(composer_id))
         return Session(
             id=request_id,
             title=self._extract_title(composer, composer_id),
@@ -646,7 +660,7 @@ class CursorAgent(BaseAgent):
         composer = self._load_composer_by_id(composer_id)
         if not composer:
             return None
-        child_session = self._build_session_from_composer(
+        child_session = self._build_session_from_composer_metadata(
             composer_id=composer_id,
             request_id=composer_id,
             composer=composer,

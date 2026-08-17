@@ -10,6 +10,7 @@ from pathlib import Path
 import sqlite3
 import sys
 import time
+from unittest import mock
 
 import pytest
 
@@ -678,7 +679,15 @@ class TestCursorAgent:
 
         agent = CursorAgent()
         session = next(item for item in agent.get_sessions(days=7) if item.id == "request-parent")
-        data = agent.get_session_data(session)
+        with mock.patch.object(agent, "_query_global", wraps=agent._query_global) as query_global:
+            data = agent.get_session_data(session)
+
+        child_bubble_queries = [
+            call
+            for call in query_global.call_args_list
+            if len(call.args) > 1 and call.args[1] and call.args[1][0] == "bubbleId:subagent-composer:"
+        ]
+        assert len(child_bubble_queries) == 1
 
         tool_message = next(message for message in data["messages"] if message["role"] == "tool")
         tool_part = tool_message["parts"][0]
