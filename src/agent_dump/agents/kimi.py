@@ -26,6 +26,7 @@ from agent_dump.agents.message_assembly import (
     build_text_part,
     build_tool_part,
 )
+from agent_dump.agents.title_fallback import basename_title, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime, safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
@@ -181,8 +182,12 @@ class KimiAgent(FileSessionAgent):
             if not context_path and not wire_path:
                 return None
 
-            session_id = metadata.get("session_id", "")
-            title = metadata.get("title", "Untitled Session")
+            raw_session_id = metadata.get("session_id")
+            session_id = raw_session_id.strip() if isinstance(raw_session_id, str) else ""
+            if not session_id:
+                session_id = session_dir.name.strip()
+            if not session_id:
+                return None
             wire_mtime = metadata.get("wire_mtime")
             created_at = safe_epoch_datetime(wire_mtime, unit="s")
             if created_at is None:
@@ -192,6 +197,12 @@ class KimiAgent(FileSessionAgent):
 
             project_hash = session_dir.parent.name
             cwd = self._resolve_cwd_from_project_hash(project_hash)
+            raw_title = metadata.get("title")
+            title = resolve_session_title(
+                raw_title if isinstance(raw_title, str) else None,
+                None,
+                basename_title(cwd),
+            )
             raw_source = context_path if context_path is not None else wire_path
             message_count = None
             if raw_source is not None:

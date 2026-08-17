@@ -404,6 +404,42 @@ class TestKimiAgent:
 
         assert result is None
 
+    def test_parse_session_normalizes_invalid_identity_and_title(self, tmp_path):
+        agent = KimiAgent()
+        session_dir = tmp_path / "fallback-id"
+        session_dir.mkdir()
+        metadata_path = session_dir / "metadata.json"
+        metadata_path.write_text(
+            json.dumps(
+                {
+                    "session_id": {"invalid": True},
+                    "title": ["invalid"],
+                    "wire_mtime": datetime.now().timestamp(),
+                }
+            ),
+            encoding="utf-8",
+        )
+        write_jsonl(session_dir / "context.jsonl", [{"role": "user", "content": "hello"}])
+
+        result = agent._parse_session(metadata_path)
+
+        assert result is not None
+        assert result.id == "fallback-id"
+        assert result.title == "Untitled Session"
+
+    def test_parse_session_normalizes_valid_identity_and_title(self, tmp_path):
+        agent = KimiAgent()
+        session_dir = tmp_path / "session"
+        session_dir.mkdir()
+        metadata_path = write_metadata(session_dir, session_id="  kimi-id  ", title="  Kimi\nSession  ")
+        write_jsonl(session_dir / "context.jsonl", [{"role": "user", "content": "hello"}])
+
+        result = agent._parse_session(metadata_path)
+
+        assert result is not None
+        assert result.id == "kimi-id"
+        assert result.title == "Kimi Session"
+
     def test_get_sessions_filtered_by_days(self, tmp_path):
         """测试按天数过滤会话"""
         agent = KimiAgent()
