@@ -510,7 +510,12 @@ def _try_indexed_search_matches(
 
         index.update(agent, all_sessions)
         scoped_by_id = {session.id: session for session in scoped_sessions}
-        results = index.search(query, agent_names={agent.name}, limit=limit)
+        results = index.search(
+            query,
+            agent_names={agent.name},
+            session_keys={(agent.name, session_id) for session_id in scoped_by_id},
+            limit=limit,
+        )
         matches: list[SearchSessionMatch] = []
         for result in results:
             session = scoped_by_id.get(result.session_id)
@@ -584,7 +589,11 @@ def _try_indexed_search(agent: BaseAgent, sessions: list[Session], query: TextQu
             return None
 
         index.update(agent, sessions)
-        results = index.search(query, agent_names={agent.name})
+        results = index.search(
+            query,
+            agent_names={agent.name},
+            session_keys={(agent.name, session.id) for session in sessions},
+        )
         matched_ids = {r.session_id for r in results}
         return [s for s in sessions if s.id in matched_ids]
     except Exception as exc:  # noqa: BLE001 - 索引出问题时退回文件扫描，但必须让用户看见

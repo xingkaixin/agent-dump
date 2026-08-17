@@ -53,6 +53,7 @@ class SearchResult:
 
 
 _LiteralMatch = tuple[float, float, float, SearchResult]
+_SessionKey = tuple[str, str]
 
 
 _CJK_RANGE = ("\u4e00", "\u9fff")
@@ -354,9 +355,12 @@ class SearchIndex:
             conn.close()
 
     def update(self, agent: BaseAgent, sessions: list[Session]) -> tuple[int, int]:
-        """Incrementally update index for an agent's sessions.
+        """Incrementally add or refresh the provided sessions.
 
-        Returns (added_count, removed_count).
+        Absence from this list is not deletion evidence because callers may pass a
+        time or project window. Explicit clear/rebuild operations own deletion.
+        Returns (added_count, removed_count), with removed_count kept at zero for
+        compatibility.
         """
         if not self.is_available:
             return (0, 0)
@@ -364,7 +368,6 @@ class SearchIndex:
         self.ensure_initialized()
         conn = self._get_connection()
         added = 0
-        removed = 0
         skipped: list[str] = []
 
         try:
@@ -376,24 +379,12 @@ class SearchIndex:
             indexed = {row["session_id"]: _IndexedRow(row["updated_signal"], row["fts_rowid"]) for row in cursor}
 
             # Determine which sessions need updating
-            current_ids: set[str] = set()
             to_update: list[tuple[Session, float]] = []
             for session in sessions:
-                current_ids.add(session.id)
                 signal = _session_updated_signal(agent, session)
                 previous = indexed.get(session.id)
                 if previous is None or abs(previous.signal - signal) > 0.001:
                     to_update.append((session, signal))
-
-            # Remove stale entries
-            stale_rowids = [row.fts_rowid for session_id, row in indexed.items() if session_id not in current_ids]
-            if stale_rowids:
-                _delete_fts_rows(conn, stale_rowids)
-                conn.executemany(
-                    "DELETE FROM index_state WHERE fts_rowid = ?",
-                    [(rowid,) for rowid in stale_rowids],
-                )
-                removed = len(stale_rowids)
 
             if len(to_update) >= _INDEX_PROGRESS_THRESHOLD:
                 print(
@@ -448,13 +439,14 @@ class SearchIndex:
         finally:
             conn.close()
 
-        return (added, removed)
+        return (added, 0)
 
     def search(
         self,
         keyword: str | TextQuery,
         *,
         agent_names: set[str] | None = None,
+        session_keys: set[_SessionKey] | None = None,
         limit: int | None = None,
     ) -> list[SearchResult]:
         """Search the index for sessions matching the keyword.
@@ -465,6 +457,8 @@ class SearchIndex:
         """
         if not self.is_available:
             return []
+        if session_keys is not None and not session_keys:
+            return []
 
         self.ensure_initialized()
         query = keyword if isinstance(keyword, TextQuery) else TextQuery.parse(keyword, TextQueryMode.SEARCH_TERMS)
@@ -472,8 +466,19 @@ class SearchIndex:
             return []
         fts_table = _select_query_fts_table(query)
         if fts_table is None:
-            return self._scan_literal_query(query, agent_names=agent_names, limit=limit)
-        return self._search_fts(query, fts_table=fts_table, agent_names=agent_names, limit=limit)
+            return self._scan_literal_query(
+                query,
+                agent_names=agent_names,
+                session_keys=session_keys,
+                limit=limit,
+            )
+        return self._search_fts(
+            query,
+            fts_table=fts_table,
+            agent_names=agent_names,
+            session_keys=session_keys,
+            limit=limit,
+        )
 
     def _search_fts(
         self,
@@ -481,6 +486,7 @@ class SearchIndex:
         *,
         fts_table: str,
         agent_names: set[str] | None,
+        session_keys: set[_SessionKey] | None,
         limit: int | None,
     ) -> list[SearchResult]:
         fts_query = _build_fts_query(query, split_cjk=fts_table == "sessions_fts")
@@ -503,7 +509,7 @@ class SearchIndex:
                 params.extend(sorted(agent_names))
 
             limit_clause = ""
-            if limit is not None and fts_table == "sessions_fts_trigram":
+            if limit is not None and fts_table == "sessions_fts_trigram" and session_keys is None:
                 limit_clause = "LIMIT ?"
                 params.append(limit)
 
@@ -524,6 +530,9 @@ class SearchIndex:
 
             # bm25 returns lower values for better matches, so we negate for ranking
             for row in cursor:
+                session_key = (str(row["agent_name"]), str(row["session_id"]))
+                if session_keys is not None and session_key not in session_keys:
+                    continue
                 fields = (row["raw_title"] or "", row["raw_content"] or "")
                 evidence = query.find_match(fields)
                 if evidence is None:
@@ -536,8 +545,8 @@ class SearchIndex:
 
                 results.append(
                     SearchResult(
-                        agent_name=row["agent_name"],
-                        session_id=row["session_id"],
+                        agent_name=session_key[0],
+                        session_id=session_key[1],
                         title=row["raw_title"] or "",
                         snippet=snippet,
                         rank=-(row["rank"] or 0.0),
@@ -555,6 +564,7 @@ class SearchIndex:
         query: TextQuery,
         *,
         agent_names: set[str] | None,
+        session_keys: set[_SessionKey] | None,
         limit: int | None,
     ) -> list[SearchResult]:
         conn = self._get_connection()
@@ -578,6 +588,9 @@ class SearchIndex:
 
             def iter_matches() -> Iterator[_LiteralMatch]:
                 for row in cursor:
+                    session_key = (str(row["agent_name"]), str(row["session_id"]))
+                    if session_keys is not None and session_key not in session_keys:
+                        continue
                     fields = (row["title"] or "", row["content"] or "")
                     evidence = query.find_match(fields)
                     if evidence is None:
@@ -588,8 +601,8 @@ class SearchIndex:
                         -row["session_updated_at"],
                         -row["session_created_at"],
                         SearchResult(
-                            agent_name=row["agent_name"],
-                            session_id=row["session_id"],
+                            agent_name=session_key[0],
+                            session_id=session_key[1],
                             title=fields[0],
                             snippet=evidence.snippet,
                             rank=rank,

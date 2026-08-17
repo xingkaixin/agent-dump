@@ -667,6 +667,7 @@ class TestSearchSessionsByQuery:
         index.search.assert_called_once_with(
             TextQuery.parse("auth timeout", TextQueryMode.SEARCH_TERMS),
             agent_names={"codex"},
+            session_keys={("codex", "s1")},
             limit=None,
         )
 
