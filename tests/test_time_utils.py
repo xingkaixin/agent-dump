@@ -1,20 +1,16 @@
-"""Tests for time_utils.py (AD-136).
-
-这 40 行是 `--collect`、`-days`、`-since/-until` 的日期过滤和每个 provider 的
-created_at 的共同底座，此前在 tests/ 中零直接引用；唯一被引用的
-get_local_timezone 只作为 monkeypatch 目标用来压制真实时区行为。
-
-这里的失败模式格外阴——naive/aware 混用或本地午夜边界的 off-by-one 会产出静默
-为空或被截断的 collect 报告，不报错。
-"""
+"""Tests for shared datetime normalization and local timezone conversion."""
 
 from datetime import date, datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+import os
+import subprocess
+import sys
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pytest
 
 from agent_dump.time_utils import (
     ensure_datetime,
+    get_local_timezone,
     get_local_today,
     normalize_datetime_utc,
     normalize_timestamp_utc,
@@ -147,6 +143,39 @@ class TestToLocalDatetime:
 
         assert winter.hour == 7  # EST, UTC-5
         assert summer.hour == 8  # EDT, UTC-4
+
+
+class TestGetLocalTimezone:
+    def test_default_timezone_preserves_dst_rules_from_environment(self):
+        code = """
+from datetime import datetime, timezone
+from agent_dump.time_utils import get_local_timezone, to_local_datetime
+
+local_tz = get_local_timezone()
+winter = to_local_datetime(datetime(2024, 1, 15, 12, tzinfo=timezone.utc), local_tz)
+summer = to_local_datetime(datetime(2024, 7, 15, 12, tzinfo=timezone.utc), local_tz)
+print(winter.hour, summer.hour)
+"""
+        env = os.environ.copy()
+        env["TZ"] = "America/New_York"
+
+        result = subprocess.run(  # noqa: S603 - 可执行文件与脚本均由测试自身固定
+            [sys.executable, "-c", code],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        assert result.stdout.strip() == "7 8"
+
+    def test_falls_back_when_the_regional_timezone_is_unavailable(self, monkeypatch):
+        def missing_timezone() -> ZoneInfo:
+            raise ZoneInfoNotFoundError("missing")
+
+        monkeypatch.setattr("agent_dump.time_utils.get_localzone", missing_timezone)
+
+        assert get_local_timezone() is not None
 
 
 class TestGetLocalToday:

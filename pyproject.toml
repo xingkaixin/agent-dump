@@ -28,6 +28,8 @@ dependencies = [
     "questionary>=2.0.0",
     # tomllib 在 Python 3.11 才进入标准库；3.10 需要 tomli 才能正确解析 config.toml
     "tomli>=2.0.0; python_version < '3.11'",
+    # 标准库只能直接取到当前偏移；历史会话的本地日期需要系统区域时区的夏令时规则
+    "tzlocal>=5.4.4",
 ]
 
 [project.urls]
