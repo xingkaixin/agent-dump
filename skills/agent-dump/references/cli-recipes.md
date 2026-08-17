@@ -100,6 +100,8 @@ uv run agent-dump --config view
 uv run agent-dump --config edit
 ```
 
+若旧配置不是合法 TOML，读取仍会兼容，但编辑会被拒绝；请先手动修正无效转义或替换配置文件。
+
 ## 2) 查询语法
 
 ### `-q` / `-query`（过滤查询）
