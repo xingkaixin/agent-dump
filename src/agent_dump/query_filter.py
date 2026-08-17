@@ -454,8 +454,8 @@ def _find_role_evidence(
                 text = _extract_message_search_text(message)
                 if query is None:
                     return role, _build_evidence_excerpt(text)
-                if query.matches((text,)) and (snippet := query.build_snippet((text,))) is not None:
-                    return role, snippet
+                if evidence := query.find_match((text,)):
+                    return role, evidence.snippet
     except Exception as exc:  # noqa: BLE001 - 单个坏会话不应中断查询，但结果不完整必须告警
         print(
             render_terminal_message(
@@ -560,11 +560,11 @@ def _fallback_search_matches(
     for session in sessions:
         content = extract_session_searchable_text_once(agent, session)
         fields = (session.title,) if content is None else (session.title, content)
-        if not text_query.matches(fields):
+        evidence = text_query.find_match(fields)
+        if evidence is None:
             continue
-        snippet = text_query.build_snippet(fields) or session.title
-        rank = 1.0 if text_query.matches((session.title,)) else 0.0
-        matches.append(SearchSessionMatch(agent=agent, session=session, snippet=snippet, rank=rank))
+        rank = 1.0 if 0 in evidence.fully_matching_field_indexes else 0.0
+        matches.append(SearchSessionMatch(agent=agent, session=session, snippet=evidence.snippet, rank=rank))
 
     return matches
 

@@ -525,13 +525,14 @@ class SearchIndex:
             # bm25 returns lower values for better matches, so we negate for ranking
             for row in cursor:
                 fields = (row["raw_title"] or "", row["raw_content"] or "")
-                if not query.matches(fields):
+                evidence = query.find_match(fields)
+                if evidence is None:
                     continue
                 snippet = row["snippet"]
                 if snippet and fts_table == "sessions_fts":
                     snippet = _cleanup_unicode61_snippet(snippet)
                 if not snippet or not query.has_evidence(snippet):
-                    snippet = query.build_snippet(fields)
+                    snippet = evidence.snippet
 
                 results.append(
                     SearchResult(
@@ -578,9 +579,10 @@ class SearchIndex:
             def iter_matches() -> Iterator[_LiteralMatch]:
                 for row in cursor:
                     fields = (row["title"] or "", row["content"] or "")
-                    if not query.matches(fields):
+                    evidence = query.find_match(fields)
+                    if evidence is None:
                         continue
-                    rank = 1.0 if query.matches((fields[0],)) else 0.0
+                    rank = 1.0 if 0 in evidence.fully_matching_field_indexes else 0.0
                     yield (
                         -rank,
                         -row["session_updated_at"],
@@ -589,7 +591,7 @@ class SearchIndex:
                             agent_name=row["agent_name"],
                             session_id=row["session_id"],
                             title=fields[0],
-                            snippet=query.build_snippet(fields),
+                            snippet=evidence.snippet,
                             rank=rank,
                         ),
                     )

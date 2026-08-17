@@ -59,6 +59,20 @@ def _find_literal(text: str, literal: str) -> tuple[int, int] | None:
 
 
 @dataclass(frozen=True)
+class TextQueryMatch:
+    """Evidence produced by one normalized scan of a field collection."""
+
+    snippet: str
+    fully_matching_field_indexes: frozenset[int]
+
+
+@dataclass(frozen=True)
+class _TextQueryEvaluation:
+    normalized_fields: tuple[tuple[int, str], ...]
+    literal_spans: tuple[tuple[tuple[int, int] | None, ...], ...]
+
+
+@dataclass(frozen=True)
 class TextQuery:
     """Parsed literal matching facts independent of any storage adapter."""
 
@@ -81,43 +95,76 @@ class TextQuery:
         return not self.literals
 
     def matches(self, fields: tuple[str, ...] | list[str]) -> bool:
-        normalized_fields = tuple(normalize_search_text(field) for field in fields if field)
-        if not self.literals or not normalized_fields:
-            return False
-        if self.mode is TextQueryMode.KEYWORD:
-            literal = self.literals[0]
-            return any(_find_literal(field, literal) is not None for field in normalized_fields)
-        return all(
-            any(_find_literal(field, literal) is not None for field in normalized_fields) for literal in self.literals
-        )
+        return self._evaluate(fields) is not None
 
     def has_evidence(self, text: str) -> bool:
         normalized = normalize_search_text(text.replace("**", ""))
         return any(_find_literal(normalized, literal) is not None for literal in self.literals)
 
-    def build_snippet(self, fields: tuple[str, ...] | list[str], context_chars: int = 48) -> str | None:
-        normalized_fields = [normalize_search_text(field) for field in fields if field]
-        normalized_fields.sort(
-            key=lambda field: sum(_find_literal(field, literal) is not None for literal in self.literals),
+    def find_match(self, fields: tuple[str, ...] | list[str], context_chars: int = 48) -> TextQueryMatch | None:
+        evaluation = self._evaluate(fields)
+        if evaluation is None:
+            return None
+
+        ranked_fields = sorted(
+            zip(evaluation.normalized_fields, evaluation.literal_spans, strict=True),
+            key=lambda item: sum(span is not None for span in item[1]),
             reverse=True,
         )
-        for literal in self.literals:
-            for normalized in normalized_fields:
-                match = _find_literal(normalized, literal)
-                if match is None:
+        fully_matching_field_indexes = frozenset(
+            field_index
+            for ((field_index, _), spans) in zip(
+                evaluation.normalized_fields,
+                evaluation.literal_spans,
+                strict=True,
+            )
+            if all(span is not None for span in spans)
+        )
+        for literal_index in range(len(self.literals)):
+            for (_, normalized), spans in ranked_fields:
+                span = spans[literal_index]
+                if span is None:
                     continue
-                match_start, match_end = match
+                match_start, match_end = span
                 start = max(0, match_start - context_chars)
                 end = min(len(normalized), match_end + context_chars)
                 prefix = "..." if start > 0 else ""
                 suffix = "..." if end < len(normalized) else ""
-                return (
-                    prefix
-                    + normalized[start:match_start]
-                    + "**"
-                    + normalized[match_start:match_end]
-                    + "**"
-                    + normalized[match_end:end]
-                    + suffix
+                return TextQueryMatch(
+                    snippet=(
+                        prefix
+                        + normalized[start:match_start]
+                        + "**"
+                        + normalized[match_start:match_end]
+                        + "**"
+                        + normalized[match_end:end]
+                        + suffix
+                    ),
+                    fully_matching_field_indexes=fully_matching_field_indexes,
                 )
         return None
+
+    def build_snippet(self, fields: tuple[str, ...] | list[str], context_chars: int = 48) -> str | None:
+        match = self.find_match(fields, context_chars=context_chars)
+        return match.snippet if match is not None else None
+
+    def _evaluate(self, fields: tuple[str, ...] | list[str]) -> _TextQueryEvaluation | None:
+        normalized_fields = tuple(
+            (field_index, normalize_search_text(field)) for field_index, field in enumerate(fields) if field
+        )
+        if not self.literals or not normalized_fields:
+            return None
+
+        literal_spans = tuple(
+            tuple(_find_literal(normalized, literal) for literal in self.literals)
+            for _, normalized in normalized_fields
+        )
+        if self.mode is TextQueryMode.KEYWORD:
+            matched = any(spans[0] is not None for spans in literal_spans)
+        else:
+            matched = all(
+                any(spans[index] is not None for spans in literal_spans) for index in range(len(self.literals))
+            )
+        if not matched:
+            return None
+        return _TextQueryEvaluation(normalized_fields=normalized_fields, literal_spans=literal_spans)
