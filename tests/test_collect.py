@@ -549,6 +549,7 @@ class TestCollectEntries:
             until_date=now.date(),
             collect_config=CollectConfig(agent_denies={"claudecode": ("/repo/fin-agent/agent",)}),
             render_session_text_fn=lambda uri, data: f"# Session Dump\n{uri}\n{json.dumps(data)}",
+            local_tz=timezone.utc,
         )
 
         assert truncated is False
