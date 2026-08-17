@@ -130,7 +130,7 @@ uv run agent-dump "agents://.?q=timeout&providers=codex,claude&roles=user&limit=
 - `provider:` 限定 provider，支持逗号分隔；`claude` 会映射到 `claudecode`。
 - `role:` 限定消息角色，支持逗号分隔。
 - `path:` / `cwd:` 限定项目路径，支持相对路径、绝对路径和 `~`。
-- `limit:` 对最终全局匹配结果集截断。
+- `limit:` 对最终全局匹配结果集截断，且必须为有符号 64 位范围内的正整数。
 
 ### `--search`（全文搜索）
 

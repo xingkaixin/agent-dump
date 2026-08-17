@@ -87,7 +87,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。
 - `--providers` 是只读能力发现命令，不扫描会话；输出格式与路径能力均从 provider 声明派生。
 - 仅使用当前 CLI 已支持的 URI 协议：`opencode`、`zcode`、`codex`、`kimi`、`claude`、`cursor`、`pi`（其中 `claude` 对应 Claude Code）。
-- 路径作用域查询 URI 使用 `agents://<path>?q=<keyword>&providers=<names>&roles=<roles>&limit=<n>`。
+- 路径作用域查询 URI 使用 `agents://<path>?q=<keyword>&providers=<names>&roles=<roles>&limit=<n>`；`limit` 必须为有符号 64 位范围内的正整数。
 - `--list` 在本机完全没有 provider 数据时退出 `1`；时间窗或关键词无命中仍为 `0`。
 
 ## 参数与错误参考

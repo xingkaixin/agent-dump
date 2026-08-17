@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +36,7 @@ def make_request(**overrides: Any) -> CommandRequest:
         ({"days": 3}, CommandMode.LIST),
         ({"query": "bug"}, CommandMode.LIST),
         ({"interactive": True}, CommandMode.INTERACTIVE),
-        ({"days": 7}, CommandMode.HELP),
+        ({"days": 7}, CommandMode.LIST),
     ],
 )
 def test_build_command_plan_resolves_closed_operation_set(
@@ -64,6 +65,24 @@ def test_build_command_plan_preserves_mode_priority(
     expected_mode: CommandMode,
 ) -> None:
     assert build_command_plan(make_request(**overrides)).mode is expected_mode
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"days": 0},
+        {"days": -1},
+        {"days": date.today().toordinal()},
+        {"collect": True, "days": 0},
+        {"stats": True, "days": 0},
+        {"reindex": True, "days": 0},
+    ],
+)
+def test_build_command_plan_rejects_days_outside_calendar_range(overrides: dict[str, object]) -> None:
+    with pytest.raises(CommandPlanError) as exc_info:
+        build_command_plan(make_request(**overrides))
+
+    assert exc_info.value.code is CommandPlanErrorCode.DAYS_INVALID
 
 
 def test_build_command_plan_normalizes_query_uri_once() -> None:

@@ -21,6 +21,7 @@ AGENT_ALIASES = {
 }
 STRUCTURED_QUERY_KEYS = {"provider", "role", "path", "cwd", "limit"}
 QUERY_PATH_KEYS = {"path", "cwd"}
+_MAX_QUERY_LIMIT = (1 << 63) - 1
 
 
 @dataclass(frozen=True)
@@ -295,6 +296,8 @@ def _parse_limit(raw: str) -> int:
         raise ValueError(i18n.t(Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE)) from exc
     if value <= 0:
         raise ValueError(i18n.t(Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE))
+    if value > _MAX_QUERY_LIMIT:
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_LIMIT_TOO_LARGE))
     return value
 
 
