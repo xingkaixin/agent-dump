@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from agent_dump.diagnostics import DiagnosticCapabilityError
-from agent_dump.export_paths import build_session_output_path, safe_session_filename
+from agent_dump.export_paths import build_session_output_path, identity_safe_session_filename, safe_session_filename
 
 
 @pytest.mark.parametrize(
@@ -33,8 +33,31 @@ def test_build_session_output_path_keeps_untrusted_id_inside_output_dir(tmp_path
 
     result = build_session_output_path(output_dir, str(tmp_path / "escaped"), ".json")
 
-    assert result == output_dir / "escaped.json"
+    assert result.parent == output_dir
+    assert result.name.startswith("~")
+    assert result.suffix == ".json"
     assert result.resolve().is_relative_to(output_dir.resolve())
+
+
+def test_identity_safe_filename_preserves_portable_ids() -> None:
+    assert identity_safe_session_filename("session-001") == "session-001"
+
+
+def test_identity_safe_filename_distinguishes_path_shaped_ids() -> None:
+    first = identity_safe_session_filename("project-a/shared")
+    second = identity_safe_session_filename("project-b/shared")
+
+    assert first != second
+    assert first.startswith("~")
+    assert second.startswith("~")
+    assert first == identity_safe_session_filename("project-a/shared")
+
+
+def test_identity_safe_filename_avoids_case_insensitive_collisions() -> None:
+    upper = identity_safe_session_filename("Case")
+    lower = identity_safe_session_filename("case")
+
+    assert upper.casefold() != lower.casefold()
 
 
 def test_build_session_output_path_rejects_existing_symlink_escape(tmp_path: Path) -> None:

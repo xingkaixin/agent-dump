@@ -439,6 +439,8 @@ class TestBaseAgent:
 
         result = agent.export_raw_session(session, output_dir)
 
-        assert result == output_dir / "escaped.raw.jsonl"
+        assert result.parent == output_dir
+        assert result.name.startswith("~")
+        assert result.name.endswith(".raw.jsonl")
         assert result.read_text(encoding="utf-8") == "{}\n"
         assert not (tmp_path / "escaped.raw.jsonl").exists()

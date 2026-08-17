@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.exporting import execute_exports
+from agent_dump.exporting import ExportPathCollisionError, execute_exports
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
 
 
@@ -74,6 +74,19 @@ def test_execute_exports_records_summary_failure_without_losing_file(tmp_path: P
     assert result.had_success is True
     assert result.exported_paths == (output_path,)
     assert isinstance(result.attempts[0].error, RuntimeError)
+
+
+def test_execute_exports_rejects_duplicate_targets_before_writing(tmp_path: Path) -> None:
+    agent = ExportingTestAgent()
+    first = make_session("first", "First")
+    second = make_session("second", "Second")
+
+    with mock.patch("agent_dump.exporting.get_session_export_path", return_value=tmp_path / "duplicate.json"):
+        result = execute_exports(agent, [first, second], ["json"], lambda _: tmp_path)
+
+    assert result.all_failed is True
+    assert not list(tmp_path.iterdir())
+    assert all(isinstance(attempt.error, ExportPathCollisionError) for attempt in result.attempts)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX modes are not meaningful on Windows")

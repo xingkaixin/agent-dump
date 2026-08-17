@@ -264,7 +264,7 @@ class KimiAgent(FileSessionAgent):
             )
 
         ensure_output_dir(output_dir)
-        output_path = self._build_raw_output_path(session, output_dir, suffix=".raw.jsonl")
+        output_path = self._build_raw_output_path(session, output_dir)
         return copy_private_file(source_path, output_path)
 
     def _map_tool_title(self, tool_name: str) -> str:
