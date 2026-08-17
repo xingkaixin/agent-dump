@@ -390,11 +390,12 @@ class TestSearchIndex:
         added, removed = index.update(agent, [session1, session2])
         assert (added, removed) == (1, 0)
 
-        # 只保留 s1：仅 s2 的索引行被清除
+        # 部分窗口只看到 s1 时，s2 仍是可复用的缓存，但不得进入当前搜索。
         added, removed = index.update(agent, [session1])
-        assert (added, removed) == (0, 1)
+        assert (added, removed) == (0, 0)
         assert len(index.search("alpha")) == 1
-        assert len(index.search("bravo")) == 0
+        assert len(index.search("bravo")) == 1
+        assert index.search("bravo", session_keys={("codex", "s1")}) == []
 
     def test_old_schema_is_migrated_on_initialize(self, tmp_path):
         """旧版按 source_path 主键的索引库会被重建为按 (agent, session_id)"""
@@ -425,21 +426,39 @@ class TestSearchIndex:
         assert (added, removed) == (1, 0)
         assert len(index.search("keyword")) == 1
 
-    def test_delete_stale_sessions(self, tmp_path):
+    def test_narrow_update_cannot_evict_a_wide_search_window(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
         agent = DummyAgent(
-            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}}
+            session_data={
+                "old": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "historic"}]}]},
+                "recent": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "current"}]}]},
+            }
         )
-        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
-        session.source_path.write_text("data")
+        source = tmp_path / "sessions.jsonl"
+        source.write_text("data")
+        old = make_session("old", "Old", source)
+        recent = make_session("recent", "Recent", source)
 
-        index.update(agent, [session])
-        assert len(index.search("keyword")) == 1
+        index.update(agent, [old, recent])
+        added, removed = index.update(agent, [recent])
 
-        # Update with empty sessions list
-        added, removed = index.update(agent, [])
-        assert removed == 1
-        assert len(index.search("keyword")) == 0
+        assert (added, removed) == (0, 0)
+        assert [
+            result.session_id
+            for result in index.search(
+                "historic",
+                agent_names={"codex"},
+                session_keys={("codex", "old"), ("codex", "recent")},
+            )
+        ] == ["old"]
+        assert (
+            index.search(
+                "historic",
+                agent_names={"codex"},
+                session_keys={("codex", "recent")},
+            )
+            == []
+        )
 
     def test_search_multi_keyword(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
@@ -888,7 +907,7 @@ class TestStableFtsRowid:
 
         index = SearchIndex(db_path)
         index.update(agent, [keep, drop])
-        index.update(agent, [_touched(keep)])
+        index.rebuild(agent, [_touched(keep)])
 
         conn = sqlite3.connect(db_path)
         try:
@@ -898,7 +917,7 @@ class TestStableFtsRowid:
                 assert fts_rowids == state_rowids, f"{table} 与 index_state 出现孤儿行"
         finally:
             conn.close()
-        assert len(index.search("bravo")) == 0, "stale 会话的 FTS 行必须一并删除"
+        assert len(index.search("bravo")) == 0, "显式重建必须一并删除旧会话的 FTS 行"
 
     def test_reused_rowid_cannot_leak_a_deleted_session(self, tmp_path):
         """AUTOINCREMENT 防止删掉末尾行后新会话拿到同一个 rowid。"""
@@ -917,7 +936,7 @@ class TestStableFtsRowid:
         index = SearchIndex(db_path)
         index.update(agent, [first])
         removed_rowid = _fts_rowid_of(db_path, "codex", "first")
-        index.update(agent, [])
+        index.clear_agent(agent.name)
         index.update(agent, [second])
 
         assert _fts_rowid_of(db_path, "codex", "second") != removed_rowid
@@ -1299,6 +1318,20 @@ class TestSearchLimitPushdown:
 
         assert len(scoped) == 5
         assert {r.agent_name for r in scoped} == {"codex"}
+
+    def test_session_scope_applies_before_limit(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent, sessions = self._seed(tmp_path, 5)
+        index.update(agent, sessions)
+
+        scoped = index.search(
+            "common",
+            agent_names={agent.name},
+            session_keys={(agent.name, sessions[0].id)},
+            limit=1,
+        )
+
+        assert [result.session_id for result in scoped] == [sessions[0].id]
 
     def test_limit_larger_than_the_hit_count_returns_everything(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
