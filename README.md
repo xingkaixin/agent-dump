@@ -80,6 +80,9 @@ npx @agent-dump/cli --help
 
 The `npx` and global npm installation paths require Node.js 22 or newer.
 
+`@agent-dump/cli` delegates the platform-package download to npm, preserving scoped registries,
+authentication, proxy, and CA settings, then verifies the published checksum before installation.
+
 Supported native targets:
 
 - `darwin-x64`

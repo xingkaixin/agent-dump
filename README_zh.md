@@ -80,7 +80,8 @@ npx @agent-dump/cli --help
 
 使用 `npx` 或 npm 全局安装时需要 Node.js 22 或更高版本。
 
-`@agent-dump/cli` 会在安装阶段下载当前平台对应的原生二进制，并在落盘前校验发布时生成的 checksum。
+`@agent-dump/cli` 通过 npm 下载当前平台包，因此会沿用 scoped registry、认证、代理与 CA 配置，
+并在落盘前校验发布时生成的 checksum。
 
 当前支持的平台：
 

@@ -1,175 +1,167 @@
 const fs = require("node:fs");
+const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
 const fsp = require("node:fs/promises");
-const http = require("node:http");
-const https = require("node:https");
+const os = require("node:os");
 const path = require("node:path");
 const zlib = require("node:zlib");
 
 const { getBinarySpec } = require("./targets.cjs");
 
-const DEFAULT_REGISTRY_URL = "https://registry.npmjs.org";
-const DEFAULT_RETRY_COUNT = 5;
-const DEFAULT_RETRY_DELAY_MS = 3000;
-
-// 上限按当前真实产物定，留足余量但仍能挡住恶意响应：
-// registry metadata 现约 45 KB（每个版本约 3 KB），最大的 binary 是 linux-x64 的
-// 16.3 MB，压缩后约 6 MB。解压上限同时是 gzip bomb 的防线——64 MB 的压缩流按
-// 1000:1 能解出 64 GB。
-const MAX_METADATA_BYTES = 16 * 1024 * 1024;
 const MAX_COMPRESSED_TARBALL_BYTES = 64 * 1024 * 1024;
 const MAX_DECOMPRESSED_TAR_BYTES = 128 * 1024 * 1024;
-// 连接建立后 30 秒没有任何字节即判定停滞；整次取用最长 5 分钟，够慢网络下载 16 MB
-const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
+const MAX_NPM_OUTPUT_BYTES = 4 * 1024 * 1024;
 const DEFAULT_TOTAL_TIMEOUT_MS = 300_000;
 
 function getPackageRoot(rootDir = __dirname) {
   return path.resolve(rootDir, "..");
 }
 
-function getRegistryBaseUrl(env = process.env) {
-  const rawUrl = env.AGENT_DUMP_NPM_REGISTRY_URL || env.npm_config_registry || DEFAULT_REGISTRY_URL;
-  return rawUrl.replace(/\/+$/, "");
-}
-
 function sha256(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function getNpmInvocation(env, platform = process.platform) {
+  const npmExecPath = env.npm_execpath;
+  if (typeof npmExecPath === "string" && path.basename(npmExecPath).toLowerCase() === "npm-cli.js") {
+    return {
+      command: env.npm_node_execpath || process.execPath,
+      prefixArgs: [npmExecPath],
+      shell: false
+    };
+  }
+  if (platform === "win32") {
+    return {
+      command: env.ComSpec || "cmd.exe",
+      prefixArgs: ["/d", "/s", "/c", "npm"],
+      shell: false
+    };
+  }
+  return { command: "npm", prefixArgs: [], shell: false };
 }
 
-function fetchBuffer(url, options = {}) {
-  if (options.fetchBufferImpl) {
-    return options.fetchBufferImpl(url);
+function runNpm(args, options = {}) {
+  const env = {
+    ...(options.env || process.env),
+    npm_config_update_notifier: "false"
+  };
+  if (options.runNpmImpl) {
+    return options.runNpmImpl(args, { cwd: options.cwd, env });
   }
 
-  const maxRedirects = options.maxRedirects ?? 5;
-  const maxBytes = options.maxBytes ?? MAX_COMPRESSED_TARBALL_BYTES;
-  const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
-  // redirect 继承同一个绝对 deadline：否则每一跳都能重置预算，重定向链就成了无限期挂起
-  const deadline = options.deadline ?? Date.now() + (options.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS);
+  const invocation = getNpmInvocation(env, options.platform);
+  const maxOutputBytes = options.maxNpmOutputBytes ?? MAX_NPM_OUTPUT_BYTES;
+  const timeoutMs = options.npmTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS;
 
   return new Promise((resolve, reject) => {
-    let settled = false;
-    let request = null;
-    let response = null;
-
-    const cleanup = () => {
-      clearTimeout(totalTimer);
-      // Node 的 setTimeout 只发事件，不 destroy 就不会关掉 socket——挂起的请求
-      // 永远不会 reject，外层重试也就永远轮不到
-      response?.destroy();
-      request?.destroy();
-    };
-
-    const fail = (error) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(error);
-    };
-
-    const succeed = (value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(totalTimer);
-      resolve(value);
-    };
-
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) {
-      settled = true;
-      reject(new Error(`Timed out before fetching ${url}`));
-      return;
-    }
-
-    const totalTimer = setTimeout(() => fail(new Error(`Timed out fetching ${url}`)), remaining);
-    totalTimer.unref?.();
-
-    const transport = url.startsWith("https:") ? https : http;
-    request = transport.get(
-      url,
-      {
-        headers: options.headers
-      },
-      (res) => {
-        response = res;
-        const { statusCode = 0, headers } = res;
-
-        if (statusCode >= 300 && statusCode < 400 && headers.location) {
-          if (maxRedirects <= 0) {
-            fail(new Error(`Too many redirects while fetching ${url}`));
-            return;
-          }
-
-          const nextUrl = new URL(headers.location, url).toString();
-          settled = true;
-          cleanup();
-          resolve(fetchBuffer(nextUrl, { ...options, maxRedirects: maxRedirects - 1, deadline, maxBytes }));
-          return;
-        }
-
-        if (statusCode < 200 || statusCode >= 300) {
-          fail(new Error(`Request to ${url} failed with status ${statusCode}`));
-          return;
-        }
-
-        const declared = Number.parseInt(headers["content-length"] ?? "", 10);
-        if (Number.isFinite(declared) && declared > maxBytes) {
-          fail(new Error(`Response for ${url} declares ${declared} bytes, over the ${maxBytes} byte limit`));
-          return;
-        }
-
-        const chunks = [];
-        let received = 0;
-        res.on("data", (chunk) => {
-          received += chunk.length;
-          // Content-Length 可以撒谎或缺失，逐 chunk 计数才是真正的上限
-          if (received > maxBytes) {
-            fail(new Error(`Response for ${url} exceeded the ${maxBytes} byte limit`));
-            return;
-          }
-          chunks.push(chunk);
-        });
-        res.once("aborted", () => fail(new Error(`Connection aborted while fetching ${url}`)));
-        res.once("error", (error) => fail(error));
-        res.once("end", () => succeed(Buffer.concat(chunks)));
-      }
-    );
-
-    request.setTimeout(idleTimeoutMs, () => {
-      fail(new Error(`No data for ${idleTimeoutMs}ms while fetching ${url}`));
+    const child = spawn(invocation.command, [...invocation.prefixArgs, ...args], {
+      cwd: options.cwd,
+      env,
+      shell: invocation.shell,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true
     });
-    request.once("error", (error) => fail(error));
+    const stdout = [];
+    const stderr = [];
+    let outputBytes = 0;
+    let settled = false;
+
+    const finish = (error, result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) {
+        reject(error);
+      } else {
+        resolve(result);
+      }
+    };
+    const append = (target, chunk) => {
+      outputBytes += chunk.length;
+      if (outputBytes > maxOutputBytes) {
+        child.kill();
+        finish(new Error(`npm output exceeded ${maxOutputBytes} bytes`));
+        return;
+      }
+      target.push(chunk);
+    };
+
+    child.stdout.on("data", (chunk) => append(stdout, chunk));
+    child.stderr.on("data", (chunk) => append(stderr, chunk));
+    child.once("error", (error) => finish(new Error(`Could not start npm: ${error.message}`)));
+    child.once("close", (code, signal) => {
+      if (settled) return;
+      const stdoutText = Buffer.concat(stdout).toString("utf8");
+      const stderrText = Buffer.concat(stderr).toString("utf8");
+      if (code !== 0) {
+        const detail = stderrText.trim() || stdoutText.trim();
+        finish(new Error(`npm pack failed with ${signal || `status ${code}`}${detail ? `:\n${detail}` : ""}`));
+        return;
+      }
+      finish(null, { stdout: stdoutText, stderr: stderrText });
+    });
+
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(new Error(`npm pack timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    timer.unref?.();
   });
 }
 
-async function fetchJson(url, options = {}) {
-  const buffer = await fetchBuffer(url, { ...options, maxBytes: options.maxBytes ?? MAX_METADATA_BYTES });
-  return JSON.parse(buffer.toString("utf8"));
-}
-
-async function withRetries(operation, options = {}) {
-  const retries = options.retries ?? DEFAULT_RETRY_COUNT;
-  const delayMs = options.delayMs ?? DEFAULT_RETRY_DELAY_MS;
-
-  let lastError = null;
-  for (let attempt = 1; attempt <= retries; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-      if (attempt === retries) {
-        break;
-      }
-
-      await delay(delayMs);
-    }
+function parseNpmPackResult(stdout, spec, version) {
+  let records;
+  try {
+    records = JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`npm returned invalid JSON for ${spec.packageName}@${version}`, { cause: error });
   }
 
-  throw lastError;
+  const metadata = Array.isArray(records) && records.length === 1 ? records[0] : null;
+  if (
+    metadata?.name !== spec.packageName ||
+    metadata?.version !== version ||
+    typeof metadata?.filename !== "string" ||
+    !metadata.filename ||
+    typeof metadata?.integrity !== "string" ||
+    !metadata.integrity
+  ) {
+    throw new Error(`npm returned invalid package metadata for ${spec.packageName}@${version}`);
+  }
+  if (path.basename(metadata.filename) !== metadata.filename) {
+    throw new Error(`npm returned an unsafe tarball filename for ${spec.packageName}@${version}`);
+  }
+  return metadata;
+}
+
+async function downloadPackageTarball(spec, version, options = {}) {
+  if (!/^[0-9A-Za-z][0-9A-Za-z.+-]*$/.test(version)) {
+    throw new Error(`Invalid package version: ${version}`);
+  }
+
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "agent-dump-npm-pack-"));
+  try {
+    const env = {
+      ...(options.env || process.env),
+      npm_config_pack_destination: tempDir
+    };
+    const npmConfigDirectory = options.npmConfigDirectory || env.npm_config_local_prefix || env.INIT_CWD;
+    const result = await runNpm(["pack", `${spec.packageName}@${version}`, "--json", "--ignore-scripts"], {
+      ...options,
+      cwd: npmConfigDirectory,
+      env
+    });
+    const metadata = parseNpmPackResult(result.stdout, spec, version);
+    const tarballPath = path.join(tempDir, metadata.filename);
+    const stats = await fsp.stat(tarballPath);
+    const maxTarballBytes = options.maxTarballBytes ?? MAX_COMPRESSED_TARBALL_BYTES;
+    if (!stats.isFile() || stats.size > maxTarballBytes) {
+      throw new Error(`Package tarball for ${spec.packageName}@${version} exceeds ${maxTarballBytes} bytes`);
+    }
+    return await fsp.readFile(tarballPath);
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 function parseTarEntries(tarBuffer) {
@@ -290,29 +282,7 @@ async function installBinary(options = {}) {
   if (tarballPath) {
     tarballBuffer = await fsp.readFile(tarballPath);
   } else {
-    const registryBaseUrl = options.registryBaseUrl || getRegistryBaseUrl(env);
-    const metadataUrl = `${registryBaseUrl}/${encodeURIComponent(spec.packageName)}`;
-    const metadata = await withRetries(
-      () => fetchJson(metadataUrl, { ...options, maxBytes: options.maxMetadataBytes ?? MAX_METADATA_BYTES }),
-      {
-        retries: options.retries,
-        delayMs: options.retryDelayMs
-      }
-    );
-    const versionMetadata = metadata.versions?.[version];
-
-    if (!versionMetadata?.dist?.tarball) {
-      throw new Error(`Registry metadata for ${spec.packageName}@${version} does not include a tarball URL`);
-    }
-
-    const tarballUrl = versionMetadata.dist.tarball;
-    tarballBuffer = await withRetries(
-      () => fetchBuffer(tarballUrl, { ...options, maxBytes: options.maxTarballBytes ?? MAX_COMPRESSED_TARBALL_BYTES }),
-      {
-        retries: options.retries,
-        delayMs: options.retryDelayMs
-      }
-    );
+    tarballBuffer = await downloadPackageTarball(spec, version, { ...options, env });
   }
 
   const binaryBuffer = extractBinaryFromTarball(tarballBuffer, spec, options);
@@ -420,20 +390,15 @@ async function installBinaryFromPackage() {
 }
 
 module.exports = {
-  DEFAULT_IDLE_TIMEOUT_MS,
-  DEFAULT_REGISTRY_URL,
-  DEFAULT_RETRY_COUNT,
-  DEFAULT_RETRY_DELAY_MS,
   DEFAULT_TOTAL_TIMEOUT_MS,
   MAX_COMPRESSED_TARBALL_BYTES,
   MAX_DECOMPRESSED_TAR_BYTES,
-  MAX_METADATA_BYTES,
+  MAX_NPM_OUTPUT_BYTES,
+  downloadPackageTarball,
   ensureBinary,
   extractBinaryFromTarball,
-  fetchBuffer,
-  fetchJson,
+  getNpmInvocation,
   getPackageRoot,
-  getRegistryBaseUrl,
   getVendorBinaryPath,
   installBinary,
   installBinaryFromPackage,
@@ -442,8 +407,8 @@ module.exports = {
   publishBinaryAtomically,
   parseTarEntries,
   readChecksums,
-  sha256,
-  withRetries
+  runNpm,
+  sha256
 };
 
 if (require.main === module) {

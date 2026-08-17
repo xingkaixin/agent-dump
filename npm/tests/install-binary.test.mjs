@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import fs from "node:fs/promises";
 import http from "node:http";
@@ -9,20 +10,19 @@ import zlib from "node:zlib";
 
 const require = createRequire(import.meta.url);
 const {
-  DEFAULT_IDLE_TIMEOUT_MS,
   DEFAULT_TOTAL_TIMEOUT_MS,
   MAX_COMPRESSED_TARBALL_BYTES,
   MAX_DECOMPRESSED_TAR_BYTES,
-  MAX_METADATA_BYTES,
+  MAX_NPM_OUTPUT_BYTES,
+  downloadPackageTarball,
   ensureBinary,
   extractBinaryFromTarball,
-  fetchBuffer,
-  getRegistryBaseUrl,
+  getNpmInvocation,
   getVendorBinaryPath,
   installBinary,
   publishBinaryAtomically,
-  sha256,
-  withRetries
+  runNpm,
+  sha256
 } = require("../packages/cli/lib/install-binary.cjs");
 const { getBinarySpec } = require("../packages/cli/lib/targets.cjs");
 
@@ -65,16 +65,6 @@ function createTarGz(entries) {
   return zlib.gzipSync(tarBody);
 }
 
-test("getRegistryBaseUrl prefers explicit environment and strips trailing slashes", () => {
-  assert.equal(
-    getRegistryBaseUrl({
-      AGENT_DUMP_NPM_REGISTRY_URL: "http://127.0.0.1:4873///",
-      npm_config_registry: "https://registry.npmjs.org/"
-    }),
-    "http://127.0.0.1:4873"
-  );
-});
-
 test("extractBinaryFromTarball reads the packaged executable from the tarball", () => {
   const spec = getBinarySpec("win32", "x64");
   const binary = Buffer.from("fake-exe");
@@ -86,7 +76,7 @@ test("extractBinaryFromTarball reads the packaged executable from the tarball", 
   assert.deepEqual(extractBinaryFromTarball(tarball, spec), binary);
 });
 
-test("installBinary downloads, verifies and writes the vendored binary", async (t) => {
+test("installBinary verifies and writes a supplied platform tarball", async (t) => {
   const packageRoot = await tempRoot(t, "agent-dump-install-");
   const version = "0.6.13";
   const spec = getBinarySpec("linux", "x64");
@@ -95,9 +85,8 @@ test("installBinary downloads, verifies and writes the vendored binary", async (
     { name: "package/package.json", content: Buffer.from('{"name":"@agent-dump/cli-linux-x64"}') },
     { name: "package/bin/agent-dump", content: binary }
   ]);
-  const metadataUrl = "http://registry.test/%40agent-dump%2Fcli-linux-x64";
-  const tarballUrl = "http://registry.test/tarballs/cli-linux-x64-0.6.13.tgz";
-  const seenUrls = [];
+  const tarballPath = path.join(packageRoot, "platform.tgz");
+  await fs.writeFile(tarballPath, tarball);
 
   const vendorPath = await installBinary({
     packageRoot,
@@ -109,35 +98,100 @@ test("installBinary downloads, verifies and writes the vendored binary", async (
         [spec.target]: sha256(binary)
       }
     },
-    retries: 1,
-    fetchBufferImpl: async (url) => {
-      seenUrls.push(url);
-      if (url === metadataUrl) {
-        return Buffer.from(
-          JSON.stringify({
-            versions: {
-              [version]: {
-                dist: {
-                  tarball: tarballUrl
-                }
-              }
-            }
-          })
-        );
-      }
-
-      if (url === tarballUrl) {
-        return tarball;
-      }
-
-      throw new Error(`Unexpected URL: ${url}`);
-    },
-    registryBaseUrl: "http://registry.test"
+    tarballPath
   });
 
-  assert.deepEqual(seenUrls, [metadataUrl, tarballUrl]);
   assert.equal(vendorPath, getVendorBinaryPath(packageRoot, spec));
   assert.deepEqual(await fs.readFile(vendorPath), binary);
+});
+
+test("installBinary honors scoped registry authentication from npm config", async (t) => {
+  const packageRoot = await tempRoot(t, "agent-dump-private-registry-");
+  const version = "0.6.13";
+  const spec = getBinarySpec("linux", "x64");
+  const binary = Buffer.from("private-registry-binary");
+  const tarball = createTarGz([
+    {
+      name: "package/package.json",
+      content: Buffer.from(JSON.stringify({ name: spec.packageName, version }))
+    },
+    { name: "package/bin/agent-dump", content: binary }
+  ]);
+  const integrity = `sha512-${crypto.createHash("sha512").update(tarball).digest("base64")}`;
+  const requests = [];
+
+  await withServer(
+    (req, res) => {
+      const authorization = req.headers.authorization ?? "<missing>";
+      requests.push({ url: req.url, authorization });
+
+      if (!req.url.startsWith("/scoped/") || authorization !== "Bearer test-token") {
+        res.writeHead(401, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "authentication required" }));
+        return;
+      }
+      if (req.url.endsWith(".tgz")) {
+        res.writeHead(200, { "content-type": "application/octet-stream" });
+        res.end(tarball);
+        return;
+      }
+
+      const origin = `http://${req.headers.host}`;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          name: spec.packageName,
+          versions: {
+            [version]: {
+              name: spec.packageName,
+              version,
+              dist: {
+                integrity,
+                tarball: `${origin}/scoped/tarballs/cli-linux-x64-${version}.tgz`
+              }
+            }
+          }
+        })
+      );
+    },
+    async (url) => {
+      const origin = new URL(url).origin;
+      const npmrcPath = path.join(packageRoot, ".npmrc");
+      const userconfigPath = path.join(packageRoot, "empty-user.npmrc");
+      const cachePath = path.join(packageRoot, "npm-cache");
+      await fs.writeFile(
+        npmrcPath,
+        [
+          `registry=${origin}/default/`,
+          `@agent-dump:registry=${origin}/scoped/`,
+          `//${new URL(origin).host}/scoped/:_authToken=test-token`
+        ].join("\n")
+      );
+      await fs.writeFile(userconfigPath, "");
+
+      const vendorPath = await installBinary({
+        packageRoot,
+        version,
+        platform: "linux",
+        arch: "x64",
+        checksums: { [version]: { [spec.target]: sha256(binary) } },
+        env: {
+          ...process.env,
+          INIT_CWD: packageRoot,
+          npm_config_cache: cachePath,
+          npm_config_local_prefix: packageRoot,
+          npm_config_registry: `${origin}/default/`,
+          npm_config_userconfig: userconfigPath
+        }
+      });
+
+      assert.deepEqual(await fs.readFile(vendorPath), binary);
+    }
+  );
+
+  assert.ok(requests.length >= 2);
+  assert.ok(requests.every((request) => request.url.startsWith("/scoped/")));
+  assert.ok(requests.every((request) => request.authorization === "Bearer test-token"));
 });
 
 test("installBinary fails on checksum mismatch", async (t) => {
@@ -148,6 +202,8 @@ test("installBinary fails on checksum mismatch", async (t) => {
     { name: "package/package.json", content: Buffer.from('{"name":"@agent-dump/cli-win32-x64"}') },
     { name: "package/bin/agent-dump.exe", content: Buffer.from("bad-binary") }
   ]);
+  const tarballPath = path.join(packageRoot, "platform.tgz");
+  await fs.writeFile(tarballPath, tarball);
 
   await assert.rejects(
     installBinary({
@@ -160,25 +216,7 @@ test("installBinary fails on checksum mismatch", async (t) => {
           [spec.target]: "deadbeef"
         }
       },
-      retries: 1,
-      fetchBufferImpl: async (url) => {
-        if (url.includes("%40agent-dump%2Fcli-win32-x64")) {
-          return Buffer.from(
-            JSON.stringify({
-              versions: {
-                [version]: {
-                  dist: {
-                    tarball: "http://registry.test/tarballs/cli-win32-x64-0.6.13.tgz"
-                  }
-                }
-              }
-            })
-          );
-        }
-
-        return tarball;
-      },
-      registryBaseUrl: "http://registry.test"
+      tarballPath
     }),
     /Checksum mismatch/
   );
@@ -200,7 +238,7 @@ test("ensureBinary returns an existing vendored binary that matches its checksum
     arch: "x64",
     version,
     checksums: { [version]: { [spec.target]: sha256(existing) } },
-    fetchBufferImpl: async () => {
+    runNpmImpl: async () => {
       throw new Error("ensureBinary should not download when the installed binary is valid");
     }
   });
@@ -218,6 +256,8 @@ test("ensureBinary installs the vendored binary when it is missing", async (t) =
     { name: "package/package.json", content: Buffer.from('{"name":"@agent-dump/cli-linux-x64"}') },
     { name: "package/bin/agent-dump", content: binary }
   ]);
+  const tarballPath = path.join(packageRoot, "platform.tgz");
+  await fs.writeFile(tarballPath, tarball);
 
   const ensuredPath = await ensureBinary({
     packageRoot,
@@ -229,32 +269,13 @@ test("ensureBinary installs the vendored binary when it is missing", async (t) =
         [spec.target]: sha256(binary)
       }
     },
-    retries: 1,
-    fetchBufferImpl: async (url) => {
-      if (url.includes("%40agent-dump%2Fcli-linux-x64")) {
-        return Buffer.from(
-          JSON.stringify({
-            versions: {
-              [version]: {
-                dist: {
-                  tarball: "http://registry.test/tarballs/cli-linux-x64-0.6.13.tgz"
-                }
-              }
-            }
-          })
-        );
-      }
-
-      return tarball;
-    },
-    registryBaseUrl: "http://registry.test"
+    tarballPath
   });
 
   assert.equal(ensuredPath, getVendorBinaryPath(packageRoot, spec));
   assert.deepEqual(await fs.readFile(ensuredPath), binary);
 });
 
-// AD-168：下载与解压都必须有硬上限，停滞的响应要能真正终止并进入重试
 async function withServer(handler, run) {
   const server = http.createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -267,131 +288,73 @@ async function withServer(handler, run) {
   }
 }
 
-async function expectRejection(promise) {
-  try {
-    await promise;
-  } catch (error) {
-    return error;
-  }
-  assert.fail("expected the request to be rejected");
-}
+test("downloadPackageTarball rejects an archive over the configured limit", async () => {
+  const spec = getBinarySpec("linux", "x64");
+  const version = "0.6.13";
 
-test("fetchBuffer rejects a response that never sends headers", async () => {
-  await withServer(
-    () => {},
-    async (url) => {
-      const error = await expectRejection(fetchBuffer(url, { idleTimeoutMs: 150 }));
-      assert.match(error.message, /No data for 150ms/);
-    }
-  );
-});
-
-test("fetchBuffer rejects a response that stalls after headers", async () => {
-  await withServer(
-    (req, res) => {
-      res.writeHead(200);
-      res.write("partial");
-    },
-    async (url) => {
-      const error = await expectRejection(fetchBuffer(url, { idleTimeoutMs: 150 }));
-      assert.match(error.message, /No data for 150ms/);
-    }
-  );
-});
-
-test("fetchBuffer rejects an oversized declared Content-Length", async () => {
-  await withServer(
-    (req, res) => {
-      res.writeHead(200, { "content-length": "999999" });
-      res.end(Buffer.alloc(10));
-    },
-    async (url) => {
-      const error = await expectRejection(fetchBuffer(url, { maxBytes: 1000 }));
-      assert.match(error.message, /declares 999999 bytes/);
-    }
-  );
-});
-
-test("fetchBuffer rejects a chunked body that lies about its size", async () => {
-  await withServer(
-    (req, res) => {
-      res.writeHead(200);
-      res.end(Buffer.alloc(5000));
-    },
-    async (url) => {
-      const error = await expectRejection(fetchBuffer(url, { maxBytes: 1000 }));
-      assert.match(error.message, /exceeded the 1000 byte limit/);
-    }
-  );
-});
-
-test("fetchBuffer rejects an aborted connection", async () => {
-  await withServer(
-    (req, res) => {
-      res.writeHead(200);
-      res.write(Buffer.alloc(16));
-      res.destroy();
-    },
-    async (url) => {
-      const error = await expectRejection(fetchBuffer(url, { idleTimeoutMs: 5000 }));
-      assert.ok(error instanceof Error);
-    }
-  );
-});
-
-test("a timed out request settles so the existing retry loop can run", async () => {
-  await withServer(
-    (req, res) => {
-      res.writeHead(200);
-      res.write("partial");
-    },
-    async (url) => {
-      let attempts = 0;
-      const error = await expectRejection(
-        withRetries(
-          () => {
-            attempts += 1;
-            return fetchBuffer(url, { idleTimeoutMs: 60 });
-          },
-          { retries: 3, delayMs: 1 }
-        )
-      );
-      assert.equal(attempts, 3, "a hung request never rejects, so retries never run");
-      assert.match(error.message, /No data for 60ms/);
-    }
-  );
-});
-
-test("redirects inherit the original deadline instead of resetting it", async () => {
-  await withServer(
-    (req, res) => {
-      if (req.url === "/artifact") {
-        res.writeHead(302, { location: "/next" });
-        res.end();
-        return;
+  await assert.rejects(
+    downloadPackageTarball(spec, version, {
+      maxTarballBytes: 3,
+      async runNpmImpl(_args, { env }) {
+        const filename = "agent-dump-cli-linux-x64-0.6.13.tgz";
+        await fs.writeFile(path.join(env.npm_config_pack_destination, filename), Buffer.alloc(4));
+        return {
+          stdout: JSON.stringify([
+            { name: spec.packageName, version, filename, integrity: "sha512-test" }
+          ]),
+          stderr: ""
+        };
       }
-      res.writeHead(200);
-      res.write("partial");
-    },
-    async (url) => {
-      const started = Date.now();
-      const error = await expectRejection(fetchBuffer(url, { totalTimeoutMs: 200, idleTimeoutMs: 5000 }));
-      assert.ok(Date.now() - started < 1500, "the redirect must not restart the total budget");
-      assert.match(error.message, /Timed out/);
-    }
+    }),
+    /exceeds 3 bytes/
   );
 });
 
-test("fetchBuffer still returns a normal response unchanged", async () => {
-  await withServer(
-    (req, res) => {
-      res.writeHead(200);
-      res.end("payload");
-    },
-    async (url) => {
-      assert.equal((await fetchBuffer(url)).toString(), "payload");
-    }
+test("downloadPackageTarball rejects a package version that is unsafe for the Windows shell", async () => {
+  const spec = getBinarySpec("win32", "x64");
+
+  await assert.rejects(
+    downloadPackageTarball(spec, "0.6.13 & calc", {
+      runNpmImpl: async () => assert.fail("invalid input must be rejected before npm starts")
+    }),
+    /Invalid package version/
   );
+});
+
+test("runNpm bounds subprocess output", async (t) => {
+  const root = await tempRoot(t, "agent-dump-npm-output-");
+  const npmExecPath = path.join(root, "npm-cli.js");
+  await fs.writeFile(npmExecPath, 'process.stdout.write("x".repeat(1024));\n');
+
+  await assert.rejects(
+    runNpm(["pack"], {
+      env: { ...process.env, npm_execpath: npmExecPath, npm_node_execpath: process.execPath },
+      maxNpmOutputBytes: 32
+    }),
+    /npm output exceeded 32 bytes/
+  );
+});
+
+test("runNpm terminates a subprocess after the total deadline", async (t) => {
+  const root = await tempRoot(t, "agent-dump-npm-timeout-");
+  const npmExecPath = path.join(root, "npm-cli.js");
+  await fs.writeFile(npmExecPath, "setInterval(() => {}, 1000);\n");
+
+  await assert.rejects(
+    runNpm(["pack"], {
+      env: { ...process.env, npm_execpath: npmExecPath, npm_node_execpath: process.execPath },
+      npmTimeoutMs: 100
+    }),
+    /npm pack timed out after 100ms/
+  );
+});
+
+test("getNpmInvocation uses cmd without enabling a child-process shell on Windows", () => {
+  assert.deepEqual(getNpmInvocation({ ComSpec: "C:\\Windows\\System32\\cmd.exe" }, "win32"), {
+    command: "C:\\Windows\\System32\\cmd.exe",
+    prefixArgs: ["/d", "/s", "/c", "npm"],
+    shell: false
+  });
 });
 
 test("extractBinaryFromTarball rejects a small tarball that decompresses past the limit", () => {
@@ -405,20 +368,21 @@ test("extractBinaryFromTarball rejects a small tarball that decompresses past th
 });
 
 test("production defaults keep every limit switched on", () => {
-  assert.ok(MAX_METADATA_BYTES > 0);
   assert.ok(MAX_COMPRESSED_TARBALL_BYTES > 0);
   assert.ok(MAX_DECOMPRESSED_TAR_BYTES > MAX_COMPRESSED_TARBALL_BYTES);
-  assert.ok(DEFAULT_IDLE_TIMEOUT_MS > 0);
-  assert.ok(DEFAULT_TOTAL_TIMEOUT_MS > DEFAULT_IDLE_TIMEOUT_MS);
+  assert.ok(MAX_NPM_OUTPUT_BYTES > 0);
+  assert.ok(DEFAULT_TOTAL_TIMEOUT_MS > 0);
 });
 
 // AD-169：最终路径在任意时刻只能是旧的完整 binary 或新的完整 binary
-function buildInstallFixture(binary, version = "0.6.13") {
+async function buildInstallFixture(packageRoot, binary, version = "0.6.13") {
   const spec = getBinarySpec("linux", "x64");
   const tarball = createTarGz([
     { name: "package/package.json", content: Buffer.from('{"name":"@agent-dump/cli-linux-x64"}') },
     { name: "package/bin/agent-dump", content: binary }
   ]);
+  const tarballPath = path.join(packageRoot, "platform.tgz");
+  await fs.writeFile(tarballPath, tarball);
 
   return {
     spec,
@@ -428,14 +392,7 @@ function buildInstallFixture(binary, version = "0.6.13") {
       arch: "x64",
       version,
       checksums: { [version]: { [spec.target]: sha256(binary) } },
-      fetchBufferImpl: async (url) =>
-        url.endsWith(".tgz")
-          ? tarball
-          : Buffer.from(
-              JSON.stringify({
-                versions: { [version]: { dist: { tarball: "https://example.test/pkg.tgz" } } }
-              })
-            )
+      tarballPath
     }
   };
 }
@@ -453,7 +410,7 @@ for (const [label, corrupt] of [
   test(`ensureBinary repairs ${label}`, async (t) => {
     const packageRoot = await tempRoot(t, "agent-dump-repair-");
     const binary = Buffer.from("#!/usr/bin/env bash\necho repaired\n", "utf8");
-    const fixture = buildInstallFixture(binary);
+    const fixture = await buildInstallFixture(packageRoot, binary);
     const vendorPath = getVendorBinaryPath(packageRoot, fixture.spec);
 
     await fs.mkdir(path.dirname(vendorPath), { recursive: true });
@@ -484,9 +441,7 @@ test("a failed install leaves the previous complete binary in place", async (t) 
       version,
       // 期望的是新版本，既有文件因此校验失败并触发重装；重装本身再失败
       checksums: { [version]: { [spec.target]: "0".repeat(64) } },
-      retries: 1,
-      retryDelayMs: 1,
-      fetchBufferImpl: async () => {
+      runNpmImpl: async () => {
         throw new Error("registry unreachable");
       }
     })
@@ -525,7 +480,7 @@ test("publishBinaryAtomically never leaves a partial file at the final path", as
 test("concurrent installs of the same version converge without leftovers", async (t) => {
   const packageRoot = await tempRoot(t, "agent-dump-concurrent-");
   const binary = Buffer.from("#!/usr/bin/env bash\necho concurrent\n", "utf8");
-  const fixture = buildInstallFixture(binary);
+  const fixture = await buildInstallFixture(packageRoot, binary);
   const vendorPath = getVendorBinaryPath(packageRoot, fixture.spec);
 
   const results = await Promise.all(
