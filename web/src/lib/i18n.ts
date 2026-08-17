@@ -23,7 +23,6 @@ export const site = {
     en: "https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md",
     zh: "https://github.com/xingkaixin/agent-dump/blob/main/docs/zh/CHANGELOG.md",
   } as Record<Locale, string>,
-  cfBeaconToken: "004af8c09ea3455ea8a2b53f0a913be2",
   skillCommand: "npx skills add xingkaixin/agent-dump",
 };
 
@@ -38,17 +37,6 @@ export const providers = [
   { name: "Cursor", example: "cursor://req-8821" },
   { name: "Pi", example: "pi://019e7978-b2ec" },
 ] as const;
-
-// Commands the CLI actually accepts; used by the hero terminal typewriter.
-export const typingCommands = [
-  "agent-dump --interactive",
-  "agent-dump zcode://sess-abc123 --format json",
-  "agent-dump codex://threads/abc123 --format json",
-  "agent-dump pi://019e7978-b2ec --head",
-  'agent-dump --search "auth timeout"',
-  "agent-dump --stats --days 30",
-  "agent-dump --collect --dry-run",
-];
 
 export type OutputTone = "dim" | "text" | "ok" | "scheme";
 export type TerminalScene = {
