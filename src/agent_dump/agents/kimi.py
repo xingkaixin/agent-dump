@@ -67,9 +67,11 @@ class KimiAgent(FileSessionAgent):
         return self._parse_session(file_path)
 
     def _should_scan_file(self, file_path: Path, cutoff: datetime) -> bool:
-        # created_at 来自 metadata 内容（wire_mtime），metadata.json 的 mtime 不可作剪枝依据
-        del file_path, cutoff
-        return True
+        metadata = self._load_session_metadata(file_path)
+        if metadata is None:
+            return False
+        created_at = self._resolve_session_created_at(file_path, metadata)
+        return created_at is not None and created_at >= cutoff
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         roots = ProviderRoots.from_env_or_home()
@@ -157,12 +159,31 @@ class KimiAgent(FileSessionAgent):
         """Map Kimi's context/wire files to the shared cache invalidation fact."""
         return tuple(path for path in self._get_session_files(session.source_path).values() if path is not None)
 
+    @staticmethod
+    def _load_session_metadata(metadata_path: Path) -> dict[str, Any] | None:
+        try:
+            with metadata_path.open(encoding="utf-8") as metadata_file:
+                metadata = json.load(metadata_file)
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            return None
+        return metadata if isinstance(metadata, dict) else None
+
+    @staticmethod
+    def _resolve_session_created_at(metadata_path: Path, metadata: dict[str, Any]) -> datetime | None:
+        created_at = safe_epoch_datetime(metadata.get("wire_mtime"), unit="s")
+        if created_at is not None:
+            return created_at
+        try:
+            metadata_mtime = metadata_path.stat().st_mtime
+        except OSError:
+            return None
+        return safe_epoch_datetime(metadata_mtime, unit="s")
+
     def _parse_session(self, metadata_path: Path) -> Session | None:
         """Parse a Kimi session from metadata file"""
         try:
-            with open(metadata_path, encoding="utf-8") as f:
-                metadata = json.load(f)
-            if not isinstance(metadata, dict):
+            metadata = self._load_session_metadata(metadata_path)
+            if metadata is None:
                 return None
 
             session_dir = metadata_path.parent
@@ -179,10 +200,7 @@ class KimiAgent(FileSessionAgent):
                 session_id = session_dir.name.strip()
             if not session_id:
                 return None
-            wire_mtime = metadata.get("wire_mtime")
-            created_at = safe_epoch_datetime(wire_mtime, unit="s")
-            if created_at is None:
-                created_at = safe_epoch_datetime(metadata_path.stat().st_mtime, unit="s")
+            created_at = self._resolve_session_created_at(metadata_path, metadata)
             if created_at is None:
                 return None
 

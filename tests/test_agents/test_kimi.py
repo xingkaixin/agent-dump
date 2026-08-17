@@ -522,6 +522,33 @@ class TestKimiAgent:
         assert len(result) == 1
         assert result[0].id == "new-session"
 
+    def test_get_sessions_prunes_old_metadata_before_transcript_scan(self, tmp_path):
+        agent = KimiAgent()
+        agent.base_path = tmp_path
+        session_dir = tmp_path / "old"
+        session_dir.mkdir()
+        write_metadata(
+            session_dir,
+            session_id="old-session",
+            title="Old",
+            wire_mtime=(datetime.now() - timedelta(days=10)).timestamp(),
+        )
+        write_jsonl(session_dir / "context.jsonl", [{"role": "user", "content": "old"}])
+
+        with (
+            mock.patch.object(agent, "_parse_session_file", wraps=agent._parse_session_file) as parse_session,
+            mock.patch.object(
+                agent,
+                "_get_context_message_count",
+                wraps=agent._get_context_message_count,
+            ) as count_messages,
+        ):
+            result = agent.get_sessions(days=7)
+
+        assert result == []
+        parse_session.assert_not_called()
+        count_messages.assert_not_called()
+
     def test_get_sessions_ignores_metadata_file_mtime(self, tmp_path):
         """测试 metadata.json 的 mtime 很旧但内容时间在窗口内时仍返回（不做 mtime 剪枝）"""
         agent = KimiAgent()
