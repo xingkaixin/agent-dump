@@ -5,6 +5,7 @@
 """
 
 from pathlib import Path
+import re
 import sys
 
 import pytest
@@ -178,6 +179,21 @@ class TestBuildBackendIsReproducible:
 
 
 class TestCiHasNoDeadSteps:
+    def test_workflows_use_the_local_pinned_just_installer(self):
+        for workflow in ("ci.yml", "release.yml"):
+            content = (REPO_ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+
+            assert "uses: ./.github/actions/setup-just" in content
+            assert "extractions/setup-just" not in content
+
+    def test_local_just_installer_pins_and_verifies_the_release(self):
+        action = (REPO_ROOT / ".github" / "actions" / "setup-just" / "action.yml").read_text(encoding="utf-8")
+
+        assert re.search(r'JUST_VERSION: "\d+\.\d+\.\d+"', action)
+        assert re.search(r'JUST_SHA256: "[0-9a-f]{64}"', action)
+        assert "releases/download/$JUST_VERSION/" in action
+        assert "sha256sum --check" in action
+
     def test_no_all_extras_flag(self):
         """pyproject 未定义 optional-dependencies，--all-extras 是 no-op 却暗示 extras 存在。"""
         assert "optional-dependencies" not in (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
