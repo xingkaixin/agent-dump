@@ -456,7 +456,15 @@ def _find_role_evidence(
                     return role, _build_evidence_excerpt(text)
                 if query.matches((text,)) and (snippet := query.build_snippet((text,))) is not None:
                     return role, snippet
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - 单个坏会话不应中断查询，但结果不完整必须告警
+        print(
+            render_terminal_message(
+                Keys.WARN_SESSION_READ_SKIPPED,
+                uri=agent.get_session_uri(session),
+                error=exc,
+            ),
+            file=sys.stderr,
+        )
         return None
 
     return None
