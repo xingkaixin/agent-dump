@@ -116,18 +116,19 @@ class JsonlObjectScan:
             yield data
 
     def iter_with_line_numbers(self) -> Iterator[tuple[int, dict[str, Any]]]:
-        """Iterate root objects together with their one-based source line numbers."""
+        """Iterate root objects together with their one-based source line numbers.
+
+        An unterminated malformed tail may still be an active append, so it is
+        ignored without being reported as a damaged record.
+        """
         with open(self.file_path, "rb") as f:
             for line_number, raw_line in enumerate(f, start=1):
                 if not raw_line.strip():
                     continue
-                line = _decode_line(raw_line)
-                if line is None:
-                    self._record_skipped_line(line_number)
-                    continue
-                data = _parse_json_object(line)
+                data = _parse_json_object(_decode_line(raw_line))
                 if data is None:
-                    self._record_skipped_line(line_number)
+                    if raw_line.endswith((b"\n", b"\r")):
+                        self._record_skipped_line(line_number)
                     continue
                 yield line_number, data
 
@@ -191,6 +192,7 @@ def _read_complete_head_lines(file_path: Path, *, max_lines: int) -> tuple[list[
 
 
 def _read_last_complete_line(file_path: Path) -> str | None:
+    """Read the last terminated nonempty line from a bounded tail window."""
     file_size = file_path.stat().st_size
     offset = max(0, file_size - TAIL_SCAN_BYTE_LIMIT)
 
@@ -206,7 +208,10 @@ def _read_last_complete_line(file_path: Path) -> str | None:
         if not separator:
             return None
 
-    lines = [line for line in chunk.splitlines() if line.strip()]
+    lines = chunk.splitlines()
+    if chunk and not chunk.endswith((b"\n", b"\r")):
+        lines = lines[:-1]
+    lines = [line for line in lines if line.strip()]
     if not lines:
         return None
     return _decode_line(lines[-1])
