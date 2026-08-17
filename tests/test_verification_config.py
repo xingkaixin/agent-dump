@@ -233,6 +233,47 @@ class TestReleasePermissions:
         assert release.count("contents: write") == 1
 
 
+class TestReleaseRetries:
+    @staticmethod
+    def _release() -> str:
+        return (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    def test_npm_publish_checks_existing_tarball_integrity(self):
+        release = self._release()
+
+        assert "node npm/scripts/restore-published-binaries.mjs" in release
+        assert "node npm/scripts/publish-if-needed.mjs" in release
+        assert release.index("./npm/packages/cli-darwin-arm64") < release.index("./npm/packages/cli\n")
+        assert "npm publish ./npm/packages" not in release
+
+    def test_same_tag_release_runs_are_serialized_without_cancellation(self):
+        preamble = self._release().split("\njobs:\n", 1)[0]
+        concurrency = preamble.split("\nconcurrency:\n", 1)[1].split("\nenv:\n", 1)[0]
+
+        assert "github.workflow" in concurrency
+        assert "github.ref" in concurrency
+        assert "cancel-in-progress: false" in concurrency
+
+    def test_release_assets_use_the_effective_npm_binaries(self):
+        release = self._release()
+        stage_release = release.split("\n      - name: Stage GitHub release assets\n", 1)[1].split(
+            "\n      - name: Verify existing GitHub release assets\n", 1
+        )[0]
+
+        assert "npm/packages/cli-linux-x64/bin/agent-dump" in stage_release
+        assert "dist/native/" not in stage_release
+
+    def test_pypi_publish_checks_existing_file_hashes(self):
+        assert "uv publish --check-url https://pypi.org/simple/" in self._release()
+
+    def test_github_release_preserves_and_verifies_existing_assets(self):
+        release = self._release()
+
+        assert "packaging/verify_release_assets.py" in release
+        assert "overwrite_files: false" in release
+        assert "fail_on_unmatched_files: true" in release
+
+
 class TestVerificationConsumesTheCommittedLock:
     """AD-174：uv sync/run 默认会重新锁定，验证过程绝不能修改 uv.lock。
 

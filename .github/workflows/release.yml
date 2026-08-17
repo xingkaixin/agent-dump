@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   PYTHON_VERSION: "3.12"
   # Project 依赖来自 uv.lock；PEP 517 依赖在 build step 由已提交的 hash constraints 约束。
@@ -214,6 +218,9 @@ jobs:
           node npm/scripts/stage-binaries.mjs darwin-x64 dist/native/darwin-x64/agent-dump
           node npm/scripts/stage-binaries.mjs darwin-arm64 dist/native/darwin-arm64/agent-dump
 
+      - name: Restore previously published npm binaries
+        run: node npm/scripts/restore-published-binaries.mjs
+
       - name: Validate staged npm binaries
         run: node npm/scripts/validate-staged-binaries.mjs
 
@@ -229,38 +236,50 @@ jobs:
       - name: Verify the packed npm tarballs install and run
         run: npm --prefix npm run smoke
 
-      - name: Publish npm platform packages
+      - name: Publish npm packages
         env:
           NODE_AUTH_TOKEN: ""
         run: |
-          npm publish ./npm/packages/cli-linux-x64 --provenance --access public
-          npm publish ./npm/packages/cli-win32-x64 --provenance --access public
-          npm publish ./npm/packages/cli-darwin-x64 --provenance --access public
-          npm publish ./npm/packages/cli-darwin-arm64 --provenance --access public
-
-      - name: Publish npm CLI package
-        env:
-          NODE_AUTH_TOKEN: ""
-        run: npm publish ./npm/packages/cli --provenance --access public
+          node npm/scripts/publish-if-needed.mjs \
+            ./npm/packages/cli-linux-x64 \
+            ./npm/packages/cli-win32-x64 \
+            ./npm/packages/cli-darwin-x64 \
+            ./npm/packages/cli-darwin-arm64 \
+            ./npm/packages/cli
 
       - name: Publish to PyPI
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
-        run: uv publish
+        run: uv publish --check-url https://pypi.org/simple/
 
       - name: Stage GitHub release assets
         shell: bash
         run: |
           mkdir -p dist/release
-          cp dist/native/linux-x64/agent-dump dist/release/agent-dump-linux-x64
-          cp dist/native/win32-x64/agent-dump.exe dist/release/agent-dump-win32-x64.exe
-          cp dist/native/darwin-x64/agent-dump dist/release/agent-dump-darwin-x64
-          cp dist/native/darwin-arm64/agent-dump dist/release/agent-dump-darwin-arm64
+          cp npm/packages/cli-linux-x64/bin/agent-dump dist/release/agent-dump-linux-x64
+          cp npm/packages/cli-win32-x64/bin/agent-dump.exe dist/release/agent-dump-win32-x64.exe
+          cp npm/packages/cli-darwin-x64/bin/agent-dump dist/release/agent-dump-darwin-x64
+          cp npm/packages/cli-darwin-arm64/bin/agent-dump dist/release/agent-dump-darwin-arm64
           cp npm/packages/cli/lib/binary-checksums.json dist/release/agent-dump-binary-checksums.json
+
+      - name: Verify existing GitHub release assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run python packaging/verify_release_assets.py \
+            dist/release/agent-dump-linux-x64 \
+            dist/release/agent-dump-win32-x64.exe \
+            dist/release/agent-dump-darwin-x64 \
+            dist/release/agent-dump-darwin-arm64 \
+            dist/release/agent-dump-binary-checksums.json \
+            dist/agent_dump-${PACKAGE_VERSION}.tar.gz \
+            dist/agent_dump-${PACKAGE_VERSION}-py3-none-any.whl
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
+          fail_on_unmatched_files: true
+          overwrite_files: false
           files: |
             dist/release/agent-dump-linux-x64
             dist/release/agent-dump-win32-x64.exe

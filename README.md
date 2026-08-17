@@ -537,6 +537,7 @@ git push origin v{version}
 - The tag release workflow is [`release.yml`](./.github/workflows/release.yml)
 - Only tags matching `vX.Y.Z` trigger the unified release pipeline
 - Release publishes PyPI artifacts, GitHub release assets, and npm packages for `@agent-dump/cli`
+- Retrying the same release skips byte-identical registry artifacts and fails if an existing version or asset differs
 - The npm CLI package installs the matching native binary during `npm`/`npx` installation and verifies its checksum
 - Configure `UV_PUBLISH_TOKEN` in the GitHub `pypi` environment
 - Configure `NPM_TOKEN` in the GitHub `release` environment
