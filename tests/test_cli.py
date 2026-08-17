@@ -238,7 +238,7 @@ class TestMain:
         for provider in ("OpenCode", "ZCode", "Codex", "Kimi", "Claude Code", "Cursor", "Pi"):
             assert provider in output
         assert "Cursor | cursor:// | json, print | 否 | 已找到 0/1 | markdown, raw" in output
-        assert "OpenCode | opencode:// | json, markdown, print, raw | 是" in output
+        assert "OpenCode | opencode:// | json, markdown, print, raw | 否" in output
         assert "ZCode:" in output
         assert "当前平台无默认路径" in output
 

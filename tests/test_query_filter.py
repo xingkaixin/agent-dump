@@ -214,6 +214,34 @@ class TestParseQueryUri:
 class TestFilterSessions:
     """测试 filter_sessions 函数"""
 
+    @pytest.mark.parametrize("agent_cls", (OpenCodeAgent, ZCodeAgent))
+    def test_index_precedes_sqlite_provider_full_scan(self, agent_cls, tmp_path):
+        agent = agent_cls()
+        session = make_session("s1", "title", tmp_path / "provider.db")
+
+        with (
+            mock.patch("agent_dump.query_filter._try_indexed_search", return_value=[session]) as indexed_search,
+            mock.patch.object(agent, "filter_sessions_by_keyword", return_value=[session]) as provider_search,
+        ):
+            result = filter_sessions(agent, [session], "keyword")
+
+        assert result == [session]
+        indexed_search.assert_called_once()
+        provider_search.assert_not_called()
+
+    def test_provider_fast_path_remains_the_index_fallback(self, tmp_path):
+        agent = DummyAgent(name="opencode")
+        session = make_session("s1", "title", tmp_path / "provider.db")
+
+        with (
+            mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None),
+            mock.patch.object(agent, "filter_sessions_by_keyword", return_value=[session]) as provider_search,
+        ):
+            result = filter_sessions(agent, [session], "keyword")
+
+        assert result == [session]
+        provider_search.assert_called_once_with([session], "keyword")
+
     def test_filter_by_title(self, tmp_path):
         agent = DummyAgent(name="codex")
         session = make_session("s1", "修复报错会话", tmp_path / "s1.jsonl")

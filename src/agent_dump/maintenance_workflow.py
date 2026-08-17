@@ -52,14 +52,14 @@ def handle_providers_mode(
         existing_roots = sum(exists for _, exists in root_states)
         supported_formats = sorted(VALID_FORMATS - agent.unsupported_uri_formats)
         unsupported_formats = sorted(agent.unsupported_uri_formats)
-        has_keyword_fast_path = type(agent).filter_sessions_by_keyword is not BaseAgent.filter_sessions_by_keyword
+        has_keyword_fallback = type(agent).filter_sessions_by_keyword is not BaseAgent.filter_sessions_by_keyword
         provider_rows.append((registration, root_states))
         print_row = render_terminal_message(
             Keys.PROVIDERS_ROW,
             provider=registration.display_name,
             uri=", ".join(f"{scheme}://" for scheme in registration.uri_schemes),
             formats=", ".join(supported_formats),
-            keyword=i18n.t(Keys.PROVIDERS_YES if has_keyword_fast_path else Keys.PROVIDERS_NO),
+            keyword=i18n.t(Keys.PROVIDERS_YES if has_keyword_fallback else Keys.PROVIDERS_NO),
             roots=i18n.t(Keys.PROVIDERS_ROOT_COUNT, existing=existing_roots, total=len(root_states)),
             unsupported=", ".join(unsupported_formats) or i18n.t(Keys.PROVIDERS_NONE),
         )

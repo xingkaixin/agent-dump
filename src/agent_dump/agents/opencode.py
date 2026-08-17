@@ -15,7 +15,6 @@ from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 from agent_dump.private_files import write_private_text
-from agent_dump.query_semantics import TextQuery, TextQueryMode, extract_transcript_searchable_text
 from agent_dump.terminal_output import render_terminal_message
 
 _EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
@@ -101,30 +100,6 @@ class OpenCodeAgent(BaseAgent):
         finally:
             conn.close()
         return sessions[0] if sessions else None
-
-    def filter_sessions_by_keyword(self, sessions: list[Session], keyword: str) -> list[Session] | None:
-        """Match a literal phrase while reusing one read-only database connection."""
-        if not self.db_path:
-            return None
-
-        query = TextQuery.parse(keyword, TextQueryMode.KEYWORD)
-        try:
-            conn = self._connect_db()
-        except Exception:
-            return None
-        try:
-            matched = []
-            for session in sessions:
-                transcript = extract_transcript_searchable_text(self._build_session_data(conn, session))
-                fields = (session.title,) if transcript is None else (session.title, transcript)
-                if query.matches(fields):
-                    matched.append(session)
-        except Exception:
-            return None
-        finally:
-            conn.close()
-
-        return matched
 
     def _select_sessions(self, conn: sqlite3.Connection, *, where_sql: str, params: tuple[Any, ...]) -> list[Session]:
         """Query sessions with an internal WHERE clause and build Session models."""
