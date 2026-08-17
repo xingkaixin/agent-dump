@@ -1,0 +1,80 @@
+name: Set up uv
+description: Install the project-pinned uv release without querying a version manifest
+
+runs:
+  using: composite
+  steps:
+    - name: Download and verify uv
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        uv_requirement="$(
+          awk '
+              $0 == "[tool.uv]" { in_uv = 1; next }
+              /^\[/ { in_uv = 0 }
+              in_uv && $1 == "required-version" {
+                value = $3
+                gsub(/"/, "", value)
+                print value
+                exit
+              }
+            ' pyproject.toml
+        )"
+        if [[ ! "$uv_requirement" =~ ^==[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "tool.uv.required-version must pin one exact release" >&2
+          exit 1
+        fi
+        uv_version="${uv_requirement#==}"
+
+        case "$uv_version:$RUNNER_OS/$RUNNER_ARCH" in
+          "0.12.5:Linux/X64")
+            uv_target="x86_64-unknown-linux-gnu"
+            uv_sha256="68a509da24b06b4223a1c0175fb5eb5bc79342b76cbeff0cfe51ac3f5b17b6b2"
+            uv_extension="tar.gz"
+            ;;
+          "0.12.5:macOS/X64")
+            uv_target="x86_64-apple-darwin"
+            uv_sha256="b3b2137477cf96c9686ebfb71524614cec780c673fd73e59bce099aef02e70e8"
+            uv_extension="tar.gz"
+            ;;
+          "0.12.5:macOS/ARM64")
+            uv_target="aarch64-apple-darwin"
+            uv_sha256="5bb0e5fe008a773c3dbcb97ff79cd89e1241464fe9d2f986d52ad8f1b037bd62"
+            uv_extension="tar.gz"
+            ;;
+          "0.12.5:Windows/X64")
+            uv_target="x86_64-pc-windows-msvc"
+            uv_sha256="4c4d49d8738847d9b71ba319e49a5688c93eac0fe6204b1df24e98528dddf39a"
+            uv_extension="zip"
+            ;;
+          *)
+            echo "Unsupported uv release or runner: $uv_version $RUNNER_OS/$RUNNER_ARCH" >&2
+            exit 1
+            ;;
+        esac
+
+        uv_archive="$RUNNER_TEMP/uv-$uv_version-$uv_target.$uv_extension"
+        uv_install_dir="$RUNNER_TEMP/uv-$uv_version-$uv_target"
+        curl --fail --location --silent --show-error \
+          --retry 5 --retry-all-errors --retry-delay 2 \
+          --connect-timeout 15 --max-time 180 \
+          --output "$uv_archive" \
+          "https://github.com/astral-sh/uv/releases/download/$uv_version/uv-$uv_target.$uv_extension"
+
+        if command -v sha256sum >/dev/null 2>&1; then
+          echo "$uv_sha256  $uv_archive" | sha256sum --check -
+        else
+          echo "$uv_sha256  $uv_archive" | shasum -a 256 --check -
+        fi
+
+        mkdir -p "$uv_install_dir"
+        tar -xf "$uv_archive" -C "$uv_install_dir"
+        uv_bin_dir="$uv_install_dir/uv-$uv_target"
+        chmod 0755 "$uv_bin_dir/uv" "$uv_bin_dir/uvx" 2>/dev/null || true
+        echo "$uv_bin_dir" >> "$GITHUB_PATH"
+        uv_executable="$uv_bin_dir/uv"
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          uv_executable="$uv_executable.exe"
+        fi
+        "$uv_executable" --version
