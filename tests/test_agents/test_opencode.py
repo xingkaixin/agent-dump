@@ -791,6 +791,7 @@ class TestOpenCodeAgent:
 
         part_selects = [statement for statement in traced_statements if "from part" in statement.lower()]
         assert len(part_selects) == 1
+        assert "json_each" not in part_selects[0].lower()
         assert [message["parts"][0]["text"] for message in data["messages"]] == ["part 0", "part 1", "part 2"]
 
     def test_get_session_head_extracts_model_message_count_and_subtargets(self, tmp_path):
