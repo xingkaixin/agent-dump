@@ -67,6 +67,7 @@
 | `cli.py` | 参数解析、模式选择、依赖装配 |
 | `cli_shared.py` | CLI 共享能力：URI、format、导出调度、诊断渲染 |
 | `command_plan.py` | 将 `CommandRequest` 一次性归一化为闭集操作事实，解析 Query/URI 并校验模式、默认值与 modifier |
+| `shortcut.py` | 将配置化 shortcut 展开为普通 argv，并以结构化错误保留失败字段 |
 | `session_workflow.py` | list / interactive / query 会话工作流 |
 | `uri_workflow.py` | 单 URI 查看、head、summary、单会话导出 |
 | `collect_workflow.py` | collect 模式编排、dry-run、保存路径解析 |
@@ -190,6 +191,7 @@ agent-dump/
 │   ├── cli.py                   # CLI 参数解析与模式分发
 │   ├── cli_shared.py            # CLI 共享工具
 │   ├── command_plan.py          # CLI 操作事实、Query/URI、默认值与 modifier 归一化
+│   ├── shortcut.py              # shortcut argv 展开与结构化错误
 │   ├── session_workflow.py      # list / interactive / query 工作流
 │   ├── uri_workflow.py          # URI 工作流
 │   ├── collect_workflow.py      # collect 工作流

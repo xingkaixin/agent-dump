@@ -32,6 +32,7 @@ from agent_dump.config import CollectConfig, ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import SearchSessionMatch
+from agent_dump.shortcut import ShortcutErrorCode, ShortcutExpansionError
 from agent_dump.text_safety import has_unsafe_body_characters, has_unsafe_line_characters
 
 
@@ -111,6 +112,13 @@ def make_session(
 
 
 class TestShortcutExpansion:
+    def test_expand_shortcut_argv_does_not_load_config_for_ordinary_commands(self):
+        with mock.patch("agent_dump.cli.load_shortcuts_config") as load_shortcuts:
+            argv = expand_shortcut_argv(["--list"])
+
+        assert argv == ["--list"]
+        load_shortcuts.assert_not_called()
+
     def test_expand_shortcut_argv_collect_date(self, monkeypatch):
         monkeypatch.setattr(
             "agent_dump.cli.load_shortcuts_config",
@@ -170,8 +178,22 @@ class TestShortcutExpansion:
             },
         )
 
-        with pytest.raises(ValueError, match="unknown_variable:since"):
+        with pytest.raises(ShortcutExpansionError) as exc_info:
             expand_shortcut_argv(["--shortcut", "ob", "20260408"])
+
+        assert exc_info.value.code is ShortcutErrorCode.UNKNOWN_VARIABLE
+        assert exc_info.value.variable_name == "since"
+
+    def test_expand_shortcut_argv_rejects_malformed_template(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_dump.cli.load_shortcuts_config",
+            lambda: {"broken": mock.MagicMock(params=(), args=("--output", "{missing"))},
+        )
+
+        with pytest.raises(ShortcutExpansionError) as exc_info:
+            expand_shortcut_argv(["--shortcut", "broken"])
+
+        assert exc_info.value.code is ShortcutErrorCode.TEMPLATE_INVALID
 
 
 class TestMain:
@@ -365,19 +387,70 @@ class TestMain:
         assert operation.since == "20260408"
         assert operation.until == "20260408"
 
+    @pytest.mark.parametrize(
+        ("trailing_args", "expected_language"),
+        [
+            ([], "en"),
+            (["--lang", "zh"], "zh"),
+        ],
+    )
+    def test_main_uses_the_effective_language_after_shortcut_expansion(
+        self,
+        trailing_args,
+        expected_language,
+        use_language,
+    ):
+        from agent_dump.i18n import i18n
+
+        use_language("zh")
+        shortcut = mock.MagicMock(params=(), args=("--providers", "--lang", "en"))
+        with (
+            mock.patch("agent_dump.cli.load_shortcuts_config", return_value={"status": shortcut}),
+            mock.patch("agent_dump.cli.handle_providers_mode", return_value=0),
+            mock.patch("sys.argv", ["agent-dump", "--shortcut", "status", *trailing_args]),
+        ):
+            result = main()
+
+        assert result == 0
+        assert i18n.lang == expected_language
+
     def test_main_reports_shortcut_not_found(self, capsys):
-        with mock.patch("agent_dump.cli.expand_shortcut_argv", side_effect=ValueError("shortcut_not_found:ob")):
+        error = ShortcutExpansionError(ShortcutErrorCode.NOT_FOUND, shortcut_name="ob")
+        with mock.patch("agent_dump.cli.expand_shortcut_argv", side_effect=error):
             with mock.patch("sys.argv", ["agent-dump", "--shortcut", "ob", "20260408"]):
                 result = main()
 
         assert result == 1
-        assert "未找到 shortcut: ob" in capsys.readouterr().out
+        assert expect(LocaleKeys.SHORTCUT_NOT_FOUND, name="ob") in capsys.readouterr().out
+
+    def test_main_preserves_delimiters_in_shortcut_error_fields(self, capsys):
+        error = ShortcutExpansionError(
+            ShortcutErrorCode.ARGS_MISMATCH,
+            shortcut_name="team:daily",
+            expected=2,
+            actual=1,
+        )
+        with mock.patch("agent_dump.cli.expand_shortcut_argv", side_effect=error):
+            with mock.patch("sys.argv", ["agent-dump", "--shortcut", "team:daily"]):
+                result = main()
+
+        assert result == 1
+        assert (
+            expect(
+                LocaleKeys.SHORTCUT_ARGS_MISMATCH,
+                name="team:daily",
+                expected=2,
+                actual=1,
+            )
+            in capsys.readouterr().out
+        )
 
     def test_main_sanitizes_shortcut_error_fields(self, capsys):
         poison = "name\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
+        error = ShortcutExpansionError(ShortcutErrorCode.NOT_FOUND, shortcut_name=poison)
         with mock.patch(
             "agent_dump.cli.expand_shortcut_argv",
-            side_effect=ValueError(f"shortcut_not_found:{poison}"),
+            side_effect=error,
         ):
             with mock.patch("sys.argv", ["agent-dump", "--shortcut", poison]):
                 result = main()
