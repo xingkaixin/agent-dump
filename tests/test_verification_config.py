@@ -331,6 +331,19 @@ class TestReleaseRetries:
         assert "overwrite_files: false" in release
         assert "fail_on_unmatched_files: true" in release
 
+    def test_bun_smoke_runs_with_the_declared_minimum_node_runtime(self):
+        release = self._release()
+        smoke_bun = release.split("\n  smoke-bun:\n", 1)[1]
+
+        assert "Smoke bunx with Node 22" in smoke_bun
+        assert "actions/setup-node@" in smoke_bun
+        assert 'node-version: "22"' in smoke_bun
+        assert (
+            smoke_bun.index("Set up Node 22")
+            < smoke_bun.index("Install Bun")
+            < smoke_bun.index("Smoke test bunx package")
+        )
+
 
 class TestVerificationConsumesTheCommittedLock:
     """AD-174：uv sync/run 默认会重新锁定，验证过程绝不能修改 uv.lock。
