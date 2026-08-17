@@ -1306,3 +1306,65 @@ class TestSearchLimitPushdown:
         index.update(agent, sessions)
 
         assert len(index.search("common", limit=100)) == 3
+
+    @pytest.mark.parametrize(
+        ("keyword", "content"),
+        [("x", "literal x value"), ("认证", "修复认证模块")],
+    )
+    def test_limited_search_streams_database_rows(self, keyword, content, tmp_path, monkeypatch):
+        class FetchallGuardCursor:
+            def __init__(self, cursor):
+                self._cursor = cursor
+
+            def __iter__(self):
+                return iter(self._cursor)
+
+            def fetchall(self):
+                raise AssertionError("limited search must not materialize every database row")
+
+        class FetchallGuardConnection:
+            def __init__(self, connection):
+                self._connection = connection
+
+            def __getattr__(self, name):
+                return getattr(self._connection, name)
+
+            def execute(self, sql, params=()):
+                cursor = self._connection.execute(sql, params)
+                return FetchallGuardCursor(cursor) if "SELECT f.agent_name" in sql else cursor
+
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "content": content}]}},
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        session.source_path.write_text("data", encoding="utf-8")
+        index.update(agent, [session])
+        original_get_connection = index._get_connection
+        monkeypatch.setattr(
+            index,
+            "_get_connection",
+            lambda: FetchallGuardConnection(original_get_connection()),
+        )
+
+        assert [result.session_id for result in index.search(keyword, limit=1)] == ["s1"]
+
+    def test_literal_limit_keeps_python_memory_proportional_to_limit(self, tmp_path):
+        count = 96
+        body_size = 64 * 1024
+        max_peak_bytes = 2 * 1024 * 1024
+        body = "x " + "z" * body_size
+        agent, sessions = self._seed(tmp_path, count)
+        agent._session_data = {session.id: {"messages": [{"role": "user", "content": body}]} for session in sessions}
+        index = SearchIndex(tmp_path / "index.db")
+        index.update(agent, sessions)
+
+        gc.collect()
+        tracemalloc.start()
+        baseline, _ = tracemalloc.get_traced_memory()
+        results = index.search("x", limit=5)
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        assert len(results) == 5
+        assert peak - baseline < max_peak_bytes

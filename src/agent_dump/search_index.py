@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
+import heapq
 import os
 from pathlib import Path
 import re
@@ -49,6 +50,9 @@ class SearchResult:
     title: str
     snippet: str | None
     rank: float
+
+
+_LiteralMatch = tuple[float, float, float, SearchResult]
 
 
 _CJK_RANGE = ("\u4e00", "\u9fff")
@@ -519,7 +523,7 @@ class SearchIndex:
             cursor = conn.execute(sql, params)
 
             # bm25 returns lower values for better matches, so we negate for ranking
-            for row in cursor.fetchall():
+            for row in cursor:
                 fields = (row["raw_title"] or "", row["raw_content"] or "")
                 if not query.matches(fields):
                     continue
@@ -560,7 +564,7 @@ class SearchIndex:
                 filters.append(f"f.agent_name IN ({','.join('?' * len(agent_names))})")
                 params.extend(sorted(agent_names))
             where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
-            rows = conn.execute(
+            cursor = conn.execute(
                 f"""
                 SELECT f.agent_name, f.session_id, f.title, f.content,
                        s.session_updated_at, s.session_created_at
@@ -569,33 +573,38 @@ class SearchIndex:
                 {where_clause}
                 """,
                 params,
-            ).fetchall()
+            )
+
+            def iter_matches() -> Iterator[_LiteralMatch]:
+                for row in cursor:
+                    fields = (row["title"] or "", row["content"] or "")
+                    if not query.matches(fields):
+                        continue
+                    rank = 1.0 if query.matches((fields[0],)) else 0.0
+                    yield (
+                        -rank,
+                        -row["session_updated_at"],
+                        -row["session_created_at"],
+                        SearchResult(
+                            agent_name=row["agent_name"],
+                            session_id=row["session_id"],
+                            title=fields[0],
+                            snippet=query.build_snippet(fields),
+                            rank=rank,
+                        ),
+                    )
+
+            def sort_key(item: _LiteralMatch) -> tuple[float, float, float, str, str]:
+                return (item[0], item[1], item[2], item[3].agent_name, item[3].session_id)
+
+            matched = (
+                sorted(iter_matches(), key=sort_key)
+                if limit is None
+                else heapq.nsmallest(limit, iter_matches(), key=sort_key)
+            )
+            return [item[3] for item in matched]
         finally:
             conn.close()
-
-        matched: list[tuple[float, float, float, SearchResult]] = []
-        for row in rows:
-            fields = (row["title"] or "", row["content"] or "")
-            if not query.matches(fields):
-                continue
-            rank = 1.0 if query.matches((fields[0],)) else 0.0
-            matched.append(
-                (
-                    -rank,
-                    -row["session_updated_at"],
-                    -row["session_created_at"],
-                    SearchResult(
-                        agent_name=row["agent_name"],
-                        session_id=row["session_id"],
-                        title=fields[0],
-                        snippet=query.build_snippet(fields),
-                        rank=rank,
-                    ),
-                )
-            )
-        matched.sort(key=lambda item: (item[0], item[1], item[2], item[3].agent_name, item[3].session_id))
-        results = [item[3] for item in matched]
-        return results if limit is None else results[:limit]
 
     def _write_session_rows(
         self,
