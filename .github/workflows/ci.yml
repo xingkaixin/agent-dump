@@ -43,7 +43,7 @@ jobs:
         run: uv python install ${{ env.QUALITY_PYTHON_VERSION }}
 
       - name: Install just
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        uses: ./.github/actions/setup-just
 
       - name: Install dependencies
         run: uv sync --locked --dev --python ${{ env.QUALITY_PYTHON_VERSION }}
@@ -87,7 +87,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install just
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        uses: ./.github/actions/setup-just
 
       - name: Install dependencies
         run: uv sync --locked --dev --python ${{ matrix.python-version }}
