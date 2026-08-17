@@ -105,8 +105,15 @@ class FileSessionAgent(BaseAgent):
 
     def find_session_by_id(self, session_id: str) -> Session | None:
         """Try filename-based candidates before falling back to a full scan."""
-        if self._ensure_base_path():
+        if base_path := self._ensure_base_path():
+            resolved_base_path = base_path.resolve()
             for file_path in self._session_file_candidates(session_id):
+                try:
+                    candidate_path = file_path.resolve()
+                except (OSError, RuntimeError):
+                    continue
+                if not candidate_path.is_relative_to(resolved_base_path):
+                    continue
                 session = self._parse_session_file(file_path)
                 if session is not None and session.id == session_id:
                     return session
