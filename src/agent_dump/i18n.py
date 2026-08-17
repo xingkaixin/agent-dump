@@ -146,6 +146,7 @@ class Keys:
     CONFIG_SAVED = "CONFIG_SAVED"
     CONFIG_ACTION_INVALID = "CONFIG_ACTION_INVALID"
     CONFIG_INVALID_FIELDS = "CONFIG_INVALID_FIELDS"
+    CONFIG_EDIT_REQUIRES_VALID_TOML = "CONFIG_EDIT_REQUIRES_VALID_TOML"
     CONFIG_INPUT_PROMPT = "CONFIG_INPUT_PROMPT"
 
     COLLECT_MODE_CONFLICT = "COLLECT_MODE_CONFLICT"
@@ -453,6 +454,10 @@ TRANSLATIONS = {
         Keys.CONFIG_SAVED: "✅ Config saved: {path}",
         Keys.CONFIG_ACTION_INVALID: "❌ Invalid --config action: {action}",
         Keys.CONFIG_INVALID_FIELDS: "❌ Invalid config fields: {fields}",
+        Keys.CONFIG_EDIT_REQUIRES_VALID_TOML: (
+            "❌ Config is not valid TOML and cannot be edited safely: {path}. "
+            "Fix its escaping manually or replace the file."
+        ),
         Keys.CONFIG_INPUT_PROMPT: "> ",
         Keys.COLLECT_MODE_CONFLICT: "❌ --collect cannot be used with URI/--interactive/--list.",
         Keys.COLLECT_DATE_FORMAT_INVALID: "❌ Invalid date format. Use YYYY-MM-DD or YYYYMMDD.",
@@ -750,6 +755,9 @@ TRANSLATIONS = {
         Keys.CONFIG_SAVED: "✅ 配置已保存: {path}",
         Keys.CONFIG_ACTION_INVALID: "❌ 无效的 --config 参数: {action}",
         Keys.CONFIG_INVALID_FIELDS: "❌ 配置项不完整: {fields}",
+        Keys.CONFIG_EDIT_REQUIRES_VALID_TOML: (
+            "❌ 配置不是合法 TOML，无法安全编辑: {path}。请手动修正转义或替换该文件。"
+        ),
         Keys.CONFIG_INPUT_PROMPT: "> ",
         Keys.COLLECT_MODE_CONFLICT: "❌ --collect 不能与 URI/--interactive/--list 同时使用。",
         Keys.COLLECT_DATE_FORMAT_INVALID: "❌ 日期格式无效，请使用 YYYY-MM-DD 或 YYYYMMDD。",

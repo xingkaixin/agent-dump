@@ -4,6 +4,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
+from enum import Enum
 import json
 import math
 import os
@@ -70,15 +71,23 @@ class ShortcutConfig:
     args: tuple[str, ...] = ()
 
 
+class ConfigurationParseMode(Enum):
+    """How a configuration snapshot was parsed."""
+
+    TOML = "toml"
+    LEGACY = "legacy"
+
+
 @dataclass(frozen=True)
 class ConfigurationDocument:
-    """One parsed configuration snapshot with lossless semantic updates."""
+    """One parsed configuration snapshot."""
 
     path: Path
     # key 是结构化的 table path，不是点连接字符串：TOML 里 ["plugin.with.dot"] 是一个
     # 含点的 key，[plugin.with.dot] 是三层表。拼成 "plugin.with.dot" 之后无从分辨，
     # 写回时按 "." 拆分就会把前者变成后者。空 tuple 是根表。
     sections: dict[tuple[str, ...], dict[str, Any]]
+    parse_mode: ConfigurationParseMode = ConfigurationParseMode.TOML
 
     def ai_config(self) -> AIConfig | None:
         parsed = self.sections.get(("ai",))
@@ -350,14 +359,16 @@ def _child_of(section_path: tuple[str, ...], parent: str) -> str | None:
     return section_path[1].strip() or None
 
 
-def _read_config_sections(config_path: Path) -> dict[tuple[str, ...], dict[str, Any]]:
+def _read_config_sections(
+    config_path: Path,
+) -> tuple[dict[tuple[str, ...], dict[str, Any]], ConfigurationParseMode]:
     text = config_path.read_text(encoding="utf-8")
     try:
         parsed = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
         # 旧版本写出的配置可能不是合法 TOML（如未转义的 Windows 路径），降级用宽松解析器读取
-        return _parse_simple_toml_sections(text)
-    return _collect_toml_sections(parsed)
+        return _parse_simple_toml_sections(text), ConfigurationParseMode.LEGACY
+    return _collect_toml_sections(parsed), ConfigurationParseMode.TOML
 
 
 def load_config_document(path: Path | None = None) -> ConfigurationDocument:
@@ -365,9 +376,11 @@ def load_config_document(path: Path | None = None) -> ConfigurationDocument:
     config_path = path if path is not None else get_config_path()
     if not config_path.exists():
         return ConfigurationDocument(path=config_path, sections={})
+    sections, parse_mode = _read_config_sections(config_path)
     return ConfigurationDocument(
         path=config_path,
-        sections=_read_config_sections(config_path),
+        sections=sections,
+        parse_mode=parse_mode,
     )
 
 
@@ -525,8 +538,10 @@ def write_config(
 ) -> Path:
     """Update known config keys while preserving the complete document."""
     config_path = path if path is not None else get_config_path()
-    config_path.parent.mkdir(parents=True, exist_ok=True)
     snapshot = document if document is not None else load_config_document(config_path)
+    if snapshot.parse_mode is ConfigurationParseMode.LEGACY:
+        raise ValueError("cannot safely update a configuration parsed with the legacy fallback")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
     sections = deepcopy(snapshot.sections)
     _replace_known_values(
         sections,
@@ -800,6 +815,10 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
 
     if action != "edit":
         print(render_terminal_message(Keys.CONFIG_ACTION_INVALID, action=action))
+        return 1
+
+    if document.parse_mode is ConfigurationParseMode.LEGACY:
+        print(render_terminal_message(Keys.CONFIG_EDIT_REQUIRES_VALID_TOML, path=config_path))
         return 1
 
     edited_ai, edited_export = prompt_edit_config(existing, existing_export)

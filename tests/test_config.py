@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+from locale_helpers import Keys, expect_contains
 import pytest
 
 import agent_dump.config as config_module
@@ -455,6 +456,20 @@ class TestConfigCommand:
         assert result == 1
         assert not path.exists()
 
+    def test_edit_rejects_invalid_toml_without_prompting_or_rewriting(self, tmp_path, capsys, monkeypatch):
+        path = tmp_path / "config.toml"
+        original = '[export]\noutput = "C:\\Users\\kevin\\dumps"\n\n[plugin]\ntoken = "abc#def"\n'
+        path.write_text(original, encoding="utf-8")
+        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
+
+        with mock.patch("agent_dump.config.prompt_edit_config") as prompt:
+            result = handle_config_command("edit")
+
+        assert result == 1
+        prompt.assert_not_called()
+        assert path.read_text(encoding="utf-8") == original
+        assert expect_contains(capsys.readouterr().out, Keys.CONFIG_EDIT_REQUIRES_VALID_TOML, path=path)
+
     def test_write_ai_config_preserves_collect_and_logging_sections(self, tmp_path):
         path = tmp_path / "config.toml"
         path.write_text(
@@ -691,3 +706,14 @@ class TestTableKeyPathsSurviveRoundTrip:
         assert ("export",) in document.sections
         assert ("plugin.with.dot",) in document.sections, "宽松 parser 也不得按 . 拆引号 key"
         assert ("plugin",) not in document.sections
+
+    def test_legacy_document_cannot_be_rewritten_lossily(self, tmp_path):
+        config_path = tmp_path / "config.toml"
+        original = '[export]\noutput = "C:\\Users\\kevin\\dumps"\n\n[plugin]\ntoken = "abc#def"\nitems = ["a,b", "c"]\n'
+        config_path.write_text(original, encoding="utf-8")
+        document = load_config_document(config_path)
+
+        with pytest.raises(ValueError, match="legacy fallback"):
+            write_config(document.ai_config(), path=config_path, document=document)
+
+        assert config_path.read_text(encoding="utf-8") == original
