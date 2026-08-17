@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { NATIVE_TARGETS } from "../scripts/native-targets.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
 const aboutFile = path.resolve(repoRoot, "src", "agent_dump", "__about__.py");
@@ -18,10 +20,7 @@ const npmRoot = path.resolve(repoRoot, "npm");
 const packageFiles = [
   path.resolve(npmRoot, "package.json"),
   path.resolve(npmRoot, "packages", "cli", "package.json"),
-  path.resolve(npmRoot, "packages", "cli-darwin-x64", "package.json"),
-  path.resolve(npmRoot, "packages", "cli-darwin-arm64", "package.json"),
-  path.resolve(npmRoot, "packages", "cli-linux-x64", "package.json"),
-  path.resolve(npmRoot, "packages", "cli-win32-x64", "package.json"),
+  ...NATIVE_TARGETS.map((target) => path.resolve(target.packageDir, "package.json"))
 ];
 
 test("npm workspace versions stay aligned with the Python version source", async () => {

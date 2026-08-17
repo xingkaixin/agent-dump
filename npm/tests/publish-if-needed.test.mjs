@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
-import { PublishOutcome, publishPackageIfNeeded } from "../scripts/publish-if-needed.mjs";
+import { NATIVE_TARGETS } from "../scripts/native-targets.mjs";
+import { PublishOutcome, publishPackageIfNeeded, releaseTarballPaths } from "../scripts/publish-if-needed.mjs";
 
 const localIntegrity = "sha512-local";
 const localMetadata = JSON.stringify([
@@ -77,4 +79,15 @@ test("does not treat registry failures as a missing package", () => {
 
   assert.throws(() => publishPackageIfNeeded("./package", { run, log() {} }), /network unavailable/);
   assert.equal(calls.length, 2);
+});
+
+test("release tarball list contains every platform before the wrapper", () => {
+  const tarballs = releaseTarballPaths("/tmp/agent-dump-packed");
+
+  assert.equal(tarballs.length, NATIVE_TARGETS.length + 1);
+  assert.deepEqual(
+    tarballs.slice(0, -1).map((tarball) => path.basename(tarball).replace(/-\d+\.\d+\.\d+\.tgz$/, "")),
+    NATIVE_TARGETS.map((target) => target.packageName.slice(1).replace("/", "-"))
+  );
+  assert.match(path.basename(tarballs.at(-1)), /^agent-dump-cli-\d+\.\d+\.\d+\.tgz$/);
 });

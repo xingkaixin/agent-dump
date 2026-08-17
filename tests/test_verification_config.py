@@ -276,21 +276,21 @@ class TestReleaseRetries:
         publish = release.split("\n      - name: Publish npm packages\n", 1)[1].split(
             "\n      - name: Publish to PyPI\n", 1
         )[0]
-        tarballs = [
-            "./npm/.pack/agent-dump-cli-linux-x64-${PACKAGE_VERSION}.tgz",
-            "./npm/.pack/agent-dump-cli-win32-x64-${PACKAGE_VERSION}.tgz",
-            "./npm/.pack/agent-dump-cli-darwin-x64-${PACKAGE_VERSION}.tgz",
-            "./npm/.pack/agent-dump-cli-darwin-arm64-${PACKAGE_VERSION}.tgz",
-            "./npm/.pack/agent-dump-cli-${PACKAGE_VERSION}.tgz",
-        ]
 
         assert "node npm/scripts/restore-published-binaries.mjs" in release
         assert "npm --prefix npm run smoke -- --all-platforms --keep-pack" in release
-        assert "node npm/scripts/publish-if-needed.mjs" in release
-        assert all(tarball in publish for tarball in tarballs)
-        positions = [publish.index(tarball) for tarball in tarballs]
-        assert positions == sorted(positions)
+        assert "node npm/scripts/publish-if-needed.mjs --release-dir ./npm/.pack" in publish
+        assert ".tgz" not in publish
         assert "./npm/packages/" not in publish
+
+    def test_native_build_and_smoke_matrices_come_from_the_manifest(self):
+        release = self._release()
+
+        assert "node npm/scripts/native-targets.mjs" in release
+        assert "native-matrix: ${{ steps.native-targets.outputs.matrix }}" in release
+        assert release.count("matrix: ${{ fromJSON(needs.validate.outputs.native-matrix) }}") == 2
+        assert "pattern: native-*" in release
+        assert "node npm/scripts/stage-binaries.mjs --artifacts dist/native" in release
 
     def test_same_tag_release_runs_are_serialized_without_cancellation(self):
         preamble = self._release().split("\njobs:\n", 1)[0]
@@ -306,7 +306,8 @@ class TestReleaseRetries:
             "\n      - name: Verify existing GitHub release assets\n", 1
         )[0]
 
-        assert "npm/packages/cli-linux-x64/bin/agent-dump" in stage_release
+        assert "node npm/scripts/stage-release-assets.mjs dist/release" in stage_release
+        assert "npm/packages/cli-" not in stage_release
         assert "dist/native/" not in stage_release
 
     def test_pypi_publish_checks_existing_file_hashes(self):
@@ -316,6 +317,7 @@ class TestReleaseRetries:
         release = self._release()
 
         assert "packaging/verify_release_assets.py" in release
+        assert "dist/release/*" in release
         assert "overwrite_files: false" in release
         assert "fail_on_unmatched_files: true" in release
 

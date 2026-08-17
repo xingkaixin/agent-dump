@@ -2,47 +2,45 @@ import { chmod, copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const npmRoot = path.resolve(__dirname, "..");
+import { NATIVE_TARGETS, getNativeTarget } from "./native-targets.mjs";
 
-const targetMap = {
-  "darwin-x64": {
-    packageDir: path.resolve(npmRoot, "packages", "cli-darwin-x64"),
-    outputName: "agent-dump"
-  },
-  "darwin-arm64": {
-    packageDir: path.resolve(npmRoot, "packages", "cli-darwin-arm64"),
-    outputName: "agent-dump"
-  },
-  "linux-x64": {
-    packageDir: path.resolve(npmRoot, "packages", "cli-linux-x64"),
-    outputName: "agent-dump"
-  },
-  "win32-x64": {
-    packageDir: path.resolve(npmRoot, "packages", "cli-win32-x64"),
-    outputName: "agent-dump.exe"
+export async function stageBinary(targetName, sourcePath) {
+  const target = getNativeTarget(targetName);
+  const outputDir = path.join(target.packageDir, "bin");
+  const outputPath = path.join(outputDir, target.executableName);
+
+  await mkdir(outputDir, { recursive: true });
+  await copyFile(path.resolve(sourcePath), outputPath);
+
+  if (target.platform !== "win32") {
+    await chmod(outputPath, 0o755);
   }
-};
 
-const [target, sourcePath] = process.argv.slice(2);
-
-if (!target || !sourcePath) {
-  throw new Error("Usage: node ./scripts/stage-binaries.mjs <target> <source-binary-path>");
+  console.log(`Staged ${target.target} binary to ${outputPath}`);
+  return outputPath;
 }
 
-const targetConfig = targetMap[target];
-if (!targetConfig) {
-  throw new Error(`Unsupported target "${target}"`);
+export async function stageArtifactBinaries(artifactsRoot) {
+  for (const target of NATIVE_TARGETS) {
+    const sourcePath = path.resolve(artifactsRoot, target.artifactName, target.executableName);
+    await stageBinary(target.target, sourcePath);
+  }
 }
 
-const outputDir = path.join(targetConfig.packageDir, "bin");
-const outputPath = path.join(outputDir, targetConfig.outputName);
-
-await mkdir(outputDir, { recursive: true });
-await copyFile(path.resolve(sourcePath), outputPath);
-
-if (!outputPath.endsWith(".exe")) {
-  await chmod(outputPath, 0o755);
+async function main(args = process.argv.slice(2)) {
+  if (args.length === 2 && args[0] === "--artifacts") {
+    await stageArtifactBinaries(args[1]);
+    return;
+  }
+  if (args.length === 2) {
+    await stageBinary(args[0], args[1]);
+    return;
+  }
+  throw new Error(
+    "Usage: node ./scripts/stage-binaries.mjs <target> <source-binary-path> | --artifacts <download-root>"
+  );
 }
 
-console.log(`Staged ${target} binary to ${outputPath}`);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

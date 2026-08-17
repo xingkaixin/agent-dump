@@ -2,6 +2,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { NATIVE_TARGETS } from "./native-targets.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
 const npmRoot = path.resolve(repoRoot, "npm");
@@ -10,10 +12,7 @@ const versionFile = path.resolve(repoRoot, "src", "agent_dump", "__about__.py");
 const packageFiles = [
   path.resolve(npmRoot, "package.json"),
   path.resolve(npmRoot, "packages", "cli", "package.json"),
-  path.resolve(npmRoot, "packages", "cli-darwin-x64", "package.json"),
-  path.resolve(npmRoot, "packages", "cli-darwin-arm64", "package.json"),
-  path.resolve(npmRoot, "packages", "cli-linux-x64", "package.json"),
-  path.resolve(npmRoot, "packages", "cli-win32-x64", "package.json")
+  ...NATIVE_TARGETS.map((target) => path.resolve(target.packageDir, "package.json"))
 ];
 
 function parseVersion(source) {

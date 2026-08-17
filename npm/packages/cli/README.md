@@ -19,10 +19,12 @@ Requires Node.js 22 or newer. Node 18 and 20 are end-of-life upstream and are no
 
 Supported targets:
 
+<!-- native-targets:start -->
 - `darwin-x64`
 - `darwin-arm64`
 - `linux-x64`
 - `win32-x64`
+<!-- native-targets:end -->
 
 ## Installation
 

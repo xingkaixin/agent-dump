@@ -1,8 +1,13 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { NATIVE_TARGETS, packageTarballName } from "./native-targets.mjs";
+
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const npmRoot = path.resolve(__dirname, "..");
 
 export const PublishOutcome = Object.freeze({
   PUBLISHED: "published",
@@ -111,9 +116,31 @@ export function publishPackageIfNeeded(packageDir, options = {}) {
   throw commandError(`Could not publish ${packageSpec}`, published);
 }
 
-export function main(packageDirs = process.argv.slice(2)) {
+export function releaseTarballPaths(releaseDir) {
+  const wrapperManifest = JSON.parse(readFileSync(path.resolve(npmRoot, "packages", "cli", "package.json"), "utf8"));
+  const outputDir = path.resolve(releaseDir);
+  return [
+    ...NATIVE_TARGETS.map((target) =>
+      path.join(outputDir, packageTarballName(target.packageName, wrapperManifest.version))
+    ),
+    path.join(outputDir, packageTarballName(wrapperManifest.name, wrapperManifest.version))
+  ];
+}
+
+function resolvePackageDirs(args) {
+  if (args[0] !== "--release-dir") {
+    return args;
+  }
+  if (args.length !== 2) {
+    throw new Error("Usage: publish-if-needed.mjs --release-dir <packed-tarball-directory>");
+  }
+  return releaseTarballPaths(args[1]);
+}
+
+export function main(args = process.argv.slice(2)) {
+  const packageDirs = resolvePackageDirs(args);
   if (packageDirs.length === 0) {
-    throw new Error("Usage: publish-if-needed.mjs <package-dir> [<package-dir> ...]");
+    throw new Error("Usage: publish-if-needed.mjs <package-path> [<package-path> ...]");
   }
   for (const packageDir of packageDirs) {
     publishPackageIfNeeded(packageDir);
