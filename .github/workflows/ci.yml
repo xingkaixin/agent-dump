@@ -127,6 +127,12 @@ jobs:
       - name: Build web
         run: pnpm --dir web build
 
+      - name: Install Chromium
+        run: pnpm --dir web exec playwright install --with-deps chromium
+
+      - name: Test web interactions
+        run: pnpm --dir web test:e2e
+
   npm-wrapper:
     name: Test npm wrapper on Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
