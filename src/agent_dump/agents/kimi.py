@@ -14,9 +14,9 @@ from typing import Any
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import (
+    FULL_SCAN_BYTE_LIMIT,
     JsonlObjectScan,
     parse_object_line,
-    read_jsonl_scan_metadata,
     warn_skipped_records,
 )
 from agent_dump.agents.message_assembly import (
@@ -203,13 +203,7 @@ class KimiAgent(FileSessionAgent):
                 None,
                 basename_title(cwd),
             )
-            raw_source = context_path if context_path is not None else wire_path
-            message_count = None
-            if raw_source is not None:
-                try:
-                    message_count = read_jsonl_scan_metadata(raw_source, head_line_limit=1).nonempty_line_count
-                except OSError:
-                    message_count = None
+            message_count = self._get_context_message_count(context_path) if context_path is not None else None
 
             return Session(
                 id=session_id,
@@ -521,6 +515,36 @@ class KimiAgent(FileSessionAgent):
             if fallback_message:
                 messages.append(fallback_message)
 
+    def _read_context_messages(self, context_path: Path, *, warn_on_invalid: bool) -> list[dict]:
+        messages: list[dict] = []
+        pending_tool_calls: dict[str, tuple[int, int]] = {}
+        ignored_tool_call_ids: set[str] = set()
+
+        with open(context_path, encoding="utf-8") as context_file:
+            for seq, line in enumerate(context_file, start=1):
+                record = parse_object_line(line)
+                if record is None:
+                    if warn_on_invalid:
+                        print(i18n.t(Keys.WARN_CONTEXT_CONVERT_FAILED, error=_line_excerpt(line)), file=sys.stderr)
+                    continue
+                self._convert_context_record(
+                    record,
+                    seq,
+                    messages,
+                    pending_tool_calls,
+                    ignored_tool_call_ids,
+                )
+
+        return messages
+
+    def _get_context_message_count(self, context_path: Path) -> int | None:
+        try:
+            if context_path.stat().st_size > FULL_SCAN_BYTE_LIMIT:
+                return None
+            return len(self._read_context_messages(context_path, warn_on_invalid=False))
+        except Exception:
+            return None
+
     def _get_session_data_from_context(self, session: Session) -> dict:
         """Build unified session data from context.jsonl."""
         context_path = session.source_path / "context.jsonl"
@@ -535,23 +559,7 @@ class KimiAgent(FileSessionAgent):
                 ),
             )
 
-        messages: list[dict] = []
-        pending_tool_calls: dict[str, tuple[int, int]] = {}
-        ignored_tool_call_ids: set[str] = set()
-
-        with open(context_path, encoding="utf-8") as f:
-            for seq, line in enumerate(f, start=1):
-                record = parse_object_line(line)
-                if record is None:
-                    print(i18n.t(Keys.WARN_CONTEXT_CONVERT_FAILED, error=_line_excerpt(line)), file=sys.stderr)
-                    continue
-                self._convert_context_record(
-                    record,
-                    seq,
-                    messages,
-                    pending_tool_calls,
-                    ignored_tool_call_ids,
-                )
+        messages = self._read_context_messages(context_path, warn_on_invalid=True)
 
         stats = self._extract_kimi_stats_from_wire(session.source_path)
         stats["message_count"] = len(messages)

@@ -235,6 +235,57 @@ class TestKimiAgent:
         assert head["message_count"] is None
         assert head["message_count_completeness"] == "unknown"
 
+    def test_context_discovery_count_matches_logical_messages(self, tmp_path):
+        agent = KimiAgent()
+        session_dir = tmp_path / "project" / "session"
+        session_dir.mkdir(parents=True)
+        metadata_path = write_metadata(session_dir)
+        write_jsonl(
+            session_dir / "context.jsonl",
+            [
+                {"role": "_checkpoint"},
+                {"role": "user", "content": "hello"},
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "done"}],
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "id": "call-1",
+                            "function": {"name": "read_file", "arguments": {"path": "README.md"}},
+                        }
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "call-1", "content": "result"},
+                {"role": "_usage", "token_count": 12},
+            ],
+        )
+
+        session = agent._parse_session(metadata_path)
+
+        assert session is not None
+        assert session.metadata["message_count"] == 2
+        assert derive_session_facts(session).message_count.exact_value == 2
+
+    def test_wire_only_discovery_count_remains_unknown(self, tmp_path):
+        agent = KimiAgent()
+        session_dir = tmp_path / "project" / "session"
+        session_dir.mkdir(parents=True)
+        metadata_path = write_metadata(session_dir)
+        write_jsonl(
+            session_dir / "wire.jsonl",
+            [
+                {"message": {"type": "TurnBegin", "payload": {"user_input": [{"text": "hello"}]}}},
+                {"message": {"type": "TurnEnd", "payload": {}}},
+            ],
+        )
+
+        session = agent._parse_session(metadata_path)
+
+        assert session is not None
+        assert session.metadata["message_count"] is None
+        assert derive_session_facts(session).message_count.value is None
+
     def test_get_session_head_uses_cwd_from_metadata(self, tmp_path):
         """测试 get_session_head 优先使用 metadata 中的真实 cwd"""
         agent = KimiAgent()
