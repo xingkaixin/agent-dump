@@ -90,6 +90,21 @@ class TestOpenPrivateAppend:
 
         assert target.read_text(encoding="utf-8") == "first\nsecond\n"
 
+    def test_preserves_existing_parent_and_tightens_existing_file(self, tmp_path):
+        parent = tmp_path / "user-logs"
+        parent.mkdir(mode=0o755)
+        parent.chmod(0o755)
+        target = parent / "collect.log"
+        target.write_text("old\n", encoding="utf-8")
+        target.chmod(0o644)
+
+        with open_private_append(target) as handle:
+            handle.write("new\n")
+
+        assert mode_of(parent) == 0o755
+        assert mode_of(target) == PRIVATE_FILE_MODE
+        assert target.read_text(encoding="utf-8") == "old\nnew\n"
+
 
 @posix_only
 class TestDerivedDataFilePermissions:
