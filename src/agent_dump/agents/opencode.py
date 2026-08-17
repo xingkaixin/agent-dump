@@ -23,6 +23,8 @@ _EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 class OpenCodeAgent(BaseAgent):
     """Handler for OpenCode sessions"""
 
+    raw_export_suffix = ".raw.json"
+
     def __init__(self):
         super().__init__("opencode", "OpenCode")
         self.db_path: Path | None = None
@@ -357,5 +359,5 @@ class OpenCodeAgent(BaseAgent):
         while using a distinct filename.
         """
         session_data = self.get_cached_session_data(session)
-        output_path = self._build_raw_output_path(session, output_dir, suffix=".raw.json")
+        output_path = self._build_raw_output_path(session, output_dir)
         return write_private_text(output_path, json.dumps(session_data, ensure_ascii=False, indent=2))

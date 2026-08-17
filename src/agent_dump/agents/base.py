@@ -106,6 +106,7 @@ class BaseAgent(ABC):
 
     #: URI 模式下该 provider 不支持的导出格式
     unsupported_uri_formats: frozenset[str] = frozenset()
+    raw_export_suffix: str = ".raw.jsonl"
 
     def __init__(self, name: str, display_name: str):
         self.name = name
@@ -234,9 +235,9 @@ class BaseAgent(ABC):
         """Build a safe output path for a session export."""
         return build_session_output_path(output_dir, session.id, suffix)
 
-    def _build_raw_output_path(self, session: Session, output_dir: Path, suffix: str = ".raw.jsonl") -> Path:
+    def _build_raw_output_path(self, session: Session, output_dir: Path) -> Path:
         """Build output path for raw session export."""
-        return self._build_output_path(session, output_dir, suffix)
+        return self._build_output_path(session, output_dir, self.raw_export_suffix)
 
     def export_raw_session(self, session: Session, output_dir: Path) -> Path:
         """Export the original session file when one exists."""

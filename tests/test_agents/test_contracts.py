@@ -23,6 +23,7 @@ from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.pi import PiAgent
 from agent_dump.agents.zcode import ZCodeAgent
 from agent_dump.diagnostics import DiagnosticFileNotFoundError
+from agent_dump.export_paths import identity_safe_session_filename
 from agent_dump.rendering import export_session_in_format, format_session_metadata_summary, render_session_head
 
 
@@ -807,7 +808,7 @@ def test_provider_contract_export_paths_contain_untrusted_session_ids(
 
     json_dir = tmp_path / "safe" / "json"
     json_path = fixture.agent.export_session(unsafe_session, json_dir)
-    assert json_path == json_dir / "escaped.json"
+    assert json_path == json_dir / f"{identity_safe_session_filename(unsafe_session.id)}.json"
 
     markdown_dir = tmp_path / "safe" / "markdown"
     markdown_path = export_session_in_format(
@@ -818,7 +819,7 @@ def test_provider_contract_export_paths_contain_untrusted_session_ids(
         session_data=session_data,
         session_uri=fixture.uri,
     )
-    assert markdown_path == markdown_dir / "escaped.md"
+    assert markdown_path == markdown_dir / f"{identity_safe_session_filename(unsafe_session.id)}.md"
     assert not (tmp_path / "escaped.json").exists()
     assert not (tmp_path / "escaped.md").exists()
 

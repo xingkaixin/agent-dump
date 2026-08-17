@@ -2804,6 +2804,7 @@ class TestMain:
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
             mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
             mock_scanner.get_available_agents.return_value = [mock_agent]
             configure_scanner_sessions(mock_scanner)
             mock_scanner.agents = [mock_agent]

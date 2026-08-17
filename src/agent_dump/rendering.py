@@ -154,6 +154,26 @@ def export_session_markdown(uri: str, session_data: dict[str, Any], session_id: 
     return write_private_text(output_path, render_session_text(uri, session_data))
 
 
+def get_session_export_path(
+    agent: BaseAgent,
+    session: Session,
+    output_dir: Path,
+    output_format: str,
+) -> Path:
+    """Derive the path an in-tree exporter will use without writing it."""
+    if output_format == "json":
+        suffix = ".json"
+    elif output_format == "markdown":
+        suffix = ".md"
+    elif output_format == "raw":
+        raw_suffix = getattr(agent, "raw_export_suffix", None)
+        suffix = raw_suffix if isinstance(raw_suffix, str) else ".raw.jsonl"
+    else:
+        raise ValueError(f"Unsupported export format: {output_format}")
+
+    return build_session_output_path(output_dir, session.id, suffix)
+
+
 def export_session_in_format(
     agent: BaseAgent,
     session: Session,
