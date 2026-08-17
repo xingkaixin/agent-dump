@@ -30,11 +30,12 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
     "@astrojs/check": "^0.9.10",
     "@iconify-json/ph": "^1.2.2",
+    "@playwright/test": "^1.62.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrangler": "4.123.0"
   }
 }

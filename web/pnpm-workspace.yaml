@@ -7,3 +7,4 @@ packages: []
 # 不使用 dangerouslyAllowAllBuilds。
 allowBuilds:
   esbuild: true
+  workerd: true
