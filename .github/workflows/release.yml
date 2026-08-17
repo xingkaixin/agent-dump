@@ -116,14 +116,15 @@ jobs:
           --distpath dist/native/${{ matrix.target }}
           --workpath build/pyinstaller/${{ matrix.target }}
 
-      - name: Run the built binary on its target runner
+      - name: Run an isolated session workflow with the built binary
         shell: bash
         run: |
           set -euo pipefail
           binary="dist/native/${{ matrix.target }}/${{ matrix.binary_name }}"
           chmod +x "${binary}" || true
-          "${binary}" --version
-          "${binary}" --help > /dev/null
+          uv run python packaging/verify_native.py \
+            --binary "${binary}" \
+            --expected-version "${GITHUB_REF_NAME#v}"
 
       - name: Upload native artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

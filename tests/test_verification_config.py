@@ -292,6 +292,16 @@ class TestReleaseRetries:
         assert "pattern: native-*" in release
         assert "node npm/scripts/stage-binaries.mjs --artifacts dist/native" in release
 
+    def test_native_build_smoke_exercises_an_isolated_session_workflow(self):
+        release = self._release()
+        build_native = release.split("\n  build-native:\n", 1)[1].split("\n  publish:\n", 1)[0]
+
+        assert "uv run python packaging/verify_native.py" in build_native
+        assert '--binary "${binary}"' in build_native
+        assert '--expected-version "${GITHUB_REF_NAME#v}"' in build_native
+        assert '"${binary}" --version' not in build_native
+        assert '"${binary}" --help' not in build_native
+
     def test_same_tag_release_runs_are_serialized_without_cancellation(self):
         preamble = self._release().split("\njobs:\n", 1)[0]
         concurrency = preamble.split("\nconcurrency:\n", 1)[1].split("\nenv:\n", 1)[0]
