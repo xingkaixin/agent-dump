@@ -26,7 +26,10 @@ from agent_dump.query_semantics import (
     TextQueryMode,
     extract_transcript_searchable_text,
 )
-from agent_dump.session_data import session_updated_signal as _session_updated_signal
+from agent_dump.session_data import (
+    serialize_session_updated_signal,
+    session_updated_signal,
+)
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import normalize_datetime_utc
 
@@ -35,9 +38,9 @@ _T = TypeVar("_T")
 
 @dataclass(frozen=True)
 class _IndexedRow:
-    """An already-indexed session's freshness signal and its stable FTS rowid."""
+    """An already-indexed session's freshness signature and stable FTS rowid."""
 
-    signal: float
+    signature: str
     fts_rowid: int
 
 
@@ -287,7 +290,7 @@ class SearchIndex:
             return False
         columns = {row["name"] for row in rows}
         pk_columns = {row["name"] for row in rows if row["pk"]}
-        return {"updated_signal", "session_updated_at"} <= columns and pk_columns == {"fts_rowid"}
+        return {"updated_signature", "session_updated_at"} <= columns and pk_columns == {"fts_rowid"}
 
     def _drop_all_tables(self, conn: sqlite3.Connection) -> None:
         """Drop all index tables for schema rebuild."""
@@ -317,7 +320,7 @@ class SearchIndex:
                     agent TEXT NOT NULL,
                     session_id TEXT NOT NULL,
                     source_path TEXT NOT NULL,
-                    updated_signal REAL NOT NULL,
+                    updated_signature TEXT NOT NULL,
                     indexed_at REAL NOT NULL,
                     session_updated_at REAL NOT NULL,
                     session_created_at REAL NOT NULL,
@@ -373,18 +376,18 @@ class SearchIndex:
         try:
             # Get currently indexed sessions for this agent
             cursor = conn.execute(
-                "SELECT session_id, updated_signal, fts_rowid FROM index_state WHERE agent = ?",
+                "SELECT session_id, updated_signature, fts_rowid FROM index_state WHERE agent = ?",
                 (agent.name,),
             )
-            indexed = {row["session_id"]: _IndexedRow(row["updated_signal"], row["fts_rowid"]) for row in cursor}
+            indexed = {row["session_id"]: _IndexedRow(row["updated_signature"], row["fts_rowid"]) for row in cursor}
 
             # Determine which sessions need updating
-            to_update: list[tuple[Session, float]] = []
+            to_update: list[tuple[Session, str]] = []
             for session in sessions:
-                signal = _session_updated_signal(agent, session)
+                signature = serialize_session_updated_signal(session_updated_signal(agent, session))
                 previous = indexed.get(session.id)
-                if previous is None or abs(previous.signal - signal) > 0.001:
-                    to_update.append((session, signal))
+                if previous is None or previous.signature != signature:
+                    to_update.append((session, signature))
 
             if len(to_update) >= _INDEX_PROGRESS_THRESHOLD:
                 print(
@@ -396,7 +399,7 @@ class SearchIndex:
                     file=sys.stderr,
                 )
 
-            def _extract_text(item: tuple[Session, float]) -> str | None:
+            def _extract_text(item: tuple[Session, str]) -> str | None:
                 session, _ = item
                 return extract_session_searchable_text_once(agent, session)
 
@@ -407,7 +410,7 @@ class SearchIndex:
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     texts = list(executor.map(_extract_text, batch))
 
-                for (session, signal), text in zip(batch, texts, strict=True):
+                for (session, signature), text in zip(batch, texts, strict=True):
                     if text is None:
                         # 读失败：不写 index_state，让下一次运行重试，而不是把失败
                         # 缓存成「已索引」导致该会话永久搜不到
@@ -418,7 +421,7 @@ class SearchIndex:
                         conn,
                         agent_name=agent.name,
                         session=session,
-                        signal=signal,
+                        signature=signature,
                         text=text,
                         fts_rowid=previous.fts_rowid if previous else None,
                     )
@@ -627,7 +630,7 @@ class SearchIndex:
         *,
         agent_name: str,
         session: Session,
-        signal: float,
+        signature: str,
         text: str,
         fts_rowid: int | None,
     ) -> None:
@@ -638,14 +641,14 @@ class SearchIndex:
         """
         if fts_rowid is None:
             cursor = conn.execute(
-                """INSERT INTO index_state (agent, session_id, source_path, updated_signal, indexed_at,
+                """INSERT INTO index_state (agent, session_id, source_path, updated_signature, indexed_at,
                                             session_updated_at, session_created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (
                     agent_name,
                     session.id,
                     str(session.source_path),
-                    signal,
+                    signature,
                     time.time(),
                     _epoch_seconds(session.updated_at),
                     _epoch_seconds(session.created_at),
@@ -656,12 +659,12 @@ class SearchIndex:
             _delete_fts_rows(conn, [fts_rowid])
             conn.execute(
                 """UPDATE index_state
-                   SET source_path = ?, updated_signal = ?, indexed_at = ?,
+                   SET source_path = ?, updated_signature = ?, indexed_at = ?,
                        session_updated_at = ?, session_created_at = ?
                    WHERE fts_rowid = ?""",
                 (
                     str(session.source_path),
-                    signal,
+                    signature,
                     time.time(),
                     _epoch_seconds(session.updated_at),
                     _epoch_seconds(session.created_at),

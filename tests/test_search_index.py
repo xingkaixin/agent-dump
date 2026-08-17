@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 import gc
+import os
 from pathlib import Path
 import sqlite3
 import threading
@@ -138,31 +139,39 @@ class TestSessionUpdatedSignal:
     def test_signal_uses_updated_at(self, tmp_path):
         session = make_session("s1", "Test", tmp_path / "s1.jsonl")
 
-        assert (
-            _session_updated_signal(DummyAgent(), session)
-            == session.updated_at.replace(tzinfo=timezone.utc).timestamp()
+        assert _session_updated_signal(DummyAgent(), session) == (
+            session.updated_at.replace(tzinfo=timezone.utc).isoformat(timespec="microseconds"),
+            (),
         )
 
-    def test_related_paths_raise_signal(self, tmp_path):
+    def test_related_paths_are_recorded_independently(self, tmp_path):
         session_dir = tmp_path / "session"
         session_dir.mkdir()
         context_file = session_dir / "context.jsonl"
         context_file.write_text("context")
+        wire_file = session_dir / "wire.jsonl"
+        wire_file.write_text("wire")
         session = make_session("s1", "Test", session_dir)
         agent = DummyAgent()
 
-        with mock.patch.object(agent, "get_session_change_sources", return_value=(context_file,)):
-            assert _session_updated_signal(agent, session) >= context_file.stat().st_mtime
+        with mock.patch.object(agent, "get_session_change_sources", return_value=(context_file, wire_file)):
+            before = _session_updated_signal(agent, session)
+            wire_stat = wire_file.stat()
+            os.utime(wire_file, ns=(wire_stat.st_atime_ns, wire_stat.st_mtime_ns + 500_000))
+            after = _session_updated_signal(agent, session)
 
-    def test_missing_related_paths_fall_back_to_updated_at(self, tmp_path):
+        assert before != after
+        assert [source[0] for source in after[1]] == [str(context_file), str(wire_file)]
+
+    def test_missing_related_paths_remain_part_of_the_signature(self, tmp_path):
         session = make_session("s1", "Test", tmp_path / "session")
         agent = DummyAgent()
         missing = tmp_path / "missing.jsonl"
 
         with mock.patch.object(agent, "get_session_change_sources", return_value=(missing,)):
-            assert (
-                _session_updated_signal(agent, session) == session.updated_at.replace(tzinfo=timezone.utc).timestamp()
-            )
+            signal = _session_updated_signal(agent, session)
+
+        assert signal[1] == ((str(missing), None, None, None),)
 
 
 class TestExtractSessionSearchableText:
@@ -333,6 +342,26 @@ class TestSearchIndex:
         assert added == 1
         assert len(index.search("new")) == 1
 
+    def test_incremental_detects_submillisecond_source_change(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "old"}]}]}}
+        )
+        source = tmp_path / "s1.jsonl"
+        source.write_text("old", encoding="utf-8")
+        initial_stat = source.stat()
+        session = make_session("s1", "Test", source)
+
+        with mock.patch.object(agent, "get_session_change_sources", return_value=(source,)):
+            index.update(agent, [session])
+            agent._session_data["s1"]["messages"][0]["parts"][0]["text"] = "new needle"
+            os.utime(source, ns=(initial_stat.st_atime_ns, initial_stat.st_mtime_ns + 500_000))
+            added, removed = index.update(agent, [session])
+
+        assert (added, removed) == (1, 0)
+        assert [result.session_id for result in index.search("needle")] == ["s1"]
+        assert index.search("old") == []
+
     def test_update_hints_progress_for_bulk_indexing(self, tmp_path, capsys):
         """测试待索引会话达到阈值时向 stderr 提示进度"""
         index = SearchIndex(tmp_path / "index.db")
@@ -425,6 +454,38 @@ class TestSearchIndex:
         added, removed = index.update(agent, [session])
         assert (added, removed) == (1, 0)
         assert len(index.search("keyword")) == 1
+
+    def test_float_freshness_schema_is_rebuilt(self, tmp_path):
+        db_path = tmp_path / "index.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE index_state (
+                fts_rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                updated_signal REAL NOT NULL,
+                indexed_at REAL NOT NULL,
+                session_updated_at REAL NOT NULL,
+                session_created_at REAL NOT NULL,
+                UNIQUE (agent, session_id)
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        index = SearchIndex(db_path)
+        index.ensure_initialized()
+        conn = sqlite3.connect(db_path)
+        try:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(index_state)")}
+        finally:
+            conn.close()
+
+        assert "updated_signature" in columns
+        assert "updated_signal" not in columns
 
     def test_narrow_update_cannot_evict_a_wide_search_window(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
@@ -833,8 +894,8 @@ class TestIndexBuildAvoidsRedundantDeletes:
         indexed_rowid = _fts_rowid_of(tmp_path / "index.db", "codex", "s1")
 
         calls = _spy_on_fts_deletes(monkeypatch)
-        # updated_signal 取 session.updated_at 与 metadata 里 per-session 文件的
-        # mtime，不看 source_path，所以必须推进 updated_at 才算「有变更」
+        # updated signature 取 session.updated_at 与 provider-owned change sources，
+        # 不看 source_path，所以必须推进 updated_at 才算「有变更」
         index.update(agent, [_touched(session)])
 
         assert calls == [[indexed_rowid]], "已索引过的会话更新时必须按稳定 rowid 删掉旧行"

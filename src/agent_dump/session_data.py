@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from concurrent.futures import Future, wait
 from contextlib import contextmanager
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
@@ -18,28 +19,38 @@ if TYPE_CHECKING:
 
 MAX_COMPLETED_SESSION_DATA_ENTRIES = 32
 _SessionIdentity = tuple[str, str]
+_PathChangeSignal = tuple[str, int | None, int | None, int | None]
+SessionUpdatedSignal = tuple[str, tuple[_PathChangeSignal, ...]]
 
 
 @dataclass
 class _CacheEntry:
-    signal: float
+    signal: SessionUpdatedSignal
     future: Future[dict[str, Any]]
     lease_count: int = 0
     retain_after_use: bool = False
 
 
-def session_updated_signal(agent: BaseAgent, session: Session) -> float:
-    """Return a change signal for one session without using shared database mtimes."""
-    signals = [normalize_datetime_utc(session.updated_at).timestamp()]
+def session_updated_signal(agent: BaseAgent, session: Session) -> SessionUpdatedSignal:
+    """Return exact session and provider-owned source facts used for invalidation."""
     facts = agent.get_session_facts(session)
-    signals.extend(_path_mtime(path) for path in facts.change_sources)
-    return max(signals)
+    return (
+        normalize_datetime_utc(session.updated_at).isoformat(timespec="microseconds"),
+        tuple(_path_change_signal(path) for path in facts.change_sources),
+    )
 
 
-def _path_mtime(path: Path) -> float:
-    if not path.exists():
-        return 0.0
-    return path.stat().st_mtime
+def serialize_session_updated_signal(signal: SessionUpdatedSignal) -> str:
+    """Serialize a change signal for exact comparison in persistent stores."""
+    return json.dumps(signal, ensure_ascii=True, separators=(",", ":"))
+
+
+def _path_change_signal(path: Path) -> _PathChangeSignal:
+    try:
+        stat = path.stat()
+    except OSError:
+        return (str(path), None, None, None)
+    return (str(path), stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
 
 
 class SessionDataCache:
