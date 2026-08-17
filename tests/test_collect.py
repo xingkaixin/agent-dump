@@ -12,6 +12,7 @@ import tracemalloc
 from unittest import mock
 from urllib import error as urllib_error
 
+from locale_helpers import Keys, expect
 import pytest
 
 from agent_dump import collect_llm
@@ -421,6 +422,76 @@ class TestCollectEntries:
         assert len(worker_threads) == 2
         assert [entry.session_id for entry in entries] == ["older", "newer"]
         assert [event.session_uri for event in progress[1:]] == ["codex://newer", "codex://older"]
+
+    def test_collect_entries_skips_one_unreadable_session_and_keeps_the_rest(self, tmp_path, capsys) -> None:
+        now = datetime.now(timezone.utc)
+        sessions = [
+            Session("bad", "bad", now, now, tmp_path / "bad.jsonl", {}),
+            Session("good", "good", now, now, tmp_path / "good.jsonl", {}),
+        ]
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = sessions
+        agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+
+        def get_session_data(session: Session) -> dict[str, object]:
+            if session.id == "bad":
+                raise OSError("source disappeared")
+            return {"messages": [{"role": "user", "content": "keep this session"}]}
+
+        agent.get_cached_session_data.side_effect = get_session_data
+        configure_session_data_lease(agent)
+        progress: list[CollectProgressEvent] = []
+        log_path = tmp_path / "collect.log"
+
+        entries, truncated = collect_entries(
+            agents=[agent],
+            since_date=now.date(),
+            until_date=now.date(),
+            render_session_text_fn=lambda _uri, _data: "",
+            local_tz=timezone.utc,
+            progress_callback=progress.append,
+            logger=CollectLogger(enabled=True, path=log_path, run_id="run-1"),
+        )
+
+        assert truncated is False
+        assert [entry.session_id for entry in entries] == ["good"]
+        assert [(event.current, event.total) for event in progress] == [(0, 2), (1, 2), (2, 2)]
+        captured = capsys.readouterr()
+        assert (
+            expect(
+                Keys.WARN_SESSION_READ_SKIPPED,
+                uri="codex://bad",
+                error="source disappeared",
+            )
+            in captured.err
+        )
+        assert expect(Keys.WARN_SESSION_READ_FAILURES, count=1) in captured.err
+        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        assert records[0]["event"] == "session_read_failed"
+        assert records[0]["session_uri"] == "codex://bad"
+        assert records[0]["error_type"] == "OSError"
+
+    def test_collect_entries_still_fails_when_every_session_is_unreadable(self, tmp_path) -> None:
+        now = datetime.now(timezone.utc)
+        session = Session("bad", "bad", now, now, tmp_path / "bad.jsonl", {})
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [session]
+        agent.get_session_uri.return_value = "codex://bad"
+        agent.get_cached_session_data.side_effect = OSError("source disappeared")
+        configure_session_data_lease(agent)
+
+        with pytest.raises(OSError, match="source disappeared"):
+            collect_entries(
+                agents=[agent],
+                since_date=now.date(),
+                until_date=now.date(),
+                render_session_text_fn=lambda _uri, _data: "",
+                local_tz=timezone.utc,
+            )
 
     def test_collect_entries_ignores_denied_agent_projects(self):
         now = datetime.now(timezone.utc)

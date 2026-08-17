@@ -249,6 +249,8 @@ class Keys:
     WARN_INDEX_SKIPPED_SESSIONS = "WARN_INDEX_SKIPPED_SESSIONS"
     WARN_JSONL_RECORDS_SKIPPED = "WARN_JSONL_RECORDS_SKIPPED"
     WARN_INDEX_UNUSABLE = "WARN_INDEX_UNUSABLE"
+    WARN_SESSION_READ_SKIPPED = "WARN_SESSION_READ_SKIPPED"
+    WARN_SESSION_READ_FAILURES = "WARN_SESSION_READ_FAILURES"
     WARN_SESSION_SUMMARY_SKIPPED = "WARN_SESSION_SUMMARY_SKIPPED"
     WARN_SESSION_SUMMARY_FAILURES = "WARN_SESSION_SUMMARY_FAILURES"
 
@@ -558,6 +560,8 @@ TRANSLATIONS = {
         Keys.WARN_INDEX_SKIPPED_SESSIONS: "⚠️  {agent}: {count} sessions could not be read and were not indexed; the next run retries them (e.g. {examples})",
         Keys.WARN_JSONL_RECORDS_SKIPPED: "⚠️  {path}: skipped {count} malformed records (lines {lines})",
         Keys.WARN_INDEX_UNUSABLE: "⚠️  The {agent} search index is unusable ({error_type}: {error}); falling back to a file scan. Run `agent-dump --reindex` to rebuild it.",
+        Keys.WARN_SESSION_READ_SKIPPED: "⚠️  Session read failed, skipped {uri}: {error}",
+        Keys.WARN_SESSION_READ_FAILURES: "⚠️  Unreadable sessions omitted from collect: {count}.",
         Keys.WARN_SESSION_SUMMARY_SKIPPED: "⚠️  Session summary failed, skipped {uri}: {error}",
         Keys.WARN_SESSION_SUMMARY_FAILURES: "⚠️  {count} session summaries failed; the final report omits those sessions.",
         Keys.DIAG_STEP_RAW_SOURCE_LOCAL: "Confirm the original session file is still on this machine.",
@@ -857,6 +861,8 @@ TRANSLATIONS = {
         Keys.WARN_INDEX_SKIPPED_SESSIONS: "警告: {agent} 有 {count} 个会话读取失败，未写入索引，下次运行会重试（示例: {examples}）",
         Keys.WARN_JSONL_RECORDS_SKIPPED: "警告: {path} 跳过了 {count} 条格式错误的记录（行 {lines}）",
         Keys.WARN_INDEX_UNUSABLE: "警告: {agent} 的搜索索引不可用（{error_type}: {error}），本次改用文件扫描；可运行 `agent-dump --reindex` 重建索引。",
+        Keys.WARN_SESSION_READ_SKIPPED: "警告: 会话读取失败，已跳过 {uri}: {error}",
+        Keys.WARN_SESSION_READ_FAILURES: "警告: {count} 个会话无法读取，collect 已忽略这些会话。",
         Keys.WARN_SESSION_SUMMARY_SKIPPED: "警告: 会话摘要失败，已跳过 {uri}: {error}",
         Keys.WARN_SESSION_SUMMARY_FAILURES: "警告: {count} 个会话摘要失败，最终报告不包含这些会话。",
         Keys.DIAG_STEP_RAW_SOURCE_LOCAL: "确认原始会话文件仍在本地。",

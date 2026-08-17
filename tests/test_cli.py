@@ -740,6 +740,7 @@ class TestMain:
 
         assert result == 0
         assert mock_collect.call_args.kwargs["collect_config"] is collect_config
+        assert mock_collect.call_args.kwargs["logger"] is mock_logger
         captured = capsys.readouterr()
         assert "Collect 任务开始" in captured.err
         assert "本次将处理 1 个 session，拆分为 3 个总结单元；并发 4" in captured.err

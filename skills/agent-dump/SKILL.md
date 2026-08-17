@@ -80,6 +80,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - `--summary` 仅支持 URI 模式，且 `--format` 必须包含 `json`；不满足条件时仅警告并继续主流程。
 - `--collect` 可接受 `agents://...` 查询 URI，可使用 `--collect-mode pm|insight`、`--dry-run`、`--save`、`-days`、`-since/-until`。
 - `--collect` 日期优先级为显式 `-since/-until` > 显式 `-days` > 缺省当天。
+- `--collect` 会告警并跳过单条无法读取的会话；其他可读会话继续处理。
 - `--collect` 与普通 session URI、`--interactive`、`--list` 组合时会报冲突。
 - `--stats` 支持 `-days` 与 `-query`；存在未知消息数时输出已知小计和未知会话数。
 - `-query` 与 `agents://...?q=` 的 keyword 是一个归一化空白后的字面短语。

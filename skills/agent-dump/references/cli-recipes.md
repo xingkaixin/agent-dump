@@ -173,6 +173,7 @@ uv run agent-dump --search "auth" --list -days 30
 - `--summary` 仅 URI 模式可用，且需 `--format` 包含 `json`。
 - `--collect-mode` 默认 `pm`，`insight` 用于作者洞察视角。
 - `--collect` 日期优先级为显式 `-since/-until` > 显式 `-days` > 缺省当天。
+- `--collect` 对单条会话的读取失败会告警并跳过；仅当所有候选会话都不可读时整体失败。
 - 结构化 `role:` 查询的 snippet 只来自允许角色的消息，不会混入无角色维度的 FTS 证据。
 - 退出码：`0` 成功（含合法空结果、交互式导出部分成功）；`1` 无法完成请求（无 provider 数据、URI 未命中、交互式导出全部失败、参数组合非法）；`2` 用法错误。
 

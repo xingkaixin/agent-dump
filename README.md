@@ -290,6 +290,7 @@ uv run agent-dump --shortcut ob 20260408
 #       prints provider breakdown, session/chunk counts, concurrency, dates, and save path preview.
 # Note: during --collect, stderr shows multi-stage progress such as scan_sessions,
 #       plan_chunks, summarize_chunks, merge_sessions, tree_reduction, render_final, and write_output.
+# Note: unreadable sessions are reported on stderr and omitted while readable sessions continue.
 # Note: collect writes files like agent-dump-collect-20260301-20260305.md.
 # Note: --save accepts either a directory or a .md file path. Missing non-.md paths are treated as directories.
 

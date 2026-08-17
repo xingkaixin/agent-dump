@@ -290,6 +290,7 @@ uv run agent-dump --shortcut ob 20260408
 #       session 数、chunk 数、并发配置、日期范围和保存路径预览。
 # 说明：--collect 会在 stderr 输出多阶段进度，包括 scan_sessions、plan_chunks、
 #       summarize_chunks、merge_sessions、tree_reduction、render_final、write_output。
+# 说明：无法读取的会话会在 stderr 告警并被忽略，其他可读会话继续处理。
 # 说明：collect 输出文件名示例：agent-dump-collect-20260301-20260305.md。
 # 说明：--save 接受目录或 .md 文件路径。缺失的非 .md 路径会被当作目录处理。
 
