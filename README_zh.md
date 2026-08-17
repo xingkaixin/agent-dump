@@ -539,6 +539,7 @@ git push origin v{version}
 - 标签发布工作流为 [`release.yml`](./.github/workflows/release.yml)
 - 仅匹配 `vX.Y.Z` 的标签会触发统一发布流水线
 - 发布包含 PyPI 制品、GitHub Release 资产和 `@agent-dump/cli` npm 包
+- 同一版本的发布可以安全重试：字节一致的 registry 制品会跳过，已存在但内容不同则失败
 - npm CLI 包在 `npm`/`npx` 安装阶段会下载并校验匹配的原生二进制
 - 在 GitHub `pypi` 环境中配置 `UV_PUBLISH_TOKEN`
 - 在 GitHub `release` 环境中配置 `NPM_TOKEN`
