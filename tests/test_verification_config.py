@@ -256,11 +256,24 @@ class TestReleaseRetries:
 
     def test_npm_publish_checks_existing_tarball_integrity(self):
         release = self._release()
+        publish = release.split("\n      - name: Publish npm packages\n", 1)[1].split(
+            "\n      - name: Publish to PyPI\n", 1
+        )[0]
+        tarballs = [
+            "./npm/.pack/agent-dump-cli-linux-x64-${PACKAGE_VERSION}.tgz",
+            "./npm/.pack/agent-dump-cli-win32-x64-${PACKAGE_VERSION}.tgz",
+            "./npm/.pack/agent-dump-cli-darwin-x64-${PACKAGE_VERSION}.tgz",
+            "./npm/.pack/agent-dump-cli-darwin-arm64-${PACKAGE_VERSION}.tgz",
+            "./npm/.pack/agent-dump-cli-${PACKAGE_VERSION}.tgz",
+        ]
 
         assert "node npm/scripts/restore-published-binaries.mjs" in release
+        assert "npm --prefix npm run smoke -- --all-platforms --keep-pack" in release
         assert "node npm/scripts/publish-if-needed.mjs" in release
-        assert release.index("./npm/packages/cli-darwin-arm64") < release.index("./npm/packages/cli\n")
-        assert "npm publish ./npm/packages" not in release
+        assert all(tarball in publish for tarball in tarballs)
+        positions = [publish.index(tarball) for tarball in tarballs]
+        assert positions == sorted(positions)
+        assert "./npm/packages/" not in publish
 
     def test_same_tag_release_runs_are_serialized_without_cancellation(self):
         preamble = self._release().split("\njobs:\n", 1)[0]

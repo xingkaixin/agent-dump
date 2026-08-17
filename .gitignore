@@ -53,6 +53,7 @@ wheels/
 /npm/packages/cli-*/bin/agent-dump
 /npm/packages/cli-*/bin/agent-dump.exe
 /npm/*.tgz
+/npm/.pack/
 /npm/node_modules
 /npm/package-lock.json
 /npm/.npm-cache
