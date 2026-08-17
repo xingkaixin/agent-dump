@@ -214,6 +214,25 @@ class TestCiCancelsSupersededRuns:
         assert "github.event.pull_request.number || github.ref" not in release_preamble
 
 
+class TestReleasePermissions:
+    @staticmethod
+    def _release() -> str:
+        return (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    def test_release_defaults_to_read_only_contents(self):
+        preamble = self._release().split("\njobs:\n", 1)[0]
+
+        assert "permissions:\n  contents: read" in preamble
+        assert "permissions:\n  contents: write" not in preamble
+
+    def test_only_publish_job_can_write_contents(self):
+        release = self._release()
+        publish = release.split("\n  publish:\n", 1)[1].split("\n  smoke-npm:\n", 1)[0]
+
+        assert "permissions:\n      id-token: write\n      contents: write" in publish
+        assert release.count("contents: write") == 1
+
+
 class TestVerificationConsumesTheCommittedLock:
     """AD-174：uv sync/run 默认会重新锁定，验证过程绝不能修改 uv.lock。
 
