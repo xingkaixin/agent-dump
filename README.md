@@ -85,10 +85,12 @@ authentication, proxy, and CA settings, then verifies the published checksum bef
 
 Supported native targets:
 
+<!-- native-targets:start -->
 - `darwin-x64`
 - `darwin-arm64`
 - `linux-x64`
 - `win32-x64`
+<!-- native-targets:end -->
 
 If your platform is unsupported, the wrapper prints the detected platform/arch pair and points to the GitHub releases page.
 

@@ -655,6 +655,8 @@ just publish
 
 PEP 517 构建依赖不属于 runtime，也不由 `UV_LOCKED`/`uv.lock` 约束：
 
+- `npm/packages/cli/lib/native-targets.json` 是原生目标闭集的唯一机器可读定义；runtime、
+  npm 发布脚本与 release matrix 必须从该文件派生，README 中的列表由测试校验一致性。
 - `packaging/build-constraints.in` 保存直接构建后端的精确版本，由 Dependabot 的 pip 入口更新。
 - `packaging/build-constraints.txt` 保存完整传递闭包与可信 hash，只能通过
   `just update-build-constraints` 重新生成。

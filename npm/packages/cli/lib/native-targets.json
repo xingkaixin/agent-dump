@@ -1,0 +1,38 @@
+[
+  {
+    "platform": "darwin",
+    "arch": "x64",
+    "target": "darwin-x64",
+    "packageName": "@agent-dump/cli-darwin-x64",
+    "executableName": "agent-dump",
+    "binaryFormat": "Mach-O",
+    "runner": "macos-15-intel"
+  },
+  {
+    "platform": "darwin",
+    "arch": "arm64",
+    "target": "darwin-arm64",
+    "packageName": "@agent-dump/cli-darwin-arm64",
+    "executableName": "agent-dump",
+    "binaryFormat": "Mach-O",
+    "runner": "macos-14"
+  },
+  {
+    "platform": "linux",
+    "arch": "x64",
+    "target": "linux-x64",
+    "packageName": "@agent-dump/cli-linux-x64",
+    "executableName": "agent-dump",
+    "binaryFormat": "ELF",
+    "runner": "ubuntu-latest"
+  },
+  {
+    "platform": "win32",
+    "arch": "x64",
+    "target": "win32-x64",
+    "packageName": "@agent-dump/cli-win32-x64",
+    "executableName": "agent-dump.exe",
+    "binaryFormat": "PE",
+    "runner": "windows-latest"
+  }
+]

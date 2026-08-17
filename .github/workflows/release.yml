@@ -21,6 +21,8 @@ jobs:
   validate:
     name: Validate Release
     runs-on: ubuntu-latest
+    outputs:
+      native-matrix: ${{ steps.native-targets.outputs.matrix }}
 
     steps:
       - name: Checkout code
@@ -42,6 +44,11 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
+
+      - name: Resolve native target matrix
+        id: native-targets
+        shell: bash
+        run: echo "matrix=$(node npm/scripts/native-targets.mjs)" >> "${GITHUB_OUTPUT}"
 
       - name: Validate tag version
         shell: bash
@@ -84,20 +91,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: linux-x64
-            binary_name: agent-dump
-          - os: windows-latest
-            target: win32-x64
-            binary_name: agent-dump.exe
-          - os: macos-15-intel
-            target: darwin-x64
-            binary_name: agent-dump
-          - os: macos-14
-            target: darwin-arm64
-            binary_name: agent-dump
+      matrix: ${{ fromJSON(needs.validate.outputs.native-matrix) }}
 
     steps:
       - name: Checkout code
@@ -172,42 +166,18 @@ jobs:
         shell: bash
         run: echo "PACKAGE_VERSION=${GITHUB_REF_NAME#v}" >> "${GITHUB_ENV}"
 
-      - name: Download linux binary
+      - name: Download native binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: native-linux-x64
-          path: dist/native/linux-x64
-
-      - name: Download windows binary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: native-win32-x64
-          path: dist/native/win32-x64
-
-      - name: Download darwin x64 binary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: native-darwin-x64
-          path: dist/native/darwin-x64
-
-      - name: Download darwin arm64 binary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: native-darwin-arm64
-          path: dist/native/darwin-arm64
-
-      - name: Make Unix binaries executable
-        run: chmod +x dist/native/linux-x64/agent-dump dist/native/darwin-x64/agent-dump dist/native/darwin-arm64/agent-dump
+          pattern: native-*
+          path: dist/native
+          merge-multiple: false
 
       - name: Sync npm versions
         run: node npm/scripts/sync-version.mjs
 
       - name: Stage npm binaries
-        run: |
-          node npm/scripts/stage-binaries.mjs linux-x64 dist/native/linux-x64/agent-dump
-          node npm/scripts/stage-binaries.mjs win32-x64 dist/native/win32-x64/agent-dump.exe
-          node npm/scripts/stage-binaries.mjs darwin-x64 dist/native/darwin-x64/agent-dump
-          node npm/scripts/stage-binaries.mjs darwin-arm64 dist/native/darwin-arm64/agent-dump
+        run: node npm/scripts/stage-binaries.mjs --artifacts dist/native
 
       - name: Restore previously published npm binaries
         run: node npm/scripts/restore-published-binaries.mjs
@@ -230,13 +200,7 @@ jobs:
       - name: Publish npm packages
         env:
           NODE_AUTH_TOKEN: ""
-        run: |
-          node npm/scripts/publish-if-needed.mjs \
-            ./npm/.pack/agent-dump-cli-linux-x64-${PACKAGE_VERSION}.tgz \
-            ./npm/.pack/agent-dump-cli-win32-x64-${PACKAGE_VERSION}.tgz \
-            ./npm/.pack/agent-dump-cli-darwin-x64-${PACKAGE_VERSION}.tgz \
-            ./npm/.pack/agent-dump-cli-darwin-arm64-${PACKAGE_VERSION}.tgz \
-            ./npm/.pack/agent-dump-cli-${PACKAGE_VERSION}.tgz
+        run: node npm/scripts/publish-if-needed.mjs --release-dir ./npm/.pack
 
       - name: Publish to PyPI
         env:
@@ -244,25 +208,14 @@ jobs:
         run: uv publish --check-url https://pypi.org/simple/
 
       - name: Stage GitHub release assets
-        shell: bash
-        run: |
-          mkdir -p dist/release
-          cp npm/packages/cli-linux-x64/bin/agent-dump dist/release/agent-dump-linux-x64
-          cp npm/packages/cli-win32-x64/bin/agent-dump.exe dist/release/agent-dump-win32-x64.exe
-          cp npm/packages/cli-darwin-x64/bin/agent-dump dist/release/agent-dump-darwin-x64
-          cp npm/packages/cli-darwin-arm64/bin/agent-dump dist/release/agent-dump-darwin-arm64
-          cp npm/packages/cli/lib/binary-checksums.json dist/release/agent-dump-binary-checksums.json
+        run: node npm/scripts/stage-release-assets.mjs dist/release
 
       - name: Verify existing GitHub release assets
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           uv run python packaging/verify_release_assets.py \
-            dist/release/agent-dump-linux-x64 \
-            dist/release/agent-dump-win32-x64.exe \
-            dist/release/agent-dump-darwin-x64 \
-            dist/release/agent-dump-darwin-arm64 \
-            dist/release/agent-dump-binary-checksums.json \
+            dist/release/* \
             dist/agent_dump-${PACKAGE_VERSION}.tar.gz \
             dist/agent_dump-${PACKAGE_VERSION}-py3-none-any.whl
 
@@ -272,26 +225,17 @@ jobs:
           fail_on_unmatched_files: true
           overwrite_files: false
           files: |
-            dist/release/agent-dump-linux-x64
-            dist/release/agent-dump-win32-x64.exe
-            dist/release/agent-dump-darwin-x64
-            dist/release/agent-dump-darwin-arm64
-            dist/release/agent-dump-binary-checksums.json
+            dist/release/*
             dist/agent_dump-${{ env.PACKAGE_VERSION }}.tar.gz
             dist/agent_dump-${{ env.PACKAGE_VERSION }}-py3-none-any.whl
 
   smoke-npm:
-    name: Smoke npx ${{ matrix.os }}
-    needs: publish
+    name: Smoke npx ${{ matrix.target }}
+    needs: [validate, publish]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-15-intel
-          - macos-14
+      matrix: ${{ fromJSON(needs.validate.outputs.native-matrix) }}
 
     steps:
       - name: Set up Node 24

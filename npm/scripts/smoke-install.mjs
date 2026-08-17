@@ -6,16 +6,13 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { NATIVE_TARGETS } from "./native-targets.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const npmRoot = path.resolve(__dirname, "..");
 const require = createRequire(import.meta.url);
-const { TARGETS, getBinarySpec } = require("../packages/cli/lib/targets.cjs");
+const { getBinarySpec } = require("../packages/cli/lib/targets.cjs");
 const { extractBinaryFromTarball } = require("../packages/cli/lib/install-binary.cjs");
-
-const targetSpecs = Object.entries(TARGETS).map(([platformArch, spec]) => {
-  const [platform, arch] = platformArch.split(":");
-  return { ...spec, platform, arch, workspace: spec.packageName.replace("@agent-dump/", "") };
-});
 
 function run(command, args, options = {}) {
   const { env: extraEnv, ...restOptions } = options;
@@ -107,7 +104,9 @@ function selectTargetSpecs(args, currentSpec) {
   if (unknownArgs.length > 0) {
     throw new Error(`Unknown smoke option: ${unknownArgs.join(", ")}`);
   }
-  return args.includes("--all-platforms") ? targetSpecs : targetSpecs.filter((spec) => spec.target === currentSpec.target);
+  return args.includes("--all-platforms")
+    ? NATIVE_TARGETS
+    : NATIVE_TARGETS.filter((spec) => spec.target === currentSpec.target);
 }
 
 export async function main(args = process.argv.slice(2)) {
@@ -127,12 +126,14 @@ export async function main(args = process.argv.slice(2)) {
     run("node", ["./scripts/sync-version.mjs"], { cwd: npmRoot });
     run("node", ["./scripts/write-checksums.mjs", ...selectedSpecs.map((spec) => spec.target)], { cwd: npmRoot });
 
-    const mainPackageJson = JSON.parse(await readFile(path.resolve(npmRoot, "packages", "cli", "package.json"), "utf8"));
+    const mainPackageJson = JSON.parse(
+      await readFile(path.resolve(npmRoot, "packages", "cli", "package.json"), "utf8")
+    );
     const platformTarballs = new Map();
 
     for (const spec of selectedSpecs) {
-      const packageDir = path.resolve(npmRoot, "packages", spec.workspace);
-      const stagedBinaryPath = path.resolve(packageDir, "bin", spec.executableName);
+      const packageDir = spec.packageDir;
+      const stagedBinaryPath = spec.binaryPath;
       if (!existsSync(stagedBinaryPath)) {
         throw new Error(`Expected staged binary at ${stagedBinaryPath}`);
       }

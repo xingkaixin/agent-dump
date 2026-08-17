@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import path from "node:path";
 
+import { NATIVE_TARGETS } from "../scripts/native-targets.mjs";
+
 const require = createRequire(import.meta.url);
 const {
   RELEASES_URL,
@@ -13,26 +15,14 @@ const {
 } = require("../packages/cli/lib/resolve-binary.cjs");
 
 test("getBinarySpec returns the expected package metadata for each supported target", () => {
-  assert.deepEqual(getBinarySpec("darwin", "x64"), {
-    target: "darwin-x64",
-    packageName: "@agent-dump/cli-darwin-x64",
-    executableName: "agent-dump"
-  });
-  assert.deepEqual(getBinarySpec("darwin", "arm64"), {
-    target: "darwin-arm64",
-    packageName: "@agent-dump/cli-darwin-arm64",
-    executableName: "agent-dump"
-  });
-  assert.deepEqual(getBinarySpec("linux", "x64"), {
-    target: "linux-x64",
-    packageName: "@agent-dump/cli-linux-x64",
-    executableName: "agent-dump"
-  });
-  assert.deepEqual(getBinarySpec("win32", "x64"), {
-    target: "win32-x64",
-    packageName: "@agent-dump/cli-win32-x64",
-    executableName: "agent-dump.exe"
-  });
+  for (const target of NATIVE_TARGETS) {
+    assert.deepEqual(getBinarySpec(target.platform, target.arch), {
+      target: target.target,
+      packageName: target.packageName,
+      executableName: target.executableName
+    });
+  }
+  assert.deepEqual(SUPPORTED_TARGETS, NATIVE_TARGETS.map((target) => target.target));
 });
 
 test("getBinarySpec rejects unsupported platforms with a release link", () => {

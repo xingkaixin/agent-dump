@@ -85,10 +85,12 @@ npx @agent-dump/cli --help
 
 当前支持的平台：
 
+<!-- native-targets:start -->
 - `darwin-x64`
 - `darwin-arm64`
 - `linux-x64`
 - `win32-x64`
+<!-- native-targets:end -->
 
 若平台暂不支持，wrapper 会输出当前检测到的 `platform/arch`，并提示前往 GitHub Releases 页面。
 

@@ -2,24 +2,12 @@ import { open, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const npmRoot = path.resolve(__dirname, "..");
+import { NATIVE_TARGETS, getNativeTarget } from "./native-targets.mjs";
 
 // 每个 target 的期望格式与 CPU 架构。只检查「非空」或 `file` 输出里没有 "text"
 // 挡不住最可能出的那类错：把两个 darwin binary 放反，或把 linux binary staged 到
 // win32 包——两者都是合法的原生可执行文件，却在用户机器上根本跑不起来。而且
 // `file` 在 Windows runner 上不存在，那条分支此前等于完全不检查。
-const EXPECTED = {
-  "darwin-x64": { format: "Mach-O", arch: "x64" },
-  "darwin-arm64": { format: "Mach-O", arch: "arm64" },
-  "linux-x64": { format: "ELF", arch: "x64" },
-  "win32-x64": { format: "PE", arch: "x64" }
-};
-
-const BINARY_NAMES = {
-  "win32-x64": "agent-dump.exe"
-};
-
 // Mach-O cputype：CPU_ARCH_ABI64 (0x01000000) | CPU_TYPE_X86 (7) / CPU_TYPE_ARM (12)
 const MACHO_CPU_TYPES = new Map([
   [0x01000007, "x64"],
@@ -80,14 +68,11 @@ export async function identifyBinary(binaryPath) {
 }
 
 export function stagedBinaryPath(target) {
-  return path.resolve(npmRoot, "packages", `cli-${target}`, "bin", BINARY_NAMES[target] ?? "agent-dump");
+  return getNativeTarget(target).binaryPath;
 }
 
 export async function validateStagedBinary(target, binaryPath = stagedBinaryPath(target)) {
-  const expected = EXPECTED[target];
-  if (!expected) {
-    throw new Error(`No expected binary format declared for ${target}`);
-  }
+  const expected = getNativeTarget(target);
 
   const binaryStat = await stat(binaryPath);
   if (binaryStat.size <= 0) {
@@ -95,17 +80,17 @@ export async function validateStagedBinary(target, binaryPath = stagedBinaryPath
   }
 
   const actual = await identifyBinary(binaryPath);
-  if (actual.format !== expected.format || actual.arch !== expected.arch) {
+  if (actual.format !== expected.binaryFormat || actual.arch !== expected.arch) {
     throw new Error(
       `Staged binary for ${target} is ${actual.format}/${actual.arch}, ` +
-        `expected ${expected.format}/${expected.arch}: ${binaryPath}`
+        `expected ${expected.binaryFormat}/${expected.arch}: ${binaryPath}`
     );
   }
 
   return actual;
 }
 
-export const STAGED_TARGETS = Object.keys(EXPECTED);
+export const STAGED_TARGETS = NATIVE_TARGETS.map((target) => target.target);
 
 async function main() {
   for (const target of STAGED_TARGETS) {

@@ -10,18 +10,10 @@ import {
   requireSuccessJson,
   runNpm
 } from "./publish-if-needed.mjs";
+import { NATIVE_TARGETS } from "./native-targets.mjs";
 
 const require = createRequire(import.meta.url);
 const { extractBinaryFromTarball } = require("../packages/cli/lib/install-binary.cjs");
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const npmRoot = path.resolve(__dirname, "..");
-
-const platformPackages = [
-  { packageDir: path.resolve(npmRoot, "packages", "cli-linux-x64"), executableName: "agent-dump" },
-  { packageDir: path.resolve(npmRoot, "packages", "cli-win32-x64"), executableName: "agent-dump.exe" },
-  { packageDir: path.resolve(npmRoot, "packages", "cli-darwin-x64"), executableName: "agent-dump" },
-  { packageDir: path.resolve(npmRoot, "packages", "cli-darwin-arm64"), executableName: "agent-dump" }
-];
 
 export const RestoreOutcome = Object.freeze({
   UNPUBLISHED: "unpublished",
@@ -91,7 +83,7 @@ export function restorePublishedBinary(packageDir, executableName, options = {})
 }
 
 export function main() {
-  for (const { packageDir, executableName } of platformPackages) {
+  for (const { packageDir, executableName } of NATIVE_TARGETS) {
     restorePublishedBinary(packageDir, executableName);
   }
 }
