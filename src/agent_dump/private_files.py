@@ -6,9 +6,11 @@ config.toml 早已刻意写成 0600，但从会话数据派生出的东西体量
 文件），在多用户或共享镜像的机器上等于把用户 AI 会话的完整副本对本机所有账户开放。
 """
 
+from contextlib import suppress
 import os
 from pathlib import Path
 import shutil
+from typing import TextIO
 
 PRIVATE_FILE_MODE = 0o600
 PRIVATE_DIR_MODE = 0o700
@@ -88,9 +90,12 @@ def copy_private_file(source: Path, destination: Path) -> Path:
     return destination
 
 
-def open_private_append(path: Path):
+def open_private_append(path: Path) -> TextIO:
     """Open a file for appending, creating it with owner-only permissions."""
-    ensure_private_dir(path.parent)
-    # 先用 os.open 带 mode 创建，避免文件在 umask 下先以宽权限存在再被 chmod 收紧
+    ensure_output_dir(path.parent)
+    # mode 只影响新文件；已存在的日志必须通过同一个 fd 收紧，避免路径被替换后 chmod 到别处
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, PRIVATE_FILE_MODE)
+    if os.name != "nt":
+        with suppress(OSError):
+            os.fchmod(fd, PRIVATE_FILE_MODE)
     return os.fdopen(fd, "a", encoding="utf-8")
