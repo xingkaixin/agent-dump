@@ -3,9 +3,7 @@ Command-line interface for agent-dump
 """
 
 import argparse
-from datetime import date, datetime
 from pathlib import Path
-from string import Formatter
 import sys
 
 from agent_dump.__about__ import __version__
@@ -46,6 +44,11 @@ from agent_dump.maintenance_workflow import (
 )
 from agent_dump.scanner import AgentScanner
 from agent_dump.session_workflow import handle_session_modes as _handle_session_modes
+from agent_dump.shortcut import (
+    ShortcutErrorCode,
+    ShortcutExpansionError,
+    expand_shortcut_argv as _expand_shortcut_argv,
+)
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.uri_workflow import handle_uri_mode as _handle_uri_mode
 
@@ -61,86 +64,23 @@ __all__ = (
 )
 
 
-def _parse_shortcut_date(value: str) -> date:
-    normalized = value.strip()
-    for fmt in ("%Y%m%d", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(normalized, fmt).date()  # noqa: DTZ007
-        except ValueError:
-            continue
-    raise ValueError("invalid_date")
-
-
-def _build_shortcut_variables(params: tuple[str, ...], values: tuple[str, ...]) -> dict[str, str]:
-    variables = dict(zip(params, values, strict=True))
-    raw_date = variables.get("date")
-    if raw_date is None:
-        return variables
-
-    parsed_date = _parse_shortcut_date(raw_date)
-    variables["date"] = parsed_date.strftime("%Y%m%d")
-    variables["year"] = parsed_date.strftime("%Y")
-    variables["month"] = parsed_date.strftime("%m")
-    variables["year_month"] = parsed_date.strftime("%Y-%m")
-    return variables
-
-
-def _render_shortcut_arg(template: str, variables: dict[str, str]) -> str:
-    formatter = Formatter()
-    rendered: list[str] = []
-    for literal_text, field_name, format_spec, conversion in formatter.parse(template):
-        rendered.append(literal_text)
-        if field_name is None:
-            continue
-        if format_spec or conversion:
-            raise ValueError("invalid_template")
-        if field_name not in variables:
-            raise ValueError(f"unknown_variable:{field_name}")
-        rendered.append(variables[field_name])
-
-    result = "".join(rendered)
-    if result.startswith("~"):
-        return str(Path(result).expanduser())
-    return result
-
-
 def expand_shortcut_argv(argv: list[str]) -> list[str]:
     """Expand configured shortcut preset into regular CLI argv."""
     if "--shortcut" not in argv:
         return argv
+    return _expand_shortcut_argv(argv, load_shortcuts_config())
 
-    shortcut_index = argv.index("--shortcut")
-    prefix = argv[:shortcut_index]
-    suffix = argv[shortcut_index + 1 :]
-    if not suffix:
-        raise ValueError("shortcut_missing_name")
 
-    shortcut_name = suffix[0].strip()
-    if not shortcut_name:
-        raise ValueError("shortcut_missing_name")
-
-    value_tokens: list[str] = []
-    remainder_index = len(suffix)
-    for index, token in enumerate(suffix[1:], start=1):
-        if token.startswith("-"):
-            remainder_index = index
+def _language_from_argv(argv: list[str]) -> str | None:
+    language: str | None = None
+    for index, arg in enumerate(argv):
+        if arg == "--":
             break
-        value_tokens.append(token)
-
-    remainder = suffix[remainder_index:]
-    shortcuts = load_shortcuts_config()
-    shortcut = shortcuts.get(shortcut_name)
-    if shortcut is None:
-        raise ValueError(f"shortcut_not_found:{shortcut_name}")
-
-    expected = len(shortcut.params)
-    actual = len(value_tokens)
-    if actual != expected:
-        raise ValueError(f"shortcut_args_mismatch:{shortcut_name}:{expected}:{actual}")
-
-    variables = _build_shortcut_variables(shortcut.params, tuple(value_tokens))
-    expanded_args = [_render_shortcut_arg(arg, variables) for arg in shortcut.args]
-    return prefix + expanded_args + remainder
+        if arg == "--lang" and index + 1 < len(argv):
+            language = argv[index + 1]
+        elif arg.startswith("--lang="):
+            language = arg.split("=", 1)[1]
+    return language
 
 
 def handle_collect_mode(operation: CollectOperation) -> int:
@@ -241,51 +181,39 @@ def main() -> int | None:
 def _run() -> int | None:
     """Parse arguments and dispatch to the selected mode."""
 
-    # Pre-parse language argument
-    lang_arg = None
-    for i, arg in enumerate(sys.argv):
-        if arg == "--lang":
-            if i + 1 < len(sys.argv):
-                lang_arg = sys.argv[i + 1]
-                break
-        elif arg.startswith("--lang="):
-            lang_arg = arg.split("=", 1)[1]
-            break
-
-    setup_i18n(lang_arg)
+    raw_argv = sys.argv[1:]
+    setup_i18n(_language_from_argv(raw_argv))
     try:
-        argv = expand_shortcut_argv(sys.argv[1:])
-    except ValueError as exc:
-        message = str(exc)
-        if message == "shortcut_missing_name":
+        argv = expand_shortcut_argv(raw_argv)
+    except ShortcutExpansionError as exc:
+        if exc.code is ShortcutErrorCode.MISSING_NAME:
             print(i18n.t(Keys.SHORTCUT_MISSING_NAME))
             return 1
-        if message == "invalid_date":
+        if exc.code is ShortcutErrorCode.DATE_INVALID:
             print(i18n.t(Keys.SHORTCUT_DATE_INVALID))
             return 1
-        if message == "invalid_template":
+        if exc.code is ShortcutErrorCode.TEMPLATE_INVALID:
             print(i18n.t(Keys.SHORTCUT_TEMPLATE_INVALID))
             return 1
-        if message.startswith("shortcut_not_found:"):
-            _, shortcut_name = message.split(":", 1)
-            print(render_terminal_message(Keys.SHORTCUT_NOT_FOUND, name=shortcut_name))
+        if exc.code is ShortcutErrorCode.NOT_FOUND:
+            print(render_terminal_message(Keys.SHORTCUT_NOT_FOUND, name=exc.shortcut_name or ""))
             return 1
-        if message.startswith("shortcut_args_mismatch:"):
-            _, shortcut_name, expected, actual = message.split(":", 3)
+        if exc.code is ShortcutErrorCode.ARGS_MISMATCH:
             print(
                 render_terminal_message(
                     Keys.SHORTCUT_ARGS_MISMATCH,
-                    name=shortcut_name,
-                    expected=expected,
-                    actual=actual,
+                    name=exc.shortcut_name or "",
+                    expected=exc.expected,
+                    actual=exc.actual,
                 )
             )
             return 1
-        if message.startswith("unknown_variable:"):
-            _, variable_name = message.split(":", 1)
-            print(render_terminal_message(Keys.SHORTCUT_UNKNOWN_VARIABLE, name=variable_name))
+        if exc.code is ShortcutErrorCode.UNKNOWN_VARIABLE:
+            print(render_terminal_message(Keys.SHORTCUT_UNKNOWN_VARIABLE, name=exc.variable_name or ""))
             return 1
         raise
+
+    setup_i18n(_language_from_argv(argv))
 
     output_specified = is_option_specified(argv, "-output", "--output")
     format_specified = is_option_specified(argv, "-format", "--format")

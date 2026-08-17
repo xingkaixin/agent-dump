@@ -437,6 +437,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── cli.py              # Argument parsing and mode dispatch
 │       ├── cli_shared.py       # Shared CLI helpers
 │       ├── command_plan.py     # Normalizes CLI arguments into one command plan
+│       ├── shortcut.py         # Expands configured shortcuts into regular arguments
 │       ├── session_workflow.py # list / interactive / query workflow
 │       ├── uri_workflow.py     # URI workflow
 │       ├── collect_workflow.py # collect workflow

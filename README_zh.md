@@ -437,6 +437,7 @@ deny = [
 │       ├── cli.py              # 参数解析与模式分发
 │       ├── cli_shared.py       # CLI 共享工具
 │       ├── command_plan.py     # 将 CLI 参数归一化为单一命令计划
+│       ├── shortcut.py         # 将配置化 shortcut 展开为普通参数
 │       ├── session_workflow.py # list / interactive / query 工作流
 │       ├── uri_workflow.py     # URI 工作流
 │       ├── collect_workflow.py # collect 工作流
