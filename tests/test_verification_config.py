@@ -399,6 +399,12 @@ class TestWebIsInTheMainGate:
 
         assert "pnpm --dir web check" in content
         assert "pnpm --dir web build" in content
+        assert "pnpm --dir web test:e2e" in content
+
+    def test_ci_installs_the_browser_and_its_system_dependencies(self):
+        content = self._ci()
+
+        assert "pnpm --dir web exec playwright install --with-deps chromium" in content
 
     def test_web_installs_from_the_committed_lockfile(self):
         """CI 的事实必须来自已提交的 lock，不是解析出的新版本。"""
@@ -422,8 +428,19 @@ class TestWebIsInTheMainGate:
     def test_local_web_entry_runs_the_same_commands_as_ci(self):
         recipe = self._justfile().split("\ncheck-web:", 1)[1].split("\n\n", 1)[0]
 
-        for command in ("install --frozen-lockfile", "check", "build"):
+        for command in (
+            "install --frozen-lockfile",
+            "check",
+            "build",
+            "exec playwright install chromium",
+            "test:e2e",
+        ):
             assert command in recipe, f"check-web 缺少 {command}"
+
+    def test_browser_test_dependency_is_declared(self):
+        dev_dependencies = _read_json("web/package.json")["devDependencies"]
+
+        assert "@playwright/test" in dev_dependencies
 
     def test_pnpm_version_comes_from_the_package_manager_field(self):
         """workflow 里再硬编码一遍 pnpm 版本，就会和 packageManager 各说各话。"""

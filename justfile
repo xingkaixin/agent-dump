@@ -56,6 +56,8 @@ check-web:
     pnpm --dir web install --frozen-lockfile
     pnpm --dir web check
     pnpm --dir web build
+    pnpm --dir web exec playwright install chromium
+    pnpm --dir web test:e2e
     @echo "✅ Landing page check complete!"
 
 # Fail when uv.lock no longer matches pyproject.toml

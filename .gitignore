@@ -64,6 +64,8 @@ wheels/
 /web/node_modules
 /web/.astro
 /web/dist
+/web/playwright-report
+/web/test-results
 
 # cloudflare
 .wrangler/
