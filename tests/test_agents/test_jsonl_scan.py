@@ -92,6 +92,53 @@ class TestNonemptyLineCount:
         assert scan.tail_record == {"n": 2}
 
 
+class TestActiveTailRecord:
+    def test_incomplete_tail_does_not_hide_the_last_complete_record(self, tmp_path):
+        file_path = tmp_path / "active.jsonl"
+        file_path.write_text(
+            _record(FULL_SCAN_BYTE_LIMIT + 1024, marker="head")
+            + "\n"
+            + _record(200, marker="last-complete")
+            + "\n"
+            + '{"marker":"partial"',
+            encoding="utf-8",
+        )
+
+        scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)
+
+        assert scan.scanned_all is False
+        assert scan.tail_record is not None
+        assert scan.tail_record["marker"] == "last-complete"
+
+    def test_unterminated_valid_json_is_not_treated_as_committed(self, tmp_path):
+        file_path = tmp_path / "active.jsonl"
+        file_path.write_text(
+            _record(FULL_SCAN_BYTE_LIMIT + 1024, marker="head")
+            + "\n"
+            + _record(200, marker="last-complete")
+            + "\n"
+            + _record(200, marker="not-committed"),
+            encoding="utf-8",
+        )
+
+        scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)
+
+        assert scan.tail_record is not None
+        assert scan.tail_record["marker"] == "last-complete"
+
+    def test_terminated_tail_remains_the_latest_record(self, tmp_path):
+        file_path = tmp_path / "complete.jsonl"
+        file_path.write_text(
+            _record(FULL_SCAN_BYTE_LIMIT + 1024, marker="head") + "\n" + _record(200, marker="latest") + "\n",
+            encoding="utf-8",
+        )
+
+        scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)
+
+        assert scan.tail_record is not None
+        assert scan.tail_record["marker"] == "latest"
+
+
 class TestOversizedHeadRecord:
     """AD-159：首记录超过 head 窗口不得让整个 Session 消失。"""
 
@@ -221,6 +268,25 @@ class TestJsonlObjectScan:
         assert list(scan.iter_with_line_numbers()) == [(1, {"n": 1}), (3, {"n": 2})]
         assert scan.skipped_count == 1
         assert scan.skipped_line_samples == (2,)
+
+    def test_unterminated_malformed_tail_is_treated_as_an_active_append(self, tmp_path):
+        file_path = tmp_path / "active.jsonl"
+        file_path.write_bytes(b'{"n": 1}\n{"n":')
+
+        scan = JsonlObjectScan(file_path)
+
+        assert list(scan) == [{"n": 1}]
+        assert scan.skipped_count == 0
+        assert scan.skipped_line_samples == ()
+
+    def test_unterminated_valid_tail_is_still_read(self, tmp_path):
+        file_path = tmp_path / "complete.jsonl"
+        file_path.write_bytes(b'{"n": 1}\n{"n": 2}')
+
+        scan = JsonlObjectScan(file_path)
+
+        assert list(scan) == [{"n": 1}, {"n": 2}]
+        assert scan.skipped_count == 0
 
     def test_blank_lines_are_not_counted_as_skipped(self, tmp_path):
         file_path = tmp_path / "s.jsonl"
