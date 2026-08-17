@@ -224,19 +224,19 @@ jobs:
       - name: Verify the wheel installs and runs
         run: uv run python packaging/verify_wheel.py --expected-version "${PACKAGE_VERSION}"
 
-      - name: Verify the packed npm tarballs install and run
-        run: npm --prefix npm run smoke
+      - name: Pack and verify every npm package
+        run: npm --prefix npm run smoke -- --all-platforms --keep-pack
 
       - name: Publish npm packages
         env:
           NODE_AUTH_TOKEN: ""
         run: |
           node npm/scripts/publish-if-needed.mjs \
-            ./npm/packages/cli-linux-x64 \
-            ./npm/packages/cli-win32-x64 \
-            ./npm/packages/cli-darwin-x64 \
-            ./npm/packages/cli-darwin-arm64 \
-            ./npm/packages/cli
+            ./npm/.pack/agent-dump-cli-linux-x64-${PACKAGE_VERSION}.tgz \
+            ./npm/.pack/agent-dump-cli-win32-x64-${PACKAGE_VERSION}.tgz \
+            ./npm/.pack/agent-dump-cli-darwin-x64-${PACKAGE_VERSION}.tgz \
+            ./npm/.pack/agent-dump-cli-darwin-arm64-${PACKAGE_VERSION}.tgz \
+            ./npm/.pack/agent-dump-cli-${PACKAGE_VERSION}.tgz
 
       - name: Publish to PyPI
         env:
