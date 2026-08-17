@@ -794,6 +794,43 @@ class TestSearchSessionsByQuery:
         assert result[0].matched_role == "tool"
         assert result[0].snippet == "ran tests"
 
+    def test_role_query_reports_unreadable_session_and_preserves_other_matches(self, tmp_path, capsys):
+        broken = make_session("broken", "broken", tmp_path / "broken.jsonl")
+        healthy = make_session("healthy", "healthy", tmp_path / "healthy.jsonl")
+        agent = DummyAgent(
+            name="codex",
+            session_data={
+                "healthy": {
+                    "messages": [
+                        {"role": "user", "parts": [{"type": "text", "text": "matching evidence"}]},
+                    ]
+                }
+            },
+        )
+        original_get_session_data = agent.get_session_data
+
+        def get_session_data(session: Session) -> dict:
+            if session is broken:
+                raise OSError("source disappeared")
+            return original_get_session_data(session)
+
+        with mock.patch.object(agent, "get_session_data", side_effect=get_session_data):
+            result = query_session_matches(
+                agent,
+                [broken, healthy],
+                make_query_spec(keyword="matching", roles={"user"}),
+            )
+
+        assert [match.session for match in result] == [healthy]
+        assert (
+            expect(
+                Keys.WARN_SESSION_READ_SKIPPED,
+                uri="codex://broken",
+                error="source disappeared",
+            )
+            in capsys.readouterr().err
+        )
+
 
 class TestRoleLimitPushdown:
     @staticmethod
