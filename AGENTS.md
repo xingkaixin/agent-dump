@@ -313,7 +313,7 @@ Collect 等批量一次性投影，离开 context 后释放完整 payload。两�
 可选扩展点：
 - `get_session_uri(session)`：默认返回 `<agent>://<session.id>`。
 - `find_session_by_id(session_id)`：URI 定位使用。默认全量扫描后按 id 匹配；provider 应尽量用直接查找（SQL 主键、文件名定位）覆盖。
-- `filter_sessions_by_keyword(sessions, keyword)`：关键词过滤使用。默认返回 `None`（由索引/文件扫描兜底）；存储支持时 provider 用只读查询覆盖（如 OpenCode 的 SQL LIKE）。
+- `filter_sessions_by_keyword(sessions, keyword)`：持久索引不可用时的关键词回退。默认返回 `None`（由统一会话读取兜底）；只有存储能更高效且完整表达统一匹配语义时，provider 才用只读查询覆盖。
 - `unsupported_uri_formats`（类属性）：声明 URI 模式下不支持的导出格式（如 Cursor 的 `raw`/`markdown`），由 `cli_shared.validate_uri_agent_formats()` 统一校验。
 - `get_search_roots()`：结构化诊断和路径发现使用。
 - `get_session_head(session)`：URI `--head` 使用。

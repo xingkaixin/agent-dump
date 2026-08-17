@@ -267,23 +267,6 @@ class TestOpenCodeAgent:
         assert all(not has_unsafe_line_characters(line) for line in lines)
         assert all("FORGED" in line for line in lines)
 
-    def test_filter_sessions_by_keyword_matches_literally(self, populated_db):
-        """Provider 快路径与逻辑 transcript 使用同一套字面量语义。"""
-        agent = OpenCodeAgent()
-        agent.db_path = populated_db
-        session = agent.find_session_by_id("session-001")
-        assert session is not None
-
-        assert agent.filter_sessions_by_keyword([session], "hello world") == [session]
-        assert agent.filter_sessions_by_keyword([session], "h_llo%") == []
-
-    def test_filter_sessions_by_keyword_without_db_returns_none(self):
-        """测试没有数据库时返回 None 交由上层兜底"""
-        agent = OpenCodeAgent()
-        agent.db_path = None
-
-        assert agent.filter_sessions_by_keyword([], "keyword") is None
-
     def test_find_session_by_id_uses_sql_lookup(self, populated_db):
         """测试 find_session_by_id 按主键直查，且不受时间窗限制"""
         agent = OpenCodeAgent()

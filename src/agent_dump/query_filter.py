@@ -147,13 +147,13 @@ def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | No
     if not sessions:
         return []
 
-    provider_matched = agent.filter_sessions_by_keyword(sessions, query.literals[0])
-    if provider_matched is not None:
-        return provider_matched
-
     indexed = _try_indexed_search(agent, sessions, query)
     if indexed is not None:
         return indexed
+
+    provider_matched = agent.filter_sessions_by_keyword(sessions, query.literals[0])
+    if provider_matched is not None:
+        return provider_matched
 
     return _filter_sessions_from_source_or_data(agent, sessions, query)
 
