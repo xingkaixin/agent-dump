@@ -225,14 +225,14 @@ class OpenCodeAgent(BaseAgent):
 
         for start in range(0, len(message_ids), 500):
             chunk = message_ids[start : start + 500]
-            cursor.execute(
-                """
+            placeholders = ", ".join("?" for _ in chunk)
+            # SQL 文本只插入固定占位符；message id 仍由参数绑定，500 也低于旧 SQLite 的变量上限。
+            part_query = f"""
                 SELECT * FROM part
-                WHERE message_id IN (SELECT value FROM json_each(?))
+                WHERE message_id IN ({placeholders})
                 ORDER BY message_id ASC, time_created ASC
-                """,
-                (json.dumps(chunk),),
-            )
+                """  # noqa: S608
+            cursor.execute(part_query, chunk)
             for part_row in cursor.fetchall():
                 message_id = str(part_row["message_id"])
                 parts_by_message_id.setdefault(message_id, []).append(part_row)

@@ -81,6 +81,13 @@ class TestHasFts5:
         conn.close()
         assert isinstance(result, bool)
 
+    def test_requires_trigram_tokenizer(self) -> None:
+        conn = mock.MagicMock(spec=sqlite3.Connection)
+        conn.execute.side_effect = sqlite3.OperationalError("no such tokenizer: trigram")
+
+        assert _has_fts5(conn) is False
+        assert "trigram" in conn.execute.call_args.args[0]
+
 
 class TestHasCjk:
     def test_detects_chinese(self):
@@ -645,7 +652,17 @@ class TestSearchIndex:
         assert results[0].agent_name == "codex"
 
     def test_clear_agent(self, tmp_path):
-        index = SearchIndex(tmp_path / "index.db")
+        class TracedSearchIndex(SearchIndex):
+            def __init__(self, db_path: Path) -> None:
+                super().__init__(db_path)
+                self.statements: list[str] = []
+
+            def _get_connection(self) -> sqlite3.Connection:
+                conn = super()._get_connection()
+                conn.set_trace_callback(self.statements.append)
+                return conn
+
+        index = TracedSearchIndex(tmp_path / "index.db")
         agent = DummyAgent(
             session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "keyword"}]}]}}
         )
@@ -658,6 +675,7 @@ class TestSearchIndex:
         deleted = index.clear_agent("codex")
         assert deleted == 1
         assert len(index.search("keyword")) == 0
+        assert not any("RETURNING" in statement for statement in index.statements)
 
     def test_clear_agent_deletes_fts_rows_per_table(self, tmp_path):
         class TracedSearchIndex(SearchIndex):

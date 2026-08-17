@@ -113,10 +113,10 @@ def _get_default_index_path() -> Path:
 
 
 def _has_fts5(conn: sqlite3.Connection) -> bool:
-    """Check if SQLite was compiled with FTS5 support."""
+    """Check the FTS5 features required by the index schema."""
     try:
-        conn.execute("CREATE VIRTUAL TABLE _fts5_test USING fts5(dummy)")
-        conn.execute("DROP TABLE _fts5_test")
+        conn.execute("CREATE VIRTUAL TABLE temp._agent_dump_fts5_probe USING fts5(dummy, tokenize='trigram')")
+        conn.execute("DROP TABLE temp._agent_dump_fts5_probe")
         return True
     except sqlite3.OperationalError:
         return False
@@ -697,8 +697,10 @@ class SearchIndex:
 
         conn = self._get_connection()
         try:
-            cursor = conn.execute("DELETE FROM index_state WHERE agent = ? RETURNING fts_rowid", (agent_name,))
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.execute("SELECT fts_rowid FROM index_state WHERE agent = ?", (agent_name,))
             rowids = [row["fts_rowid"] for row in cursor.fetchall()]
+            conn.execute("DELETE FROM index_state WHERE agent = ?", (agent_name,))
             _delete_fts_rows(conn, rowids)
             conn.commit()
             return len(rowids)
