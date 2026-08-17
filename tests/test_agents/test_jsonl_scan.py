@@ -79,6 +79,18 @@ class TestNonemptyLineCount:
         assert scan.scanned_all is False
         assert scan.nonempty_line_count is None
 
+    def test_small_scan_tolerates_an_invalid_utf8_record(self, tmp_path):
+        file_path = tmp_path / "s.jsonl"
+        file_path.write_bytes(b'{"n": 1}\n{"text": "\xff"}\n{"n": 2}\n')
+
+        scan = read_jsonl_scan_metadata(file_path, head_line_limit=20)
+
+        assert scan.scanned_all is True
+        assert scan.nonempty_line_count == 3
+        assert scan.first_record == {"n": 1}
+        assert scan.head_records == [{"n": 1}, {"n": 2}]
+        assert scan.tail_record == {"n": 2}
+
 
 class TestOversizedHeadRecord:
     """AD-159：首记录超过 head 窗口不得让整个 Session 消失。"""
@@ -197,6 +209,16 @@ class TestJsonlObjectScan:
         scan = JsonlObjectScan(file_path)
 
         assert list(scan) == [{"n": 1}, {"n": 2}]
+        assert scan.skipped_count == 1
+        assert scan.skipped_line_samples == (2,)
+
+    def test_invalid_utf8_is_skipped_without_losing_surrounding_records(self, tmp_path):
+        file_path = tmp_path / "s.jsonl"
+        file_path.write_bytes(b'{"n": 1}\n{"text": "\xff"}\n{"n": 2}\n')
+
+        scan = JsonlObjectScan(file_path)
+
+        assert list(scan.iter_with_line_numbers()) == [(1, {"n": 1}), (3, {"n": 2})]
         assert scan.skipped_count == 1
         assert scan.skipped_line_samples == (2,)
 

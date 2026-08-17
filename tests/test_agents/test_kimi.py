@@ -691,6 +691,20 @@ class TestKimiAgent:
         assert result["messages"][0]["role"] == "user"
         assert result["messages"][0]["parts"] == [{"type": "text", "text": "Hello Kimi", "time_created": 0}]
 
+    def test_context_invalid_utf8_record_does_not_hide_later_messages(self, tmp_path):
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        context_path = session_dir / "context.jsonl"
+        context_path.write_bytes(
+            b'{"role":"user","content":"first"}\n{"role":"user","content":"\xff"}\n{"role":"user","content":"last"}\n'
+        )
+
+        result = agent._get_session_data_from_context(make_session(session_dir))
+
+        assert [message["id"] for message in result["messages"]] == ["context-1", "context-3"]
+        assert [message["parts"][0]["text"] for message in result["messages"]] == ["first", "last"]
+
     def test_context_assistant_tool_outputs_are_backfilled_to_tool_parts(self, tmp_path):
         """测试 assistant 的 tool output 会按 tool_call_id 回填"""
         agent = KimiAgent()
@@ -1164,6 +1178,38 @@ class TestKimiAgent:
                 "time_created": 0,
             }
         ]
+
+    def test_wire_invalid_utf8_record_does_not_hide_later_messages(self, tmp_path):
+        agent = KimiAgent()
+        session_dir = tmp_path / "session1"
+        session_dir.mkdir()
+        records = [
+            {
+                "timestamp": 1.0,
+                "message": {
+                    "type": "TurnBegin",
+                    "payload": {"user_input": [{"text": "first"}]},
+                },
+            },
+            {
+                "timestamp": 2.0,
+                "message": {
+                    "type": "TurnBegin",
+                    "payload": {"user_input": [{"text": "last"}]},
+                },
+            },
+        ]
+        wire_path = session_dir / "wire.jsonl"
+        wire_path.write_bytes(
+            (json.dumps(records[0]) + "\n").encode()
+            + b'{"message":"\xff"}\n'
+            + (json.dumps(records[1]) + "\n").encode()
+        )
+
+        result = agent._get_session_data_from_wire(make_session(session_dir))
+
+        assert [message["id"] for message in result["messages"]] == ["wire-1", "wire-3"]
+        assert [message["parts"][0]["text"] for message in result["messages"]] == ["first", "last"]
 
     def test_wire_tool_call_part_appends_arguments_to_open_call(self, tmp_path):
         """测试 wire ToolCallPart 会把参数碎片拼回对应 tool call"""

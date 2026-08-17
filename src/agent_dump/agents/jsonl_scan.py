@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -112,19 +112,24 @@ class JsonlObjectScan:
             self.skipped_line_samples += (line_number,)
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
-        with open(self.file_path, encoding="utf-8") as f:
-            for line_number, line in enumerate(f, start=1):
-                if not line.strip():
+        for _, data in self.iter_with_line_numbers():
+            yield data
+
+    def iter_with_line_numbers(self) -> Iterator[tuple[int, dict[str, Any]]]:
+        """Iterate root objects together with their one-based source line numbers."""
+        with open(self.file_path, "rb") as f:
+            for line_number, raw_line in enumerate(f, start=1):
+                if not raw_line.strip():
                     continue
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
+                line = _decode_line(raw_line)
+                if line is None:
                     self._record_skipped_line(line_number)
                     continue
-                if not isinstance(data, dict):
+                data = _parse_json_object(line)
+                if data is None:
                     self._record_skipped_line(line_number)
                     continue
-                yield data
+                yield line_number, data
 
 
 def parse_object_line(line: str) -> dict[str, Any] | None:
@@ -155,16 +160,16 @@ def warn_skipped_records(scan: JsonlObjectScan) -> None:
     )
 
 
-def _read_all_lines(file_path: Path) -> list[str]:
-    lines: list[str] = []
-    with open(file_path, encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                lines.append(line)
+def _read_all_lines(file_path: Path) -> list[str | None]:
+    lines: list[str | None] = []
+    with open(file_path, "rb") as f:
+        for raw_line in f:
+            if raw_line.strip():
+                lines.append(_decode_line(raw_line))
     return lines
 
 
-def _read_complete_head_lines(file_path: Path, *, max_lines: int) -> tuple[list[str], bool]:
+def _read_complete_head_lines(file_path: Path, *, max_lines: int) -> tuple[list[str | None], bool]:
     """Read complete head lines, and whether the window was one oversized record.
 
     第二个返回值只在窗口非空却一个换行都没有时为 True。窗口保持固定 64 KiB：
@@ -207,11 +212,16 @@ def _read_last_complete_line(file_path: Path) -> str | None:
     return _decode_line(lines[-1])
 
 
-def _decode_line(line: bytes) -> str:
-    return line.decode("utf-8", errors="ignore")
+def _decode_line(line: bytes) -> str | None:
+    try:
+        return line.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
 
 
-def _parse_json_object(line: str) -> dict[str, Any] | None:
+def _parse_json_object(line: str | None) -> dict[str, Any] | None:
+    if line is None:
+        return None
     try:
         data = json.loads(line)
     except json.JSONDecodeError:
@@ -219,7 +229,7 @@ def _parse_json_object(line: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def _parse_jsonl_records(lines: list[str]) -> list[dict[str, Any]]:
+def _parse_jsonl_records(lines: Iterable[str | None]) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for line in lines:
         data = _parse_json_object(line)
