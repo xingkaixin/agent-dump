@@ -411,8 +411,9 @@ class CursorAgent(BaseAgent):
             return None
         lower, upper = _key_prefix_bounds("bubbleId:")
         rows = self._query_global(
-            "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? AND value LIKE ? ORDER BY rowid DESC",
-            (lower, upper, f"%{request_id}%"),
+            "SELECT key, value FROM cursorDiskKV "
+            "WHERE key >= ? AND key < ? AND instr(value, ?) > 0 ORDER BY rowid DESC",
+            (lower, upper, request_id),
         )
         composer_id: str | None = None
         for row in rows:

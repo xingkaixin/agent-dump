@@ -417,6 +417,45 @@ class TestCursorAgent:
         assert matched.id == "request-other"
         assert matched.metadata["composer_id"] == "composer-any-req"
 
+    def test_find_session_by_request_id_treats_wildcards_as_literals(self, monkeypatch, tmp_path):
+        global_db = self._create_layout(monkeypatch, tmp_path)
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        request_id = "literal%_id"
+        _insert_kv(
+            global_db,
+            "composerData:target",
+            {"composerId": "target", "createdAt": now_ms, "name": "Target"},
+        )
+        _insert_kv(
+            global_db,
+            "bubbleId:target:b1",
+            {"requestId": request_id, "type": 1, "text": "target"},
+        )
+        for index in range(50):
+            _insert_kv(
+                global_db,
+                f"bubbleId:noise-{index}:b1",
+                {"requestId": f"literal-noise-{index}Xid", "type": 1, "text": "noise"},
+            )
+
+        agent = CursorAgent()
+        original_query = agent._query_global
+        candidate_counts: list[int] = []
+
+        def recording_query(sql, params, *, conn=None):
+            rows = original_query(sql, params, conn=conn)
+            if "instr(value" in sql:
+                candidate_counts.append(len(rows))
+            return rows
+
+        monkeypatch.setattr(agent, "_query_global", recording_query)
+
+        matched = agent.find_session_by_request_id(request_id)
+
+        assert matched is not None
+        assert matched.id == request_id
+        assert candidate_counts == [1]
+
     def test_key_prefix_bounds_covers_exactly_prefix_matches(self):
         """测试范围边界与 LIKE 前缀匹配语义一致"""
         lower, upper = _key_prefix_bounds("bubbleId:abc:")
