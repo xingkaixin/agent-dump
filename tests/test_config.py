@@ -560,6 +560,23 @@ class TestConfigCommand:
         assert edited_ai.model == "gpt-4.1-mini"
         assert edited_export == ExportConfig(output="./exports")
 
+    def test_prompt_edit_hides_api_key_when_only_stdin_is_a_terminal(self, monkeypatch):
+        monkeypatch.setattr("agent_dump.config._is_terminal", lambda: False)
+        monkeypatch.setattr("agent_dump.config.os.isatty", lambda fd: fd == 0)
+        inputs = iter(["1", "https://api.openai.com/v1", "gpt-4.1-mini", "./exports", "y"])
+
+        with (
+            mock.patch("builtins.input", side_effect=lambda _="": next(inputs)) as visible_input,
+            mock.patch("agent_dump.config.getpass.getpass", return_value="sk-hidden") as secret_input,
+        ):
+            edited_ai, edited_export = prompt_edit_config()
+
+        assert edited_ai is not None
+        assert edited_ai.api_key == "sk-hidden"
+        assert edited_export == ExportConfig(output="./exports")
+        secret_input.assert_called_once()
+        assert all("API Key" not in str(call.args[0]) for call in visible_input.call_args_list)
+
 
 class TestAiBaseUrlSchemeValidation:
     """AD-130：base_url 的 scheme 必须先过白名单，明文带 key 要失败关闭。"""

@@ -5,6 +5,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from enum import Enum
+import getpass
 import json
 import math
 import os
@@ -691,9 +692,8 @@ def prompt_edit_config(
             f"{i18n.t(Keys.CONFIG_INPUT_BASE_URL)} [{safe_display_text(default_base_url)}]: "
         ).strip()
         model_input = input(f"{i18n.t(Keys.CONFIG_INPUT_MODEL)} [{safe_display_text(default_model)}]: ").strip()
-        api_key_input = input(
-            f"{i18n.t(Keys.CONFIG_INPUT_API_KEY)} [{safe_display_text(mask_api_key(default_api_key))}]: "
-        ).strip()
+        api_key_prompt = f"{i18n.t(Keys.CONFIG_INPUT_API_KEY)} [{safe_display_text(mask_api_key(default_api_key))}]: "
+        api_key_input = getpass.getpass(api_key_prompt).strip() if os.isatty(0) else input(api_key_prompt).strip()
         export_output_input = input(
             f"{i18n.t(Keys.CONFIG_INPUT_EXPORT_OUTPUT)} [{safe_display_text(default_export_output)}]: "
         ).strip()
