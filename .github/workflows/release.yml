@@ -6,7 +6,7 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   PYTHON_VERSION: "3.12"
