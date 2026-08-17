@@ -1,3 +1,6 @@
+from unittest import mock
+
+import agent_dump.query_semantics as query_semantics
 from agent_dump.query_semantics import TextQuery, TextQueryMode, serialize_search_value
 
 
@@ -32,6 +35,35 @@ class TestTextQuery:
         query = TextQuery.parse("auth timeout", TextQueryMode.SEARCH_TERMS)
 
         assert query.build_snippet(("Auth incident", "request timeout")) == "**Auth** incident"
+
+    def test_match_reports_full_field_evidence_for_ranking(self) -> None:
+        query = TextQuery.parse("auth timeout", TextQueryMode.SEARCH_TERMS)
+
+        split_match = query.find_match(("Auth incident", "request timeout"))
+        title_match = query.find_match(("Auth timeout", "request timeout"))
+
+        assert split_match is not None
+        assert split_match.fully_matching_field_indexes == frozenset()
+        assert split_match.snippet == "**Auth** incident"
+        assert title_match is not None
+        assert title_match.fully_matching_field_indexes == frozenset({0})
+
+    def test_match_normalizes_and_scans_each_field_once(self) -> None:
+        query = TextQuery.parse("auth timeout", TextQueryMode.SEARCH_TERMS)
+
+        with (
+            mock.patch.object(
+                query_semantics,
+                "normalize_search_text",
+                wraps=query_semantics.normalize_search_text,
+            ) as normalize,
+            mock.patch.object(query_semantics, "_find_literal", wraps=query_semantics._find_literal) as find_literal,
+        ):
+            match = query.find_match(("Auth title", "request timeout"))
+
+        assert match is not None
+        assert normalize.call_count == 2
+        assert find_literal.call_count == 4
 
 
 def test_search_value_serialization_preserves_logical_unicode() -> None:
