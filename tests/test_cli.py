@@ -2399,7 +2399,12 @@ class TestMain:
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch(
                     "sys.argv",
-                    ["agent-dump", "codex://session-001", "--format", "json", "--output", str(output_root)],
+                    [
+                        "agent-dump",
+                        "codex://session-001",
+                        "-format=json",
+                        f"-output={output_root}",
+                    ],
                 ):
                     result = main()
 

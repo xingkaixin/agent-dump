@@ -235,7 +235,7 @@ def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
 
 
 def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:
-    return any(arg in (short_option, long_option) or arg.startswith(f"{long_option}=") for arg in argv)
+    return any(arg.partition("=")[0] in (short_option, long_option) for arg in argv)
 
 
 def resolve_output_base_dir(
