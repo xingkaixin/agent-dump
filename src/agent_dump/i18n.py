@@ -197,8 +197,6 @@ class Keys:
     WARN_TITLE_CACHE_FAILED = "WARN_TITLE_CACHE_FAILED"
     WARN_TITLE_EXTRACT_FAILED = "WARN_TITLE_EXTRACT_FAILED"
     WARN_MESSAGE_CONVERT_FAILED = "WARN_MESSAGE_CONVERT_FAILED"
-    WARN_CONTEXT_CONVERT_FAILED = "WARN_CONTEXT_CONVERT_FAILED"
-    WARN_WIRE_CONVERT_FAILED = "WARN_WIRE_CONVERT_FAILED"
     WARN_PI_RECORD_CONVERT_FAILED = "WARN_PI_RECORD_CONVERT_FAILED"
     WARN_MESSAGE_DATA_PARSE_FAILED = "WARN_MESSAGE_DATA_PARSE_FAILED"
     WARN_PART_DATA_PARSE_FAILED = "WARN_PART_DATA_PARSE_FAILED"
@@ -510,8 +508,6 @@ TRANSLATIONS = {
         Keys.WARN_TITLE_CACHE_FAILED: "⚠️  Failed to load title cache: {error}",
         Keys.WARN_TITLE_EXTRACT_FAILED: "⚠️  Failed to extract title: {error}",
         Keys.WARN_MESSAGE_CONVERT_FAILED: "⚠️  Failed to convert message format: {error}",
-        Keys.WARN_CONTEXT_CONVERT_FAILED: "⚠️  Failed to convert context record: {error}",
-        Keys.WARN_WIRE_CONVERT_FAILED: "⚠️  Failed to convert wire record: {error}",
         Keys.WARN_PI_RECORD_CONVERT_FAILED: "⚠️  Failed to convert Pi record: {error}",
         Keys.WARN_MESSAGE_DATA_PARSE_FAILED: "⚠️  Failed to parse message data message={message_id}",
         Keys.WARN_PART_DATA_PARSE_FAILED: "⚠️  Failed to parse message part data part={part_id}",
@@ -811,8 +807,6 @@ TRANSLATIONS = {
         Keys.WARN_TITLE_CACHE_FAILED: "警告: 加载标题缓存失败: {error}",
         Keys.WARN_TITLE_EXTRACT_FAILED: "警告: 提取标题失败: {error}",
         Keys.WARN_MESSAGE_CONVERT_FAILED: "警告: 转换消息格式失败: {error}",
-        Keys.WARN_CONTEXT_CONVERT_FAILED: "警告: 转换 context 记录失败: {error}",
-        Keys.WARN_WIRE_CONVERT_FAILED: "警告: 转换 wire 记录失败: {error}",
         Keys.WARN_PI_RECORD_CONVERT_FAILED: "警告: 转换 Pi 记录失败: {error}",
         Keys.WARN_MESSAGE_DATA_PARSE_FAILED: "警告: 解析消息数据失败 message={message_id}",
         Keys.WARN_PART_DATA_PARSE_FAILED: "警告: 解析消息分段数据失败 part={part_id}",
