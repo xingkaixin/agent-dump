@@ -100,8 +100,8 @@ class TestCursorAgent:
         assert sessions[0].metadata["message_count"] == 1
         assert agent.get_session_uri(sessions[0]) == "cursor://request-1"
 
-    def test_get_sessions_query_count_is_independent_of_session_count(self, monkeypatch, tmp_path):
-        """AD-124：bubble 摘要走批量聚合，查询数不再随会话数增长。"""
+    def test_get_sessions_query_count_is_bounded_by_batch_count(self, monkeypatch, tmp_path):
+        """AD-124：bubble 摘要按批读取，查询数不再随每个会话增长。"""
         global_db = self._create_layout(monkeypatch, tmp_path)
 
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
@@ -126,7 +126,7 @@ class TestCursorAgent:
                         },
                     )
 
-        def _count_statements(agent: CursorAgent) -> tuple[int, list]:
+        def _count_statements(agent: CursorAgent) -> tuple[int, list[Session]]:
             statements: list[str] = []
             original_open = agent._open_global
 
@@ -144,7 +144,8 @@ class TestCursorAgent:
             # patch 打在实例上，两次测量各用一个新实例，无需 undo
             # （undo 会连 _create_layout 的 Path.home / 环境变量 patch 一起撤掉）
             monkeypatch.setattr(agent, "_open_global", counting_open)
-            return len(statements), agent.get_sessions(days=7)
+            sessions = agent.get_sessions(days=7)
+            return len(statements), sessions
 
         _seed(2)
         agent = CursorAgent()
@@ -161,9 +162,18 @@ class TestCursorAgent:
         eight_count, eight_sessions = _count_statements(agent)
 
         assert len(eight_sessions) == 8
-        assert eight_count == two_count, (
+        assert two_count == eight_count == 3, (
             f"查询数应与会话数无关，2 个会话用了 {two_count} 条、8 个会话用了 {eight_count} 条"
         )
+
+        over_one_batch = _BUBBLE_RANGE_BATCH_SIZE + 1
+        _seed(over_one_batch)
+        agent = CursorAgent()
+        assert agent.is_available() is True
+        batched_count, batched_sessions = _count_statements(agent)
+
+        assert len(batched_sessions) == over_one_batch
+        assert batched_count == 5, "composer 一次读取，消息计数与元数据摘要各按两批读取"
 
     def test_metadata_scan_is_bounded_to_the_first_bubbles(self, monkeypatch, tmp_path):
         """AD-124：列表元数据只扫会话开头若干条 bubble，不再搬运整段正文。

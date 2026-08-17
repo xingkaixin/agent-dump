@@ -58,8 +58,9 @@ _BUBBLE_MESSAGE_COUNT_SQL = """
     GROUP BY composer_id
 """
 
-# 一条 SQL 里最多放多少个 composer 的 key range。每个 range 占 2 个绑定参数和一层
-# OR 节点，批过大会撞上 SQLite 的变量数与表达式深度上限。
+# 一条 SQL 里最多放多少个 composer 的 key range。计数查询的每个 range 占 2 个
+# 绑定参数和一层 OR 节点，元数据查询每个 range 占 4 个绑定参数和一个
+# compound term；批过大会撞上 SQLite 的变量数、表达式深度或 compound-select 上限。
 _BUBBLE_RANGE_BATCH_SIZE = 100
 
 # 列表元数据只需要首个带 requestId 的 bubble 和首个带 modelInfo.modelName 的 bubble，
@@ -264,33 +265,46 @@ class CursorAgent(BaseAgent):
                 counts[str(row["composer_id"])] = safe_int(row["message_count"])
         return counts
 
-    def _scan_metadata_bubbles(self, composer_id: str, *, conn: sqlite3.Connection) -> tuple[str | None, str | None]:
-        """Read request id and model from this composer's first few bubbles."""
-        lower, upper = _key_prefix_bounds(f"bubbleId:{composer_id}:")
-        rows = self._query_global(
-            "SELECT value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key LIMIT ?",
-            (lower, upper, _METADATA_BUBBLE_SCAN_LIMIT),
-            conn=conn,
-        )
+    def _scan_metadata_bubbles_by_composer(
+        self,
+        composer_ids: list[str],
+        *,
+        conn: sqlite3.Connection,
+    ) -> dict[str, tuple[str | None, str | None]]:
+        """Read request ids and models from a bounded prefix of each composer's bubbles."""
+        summaries: dict[str, tuple[str | None, str | None]] = {}
+        for start in range(0, len(composer_ids), _BUBBLE_RANGE_BATCH_SIZE):
+            batch = composer_ids[start : start + _BUBBLE_RANGE_BATCH_SIZE]
+            statements: list[str] = []
+            params: list[str | int] = []
+            for composer_id in batch:
+                lower, upper = _key_prefix_bounds(f"bubbleId:{composer_id}:")
+                statements.append(
+                    "SELECT * FROM ("
+                    "SELECT ? AS composer_id, key, value FROM cursorDiskKV "
+                    "WHERE key >= ? AND key < ? ORDER BY key LIMIT ?"
+                    ")"
+                )
+                params.extend((composer_id, lower, upper, _METADATA_BUBBLE_SCAN_LIMIT))
 
-        request_id: str | None = None
-        model: str | None = None
-        for row in rows:
-            bubble = self._parse_json(row["value"])
-            if not bubble:
-                continue
-            if request_id is None:
-                raw_request_id = bubble.get("requestId")
-                if isinstance(raw_request_id, str) and raw_request_id.strip():
-                    request_id = raw_request_id.strip()
-            if model is None:
-                model_info = bubble.get("modelInfo")
-                model_name = model_info.get("modelName") if isinstance(model_info, dict) else None
-                if isinstance(model_name, str) and model_name.strip():
-                    model = model_name.strip()
-            if request_id is not None and model is not None:
-                break
-        return request_id, model
+            rows = conn.execute(" UNION ALL ".join(statements) + " ORDER BY composer_id, key", params).fetchall()
+            for row in rows:
+                composer_id = str(row["composer_id"])
+                request_id, model = summaries.get(composer_id, (None, None))
+                bubble = self._parse_json(row["value"])
+                if not bubble:
+                    continue
+                if request_id is None:
+                    raw_request_id = bubble.get("requestId")
+                    if isinstance(raw_request_id, str) and raw_request_id.strip():
+                        request_id = raw_request_id.strip()
+                if model is None:
+                    model_info = bubble.get("modelInfo")
+                    model_name = model_info.get("modelName") if isinstance(model_info, dict) else None
+                    if isinstance(model_name, str) and model_name.strip():
+                        model = model_name.strip()
+                summaries[composer_id] = (request_id, model)
+        return summaries
 
     def _summarize_bubbles(self, bubble_rows: list[sqlite3.Row]) -> tuple[str | None, int, str | None]:
         """Return (request_id, message_count, model) from a single pass over the rows.
@@ -360,12 +374,16 @@ class CursorAgent(BaseAgent):
                 recent.append((composer_id, composer, created_at, updated_at))
 
             # days 窗口必须先于 bubble 聚合生效，否则 days=1 也要扫过全部历史 bubble
-            message_counts = self._count_messages_by_composer(conn, [item[0] for item in recent])
+            composer_ids = [item[0] for item in recent]
+            message_counts = self._count_messages_by_composer(conn, composer_ids)
+            metadata_summaries = (
+                self._scan_metadata_bubbles_by_composer(composer_ids, conn=conn) if message_counts is not None else {}
+            )
 
             for composer_id, composer, created_at, updated_at in recent:
                 if message_counts is not None:
                     message_count = message_counts.get(composer_id, 0)
-                    bubble_request_id, bubble_model = self._scan_metadata_bubbles(composer_id, conn=conn)
+                    bubble_request_id, bubble_model = metadata_summaries.get(composer_id, (None, None))
                 else:
                     bubble_request_id, message_count, bubble_model = self._summarize_bubbles(
                         self._get_bubble_rows(composer_id, conn=conn)
