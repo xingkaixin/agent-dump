@@ -543,8 +543,9 @@ git push origin v{version}
 - Release publishes PyPI artifacts, GitHub release assets, and npm packages for `@agent-dump/cli`
 - Retrying the same release skips byte-identical registry artifacts and fails if an existing version or asset differs
 - The npm CLI package installs the matching native binary during `npm`/`npx` installation and verifies its checksum
-- Configure `UV_PUBLISH_TOKEN` in the GitHub `pypi` environment
-- Configure `NPM_TOKEN` in the GitHub `release` environment
+- PyPI publishing uses `UV_PUBLISH_TOKEN`, stored as an environment secret in the GitHub `release` environment
+- npm publishing uses Trusted Publisher/OIDC for every `@agent-dump/*` package, bound to this repository,
+  `release.yml`, and the GitHub `release` environment; it does not use an `NPM_TOKEN` secret
 
 ## License
 

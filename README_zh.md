@@ -543,8 +543,9 @@ git push origin v{version}
 - 发布包含 PyPI 制品、GitHub Release 资产和 `@agent-dump/cli` npm 包
 - 同一版本的发布可以安全重试：字节一致的 registry 制品会跳过，已存在但内容不同则失败
 - npm CLI 包在 `npm`/`npx` 安装阶段会下载并校验匹配的原生二进制
-- 在 GitHub `pypi` 环境中配置 `UV_PUBLISH_TOKEN`
-- 在 GitHub `release` 环境中配置 `NPM_TOKEN`
+- PyPI 发布使用 GitHub `release` 环境中的环境级 secret `UV_PUBLISH_TOKEN`
+- 每个 `@agent-dump/*` npm 包均使用绑定到本仓库、`release.yml` 与 GitHub `release` 环境的
+  Trusted Publisher/OIDC 发布，不使用 `NPM_TOKEN` secret
 
 ## 许可证
 
