@@ -248,6 +248,23 @@ class TestReleasePermissions:
         assert "permissions:\n      id-token: write\n      contents: write" in publish
         assert release.count("contents: write") == 1
 
+    @pytest.mark.parametrize("readme_name", ["README.md", "README_zh.md"])
+    def test_release_credential_documentation_matches_the_workflow(self, readme_name):
+        readme = (REPO_ROOT / readme_name).read_text(encoding="utf-8")
+        heading = "## Release" if readme_name == "README.md" else "## 发布"
+        release_section = readme.split(heading, 1)[1]
+        workflow = self._release()
+        publish_job = workflow.split("\n  publish:\n", 1)[1].split("\n  smoke-npm:\n", 1)[0]
+
+        assert "`UV_PUBLISH_TOKEN`" in release_section
+        assert "GitHub `release`" in release_section
+        assert "Trusted Publisher/OIDC" in release_section
+        assert "does not use an `NPM_TOKEN`" in release_section or "不使用 `NPM_TOKEN`" in release_section
+        assert release_section.count("NPM_TOKEN") == 1
+        assert "environment: release" in publish_job
+        assert "UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}" in publish_job
+        assert 'NODE_AUTH_TOKEN: ""' in publish_job
+
 
 class TestReleaseRetries:
     @staticmethod
