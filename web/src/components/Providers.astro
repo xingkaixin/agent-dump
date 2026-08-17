@@ -1,5 +1,5 @@
 ---
-import { Icon } from "astro-icon/components";
+import { ArrowUpRightIcon } from "@phosphor-icons/react";
 import { site, ui, providers, type Locale } from "../lib/i18n";
 
 interface Props {
@@ -50,7 +50,7 @@ const more =
         </span>
         <span class="mt-2 inline-flex items-center gap-1 font-mono text-[12px] text-subtle transition-colors duration-200 ease-out group-hover:text-accent">
           {more.note}
-          <Icon name="ph:arrow-up-right" class="size-3.5" aria-hidden="true" />
+          <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
         </span>
       </a>
     </li>

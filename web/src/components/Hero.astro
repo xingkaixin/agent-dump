@@ -1,5 +1,5 @@
 ---
-import { Icon } from "astro-icon/components";
+import { ArrowDownIcon, GithubLogoIcon } from "@phosphor-icons/react";
 import { site, ui, terminalScenes, type Locale } from "../lib/i18n";
 import Terminal from "./Terminal.astro";
 
@@ -33,7 +33,7 @@ const terminalLabel =
           class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-accent px-4 py-2.5 text-[14px] font-medium text-accent-fg no-underline transition-[transform,filter] duration-150 ease-out hover:brightness-95 active:scale-[0.98]"
         >
           {t.ctaInstall}
-          <Icon name="ph:arrow-down" class="size-4" aria-hidden="true" />
+          <ArrowDownIcon className="size-4" aria-hidden="true" />
         </a>
         <a
           href={site.repo}
@@ -41,7 +41,7 @@ const terminalLabel =
           rel="noopener noreferrer"
           class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-line-strong px-4 py-2.5 text-[14px] font-medium text-fg no-underline transition-[transform,background-color] duration-150 ease-out hover:bg-surface active:scale-[0.98]"
         >
-          <Icon name="ph:github-logo" class="size-4" aria-hidden="true" />
+          <GithubLogoIcon className="size-4" aria-hidden="true" />
           {t.ctaSource}
         </a>
       </div>

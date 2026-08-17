@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
-import icon from "astro-icon";
 import tailwindcss from "@tailwindcss/vite";
 
 // Version single source of truth is the Python package metadata. Resolved from this
@@ -29,7 +28,6 @@ export default defineConfig({
   },
   integrations: [
     react(),
-    icon(),
     sitemap({
       i18n: {
         defaultLocale: "en",
