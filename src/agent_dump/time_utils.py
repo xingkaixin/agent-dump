@@ -1,6 +1,9 @@
 """Shared datetime helpers for session timestamps."""
 
 from datetime import date, datetime, timezone, tzinfo
+from zoneinfo import ZoneInfoNotFoundError
+
+from tzlocal import get_localzone
 
 
 def ensure_datetime(value: datetime | int | float) -> datetime:
@@ -25,7 +28,12 @@ def normalize_timestamp_utc(value: datetime | int | float) -> datetime:
 
 
 def get_local_timezone() -> tzinfo:
-    """Return the current machine local timezone."""
+    """Return the current machine local timezone with historical rules."""
+    try:
+        return get_localzone()
+    except (OSError, ValueError, ZoneInfoNotFoundError):
+        pass
+
     local_tz = datetime.now().astimezone().tzinfo
     return local_tz or timezone.utc
 
