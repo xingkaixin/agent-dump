@@ -78,7 +78,8 @@ bunx @agent-dump/cli --help
 npx @agent-dump/cli --help
 ```
 
-The `npx` and global npm installation paths require Node.js 22 or newer.
+The `bunx`, `npx`, and global npm/pnpm/Bun installation paths all require Node.js 22 or newer.
+They execute the same Node.js package wrapper before launching the native binary.
 
 `@agent-dump/cli` delegates the platform-package download to npm, preserving scoped registries,
 authentication, proxy, and CA settings, then verifies the published checksum before installation.

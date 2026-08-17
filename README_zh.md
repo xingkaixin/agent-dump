@@ -78,7 +78,8 @@ bunx @agent-dump/cli --help
 npx @agent-dump/cli --help
 ```
 
-使用 `npx` 或 npm 全局安装时需要 Node.js 22 或更高版本。
+`bunx`、`npx` 以及 npm/pnpm/Bun 全局安装路径都需要 Node.js 22 或更高版本。
+这些入口会先执行同一个 Node.js 包装器，再启动原生二进制文件。
 
 `@agent-dump/cli` 通过 npm 下载当前平台包，因此会沿用 scoped registry、认证、代理与 CA 配置，
 并在落盘前校验发布时生成的 checksum。

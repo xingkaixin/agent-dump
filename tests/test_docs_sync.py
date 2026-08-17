@@ -4,6 +4,7 @@ AD-119 已经手工同步过一次 README 的结构树，几个月后 AGENTS.md 
 手工同步会再漂，所以这里把「文档与代码一致」变成 CI 检查。
 """
 
+import json
 from pathlib import Path
 import re
 import shlex
@@ -98,6 +99,35 @@ class TestReadmeDocumentsEveryCliFlag:
         missing = sorted(flag for flag in self._declared_option_strings() if flag not in content)
 
         assert missing == [], f"{readme} 未记录这些 CLI 参数: {missing}"
+
+
+class TestNpmWrapperRuntimeContract:
+    @staticmethod
+    def _manifest() -> dict:
+        return json.loads((REPO_ROOT / "npm" / "packages" / "cli" / "package.json").read_text(encoding="utf-8"))
+
+    def test_wrapper_entrypoint_and_manifest_require_the_same_node_runtime(self):
+        manifest = self._manifest()
+        entrypoint = (REPO_ROOT / "npm" / "packages" / "cli" / "bin" / "agent-dump.cjs").read_text(encoding="utf-8")
+
+        assert manifest["engines"]["node"] == ">=22"
+        assert entrypoint.startswith("#!/usr/bin/env node\n")
+
+    @pytest.mark.parametrize(
+        "document",
+        [
+            "README.md",
+            "README_zh.md",
+            "npm/packages/cli/README.md",
+            "skills/agent-dump/SKILL.md",
+            "web/src/lib/i18n.ts",
+        ],
+    )
+    def test_every_bun_entrypoint_declares_the_node_minimum(self, document):
+        content = (REPO_ROOT / document).read_text(encoding="utf-8")
+
+        assert "bunx" in content
+        assert "Node.js 22" in content
 
 
 class TestChangelogLinksResolve:

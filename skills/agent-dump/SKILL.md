@@ -18,7 +18,8 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 2. 免安装直跑
 - 适用于只想临时运行一次，或用户明确说不想装 Python。
 - 优先使用 `bunx @agent-dump/cli` 或 `npx @agent-dump/cli`。
-- 选择 `npx` 前先确认 Node.js 版本不低于 22；版本不足时改用可用的 `bunx` 或 `uvx`。
+- 使用 `bunx` 或 `npx` 前都要确认 Node.js 版本不低于 22；两者执行同一个 Node.js 包装器。
+- Node.js 不存在或版本不足时改用 `uvx`，不要把 `bunx` 当作规避 Node.js 要求的入口。
 - 示例：`bunx @agent-dump/cli --help`
 - 示例：`npx @agent-dump/cli --help`
 
@@ -29,7 +30,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 ## 环境不确定时的处理规则
 
 - 如果用户已经指定运行方式，直接遵循，不要替换成别的入口。
-- 如果环境不明确，先做低成本检查，按以下顺序判断可用入口：`agent-dump`、`bunx`、`npx`、`uv` / `uvx`。
+- 如果环境不明确，先做低成本检查，按以下顺序判断可用入口：`agent-dump`、Node.js 22+ 下的 `bunx` / `npx`、`uv` / `uvx`。
 - 只要确认某个入口可用，就按该入口组装后续命令。
 - 如果无法安全判断是否允许联网拉包、是否应做全局安装、或用户偏好 Python 体系还是 Node/Bun 体系，先向用户确认，不要自行假设。
 - 默认偏好：已存在 `agent-dump` 时优先复用；只是临时执行一次时优先 `bunx @agent-dump/cli` 或 `npx @agent-dump/cli`；用户明确要长期直接运行 `agent-dump` 时再走安装路径。

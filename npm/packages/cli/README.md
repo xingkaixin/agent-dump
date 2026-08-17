@@ -15,7 +15,8 @@ bunx @agent-dump/cli --help
 npx @agent-dump/cli --help
 ```
 
-Requires Node.js 22 or newer. Node 18 and 20 are end-of-life upstream and are not tested.
+Every entry point above, including `bunx`, requires Node.js 22 or newer because it executes the
+same Node.js package wrapper. Node 18 and 20 are end-of-life upstream and are not tested.
 
 Supported targets:
 
