@@ -18,6 +18,7 @@ LLM_RESPONSE_MAX_BYTES = 256 * 1024
 LLM_ERROR_BODY_MAX_BYTES = 4 * 1024
 _RESPONSE_READ_CHUNK_BYTES = 64 * 1024
 SENSITIVE_REQUEST_HEADERS = frozenset({"authorization", "x-api-key"})
+OPTIONAL_OPENAI_PARAMETERS = frozenset({"enable_thinking"})
 
 
 class LLMRequestError(RuntimeError):
@@ -25,6 +26,7 @@ class LLMRequestError(RuntimeError):
 
     status 是 HTTP 状态码（无响应的连接/超时故障为 None）。retryable 由此判定：
     对 400/401/403 这类永久失败重发非幂等的 POST，只会让每个 chunk 的延迟和计费翻倍。
+    远端错误正文不进入 message；只保留闭集的 rejected_parameters 供请求降级使用。
     """
 
     def __init__(
@@ -34,11 +36,13 @@ class LLMRequestError(RuntimeError):
         status: int | None = None,
         transport: bool = False,
         response_too_large: bool = False,
+        rejected_parameters: frozenset[str] = frozenset(),
     ) -> None:
         super().__init__(message)
         self.status = status
         self.transport = transport
         self.response_too_large = response_too_large
+        self.rejected_parameters = frozenset(rejected_parameters)
 
     @property
     def retryable(self) -> bool:
@@ -138,10 +142,9 @@ def _normalize_base_url(base_url: str) -> str:
 
 
 class _ResponseTooLargeError(ValueError):
-    def __init__(self, *, limit_bytes: int, preview: bytes = b"") -> None:
+    def __init__(self, *, limit_bytes: int) -> None:
         super().__init__(f"response exceeded {limit_bytes} bytes")
         self.limit_bytes = limit_bytes
-        self.preview = preview
 
 
 def _declared_content_length(response: Any) -> int | None:
@@ -171,7 +174,7 @@ def _read_bounded_body(response: Any, *, limit_bytes: int) -> bytes:
             return bytes(body)
         body.extend(chunk)
         if len(body) > limit_bytes:
-            raise _ResponseTooLargeError(limit_bytes=limit_bytes, preview=bytes(body[:limit_bytes]))
+            raise _ResponseTooLargeError(limit_bytes=limit_bytes)
 
 
 def _read_json_response(response: Any, *, provider_name: str) -> Any:
@@ -185,28 +188,61 @@ def _read_json_response(response: Any, *, provider_name: str) -> Any:
     return json.loads(body.decode("utf-8"))
 
 
-def _normalize_http_error(provider_name: str, exc: error.HTTPError) -> LLMRequestError:
+def _find_rejected_parameters(body: bytes, candidates: frozenset[str]) -> frozenset[str]:
+    try:
+        payload = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return frozenset()
+    error_payload = payload.get("error") if isinstance(payload, dict) else None
+    if not isinstance(error_payload, dict):
+        return frozenset()
+
+    parameter = error_payload.get("param")
+    message = error_payload.get("message")
+    normalized_message = message.casefold() if isinstance(message, str) else ""
+    rejection_markers = (
+        "unrecognized request argument",
+        "unknown parameter",
+        "unsupported parameter",
+        "unexpected keyword argument",
+        "extra inputs are not permitted",
+    )
+    return frozenset(
+        candidate
+        for candidate in candidates
+        if parameter == candidate
+        or (
+            candidate.casefold() in normalized_message
+            and any(marker in normalized_message for marker in rejection_markers)
+        )
+    )
+
+
+def _normalize_http_error(
+    provider_name: str,
+    exc: error.HTTPError,
+    *,
+    optional_parameters: frozenset[str] = frozenset(),
+) -> LLMRequestError:
     try:
         body = _read_bounded_body(exc, limit_bytes=LLM_ERROR_BODY_MAX_BYTES) if exc.fp else b""
     except _ResponseTooLargeError as body_error:
-        preview = safe_display_text(body_error.preview.decode("utf-8", errors="replace"))
-        detail = f"response body exceeded {body_error.limit_bytes} bytes"
-        if preview:
-            detail = f"{detail}; preview: {preview}"
         return LLMRequestError(
-            f"{provider_name} API HTTP {exc.code}: {detail}",
+            f"{provider_name} API HTTP {exc.code}: response body exceeded {body_error.limit_bytes} bytes",
             status=exc.code,
             response_too_large=True,
         )
-    except OSError as body_error:
-        detail = safe_display_text(str(body_error))
+    except OSError:
         return LLMRequestError(
-            f"{provider_name} API HTTP {exc.code}: error body read failed: {detail}",
+            f"{provider_name} API HTTP {exc.code}: response body unavailable",
             status=exc.code,
         )
 
-    detail = safe_display_text(body.decode("utf-8", errors="replace")) or safe_display_text(str(exc))
-    return LLMRequestError(f"{provider_name} API HTTP {exc.code}: {detail}", status=exc.code)
+    return LLMRequestError(
+        f"{provider_name} API HTTP {exc.code}",
+        status=exc.code,
+        rejected_parameters=_find_rejected_parameters(body, optional_parameters),
+    )
 
 
 def _normalize_transport_error(provider_name: str, exc: OSError) -> LLMRequestError:
@@ -231,8 +267,8 @@ def _request_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_s
     except LLMRequestError as exc:
         # enable_thinking 只有 Qwen 系端点认识；OpenAI 官方 API 会以 4xx 拒绝未知参数，
         # 剔除后重试一次。限定在客户端错误上，避免 5xx/超时也走这条特殊路径。
-        rejected_parameter = exc.status is not None and 400 <= exc.status < 500
-        if rejected_parameter and "enable_thinking" in payload and "enable_thinking" in str(exc):
+        is_client_error = exc.status is not None and 400 <= exc.status < 500
+        if is_client_error and "enable_thinking" in payload and "enable_thinking" in exc.rejected_parameters:
             retry_payload = {key: value for key, value in payload.items() if key != "enable_thinking"}
             return _post_openai_json(config, retry_payload, timeout_seconds=timeout_seconds)
         raise
@@ -255,7 +291,7 @@ def _post_openai_json(config: AIConfig, payload: dict[str, Any], *, timeout_seco
         with _open_url(req, timeout_seconds=timeout_seconds) as resp:
             return cast(dict[str, Any], _read_json_response(resp, provider_name="OpenAI"))
     except error.HTTPError as exc:
-        raise _normalize_http_error("OpenAI", exc) from exc
+        raise _normalize_http_error("OpenAI", exc, optional_parameters=OPTIONAL_OPENAI_PARAMETERS) from exc
     except OSError as exc:
         raise _normalize_transport_error("OpenAI", exc) from exc
 

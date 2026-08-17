@@ -243,8 +243,12 @@ class TestBoundedResponses:
         assert collect_llm._read_bounded_body(response, limit_bytes=64) == b"payload"
         assert response.read_sizes
 
-    def test_oversized_http_error_has_a_sanitized_bounded_preview(self) -> None:
-        body = b"bad\x1b[31m\n" + b"x" * collect_llm.LLM_ERROR_BODY_MAX_BYTES + b"remote-tail"
+    def test_oversized_http_error_body_is_bounded_without_exposing_a_preview(self) -> None:
+        body = (
+            b"Authorization: Bearer redacted-secret; prompt=private-session-text\x1b[31m\n"
+            + b"x" * collect_llm.LLM_ERROR_BODY_MAX_BYTES
+            + b"remote-tail"
+        )
         response = _StreamingResponse(body)
         http_error = urllib_error.HTTPError(
             "https://api.example.com/v1/chat/completions",
@@ -266,9 +270,30 @@ class TestBoundedResponses:
         assert not is_retryable_error(raised.value)
         assert len(error_text) < 700
         assert not has_unsafe_line_characters(error_text)
-        assert "remote-tail" not in error_text
         assert "redacted-secret" not in error_text
+        assert "private-session-text" not in error_text
+        assert "remote-tail" not in error_text
         assert response.bytes_read == collect_llm.LLM_ERROR_BODY_MAX_BYTES + 1
+
+    def test_http_error_body_is_not_exposed_in_the_exception(self) -> None:
+        body = b'{"error":{"message":"Authorization: Bearer redacted-secret; prompt=private-session-text"}}'
+        http_error = urllib_error.HTTPError(
+            "https://api.example.com/v1/chat/completions",
+            401,
+            "Unauthorized",
+            Message(),
+            io.BytesIO(body),
+        )
+
+        with (
+            mock.patch("agent_dump.collect_llm._open_url", side_effect=http_error),
+            pytest.raises(LLMRequestError) as raised,
+        ):
+            request_summary_from_llm(self._config(), "private-session-text")
+
+        assert str(raised.value) == "OpenAI API HTTP 401"
+        assert "redacted-secret" not in str(raised.value)
+        assert "private-session-text" not in str(raised.value)
 
     @pytest.mark.parametrize("transport_error", [TimeoutError("timed out"), ConnectionResetError("reset")])
     def test_low_level_transport_errors_are_classified_for_retry(self, transport_error: OSError) -> None:
