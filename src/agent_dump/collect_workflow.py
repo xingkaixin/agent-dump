@@ -261,6 +261,7 @@ def handle_collect_mode(
                 query_spec=operation.query_spec,
                 render_session_text_fn=render_session_text,
                 progress_callback=update_progress,
+                logger=collect_logger,
             )
             if not entries:
                 print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))

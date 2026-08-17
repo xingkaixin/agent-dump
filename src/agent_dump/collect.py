@@ -306,6 +306,7 @@ def collect_entries(
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     scanner: AgentScanner | None = None,
+    logger: CollectLogger | None = None,
 ) -> tuple[list[CollectEntry], bool]:
     """Collect session entries for range."""
     entries: list[CollectEntry] = []
@@ -381,18 +382,56 @@ def collect_entries(
     if matched_sessions:
         max_workers = min(_MAX_SESSION_PARSE_WORKERS, total)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            collected_entries = executor.map(_collect_entry, matched_sessions)
-            for index, entry in enumerate(collected_entries, start=1):
-                entries.append(entry)
-                has_truncated = has_truncated or entry.is_truncated
+            futures = [executor.submit(_collect_entry, matched_session) for matched_session in matched_sessions]
+            failed_sessions = 0
+            last_error: Exception | None = None
+            for index, (matched_session, future) in enumerate(
+                zip(matched_sessions, futures, strict=True),
+                start=1,
+            ):
+                agent, session, _ = matched_session
+                try:
+                    entry = future.result()
+                except Exception as exc:  # noqa: BLE001 - 一条损坏会话不应影响其他会话
+                    failed_sessions += 1
+                    last_error = exc
+                    try:
+                        session_uri = agent.get_session_uri(session)
+                    except Exception:  # noqa: BLE001 - URI 生成失败时仍需要可识别的诊断标签
+                        session_uri = f"{agent.name}:{session.id}"
+                    print(
+                        render_terminal_message(
+                            Keys.WARN_SESSION_READ_SKIPPED,
+                            uri=session_uri,
+                            error=exc,
+                        ),
+                        file=sys.stderr,
+                    )
+                    if logger is not None:
+                        logger.log(
+                            "session_read_failed",
+                            agent=agent.name,
+                            session_uri=session_uri,
+                            error_type=type(exc).__name__,
+                            error=str(exc),
+                        )
+                else:
+                    entries.append(entry)
+                    has_truncated = has_truncated or entry.is_truncated
+                    session_uri = entry.session_uri
                 emit_collect_progress(
                     progress_callback,
                     stage="scan_sessions",
                     current=index,
                     total=total,
                     message="scan sessions",
-                    session_uri=entry.session_uri,
+                    session_uri=session_uri,
                 )
+
+        if not entries and last_error is not None:
+            raise last_error
+        if failed_sessions:
+            print(i18n.t(Keys.WARN_SESSION_READ_FAILURES, count=failed_sessions), file=sys.stderr)
 
     entries.sort(key=lambda item: normalize_datetime_utc(item.created_at))
     return entries, has_truncated
