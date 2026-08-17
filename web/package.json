@@ -24,7 +24,6 @@
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.2.1",
     "astro-icon": "^1.1.5",
-    "motion": "^13.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3"
