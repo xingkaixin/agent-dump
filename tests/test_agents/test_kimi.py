@@ -1717,6 +1717,19 @@ class TestSessionFileCandidates:
 
         assert agent.find_session_by_id("no-such-session") is None
 
+    def test_candidate_path_cannot_escape_session_root(self, tmp_path):
+        sessions_dir = tmp_path / "sessions"
+        (sessions_dir / "project").mkdir(parents=True)
+        outside_dir = tmp_path / "outside"
+        outside_dir.mkdir()
+        write_metadata(outside_dir, session_id="../../outside")
+        write_jsonl(outside_dir / "context.jsonl", [{"role": "user", "content": "outside"}])
+
+        agent = KimiAgent()
+        agent.base_path = sessions_dir
+
+        assert agent.find_session_by_id("../../outside") is None
+
 
 class TestUntrustedUsageValuesDoNotBreakStats:
     """AD-160：usage 由 Kimi 写入，任何标量形状都不能中断导出。"""
