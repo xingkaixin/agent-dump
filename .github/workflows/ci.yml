@@ -32,10 +32,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
+        uses: ./.github/actions/setup-uv
 
       # ruff 与 pyright 的结论都不随运行时 Python 变化——pyright 的分析版本由
       # pyproject 固定，ruff 读的是 target-version。跑五遍只是重复付钱。
@@ -78,10 +75,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
+        uses: ./.github/actions/setup-uv
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
