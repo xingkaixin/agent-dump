@@ -484,6 +484,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │           ├── file_sessions.py # Shared file-backed provider base
 │           ├── jsonl_scan.py   # Bounded JSONL object scan and diagnostics
 │           ├── message_assembly.py # Normalized message builders
+│           ├── message_types.py # Internal normalized message/session types
 │           └── title_fallback.py # Shared title fallback rules
 ├── tests/                      # Test directory
 ├── skills/agent-dump/          # Codex skill docs

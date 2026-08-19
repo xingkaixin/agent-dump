@@ -4,6 +4,7 @@ Codex agent handler
 
 from collections.abc import Iterable, Iterator
 from contextlib import suppress
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -48,6 +49,23 @@ CODEX_TOOL_TITLE_MAP = {
 }
 PROPOSED_PLAN_PATTERN = re.compile(r"<proposed_plan>\s*(.*?)\s*</proposed_plan>", re.DOTALL)
 PLAN_APPROVAL_PREFIX = "PLEASE IMPLEMENT THIS PLAN"
+
+
+@dataclass
+class _CodexAssemblyState:
+    """Mutable state for one pass over a Codex response stream."""
+
+    messages: list[dict[str, Any]] = field(default_factory=list)
+    pending_tool_calls: dict[str, tuple[int, int]] = field(default_factory=dict)
+    subagent_call_map: dict[str, dict[str, str]] = field(default_factory=dict)
+    subagent_nicknames: dict[str, str] = field(default_factory=dict)
+    current_assistant_index: int | None = None
+    latest_assistant_text_index: int | None = None
+    pending_plan_location: tuple[int, int] | None = None
+
+    def clear_assistant_group(self) -> None:
+        self.current_assistant_index = None
+        self.latest_assistant_text_index = None
 
 
 class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
@@ -302,39 +320,22 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                 ),
             )
 
-        messages: list[dict[str, Any]] = []
-        pending_tool_calls: dict[str, tuple[int, int]] = {}
-        subagent_call_map: dict[str, dict[str, str]] = {}
-        subagent_nicknames: dict[str, str] = {}
-        current_assistant_index: int | None = None
-        latest_assistant_text_index: int | None = None
-        pending_plan_location: tuple[int, int] | None = None
+        state = _CodexAssemblyState()
         stats = self._empty_stats()
 
         scan = JsonlObjectScan(session.source_path)
         for data in scan:
             try:
-                current_assistant_index, latest_assistant_text_index, pending_plan_location = (
-                    self._convert_record_to_messages(
-                        data=data,
-                        messages=messages,
-                        pending_tool_calls=pending_tool_calls,
-                        subagent_call_map=subagent_call_map,
-                        subagent_nicknames=subagent_nicknames,
-                        current_assistant_index=current_assistant_index,
-                        latest_assistant_text_index=latest_assistant_text_index,
-                        pending_plan_location=pending_plan_location,
-                    )
-                )
+                self._convert_record_to_messages(data=data, state=state)
                 self._accumulate_token_stats(stats, data)
             except Exception as e:
                 print(i18n.t(Keys.WARN_MESSAGE_CONVERT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
                 continue
         warn_skipped_records(scan)
 
-        self._finalize_pending_plan(messages, pending_plan_location)
+        self._finalize_pending_plan(state.messages, state.pending_plan_location)
 
-        stats["message_count"] = len(messages)
+        stats["message_count"] = len(state.messages)
 
         return {
             "id": session.id,
@@ -346,7 +347,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             "time_updated": int(session.updated_at.timestamp() * 1000),
             "summary_files": None,
             "stats": stats,
-            "messages": messages,
+            "messages": state.messages,
         }
 
     def _json_export_payload(self, session: Session) -> dict[str, Any]:
@@ -781,177 +782,206 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         self,
         *,
         data: dict[str, Any],
-        messages: list[dict[str, Any]],
-        pending_tool_calls: dict[str, tuple[int, int]],
-        subagent_call_map: dict[str, dict[str, str]],
-        subagent_nicknames: dict[str, str],
-        current_assistant_index: int | None,
-        latest_assistant_text_index: int | None,
-        pending_plan_location: tuple[int, int] | None,
-    ) -> tuple[int | None, int | None, tuple[int, int] | None]:
+        state: _CodexAssemblyState,
+    ) -> None:
         """Convert one Codex record into unified messages while preserving stream relationships."""
         msg_type = data.get("type", "")
-        payload = data.get("payload", {})
+        if msg_type != "response_item":
+            return
+
+        payload = data.get("payload")
+        if not isinstance(payload, dict):
+            return
+
         timestamp_ms = self._parse_timestamp_ms(data)
         message_id = str(data.get("timestamp", ""))
+        item_type = payload.get("type", "")
+        if item_type == "message":
+            self._convert_message_response_item(
+                state,
+                payload=payload,
+                message_id=message_id,
+                timestamp_ms=timestamp_ms,
+            )
+        elif item_type == "reasoning":
+            self._convert_reasoning_response_item(
+                state,
+                payload=payload,
+                message_id=message_id,
+                timestamp_ms=timestamp_ms,
+            )
+        elif item_type in {"function_call", "custom_tool_call"}:
+            self._convert_tool_call_response_item(
+                state,
+                payload=payload,
+                timestamp_ms=timestamp_ms,
+                is_custom=item_type == "custom_tool_call",
+            )
+        elif item_type in {"function_call_output", "custom_tool_call_output"}:
+            self._convert_tool_output_response_item(
+                state,
+                payload=payload,
+                message_id=message_id,
+                timestamp_ms=timestamp_ms,
+                is_custom=item_type == "custom_tool_call_output",
+            )
 
-        if msg_type == "session_meta":
-            return current_assistant_index, latest_assistant_text_index, pending_plan_location
+    def _convert_message_response_item(
+        self,
+        state: _CodexAssemblyState,
+        *,
+        payload: dict[str, Any],
+        message_id: str,
+        timestamp_ms: int,
+    ) -> None:
+        role = str(payload.get("role", "unknown"))
+        parts = self._extract_message_content_parts(role, payload.get("content", []), timestamp_ms)
+        if not parts:
+            return
 
-        if msg_type == "response_item":
-            item_type = payload.get("type", "")
+        if role == "assistant":
+            self._append_assistant_message_item(
+                state,
+                message_id=message_id,
+                timestamp_ms=timestamp_ms,
+                parts=parts,
+            )
+            return
 
-            if item_type == "message":
-                role = str(payload.get("role", "unknown"))
-                parts = self._extract_message_content_parts(role, payload.get("content", []), timestamp_ms)
-                if not parts:
-                    return current_assistant_index, latest_assistant_text_index, pending_plan_location
+        can_consume_for_plan, user_text = self._is_plan_approval_user_message(parts)
+        if state.pending_plan_location is not None and can_consume_for_plan and user_text is not None:
+            approval_status = "success" if user_text.lstrip().startswith(PLAN_APPROVAL_PREFIX) else "fail"
+            output = None if approval_status == "success" else user_text
+            self._finalize_pending_plan(
+                state.messages,
+                state.pending_plan_location,
+                approval_status=approval_status,
+                output=output,
+            )
+            state.pending_plan_location = None
+            state.clear_assistant_group()
+            return
 
-                if role == "assistant":
-                    if pending_plan_location is not None:
-                        self._finalize_pending_plan(messages, pending_plan_location)
-                        pending_plan_location = None
+        subagent_message = self._maybe_build_subagent_notification_message(
+            message_id=message_id,
+            timestamp_ms=timestamp_ms,
+            role=role,
+            parts=parts,
+            subagent_nicknames=state.subagent_nicknames,
+        )
+        state.messages.append(
+            subagent_message
+            if subagent_message is not None
+            else build_message(
+                message_id=message_id,
+                role=role,
+                time_created=timestamp_ms,
+                parts=parts,
+            )
+        )
+        state.clear_assistant_group()
 
-                    assistant_index = self._append_assistant_text(
-                        messages,
-                        message_id=message_id,
-                        timestamp_ms=timestamp_ms,
-                        parts=parts,
-                        current_assistant_index=current_assistant_index,
-                    )
-                    next_index = assistant_index if assistant_index is not None else current_assistant_index
-                    next_latest_text_index = next_index
-                    if assistant_index is not None and self._message_contains_plan_part(messages[assistant_index]):
-                        pending_plan_location = (assistant_index, len(messages[assistant_index]["parts"]) - 1)
-                        next_latest_text_index = None
-                    return next_index, next_latest_text_index, pending_plan_location
+    def _append_assistant_message_item(
+        self,
+        state: _CodexAssemblyState,
+        *,
+        message_id: str,
+        timestamp_ms: int,
+        parts: list[dict[str, Any]],
+    ) -> None:
+        if state.pending_plan_location is not None:
+            self._finalize_pending_plan(state.messages, state.pending_plan_location)
+            state.pending_plan_location = None
 
-                can_consume_for_plan, user_text = self._is_plan_approval_user_message(parts)
-                if pending_plan_location is not None and can_consume_for_plan and user_text is not None:
-                    approval_status = "success" if user_text.lstrip().startswith(PLAN_APPROVAL_PREFIX) else "fail"
-                    output = None if approval_status == "success" else user_text
-                    self._finalize_pending_plan(
-                        messages,
-                        pending_plan_location,
-                        approval_status=approval_status,
-                        output=output,
-                    )
-                    return None, None, None
+        assistant_index = self._append_assistant_text(
+            state.messages,
+            message_id=message_id,
+            timestamp_ms=timestamp_ms,
+            parts=parts,
+            current_assistant_index=state.current_assistant_index,
+        )
+        if assistant_index is not None:
+            state.current_assistant_index = assistant_index
+        state.latest_assistant_text_index = state.current_assistant_index
+        if assistant_index is not None and self._message_contains_plan_part(state.messages[assistant_index]):
+            state.pending_plan_location = (assistant_index, len(state.messages[assistant_index]["parts"]) - 1)
+            state.latest_assistant_text_index = None
 
-                subagent_message = self._maybe_build_subagent_notification_message(
-                    message_id=message_id,
-                    timestamp_ms=timestamp_ms,
-                    role=role,
-                    parts=parts,
-                    subagent_nicknames=subagent_nicknames,
-                )
-                if subagent_message is not None:
-                    messages.append(subagent_message)
-                    return None, None, pending_plan_location
+    def _convert_reasoning_response_item(
+        self,
+        state: _CodexAssemblyState,
+        *,
+        payload: dict[str, Any],
+        message_id: str,
+        timestamp_ms: int,
+    ) -> None:
+        assistant_index = self._append_assistant_reasoning(
+            state.messages,
+            message_id=message_id,
+            timestamp_ms=timestamp_ms,
+            parts=self._extract_reasoning_parts(payload, timestamp_ms),
+            current_assistant_index=state.current_assistant_index,
+        )
+        if assistant_index is not None:
+            state.current_assistant_index = assistant_index
 
-                messages.append(
-                    build_message(
-                        message_id=message_id,
-                        role=role,
-                        time_created=timestamp_ms,
-                        parts=parts,
-                    )
-                )
-                return None, None, pending_plan_location
+    def _convert_tool_call_response_item(
+        self,
+        state: _CodexAssemblyState,
+        *,
+        payload: dict[str, Any],
+        timestamp_ms: int,
+        is_custom: bool,
+    ) -> None:
+        attach_tool_call = (
+            self._attach_custom_tool_call_to_latest_assistant
+            if is_custom
+            else self._attach_tool_call_to_latest_assistant
+        )
+        message_index, part_index = attach_tool_call(
+            state.messages,
+            payload,
+            timestamp_ms,
+            state.latest_assistant_text_index,
+        )
+        call_id = str(payload.get("call_id", ""))
+        if call_id:
+            state.pending_tool_calls[call_id] = (message_index, part_index)
+        if state.latest_assistant_text_index is None and message_index == len(state.messages) - 1:
+            state.current_assistant_index = message_index
 
-            if item_type == "reasoning":
-                parts = self._extract_reasoning_parts(payload, timestamp_ms)
-                assistant_index = self._append_assistant_reasoning(
-                    messages,
-                    message_id=message_id,
-                    timestamp_ms=timestamp_ms,
-                    parts=parts,
-                    current_assistant_index=current_assistant_index,
-                )
-                next_index = assistant_index if assistant_index is not None else current_assistant_index
-                return next_index, latest_assistant_text_index, pending_plan_location
+    def _convert_tool_output_response_item(
+        self,
+        state: _CodexAssemblyState,
+        *,
+        payload: dict[str, Any],
+        message_id: str,
+        timestamp_ms: int,
+        is_custom: bool,
+    ) -> None:
+        call_id = str(payload.get("call_id", ""))
+        raw_output = payload.get("output")
+        output_parts = (
+            self._normalize_custom_tool_output(raw_output, timestamp_ms)
+            if is_custom
+            else self._normalize_output_parts(raw_output, timestamp_ms)
+        )
+        if self._backfill_tool_output(
+            state.messages,
+            state.pending_tool_calls,
+            call_id=call_id,
+            output_parts=output_parts,
+            raw_output=raw_output,
+            subagent_call_map=state.subagent_call_map,
+            subagent_nicknames=state.subagent_nicknames,
+        ):
+            return
 
-            if item_type == "function_call":
-                message_index, part_index = self._attach_tool_call_to_latest_assistant(
-                    messages,
-                    payload,
-                    timestamp_ms,
-                    latest_assistant_text_index,
-                )
-                call_id = str(payload.get("call_id", ""))
-                if call_id:
-                    pending_tool_calls[call_id] = (message_index, part_index)
-                next_current_index = current_assistant_index
-                if latest_assistant_text_index is None and message_index == len(messages) - 1:
-                    next_current_index = message_index
-                return next_current_index, latest_assistant_text_index, pending_plan_location
-
-            if item_type == "custom_tool_call":
-                message_index, part_index = self._attach_custom_tool_call_to_latest_assistant(
-                    messages,
-                    payload,
-                    timestamp_ms,
-                    latest_assistant_text_index,
-                )
-                call_id = str(payload.get("call_id", ""))
-                if call_id:
-                    pending_tool_calls[call_id] = (message_index, part_index)
-                next_current_index = current_assistant_index
-                if latest_assistant_text_index is None and message_index == len(messages) - 1:
-                    next_current_index = message_index
-                return next_current_index, latest_assistant_text_index, pending_plan_location
-
-            if item_type == "function_call_output":
-                call_id = str(payload.get("call_id", ""))
-                output_parts = self._normalize_output_parts(payload.get("output"), timestamp_ms)
-                if self._backfill_tool_output(
-                    messages,
-                    pending_tool_calls,
-                    call_id=call_id,
-                    output_parts=output_parts,
-                    raw_output=payload.get("output"),
-                    subagent_call_map=subagent_call_map,
-                    subagent_nicknames=subagent_nicknames,
-                ):
-                    return current_assistant_index, latest_assistant_text_index, pending_plan_location
-
-                fallback = build_fallback_tool_message(
-                    message_id=message_id,
-                    output_parts=output_parts,
-                    time_created=timestamp_ms,
-                    tool_call_id=call_id,
-                )
-                if fallback:
-                    messages.append(fallback)
-                return current_assistant_index, latest_assistant_text_index, pending_plan_location
-
-            if item_type == "custom_tool_call_output":
-                call_id = str(payload.get("call_id", ""))
-                output_parts = self._normalize_custom_tool_output(payload.get("output"), timestamp_ms)
-                if self._backfill_tool_output(
-                    messages,
-                    pending_tool_calls,
-                    call_id=call_id,
-                    output_parts=output_parts,
-                    raw_output=payload.get("output"),
-                    subagent_call_map=subagent_call_map,
-                    subagent_nicknames=subagent_nicknames,
-                ):
-                    return current_assistant_index, latest_assistant_text_index, pending_plan_location
-
-                fallback = build_fallback_tool_message(
-                    message_id=message_id,
-                    output_parts=output_parts,
-                    time_created=timestamp_ms,
-                    tool_call_id=call_id,
-                )
-                if fallback:
-                    messages.append(fallback)
-                return current_assistant_index, latest_assistant_text_index, pending_plan_location
-
-            return current_assistant_index, latest_assistant_text_index, pending_plan_location
-
-        if msg_type == "event_msg":
-            return current_assistant_index, latest_assistant_text_index, pending_plan_location
-
-        return current_assistant_index, latest_assistant_text_index, pending_plan_location
+        fallback = build_fallback_tool_message(
+            message_id=message_id,
+            output_parts=output_parts,
+            time_created=timestamp_ms,
+            tool_call_id=call_id,
+        )
+        if fallback is not None:
+            state.messages.append(fallback)
