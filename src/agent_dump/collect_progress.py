@@ -19,12 +19,14 @@ from agent_dump.collect_models import (
 from agent_dump.config import LoggingConfig
 
 
-def _truncate_log_preview(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
+def truncate_log_preview(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
+    """Return the bounded leading portion of text used in collect logs."""
     normalized = text.strip()
     return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
 
 
-def _truncate_log_tail(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
+def truncate_log_tail(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
+    """Return the bounded trailing portion of text used in collect logs."""
     normalized = text.strip()
     return normalized if len(normalized) <= limit else f"...{normalized[-limit + 3 :].lstrip()}"
 

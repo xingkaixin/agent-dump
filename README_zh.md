@@ -444,9 +444,12 @@ deny = [
 │       ├── uri_workflow.py     # URI 工作流
 │       ├── collect_workflow.py # collect 工作流
 │       ├── maintenance_workflow.py # providers / stats / reindex 工作流
-│       ├── collect.py          # collect 核心逻辑
+│       ├── collect.py          # collect 摘要请求编排与 tree reduction
+│       ├── collect_dates.py    # collect 日期范围解析
+│       ├── collect_events.py   # collect 事件提取、渲染与 chunk 规划
 │       ├── collect_llm.py      # collect LLM 请求
 │       ├── collect_models.py   # collect 输出模型
+│       ├── collect_output.py   # collect Markdown 输出
 │       ├── collect_progress.py # collect 日志、进度上报与 run stats
 │       ├── collect_summary.py  # collect 摘要 payload 合并与 JSON 提取
 │       ├── coercion.py         # 不可信 provider 标量的容错转换
