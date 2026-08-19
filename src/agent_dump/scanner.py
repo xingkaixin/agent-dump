@@ -10,6 +10,7 @@ from typing import TypeVar
 from agent_dump.agent_registry import create_registered_agents
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
+from agent_dump.provider_diagnostics import ProviderDiagnosticSink, print_provider_diagnostic
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
 
@@ -19,8 +20,15 @@ T = TypeVar("T")
 class AgentScanner:
     """Scanner for all supported agent tools"""
 
-    def __init__(self, agents: Sequence[BaseAgent] | None = None):
+    def __init__(
+        self,
+        agents: Sequence[BaseAgent] | None = None,
+        *,
+        diagnostic_sink: ProviderDiagnosticSink | None = print_provider_diagnostic,
+    ) -> None:
         self.agents = list(agents) if agents is not None else create_registered_agents()
+        for agent in self.agents:
+            agent._set_diagnostic_sink(diagnostic_sink)
 
     @staticmethod
     def _scan_single_agent(agent: BaseAgent) -> list[Session] | None:

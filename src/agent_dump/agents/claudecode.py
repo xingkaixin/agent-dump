@@ -7,7 +7,6 @@ from contextlib import suppress
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-import sys
 from threading import Lock
 from typing import Any
 
@@ -18,7 +17,7 @@ from agent_dump.agents.jsonl_scan import (
     parse_iso_timestamp_ms,
     parse_object_lines,
     read_jsonl_scan_metadata,
-    warn_skipped_records,
+    skipped_records_diagnostic,
 )
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
@@ -33,7 +32,6 @@ from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
-from agent_dump.text_safety import safe_display_text
 
 
 class ClaudeCodeAgent(FileSessionAgent):
@@ -202,7 +200,7 @@ class ClaudeCodeAgent(FileSessionAgent):
         try:
             return self._extract_title_from_records(parse_object_lines(lines[:20]))
         except Exception as e:
-            print(i18n.t(Keys.WARN_TITLE_EXTRACT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
+            self._report_diagnostic(Keys.WARN_TITLE_EXTRACT_FAILED, error=str(e))
 
         return None
 
@@ -270,9 +268,10 @@ class ClaudeCodeAgent(FileSessionAgent):
                     assistant_state,
                 )
             except Exception as e:
-                print(i18n.t(Keys.WARN_MESSAGE_CONVERT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
+                self._report_diagnostic(Keys.WARN_MESSAGE_CONVERT_FAILED, error=str(e))
                 continue
-        warn_skipped_records(scan)
+        if diagnostic := skipped_records_diagnostic(scan):
+            self._report_diagnostic(diagnostic.message_key, **diagnostic.fields)
 
         stats["message_count"] = len(messages)
         self._accumulate_token_totals(stats, messages)

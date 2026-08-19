@@ -14,6 +14,7 @@ from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
 from agent_dump.paths import ProviderRoots
+from agent_dump.scanner import AgentScanner
 
 PATCH_INPUT = """*** Begin Patch
 *** Add File: /workspace/new.py
@@ -899,6 +900,7 @@ class TestCodexAgent:
     def test_get_session_data_malformed_line_warns_to_stderr(self, tmp_path, capsys):
         """测试损坏的 JSONL 行只向 stderr 输出警告，不污染 stdout"""
         agent = CodexAgent()
+        AgentScanner([agent])
         session_file = tmp_path / "test-malformed.jsonl"
         valid_line = json.dumps(
             {

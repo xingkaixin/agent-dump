@@ -3,12 +3,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-import sys
 from typing import Any
 
 from agent_dump.coercion import safe_epoch_datetime
-from agent_dump.i18n import Keys, i18n
-from agent_dump.text_safety import safe_display_text
+from agent_dump.i18n import Keys
+from agent_dump.provider_diagnostics import ProviderDiagnostic
 
 FULL_SCAN_BYTE_LIMIT = 256 * 1024
 HEAD_SCAN_BYTE_LIMIT = 64 * 1024
@@ -146,18 +145,17 @@ def parse_object_lines(lines: list[str]) -> list[dict[str, Any]]:
     return _parse_jsonl_records(lines)
 
 
-def warn_skipped_records(scan: JsonlObjectScan) -> None:
-    """Report a file's skipped records once, after the scan is exhausted."""
+def skipped_records_diagnostic(scan: JsonlObjectScan) -> ProviderDiagnostic | None:
+    """Build one aggregate diagnostic after a JSONL scan is exhausted."""
     if not scan.skipped_count:
-        return
-    print(
-        i18n.t(
-            Keys.WARN_JSONL_RECORDS_SKIPPED,
-            path=safe_display_text(str(scan.file_path)),
-            count=scan.skipped_count,
-            lines=", ".join(str(line) for line in scan.skipped_line_samples),
-        ),
-        file=sys.stderr,
+        return None
+    return ProviderDiagnostic(
+        message_key=Keys.WARN_JSONL_RECORDS_SKIPPED,
+        fields={
+            "path": str(scan.file_path),
+            "count": scan.skipped_count,
+            "lines": ", ".join(str(line) for line in scan.skipped_line_samples),
+        },
     )
 
 

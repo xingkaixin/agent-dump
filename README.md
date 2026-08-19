@@ -456,6 +456,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── paths.py            # Search root models
 │       ├── private_files.py     # Owner-only permissions for tool-created files
 │       ├── prompt_safety.py    # Safe summary request composition and typed data envelopes
+│       ├── provider_diagnostics.py # Structured provider warning boundary
 │       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch
 │       ├── exporting.py        # Unified export execution and structured outcome
 │       ├── query_filter.py     # Query parsing and filtering

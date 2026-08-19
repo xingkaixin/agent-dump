@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
-import sys
 from threading import Lock
 from typing import Any
 
@@ -22,7 +21,7 @@ from agent_dump.agents.jsonl_scan import (
     parse_iso_timestamp_ms,
     parse_object_lines,
     read_jsonl_scan_metadata,
-    warn_skipped_records,
+    skipped_records_diagnostic,
 )
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
@@ -39,7 +38,6 @@ from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import filter_messages_for_export, is_developer_like_user_message
 from agent_dump.paths import ProviderRoots, SearchRoot
-from agent_dump.text_safety import safe_display_text
 
 CODEX_TOOL_TITLE_MAP = {
     "exec_command": "bash",
@@ -117,7 +115,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                             if normalized:
                                 titles[session_id] = normalized
                 except Exception as e:
-                    print(i18n.t(Keys.WARN_TITLE_CACHE_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
+                    self._report_diagnostic(Keys.WARN_TITLE_CACHE_FAILED, error=str(e))
 
             self._titles_cache = titles
             return titles
@@ -244,7 +242,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         try:
             return self._extract_title_from_records(parse_object_lines(lines[:10]))
         except Exception as e:
-            print(i18n.t(Keys.WARN_TITLE_EXTRACT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
+            self._report_diagnostic(Keys.WARN_TITLE_EXTRACT_FAILED, error=str(e))
 
         return None
 
@@ -329,9 +327,10 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                 self._convert_record_to_messages(data=data, state=state)
                 self._accumulate_token_stats(stats, data)
             except Exception as e:
-                print(i18n.t(Keys.WARN_MESSAGE_CONVERT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
+                self._report_diagnostic(Keys.WARN_MESSAGE_CONVERT_FAILED, error=str(e))
                 continue
-        warn_skipped_records(scan)
+        if diagnostic := skipped_records_diagnostic(scan):
+            self._report_diagnostic(diagnostic.message_key, **diagnostic.fields)
 
         self._finalize_pending_plan(state.messages, state.pending_plan_location)
 

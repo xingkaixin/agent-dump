@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
-import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -15,7 +14,6 @@ from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root
 from agent_dump.private_files import write_private_text
-from agent_dump.terminal_output import render_terminal_message
 
 _EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 
@@ -240,10 +238,7 @@ class OpenCodeAgent(BaseAgent):
         for msg_row in message_rows:
             msg_data = self._parse_json_dict(msg_row["data"])
             if msg_data is None:
-                print(
-                    render_terminal_message(Keys.WARN_MESSAGE_DATA_PARSE_FAILED, message_id=msg_row["id"]),
-                    file=sys.stderr,
-                )
+                self._report_diagnostic(Keys.WARN_MESSAGE_DATA_PARSE_FAILED, message_id=msg_row["id"])
                 continue
 
             # time/tokens/cost 都由 OpenCode 写入：非 dict 的 time 会让 .get() 抛，
@@ -275,10 +270,7 @@ class OpenCodeAgent(BaseAgent):
             for part_row in parts_by_message_id.get(str(msg_row["id"]), []):
                 part_data = self._parse_json_dict(part_row["data"])
                 if part_data is None:
-                    print(
-                        render_terminal_message(Keys.WARN_PART_DATA_PARSE_FAILED, part_id=part_row["id"]),
-                        file=sys.stderr,
-                    )
+                    self._report_diagnostic(Keys.WARN_PART_DATA_PARSE_FAILED, part_id=part_row["id"])
                     continue
                 part = {
                     "type": part_data.get("type"),
