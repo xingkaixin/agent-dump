@@ -128,7 +128,17 @@ jobs:
         run: pnpm --dir web build
 
       - name: Install Chromium
-        run: pnpm --dir web exec playwright install --with-deps chromium
+        timeout-minutes: 10
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+        run: |
+          for attempt in 1 2 3; do
+            echo "Installing Chromium (attempt ${attempt}/3)"
+            if timeout --kill-after=10s 3m pnpm --dir web exec playwright install --with-deps chromium; then
+              exit 0
+            fi
+          done
+          exit 1
 
       - name: Test web interactions
         run: pnpm --dir web test:e2e
