@@ -23,7 +23,7 @@ class OpenCodeAgent(BaseAgent):
 
     raw_export_suffix = ".raw.json"
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("opencode", "OpenCode")
         self.db_path: Path | None = None
         self._db_path_discovered = False

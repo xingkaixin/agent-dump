@@ -69,7 +69,7 @@ class _CodexAssemblyState:
 class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
     """Handler for Codex sessions"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("codex", "Codex")
         self._titles_cache: dict[str, str] | None = None
         self._titles_cache_lock = Lock()

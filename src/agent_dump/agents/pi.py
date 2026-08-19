@@ -28,7 +28,7 @@ PI_TOOL_TITLE_MAP = {
 class PiAgent(FileSessionAgent):
     """Handler for Pi coding agent sessions."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("pi", "Pi")
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
