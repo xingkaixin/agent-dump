@@ -83,6 +83,7 @@
 | `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
 | `prompt_safety.py` | 摘要 request composition：system 规则、typed JSON data envelope 与来源追踪 |
+| `provider_diagnostics.py` | Provider 读取层的结构化可恢复诊断与终端展示边界 |
 | `session_data.py` | 有界请求级会话数据缓存，按 provider-owned change sources 失效，并为批量投影提供临时 lease |
 | `terminal_output.py` | 终端单行 i18n 文案的安全动态字段插值，不负责 IO |
 | `text_safety.py` | 第三方会话文本的输出净化（终端 / markdown / 文件名） |

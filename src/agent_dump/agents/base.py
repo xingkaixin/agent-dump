@@ -17,6 +17,7 @@ from agent_dump.export_paths import build_session_output_path
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
 from agent_dump.private_files import copy_private_file, ensure_output_dir, write_private_text
+from agent_dump.provider_diagnostics import ProviderDiagnostic, ProviderDiagnosticSink
 from agent_dump.session_data import SessionDataCache
 from agent_dump.time_utils import to_local_datetime
 
@@ -112,6 +113,17 @@ class BaseAgent(ABC):
         self.name = name
         self.display_name = display_name
         self._session_data_cache = SessionDataCache()
+        self._diagnostic_sink: ProviderDiagnosticSink | None = None
+
+    def _set_diagnostic_sink(self, sink: ProviderDiagnosticSink | None) -> None:
+        """Set the presentation boundary used for recoverable provider warnings."""
+        self._diagnostic_sink = sink
+
+    def _report_diagnostic(self, message_key: str, **fields: Any) -> None:
+        """Emit a structured warning when a caller configured a diagnostic sink."""
+        if self._diagnostic_sink is None:
+            return
+        self._diagnostic_sink(ProviderDiagnostic(message_key=message_key, fields=fields))
 
     @abstractmethod
     def scan(self) -> list[Session]:

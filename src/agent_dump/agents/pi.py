@@ -4,19 +4,17 @@ from collections.abc import Iterable, Iterator
 from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
-import sys
 from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
-from agent_dump.agents.jsonl_scan import JsonlObjectScan, read_jsonl_scan_metadata, warn_skipped_records
+from agent_dump.agents.jsonl_scan import JsonlObjectScan, read_jsonl_scan_metadata, skipped_records_diagnostic
 from agent_dump.agents.message_assembly import build_message, build_text_part, build_tool_part
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
-from agent_dump.text_safety import safe_display_text
 
 PI_TOOL_TITLE_MAP = {
     "bash": "bash",
@@ -201,9 +199,10 @@ class PiAgent(FileSessionAgent):
                     messages.append(message)
                 self._accumulate_stats(stats, record)
             except Exception as e:
-                print(i18n.t(Keys.WARN_PI_RECORD_CONVERT_FAILED, error=safe_display_text(str(e))), file=sys.stderr)
+                self._report_diagnostic(Keys.WARN_PI_RECORD_CONVERT_FAILED, error=str(e))
                 continue
-        warn_skipped_records(scan)
+        if diagnostic := skipped_records_diagnostic(scan):
+            self._report_diagnostic(diagnostic.message_key, **diagnostic.fields)
 
         stats["message_count"] = len(messages)
         title = latest_session_name or session.title

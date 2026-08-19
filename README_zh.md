@@ -456,6 +456,7 @@ deny = [
 │       ├── paths.py            # 搜索根路径模型
 │       ├── private_files.py     # 本工具创建文件的私有权限
 │       ├── prompt_safety.py    # 摘要 request composition 与 typed data envelope
+│       ├── provider_diagnostics.py # Provider 结构化告警边界
 │       ├── rendering.py        # print/head/markdown/json/raw 渲染调度
 │       ├── exporting.py        # 统一导出执行与结构化 outcome
 │       ├── query_filter.py     # 查询解析与过滤

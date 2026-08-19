@@ -15,7 +15,7 @@ from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import (
     FULL_SCAN_BYTE_LIMIT,
     JsonlObjectScan,
-    warn_skipped_records,
+    skipped_records_diagnostic,
 )
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
@@ -292,7 +292,8 @@ class KimiAgent(FileSessionAgent):
             token_count = data.get("token_count")
             if isinstance(token_count, (int, float)) and not isinstance(token_count, bool):
                 total_tokens = safe_int(token_count, total_tokens if total_tokens is not None else 0)
-        warn_skipped_records(scan)
+        if diagnostic := skipped_records_diagnostic(scan):
+            self._report_diagnostic(diagnostic.message_key, **diagnostic.fields)
 
         return total_tokens
 
@@ -320,7 +321,8 @@ class KimiAgent(FileSessionAgent):
                 # usage 由 Kimi 写入，字段可能是字符串或 null；裸 int() 会中断整份导出
                 stats["total_input_tokens"] += safe_int(token_usage.get("input_tokens"))
                 stats["total_output_tokens"] += safe_int(token_usage.get("output_tokens"))
-            warn_skipped_records(scan)
+            if diagnostic := skipped_records_diagnostic(scan):
+                self._report_diagnostic(diagnostic.message_key, **diagnostic.fields)
 
         total_tokens = self._extract_kimi_total_tokens_from_raw(session_dir)
         if total_tokens is not None:
@@ -538,8 +540,8 @@ class KimiAgent(FileSessionAgent):
                 pending_tool_calls,
                 ignored_tool_call_ids,
             )
-        if warn_on_invalid:
-            warn_skipped_records(scan)
+        if warn_on_invalid and (diagnostic := skipped_records_diagnostic(scan)):
+            self._report_diagnostic(diagnostic.message_key, **diagnostic.fields)
 
         return messages
 
@@ -784,7 +786,8 @@ class KimiAgent(FileSessionAgent):
                 "TurnEnd",
             }:
                 continue
-        warn_skipped_records(scan)
+        if diagnostic := skipped_records_diagnostic(scan):
+            self._report_diagnostic(diagnostic.message_key, **diagnostic.fields)
 
         messages = [message for message in messages if message.get("parts")]
         stats = self._extract_kimi_stats_from_wire(session.source_path)

@@ -16,8 +16,9 @@ from agent_dump.agents.jsonl_scan import (
     file_modified_since,
     parse_object_line,
     read_jsonl_scan_metadata,
-    warn_skipped_records,
+    skipped_records_diagnostic,
 )
+from agent_dump.provider_diagnostics import render_provider_diagnostic
 
 
 class TestFileModifiedSince:
@@ -309,29 +310,29 @@ class TestJsonlObjectScan:
         assert scan.skipped_line_samples == (1, 2, 3, 4, 5)
         assert all(not isinstance(value, list) for value in vars(scan).values())
 
-    def test_clean_file_reports_nothing(self, tmp_path, capsys):
+    def test_clean_file_has_no_diagnostic(self, tmp_path):
         file_path = tmp_path / "s.jsonl"
         file_path.write_text('{"n": 1}\n', encoding="utf-8")
 
         scan = JsonlObjectScan(file_path)
         list(scan)
-        warn_skipped_records(scan)
 
-        assert capsys.readouterr().err == ""
+        assert skipped_records_diagnostic(scan) is None
 
-    def test_diagnostic_is_one_sanitized_line_without_a_traceback(self, tmp_path, capsys):
+    def test_diagnostic_renders_as_one_sanitized_line_without_a_traceback(self, tmp_path):
         file_path = tmp_path / "s\x1b[31m.jsonl"
         file_path.write_text("1\n" * 50, encoding="utf-8")
 
         scan = JsonlObjectScan(file_path)
         list(scan)
-        warn_skipped_records(scan)
+        diagnostic = skipped_records_diagnostic(scan)
 
-        err = capsys.readouterr().err
-        assert err.count("\n") == 1, "成千上万条坏记录只能产生一条诊断"
-        assert "50" in err
-        assert "\x1b" not in err, "路径来自不可信输入，必须净化后才进终端"
-        assert "Traceback" not in err
+        assert diagnostic is not None
+        rendered = render_provider_diagnostic(diagnostic)
+        assert "\n" not in rendered, "成千上万条坏记录只能产生一条诊断"
+        assert "50" in rendered
+        assert "\x1b" not in rendered, "路径来自不可信输入，必须净化后才进终端"
+        assert "Traceback" not in rendered
 
     def test_parse_object_line_rejects_non_objects(self, tmp_path):
         assert parse_object_line('{"n": 1}') == {"n": 1}
