@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import ParseResult, parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
 from agent_dump.i18n import Keys, i18n
@@ -244,7 +244,7 @@ def _normalize_agent_name(name: str, valid_agents: set[str]) -> str | None:
     return None
 
 
-def _parse_query_uri_project_path(parsed_uri, cwd: Path | None) -> Path:
+def _parse_query_uri_project_path(parsed_uri: ParseResult, cwd: Path | None) -> Path:
     raw_path = f"{parsed_uri.netloc}{parsed_uri.path}".strip()
     if not raw_path:
         raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_PATH))

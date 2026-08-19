@@ -1,5 +1,6 @@
 """Structured diagnostic errors for CLI-facing failures."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -146,7 +147,7 @@ def unexpected_failure(exc: BaseException) -> DiagnosticError:
     )
 
 
-def render_diagnostic(error: DiagnosticError, *, t) -> str:
+def render_diagnostic(error: DiagnosticError, *, t: Callable[[str], str]) -> str:
     """Render one diagnostic block with stable field labels.
 
     每个动态字段单独净化成一行：URI、路径、异常文本都来自第三方会话、环境路径或

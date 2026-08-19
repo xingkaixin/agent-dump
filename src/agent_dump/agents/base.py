@@ -109,7 +109,7 @@ class BaseAgent(ABC):
     unsupported_uri_formats: frozenset[str] = frozenset()
     raw_export_suffix: str = ".raw.jsonl"
 
-    def __init__(self, name: str, display_name: str):
+    def __init__(self, name: str, display_name: str) -> None:
         self.name = name
         self.display_name = display_name
         self._session_data_cache = SessionDataCache()

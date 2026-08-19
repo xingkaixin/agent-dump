@@ -37,7 +37,7 @@ from agent_dump.paths import ProviderRoots, SearchRoot
 class ClaudeCodeAgent(FileSessionAgent):
     """Handler for Claude Code sessions"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("claudecode", "Claude Code")
         self._sessions_index_cache: dict[Path, dict[str, dict]] = {}
         self._sessions_index_lock = Lock()

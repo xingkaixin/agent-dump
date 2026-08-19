@@ -111,7 +111,7 @@ def collect_entries(
     until_date: date,
     collect_config: CollectConfig | None = None,
     query_spec: QuerySpec | None = None,
-    render_session_text_fn,
+    render_session_text_fn: Callable[[str, dict[str, Any]], str],
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     scanner: AgentScanner | None = None,

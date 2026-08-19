@@ -934,18 +934,18 @@ STRICT_FORMATTING = False
 
 
 class I18n:
-    def __init__(self):
+    def __init__(self) -> None:
         self.lang = "en"
         self.translations = TRANSLATIONS
 
-    def set_language(self, lang):
+    def set_language(self, lang: str) -> None:
         if lang in self.translations:
             self.lang = lang
         else:
             # Fallback to English if not supported
             self.lang = "en"
 
-    def detect_language(self):
+    def detect_language(self) -> str:
         # Check environment variables first
         lang = os.environ.get("LANG", "") or os.environ.get("LC_ALL", "")
         if "zh" in lang.lower():
@@ -961,7 +961,7 @@ class I18n:
 
         return "en"
 
-    def t(self, key: str, **kwargs) -> str:
+    def t(self, key: str, **kwargs: object) -> str:
         lang_dict = self.translations.get(self.lang, {})
         msg = lang_dict.get(key)
 
@@ -990,7 +990,7 @@ class I18n:
 i18n = I18n()
 
 
-def setup_i18n(lang_arg=None):
+def setup_i18n(lang_arg: str | None = None) -> None:
     """
     Initialize i18n with detection logic.
     Priority:

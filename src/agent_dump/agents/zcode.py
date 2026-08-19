@@ -12,7 +12,7 @@ from agent_dump.paths import SearchRoot
 class ZCodeAgent(OpenCodeAgent):
     """Handler for ZCode sessions."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.name = "zcode"
         self.display_name = "ZCode"

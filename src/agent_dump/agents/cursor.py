@@ -74,7 +74,7 @@ class CursorAgent(BaseAgent):
     # Cursor 会话没有独立原始文件，markdown 渲染也未适配其数据形态
     unsupported_uri_formats = frozenset({"raw", "markdown"})
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("cursor", "Cursor")
 
     def _default_cursor_user_root(self) -> Path:
