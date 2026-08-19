@@ -484,6 +484,7 @@ deny = [
 │           ├── file_sessions.py # file-backed provider 共享基类
 │           ├── jsonl_scan.py   # 有界 JSONL 对象扫描与诊断
 │           ├── message_assembly.py # 标准化消息构建器
+│           ├── message_types.py # 标准化消息/会话内部类型
 │           └── title_fallback.py # 共享标题回退规则
 ├── tests/                      # 测试目录
 ├── skills/agent-dump/          # Codex skill 文档

@@ -1,7 +1,9 @@
 """Shared builders for the normalized session message contract."""
 
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, cast
+
+from agent_dump.agents.message_types import NormalizedMessage
 
 
 def build_message(
@@ -16,7 +18,7 @@ def build_message(
     provider: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    message = {
+    message: NormalizedMessage = {
         "id": message_id,
         "role": role,
         "agent": agent,
@@ -30,8 +32,8 @@ def build_message(
         "parts": parts,
     }
     if extra:
-        message.update(extra)
-    return message
+        cast(dict[str, Any], message).update(extra)
+    return cast(dict[str, Any], message)
 
 
 def build_text_part(text: str, timestamp_ms: int = 0, part_type: str = "text") -> dict[str, Any]:
