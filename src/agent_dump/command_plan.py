@@ -162,6 +162,7 @@ CommandOperation = (
 class CommandPlan:
     operation: CommandOperation
     warnings: tuple[CommandPlanWarning, ...] = ()
+    ignored_mode_options: tuple[str, ...] = ()
 
     @property
     def mode(self) -> CommandMode:
@@ -179,7 +180,10 @@ def build_command_plan(
     valid_agents: set[str] | None = None,
 ) -> CommandPlan:
     if request.providers:
-        return CommandPlan(ProvidersOperation())
+        return CommandPlan(
+            ProvidersOperation(),
+            ignored_mode_options=_ignored_mode_options(request, selected_mode=CommandMode.PROVIDERS),
+        )
 
     effective_agents = valid_agents if valid_agents is not None else _VALID_AGENT_NAMES
     query_uri_spec = _parse_query_uri(request.uri, valid_agents=effective_agents, cwd=cwd)
@@ -188,7 +192,15 @@ def build_command_plan(
 
     mode = _resolve_command_mode(request, is_query_uri=query_uri_spec is not None)
     operation = _build_operation(request, mode=mode, query_uri_spec=query_uri_spec, valid_agents=effective_agents)
-    return CommandPlan(operation=operation, warnings=_build_warnings(request, mode=mode))
+    return CommandPlan(
+        operation=operation,
+        warnings=_build_warnings(request, mode=mode),
+        ignored_mode_options=_ignored_mode_options(
+            request,
+            selected_mode=mode,
+            is_query_uri=query_uri_spec is not None,
+        ),
+    )
 
 
 def _parse_query_uri(
@@ -356,6 +368,41 @@ def _build_warnings(request: CommandRequest, *, mode: CommandMode) -> tuple[Comm
     if request.head:
         warnings.append(CommandPlanWarning.HEAD_IGNORED_NON_URI)
     return tuple(warnings)
+
+
+def _ignored_mode_options(
+    request: CommandRequest,
+    *,
+    selected_mode: CommandMode,
+    is_query_uri: bool | None = None,
+) -> tuple[str, ...]:
+    """Return explicit mode selectors that lose to the selected mode's priority."""
+    query_uri = (
+        request.uri is not None and request.uri.startswith("agents://") if is_query_uri is None else is_query_uri
+    )
+    selectors: list[tuple[CommandMode, str]] = []
+    if request.providers:
+        selectors.append((CommandMode.PROVIDERS, "--providers"))
+    if request.config_action:
+        selectors.append((CommandMode.CONFIG, "--config"))
+    if request.collect:
+        selectors.append((CommandMode.COLLECT, "--collect"))
+    if request.stats:
+        selectors.append((CommandMode.STATS, "--stats"))
+    if request.reindex:
+        selectors.append((CommandMode.REINDEX, "--reindex"))
+    if request.uri and not query_uri:
+        selectors.append((CommandMode.URI, "session URI"))
+    if request.search:
+        selectors.append((CommandMode.LIST, "--search"))
+    if request.list_requested:
+        selectors.append((CommandMode.LIST, "--list"))
+    if request.interactive:
+        selectors.append((CommandMode.INTERACTIVE, "--interactive"))
+    if query_uri and not request.collect:
+        selectors.append((CommandMode.LIST, "agents:// query URI"))
+
+    return tuple(label for mode, label in selectors if mode is not selected_mode)
 
 
 def _resolve_command_mode(request: CommandRequest, *, is_query_uri: bool) -> CommandMode:

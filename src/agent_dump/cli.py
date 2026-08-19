@@ -402,6 +402,13 @@ def _run() -> int | None:
             print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
         elif warning is CommandPlanWarning.HEAD_IGNORED_NON_URI:
             print(i18n.t(Keys.HEAD_IGNORED_NON_URI_WARNING))
+    if plan.ignored_mode_options:
+        print(
+            render_terminal_message(
+                Keys.CLI_MODE_OPTIONS_IGNORED_WARNING,
+                options=", ".join(plan.ignored_mode_options),
+            )
+        )
 
     operation = plan.operation
     if plan.mode is CommandMode.PROVIDERS:
