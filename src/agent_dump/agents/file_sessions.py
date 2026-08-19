@@ -26,7 +26,6 @@ class FileSessionAgent(BaseAgent):
     def __init__(self, name: str, display_name: str):
         super().__init__(name, display_name)
         self.base_path: Path | None = None
-        self._base_path_discovered = False
 
     @abstractmethod
     def _iter_session_files(self) -> Iterator[Path]:
@@ -50,11 +49,8 @@ class FileSessionAgent(BaseAgent):
 
     def _ensure_base_path(self) -> Path | None:
         if self.base_path is not None:
-            self._base_path_discovered = True
             return self.base_path
-        if not self._base_path_discovered:
-            self.base_path = self._find_base_path()
-            self._base_path_discovered = True
+        self.base_path = self._find_base_path()
         return self.base_path
 
     def is_available(self) -> bool:

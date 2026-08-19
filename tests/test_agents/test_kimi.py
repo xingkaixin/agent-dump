@@ -152,6 +152,22 @@ class TestKimiAgent:
 
         finder.assert_called_once_with()
 
+    def test_missing_base_path_is_rediscovered_when_it_appears(self, tmp_path):
+        agent = KimiAgent()
+        sessions_dir = tmp_path / "sessions"
+        session_dir = sessions_dir / "project1" / "session1"
+        finder = mock.MagicMock(side_effect=[None, sessions_dir])
+
+        with mock.patch.object(agent, "_find_base_path", finder):
+            assert agent.is_available() is False
+
+            session_dir.mkdir(parents=True)
+            (session_dir / "metadata.json").touch()
+
+            assert agent.is_available() is True
+
+        assert finder.call_count == 2
+
     def test_resolve_cwd_from_project_hash_returns_path_when_matched(self, tmp_path):
         """测试能正确从 kimi.json 解析 project hash 对应的 cwd"""
         agent = KimiAgent()
