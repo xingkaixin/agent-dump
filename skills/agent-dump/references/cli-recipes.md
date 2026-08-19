@@ -166,6 +166,7 @@ uv run agent-dump --search "auth" --list -days 30
 | `--reindex` | N/A | 独立的索引维护命令，不应与其他模式标志组合 |
 
 补充：
+- 同时传入多个显式模式时，CLI 会按既有优先级执行，并告警列出被忽略的较低优先级模式；命令模板不应依赖该优先级。
 - `-p/-page-size` 参数为兼容保留，当前不生效。
 - `--lang` 支持 `en` 与 `zh`；诊断与用户可见文案跟随 locale。
 - `md` 是 `markdown` 的别名。

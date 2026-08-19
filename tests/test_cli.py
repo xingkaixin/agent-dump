@@ -242,6 +242,14 @@ class TestMain:
         assert result == 0
         mock_handle.assert_called_once_with()
 
+    def test_main_warns_when_mode_priority_ignores_an_option(self, capsys) -> None:
+        with mock.patch("agent_dump.cli.handle_providers_mode", return_value=0):
+            with mock.patch("sys.argv", ["agent-dump", "--providers", "--stats"]):
+                result = main()
+
+        assert result == 0
+        assert expect(LocaleKeys.CLI_MODE_OPTIONS_IGNORED_WARNING, options="--stats") in capsys.readouterr().out
+
     def test_main_providers_shows_registered_capabilities_without_scanning(
         self,
         capsys,

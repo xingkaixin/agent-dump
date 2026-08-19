@@ -123,6 +123,7 @@ class Keys:
     URI_SUMMARY_LOADING = "URI_SUMMARY_LOADING"
     SUMMARY_IGNORED_NON_URI_WARNING = "SUMMARY_IGNORED_NON_URI_WARNING"
     HEAD_IGNORED_NON_URI_WARNING = "HEAD_IGNORED_NON_URI_WARNING"
+    CLI_MODE_OPTIONS_IGNORED_WARNING = "CLI_MODE_OPTIONS_IGNORED_WARNING"
     URI_HEAD_WITH_FORMAT_ERROR = "URI_HEAD_WITH_FORMAT_ERROR"
     URI_HEAD_WITH_SUMMARY_ERROR = "URI_HEAD_WITH_SUMMARY_ERROR"
 
@@ -433,6 +434,7 @@ TRANSLATIONS = {
         Keys.URI_SUMMARY_LOADING: "⏳ Calling AI to generate URI summary, please wait...",
         Keys.SUMMARY_IGNORED_NON_URI_WARNING: "⚠️  --summary is only supported in URI mode and will be ignored.",
         Keys.HEAD_IGNORED_NON_URI_WARNING: "⚠️  --head is only supported in URI mode and will be ignored.",
+        Keys.CLI_MODE_OPTIONS_IGNORED_WARNING: "⚠️  Ignored lower-priority mode options: {options}",
         Keys.URI_HEAD_WITH_FORMAT_ERROR: "❌ --head cannot be used with -format/--format.",
         Keys.URI_HEAD_WITH_SUMMARY_ERROR: "❌ --head cannot be used with --summary.",
         Keys.CONFIG_NOT_FOUND: "⚠️  Config file not found: {path}",
@@ -734,6 +736,7 @@ TRANSLATIONS = {
         Keys.URI_SUMMARY_LOADING: "⏳ 正在调用 AI 生成会话总结，请稍候...",
         Keys.SUMMARY_IGNORED_NON_URI_WARNING: "⚠️  --summary 仅支持 URI 模式，当前已忽略。",
         Keys.HEAD_IGNORED_NON_URI_WARNING: "⚠️  --head 仅支持 URI 模式，当前已忽略。",
+        Keys.CLI_MODE_OPTIONS_IGNORED_WARNING: "⚠️  已忽略较低优先级的模式参数：{options}",
         Keys.URI_HEAD_WITH_FORMAT_ERROR: "❌ --head 不能与 -format/--format 同时使用。",
         Keys.URI_HEAD_WITH_SUMMARY_ERROR: "❌ --head 不能与 --summary 同时使用。",
         Keys.CONFIG_NOT_FOUND: "⚠️  未找到配置文件: {path}",

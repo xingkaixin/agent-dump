@@ -49,22 +49,36 @@ def test_build_command_plan_resolves_closed_operation_set(
 
 
 @pytest.mark.parametrize(
-    ("overrides", "expected_mode"),
+    ("overrides", "expected_mode", "ignored_options"),
     [
-        ({"providers": True, "config_action": "view", "uri": "agents://.?providers=unknown"}, CommandMode.PROVIDERS),
-        ({"config_action": "view", "collect": True}, CommandMode.CONFIG),
-        ({"collect": True, "stats": True}, CommandMode.COLLECT),
-        ({"stats": True, "reindex": True}, CommandMode.STATS),
-        ({"reindex": True, "uri": "codex://session"}, CommandMode.REINDEX),
-        ({"uri": "codex://session", "list_requested": True}, CommandMode.URI),
-        ({"list_requested": True, "interactive": True}, CommandMode.LIST),
+        (
+            {"providers": True, "config_action": "view", "uri": "agents://.?providers=unknown"},
+            CommandMode.PROVIDERS,
+            ("--config", "agents:// query URI"),
+        ),
+        ({"config_action": "view", "collect": True}, CommandMode.CONFIG, ("--collect",)),
+        ({"collect": True, "stats": True}, CommandMode.COLLECT, ("--stats",)),
+        ({"stats": True, "reindex": True}, CommandMode.STATS, ("--reindex",)),
+        ({"reindex": True, "uri": "codex://session"}, CommandMode.REINDEX, ("session URI",)),
+        ({"uri": "codex://session", "list_requested": True}, CommandMode.URI, ("--list",)),
+        ({"list_requested": True, "interactive": True}, CommandMode.LIST, ("--interactive",)),
     ],
 )
 def test_build_command_plan_preserves_mode_priority(
     overrides: dict[str, object],
     expected_mode: CommandMode,
+    ignored_options: tuple[str, ...],
 ) -> None:
-    assert build_command_plan(make_request(**overrides)).mode is expected_mode
+    plan = build_command_plan(make_request(**overrides))
+
+    assert plan.mode is expected_mode
+    assert plan.ignored_mode_options == ignored_options
+
+
+def test_build_command_plan_does_not_warn_for_collect_query_uri() -> None:
+    plan = build_command_plan(make_request(collect=True, uri="agents://.?providers=codex"))
+
+    assert plan.ignored_mode_options == ()
 
 
 @pytest.mark.parametrize(

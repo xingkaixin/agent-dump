@@ -87,6 +87,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - `-query` 与 `agents://...?q=` 的 keyword 是一个归一化空白后的字面短语。
 - `--search` 作为列表搜索模式使用，可与 `--list`、`-days`、`-query` 组合；按空白切分的 distinct term 均按字面量匹配，不解释 FTS5 操作符语法（`AND`/`NEAR`/`*` 等），全部 term 必须命中，CJK term 必须连续。
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。
+- 同时传入多个显式模式时，CLI 保留既有优先级并告警列出被忽略的较低优先级模式；应按告警修正命令，而不是依赖优先级。
 - `--providers` 是只读能力发现命令，不扫描会话；输出格式与路径能力均从 provider 声明派生。
 - 仅使用当前 CLI 已支持的 URI 协议：`opencode`、`zcode`、`codex`、`kimi`、`claude`、`cursor`、`pi`（其中 `claude` 对应 Claude Code）。
 - 路径作用域查询 URI 使用 `agents://<path>?q=<keyword>&providers=<names>&roles=<roles>&limit=<n>`；`limit` 必须为有符号 64 位范围内的正整数。
