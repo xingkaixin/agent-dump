@@ -12,18 +12,20 @@ from typing import Any, cast
 from agent_dump.collect_models import MAX_SUMMARY_ITEMS_PER_FIELD, collect_fields_for
 
 
-def _normalize_text(value: str) -> str:
+def normalize_text(value: str) -> str:
+    """Collapse whitespace in one summary or event text value."""
     return re.sub(r"\s+", " ", value).strip()
 
 
 SUMMARY_JSON_PATTERN = re.compile(r"```json\s*(\{[\s\S]*?\})\s*```", re.IGNORECASE)
 
 
-def _dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_ITEMS_PER_FIELD) -> list[str]:
+def dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_ITEMS_PER_FIELD) -> list[str]:
+    """Normalize and deduplicate text values without changing their first-seen order."""
     seen: set[str] = set()
     result: list[str] = []
     for value in values:
-        normalized = _normalize_text(value)
+        normalized = normalize_text(value)
         if not normalized:
             continue
         lowered = normalized.casefold()
@@ -54,7 +56,7 @@ def normalize_summary_payload(payload: dict[str, Any], *, mode: str = "pm") -> d
             values = [raw_value]
         else:
             values = []
-        normalized[field_name] = _dedupe_preserve_order(values)
+        normalized[field_name] = dedupe_preserve_order(values)
     return normalized
 
 
@@ -71,15 +73,17 @@ def merge_summary_payloads(
         items: list[str] = []
         for payload in payloads:
             items.extend(payload.get(field_name, []))
-        merged[field_name] = _dedupe_preserve_order(items, limit=max_items_per_field)
+        merged[field_name] = dedupe_preserve_order(items, limit=max_items_per_field)
     return merged
 
 
-def _summary_payload_size(payload: dict[str, list[str]]) -> int:
+def summary_payload_size(payload: dict[str, list[str]]) -> int:
+    """Return the number of structured summary items across all fields."""
     return sum(len(items) for items in payload.values())
 
 
-def _extract_json_object(text: str) -> dict[str, Any]:
+def extract_json_object(text: str) -> dict[str, Any]:
+    """Extract the first usable JSON object from a model response."""
     match = SUMMARY_JSON_PATTERN.search(text)
     candidates = [match.group(1)] if match else []
     candidates.append(text.strip())
@@ -104,11 +108,12 @@ def _extract_json_object(text: str) -> dict[str, Any]:
             continue
         if isinstance(loaded, dict):
             return cast(dict[str, Any], loaded)
-    details = "; ".join(_dedupe_preserve_order(decode_errors, limit=3))
+    details = "; ".join(dedupe_preserve_order(decode_errors, limit=3))
     if details:
         raise ValueError(f"response is not valid JSON object: {details}")
     raise ValueError("response is not valid JSON object")
 
 
-def _serialize_summary_payload(payload: dict[str, list[str]]) -> str:
+def serialize_summary_payload(payload: dict[str, list[str]]) -> str:
+    """Serialize one structured summary payload for an LLM data envelope."""
     return json.dumps(payload, ensure_ascii=False, indent=2)

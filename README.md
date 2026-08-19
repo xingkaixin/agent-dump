@@ -444,9 +444,12 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── uri_workflow.py     # URI workflow
 │       ├── collect_workflow.py # collect workflow
 │       ├── maintenance_workflow.py # providers / stats / reindex workflows
-│       ├── collect.py          # Collect core logic
+│       ├── collect.py          # Collect summary orchestration and tree reduction
+│       ├── collect_dates.py    # Collect date-range parsing
+│       ├── collect_events.py   # Collect event extraction, rendering and chunking
 │       ├── collect_llm.py      # Collect LLM requests
 │       ├── collect_models.py   # Collect output models
+│       ├── collect_output.py   # Collect Markdown output
 │       ├── collect_progress.py # Collect logging, progress and run stats
 │       ├── collect_summary.py  # Collect summary payload merge and JSON extraction
 │       ├── coercion.py         # Fault-tolerant conversion of untrusted provider scalars

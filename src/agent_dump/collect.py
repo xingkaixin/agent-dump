@@ -1,18 +1,26 @@
 """Collect mode: gather sessions and summarize with structured multi-stage reduction."""
 
 from collections import defaultdict
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from datetime import date, datetime, timedelta, tzinfo
+from datetime import date, tzinfo
 import json
 from pathlib import Path
-import re
 import sys
 import threading
 from typing import Any
 from uuid import uuid4
 
 from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
+from agent_dump.collect_dates import (
+    parse_user_date as parse_user_date,
+    resolve_collect_date_range as resolve_collect_date_range,
+)
+from agent_dump.collect_events import (
+    chunk_collect_events as chunk_collect_events,
+    extract_collect_events as extract_collect_events,
+    render_collect_event,
+)
 from agent_dump.collect_llm import (
     build_summary_json_schema as _build_summary_json_schema,
     is_retryable_error,
@@ -20,13 +28,10 @@ from agent_dump.collect_llm import (
     request_summary_from_llm as _request_summary_from_llm,
 )
 from agent_dump.collect_models import (
-    CHUNK_TARGET_CHARS,
-    EVENT_EXTRACT_CHAR_BUDGET,
     GROUP_SIZE,
     SESSION_MERGE_LLM_THRESHOLD,
     SUMMARY_PARSE_RETRY_COUNT,
     SUMMARY_TRANSPORT_RETRY_COUNT,
-    SUPPORTED_DATE_FORMATS,
     CollectAggregate,
     CollectEntry,
     CollectEvent,
@@ -37,25 +42,23 @@ from agent_dump.collect_models import (
     SessionSummaryEntry,
     collect_fields_for,
 )
+from agent_dump.collect_output import write_collect_markdown as write_collect_markdown
 from agent_dump.collect_progress import (
-    _truncate_log_preview,
-    _truncate_log_tail,
     emit_collect_progress,
+    truncate_log_preview,
+    truncate_log_tail,
 )
 from agent_dump.collect_summary import (
-    _dedupe_preserve_order,
-    _extract_json_object,
-    _normalize_text,
-    _serialize_summary_payload,
-    _summary_payload_size,
+    dedupe_preserve_order,
     empty_summary_payload,
+    extract_json_object,
     merge_summary_payloads,
     normalize_summary_payload,
+    serialize_summary_payload,
+    summary_payload_size,
 )
 from agent_dump.config import AIConfig, CollectConfig
 from agent_dump.i18n import Keys, i18n
-from agent_dump.message_filter import should_filter_message_for_export
-from agent_dump.private_files import write_private_text
 from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
 from agent_dump.query_filter import (
     QuerySpec,
@@ -66,69 +69,8 @@ from agent_dump.query_filter import (
 from agent_dump.scanner import AgentScanner
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
-from agent_dump.transcript import read_message
 
-GREETING_PATTERN = re.compile(r"^(hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok\b)", re.IGNORECASE)
-DECISION_PATTERN = re.compile(r"(决定|采用|改成|切换|方案|fix|修复|处理|实现|完成|done|resolved?)", re.IGNORECASE)
-ERROR_PATTERN = re.compile(
-    r"(error|exception|traceback|failed|failure|bug|报错|错误|异常|失败|崩溃|panic|not found)",
-    re.IGNORECASE,
-)
-QUESTION_PATTERN = re.compile(r"(\?$|是否|要不要|需要|待确认|todo|待办|next)", re.IGNORECASE)
-CODE_BLOCK_PATTERN = re.compile(r"```[\s\S]+?```")
-PATH_PATTERN = re.compile(
-    r"(?:(?:[A-Za-z]:)?[\\/][^\s'\"`]+|(?:\./|\../|~?/)?[\w.-]+(?:/[\w.-]+)+)",
-)
-SUMMARY_JSON_PATTERN = re.compile(r"```json\s*(\{[\s\S]*?\})\s*```", re.IGNORECASE)
 _MAX_SESSION_PARSE_WORKERS = 32
-
-
-def parse_user_date(value: str) -> date:
-    """Parse date from supported input formats."""
-    normalized = value.strip()
-    for fmt in SUPPORTED_DATE_FORMATS:
-        try:
-            return datetime.strptime(normalized, fmt).date()  # noqa: DTZ007
-        except ValueError:
-            continue
-    raise ValueError(f"invalid date format: {value}")
-
-
-def resolve_collect_date_range(
-    since: str | None,
-    until: str | None,
-    *,
-    days: int | None = None,
-    today: date | None = None,
-    local_tz: tzinfo | None = None,
-) -> tuple[date, date]:
-    """Resolve effective [since, until] date range."""
-    effective_today = today or get_local_today(local_tz)
-
-    if not since and not until:
-        if days is not None:
-            return effective_today - timedelta(days=days), effective_today
-        return effective_today, effective_today
-
-    if since and until:
-        start = parse_user_date(since)
-        end = parse_user_date(until)
-        if start > end:
-            raise ValueError("since_after_until")
-        return start, end
-
-    if since:
-        start = parse_user_date(since)
-        end = effective_today
-        if start > end:
-            raise ValueError("since_after_until")
-        return start, end
-
-    end = parse_user_date(until or "")
-    start = date(end.year, end.month, 1)
-    if start > end:
-        raise ValueError("since_after_until")
-    return start, end
 
 
 def _session_local_date(session: Session, local_tz: tzinfo) -> date:
@@ -157,142 +99,9 @@ def _is_session_denied(session: Session, deny_paths: tuple[str, ...]) -> bool:
     return False
 
 
-def _truncate_excerpt(text: str, limit: int = 280) -> str:
-    normalized = text.strip()
-    return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
-
-
 def build_summary_json_schema(mode: str = "pm") -> dict[str, Any]:
     """Build one fixed schema for collect structured summaries."""
     return _build_summary_json_schema(collect_fields_for(mode))
-
-
-def _find_paths_in_text(text: str) -> list[str]:
-    candidates = [match.group(0).strip(".,:;)]}") for match in PATH_PATTERN.finditer(text)]
-    return _dedupe_preserve_order(candidates, limit=6)
-
-
-def _build_collect_event(kind: str, role: str, text: str) -> CollectEvent | None:
-    normalized_text = _truncate_excerpt(text)
-    if not normalized_text:
-        return None
-    files = tuple(_find_paths_in_text(normalized_text))
-    return CollectEvent(kind=kind, role=role, text=normalized_text, files=files)
-
-
-def _classify_text_event(role: str, text: str) -> str | None:
-    normalized = _normalize_text(text)
-    if not normalized:
-        return None
-    if GREETING_PATTERN.match(normalized) and len(normalized) <= 60:
-        return None
-    if role == "user":
-        return "user_intent"
-    if CODE_BLOCK_PATTERN.search(text):
-        return "code"
-    if ERROR_PATTERN.search(normalized):
-        return "error"
-    if QUESTION_PATTERN.search(normalized):
-        return "open_question"
-    if DECISION_PATTERN.search(normalized):
-        return "decision"
-    if role == "assistant":
-        return "assistant_key"
-    return "message"
-
-
-def extract_collect_events(
-    session_data: dict[str, Any],
-    *,
-    fallback_text_fn: Callable[[], str] | None = None,
-    char_budget: int = EVENT_EXTRACT_CHAR_BUDGET,
-) -> tuple[tuple[CollectEvent, ...], bool]:
-    """Extract deterministic high-signal events from one session.
-
-    fallback_text_fn 只在会话一个事件都提取不出来时才被调用。渲染整段会话正文的
-    代价与会话体积同阶，而绝大多数会话都有事件，提前算好等于白付。
-    """
-    events: list[CollectEvent] = []
-    used_chars = 0
-    truncated = False
-    messages = session_data.get("messages", [])
-
-    def _append_event(event: CollectEvent | None) -> None:
-        nonlocal used_chars, truncated
-        if event is None:
-            return
-        event_size = len(event.text) + sum(len(file_path) for file_path in event.files) + 32
-        if events and used_chars + event_size > char_budget:
-            truncated = True
-            return
-        events.append(event)
-        used_chars += event_size
-
-    if isinstance(messages, list):
-        for message in messages:
-            if not isinstance(message, dict):
-                continue
-            if should_filter_message_for_export(message):
-                continue
-
-            transcript_message = read_message(message)
-            role = transcript_message.role
-            # collect 的产品策略：只看对话双方，工具调用不单独成为事件
-            if role not in {"user", "assistant"}:
-                continue
-
-            for part_text in transcript_message.texts:
-                kind = _classify_text_event(role, part_text)
-                if kind is not None:
-                    _append_event(_build_collect_event(kind, role, part_text))
-
-            # 此前这里还有一个 "没有 parts 时回退" 的分支，用的却是同样只读 parts 的
-            # get_text_content_parts——parts 为空时它必然也为空，那个分支从不可达。
-            # 用 Transcript 表达之后这一点变得显然，于是删掉；collect 依旧不读 legacy
-            # content，行为与迁移前一致。
-
-    if not events:
-        fallback = _normalize_text(fallback_text_fn() if fallback_text_fn is not None else "")
-        _append_event(_build_collect_event("fallback", "system", fallback or "(empty session)"))
-
-    return tuple(events), truncated
-
-
-def _render_event(event: CollectEvent) -> str:
-    prefix = f"[{event.kind}] role={event.role}"
-    if event.files:
-        prefix += f" files={','.join(event.files)}"
-    return f"{prefix} text={event.text}"
-
-
-def chunk_collect_events(
-    events: Iterable[CollectEvent],
-    *,
-    target_chars: int = CHUNK_TARGET_CHARS,
-) -> list[tuple[CollectEvent, ...]]:
-    """Chunk events by approximate serialized size."""
-    chunks: list[list[CollectEvent]] = []
-    current: list[CollectEvent] = []
-    current_size = 0
-
-    for event in events:
-        event_text = _render_event(event)
-        event_size = len(event_text) + 1
-        if current and current_size + event_size > target_chars:
-            chunks.append(current)
-            current = []
-            current_size = 0
-        current.append(event)
-        current_size += event_size
-
-    if current:
-        chunks.append(current)
-
-    if not chunks:
-        empty_chunk: tuple[CollectEvent, ...] = ()
-        return [empty_chunk]
-
-    return [tuple(chunk) for chunk in chunks]
 
 
 def collect_entries(
@@ -522,7 +331,7 @@ def build_collect_chunk_prompt(
             f"chunk: {chunk_index + 1}/{chunk_total}",
         ]
     )
-    events_body = "\n".join(_render_event(event) for event in chunk_events)
+    events_body = "\n".join(render_collect_event(event) for event in chunk_events)
     return compose_summary_prompt(
         lines,
         data=(
@@ -567,7 +376,7 @@ def build_collect_merge_prompt(
                 if merge_label == "session"
                 else f"collect://{merge_label}/summary/{index}"
             ),
-            body=_serialize_summary_payload(payload),
+            body=serialize_summary_payload(payload),
         )
         for index, payload in enumerate(payloads, start=1)
     )
@@ -621,7 +430,7 @@ def _build_structured_summary_retry_prompt(
             UntrustedData(
                 kind="untrusted_derived_summary",
                 source=request_source,
-                body=_truncate_log_preview(invalid_response, limit=1200),
+                body=truncate_log_preview(invalid_response, limit=1200),
             ),
         ),
     )
@@ -713,7 +522,7 @@ def request_structured_summary_from_llm(
                 **attempt_fields,
             )
         try:
-            return normalize_summary_payload(_extract_json_object(response), mode=mode)
+            return normalize_summary_payload(extract_json_object(response), mode=mode)
         except Exception as exc:  # noqa: BLE001
             will_retry = parse_attempt < parse_retry_count
             if logger is not None:
@@ -728,8 +537,8 @@ def request_structured_summary_from_llm(
                     chunk_total=chunk_total,
                     error=str(exc),
                     response_chars=len(response),
-                    response_preview=_truncate_log_preview(response),
-                    response_tail_preview=_truncate_log_tail(response),
+                    response_preview=truncate_log_preview(response),
+                    response_tail_preview=truncate_log_tail(response),
                     will_retry=will_retry,
                     retry_kind="parse_correction" if will_retry else None,
                     **attempt_fields,
@@ -830,7 +639,7 @@ def _summarize_collect_entry(
         )
 
     merged = merge_summary_payloads(chunk_payloads, mode=mode)
-    if len(chunk_payloads) > 1 and _summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
+    if len(chunk_payloads) > 1 and summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
         try:
             merged = request_structured_summary_from_llm(
                 config,
@@ -1021,9 +830,9 @@ def _build_summary_bucket_lines(
             highlights = (
                 payload.get("key_actions", [])[:2] + payload.get("decisions", [])[:1] + payload.get("errors", [])[:1]
             )
-        line = f"{summary.collect_entry.session_title}: {'; '.join(_dedupe_preserve_order(highlights, limit=4)) or '(no highlights)'}"
+        line = f"{summary.collect_entry.session_title}: {'; '.join(dedupe_preserve_order(highlights, limit=4)) or '(no highlights)'}"
         grouped[key].append(line)
-    return {key: _dedupe_preserve_order(values, limit=6) for key, values in grouped.items()}
+    return {key: dedupe_preserve_order(values, limit=6) for key, values in grouped.items()}
 
 
 def reduce_collect_summaries(
@@ -1067,7 +876,7 @@ def reduce_collect_summaries(
             group = working[start : start + group_size]
             payloads = [item.summary_data for item in group]
             merged = merge_summary_payloads(payloads, mode=mode)
-            if _summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
+            if summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
                 dummy_entry = session_summaries[min(start, len(session_summaries) - 1)].collect_entry
                 try:
                     merged = request_structured_summary_from_llm(
@@ -1188,7 +997,7 @@ def build_collect_final_prompt(
         UntrustedData(
             kind="untrusted_derived_summary",
             source="collect://final/aggregate",
-            body=_serialize_summary_payload(aggregate.summary_data),
+            body=serialize_summary_payload(aggregate.summary_data),
         )
     ]
     data.extend(
@@ -1208,24 +1017,3 @@ def build_collect_final_prompt(
         for index, (bucket, values) in enumerate(aggregate.project_summaries.items(), start=1)
     )
     return compose_summary_prompt(lines, data=tuple(data))
-
-
-def write_collect_markdown(
-    markdown: str,
-    *,
-    since_date: date,
-    until_date: date,
-    output_dir: Path | None = None,
-    output_path: Path | None = None,
-) -> Path:
-    """Write collect markdown file to current directory or a specific path."""
-    if output_path is not None and output_dir is not None:
-        raise ValueError("output_path and output_dir are mutually exclusive")
-
-    if output_path is not None:
-        path = output_path
-    else:
-        base = output_dir if output_dir is not None else Path.cwd()
-        path = base / f"agent-dump-collect-{since_date.strftime('%Y%m%d')}-{until_date.strftime('%Y%m%d')}.md"
-
-    return write_private_text(path, markdown)
