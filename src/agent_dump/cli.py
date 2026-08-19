@@ -17,6 +17,7 @@ from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_m
 from agent_dump.command_plan import (
     CollectOperation,
     CommandMode,
+    CommandPlan,
     CommandPlanError,
     CommandPlanErrorCode,
     CommandPlanWarning,
@@ -161,63 +162,7 @@ def _build_command_request(
     )
 
 
-def main() -> int | None:
-    """Main entry point.
-
-    只在这里做顶层兜底：任何漏到最外层的异常都渲染成诊断块，而不是给用户一段
-    traceback。SystemExit 必须原样放行，argparse 的 --help / -v / usage error
-    依赖它。
-    """
-    try:
-        return _run()
-    except DiagnosticError as exc:
-        _print_diagnostic(exc)
-        return 1
-    except Exception as exc:  # noqa: BLE001 - 顶层兜底，转成诊断后以退出码 1 结束
-        _print_diagnostic(unexpected_failure(exc))
-        return 1
-
-
-def _run() -> int | None:
-    """Parse arguments and dispatch to the selected mode."""
-
-    raw_argv = sys.argv[1:]
-    setup_i18n(_language_from_argv(raw_argv))
-    try:
-        argv = expand_shortcut_argv(raw_argv)
-    except ShortcutExpansionError as exc:
-        if exc.code is ShortcutErrorCode.MISSING_NAME:
-            print(i18n.t(Keys.SHORTCUT_MISSING_NAME))
-            return 1
-        if exc.code is ShortcutErrorCode.DATE_INVALID:
-            print(i18n.t(Keys.SHORTCUT_DATE_INVALID))
-            return 1
-        if exc.code is ShortcutErrorCode.TEMPLATE_INVALID:
-            print(i18n.t(Keys.SHORTCUT_TEMPLATE_INVALID))
-            return 1
-        if exc.code is ShortcutErrorCode.NOT_FOUND:
-            print(render_terminal_message(Keys.SHORTCUT_NOT_FOUND, name=exc.shortcut_name or ""))
-            return 1
-        if exc.code is ShortcutErrorCode.ARGS_MISMATCH:
-            print(
-                render_terminal_message(
-                    Keys.SHORTCUT_ARGS_MISMATCH,
-                    name=exc.shortcut_name or "",
-                    expected=exc.expected,
-                    actual=exc.actual,
-                )
-            )
-            return 1
-        if exc.code is ShortcutErrorCode.UNKNOWN_VARIABLE:
-            print(render_terminal_message(Keys.SHORTCUT_UNKNOWN_VARIABLE, name=exc.variable_name or ""))
-            return 1
-        raise
-
-    setup_i18n(_language_from_argv(argv))
-
-    output_specified = is_option_specified(argv, "-output", "--output")
-    format_specified = is_option_specified(argv, "-format", "--format")
-
+def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=i18n.t(Keys.CLI_DESC))
     parser.add_argument("uri", nargs="?", help=i18n.t(Keys.CLI_URI_HELP))
     parser.add_argument("-d", "-days", type=int, default=None, dest="days", help=i18n.t(Keys.CLI_DAYS_HELP))
@@ -317,86 +262,116 @@ def _run() -> int | None:
         version=f"agent-dump {__version__}",
         help=i18n.t(Keys.CLI_VERSION_HELP),
     )
-    args = parser.parse_args(argv)
-    request = _build_command_request(
-        args,
-        output_specified=output_specified,
-        format_specified=format_specified,
-    )
+    return parser
 
-    try:
-        plan = build_command_plan(request, cwd=Path.cwd())
-    except CommandPlanError as exc:
-        if exc.code is CommandPlanErrorCode.QUERY_URI_INVALID:
-            _print_diagnostic(
-                invalid_query_or_uri(
-                    i18n.t(Keys.DIAG_QUERY_URI_INVALID),
-                    details=(exc.detail or exc.code.value,),
-                    parsed_uri=ParsedUri(raw=request.uri or ""),
-                    next_steps=(
-                        i18n.t(Keys.DIAG_STEP_CHECK_QUERY_URI_SHAPE),
-                        i18n.t(Keys.DIAG_STEP_NO_QUERY_URI_WITH_Q),
-                    ),
-                )
-            )
-            return 1
-        if exc.code is CommandPlanErrorCode.QUERY_SPEC_INVALID:
-            _print_diagnostic(
-                invalid_query_or_uri(
-                    i18n.t(Keys.DIAG_QUERY_SPEC_INVALID),
-                    details=(exc.detail or exc.code.value,),
-                    next_steps=(
-                        i18n.t(Keys.DIAG_STEP_QUERY_FORMAT),
-                        i18n.t(Keys.DIAG_STEP_QUERY_URI_FOR_PATH),
-                    ),
-                )
-            )
-            return 1
-        if exc.code is CommandPlanErrorCode.QUERY_COMBINATION_INVALID:
-            _print_diagnostic(
-                invalid_query_or_uri(
-                    i18n.t(Keys.DIAG_QUERY_COMBINATION_INVALID),
-                    details=(i18n.t(Keys.DIAG_QUERY_URI_WITH_Q_DETAIL),),
-                    parsed_uri=ParsedUri(raw=request.uri or ""),
-                    next_steps=(i18n.t(Keys.DIAG_STEP_DROP_Q),),
-                )
-            )
-            return 1
-        if exc.code is CommandPlanErrorCode.COLLECT_MODE_CONFLICT:
-            print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
-            return 1
-        if exc.code is CommandPlanErrorCode.URI_INVALID:
-            _print_diagnostic(
-                invalid_query_or_uri(
-                    i18n.t(Keys.DIAG_URI_INVALID),
-                    details=(i18n.t(Keys.DIAG_URI_UNPARSEABLE),),
-                    parsed_uri=ParsedUri(raw=request.uri or ""),
-                    next_steps=(
-                        i18n.t(Keys.DIAG_STEP_USE_SUPPORTED_SCHEME),
-                        *[example.strip() for example in get_supported_uri_examples()],
-                    ),
-                )
-            )
-            return 1
-        if exc.code is CommandPlanErrorCode.URI_HEAD_WITH_FORMAT:
-            print(i18n.t(Keys.URI_HEAD_WITH_FORMAT_ERROR))
-            return 1
-        if exc.code is CommandPlanErrorCode.URI_HEAD_WITH_SUMMARY:
-            print(i18n.t(Keys.URI_HEAD_WITH_SUMMARY_ERROR))
-            return 1
-        if exc.code is CommandPlanErrorCode.FORMAT_INVALID:
-            parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=request.raw_format or ""))
-        if exc.code is CommandPlanErrorCode.DAYS_INVALID:
-            parser.error(i18n.t(Keys.CLI_DAYS_INVALID, value=request.days))
-        _print_diagnostic(
-            unsupported_capability(
-                i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_MODE),
-                capability_gap=i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_DETAIL),
-                next_steps=(i18n.t(Keys.DIAG_STEP_DROP_PRINT),),
+
+def _report_shortcut_error(exc: ShortcutExpansionError) -> int:
+    if exc.code is ShortcutErrorCode.MISSING_NAME:
+        print(i18n.t(Keys.SHORTCUT_MISSING_NAME))
+        return 1
+    if exc.code is ShortcutErrorCode.DATE_INVALID:
+        print(i18n.t(Keys.SHORTCUT_DATE_INVALID))
+        return 1
+    if exc.code is ShortcutErrorCode.TEMPLATE_INVALID:
+        print(i18n.t(Keys.SHORTCUT_TEMPLATE_INVALID))
+        return 1
+    if exc.code is ShortcutErrorCode.NOT_FOUND:
+        print(render_terminal_message(Keys.SHORTCUT_NOT_FOUND, name=exc.shortcut_name or ""))
+        return 1
+    if exc.code is ShortcutErrorCode.ARGS_MISMATCH:
+        print(
+            render_terminal_message(
+                Keys.SHORTCUT_ARGS_MISMATCH,
+                name=exc.shortcut_name or "",
+                expected=exc.expected,
+                actual=exc.actual,
             )
         )
         return 1
+    if exc.code is ShortcutErrorCode.UNKNOWN_VARIABLE:
+        print(render_terminal_message(Keys.SHORTCUT_UNKNOWN_VARIABLE, name=exc.variable_name or ""))
+        return 1
+    raise exc
 
+
+def _report_command_plan_error(
+    exc: CommandPlanError,
+    *,
+    parser: argparse.ArgumentParser,
+    request: CommandRequest,
+) -> int:
+    if exc.code is CommandPlanErrorCode.QUERY_URI_INVALID:
+        _print_diagnostic(
+            invalid_query_or_uri(
+                i18n.t(Keys.DIAG_QUERY_URI_INVALID),
+                details=(exc.detail or exc.code.value,),
+                parsed_uri=ParsedUri(raw=request.uri or ""),
+                next_steps=(
+                    i18n.t(Keys.DIAG_STEP_CHECK_QUERY_URI_SHAPE),
+                    i18n.t(Keys.DIAG_STEP_NO_QUERY_URI_WITH_Q),
+                ),
+            )
+        )
+        return 1
+    if exc.code is CommandPlanErrorCode.QUERY_SPEC_INVALID:
+        _print_diagnostic(
+            invalid_query_or_uri(
+                i18n.t(Keys.DIAG_QUERY_SPEC_INVALID),
+                details=(exc.detail or exc.code.value,),
+                next_steps=(
+                    i18n.t(Keys.DIAG_STEP_QUERY_FORMAT),
+                    i18n.t(Keys.DIAG_STEP_QUERY_URI_FOR_PATH),
+                ),
+            )
+        )
+        return 1
+    if exc.code is CommandPlanErrorCode.QUERY_COMBINATION_INVALID:
+        _print_diagnostic(
+            invalid_query_or_uri(
+                i18n.t(Keys.DIAG_QUERY_COMBINATION_INVALID),
+                details=(i18n.t(Keys.DIAG_QUERY_URI_WITH_Q_DETAIL),),
+                parsed_uri=ParsedUri(raw=request.uri or ""),
+                next_steps=(i18n.t(Keys.DIAG_STEP_DROP_Q),),
+            )
+        )
+        return 1
+    if exc.code is CommandPlanErrorCode.COLLECT_MODE_CONFLICT:
+        print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
+        return 1
+    if exc.code is CommandPlanErrorCode.URI_INVALID:
+        _print_diagnostic(
+            invalid_query_or_uri(
+                i18n.t(Keys.DIAG_URI_INVALID),
+                details=(i18n.t(Keys.DIAG_URI_UNPARSEABLE),),
+                parsed_uri=ParsedUri(raw=request.uri or ""),
+                next_steps=(
+                    i18n.t(Keys.DIAG_STEP_USE_SUPPORTED_SCHEME),
+                    *[example.strip() for example in get_supported_uri_examples()],
+                ),
+            )
+        )
+        return 1
+    if exc.code is CommandPlanErrorCode.URI_HEAD_WITH_FORMAT:
+        print(i18n.t(Keys.URI_HEAD_WITH_FORMAT_ERROR))
+        return 1
+    if exc.code is CommandPlanErrorCode.URI_HEAD_WITH_SUMMARY:
+        print(i18n.t(Keys.URI_HEAD_WITH_SUMMARY_ERROR))
+        return 1
+    if exc.code is CommandPlanErrorCode.FORMAT_INVALID:
+        parser.error(i18n.t(Keys.CLI_FORMAT_INVALID, value=request.raw_format or ""))
+    if exc.code is CommandPlanErrorCode.DAYS_INVALID:
+        parser.error(i18n.t(Keys.CLI_DAYS_INVALID, value=request.days))
+    _print_diagnostic(
+        unsupported_capability(
+            i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_MODE),
+            capability_gap=i18n.t(Keys.DIAG_PRINT_UNSUPPORTED_DETAIL),
+            next_steps=(i18n.t(Keys.DIAG_STEP_DROP_PRINT),),
+        )
+    )
+    return 1
+
+
+def _report_command_plan_warnings(plan: CommandPlan) -> None:
     for warning in plan.warnings:
         if warning is CommandPlanWarning.SUMMARY_IGNORED_NON_URI:
             print(i18n.t(Keys.SUMMARY_IGNORED_NON_URI_WARNING))
@@ -410,6 +385,8 @@ def _run() -> int | None:
             )
         )
 
+
+def _dispatch_command_plan(plan: CommandPlan, parser: argparse.ArgumentParser) -> int | None:
     operation = plan.operation
     if plan.mode is CommandMode.PROVIDERS:
         return handle_providers_mode()
@@ -431,6 +408,55 @@ def _run() -> int | None:
     if isinstance(operation, SessionOperation):
         return handle_session_modes(operation, export_config=export_config)
     raise AssertionError(f"unhandled command mode: {plan.mode.value}")
+
+
+def main() -> int | None:
+    """Main entry point.
+
+    只在这里做顶层兜底：任何漏到最外层的异常都渲染成诊断块，而不是给用户一段
+    traceback。SystemExit 必须原样放行，argparse 的 --help / -v / usage error
+    依赖它。
+    """
+    try:
+        return _run()
+    except DiagnosticError as exc:
+        _print_diagnostic(exc)
+        return 1
+    except Exception as exc:  # noqa: BLE001 - 顶层兜底，转成诊断后以退出码 1 结束
+        _print_diagnostic(unexpected_failure(exc))
+        return 1
+
+
+def _run() -> int | None:
+    """Parse arguments and dispatch to the selected mode."""
+
+    raw_argv = sys.argv[1:]
+    setup_i18n(_language_from_argv(raw_argv))
+    try:
+        argv = expand_shortcut_argv(raw_argv)
+    except ShortcutExpansionError as exc:
+        return _report_shortcut_error(exc)
+
+    setup_i18n(_language_from_argv(argv))
+
+    output_specified = is_option_specified(argv, "-output", "--output")
+    format_specified = is_option_specified(argv, "-format", "--format")
+
+    parser = _build_argument_parser()
+    args = parser.parse_args(argv)
+    request = _build_command_request(
+        args,
+        output_specified=output_specified,
+        format_specified=format_specified,
+    )
+
+    try:
+        plan = build_command_plan(request, cwd=Path.cwd())
+    except CommandPlanError as exc:
+        return _report_command_plan_error(exc, parser=parser, request=request)
+
+    _report_command_plan_warnings(plan)
+    return _dispatch_command_plan(plan, parser)
 
 
 if __name__ == "__main__":
