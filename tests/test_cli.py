@@ -2426,6 +2426,14 @@ class TestMain:
         captured = capsys.readouterr()
         assert "无效的格式列表" in captured.err
 
+    def test_main_explicit_empty_format_exits(self, capsys):
+        with mock.patch("sys.argv", ["agent-dump", "--list", "--format", ""]):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 2
+        assert expect(LocaleKeys.CLI_FORMAT_INVALID, value="") in capsys.readouterr().err
+
     def test_main_list_mode_warns_and_continues_when_format_specified(self, capsys):
         """测试 --list + -format 会警告但继续"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:

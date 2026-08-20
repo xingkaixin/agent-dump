@@ -54,7 +54,6 @@ class CommandRequest:
     output: str | None = None
     raw_format: str | None = None
     output_specified: bool = False
-    format_specified: bool = False
     head: bool = False
     summary: bool = False
     collect: bool = False
@@ -270,7 +269,7 @@ def _parse_query(raw_query: str | None, valid_agents: set[str]) -> QuerySpec | N
 def _build_uri_operation(request: CommandRequest) -> UriOperation:
     raw_uri = request.uri or ""
     if request.head:
-        if request.format_specified:
+        if request.raw_format is not None:
             raise CommandPlanError(CommandPlanErrorCode.URI_HEAD_WITH_FORMAT)
         if request.summary:
             raise CommandPlanError(CommandPlanErrorCode.URI_HEAD_WITH_SUMMARY)
@@ -320,7 +319,7 @@ def _build_session_operation(
         is_search=is_search,
         output=request.output,
         output_specified=request.output_specified,
-        format_specified=request.format_specified,
+        format_specified=request.raw_format is not None,
         output_formats=output_formats,
         show_metadata_summary=not request.no_metadata_summary,
     )
@@ -340,7 +339,7 @@ def _resolve_output_formats(request: CommandRequest, *, mode: CommandMode) -> tu
     try:
         formats = (
             parse_format_spec(request.raw_format)
-            if request.format_specified and request.raw_format
+            if request.raw_format is not None
             else (["print"] if mode is CommandMode.URI else ["json"])
         )
     except ValueError as exc:

@@ -133,7 +133,6 @@ def _build_command_request(
     args: argparse.Namespace,
     *,
     output_specified: bool,
-    format_specified: bool,
 ) -> CommandRequest:
     return CommandRequest(
         uri=args.uri,
@@ -141,7 +140,6 @@ def _build_command_request(
         output=args.output,
         raw_format=args.format,
         output_specified=output_specified,
-        format_specified=format_specified,
         head=args.head,
         summary=args.summary,
         collect=args.collect,
@@ -440,14 +438,12 @@ def _run() -> int | None:
     setup_i18n(_language_from_argv(argv))
 
     output_specified = is_option_specified(argv, "-output", "--output")
-    format_specified = is_option_specified(argv, "-format", "--format")
 
     parser = _build_argument_parser()
     args = parser.parse_args(argv)
     request = _build_command_request(
         args,
         output_specified=output_specified,
-        format_specified=format_specified,
     )
 
     try:
