@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from agent_dump.agent_registry import AGENT_REGISTRATIONS, AgentRegistration
 from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, MessageCountFact, Session
 from agent_dump.cli_shared import (
-    VALID_FORMATS,
     apply_query_filter,
     build_no_agents_found_diagnostic,
     group_sessions_by_time,
@@ -14,6 +13,7 @@ from agent_dump.cli_shared import (
 from agent_dump.command_plan import ReindexOperation, StatsOperation
 from agent_dump.diagnostics import root_not_found
 from agent_dump.i18n import Keys, i18n
+from agent_dump.output_formats import VALID_FORMATS
 from agent_dump.scanner import AgentScanner
 from agent_dump.search_index import SearchIndex
 from agent_dump.terminal_output import render_terminal_message

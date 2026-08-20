@@ -32,7 +32,7 @@
 - **cli.py 只负责参数解析和工作流调度**：业务逻辑必须下沉到具体模块
 - **Provider 读取逻辑禁止写入 cli.py**：所有会话发现、读取、导出实现封装在 `BaseAgent` 子类
 - **UI 逻辑与业务逻辑分离**：selector 层不得直接操作数据库或文件系统，也不得调用 provider 方法；会话数等展示数据由调用方计算后传入（`select_agent_interactive(agents, session_counts)`）
-- **跨模式共享逻辑进入 cli_shared.py**：URI、format、渲染、导出调度等复用入口集中维护
+- **共享逻辑归属明确**：URI 解析、输出格式、渲染和导出分别由 `uri_support.py`、`output_formats.py`、`rendering.py`、`exporting.py` 维护；仅工作流展示与诊断等 CLI 共享能力进入 `cli_shared.py`
 
 ---
 
@@ -65,7 +65,7 @@
 | `agent_registry.py` | 注册 provider、URI scheme、用户可见路径说明 |
 | `scanner.py` | Provider availability、session list / locate 编排与逐 provider 失败隔离 |
 | `cli.py` | 参数解析、模式选择、依赖装配 |
-| `cli_shared.py` | CLI 共享能力：URI、format、导出调度、诊断渲染 |
+| `cli_shared.py` | CLI 工作流共享能力：查询展示、批量导出、输出目录与诊断渲染 |
 | `command_plan.py` | 将 `CommandRequest` 一次性归一化为闭集操作事实，解析 Query/URI 并校验模式、默认值与 modifier |
 | `shortcut.py` | 将配置化 shortcut 展开为普通 argv，并以结构化错误保留失败字段 |
 | `session_workflow.py` | list / interactive / query 会话工作流 |
@@ -74,6 +74,7 @@
 | `maintenance_workflow.py` | providers capability、stats 与 reindex 模式 |
 | `rendering.py` | print/head/markdown 渲染与 format 导出分发 |
 | `exporting.py` | 跨 URI / interactive 模式的统一导出执行与结构化 outcome |
+| `output_formats.py` | 输出格式闭集、别名与模式/provider 能力校验 |
 | `query_filter.py` | QuerySpec 解析、QuerySessionMatch 匹配证据、过滤与全局 limit |
 | `query_semantics.py` | Query keyword、Search terms 与 Searchable Corpus 的统一字面匹配语义 |
 | `search_index.py` | SQLite FTS5 搜索索引 |
@@ -142,7 +143,7 @@ BaseAgent 子类 (agents/*.py)
   ↓ scan / get_sessions 返回 Session
 Selector / Query / Search
   ↓ 选择或过滤 Session
-Rendering / export dispatch (rendering.py, cli_shared.py)
+Rendering / export dispatch (rendering.py, exporting.py, cli_shared.py)
   ↓ 调用 agent.export_session / export_raw_session / markdown renderer
 输出到 sessions/<agent>/ 或 --output 目录
 ```
@@ -180,7 +181,7 @@ Markdown 输出到 --save 或默认文件名
 改动某个阶段时，必须维护上下游契约：
 - Provider 返回 `Session`，完整内容通过 `get_session_data()` 获取。
 - URI scheme 由 `agent_registry.AGENT_REGISTRATIONS` 统一声明。
-- 输出格式由 `cli_shared.VALID_FORMATS`、`rendering.export_session_in_format()` 和模式校验共同约束。
+- 输出格式由 `output_formats.VALID_FORMATS`、`rendering.export_session_in_format()` 和模式校验共同约束。
 
 ---
 
@@ -194,7 +195,7 @@ agent-dump/
 │   ├── __main__.py              # python -m agent_dump 入口
 │   ├── agent_registry.py        # provider 注册表
 │   ├── cli.py                   # CLI 参数解析与模式分发
-│   ├── cli_shared.py            # CLI 共享工具
+│   ├── cli_shared.py            # CLI 工作流共享展示、诊断与批量导出
 │   ├── command_plan.py          # CLI 操作事实、Query/URI、默认值与 modifier 归一化
 │   ├── shortcut.py              # shortcut argv 展开与结构化错误
 │   ├── session_workflow.py      # list / interactive / query 工作流
@@ -219,6 +220,7 @@ agent-dump/
 │   ├── query_semantics.py       # Query/Search 字面语义与可搜索语料
 │   ├── rendering.py             # print/head/markdown/json/raw 渲染调度
 │   ├── exporting.py             # 统一导出执行与结构化 outcome
+│   ├── output_formats.py        # 输出格式闭集、别名与能力校验
 │   ├── scanner.py               # Provider discovery、list / locate 与失败隔离
 │   ├── search_index.py          # FTS5 搜索索引
 │   ├── selector.py              # 交互式选择
@@ -244,6 +246,7 @@ agent-dump/
 │   ├── test_agents/             # provider 合约和实现测试
 │   ├── test_cli.py              # CLI 参数与模式分发测试
 │   ├── test_cli_shared.py       # 共享 CLI 能力测试
+│   ├── test_output_formats.py   # 输出格式解析与能力校验测试
 │   ├── test_collect.py          # collect 核心测试
 │   ├── test_config.py           # 配置测试
 │   ├── test_maintenance_workflow.py
@@ -326,7 +329,7 @@ Collect 等批量一次性投影，离开 context 后释放完整 payload。两�
 - `get_session_uri(session)`：默认返回 `<agent>://<session.id>`。
 - `find_session_by_id(session_id)`：URI 定位使用。默认全量扫描后按 id 匹配；provider 应尽量用直接查找（SQL 主键、文件名定位）覆盖。
 - `filter_sessions_by_keyword(sessions, keyword)`：持久索引不可用时的关键词回退。默认返回 `None`（由统一会话读取兜底）；只有存储能更高效且完整表达统一匹配语义时，provider 才用只读查询覆盖。
-- `unsupported_uri_formats`（类属性）：声明 URI 模式下不支持的导出格式（如 Cursor 的 `raw`/`markdown`），由 `cli_shared.validate_uri_agent_formats()` 统一校验。
+- `unsupported_uri_formats`（类属性）：声明 URI 模式下不支持的导出格式（如 Cursor 的 `raw`/`markdown`），由 `output_formats.validate_uri_agent_formats()` 统一校验。
 - `get_search_roots()`：结构化诊断和路径发现使用。
 - `get_session_head(session)`：URI `--head` 使用。
 - `get_session_summary_fields(session)`：列表和交互视图元数据摘要使用。
@@ -358,10 +361,10 @@ Collect 等批量一次性投影，离开 context 后释放完整 payload。两�
 - `print`：URI 模式直接打印 `render_session_text()` 结果。
 
 格式相关入口：
-- `cli_shared.VALID_FORMATS`
-- `cli_shared.FORMAT_ALIASES`
-- `cli_shared.validate_formats_for_mode()`
-- `cli_shared.validate_uri_agent_formats()`
+- `output_formats.VALID_FORMATS`
+- `output_formats.FORMAT_ALIASES`
+- `output_formats.validate_formats_for_mode()`
+- `output_formats.validate_uri_agent_formats()`
 - `rendering.export_session_in_format()`
 
 ### 5.5 `query_filter.py` 与搜索
@@ -414,7 +417,7 @@ collect 模式入口：
 ### 6.2 添加新的导出格式
 
 步骤：
-1. 在 `cli_shared.VALID_FORMATS` 添加格式名，必要时添加 `FORMAT_ALIASES`。
+1. 在 `output_formats.VALID_FORMATS` 添加格式名，必要时添加 `FORMAT_ALIASES`。
 2. 在 `rendering.export_session_in_format()` 增加分发。
 3. 若格式有模式限制，更新 `validate_formats_for_mode()` 或 `validate_uri_agent_formats()`。
 4. 为 CLI 解析、分发、成功导出和错误路径补测试。
@@ -426,7 +429,7 @@ collect 模式入口：
 1. `cli.py` 添加参数，并在 Namespace → `CommandRequest` 的唯一投影处记录原始事实。
 2. 在 `command_plan.py` 增加闭集 operation 及归一化/组合校验，再由 `cli.py` 顶层分发。
 3. 新建或复用 `*_workflow.py`。workflow 接收对应 operation；稳定协作者（渲染、导出、诊断等）直接 import；只把真实会变化的依赖（scanner 工厂、LLM 请求、交互 IO）声明为带生产默认值的关键字参数，由 cli.py 装配根传入。测试通过关键字参数替换真 seam，或用 `monkeypatch.setattr("agent_dump.<workflow>.<name>", ...)` 替换稳定协作者。
-4. 复用逻辑进入 `cli_shared.py`。
+4. 复用逻辑进入其单一职责模块；仅跨工作流的 CLI 展示与诊断能力进入 `cli_shared.py`。
 5. 增加 `tests/test_command_plan.py` 纯归一化矩阵、`tests/test_cli.py` 分发测试和对应 workflow 测试。
 6. 更新 README 与 skill recipes 的行为矩阵。
 

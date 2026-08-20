@@ -6,17 +6,13 @@ import sys
 import threading
 from typing import Any, cast
 
-from agent_dump.agent_registry import (
-    get_supported_agent_locations as _get_supported_agent_locations,
-    get_uri_scheme_map,
-)
+from agent_dump.agent_registry import get_supported_agent_locations
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.diagnostics import (
     DiagnosticError,
     invalid_query_or_uri,
     render_diagnostic,
     root_not_found,
-    unsupported_capability,
 )
 from agent_dump.exporting import ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
@@ -31,52 +27,13 @@ from agent_dump.query_filter import (
     query_session_matches,
     search_sessions_by_query,
 )
-from agent_dump.rendering import (
-    apply_summary_to_json_export as _apply_summary_to_json_export,
-    export_session_in_format as _export_session_in_format,
-    format_session_metadata_summary as _format_session_metadata_summary,
-    render_session_head as _render_session_head,
-    render_session_text as _render_session_text,
-)
+from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.scanner import AgentScanner
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
-from agent_dump.uri_support import find_session_by_id as _find_session_by_id, parse_uri as _parse_uri
 
-VALID_URI_SCHEMES = get_uri_scheme_map()
-VALID_FORMATS = {"json", "markdown", "raw", "print"}
-FORMAT_ALIASES = {"md": "markdown"}
 DEFAULT_OUTPUT_BASE_DIR = Path("./sessions")
-
-
-def parse_uri(uri: str) -> tuple[str, str] | None:
-    return _parse_uri(uri)
-
-
-def find_session_by_id(
-    scanner: AgentScanner,
-    session_id: str,
-    *,
-    agent_name: str | None = None,
-) -> tuple[BaseAgent, Session] | None:
-    return _find_session_by_id(scanner, session_id, agent_name=agent_name)
-
-
-def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
-    return _render_session_text(uri, session_data)
-
-
-def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
-    return _format_session_metadata_summary(agent, session)
-
-
-def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
-    return _render_session_head(uri, session_head)
-
-
-def apply_summary_to_json_export(output_path: Path, summary_markdown: str) -> None:
-    _apply_summary_to_json_export(output_path, summary_markdown)
 
 
 def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
@@ -136,25 +93,6 @@ def display_sessions_list(
         else:
             uri = safe_display_text(agent.get_session_uri(session))
             print(f"   • {title} {uri}")
-
-
-def export_session_in_format(
-    agent: BaseAgent,
-    session: Session,
-    output_dir: Path,
-    output_format: str,
-    *,
-    session_data: dict[str, Any] | None = None,
-    session_uri: str | None = None,
-) -> Path:
-    return _export_session_in_format(
-        agent,
-        session,
-        output_dir,
-        output_format,
-        session_data=session_data,
-        session_uri=session_uri,
-    )
 
 
 def export_sessions_for_formats(
@@ -252,27 +190,6 @@ def resolve_output_base_dir(
     return DEFAULT_OUTPUT_BASE_DIR
 
 
-def parse_format_spec(raw: str) -> list[str]:
-    formats: list[str] = []
-    seen: set[str] = set()
-
-    for part in raw.split(","):
-        normalized = FORMAT_ALIASES.get(part.strip().lower(), part.strip().lower())
-        if not normalized:
-            raise ValueError("empty format")
-        if normalized not in VALID_FORMATS:
-            raise ValueError(normalized)
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        formats.append(normalized)
-
-    if not formats:
-        raise ValueError("empty format")
-
-    return formats
-
-
 def render_query_summary(spec: QuerySpec) -> str:
     if (
         spec.project_path is None
@@ -359,42 +276,11 @@ def display_search_results(matches: list[SearchSessionMatch]) -> None:
         print(f"   {i18n.t(Keys.SEARCH_RESULT_SNIPPET)}: {safe_display_text(match.snippet)}")
 
 
-def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mode: bool) -> None:
-    if is_list_mode or is_uri_mode:
-        return
-    if "print" in formats:
-        raise ValueError("interactive-print")
-
-
-def validate_uri_agent_formats(agent: BaseAgent, formats: list[str]) -> None:
-    unsupported = [fmt for fmt in formats if fmt in agent.unsupported_uri_formats]
-    if unsupported:
-        requested = ",".join(unsupported)
-        supported = ", ".join(sorted(VALID_FORMATS - agent.unsupported_uri_formats))
-        raise unsupported_capability(
-            i18n.t(Keys.DIAG_URI_CAPABILITY_GAP, agent=agent.display_name),
-            capability_gap=i18n.t(
-                Keys.DIAG_URI_CAPABILITY_DETAIL,
-                agent=agent.display_name,
-                supported=supported,
-                requested=requested,
-            ),
-            next_steps=(
-                i18n.t(Keys.DIAG_STEP_DROP_FORMATS, formats=", ".join(f"`{fmt}`" for fmt in unsupported)),
-                i18n.t(Keys.DIAG_STEP_EXPORT_JSON_FIRST),
-            ),
-        )
-
-
 def warn_list_ignored_options(output_specified: bool, format_specified: bool) -> None:
     if format_specified:
         print(i18n.t(Keys.LIST_IGNORE_FORMAT))
     if output_specified:
         print(i18n.t(Keys.LIST_IGNORE_OUTPUT))
-
-
-def get_supported_agent_locations() -> list[str]:
-    return _get_supported_agent_locations()
 
 
 def render_agent_search_roots(agents: list[BaseAgent] | list[Any]) -> tuple[str, ...]:
