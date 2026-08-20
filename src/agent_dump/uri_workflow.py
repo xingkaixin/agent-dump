@@ -4,7 +4,6 @@ from typing import Any, Protocol
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
-    build_no_agents_found_diagnostic,
     find_session_by_id,
     print_diagnostic,
     render_agent_search_roots,
@@ -18,12 +17,7 @@ from agent_dump.cli_shared import (
 from agent_dump.collect import request_summary_from_llm
 from agent_dump.command_plan import UriOperation
 from agent_dump.config import AIConfig, load_ai_config, validate_ai_config
-from agent_dump.diagnostics import (
-    DiagnosticError,
-    ParsedUri,
-    invalid_query_or_uri,
-    session_not_found,
-)
+from agent_dump.diagnostics import DiagnosticError, session_not_found
 from agent_dump.exporting import execute_exports
 from agent_dump.i18n import Keys, i18n
 from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
@@ -105,12 +99,6 @@ def handle_uri_mode(
     request_summary: Callable[[AIConfig, str], str] = request_summary_from_llm,
 ) -> int:
     scanner = scanner_factory()
-    available_agents = scanner.get_available_agents()
-
-    if not available_agents:
-        print_diagnostic(build_no_agents_found_diagnostic(scanner))
-        return 1
-
     result = find_session_by_id(
         scanner,
         operation.session_id,
@@ -133,21 +121,6 @@ def handle_uri_mode(
         return 1
 
     agent, session = result
-
-    if agent.name != operation.expected_agent_name:
-        print_diagnostic(
-            invalid_query_or_uri(
-                i18n.t(Keys.DIAG_URI_SCHEME_MISMATCH),
-                details=(i18n.t(Keys.DIAG_URI_BELONGS_TO, agent=agent.display_name),),
-                parsed_uri=ParsedUri(
-                    raw=operation.raw_uri,
-                    scheme=operation.scheme,
-                    session_id=operation.session_id,
-                ),
-                next_steps=(i18n.t(Keys.DIAG_STEP_USE_THIS_URI, uri=agent.get_session_uri(session)),),
-            )
-        )
-        return 1
     try:
         validate_uri_agent_formats(agent, list(operation.output_formats))
     except DiagnosticError as e:
