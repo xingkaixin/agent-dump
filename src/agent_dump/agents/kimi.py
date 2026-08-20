@@ -60,7 +60,7 @@ class KimiAgent(FileSessionAgent):
         if self.base_path is None:
             return ()
         # 目录结构是 sessions/<project_hash>/<session_id>/metadata.json，
-        # 少了这个直接定位，URI 模式会退化成 get_sessions(days=3650) 全量扫描
+        # 少了这个直接定位，URI 模式会退化成无界全量扫描
         return self.base_path.glob(f"*/{session_id}/metadata.json")
 
     def _parse_session_file(self, file_path: Path) -> Session | None:

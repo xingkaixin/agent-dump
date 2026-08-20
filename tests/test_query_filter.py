@@ -44,7 +44,7 @@ class DummyAgent(BaseAgent):
     def is_available(self) -> bool:
         return True
 
-    def get_sessions(self, days: int = 7) -> list[Session]:
+    def get_sessions(self, days: int | None = 7) -> list[Session]:
         return []
 
     def export_session(self, session: Session, output_dir: Path) -> Path:

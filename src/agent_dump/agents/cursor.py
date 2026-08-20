@@ -113,10 +113,6 @@ class CursorAgent(BaseAgent):
             return False
         return True
 
-    def scan(self) -> list[Session]:
-        """Scan for all available Cursor sessions."""
-        return self.get_sessions(days=3650)
-
     def _missing_global_db_error(self) -> DiagnosticError:
         return source_missing(
             "Cursor global database is missing",
@@ -345,12 +341,12 @@ class CursorAgent(BaseAgent):
         _, message_count, model = self._summarize_bubbles(bubble_rows)
         self._apply_bubble_summary(metadata, message_count=message_count, model=model)
 
-    def get_sessions(self, days: int = 7) -> list[Session]:
-        """Get Cursor sessions from the last N days."""
+    def get_sessions(self, days: int | None = 7) -> list[Session]:
+        """Get Cursor sessions from the requested time window."""
         global_db_path = self._find_global_db_path()
         if not global_db_path.exists():
             return []
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days) if days is not None else None
         lower, upper = _key_prefix_bounds("composerData:")
         sessions: list[Session] = []
 
@@ -369,11 +365,11 @@ class CursorAgent(BaseAgent):
                     continue
 
                 created_at, updated_at = self._resolve_session_times(composer)
-                if created_at < cutoff:
+                if cutoff is not None and created_at < cutoff:
                     continue
                 recent.append((composer_id, composer, created_at, updated_at))
 
-            # days 窗口必须先于 bubble 聚合生效，否则 days=1 也要扫过全部历史 bubble
+            # 有界窗口必须先于 bubble 聚合生效，否则 days=1 也要扫过全部历史 bubble
             composer_ids = [item[0] for item in recent]
             message_counts = self._count_messages_by_composer(conn, composer_ids)
             metadata_summaries = (

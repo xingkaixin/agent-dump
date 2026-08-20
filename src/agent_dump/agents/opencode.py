@@ -72,19 +72,16 @@ class OpenCodeAgent(BaseAgent):
         conn.row_factory = sqlite3.Row
         return conn
 
-    def scan(self) -> list[Session]:
-        """Scan for all available sessions"""
-        return self.get_sessions(days=3650)  # ~10 years
-
-    def get_sessions(self, days: int = 7) -> list[Session]:
-        """Get sessions from the last N days"""
+    def get_sessions(self, days: int | None = 7) -> list[Session]:
+        """Get sessions from the requested time window."""
         if not self._ensure_db_path():
             return []
 
-        cutoff_time = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
-
         conn = self._connect_db()
         try:
+            if days is None:
+                return self._select_sessions(conn, where_sql="1 = 1", params=())
+            cutoff_time = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
             return self._select_sessions(conn, where_sql="s.time_created >= ?", params=(cutoff_time,))
         finally:
             conn.close()

@@ -80,14 +80,13 @@ class ConcreteAgent(BaseAgent):
         self._available = True
         self._sessions = []
         self.data_reads = 0
-
-    def scan(self):
-        return self._sessions
+        self.requested_days: list[int | None] = []
 
     def is_available(self):
         return self._available
 
-    def get_sessions(self, days=7):
+    def get_sessions(self, days: int | None = 7):
+        self.requested_days.append(days)
         return self._sessions
 
     def export_session(self, session, output_dir):
@@ -110,6 +109,12 @@ class TestBaseAgent:
         agent = ConcreteAgent()
         assert agent.name == "concrete"
         assert agent.display_name == "Concrete Agent"
+
+    def test_scan_requests_all_sessions_from_canonical_reader(self):
+        agent = ConcreteAgent()
+
+        assert agent.scan() == []
+        assert agent.requested_days == [None]
 
     def test_cached_session_data_reads_once_for_unchanged_session(self, tmp_path):
         agent = ConcreteAgent()

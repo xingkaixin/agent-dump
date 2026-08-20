@@ -14,7 +14,7 @@ class DiagnosticAgent(BaseAgent):
     def is_available(self) -> bool:
         return True
 
-    def get_sessions(self, days: int = 7) -> list[Session]:
+    def get_sessions(self, days: int | None = 7) -> list[Session]:
         del days
         self._report_diagnostic(Keys.WARN_TITLE_EXTRACT_FAILED, error="bad title")
         return []

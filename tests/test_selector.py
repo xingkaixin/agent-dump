@@ -523,7 +523,7 @@ class TestSelectorSanitizesUntrustedFields:
         def is_available(self) -> bool:
             return True
 
-        def get_sessions(self, days: int = 7):
+        def get_sessions(self, days: int | None = 7):
             return []
 
         def export_session(self, session, output_dir):

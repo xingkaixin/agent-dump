@@ -58,19 +58,15 @@ class FileSessionAgent(BaseAgent):
             return False
         return next(iter(self._iter_session_files()), None) is not None
 
-    def scan(self) -> list[Session]:
-        """Scan for all available sessions."""
-        return self.get_sessions(days=3650)
-
-    def get_sessions(self, days: int = 7) -> list[Session]:
-        """Get sessions from the last N days."""
+    def get_sessions(self, days: int | None = 7) -> list[Session]:
+        """Get sessions from the requested time window."""
         if not self._ensure_base_path():
             return []
 
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
-        session_files = [
-            file_path for file_path in self._iter_session_files() if self._should_scan_file(file_path, cutoff_time)
-        ]
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days) if days is not None else None
+        session_files = list(self._iter_session_files())
+        if cutoff_time is not None:
+            session_files = [file_path for file_path in session_files if self._should_scan_file(file_path, cutoff_time)]
         if not session_files:
             return []
 
@@ -85,7 +81,7 @@ class FileSessionAgent(BaseAgent):
                 except Exception as e:
                     self._report_diagnostic(Keys.WARN_SESSION_PARSE_FAILED, path=str(path), error=str(e))
                     continue
-                if session and normalize_datetime_utc(session.created_at) >= cutoff_time:
+                if session and (cutoff_time is None or normalize_datetime_utc(session.created_at) >= cutoff_time):
                     sessions.append(session)
 
         return sorted(sessions, key=lambda s: normalize_datetime_utc(s.created_at), reverse=True)

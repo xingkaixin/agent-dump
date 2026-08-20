@@ -784,7 +784,7 @@ class TestCollectEntries:
             def is_available(self) -> bool:
                 return True
 
-            def get_sessions(self, days: int = 7) -> list[Session]:
+            def get_sessions(self, days: int | None = 7) -> list[Session]:
                 return sessions
 
             def get_session_data(self, session: Session) -> dict[str, object]:
