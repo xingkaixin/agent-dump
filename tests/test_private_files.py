@@ -161,7 +161,7 @@ class TestExportsAndReportsArePrivate:
         def is_available(self) -> bool:
             return True
 
-        def get_sessions(self, days: int = 7):
+        def get_sessions(self, days: int | None = 7):
             return []
 
         def get_session_data(self, session) -> dict:

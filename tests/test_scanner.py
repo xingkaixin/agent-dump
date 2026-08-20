@@ -58,7 +58,7 @@ class FakeAgent(BaseAgent):
             raise self.availability_error
         return self.available
 
-    def get_sessions(self, days: int = 7) -> list[Session]:
+    def get_sessions(self, days: int | None = 7) -> list[Session]:
         del days
         if self.sessions_error is not None:
             raise self.sessions_error

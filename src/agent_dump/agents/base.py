@@ -125,13 +125,9 @@ class BaseAgent(ABC):
             return
         self._diagnostic_sink(ProviderDiagnostic(message_key=message_key, fields=fields))
 
-    @abstractmethod
     def scan(self) -> list[Session]:
-        """
-        Scan for available sessions.
-        Returns list of sessions found.
-        """
-        pass
+        """Scan all available sessions without a time limit."""
+        return self.get_sessions(days=None)
 
     @abstractmethod
     def is_available(self) -> bool:
@@ -141,9 +137,9 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    def get_sessions(self, days: int = 7) -> list[Session]:
+    def get_sessions(self, days: int | None = 7) -> list[Session]:
         """
-        Get sessions from the last N days.
+        Get sessions from the last N days, or all sessions when days is None.
         """
         pass
 
@@ -179,7 +175,7 @@ class BaseAgent(ABC):
         Default implementation scans all sessions; providers should override
         with a direct lookup when their storage supports it.
         """
-        for session in self.get_sessions(days=3650):
+        for session in self.scan():
             if session.id == session_id:
                 return session
         return None
