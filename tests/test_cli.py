@@ -1228,26 +1228,29 @@ class TestMain:
         assert "解析后的 URI: invalid-uri" in captured.out
         assert "下一步" in captured.out
 
-    def test_main_uri_mode_no_available_agents(self, capsys, tmp_path):
-        """测试 URI 模式下没有可用 agent"""
+    def test_main_uri_mode_uses_targeted_lookup_without_availability_scan(self, capsys):
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
-            mock_scanner.get_available_agents.return_value = []
-            configure_scanner_sessions(mock_scanner)
             mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
-            mock_agent.get_search_roots.return_value = (SearchRoot("CODEX_HOME/sessions", tmp_path / "codex"),)
+            mock_agent.get_cached_session_data.return_value = {"messages": []}
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
             mock_scanner.agents = [mock_agent]
             mock_scanner_class.return_value = mock_scanner
 
-            with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
-                result = main()
+            with mock.patch(
+                "agent_dump.uri_workflow.find_session_by_id",
+                return_value=(mock_agent, mock_session),
+            ) as mock_find:
+                with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
+                    result = main()
 
-        assert result == 1
-        captured = capsys.readouterr()
-        assert "未找到任何可用的本地会话数据" in captured.out
-        assert expect(LocaleKeys.DIAGNOSTIC_SEARCHED_ROOTS) in captured.out
-        assert f"Codex: CODEX_HOME/sessions: {tmp_path / 'codex'}" in captured.out
+        assert result == 0
+        mock_scanner.get_available_agents.assert_not_called()
+        mock_find.assert_called_once_with(mock_scanner, "session-001", agent_name="codex")
+        assert "# Session Dump" in capsys.readouterr().out
 
     def test_main_uri_mode_session_not_found(self, capsys, tmp_path):
         """测试 URI 模式下找不到会话"""
@@ -1271,29 +1274,6 @@ class TestMain:
         assert "解析后的 URI: codex://session-001" in captured.out
         assert "session_id: session-001" in captured.out
         assert "先运行 `agent-dump --list`" in captured.out
-
-    def test_main_uri_mode_scheme_mismatch(self, capsys):
-        """测试 URI scheme 与真实会话来源不匹配"""
-        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
-            mock_scanner = mock.MagicMock()
-
-            mock_agent = mock.MagicMock()
-            mock_agent.name = "opencode"
-            mock_agent.display_name = "OpenCode"
-            mock_scanner.get_available_agents.return_value = [mock_agent]
-            configure_scanner_sessions(mock_scanner)
-            mock_scanner_class.return_value = mock_scanner
-
-            with mock.patch("agent_dump.uri_workflow.find_session_by_id") as mock_find:
-                mock_find.return_value = (mock_agent, mock.MagicMock())
-
-                with mock.patch("sys.argv", ["agent-dump", "codex://session-001"]):
-                    result = main()
-
-        assert result == 1
-        captured = capsys.readouterr()
-        assert "URI scheme 与实际会话来源不匹配" in captured.out
-        assert "该会话实际属于 OpenCode" in captured.out
 
     def test_main_uri_mode_get_session_data_failed(self, capsys):
         """测试 URI 模式获取会话数据异常"""

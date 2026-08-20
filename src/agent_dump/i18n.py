@@ -226,9 +226,6 @@ class Keys:
     DIAG_URI_SCANNED_NO_MATCH = "DIAG_URI_SCANNED_NO_MATCH"
     DIAG_STEP_LIST_TO_CONFIRM = "DIAG_STEP_LIST_TO_CONFIRM"
     DIAG_STEP_CHECK_URI_SESSION_ID = "DIAG_STEP_CHECK_URI_SESSION_ID"
-    DIAG_URI_SCHEME_MISMATCH = "DIAG_URI_SCHEME_MISMATCH"
-    DIAG_URI_BELONGS_TO = "DIAG_URI_BELONGS_TO"
-    DIAG_STEP_USE_THIS_URI = "DIAG_STEP_USE_THIS_URI"
     DIAG_QUERY_URI_INVALID = "DIAG_QUERY_URI_INVALID"
     DIAG_STEP_CHECK_QUERY_URI_SHAPE = "DIAG_STEP_CHECK_QUERY_URI_SHAPE"
     DIAG_STEP_NO_QUERY_URI_WITH_Q = "DIAG_STEP_NO_QUERY_URI_WITH_Q"
@@ -536,9 +533,6 @@ TRANSLATIONS = {
         Keys.DIAG_URI_SCANNED_NO_MATCH: "Scanned the currently available providers, but no session id matched.",
         Keys.DIAG_STEP_LIST_TO_CONFIRM: "Run `agent-dump --list` to confirm the session still exists.",
         Keys.DIAG_STEP_CHECK_URI_SESSION_ID: "Check that the session id in the URI is complete and belongs to that provider.",
-        Keys.DIAG_URI_SCHEME_MISMATCH: "The URI scheme does not match the actual session source.",
-        Keys.DIAG_URI_BELONGS_TO: "This session actually belongs to {agent}.",
-        Keys.DIAG_STEP_USE_THIS_URI: "Re-run with `{uri}`.",
         Keys.DIAG_QUERY_URI_INVALID: "Invalid agents:// query.",
         Keys.DIAG_STEP_CHECK_QUERY_URI_SHAPE: "Check that the `agents://<path>?q=<keyword>&providers=<names>` structure is complete.",
         Keys.DIAG_STEP_NO_QUERY_URI_WITH_Q: "Do not combine `agents://...` with `-q/--query`.",
@@ -836,9 +830,6 @@ TRANSLATIONS = {
         Keys.DIAG_URI_SCANNED_NO_MATCH: "已扫描当前可用 provider，但未匹配到该 session id。",
         Keys.DIAG_STEP_LIST_TO_CONFIRM: "先运行 `agent-dump --list` 确认该会话是否仍存在。",
         Keys.DIAG_STEP_CHECK_URI_SESSION_ID: "检查 URI 中的 session id 是否完整且对应正确 provider。",
-        Keys.DIAG_URI_SCHEME_MISMATCH: "URI scheme 与实际会话来源不匹配。",
-        Keys.DIAG_URI_BELONGS_TO: "该会话实际属于 {agent}。",
-        Keys.DIAG_STEP_USE_THIS_URI: "改用 `{uri}` 重新执行。",
         Keys.DIAG_QUERY_URI_INVALID: "agents:// 查询无效。",
         Keys.DIAG_STEP_CHECK_QUERY_URI_SHAPE: "检查 `agents://<path>?q=<keyword>&providers=<names>` 结构是否完整。",
         Keys.DIAG_STEP_NO_QUERY_URI_WITH_Q: "不要把 `agents://...` 与 `-q/--query` 同时使用。",
