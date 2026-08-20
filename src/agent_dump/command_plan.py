@@ -6,6 +6,7 @@ from typing import ClassVar
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS, get_uri_scheme_map
 from agent_dump.cli_shared import parse_format_spec, validate_formats_for_mode
+from agent_dump.collect_models import CollectMode
 from agent_dump.query_filter import QuerySpec, parse_query, parse_query_uri
 from agent_dump.uri_support import parse_uri
 
@@ -57,7 +58,7 @@ class CommandRequest:
     head: bool = False
     summary: bool = False
     collect: bool = False
-    collect_mode: str = "pm"
+    collect_mode: CollectMode = CollectMode.PM
     dry_run: bool = False
     stats: bool = False
     providers: bool = False
@@ -91,7 +92,7 @@ class CollectOperation:
     until: str | None
     save: str | None
     dry_run: bool
-    collect_mode: str
+    collect_mode: CollectMode
     query_spec: QuerySpec | None
     mode: ClassVar[CommandMode] = CommandMode.COLLECT
 

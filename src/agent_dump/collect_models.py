@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from enum import Enum
 import json
 from pathlib import Path
 from typing import Any
@@ -23,18 +24,36 @@ SUMMARY_FIELDS = (
 )
 INSIGHT_SUMMARY_FIELDS = ("scene", "stuck", "turning")
 
+
+class CollectMode(str, Enum):
+    PM = "pm"
+    INSIGHT = "insight"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class CollectStage(str, Enum):
+    COLLECT_START = "collect_start"
+    COLLECT_OVERVIEW = "collect_overview"
+    SCAN_SESSIONS = "scan_sessions"
+    PLAN_CHUNKS = "plan_chunks"
+    SUMMARIZE_CHUNKS = "summarize_chunks"
+    MERGE_SESSIONS = "merge_sessions"
+    TREE_REDUCTION = "tree_reduction"
+    RENDER_FINAL = "render_final"
+    WRITE_OUTPUT = "write_output"
+
+
 _COLLECT_MODE_FIELDS = {
-    "pm": SUMMARY_FIELDS,
-    "insight": INSIGHT_SUMMARY_FIELDS,
+    CollectMode.PM: SUMMARY_FIELDS,
+    CollectMode.INSIGHT: INSIGHT_SUMMARY_FIELDS,
 }
 
 
-def collect_fields_for(mode: str) -> tuple[str, ...]:
+def collect_fields_for(mode: CollectMode) -> tuple[str, ...]:
     """Return the summary field names for the given collect mode."""
-    fields = _COLLECT_MODE_FIELDS.get(mode)
-    if fields is None:
-        raise ValueError(f"unsupported collect mode: {mode}")
-    return fields
+    return _COLLECT_MODE_FIELDS[mode]
 
 
 EVENT_EXTRACT_CHAR_BUDGET = 12000
@@ -61,15 +80,13 @@ class CollectEvent:
 class CollectProgressEvent:
     """Structured progress event for collect mode."""
 
-    stage: str
+    stage: CollectStage
     current: int
     total: int
-    message: str
     session_uri: str | None = None
     chunk_index: int | None = None
     chunk_total: int | None = None
     level: int | None = None
-    agent_name: str | None = None
     session_count: int | None = None
     chunk_count: int | None = None
     concurrency: int | None = None

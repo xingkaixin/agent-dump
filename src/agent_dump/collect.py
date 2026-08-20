@@ -36,7 +36,9 @@ from agent_dump.collect_models import (
     CollectEntry,
     CollectEvent,
     CollectLogger,
+    CollectMode,
     CollectProgressEvent,
+    CollectStage,
     GroupSummaryEntry,
     PlannedCollectEntry,
     SessionSummaryEntry,
@@ -99,7 +101,7 @@ def _is_session_denied(session: Session, deny_paths: tuple[str, ...]) -> bool:
     return False
 
 
-def build_summary_json_schema(mode: str = "pm") -> dict[str, Any]:
+def build_summary_json_schema(mode: CollectMode = CollectMode.PM) -> dict[str, Any]:
     """Build one fixed schema for collect structured summaries."""
     return _build_summary_json_schema(collect_fields_for(mode))
 
@@ -161,10 +163,9 @@ def collect_entries(
     total = len(matched_sessions)
     emit_collect_progress(
         progress_callback,
-        stage="scan_sessions",
+        stage=CollectStage.SCAN_SESSIONS,
         current=0,
         total=total,
-        message="scan sessions",
     )
 
     def _collect_entry(matched_session: tuple[BaseAgent, Session, date]) -> CollectEntry:
@@ -230,10 +231,9 @@ def collect_entries(
                     session_uri = entry.session_uri
                 emit_collect_progress(
                     progress_callback,
-                    stage="scan_sessions",
+                    stage=CollectStage.SCAN_SESSIONS,
                     current=index,
                     total=total,
-                    message="scan sessions",
                     session_uri=session_uri,
                 )
 
@@ -257,10 +257,9 @@ def plan_collect_entries(
     total_chunks = 0
     emit_collect_progress(
         progress_callback,
-        stage="plan_chunks",
+        stage=CollectStage.PLAN_CHUNKS,
         current=0,
         total=total,
-        message="plan chunks",
     )
 
     for index, entry in enumerate(entries, start=1):
@@ -269,10 +268,9 @@ def plan_collect_entries(
         planned_entries.append(PlannedCollectEntry(collect_entry=entry, chunks=chunks))
         emit_collect_progress(
             progress_callback,
-            stage="plan_chunks",
+            stage=CollectStage.PLAN_CHUNKS,
             current=index,
             total=total,
-            message="plan chunks",
             session_uri=entry.session_uri,
             chunk_total=total_chunks,
         )
@@ -287,12 +285,12 @@ def build_collect_chunk_prompt(
     chunk_index: int,
     chunk_total: int,
     local_tz: tzinfo | None = None,
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> str:
     """Build prompt for a chunk-level structured summary."""
     resolved_local_tz = local_tz or get_local_timezone()
     fields = collect_fields_for(mode)
-    if mode == "insight":
+    if mode is CollectMode.INSIGHT:
         lines = [
             "任务：从用户视角提取给定 chunk 中的关键事实片段。",
             "请只基于给定 chunk 内容输出 JSON 对象，不要输出 Markdown，不要补充解释。",
@@ -354,7 +352,7 @@ def build_collect_merge_prompt(
     entry: CollectEntry,
     payloads: list[dict[str, list[str]]],
     merge_label: str,
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> str:
     """Build prompt for session/group structured merge when deterministic merge is too large."""
     fields = collect_fields_for(mode)
@@ -413,7 +411,7 @@ def _build_structured_summary_retry_prompt(
     *,
     original_prompt: str,
     invalid_response: str,
-    mode: str,
+    mode: CollectMode,
     request_source: str,
 ) -> str:
     fields = collect_fields_for(mode)
@@ -450,7 +448,7 @@ def request_structured_summary_from_llm(
     session_uri: str | None = None,
     chunk_index: int | None = None,
     chunk_total: int | None = None,
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> dict[str, list[str]]:
     """Call LLM and parse one structured summary payload."""
     summary_fields = collect_fields_for(mode)
@@ -576,7 +574,7 @@ def build_collect_session_prompt(
     *,
     source_truncated: bool,
     local_tz: tzinfo | None = None,
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> str:
     """Build compatibility prompt string for one whole session."""
     chunks = chunk_collect_events(entry.events)
@@ -600,7 +598,7 @@ def _summarize_collect_entry(
     on_chunk_summarized: Callable[[CollectProgressEvent], None] | None = None,
     on_session_merged: Callable[[CollectProgressEvent], None] | None = None,
     logger: CollectLogger | None = None,
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> SessionSummaryEntry:
     entry = planned_entry.collect_entry
     chunks = planned_entry.chunks
@@ -629,10 +627,9 @@ def _summarize_collect_entry(
         chunk_payloads.append(payload)
         emit_collect_progress(
             on_chunk_summarized,
-            stage="summarize_chunks",
+            stage=CollectStage.SUMMARIZE_CHUNKS,
             current=1,
             total=1,
-            message="summarize chunk",
             session_uri=entry.session_uri,
             chunk_index=chunk_index + 1,
             chunk_total=len(chunks),
@@ -663,10 +660,9 @@ def _summarize_collect_entry(
                 )
     emit_collect_progress(
         on_session_merged,
-        stage="merge_sessions",
+        stage=CollectStage.MERGE_SESSIONS,
         current=1,
         total=1,
-        message="merge session",
         session_uri=entry.session_uri,
         chunk_total=len(chunks),
     )
@@ -689,7 +685,7 @@ def summarize_collect_entries(
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     timeout_seconds: int = 90,
     logger: CollectLogger | None = None,
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> list[SessionSummaryEntry]:
     """Generate structured per-session summaries with limited concurrency."""
     if not planned_entries:
@@ -708,18 +704,16 @@ def summarize_collect_entries(
 
     emit_collect_progress(
         progress_callback,
-        stage="summarize_chunks",
+        stage=CollectStage.SUMMARIZE_CHUNKS,
         current=0,
         total=total_chunks,
-        message="summarize chunks",
         concurrency=max_workers,
     )
     emit_collect_progress(
         progress_callback,
-        stage="merge_sessions",
+        stage=CollectStage.MERGE_SESSIONS,
         current=0,
         total=total,
-        message="merge sessions",
     )
 
     def _mark_chunk_summarized(event: CollectProgressEvent) -> None:
@@ -729,10 +723,9 @@ def summarize_collect_entries(
             current = summarized_chunks
         emit_collect_progress(
             progress_callback,
-            stage="summarize_chunks",
+            stage=CollectStage.SUMMARIZE_CHUNKS,
             current=current,
             total=total_chunks,
-            message="summarize chunks",
             session_uri=event.session_uri,
             chunk_index=event.chunk_index,
             chunk_total=event.chunk_total,
@@ -746,10 +739,9 @@ def summarize_collect_entries(
             current = merged_sessions
         emit_collect_progress(
             progress_callback,
-            stage="merge_sessions",
+            stage=CollectStage.MERGE_SESSIONS,
             current=current,
             total=total,
-            message="merge sessions",
             session_uri=event.session_uri,
             chunk_total=event.chunk_total,
         )
@@ -818,13 +810,13 @@ def _build_summary_bucket_lines(
     session_summaries: list[SessionSummaryEntry],
     *,
     key_fn: Callable[[SessionSummaryEntry], str],
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> dict[str, list[str]]:
     grouped: dict[str, list[str]] = defaultdict(list)
     for summary in session_summaries:
         key = key_fn(summary)
         payload = summary.summary_data
-        if mode == "insight":
+        if mode is CollectMode.INSIGHT:
             highlights = payload.get("scene", [])[:2] + payload.get("stuck", [])[:1]
         else:
             highlights = (
@@ -843,7 +835,7 @@ def reduce_collect_summaries(
     group_size: int = GROUP_SIZE,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     logger: CollectLogger | None = None,
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> CollectAggregate:
     """Reduce per-session summaries via tree reduction into one final aggregate."""
     if not session_summaries:
@@ -866,10 +858,9 @@ def reduce_collect_summaries(
         total_groups = (len(working) + group_size - 1) // group_size
         emit_collect_progress(
             progress_callback,
-            stage="tree_reduction",
+            stage=CollectStage.TREE_REDUCTION,
             current=0,
             total=total_groups,
-            message="tree reduction",
             level=reduction_depth,
         )
         for start in range(0, len(working), group_size):
@@ -913,10 +904,9 @@ def reduce_collect_summaries(
             )
             emit_collect_progress(
                 progress_callback,
-                stage="tree_reduction",
+                stage=CollectStage.TREE_REDUCTION,
                 current=(start // group_size) + 1,
                 total=total_groups,
-                message="tree reduction",
                 level=reduction_depth,
             )
         working = next_level
@@ -946,10 +936,10 @@ def build_collect_final_prompt(
     until_date: date,
     aggregate: CollectAggregate,
     has_truncated: bool,
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> str:
     """Build final collect markdown prompt from the final aggregate."""
-    if mode == "insight":
+    if mode is CollectMode.INSIGHT:
         lines = [
             "任务：从用户视角整理给定聚合数据中的关键事实片段。",
             "请基于给定的结构化聚合数据输出 Markdown，只摆事实，不做评价。",

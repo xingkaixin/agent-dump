@@ -205,7 +205,7 @@ agent-dump/
 │   ├── collect_dates.py         # collect 日期范围解析
 │   ├── collect_events.py        # collect 事件提取、渲染与 chunk 规划
 │   ├── collect_llm.py           # collect LLM 请求
-│   ├── collect_models.py        # collect 输出字段定义
+│   ├── collect_models.py        # collect 模式、阶段与输出字段定义
 │   ├── collect_output.py        # collect Markdown 输出
 │   ├── collect_progress.py      # collect 日志、进度与 run stats
 │   ├── collect_summary.py       # collect 摘要 payload 处理
@@ -387,7 +387,7 @@ collect 模式入口：
 - `collect_dates.py`：日期输入解析与日期范围归一化。
 - `collect_events.py`：事件收集、渲染与 chunk planning。
 - `collect_llm.py`：AI 请求。
-- `collect_models.py`：`pm` 和 `insight` 输出字段。
+- `collect_models.py`：`pm` / `insight` 模式、进度阶段与输出字段的闭集定义。
 - `collect_output.py`：Markdown 输出。
 - `collect_progress.py`：日志、进度上报与 run stats。
 - `collect_summary.py`：摘要 payload 归一化、合并与 JSON 提取。

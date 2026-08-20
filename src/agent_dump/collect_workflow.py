@@ -19,7 +19,7 @@ from agent_dump.collect import (
     summarize_collect_entries,
     write_collect_markdown,
 )
-from agent_dump.collect_models import CollectProgressEvent, CollectRunStats
+from agent_dump.collect_models import CollectProgressEvent, CollectRunStats, CollectStage
 from agent_dump.collect_progress import (
     build_collect_run_stats,
     create_collect_logger,
@@ -66,9 +66,9 @@ def preview_collect_save_path(save: str | None, *, since_date: date, until_date:
 
 def _format_collect_progress(event: CollectProgressEvent) -> str:
     """Format one collect progress event for stderr."""
-    if event.stage == "collect_start":
+    if event.stage is CollectStage.COLLECT_START:
         return i18n.t(Keys.COLLECT_PROGRESS_START, since=event.since, until=event.until)
-    if event.stage == "collect_overview":
+    if event.stage is CollectStage.COLLECT_OVERVIEW:
         breakdown = ", ".join(
             f"{agent_name} {count}" for agent_name, count in (event.agent_session_counts or {}).items()
         )
@@ -81,9 +81,9 @@ def _format_collect_progress(event: CollectProgressEvent) -> str:
         if not breakdown:
             return overview
         return "\n".join([overview, i18n.t(Keys.COLLECT_PROGRESS_AGENT_BREAKDOWN, breakdown=breakdown)])
-    if event.stage == "scan_sessions":
+    if event.stage is CollectStage.SCAN_SESSIONS:
         return i18n.t(Keys.COLLECT_PROGRESS_SCAN_SESSIONS, current=event.current, total=event.total)
-    if event.stage == "plan_chunks":
+    if event.stage is CollectStage.PLAN_CHUNKS:
         if event.current >= event.total:
             return i18n.t(
                 Keys.COLLECT_PROGRESS_PLAN_CHUNKS_DONE,
@@ -91,23 +91,23 @@ def _format_collect_progress(event: CollectProgressEvent) -> str:
                 chunk_count=event.chunk_total or 0,
             )
         return i18n.t(Keys.COLLECT_PROGRESS_PLAN_CHUNKS, current=event.current, total=event.total)
-    if event.stage == "summarize_chunks":
+    if event.stage is CollectStage.SUMMARIZE_CHUNKS:
         return i18n.t(
             Keys.COLLECT_PROGRESS_SUMMARIZE_CHUNKS,
             current=event.current,
             total=event.total,
             concurrency=event.concurrency or 1,
         )
-    if event.stage == "merge_sessions":
+    if event.stage is CollectStage.MERGE_SESSIONS:
         return i18n.t(Keys.COLLECT_PROGRESS_MERGE_SESSIONS, current=event.current, total=event.total)
-    if event.stage == "tree_reduction":
+    if event.stage is CollectStage.TREE_REDUCTION:
         level = event.level or 1
         return i18n.t(Keys.COLLECT_PROGRESS_TREE_REDUCTION, level=level, current=event.current, total=event.total)
-    if event.stage == "render_final":
+    if event.stage is CollectStage.RENDER_FINAL:
         return i18n.t(Keys.COLLECT_PROGRESS_RENDER_FINAL, current=event.current, total=event.total)
-    if event.stage == "write_output":
+    if event.stage is CollectStage.WRITE_OUTPUT:
         return i18n.t(Keys.COLLECT_PROGRESS_WRITE_OUTPUT, current=event.current, total=event.total)
-    return event.message
+    raise AssertionError(f"unsupported collect stage: {event.stage}")
 
 
 @contextmanager
@@ -127,7 +127,7 @@ def show_collect_progress() -> Iterator[Callable[[CollectProgressEvent], None]]:
     def _update(event: CollectProgressEvent) -> None:
         nonlocal last_rendered
         text = safe_display_text(_format_collect_progress(event))
-        if event.stage in {"collect_start", "collect_overview"}:
+        if event.stage in {CollectStage.COLLECT_START, CollectStage.COLLECT_OVERVIEW}:
             if is_tty:
                 with progress_lock:
                     if last_rendered:
@@ -245,10 +245,9 @@ def handle_collect_mode(
         with show_collect_progress() as update_progress:
             emit_collect_progress(
                 update_progress,
-                stage="collect_start",
+                stage=CollectStage.COLLECT_START,
                 current=0,
                 total=1,
-                message="collect start",
                 since=since_date.isoformat(),
                 until=until_date.isoformat(),
             )
@@ -286,10 +285,9 @@ def handle_collect_mode(
             )
             emit_collect_progress(
                 update_progress,
-                stage="collect_overview",
+                stage=CollectStage.COLLECT_OVERVIEW,
                 current=run_stats.session_count,
                 total=run_stats.session_count,
-                message="collect overview",
                 session_count=run_stats.session_count,
                 chunk_count=run_stats.chunk_count,
                 concurrency=run_stats.concurrency,
@@ -322,7 +320,7 @@ def handle_collect_mode(
                 mode=operation.collect_mode,
             )
             phase = "render"
-            emit_collect_progress(update_progress, stage="render_final", current=0, total=2, message="render final")
+            emit_collect_progress(update_progress, stage=CollectStage.RENDER_FINAL, current=0, total=2)
             aggregate = reduce_collect_summaries(
                 config=ai_config,
                 session_summaries=session_summaries,
@@ -331,7 +329,7 @@ def handle_collect_mode(
                 logger=collect_logger,
                 mode=operation.collect_mode,
             )
-            emit_collect_progress(update_progress, stage="render_final", current=1, total=2, message="render final")
+            emit_collect_progress(update_progress, stage=CollectStage.RENDER_FINAL, current=1, total=2)
             prompt = build_collect_final_prompt(
                 since_date=since_date,
                 until_date=until_date,
@@ -344,8 +342,8 @@ def handle_collect_mode(
                 prompt,
                 timeout_seconds=collect_config.summary_timeout_seconds,
             )
-            emit_collect_progress(update_progress, stage="render_final", current=2, total=2, message="render final")
-            emit_collect_progress(update_progress, stage="write_output", current=0, total=1, message="write output")
+            emit_collect_progress(update_progress, stage=CollectStage.RENDER_FINAL, current=2, total=2)
+            emit_collect_progress(update_progress, stage=CollectStage.WRITE_OUTPUT, current=0, total=1)
             phase = "write"
             output_path = write_collect_markdown(
                 markdown,
@@ -357,7 +355,7 @@ def handle_collect_mode(
                     until_date=until_date,
                 ),
             )
-            emit_collect_progress(update_progress, stage="write_output", current=1, total=1, message="write output")
+            emit_collect_progress(update_progress, stage=CollectStage.WRITE_OUTPUT, current=1, total=1)
     except Exception as exc:
         if collect_logger is not None:
             collect_logger.log("collect_run_fail", phase=phase, error=str(exc))

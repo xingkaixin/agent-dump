@@ -14,6 +14,7 @@ from agent_dump.collect_models import (
     CollectLogger,
     CollectProgressEvent,
     CollectRunStats,
+    CollectStage,
     PlannedCollectEntry,
 )
 from agent_dump.config import LoggingConfig
@@ -41,10 +42,9 @@ def create_collect_logger(config: LoggingConfig | None) -> CollectLogger:
 def emit_collect_progress(
     progress_callback: Callable[[CollectProgressEvent], None] | None,
     *,
-    stage: str,
+    stage: CollectStage,
     current: int,
     total: int,
-    message: str,
     session_uri: str | None = None,
     chunk_index: int | None = None,
     chunk_total: int | None = None,
@@ -64,7 +64,6 @@ def emit_collect_progress(
             stage=stage,
             current=current,
             total=total,
-            message=message,
             session_uri=session_uri,
             chunk_index=chunk_index,
             chunk_total=chunk_total,

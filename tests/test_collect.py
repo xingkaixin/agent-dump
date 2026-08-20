@@ -45,7 +45,7 @@ from agent_dump.collect import (
     write_collect_markdown,
 )
 from agent_dump.collect_llm import LLMRequestError
-from agent_dump.collect_models import INSIGHT_SUMMARY_FIELDS, SUMMARY_FIELDS, collect_fields_for
+from agent_dump.collect_models import INSIGHT_SUMMARY_FIELDS, SUMMARY_FIELDS, CollectMode, collect_fields_for
 from agent_dump.collect_progress import (
     build_collect_run_stats,
 )
@@ -1667,13 +1667,13 @@ class TestCollectInsightMode:
         )
 
     def test_collect_fields_for_returns_correct_fields(self):
-        assert collect_fields_for("pm") == SUMMARY_FIELDS
-        assert collect_fields_for("insight") == INSIGHT_SUMMARY_FIELDS
-        assert set(collect_fields_for("insight")) == {"scene", "stuck", "turning"}
+        assert collect_fields_for(CollectMode.PM) == SUMMARY_FIELDS
+        assert collect_fields_for(CollectMode.INSIGHT) == INSIGHT_SUMMARY_FIELDS
+        assert set(collect_fields_for(CollectMode.INSIGHT)) == {"scene", "stuck", "turning"}
 
-    def test_collect_fields_for_rejects_unknown_mode(self):
-        with pytest.raises(ValueError, match="unsupported collect mode"):
-            collect_fields_for("unknown")
+    def test_collect_mode_rejects_unknown_value(self):
+        with pytest.raises(ValueError, match="not a valid CollectMode"):
+            CollectMode("unknown")
 
     def test_build_collect_chunk_prompt_insight_mode(self):
         prompt = build_collect_chunk_prompt(
@@ -1681,7 +1681,7 @@ class TestCollectInsightMode:
             (CollectEvent(kind="user_intent", role="user", text="toBeVisible 断言失败"),),
             chunk_index=0,
             chunk_total=1,
-            mode="insight",
+            mode=CollectMode.INSIGHT,
         )
 
         assert "从用户视角提取给定 chunk" in prompt
@@ -1698,7 +1698,7 @@ class TestCollectInsightMode:
             (CollectEvent(kind="user_intent", role="user", text="修复"),),
             chunk_index=0,
             chunk_total=1,
-            mode="pm",
+            mode=CollectMode.PM,
         )
 
         assert "工作记录结构化摘要" in prompt
@@ -1711,7 +1711,7 @@ class TestCollectInsightMode:
             entry=entry,
             payloads=[{"scene": ["S1"], "stuck": [], "turning": ["L1"]}],
             merge_label="session",
-            mode="insight",
+            mode=CollectMode.INSIGHT,
         )
 
         assert "scene, stuck, turning" in prompt
@@ -1721,7 +1721,7 @@ class TestCollectInsightMode:
         aggregate = CollectAggregate(
             summary_data=normalize_summary_payload(
                 {"scene": ["调试断言"], "stuck": ["断言反复失败"], "turning": ["改用 waitFor"]},
-                mode="insight",
+                mode=CollectMode.INSIGHT,
             ),
             date_summaries={"2026-03-05": ["task: 调试断言"]},
             project_summaries={"/repo": ["task: 调试断言"]},
@@ -1734,7 +1734,7 @@ class TestCollectInsightMode:
             until_date=date(2026, 3, 5),
             aggregate=aggregate,
             has_truncated=False,
-            mode="insight",
+            mode=CollectMode.INSIGHT,
         )
 
         assert "# 作者洞察（2026-03-01 ~ 2026-03-05）" in prompt
@@ -1750,7 +1750,7 @@ class TestCollectInsightMode:
         assert json.loads(aggregate_envelope["content"])["scene"] == ["调试断言"]
 
     def test_build_summary_json_schema_insight_mode(self):
-        schema = build_summary_json_schema(mode="insight")
+        schema = build_summary_json_schema(mode=CollectMode.INSIGHT)
 
         properties = schema["schema"]["properties"]
         assert set(properties) == {"scene", "stuck", "turning"}
@@ -1760,7 +1760,7 @@ class TestCollectInsightMode:
     def test_normalize_summary_payload_insight_mode(self):
         payload = normalize_summary_payload(
             {"scene": ["调试断言", "调试断言"], "stuck": "断言反复失败", "unknown": ["x"]},
-            mode="insight",
+            mode=CollectMode.INSIGHT,
         )
 
         assert payload["scene"] == ["调试断言"]
@@ -1771,10 +1771,10 @@ class TestCollectInsightMode:
     def test_merge_summary_payloads_insight_mode(self):
         merged = merge_summary_payloads(
             [
-                {**empty_summary_payload("insight"), "scene": ["S1"], "turning": ["L1"]},
-                {**empty_summary_payload("insight"), "scene": ["S1", "S2"], "stuck": ["C1"]},
+                {**empty_summary_payload(CollectMode.INSIGHT), "scene": ["S1"], "turning": ["L1"]},
+                {**empty_summary_payload(CollectMode.INSIGHT), "scene": ["S1", "S2"], "stuck": ["C1"]},
             ],
-            mode="insight",
+            mode=CollectMode.INSIGHT,
         )
 
         assert merged["scene"] == ["S1", "S2"]
@@ -1788,7 +1788,7 @@ class TestCollectInsightMode:
                 collect_entry=self._entry(),
                 summary_data=normalize_summary_payload(
                     {"scene": ["调试断言"], "stuck": ["断言反复失败"], "turning": ["改用 waitFor"]},
-                    mode="insight",
+                    mode=CollectMode.INSIGHT,
                 ),
                 chunk_count=1,
                 source_truncated=False,
@@ -1798,7 +1798,7 @@ class TestCollectInsightMode:
         buckets = _build_summary_bucket_lines(
             summaries,
             key_fn=lambda item: item.collect_entry.date_value.isoformat(),
-            mode="insight",
+            mode=CollectMode.INSIGHT,
         )
 
         assert "2026-03-05" in buckets
@@ -1807,7 +1807,7 @@ class TestCollectInsightMode:
         assert "断言反复失败" in line
 
     def test_empty_summary_payload_insight_mode(self):
-        payload = empty_summary_payload("insight")
+        payload = empty_summary_payload(CollectMode.INSIGHT)
 
         assert set(payload) == {"scene", "stuck", "turning"}
         assert all(v == [] for v in payload.values())
@@ -1985,10 +1985,10 @@ class TestUntrustedSessionContentIsIsolated:
         recovered = [json.loads(e["content"]) for e in self._envelopes(prompt)]
         assert recovered == payloads, "归并输入仍必须是可解析的合法摘要"
 
-    @pytest.mark.parametrize("mode", ["pm", "insight"])
+    @pytest.mark.parametrize("mode", list(CollectMode))
     def test_final_prompt_envelopes_aggregate_and_bucket_data(self, mode):
         payload = normalize_summary_payload(
-            {"topics": [self.HOSTILE]} if mode == "pm" else {"scene": [self.HOSTILE]},
+            {"topics": [self.HOSTILE]} if mode is CollectMode.PM else {"scene": [self.HOSTILE]},
             mode=mode,
         )
         aggregate = CollectAggregate(
