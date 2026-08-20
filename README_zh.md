@@ -464,6 +464,7 @@ deny = [
 │       ├── provider_diagnostics.py # Provider 结构化告警边界
 │       ├── rendering.py        # print/head/markdown/json/raw 渲染调度
 │       ├── exporting.py        # 统一导出执行与结构化 outcome
+│       ├── output_formats.py   # 输出格式定义与能力校验
 │       ├── query_filter.py     # 查询解析与过滤
 │       ├── query_semantics.py  # Query/Search 字面语义与可搜索语料
 │       ├── search_index.py     # FTS5 搜索索引

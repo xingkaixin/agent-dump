@@ -464,6 +464,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── provider_diagnostics.py # Structured provider warning boundary
 │       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch
 │       ├── exporting.py        # Unified export execution and structured outcome
+│       ├── output_formats.py   # Output format definitions and capability validation
 │       ├── query_filter.py     # Query parsing and filtering
 │       ├── query_semantics.py  # Literal Query/Search semantics and corpus
 │       ├── search_index.py     # FTS5 search index

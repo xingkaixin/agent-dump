@@ -11,27 +11,20 @@ from locale_helpers import ALL_LANGUAGES, Keys, expect
 import pytest
 
 from agent_dump.agents.base import Session
-from agent_dump.agents.cursor import CursorAgent
 from agent_dump.cli_shared import (
     collect_query_matches,
     collect_search_matches,
     display_search_results,
     display_sessions_list,
     export_sessions_for_formats,
-    find_session_by_id,
-    format_session_metadata_summary,
     group_sessions_by_time,
-    parse_format_spec,
-    parse_uri,
     render_query_summary,
-    render_session_head,
-    render_session_text,
     show_loading,
-    validate_uri_agent_formats,
 )
-from agent_dump.diagnostics import DiagnosticError
 from agent_dump.query_filter import QuerySpec, SearchSessionMatch
+from agent_dump.rendering import format_session_metadata_summary, render_session_head, render_session_text
 from agent_dump.text_safety import has_unsafe_body_characters
+from agent_dump.uri_support import find_session_by_id, parse_uri
 
 
 def make_session(
@@ -412,44 +405,6 @@ def test_show_loading_sanitizes_non_tty_status(capsys):
     output = capsys.readouterr().err
     assert not has_unsafe_body_characters(output)
     assert "FORGED" in output
-
-
-class TestValidateUriAgentFormats:
-    """测试按 provider 声明校验 URI 导出格式"""
-
-    def test_provider_without_restrictions_accepts_all_formats(self):
-        agent = mock.MagicMock()
-        agent.unsupported_uri_formats = frozenset()
-
-        validate_uri_agent_formats(agent, ["json", "markdown", "raw", "print"])
-
-    def test_provider_restrictions_raise_capability_error(self):
-        agent = CursorAgent()
-
-        with pytest.raises(DiagnosticError) as excinfo:
-            validate_uri_agent_formats(agent, ["json", "raw"])
-
-        assert excinfo.value.capability_gap is not None
-        assert (
-            expect(Keys.DIAG_URI_CAPABILITY_DETAIL, agent="Cursor", supported="json, print", requested="raw")
-            == excinfo.value.capability_gap
-        )
-
-
-class TestFormatSpec:
-    """测试格式解析辅助函数"""
-
-    def test_parse_format_spec_supports_alias_and_dedup(self):
-        result = parse_format_spec("json, md ,raw,json")
-        assert result == ["json", "markdown", "raw"]
-
-    def test_parse_format_spec_rejects_unknown_format(self):
-        with pytest.raises(ValueError):
-            parse_format_spec("json,foo")
-
-    def test_parse_format_spec_rejects_empty_part(self):
-        with pytest.raises(ValueError):
-            parse_format_spec("json,,raw")
 
 
 class TestRenderSessionText:

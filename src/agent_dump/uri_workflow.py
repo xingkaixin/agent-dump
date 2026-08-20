@@ -4,14 +4,10 @@ from typing import Any, Protocol
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
-    find_session_by_id,
     print_diagnostic,
     render_agent_search_roots,
-    render_session_head,
-    render_session_text,
     resolve_output_base_dir,
     show_loading,
-    validate_uri_agent_formats,
     wrap_runtime_fetch_error,
 )
 from agent_dump.collect import request_summary_from_llm
@@ -20,10 +16,13 @@ from agent_dump.config import AIConfig, load_ai_config, validate_ai_config
 from agent_dump.diagnostics import DiagnosticError, session_not_found
 from agent_dump.exporting import execute_exports
 from agent_dump.i18n import Keys, i18n
+from agent_dump.output_formats import validate_uri_agent_formats
 from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
+from agent_dump.rendering import render_session_head, render_session_text
 from agent_dump.scanner import AgentScanner
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_body_text
+from agent_dump.uri_support import find_session_by_id
 
 
 class ExportConfigLike(Protocol):

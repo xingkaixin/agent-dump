@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS, get_uri_scheme_map
-from agent_dump.cli_shared import parse_format_spec, validate_formats_for_mode
 from agent_dump.collect_models import CollectMode
+from agent_dump.output_formats import parse_format_spec, validate_formats_for_mode
 from agent_dump.query_filter import QuerySpec, parse_query, parse_query_uri
 from agent_dump.uri_support import parse_uri
 
