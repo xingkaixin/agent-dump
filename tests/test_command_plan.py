@@ -195,7 +195,7 @@ def test_build_command_plan_rejects_collect_mode_conflicts(overrides: dict[str, 
 
 @pytest.mark.parametrize("overrides", [{"list_requested": True}, {"search": "bug"}, {"days": 3}, {"query": "bug"}])
 def test_build_command_plan_allows_print_for_explicit_and_implicit_list(overrides: dict[str, object]) -> None:
-    plan = build_command_plan(make_request(raw_format="print", format_specified=True, **overrides))
+    plan = build_command_plan(make_request(raw_format="print", **overrides))
 
     operation = plan.operation
     assert isinstance(operation, SessionOperation)
@@ -204,7 +204,7 @@ def test_build_command_plan_allows_print_for_explicit_and_implicit_list(override
 
 def test_build_command_plan_rejects_print_for_interactive() -> None:
     with pytest.raises(CommandPlanError) as exc_info:
-        build_command_plan(make_request(raw_format="print", format_specified=True, interactive=True))
+        build_command_plan(make_request(raw_format="print", interactive=True))
 
     assert exc_info.value.code is CommandPlanErrorCode.INTERACTIVE_PRINT
 
@@ -223,12 +223,12 @@ def test_build_command_plan_rejects_query_with_query_uri() -> None:
         (make_request(list_requested=True, query="provider:unknown bug"), CommandPlanErrorCode.QUERY_SPEC_INVALID),
         (make_request(uri="not-a-uri"), CommandPlanErrorCode.URI_INVALID),
         (
-            make_request(uri="codex://session", head=True, raw_format="json", format_specified=True),
+            make_request(uri="codex://session", head=True, raw_format="json"),
             CommandPlanErrorCode.URI_HEAD_WITH_FORMAT,
         ),
         (make_request(uri="codex://session", head=True, summary=True), CommandPlanErrorCode.URI_HEAD_WITH_SUMMARY),
         (
-            make_request(list_requested=True, raw_format="xml", format_specified=True),
+            make_request(list_requested=True, raw_format="xml"),
             CommandPlanErrorCode.FORMAT_INVALID,
         ),
     ],
@@ -250,7 +250,6 @@ def test_build_command_plan_normalizes_uri_modifiers() -> None:
             output="exports",
             output_specified=True,
             raw_format="json,md",
-            format_specified=True,
             summary=True,
         )
     )
@@ -274,3 +273,10 @@ def test_build_command_plan_records_non_uri_modifier_warnings() -> None:
         CommandPlanWarning.SUMMARY_IGNORED_NON_URI,
         CommandPlanWarning.HEAD_IGNORED_NON_URI,
     )
+
+
+def test_build_command_plan_rejects_explicit_empty_format() -> None:
+    with pytest.raises(CommandPlanError) as exc_info:
+        build_command_plan(make_request(list_requested=True, raw_format=""))
+
+    assert exc_info.value.code is CommandPlanErrorCode.FORMAT_INVALID
