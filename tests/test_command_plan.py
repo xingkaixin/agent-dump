@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from agent_dump.collect_models import CollectMode
 from agent_dump.command_plan import (
     CollectOperation,
     CommandMode,
@@ -162,7 +163,7 @@ def test_build_command_plan_normalizes_collect_query_uri() -> None:
             until="2026-08-10",
             save="report.md",
             dry_run=True,
-            collect_mode="insight",
+            collect_mode=CollectMode.INSIGHT,
         )
     )
 
@@ -173,7 +174,7 @@ def test_build_command_plan_normalizes_collect_query_uri() -> None:
     assert operation.until == "2026-08-10"
     assert operation.save == "report.md"
     assert operation.dry_run is True
-    assert operation.collect_mode == "insight"
+    assert operation.collect_mode is CollectMode.INSIGHT
     assert operation.query_spec is not None
     assert operation.query_spec.agent_names == {"codex"}
 

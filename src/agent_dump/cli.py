@@ -13,6 +13,7 @@ from agent_dump.cli_shared import (
     print_diagnostic as _print_diagnostic,
 )
 from agent_dump.collect import request_summary_from_llm
+from agent_dump.collect_models import CollectMode
 from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
 from agent_dump.command_plan import (
     CollectOperation,
@@ -143,7 +144,7 @@ def _build_command_request(
         head=args.head,
         summary=args.summary,
         collect=args.collect,
-        collect_mode=args.collect_mode,
+        collect_mode=CollectMode(args.collect_mode),
         dry_run=args.dry_run,
         stats=args.stats,
         providers=args.providers,
@@ -177,9 +178,9 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--collect", action="store_true", help=i18n.t(Keys.CLI_COLLECT_HELP))
     parser.add_argument(
         "--collect-mode",
-        type=str,
-        choices=["pm", "insight"],
-        default="pm",
+        type=CollectMode,
+        choices=tuple(CollectMode),
+        default=CollectMode.PM,
         dest="collect_mode",
         help=i18n.t(Keys.CLI_COLLECT_MODE_HELP),
     )

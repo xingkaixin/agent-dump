@@ -9,7 +9,7 @@ import json
 import re
 from typing import Any, cast
 
-from agent_dump.collect_models import MAX_SUMMARY_ITEMS_PER_FIELD, collect_fields_for
+from agent_dump.collect_models import MAX_SUMMARY_ITEMS_PER_FIELD, CollectMode, collect_fields_for
 
 
 def normalize_text(value: str) -> str:
@@ -38,12 +38,12 @@ def dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_ITE
     return result
 
 
-def empty_summary_payload(mode: str = "pm") -> dict[str, list[str]]:
+def empty_summary_payload(mode: CollectMode = CollectMode.PM) -> dict[str, list[str]]:
     """Create one empty structured summary payload."""
     return {field_name: [] for field_name in collect_fields_for(mode)}
 
 
-def normalize_summary_payload(payload: dict[str, Any], *, mode: str = "pm") -> dict[str, list[str]]:
+def normalize_summary_payload(payload: dict[str, Any], *, mode: CollectMode = CollectMode.PM) -> dict[str, list[str]]:
     """Normalize unknown payload to the fixed summary schema."""
     fields = collect_fields_for(mode)
     normalized: dict[str, list[str]] = {field_name: [] for field_name in fields}
@@ -64,7 +64,7 @@ def merge_summary_payloads(
     payloads: Iterable[dict[str, list[str]]],
     *,
     max_items_per_field: int = MAX_SUMMARY_ITEMS_PER_FIELD,
-    mode: str = "pm",
+    mode: CollectMode = CollectMode.PM,
 ) -> dict[str, list[str]]:
     """Merge structured summaries deterministically."""
     fields = collect_fields_for(mode)
