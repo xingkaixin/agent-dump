@@ -7,6 +7,8 @@ import threading
 import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.i18n import Keys
+from agent_dump.provider_diagnostics import ProviderDiagnostic
 from agent_dump.scanner import AgentScanner
 from agent_dump.text_safety import has_unsafe_line_characters
 
@@ -204,6 +206,35 @@ class TestAgentScanner:
             ("broken", []),
         ]
         assert "ValueError: malformed row" in capsys.readouterr().err
+
+    def test_get_sessions_emits_structured_provider_failure(self):
+        broken = FakeAgent("broken")
+        error = ValueError("malformed row")
+        broken.sessions_error = error
+        diagnostics: list[ProviderDiagnostic] = []
+
+        results = AgentScanner([broken], diagnostic_sink=diagnostics.append).get_sessions(days=7)
+
+        assert results == [(broken, [])]
+        assert diagnostics == [
+            ProviderDiagnostic(
+                message_key=Keys.WARN_PROVIDER_OPERATION_FAILED,
+                fields={
+                    "agent": "Broken",
+                    "error_type": "ValueError",
+                    "error": error,
+                },
+            )
+        ]
+
+    def test_get_sessions_can_disable_scanner_failure_output(self, capsys):
+        broken = FakeAgent("broken")
+        broken.sessions_error = ValueError("malformed row")
+
+        results = AgentScanner([broken], diagnostic_sink=None).get_sessions(days=7)
+
+        assert results == [(broken, [])]
+        assert capsys.readouterr().err == ""
 
     def test_get_sessions_with_no_agents(self):
         assert AgentScanner([]).get_sessions(days=7) == []

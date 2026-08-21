@@ -4,15 +4,13 @@ Scanner for agent tools
 
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-import sys
 from typing import TypeVar
 
 from agent_dump.agent_registry import create_registered_agents
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
-from agent_dump.provider_diagnostics import ProviderDiagnosticSink, print_provider_diagnostic
+from agent_dump.provider_diagnostics import ProviderDiagnostic, ProviderDiagnosticSink, print_provider_diagnostic
 from agent_dump.terminal_output import render_terminal_message
-from agent_dump.text_safety import safe_display_text
 
 T = TypeVar("T")
 
@@ -27,8 +25,27 @@ class AgentScanner:
         diagnostic_sink: ProviderDiagnosticSink | None = print_provider_diagnostic,
     ) -> None:
         self.agents = list(agents) if agents is not None else create_registered_agents()
+        self._diagnostic_sink = diagnostic_sink
         for agent in self.agents:
             agent._set_diagnostic_sink(diagnostic_sink)
+
+    @staticmethod
+    def _operation_failure_diagnostic(agent: BaseAgent, exc: Exception) -> ProviderDiagnostic:
+        return ProviderDiagnostic(
+            message_key=Keys.WARN_PROVIDER_OPERATION_FAILED,
+            fields={
+                "agent": agent.display_name,
+                "error_type": type(exc).__name__,
+                "error": exc,
+            },
+        )
+
+    @staticmethod
+    def _lookup_failure_diagnostic(agent: BaseAgent, exc: Exception) -> ProviderDiagnostic:
+        return ProviderDiagnostic(
+            message_key=Keys.WARN_SESSION_LOOKUP_FAILED,
+            fields={"agent": agent.display_name, "error": exc},
+        )
 
     @staticmethod
     def _scan_single_agent(agent: BaseAgent) -> list[Session] | None:
@@ -42,7 +59,7 @@ class AgentScanner:
         fn: Callable[[BaseAgent], T],
         agents: Sequence[BaseAgent] | None = None,
         *,
-        format_error: Callable[[BaseAgent, Exception], str] | None = None,
+        diagnostic_factory: Callable[[BaseAgent, Exception], ProviderDiagnostic] | None = None,
     ) -> list[tuple[BaseAgent, T | None]]:
         """Execute one provider operation concurrently in registration order."""
         selected_agents = list(agents) if agents is not None else self.agents
@@ -56,16 +73,9 @@ class AgentScanner:
                 try:
                     result = future.result()
                 except Exception as exc:
-                    if format_error is None:
-                        message = render_terminal_message(
-                            Keys.WARN_PROVIDER_OPERATION_FAILED,
-                            agent=agent.display_name,
-                            error_type=type(exc).__name__,
-                            error=exc,
-                        )
-                    else:
-                        message = safe_display_text(format_error(agent, exc))
-                    print(message, file=sys.stderr)
+                    if self._diagnostic_sink is not None:
+                        factory = diagnostic_factory or self._operation_failure_diagnostic
+                        self._diagnostic_sink(factory(agent, exc))
                     result = None
                 results.append((agent, result))
             return results
@@ -122,11 +132,7 @@ class AgentScanner:
         results = self._run_concurrently(
             lambda agent: agent.find_session_by_id(session_id),
             candidates,
-            format_error=lambda agent, exc: i18n.t(
-                Keys.WARN_SESSION_LOOKUP_FAILED,
-                agent=agent.display_name,
-                error=exc,
-            ),
+            diagnostic_factory=self._lookup_failure_diagnostic,
         )
         return next(
             ((agent, session) for agent, session in results if session is not None),
