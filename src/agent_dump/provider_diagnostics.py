@@ -6,8 +6,7 @@ import sys
 from threading import Lock
 from typing import Any
 
-from agent_dump.i18n import i18n
-from agent_dump.text_safety import safe_display_text
+from agent_dump.terminal_output import render_terminal_message
 
 
 @dataclass(frozen=True)
@@ -24,7 +23,7 @@ _TERMINAL_DIAGNOSTIC_LOCK = Lock()
 
 def render_provider_diagnostic(diagnostic: ProviderDiagnostic) -> str:
     """Render one provider warning for terminal display."""
-    return safe_display_text(i18n.t(diagnostic.message_key, **diagnostic.fields))
+    return render_terminal_message(diagnostic.message_key, **diagnostic.fields)
 
 
 def print_provider_diagnostic(diagnostic: ProviderDiagnostic) -> None:
