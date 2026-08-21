@@ -9,17 +9,7 @@ import threading
 from typing import cast
 
 from agent_dump.agents.base import BaseAgent
-from agent_dump.collect import (
-    build_collect_final_prompt,
-    collect_entries,
-    plan_collect_entries,
-    reduce_collect_summaries,
-    request_summary_from_llm,
-    resolve_collect_date_range,
-    summarize_collect_entries,
-    write_collect_markdown,
-)
-from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode
+from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, resolve_collect_date_range
 from agent_dump.collect_logging import create_collect_logger
 from agent_dump.collect_models import (
     CollectFailurePhase,
@@ -36,10 +26,15 @@ from agent_dump.collect_models import (
     TreeReductionProgress,
     WriteOutputProgress,
 )
+from agent_dump.collect_output import write_collect_markdown
 from agent_dump.collect_progress import (
     build_collect_run_stats,
     emit_collect_progress,
 )
+from agent_dump.collect_prompts import build_collect_final_prompt
+from agent_dump.collect_reduction import reduce_collect_summaries, summarize_collect_entries
+from agent_dump.collect_requests import request_summary_from_llm
+from agent_dump.collect_sessions import collect_entries, plan_collect_entries
 from agent_dump.command_plan import CollectOperation
 from agent_dump.config import (
     AIConfig,
