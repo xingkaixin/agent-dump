@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 import os
 from pathlib import Path
 import stat
@@ -56,13 +57,12 @@ def test_execute_exports_retains_success_and_failure_outcomes(tmp_path: Path) ->
     assert isinstance(result.attempts[1].error, RuntimeError)
 
 
-def test_execute_exports_records_summary_failure_without_losing_file(tmp_path: Path) -> None:
-    agent = mock.MagicMock()
+def test_execute_exports_writes_summary_with_initial_json_export(tmp_path: Path) -> None:
+    agent = ExportingTestAgent()
     session = make_session("session-001", "Session")
     output_path = tmp_path / "session-001.json"
-    agent.export_session.return_value = output_path
 
-    with mock.patch("agent_dump.exporting.apply_summary_to_json_export", side_effect=RuntimeError("rewrite failed")):
+    with mock.patch("agent_dump.private_files.os.replace", wraps=os.replace) as replace:
         result = execute_exports(
             agent,
             [session],
@@ -73,7 +73,9 @@ def test_execute_exports_records_summary_failure_without_losing_file(tmp_path: P
 
     assert result.had_success is True
     assert result.exported_paths == (output_path,)
-    assert isinstance(result.attempts[0].error, RuntimeError)
+    assert result.attempts[0].error is None
+    assert json.loads(output_path.read_text(encoding="utf-8"))["summary"] == "# Summary"
+    replace.assert_called_once()
 
 
 def test_execute_exports_rejects_duplicate_targets_before_writing(tmp_path: Path) -> None:

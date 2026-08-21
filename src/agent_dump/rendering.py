@@ -182,9 +182,12 @@ def export_session_in_format(
     *,
     session_data: dict[str, Any] | None = None,
     session_uri: str | None = None,
+    json_fields: dict[str, Any] | None = None,
 ) -> Path:
     """Export one session in the requested file format."""
     if output_format == "json":
+        if json_fields:
+            return agent.export_session_with_fields(session, output_dir, json_fields)
         return agent.export_session(session, output_dir)
     if output_format == "raw":
         return agent.export_raw_session(session, output_dir)
@@ -194,15 +197,6 @@ def export_session_in_format(
         return export_session_markdown(effective_session_uri, effective_session_data, session.id, output_dir)
 
     raise ValueError(f"Unsupported export format: {output_format}")
-
-
-def apply_summary_to_json_export(output_path: Path, summary_markdown: str) -> None:
-    """Inject summary markdown into exported JSON as top-level `summary`."""
-    payload = json.loads(output_path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise RuntimeError("exported JSON payload is not an object")
-    payload["summary"] = summary_markdown
-    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _truncate_summary_text(text: str, max_length: int) -> str:

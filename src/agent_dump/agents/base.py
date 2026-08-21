@@ -3,7 +3,7 @@ Base agent handler interface
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -145,7 +145,18 @@ class BaseAgent(ABC):
 
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to unified JSON. Returns the exported file path."""
+        return self.export_session_with_fields(session, output_dir)
+
+    def export_session_with_fields(
+        self,
+        session: Session,
+        output_dir: Path,
+        fields: Mapping[str, Any] | None = None,
+    ) -> Path:
+        """Export unified JSON after merging workflow-owned top-level fields."""
         payload = self._json_export_payload(session)
+        if fields:
+            payload.update(fields)
         ensure_output_dir(output_dir)
         output_path = self._build_output_path(session, output_dir, ".json")
         return write_private_text(output_path, json.dumps(payload, ensure_ascii=False, indent=2))
