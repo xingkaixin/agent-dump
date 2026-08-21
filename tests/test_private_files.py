@@ -3,6 +3,7 @@
 from datetime import date, datetime, timezone
 import os
 from pathlib import Path
+import shutil
 import stat
 
 import pytest
@@ -255,3 +256,26 @@ class TestExportsAndReportsArePrivate:
 
         assert _mode(copied) == PRIVATE_FILE_MODE
         assert _mode(source) == 0o644
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions only")
+    def test_copy_private_file_is_private_before_writing_content(self, tmp_path, monkeypatch):
+        source = tmp_path / "src.jsonl"
+        source.write_text("sensitive", encoding="utf-8")
+        os.chmod(source, 0o644)
+        destination = tmp_path / "existing" / "copy.jsonl"
+        destination.parent.mkdir()
+        destination.write_text("old", encoding="utf-8")
+        os.chmod(destination, 0o644)
+        modes_during_copy: list[int] = []
+        original_copyfileobj = shutil.copyfileobj
+
+        def record_destination_mode(source_handle, destination_handle):
+            modes_during_copy.append(os.fstat(destination_handle.fileno()).st_mode & 0o777)
+            original_copyfileobj(source_handle, destination_handle)
+
+        monkeypatch.setattr("agent_dump.private_files.shutil.copyfileobj", record_destination_mode)
+
+        copy_private_file(source, destination)
+
+        assert modes_during_copy == [PRIVATE_FILE_MODE]
+        assert destination.read_text(encoding="utf-8") == "sensitive"
