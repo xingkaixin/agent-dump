@@ -315,11 +315,15 @@ class TestCursorAgent:
         )
 
         agent = CursorAgent()
-        sessions = agent.get_sessions(days=7)
-        head = agent.get_session_head(sessions[0])
+        session = agent.find_session_by_request_id("request-head")
+        assert session is not None
+
+        with mock.patch.object(agent, "_query_global", side_effect=AssertionError("unexpected query")):
+            head = agent.get_session_head(session)
 
         assert head["model"] == "claude-4.6"
         assert head["message_count"] == 2
+        assert head["message_count_completeness"] == "exact"
         assert head["subtargets"] == ["worker-1", "worker-2"]
 
     def test_export_raw_session_not_supported(self, monkeypatch, tmp_path):
