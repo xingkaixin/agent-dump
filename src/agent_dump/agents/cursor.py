@@ -1053,44 +1053,9 @@ class CursorAgent(BaseAgent):
 
     def get_session_head(self, session: Session) -> dict[str, Any]:
         head = super().get_session_head(session)
-        composer_id = session.metadata.get("composer_id")
-        if not isinstance(composer_id, str) or not composer_id:
-            composer_id = session.id
-
         subtargets = session.metadata.get("subagent_composer_ids")
         if isinstance(subtargets, list):
             head["subtargets"] = [str(item) for item in subtargets if str(item).strip()]
-
-        composer = self._load_composer_by_id(composer_id)
-        if isinstance(composer, dict):
-            model_config = composer.get("modelConfig")
-            if isinstance(model_config, dict):
-                model_name = model_config.get("modelName")
-                if isinstance(model_name, str) and model_name.strip():
-                    head["model"] = model_name.strip()
-
-        lower, upper = _key_prefix_bounds(f"bubbleId:{composer_id}:")
-        rows = self._query_global(
-            "SELECT value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key",
-            (lower, upper),
-        )
-        message_count = 0
-        for row in rows:
-            bubble = self._parse_json(row["value"])
-            if not bubble:
-                continue
-            bubble_type = bubble.get("type")
-            if bubble_type in {1, 2}:
-                message_count += 1
-            if head.get("model"):
-                continue
-            model_info = bubble.get("modelInfo")
-            if isinstance(model_info, dict):
-                model_name = model_info.get("modelName")
-                if isinstance(model_name, str) and model_name.strip():
-                    head["model"] = model_name.strip()
-
-        head["message_count"] = message_count
         return head
 
     def export_raw_session(self, session: Session, output_dir: Path) -> Path:
