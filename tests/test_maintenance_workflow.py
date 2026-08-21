@@ -204,12 +204,51 @@ class TestStatsMode:
         configure_scanner_sessions(scanner)
 
         with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
-            with mock.patch("agent_dump.maintenance_workflow.apply_query_filter", return_value=[session]):
+            with mock.patch(
+                "agent_dump.maintenance_workflow.collect_query_matches",
+                return_value={agent.name: [session]},
+            ):
                 result = handle_stats_mode(operation)
 
         assert result == 0
         captured = capsys.readouterr()
         assert "总会话数: 1" in captured.out
+
+    def test_stats_applies_query_limit_globally_across_agents(self, capsys):
+        operation = StatsOperation(days=7, query_spec=QuerySpec(None, None, None, None, 1))
+        older = make_session(
+            "older",
+            "Older",
+            created_at=datetime(2026, 1, 1, 12, 0, 0),
+            metadata={"message_count": 3},
+        )
+        newer = make_session(
+            "newer",
+            "Newer",
+            created_at=datetime(2026, 1, 2, 12, 0, 0),
+            metadata={"message_count": 5},
+        )
+        first_agent = mock.MagicMock(name="first_agent")
+        first_agent.name = "codex"
+        first_agent.display_name = "Codex"
+        first_agent.get_sessions.return_value = [older]
+        second_agent = mock.MagicMock(name="second_agent")
+        second_agent.name = "kimi"
+        second_agent.display_name = "Kimi"
+        second_agent.get_sessions.return_value = [newer]
+
+        scanner = mock.MagicMock()
+        scanner.agents = [first_agent, second_agent]
+        scanner.get_available_agents.return_value = [first_agent, second_agent]
+        configure_scanner_sessions(scanner)
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            result = handle_stats_mode(operation)
+
+        output = capsys.readouterr().out
+        assert result == 0
+        assert expect_contains(output, Keys.STATS_TOTAL_SESSIONS, count=1)
+        assert expect_contains(output, Keys.STATS_TOTAL_MESSAGES, count=5)
 
 
 class TestReindexMode:
