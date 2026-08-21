@@ -13,7 +13,7 @@ import sys
 from typing import Any
 from urllib.parse import urlsplit
 
-from agent_dump.private_files import PRIVATE_FILE_MODE
+from agent_dump.private_files import PRIVATE_FILE_MODE, write_private_text
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -561,11 +561,7 @@ def write_config(
         )
 
     rendered_content = _render_config_sections(sections)
-    write_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    with os.fdopen(os.open(config_path, write_flags, PRIVATE_CONFIG_MODE), "w", encoding="utf-8") as config_file:
-        config_path.chmod(PRIVATE_CONFIG_MODE)
-        config_file.write(rendered_content)
-    return config_path
+    return write_private_text(config_path, rendered_content)
 
 
 def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
