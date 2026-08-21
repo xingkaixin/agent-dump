@@ -10,7 +10,7 @@ from agent_dump.cli_shared import (
     show_loading,
     wrap_runtime_fetch_error,
 )
-from agent_dump.collect import request_summary_from_llm
+from agent_dump.collect_requests import request_summary_from_llm
 from agent_dump.command_plan import UriOperation
 from agent_dump.config import AIConfig, AIConfigError, load_ai_config, validate_ai_config
 from agent_dump.diagnostics import DiagnosticError, session_not_found

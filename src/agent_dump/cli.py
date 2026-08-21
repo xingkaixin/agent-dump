@@ -12,8 +12,8 @@ from agent_dump.cli_shared import (
     is_option_specified,
     print_diagnostic as _print_diagnostic,
 )
-from agent_dump.collect import request_summary_from_llm
 from agent_dump.collect_models import CollectMode
+from agent_dump.collect_requests import request_summary_from_llm
 from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
 from agent_dump.command_plan import (
     CollectOperation,
