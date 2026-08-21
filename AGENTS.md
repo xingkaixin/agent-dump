@@ -80,6 +80,7 @@
 | `search_index.py` | SQLite FTS5 搜索索引 |
 | `selector.py` | 终端交互选择与非 TTY 输入回退 |
 | `config.py` | `ConfigurationDocument` TOML 快照、兼容投影、保留式更新与校验 |
+| `config_command.py` | 配置查看、交互编辑与终端展示工作流 |
 | `coercion.py` | 不可信 provider 标量的全输入域容错转换（safe_int / safe_float / safe_epoch_datetime） |
 | `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
@@ -210,7 +211,8 @@ agent-dump/
 │   ├── collect_output.py        # collect Markdown 输出
 │   ├── collect_progress.py      # collect 日志、进度与 run stats
 │   ├── collect_summary.py       # collect 摘要 payload 处理
-│   ├── config.py                # 配置加载与编辑
+│   ├── config.py                # 配置模型、加载、校验与写入
+│   ├── config_command.py        # 配置查看与交互编辑
 │   ├── diagnostics.py           # 结构化诊断
 │   ├── i18n.py                  # 中英文文案
 │   ├── message_filter.py        # 消息过滤

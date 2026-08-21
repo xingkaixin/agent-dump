@@ -30,7 +30,8 @@ from agent_dump.command_plan import (
     UriOperation,
     build_command_plan,
 )
-from agent_dump.config import ExportConfig, handle_config_command, load_export_config, load_shortcuts_config
+from agent_dump.config import ExportConfig, load_export_config, load_shortcuts_config
+from agent_dump.config_command import handle_config_command
 from agent_dump.diagnostics import (
     DiagnosticError,
     ParsedUri,
