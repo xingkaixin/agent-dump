@@ -1,0 +1,225 @@
+"""Session discovery and event planning for collect mode."""
+
+from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, tzinfo
+from pathlib import Path
+import sys
+from typing import Any
+
+from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
+from agent_dump.collect_events import chunk_collect_events, extract_collect_events
+from agent_dump.collect_logging import CollectLogger
+from agent_dump.collect_models import (
+    CollectEntry,
+    CollectProgressEvent,
+    PlanChunksProgress,
+    PlannedCollectEntry,
+    ScanSessionsProgress,
+)
+from agent_dump.collect_progress import emit_collect_progress
+from agent_dump.config import CollectConfig
+from agent_dump.i18n import Keys, i18n
+from agent_dump.query_filter import (
+    QuerySpec,
+    SearchSessionMatch,
+    limit_query_session_matches,
+    query_session_matches,
+)
+from agent_dump.scanner import AgentScanner
+from agent_dump.terminal_output import render_terminal_message
+from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
+
+_MAX_SESSION_PARSE_WORKERS = 32
+
+
+def _session_local_date(session: Session, local_tz: tzinfo) -> date:
+    return to_local_datetime(session.created_at, local_tz).date()
+
+
+def _normalize_collect_project_path(value: str) -> Path | None:
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return Path(normalized).expanduser().resolve(strict=False)
+
+
+def _is_session_denied(session: Session, deny_paths: tuple[str, ...]) -> bool:
+    working_directory = derive_session_facts(session).working_directory
+    session_path = _normalize_collect_project_path(str(working_directory or ""))
+    if session_path is None:
+        return False
+
+    for deny_path in deny_paths:
+        denied_root = _normalize_collect_project_path(deny_path)
+        if denied_root is None:
+            continue
+        if session_path == denied_root or denied_root in session_path.parents:
+            return True
+    return False
+
+
+def collect_entries(
+    *,
+    agents: list[BaseAgent],
+    since_date: date,
+    until_date: date,
+    collect_config: CollectConfig | None = None,
+    query_spec: QuerySpec | None = None,
+    render_session_text_fn: Callable[[str, Mapping[str, Any]], str],
+    local_tz: tzinfo | None = None,
+    progress_callback: Callable[[CollectProgressEvent], None] | None = None,
+    scanner: AgentScanner | None = None,
+    logger: CollectLogger | None = None,
+) -> tuple[list[CollectEntry], bool]:
+    """Collect session entries for range."""
+    entries: list[CollectEntry] = []
+    has_truncated = False
+    resolved_local_tz = local_tz or get_local_timezone()
+    resolved_collect_config = collect_config or CollectConfig()
+    matched_sessions: list[tuple[BaseAgent, Session, date]] = []
+    candidate_matches: list[SearchSessionMatch] = []
+
+    days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
+    session_scanner = scanner if scanner is not None else AgentScanner(agents)
+    for agent, sessions in session_scanner.get_sessions(days_span, agents=agents):
+        deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
+        if deny_paths:
+            sessions = [session for session in sessions if not _is_session_denied(session, deny_paths)]
+        matches = (
+            query_session_matches(agent, sessions, query_spec)
+            if query_spec is not None
+            else [
+                SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
+                for session in sessions
+            ]
+        )
+        for match in matches:
+            session = match.session
+            session_date = _session_local_date(session, resolved_local_tz)
+            if session_date < since_date or session_date > until_date:
+                continue
+            candidate_matches.append(match)
+
+    if query_spec is not None:
+        candidate_matches = limit_query_session_matches(candidate_matches, query_spec.limit)
+
+    for match in candidate_matches:
+        matched_sessions.append(
+            (
+                match.agent,
+                match.session,
+                _session_local_date(match.session, resolved_local_tz),
+            )
+        )
+
+    total = len(matched_sessions)
+    emit_collect_progress(
+        progress_callback,
+        ScanSessionsProgress(current=0, total=total),
+    )
+
+    def _collect_entry(matched_session: tuple[BaseAgent, Session, date]) -> CollectEntry:
+        agent, session, session_date = matched_session
+        with agent.lease_cached_session_data(session) as session_data:
+            uri = agent.get_session_uri(session)
+            events, truncated = extract_collect_events(
+                session_data,
+                fallback_text_fn=lambda: render_session_text_fn(uri, session_data),
+            )
+            return CollectEntry(
+                date_value=session_date,
+                created_at=session.created_at,
+                agent_name=agent.name,
+                agent_display_name=agent.display_name,
+                session_id=session.id,
+                session_title=session.title,
+                session_uri=uri,
+                project_directory=str(derive_session_facts(session).working_directory or ""),
+                events=events,
+                is_truncated=truncated,
+            )
+
+    if matched_sessions:
+        max_workers = min(_MAX_SESSION_PARSE_WORKERS, total)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(_collect_entry, matched_session) for matched_session in matched_sessions]
+            failed_sessions = 0
+            last_error: Exception | None = None
+            for index, (matched_session, future) in enumerate(
+                zip(matched_sessions, futures, strict=True),
+                start=1,
+            ):
+                agent, session, _ = matched_session
+                try:
+                    entry = future.result()
+                except Exception as exc:  # noqa: BLE001 - 一条损坏会话不应影响其他会话
+                    failed_sessions += 1
+                    last_error = exc
+                    try:
+                        session_uri = agent.get_session_uri(session)
+                    except Exception:  # noqa: BLE001 - URI 生成失败时仍需要可识别的诊断标签
+                        session_uri = f"{agent.name}:{session.id}"
+                    print(
+                        render_terminal_message(
+                            Keys.WARN_SESSION_READ_SKIPPED,
+                            uri=session_uri,
+                            error=exc,
+                        ),
+                        file=sys.stderr,
+                    )
+                    if logger is not None:
+                        logger.log(
+                            "session_read_failed",
+                            agent=agent.name,
+                            session_uri=session_uri,
+                            error_type=type(exc).__name__,
+                            error=str(exc),
+                        )
+                else:
+                    entries.append(entry)
+                    has_truncated = has_truncated or entry.is_truncated
+                    session_uri = entry.session_uri
+                emit_collect_progress(
+                    progress_callback,
+                    ScanSessionsProgress(current=index, total=total, session_uri=session_uri),
+                )
+
+        if not entries and last_error is not None:
+            raise last_error
+        if failed_sessions:
+            print(i18n.t(Keys.WARN_SESSION_READ_FAILURES, count=failed_sessions), file=sys.stderr)
+
+    entries.sort(key=lambda item: normalize_datetime_utc(item.created_at))
+    return entries, has_truncated
+
+
+def plan_collect_entries(
+    entries: list[CollectEntry],
+    *,
+    progress_callback: Callable[[CollectProgressEvent], None] | None = None,
+) -> tuple[list[PlannedCollectEntry], int]:
+    """Plan deterministic event chunks for each collected session."""
+    total = len(entries)
+    planned_entries: list[PlannedCollectEntry] = []
+    total_chunks = 0
+    emit_collect_progress(
+        progress_callback,
+        PlanChunksProgress(current=0, total=total),
+    )
+
+    for index, entry in enumerate(entries, start=1):
+        chunks = tuple(chunk_collect_events(entry.events))
+        total_chunks += len(chunks)
+        planned_entries.append(PlannedCollectEntry(collect_entry=entry, chunks=chunks))
+        emit_collect_progress(
+            progress_callback,
+            PlanChunksProgress(
+                current=index,
+                total=total,
+                session_uri=entry.session_uri,
+                chunk_total=total_chunks,
+            ),
+        )
+
+    return planned_entries, total_chunks

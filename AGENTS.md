@@ -92,13 +92,17 @@
 | `transcript.py` | 标准化消息的只读读取（role、正文、legacy content、tool / subagent facts） |
 | `time_utils.py` | 时间与时区工具，全部转换的单一入口 |
 | `uri_support.py` | URI 解析与 Scanner locate 兼容 adapter |
-| `collect.py` | collect 摘要请求编排与 tree reduction |
+| `collect.py` | collect 内部兼容导入入口 |
 | `collect_dates.py` | collect 日期输入解析与日期范围归一化 |
 | `collect_events.py` | collect 高信号事件提取、渲染与 chunk 规划 |
 | `collect_llm.py` | collect 的 LLM 请求、错误分类与重试判定 |
 | `collect_logging.py` | collect 的私有 JSONL 诊断日志与一次性写入失败通知 |
 | `collect_output.py` | collect Markdown 输出 |
+| `collect_prompts.py` | collect 各阶段 prompt 构造 |
 | `collect_progress.py` | collect 的进度上报与 run stats |
+| `collect_reduction.py` | session 并发总结、失败隔离与 tree reduction |
+| `collect_requests.py` | collect LLM 重试与结构化响应处理 |
+| `collect_sessions.py` | session 发现、读取、过滤与 chunk 规划 |
 | `collect_summary.py` | collect 摘要 payload 的归一化、合并与 JSON 提取 |
 | `agents/message_assembly.py` | 统一 message/part 组装与 assistant 分组判断 |
 | `agents/message_types.py` | Provider 组装阶段使用的统一 message / session payload 内部类型 |
@@ -173,7 +177,7 @@ collect_workflow.handle_collect_mode()
   ↓
 AgentScanner + 可选 agents:// 查询 URI
   ↓
-collect.py 将 Session 渲染为高信号事件流
+collect_sessions.py 读取 Session，collect_events.py 渲染高信号事件流
   ↓
 LLM chunk summary → session merge → tree reduction
   ↓
@@ -204,14 +208,18 @@ agent-dump/
 │   ├── uri_workflow.py          # URI 工作流
 │   ├── collect_workflow.py      # collect 工作流
 │   ├── maintenance_workflow.py  # stats / reindex 工作流
-│   ├── collect.py               # collect 摘要请求编排与 tree reduction
+│   ├── collect.py               # collect 内部兼容导入入口
 │   ├── collect_dates.py         # collect 日期范围解析
 │   ├── collect_events.py        # collect 事件提取、渲染与 chunk 规划
 │   ├── collect_llm.py           # collect LLM 请求
 │   ├── collect_logging.py       # collect 私有诊断日志
 │   ├── collect_models.py        # collect 模式、阶段与输出字段定义
 │   ├── collect_output.py        # collect Markdown 输出
+│   ├── collect_prompts.py       # collect prompt 构造
 │   ├── collect_progress.py      # collect 进度与 run stats
+│   ├── collect_reduction.py     # collect 并发总结与 tree reduction
+│   ├── collect_requests.py      # collect 重试与结构化响应处理
+│   ├── collect_sessions.py      # collect session 发现与 chunk 规划
 │   ├── collect_summary.py       # collect 摘要 payload 处理
 │   ├── config.py                # 配置模型、加载、校验与写入
 │   ├── config_command.py        # 配置查看与交互编辑
@@ -391,14 +399,18 @@ list 与 collect 只在各自边界投影为 `Session`。带 `role:` 的查询�
 
 collect 模式入口：
 - `collect_workflow.py`：参数校验、dry-run、保存路径、进度编排。
-- `collect.py`：摘要请求编排、摘要合并与 tree reduction。
+- `collect.py`：保留内部导入兼容，不拥有业务实现。
 - `collect_dates.py`：日期输入解析与日期范围归一化。
 - `collect_events.py`：事件收集、渲染与 chunk planning。
 - `collect_llm.py`：AI 请求。
 - `collect_models.py`：`pm` / `insight` 模式、进度阶段与输出字段的闭集定义。
 - `collect_output.py`：Markdown 输出。
 - `collect_logging.py`：私有 JSONL 诊断日志与写入失败通知。
+- `collect_prompts.py`：各阶段 prompt 构造。
 - `collect_progress.py`：进度上报与 run stats。
+- `collect_reduction.py`：session 并发总结、失败隔离与 tree reduction。
+- `collect_requests.py`：重试与结构化响应处理。
+- `collect_sessions.py`：session 发现、读取、过滤与 chunk 规划。
 - `collect_summary.py`：摘要 payload 归一化、合并与 JSON 提取。
 
 ---
