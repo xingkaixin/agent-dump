@@ -19,7 +19,7 @@ from agent_dump.collect import (
     summarize_collect_entries,
     write_collect_markdown,
 )
-from agent_dump.collect_models import CollectProgressEvent, CollectRunStats, CollectStage
+from agent_dump.collect_models import CollectFailurePhase, CollectProgressEvent, CollectRunStats, CollectStage
 from agent_dump.collect_progress import (
     build_collect_run_stats,
     create_collect_logger,
@@ -240,7 +240,7 @@ def handle_collect_mode(
         print(i18n.t(Keys.NO_AGENTS_FOUND))
         return 1
 
-    phase = "read"
+    phase = CollectFailurePhase.READ
     try:
         with show_collect_progress() as update_progress:
             emit_collect_progress(
@@ -307,7 +307,7 @@ def handle_collect_mode(
                     )
                 )
                 return 0
-            phase = "summarize"
+            phase = CollectFailurePhase.SUMMARIZE
             # dry-run 已在上方返回；非 dry-run 路径的 config 已通过校验
             ai_config = cast(AIConfig, config)
             session_summaries = summarize_collect_entries(
@@ -319,7 +319,7 @@ def handle_collect_mode(
                 logger=collect_logger,
                 mode=operation.collect_mode,
             )
-            phase = "render"
+            phase = CollectFailurePhase.RENDER
             emit_collect_progress(update_progress, stage=CollectStage.RENDER_FINAL, current=0, total=2)
             aggregate = reduce_collect_summaries(
                 config=ai_config,
@@ -344,7 +344,7 @@ def handle_collect_mode(
             )
             emit_collect_progress(update_progress, stage=CollectStage.RENDER_FINAL, current=2, total=2)
             emit_collect_progress(update_progress, stage=CollectStage.WRITE_OUTPUT, current=0, total=1)
-            phase = "write"
+            phase = CollectFailurePhase.WRITE
             output_path = write_collect_markdown(
                 markdown,
                 since_date=since_date,
@@ -358,9 +358,11 @@ def handle_collect_mode(
             emit_collect_progress(update_progress, stage=CollectStage.WRITE_OUTPUT, current=1, total=1)
     except Exception as exc:
         if collect_logger is not None:
-            collect_logger.log("collect_run_fail", phase=phase, error=str(exc))
-        if phase == "read":
+            collect_logger.log("collect_run_fail", phase=phase.value, error=str(exc))
+        if phase is CollectFailurePhase.READ:
             print(i18n.t(Keys.COLLECT_READ_FAILED, error=safe_display_text(str(exc))))
+        elif phase is CollectFailurePhase.WRITE:
+            print(i18n.t(Keys.COLLECT_WRITE_FAILED, error=safe_display_text(str(exc))))
         else:
             # 远端错误响应会被原样带进异常文本；先压成一行安全文本再进终端
             print(i18n.t(Keys.COLLECT_API_FAILED, error=safe_display_text(str(exc))))
