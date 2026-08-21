@@ -321,7 +321,8 @@ Project、Session Source 与带 exact/unknown 完整度的 Message Count Fact；
 完整 payload 有两种所有权入口：`get_cached_session_data(session)` 用于同一短工作流中的
 多投影复用，完成项受内部 LRU 上限约束；`lease_cached_session_data(session)` 用于 Search、
 Collect 等批量一次性投影，离开 context 后释放完整 payload。两者都按同一 change signal
-失效，并合并同一 Session 的并发读取；批量调用方不得用普通缓存重新引入全量驻留。
+失效，并合并同一 Session 的并发读取；缓存内部保留私有快照，每个消费者获取隔离副本。
+批量调用方不得用普通缓存重新引入全量驻留。
 
 `get_sessions()` 与 `find_session_by_id()` 是自包含读取入口，调用方不得依赖先调用
 `is_available()` 来初始化 provider 路径。跨 provider 的 availability、list、locate
@@ -407,7 +408,7 @@ collect 模式入口：
 
 步骤：
 1. 在 `src/agent_dump/agents/<agent_name>.py` 创建 `BaseAgent` 子类。会话以文件形式存储的 provider 应继承 `FileSessionAgent`，只需实现 `_iter_session_files()` 与 `_parse_session_file()`（可选 `_session_file_candidates()` 加速 URI 定位）。
-2. 实现 `is_available()`、`get_sessions()`、`get_session_data()`；`scan()` 由 `BaseAgent` 统一通过 `get_sessions(days=None)` 提供（继承 `FileSessionAgent` 时前两项也由基类提供）。`get_sessions()` 与 `find_session_by_id()` 必须能在未预先调用 `is_available()` 时直接工作。`export_session()` 由 `BaseAgent` 统一实现，只在需要导出专属变换时覆盖 `_json_export_payload()`（覆盖时必须先浅拷贝，基类返回的是请求级缓存里的共享 dict）。
+2. 实现 `is_available()`、`get_sessions()`、`get_session_data()`；`scan()` 由 `BaseAgent` 统一通过 `get_sessions(days=None)` 提供（继承 `FileSessionAgent` 时前两项也由基类提供）。`get_sessions()` 与 `find_session_by_id()` 必须能在未预先调用 `is_available()` 时直接工作。`export_session()` 由 `BaseAgent` 统一实现，只在需要导出专属变换时覆盖 `_json_export_payload()`；返回的 payload 是当前消费者的隔离副本，可直接变换。
 3. 实现 `get_search_roots()`，让诊断信息显示真实搜索路径。
 4. 在 `src/agent_dump/agent_registry.py` 添加 `AgentRegistration`，声明 `name`、`display_name`、`factory`、`uri_schemes`、`location_line`；若该 provider 的 URI 带路径前缀（如 `codex://threads/<id>`）或 session id 用别的名字（如 Cursor 的 requestId），一并声明 `uri_path_prefixes` 与 `uri_identifier_label`——parse_uri 与 URI 示例都由这些字段驱动，不要在共享模块里加 provider 分支。
 5. 在 `src/agent_dump/agents/__init__.py` 导出 provider。
