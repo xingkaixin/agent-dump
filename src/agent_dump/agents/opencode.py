@@ -22,10 +22,12 @@ _EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 class OpenCodeAgent(BaseAgent):
     """Handler for OpenCode sessions"""
 
+    provider_name = "opencode"
+    provider_display_name = "OpenCode"
     raw_export_suffix = ".raw.json"
 
     def __init__(self) -> None:
-        super().__init__("opencode", "OpenCode")
+        super().__init__()
         self.db_path: Path | None = None
         self._db_path_discovered = False
 

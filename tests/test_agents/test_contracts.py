@@ -668,6 +668,15 @@ def test_contract_builders_cover_registered_providers() -> None:
     assert set(CONTRACT_BUILDERS) == registered_providers
 
 
+def test_registration_identity_comes_from_provider_class() -> None:
+    for registration in AGENT_REGISTRATIONS:
+        assert registration.name == registration.factory.provider_name
+        assert registration.display_name == registration.factory.provider_display_name
+        agent = registration.factory()
+        assert agent.name == registration.name
+        assert agent.display_name == registration.display_name
+
+
 def _find_contract_session(fixture: ProviderContractFixture) -> Session:
     sessions = fixture.agent.get_sessions(days=None)
     session = next((item for item in sessions if item.id == fixture.session_id), None)
