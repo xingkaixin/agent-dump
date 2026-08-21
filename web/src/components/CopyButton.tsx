@@ -7,15 +7,18 @@ interface Props {
   copiedLabel: string;
 }
 
-function fallbackCopy(text: string) {
+function fallbackCopy(text: string): boolean {
   const textarea = document.createElement("textarea");
   textarea.value = text;
   textarea.setAttribute("readonly", "true");
   textarea.style.cssText = "position:absolute;opacity:0;pointer-events:none";
   document.body.append(textarea);
   textarea.select();
-  document.execCommand("copy");
-  textarea.remove();
+  try {
+    return document.execCommand("copy");
+  } finally {
+    textarea.remove();
+  }
 }
 
 export function CopyButton({ text, copyLabel, copiedLabel }: Props) {
@@ -26,8 +29,8 @@ export function CopyButton({ text, copyLabel, copiedLabel }: Props) {
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
-      } else {
-        fallbackCopy(text);
+      } else if (!fallbackCopy(text)) {
+        return;
       }
       setCopied(true);
       clearTimeout(timer.current);

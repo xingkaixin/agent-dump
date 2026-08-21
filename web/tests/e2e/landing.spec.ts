@@ -57,3 +57,24 @@ for (const locale of locales) {
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#141109");
   });
 }
+
+test("copy fallback does not report success when execCommand rejects it", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "isSecureContext", { value: false });
+    Object.defineProperty(document, "execCommand", {
+      value: () => {
+        document.documentElement.dataset.copyAttempted = "true";
+        return false;
+      },
+    });
+  });
+  await page.goto("/");
+
+  const copyButton = page.locator("#install").getByRole("button").first();
+  await expect(async () => {
+    await copyButton.click();
+    await expect(page.locator("html")).toHaveAttribute("data-copy-attempted", "true");
+  }).toPass();
+
+  expect(await copyButton.getAttribute("aria-label")).toBe("Copy");
+});
