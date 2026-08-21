@@ -44,6 +44,7 @@ from agent_dump.collect import (
     summarize_collect_entries,
     write_collect_markdown,
 )
+from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, parse_user_date
 from agent_dump.collect_llm import LLMRequestError
 from agent_dump.collect_models import INSIGHT_SUMMARY_FIELDS, SUMMARY_FIELDS, CollectMode, collect_fields_for
 from agent_dump.collect_progress import (
@@ -132,8 +133,18 @@ class TestCollectDates:
         assert until == date(2026, 2, 10)
 
     def test_invalid_range(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(CollectDateError) as error:
             resolve_collect_date_range("2026-03-05", "2026-03-01")
+
+        assert error.value.code is CollectDateErrorCode.SINCE_AFTER_UNTIL
+
+    def test_invalid_format(self):
+        with pytest.raises(CollectDateError) as error:
+            parse_user_date("not-a-date")
+
+        assert error.value.code is CollectDateErrorCode.INVALID_FORMAT
+        assert error.value.value == "not-a-date"
+        assert str(error.value) == "invalid date format: not-a-date"
 
     def test_defaults_today_in_local_timezone(self):
         local_tz = timezone(timedelta(hours=8))

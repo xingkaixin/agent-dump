@@ -19,6 +19,7 @@ from agent_dump.cli import (
     handle_collect_mode,
     main,
 )
+from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode
 from agent_dump.collect_models import CollectMode, CollectProgressEvent, CollectStage
 from agent_dump.collect_workflow import resolve_collect_save_path, show_collect_progress
 from agent_dump.command_plan import (
@@ -28,7 +29,7 @@ from agent_dump.command_plan import (
     SessionOperation,
     build_command_plan,
 )
-from agent_dump.config import CollectConfig, ExportConfig
+from agent_dump.config import AIConfigError, CollectConfig, ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import SearchSessionMatch
@@ -489,7 +490,7 @@ class TestMain:
 
         with mock.patch(
             "agent_dump.collect_workflow.resolve_collect_date_range",
-            side_effect=ValueError("invalid date"),
+            side_effect=CollectDateError(CollectDateErrorCode.INVALID_FORMAT, "invalid date"),
         ) as mock_resolve:
             result = handle_collect_mode(collect_operation_from(args))
 
@@ -2997,7 +2998,8 @@ class TestMain:
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=None):
                     with mock.patch(
-                        "agent_dump.uri_workflow.validate_ai_config", return_value=(False, ["missing_file"])
+                        "agent_dump.uri_workflow.validate_ai_config",
+                        return_value=(False, [AIConfigError.MISSING_FILE]),
                     ):
                         with mock.patch(
                             "sys.argv",
@@ -3045,7 +3047,8 @@ class TestMain:
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
                 with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
                     with mock.patch(
-                        "agent_dump.uri_workflow.validate_ai_config", return_value=(False, ["model", "api_key"])
+                        "agent_dump.uri_workflow.validate_ai_config",
+                        return_value=(False, [AIConfigError.MODEL, AIConfigError.API_KEY]),
                     ):
                         with mock.patch(
                             "sys.argv",

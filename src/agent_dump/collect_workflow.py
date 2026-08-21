@@ -19,6 +19,7 @@ from agent_dump.collect import (
     summarize_collect_entries,
     write_collect_markdown,
 )
+from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode
 from agent_dump.collect_models import CollectFailurePhase, CollectProgressEvent, CollectRunStats, CollectStage
 from agent_dump.collect_progress import (
     build_collect_run_stats,
@@ -28,6 +29,7 @@ from agent_dump.collect_progress import (
 from agent_dump.command_plan import CollectOperation
 from agent_dump.config import (
     AIConfig,
+    AIConfigError,
     load_config_document,
     validate_ai_config,
 )
@@ -204,8 +206,8 @@ def handle_collect_mode(
             operation.until,
             days=operation.days,
         )
-    except ValueError as exc:
-        if str(exc) == "since_after_until":
+    except CollectDateError as exc:
+        if exc.code is CollectDateErrorCode.SINCE_AFTER_UNTIL:
             print(i18n.t(Keys.COLLECT_DATE_RANGE_INVALID))
         else:
             print(i18n.t(Keys.COLLECT_DATE_FORMAT_INVALID))
@@ -217,14 +219,14 @@ def handle_collect_mode(
         config = config_document.ai_config()
         valid, errors = validate_ai_config(config)
         if not valid or config is None:
-            if "missing_file" in errors:
+            if AIConfigError.MISSING_FILE in errors:
                 print(i18n.t(Keys.COLLECT_CONFIG_MISSING))
-            elif "base_url_scheme" in errors:
+            elif AIConfigError.BASE_URL_SCHEME in errors:
                 print(i18n.t(Keys.COLLECT_CONFIG_BAD_SCHEME))
-            elif "base_url_plaintext_key" in errors:
+            elif AIConfigError.BASE_URL_PLAINTEXT_KEY in errors:
                 print(i18n.t(Keys.COLLECT_CONFIG_PLAINTEXT_KEY))
             else:
-                print(i18n.t(Keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(errors)))
+                print(i18n.t(Keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(error.value for error in errors)))
             print(i18n.t(Keys.COLLECT_CONFIG_HINT))
             return 1
 

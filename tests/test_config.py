@@ -11,6 +11,7 @@ import pytest
 import agent_dump.config as config_module
 from agent_dump.config import (
     AIConfig,
+    AIConfigError,
     CollectConfig,
     ExportConfig,
     LoggingConfig,
@@ -583,6 +584,12 @@ class TestAiBaseUrlSchemeValidation:
     def _config(base_url: str, api_key: str = "sk-test") -> AIConfig:
         return AIConfig(provider="openai", base_url=base_url, model="m", api_key=api_key)
 
+    def test_missing_config_reports_typed_error(self):
+        valid, errors = validate_ai_config(None)
+
+        assert not valid
+        assert errors == [AIConfigError.MISSING_FILE]
+
     @pytest.mark.parametrize(
         "base_url",
         ["https://api.example.com/v1", "https://api.example.com", "HTTPS://API.EXAMPLE.COM/v1"],
@@ -601,14 +608,14 @@ class TestAiBaseUrlSchemeValidation:
         valid, errors = validate_ai_config(self._config(base_url))
 
         assert not valid
-        assert "base_url_scheme" in errors
+        assert AIConfigError.BASE_URL_SCHEME in errors
 
     @pytest.mark.parametrize("base_url", ["http://api.example.com/v1", "http://10.0.0.5:8080/v1"])
     def test_http_with_a_key_to_a_remote_host_is_rejected(self, base_url):
         valid, errors = validate_ai_config(self._config(base_url))
 
         assert not valid
-        assert "base_url_plaintext_key" in errors
+        assert AIConfigError.BASE_URL_PLAINTEXT_KEY in errors
 
     @pytest.mark.parametrize(
         "base_url",
@@ -629,8 +636,8 @@ class TestAiBaseUrlSchemeValidation:
         valid, errors = validate_ai_config(self._config("http://api.example.com/v1", api_key=""))
 
         assert not valid
-        assert "api_key" in errors
-        assert "base_url_plaintext_key" not in errors
+        assert AIConfigError.API_KEY in errors
+        assert AIConfigError.BASE_URL_PLAINTEXT_KEY not in errors
 
 
 class TestTableKeyPathsSurviveRoundTrip:
