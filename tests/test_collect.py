@@ -24,8 +24,13 @@ from agent_dump.collect import (
     CollectEvent,
     CollectLogger,
     CollectProgressEvent,
+    MergeSessionsProgress,
+    PlanChunksProgress,
     PlannedCollectEntry,
+    ScanSessionsProgress,
     SessionSummaryEntry,
+    SummarizeChunksProgress,
+    TreeReductionProgress,
     _build_summary_bucket_lines,
     build_collect_chunk_prompt,
     build_collect_final_prompt,
@@ -375,6 +380,7 @@ class TestCollectEntries:
         assert truncated is False
         assert entries[0].is_truncated is False
         assert [event.stage for event in progress] == ["scan_sessions", "scan_sessions"]
+        assert isinstance(progress[-1], ScanSessionsProgress)
         assert progress[-1].current == 1
         assert progress[-1].total == 1
 
@@ -432,7 +438,8 @@ class TestCollectEntries:
         assert truncated is False
         assert len(worker_threads) == 2
         assert [entry.session_id for entry in entries] == ["older", "newer"]
-        assert [event.session_uri for event in progress[1:]] == ["codex://newer", "codex://older"]
+        scan_events = [event for event in progress if isinstance(event, ScanSessionsProgress)]
+        assert [event.session_uri for event in scan_events[1:]] == ["codex://newer", "codex://older"]
 
     def test_collect_entries_skips_one_unreadable_session_and_keeps_the_rest(self, tmp_path, capsys) -> None:
         now = datetime.now(timezone.utc)
@@ -468,7 +475,8 @@ class TestCollectEntries:
 
         assert truncated is False
         assert [entry.session_id for entry in entries] == ["good"]
-        assert [(event.current, event.total) for event in progress] == [(0, 2), (1, 2), (2, 2)]
+        scan_events = [event for event in progress if isinstance(event, ScanSessionsProgress)]
+        assert [(event.current, event.total) for event in scan_events] == [(0, 2), (1, 2), (2, 2)]
         captured = capsys.readouterr()
         assert (
             expect(
@@ -866,6 +874,7 @@ class TestCollectEntries:
         assert chunk_count == 3
         assert sum(len(item.chunks) for item in planned) == 3
         assert [event.stage for event in progress] == ["plan_chunks", "plan_chunks", "plan_chunks"]
+        assert isinstance(progress[-1], PlanChunksProgress)
         assert progress[-1].chunk_total == 3
 
     def test_build_collect_run_stats_counts_agents_and_chunks(self):
@@ -1314,8 +1323,8 @@ class TestCollectStructuredSummary:
             )
 
         assert [item.summary_data["topics"] for item in summaries] == [["T1"], ["T2"]]
-        summarize_events = [event for event in progress if event.stage == "summarize_chunks"]
-        merge_events = [event for event in progress if event.stage == "merge_sessions"]
+        summarize_events = [event for event in progress if isinstance(event, SummarizeChunksProgress)]
+        merge_events = [event for event in progress if isinstance(event, MergeSessionsProgress)]
         assert summarize_events[0].current == 0
         assert summarize_events[-1].current == 2
         assert merge_events[0].current == 0
@@ -1502,7 +1511,7 @@ class TestCollectStructuredSummary:
         assert aggregate.reduction_depth >= 2
         assert "2026-03-05" in aggregate.date_summaries
         assert "/repo/0" in aggregate.project_summaries
-        tree_events = [event for event in progress if event.stage == "tree_reduction"]
+        tree_events = [event for event in progress if isinstance(event, TreeReductionProgress)]
         assert tree_events[0].current == 0
         assert tree_events[-1].current == tree_events[-1].total
 

@@ -20,7 +20,21 @@ from agent_dump.collect import (
     write_collect_markdown,
 )
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode
-from agent_dump.collect_models import CollectFailurePhase, CollectProgressEvent, CollectRunStats, CollectStage
+from agent_dump.collect_models import (
+    CollectFailurePhase,
+    CollectOverviewProgress,
+    CollectProgressEvent,
+    CollectRunStats,
+    CollectStage,
+    CollectStartProgress,
+    MergeSessionsProgress,
+    PlanChunksProgress,
+    RenderFinalProgress,
+    ScanSessionsProgress,
+    SummarizeChunksProgress,
+    TreeReductionProgress,
+    WriteOutputProgress,
+)
 from agent_dump.collect_progress import (
     build_collect_run_stats,
     create_collect_logger,
@@ -68,48 +82,50 @@ def preview_collect_save_path(save: str | None, *, since_date: date, until_date:
 
 def _format_collect_progress(event: CollectProgressEvent) -> str:
     """Format one collect progress event for stderr."""
-    if event.stage is CollectStage.COLLECT_START:
+    if isinstance(event, CollectStartProgress):
         return i18n.t(Keys.COLLECT_PROGRESS_START, since=event.since, until=event.until)
-    if event.stage is CollectStage.COLLECT_OVERVIEW:
-        breakdown = ", ".join(
-            f"{agent_name} {count}" for agent_name, count in (event.agent_session_counts or {}).items()
-        )
+    if isinstance(event, CollectOverviewProgress):
+        breakdown = ", ".join(f"{agent_name} {count}" for agent_name, count in event.agent_session_counts.items())
         overview = i18n.t(
             Keys.COLLECT_PROGRESS_OVERVIEW,
-            session_count=event.session_count or event.current,
-            chunk_count=event.chunk_count or 0,
-            concurrency=event.concurrency or 1,
+            session_count=event.session_count,
+            chunk_count=event.chunk_count,
+            concurrency=event.concurrency,
         )
         if not breakdown:
             return overview
         return "\n".join([overview, i18n.t(Keys.COLLECT_PROGRESS_AGENT_BREAKDOWN, breakdown=breakdown)])
-    if event.stage is CollectStage.SCAN_SESSIONS:
+    if isinstance(event, ScanSessionsProgress):
         return i18n.t(Keys.COLLECT_PROGRESS_SCAN_SESSIONS, current=event.current, total=event.total)
-    if event.stage is CollectStage.PLAN_CHUNKS:
+    if isinstance(event, PlanChunksProgress):
         if event.current >= event.total:
             return i18n.t(
                 Keys.COLLECT_PROGRESS_PLAN_CHUNKS_DONE,
                 session_count=event.current,
-                chunk_count=event.chunk_total or 0,
+                chunk_count=event.chunk_total,
             )
         return i18n.t(Keys.COLLECT_PROGRESS_PLAN_CHUNKS, current=event.current, total=event.total)
-    if event.stage is CollectStage.SUMMARIZE_CHUNKS:
+    if isinstance(event, SummarizeChunksProgress):
         return i18n.t(
             Keys.COLLECT_PROGRESS_SUMMARIZE_CHUNKS,
             current=event.current,
             total=event.total,
-            concurrency=event.concurrency or 1,
+            concurrency=event.concurrency,
         )
-    if event.stage is CollectStage.MERGE_SESSIONS:
+    if isinstance(event, MergeSessionsProgress):
         return i18n.t(Keys.COLLECT_PROGRESS_MERGE_SESSIONS, current=event.current, total=event.total)
-    if event.stage is CollectStage.TREE_REDUCTION:
-        level = event.level or 1
-        return i18n.t(Keys.COLLECT_PROGRESS_TREE_REDUCTION, level=level, current=event.current, total=event.total)
-    if event.stage is CollectStage.RENDER_FINAL:
+    if isinstance(event, TreeReductionProgress):
+        return i18n.t(
+            Keys.COLLECT_PROGRESS_TREE_REDUCTION,
+            level=event.level,
+            current=event.current,
+            total=event.total,
+        )
+    if isinstance(event, RenderFinalProgress):
         return i18n.t(Keys.COLLECT_PROGRESS_RENDER_FINAL, current=event.current, total=event.total)
-    if event.stage is CollectStage.WRITE_OUTPUT:
+    if isinstance(event, WriteOutputProgress):
         return i18n.t(Keys.COLLECT_PROGRESS_WRITE_OUTPUT, current=event.current, total=event.total)
-    raise AssertionError(f"unsupported collect stage: {event.stage}")
+    raise AssertionError(f"unsupported collect progress event: {type(event).__name__}")
 
 
 @contextmanager
@@ -247,11 +263,7 @@ def handle_collect_mode(
         with show_collect_progress() as update_progress:
             emit_collect_progress(
                 update_progress,
-                stage=CollectStage.COLLECT_START,
-                current=0,
-                total=1,
-                since=since_date.isoformat(),
-                until=until_date.isoformat(),
+                CollectStartProgress(since=since_date.isoformat(), until=until_date.isoformat()),
             )
             with scanner.diagnostic_scope(available_agents):
                 entries, has_truncated = collect_entries(
@@ -288,15 +300,12 @@ def handle_collect_mode(
             )
             emit_collect_progress(
                 update_progress,
-                stage=CollectStage.COLLECT_OVERVIEW,
-                current=run_stats.session_count,
-                total=run_stats.session_count,
-                session_count=run_stats.session_count,
-                chunk_count=run_stats.chunk_count,
-                concurrency=run_stats.concurrency,
-                since=run_stats.since,
-                until=run_stats.until,
-                agent_session_counts=run_stats.agent_session_counts,
+                CollectOverviewProgress(
+                    session_count=run_stats.session_count,
+                    chunk_count=run_stats.chunk_count,
+                    concurrency=run_stats.concurrency,
+                    agent_session_counts=run_stats.agent_session_counts,
+                ),
             )
             if operation.dry_run:
                 print(
@@ -323,7 +332,7 @@ def handle_collect_mode(
                 mode=operation.collect_mode,
             )
             phase = CollectFailurePhase.RENDER
-            emit_collect_progress(update_progress, stage=CollectStage.RENDER_FINAL, current=0, total=2)
+            emit_collect_progress(update_progress, RenderFinalProgress(current=0, total=2))
             aggregate = reduce_collect_summaries(
                 config=ai_config,
                 session_summaries=session_summaries,
@@ -332,7 +341,7 @@ def handle_collect_mode(
                 logger=collect_logger,
                 mode=operation.collect_mode,
             )
-            emit_collect_progress(update_progress, stage=CollectStage.RENDER_FINAL, current=1, total=2)
+            emit_collect_progress(update_progress, RenderFinalProgress(current=1, total=2))
             prompt = build_collect_final_prompt(
                 since_date=since_date,
                 until_date=until_date,
@@ -345,8 +354,8 @@ def handle_collect_mode(
                 prompt,
                 timeout_seconds=collect_config.summary_timeout_seconds,
             )
-            emit_collect_progress(update_progress, stage=CollectStage.RENDER_FINAL, current=2, total=2)
-            emit_collect_progress(update_progress, stage=CollectStage.WRITE_OUTPUT, current=0, total=1)
+            emit_collect_progress(update_progress, RenderFinalProgress(current=2, total=2))
+            emit_collect_progress(update_progress, WriteOutputProgress(current=0, total=1))
             phase = CollectFailurePhase.WRITE
             output_path = write_collect_markdown(
                 markdown,
@@ -358,7 +367,7 @@ def handle_collect_mode(
                     until_date=until_date,
                 ),
             )
-            emit_collect_progress(update_progress, stage=CollectStage.WRITE_OUTPUT, current=1, total=1)
+            emit_collect_progress(update_progress, WriteOutputProgress(current=1, total=1))
     except Exception as exc:
         if collect_logger is not None:
             collect_logger.log("collect_run_fail", phase=phase.value, error=str(exc))
