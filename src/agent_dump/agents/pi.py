@@ -4,12 +4,13 @@ from collections.abc import Iterable, Iterator
 from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import JsonlObjectScan, read_jsonl_scan_metadata, skipped_records_diagnostic
 from agent_dump.agents.message_assembly import build_message, build_text_part, build_tool_part
+from agent_dump.agents.message_types import NormalizedSessionData
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import source_missing
@@ -165,7 +166,7 @@ class PiAgent(FileSessionAgent):
                 return int(parsed.timestamp() * 1000)
         return 0
 
-    def get_session_data(self, session: Session) -> dict:
+    def get_session_data(self, session: Session) -> dict[str, Any]:
         """Get session data as a dictionary."""
         if not session.source_path.exists():
             raise source_missing(
@@ -207,7 +208,7 @@ class PiAgent(FileSessionAgent):
         stats["message_count"] = len(messages)
         title = latest_session_name or session.title
 
-        return {
+        session_data: NormalizedSessionData = {
             "id": session.id,
             "title": title,
             "slug": None,
@@ -219,6 +220,7 @@ class PiAgent(FileSessionAgent):
             "stats": stats,
             "messages": messages,
         }
+        return cast(dict[str, Any], session_data)
 
     def _empty_stats(self) -> dict[str, int | float]:
         return {

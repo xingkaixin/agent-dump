@@ -5,7 +5,6 @@ Query parsing and session filtering helpers.
 from dataclasses import dataclass
 from pathlib import Path
 import sys
-from typing import Any
 from urllib.parse import ParseResult, parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
@@ -14,7 +13,7 @@ from agent_dump.query_semantics import TextQuery, TextQueryMode
 from agent_dump.search_index import SearchIndex, extract_session_searchable_text_once
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import normalize_datetime_utc
-from agent_dump.transcript import read_message
+from agent_dump.transcript import read_messages
 
 AGENT_ALIASES = {
     "claude": "claudecode",
@@ -441,17 +440,11 @@ def _find_role_evidence(
 ) -> tuple[str, str] | None:
     try:
         with agent.lease_cached_session_data(session) as session_data:
-            messages = session_data.get("messages")
-            if not isinstance(messages, list):
-                return None
-
-            for message in messages:
-                if not isinstance(message, dict):
-                    continue
-                role = str(message.get("role", "")).strip().lower()
+            for message in read_messages(session_data):
+                role = message.role
                 if role not in roles:
                     continue
-                text = _extract_message_search_text(message)
+                text = "\n".join(message.searchable_texts)
                 if query is None:
                     return role, _build_evidence_excerpt(text)
                 if evidence := query.find_match((text,)):
@@ -468,10 +461,6 @@ def _find_role_evidence(
         return None
 
     return None
-
-
-def _extract_message_search_text(message: dict[str, Any]) -> str:
-    return "\n".join(read_message(message).searchable_texts)
 
 
 def _query_evidence_sort_key(match: SearchSessionMatch) -> tuple[float, float, str, str]:

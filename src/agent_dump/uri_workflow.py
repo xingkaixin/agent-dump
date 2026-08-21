@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -52,9 +52,9 @@ def maybe_generate_uri_summary(
     uri: str,
     agent: BaseAgent,
     session: Session,
-    session_data: dict[str, Any] | None,
+    session_data: Mapping[str, Any] | None,
     request_summary: Callable[[AIConfig, str], str] = request_summary_from_llm,
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[Mapping[str, Any] | None, str | None]:
     """Best-effort URI summary generation. Returns possibly-loaded session_data and summary."""
     if not enabled:
         return session_data, None
@@ -153,7 +153,7 @@ def _handle_uri_mode(
             print(render_session_head(operation.raw_uri, agent.get_session_head(session)))
             return 0
 
-        session_data: dict[str, Any] | None = None
+        session_data: Mapping[str, Any] | None = None
         session_data, summary_markdown = maybe_generate_uri_summary(
             enabled=operation.summary,
             output_formats=list(operation.output_formats),

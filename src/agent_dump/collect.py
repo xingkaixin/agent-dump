@@ -1,7 +1,7 @@
 """Collect mode: gather sessions and summarize with structured multi-stage reduction."""
 
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import date, tzinfo
 import json
@@ -113,7 +113,7 @@ def collect_entries(
     until_date: date,
     collect_config: CollectConfig | None = None,
     query_spec: QuerySpec | None = None,
-    render_session_text_fn: Callable[[str, dict[str, Any]], str],
+    render_session_text_fn: Callable[[str, Mapping[str, Any]], str],
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     scanner: AgentScanner | None = None,

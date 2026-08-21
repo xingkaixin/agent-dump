@@ -1,5 +1,6 @@
 """Session rendering and export helpers."""
 
+from collections.abc import Mapping
 from datetime import datetime
 import json
 from pathlib import Path, PurePath
@@ -12,7 +13,7 @@ from agent_dump.message_filter import should_filter_message_for_export
 from agent_dump.private_files import ensure_output_dir, write_private_text
 from agent_dump.text_safety import safe_body_text, safe_display_text
 from agent_dump.time_utils import to_local_datetime
-from agent_dump.transcript import ToolCall, TranscriptMessage, read_message
+from agent_dump.transcript import ToolCall, TranscriptMessage, read_messages
 
 HEAD_FIELDS = (
     ("URI", "uri"),
@@ -68,10 +69,9 @@ def render_session_head(uri: str, session_head: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
+def render_session_text(uri: str, session_data: Mapping[str, Any]) -> str:
     """Render session data as formatted text."""
     lines = ["# Session Dump", "", f"- URI: `{safe_display_text(uri)}`", ""]
-    messages = session_data.get("messages", [])
     msg_idx = 1
 
     def _append_section(display_role: str, contents: list[str]) -> None:
@@ -114,8 +114,8 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
             if prompt:
                 _append_section(display, [prompt])
 
-    for msg in messages:
-        message = read_message(msg)
+    for message in read_messages(session_data):
+        msg = message.raw
         role_normalized = message.role
         content_parts = list(message.texts)
 
@@ -147,7 +147,7 @@ def render_session_text(uri: str, session_data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def export_session_markdown(uri: str, session_data: dict[str, Any], session_id: str, output_dir: Path) -> Path:
+def export_session_markdown(uri: str, session_data: Mapping[str, Any], session_id: str, output_dir: Path) -> Path:
     """Export a single session to Markdown."""
     ensure_output_dir(output_dir)
     output_path = build_session_output_path(output_dir, session_id, ".md")
@@ -180,7 +180,7 @@ def export_session_in_format(
     output_dir: Path,
     output_format: str,
     *,
-    session_data: dict[str, Any] | None = None,
+    session_data: Mapping[str, Any] | None = None,
     session_uri: str | None = None,
     json_fields: dict[str, Any] | None = None,
 ) -> Path:

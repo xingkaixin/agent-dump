@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
@@ -24,6 +24,7 @@ from agent_dump.agents.message_assembly import (
     build_text_part,
     build_tool_part,
 )
+from agent_dump.agents.message_types import NormalizedSessionData
 from agent_dump.agents.title_fallback import basename_title, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime, safe_int
 from agent_dump.diagnostics import source_missing
@@ -221,7 +222,12 @@ class KimiAgent(FileSessionAgent):
             },
         )
 
-    def _build_session_data(self, session: Session, messages: list[dict], stats: dict[str, int | float]) -> dict:
+    def _build_session_data(
+        self,
+        session: Session,
+        messages: list[dict],
+        stats: dict[str, int | float],
+    ) -> NormalizedSessionData:
         """Build unified session data payload."""
         return {
             "id": session.id,
@@ -543,7 +549,7 @@ class KimiAgent(FileSessionAgent):
         except Exception:
             return None
 
-    def _get_session_data_from_context(self, session: Session) -> dict:
+    def _get_session_data_from_context(self, session: Session) -> NormalizedSessionData:
         """Build unified session data from context.jsonl."""
         context_path = session.source_path / "context.jsonl"
         if not context_path.exists():
@@ -649,7 +655,7 @@ class KimiAgent(FileSessionAgent):
         messages[message_index]["parts"][part_index]["state"]["arguments"] = parsed_arguments
         open_tool_argument_buffer.pop(open_tool_call_id, None)
 
-    def _get_session_data_from_wire(self, session: Session) -> dict:
+    def _get_session_data_from_wire(self, session: Session) -> NormalizedSessionData:
         """Build unified session data from legacy wire.jsonl."""
         wire_path = session.source_path / "wire.jsonl"
         if not wire_path.exists():
@@ -784,9 +790,9 @@ class KimiAgent(FileSessionAgent):
         stats["message_count"] = len(messages)
         return self._build_session_data(session, messages, stats)
 
-    def get_session_data(self, session: Session) -> dict:
+    def get_session_data(self, session: Session) -> dict[str, Any]:
         """Get session data as a dictionary"""
         context_path = session.source_path / "context.jsonl"
         if context_path.exists():
-            return self._get_session_data_from_context(session)
-        return self._get_session_data_from_wire(session)
+            return cast(dict[str, Any], self._get_session_data_from_context(session))
+        return cast(dict[str, Any], self._get_session_data_from_wire(session))

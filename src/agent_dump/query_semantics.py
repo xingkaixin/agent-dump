@@ -1,12 +1,13 @@
 """Literal text semantics shared by Query, Search, and their adapters."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 import json
 import re
 from typing import Any
 
-from agent_dump.transcript import read_message
+from agent_dump.transcript import read_messages
 
 
 class TextQueryMode(Enum):
@@ -30,16 +31,12 @@ def serialize_search_value(value: Any) -> str:
         return str(value)
 
 
-def extract_transcript_searchable_text(session_data: dict[str, Any]) -> str | None:
-    messages = session_data.get("messages")
-    if not isinstance(messages, list):
+def extract_transcript_searchable_text(session_data: Mapping[str, Any]) -> str | None:
+    if not isinstance(session_data.get("messages"), list):
         return None
 
     text_parts: list[str] = []
-    for message in messages:
-        if not isinstance(message, dict):
-            continue
-        transcript_message = read_message(message)
+    for transcript_message in read_messages(session_data):
         contents = list(transcript_message.searchable_texts)
         for call in transcript_message.tool_calls:
             if call.arguments is not None:

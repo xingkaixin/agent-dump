@@ -13,7 +13,7 @@
 Provider 私有 schema 不进这里——它们仍然只在对应 Agent 内被解释。
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -141,7 +141,7 @@ def read_message(message: dict[str, Any]) -> TranscriptMessage:
     )
 
 
-def read_messages(session_data: dict[str, Any]) -> Iterator[TranscriptMessage]:
+def read_messages(session_data: Mapping[str, Any]) -> Iterator[TranscriptMessage]:
     """Iterate a session payload's messages, skipping anything that is not one."""
     messages = session_data.get("messages")
     if not isinstance(messages, list):

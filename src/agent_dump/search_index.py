@@ -5,7 +5,7 @@ All SQL f-strings in this file use FTS5 virtual table names that are
 hardcoded internal constants (_FTS_TABLES), never user input.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -146,7 +146,7 @@ def extract_session_searchable_text_once(agent: BaseAgent, session: Session) -> 
         return _fallback_extract_from_source(session.source_path)
 
 
-def _extract_searchable_text_from_data(session: Session, session_data: dict[str, Any]) -> str | None:
+def _extract_searchable_text_from_data(session: Session, session_data: Mapping[str, Any]) -> str | None:
     text = extract_transcript_searchable_text(session_data)
     if text is None:
         return _fallback_extract_from_source(session.source_path)
