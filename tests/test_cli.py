@@ -20,7 +20,19 @@ from agent_dump.cli import (
     main,
 )
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode
-from agent_dump.collect_models import CollectMode, CollectProgressEvent, CollectStage
+from agent_dump.collect_models import (
+    CollectMode,
+    CollectOverviewProgress,
+    CollectProgressEvent,
+    CollectStartProgress,
+    MergeSessionsProgress,
+    PlanChunksProgress,
+    RenderFinalProgress,
+    ScanSessionsProgress,
+    SummarizeChunksProgress,
+    TreeReductionProgress,
+    WriteOutputProgress,
+)
 from agent_dump.collect_workflow import resolve_collect_save_path, show_collect_progress
 from agent_dump.command_plan import (
     CollectOperation,
@@ -760,35 +772,21 @@ class TestMain:
 
                                         def _summarize_collect_entries(**kwargs):
                                             kwargs["progress_callback"](
-                                                CollectProgressEvent(
-                                                    stage=CollectStage.SUMMARIZE_CHUNKS,
+                                                SummarizeChunksProgress(
                                                     current=0,
                                                     total=1,
                                                     concurrency=4,
                                                 )
                                             )
                                             kwargs["progress_callback"](
-                                                CollectProgressEvent(
-                                                    stage=CollectStage.SUMMARIZE_CHUNKS,
+                                                SummarizeChunksProgress(
                                                     current=1,
                                                     total=1,
                                                     concurrency=4,
                                                 )
                                             )
-                                            kwargs["progress_callback"](
-                                                CollectProgressEvent(
-                                                    stage=CollectStage.MERGE_SESSIONS,
-                                                    current=0,
-                                                    total=1,
-                                                )
-                                            )
-                                            kwargs["progress_callback"](
-                                                CollectProgressEvent(
-                                                    stage=CollectStage.MERGE_SESSIONS,
-                                                    current=1,
-                                                    total=1,
-                                                )
-                                            )
+                                            kwargs["progress_callback"](MergeSessionsProgress(current=0, total=1))
+                                            kwargs["progress_callback"](MergeSessionsProgress(current=1, total=1))
                                             return [mock.MagicMock()]
 
                                         with mock.patch(
@@ -1036,30 +1034,19 @@ class TestMain:
     def test_show_collect_progress_non_tty_reports_incremental_progress(self, capsys):
         with mock.patch("sys.stderr.isatty", return_value=False):
             with show_collect_progress() as update_progress:
+                update_progress(CollectStartProgress(since="2026-03-01", until="2026-03-05"))
+                update_progress(ScanSessionsProgress(current=0, total=2))
+                update_progress(ScanSessionsProgress(current=2, total=2))
+                update_progress(PlanChunksProgress(current=2, total=2, chunk_total=5))
                 update_progress(
-                    CollectProgressEvent(
-                        stage=CollectStage.COLLECT_START,
-                        current=0,
-                        total=1,
-                        since="2026-03-01",
-                        until="2026-03-05",
-                    )
-                )
-                update_progress(CollectProgressEvent(stage=CollectStage.SCAN_SESSIONS, current=0, total=2))
-                update_progress(CollectProgressEvent(stage=CollectStage.SCAN_SESSIONS, current=2, total=2))
-                update_progress(CollectProgressEvent(stage=CollectStage.PLAN_CHUNKS, current=2, total=2, chunk_total=5))
-                update_progress(
-                    CollectProgressEvent(
-                        stage=CollectStage.COLLECT_OVERVIEW,
-                        current=2,
-                        total=2,
+                    CollectOverviewProgress(
                         session_count=2,
                         chunk_count=5,
                         concurrency=4,
                         agent_session_counts={"Codex": 2},
                     )
                 )
-                update_progress(CollectProgressEvent(stage=CollectStage.RENDER_FINAL, current=2, total=2))
+                update_progress(RenderFinalProgress(current=2, total=2))
 
         captured = capsys.readouterr()
         assert "Collect 任务开始：2026-03-01 ~ 2026-03-05" in captured.err
@@ -1070,22 +1057,26 @@ class TestMain:
         assert "Agent 分布：Codex 2" in captured.err
         assert "正在生成最终总结：2/2" in captured.err
 
-    @pytest.mark.parametrize("stage", list(CollectStage))
-    def test_show_collect_progress_formats_every_stage(self, capsys, stage: CollectStage):
-        event = CollectProgressEvent(
-            stage=stage,
-            current=1,
-            total=1,
-            since="2026-03-01",
-            until="2026-03-05",
-            session_count=1,
-            chunk_count=1,
-            chunk_total=1,
-            concurrency=1,
-            level=1,
-            agent_session_counts={"Codex": 1},
-        )
-
+    @pytest.mark.parametrize(
+        "event",
+        [
+            CollectStartProgress(since="2026-03-01", until="2026-03-05"),
+            CollectOverviewProgress(
+                session_count=1,
+                chunk_count=1,
+                concurrency=1,
+                agent_session_counts={"Codex": 1},
+            ),
+            ScanSessionsProgress(current=1, total=1),
+            PlanChunksProgress(current=1, total=1, chunk_total=1),
+            SummarizeChunksProgress(current=1, total=1, concurrency=1),
+            MergeSessionsProgress(current=1, total=1),
+            TreeReductionProgress(level=1, current=1, total=1),
+            RenderFinalProgress(current=1, total=1),
+            WriteOutputProgress(current=1, total=1),
+        ],
+    )
+    def test_show_collect_progress_formats_every_stage(self, capsys, event: CollectProgressEvent):
         with mock.patch("sys.stderr.isatty", return_value=False):
             with show_collect_progress() as update_progress:
                 update_progress(event)
@@ -1096,12 +1087,8 @@ class TestMain:
 
     def test_show_collect_progress_tty_finishes_with_newline(self, capsys):
         with mock.patch("sys.stderr.isatty", return_value=True), show_collect_progress() as update_progress:
-            update_progress(
-                CollectProgressEvent(stage=CollectStage.SUMMARIZE_CHUNKS, current=0, total=2, concurrency=2)
-            )
-            update_progress(
-                CollectProgressEvent(stage=CollectStage.SUMMARIZE_CHUNKS, current=2, total=2, concurrency=2)
-            )
+            update_progress(SummarizeChunksProgress(current=0, total=2, concurrency=2))
+            update_progress(SummarizeChunksProgress(current=2, total=2, concurrency=2))
 
         captured = capsys.readouterr()
         assert "正在总结内容：已完成 2/2 个单元，并发 2" in captured.err
@@ -1142,18 +1129,14 @@ class TestMain:
         ):
             with show_collect_progress() as update_progress:
                 update_progress(
-                    CollectProgressEvent(
-                        stage=CollectStage.SUMMARIZE_CHUNKS,
+                    SummarizeChunksProgress(
                         current=1,
                         total=2,
                         concurrency=2,
                     )
                 )
                 update_progress(
-                    CollectProgressEvent(
-                        stage=CollectStage.COLLECT_OVERVIEW,
-                        current=2,
-                        total=2,
+                    CollectOverviewProgress(
                         session_count=2,
                         chunk_count=5,
                         concurrency=2,

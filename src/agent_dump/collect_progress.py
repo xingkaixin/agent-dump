@@ -6,6 +6,7 @@
 
 from collections.abc import Callable
 from datetime import date
+from typing import TypeVar
 from uuid import uuid4
 
 from agent_dump.collect_models import (
@@ -14,10 +15,11 @@ from agent_dump.collect_models import (
     CollectLogger,
     CollectProgressEvent,
     CollectRunStats,
-    CollectStage,
     PlannedCollectEntry,
 )
 from agent_dump.config import LoggingConfig
+
+ProgressEventT = TypeVar("ProgressEventT", bound=CollectProgressEvent)
 
 
 def truncate_log_preview(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
@@ -40,42 +42,12 @@ def create_collect_logger(config: LoggingConfig | None) -> CollectLogger:
 
 
 def emit_collect_progress(
-    progress_callback: Callable[[CollectProgressEvent], None] | None,
-    *,
-    stage: CollectStage,
-    current: int,
-    total: int,
-    session_uri: str | None = None,
-    chunk_index: int | None = None,
-    chunk_total: int | None = None,
-    level: int | None = None,
-    session_count: int | None = None,
-    chunk_count: int | None = None,
-    concurrency: int | None = None,
-    since: str | None = None,
-    until: str | None = None,
-    agent_session_counts: dict[str, int] | None = None,
+    progress_callback: Callable[[ProgressEventT], None] | None,
+    event: ProgressEventT,
 ) -> None:
     """Emit one collect progress event when callback is configured."""
-    if progress_callback is None:
-        return
-    progress_callback(
-        CollectProgressEvent(
-            stage=stage,
-            current=current,
-            total=total,
-            session_uri=session_uri,
-            chunk_index=chunk_index,
-            chunk_total=chunk_total,
-            level=level,
-            session_count=session_count,
-            chunk_count=chunk_count,
-            concurrency=concurrency,
-            since=since,
-            until=until,
-            agent_session_counts=agent_session_counts,
-        )
-    )
+    if progress_callback is not None:
+        progress_callback(event)
 
 
 def build_collect_run_stats(

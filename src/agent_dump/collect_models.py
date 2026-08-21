@@ -5,7 +5,7 @@ from datetime import date, datetime
 from enum import Enum
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from agent_dump.private_files import open_private_append
 
@@ -83,23 +83,94 @@ class CollectEvent:
     files: tuple[str, ...] = ()
 
 
-@dataclass
 class CollectProgressEvent:
-    """Structured progress event for collect mode."""
+    """Base type for the closed set of collect progress events."""
 
-    stage: CollectStage
+    stage: ClassVar[CollectStage]
+
+
+@dataclass(frozen=True)
+class CollectStartProgress(CollectProgressEvent):
+    since: str
+    until: str
+
+    stage: ClassVar[CollectStage] = CollectStage.COLLECT_START
+
+
+@dataclass(frozen=True)
+class CollectOverviewProgress(CollectProgressEvent):
+    session_count: int
+    chunk_count: int
+    concurrency: int
+    agent_session_counts: dict[str, int]
+
+    stage: ClassVar[CollectStage] = CollectStage.COLLECT_OVERVIEW
+
+
+@dataclass(frozen=True)
+class ScanSessionsProgress(CollectProgressEvent):
     current: int
     total: int
     session_uri: str | None = None
+
+    stage: ClassVar[CollectStage] = CollectStage.SCAN_SESSIONS
+
+
+@dataclass(frozen=True)
+class PlanChunksProgress(CollectProgressEvent):
+    current: int
+    total: int
+    chunk_total: int = 0
+    session_uri: str | None = None
+
+    stage: ClassVar[CollectStage] = CollectStage.PLAN_CHUNKS
+
+
+@dataclass(frozen=True)
+class SummarizeChunksProgress(CollectProgressEvent):
+    current: int
+    total: int
+    concurrency: int
+    session_uri: str | None = None
     chunk_index: int | None = None
     chunk_total: int | None = None
-    level: int | None = None
-    session_count: int | None = None
-    chunk_count: int | None = None
-    concurrency: int | None = None
-    since: str | None = None
-    until: str | None = None
-    agent_session_counts: dict[str, int] | None = None
+
+    stage: ClassVar[CollectStage] = CollectStage.SUMMARIZE_CHUNKS
+
+
+@dataclass(frozen=True)
+class MergeSessionsProgress(CollectProgressEvent):
+    current: int
+    total: int
+    session_uri: str | None = None
+    chunk_total: int | None = None
+
+    stage: ClassVar[CollectStage] = CollectStage.MERGE_SESSIONS
+
+
+@dataclass(frozen=True)
+class TreeReductionProgress(CollectProgressEvent):
+    level: int
+    current: int
+    total: int
+
+    stage: ClassVar[CollectStage] = CollectStage.TREE_REDUCTION
+
+
+@dataclass(frozen=True)
+class RenderFinalProgress(CollectProgressEvent):
+    current: int
+    total: int
+
+    stage: ClassVar[CollectStage] = CollectStage.RENDER_FINAL
+
+
+@dataclass(frozen=True)
+class WriteOutputProgress(CollectProgressEvent):
+    current: int
+    total: int
+
+    stage: ClassVar[CollectStage] = CollectStage.WRITE_OUTPUT
 
 
 @dataclass

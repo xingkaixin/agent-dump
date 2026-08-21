@@ -38,10 +38,14 @@ from agent_dump.collect_models import (
     CollectLogger,
     CollectMode,
     CollectProgressEvent,
-    CollectStage,
     GroupSummaryEntry,
+    MergeSessionsProgress,
+    PlanChunksProgress,
     PlannedCollectEntry,
+    ScanSessionsProgress,
     SessionSummaryEntry,
+    SummarizeChunksProgress,
+    TreeReductionProgress,
     collect_fields_for,
 )
 from agent_dump.collect_output import write_collect_markdown as write_collect_markdown
@@ -163,9 +167,7 @@ def collect_entries(
     total = len(matched_sessions)
     emit_collect_progress(
         progress_callback,
-        stage=CollectStage.SCAN_SESSIONS,
-        current=0,
-        total=total,
+        ScanSessionsProgress(current=0, total=total),
     )
 
     def _collect_entry(matched_session: tuple[BaseAgent, Session, date]) -> CollectEntry:
@@ -231,10 +233,7 @@ def collect_entries(
                     session_uri = entry.session_uri
                 emit_collect_progress(
                     progress_callback,
-                    stage=CollectStage.SCAN_SESSIONS,
-                    current=index,
-                    total=total,
-                    session_uri=session_uri,
+                    ScanSessionsProgress(current=index, total=total, session_uri=session_uri),
                 )
 
         if not entries and last_error is not None:
@@ -257,9 +256,7 @@ def plan_collect_entries(
     total_chunks = 0
     emit_collect_progress(
         progress_callback,
-        stage=CollectStage.PLAN_CHUNKS,
-        current=0,
-        total=total,
+        PlanChunksProgress(current=0, total=total),
     )
 
     for index, entry in enumerate(entries, start=1):
@@ -268,11 +265,12 @@ def plan_collect_entries(
         planned_entries.append(PlannedCollectEntry(collect_entry=entry, chunks=chunks))
         emit_collect_progress(
             progress_callback,
-            stage=CollectStage.PLAN_CHUNKS,
-            current=index,
-            total=total,
-            session_uri=entry.session_uri,
-            chunk_total=total_chunks,
+            PlanChunksProgress(
+                current=index,
+                total=total,
+                session_uri=entry.session_uri,
+                chunk_total=total_chunks,
+            ),
         )
 
     return planned_entries, total_chunks
@@ -595,8 +593,8 @@ def _summarize_collect_entry(
     index: int,
     timeout_seconds: int,
     local_tz: tzinfo | None,
-    on_chunk_summarized: Callable[[CollectProgressEvent], None] | None = None,
-    on_session_merged: Callable[[CollectProgressEvent], None] | None = None,
+    on_chunk_summarized: Callable[[SummarizeChunksProgress], None] | None = None,
+    on_session_merged: Callable[[MergeSessionsProgress], None] | None = None,
     logger: CollectLogger | None = None,
     mode: CollectMode = CollectMode.PM,
 ) -> SessionSummaryEntry:
@@ -627,12 +625,14 @@ def _summarize_collect_entry(
         chunk_payloads.append(payload)
         emit_collect_progress(
             on_chunk_summarized,
-            stage=CollectStage.SUMMARIZE_CHUNKS,
-            current=1,
-            total=1,
-            session_uri=entry.session_uri,
-            chunk_index=chunk_index + 1,
-            chunk_total=len(chunks),
+            SummarizeChunksProgress(
+                current=1,
+                total=1,
+                concurrency=1,
+                session_uri=entry.session_uri,
+                chunk_index=chunk_index + 1,
+                chunk_total=len(chunks),
+            ),
         )
 
     merged = merge_summary_payloads(chunk_payloads, mode=mode)
@@ -660,11 +660,12 @@ def _summarize_collect_entry(
                 )
     emit_collect_progress(
         on_session_merged,
-        stage=CollectStage.MERGE_SESSIONS,
-        current=1,
-        total=1,
-        session_uri=entry.session_uri,
-        chunk_total=len(chunks),
+        MergeSessionsProgress(
+            current=1,
+            total=1,
+            session_uri=entry.session_uri,
+            chunk_total=len(chunks),
+        ),
     )
 
     return SessionSummaryEntry(
@@ -704,46 +705,43 @@ def summarize_collect_entries(
 
     emit_collect_progress(
         progress_callback,
-        stage=CollectStage.SUMMARIZE_CHUNKS,
-        current=0,
-        total=total_chunks,
-        concurrency=max_workers,
+        SummarizeChunksProgress(current=0, total=total_chunks, concurrency=max_workers),
     )
     emit_collect_progress(
         progress_callback,
-        stage=CollectStage.MERGE_SESSIONS,
-        current=0,
-        total=total,
+        MergeSessionsProgress(current=0, total=total),
     )
 
-    def _mark_chunk_summarized(event: CollectProgressEvent) -> None:
+    def _mark_chunk_summarized(event: SummarizeChunksProgress) -> None:
         nonlocal summarized_chunks
         with chunk_progress_lock:
             summarized_chunks += event.current
             current = summarized_chunks
         emit_collect_progress(
             progress_callback,
-            stage=CollectStage.SUMMARIZE_CHUNKS,
-            current=current,
-            total=total_chunks,
-            session_uri=event.session_uri,
-            chunk_index=event.chunk_index,
-            chunk_total=event.chunk_total,
-            concurrency=max_workers,
+            SummarizeChunksProgress(
+                current=current,
+                total=total_chunks,
+                session_uri=event.session_uri,
+                chunk_index=event.chunk_index,
+                chunk_total=event.chunk_total,
+                concurrency=max_workers,
+            ),
         )
 
-    def _mark_session_merged(event: CollectProgressEvent) -> None:
+    def _mark_session_merged(event: MergeSessionsProgress) -> None:
         nonlocal merged_sessions
         with merge_progress_lock:
             merged_sessions += event.current
             current = merged_sessions
         emit_collect_progress(
             progress_callback,
-            stage=CollectStage.MERGE_SESSIONS,
-            current=current,
-            total=total,
-            session_uri=event.session_uri,
-            chunk_total=event.chunk_total,
+            MergeSessionsProgress(
+                current=current,
+                total=total,
+                session_uri=event.session_uri,
+                chunk_total=event.chunk_total,
+            ),
         )
 
     def _summarize(index: int, planned_entry: PlannedCollectEntry) -> SessionSummaryEntry:
@@ -858,10 +856,7 @@ def reduce_collect_summaries(
         total_groups = (len(working) + group_size - 1) // group_size
         emit_collect_progress(
             progress_callback,
-            stage=CollectStage.TREE_REDUCTION,
-            current=0,
-            total=total_groups,
-            level=reduction_depth,
+            TreeReductionProgress(level=reduction_depth, current=0, total=total_groups),
         )
         for start in range(0, len(working), group_size):
             group = working[start : start + group_size]
@@ -904,10 +899,11 @@ def reduce_collect_summaries(
             )
             emit_collect_progress(
                 progress_callback,
-                stage=CollectStage.TREE_REDUCTION,
-                current=(start // group_size) + 1,
-                total=total_groups,
-                level=reduction_depth,
+                TreeReductionProgress(
+                    level=reduction_depth,
+                    current=(start // group_size) + 1,
+                    total=total_groups,
+                ),
             )
         working = next_level
 
