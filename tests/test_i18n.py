@@ -149,9 +149,9 @@ class TestCatalogHasNoUnreferencedKeys:
 CHINESE_LITERAL_EXEMPTIONS = {
     # 发给模型的 prompt 文本与匹配中文的正则：属于算法输入，按 locale 改写会改变
     # 模型输出质量（见 AD-138 / AD-146 的范围说明）
-    "collect.py",
     "collect_events.py",
     "collect_llm.py",
+    "collect_prompts.py",
     "prompt_safety.py",
     "uri_workflow.py",
     # i18n 目录本身

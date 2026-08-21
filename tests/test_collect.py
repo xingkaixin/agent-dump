@@ -954,7 +954,7 @@ class TestCollectStructuredSummary:
 
     def test_request_structured_summary_from_llm_parses_json_fence(self):
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             return_value='```json\n{"topics":["A"]}\n```',
         ):
             result = request_structured_summary_from_llm(
@@ -967,7 +967,7 @@ class TestCollectStructuredSummary:
 
     def test_request_structured_summary_from_llm_parses_first_json_object(self):
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             return_value='{"topics":["A"]}\n{"topics":["ignored"]}',
         ):
             result = request_structured_summary_from_llm(
@@ -980,7 +980,9 @@ class TestCollectStructuredSummary:
 
     def test_request_structured_summary_from_llm_retries_then_raises(self):
         with (
-            mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="not json"),
+            mock.patch(
+                "agent_dump.collect_requests.request_structured_summary_payload_from_llm", return_value="not json"
+            ),
             pytest.raises(RuntimeError, match="chunk-1"),
         ):
             request_structured_summary_from_llm(
@@ -997,7 +999,7 @@ class TestCollectStructuredSummary:
         responses = [invalid_response, '{"topics":["英文文案改为 Control app sounds."]}']
 
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=responses
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm", side_effect=responses
         ) as mock_request:
             result = request_structured_summary_from_llm(
                 self._config(),
@@ -1022,7 +1024,7 @@ class TestCollectStructuredSummary:
         responses = [invalid_response, '{"topics":["recovered"]}']
 
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=responses
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm", side_effect=responses
         ) as mock_request:
             request_structured_summary_from_llm(self._config(), "original prompt", context_label="chunk-1")
 
@@ -1057,7 +1059,7 @@ class TestCollectStructuredSummary:
         """连接/超时类失败会重试一次。"""
         transient = LLMRequestError("connection reset", transport=True)
         with mock.patch(
-            "agent_dump.collect._request_summary_from_llm",
+            "agent_dump.collect_requests._request_summary_from_llm",
             side_effect=[transient, "# summary"],
         ) as mocked:
             result = request_summary_from_llm(self._config(), "prompt")
@@ -1067,7 +1069,7 @@ class TestCollectStructuredSummary:
 
     def test_request_summary_from_llm_retries_server_errors(self):
         with mock.patch(
-            "agent_dump.collect._request_summary_from_llm",
+            "agent_dump.collect_requests._request_summary_from_llm",
             side_effect=[LLMRequestError("HTTP 503", status=503), "# summary"],
         ) as mocked:
             assert request_summary_from_llm(self._config(), "prompt") == "# summary"
@@ -1075,7 +1077,7 @@ class TestCollectStructuredSummary:
 
     def test_request_summary_from_llm_retries_rate_limits(self):
         with mock.patch(
-            "agent_dump.collect._request_summary_from_llm",
+            "agent_dump.collect_requests._request_summary_from_llm",
             side_effect=[LLMRequestError("HTTP 429", status=429), "# summary"],
         ) as mocked:
             assert request_summary_from_llm(self._config(), "prompt") == "# summary"
@@ -1086,7 +1088,7 @@ class TestCollectStructuredSummary:
         """AD-130：对永久失败重发非幂等 POST 只会让延迟与计费翻倍。"""
         with (
             mock.patch(
-                "agent_dump.collect._request_summary_from_llm",
+                "agent_dump.collect_requests._request_summary_from_llm",
                 side_effect=LLMRequestError(f"HTTP {status}", status=status),
             ) as mocked,
             pytest.raises(LLMRequestError),
@@ -1099,7 +1101,7 @@ class TestCollectStructuredSummary:
         """未分类异常（如响应解析失败）保守视为不可重试。"""
         with (
             mock.patch(
-                "agent_dump.collect._request_summary_from_llm",
+                "agent_dump.collect_requests._request_summary_from_llm",
                 side_effect=RuntimeError("response missing content"),
             ) as mocked,
             pytest.raises(RuntimeError, match="response missing content"),
@@ -1112,7 +1114,7 @@ class TestCollectStructuredSummary:
         """可重试错误在重试耗尽后抛出最后一次错误。"""
         with (
             mock.patch(
-                "agent_dump.collect._request_summary_from_llm",
+                "agent_dump.collect_requests._request_summary_from_llm",
                 side_effect=LLMRequestError("boom", transport=True),
             ) as mocked,
             pytest.raises(LLMRequestError, match="boom"),
@@ -1172,7 +1174,9 @@ class TestCollectStructuredSummary:
         logger = CollectLogger(enabled=True, path=log_path, run_id="run-1")
 
         with (
-            mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="not json"),
+            mock.patch(
+                "agent_dump.collect_requests.request_structured_summary_payload_from_llm", return_value="not json"
+            ),
             pytest.raises(RuntimeError, match="chunk-1"),
         ):
             request_structured_summary_from_llm(
@@ -1216,7 +1220,9 @@ class TestCollectStructuredSummary:
                 raise result
             return result
 
-        with mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=_side_effect):
+        with mock.patch(
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm", side_effect=_side_effect
+        ):
             result = request_structured_summary_from_llm(
                 self._config(),
                 "prompt",
@@ -1242,7 +1248,7 @@ class TestCollectStructuredSummary:
     def test_structured_summary_does_not_retry_permanent_http_errors(self, status):
         with (
             mock.patch(
-                "agent_dump.collect.request_structured_summary_payload_from_llm",
+                "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
                 side_effect=LLMRequestError(f"HTTP {status}", status=status),
             ) as mocked,
             pytest.raises(RuntimeError, match=f"HTTP {status}"),
@@ -1254,7 +1260,7 @@ class TestCollectStructuredSummary:
     @pytest.mark.parametrize("status", [429, 500, 503])
     def test_structured_summary_retries_retryable_http_errors(self, status):
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             side_effect=[LLMRequestError(f"HTTP {status}", status=status), '{"topics":["A"]}'],
         ) as mocked:
             result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
@@ -1265,7 +1271,7 @@ class TestCollectStructuredSummary:
     def test_structured_summary_does_not_retry_unclassified_request_errors(self):
         with (
             mock.patch(
-                "agent_dump.collect.request_structured_summary_payload_from_llm",
+                "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
                 side_effect=RuntimeError("missing response content"),
             ) as mocked,
             pytest.raises(RuntimeError, match="missing response content"),
@@ -1282,7 +1288,7 @@ class TestCollectStructuredSummary:
             '{"topics":["recovered"]}',
         ]
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             side_effect=responses,
         ) as mocked:
             result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
@@ -1313,7 +1319,7 @@ class TestCollectStructuredSummary:
             return '{"topics":["T2"],"errors":["E2"]}'
 
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect
         ):
             summaries = summarize_collect_entries(
                 config=self._config(),
@@ -1358,7 +1364,7 @@ class TestCollectStructuredSummary:
         )
 
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             side_effect=lambda *args, **kwargs: next(responses),
         ):
             summaries = summarize_collect_entries(
@@ -1387,9 +1393,9 @@ class TestCollectStructuredSummary:
         )
 
         with (
-            mock.patch("agent_dump.collect.SESSION_MERGE_LLM_THRESHOLD", 1),
+            mock.patch("agent_dump.collect_reduction.SESSION_MERGE_LLM_THRESHOLD", 1),
             mock.patch(
-                "agent_dump.collect.request_structured_summary_payload_from_llm",
+                "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
                 side_effect=lambda *args, **kwargs: next(responses),
             ),
         ):
@@ -1408,7 +1414,9 @@ class TestCollectStructuredSummary:
 
     def test_summarize_collect_entries_raises_wrapped_session_uri(self):
         with (
-            mock.patch("agent_dump.collect.request_structured_summary_payload_from_llm", return_value="bad json"),
+            mock.patch(
+                "agent_dump.collect_requests.request_structured_summary_payload_from_llm", return_value="bad json"
+            ),
             pytest.raises(RuntimeError, match="codex://s-1"),
         ):
             summarize_collect_entries(
@@ -1431,7 +1439,7 @@ class TestCollectStructuredSummary:
             return '{"topics":["T1"]}'
 
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect
         ):
             summaries = summarize_collect_entries(
                 config=self._config(),
@@ -1462,7 +1470,7 @@ class TestCollectStructuredSummary:
             return '{"topics":["T1"]}'
 
         with mock.patch(
-            "agent_dump.collect.request_structured_summary_payload_from_llm",
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             side_effect=_summary_side_effect,
         ):
             summaries = summarize_collect_entries(
@@ -1542,9 +1550,9 @@ class TestCollectStructuredSummary:
         responses = iter(["bad json", "bad json"])
 
         with (
-            mock.patch("agent_dump.collect.SESSION_MERGE_LLM_THRESHOLD", 1),
+            mock.patch("agent_dump.collect_reduction.SESSION_MERGE_LLM_THRESHOLD", 1),
             mock.patch(
-                "agent_dump.collect.request_structured_summary_payload_from_llm",
+                "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
                 side_effect=lambda *args, **kwargs: next(responses),
             ),
         ):
