@@ -458,7 +458,6 @@ class TestKimiAgent:
         assert result is None
 
     def test_parse_session_invalid_json(self, tmp_path):
-        """测试无效的 JSON 返回 None"""
         agent = KimiAgent()
         session_dir = tmp_path / "session1"
         session_dir.mkdir()
@@ -467,9 +466,8 @@ class TestKimiAgent:
         metadata_path.write_text("invalid json", encoding="utf-8")
         (session_dir / "wire.jsonl").touch()
 
-        result = agent._parse_session(metadata_path)
-
-        assert result is None
+        with pytest.raises(json.JSONDecodeError):
+            agent._parse_session(metadata_path)
 
     def test_parse_session_normalizes_invalid_identity_and_title(self, tmp_path):
         agent = KimiAgent()

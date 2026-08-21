@@ -160,76 +160,66 @@ class KimiAgent(FileSessionAgent):
         return tuple(path for path in self._get_session_files(session.source_path).values() if path is not None)
 
     @staticmethod
-    def _load_session_metadata(metadata_path: Path) -> dict[str, Any] | None:
-        try:
-            with metadata_path.open(encoding="utf-8") as metadata_file:
-                metadata = json.load(metadata_file)
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            return None
-        return metadata if isinstance(metadata, dict) else None
+    def _load_session_metadata(metadata_path: Path) -> dict[str, Any]:
+        with metadata_path.open(encoding="utf-8") as metadata_file:
+            metadata = json.load(metadata_file)
+        if not isinstance(metadata, dict):
+            raise ValueError("session metadata must be a JSON object")
+        return metadata
 
     @staticmethod
     def _resolve_session_created_at(metadata_path: Path, metadata: dict[str, Any]) -> datetime | None:
         created_at = safe_epoch_datetime(metadata.get("wire_mtime"), unit="s")
         if created_at is not None:
             return created_at
-        try:
-            metadata_mtime = metadata_path.stat().st_mtime
-        except OSError:
-            return None
+        metadata_mtime = metadata_path.stat().st_mtime
         return safe_epoch_datetime(metadata_mtime, unit="s")
 
     def _parse_session(self, metadata_path: Path) -> Session | None:
         """Parse a Kimi session from metadata file"""
-        try:
-            metadata = self._load_session_metadata(metadata_path)
-            if metadata is None:
-                return None
+        metadata = self._load_session_metadata(metadata_path)
+        session_dir = metadata_path.parent
+        session_files = self._get_session_files(session_dir)
+        context_path = session_files["context_file"]
+        wire_path = session_files["wire_file"]
 
-            session_dir = metadata_path.parent
-            session_files = self._get_session_files(session_dir)
-            context_path = session_files["context_file"]
-            wire_path = session_files["wire_file"]
-
-            if not context_path and not wire_path:
-                return None
-
-            raw_session_id = metadata.get("session_id")
-            session_id = raw_session_id.strip() if isinstance(raw_session_id, str) else ""
-            if not session_id:
-                session_id = session_dir.name.strip()
-            if not session_id:
-                return None
-            created_at = self._resolve_session_created_at(metadata_path, metadata)
-            if created_at is None:
-                return None
-
-            project_hash = session_dir.parent.name
-            cwd = self._resolve_cwd_from_project_hash(project_hash)
-            raw_title = metadata.get("title")
-            title = resolve_session_title(
-                raw_title if isinstance(raw_title, str) else None,
-                None,
-                basename_title(cwd),
-            )
-            message_count = self._get_context_message_count(context_path) if context_path is not None else None
-
-            return Session(
-                id=session_id,
-                title=title,
-                created_at=created_at,
-                updated_at=created_at,
-                source_path=session_dir,
-                metadata={
-                    "context_file": str(context_path) if context_path else None,
-                    "wire_file": str(wire_path) if wire_path else None,
-                    "title_generated": metadata.get("title_generated", False),
-                    "cwd": cwd,
-                    "message_count": message_count,
-                },
-            )
-        except Exception:
+        if not context_path and not wire_path:
             return None
+
+        raw_session_id = metadata.get("session_id")
+        session_id = raw_session_id.strip() if isinstance(raw_session_id, str) else ""
+        if not session_id:
+            session_id = session_dir.name.strip()
+        if not session_id:
+            return None
+        created_at = self._resolve_session_created_at(metadata_path, metadata)
+        if created_at is None:
+            return None
+
+        project_hash = session_dir.parent.name
+        cwd = self._resolve_cwd_from_project_hash(project_hash)
+        raw_title = metadata.get("title")
+        title = resolve_session_title(
+            raw_title if isinstance(raw_title, str) else None,
+            None,
+            basename_title(cwd),
+        )
+        message_count = self._get_context_message_count(context_path) if context_path is not None else None
+
+        return Session(
+            id=session_id,
+            title=title,
+            created_at=created_at,
+            updated_at=created_at,
+            source_path=session_dir,
+            metadata={
+                "context_file": str(context_path) if context_path else None,
+                "wire_file": str(wire_path) if wire_path else None,
+                "title_generated": metadata.get("title_generated", False),
+                "cwd": cwd,
+                "message_count": message_count,
+            },
+        )
 
     def _build_session_data(self, session: Session, messages: list[dict], stats: dict[str, int | float]) -> dict:
         """Build unified session data payload."""

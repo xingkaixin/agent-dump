@@ -180,62 +180,54 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _parse_session_file(self, file_path: Path) -> Session | None:
         """Parse a single Codex session file"""
-        try:
-            scan = read_jsonl_scan_metadata(file_path, head_line_limit=10)
-            # session_header 在首记录超过 head 窗口时给出空 dict：Claude/Codex 靠目录
-            # 布局与文件名识别会话，首记录只提供元数据，缺了就走既有的 mtime/目录名回退
-            first_line = scan.session_header
-            if first_line is None:
-                return None
-
-            # Parse first line to get session metadata
-            payload = first_line.get("payload", {})
-
-            session_id = payload.get("id", "")
-            timestamp_str = payload.get("timestamp", "")
-
-            if not session_id:
-                # Extract from filename
-                session_id = self._extract_session_id_from_filename(file_path)
-
-            # Parse timestamp
-            try:
-                created_at = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-            except Exception:
-                # Try to get from file modification time
-                stat = file_path.stat()
-                created_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
-
-            explicit_title = self._get_session_title(session_id)
-            message_title = self._extract_title_from_records(scan.head_records[:10])
-            directory_title = basename_title(payload.get("cwd")) or basename_title(file_path.parent)
-            title = resolve_session_title(explicit_title, message_title, directory_title)
-
-            metadata_records = list(scan.head_records)
-            if not scan.scanned_all and scan.tail_record is not None:
-                metadata_records.append(scan.tail_record)
-            updated_at, message_count, model = self._extract_scan_metadata(
-                metadata_records,
-                created_at,
-                scanned_all=scan.scanned_all,
-            )
-
-            return Session(
-                id=session_id,
-                title=title,
-                created_at=created_at,
-                updated_at=updated_at,
-                source_path=file_path,
-                metadata={
-                    "cwd": payload.get("cwd", ""),
-                    "cli_version": payload.get("cli_version", ""),
-                    "model_provider": payload.get("model_provider", ""),
-                    "model": model or payload.get("model_provider", ""),
-                    "message_count": message_count,
-                },
-            )
-        except Exception:
+        scan = read_jsonl_scan_metadata(file_path, head_line_limit=10)
+        # session_header 在首记录超过 head 窗口时给出空 dict：Claude/Codex 靠目录
+        # 布局与文件名识别会话，首记录只提供元数据，缺了就走既有的 mtime/目录名回退
+        first_line = scan.session_header
+        if first_line is None:
             return None
+
+        payload = first_line.get("payload", {})
+        session_id = payload.get("id", "")
+        timestamp_str = payload.get("timestamp", "")
+
+        if not session_id:
+            session_id = self._extract_session_id_from_filename(file_path)
+
+        try:
+            created_at = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        except (AttributeError, TypeError, ValueError):
+            stat = file_path.stat()
+            created_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+
+        explicit_title = self._get_session_title(session_id)
+        message_title = self._extract_title_from_records(scan.head_records[:10])
+        directory_title = basename_title(payload.get("cwd")) or basename_title(file_path.parent)
+        title = resolve_session_title(explicit_title, message_title, directory_title)
+
+        metadata_records = list(scan.head_records)
+        if not scan.scanned_all and scan.tail_record is not None:
+            metadata_records.append(scan.tail_record)
+        updated_at, message_count, model = self._extract_scan_metadata(
+            metadata_records,
+            created_at,
+            scanned_all=scan.scanned_all,
+        )
+
+        return Session(
+            id=session_id,
+            title=title,
+            created_at=created_at,
+            updated_at=updated_at,
+            source_path=file_path,
+            metadata={
+                "cwd": payload.get("cwd", ""),
+                "cli_version": payload.get("cli_version", ""),
+                "model_provider": payload.get("model_provider", ""),
+                "model": model or payload.get("model_provider", ""),
+                "message_count": message_count,
+            },
+        )
 
     def _extract_title(self, lines: list[str]) -> str | None:
         """Extract title from the second user message in a session."""

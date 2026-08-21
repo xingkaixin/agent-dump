@@ -44,6 +44,23 @@ class FileSessionAgent(BaseAgent):
         """Whether a file may contain sessions inside the window; default prunes by mtime."""
         return file_modified_since(file_path, cutoff)
 
+    def _report_parse_failure(self, file_path: Path, exc: Exception) -> None:
+        self._report_diagnostic(Keys.WARN_SESSION_PARSE_FAILED, path=str(file_path), error=str(exc))
+
+    def _should_scan_file_or_report(self, file_path: Path, cutoff: datetime) -> bool:
+        try:
+            return self._should_scan_file(file_path, cutoff)
+        except Exception as exc:
+            self._report_parse_failure(file_path, exc)
+            return False
+
+    def _parse_session_file_or_report(self, file_path: Path) -> Session | None:
+        try:
+            return self._parse_session_file(file_path)
+        except Exception as exc:
+            self._report_parse_failure(file_path, exc)
+            return None
+
     def _find_base_path(self) -> Path | None:
         return first_existing_search_root(*self.get_search_roots())
 
@@ -66,21 +83,18 @@ class FileSessionAgent(BaseAgent):
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=days) if days is not None else None
         session_files = list(self._iter_session_files())
         if cutoff_time is not None:
-            session_files = [file_path for file_path in session_files if self._should_scan_file(file_path, cutoff_time)]
+            session_files = [
+                file_path for file_path in session_files if self._should_scan_file_or_report(file_path, cutoff_time)
+            ]
         if not session_files:
             return []
 
         sessions: list[Session] = []
         max_workers = min(_MAX_SCAN_WORKERS, len(session_files))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(self._parse_session_file, path): path for path in session_files}
+            futures = [executor.submit(self._parse_session_file_or_report, path) for path in session_files]
             for future in as_completed(futures):
-                path = futures[future]
-                try:
-                    session = future.result()
-                except Exception as e:
-                    self._report_diagnostic(Keys.WARN_SESSION_PARSE_FAILED, path=str(path), error=str(e))
-                    continue
+                session = future.result()
                 if session and (cutoff_time is None or normalize_datetime_utc(session.created_at) >= cutoff_time):
                     sessions.append(session)
 
@@ -97,7 +111,7 @@ class FileSessionAgent(BaseAgent):
                     continue
                 if not candidate_path.is_relative_to(resolved_base_path):
                     continue
-                session = self._parse_session_file(file_path)
+                session = self._parse_session_file_or_report(file_path)
                 if session is not None and session.id == session_id:
                     return session
         return super().find_session_by_id(session_id)
