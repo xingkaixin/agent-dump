@@ -16,20 +16,18 @@ from agent_dump.config import (
     LoggingConfig,
     ShortcutConfig,
     get_config_path,
-    handle_config_command,
     load_ai_config,
     load_collect_config,
     load_config_document,
     load_export_config,
     load_logging_config,
     load_shortcuts_config,
-    mask_api_key,
-    prompt_edit_config,
     tomllib,
     validate_ai_config,
     write_ai_config,
     write_config,
 )
+from agent_dump.config_command import handle_config_command, mask_api_key, prompt_edit_config
 from agent_dump.text_safety import has_unsafe_body_characters
 
 
@@ -377,7 +375,7 @@ class TestConfigCommand:
             ),
             encoding="utf-8",
         )
-        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
+        monkeypatch.setattr("agent_dump.config_command.get_config_path", lambda **kwargs: path)
 
         with mock.patch(
             "agent_dump.config._read_config_sections",
@@ -410,8 +408,8 @@ class TestConfigCommand:
         document.shortcuts_config.return_value = {
             poison: ShortcutConfig(params=(poison,), args=(poison,)),
         }
-        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
-        monkeypatch.setattr("agent_dump.config.load_config_document", lambda _path: document)
+        monkeypatch.setattr("agent_dump.config_command.get_config_path", lambda **kwargs: path)
+        monkeypatch.setattr("agent_dump.config_command.load_config_document", lambda _path: document)
 
         result = handle_config_command("view")
 
@@ -422,9 +420,9 @@ class TestConfigCommand:
 
     def test_view_missing_then_create(self, tmp_path, monkeypatch):
         path = tmp_path / "config.toml"
-        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
+        monkeypatch.setattr("agent_dump.config_command.get_config_path", lambda **kwargs: path)
         monkeypatch.setattr(
-            "agent_dump.config.prompt_edit_config",
+            "agent_dump.config_command.prompt_edit_config",
             lambda existing_ai=None, existing_export=None: (
                 AIConfig(
                     provider="anthropic",
@@ -446,9 +444,9 @@ class TestConfigCommand:
 
     def test_edit_cancelled(self, tmp_path, monkeypatch):
         path = tmp_path / "config.toml"
-        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
+        monkeypatch.setattr("agent_dump.config_command.get_config_path", lambda **kwargs: path)
         monkeypatch.setattr(
-            "agent_dump.config.prompt_edit_config",
+            "agent_dump.config_command.prompt_edit_config",
             lambda existing_ai=None, existing_export=None: (None, existing_export or ExportConfig()),
         )
 
@@ -460,9 +458,9 @@ class TestConfigCommand:
         path = tmp_path / "config.toml"
         original = '[export]\noutput = "C:\\Users\\kevin\\dumps"\n\n[plugin]\ntoken = "abc#def"\n'
         path.write_text(original, encoding="utf-8")
-        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
+        monkeypatch.setattr("agent_dump.config_command.get_config_path", lambda **kwargs: path)
 
-        with mock.patch("agent_dump.config.prompt_edit_config") as prompt:
+        with mock.patch("agent_dump.config_command.prompt_edit_config") as prompt:
             result = handle_config_command("edit")
 
         assert result == 1
@@ -533,9 +531,9 @@ class TestConfigCommand:
 
     def test_handle_config_command_allows_export_only_config(self, tmp_path, monkeypatch):
         path = tmp_path / "config.toml"
-        monkeypatch.setattr("agent_dump.config.get_config_path", lambda **kwargs: path)
+        monkeypatch.setattr("agent_dump.config_command.get_config_path", lambda **kwargs: path)
         monkeypatch.setattr(
-            "agent_dump.config.prompt_edit_config",
+            "agent_dump.config_command.prompt_edit_config",
             lambda existing_ai=None, existing_export=None: (None, ExportConfig(output="./exports")),
         )
 
@@ -550,7 +548,7 @@ class TestConfigCommand:
         assert result == 1
 
     def test_prompt_edit_simple_mode(self, monkeypatch):
-        monkeypatch.setattr("agent_dump.config._is_terminal", lambda: False)
+        monkeypatch.setattr("agent_dump.config_command._is_terminal", lambda: False)
         inputs = iter(["1", "https://api.openai.com/v1", "gpt-4.1-mini", "sk-123", "./exports", "y"])
         with mock.patch("builtins.input", side_effect=lambda _="": next(inputs)):
             edited_ai, edited_export = prompt_edit_config()
@@ -561,13 +559,13 @@ class TestConfigCommand:
         assert edited_export == ExportConfig(output="./exports")
 
     def test_prompt_edit_hides_api_key_when_only_stdin_is_a_terminal(self, monkeypatch):
-        monkeypatch.setattr("agent_dump.config._is_terminal", lambda: False)
-        monkeypatch.setattr("agent_dump.config.os.isatty", lambda fd: fd == 0)
+        monkeypatch.setattr("agent_dump.config_command._is_terminal", lambda: False)
+        monkeypatch.setattr("agent_dump.config_command.os.isatty", lambda fd: fd == 0)
         inputs = iter(["1", "https://api.openai.com/v1", "gpt-4.1-mini", "./exports", "y"])
 
         with (
             mock.patch("builtins.input", side_effect=lambda _="": next(inputs)) as visible_input,
-            mock.patch("agent_dump.config.getpass.getpass", return_value="sk-hidden") as secret_input,
+            mock.patch("agent_dump.config_command.getpass.getpass", return_value="sk-hidden") as secret_input,
         ):
             edited_ai, edited_export = prompt_edit_config()
 

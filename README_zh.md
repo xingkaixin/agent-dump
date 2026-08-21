@@ -453,7 +453,8 @@ deny = [
 │       ├── collect_progress.py # collect 日志、进度上报与 run stats
 │       ├── collect_summary.py  # collect 摘要 payload 合并与 JSON 提取
 │       ├── coercion.py         # 不可信 provider 标量的容错转换
-│       ├── config.py           # TOML 配置
+│       ├── config.py           # TOML 配置模型与持久化
+│       ├── config_command.py   # 交互式配置命令工作流
 │       ├── diagnostics.py      # 结构化诊断
 │       ├── export_paths.py     # 安全导出路径构造
 │       ├── i18n.py             # 中英文文案
