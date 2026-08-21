@@ -2,6 +2,7 @@
 Query parsing and session filtering helpers.
 """
 
+from collections.abc import Set
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -27,10 +28,10 @@ _MAX_QUERY_LIMIT = (1 << 63) - 1
 class QuerySpec:
     """Parsed query option."""
 
-    agent_names: set[str] | None
+    agent_names: frozenset[str] | None
     keyword: str | None
     project_path: Path | None
-    roles: set[str] | None
+    roles: frozenset[str] | None
     limit: int | None
 
 
@@ -95,7 +96,7 @@ def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
                 raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_KEYWORD))
 
             return QuerySpec(
-                agent_names=normalized_agents,
+                agent_names=frozenset(normalized_agents),
                 keyword=keyword,
                 project_path=None,
                 roles=None,
@@ -257,7 +258,7 @@ def _extract_single_query_param(params: dict[str, list[str]], name: str) -> str 
     return values[-1]
 
 
-def _parse_provider_scope(raw: str, valid_agents: set[str]) -> set[str]:
+def _parse_provider_scope(raw: str, valid_agents: set[str]) -> frozenset[str]:
     provider_names = [name.strip().lower() for name in raw.split(",") if name.strip()]
     if not provider_names:
         raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_PROVIDERS))
@@ -275,14 +276,14 @@ def _parse_provider_scope(raw: str, valid_agents: set[str]) -> set[str]:
         unknown = ",".join(sorted(set(unknown_agents)))
         raise ValueError(i18n.t(Keys.QUERY_ERROR_UNKNOWN_AGENT, name=unknown))
 
-    return normalized_agents
+    return frozenset(normalized_agents)
 
 
-def _parse_roles(raw: str) -> set[str]:
+def _parse_roles(raw: str) -> frozenset[str]:
     role_names = {name.strip().lower() for name in raw.split(",") if name.strip()}
     if not role_names:
         raise ValueError(i18n.t(Keys.QUERY_ERROR_EMPTY_ROLES))
-    return role_names
+    return frozenset(role_names)
 
 
 def _parse_limit(raw: str) -> int:
@@ -342,8 +343,8 @@ def _contains_structured_query_terms(query: str) -> bool:
 
 def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
     keyword_terms: list[str] = []
-    agent_names: set[str] | None = None
-    roles: set[str] | None = None
+    agent_names: frozenset[str] | None = None
+    roles: frozenset[str] | None = None
     project_path: Path | None = None
     limit: int | None = None
 
@@ -403,7 +404,7 @@ def _filter_sessions_from_source_or_data(
 def _role_search_matches(
     agent: BaseAgent,
     sessions: list[Session],
-    roles: set[str],
+    roles: Set[str],
     query: TextQuery | None,
     *,
     limit: int | None,
@@ -435,7 +436,7 @@ def _role_search_matches(
 def _find_role_evidence(
     agent: BaseAgent,
     session: Session,
-    roles: set[str],
+    roles: Set[str],
     query: TextQuery | None,
 ) -> tuple[str, str] | None:
     try:

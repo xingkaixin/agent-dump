@@ -69,10 +69,10 @@ def make_query_spec(
     limit: int | None = None,
 ) -> QuerySpec:
     return QuerySpec(
-        agent_names=agent_names,
+        agent_names=frozenset(agent_names) if agent_names is not None else None,
         keyword=keyword,
         project_path=project_path,
-        roles=roles,
+        roles=frozenset(roles) if roles is not None else None,
         limit=limit,
     )
 

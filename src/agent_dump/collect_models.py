@@ -83,7 +83,7 @@ class CollectEvent:
     files: tuple[str, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass
 class CollectProgressEvent:
     """Structured progress event for collect mode."""
 
@@ -102,7 +102,7 @@ class CollectProgressEvent:
     agent_session_counts: dict[str, int] | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class CollectRunStats:
     """User-facing collect workload stats."""
 
@@ -130,7 +130,7 @@ class CollectEntry:
     is_truncated: bool
 
 
-@dataclass(frozen=True)
+@dataclass
 class SessionSummaryEntry:
     """One summarized session entry for collect aggregation."""
 
@@ -141,7 +141,7 @@ class SessionSummaryEntry:
     source_truncated: bool
 
 
-@dataclass(frozen=True)
+@dataclass
 class GroupSummaryEntry:
     """Intermediate group summary used by tree reduction."""
 
@@ -150,7 +150,7 @@ class GroupSummaryEntry:
     session_count: int
 
 
-@dataclass(frozen=True)
+@dataclass
 class CollectAggregate:
     """Final aggregate input used to render the markdown report."""
 
