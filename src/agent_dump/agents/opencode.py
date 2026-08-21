@@ -6,9 +6,10 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.message_types import NormalizedSessionData
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
@@ -181,18 +182,18 @@ class OpenCodeAgent(BaseAgent):
             return None
         return data if isinstance(data, dict) else None
 
-    def get_session_data(self, session: Session) -> dict:
+    def get_session_data(self, session: Session) -> dict[str, Any]:
         """Get session data as a dictionary"""
         conn = self._connect_db()
         try:
-            return self._build_session_data(conn, session)
+            return cast(dict[str, Any], self._build_session_data(conn, session))
         finally:
             conn.close()
 
-    def _build_session_data(self, conn: sqlite3.Connection, session: Session) -> dict:
+    def _build_session_data(self, conn: sqlite3.Connection, session: Session) -> NormalizedSessionData:
         cursor = conn.cursor()
 
-        session_data = {
+        session_data: NormalizedSessionData = {
             "id": session.id,
             "title": session.title,
             "slug": session.metadata.get("slug"),

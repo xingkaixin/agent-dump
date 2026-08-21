@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import re
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex_enrichment import CodexMessageEnrichmentMixin
@@ -32,6 +32,7 @@ from agent_dump.agents.message_assembly import (
     message_has_part_type,
     try_append_to_assistant_group,
 )
+from agent_dump.agents.message_types import NormalizedSessionData
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
@@ -297,7 +298,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         json_messages = self._filter_json_export_only_tools(transformed_messages)
         return filter_messages_for_export(json_messages)
 
-    def get_session_data(self, session: Session) -> dict:
+    def get_session_data(self, session: Session) -> dict[str, Any]:
         """Get session data as a dictionary"""
         if not session.source_path.exists():
             raise source_missing(
@@ -328,7 +329,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
         stats["message_count"] = len(state.messages)
 
-        return {
+        session_data: NormalizedSessionData = {
             "id": session.id,
             "title": session.title,
             "slug": None,
@@ -340,6 +341,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             "stats": stats,
             "messages": state.messages,
         }
+        return cast(dict[str, Any], session_data)
 
     def _json_export_payload(self, session: Session) -> dict[str, Any]:
         """Apply Codex's JSON-export-only message transforms."""

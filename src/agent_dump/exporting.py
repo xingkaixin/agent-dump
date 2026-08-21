@@ -103,13 +103,13 @@ def execute_exports(
     formats: Sequence[str],
     output_dir_for_format: Callable[[str], Path],
     *,
-    prepared_session_data: Mapping[str, dict[str, Any]] | None = None,
+    prepared_session_data: Mapping[str, Mapping[str, Any]] | None = None,
     session_uris: Mapping[str, str] | None = None,
     summaries: Mapping[str, str] | None = None,
 ) -> ExportRunResult:
     """Execute every requested file export and retain each observable outcome."""
     attempts: list[ExportAttempt] = []
-    loaded_session_data = dict(prepared_session_data or {})
+    loaded_session_data: dict[str, Mapping[str, Any]] = dict(prepared_session_data or {})
 
     for plan in _plan_exports(agent, sessions, formats, output_dir_for_format):
         output_path: Path | None = None

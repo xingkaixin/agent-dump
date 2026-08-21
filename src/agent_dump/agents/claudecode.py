@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
@@ -27,6 +27,7 @@ from agent_dump.agents.message_assembly import (
     build_tool_part,
     try_append_to_assistant_group,
 )
+from agent_dump.agents.message_types import NormalizedSessionData
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
@@ -221,7 +222,7 @@ class ClaudeCodeAgent(FileSessionAgent):
 
         return None
 
-    def get_session_data(self, session: Session) -> dict:
+    def get_session_data(self, session: Session) -> dict[str, Any]:
         """Get session data as a dictionary"""
         if not session.source_path.exists():
             raise source_missing(
@@ -269,7 +270,7 @@ class ClaudeCodeAgent(FileSessionAgent):
         stats["message_count"] = len(messages)
         self._accumulate_token_totals(stats, messages)
 
-        return {
+        session_data: NormalizedSessionData = {
             "id": session.id,
             "title": session.title,
             "slug": None,
@@ -281,6 +282,7 @@ class ClaudeCodeAgent(FileSessionAgent):
             "stats": stats,
             "messages": messages,
         }
+        return cast(dict[str, Any], session_data)
 
     def _parse_timestamp_ms(self, data: dict[str, Any]) -> int:
         """Parse record timestamp into milliseconds."""

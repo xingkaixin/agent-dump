@@ -1,13 +1,13 @@
 """Deterministic event extraction and chunking for collect mode."""
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 import re
 from typing import Any
 
 from agent_dump.collect_models import CHUNK_TARGET_CHARS, EVENT_EXTRACT_CHAR_BUDGET, CollectEvent
 from agent_dump.collect_summary import dedupe_preserve_order, normalize_text
 from agent_dump.message_filter import should_filter_message_for_export
-from agent_dump.transcript import read_message
+from agent_dump.transcript import read_messages
 
 GREETING_PATTERN = re.compile(r"^(hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok\b)", re.IGNORECASE)
 DECISION_PATTERN = re.compile(r"(决定|采用|改成|切换|方案|fix|修复|处理|实现|完成|done|resolved?)", re.IGNORECASE)
@@ -62,7 +62,7 @@ def _classify_text_event(role: str, text: str) -> str | None:
 
 
 def extract_collect_events(
-    session_data: dict[str, Any],
+    session_data: Mapping[str, Any],
     *,
     fallback_text_fn: Callable[[], str] | None = None,
     char_budget: int = EVENT_EXTRACT_CHAR_BUDGET,
@@ -71,7 +71,6 @@ def extract_collect_events(
     events: list[CollectEvent] = []
     used_chars = 0
     truncated = False
-    messages = session_data.get("messages", [])
 
     def _append_event(event: CollectEvent | None) -> None:
         nonlocal used_chars, truncated
@@ -84,20 +83,18 @@ def extract_collect_events(
         events.append(event)
         used_chars += event_size
 
-    if isinstance(messages, list):
-        for message in messages:
-            if not isinstance(message, dict) or should_filter_message_for_export(message):
-                continue
+    for transcript_message in read_messages(session_data):
+        if should_filter_message_for_export(transcript_message.raw):
+            continue
 
-            transcript_message = read_message(message)
-            role = transcript_message.role
-            if role not in {"user", "assistant"}:
-                continue
+        role = transcript_message.role
+        if role not in {"user", "assistant"}:
+            continue
 
-            for part_text in transcript_message.texts:
-                kind = _classify_text_event(role, part_text)
-                if kind is not None:
-                    _append_event(_build_collect_event(kind, role, part_text))
+        for part_text in transcript_message.texts:
+            kind = _classify_text_event(role, part_text)
+            if kind is not None:
+                _append_event(_build_collect_event(kind, role, part_text))
 
     if not events:
         fallback = normalize_text(fallback_text_fn() if fallback_text_fn is not None else "")

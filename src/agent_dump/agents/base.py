@@ -296,7 +296,7 @@ class BaseAgent(ABC):
         return copy_private_file(source_path, output_path)
 
     @abstractmethod
-    def get_session_data(self, session: Session) -> dict:
+    def get_session_data(self, session: Session) -> dict[str, Any]:
         """
         Get session data as a dictionary.
         Returns dict with keys: id, title, messages, etc.

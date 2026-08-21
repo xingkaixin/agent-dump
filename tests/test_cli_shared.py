@@ -410,6 +410,20 @@ def test_show_loading_sanitizes_non_tty_status(capsys):
 class TestRenderSessionText:
     """测试 render_session_text 函数"""
 
+    def test_render_session_text_skips_malformed_message_entries(self):
+        session_data = {
+            "messages": [
+                "bare",
+                None,
+                {"role": "user", "parts": [{"type": "text", "text": "Hello"}]},
+            ]
+        }
+
+        output = render_session_text("codex://abc", session_data)
+
+        assert "## 1. User" in output
+        assert "Hello" in output
+
     def test_render_session_text_skips_developer_messages(self):
         """测试 URI 输出会过滤 developer 角色"""
         session_data = {

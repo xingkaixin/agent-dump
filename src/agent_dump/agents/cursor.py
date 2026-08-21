@@ -2,7 +2,7 @@
 Cursor agent handler
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 import json
@@ -10,9 +10,10 @@ import os
 from pathlib import Path
 import sqlite3
 import sys
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.message_types import NormalizedSessionData
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing, unsupported_capability
 from agent_dump.i18n import Keys, i18n
@@ -633,7 +634,7 @@ class CursorAgent(BaseAgent):
             return None
         return self._parse_json(rows[0]["value"])
 
-    def _extract_subagent_model(self, composer: dict[str, Any], child_data: dict[str, Any]) -> str | None:
+    def _extract_subagent_model(self, composer: dict[str, Any], child_data: Mapping[str, Any]) -> str | None:
         model_config = composer.get("modelConfig")
         if isinstance(model_config, dict):
             model_name = model_config.get("modelName")
@@ -859,9 +860,12 @@ class CursorAgent(BaseAgent):
             return safe_int(cws.get("tokensUsed")), 0
         return 0, 0
 
-    def get_session_data(self, session: Session) -> dict:
+    def get_session_data(self, session: Session) -> dict[str, Any]:
         """Get Cursor session data as unified dictionary."""
-        return self._build_session_data(session, expanding=frozenset(), subagent_memo={})
+        return cast(
+            dict[str, Any],
+            self._build_session_data(session, expanding=frozenset(), subagent_memo={}),
+        )
 
     def _build_session_data(
         self,
@@ -869,7 +873,7 @@ class CursorAgent(BaseAgent):
         *,
         expanding: frozenset[str],
         subagent_memo: dict[str, dict[str, Any] | None],
-    ) -> dict:
+    ) -> NormalizedSessionData:
         """Build session data, carrying the subagent-expansion context down the recursion.
 
         `expanding` 是当前正在展开的 composer id 链，用于挡住 subagentComposerId

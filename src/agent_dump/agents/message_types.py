@@ -43,3 +43,4 @@ class NormalizedSessionData(_NormalizedSessionDataRequired, total=False):
     summary_files: Any
     stats: dict[str, Any]
     metadata: dict[str, Any]
+    summary: str
