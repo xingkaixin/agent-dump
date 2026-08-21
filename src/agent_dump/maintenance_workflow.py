@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from agent_dump.agent_registry import AGENT_REGISTRATIONS, AgentRegistration
 from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, MessageCountFact, Session
 from agent_dump.cli_shared import (
-    apply_query_filter,
     build_no_agents_found_diagnostic,
+    collect_query_matches,
     group_sessions_by_time,
     print_diagnostic,
     render_agent_search_roots,
@@ -116,10 +116,24 @@ def handle_stats_mode(
             )
             return 0
 
+    sessions_by_agent = (
+        collect_query_matches(
+            available_agents,
+            days=operation.days,
+            spec=query_spec,
+            scanner=scanner,
+        )
+        if query_spec is not None
+        else None
+    )
+    scanned_sessions = (
+        [(agent, sessions_by_agent.get(agent.name, [])) for agent in available_agents]
+        if sessions_by_agent is not None
+        else scanner.get_sessions(operation.days, agents=available_agents)
+    )
+
     all_sessions: list[tuple[BaseAgent, Session]] = []
-    for agent, sessions in scanner.get_sessions(operation.days, agents=available_agents):
-        if query_spec is not None:
-            sessions = apply_query_filter(agent, sessions, query_spec)
+    for agent, sessions in scanned_sessions:
         for session in sessions:
             all_sessions.append((agent, session))
 
