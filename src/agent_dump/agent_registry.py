@@ -1,6 +1,5 @@
 """Central registry for supported agent integrations."""
 
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from agent_dump.agents.base import BaseAgent
@@ -17,9 +16,7 @@ from agent_dump.agents.zcode import ZCodeAgent
 class AgentRegistration:
     """One supported agent integration."""
 
-    name: str
-    display_name: str
-    factory: Callable[[], BaseAgent]
+    factory: type[BaseAgent]
     uri_schemes: tuple[str, ...]
     location_line: str
     # 该 provider 额外接受的 URI 路径前缀，如 codex 的 `codex://threads/<id>`。
@@ -29,55 +26,49 @@ class AgentRegistration:
     # URI 示例里 session id 占位符的写法；Cursor 用的是 bubble 级的 requestId。
     uri_identifier_label: str = "<session_id>"
 
+    @property
+    def name(self) -> str:
+        return self.factory.provider_name
+
+    @property
+    def display_name(self) -> str:
+        return self.factory.provider_display_name
+
 
 AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
     AgentRegistration(
-        name="opencode",
-        display_name="OpenCode",
         factory=OpenCodeAgent,
         uri_schemes=("opencode",),
         location_line="  - OpenCode: XDG_DATA_HOME/opencode/opencode.db or ~/.local/share/opencode/opencode.db",
     ),
     AgentRegistration(
-        name="zcode",
-        display_name="ZCode",
         factory=ZCodeAgent,
         uri_schemes=("zcode",),
         location_line="  - ZCode: ~/.zcode/cli/db/db.sqlite on macOS or %USERPROFILE%\\.zcode\\cli\\db\\db.sqlite on Windows",
     ),
     AgentRegistration(
-        name="codex",
-        display_name="Codex",
         factory=CodexAgent,
         uri_schemes=("codex",),
         uri_path_prefixes=("threads/",),
         location_line="  - Codex: CODEX_HOME/sessions or ~/.codex/sessions",
     ),
     AgentRegistration(
-        name="kimi",
-        display_name="Kimi",
         factory=KimiAgent,
         uri_schemes=("kimi",),
         location_line="  - Kimi: KIMI_SHARE_DIR/sessions or ~/.kimi/sessions",
     ),
     AgentRegistration(
-        name="claudecode",
-        display_name="Claude Code",
         factory=ClaudeCodeAgent,
         uri_schemes=("claude",),
         location_line="  - Claude Code: CLAUDE_CONFIG_DIR/projects or ~/.claude/projects",
     ),
     AgentRegistration(
-        name="cursor",
-        display_name="Cursor",
         factory=CursorAgent,
         uri_schemes=("cursor",),
         uri_identifier_label="<requestid>",
         location_line="  - Cursor: ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
     ),
     AgentRegistration(
-        name="pi",
-        display_name="Pi",
         factory=PiAgent,
         uri_schemes=("pi",),
         location_line="  - Pi: PI_HOME/agent/sessions or ~/.pi/agent/sessions",

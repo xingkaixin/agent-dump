@@ -47,8 +47,11 @@ KIMI_IGNORED_TOOLS = {"SetTodoList"}
 class KimiAgent(FileSessionAgent):
     """Handler for Kimi sessions"""
 
+    provider_name = "kimi"
+    provider_display_name = "Kimi"
+
     def __init__(self) -> None:
-        super().__init__("kimi", "Kimi")
+        super().__init__()
         self._work_dirs_by_hash: dict[str, str] | None = None
         self._work_dirs_lock = Lock()
 

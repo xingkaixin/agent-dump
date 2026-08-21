@@ -11,7 +11,7 @@ from enum import Enum
 import json
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, ClassVar
 
 from agent_dump.diagnostics import source_missing, unsupported_capability
 from agent_dump.export_paths import build_session_output_path
@@ -106,13 +106,20 @@ def derive_session_facts(
 class BaseAgent(ABC):
     """Abstract base class for agent handlers"""
 
+    provider_name: ClassVar[str] = ""
+    provider_display_name: ClassVar[str] = ""
+
     #: URI 模式下该 provider 不支持的导出格式
     unsupported_uri_formats: frozenset[str] = frozenset()
     raw_export_suffix: str = ".raw.jsonl"
 
-    def __init__(self, name: str, display_name: str) -> None:
-        self.name = name
-        self.display_name = display_name
+    def __init__(self, name: str | None = None, display_name: str | None = None) -> None:
+        resolved_name = name if name is not None else type(self).provider_name
+        resolved_display_name = display_name if display_name is not None else type(self).provider_display_name
+        if not resolved_name or not resolved_display_name:
+            raise ValueError("agent name and display name must be non-empty")
+        self.name = resolved_name
+        self.display_name = resolved_display_name
         self._session_data_cache = SessionDataCache()
         self._diagnostic_sink: ProviderDiagnosticSink | None = None
         self._diagnostic_scope_lock = RLock()

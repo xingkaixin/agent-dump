@@ -23,7 +23,7 @@ class FileSessionAgent(BaseAgent):
     sorting, and filename-based lookup are shared here.
     """
 
-    def __init__(self, name: str, display_name: str) -> None:
+    def __init__(self, name: str | None = None, display_name: str | None = None) -> None:
         super().__init__(name, display_name)
         self.base_path: Path | None = None
 

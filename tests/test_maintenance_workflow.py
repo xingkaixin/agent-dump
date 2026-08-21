@@ -294,11 +294,8 @@ class TestProvidersMode:
         existing_root = tmp_path / "sessions"
         existing_root.mkdir()
         missing_root = tmp_path / "missing"
-        agent = OpenCodeAgent()
         registration = AgentRegistration(
-            name="opencode",
-            display_name="OpenCode",
-            factory=lambda: agent,
+            factory=OpenCodeAgent,
             uri_schemes=("opencode",),
             location_line="",
         )
@@ -307,7 +304,7 @@ class TestProvidersMode:
             SearchRoot("existing root", existing_root),
             SearchRoot("missing root", missing_root),
         )
-        with mock.patch.object(agent, "get_search_roots", return_value=roots):
+        with mock.patch.object(OpenCodeAgent, "get_search_roots", return_value=roots):
             result = render_provider_capabilities(registrations=(registration,))
 
         assert result == 0
@@ -321,17 +318,18 @@ class TestProvidersMode:
 
     def test_providers_sanitizes_registration_and_search_root_fields(self, capsys, tmp_path) -> None:
         poison = "Provider\x1b[2K\rFORGED\x1b]8;;https://example.invalid\x07link\u202e"
-        agent = OpenCodeAgent()
+
+        class PoisonAgent(OpenCodeAgent):
+            provider_display_name = poison
+
         registration = AgentRegistration(
-            name="opencode",
-            display_name=poison,
-            factory=lambda: agent,
+            factory=PoisonAgent,
             uri_schemes=(poison,),
             location_line="",
         )
         roots = (SearchRoot(poison, tmp_path / poison),)
 
-        with mock.patch.object(agent, "get_search_roots", return_value=roots):
+        with mock.patch.object(PoisonAgent, "get_search_roots", return_value=roots):
             result = render_provider_capabilities(registrations=(registration,))
 
         output = capsys.readouterr().out

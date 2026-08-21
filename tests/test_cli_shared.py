@@ -897,8 +897,6 @@ class TestUriShapesComeFromTheRegistry:
         patched = tuple(
             (
                 type(registration)(
-                    name=registration.name,
-                    display_name=registration.display_name,
                     factory=registration.factory,
                     uri_schemes=registration.uri_schemes,
                     location_line=registration.location_line,
