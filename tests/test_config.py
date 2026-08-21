@@ -309,14 +309,13 @@ class TestConfigReadWrite:
     def test_write_config_is_private_when_created(self, tmp_path, monkeypatch):
         path = tmp_path / "config.toml"
         created_modes: list[int] = []
-        original_open = os.open
+        original_fdopen = os.fdopen
 
-        def recording_open(file: Any, flags: int, mode: int = 0o777) -> int:
-            descriptor = original_open(file, flags, mode)
-            created_modes.append(Path(file).stat().st_mode & 0o777)
-            return descriptor
+        def recording_fdopen(descriptor: int, *args: Any, **kwargs: Any):
+            created_modes.append(os.fstat(descriptor).st_mode & 0o777)
+            return original_fdopen(descriptor, *args, **kwargs)
 
-        monkeypatch.setattr("agent_dump.config.os.open", recording_open)
+        monkeypatch.setattr("agent_dump.private_files.os.fdopen", recording_fdopen)
         previous_umask = os.umask(0o022)
         try:
             write_ai_config(

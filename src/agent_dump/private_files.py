@@ -10,6 +10,7 @@ from contextlib import suppress
 import os
 from pathlib import Path
 import shutil
+from tempfile import mkstemp
 from typing import TextIO
 
 PRIVATE_FILE_MODE = 0o600
@@ -67,14 +68,25 @@ def ensure_output_dir(path: Path) -> Path:
 
 
 def write_private_text(path: Path, text: str) -> Path:
-    """Write text to a file created owner-only, tightening an existing target."""
+    """Atomically replace a text file with owner-only content."""
     ensure_output_dir(path.parent)
-    # 用 os.open 带 mode 创建，避免文件先以 umask 权限存在、再被 chmod 收紧的窗口；
-    # 已存在的目标由 O_TRUNC 复用其旧 mode，所以还要显式收紧一次
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, PRIVATE_FILE_MODE)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(text)
-    _chmod_quietly(path, PRIVATE_FILE_MODE)
+    fd, temporary_name = mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary_path = Path(temporary_name)
+    try:
+        if os.name != "nt":
+            os.fchmod(fd, PRIVATE_FILE_MODE)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            fd = -1
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+        with suppress(OSError):
+            temporary_path.unlink()
+        raise
     return path
 
 

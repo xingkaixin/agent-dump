@@ -247,6 +247,21 @@ class TestExportsAndReportsArePrivate:
         assert _mode(target) == PRIVATE_FILE_MODE
         assert target.read_text(encoding="utf-8") == "new"
 
+    def test_failed_text_write_preserves_existing_target(self, tmp_path, monkeypatch):
+        target = tmp_path / "report.md"
+        target.write_text("old complete report", encoding="utf-8")
+
+        def fail_fdopen(*_args, **_kwargs):
+            raise OSError("write failed")
+
+        monkeypatch.setattr("agent_dump.private_files.os.fdopen", fail_fdopen)
+
+        with pytest.raises(OSError, match="write failed"):
+            write_private_text(target, "new report")
+
+        assert target.read_text(encoding="utf-8") == "old complete report"
+        assert list(tmp_path.glob(f".{target.name}.*.tmp")) == []
+
     def test_copy_private_file_tightens_a_world_readable_source(self, tmp_path):
         source = tmp_path / "src.jsonl"
         source.write_text("data", encoding="utf-8")
