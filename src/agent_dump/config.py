@@ -406,35 +406,45 @@ SUPPORTED_AI_URL_SCHEMES = frozenset({"http", "https"})
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
 
 
+class AIConfigError(str, Enum):
+    MISSING_FILE = "missing_file"
+    PROVIDER = "provider"
+    BASE_URL = "base_url"
+    MODEL = "model"
+    API_KEY = "api_key"
+    BASE_URL_SCHEME = "base_url_scheme"
+    BASE_URL_PLAINTEXT_KEY = "base_url_plaintext_key"
+
+
 def is_loopback_host(host: str) -> bool:
     """Whether a hostname refers to this machine."""
     return host.strip().lower().strip("[]") in {h.strip("[]") for h in _LOOPBACK_HOSTS}
 
 
-def validate_ai_config(config: AIConfig | None) -> tuple[bool, list[str]]:
+def validate_ai_config(config: AIConfig | None) -> tuple[bool, list[AIConfigError]]:
     """Validate collect-required AI config."""
     if config is None:
-        return False, ["missing_file"]
+        return False, [AIConfigError.MISSING_FILE]
 
-    errors: list[str] = []
+    errors: list[AIConfigError] = []
     if config.provider not in {"openai", "anthropic"}:
-        errors.append("provider")
+        errors.append(AIConfigError.PROVIDER)
     if not config.base_url:
-        errors.append("base_url")
+        errors.append(AIConfigError.BASE_URL)
     if not config.model:
-        errors.append("model")
+        errors.append(AIConfigError.MODEL)
     if not config.api_key:
-        errors.append("api_key")
+        errors.append(AIConfigError.API_KEY)
 
     if config.base_url:
         parsed = urlsplit(config.base_url)
         scheme = parsed.scheme.lower()
         if scheme not in SUPPORTED_AI_URL_SCHEMES:
             # 未加白名单前 file:// / ftp:// 之类的值也能走到 urllib 的 opener
-            errors.append("base_url_scheme")
+            errors.append(AIConfigError.BASE_URL_SCHEME)
         elif scheme == "http" and config.api_key and not is_loopback_host(parsed.hostname or ""):
             # 明文发 API key 只在指向本机网关时才是可接受的取舍
-            errors.append("base_url_plaintext_key")
+            errors.append(AIConfigError.BASE_URL_PLAINTEXT_KEY)
 
     return len(errors) == 0, errors
 

@@ -276,9 +276,12 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
         print(i18n.t(Keys.CONFIG_CANCELLED))
         return 1
 
-    ok, errors = validate_ai_config(edited_ai) if edited_ai is not None else (True, [])
+    if edited_ai is None:
+        ok, errors = True, []
+    else:
+        ok, errors = validate_ai_config(edited_ai)
     if not ok:
-        print(render_terminal_message(Keys.CONFIG_INVALID_FIELDS, fields=", ".join(errors)))
+        print(render_terminal_message(Keys.CONFIG_INVALID_FIELDS, fields=", ".join(error.value for error in errors)))
         return 1
 
     path = write_config(edited_ai, edited_export, config_path, document=document)

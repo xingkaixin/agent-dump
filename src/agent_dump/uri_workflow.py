@@ -12,7 +12,7 @@ from agent_dump.cli_shared import (
 )
 from agent_dump.collect import request_summary_from_llm
 from agent_dump.command_plan import UriOperation
-from agent_dump.config import AIConfig, load_ai_config, validate_ai_config
+from agent_dump.config import AIConfig, AIConfigError, load_ai_config, validate_ai_config
 from agent_dump.diagnostics import DiagnosticError, session_not_found
 from agent_dump.exporting import execute_exports
 from agent_dump.i18n import Keys, i18n
@@ -66,14 +66,19 @@ def maybe_generate_uri_summary(
     config = load_ai_config()
     valid, errors = validate_ai_config(config)
     if not valid or config is None:
-        if "missing_file" in errors:
+        if AIConfigError.MISSING_FILE in errors:
             print(i18n.t(Keys.URI_SUMMARY_CONFIG_MISSING_WARNING))
-        elif "base_url_scheme" in errors:
+        elif AIConfigError.BASE_URL_SCHEME in errors:
             print(i18n.t(Keys.COLLECT_CONFIG_BAD_SCHEME))
-        elif "base_url_plaintext_key" in errors:
+        elif AIConfigError.BASE_URL_PLAINTEXT_KEY in errors:
             print(i18n.t(Keys.COLLECT_CONFIG_PLAINTEXT_KEY))
         else:
-            print(render_terminal_message(Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING, fields=",".join(errors)))
+            print(
+                render_terminal_message(
+                    Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING,
+                    fields=",".join(error.value for error in errors),
+                )
+            )
         return session_data, None
 
     effective_session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
