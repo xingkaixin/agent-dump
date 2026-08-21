@@ -5,7 +5,7 @@ All SQL f-strings in this file use FTS5 virtual table names that are
 hardcoded internal constants (_FTS_TABLES), never user input.
 """
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -132,47 +132,18 @@ def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str |
     try:
         session_data = agent.get_cached_session_data(session)
     except Exception:
-        return _fallback_extract_from_source(session.source_path)
+        return None
 
-    return _extract_searchable_text_from_data(session, session_data)
+    return extract_transcript_searchable_text(session_data)
 
 
 def extract_session_searchable_text_once(agent: BaseAgent, session: Session) -> str | None:
     """Extract searchable text while releasing the full parsed payload afterwards."""
     try:
         with agent.lease_cached_session_data(session) as session_data:
-            return _extract_searchable_text_from_data(session, session_data)
+            return extract_transcript_searchable_text(session_data)
     except Exception:
-        return _fallback_extract_from_source(session.source_path)
-
-
-def _extract_searchable_text_from_data(session: Session, session_data: Mapping[str, Any]) -> str | None:
-    text = extract_transcript_searchable_text(session_data)
-    if text is None:
-        return _fallback_extract_from_source(session.source_path)
-    return text
-
-
-# 只有按会话切分的文本源才能整文件读取。SQLite provider 的 source_path 是整个
-# 数据库（opencode.py:200、cursor.py:255），把它当文本读会把全库内容索引到单个
-# session id 下，造成跨会话结果污染并让索引膨胀。
-_PER_SESSION_TEXT_SUFFIXES = frozenset({".jsonl", ".json", ".txt", ".md", ".log"})
-
-
-def _fallback_extract_from_source(source_path: Path) -> str | None:
-    """Read text straight from a per-session source, or None when that is not possible."""
-    try:
-        if source_path.is_dir():
-            parts = [
-                jsonl_file.read_text(encoding="utf-8", errors="ignore")
-                for jsonl_file in sorted(source_path.glob("*.jsonl"))
-            ]
-            return "\n".join(parts) if parts else None
-        if source_path.is_file() and source_path.suffix.lower() in _PER_SESSION_TEXT_SUFFIXES:
-            return source_path.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
         return None
-    return None
 
 
 def _build_fts_query(

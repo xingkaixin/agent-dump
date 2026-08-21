@@ -10,8 +10,8 @@ from urllib.parse import ParseResult, parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
 from agent_dump.i18n import Keys, i18n
-from agent_dump.query_semantics import TextQuery, TextQueryMode
-from agent_dump.search_index import SearchIndex, extract_session_searchable_text_once
+from agent_dump.query_semantics import TextQuery, TextQueryMode, extract_transcript_searchable_text
+from agent_dump.search_index import SearchIndex
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import normalize_datetime_utc
 from agent_dump.transcript import read_messages
@@ -155,7 +155,7 @@ def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | No
     if provider_matched is not None:
         return provider_matched
 
-    return _filter_sessions_from_source_or_data(agent, sessions, query)
+    return _filter_sessions_from_data(agent, sessions, query)
 
 
 def search_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: QuerySpec) -> list[SearchSessionMatch]:
@@ -386,16 +386,15 @@ def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
     )
 
 
-def _filter_sessions_from_source_or_data(
+def _filter_sessions_from_data(
     agent: BaseAgent,
     sessions: list[Session],
     query: TextQuery,
 ) -> list[Session]:
     matched: list[Session] = []
     for session in sessions:
-        content = extract_session_searchable_text_once(agent, session)
-        fields = (session.title,) if content is None else (session.title, content)
-        if query.matches(fields):
+        content = _read_searchable_text(agent, session)
+        if content is not None and query.matches((session.title, content)):
             matched.append(session)
 
     return matched
@@ -441,6 +440,9 @@ def _find_role_evidence(
 ) -> tuple[str, str] | None:
     try:
         with agent.lease_cached_session_data(session) as session_data:
+            if not isinstance(session_data.get("messages"), list):
+                _warn_session_read_skipped(agent, session, i18n.t(Keys.DIAG_SESSION_READ_FAILED))
+                return None
             for message in read_messages(session_data):
                 role = message.role
                 if role not in roles:
@@ -451,14 +453,7 @@ def _find_role_evidence(
                 if evidence := query.find_match((text,)):
                     return role, evidence.snippet
     except Exception as exc:  # noqa: BLE001 - 单个坏会话不应中断查询，但结果不完整必须告警
-        print(
-            render_terminal_message(
-                Keys.WARN_SESSION_READ_SKIPPED,
-                uri=agent.get_session_uri(session),
-                error=exc,
-            ),
-            file=sys.stderr,
-        )
+        _warn_session_read_skipped(agent, session, exc)
         return None
 
     return None
@@ -553,15 +548,40 @@ def _fallback_search_matches(
     text_query = query if isinstance(query, TextQuery) else TextQuery.parse(query, TextQueryMode.SEARCH_TERMS)
     matches: list[SearchSessionMatch] = []
     for session in sessions:
-        content = extract_session_searchable_text_once(agent, session)
-        fields = (session.title,) if content is None else (session.title, content)
-        evidence = text_query.find_match(fields)
+        content = _read_searchable_text(agent, session)
+        if content is None:
+            continue
+        evidence = text_query.find_match((session.title, content))
         if evidence is None:
             continue
         rank = 1.0 if 0 in evidence.fully_matching_field_indexes else 0.0
         matches.append(SearchSessionMatch(agent=agent, session=session, snippet=evidence.snippet, rank=rank))
 
     return matches
+
+
+def _read_searchable_text(agent: BaseAgent, session: Session) -> str | None:
+    try:
+        with agent.lease_cached_session_data(session) as session_data:
+            content = extract_transcript_searchable_text(session_data)
+    except Exception as exc:  # noqa: BLE001 - 跳过一个坏会话比中断全局搜索更有用
+        _warn_session_read_skipped(agent, session, exc)
+        return None
+
+    if content is None:
+        _warn_session_read_skipped(agent, session, i18n.t(Keys.DIAG_SESSION_READ_FAILED))
+    return content
+
+
+def _warn_session_read_skipped(agent: BaseAgent, session: Session, error: object) -> None:
+    print(
+        render_terminal_message(
+            Keys.WARN_SESSION_READ_SKIPPED,
+            uri=agent.get_session_uri(session),
+            error=error,
+        ),
+        file=sys.stderr,
+    )
 
 
 def _build_evidence_excerpt(text: str, context_chars: int = 96) -> str:

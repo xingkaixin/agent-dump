@@ -244,20 +244,30 @@ class TestFilterSessions:
         provider_search.assert_called_once_with([session], "keyword")
 
     def test_filter_by_title(self, tmp_path):
-        agent = DummyAgent(name="codex")
+        agent = DummyAgent(name="codex", session_data={"s1": {"messages": []}})
         session = make_session("s1", "修复报错会话", tmp_path / "s1.jsonl")
         session.source_path.write_text("no-hit")
 
         result = filter_sessions(agent, [session], "报错")
         assert result == [session]
 
-    def test_filter_by_source_file(self, tmp_path):
+    def test_filter_does_not_search_raw_source_fields(self, tmp_path, capsys):
         agent = DummyAgent(name="codex")
         session = make_session("s1", "普通标题", tmp_path / "s1.jsonl")
-        session.source_path.write_text("this has fatal bug text")
+        session.source_path.write_text('{"internal_metadata": "fatal"}')
 
-        result = filter_sessions(agent, [session], "fatal")
-        assert result == [session]
+        with mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None):
+            result = filter_sessions(agent, [session], "fatal")
+
+        assert result == []
+        assert (
+            expect(
+                Keys.WARN_SESSION_READ_SKIPPED,
+                uri="codex://s1",
+                error=expect(Keys.DIAG_SESSION_READ_FAILED),
+            )
+            in capsys.readouterr().err
+        )
 
     def test_filter_fallback_to_session_data(self, tmp_path):
         missing_path = tmp_path / "missing.jsonl"
@@ -320,24 +330,18 @@ class TestFilterSessions:
 
         assert result == []
 
-    def test_filter_directory_session_searches_every_jsonl(self, tmp_path):
-        """目录型会话（Kimi）的兜底提取会读目录下所有 *.jsonl。
-
-        本测试原名 `..._prefers_wire_file` 并断言 "other-hit" 匹配不到，但那只是因为
-        AD-133 之前带连字符的关键词会让 FTS5 报 `no such column: hit` 并被静默吞掉。
-        _fallback_extract_from_source（search_index.py:188）对目录是 glob("*.jsonl")，
-        从来没有偏好 wire.jsonl 的逻辑。
-        """
+    def test_filter_directory_session_uses_normalized_transcript_only(self, tmp_path):
         session_dir = tmp_path / "session"
         session_dir.mkdir()
-        (session_dir / "wire.jsonl").write_text("wire-hit", encoding="utf-8")
-        (session_dir / "other.jsonl").write_text("other-hit", encoding="utf-8")
+        (session_dir / "wire.jsonl").write_text('{"internal_metadata": "raw-only-hit"}', encoding="utf-8")
         session = make_session("s1", "普通标题", session_dir)
-        agent = DummyAgent(name="kimi")
+        agent = DummyAgent(
+            name="kimi",
+            session_data={"s1": {"messages": [{"parts": [{"type": "text", "text": "logical-hit"}]}]}},
+        )
 
-        assert filter_sessions(agent, [session], "wire-hit") == [session]
-        assert filter_sessions(agent, [session], "other-hit") == [session]
-        assert filter_sessions(agent, [session], "absent-token") == []
+        assert filter_sessions(agent, [session], "logical-hit") == [session]
+        assert filter_sessions(agent, [session], "raw-only-hit") == []
 
     def test_filter_binary_like_source_falls_back_to_session_data(self, tmp_path):
         source_path = tmp_path / "state.vscdb"
@@ -527,7 +531,10 @@ class TestFilterSessionsByQuery:
         assert filter_sessions_by_query(agent, [session], spec) == []
 
     def test_combines_path_scope_and_keyword(self, tmp_path):
-        agent = DummyAgent(name="codex")
+        agent = DummyAgent(
+            name="codex",
+            session_data={"s1": {"messages": []}, "s2": {"messages": []}},
+        )
         session = make_session("s1", "refactor api", tmp_path / "s1.jsonl")
         session.metadata = {"cwd": str(tmp_path / "repo")}
         session.source_path.write_text("contains refactor", encoding="utf-8")
