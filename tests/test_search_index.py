@@ -242,13 +242,13 @@ class TestExtractSessionSearchableText:
         assert "file1.txt" in text
         assert "run bash" in text
 
-    def test_fallback_to_source(self, tmp_path):
+    def test_missing_normalized_messages_does_not_read_raw_source(self, tmp_path):
         source = tmp_path / "session.jsonl"
-        source.write_text('{"message": {"role": "user", "content": "fallback text"}}')
+        source.write_text('{"internal_metadata": "raw-only-keyword"}')
         agent = DummyAgent(session_data={})
         session = make_session("s1", "Test", source)
-        text = require_text(agent, session)
-        assert "fallback text" in text
+
+        assert extract_session_searchable_text(agent, session) is None
 
 
 class TestSearchIndex:
@@ -1200,14 +1200,12 @@ class TestExtractionFailureIsNotRecordedAsIndexed:
 
         assert extract_session_searchable_text(FailingAgent(), session) is None
 
-    def test_returns_text_when_source_is_a_per_session_jsonl(self, tmp_path):
+    def test_returns_none_when_per_session_jsonl_parse_fails(self, tmp_path):
         source = tmp_path / "session.jsonl"
-        source.write_text('{"content": "per session text"}', encoding="utf-8")
+        source.write_text('{"internal_metadata": "raw-only-keyword"}', encoding="utf-8")
         session = make_session("s1", "Test", source)
 
-        text = extract_session_searchable_text(FailingAgent(), session)
-
-        assert text is not None and "per session text" in text
+        assert extract_session_searchable_text(FailingAgent(), session) is None
 
     def test_returns_none_when_source_is_missing(self, tmp_path):
         session = make_session("s1", "Test", tmp_path / "gone.jsonl")
@@ -1272,14 +1270,15 @@ class TestExtractionFailureIsNotRecordedAsIndexed:
 class TestFallbackSearchHandlesUnreadableSessions:
     """AD-121：query_filter 的兜底匹配也要能吃 None。"""
 
-    def test_unreadable_session_is_skipped_not_crashed(self, tmp_path):
+    def test_unreadable_session_is_skipped_not_crashed(self, tmp_path, capsys):
         from agent_dump.query_filter import _fallback_search_matches
 
-        db_path = tmp_path / "opencode.db"
-        db_path.write_bytes(b"SQLite format 3\x00")
-        sessions = [make_session("s1", "无关标题", db_path)]
+        source = tmp_path / "session.jsonl"
+        source.write_text('{"internal_metadata": "keyword"}', encoding="utf-8")
+        sessions = [make_session("s1", "无关标题", source)]
 
         assert _fallback_search_matches(FailingAgent(name="opencode"), sessions, "keyword") == []
+        assert "opencode://s1" in capsys.readouterr().err
 
 
 class TestIndexFailureIsReported:

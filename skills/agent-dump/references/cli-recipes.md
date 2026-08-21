@@ -136,10 +136,10 @@ uv run agent-dump "agents://.?q=timeout&providers=codex,claude&roles=user&limit=
 
 ### `--search`（全文搜索）
 
-- 基于 SQLite FTS5 的本地全文搜索，覆盖标题、消息、reasoning、tool state。
+- 基于 SQLite FTS5 的本地全文搜索，覆盖 provider 标准化后的标题、消息、reasoning、tool state；不搜索 provider 原始元数据。
 - 按空白切分的 distinct term 均按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），全部 term 必须命中，但可以分别落在标题与逻辑 transcript 中；CJK term 必须连续。
 - 双分词器：`unicode61` 处理 CJK，`trigram` 处理三字符以上的非 CJK 子串；无法等价表达的输入使用同一逻辑 matcher。
-- 索引按 Provider-owned change signal 增量更新；30 天未再出现的缓存会话正文会自动清理；FTS5 不可用时回退到 O(n) 逻辑 transcript 扫描；索引错误会在 stderr 提示并建议 `--reindex`。
+- 索引按 Provider-owned change signal 增量更新；30 天未再出现的缓存会话正文会自动清理；FTS5 不可用时回退到 O(n) 逻辑 transcript 扫描；无法读取的会话与索引错误都会在 stderr 提示。
 - 作为列表搜索模式使用，可与 `--list`、`-days`、`-query` 组合。
 
 示例：
