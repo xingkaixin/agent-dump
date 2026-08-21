@@ -60,7 +60,7 @@ from agent_dump.collect_summary import (
     merge_summary_payloads,
     normalize_summary_payload,
 )
-from agent_dump.config import AIConfig, CollectConfig
+from agent_dump.config import MAX_COLLECT_SUMMARY_CONCURRENCY, AIConfig, CollectConfig
 from agent_dump.query_filter import QuerySpec
 from agent_dump.text_safety import has_unsafe_line_characters
 
@@ -1335,6 +1335,23 @@ class TestCollectStructuredSummary:
         assert summarize_events[-1].current == 2
         assert merge_events[0].current == 0
         assert merge_events[-1].current == 2
+
+    def test_summarize_collect_entries_caps_runtime_concurrency(self):
+        progress: list[CollectProgressEvent] = []
+
+        with mock.patch(
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
+            return_value='{"topics":["T1"]}',
+        ):
+            summarize_collect_entries(
+                config=self._config(),
+                planned_entries=[self._planned_entry()],
+                summary_concurrency=MAX_COLLECT_SUMMARY_CONCURRENCY + 1,
+                progress_callback=progress.append,
+            )
+
+        summarize_events = [event for event in progress if isinstance(event, SummarizeChunksProgress)]
+        assert summarize_events[0].concurrency == MAX_COLLECT_SUMMARY_CONCURRENCY
 
     def test_summarize_collect_entries_splits_long_session_into_multiple_chunks(self):
         events = tuple(

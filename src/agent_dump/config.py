@@ -102,6 +102,7 @@ class ConfigurationDocument:
         concurrency = _coerce_positive_int(
             parsed.get("summary_concurrency"),
             DEFAULT_COLLECT_SUMMARY_CONCURRENCY,
+            maximum=MAX_COLLECT_SUMMARY_CONCURRENCY,
         )
         timeout_seconds = _coerce_positive_int(parsed.get("summary_timeout_seconds"), 90)
         agent_denies: dict[str, tuple[str, ...]] = {}
@@ -149,6 +150,7 @@ class ConfigurationDocument:
 
 
 DEFAULT_COLLECT_SUMMARY_CONCURRENCY = 4
+MAX_COLLECT_SUMMARY_CONCURRENCY = 32
 PRIVATE_CONFIG_MODE = PRIVATE_FILE_MODE
 
 
@@ -241,17 +243,17 @@ def _parse_bool(value: Any, default: bool) -> bool:
     return default
 
 
-def _coerce_positive_int(value: Any, default: int) -> int:
+def _coerce_positive_int(value: Any, default: int, *, maximum: int | None = None) -> int:
     if isinstance(value, bool):
         return default
     if isinstance(value, int):
-        return value if value > 0 else default
+        return value if value > 0 and (maximum is None or value <= maximum) else default
     if isinstance(value, str) and value.strip():
         try:
             parsed = int(value)
         except ValueError:
             return default
-        if parsed > 0:
+        if parsed > 0 and (maximum is None or parsed <= maximum):
             return parsed
     return default
 
