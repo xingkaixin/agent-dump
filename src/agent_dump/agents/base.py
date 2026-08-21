@@ -10,6 +10,7 @@ from datetime import datetime
 from enum import Enum
 import json
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 from agent_dump.diagnostics import source_missing, unsupported_capability
@@ -114,10 +115,18 @@ class BaseAgent(ABC):
         self.display_name = display_name
         self._session_data_cache = SessionDataCache()
         self._diagnostic_sink: ProviderDiagnosticSink | None = None
+        self._diagnostic_scope_lock = RLock()
 
-    def _set_diagnostic_sink(self, sink: ProviderDiagnosticSink | None) -> None:
-        """Set the presentation boundary used for recoverable provider warnings."""
-        self._diagnostic_sink = sink
+    @contextmanager
+    def _use_diagnostic_sink(self, sink: ProviderDiagnosticSink | None) -> Iterator[None]:
+        """Use one diagnostic destination for the duration of a provider operation."""
+        with self._diagnostic_scope_lock:
+            previous_sink = self._diagnostic_sink
+            self._diagnostic_sink = sink
+            try:
+                yield
+            finally:
+                self._diagnostic_sink = previous_sink
 
     def _report_diagnostic(self, message_key: str, **fields: Any) -> None:
         """Emit a structured warning when a caller configured a diagnostic sink."""

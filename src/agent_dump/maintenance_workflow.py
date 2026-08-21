@@ -223,7 +223,8 @@ def handle_reindex_mode(
     for agent, sessions in scanner.get_sessions(operation.days, agents=available_agents):
         if not sessions:
             continue
-        added = index.rebuild(agent, sessions)
+        with scanner.diagnostic_scope([agent]):
+            added = index.rebuild(agent, sessions)
         total_indexed += added
         print(render_terminal_message(Keys.REINDEX_AGENT_DONE, agent=agent.display_name, count=added))
 

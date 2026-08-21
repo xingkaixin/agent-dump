@@ -253,17 +253,18 @@ def handle_collect_mode(
                 since=since_date.isoformat(),
                 until=until_date.isoformat(),
             )
-            entries, has_truncated = collect_entries(
-                scanner=scanner,
-                agents=available_agents,
-                since_date=since_date,
-                until_date=until_date,
-                collect_config=collect_config,
-                query_spec=operation.query_spec,
-                render_session_text_fn=render_session_text,
-                progress_callback=update_progress,
-                logger=collect_logger,
-            )
+            with scanner.diagnostic_scope(available_agents):
+                entries, has_truncated = collect_entries(
+                    scanner=scanner,
+                    agents=available_agents,
+                    since_date=since_date,
+                    until_date=until_date,
+                    collect_config=collect_config,
+                    query_spec=operation.query_spec,
+                    render_session_text_fn=render_session_text,
+                    progress_callback=update_progress,
+                    logger=collect_logger,
+                )
             if not entries:
                 print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
                 return 1

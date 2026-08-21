@@ -36,10 +36,20 @@ def handle_session_modes(
     export_config: ExportConfigLike,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
 ) -> int | None:
+    scanner = scanner_factory()
+    with scanner.diagnostic_scope():
+        return _handle_session_modes(operation, export_config=export_config, scanner=scanner)
+
+
+def _handle_session_modes(
+    operation: SessionOperation,
+    *,
+    export_config: ExportConfigLike,
+    scanner: AgentScanner,
+) -> int | None:
     print("🚀 Agent Session Exporter\n")
     print("=" * 60 + "\n")
 
-    scanner = scanner_factory()
     query_spec = operation.query_spec
 
     available_agents = scanner.get_available_agents()
