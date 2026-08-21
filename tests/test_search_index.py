@@ -16,6 +16,7 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.query_semantics import TextQuery, TextQueryMode
 from agent_dump.search_index import (
     _INDEX_BATCH_SIZE,
+    _INDEX_RETENTION_SECONDS,
     SearchIndex,
     _batched,
     _build_fts_query,
@@ -527,6 +528,49 @@ class TestSearchIndex:
             )
             == []
         )
+
+    def test_unseen_rows_expire_from_state_and_full_text_tables(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(session_data={"s1": {"messages": [{"role": "user", "content": "private retained needle"}]}})
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+
+        with mock.patch("agent_dump.search_index.time.time", return_value=1_000.0):
+            index.update(agent, [session])
+        with mock.patch(
+            "agent_dump.search_index.time.time",
+            return_value=1_000.0 + _INDEX_RETENTION_SECONDS + 1,
+        ):
+            index.ensure_initialized()
+
+        assert index.get_stats() == {}
+        conn = sqlite3.connect(tmp_path / "index.db")
+        try:
+            assert conn.execute("SELECT COUNT(*) FROM sessions_fts").fetchone()[0] == 0
+            assert conn.execute("SELECT COUNT(*) FROM sessions_fts_trigram").fetchone()[0] == 0
+        finally:
+            conn.close()
+
+    def test_unchanged_seen_rows_refresh_retention_without_reindexing(self, tmp_path):
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(session_data={"s1": {"messages": [{"role": "user", "content": "still searchable"}]}})
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+
+        with mock.patch("agent_dump.search_index.time.time", return_value=1_000.0):
+            index.update(agent, [session])
+        with mock.patch(
+            "agent_dump.search_index.time.time",
+            return_value=1_000.0 + _INDEX_RETENTION_SECONDS - 10,
+        ):
+            added, removed = index.update(agent, [session])
+        with mock.patch(
+            "agent_dump.search_index.time.time",
+            return_value=1_000.0 + _INDEX_RETENTION_SECONDS + 10,
+        ):
+            results = index.search("searchable")
+
+        assert (added, removed) == (0, 0)
+        assert agent.data_reads == 1
+        assert [result.session_id for result in results] == ["s1"]
 
     def test_search_multi_keyword(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
