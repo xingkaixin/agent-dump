@@ -45,6 +45,13 @@ class CollectStage(str, Enum):
     WRITE_OUTPUT = "write_output"
 
 
+class CollectFailurePhase(str, Enum):
+    READ = "read"
+    SUMMARIZE = "summarize"
+    RENDER = "render"
+    WRITE = "write"
+
+
 _COLLECT_MODE_FIELDS = {
     CollectMode.PM: SUMMARY_FIELDS,
     CollectMode.INSIGHT: INSIGHT_SUMMARY_FIELDS,
