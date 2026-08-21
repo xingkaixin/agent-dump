@@ -48,6 +48,20 @@ def test_scanner_can_disable_provider_diagnostics(capsys) -> None:
     assert capsys.readouterr().err == ""
 
 
+def test_scanners_keep_their_own_provider_diagnostic_destinations() -> None:
+    agent = DiagnosticAgent()
+    first_diagnostics: list[ProviderDiagnostic] = []
+    second_diagnostics: list[ProviderDiagnostic] = []
+    first_scanner = AgentScanner([agent], diagnostic_sink=first_diagnostics.append)
+    second_scanner = AgentScanner([agent], diagnostic_sink=second_diagnostics.append)
+
+    first_scanner.get_sessions()
+    second_scanner.get_sessions()
+
+    assert [diagnostic.fields["error"] for diagnostic in first_diagnostics] == ["bad title"]
+    assert [diagnostic.fields["error"] for diagnostic in second_diagnostics] == ["bad title"]
+
+
 def test_provider_diagnostic_renderer_sanitizes_untrusted_fields() -> None:
     diagnostic = ProviderDiagnostic(
         message_key=Keys.WARN_TITLE_EXTRACT_FAILED,

@@ -2,8 +2,9 @@
 Scanner for agent tools
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, contextmanager
 from typing import TypeVar
 
 from agent_dump.agent_registry import create_registered_agents
@@ -26,8 +27,21 @@ class AgentScanner:
     ) -> None:
         self.agents = list(agents) if agents is not None else create_registered_agents()
         self._diagnostic_sink = diagnostic_sink
-        for agent in self.agents:
-            agent._set_diagnostic_sink(diagnostic_sink)
+        self._diagnostic_scoped_agent_ids: set[int] = set()
+
+    @contextmanager
+    def diagnostic_scope(self, agents: Sequence[BaseAgent] | None = None) -> Iterator[None]:
+        """Keep provider diagnostics attached for a complete caller workflow."""
+        selected_agents = list(dict.fromkeys(agents if agents is not None else self.agents))
+        with ExitStack() as stack:
+            for agent in sorted(selected_agents, key=id):
+                stack.enter_context(agent._use_diagnostic_sink(self._diagnostic_sink))
+            previous_agent_ids = self._diagnostic_scoped_agent_ids
+            self._diagnostic_scoped_agent_ids = previous_agent_ids | {id(agent) for agent in selected_agents}
+            try:
+                yield
+            finally:
+                self._diagnostic_scoped_agent_ids = previous_agent_ids
 
     @staticmethod
     def _operation_failure_diagnostic(agent: BaseAgent, exc: Exception) -> ProviderDiagnostic:
@@ -66,8 +80,14 @@ class AgentScanner:
         if not selected_agents:
             return []
 
+        def run_agent_operation(agent: BaseAgent) -> T:
+            if id(agent) in self._diagnostic_scoped_agent_ids:
+                return fn(agent)
+            with agent._use_diagnostic_sink(self._diagnostic_sink):
+                return fn(agent)
+
         with ThreadPoolExecutor(max_workers=len(selected_agents)) as executor:
-            futures = [executor.submit(fn, agent) for agent in selected_agents]
+            futures = [executor.submit(run_agent_operation, agent) for agent in selected_agents]
             results: list[tuple[BaseAgent, T | None]] = []
             for agent, future in zip(selected_agents, futures, strict=True):
                 try:
@@ -143,5 +163,6 @@ class AgentScanner:
         """Get agent by name"""
         for agent in self.agents:
             if agent.name == name:
-                return agent if agent.is_available() else None
+                with agent._use_diagnostic_sink(self._diagnostic_sink):
+                    return agent if agent.is_available() else None
         return None

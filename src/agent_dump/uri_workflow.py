@@ -103,6 +103,22 @@ def handle_uri_mode(
     request_summary: Callable[[AIConfig, str], str] = request_summary_from_llm,
 ) -> int:
     scanner = scanner_factory()
+    with scanner.diagnostic_scope():
+        return _handle_uri_mode(
+            operation,
+            export_config=export_config,
+            scanner=scanner,
+            request_summary=request_summary,
+        )
+
+
+def _handle_uri_mode(
+    operation: UriOperation,
+    *,
+    export_config: ExportConfigLike,
+    scanner: AgentScanner,
+    request_summary: Callable[[AIConfig, str], str],
+) -> int:
     result = find_session_by_id(
         scanner,
         operation.session_id,
