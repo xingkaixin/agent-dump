@@ -1,4 +1,4 @@
-"""Logging, progress reporting and run statistics for collect.
+"""Progress reporting and run statistics for collect.
 
 从 collect.py 拆出：这层是 collect 与 collect_workflow 共享的纯管道，不参与
 事件/摘要算法。
@@ -7,17 +7,14 @@
 from collections.abc import Callable
 from datetime import date
 from typing import TypeVar
-from uuid import uuid4
 
 from agent_dump.collect_models import (
     MAX_LOG_PREVIEW_CHARS,
     CollectEntry,
-    CollectLogger,
     CollectProgressEvent,
     CollectRunStats,
     PlannedCollectEntry,
 )
-from agent_dump.config import LoggingConfig
 
 ProgressEventT = TypeVar("ProgressEventT", bound=CollectProgressEvent)
 
@@ -32,13 +29,6 @@ def truncate_log_tail(text: str, limit: int = MAX_LOG_PREVIEW_CHARS) -> str:
     """Return the bounded trailing portion of text used in collect logs."""
     normalized = text.strip()
     return normalized if len(normalized) <= limit else f"...{normalized[-limit + 3 :].lstrip()}"
-
-
-def create_collect_logger(config: LoggingConfig | None) -> CollectLogger:
-    """Create a collect logger from config."""
-    if config is None or not config.enabled:
-        return CollectLogger(enabled=False, run_id=str(uuid4()))
-    return CollectLogger(enabled=True, path=config.path, run_id=str(uuid4()))
 
 
 def emit_collect_progress(

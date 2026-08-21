@@ -123,7 +123,7 @@ class TestDerivedDataFilePermissions:
         assert mode_of(db_path.parent) == PRIVATE_DIR_MODE
 
     def test_collect_log_is_owner_only(self, tmp_path):
-        from agent_dump.collect_models import CollectLogger
+        from agent_dump.collect_logging import CollectLogger
 
         log_path = tmp_path / "logs" / "collect.log"
         CollectLogger(enabled=True, path=log_path, run_id="r1").log("started", detail="x")

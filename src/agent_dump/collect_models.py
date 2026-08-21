@@ -3,11 +3,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum
-import json
-from pathlib import Path
-from typing import Any, ClassVar
-
-from agent_dump.private_files import open_private_append
+from typing import ClassVar
 
 SUPPORTED_DATE_FORMATS = ("%Y-%m-%d", "%Y%m%d")
 SUMMARY_FIELDS = (
@@ -238,28 +234,3 @@ class PlannedCollectEntry:
 
     collect_entry: CollectEntry
     chunks: tuple[tuple[CollectEvent, ...], ...]
-
-
-@dataclass(frozen=True)
-class CollectLogger:
-    """Append-only JSONL logger for collect diagnostics."""
-
-    enabled: bool
-    path: Path | None = None
-    run_id: str | None = None
-
-    def log(self, event: str, **payload: Any) -> None:
-        if not self.enabled or self.path is None:
-            return
-        try:
-            record = {
-                "timestamp": datetime.now().astimezone().isoformat(),
-                "event": event,
-                "run_id": self.run_id,
-                **payload,
-            }
-            # 日志里含模型输出片段，与搜索索引同样按私有文件处理
-            with open_private_append(self.path) as handle:
-                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-        except OSError:
-            return
