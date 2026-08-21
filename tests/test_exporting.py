@@ -8,7 +8,7 @@ from unittest import mock
 import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.exporting import ExportPathCollisionError, execute_exports
+from agent_dump.exporting import ExportAttempt, ExportPathCollisionError, execute_exports
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
 
 
@@ -39,6 +39,23 @@ def make_session(session_id: str, title: str) -> Session:
         source_path=Path(f"/tmp/{session_id}.jsonl"),
         metadata={},
     )
+
+
+@pytest.mark.parametrize(
+    ("output_path", "error"),
+    [
+        (None, None),
+        (Path("session.json"), RuntimeError("failed")),
+    ],
+)
+def test_export_attempt_rejects_ambiguous_outcomes(output_path: Path | None, error: Exception | None) -> None:
+    with pytest.raises(ValueError, match="exactly one"):
+        ExportAttempt(
+            session=make_session("session-001", "Session"),
+            output_format="json",
+            output_path=output_path,
+            error=error,
+        )
 
 
 def test_execute_exports_retains_success_and_failure_outcomes(tmp_path: Path) -> None:

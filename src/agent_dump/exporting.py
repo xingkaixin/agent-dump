@@ -18,9 +18,13 @@ class ExportAttempt:
     output_path: Path | None
     error: Exception | None
 
+    def __post_init__(self) -> None:
+        if (self.output_path is None) == (self.error is None):
+            raise ValueError("an export attempt must contain exactly one of output_path or error")
+
     @property
     def succeeded(self) -> bool:
-        return self.output_path is not None
+        return self.error is None
 
 
 @dataclass(frozen=True)
