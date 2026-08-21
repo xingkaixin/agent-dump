@@ -154,8 +154,8 @@ class BaseAgent(ABC):
         """Data to serialize for JSON export.
 
         走请求级缓存，同一条命令里 print/markdown/search 已经解析过的会话不再重解析。
-        需要做导出专属变换的 provider 覆盖此方法，并且必须先浅拷贝——缓存返回的是
-        共享可变 dict，直接改键会污染其他消费者看到的同一份数据。
+        需要做导出专属变换的 provider 可直接修改返回值；缓存为每个消费者
+        提供隔离的副本。
         """
         return self.get_cached_session_data(session)
 
@@ -284,12 +284,12 @@ class BaseAgent(ABC):
         pass
 
     def get_cached_session_data(self, session: Session) -> dict[str, Any]:
-        """Get session data once per change signal for this agent instance."""
+        """Get isolated session data from one cached read per change signal."""
         return self._session_data_cache.get(self, session)
 
     @contextmanager
     def lease_cached_session_data(self, session: Session) -> Iterator[dict[str, Any]]:
-        """Keep parsed data only while one bulk consumer derives its smaller output."""
+        """Yield isolated data while retaining the cached source only for this lease."""
         with self._session_data_cache.lease(self, session) as session_data:
             yield session_data
 

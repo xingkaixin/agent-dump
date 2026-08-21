@@ -88,7 +88,7 @@ def test_concurrent_leases_coalesce_and_release_after_last_consumer() -> None:
     session = make_session("shared")
     load_started = threading.Event()
     release_load = threading.Event()
-    payload = {"messages": []}
+    payload = {"messages": [{"content": "original"}]}
 
     def load(_session: Session) -> dict[str, Any]:
         load_started.set()
@@ -110,7 +110,10 @@ def test_concurrent_leases_coalesce_and_release_after_last_consumer() -> None:
         results = [future.result() for future in futures]
 
     assert agent.reads == Counter({"shared": 1})
-    assert all(result is payload for result in results)
+    assert all(result == payload for result in results)
+    assert len({id(result) for result in results}) == len(results)
+    results[0]["messages"][0]["content"] = "mutated"
+    assert results[1]["messages"][0]["content"] == "original"
     assert not cache._entries
 
 
@@ -138,8 +141,11 @@ def test_in_flight_entry_is_not_evicted_or_loaded_twice() -> None:
         second = executor.submit(cache.get, agent, slow)
         release_load.set()
 
-        assert first.result() is payload
-        assert second.result() is payload
+        first_result = first.result()
+        second_result = second.result()
+        assert first_result == payload
+        assert second_result == payload
+        assert first_result is not second_result
 
     assert agent.reads["slow"] == 1
     assert len(cache._entries) == 1
@@ -203,7 +209,8 @@ def test_failed_lease_does_not_pollute_cache_and_can_retry() -> None:
     with pytest.raises(ValueError, match="temporary failure"), cache.lease(agent, session):
         pass
     with cache.lease(agent, session) as result:
-        assert result is expected
+        assert result == expected
+        assert result is not expected
 
     assert agent.reads == Counter({"retry": 2})
     assert not cache._entries

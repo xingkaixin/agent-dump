@@ -130,7 +130,26 @@ class TestBaseAgent:
         first = agent.get_cached_session_data(session)
         second = agent.get_cached_session_data(session)
 
-        assert first is second
+        assert first == second
+        assert first is not second
+        assert agent.data_reads == 1
+
+    def test_cached_session_data_isolates_nested_consumer_mutations(self, tmp_path):
+        agent = ConcreteAgent()
+        session = Session(
+            id="isolated",
+            title="Isolated",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=tmp_path / "isolated.jsonl",
+            metadata={},
+        )
+
+        first = agent.get_cached_session_data(session)
+        first["messages"].append({"role": "user", "content": "mutated"})
+        second = agent.get_cached_session_data(session)
+
+        assert second["messages"] == []
         assert agent.data_reads == 1
 
     def test_cached_session_data_reloads_when_related_file_mtime_changes(self, tmp_path):
@@ -182,7 +201,8 @@ class TestBaseAgent:
                 results = [future.result() for future in futures]
 
         assert load.call_count == 1
-        assert all(result is results[0] for result in results)
+        assert all(result == results[0] for result in results)
+        assert len({id(result) for result in results}) == len(results)
 
     def test_cached_session_data_retries_after_failed_read(self, tmp_path):
         agent = ConcreteAgent()
@@ -205,7 +225,8 @@ class TestBaseAgent:
                 agent.get_cached_session_data(session)
             result = agent.get_cached_session_data(session)
 
-        assert result is expected
+        assert result == expected
+        assert result is not expected
         assert load.call_count == 2
 
     def test_get_formatted_title_short(self):

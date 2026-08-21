@@ -6,6 +6,7 @@ from collections import OrderedDict
 from collections.abc import Iterator
 from concurrent.futures import Future, wait
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -54,7 +55,7 @@ def _path_change_signal(path: Path) -> _PathChangeSignal:
 
 
 class SessionDataCache:
-    """Coalesce active reads and retain a bounded set of completed payloads."""
+    """Coalesce active reads and retain bounded private payload snapshots."""
 
     def __init__(self, *, completed_entry_limit: int = MAX_COMPLETED_SESSION_DATA_ENTRIES) -> None:
         if completed_entry_limit < 0:
@@ -64,16 +65,16 @@ class SessionDataCache:
         self._lock = Lock()
 
     def get(self, agent: BaseAgent, session: Session) -> dict[str, Any]:
-        """Return parsed data, reloading when the session change signal differs."""
+        """Return isolated parsed data, reloading when the change signal differs."""
         data, _, _ = self._acquire(agent, session, retain_after_use=True)
-        return data
+        return deepcopy(data)
 
     @contextmanager
     def lease(self, agent: BaseAgent, session: Session) -> Iterator[dict[str, Any]]:
-        """Yield parsed data and release this lease's completed entry on exit."""
+        """Yield isolated parsed data and release the completed entry on exit."""
         data, identity, entry = self._acquire(agent, session, retain_after_use=False)
         try:
-            yield data
+            yield deepcopy(data)
         finally:
             self._release_lease(identity, entry)
 

@@ -342,10 +342,8 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         }
 
     def _json_export_payload(self, session: Session) -> dict[str, Any]:
-        """Apply Codex's JSON-export-only message transforms on a copy of the cached data."""
-        # 必须浅拷贝：基类返回的是请求级缓存里的共享 dict，直接改 messages 会让
-        # 同一条命令里的 markdown 渲染看到被改过的消息
-        session_data = dict(super()._json_export_payload(session))
+        """Apply Codex's JSON-export-only message transforms."""
+        session_data = super()._json_export_payload(session)
         messages = session_data.get("messages")
         if isinstance(messages, list):
             session_data["messages"] = self._prepare_json_export_messages(messages)
