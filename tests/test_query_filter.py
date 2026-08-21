@@ -84,10 +84,10 @@ def make_query_spec(
     limit: int | None = None,
 ) -> QuerySpec:
     return QuerySpec(
-        agent_names=agent_names,
+        agent_names=frozenset(agent_names) if agent_names is not None else None,
         keyword=keyword,
         project_path=project_path,
-        roles=roles,
+        roles=frozenset(roles) if roles is not None else None,
         limit=limit,
     )
 
@@ -106,6 +106,7 @@ class TestParseQuery:
     def test_parse_agent_scope(self):
         result = parse_query("codex,kimi:报错", {"opencode", "codex", "kimi", "claudecode"})
         assert result == make_query_spec(agent_names={"codex", "kimi"}, keyword="报错")
+        assert isinstance(result.agent_names, frozenset)
 
     def test_parse_agent_scope_with_alias_and_case(self):
         result = parse_query("ClAuDe:bug", {"opencode", "codex", "kimi", "claudecode"})
