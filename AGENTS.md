@@ -10,7 +10,7 @@
 
 - **不得破坏公开 API**：`__init__.py` 导出的符号集合必须保持稳定
 - **不得删除或重命名已导出的函数/类**：如需变更，保留旧接口并标记 `@deprecated`
-- **CLI 行为变更必须同步更新测试**：参数、输出格式、退出码的修改需配套更新 `test_cli.py`
+- **CLI 行为变更必须同步更新测试**：参数、输出格式、退出码的修改需配套更新对应的 `test_cli*.py`
 - **默认行为必须向后兼容**：新增功能默认关闭，不得改变现有执行路径
 
 ### 1.2 代码质量约束
@@ -256,8 +256,15 @@ agent-dump/
 │       └── title_fallback.py    # 标题回退策略
 ├── tests/
 │   ├── test_agents/             # provider 合约和实现测试
-│   ├── test_cli.py              # CLI 参数与模式分发测试
+│   ├── cli_test_support.py      # CLI 测试共享构造器
+│   ├── test_cli.py              # CLI 核心参数与模式分发测试
+│   ├── test_cli_collect.py      # collect CLI 测试
+│   ├── test_cli_export.py       # 交互导出格式与输出路径测试
+│   ├── test_cli_query.py        # query / search CLI 测试
+│   ├── test_cli_sessions.py     # 会话列表与交互选择测试
+│   ├── test_cli_shortcuts.py    # shortcut 展开与分发测试
 │   ├── test_cli_shared.py       # 共享 CLI 能力测试
+│   ├── test_cli_uri.py          # URI CLI 测试
 │   ├── test_output_formats.py   # 输出格式解析与能力校验测试
 │   ├── test_collect.py          # collect 核心测试
 │   ├── test_config.py           # 配置测试
@@ -294,7 +301,7 @@ agent-dump/
 约束：
 - Provider 数据读取、导出、搜索实现必须下沉到 provider、workflow 或 shared 模块。
 - workflow 只接收对应 operation；不得同时传入 Namespace 与由它派生的平行标量，也不得重复解析 Query/URI。
-- 新 CLI 参数必须补充 `tests/test_cli.py` 覆盖。
+- 新 CLI 参数必须补充对应的 `tests/test_cli*.py` 覆盖。
 
 ### 5.2 `BaseAgent` 与 `Session`
 
@@ -448,7 +455,7 @@ collect 模式入口：
 2. 在 `command_plan.py` 增加闭集 operation 及归一化/组合校验，再由 `cli.py` 顶层分发。
 3. 新建或复用 `*_workflow.py`。workflow 接收对应 operation；稳定协作者（渲染、导出、诊断等）直接 import；只把真实会变化的依赖（scanner 工厂、LLM 请求、交互 IO）声明为带生产默认值的关键字参数，由 cli.py 装配根传入。测试通过关键字参数替换真 seam，或用 `monkeypatch.setattr("agent_dump.<workflow>.<name>", ...)` 替换稳定协作者。
 4. 复用逻辑进入其单一职责模块；仅跨工作流的 CLI 展示与诊断能力进入 `cli_shared.py`。
-5. 增加 `tests/test_command_plan.py` 纯归一化矩阵、`tests/test_cli.py` 分发测试和对应 workflow 测试。
+5. 增加 `tests/test_command_plan.py` 纯归一化矩阵、对应的 `tests/test_cli*.py` 分发测试和 workflow 测试。
 6. 更新 README 与 skill recipes 的行为矩阵。
 
 ---
@@ -732,7 +739,7 @@ uv add --dev package-name
 - [ ] 没有破坏 `__init__.py` 导出的公开 API
 - [ ] 公开 API 声明与 `src/agent_dump/__init__.py::__all__` 一致
 - [ ] 新增函数有对应的单元测试
-- [ ] CLI 变更同步更新了 `test_cli.py`
+- [ ] CLI 变更同步更新了对应的 `test_cli*.py`
 - [ ] Provider 测试使用临时数据源，没有访问真实用户目录
 - [ ] README 与 skill recipes 已同步 CLI 能力边界
 - [ ] 代码通过 `just isok` 检查
