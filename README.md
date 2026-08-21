@@ -450,7 +450,8 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── collect_llm.py      # Collect LLM requests
 │       ├── collect_models.py   # Collect output models
 │       ├── collect_output.py   # Collect Markdown output
-│       ├── collect_progress.py # Collect logging, progress and run stats
+│       ├── collect_logging.py  # Collect private diagnostics logging
+│       ├── collect_progress.py # Collect progress and run stats
 │       ├── collect_summary.py  # Collect summary payload merge and JSON extraction
 │       ├── coercion.py         # Fault-tolerant conversion of untrusted provider scalars
 │       ├── config.py           # TOML configuration models and persistence

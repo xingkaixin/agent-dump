@@ -160,6 +160,7 @@ class Keys:
     COLLECT_CONFIG_PLAINTEXT_KEY = "COLLECT_CONFIG_PLAINTEXT_KEY"
     COLLECT_READ_FAILED = "COLLECT_READ_FAILED"
     COLLECT_WRITE_FAILED = "COLLECT_WRITE_FAILED"
+    COLLECT_LOG_WRITE_FAILED = "COLLECT_LOG_WRITE_FAILED"
     COLLECT_NO_SESSIONS = "COLLECT_NO_SESSIONS"
     COLLECT_API_FAILED = "COLLECT_API_FAILED"
     COLLECT_OUTPUT_SAVED = "COLLECT_OUTPUT_SAVED"
@@ -472,6 +473,7 @@ TRANSLATIONS = {
         ),
         Keys.COLLECT_READ_FAILED: "❌ Failed to read sessions for collect: {error}",
         Keys.COLLECT_WRITE_FAILED: "❌ Failed to write collect output: {error}",
+        Keys.COLLECT_LOG_WRITE_FAILED: "⚠️  Failed to write collect diagnostics to {path}: {error}",
         Keys.COLLECT_NO_SESSIONS: "⚠️  No sessions found in range {since} ~ {until}.",
         Keys.COLLECT_API_FAILED: "❌ AI summary request failed: {error}",
         Keys.COLLECT_OUTPUT_SAVED: "✅ Collect summary saved: {path}",
@@ -770,6 +772,7 @@ TRANSLATIONS = {
         Keys.COLLECT_CONFIG_HINT: "请先执行: agent-dump -config edit",
         Keys.COLLECT_READ_FAILED: "❌ collect 读取会话失败: {error}",
         Keys.COLLECT_WRITE_FAILED: "❌ collect 写入结果失败: {error}",
+        Keys.COLLECT_LOG_WRITE_FAILED: "⚠️  collect 诊断日志写入失败 {path}: {error}",
         Keys.COLLECT_NO_SESSIONS: "⚠️  在 {since} ~ {until} 区间内未找到会话。",
         Keys.COLLECT_API_FAILED: "❌ AI 总结请求失败: {error}",
         Keys.COLLECT_OUTPUT_SAVED: "✅ collect 总结已保存: {path}",

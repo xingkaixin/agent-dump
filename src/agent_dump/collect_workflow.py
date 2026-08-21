@@ -20,6 +20,7 @@ from agent_dump.collect import (
     write_collect_markdown,
 )
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode
+from agent_dump.collect_logging import create_collect_logger
 from agent_dump.collect_models import (
     CollectFailurePhase,
     CollectOverviewProgress,
@@ -37,7 +38,6 @@ from agent_dump.collect_models import (
 )
 from agent_dump.collect_progress import (
     build_collect_run_stats,
-    create_collect_logger,
     emit_collect_progress,
 )
 from agent_dump.command_plan import CollectOperation
@@ -78,6 +78,13 @@ def preview_collect_save_path(save: str | None, *, since_date: date, until_date:
     if resolved is not None:
         return resolved
     return Path.cwd() / _collect_default_filename(since_date=since_date, until_date=until_date)
+
+
+def _report_collect_log_write_error(path: Path, error: OSError) -> None:
+    print(
+        render_terminal_message(Keys.COLLECT_LOG_WRITE_FAILED, path=path, error=error),
+        file=sys.stderr,
+    )
 
 
 def _format_collect_progress(event: CollectProgressEvent) -> str:
@@ -250,7 +257,10 @@ def handle_collect_mode(
     collect_logger = None
     if not operation.dry_run:
         logging_config = config_document.logging_config()
-        collect_logger = create_collect_logger(logging_config)
+        collect_logger = create_collect_logger(
+            logging_config,
+            on_write_error=_report_collect_log_write_error,
+        )
 
     scanner = scanner_factory()
     available_agents: list[BaseAgent] = scanner.get_available_agents()

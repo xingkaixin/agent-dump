@@ -27,6 +27,7 @@ from agent_dump.collect_llm import (
     request_structured_summary_payload_from_llm as _request_structured_summary_payload_from_llm,
     request_summary_from_llm as _request_summary_from_llm,
 )
+from agent_dump.collect_logging import CollectLogger
 from agent_dump.collect_models import (
     GROUP_SIZE,
     SESSION_MERGE_LLM_THRESHOLD,
@@ -35,7 +36,6 @@ from agent_dump.collect_models import (
     CollectAggregate,
     CollectEntry,
     CollectEvent,
-    CollectLogger,
     CollectMode,
     CollectProgressEvent,
     GroupSummaryEntry,

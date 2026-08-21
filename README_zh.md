@@ -450,7 +450,8 @@ deny = [
 │       ├── collect_llm.py      # collect LLM 请求
 │       ├── collect_models.py   # collect 输出模型
 │       ├── collect_output.py   # collect Markdown 输出
-│       ├── collect_progress.py # collect 日志、进度上报与 run stats
+│       ├── collect_logging.py  # collect 私有诊断日志
+│       ├── collect_progress.py # collect 进度上报与 run stats
 │       ├── collect_summary.py  # collect 摘要 payload 合并与 JSON 提取
 │       ├── coercion.py         # 不可信 provider 标量的容错转换
 │       ├── config.py           # TOML 配置模型与持久化

@@ -96,8 +96,9 @@
 | `collect_dates.py` | collect 日期输入解析与日期范围归一化 |
 | `collect_events.py` | collect 高信号事件提取、渲染与 chunk 规划 |
 | `collect_llm.py` | collect 的 LLM 请求、错误分类与重试判定 |
+| `collect_logging.py` | collect 的私有 JSONL 诊断日志与一次性写入失败通知 |
 | `collect_output.py` | collect Markdown 输出 |
-| `collect_progress.py` | collect 的日志、进度上报与 run stats |
+| `collect_progress.py` | collect 的进度上报与 run stats |
 | `collect_summary.py` | collect 摘要 payload 的归一化、合并与 JSON 提取 |
 | `agents/message_assembly.py` | 统一 message/part 组装与 assistant 分组判断 |
 | `agents/message_types.py` | Provider 组装阶段使用的统一 message / session payload 内部类型 |
@@ -207,9 +208,10 @@ agent-dump/
 │   ├── collect_dates.py         # collect 日期范围解析
 │   ├── collect_events.py        # collect 事件提取、渲染与 chunk 规划
 │   ├── collect_llm.py           # collect LLM 请求
+│   ├── collect_logging.py       # collect 私有诊断日志
 │   ├── collect_models.py        # collect 模式、阶段与输出字段定义
 │   ├── collect_output.py        # collect Markdown 输出
-│   ├── collect_progress.py      # collect 日志、进度与 run stats
+│   ├── collect_progress.py      # collect 进度与 run stats
 │   ├── collect_summary.py       # collect 摘要 payload 处理
 │   ├── config.py                # 配置模型、加载、校验与写入
 │   ├── config_command.py        # 配置查看与交互编辑
@@ -395,7 +397,8 @@ collect 模式入口：
 - `collect_llm.py`：AI 请求。
 - `collect_models.py`：`pm` / `insight` 模式、进度阶段与输出字段的闭集定义。
 - `collect_output.py`：Markdown 输出。
-- `collect_progress.py`：日志、进度上报与 run stats。
+- `collect_logging.py`：私有 JSONL 诊断日志与写入失败通知。
+- `collect_progress.py`：进度上报与 run stats。
 - `collect_summary.py`：摘要 payload 归一化、合并与 JSON 提取。
 
 ---
