@@ -8,7 +8,7 @@ import unicodedata
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.private_files import ensure_output_dir
-from agent_dump.rendering import apply_summary_to_json_export, export_session_in_format, get_session_export_path
+from agent_dump.rendering import export_session_in_format, get_session_export_path
 
 
 @dataclass(frozen=True)
@@ -123,13 +123,12 @@ def execute_exports(
                     plan.output_format,
                     session_data=loaded_session_data.get(plan.session.id),
                     session_uri=session_uris.get(plan.session.id) if session_uris is not None else None,
+                    json_fields=(
+                        {"summary": summaries[plan.session.id]}
+                        if plan.output_format == "json" and summaries is not None and plan.session.id in summaries
+                        else None
+                    ),
                 )
-                summary = summaries.get(plan.session.id) if summaries is not None else None
-                if plan.output_format == "json" and summary is not None:
-                    try:
-                        apply_summary_to_json_export(output_path, summary)
-                    except Exception as exc:
-                        error = exc
             except Exception as exc:
                 error = exc
 

@@ -2844,12 +2844,15 @@ class TestMain:
             output_root = tmp_path / "out"
             expected_output = output_root / "codex" / "session-001.json"
 
-            def _export_json(session, output_dir):
+            def _export_json(session, output_dir, fields):
                 output_dir.mkdir(parents=True, exist_ok=True)
-                expected_output.write_text(json.dumps({"id": "session-001", "messages": []}), encoding="utf-8")
+                expected_output.write_text(
+                    json.dumps({"id": "session-001", "messages": [], **fields}),
+                    encoding="utf-8",
+                )
                 return expected_output
 
-            mock_agent.export_session.side_effect = _export_json
+            mock_agent.export_session_with_fields.side_effect = _export_json
             mock_scanner.get_available_agents.return_value = [mock_agent]
             configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
@@ -2896,12 +2899,15 @@ class TestMain:
             output_root = tmp_path / "out"
             expected_output = output_root / "codex" / "session-001.json"
 
-            def _export_json(session, output_dir):
+            def _export_json(session, output_dir, fields):
                 output_dir.mkdir(parents=True, exist_ok=True)
-                expected_output.write_text(json.dumps({"id": "session-001", "messages": []}), encoding="utf-8")
+                expected_output.write_text(
+                    json.dumps({"id": "session-001", "messages": [], **fields}),
+                    encoding="utf-8",
+                )
                 return expected_output
 
-            mock_agent.export_session.side_effect = _export_json
+            mock_agent.export_session_with_fields.side_effect = _export_json
             mock_scanner.get_available_agents.return_value = [mock_agent]
             configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
