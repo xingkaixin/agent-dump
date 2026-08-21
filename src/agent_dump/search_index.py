@@ -226,6 +226,8 @@ _INDEX_PROGRESS_THRESHOLD = 10
 _MAX_INDEX_PARSE_WORKERS = 32
 # 每批同时驻留内存的会话正文数量上限，与解析并行度对齐
 _INDEX_BATCH_SIZE = 32
+# 索引是可重建的私有缓存，不能无期保留已从 Provider 消失的会话正文
+_INDEX_RETENTION_SECONDS = 30 * 24 * 60 * 60
 
 
 def _epoch_seconds(value: datetime) -> float:
@@ -251,6 +253,13 @@ def _delete_fts_rows(conn: sqlite3.Connection, rowids: list[int]) -> None:
     params = [(rowid,) for rowid in rowids]
     for fts_table in _FTS_TABLES:
         conn.executemany(f"DELETE FROM {fts_table} WHERE rowid = ?", params)
+
+
+def _delete_index_rows(conn: sqlite3.Connection, rowids: list[int]) -> None:
+    if not rowids:
+        return
+    conn.executemany("DELETE FROM index_state WHERE fts_rowid = ?", [(rowid,) for rowid in rowids])
+    _delete_fts_rows(conn, rowids)
 
 
 class SearchIndex:
@@ -290,7 +299,7 @@ class SearchIndex:
             return False
         columns = {row["name"] for row in rows}
         pk_columns = {row["name"] for row in rows if row["pk"]}
-        return {"updated_signature", "session_updated_at"} <= columns and pk_columns == {"fts_rowid"}
+        return {"updated_signature", "last_seen_at", "session_updated_at"} <= columns and pk_columns == {"fts_rowid"}
 
     def _drop_all_tables(self, conn: sqlite3.Connection) -> None:
         """Drop all index tables for schema rebuild."""
@@ -322,12 +331,15 @@ class SearchIndex:
                     source_path TEXT NOT NULL,
                     updated_signature TEXT NOT NULL,
                     indexed_at REAL NOT NULL,
+                    last_seen_at REAL NOT NULL,
                     session_updated_at REAL NOT NULL,
                     session_created_at REAL NOT NULL,
                     UNIQUE (agent, session_id)
                 )
                 """
             )
+
+            conn.execute("CREATE INDEX IF NOT EXISTS index_state_last_seen_idx ON index_state(last_seen_at)")
 
             conn.execute(
                 """
@@ -353,6 +365,13 @@ class SearchIndex:
                 """
             )
 
+            cutoff = time.time() - _INDEX_RETENTION_SECONDS
+            expired_rowids = [
+                row["fts_rowid"]
+                for row in conn.execute("SELECT fts_rowid FROM index_state WHERE last_seen_at < ?", (cutoff,))
+            ]
+            _delete_index_rows(conn, expired_rowids)
+
             conn.commit()
         finally:
             conn.close()
@@ -360,8 +379,9 @@ class SearchIndex:
     def update(self, agent: BaseAgent, sessions: list[Session]) -> tuple[int, int]:
         """Incrementally add or refresh the provided sessions.
 
-        Absence from this list is not deletion evidence because callers may pass a
-        time or project window. Explicit clear/rebuild operations own deletion.
+        Absence from this list is not immediate deletion evidence because callers may
+        pass a time or project window. Seen rows refresh their retention timestamp;
+        rows unseen beyond the cache retention period are removed during initialization.
         Returns (added_count, removed_count), with removed_count kept at zero for
         compatibility.
         """
@@ -372,6 +392,7 @@ class SearchIndex:
         conn = self._get_connection()
         added = 0
         skipped: list[str] = []
+        observed_at = time.time()
 
         try:
             # Get currently indexed sessions for this agent
@@ -380,6 +401,11 @@ class SearchIndex:
                 (agent.name,),
             )
             indexed = {row["session_id"]: _IndexedRow(row["updated_signature"], row["fts_rowid"]) for row in cursor}
+
+            conn.executemany(
+                "UPDATE index_state SET last_seen_at = ? WHERE agent = ? AND session_id = ?",
+                [(observed_at, agent.name, session.id) for session in sessions],
+            )
 
             # Determine which sessions need updating
             to_update: list[tuple[Session, str]] = []
@@ -424,6 +450,7 @@ class SearchIndex:
                         signature=signature,
                         text=text,
                         fts_rowid=previous.fts_rowid if previous else None,
+                        observed_at=observed_at,
                     )
                     added += 1
 
@@ -633,6 +660,7 @@ class SearchIndex:
         signature: str,
         text: str,
         fts_rowid: int | None,
+        observed_at: float,
     ) -> None:
         """Replace one session's rows in both FTS tables and its index_state row.
 
@@ -642,14 +670,15 @@ class SearchIndex:
         if fts_rowid is None:
             cursor = conn.execute(
                 """INSERT INTO index_state (agent, session_id, source_path, updated_signature, indexed_at,
-                                            session_updated_at, session_created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                                            last_seen_at, session_updated_at, session_created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     agent_name,
                     session.id,
                     str(session.source_path),
                     signature,
-                    time.time(),
+                    observed_at,
+                    observed_at,
                     _epoch_seconds(session.updated_at),
                     _epoch_seconds(session.created_at),
                 ),
@@ -659,13 +688,14 @@ class SearchIndex:
             _delete_fts_rows(conn, [fts_rowid])
             conn.execute(
                 """UPDATE index_state
-                   SET source_path = ?, updated_signature = ?, indexed_at = ?,
+                   SET source_path = ?, updated_signature = ?, indexed_at = ?, last_seen_at = ?,
                        session_updated_at = ?, session_created_at = ?
                    WHERE fts_rowid = ?""",
                 (
                     str(session.source_path),
                     signature,
-                    time.time(),
+                    observed_at,
+                    observed_at,
                     _epoch_seconds(session.updated_at),
                     _epoch_seconds(session.created_at),
                     fts_rowid,
@@ -700,8 +730,7 @@ class SearchIndex:
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute("SELECT fts_rowid FROM index_state WHERE agent = ?", (agent_name,))
             rowids = [row["fts_rowid"] for row in cursor.fetchall()]
-            conn.execute("DELETE FROM index_state WHERE agent = ?", (agent_name,))
-            _delete_fts_rows(conn, rowids)
+            _delete_index_rows(conn, rowids)
             conn.commit()
             return len(rowids)
         finally:
