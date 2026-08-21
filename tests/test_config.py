@@ -10,6 +10,7 @@ import pytest
 
 import agent_dump.config as config_module
 from agent_dump.config import (
+    MAX_COLLECT_SUMMARY_CONCURRENCY,
     AIConfig,
     AIConfigError,
     CollectConfig,
@@ -114,6 +115,19 @@ class TestConfigReadWrite:
         )
 
         assert load_collect_config(path) == CollectConfig()
+
+    @pytest.mark.parametrize(
+        ("configured", "expected"),
+        [
+            (MAX_COLLECT_SUMMARY_CONCURRENCY, MAX_COLLECT_SUMMARY_CONCURRENCY),
+            (MAX_COLLECT_SUMMARY_CONCURRENCY + 1, CollectConfig().summary_concurrency),
+        ],
+    )
+    def test_load_collect_config_bounds_summary_concurrency(self, tmp_path, configured, expected):
+        path = tmp_path / "config.toml"
+        path.write_text(f"[collect]\nsummary_concurrency = {configured}\n", encoding="utf-8")
+
+        assert load_collect_config(path).summary_concurrency == expected
 
     def test_load_collect_config_ignores_invalid_agent_deny(self, tmp_path):
         path = tmp_path / "config.toml"

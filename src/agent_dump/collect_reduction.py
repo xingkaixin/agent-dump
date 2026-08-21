@@ -30,7 +30,7 @@ from agent_dump.collect_summary import (
     merge_summary_payloads,
     summary_payload_size,
 )
-from agent_dump.config import AIConfig
+from agent_dump.config import MAX_COLLECT_SUMMARY_CONCURRENCY, AIConfig
 from agent_dump.i18n import Keys, i18n
 from agent_dump.terminal_output import render_terminal_message
 
@@ -143,7 +143,7 @@ def summarize_collect_entries(
 
     total = len(planned_entries)
     total_chunks = sum(len(item.chunks) for item in planned_entries)
-    max_workers = max(1, summary_concurrency)
+    max_workers = min(max(1, summary_concurrency), MAX_COLLECT_SUMMARY_CONCURRENCY)
     results: list[SessionSummaryEntry | None] = [None] * total
     chunk_progress_lock = threading.Lock()
     merge_progress_lock = threading.Lock()

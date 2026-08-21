@@ -397,7 +397,7 @@ model = "gpt-4.1-mini"
 api_key = "sk-..."
 
 [collect]
-summary_concurrency = 4
+summary_concurrency = 4 # 1-32
 
 [export]
 output = "../exports"
