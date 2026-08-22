@@ -123,9 +123,9 @@ class TestCatalogHasNoUnreferencedKeys:
     """AD-142：死 key 每个都要在 Keys/en/zh 三处同步维护，parity 测试还会强制这份维护。"""
 
     def test_every_key_is_referenced_outside_the_catalog(self):
-        """i18n.py 之外没有任何引用的 key 就是死 key。
+        """目录定义之外没有任何引用的 key 就是死 key。
 
-        不含 i18n.py 自身（它必然包含三处声明），也不含本测试文件（白名单会提到 key 名）。
+        不含 key/语言目录自身，也不含本测试文件（白名单会提到 key 名）。
         """
         from pathlib import Path
 
@@ -135,7 +135,7 @@ class TestCatalogHasNoUnreferencedKeys:
         sources = [
             path
             for path in list((repo_root / "src").rglob("*.py")) + list((repo_root / "tests").rglob("*.py"))
-            if path.name not in {"i18n.py", "test_i18n.py"}
+            if path.name not in {"i18n.py", "i18n_en.py", "i18n_keys.py", "i18n_zh.py", "test_i18n.py"}
         ]
         blob = "\n".join(path.read_text(encoding="utf-8") for path in sources)
 
@@ -156,6 +156,7 @@ CHINESE_LITERAL_EXEMPTIONS = {
     "uri_workflow.py",
     # i18n 目录本身
     "i18n.py",
+    "i18n_zh.py",
 }
 
 

@@ -81,6 +81,9 @@
 | `selector.py` | 终端交互选择与非 TTY 输入回退 |
 | `config.py` | `ConfigurationDocument` TOML 快照、兼容投影、保留式更新与校验 |
 | `config_command.py` | 配置查看、交互编辑与终端展示工作流 |
+| `i18n_en.py` | 英文翻译目录 |
+| `i18n_keys.py` | 翻译键定义 |
+| `i18n_zh.py` | 中文翻译目录 |
 | `coercion.py` | 不可信 provider 标量的全输入域容错转换（safe_int / safe_float / safe_epoch_datetime） |
 | `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
@@ -226,7 +229,10 @@ agent-dump/
 │   ├── config.py                # 配置模型、加载、校验与写入
 │   ├── config_command.py        # 配置查看与交互编辑
 │   ├── diagnostics.py           # 结构化诊断
-│   ├── i18n.py                  # 中英文文案
+│   ├── i18n.py                  # 语言选择与翻译运行时
+│   ├── i18n_en.py               # 英文翻译目录
+│   ├── i18n_keys.py             # 翻译键定义
+│   ├── i18n_zh.py               # 中文翻译目录
 │   ├── message_filter.py        # 消息过滤
 │   ├── paths.py                 # 搜索根路径模型
 │   ├── prompt_safety.py         # 摘要 prompt 的不可信数据隔离
@@ -270,7 +276,8 @@ agent-dump/
 │   ├── test_cli_shared.py       # 共享 CLI 能力测试
 │   ├── test_cli_uri.py          # URI CLI 测试
 │   ├── test_output_formats.py   # 输出格式解析与能力校验测试
-│   ├── test_collect.py          # collect 核心测试
+│   ├── collect_test_support.py  # collect 测试共享构造器
+│   ├── test_collect_*.py        # 按 collect 模块职责拆分的核心测试
 │   ├── test_config.py           # 配置测试
 │   ├── test_maintenance_workflow.py
 │   ├── test_query_filter.py
