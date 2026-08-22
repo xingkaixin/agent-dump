@@ -492,6 +492,7 @@ deny = [
 │           ├── codex_enrichment.py # Codex subagent 与 skill 增强
 │           ├── codex_patch.py  # Codex apply_patch 解析
 │           ├── cursor.py       # Cursor Agent
+│           ├── cursor_storage.py # Cursor SQLite 只读存储访问
 │           ├── kimi.py         # Kimi Agent
 │           ├── pi.py           # Pi Agent
 │           ├── file_sessions.py # file-backed provider 共享基类
