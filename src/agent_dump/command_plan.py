@@ -169,6 +169,12 @@ class CommandPlan:
         return self.operation.mode
 
 
+@dataclass(frozen=True)
+class _ModeCandidate:
+    mode: CommandMode
+    ignored_label: str | None = None
+
+
 _VALID_AGENT_NAMES = {registration.name for registration in AGENT_REGISTRATIONS}
 _URI_SCHEME_TO_AGENT = get_uri_scheme_map()
 
@@ -179,10 +185,19 @@ def build_command_plan(
     cwd: Path | None = None,
     valid_agents: set[str] | None = None,
 ) -> CommandPlan:
-    if request.providers:
+    is_query_uri = request.uri is not None and request.uri.startswith("agents://")
+    mode_candidates = _build_mode_candidates(request, is_query_uri=is_query_uri)
+    mode = mode_candidates[0].mode
+    ignored_mode_options = tuple(
+        candidate.ignored_label
+        for candidate in mode_candidates
+        if candidate.ignored_label is not None and candidate.mode is not mode
+    )
+
+    if mode is CommandMode.PROVIDERS:
         return CommandPlan(
             ProvidersOperation(),
-            ignored_mode_options=_ignored_mode_options(request, selected_mode=CommandMode.PROVIDERS),
+            ignored_mode_options=ignored_mode_options,
         )
 
     effective_agents = valid_agents if valid_agents is not None else _VALID_AGENT_NAMES
@@ -190,17 +205,42 @@ def build_command_plan(
     if request.query and query_uri_spec is not None:
         raise CommandPlanError(CommandPlanErrorCode.QUERY_COMBINATION_INVALID)
 
-    mode = _resolve_command_mode(request, is_query_uri=query_uri_spec is not None)
     operation = _build_operation(request, mode=mode, query_uri_spec=query_uri_spec, valid_agents=effective_agents)
     return CommandPlan(
         operation=operation,
         warnings=_build_warnings(request, mode=mode),
-        ignored_mode_options=_ignored_mode_options(
-            request,
-            selected_mode=mode,
-            is_query_uri=query_uri_spec is not None,
-        ),
+        ignored_mode_options=ignored_mode_options,
     )
+
+
+def _build_mode_candidates(request: CommandRequest, *, is_query_uri: bool) -> tuple[_ModeCandidate, ...]:
+    """Build all applicable modes once, in compatibility-priority order."""
+    candidates: list[_ModeCandidate] = []
+    if request.providers:
+        candidates.append(_ModeCandidate(CommandMode.PROVIDERS, "--providers"))
+    if request.config_action:
+        candidates.append(_ModeCandidate(CommandMode.CONFIG, "--config"))
+    if request.collect:
+        candidates.append(_ModeCandidate(CommandMode.COLLECT, "--collect"))
+    if request.stats:
+        candidates.append(_ModeCandidate(CommandMode.STATS, "--stats"))
+    if request.reindex:
+        candidates.append(_ModeCandidate(CommandMode.REINDEX, "--reindex"))
+    if request.uri and not is_query_uri:
+        candidates.append(_ModeCandidate(CommandMode.URI, "session URI"))
+    if request.search:
+        candidates.append(_ModeCandidate(CommandMode.LIST, "--search"))
+    if request.list_requested:
+        candidates.append(_ModeCandidate(CommandMode.LIST, "--list"))
+    if request.interactive:
+        candidates.append(_ModeCandidate(CommandMode.INTERACTIVE, "--interactive"))
+    if is_query_uri and not request.collect:
+        candidates.append(_ModeCandidate(CommandMode.LIST, "agents:// query URI"))
+    elif request.days is not None or request.query:
+        candidates.append(_ModeCandidate(CommandMode.LIST))
+    if not candidates:
+        candidates.append(_ModeCandidate(CommandMode.HELP))
+    return tuple(candidates)
 
 
 def _parse_query_uri(
@@ -368,58 +408,3 @@ def _build_warnings(request: CommandRequest, *, mode: CommandMode) -> tuple[Comm
     if request.head:
         warnings.append(CommandPlanWarning.HEAD_IGNORED_NON_URI)
     return tuple(warnings)
-
-
-def _ignored_mode_options(
-    request: CommandRequest,
-    *,
-    selected_mode: CommandMode,
-    is_query_uri: bool | None = None,
-) -> tuple[str, ...]:
-    """Return explicit mode selectors that lose to the selected mode's priority."""
-    query_uri = (
-        request.uri is not None and request.uri.startswith("agents://") if is_query_uri is None else is_query_uri
-    )
-    selectors: list[tuple[CommandMode, str]] = []
-    if request.providers:
-        selectors.append((CommandMode.PROVIDERS, "--providers"))
-    if request.config_action:
-        selectors.append((CommandMode.CONFIG, "--config"))
-    if request.collect:
-        selectors.append((CommandMode.COLLECT, "--collect"))
-    if request.stats:
-        selectors.append((CommandMode.STATS, "--stats"))
-    if request.reindex:
-        selectors.append((CommandMode.REINDEX, "--reindex"))
-    if request.uri and not query_uri:
-        selectors.append((CommandMode.URI, "session URI"))
-    if request.search:
-        selectors.append((CommandMode.LIST, "--search"))
-    if request.list_requested:
-        selectors.append((CommandMode.LIST, "--list"))
-    if request.interactive:
-        selectors.append((CommandMode.INTERACTIVE, "--interactive"))
-    if query_uri and not request.collect:
-        selectors.append((CommandMode.LIST, "agents:// query URI"))
-
-    return tuple(label for mode, label in selectors if mode is not selected_mode)
-
-
-def _resolve_command_mode(request: CommandRequest, *, is_query_uri: bool) -> CommandMode:
-    if request.config_action:
-        return CommandMode.CONFIG
-    if request.collect:
-        return CommandMode.COLLECT
-    if request.stats:
-        return CommandMode.STATS
-    if request.reindex:
-        return CommandMode.REINDEX
-    if request.uri and not is_query_uri:
-        return CommandMode.URI
-    if request.search or request.list_requested:
-        return CommandMode.LIST
-    if request.interactive:
-        return CommandMode.INTERACTIVE
-    if request.days is not None or request.query or is_query_uri:
-        return CommandMode.LIST
-    return CommandMode.HELP
