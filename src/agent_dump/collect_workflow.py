@@ -2,16 +2,18 @@
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 import sys
 import threading
-from typing import cast
+from typing import Protocol
 
 from agent_dump.agents.base import BaseAgent
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, resolve_collect_date_range
-from agent_dump.collect_logging import create_collect_logger
+from agent_dump.collect_logging import CollectLogger, create_collect_logger
 from agent_dump.collect_models import (
+    CollectEntry,
     CollectFailurePhase,
     CollectOverviewProgress,
     CollectProgressEvent,
@@ -20,6 +22,7 @@ from agent_dump.collect_models import (
     CollectStartProgress,
     MergeSessionsProgress,
     PlanChunksProgress,
+    PlannedCollectEntry,
     RenderFinalProgress,
     ScanSessionsProgress,
     SummarizeChunksProgress,
@@ -39,6 +42,8 @@ from agent_dump.command_plan import CollectOperation
 from agent_dump.config import (
     AIConfig,
     AIConfigError,
+    CollectConfig,
+    ConfigurationDocument,
     load_config_document,
     validate_ai_config,
 )
@@ -211,11 +216,294 @@ def _format_collect_dry_run_preview(*, run_stats: CollectRunStats, output_path: 
     )
 
 
+class _SummaryRequester(Protocol):
+    def __call__(self, config: AIConfig, prompt: str, *, timeout_seconds: int) -> str: ...
+
+
+@dataclass(frozen=True)
+class _CollectPlan:
+    entries: list[CollectEntry]
+    planned_entries: list[PlannedCollectEntry]
+    has_truncated: bool
+    run_stats: CollectRunStats
+
+
+@dataclass(frozen=True)
+class _CollectOutput:
+    markdown: str
+    output_path: Path
+
+
+def _validated_collect_ai_config(config_document: ConfigurationDocument) -> AIConfig | None:
+    config = config_document.ai_config()
+    valid, errors = validate_ai_config(config)
+    if valid and config is not None:
+        return config
+
+    if AIConfigError.MISSING_FILE in errors:
+        print(i18n.t(Keys.COLLECT_CONFIG_MISSING))
+    elif AIConfigError.BASE_URL_SCHEME in errors:
+        print(i18n.t(Keys.COLLECT_CONFIG_BAD_SCHEME))
+    elif AIConfigError.BASE_URL_PLAINTEXT_KEY in errors:
+        print(i18n.t(Keys.COLLECT_CONFIG_PLAINTEXT_KEY))
+    else:
+        print(i18n.t(Keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(error.value for error in errors)))
+    print(i18n.t(Keys.COLLECT_CONFIG_HINT))
+    return None
+
+
+def _log_collect_failure(logger: CollectLogger | None, phase: CollectFailurePhase, error: Exception) -> None:
+    if logger is not None:
+        logger.log("collect_run_fail", phase=phase.value, error=str(error))
+
+
+def _prepare_collect_plan(
+    operation: CollectOperation,
+    *,
+    scanner: AgentScanner,
+    available_agents: list[BaseAgent],
+    collect_config: CollectConfig,
+    since_date: date,
+    until_date: date,
+    progress_callback: Callable[[CollectProgressEvent], None],
+    logger: CollectLogger | None,
+) -> _CollectPlan | None:
+    try:
+        emit_collect_progress(
+            progress_callback,
+            CollectStartProgress(since=since_date.isoformat(), until=until_date.isoformat()),
+        )
+        with scanner.diagnostic_scope(available_agents):
+            entries, has_truncated = collect_entries(
+                scanner=scanner,
+                agents=available_agents,
+                since_date=since_date,
+                until_date=until_date,
+                collect_config=collect_config,
+                query_spec=operation.query_spec,
+                render_session_text_fn=render_session_text,
+                progress_callback=progress_callback,
+                logger=logger,
+            )
+        if not entries:
+            print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
+            return None
+
+        if logger is not None:
+            logger.log(
+                "collect_run_start",
+                since=since_date.isoformat(),
+                until=until_date.isoformat(),
+                summary_concurrency=collect_config.summary_concurrency,
+                agent_count=len(available_agents),
+                session_count=len(entries),
+            )
+        planned_entries, _ = plan_collect_entries(entries, progress_callback=progress_callback)
+        run_stats = build_collect_run_stats(
+            entries=entries,
+            planned_entries=planned_entries,
+            since_date=since_date,
+            until_date=until_date,
+            summary_concurrency=collect_config.summary_concurrency,
+        )
+        emit_collect_progress(
+            progress_callback,
+            CollectOverviewProgress(
+                session_count=run_stats.session_count,
+                chunk_count=run_stats.chunk_count,
+                concurrency=run_stats.concurrency,
+                agent_session_counts=run_stats.agent_session_counts,
+            ),
+        )
+    except Exception as exc:
+        _log_collect_failure(logger, CollectFailurePhase.READ, exc)
+        print(i18n.t(Keys.COLLECT_READ_FAILED, error=safe_display_text(str(exc))))
+        return None
+
+    return _CollectPlan(
+        entries=entries,
+        planned_entries=planned_entries,
+        has_truncated=has_truncated,
+        run_stats=run_stats,
+    )
+
+
+def _execute_collect_plan(
+    operation: CollectOperation,
+    plan: _CollectPlan,
+    *,
+    ai_config: AIConfig,
+    collect_config: CollectConfig,
+    since_date: date,
+    until_date: date,
+    progress_callback: Callable[[CollectProgressEvent], None],
+    logger: CollectLogger,
+    request_summary: _SummaryRequester,
+) -> _CollectOutput | None:
+    try:
+        session_summaries = summarize_collect_entries(
+            config=ai_config,
+            planned_entries=plan.planned_entries,
+            summary_concurrency=collect_config.summary_concurrency,
+            progress_callback=progress_callback,
+            timeout_seconds=collect_config.summary_timeout_seconds,
+            logger=logger,
+            mode=operation.collect_mode,
+        )
+    except Exception as exc:
+        _log_collect_failure(logger, CollectFailurePhase.SUMMARIZE, exc)
+        print(i18n.t(Keys.COLLECT_API_FAILED, error=safe_display_text(str(exc))))
+        return None
+
+    try:
+        emit_collect_progress(progress_callback, RenderFinalProgress(current=0, total=2))
+        aggregate = reduce_collect_summaries(
+            config=ai_config,
+            session_summaries=session_summaries,
+            progress_callback=progress_callback,
+            timeout_seconds=collect_config.summary_timeout_seconds,
+            logger=logger,
+            mode=operation.collect_mode,
+        )
+        emit_collect_progress(progress_callback, RenderFinalProgress(current=1, total=2))
+        prompt = build_collect_final_prompt(
+            since_date=since_date,
+            until_date=until_date,
+            aggregate=aggregate,
+            has_truncated=plan.has_truncated,
+            mode=operation.collect_mode,
+        )
+        markdown = request_summary(
+            ai_config,
+            prompt,
+            timeout_seconds=collect_config.summary_timeout_seconds,
+        )
+        emit_collect_progress(progress_callback, RenderFinalProgress(current=2, total=2))
+    except Exception as exc:
+        _log_collect_failure(logger, CollectFailurePhase.RENDER, exc)
+        print(i18n.t(Keys.COLLECT_API_FAILED, error=safe_display_text(str(exc))))
+        return None
+
+    try:
+        emit_collect_progress(progress_callback, WriteOutputProgress(current=0, total=1))
+        output_path = write_collect_markdown(
+            markdown,
+            since_date=since_date,
+            until_date=until_date,
+            output_path=resolve_collect_save_path(
+                operation.save,
+                since_date=since_date,
+                until_date=until_date,
+            ),
+        )
+        emit_collect_progress(progress_callback, WriteOutputProgress(current=1, total=1))
+    except Exception as exc:
+        _log_collect_failure(logger, CollectFailurePhase.WRITE, exc)
+        print(i18n.t(Keys.COLLECT_WRITE_FAILED, error=safe_display_text(str(exc))))
+        return None
+
+    return _CollectOutput(markdown=markdown, output_path=output_path)
+
+
+def _available_collect_agents(scanner: AgentScanner) -> list[BaseAgent] | None:
+    available_agents = scanner.get_available_agents()
+    if available_agents:
+        return available_agents
+    print(i18n.t(Keys.NO_AGENTS_FOUND))
+    return None
+
+
+def _handle_collect_dry_run(
+    operation: CollectOperation,
+    *,
+    scanner_factory: Callable[[], AgentScanner],
+    collect_config: CollectConfig,
+    since_date: date,
+    until_date: date,
+) -> int:
+    scanner = scanner_factory()
+    available_agents = _available_collect_agents(scanner)
+    if available_agents is None:
+        return 1
+    with show_collect_progress() as update_progress:
+        plan = _prepare_collect_plan(
+            operation,
+            scanner=scanner,
+            available_agents=available_agents,
+            collect_config=collect_config,
+            since_date=since_date,
+            until_date=until_date,
+            progress_callback=update_progress,
+            logger=None,
+        )
+    if plan is None:
+        return 1
+    print(
+        _format_collect_dry_run_preview(
+            run_stats=plan.run_stats,
+            output_path=preview_collect_save_path(
+                operation.save,
+                since_date=since_date,
+                until_date=until_date,
+            ),
+        )
+    )
+    return 0
+
+
+def _handle_collect_execution(
+    operation: CollectOperation,
+    *,
+    scanner_factory: Callable[[], AgentScanner],
+    request_summary: _SummaryRequester,
+    ai_config: AIConfig,
+    collect_config: CollectConfig,
+    logger: CollectLogger,
+    since_date: date,
+    until_date: date,
+) -> int:
+    scanner = scanner_factory()
+    available_agents = _available_collect_agents(scanner)
+    if available_agents is None:
+        return 1
+    with show_collect_progress() as update_progress:
+        plan = _prepare_collect_plan(
+            operation,
+            scanner=scanner,
+            available_agents=available_agents,
+            collect_config=collect_config,
+            since_date=since_date,
+            until_date=until_date,
+            progress_callback=update_progress,
+            logger=logger,
+        )
+        if plan is None:
+            return 1
+        output = _execute_collect_plan(
+            operation,
+            plan,
+            ai_config=ai_config,
+            collect_config=collect_config,
+            since_date=since_date,
+            until_date=until_date,
+            progress_callback=update_progress,
+            logger=logger,
+            request_summary=request_summary,
+        )
+    if output is None:
+        return 1
+
+    logger.log("collect_run_finish", output_path=str(output.output_path), session_count=len(plan.entries))
+    print(safe_body_text(output.markdown))
+    print(render_terminal_message(Keys.COLLECT_OUTPUT_SAVED, path=output.output_path))
+    return 0
+
+
 def handle_collect_mode(
     operation: CollectOperation,
     *,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
-    request_summary: Callable[..., str] = request_summary_from_llm,
+    request_summary: _SummaryRequester = request_summary_from_llm,
 ) -> int:
     """Handle `--collect` flow."""
     try:
@@ -232,162 +520,30 @@ def handle_collect_mode(
         return 1
 
     config_document = load_config_document()
-    config: AIConfig | None = None
-    if not operation.dry_run:
-        config = config_document.ai_config()
-        valid, errors = validate_ai_config(config)
-        if not valid or config is None:
-            if AIConfigError.MISSING_FILE in errors:
-                print(i18n.t(Keys.COLLECT_CONFIG_MISSING))
-            elif AIConfigError.BASE_URL_SCHEME in errors:
-                print(i18n.t(Keys.COLLECT_CONFIG_BAD_SCHEME))
-            elif AIConfigError.BASE_URL_PLAINTEXT_KEY in errors:
-                print(i18n.t(Keys.COLLECT_CONFIG_PLAINTEXT_KEY))
-            else:
-                print(i18n.t(Keys.COLLECT_CONFIG_INCOMPLETE, fields=",".join(error.value for error in errors)))
-            print(i18n.t(Keys.COLLECT_CONFIG_HINT))
-            return 1
-
-    collect_config = config_document.collect_config()
-    collect_logger = None
-    if not operation.dry_run:
-        logging_config = config_document.logging_config()
-        collect_logger = create_collect_logger(
-            logging_config,
-            on_write_error=_report_collect_log_write_error,
+    if operation.dry_run:
+        return _handle_collect_dry_run(
+            operation,
+            scanner_factory=scanner_factory,
+            collect_config=config_document.collect_config(),
+            since_date=since_date,
+            until_date=until_date,
         )
 
-    scanner = scanner_factory()
-    available_agents: list[BaseAgent] = scanner.get_available_agents()
-    if not available_agents:
-        print(i18n.t(Keys.NO_AGENTS_FOUND))
+    ai_config = _validated_collect_ai_config(config_document)
+    if ai_config is None:
         return 1
-
-    phase = CollectFailurePhase.READ
-    try:
-        with show_collect_progress() as update_progress:
-            emit_collect_progress(
-                update_progress,
-                CollectStartProgress(since=since_date.isoformat(), until=until_date.isoformat()),
-            )
-            with scanner.diagnostic_scope(available_agents):
-                entries, has_truncated = collect_entries(
-                    scanner=scanner,
-                    agents=available_agents,
-                    since_date=since_date,
-                    until_date=until_date,
-                    collect_config=collect_config,
-                    query_spec=operation.query_spec,
-                    render_session_text_fn=render_session_text,
-                    progress_callback=update_progress,
-                    logger=collect_logger,
-                )
-            if not entries:
-                print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
-                return 1
-
-            if collect_logger is not None:
-                collect_logger.log(
-                    "collect_run_start",
-                    since=since_date.isoformat(),
-                    until=until_date.isoformat(),
-                    summary_concurrency=collect_config.summary_concurrency,
-                    agent_count=len(available_agents),
-                    session_count=len(entries),
-                )
-            planned_entries, _ = plan_collect_entries(entries, progress_callback=update_progress)
-            run_stats = build_collect_run_stats(
-                entries=entries,
-                planned_entries=planned_entries,
-                since_date=since_date,
-                until_date=until_date,
-                summary_concurrency=collect_config.summary_concurrency,
-            )
-            emit_collect_progress(
-                update_progress,
-                CollectOverviewProgress(
-                    session_count=run_stats.session_count,
-                    chunk_count=run_stats.chunk_count,
-                    concurrency=run_stats.concurrency,
-                    agent_session_counts=run_stats.agent_session_counts,
-                ),
-            )
-            if operation.dry_run:
-                print(
-                    _format_collect_dry_run_preview(
-                        run_stats=run_stats,
-                        output_path=preview_collect_save_path(
-                            operation.save,
-                            since_date=since_date,
-                            until_date=until_date,
-                        ),
-                    )
-                )
-                return 0
-            phase = CollectFailurePhase.SUMMARIZE
-            # dry-run 已在上方返回；非 dry-run 路径的 config 已通过校验
-            ai_config = cast(AIConfig, config)
-            session_summaries = summarize_collect_entries(
-                config=ai_config,
-                planned_entries=planned_entries,
-                summary_concurrency=collect_config.summary_concurrency,
-                progress_callback=update_progress,
-                timeout_seconds=collect_config.summary_timeout_seconds,
-                logger=collect_logger,
-                mode=operation.collect_mode,
-            )
-            phase = CollectFailurePhase.RENDER
-            emit_collect_progress(update_progress, RenderFinalProgress(current=0, total=2))
-            aggregate = reduce_collect_summaries(
-                config=ai_config,
-                session_summaries=session_summaries,
-                progress_callback=update_progress,
-                timeout_seconds=collect_config.summary_timeout_seconds,
-                logger=collect_logger,
-                mode=operation.collect_mode,
-            )
-            emit_collect_progress(update_progress, RenderFinalProgress(current=1, total=2))
-            prompt = build_collect_final_prompt(
-                since_date=since_date,
-                until_date=until_date,
-                aggregate=aggregate,
-                has_truncated=has_truncated,
-                mode=operation.collect_mode,
-            )
-            markdown = request_summary(
-                ai_config,
-                prompt,
-                timeout_seconds=collect_config.summary_timeout_seconds,
-            )
-            emit_collect_progress(update_progress, RenderFinalProgress(current=2, total=2))
-            emit_collect_progress(update_progress, WriteOutputProgress(current=0, total=1))
-            phase = CollectFailurePhase.WRITE
-            output_path = write_collect_markdown(
-                markdown,
-                since_date=since_date,
-                until_date=until_date,
-                output_path=resolve_collect_save_path(
-                    operation.save,
-                    since_date=since_date,
-                    until_date=until_date,
-                ),
-            )
-            emit_collect_progress(update_progress, WriteOutputProgress(current=1, total=1))
-    except Exception as exc:
-        if collect_logger is not None:
-            collect_logger.log("collect_run_fail", phase=phase.value, error=str(exc))
-        if phase is CollectFailurePhase.READ:
-            print(i18n.t(Keys.COLLECT_READ_FAILED, error=safe_display_text(str(exc))))
-        elif phase is CollectFailurePhase.WRITE:
-            print(i18n.t(Keys.COLLECT_WRITE_FAILED, error=safe_display_text(str(exc))))
-        else:
-            # 远端错误响应会被原样带进异常文本；先压成一行安全文本再进终端
-            print(i18n.t(Keys.COLLECT_API_FAILED, error=safe_display_text(str(exc))))
-        return 1
-
-    if collect_logger is not None:
-        collect_logger.log("collect_run_finish", output_path=str(output_path), session_count=len(entries))
-    # 模型生成的 Markdown 是多行正文：用 body-safe 保留换行与缩进，只剥掉 ANSI/OSC/bidi
-    print(safe_body_text(markdown))
-    print(render_terminal_message(Keys.COLLECT_OUTPUT_SAVED, path=output_path))
-    return 0
+    collect_config = config_document.collect_config()
+    collect_logger = create_collect_logger(
+        config_document.logging_config(),
+        on_write_error=_report_collect_log_write_error,
+    )
+    return _handle_collect_execution(
+        operation,
+        scanner_factory=scanner_factory,
+        request_summary=request_summary,
+        ai_config=ai_config,
+        collect_config=collect_config,
+        logger=collect_logger,
+        since_date=since_date,
+        until_date=until_date,
+    )
