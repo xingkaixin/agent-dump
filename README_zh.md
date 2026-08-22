@@ -462,7 +462,10 @@ deny = [
 │       ├── config_command.py   # 交互式配置命令工作流
 │       ├── diagnostics.py      # 结构化诊断
 │       ├── export_paths.py     # 安全导出路径构造
-│       ├── i18n.py             # 中英文文案
+│       ├── i18n.py             # 语言选择与翻译运行时
+│       ├── i18n_en.py          # 英文翻译目录
+│       ├── i18n_keys.py        # 翻译键定义
+│       ├── i18n_zh.py          # 中文翻译目录
 │       ├── message_filter.py   # 共享消息过滤
 │       ├── paths.py            # 搜索根路径模型
 │       ├── private_files.py     # 本工具创建文件的私有权限

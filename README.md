@@ -462,7 +462,10 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── config_command.py   # Interactive configuration command workflow
 │       ├── diagnostics.py      # Structured diagnostics
 │       ├── export_paths.py     # Safe export path construction
-│       ├── i18n.py             # English and Chinese messages
+│       ├── i18n.py             # Language selection and translation runtime
+│       ├── i18n_en.py          # English translation catalog
+│       ├── i18n_keys.py        # Translation key definitions
+│       ├── i18n_zh.py          # Chinese translation catalog
 │       ├── message_filter.py   # Shared message filtering
 │       ├── paths.py            # Search root models
 │       ├── private_files.py     # Owner-only permissions for tool-created files
