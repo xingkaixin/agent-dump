@@ -1,6 +1,19 @@
 """Internal types for the normalized session message contract."""
 
-from typing import Any, TypedDict
+from typing import Any, Literal, TypeAlias, TypedDict
+
+MessageRole: TypeAlias = Literal[
+    "user",
+    "assistant",
+    "tool",
+    "system",
+    "unknown",
+    "branch_summary",
+    "compaction",
+    "custom",
+]
+TextPartType: TypeAlias = Literal["text", "reasoning"]
+StepPartType: TypeAlias = Literal["step-start", "step-finish"]
 
 
 class _NormalizedPartRequired(TypedDict):
@@ -8,7 +21,7 @@ class _NormalizedPartRequired(TypedDict):
 
 
 class NormalizedPart(_NormalizedPartRequired, total=False):
-    """One provider-neutral message part."""
+    """Serialized provider-neutral part, including open provider extensions."""
 
     text: str
     tool: str
@@ -24,6 +37,63 @@ class NormalizedPart(_NormalizedPartRequired, total=False):
     subagent_id: str
     nickname: str
     subagent_type: str
+    reason: Any
+    tokens: Any
+    cost: Any
+
+
+class TextPart(TypedDict):
+    """Visible text or reasoning content."""
+
+    type: TextPartType
+    text: str
+    time_created: int
+
+
+class _ToolPartRequired(TypedDict):
+    type: Literal["tool"]
+    tool: str
+    callID: str
+    title: str
+    state: dict[str, Any]
+    time_created: int
+
+
+class ToolPart(_ToolPartRequired, total=False):
+    """One normalized tool invocation."""
+
+    subagent_id: str
+    nickname: str
+    subagent_type: str
+
+
+class PlanPart(TypedDict):
+    """One proposed plan and its approval result."""
+
+    type: Literal["plan"]
+    input: Any
+    output: Any
+    approval_status: str
+    time_created: int
+
+
+class ImagePart(TypedDict):
+    """One image payload."""
+
+    type: Literal["image"]
+    mime_type: str | None
+    data: Any
+    time_created: int
+
+
+class _StepPartRequired(TypedDict):
+    type: StepPartType
+    time_created: int
+
+
+class StepPart(_StepPartRequired, total=False):
+    """OpenCode step metadata preserved in normalized output."""
+
     reason: Any
     tokens: Any
     cost: Any

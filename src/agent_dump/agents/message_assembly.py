@@ -1,9 +1,20 @@
 """Shared builders for the normalized session message contract."""
 
 from collections.abc import Callable, Sequence
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
-from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart
+from agent_dump.agents.message_types import (
+    ImagePart,
+    MessageRole,
+    NormalizedMessage,
+    NormalizedPart,
+    PlanPart,
+    StepPart,
+    StepPartType,
+    TextPart,
+    TextPartType,
+    ToolPart,
+)
 
 
 class NormalizedMessageExtra(TypedDict, total=False):
@@ -18,7 +29,7 @@ class NormalizedMessageExtra(TypedDict, total=False):
 def build_message(
     *,
     message_id: str,
-    role: str,
+    role: MessageRole,
     parts: list[NormalizedPart],
     time_created: int = 0,
     agent: str | None = None,
@@ -56,12 +67,13 @@ def build_message(
     return message
 
 
-def build_text_part(text: str, timestamp_ms: int = 0, part_type: str = "text") -> NormalizedPart:
-    return {
-        "type": part_type,
-        "text": text,
-        "time_created": timestamp_ms,
-    }
+def build_text_part(text: str, timestamp_ms: int = 0, part_type: TextPartType = "text") -> NormalizedPart:
+    part = TextPart(
+        type=part_type,
+        text=text,
+        time_created=timestamp_ms,
+    )
+    return cast(NormalizedPart, part)
 
 
 def build_tool_part(
@@ -72,14 +84,55 @@ def build_tool_part(
     state: dict[str, Any],
     timestamp_ms: int,
 ) -> NormalizedPart:
-    return {
-        "type": "tool",
-        "tool": tool_name,
-        "callID": call_id,
-        "title": title,
-        "state": state,
-        "time_created": timestamp_ms,
-    }
+    part = ToolPart(
+        type="tool",
+        tool=tool_name,
+        callID=call_id,
+        title=title,
+        state=state,
+        time_created=timestamp_ms,
+    )
+    return cast(NormalizedPart, part)
+
+
+def build_plan_part(
+    *,
+    text: str,
+    output: Any,
+    approval_status: str,
+    timestamp_ms: int,
+) -> NormalizedPart:
+    part = PlanPart(
+        type="plan",
+        input=text,
+        output=output,
+        approval_status=approval_status,
+        time_created=timestamp_ms,
+    )
+    return cast(NormalizedPart, part)
+
+
+def build_image_part(*, mime_type: str | None, data: Any, timestamp_ms: int) -> NormalizedPart:
+    part = ImagePart(type="image", mime_type=mime_type, data=data, time_created=timestamp_ms)
+    return cast(NormalizedPart, part)
+
+
+def build_step_part(
+    *,
+    part_type: StepPartType,
+    timestamp_ms: int,
+    reason: Any,
+    tokens: Any,
+    cost: Any,
+) -> NormalizedPart:
+    part = StepPart(
+        type=part_type,
+        time_created=timestamp_ms,
+        reason=reason,
+        tokens=tokens,
+        cost=cost,
+    )
+    return cast(NormalizedPart, part)
 
 
 def build_fallback_tool_message(
@@ -109,7 +162,7 @@ def backfill_tool_state(
     call_id: str,
     output_parts: list[NormalizedPart],
     state_updates: dict[str, Any] | None = None,
-) -> NormalizedPart | None:
+) -> ToolPart | None:
     if not call_id or (not output_parts and not state_updates):
         return None
 
@@ -119,7 +172,10 @@ def backfill_tool_state(
 
     message_index, part_index = location
     tool_part = messages[message_index]["parts"][part_index]
-    state = tool_part.setdefault("state", {})
+    if tool_part["type"] != "tool":
+        return None
+    tool_part = cast(ToolPart, tool_part)
+    state = tool_part["state"]
     if output_parts:
         existing_output = state.get("output")
         if isinstance(existing_output, list):

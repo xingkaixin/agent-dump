@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import re
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex_enrichment import CodexMessageEnrichmentMixin
@@ -27,16 +27,19 @@ from agent_dump.agents.message_assembly import (
     backfill_tool_state,
     build_fallback_tool_message,
     build_message,
+    build_plan_part,
     build_text_part,
     build_tool_part,
     message_has_part_type,
     try_append_to_assistant_group,
 )
 from agent_dump.agents.message_types import (
+    MessageRole,
     NormalizedMessage,
     NormalizedPart,
     NormalizedSessionData,
     NormalizedSessionStats,
+    PlanPart,
 )
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_int
@@ -429,13 +432,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _build_plan_part(self, plan_text: str, timestamp_ms: int) -> NormalizedPart:
         """Build one plan part."""
-        return {
-            "type": "plan",
-            "input": plan_text,
-            "output": None,
-            "approval_status": "fail",
-            "time_created": timestamp_ms,
-        }
+        return build_plan_part(text=plan_text, output=None, approval_status="fail", timestamp_ms=timestamp_ms)
 
     def _build_tool_part(
         self,
@@ -658,6 +655,9 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
         message_index, part_index = pending_plan_location
         plan_part = messages[message_index]["parts"][part_index]
+        if plan_part["type"] != "plan":
+            return
+        plan_part = cast(PlanPart, plan_part)
         plan_part["approval_status"] = approval_status
         plan_part["output"] = output
 
@@ -873,7 +873,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             if subagent_message is not None
             else build_message(
                 message_id=message_id,
-                role=role,
+                role=cast(MessageRole, role),
                 time_created=timestamp_ms,
                 parts=parts,
             )
