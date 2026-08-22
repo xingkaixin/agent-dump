@@ -494,6 +494,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │           ├── cursor.py       # Cursor Agent
 │           ├── cursor_storage.py # Cursor read-only SQLite access
 │           ├── kimi.py         # Kimi Agent
+│           ├── kimi_wire.py    # Kimi wire event stream parser
 │           ├── pi.py           # Pi Agent
 │           ├── file_sessions.py # Shared file-backed provider base
 │           ├── jsonl_scan.py   # Bounded JSONL object scan and diagnostics

@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 from threading import Lock
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
@@ -16,6 +16,12 @@ from agent_dump.agents.jsonl_scan import (
     FULL_SCAN_BYTE_LIMIT,
     JsonlObjectScan,
     skipped_records_diagnostic,
+)
+from agent_dump.agents.kimi_wire import (
+    map_kimi_tool_title,
+    normalize_kimi_tool_arguments,
+    parse_kimi_wire,
+    should_ignore_kimi_tool,
 )
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
@@ -29,7 +35,6 @@ from agent_dump.agents.message_types import (
     NormalizedPart,
     NormalizedSessionData,
     NormalizedSessionStats,
-    ToolPart,
 )
 from agent_dump.agents.title_fallback import basename_title, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime, safe_int
@@ -37,17 +42,6 @@ from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import ProviderRoots, SearchRoot
 from agent_dump.private_files import copy_private_file, ensure_output_dir
-
-KIMI_TOOL_TITLE_MAP = {
-    "ReadFile": "read",
-    "Glob": "glob",
-    "StrReplaceFile": "edit",
-    "Grep": "grep",
-    "WriteFile": "write",
-    "Shell": "bash",
-}
-
-KIMI_IGNORED_TOOLS = {"SetTodoList"}
 
 
 class KimiAgent(FileSessionAgent):
@@ -272,14 +266,6 @@ class KimiAgent(FileSessionAgent):
         output_path = self._build_raw_output_path(session, output_dir)
         return copy_private_file(source_path, output_path)
 
-    def _map_tool_title(self, tool_name: str) -> str:
-        """Map Kimi tool names to unified short titles."""
-        return KIMI_TOOL_TITLE_MAP.get(tool_name, tool_name)
-
-    def _should_ignore_tool(self, tool_name: str) -> bool:
-        """Check whether a tool should be excluded from export."""
-        return tool_name in KIMI_IGNORED_TOOLS
-
     def _extract_kimi_total_tokens_from_raw(self, session_dir: Path) -> int | None:
         """Extract the final cumulative token count from raw Kimi jsonl."""
         raw_path = session_dir / "context.jsonl"
@@ -352,15 +338,6 @@ class KimiAgent(FileSessionAgent):
 
         return None
 
-    def _normalize_tool_arguments(self, raw: Any) -> Any:
-        """Normalize tool call arguments."""
-        if isinstance(raw, str):
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                return raw
-        return raw
-
     def _normalize_tool_output_parts(self, content: Any) -> list[NormalizedPart]:
         """Normalize tool output content to text parts."""
         if isinstance(content, str):
@@ -383,17 +360,6 @@ class KimiAgent(FileSessionAgent):
         text = str(content)
         return [build_text_part(text)] if text.strip() else []
 
-    def _normalize_wire_tool_output_parts(self, return_value: Any) -> list[NormalizedPart]:
-        """Normalize wire tool output content to text parts."""
-        if return_value is None:
-            return []
-        if isinstance(return_value, str):
-            return [build_text_part(return_value)] if return_value.strip() else []
-        if isinstance(return_value, (dict, list)):
-            return [build_text_part(json.dumps(return_value, ensure_ascii=False, indent=2))]
-        text = str(return_value)
-        return [build_text_part(text)] if text.strip() else []
-
     def _convert_context_tool_call(self, tool_call: dict[str, Any]) -> NormalizedPart | None:
         """Convert one assistant tool call from context.jsonl."""
         if tool_call.get("type") != "function":
@@ -411,9 +377,9 @@ class KimiAgent(FileSessionAgent):
         return build_tool_part(
             tool_name=tool_name,
             call_id=call_id,
-            title=self._map_tool_title(tool_name),
+            title=map_kimi_tool_title(tool_name),
             state={
-                "arguments": self._normalize_tool_arguments(function.get("arguments")),
+                "arguments": normalize_kimi_tool_arguments(function.get("arguments")),
                 "output": None,
             },
             timestamp_ms=0,
@@ -459,7 +425,7 @@ class KimiAgent(FileSessionAgent):
                 function = tool_call.get("function", {})
                 tool_name = str(function.get("name", "")).strip() if isinstance(function, dict) else ""
                 call_id = str(tool_call.get("id", "")).strip()
-                if tool_name and call_id and self._should_ignore_tool(tool_name):
+                if tool_name and call_id and should_ignore_kimi_tool(tool_name):
                     ignored_tool_call_ids.add(call_id)
                     continue
                 tool_part = self._convert_context_tool_call(tool_call)
@@ -578,98 +544,6 @@ class KimiAgent(FileSessionAgent):
         stats["message_count"] = len(messages)
         return self._build_session_data(session, messages, stats)
 
-    def _create_wire_assistant_message(self, message_id: str) -> NormalizedMessage:
-        """Create one assistant message for wire state machine."""
-        return build_message(
-            message_id=message_id,
-            role="assistant",
-            agent="kimi",
-            parts=[],
-        )
-
-    def _get_or_create_wire_assistant(
-        self,
-        messages: list[NormalizedMessage],
-        current_assistant_index: int | None,
-        message_id: str,
-    ) -> int:
-        """Get or create current assistant message index."""
-        if current_assistant_index is not None:
-            return current_assistant_index
-        messages.append(self._create_wire_assistant_message(message_id))
-        return len(messages) - 1
-
-    def _append_wire_content_part(
-        self, assistant_message: NormalizedMessage, payload: dict[str, Any], timestamp_ms: int
-    ) -> None:
-        """Append one wire content part to assistant message."""
-        part_type = payload.get("type")
-        if part_type == "think":
-            text = str(payload.get("think", ""))
-            if text.strip():
-                assistant_message["parts"].append(build_text_part(text, timestamp_ms, part_type="reasoning"))
-        elif part_type == "text":
-            text = str(payload.get("text", ""))
-            if text.strip():
-                assistant_message["parts"].append(build_text_part(text, timestamp_ms))
-
-    def _create_wire_tool_part(
-        self, payload: dict[str, Any], timestamp_ms: int
-    ) -> tuple[NormalizedPart | None, str | None, str | None]:
-        """Create one wire tool part and optional raw arguments buffer."""
-        call_id = str(payload.get("id", "")).strip()
-        function = payload.get("function", {})
-        if not isinstance(function, dict) or not call_id:
-            return None, None, None
-
-        tool_name = str(function.get("name", "")).strip()
-        if not tool_name:
-            return None, None, None
-
-        raw_arguments = function.get("arguments")
-        normalized_arguments = self._normalize_tool_arguments(raw_arguments)
-        buffer = raw_arguments if isinstance(raw_arguments, str) and isinstance(normalized_arguments, str) else None
-
-        tool_part = build_tool_part(
-            tool_name=tool_name,
-            call_id=call_id,
-            title=self._map_tool_title(tool_name),
-            state={
-                "arguments": normalized_arguments,
-                "output": None,
-            },
-            timestamp_ms=timestamp_ms,
-        )
-        return tool_part, call_id, buffer
-
-    def _append_wire_tool_call_part(
-        self,
-        arguments_part: str,
-        open_tool_call_id: str | None,
-        open_tool_argument_buffer: dict[str, str],
-        messages: list[NormalizedMessage],
-        pending_tool_calls: dict[str, tuple[int, int]],
-    ) -> None:
-        """Append ToolCallPart fragments to the active tool call."""
-        if not open_tool_call_id or open_tool_call_id not in pending_tool_calls:
-            return
-
-        buffer = open_tool_argument_buffer.get(open_tool_call_id, "")
-        buffer += arguments_part
-        try:
-            parsed_arguments = json.loads(buffer)
-        except json.JSONDecodeError:
-            open_tool_argument_buffer[open_tool_call_id] = buffer
-            return
-
-        message_index, part_index = pending_tool_calls[open_tool_call_id]
-        tool_part = messages[message_index]["parts"][part_index]
-        if tool_part["type"] != "tool":
-            return
-        tool_part = cast(ToolPart, tool_part)
-        tool_part["state"]["arguments"] = parsed_arguments
-        open_tool_argument_buffer.pop(open_tool_call_id, None)
-
     def _get_session_data_from_wire(self, session: Session) -> NormalizedSessionData:
         """Build unified session data from legacy wire.jsonl."""
         wire_path = session.source_path / "wire.jsonl"
@@ -684,123 +558,10 @@ class KimiAgent(FileSessionAgent):
                 ),
             )
 
-        messages: list[NormalizedMessage] = []
-        pending_tool_calls: dict[str, tuple[int, int]] = {}
-        open_tool_argument_buffer: dict[str, str] = {}
-        ignored_tool_call_ids: set[str] = set()
-        current_assistant_index: int | None = None
-        open_tool_call_id: str | None = None
-
-        scan = JsonlObjectScan(wire_path)
-        for seq, data in scan.iter_with_line_numbers():
-            message = data.get("message")
-            if not isinstance(message, dict):
-                continue
-            msg_type = message.get("type", "")
-            payload = message.get("payload", {})
-            if not isinstance(payload, dict):
-                continue
-            timestamp = data.get("timestamp", 0)
-            parsed_timestamp = safe_epoch_datetime(timestamp, unit="s")
-            timestamp_ms = int(parsed_timestamp.timestamp() * 1000) if parsed_timestamp is not None else 0
-
-            if msg_type == "TurnBegin":
-                user_input = payload.get("user_input", [])
-                text = ""
-                if user_input and isinstance(user_input, list) and isinstance(user_input[0], dict):
-                    text = str(user_input[0].get("text", ""))
-                if text.strip():
-                    messages.append(
-                        build_message(
-                            message_id=f"wire-{seq}",
-                            role="user",
-                            parts=[build_text_part(text, timestamp_ms)],
-                            time_created=timestamp_ms,
-                        )
-                    )
-                current_assistant_index = None
-                open_tool_call_id = None
-                continue
-
-            if msg_type == "ContentPart":
-                current_assistant_index = self._get_or_create_wire_assistant(
-                    messages, current_assistant_index, f"wire-{seq}"
-                )
-                self._append_wire_content_part(messages[current_assistant_index], payload, timestamp_ms)
-                continue
-
-            if msg_type == "ToolCall":
-                function = payload.get("function", {})
-                tool_name = str(function.get("name", "")).strip() if isinstance(function, dict) else ""
-                call_id = str(payload.get("id", "")).strip()
-                if tool_name and call_id and self._should_ignore_tool(tool_name):
-                    ignored_tool_call_ids.add(call_id)
-                    open_tool_call_id = call_id
-                    continue
-                current_assistant_index = self._get_or_create_wire_assistant(
-                    messages, current_assistant_index, f"wire-{seq}"
-                )
-                tool_part, call_id, buffer = self._create_wire_tool_part(payload, timestamp_ms)
-                if tool_part is None or call_id is None:
-                    continue
-                part_index = len(messages[current_assistant_index]["parts"])
-                messages[current_assistant_index]["parts"].append(tool_part)
-                messages[current_assistant_index]["mode"] = "tool"
-                pending_tool_calls[call_id] = (current_assistant_index, part_index)
-                open_tool_call_id = call_id
-                if buffer is not None:
-                    open_tool_argument_buffer[call_id] = buffer
-                continue
-
-            if msg_type == "ToolCallPart":
-                if open_tool_call_id and open_tool_call_id in ignored_tool_call_ids:
-                    continue
-                arguments_part = str(payload.get("arguments_part", ""))
-                self._append_wire_tool_call_part(
-                    arguments_part,
-                    open_tool_call_id,
-                    open_tool_argument_buffer,
-                    messages,
-                    pending_tool_calls,
-                )
-                continue
-
-            if msg_type == "ToolResult":
-                tool_call_id = str(payload.get("tool_call_id", "")).strip()
-                if tool_call_id and tool_call_id in ignored_tool_call_ids:
-                    continue
-                output_parts = self._normalize_wire_tool_output_parts(payload.get("return_value"))
-                if (
-                    backfill_tool_state(
-                        messages,
-                        pending_tool_calls,
-                        call_id=tool_call_id,
-                        output_parts=output_parts,
-                    )
-                    is not None
-                ):
-                    continue
-                fallback_message = build_fallback_tool_message(
-                    message_id=f"wire-{seq}",
-                    output_parts=output_parts,
-                    tool_call_id=tool_call_id or None,
-                )
-                if fallback_message:
-                    messages.append(fallback_message)
-                continue
-
-            if msg_type in {
-                "StepBegin",
-                "StatusUpdate",
-                "ApprovalRequest",
-                "ApprovalResponse",
-                "TurnEnd",
-            }:
-                continue
-        if diagnostic := skipped_records_diagnostic(scan):
-            self._report_diagnostic(diagnostic.message_key, **diagnostic.fields)
-
-        messages = [message for message in messages if message.get("parts")]
+        result = parse_kimi_wire(wire_path)
+        if result.diagnostic:
+            self._report_diagnostic(result.diagnostic.message_key, **result.diagnostic.fields)
+        messages = result.messages
         stats = self._extract_kimi_stats_from_wire(session.source_path)
         stats["message_count"] = len(messages)
         return self._build_session_data(session, messages, stats)

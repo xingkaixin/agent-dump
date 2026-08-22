@@ -107,6 +107,7 @@
 | `agents/message_assembly.py` | 统一 message/part 组装与 assistant 分组判断 |
 | `agents/message_types.py` | Provider 组装阶段使用的统一 message / session payload 内部类型 |
 | `agents/jsonl_scan.py` | JSONL 头尾扫描、根对象保证、坏行计数与固定容量诊断样本 |
+| `agents/kimi_wire.py` | Kimi wire.jsonl 事件流解析与消息组装 |
 | `agents/file_sessions.py` | 文件型 provider 共享基类（扫描 / 剪枝 / 并行解析 / 定位） |
 | `agents/codex_patch.py` | Codex apply_patch 解析 |
 | `agents/codex_enrichment.py` | Codex subagent / skill 消息增强 |
@@ -249,6 +250,7 @@ agent-dump/
 │       ├── zcode.py             # ZCode SQLite provider
 │       ├── codex.py             # Codex JSONL provider
 │       ├── kimi.py              # Kimi JSONL provider
+│       ├── kimi_wire.py         # Kimi wire 事件流解析
 │       ├── claudecode.py        # Claude Code JSONL provider
 │       ├── cursor.py            # Cursor SQLite provider
 │       ├── cursor_storage.py    # Cursor SQLite 只读存储访问

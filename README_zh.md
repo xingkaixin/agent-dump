@@ -494,6 +494,7 @@ deny = [
 │           ├── cursor.py       # Cursor Agent
 │           ├── cursor_storage.py # Cursor SQLite 只读存储访问
 │           ├── kimi.py         # Kimi Agent
+│           ├── kimi_wire.py    # Kimi wire 事件流解析
 │           ├── pi.py           # Pi Agent
 │           ├── file_sessions.py # file-backed provider 共享基类
 │           ├── jsonl_scan.py   # 有界 JSONL 对象扫描与诊断
