@@ -1,5 +1,6 @@
 """collect 模块测试。"""
 
+from concurrent.futures import ThreadPoolExecutor as RealThreadPoolExecutor, wait as wait_for_futures
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from email.message import Message
@@ -440,6 +441,70 @@ class TestCollectEntries:
         assert [entry.session_id for entry in entries] == ["older", "newer"]
         scan_events = [event for event in progress if isinstance(event, ScanSessionsProgress)]
         assert [event.session_uri for event in scan_events[1:]] == ["codex://newer", "codex://older"]
+
+    def test_collect_entries_bounds_submitted_session_reads(self, monkeypatch) -> None:
+        now = datetime.now(timezone.utc)
+        sessions = [
+            Session(
+                id=f"session-{index}",
+                title=f"session-{index}",
+                created_at=now - timedelta(minutes=index),
+                updated_at=now - timedelta(minutes=index),
+                source_path=Path(f"/tmp/session-{index}.jsonl"),
+                metadata={},
+            )
+            for index in range(5)
+        ]
+        release_reads = threading.Event()
+        wait_called = threading.Event()
+        submitted_sessions: list[str] = []
+
+        class RecordingThreadPoolExecutor(RealThreadPoolExecutor):
+            def submit(self, function, /, *args, **kwargs):
+                submitted_sessions.append(args[0][1].id)
+                return super().submit(function, *args, **kwargs)
+
+        def recording_wait(*args, **kwargs):
+            wait_called.set()
+            return wait_for_futures(*args, **kwargs)
+
+        def get_session_data(session: Session) -> dict[str, object]:
+            if not release_reads.wait(timeout=5):
+                raise AssertionError(f"session read did not resume: {session.id}")
+            return {"messages": [{"role": "user", "content": session.id}]}
+
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = sessions
+        agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+        agent.get_cached_session_data.side_effect = get_session_data
+        configure_session_data_lease(agent)
+        monkeypatch.setattr("agent_dump.collect_sessions._MAX_SESSION_PARSE_WORKERS", 2)
+        monkeypatch.setattr("agent_dump.collect_sessions.ThreadPoolExecutor", RecordingThreadPoolExecutor)
+        monkeypatch.setattr("agent_dump.collect_sessions.wait", recording_wait)
+        results: list[tuple[list[CollectEntry], bool]] = []
+        collector = threading.Thread(
+            target=lambda: results.append(
+                collect_entries(
+                    agents=[agent],
+                    since_date=(now - timedelta(days=1)).date(),
+                    until_date=now.date(),
+                    render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
+                    local_tz=timezone.utc,
+                )
+            )
+        )
+
+        collector.start()
+        assert wait_called.wait(timeout=5)
+        assert submitted_sessions == ["session-0", "session-1"]
+        release_reads.set()
+        collector.join(timeout=5)
+
+        assert not collector.is_alive()
+        assert len(submitted_sessions) == len(sessions)
+        assert len(results[0][0]) == len(sessions)
 
     def test_collect_entries_skips_one_unreadable_session_and_keeps_the_rest(self, tmp_path, capsys) -> None:
         now = datetime.now(timezone.utc)

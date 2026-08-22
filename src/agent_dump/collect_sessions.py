@@ -1,7 +1,7 @@
 """Session discovery and event planning for collect mode."""
 
-from collections.abc import Callable, Mapping
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable, Iterator, Mapping
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import date, tzinfo
 from pathlib import Path
 import sys
@@ -31,6 +31,33 @@ from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
 _MAX_SESSION_PARSE_WORKERS = 32
+_MatchedSession = tuple[BaseAgent, Session, date]
+
+
+def _iter_bounded_session_reads(
+    executor: ThreadPoolExecutor,
+    matched_sessions: list[_MatchedSession],
+    read_entry: Callable[[_MatchedSession], CollectEntry],
+    max_pending: int,
+) -> Iterator[tuple[int, _MatchedSession, Future[CollectEntry]]]:
+    pending_sessions = iter(enumerate(matched_sessions))
+    future_to_session: dict[Future[CollectEntry], tuple[int, _MatchedSession]] = {}
+
+    for _ in range(min(max_pending, len(matched_sessions))):
+        session_index, matched_session = next(pending_sessions)
+        future_to_session[executor.submit(read_entry, matched_session)] = (session_index, matched_session)
+
+    while future_to_session:
+        done, _ = wait(tuple(future_to_session), return_when=FIRST_COMPLETED)
+        for future in done:
+            session_index, matched_session = future_to_session.pop(future)
+            try:
+                next_index, next_session = next(pending_sessions)
+            except StopIteration:
+                pass
+            else:
+                future_to_session[executor.submit(read_entry, next_session)] = (next_index, next_session)
+            yield session_index, matched_session, future
 
 
 def _session_local_date(session: Session, local_tz: tzinfo) -> date:
@@ -77,7 +104,7 @@ def collect_entries(
     has_truncated = False
     resolved_local_tz = local_tz or get_local_timezone()
     resolved_collect_config = collect_config or CollectConfig()
-    matched_sessions: list[tuple[BaseAgent, Session, date]] = []
+    matched_sessions: list[_MatchedSession] = []
     candidate_matches: list[SearchSessionMatch] = []
 
     days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
@@ -143,12 +170,15 @@ def collect_entries(
     if matched_sessions:
         max_workers = min(_MAX_SESSION_PARSE_WORKERS, total)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(_collect_entry, matched_session) for matched_session in matched_sessions]
             failed_sessions = 0
             last_error: Exception | None = None
-            for index, (matched_session, future) in enumerate(
-                zip(matched_sessions, futures, strict=True),
-                start=1,
+            completed_session_uris: dict[int, str] = {}
+            next_progress_index = 0
+            for session_index, matched_session, future in _iter_bounded_session_reads(
+                executor,
+                matched_sessions,
+                _collect_entry,
+                max_workers,
             ):
                 agent, session, _ = matched_session
                 try:
@@ -180,10 +210,14 @@ def collect_entries(
                     entries.append(entry)
                     has_truncated = has_truncated or entry.is_truncated
                     session_uri = entry.session_uri
-                emit_collect_progress(
-                    progress_callback,
-                    ScanSessionsProgress(current=index, total=total, session_uri=session_uri),
-                )
+                completed_session_uris[session_index] = session_uri
+                while next_progress_index in completed_session_uris:
+                    session_uri = completed_session_uris.pop(next_progress_index)
+                    next_progress_index += 1
+                    emit_collect_progress(
+                        progress_callback,
+                        ScanSessionsProgress(current=next_progress_index, total=total, session_uri=session_uri),
+                    )
 
         if not entries and last_error is not None:
             raise last_error
