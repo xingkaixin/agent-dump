@@ -2355,14 +2355,15 @@ class TestTokenStatsAccumulation:
 
     def test_accumulates_from_structured_payload(self):
         agent = CodexAgent()
-        stats = {"total_input_tokens": 0, "total_output_tokens": 0}
+        stats = agent._empty_stats()
 
         agent._accumulate_token_stats(
             stats,
             {"payload": {"info": {"total_token_usage": {"input_tokens": 10, "output_tokens": 4}}}},
         )
 
-        assert stats == {"total_input_tokens": 10, "total_output_tokens": 4}
+        assert stats["total_input_tokens"] == 10
+        assert stats["total_output_tokens"] == 4
 
     @pytest.mark.parametrize(
         "record",
@@ -2379,22 +2380,24 @@ class TestTokenStatsAccumulation:
     )
     def test_records_without_usable_usage_are_ignored(self, record):
         agent = CodexAgent()
-        stats = {"total_input_tokens": 0, "total_output_tokens": 0}
+        stats = agent._empty_stats()
 
         agent._accumulate_token_stats(stats, record)
 
-        assert stats == {"total_input_tokens": 0, "total_output_tokens": 0}
+        assert stats["total_input_tokens"] == 0
+        assert stats["total_output_tokens"] == 0
 
     def test_non_numeric_counts_degrade_to_zero(self):
         agent = CodexAgent()
-        stats = {"total_input_tokens": 0, "total_output_tokens": 0}
+        stats = agent._empty_stats()
 
         agent._accumulate_token_stats(
             stats,
             {"payload": {"info": {"total_token_usage": {"input_tokens": "abc", "output_tokens": None}}}},
         )
 
-        assert stats == {"total_input_tokens": 0, "total_output_tokens": 0}
+        assert stats["total_input_tokens"] == 0
+        assert stats["total_output_tokens"] == 0
 
     def test_record_is_never_stringified(self, monkeypatch):
         """曾经的 `"token_count" not in str(data)` 会对每条记录做一次 repr。"""
@@ -2407,13 +2410,14 @@ class TestTokenStatsAccumulation:
                 return super().__repr__()
 
         agent = CodexAgent()
-        stats = {"total_input_tokens": 0, "total_output_tokens": 0}
+        stats = agent._empty_stats()
         record = TrackingDict({"payload": {"info": {"total_token_usage": {"input_tokens": 1, "output_tokens": 2}}}})
 
         agent._accumulate_token_stats(stats, record)
 
         assert TrackingDict.stringified == 0
-        assert stats == {"total_input_tokens": 1, "total_output_tokens": 2}
+        assert stats["total_input_tokens"] == 1
+        assert stats["total_output_tokens"] == 2
 
 
 class TestMalformedRecordsDoNotBreakTheSession:

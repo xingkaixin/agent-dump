@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from threading import Lock
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
@@ -27,7 +27,12 @@ from agent_dump.agents.message_assembly import (
     build_tool_part,
     try_append_to_assistant_group,
 )
-from agent_dump.agents.message_types import NormalizedSessionData
+from agent_dump.agents.message_types import (
+    NormalizedMessage,
+    NormalizedPart,
+    NormalizedSessionData,
+    NormalizedSessionStats,
+)
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
@@ -238,7 +243,7 @@ class ClaudeCodeAgent(FileSessionAgent):
                 ),
             )
 
-        messages: list[dict[str, Any]] = []
+        messages: list[NormalizedMessage] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}
         ignored_tool_call_ids: set[str] = set()
         assistant_uuid_to_tool_calls: dict[str, list[str]] = {}
@@ -246,7 +251,7 @@ class ClaudeCodeAgent(FileSessionAgent):
             "current_index": None,
             "latest_text_index": None,
         }
-        stats = {
+        stats: NormalizedSessionStats = {
             "total_cost": 0,
             "total_input_tokens": 0,
             "total_output_tokens": 0,
@@ -285,13 +290,13 @@ class ClaudeCodeAgent(FileSessionAgent):
             "stats": stats,
             "messages": messages,
         }
-        return cast(dict[str, Any], session_data)
+        return dict(session_data)
 
     def _parse_timestamp_ms(self, data: dict[str, Any]) -> int:
         """Parse record timestamp into milliseconds."""
         return parse_iso_timestamp_ms(data.get("timestamp"))
 
-    def _build_tool_part(self, part: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
+    def _build_tool_part(self, part: dict[str, Any], timestamp_ms: int) -> NormalizedPart:
         """Build one tool part from Claude tool_use content."""
         tool_name = str(part.get("name", ""))
         return build_tool_part(
@@ -305,13 +310,13 @@ class ClaudeCodeAgent(FileSessionAgent):
             timestamp_ms=timestamp_ms,
         )
 
-    def _normalize_claude_tool_output(self, content: Any, timestamp_ms: int) -> list[dict[str, Any]]:
+    def _normalize_claude_tool_output(self, content: Any, timestamp_ms: int) -> list[NormalizedPart]:
         """Normalize Claude tool output into text parts."""
         if isinstance(content, str):
             return [build_text_part(content, timestamp_ms)] if content.strip() else []
 
         if isinstance(content, list):
-            parts: list[dict[str, Any]] = []
+            parts: list[NormalizedPart] = []
             for item in content:
                 if isinstance(item, dict):
                     text = str(item.get("text", item.get("content", "")))
@@ -327,7 +332,7 @@ class ClaudeCodeAgent(FileSessionAgent):
         text = str(content)
         return [build_text_part(text, timestamp_ms)] if text.strip() else []
 
-    def _normalize_user_text_parts(self, content: Any, timestamp_ms: int) -> list[dict[str, Any]]:
+    def _normalize_user_text_parts(self, content: Any, timestamp_ms: int) -> list[NormalizedPart]:
         """Normalize user-visible text content into text parts."""
         if isinstance(content, str):
             return [build_text_part(content, timestamp_ms)] if content.strip() else []
@@ -335,7 +340,7 @@ class ClaudeCodeAgent(FileSessionAgent):
         if not isinstance(content, list):
             return []
 
-        parts: list[dict[str, Any]] = []
+        parts: list[NormalizedPart] = []
         for item in content:
             if isinstance(item, dict):
                 item_type = item.get("type")
@@ -348,7 +353,7 @@ class ClaudeCodeAgent(FileSessionAgent):
                 parts.append(build_text_part(item, timestamp_ms))
         return parts
 
-    def _accumulate_token_totals(self, stats: dict[str, Any], messages: list[dict[str, Any]]) -> None:
+    def _accumulate_token_totals(self, stats: NormalizedSessionStats, messages: list[NormalizedMessage]) -> None:
         """Sum usage from the assembled messages rather than from raw JSONL records.
 
         一轮 assistant 回复会写出多条增量记录，按行累加会把同一份 usage 重复计入；
@@ -365,7 +370,7 @@ class ClaudeCodeAgent(FileSessionAgent):
             stats["total_input_tokens"] += safe_int(tokens.get("input_tokens"))
             stats["total_output_tokens"] += safe_int(tokens.get("output_tokens"))
 
-    def _apply_assistant_metadata(self, message: dict[str, Any], msg: dict[str, Any]) -> None:
+    def _apply_assistant_metadata(self, message: NormalizedMessage, msg: dict[str, Any]) -> None:
         """Apply model/usage metadata to an assistant message when available."""
         model = msg.get("model")
         usage = msg.get("usage")
@@ -376,12 +381,12 @@ class ClaudeCodeAgent(FileSessionAgent):
 
     def _append_assistant_reasoning(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         *,
         message_id: str,
         msg: dict[str, Any],
         timestamp_ms: int,
-        part: dict[str, Any],
+        part: NormalizedPart,
         current_assistant_index: int | None,
     ) -> int:
         """Append reasoning to the active assistant group or create a new one."""
@@ -408,12 +413,12 @@ class ClaudeCodeAgent(FileSessionAgent):
 
     def _append_assistant_text(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         *,
         message_id: str,
         msg: dict[str, Any],
         timestamp_ms: int,
-        part: dict[str, Any],
+        part: NormalizedPart,
         current_assistant_index: int | None,
     ) -> int:
         """Append text to the active assistant group or create a new one."""
@@ -440,13 +445,13 @@ class ClaudeCodeAgent(FileSessionAgent):
 
     def _attach_tool_call_to_latest_assistant(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         *,
         message_id: str,
         msg: dict[str, Any],
         timestamp_ms: int,
         latest_assistant_text_index: int | None,
-        tool_part: dict[str, Any],
+        tool_part: NormalizedPart,
     ) -> tuple[int, int]:
         """Attach one tool part to the latest assistant text message or create a fallback one."""
         if latest_assistant_text_index is not None:
@@ -489,11 +494,11 @@ class ClaudeCodeAgent(FileSessionAgent):
 
     def _backfill_tool_output(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         pending_tool_calls: dict[str, tuple[int, int]],
         *,
         call_id: str,
-        output_parts: list[dict[str, Any]],
+        output_parts: list[NormalizedPart],
         state_updates: dict[str, Any] | None = None,
     ) -> bool:
         """Backfill tool output and state updates into a matching tool part."""
@@ -507,7 +512,7 @@ class ClaudeCodeAgent(FileSessionAgent):
         if tool_part is None:
             return False
 
-        state = tool_part["state"]
+        state = tool_part.setdefault("state", {})
         if output_parts and "status" not in state:
             state["status"] = "completed"
 
@@ -536,7 +541,7 @@ class ClaudeCodeAgent(FileSessionAgent):
     def _convert_assistant_record(
         self,
         data: dict[str, Any],
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         pending_tool_calls: dict[str, tuple[int, int]],
         ignored_tool_call_ids: set[str],
         assistant_uuid_to_tool_calls: dict[str, list[str]],
@@ -616,7 +621,7 @@ class ClaudeCodeAgent(FileSessionAgent):
     def _convert_user_record(
         self,
         data: dict[str, Any],
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         pending_tool_calls: dict[str, tuple[int, int]],
         ignored_tool_call_ids: set[str],
         assistant_uuid_to_tool_calls: dict[str, list[str]],
@@ -691,9 +696,9 @@ class ClaudeCodeAgent(FileSessionAgent):
         assistant_state["current_index"] = None
         assistant_state["latest_text_index"] = None
 
-    def _convert_to_opencode_format(self, data: dict[str, Any]) -> dict[str, Any] | None:
+    def _convert_to_opencode_format(self, data: dict[str, Any]) -> NormalizedMessage | None:
         """Convert a single Claude record into unified message format."""
-        messages: list[dict[str, Any]] = []
+        messages: list[NormalizedMessage] = []
         assistant_state: dict[str, int | None] = {
             "current_index": None,
             "latest_text_index": None,
@@ -706,7 +711,7 @@ class ClaudeCodeAgent(FileSessionAgent):
     def _convert_claude_record(
         self,
         data: dict[str, Any],
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         pending_tool_calls: dict[str, tuple[int, int]],
         ignored_tool_call_ids: set[str],
         assistant_uuid_to_tool_calls: dict[str, list[str]],

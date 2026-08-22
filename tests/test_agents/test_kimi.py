@@ -14,6 +14,7 @@ import pytest
 from agent_dump.agents.base import Session, derive_session_facts
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT
 from agent_dump.agents.kimi import KimiAgent
+from agent_dump.agents.message_types import NormalizedSessionStats
 from agent_dump.paths import ProviderRoots
 
 
@@ -1949,17 +1950,26 @@ class TestExportDirectoryIsTheWorkingDirectory:
             metadata=metadata,
         )
 
+    @staticmethod
+    def _stats() -> NormalizedSessionStats:
+        return {
+            "total_cost": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "message_count": 0,
+        }
+
     def test_uses_the_parsed_cwd(self, tmp_path):
         session = self._session(tmp_path, cwd="/actual/repo")
 
-        payload = KimiAgent()._build_session_data(session, [], {})
+        payload = KimiAgent()._build_session_data(session, [], self._stats())
 
         assert payload["directory"] == "/actual/repo"
 
     def test_missing_cwd_is_empty_rather_than_the_source_path(self, tmp_path):
         session = self._session(tmp_path)
 
-        payload = KimiAgent()._build_session_data(session, [], {})
+        payload = KimiAgent()._build_session_data(session, [], self._stats())
 
         assert payload["directory"] == ""
         assert str(session.source_path) not in payload["directory"]
@@ -1967,7 +1977,7 @@ class TestExportDirectoryIsTheWorkingDirectory:
     def test_source_path_never_leaks_when_it_differs_from_cwd(self, tmp_path):
         session = self._session(tmp_path, cwd="/work/project")
 
-        payload = KimiAgent()._build_session_data(session, [], {})
+        payload = KimiAgent()._build_session_data(session, [], self._stats())
         serialized = json.dumps(payload, ensure_ascii=False)
 
         assert payload["directory"] == "/work/project"
@@ -1977,6 +1987,6 @@ class TestExportDirectoryIsTheWorkingDirectory:
         """derive_session_facts 从 cwd/directory 推 Working Directory，两边必须一致。"""
         session = self._session(tmp_path, cwd="/work/project")
 
-        payload = KimiAgent()._build_session_data(session, [], {})
+        payload = KimiAgent()._build_session_data(session, [], self._stats())
 
         assert payload["directory"] == str(derive_session_facts(session).working_directory)

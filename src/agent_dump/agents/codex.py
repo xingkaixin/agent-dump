@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import re
 from threading import Lock
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex_enrichment import CodexMessageEnrichmentMixin
@@ -32,7 +32,12 @@ from agent_dump.agents.message_assembly import (
     message_has_part_type,
     try_append_to_assistant_group,
 )
-from agent_dump.agents.message_types import NormalizedSessionData
+from agent_dump.agents.message_types import (
+    NormalizedMessage,
+    NormalizedPart,
+    NormalizedSessionData,
+    NormalizedSessionStats,
+)
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
@@ -54,7 +59,7 @@ PLAN_APPROVAL_PREFIX = "PLEASE IMPLEMENT THIS PLAN"
 class _CodexAssemblyState:
     """Mutable state for one pass over a Codex response stream."""
 
-    messages: list[dict[str, Any]] = field(default_factory=list)
+    messages: list[NormalizedMessage] = field(default_factory=list)
     pending_tool_calls: dict[str, tuple[int, int]] = field(default_factory=dict)
     subagent_call_map: dict[str, dict[str, str]] = field(default_factory=dict)
     subagent_nicknames: dict[str, str] = field(default_factory=dict)
@@ -272,7 +277,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
         return None
 
-    def _empty_stats(self) -> dict[str, int]:
+    def _empty_stats(self) -> NormalizedSessionStats:
         return {
             "total_cost": 0,
             "total_input_tokens": 0,
@@ -280,7 +285,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             "message_count": 0,
         }
 
-    def _accumulate_token_stats(self, stats: dict[str, int], data: dict[str, Any]) -> None:
+    def _accumulate_token_stats(self, stats: NormalizedSessionStats, data: dict[str, Any]) -> None:
         """Update stats from one raw record when token usage is present."""
         # 曾用 `"token_count" not in str(data)` 做前置过滤，但那会把每条记录（含数百 KB
         # 的工具输出）先 repr 成字符串再丢掉，比产生它的 json.loads 还贵。下面的结构化
@@ -344,7 +349,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             "stats": stats,
             "messages": state.messages,
         }
-        return cast(dict[str, Any], session_data)
+        return dict(session_data)
 
     def _json_export_payload(self, session: Session) -> dict[str, Any]:
         """Apply Codex's JSON-export-only message transforms."""
@@ -422,7 +427,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         except json.JSONDecodeError:
             return None
 
-    def _build_plan_part(self, plan_text: str, timestamp_ms: int) -> dict[str, Any]:
+    def _build_plan_part(self, plan_text: str, timestamp_ms: int) -> NormalizedPart:
         """Build one plan part."""
         return {
             "type": "plan",
@@ -439,7 +444,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         call_id: str,
         arguments: Any,
         timestamp_ms: int,
-    ) -> dict[str, Any]:
+    ) -> NormalizedPart:
         """Build one unified tool part."""
         return build_tool_part(
             tool_name=tool_name,
@@ -449,7 +454,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             timestamp_ms=timestamp_ms,
         )
 
-    def _build_function_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
+    def _build_function_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> NormalizedPart:
         """Build one tool part from a function_call payload."""
         raw_tool_name = str(payload.get("name", ""))
         tool_name = self._normalize_tool_name(raw_tool_name)
@@ -461,7 +466,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             timestamp_ms=timestamp_ms,
         )
 
-    def _build_custom_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> dict[str, Any]:
+    def _build_custom_tool_part(self, payload: dict[str, Any], timestamp_ms: int) -> NormalizedPart:
         """Build one tool part from a custom_tool_call payload."""
         raw_tool_name = str(payload.get("name", ""))
         tool_name = self._normalize_custom_tool_name(raw_tool_name)
@@ -479,7 +484,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             return parse_apply_patch_input(str(raw_input or ""))
         return raw_input
 
-    def _normalize_output_parts(self, output: Any, timestamp_ms: int) -> list[dict[str, Any]]:
+    def _normalize_output_parts(self, output: Any, timestamp_ms: int) -> list[NormalizedPart]:
         """Normalize tool output into text parts."""
         if output is None:
             return []
@@ -489,7 +494,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             return [build_text_part(json.dumps(output, ensure_ascii=False, indent=2), timestamp_ms)]
         return [build_text_part(str(output), timestamp_ms)]
 
-    def _normalize_custom_tool_output(self, output: Any, timestamp_ms: int) -> list[dict[str, Any]]:
+    def _normalize_custom_tool_output(self, output: Any, timestamp_ms: int) -> list[NormalizedPart]:
         """Normalize custom tool output and prefer the user-facing output field."""
         parsed_output = self._try_parse_json_string(output)
         if isinstance(parsed_output, dict) and "output" in parsed_output:
@@ -505,12 +510,12 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         plan_text = match.group(1).strip()
         return plan_text or None
 
-    def _extract_message_content_parts(self, role: str, content: Any, timestamp_ms: int) -> list[dict[str, Any]]:
+    def _extract_message_content_parts(self, role: str, content: Any, timestamp_ms: int) -> list[NormalizedPart]:
         """Extract text parts from a response_item message payload."""
         if not isinstance(content, list):
             return []
 
-        parts: list[dict[str, Any]] = []
+        parts: list[NormalizedPart] = []
         is_assistant = role == "assistant"
         supported_types = {"output_text"} if is_assistant else {"input_text"}
 
@@ -530,13 +535,13 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
         return parts
 
-    def _extract_reasoning_parts(self, payload: dict[str, Any], timestamp_ms: int) -> list[dict[str, Any]]:
+    def _extract_reasoning_parts(self, payload: dict[str, Any], timestamp_ms: int) -> list[NormalizedPart]:
         """Extract reasoning summary text parts."""
         summary = payload.get("summary", [])
         if not isinstance(summary, list):
             return []
 
-        parts: list[dict[str, Any]] = []
+        parts: list[NormalizedPart] = []
         for item in summary:
             if not isinstance(item, dict):
                 continue
@@ -547,11 +552,11 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _append_assistant_text_message(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         *,
         message_id: str,
         timestamp_ms: int,
-        parts: list[dict[str, Any]],
+        parts: list[NormalizedPart],
     ) -> int | None:
         """Append one assistant text message, deduplicating identical adjacent records."""
         if not parts:
@@ -578,11 +583,11 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _append_assistant_reasoning(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         *,
         message_id: str,
         timestamp_ms: int,
-        parts: list[dict[str, Any]],
+        parts: list[NormalizedPart],
         current_assistant_index: int | None,
     ) -> int | None:
         """Append reasoning to the active assistant group or create a new one."""
@@ -611,11 +616,11 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _append_assistant_text(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         *,
         message_id: str,
         timestamp_ms: int,
-        parts: list[dict[str, Any]],
+        parts: list[NormalizedPart],
         current_assistant_index: int | None,
     ) -> int | None:
         """Append text to the active assistant group or create a new one."""
@@ -641,7 +646,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _finalize_pending_plan(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         pending_plan_location: tuple[int, int] | None,
         *,
         approval_status: str = "fail",
@@ -656,11 +661,11 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         plan_part["approval_status"] = approval_status
         plan_part["output"] = output
 
-    def _message_contains_plan_part(self, message: dict[str, Any]) -> bool:
+    def _message_contains_plan_part(self, message: NormalizedMessage) -> bool:
         """Whether one message contains a plan part."""
         return message_has_part_type(message, "plan")
 
-    def _extract_visible_user_text(self, parts: list[dict[str, Any]]) -> str | None:
+    def _extract_visible_user_text(self, parts: list[NormalizedPart]) -> str | None:
         """Extract visible text from user parts."""
         text_parts: list[str] = []
         for part in parts:
@@ -675,7 +680,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
         return "\n\n".join(text_parts)
 
-    def _is_plan_approval_user_message(self, parts: list[dict[str, Any]]) -> tuple[bool, str | None]:
+    def _is_plan_approval_user_message(self, parts: list[NormalizedPart]) -> tuple[bool, str | None]:
         """Whether one user message should be consumed as plan approval input."""
         user_text = self._extract_visible_user_text(parts)
         if user_text is None:
@@ -688,8 +693,8 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _attach_tool_part_to_latest_assistant(
         self,
-        messages: list[dict[str, Any]],
-        tool_part: dict[str, Any],
+        messages: list[NormalizedMessage],
+        tool_part: NormalizedPart,
         timestamp_ms: int,
         latest_assistant_text_index: int | None,
     ) -> tuple[int, int]:
@@ -711,7 +716,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _attach_tool_call_to_latest_assistant(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         payload: dict[str, Any],
         timestamp_ms: int,
         latest_assistant_text_index: int | None,
@@ -727,7 +732,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _attach_custom_tool_call_to_latest_assistant(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         payload: dict[str, Any],
         timestamp_ms: int,
         latest_assistant_text_index: int | None,
@@ -743,11 +748,11 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
 
     def _backfill_tool_output(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[NormalizedMessage],
         pending_tool_calls: dict[str, tuple[int, int]],
         *,
         call_id: str,
-        output_parts: list[dict[str, Any]],
+        output_parts: list[NormalizedPart],
         raw_output: Any,
         subagent_call_map: dict[str, dict[str, str]],
         subagent_nicknames: dict[str, str],
@@ -881,7 +886,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         *,
         message_id: str,
         timestamp_ms: int,
-        parts: list[dict[str, Any]],
+        parts: list[NormalizedPart],
     ) -> None:
         if state.pending_plan_location is not None:
             self._finalize_pending_plan(state.messages, state.pending_plan_location)

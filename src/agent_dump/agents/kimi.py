@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 from threading import Lock
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
@@ -24,7 +24,12 @@ from agent_dump.agents.message_assembly import (
     build_text_part,
     build_tool_part,
 )
-from agent_dump.agents.message_types import NormalizedSessionData
+from agent_dump.agents.message_types import (
+    NormalizedMessage,
+    NormalizedPart,
+    NormalizedSessionData,
+    NormalizedSessionStats,
+)
 from agent_dump.agents.title_fallback import basename_title, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime, safe_int
 from agent_dump.diagnostics import source_missing
@@ -228,8 +233,8 @@ class KimiAgent(FileSessionAgent):
     def _build_session_data(
         self,
         session: Session,
-        messages: list[dict],
-        stats: dict[str, int | float],
+        messages: list[NormalizedMessage],
+        stats: NormalizedSessionStats,
     ) -> NormalizedSessionData:
         """Build unified session data payload."""
         return {
@@ -296,9 +301,9 @@ class KimiAgent(FileSessionAgent):
 
         return total_tokens
 
-    def _extract_kimi_stats_from_wire(self, session_dir: Path) -> dict[str, int | float]:
+    def _extract_kimi_stats_from_wire(self, session_dir: Path) -> NormalizedSessionStats:
         """Extract best-effort usage stats from wire.jsonl."""
-        stats: dict[str, int | float] = {
+        stats: NormalizedSessionStats = {
             "total_cost": 0,
             "total_input_tokens": 0,
             "total_output_tokens": 0,
@@ -329,7 +334,7 @@ class KimiAgent(FileSessionAgent):
 
         return stats
 
-    def _convert_context_content_part(self, item: dict[str, Any]) -> dict | None:
+    def _convert_context_content_part(self, item: dict[str, Any]) -> NormalizedPart | None:
         """Convert one assistant content part from context.jsonl."""
         part_type = item.get("type")
         if part_type == "think":
@@ -355,13 +360,13 @@ class KimiAgent(FileSessionAgent):
                 return raw
         return raw
 
-    def _normalize_tool_output_parts(self, content: Any) -> list[dict]:
+    def _normalize_tool_output_parts(self, content: Any) -> list[NormalizedPart]:
         """Normalize tool output content to text parts."""
         if isinstance(content, str):
             return [build_text_part(content)] if content.strip() else []
 
         if isinstance(content, list):
-            parts: list[dict] = []
+            parts: list[NormalizedPart] = []
             for item in content:
                 if isinstance(item, dict) and item.get("type") == "text":
                     text = str(item.get("text", ""))
@@ -377,7 +382,7 @@ class KimiAgent(FileSessionAgent):
         text = str(content)
         return [build_text_part(text)] if text.strip() else []
 
-    def _normalize_wire_tool_output_parts(self, return_value: Any) -> list[dict]:
+    def _normalize_wire_tool_output_parts(self, return_value: Any) -> list[NormalizedPart]:
         """Normalize wire tool output content to text parts."""
         if return_value is None:
             return []
@@ -388,7 +393,7 @@ class KimiAgent(FileSessionAgent):
         text = str(return_value)
         return [build_text_part(text)] if text.strip() else []
 
-    def _convert_context_tool_call(self, tool_call: dict[str, Any]) -> dict | None:
+    def _convert_context_tool_call(self, tool_call: dict[str, Any]) -> NormalizedPart | None:
         """Convert one assistant tool call from context.jsonl."""
         if tool_call.get("type") != "function":
             return None
@@ -413,7 +418,7 @@ class KimiAgent(FileSessionAgent):
             timestamp_ms=0,
         )
 
-    def _convert_context_user_message(self, record: dict[str, Any], seq: int) -> dict | None:
+    def _convert_context_user_message(self, record: dict[str, Any], seq: int) -> NormalizedMessage | None:
         """Convert one user record from context.jsonl."""
         content = record.get("content", "")
         text = str(content)
@@ -431,9 +436,9 @@ class KimiAgent(FileSessionAgent):
         record: dict[str, Any],
         seq: int,
         ignored_tool_call_ids: set[str],
-    ) -> tuple[dict | None, dict[str, int]]:
+    ) -> tuple[NormalizedMessage | None, dict[str, int]]:
         """Build one assistant message and record tool part indexes."""
-        parts: list[dict] = []
+        parts: list[NormalizedPart] = []
         tool_indexes: dict[str, int] = {}
 
         content = record.get("content", [])
@@ -458,7 +463,7 @@ class KimiAgent(FileSessionAgent):
                     continue
                 tool_part = self._convert_context_tool_call(tool_call)
                 if tool_part:
-                    tool_indexes[tool_part["callID"]] = len(parts)
+                    tool_indexes[str(tool_part.get("callID", ""))] = len(parts)
                     parts.append(tool_part)
 
         if not parts:
@@ -477,7 +482,7 @@ class KimiAgent(FileSessionAgent):
         self,
         record: dict[str, Any],
         seq: int,
-        messages: list[dict],
+        messages: list[NormalizedMessage],
         pending_tool_calls: dict[str, tuple[int, int]],
         ignored_tool_call_ids: set[str],
     ) -> None:
@@ -525,8 +530,8 @@ class KimiAgent(FileSessionAgent):
             if fallback_message:
                 messages.append(fallback_message)
 
-    def _read_context_messages(self, context_path: Path, *, warn_on_invalid: bool) -> list[dict]:
-        messages: list[dict] = []
+    def _read_context_messages(self, context_path: Path, *, warn_on_invalid: bool) -> list[NormalizedMessage]:
+        messages: list[NormalizedMessage] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}
         ignored_tool_call_ids: set[str] = set()
 
@@ -572,7 +577,7 @@ class KimiAgent(FileSessionAgent):
         stats["message_count"] = len(messages)
         return self._build_session_data(session, messages, stats)
 
-    def _create_wire_assistant_message(self, message_id: str) -> dict:
+    def _create_wire_assistant_message(self, message_id: str) -> NormalizedMessage:
         """Create one assistant message for wire state machine."""
         return build_message(
             message_id=message_id,
@@ -583,7 +588,7 @@ class KimiAgent(FileSessionAgent):
 
     def _get_or_create_wire_assistant(
         self,
-        messages: list[dict],
+        messages: list[NormalizedMessage],
         current_assistant_index: int | None,
         message_id: str,
     ) -> int:
@@ -593,7 +598,9 @@ class KimiAgent(FileSessionAgent):
         messages.append(self._create_wire_assistant_message(message_id))
         return len(messages) - 1
 
-    def _append_wire_content_part(self, assistant_message: dict, payload: dict[str, Any], timestamp_ms: int) -> None:
+    def _append_wire_content_part(
+        self, assistant_message: NormalizedMessage, payload: dict[str, Any], timestamp_ms: int
+    ) -> None:
         """Append one wire content part to assistant message."""
         part_type = payload.get("type")
         if part_type == "think":
@@ -607,7 +614,7 @@ class KimiAgent(FileSessionAgent):
 
     def _create_wire_tool_part(
         self, payload: dict[str, Any], timestamp_ms: int
-    ) -> tuple[dict | None, str | None, str | None]:
+    ) -> tuple[NormalizedPart | None, str | None, str | None]:
         """Create one wire tool part and optional raw arguments buffer."""
         call_id = str(payload.get("id", "")).strip()
         function = payload.get("function", {})
@@ -639,7 +646,7 @@ class KimiAgent(FileSessionAgent):
         arguments_part: str,
         open_tool_call_id: str | None,
         open_tool_argument_buffer: dict[str, str],
-        messages: list[dict],
+        messages: list[NormalizedMessage],
         pending_tool_calls: dict[str, tuple[int, int]],
     ) -> None:
         """Append ToolCallPart fragments to the active tool call."""
@@ -655,7 +662,7 @@ class KimiAgent(FileSessionAgent):
             return
 
         message_index, part_index = pending_tool_calls[open_tool_call_id]
-        messages[message_index]["parts"][part_index]["state"]["arguments"] = parsed_arguments
+        messages[message_index]["parts"][part_index].setdefault("state", {})["arguments"] = parsed_arguments
         open_tool_argument_buffer.pop(open_tool_call_id, None)
 
     def _get_session_data_from_wire(self, session: Session) -> NormalizedSessionData:
@@ -672,7 +679,7 @@ class KimiAgent(FileSessionAgent):
                 ),
             )
 
-        messages: list[dict] = []
+        messages: list[NormalizedMessage] = []
         pending_tool_calls: dict[str, tuple[int, int]] = {}
         open_tool_argument_buffer: dict[str, str] = {}
         ignored_tool_call_ids: set[str] = set()
@@ -797,5 +804,5 @@ class KimiAgent(FileSessionAgent):
         """Get session data as a dictionary"""
         context_path = session.source_path / "context.jsonl"
         if context_path.exists():
-            return cast(dict[str, Any], self._get_session_data_from_context(session))
-        return cast(dict[str, Any], self._get_session_data_from_wire(session))
+            return dict(self._get_session_data_from_context(session))
+        return dict(self._get_session_data_from_wire(session))
