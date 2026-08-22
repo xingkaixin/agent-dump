@@ -4,13 +4,20 @@ from collections.abc import Iterable, Iterator
 from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import JsonlObjectScan, read_jsonl_scan_metadata, skipped_records_diagnostic
-from agent_dump.agents.message_assembly import NormalizedMessageExtra, build_message, build_text_part, build_tool_part
+from agent_dump.agents.message_assembly import (
+    NormalizedMessageExtra,
+    build_image_part,
+    build_message,
+    build_text_part,
+    build_tool_part,
+)
 from agent_dump.agents.message_types import (
+    MessageRole,
     NormalizedMessage,
     NormalizedPart,
     NormalizedSessionData,
@@ -321,6 +328,7 @@ class PiAgent(FileSessionAgent):
     ) -> NormalizedMessage | None:
         role = str(message.get("role", "")).strip()
         timestamp_ms = self._parse_timestamp_ms(message.get("timestamp"), record.get("timestamp")) or entry_timestamp_ms
+        parts: list[NormalizedPart]
 
         if role == "bashExecution":
             command = str(message.get("command", "")).strip()
@@ -377,7 +385,7 @@ class PiAgent(FileSessionAgent):
             normalized_role = "custom"
         else:
             parts = self._normalize_content_parts(message.get("content"), timestamp_ms)
-            normalized_role = role or "unknown"
+            normalized_role = cast(MessageRole, role or "unknown")
 
         if not parts:
             return None
@@ -435,12 +443,7 @@ class PiAgent(FileSessionAgent):
             elif part_type == "image":
                 mime_type = str(item.get("mimeType", "")).strip()
                 parts.append(
-                    {
-                        "type": "image",
-                        "mime_type": mime_type or None,
-                        "data": item.get("data"),
-                        "time_created": timestamp_ms,
-                    }
+                    build_image_part(mime_type=mime_type or None, data=item.get("data"), timestamp_ms=timestamp_ms)
                 )
 
         return parts

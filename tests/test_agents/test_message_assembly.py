@@ -4,7 +4,10 @@ from agent_dump.agents.jsonl_scan import parse_iso_timestamp_ms
 from agent_dump.agents.message_assembly import (
     backfill_tool_state,
     build_fallback_tool_message,
+    build_image_part,
     build_message,
+    build_plan_part,
+    build_step_part,
     build_text_part,
     build_tool_part,
     try_append_to_assistant_group,
@@ -61,6 +64,35 @@ def test_build_tool_part_preserves_provider_state():
         "title": "read",
         "state": state,
         "time_created": 20,
+    }
+
+
+def test_specialized_part_builders_preserve_normalized_shapes():
+    assert build_plan_part(text="ship it", output=None, approval_status="success", timestamp_ms=10) == {
+        "type": "plan",
+        "input": "ship it",
+        "output": None,
+        "approval_status": "success",
+        "time_created": 10,
+    }
+    assert build_image_part(mime_type="image/png", data="encoded", timestamp_ms=20) == {
+        "type": "image",
+        "mime_type": "image/png",
+        "data": "encoded",
+        "time_created": 20,
+    }
+    assert build_step_part(
+        part_type="step-start",
+        timestamp_ms=30,
+        reason="start",
+        tokens=None,
+        cost=0,
+    ) == {
+        "type": "step-start",
+        "time_created": 30,
+        "reason": "start",
+        "tokens": None,
+        "cost": 0,
     }
 
 
@@ -125,6 +157,20 @@ def test_backfill_tool_state_merges_output_and_state_updates():
     )
 
 
+def test_backfill_tool_state_rejects_non_tool_location():
+    messages = [build_message(message_id="message-1", role="assistant", parts=[build_text_part("text")])]
+
+    assert (
+        backfill_tool_state(
+            messages,
+            {"call-1": (0, 0)},
+            call_id="call-1",
+            output_parts=[build_text_part("ignored")],
+        )
+        is None
+    )
+
+
 class TestTryAppendToAssistantGroup:
     """AD-139：codex 与 claudecode 之前各自维护一份这段判断。"""
 
@@ -134,10 +180,9 @@ class TestTryAppendToAssistantGroup:
 
     @staticmethod
     def _part(part_type: str, text: str | None = None) -> NormalizedPart:
-        part: NormalizedPart = {"type": part_type}
-        if text is not None:
-            part["text"] = text
-        return part
+        if part_type in {"text", "reasoning"}:
+            return build_text_part(text or "", part_type=part_type)
+        return build_tool_part(tool_name="test", call_id="call", title="test", state={}, timestamp_ms=0)
 
     def test_no_active_group_returns_none(self):
         assert (

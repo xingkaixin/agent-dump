@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from agent_dump.agents.message_assembly import NormalizedMessageExtra, build_message, build_text_part
-from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart
+from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart, ToolPart
 
 SKILL_NAME_PATTERN = re.compile(r"<name>\s*(.*?)\s*</name>", re.DOTALL)
 SUBAGENT_NOTIFICATION_PATTERN = re.compile(r"<subagent_notification>\s*(.*?)\s*</subagent_notification>", re.DOTALL)
@@ -113,7 +113,7 @@ class CodexMessageEnrichmentMixin(ABC):
     def _record_subagent_output(
         self,
         *,
-        tool_part: NormalizedPart,
+        tool_part: ToolPart,
         output_parts: list[NormalizedPart],
         raw_output: Any,
         call_id: str,

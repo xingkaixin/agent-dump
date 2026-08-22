@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
@@ -29,6 +29,7 @@ from agent_dump.agents.message_types import (
     NormalizedPart,
     NormalizedSessionData,
     NormalizedSessionStats,
+    ToolPart,
 )
 from agent_dump.agents.title_fallback import basename_title, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime, safe_int
@@ -662,7 +663,11 @@ class KimiAgent(FileSessionAgent):
             return
 
         message_index, part_index = pending_tool_calls[open_tool_call_id]
-        messages[message_index]["parts"][part_index].setdefault("state", {})["arguments"] = parsed_arguments
+        tool_part = messages[message_index]["parts"][part_index]
+        if tool_part["type"] != "tool":
+            return
+        tool_part = cast(ToolPart, tool_part)
+        tool_part["state"]["arguments"] = parsed_arguments
         open_tool_argument_buffer.pop(open_tool_call_id, None)
 
     def _get_session_data_from_wire(self, session: Session) -> NormalizedSessionData:

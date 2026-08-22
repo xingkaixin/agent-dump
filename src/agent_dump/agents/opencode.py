@@ -6,10 +6,15 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
-from typing import Any
+from typing import Any, cast
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart, NormalizedSessionData
+from agent_dump.agents.message_assembly import build_step_part, build_text_part, build_tool_part
+from agent_dump.agents.message_types import (
+    NormalizedMessage,
+    NormalizedPart,
+    NormalizedSessionData,
+)
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
@@ -278,27 +283,37 @@ class OpenCodeAgent(BaseAgent):
                     self._report_diagnostic(Keys.WARN_PART_DATA_PARSE_FAILED, part_id=part_row["id"])
                     continue
                 raw_part_type = part_data.get("type")
-                part: NormalizedPart = {
-                    "type": raw_part_type if isinstance(raw_part_type, str) else "unknown",
-                    "time_created": safe_int(part_row["time_created"]),
-                }
-
-                if part["type"] in ("text", "reasoning"):
+                part_type = raw_part_type if isinstance(raw_part_type, str) else "unknown"
+                timestamp_ms = safe_int(part_row["time_created"])
+                if part_type in ("text", "reasoning"):
                     text = part_data.get("text")
-                    part["text"] = text if isinstance(text, str) else ""
-                elif part["type"] == "tool":
+                    part = build_text_part(
+                        text if isinstance(text, str) else "",
+                        timestamp_ms,
+                        part_type=part_type,
+                    )
+                elif part_type == "tool":
                     tool = part_data.get("tool")
                     call_id = part_data.get("callID")
                     title = part_data.get("title")
                     state = part_data.get("state")
-                    part["tool"] = tool if isinstance(tool, str) else ""
-                    part["callID"] = call_id if isinstance(call_id, str) else ""
-                    part["title"] = title if isinstance(title, str) else ""
-                    part["state"] = state if isinstance(state, dict) else {}
-                elif part["type"] in ("step-start", "step-finish"):
-                    part["reason"] = part_data.get("reason")
-                    part["tokens"] = part_data.get("tokens")
-                    part["cost"] = part_data.get("cost")
+                    part = build_tool_part(
+                        tool_name=tool if isinstance(tool, str) else "",
+                        call_id=call_id if isinstance(call_id, str) else "",
+                        title=title if isinstance(title, str) else "",
+                        state=state if isinstance(state, dict) else {},
+                        timestamp_ms=timestamp_ms,
+                    )
+                elif part_type in ("step-start", "step-finish"):
+                    part = build_step_part(
+                        part_type=part_type,
+                        timestamp_ms=timestamp_ms,
+                        reason=part_data.get("reason"),
+                        tokens=part_data.get("tokens"),
+                        cost=part_data.get("cost"),
+                    )
+                else:
+                    part = cast(NormalizedPart, {"type": part_type, "time_created": timestamp_ms})
 
                 message["parts"].append(part)
 

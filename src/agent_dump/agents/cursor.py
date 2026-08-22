@@ -15,6 +15,7 @@ from agent_dump.agents.cursor_storage import (
     key_prefix_bounds,
     parse_cursor_json,
 )
+from agent_dump.agents.message_assembly import build_plan_part, build_tool_part
 from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart, NormalizedSessionData
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import unsupported_capability
@@ -332,13 +333,12 @@ class CursorAgent(BaseAgent):
                 if selected_option in {"accept", "accepted", "approve", "approved"}:
                     approval_status = "success"
 
-        return {
-            "type": "plan",
-            "input": plan_text.strip(),
-            "output": output,
-            "approval_status": approval_status,
-            "time_created": timestamp_ms,
-        }
+        return build_plan_part(
+            text=plan_text.strip(),
+            output=output,
+            approval_status=approval_status,
+            timestamp_ms=timestamp_ms,
+        )
 
     def _extract_tool_output_parts(self, output: Any, timestamp_ms: int) -> list[NormalizedPart]:
         if isinstance(output, list):
@@ -525,14 +525,13 @@ class CursorAgent(BaseAgent):
                 state["output"] = None
 
         raw_call_id = tool_data.get("toolCallId") or tool_data.get("callId")
-        tool_part: NormalizedPart = {
-            "type": "tool",
-            "tool": normalized_name,
-            "callID": raw_call_id if isinstance(raw_call_id, str) else "",
-            "title": name,
-            "state": state,
-            "time_created": timestamp_ms,
-        }
+        tool_part = build_tool_part(
+            tool_name=normalized_name,
+            call_id=raw_call_id if isinstance(raw_call_id, str) else "",
+            title=name,
+            state=state,
+            timestamp_ms=timestamp_ms,
+        )
         if normalized_name == "subagent" and subagent_id:
             tool_part["subagent_id"] = subagent_id
             state["subagent_id"] = subagent_id
