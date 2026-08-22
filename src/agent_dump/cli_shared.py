@@ -1,10 +1,9 @@
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 import sys
 import threading
-from typing import Any, cast
 
 from agent_dump.agent_registry import get_supported_agent_locations
 from agent_dump.agents.base import BaseAgent, Session
@@ -16,7 +15,6 @@ from agent_dump.diagnostics import (
 )
 from agent_dump.exporting import ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
-from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
@@ -283,17 +281,13 @@ def warn_list_ignored_options(output_specified: bool, format_specified: bool) ->
         print(i18n.t(Keys.LIST_IGNORE_OUTPUT))
 
 
-def render_agent_search_roots(agents: list[BaseAgent] | list[Any]) -> tuple[str, ...]:
+def render_agent_search_roots(agents: Sequence[BaseAgent]) -> tuple[str, ...]:
     roots: list[str] = []
     for agent in agents:
-        get_search_roots = getattr(agent, "get_search_roots", None)
-        display_name = getattr(agent, "display_name", getattr(agent, "name", "agent"))
-        if not callable(get_search_roots):
-            continue
-        provider_roots = [root.render() for root in cast(tuple[SearchRoot, ...], get_search_roots())]
+        provider_roots = [root.render() for root in agent.get_search_roots()]
         if not provider_roots:
             continue
-        roots.extend(f"{display_name}: {entry}" for entry in provider_roots)
+        roots.extend(f"{agent.display_name}: {entry}" for entry in provider_roots)
     return tuple(roots)
 
 
@@ -302,8 +296,7 @@ def print_diagnostic(error: DiagnosticError) -> None:
 
 
 def build_no_agents_found_diagnostic(scanner: AgentScanner) -> DiagnosticError:
-    agents = getattr(scanner, "agents", [])
-    searched_roots = render_agent_search_roots(agents)
+    searched_roots = render_agent_search_roots(scanner.agents)
     if not searched_roots:
         searched_roots = tuple(location.strip() for location in get_supported_agent_locations())
     return root_not_found(

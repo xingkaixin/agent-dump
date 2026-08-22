@@ -10,19 +10,23 @@ from unittest import mock
 from locale_helpers import ALL_LANGUAGES, Keys, expect
 import pytest
 
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
+    build_no_agents_found_diagnostic,
     collect_query_matches,
     collect_search_matches,
     display_search_results,
     display_sessions_list,
     export_sessions_for_formats,
     group_sessions_by_time,
+    render_agent_search_roots,
     render_query_summary,
     show_loading,
 )
+from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import QuerySpec, SearchSessionMatch
 from agent_dump.rendering import format_session_metadata_summary, render_session_head, render_session_text
+from agent_dump.scanner import AgentScanner
 from agent_dump.text_safety import has_unsafe_body_characters
 from agent_dump.uri_support import find_session_by_id, parse_uri
 
@@ -61,6 +65,36 @@ def make_query_spec(
         roles=frozenset(roles) if roles is not None else None,
         limit=limit,
     )
+
+
+class SearchRootAgent(BaseAgent):
+    def __init__(self, roots: tuple[SearchRoot, ...]) -> None:
+        super().__init__("typed", "Typed Agent")
+        self._roots = roots
+
+    def is_available(self) -> bool:
+        return False
+
+    def get_sessions(self, days: int | None = 7) -> list[Session]:
+        del days
+        return []
+
+    def get_session_data(self, session: Session) -> dict[str, Any]:
+        del session
+        return {}
+
+    def get_search_roots(self) -> tuple[SearchRoot, ...]:
+        return self._roots
+
+
+def test_diagnostic_search_roots_use_the_base_agent_contract(tmp_path: Path) -> None:
+    agent = SearchRootAgent((SearchRoot("typed root", tmp_path / "sessions"),))
+
+    rendered = render_agent_search_roots((agent,))
+    diagnostic = build_no_agents_found_diagnostic(AgentScanner((agent,)))
+
+    assert rendered == (f"Typed Agent: typed root: {tmp_path / 'sessions'}",)
+    assert diagnostic.searched_roots == rendered
 
 
 class TestParseUri:
