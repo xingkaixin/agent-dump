@@ -10,10 +10,10 @@ import os
 from pathlib import Path
 import sqlite3
 import sys
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.message_types import NormalizedSessionData
+from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart, NormalizedSessionData
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing, unsupported_capability
 from agent_dump.i18n import Keys, i18n
@@ -577,7 +577,7 @@ class CursorAgent(BaseAgent):
             return subagent_type.strip()
         return None
 
-    def _build_plan_part(self, tool_data: dict[str, Any], timestamp_ms: int) -> dict[str, Any] | None:
+    def _build_plan_part(self, tool_data: dict[str, Any], timestamp_ms: int) -> NormalizedPart | None:
         normalized_input = self._normalize_tool_input(tool_data)
         if not isinstance(normalized_input, dict):
             return None
@@ -609,9 +609,9 @@ class CursorAgent(BaseAgent):
             "time_created": timestamp_ms,
         }
 
-    def _extract_tool_output_parts(self, output: Any, timestamp_ms: int) -> list[dict[str, Any]]:
+    def _extract_tool_output_parts(self, output: Any, timestamp_ms: int) -> list[NormalizedPart]:
         if isinstance(output, list):
-            parts: list[dict[str, Any]] = []
+            parts: list[NormalizedPart] = []
             for item in output:
                 if isinstance(item, dict) and item.get("type") == "text":
                     text = item.get("text")
@@ -655,8 +655,8 @@ class CursorAgent(BaseAgent):
         composer_id: str,
         *,
         expanding: frozenset[str],
-        subagent_memo: dict[str, dict[str, Any] | None],
-    ) -> dict[str, Any] | None:
+        subagent_memo: dict[str, NormalizedMessage | None],
+    ) -> NormalizedMessage | None:
         if composer_id in expanding:
             # subagentComposerId 来自 Cursor 的存储，A 引用 B 而 B 又引用 A 会让
             # 展开无限递归；环上的引用退化成普通 tool call
@@ -673,8 +673,8 @@ class CursorAgent(BaseAgent):
         composer_id: str,
         *,
         expanding: frozenset[str],
-        subagent_memo: dict[str, dict[str, Any] | None],
-    ) -> dict[str, Any] | None:
+        subagent_memo: dict[str, NormalizedMessage | None],
+    ) -> NormalizedMessage | None:
         composer = self._load_composer_by_id(composer_id)
         if not composer:
             return None
@@ -688,7 +688,7 @@ class CursorAgent(BaseAgent):
             expanding=expanding | {composer_id},
             subagent_memo=subagent_memo,
         )
-        parts: list[dict[str, Any]] = []
+        parts: list[NormalizedPart] = []
         latest_time_created = 0
         for message in child_data.get("messages", []):
             if message.get("role") != "assistant":
@@ -715,7 +715,7 @@ class CursorAgent(BaseAgent):
         if not parts:
             return None
 
-        message: dict[str, Any] = {
+        message: NormalizedMessage = {
             "id": f"{composer_id}:subagent-output",
             "role": "assistant",
             "agent": "cursor",
@@ -756,8 +756,8 @@ class CursorAgent(BaseAgent):
         timestamp_ms: int,
         *,
         expanding: frozenset[str] = frozenset(),
-        subagent_memo: dict[str, dict[str, Any] | None] | None = None,
-    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        subagent_memo: dict[str, NormalizedMessage | None] | None = None,
+    ) -> tuple[NormalizedPart | None, NormalizedMessage | None]:
         tool_data = bubble.get("toolFormerData")
         if not isinstance(tool_data, dict):
             return None, None
@@ -781,7 +781,7 @@ class CursorAgent(BaseAgent):
 
         normalized_name = "subagent" if "agent" in name.lower() or "task" in name.lower() else name
         subagent_id: str | None = None
-        subagent_completion: dict[str, Any] | None = None
+        subagent_completion: NormalizedMessage | None = None
         if normalized_name == "subagent":
             state["prompt"] = self._extract_subagent_prompt(normalized_input)
             subagent_type = self._extract_subagent_type(normalized_input)
@@ -795,17 +795,18 @@ class CursorAgent(BaseAgent):
                     subagent_memo=subagent_memo if subagent_memo is not None else {},
                 )
                 if subagent_completion is not None and subagent_completion.get("model"):
-                    state["model"] = subagent_completion["model"]
+                    state["model"] = subagent_completion.get("model")
                 if subagent_completion is not None:
                     subagent_type = subagent_completion.get("subagent_type")
                     if isinstance(subagent_type, str) and subagent_type.strip():
                         state["subagent_type"] = subagent_type.strip()
                 state["output"] = None
 
-        tool_part = {
+        raw_call_id = tool_data.get("toolCallId") or tool_data.get("callId")
+        tool_part: NormalizedPart = {
             "type": "tool",
             "tool": normalized_name,
-            "callID": tool_data.get("toolCallId") or tool_data.get("callId") or "",
+            "callID": raw_call_id if isinstance(raw_call_id, str) else "",
             "title": name,
             "state": state,
             "time_created": timestamp_ms,
@@ -865,17 +866,14 @@ class CursorAgent(BaseAgent):
 
     def get_session_data(self, session: Session) -> dict[str, Any]:
         """Get Cursor session data as unified dictionary."""
-        return cast(
-            dict[str, Any],
-            self._build_session_data(session, expanding=frozenset(), subagent_memo={}),
-        )
+        return dict(self._build_session_data(session, expanding=frozenset(), subagent_memo={}))
 
     def _build_session_data(
         self,
         session: Session,
         *,
         expanding: frozenset[str],
-        subagent_memo: dict[str, dict[str, Any] | None],
+        subagent_memo: dict[str, NormalizedMessage | None],
     ) -> NormalizedSessionData:
         """Build session data, carrying the subagent-expansion context down the recursion.
 
@@ -895,7 +893,7 @@ class CursorAgent(BaseAgent):
 
         total_input_tokens = 0
         total_output_tokens = 0
-        messages: list[dict[str, Any]] = []
+        messages: list[NormalizedMessage] = []
         bubble_message_index: dict[str, int] = {}
         fallback_created_ms = int(session.created_at.timestamp() * 1000)
         active_model_name: str | None = None
@@ -948,7 +946,7 @@ class CursorAgent(BaseAgent):
             parent_message_id = self._extract_tool_parent_message_id(bubble) if tool_part else None
 
             if text_content:
-                message = {
+                message: NormalizedMessage = {
                     "id": bubble_id,
                     "role": role,
                     "agent": "cursor",
@@ -971,7 +969,7 @@ class CursorAgent(BaseAgent):
                     parent_idx = bubble_message_index[parent_message_id]
                     messages[parent_idx]["parts"].append(tool_part)
                 else:
-                    tool_message = {
+                    tool_message: NormalizedMessage = {
                         "id": f"{bubble_id}:tool",
                         "role": "tool",
                         "agent": "cursor",

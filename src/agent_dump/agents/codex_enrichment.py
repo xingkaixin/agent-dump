@@ -5,7 +5,8 @@ import json
 import re
 from typing import Any
 
-from agent_dump.agents.message_assembly import build_message, build_text_part
+from agent_dump.agents.message_assembly import NormalizedMessageExtra, build_message, build_text_part
+from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart
 
 SKILL_NAME_PATTERN = re.compile(r"<name>\s*(.*?)\s*</name>", re.DOTALL)
 SUBAGENT_NOTIFICATION_PATTERN = re.compile(r"<subagent_notification>\s*(.*?)\s*</subagent_notification>", re.DOTALL)
@@ -62,14 +63,14 @@ class CodexMessageEnrichmentMixin(ABC):
         timestamp_ms: int,
         notification: dict[str, Any],
         subagent_nicknames: dict[str, str],
-    ) -> dict[str, Any]:
+    ) -> NormalizedMessage:
         """Build one assistant message from a subagent notification payload."""
         agent_id = str(notification.get("agent_id", "")).strip()
         nickname = str(notification.get("nickname", "")).strip() or subagent_nicknames.get(agent_id, "")
         if nickname:
             subagent_nicknames[agent_id] = nickname
 
-        extra = {"subagent_id": agent_id}
+        extra: NormalizedMessageExtra = {"subagent_id": agent_id}
         if nickname:
             extra["nickname"] = nickname
 
@@ -87,9 +88,9 @@ class CodexMessageEnrichmentMixin(ABC):
         message_id: str,
         timestamp_ms: int,
         role: str,
-        parts: list[dict[str, Any]],
+        parts: list[NormalizedPart],
         subagent_nicknames: dict[str, str],
-    ) -> dict[str, Any] | None:
+    ) -> NormalizedMessage | None:
         """Convert a user subagent notification into an assistant message when applicable."""
         if role != "user" or len(parts) != 1:
             return None
@@ -112,8 +113,8 @@ class CodexMessageEnrichmentMixin(ABC):
     def _record_subagent_output(
         self,
         *,
-        tool_part: dict[str, Any],
-        output_parts: list[dict[str, Any]],
+        tool_part: NormalizedPart,
+        output_parts: list[NormalizedPart],
         raw_output: Any,
         call_id: str,
         subagent_call_map: dict[str, dict[str, str]],
@@ -168,7 +169,7 @@ class CodexMessageEnrichmentMixin(ABC):
         name = match.group(1).strip()
         return name or None
 
-    def _build_skill_tool_part(self, name: str, timestamp_ms: int, call_id: str) -> dict[str, Any]:
+    def _build_skill_tool_part(self, name: str, timestamp_ms: int, call_id: str) -> NormalizedPart:
         """Build one tool part for a skill payload."""
         return {
             "type": "tool",
@@ -203,18 +204,20 @@ class CodexMessageEnrichmentMixin(ABC):
         if skill_name is None:
             return None
 
-        return build_message(
-            message_id=str(message.get("id", "")),
-            role="assistant",
-            time_created=int(message.get("time_created", 0)),
-            mode="tool",
-            parts=[
-                self._build_skill_tool_part(
-                    skill_name,
-                    int(part.get("time_created", message.get("time_created", 0))),
-                    f"skill:{skill_index}",
-                )
-            ],
+        return dict(
+            build_message(
+                message_id=str(message.get("id", "")),
+                role="assistant",
+                time_created=int(message.get("time_created", 0)),
+                mode="tool",
+                parts=[
+                    self._build_skill_tool_part(
+                        skill_name,
+                        int(part.get("time_created", message.get("time_created", 0))),
+                        f"skill:{skill_index}",
+                    )
+                ],
+            )
         )
 
     def _transform_skill_messages_for_json_export(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:

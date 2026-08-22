@@ -6,10 +6,10 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sqlite3
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.message_types import NormalizedSessionData
+from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart, NormalizedSessionData
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
@@ -188,7 +188,7 @@ class OpenCodeAgent(BaseAgent):
         """Get session data as a dictionary"""
         conn = self._connect_db()
         try:
-            return cast(dict[str, Any], self._build_session_data(conn, session))
+            return dict(self._build_session_data(conn, session))
         finally:
             conn.close()
 
@@ -248,17 +248,22 @@ class OpenCodeAgent(BaseAgent):
             if not isinstance(tokens, dict):
                 tokens = {}
 
-            message = {
-                "id": msg_row["id"],
-                "role": msg_data.get("role", "unknown"),
-                "agent": msg_data.get("agent"),
-                "mode": msg_data.get("mode"),
-                "model": msg_data.get("modelID"),
-                "provider": msg_data.get("providerID"),
-                "time_created": msg_row["time_created"],
+            role = msg_data.get("role")
+            agent = msg_data.get("agent")
+            mode = msg_data.get("mode")
+            model = msg_data.get("modelID")
+            provider = msg_data.get("providerID")
+            message: NormalizedMessage = {
+                "id": str(msg_row["id"]),
+                "role": role if isinstance(role, str) else "unknown",
+                "agent": agent if isinstance(agent, str) else None,
+                "mode": mode if isinstance(mode, str) else None,
+                "model": model if isinstance(model, str) else None,
+                "provider": provider if isinstance(provider, str) else None,
+                "time_created": safe_int(msg_row["time_created"]),
                 "time_completed": message_time.get("completed") if isinstance(message_time, dict) else None,
                 "tokens": tokens,
-                "cost": msg_data.get("cost", 0),
+                "cost": safe_float(msg_data.get("cost")),
                 "parts": [],
             }
 
@@ -272,18 +277,24 @@ class OpenCodeAgent(BaseAgent):
                 if part_data is None:
                     self._report_diagnostic(Keys.WARN_PART_DATA_PARSE_FAILED, part_id=part_row["id"])
                     continue
-                part = {
-                    "type": part_data.get("type"),
-                    "time_created": part_row["time_created"],
+                raw_part_type = part_data.get("type")
+                part: NormalizedPart = {
+                    "type": raw_part_type if isinstance(raw_part_type, str) else "unknown",
+                    "time_created": safe_int(part_row["time_created"]),
                 }
 
                 if part["type"] in ("text", "reasoning"):
-                    part["text"] = part_data.get("text", "")
+                    text = part_data.get("text")
+                    part["text"] = text if isinstance(text, str) else ""
                 elif part["type"] == "tool":
-                    part["tool"] = part_data.get("tool")
-                    part["callID"] = part_data.get("callID")
-                    part["title"] = part_data.get("title", "")
-                    part["state"] = part_data.get("state", {})
+                    tool = part_data.get("tool")
+                    call_id = part_data.get("callID")
+                    title = part_data.get("title")
+                    state = part_data.get("state")
+                    part["tool"] = tool if isinstance(tool, str) else ""
+                    part["callID"] = call_id if isinstance(call_id, str) else ""
+                    part["title"] = title if isinstance(title, str) else ""
+                    part["state"] = state if isinstance(state, dict) else {}
                 elif part["type"] in ("step-start", "step-finish"):
                     part["reason"] = part_data.get("reason")
                     part["tokens"] = part_data.get("tokens")

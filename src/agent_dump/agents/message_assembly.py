@@ -1,23 +1,32 @@
 """Shared builders for the normalized session message contract."""
 
 from collections.abc import Callable, Sequence
-from typing import Any, cast
+from typing import Any, TypedDict
 
-from agent_dump.agents.message_types import NormalizedMessage
+from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart
+
+
+class NormalizedMessageExtra(TypedDict, total=False):
+    entry_id: str
+    entry_type: Any
+    nickname: str
+    parent_id: str | None
+    subagent_id: str
+    tool_call_id: str
 
 
 def build_message(
     *,
     message_id: str,
     role: str,
-    parts: list[dict[str, Any]],
+    parts: list[NormalizedPart],
     time_created: int = 0,
     agent: str | None = None,
     mode: str | None = None,
     model: str | None = None,
     provider: str | None = None,
-    extra: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+    extra: NormalizedMessageExtra | None = None,
+) -> NormalizedMessage:
     message: NormalizedMessage = {
         "id": message_id,
         "role": role,
@@ -32,11 +41,22 @@ def build_message(
         "parts": parts,
     }
     if extra:
-        cast(dict[str, Any], message).update(extra)
-    return cast(dict[str, Any], message)
+        if "entry_id" in extra:
+            message["entry_id"] = extra["entry_id"]
+        if "entry_type" in extra:
+            message["entry_type"] = extra["entry_type"]
+        if "nickname" in extra:
+            message["nickname"] = extra["nickname"]
+        if "parent_id" in extra:
+            message["parent_id"] = extra["parent_id"]
+        if "subagent_id" in extra:
+            message["subagent_id"] = extra["subagent_id"]
+        if "tool_call_id" in extra:
+            message["tool_call_id"] = extra["tool_call_id"]
+    return message
 
 
-def build_text_part(text: str, timestamp_ms: int = 0, part_type: str = "text") -> dict[str, Any]:
+def build_text_part(text: str, timestamp_ms: int = 0, part_type: str = "text") -> NormalizedPart:
     return {
         "type": part_type,
         "text": text,
@@ -51,7 +71,7 @@ def build_tool_part(
     title: str,
     state: dict[str, Any],
     timestamp_ms: int,
-) -> dict[str, Any]:
+) -> NormalizedPart:
     return {
         "type": "tool",
         "tool": tool_name,
@@ -65,14 +85,14 @@ def build_tool_part(
 def build_fallback_tool_message(
     *,
     message_id: str,
-    output_parts: list[dict[str, Any]],
+    output_parts: list[NormalizedPart],
     time_created: int = 0,
     tool_call_id: str | None = None,
-) -> dict[str, Any] | None:
+) -> NormalizedMessage | None:
     if not output_parts:
         return None
 
-    extra = {"tool_call_id": tool_call_id} if tool_call_id else None
+    extra: NormalizedMessageExtra | None = {"tool_call_id": tool_call_id} if tool_call_id else None
     return build_message(
         message_id=message_id,
         role="tool",
@@ -83,13 +103,13 @@ def build_fallback_tool_message(
 
 
 def backfill_tool_state(
-    messages: list[dict[str, Any]],
+    messages: list[NormalizedMessage],
     pending_tool_calls: dict[str, tuple[int, int]],
     *,
     call_id: str,
-    output_parts: list[dict[str, Any]],
+    output_parts: list[NormalizedPart],
     state_updates: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
+) -> NormalizedPart | None:
     if not call_id or (not output_parts and not state_updates):
         return None
 
@@ -113,12 +133,12 @@ def backfill_tool_state(
     return tool_part
 
 
-def message_has_part_type(message: dict[str, Any], part_type: str) -> bool:
+def message_has_part_type(message: NormalizedMessage, part_type: str) -> bool:
     """Whether a message already contains a given part type."""
     return any(part.get("type") == part_type for part in message.get("parts", []))
 
 
-def append_part_if_new(message: dict[str, Any], part: dict[str, Any]) -> None:
+def append_part_if_new(message: NormalizedMessage, part: NormalizedPart) -> None:
     """Append a part unless it duplicates the current tail part."""
     parts = message.get("parts", [])
     if parts and parts[-1] == part:
@@ -127,12 +147,12 @@ def append_part_if_new(message: dict[str, Any], part: dict[str, Any]) -> None:
 
 
 def try_append_to_assistant_group(
-    messages: list[dict[str, Any]],
+    messages: list[NormalizedMessage],
     *,
     current_assistant_index: int | None,
-    parts: Sequence[dict[str, Any]],
+    parts: Sequence[NormalizedPart],
     blocking_part_types: Sequence[str],
-    on_message: Callable[[dict[str, Any]], None] | None = None,
+    on_message: Callable[[NormalizedMessage], None] | None = None,
 ) -> int | None:
     """Fold parts into the active assistant group, or return None if a new one is needed.
 

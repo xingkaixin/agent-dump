@@ -9,6 +9,7 @@ from agent_dump.agents.message_assembly import (
     build_tool_part,
     try_append_to_assistant_group,
 )
+from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart
 
 
 def test_build_message_preserves_normalized_shape_and_extra():
@@ -128,24 +129,31 @@ class TestTryAppendToAssistantGroup:
     """AD-139：codex 与 claudecode 之前各自维护一份这段判断。"""
 
     @staticmethod
-    def _assistant(parts: list[dict]) -> dict:
-        return {"role": "assistant", "parts": list(parts)}
+    def _assistant(parts: list[NormalizedPart]) -> NormalizedMessage:
+        return build_message(message_id="assistant", role="assistant", parts=list(parts))
+
+    @staticmethod
+    def _part(part_type: str, text: str | None = None) -> NormalizedPart:
+        part: NormalizedPart = {"type": part_type}
+        if text is not None:
+            part["text"] = text
+        return part
 
     def test_no_active_group_returns_none(self):
         assert (
             try_append_to_assistant_group(
-                [], current_assistant_index=None, parts=({"type": "text"},), blocking_part_types=("tool",)
+                [], current_assistant_index=None, parts=(self._part("text"),), blocking_part_types=("tool",)
             )
             is None
         )
 
     def test_folds_into_an_unblocked_group(self):
-        messages = [self._assistant([{"type": "reasoning"}])]
+        messages = [self._assistant([self._part("reasoning")])]
 
         folded = try_append_to_assistant_group(
             messages,
             current_assistant_index=0,
-            parts=({"type": "text", "text": "hi"},),
+            parts=(self._part("text", "hi"),),
             blocking_part_types=("tool",),
         )
 
@@ -154,12 +162,12 @@ class TestTryAppendToAssistantGroup:
 
     @pytest.mark.parametrize("blocker", ["text", "tool"])
     def test_a_blocking_part_forces_a_new_group(self, blocker):
-        messages = [self._assistant([{"type": blocker}])]
+        messages = [self._assistant([self._part(blocker)])]
 
         folded = try_append_to_assistant_group(
             messages,
             current_assistant_index=0,
-            parts=({"type": "reasoning"},),
+            parts=(self._part("reasoning"),),
             blocking_part_types=("text", "tool"),
         )
 
@@ -167,33 +175,33 @@ class TestTryAppendToAssistantGroup:
         assert len(messages[0]["parts"]) == 1, "被阻塞时不得改动原消息"
 
     def test_identical_tail_part_is_not_duplicated(self):
-        part = {"type": "text", "text": "same"}
+        part = self._part("text", "same")
         messages = [self._assistant([part])]
 
         try_append_to_assistant_group(
-            messages, current_assistant_index=0, parts=(dict(part),), blocking_part_types=("tool",)
+            messages, current_assistant_index=0, parts=(self._part("text", "same"),), blocking_part_types=("tool",)
         )
 
         assert len(messages[0]["parts"]) == 1
 
     def test_on_message_runs_only_when_folding_succeeds(self):
-        calls: list[dict] = []
-        blocked = [self._assistant([{"type": "tool"}])]
+        calls: list[NormalizedMessage] = []
+        blocked = [self._assistant([self._part("tool")])]
 
         try_append_to_assistant_group(
             blocked,
             current_assistant_index=0,
-            parts=({"type": "text"},),
+            parts=(self._part("text"),),
             blocking_part_types=("tool",),
             on_message=calls.append,
         )
         assert calls == [], "未并入时不应执行后处理"
 
-        open_group = [self._assistant([{"type": "reasoning"}])]
+        open_group = [self._assistant([self._part("reasoning")])]
         try_append_to_assistant_group(
             open_group,
             current_assistant_index=0,
-            parts=({"type": "text"},),
+            parts=(self._part("text"),),
             blocking_part_types=("tool",),
             on_message=calls.append,
         )
@@ -205,7 +213,7 @@ class TestTryAppendToAssistantGroup:
         try_append_to_assistant_group(
             messages,
             current_assistant_index=0,
-            parts=({"type": "text", "text": "a"}, {"type": "text", "text": "b"}),
+            parts=(self._part("text", "a"), self._part("text", "b")),
             blocking_part_types=("tool",),
         )
 

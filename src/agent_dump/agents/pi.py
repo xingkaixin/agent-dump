@@ -4,13 +4,18 @@ from collections.abc import Iterable, Iterator
 from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.agents.jsonl_scan import JsonlObjectScan, read_jsonl_scan_metadata, skipped_records_diagnostic
-from agent_dump.agents.message_assembly import build_message, build_text_part, build_tool_part
-from agent_dump.agents.message_types import NormalizedSessionData
+from agent_dump.agents.message_assembly import NormalizedMessageExtra, build_message, build_text_part, build_tool_part
+from agent_dump.agents.message_types import (
+    NormalizedMessage,
+    NormalizedPart,
+    NormalizedSessionData,
+    NormalizedSessionStats,
+)
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import source_missing
@@ -182,7 +187,7 @@ class PiAgent(FileSessionAgent):
                 ),
             )
 
-        messages: list[dict[str, Any]] = []
+        messages: list[NormalizedMessage] = []
         stats = self._empty_stats()
         header: dict[str, Any] = {}
         latest_session_name: str | None = None
@@ -223,9 +228,9 @@ class PiAgent(FileSessionAgent):
             "stats": stats,
             "messages": messages,
         }
-        return cast(dict[str, Any], session_data)
+        return dict(session_data)
 
-    def _empty_stats(self) -> dict[str, int | float]:
+    def _empty_stats(self) -> NormalizedSessionStats:
         return {
             "total_cost": 0,
             "total_input_tokens": 0,
@@ -234,7 +239,7 @@ class PiAgent(FileSessionAgent):
             "message_count": 0,
         }
 
-    def _accumulate_stats(self, stats: dict[str, int | float], record: dict[str, Any]) -> None:
+    def _accumulate_stats(self, stats: NormalizedSessionStats, record: dict[str, Any]) -> None:
         if record.get("type") != "message":
             return
         message = record.get("message")
@@ -246,7 +251,7 @@ class PiAgent(FileSessionAgent):
 
         stats["total_input_tokens"] += self._int_value(usage.get("input"))
         stats["total_output_tokens"] += self._int_value(usage.get("output"))
-        stats["total_tokens"] += self._int_value(usage.get("totalTokens"))
+        stats["total_tokens"] = stats.get("total_tokens", 0) + self._int_value(usage.get("totalTokens"))
         cost = usage.get("cost")
         if isinstance(cost, dict):
             stats["total_cost"] += self._float_value(cost.get("total"))
@@ -257,7 +262,7 @@ class PiAgent(FileSessionAgent):
     def _float_value(self, value: Any) -> float:
         return safe_float(value)
 
-    def _convert_entry_to_message(self, record: dict[str, Any], seq: int) -> dict[str, Any] | None:
+    def _convert_entry_to_message(self, record: dict[str, Any], seq: int) -> NormalizedMessage | None:
         entry_type = record.get("type")
         timestamp_ms = self._parse_timestamp_ms(record.get("timestamp"))
         extra = self._entry_extra(record, entry_type)
@@ -312,8 +317,8 @@ class PiAgent(FileSessionAgent):
         record: dict[str, Any],
         seq: int,
         entry_timestamp_ms: int,
-        extra: dict[str, Any],
-    ) -> dict[str, Any] | None:
+        extra: NormalizedMessageExtra,
+    ) -> NormalizedMessage | None:
         role = str(message.get("role", "")).strip()
         timestamp_ms = self._parse_timestamp_ms(message.get("timestamp"), record.get("timestamp")) or entry_timestamp_ms
 
@@ -389,14 +394,14 @@ class PiAgent(FileSessionAgent):
             extra=extra,
         )
 
-    def _normalize_content_parts(self, content: Any, timestamp_ms: int) -> list[dict[str, Any]]:
+    def _normalize_content_parts(self, content: Any, timestamp_ms: int) -> list[NormalizedPart]:
         if isinstance(content, str):
             return [build_text_part(content, timestamp_ms)] if content.strip() else []
 
         if not isinstance(content, list):
             return []
 
-        parts: list[dict[str, Any]] = []
+        parts: list[NormalizedPart] = []
         for item in content:
             if isinstance(item, str):
                 if item.strip():
@@ -462,10 +467,10 @@ class PiAgent(FileSessionAgent):
         tool_name: str,
         call_id: str,
         arguments: Any,
-        output: list[dict[str, Any]] | None,
+        output: list[NormalizedPart] | None,
         timestamp_ms: int,
         state_extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> NormalizedPart:
         state = {
             "arguments": arguments if arguments is not None else {},
             "output": output,
@@ -484,8 +489,8 @@ class PiAgent(FileSessionAgent):
         entry_id = str(record.get("id", "")).strip()
         return entry_id or f"pi-{seq}"
 
-    def _entry_extra(self, record: dict[str, Any], entry_type: Any) -> dict[str, Any]:
-        extra: dict[str, Any] = {"entry_type": entry_type}
+    def _entry_extra(self, record: dict[str, Any], entry_type: Any) -> NormalizedMessageExtra:
+        extra: NormalizedMessageExtra = {"entry_type": entry_type}
         entry_id = str(record.get("id", "")).strip()
         parent_id = record.get("parentId")
         if entry_id:
