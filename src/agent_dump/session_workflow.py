@@ -15,7 +15,7 @@ from agent_dump.cli_shared import (
     resolve_output_base_dir,
     warn_list_ignored_options,
 )
-from agent_dump.command_plan import CommandMode, SessionOperation
+from agent_dump.command_plan import InteractiveOperation, ListOperation, SearchOperation, SessionOperation
 from agent_dump.diagnostics import root_not_found
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import QuerySpec
@@ -74,20 +74,21 @@ def _handle_session_modes(
                     ),
                 )
             )
-            return 0 if operation.mode is CommandMode.LIST else 1
+            return 1 if isinstance(operation, InteractiveOperation) else 0
 
-    if operation.is_search and query_spec is not None:
+    if isinstance(operation, SearchOperation):
+        search_spec = operation.query_spec
         warn_list_ignored_options(operation.output_specified, operation.format_specified)
         print(
             render_terminal_message(
                 Keys.SEARCH_HEADER,
                 days=operation.days,
-                query=render_query_summary(query_spec),
+                query=render_query_summary(search_spec),
             )
         )
         print("-" * 60)
         display_search_results(
-            collect_search_matches(available_agents, days=operation.days, spec=query_spec, scanner=scanner)
+            collect_search_matches(available_agents, days=operation.days, spec=search_spec, scanner=scanner)
         )
         print("\n" + "=" * 60)
         return 0
@@ -101,7 +102,7 @@ def _handle_session_modes(
             scanner=scanner,
         )
 
-    if operation.mode is CommandMode.LIST:
+    if isinstance(operation, ListOperation):
         return _handle_list_mode(
             operation,
             scanner=scanner,
@@ -121,7 +122,7 @@ def _handle_session_modes(
 
 
 def _handle_list_mode(
-    operation: SessionOperation,
+    operation: ListOperation,
     *,
     scanner: AgentScanner,
     query_spec: QuerySpec | None,
@@ -165,7 +166,7 @@ def _handle_list_mode(
 
 
 def _handle_interactive_mode(
-    operation: SessionOperation,
+    operation: InteractiveOperation,
     *,
     scanner: AgentScanner,
     query_spec: QuerySpec | None,

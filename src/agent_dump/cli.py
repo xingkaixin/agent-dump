@@ -24,7 +24,10 @@ from agent_dump.command_plan import (
     CommandPlanWarning,
     CommandRequest,
     ConfigOperation,
+    InteractiveOperation,
+    ListOperation,
     ReindexOperation,
+    SearchOperation,
     SessionOperation,
     StatsOperation,
     UriOperation,
@@ -405,7 +408,7 @@ def _dispatch_command_plan(plan: CommandPlan, parser: argparse.ArgumentParser) -
     export_config = load_export_config()
     if isinstance(operation, UriOperation):
         return handle_uri_mode(operation, export_config=export_config)
-    if isinstance(operation, SessionOperation):
+    if isinstance(operation, (ListOperation, SearchOperation, InteractiveOperation)):
         return handle_session_modes(operation, export_config=export_config)
     raise AssertionError(f"unhandled command mode: {plan.mode.value}")
 
