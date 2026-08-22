@@ -1,8 +1,30 @@
 import { expect, test } from "@playwright/test";
 
 const locales = [
-  { name: "English", path: "/", htmlLang: "en", copy: "Copy", copied: "Copied" },
-  { name: "Chinese", path: "/zh/", htmlLang: "zh-Hans", copy: "复制", copied: "已复制" },
+  {
+    name: "English",
+    path: "/",
+    htmlLang: "en",
+    title: "Agent Dump | Export AI Coding Sessions from CLI",
+    copy: "Copy",
+    copied: "Copied",
+  },
+  {
+    name: "Chinese",
+    path: "/zh/",
+    htmlLang: "zh-Hans",
+    title: "Agent Dump | AI 编码会话导出工具",
+    copy: "复制",
+    copied: "已复制",
+  },
+  {
+    name: "Japanese",
+    path: "/ja/",
+    htmlLang: "ja",
+    title: "Agent Dump | AIコーディングセッションをCLIからエクスポート",
+    copy: "コピー",
+    copied: "コピーしました",
+  },
 ] as const;
 
 for (const locale of locales) {
@@ -14,6 +36,13 @@ for (const locale of locales) {
 
     await expect(page.locator("html")).toHaveAttribute("lang", locale.htmlLang);
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect(page).toHaveTitle(locale.title);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+      "href",
+      `https://agent-dump.xingkaixin.me${locale.path}`,
+    );
+    await expect(page.locator('link[rel="alternate"]')).toHaveCount(4);
+    await expect(page.locator('header a[aria-current="page"]')).toHaveAttribute("href", locale.path);
 
     const install = page.locator("#install");
     const npmTab = install.getByRole("tab", { name: "npm", exact: true });
