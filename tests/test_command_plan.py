@@ -76,6 +76,48 @@ def test_build_command_plan_preserves_mode_priority(
     assert plan.ignored_mode_options == ignored_options
 
 
+def test_build_command_plan_orders_and_reports_all_explicit_mode_candidates() -> None:
+    plan = build_command_plan(
+        make_request(
+            providers=True,
+            config_action="view",
+            collect=True,
+            stats=True,
+            reindex=True,
+            uri="codex://session",
+            search="bug",
+            list_requested=True,
+            interactive=True,
+        )
+    )
+
+    assert plan.mode is CommandMode.PROVIDERS
+    assert plan.ignored_mode_options == (
+        "--config",
+        "--collect",
+        "--stats",
+        "--reindex",
+        "session URI",
+        "--search",
+        "--list",
+        "--interactive",
+    )
+
+
+def test_build_command_plan_does_not_report_selectors_for_the_same_mode() -> None:
+    plan = build_command_plan(make_request(uri="agents://.?providers=codex", search="bug", list_requested=True))
+
+    assert plan.mode is CommandMode.LIST
+    assert plan.ignored_mode_options == ()
+
+
+def test_build_command_plan_does_not_report_implicit_list_inputs_as_ignored() -> None:
+    plan = build_command_plan(make_request(interactive=True, days=30, query="bug"))
+
+    assert plan.mode is CommandMode.INTERACTIVE
+    assert plan.ignored_mode_options == ()
+
+
 def test_build_command_plan_does_not_warn_for_collect_query_uri() -> None:
     plan = build_command_plan(make_request(collect=True, uri="agents://.?providers=codex"))
 
