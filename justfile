@@ -143,7 +143,7 @@ publish:
 # Build and publish package in one step
 build-and-publish: build publish
 
-# Build the static landing page (Astro, en + zh) into web/dist
+# Build the static landing page (Astro, en + zh + ja) into web/dist
 build-web:
     @echo "🛠️ Building landing page..."
     pnpm --dir web install --frozen-lockfile

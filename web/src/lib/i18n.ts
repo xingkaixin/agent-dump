@@ -2,12 +2,18 @@
 // SEO-critical strings (title / description / keywords / FAQ) are kept stable to
 // preserve existing search ranking.
 
-export const LOCALES = ["en", "zh"] as const;
+export const LOCALES = ["en", "zh", "ja"] as const;
 export type Locale = (typeof LOCALES)[number];
+
+export const localeLabels = {
+  en: "EN",
+  zh: "中文",
+  ja: "日本語",
+} satisfies Record<Locale, string>;
 
 export const site = {
   origin: "https://agent-dump.xingkaixin.me",
-  paths: { en: "/", zh: "/zh/" } as Record<Locale, string>,
+  paths: { en: "/", zh: "/zh/", ja: "/ja/" } as Record<Locale, string>,
   author: { name: "xingkaixin", url: "https://github.com/xingkaixin" },
   repo: "https://github.com/xingkaixin/agent-dump",
   license: "https://github.com/xingkaixin/agent-dump/blob/main/LICENSE",
@@ -22,6 +28,7 @@ export const site = {
   changelogUrl: {
     en: "https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md",
     zh: "https://github.com/xingkaixin/agent-dump/blob/main/docs/zh/CHANGELOG.md",
+    ja: "https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md",
   } as Record<Locale, string>,
   skillCommand: "npx skills add xingkaixin/agent-dump",
 };
@@ -99,11 +106,13 @@ type UiStrings = {
   heroTitle: string;
   heroTitleAccent: string;
   heroDescription: string;
+  terminalLabel: string;
   answerSummary: string;
   ctaInstall: string;
   ctaSource: string;
   providersHeading: string;
   providersNote: string;
+  moreTools: { title: string; note: string };
   capabilitiesHeading: string;
   capabilities: { title: string; body: string; command: string }[];
   installHeading: string;
@@ -120,8 +129,14 @@ type UiStrings = {
 };
 
 export const install = {
-  globalLabel: { en: "Install globally", zh: "全局安装" } as Record<Locale, string>,
-  runLabel: { en: "Run without installing", zh: "免安装运行" } as Record<Locale, string>,
+  globalLabel: { en: "Install globally", zh: "全局安装", ja: "グローバルにインストール" } as Record<
+    Locale,
+    string
+  >,
+  runLabel: { en: "Run without installing", zh: "免安装运行", ja: "インストールせずに実行" } as Record<
+    Locale,
+    string
+  >,
   global: [
     { label: "uv", code: "uv tool install agent-dump" },
     { label: "npm", code: "npm install -g @agent-dump/cli" },
@@ -160,6 +175,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitleAccent: "sessions.",
     heroDescription:
       "One command lists, dumps, searches, and summarizes sessions across seven AI coding tools.",
+    terminalLabel: "Terminal demo running agent-dump commands",
     answerSummary:
       "Agent Dump gives developers one command-line interface for local AI coding session history across seven tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.",
     ctaInstall: "Install",
@@ -167,6 +183,7 @@ export const ui: Record<Locale, UiStrings> = {
     providersHeading: "Seven tools, one URI grammar",
     providersNote:
       "Every session is addressable by its provider scheme. Point agent-dump at a URI and read it anywhere.",
+    moreTools: { title: "More tools", note: "PRs welcome" },
     capabilitiesHeading: "What it does",
     capabilities: [
       {
@@ -242,6 +259,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitleAccent: "会话。",
     heroDescription:
       "一条命令，列出、直读、导出、搜索并汇总七款 AI 编码工具的会话。",
+    terminalLabel: "运行 agent-dump 命令的终端演示",
     answerSummary:
       "Agent Dump 为开发者提供一个统一的命令行入口，读取七类 AI 编码工具的本地会话历史，并输出可读导出、URI 直读、搜索结果、统计和汇总报告。",
     ctaInstall: "安装",
@@ -249,6 +267,7 @@ export const ui: Record<Locale, UiStrings> = {
     providersHeading: "七款工具，一套 URI 语法",
     providersNote:
       "每个会话都能用它的 provider scheme 寻址。把 agent-dump 指向一个 URI，就能在任何地方读取它。",
+    moreTools: { title: "更多工具", note: "欢迎 PR" },
     capabilitiesHeading: "它能做什么",
     capabilities: [
       {
@@ -300,8 +319,89 @@ export const ui: Record<Locale, UiStrings> = {
     footerTagline: "在命令行里导出 AI 编码会话。",
     footerGithub: "GitHub",
   },
+  ja: {
+    htmlLang: "ja",
+    ogLocale: "ja_JP",
+    dir: "ltr",
+    title: "Agent Dump | AIコーディングセッションをCLIからエクスポート",
+    description:
+      "Agent Dumpは、Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、PiのAIコーディングセッションを一覧表示、エクスポート、検索、要約するCLIです。",
+    softwareDescription:
+      "Agent Dumpは、Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、PiのAIコーディングセッションを一覧表示、エクスポート、検索、要約するCLIです。",
+    websiteDescription:
+      "Agent Dumpは、AIコーディングセッションを一覧表示、エクスポート、検索、要約するCLIです。",
+    keywords:
+      "agent-dump, AIセッションのエクスポート, Claude Codeセッション, Codexセッション, ZCodeセッション, Cursorセッション, Piセッション, AIコーディングツール, セッション出力, CLIツール, 開発者ツール",
+    ogImageAlt: "AIコーディングセッションを読みやすいファイルに出力するAgent Dump CLI",
+    skipLink: "本文へ移動",
+    langLabel: "言語",
+    themeLabel: "テーマを切り替える",
+    themeLight: "ライト",
+    themeDark: "ダーク",
+    eyebrow: "CLI · AIセッションのエクスポート",
+    heroTitle: "AIコーディングの",
+    heroTitleAccent: "セッションを書き出す。",
+    heroDescription:
+      "1つのコマンドで、7つのAIコーディングツールのセッションを一覧表示、閲覧、エクスポート、検索、要約できます。",
+    terminalLabel: "agent-dumpコマンドを実行するターミナルのデモ",
+    answerSummary:
+      "Agent Dumpは、7つのAIコーディングツールに保存されたローカルセッション履歴を、1つのコマンドラインインターフェースから扱えるようにします。各ツール固有の保存形式を、読みやすいエクスポート、URIによる直接表示、検索結果、統計、収集レポートへ変換します。",
+    ctaInstall: "インストール",
+    ctaSource: "GitHub",
+    providersHeading: "7つのツール、1つのURI構文",
+    providersNote:
+      "各セッションはツールごとのスキームで指定できます。agent-dumpにURIを渡せば、どこからでも内容を確認できます。",
+    moreTools: { title: "その他のツール", note: "PRを歓迎します" },
+    capabilitiesHeading: "できること",
+    capabilities: [
+      {
+        title: "すべてのローカルセッションを読み込む",
+        body: "Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、Piのネイティブストレージから読み込みます。",
+        command: "agent-dump --interactive",
+      },
+      {
+        title: "必要な形式でエクスポートする",
+        body: "JSON、Markdown、rawファイルに出力でき、パイプ処理のためにターミナルへ直接表示することもできます。",
+        command: "agent-dump <uri> --format markdown",
+      },
+      {
+        title: "検索して絞り込む",
+        body: "タイトル、メッセージ、推論を全文検索し、provider、role、pathで絞り込めます。",
+        command: 'agent-dump --search "auth timeout"',
+      },
+      {
+        title: "セッションを要約する",
+        body: "プロジェクト管理やインサイトレポートに使える、重要度の高いセッション要約を生成します。",
+        command: "agent-dump --collect",
+      },
+    ],
+    installHeading: "インストール",
+    installNote:
+      "uv、npm、pnpm、bunに対応しています。JavaScriptパッケージのラッパーにはNode.js 22以降が必要です。",
+    skillNote: "またはagent skillとして追加",
+    copy: "コピー",
+    copied: "コピーしました",
+    faqHeading: "よくある質問",
+    faq: [
+      {
+        question: "Agent Dumpとは何ですか？",
+        answer:
+          "Agent Dumpは、ローカルのAIコーディングセッションを一覧表示、エクスポート、検索、要約するコマンドラインツールです。Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、Piに対応し、1つのCLIからセッション履歴を確認できます。",
+      },
+      {
+        question: "Agent DumpはどのAIコーディングツールに対応していますか？",
+        answer:
+          "Agent Dumpは、Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、Piに対応しています。各ツールのローカルセッションを読み込み、一覧表示、URIによる直接表示、エクスポート、検索、統計、収集ワークフローを共通のCLIで提供します。",
+      },
+      {
+        question: "Agent Dumpをインストールするには？",
+        answer:
+          "uv tool install agent-dumpまたはnpm install -g @agent-dump/cliでグローバルにインストールできます。uvx agent-dump --help、npx @agent-dump/cli --help、bunx @agent-dump/cli --helpで直接実行することもできます。",
+      },
+    ],
+    versionLabel: "バージョン",
+    changelogLabel: "変更履歴",
+    footerTagline: "AIコーディングセッションをCLIからエクスポート。",
+    footerGithub: "GitHub",
+  },
 };
-
-export function otherLocale(locale: Locale): Locale {
-  return locale === "en" ? "zh" : "en";
-}

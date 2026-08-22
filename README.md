@@ -503,7 +503,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 ├── tests/                      # Test directory
 ├── skills/agent-dump/          # Codex skill docs
 ├── npm/                        # npm wrapper and platform packages
-├── web/                        # Astro landing page (en + zh)
+├── web/                        # Astro landing page (en + zh + ja)
 ├── pyproject.toml              # Project configuration
 ├── justfile                    # Automated commands
 ├── ruff.toml                   # Code style configuration

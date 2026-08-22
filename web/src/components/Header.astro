@@ -1,6 +1,6 @@
 ---
 import { MoonIcon, SunIcon } from "@phosphor-icons/react";
-import { site, ui, type Locale } from "../lib/i18n";
+import { LOCALES, localeLabels, site, ui, type Locale } from "../lib/i18n";
 
 interface Props {
   locale: Locale;
@@ -8,10 +8,6 @@ interface Props {
 const { locale } = Astro.props;
 const t = ui[locale];
 
-const langs: { code: Locale; label: string }[] = [
-  { code: "en", label: "EN" },
-  { code: "zh", label: "中文" },
-];
 ---
 
 <header
@@ -39,21 +35,21 @@ const langs: { code: Locale; label: string }[] = [
         class="inline-flex overflow-hidden rounded-[var(--radius-sm)] border border-line"
       >
         {
-          langs.map((lang) => {
-            const current = lang.code === locale;
+          LOCALES.map((code) => {
+            const current = code === locale;
             return (
               <a
-                href={site.paths[lang.code]}
-                lang={lang.code === "zh" ? "zh-Hans" : "en"}
+                href={site.paths[code]}
+                lang={ui[code].htmlLang}
                 aria-current={current ? "page" : undefined}
                 class:list={[
-                  "px-2.5 py-1.5 font-mono text-[12px] no-underline transition-colors duration-150 ease-out",
+                  "px-2 py-1.5 font-mono text-[12px] no-underline transition-colors duration-150 ease-out",
                   current
                     ? "bg-fg text-bg"
                     : "text-muted hover:bg-surface hover:text-fg",
                 ]}
               >
-                {lang.label}
+                {localeLabels[code]}
               </a>
             );
           })

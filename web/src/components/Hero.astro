@@ -8,10 +8,6 @@ interface Props {
 }
 const { locale } = Astro.props;
 const t = ui[locale];
-const terminalLabel =
-  locale === "zh"
-    ? "运行 agent-dump 命令的终端演示"
-    : "Terminal demo running agent-dump commands";
 ---
 
 <section id="hero" class="shell pt-14 pb-16 sm:pt-20 sm:pb-20">
@@ -48,7 +44,7 @@ const terminalLabel =
     </div>
 
     <div data-reveal style="--reveal-delay: 120ms">
-      <Terminal scene={terminalScenes[0]} label={terminalLabel} />
+      <Terminal scene={terminalScenes[0]} label={t.terminalLabel} />
     </div>
   </div>
 </section>

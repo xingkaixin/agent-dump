@@ -7,10 +7,6 @@ interface Props {
 }
 const { locale } = Astro.props;
 const t = ui[locale];
-const more =
-  locale === "zh"
-    ? { title: "更多工具", note: "欢迎 PR" }
-    : { title: "More tools", note: "PRs welcome" };
 ---
 
 <section id="providers" class="shell py-16 sm:py-20">
@@ -46,10 +42,10 @@ const more =
         class="group flex h-full flex-col justify-between no-underline"
       >
         <span class="font-mono text-[13.5px] font-medium text-muted transition-colors duration-200 ease-out group-hover:text-fg">
-          {more.title}
+          {t.moreTools.title}
         </span>
         <span class="mt-2 inline-flex items-center gap-1 font-mono text-[12px] text-subtle transition-colors duration-200 ease-out group-hover:text-accent">
-          {more.note}
+          {t.moreTools.note}
           <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
         </span>
       </a>
