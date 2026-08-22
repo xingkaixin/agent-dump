@@ -12,7 +12,9 @@ from agent_dump.command_plan import (
     CommandPlanErrorCode,
     CommandPlanWarning,
     CommandRequest,
-    SessionOperation,
+    InteractiveOperation,
+    ListOperation,
+    SearchOperation,
     StatsOperation,
     UriOperation,
     build_command_plan,
@@ -151,7 +153,7 @@ def test_build_command_plan_normalizes_query_uri_once() -> None:
     )
 
     operation = plan.operation
-    assert isinstance(operation, SessionOperation)
+    assert isinstance(operation, ListOperation)
     assert operation.mode is CommandMode.LIST
     assert operation.days == 7
     assert operation.query_spec is not None
@@ -166,7 +168,7 @@ def test_build_command_plan_preserves_query_uri_in_explicit_interactive_mode() -
     plan = build_command_plan(make_request(uri="agents://.", interactive=True))
 
     operation = plan.operation
-    assert isinstance(operation, SessionOperation)
+    assert isinstance(operation, InteractiveOperation)
     assert operation.mode is CommandMode.INTERACTIVE
     assert operation.query_spec is not None
 
@@ -175,9 +177,7 @@ def test_build_command_plan_combines_search_with_query_scope() -> None:
     plan = build_command_plan(make_request(query="provider:codex role:user limit:4", search="auth timeout"))
 
     operation = plan.operation
-    assert isinstance(operation, SessionOperation)
-    assert operation.is_search is True
-    assert operation.query_spec is not None
+    assert isinstance(operation, SearchOperation)
     assert operation.query_spec.keyword == "auth timeout"
     assert operation.query_spec.agent_names == {"codex"}
     assert operation.query_spec.roles == {"user"}
@@ -241,8 +241,7 @@ def test_build_command_plan_allows_print_for_explicit_and_implicit_list(override
     plan = build_command_plan(make_request(raw_format="print", **overrides))
 
     operation = plan.operation
-    assert isinstance(operation, SessionOperation)
-    assert operation.output_formats == ("print",)
+    assert isinstance(operation, (ListOperation, SearchOperation))
 
 
 def test_build_command_plan_rejects_print_for_interactive() -> None:

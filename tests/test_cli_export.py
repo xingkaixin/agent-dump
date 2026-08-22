@@ -15,7 +15,8 @@ from agent_dump.cli import (
 )
 from agent_dump.command_plan import (
     CommandMode,
-    SessionOperation,
+    ListOperation,
+    SearchOperation,
 )
 from agent_dump.config import ExportConfig
 
@@ -40,9 +41,8 @@ class TestMain:
 
         assert result == 0
         operation = mock_handle.call_args.args[0]
-        assert isinstance(operation, SessionOperation)
+        assert isinstance(operation, (ListOperation, SearchOperation))
         assert operation.mode is CommandMode.LIST
-        assert operation.output_formats == ("print",)
 
     def test_main_with_output_argument(self, tmp_path):
         """测试指定 output 参数"""

@@ -125,20 +125,36 @@ class UriOperation:
 
 
 @dataclass(frozen=True)
-class SessionOperation:
-    mode: CommandMode
+class ListOperation:
     days: int
     query_spec: QuerySpec | None
-    is_search: bool
-    output: str | None
     output_specified: bool
     format_specified: bool
+    show_metadata_summary: bool
+    mode: ClassVar[CommandMode] = CommandMode.LIST
+
+
+@dataclass(frozen=True)
+class SearchOperation:
+    days: int
+    query_spec: QuerySpec
+    output_specified: bool
+    format_specified: bool
+    mode: ClassVar[CommandMode] = CommandMode.LIST
+
+
+@dataclass(frozen=True)
+class InteractiveOperation:
+    days: int
+    query_spec: QuerySpec | None
+    output: str | None
+    output_specified: bool
     output_formats: tuple[str, ...]
     show_metadata_summary: bool
+    mode: ClassVar[CommandMode] = CommandMode.INTERACTIVE
 
-    def __post_init__(self) -> None:
-        if self.mode not in {CommandMode.LIST, CommandMode.INTERACTIVE}:
-            raise ValueError(f"invalid session mode: {self.mode.value}")
+
+SessionOperation = ListOperation | SearchOperation | InteractiveOperation
 
 
 @dataclass(frozen=True)
@@ -153,7 +169,9 @@ CommandOperation = (
     | StatsOperation
     | ReindexOperation
     | UriOperation
-    | SessionOperation
+    | ListOperation
+    | SearchOperation
+    | InteractiveOperation
     | HelpOperation
 )
 
@@ -344,23 +362,34 @@ def _build_session_operation(
 ) -> SessionOperation:
     output_formats = _resolve_output_formats(request, mode=mode)
     query_spec = query_uri_spec if query_uri_spec is not None else _parse_query(request.query, valid_agents)
-    is_search = bool(request.search)
-    if is_search:
-        query_spec = QuerySpec(
+    days = _days_or_default(request.days)
+    if request.search:
+        search_spec = QuerySpec(
             agent_names=query_spec.agent_names if query_spec else None,
             keyword=request.search,
             project_path=query_spec.project_path if query_spec else None,
             roles=query_spec.roles if query_spec else None,
             limit=query_spec.limit if query_spec else None,
         )
-    return SessionOperation(
-        mode=mode,
-        days=_days_or_default(request.days),
+        return SearchOperation(
+            days=days,
+            query_spec=search_spec,
+            output_specified=request.output_specified,
+            format_specified=request.raw_format is not None,
+        )
+    if mode is CommandMode.LIST:
+        return ListOperation(
+            days=days,
+            query_spec=query_spec,
+            output_specified=request.output_specified,
+            format_specified=request.raw_format is not None,
+            show_metadata_summary=not request.no_metadata_summary,
+        )
+    return InteractiveOperation(
+        days=days,
         query_spec=query_spec,
-        is_search=is_search,
         output=request.output,
         output_specified=request.output_specified,
-        format_specified=request.raw_format is not None,
         output_formats=output_formats,
         show_metadata_summary=not request.no_metadata_summary,
     )
