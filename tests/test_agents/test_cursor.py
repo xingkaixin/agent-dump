@@ -16,6 +16,7 @@ import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.cursor import _BUBBLE_RANGE_BATCH_SIZE, CursorAgent, _key_prefix_bounds
+from agent_dump.agents.cursor_storage import _METADATA_BUBBLE_SCAN_LIMIT, CursorStoreReader, parse_cursor_json
 
 
 def _create_cursor_global_db(path: Path) -> None:
@@ -57,7 +58,7 @@ class TestCursorAgent:
     @staticmethod
     def _create_layout(monkeypatch, tmp_path):
         cursor_home = tmp_path / "home"
-        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        monkeypatch.setattr("agent_dump.agents.cursor_storage.Path.home", lambda: cursor_home)
         global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
         global_db.parent.mkdir(parents=True)
         _create_cursor_global_db(global_db)
@@ -128,22 +129,20 @@ class TestCursorAgent:
 
         def _count_statements(agent: CursorAgent) -> tuple[int, list[Session]]:
             statements: list[str] = []
-            original_open = agent._open_global
+            original_reader = agent._store.reader
 
             @contextmanager
-            def counting_open():
-                with original_open() as conn:
-                    # sqlite3 自带的语句 trace，比包装 Connection.execute 可靠
-                    # （后者是只读属性）
-                    conn.set_trace_callback(statements.append)
+            def counting_reader():
+                with original_reader() as reader:
+                    reader._connection.set_trace_callback(statements.append)
                     try:
-                        yield conn
+                        yield reader
                     finally:
-                        conn.set_trace_callback(None)
+                        reader._connection.set_trace_callback(None)
 
             # patch 打在实例上，两次测量各用一个新实例，无需 undo
             # （undo 会连 _create_layout 的 Path.home / 环境变量 patch 一起撤掉）
-            monkeypatch.setattr(agent, "_open_global", counting_open)
+            monkeypatch.setattr(agent._store, "reader", counting_reader)
             sessions = agent.get_sessions(days=7)
             return len(statements), sessions
 
@@ -180,8 +179,6 @@ class TestCursorAgent:
 
         这是一处刻意的语义收窄：修复前 requestId/model 会扫完全部 bubble。
         """
-        from agent_dump.agents.cursor import _METADATA_BUBBLE_SCAN_LIMIT
-
         global_db = self._create_layout(monkeypatch, tmp_path)
         created_at_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         _insert_kv(
@@ -230,7 +227,7 @@ class TestCursorAgent:
         assert agent.is_available() is True
         aggregated = agent.get_sessions(days=7)
 
-        monkeypatch.setattr(CursorAgent, "_count_messages_by_composer", lambda self, conn, composer_ids: None)
+        monkeypatch.setattr(CursorStoreReader, "_count_messages", lambda self, composer_ids: None)
         fallback = agent.get_sessions(days=7)
 
         assert [s.id for s in fallback] == [s.id for s in aggregated]
@@ -318,7 +315,7 @@ class TestCursorAgent:
         session = agent.find_session_by_request_id("request-head")
         assert session is not None
 
-        with mock.patch.object(agent, "_query_global", side_effect=AssertionError("unexpected query")):
+        with mock.patch.object(agent._store, "reader", side_effect=AssertionError("unexpected query")):
             head = agent.get_session_head(session)
 
         assert head["model"] == "claude-4.6"
@@ -454,17 +451,16 @@ class TestCursorAgent:
             )
 
         agent = CursorAgent()
-        original_query = agent._query_global
+        original_query = CursorStoreReader._query
         candidate_counts: list[int] = []
 
-        def recording_query(sql, params, *, conn=None):
-            rows = original_query(sql, params, conn=conn)
+        def recording_query(reader, sql, params):
+            rows = original_query(reader, sql, params)
             if "instr(value" in sql:
                 candidate_counts.append(len(rows))
             return rows
 
-        monkeypatch.setattr(agent, "_query_global", recording_query)
-
+        monkeypatch.setattr(CursorStoreReader, "_query", recording_query)
         matched = agent.find_session_by_request_id(request_id)
 
         assert matched is not None
@@ -693,15 +689,15 @@ class TestCursorAgent:
 
         agent = CursorAgent()
         session = next(item for item in agent.get_sessions(days=7) if item.id == "request-parent")
-        with mock.patch.object(agent, "_query_global", wraps=agent._query_global) as query_global:
+        with mock.patch.object(
+            agent._store,
+            "transcript_bubbles",
+            wraps=agent._store.transcript_bubbles,
+        ) as read_bubbles:
             data = agent.get_session_data(session)
 
-        child_bubble_queries = [
-            call
-            for call in query_global.call_args_list
-            if len(call.args) > 1 and call.args[1] and call.args[1][0] == "bubbleId:subagent-composer:"
-        ]
-        assert len(child_bubble_queries) == 1
+        child_bubble_reads = [call for call in read_bubbles.call_args_list if call.args[0] == "subagent-composer"]
+        assert len(child_bubble_reads) == 1
 
         tool_message = next(message for message in data["messages"] if message["role"] == "tool")
         tool_part = tool_message["parts"][0]
@@ -817,12 +813,12 @@ class TestCursorAgent:
     def test_parse_helpers_cover_cursor_edge_shapes(self):
         agent = CursorAgent()
 
-        assert agent._parse_json(b'{"ok": true}') == {"ok": True}
-        assert agent._parse_json(b"\xff") is None
-        assert agent._parse_json(1) is None
-        assert agent._parse_json(" ") is None
-        assert agent._parse_json("{") is None
-        assert agent._parse_json("[]") is None
+        assert parse_cursor_json(b'{"ok": true}') == {"ok": True}
+        assert parse_cursor_json(b"\xff") is None
+        assert parse_cursor_json(1) is None
+        assert parse_cursor_json(" ") is None
+        assert parse_cursor_json("{") is None
+        assert parse_cursor_json("[]") is None
 
         assert agent._extract_title({"title": "Title Fallback"}, "composer-abc") == "Title Fallback"
         assert agent._extract_title({}, "composer-abc") == "Cursor Session composer"
@@ -998,7 +994,7 @@ class TestCursorAgent:
 
     def test_find_session_by_request_id_none_paths(self, monkeypatch, tmp_path):
         cursor_home = tmp_path / "empty-home"
-        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        monkeypatch.setattr("agent_dump.agents.cursor_storage.Path.home", lambda: cursor_home)
 
         empty_agent = CursorAgent()
         assert empty_agent.scan() == []
@@ -1081,7 +1077,7 @@ class TestSubagentExpansionIsBounded:
     @staticmethod
     def _layout(monkeypatch, tmp_path):
         cursor_home = tmp_path / "home"
-        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        monkeypatch.setattr("agent_dump.agents.cursor_storage.Path.home", lambda: cursor_home)
         global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
         global_db.parent.mkdir(parents=True)
         _create_cursor_global_db(global_db)
@@ -1189,7 +1185,7 @@ class TestDiscoveryDependsOnlyOnGlobalStore:
     def _home_without_store(monkeypatch, tmp_path) -> Path:
         cursor_home = tmp_path / "home"
         cursor_home.mkdir()
-        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        monkeypatch.setattr("agent_dump.agents.cursor_storage.Path.home", lambda: cursor_home)
         return cursor_home
 
     @staticmethod
@@ -1254,7 +1250,7 @@ class TestDiscoveryDependsOnlyOnGlobalStore:
         def refuse(*args, **kwargs):
             raise sqlite3.OperationalError("unable to open database file")
 
-        monkeypatch.setattr("agent_dump.agents.cursor.sqlite3.connect", refuse)
+        monkeypatch.setattr("agent_dump.agents.cursor_storage.sqlite3.connect", refuse)
         assert CursorAgent().is_available() is False
 
     def test_search_roots_only_list_the_store_that_is_read(self, monkeypatch, tmp_path):
@@ -1272,7 +1268,7 @@ class TestDaysWindowAppliesBeforeBubbleAggregation:
     @staticmethod
     def _layout_with_history(monkeypatch, tmp_path, *, old_bubbles: int) -> Path:
         cursor_home = tmp_path / "home"
-        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        monkeypatch.setattr("agent_dump.agents.cursor_storage.Path.home", lambda: cursor_home)
         global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
         global_db.parent.mkdir(parents=True)
         _create_cursor_global_db(global_db)
@@ -1311,15 +1307,15 @@ class TestDaysWindowAppliesBeforeBubbleAggregation:
     def _count_scanned_rows(agent: CursorAgent, days: int) -> tuple[int, list[Session]]:
         """统计 SQLite 实际访问的行数，比墙钟时间更稳定地反映扫描规模。"""
         scanned = [0]
-        real_open = agent._open_global
+        real_reader = agent._store.reader
 
         @contextmanager
-        def counting_open():
-            with real_open() as conn:
-                conn.set_progress_handler(lambda: scanned.__setitem__(0, scanned[0] + 1) or 0, 100)
-                yield conn
+        def counting_reader():
+            with real_reader() as reader:
+                reader._connection.set_progress_handler(lambda: scanned.__setitem__(0, scanned[0] + 1) or 0, 100)
+                yield reader
 
-        object.__setattr__(agent, "_open_global", counting_open)
+        object.__setattr__(agent._store, "reader", counting_reader)
         sessions = agent.get_sessions(days=days)
         return scanned[0], sessions
 
@@ -1349,7 +1345,7 @@ class TestDaysWindowAppliesBeforeBubbleAggregation:
         self._layout_with_history(monkeypatch, tmp_path, old_bubbles=50)
 
         aggregated = CursorAgent().get_sessions(days=3650)
-        monkeypatch.setattr(CursorAgent, "_count_messages_by_composer", lambda self, conn, composer_ids: None)
+        monkeypatch.setattr(CursorStoreReader, "_count_messages", lambda self, composer_ids: None)
         fallback = CursorAgent().get_sessions(days=3650)
 
         assert [s.id for s in fallback] == [s.id for s in aggregated]
@@ -1359,7 +1355,7 @@ class TestDaysWindowAppliesBeforeBubbleAggregation:
     def test_more_composers_than_one_batch_are_all_counted(self, monkeypatch, tmp_path):
         """composer 数超过单条 SQL 的批上限时不得漏计。"""
         cursor_home = tmp_path / "home"
-        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        monkeypatch.setattr("agent_dump.agents.cursor_storage.Path.home", lambda: cursor_home)
         global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
         global_db.parent.mkdir(parents=True)
         _create_cursor_global_db(global_db)
@@ -1438,7 +1434,7 @@ class TestNaiveIsoIsInterpretedAsUtc:
         time.tzset()
 
         cursor_home = tmp_path / "home"
-        monkeypatch.setattr("agent_dump.agents.cursor.Path.home", lambda: cursor_home)
+        monkeypatch.setattr("agent_dump.agents.cursor_storage.Path.home", lambda: cursor_home)
         global_db = TestCursorAgent._cursor_user_root(cursor_home) / "globalStorage" / "state.vscdb"
         global_db.parent.mkdir(parents=True)
         _create_cursor_global_db(global_db)

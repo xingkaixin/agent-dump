@@ -110,6 +110,7 @@
 | `agents/file_sessions.py` | 文件型 provider 共享基类（扫描 / 剪枝 / 并行解析 / 定位） |
 | `agents/codex_patch.py` | Codex apply_patch 解析 |
 | `agents/codex_enrichment.py` | Codex subagent / skill 消息增强 |
+| `agents/cursor_storage.py` | Cursor SQLite 路径发现、只读查询与原始记录解析 |
 
 ### 2.3 作为库使用示例
 
@@ -250,6 +251,7 @@ agent-dump/
 │       ├── kimi.py              # Kimi JSONL provider
 │       ├── claudecode.py        # Claude Code JSONL provider
 │       ├── cursor.py            # Cursor SQLite provider
+│       ├── cursor_storage.py    # Cursor SQLite 只读存储访问
 │       ├── pi.py                # Pi JSONL provider
 │       ├── file_sessions.py     # 文件型 provider 共享基类（扫描/剪枝/并行解析/定位）
 │       ├── jsonl_scan.py        # JSONL 扫描辅助

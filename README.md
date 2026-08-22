@@ -492,6 +492,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │           ├── codex_enrichment.py # Codex subagent and skill enrichment
 │           ├── codex_patch.py  # Codex apply_patch parser
 │           ├── cursor.py       # Cursor Agent
+│           ├── cursor_storage.py # Cursor read-only SQLite access
 │           ├── kimi.py         # Kimi Agent
 │           ├── pi.py           # Pi Agent
 │           ├── file_sessions.py # Shared file-backed provider base
