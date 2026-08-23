@@ -11,7 +11,7 @@ from unittest import mock
 from locale_helpers import Keys, expect
 import pytest
 
-from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.zcode import ZCodeAgent
 from agent_dump.query_filter import (
@@ -519,6 +519,19 @@ class TestFilterSessionsByQuery:
         spec = make_query_spec(project_path=tmp_path / "repo")
 
         assert filter_sessions_by_query(agent, [session], spec) == []
+
+    def test_path_scope_uses_provider_session_facts(self, tmp_path):
+        agent = DummyAgent(name="cursor")
+        session = make_session("s1", "provider facts", tmp_path / "s1.jsonl")
+        session.metadata = {"cwd": str(tmp_path / "stale")}
+        facts_session = make_session("facts", "facts", tmp_path / "facts.jsonl")
+        facts_session.metadata = {"cwd": str(tmp_path / "repo")}
+
+        with mock.patch.object(agent, "get_session_facts", return_value=derive_session_facts(facts_session)) as facts:
+            result = filter_sessions_by_query(agent, [session], make_query_spec(project_path=tmp_path / "repo"))
+
+        assert result == [session]
+        facts.assert_called_once_with(session)
 
     def test_path_scope_does_not_treat_provider_project_or_source_as_working_directory(self, tmp_path):
         agent = DummyAgent(name="claudecode")
@@ -1111,13 +1124,13 @@ class TestExtractSessionProjectPath:
         session = make_session("s1", "session", tmp_path / "s1.jsonl")
         session.metadata = {"cwd": str(tmp_path / "repo"), "directory": str(tmp_path / "ignored")}
 
-        assert extract_session_working_directory(session) == (tmp_path / "repo").resolve()
+        assert extract_session_working_directory(DummyAgent(), session) == (tmp_path / "repo").resolve()
 
     def test_uses_directory_when_cwd_missing(self, tmp_path):
         session = make_session("s1", "session", tmp_path / "s1.jsonl")
         session.metadata = {"directory": str(tmp_path / "repo")}
 
-        assert extract_session_working_directory(session) == (tmp_path / "repo").resolve()
+        assert extract_session_working_directory(DummyAgent(), session) == (tmp_path / "repo").resolve()
 
 
 class TestSearchLimitPushdownSafety:

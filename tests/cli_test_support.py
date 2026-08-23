@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import Session, derive_session_facts
 from agent_dump.collect_models import CollectMode
 from agent_dump.command_plan import CollectOperation, CommandRequest, build_command_plan
 from agent_dump.config import CollectConfig
@@ -61,6 +61,8 @@ def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
 
 
 def configure_session_data_lease(agent: mock.MagicMock) -> None:
+    agent.get_session_facts.side_effect = derive_session_facts
+
     @contextmanager
     def lease(session: Session):
         yield agent.get_cached_session_data(session)

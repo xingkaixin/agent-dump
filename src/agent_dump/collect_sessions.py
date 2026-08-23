@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
+from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.collect_events import chunk_collect_events, extract_collect_events
 from agent_dump.collect_logging import CollectLogger
 from agent_dump.collect_models import (
@@ -71,8 +71,8 @@ def _normalize_collect_project_path(value: str) -> Path | None:
     return Path(normalized).expanduser().resolve(strict=False)
 
 
-def _is_session_denied(session: Session, deny_paths: tuple[str, ...]) -> bool:
-    working_directory = derive_session_facts(session).working_directory
+def _is_session_denied(agent: BaseAgent, session: Session, deny_paths: tuple[str, ...]) -> bool:
+    working_directory = agent.get_session_facts(session).working_directory
     session_path = _normalize_collect_project_path(str(working_directory or ""))
     if session_path is None:
         return False
@@ -112,7 +112,7 @@ def collect_entries(
     for agent, sessions in session_scanner.get_sessions(days_span, agents=agents):
         deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
         if deny_paths:
-            sessions = [session for session in sessions if not _is_session_denied(session, deny_paths)]
+            sessions = [session for session in sessions if not _is_session_denied(agent, session, deny_paths)]
         matches = (
             query_session_matches(agent, sessions, query_spec)
             if query_spec is not None
@@ -162,7 +162,7 @@ def collect_entries(
                 session_id=session.id,
                 session_title=session.title,
                 session_uri=uri,
-                project_directory=str(derive_session_facts(session).working_directory or ""),
+                project_directory=str(agent.get_session_facts(session).working_directory or ""),
                 events=events,
                 is_truncated=truncated,
             )

@@ -344,10 +344,10 @@ class BaseAgent(ABC):
     def get_session_data(self, session: Session) -> dict: ...
 ```
 
-共享 workflow 通过 `derive_session_facts(session)` 读取 Working Directory、Provider
-Project、Session Source 与带 exact/unknown 完整度的 Message Count Fact；缓存通过
-`BaseAgent.get_session_facts(session)` 追加 provider-owned change sources。调用方不得自行
-解释对应 metadata key。facts 按需派生，不在 `Session` 上重复存储。术语边界见
+共享 workflow 统一通过 `agent.get_session_facts(session)` 读取 Working Directory、Provider
+Project、Session Source、provider-owned change sources 与带 exact/unknown 完整度的
+Message Count Fact。`derive_session_facts(session)` 只负责 `BaseAgent` 默认映射；调用方不得绕过
+provider 入口或自行解释对应 metadata key。facts 按需派生，不在 `Session` 上重复存储。术语边界见
 `CONTEXT.md`。
 
 完整 payload 有两种所有权入口：`get_cached_session_data(session)` 用于同一短工作流中的

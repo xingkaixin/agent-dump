@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 from urllib.parse import ParseResult, parse_qs, urlparse
 
-from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
+from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_semantics import TextQuery, TextQueryMode, extract_transcript_searchable_text
 from agent_dump.search_index import SearchIndex
@@ -188,7 +188,7 @@ def _session_matches(
             session
             for session in scoped_sessions
             if (
-                (session_path := extract_session_working_directory(session)) is not None
+                (session_path := extract_session_working_directory(agent, session)) is not None
                 and is_path_scope_match(spec.project_path, session_path)
             )
         ]
@@ -313,8 +313,8 @@ def normalize_project_path(value: str, cwd: Path | None = None) -> Path:
     return path.resolve(strict=False)
 
 
-def extract_session_working_directory(session: Session) -> Path | None:
-    working_directory = derive_session_facts(session).working_directory
+def extract_session_working_directory(agent: BaseAgent, session: Session) -> Path | None:
+    working_directory = agent.get_session_facts(session).working_directory
     if working_directory is None:
         return None
     return normalize_project_path(str(working_directory))
