@@ -304,6 +304,47 @@ class TestConfigReadWrite:
         assert ("logging",) not in document.sections
         assert ("export",) not in document.sections
 
+    def test_write_preserves_comments_spacing_and_order(self, tmp_path):
+        path = tmp_path / "config.toml"
+        original = (
+            "# user configuration\n"
+            "\n"
+            "[ai] # provider settings\n"
+            'provider   = "openai"  # keep provider note\n'
+            'base_url = "https://old.example/v1"\n'
+            'model = "old-model"\n'
+            'api_key = "old-key" # rotate manually\n'
+            "\n"
+            "[future]\n"
+            "enabled    = true # keep alignment\n"
+            "\n"
+            "[export] # output settings\n"
+            'output    = "./old" # keep output note\n'
+        )
+        path.write_text(original, encoding="utf-8")
+        document = load_config_document(path)
+
+        write_config(
+            AIConfig(
+                provider="anthropic",
+                base_url="https://new.example/v1",
+                model="claude",
+                api_key="new-key",
+            ),
+            ExportConfig(output="./new"),
+            path,
+            document=document,
+        )
+
+        expected = (
+            original.replace('"openai"', '"anthropic"')
+            .replace('"https://old.example/v1"', '"https://new.example/v1"')
+            .replace('"old-model"', '"claude"')
+            .replace('"old-key"', '"new-key"')
+            .replace('"./old"', '"./new"')
+        )
+        assert path.read_text(encoding="utf-8") == expected
+
     @pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions only")
     def test_write_config_restricts_permissions(self, tmp_path):
         path = tmp_path / "config.toml"
