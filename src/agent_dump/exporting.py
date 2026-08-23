@@ -2,29 +2,43 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 import unicodedata
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.output_formats import FileOutputFormat
 from agent_dump.private_files import ensure_output_dir
 from agent_dump.rendering import export_session_in_format, get_session_export_path
 
 
 @dataclass(frozen=True)
-class ExportAttempt:
+class ExportSuccess:
     session: Session
-    output_format: str
-    output_path: Path | None
-    error: Exception | None
+    output_format: FileOutputFormat
+    output_path: Path
 
-    def __post_init__(self) -> None:
-        if (self.output_path is None) == (self.error is None):
-            raise ValueError("an export attempt must contain exactly one of output_path or error")
+
+@dataclass(frozen=True)
+class ExportFailure:
+    session: Session
+    output_format: FileOutputFormat
+    error: Exception
+
+
+ExportAttempt: TypeAlias = ExportSuccess | ExportFailure
+
+
+class ExportRunStatus(Enum):
+    EMPTY = "empty"
+    SUCCEEDED = "succeeded"
+    PARTIAL = "partial"
+    FAILED = "failed"
 
     @property
-    def succeeded(self) -> bool:
-        return self.error is None
+    def has_success(self) -> bool:
+        return self in {ExportRunStatus.SUCCEEDED, ExportRunStatus.PARTIAL}
 
 
 @dataclass(frozen=True)
@@ -33,15 +47,18 @@ class ExportRunResult:
 
     @property
     def exported_paths(self) -> tuple[Path, ...]:
-        return tuple(attempt.output_path for attempt in self.attempts if attempt.output_path is not None)
+        return tuple(attempt.output_path for attempt in self.attempts if isinstance(attempt, ExportSuccess))
 
     @property
-    def had_success(self) -> bool:
-        return any(attempt.succeeded for attempt in self.attempts)
-
-    @property
-    def all_failed(self) -> bool:
-        return bool(self.attempts) and not self.had_success
+    def status(self) -> ExportRunStatus:
+        success_count = sum(isinstance(attempt, ExportSuccess) for attempt in self.attempts)
+        if not self.attempts:
+            return ExportRunStatus.EMPTY
+        if success_count == len(self.attempts):
+            return ExportRunStatus.SUCCEEDED
+        if success_count:
+            return ExportRunStatus.PARTIAL
+        return ExportRunStatus.FAILED
 
     def __len__(self) -> int:
         return len(self.exported_paths)
@@ -52,12 +69,21 @@ class ExportPathCollisionError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class _PlannedExport:
+class _ReadyExport:
     session: Session
-    output_format: str
-    output_dir: Path | None
-    output_path: Path | None
-    error: Exception | None
+    output_format: FileOutputFormat
+    output_dir: Path
+    output_path: Path
+
+
+@dataclass(frozen=True)
+class _RejectedExport:
+    session: Session
+    output_format: FileOutputFormat
+    error: Exception
+
+
+_PlannedExport: TypeAlias = _ReadyExport | _RejectedExport
 
 
 def _portable_path_key(path: Path) -> str:
@@ -67,8 +93,8 @@ def _portable_path_key(path: Path) -> str:
 def _plan_exports(
     agent: BaseAgent,
     sessions: Sequence[Session],
-    formats: Sequence[str],
-    output_dir_for_format: Callable[[str], Path],
+    formats: Sequence[FileOutputFormat],
+    output_dir_for_format: Callable[[FileOutputFormat], Path],
 ) -> tuple[_PlannedExport, ...]:
     plans: list[_PlannedExport] = []
     target_indices: dict[str, list[int]] = {}
@@ -79,18 +105,18 @@ def _plan_exports(
                 output_dir = output_dir_for_format(output_format)
                 output_path = get_session_export_path(agent, session, output_dir, output_format)
                 target_indices.setdefault(_portable_path_key(output_path), []).append(len(plans))
-                plans.append(_PlannedExport(session, output_format, output_dir, output_path, None))
+                plans.append(_ReadyExport(session, output_format, output_dir, output_path))
             except Exception as exc:
-                plans.append(_PlannedExport(session, output_format, None, None, exc))
+                plans.append(_RejectedExport(session, output_format, exc))
 
     collision_indices = {index for indices in target_indices.values() if len(indices) > 1 for index in indices}
     for index in collision_indices:
         plan = plans[index]
-        plans[index] = _PlannedExport(
+        if isinstance(plan, _RejectedExport):
+            continue
+        plans[index] = _RejectedExport(
             session=plan.session,
             output_format=plan.output_format,
-            output_dir=plan.output_dir,
-            output_path=plan.output_path,
             error=ExportPathCollisionError(f"multiple exports resolve to the same output path: {plan.output_path}"),
         )
 
@@ -100,8 +126,8 @@ def _plan_exports(
 def execute_exports(
     agent: BaseAgent,
     sessions: Sequence[Session],
-    formats: Sequence[str],
-    output_dir_for_format: Callable[[str], Path],
+    formats: Sequence[FileOutputFormat],
+    output_dir_for_format: Callable[[FileOutputFormat], Path],
     *,
     prepared_session_data: Mapping[str, Mapping[str, Any]] | None = None,
     session_uris: Mapping[str, str] | None = None,
@@ -112,37 +138,29 @@ def execute_exports(
     loaded_session_data: dict[str, Mapping[str, Any]] = dict(prepared_session_data or {})
 
     for plan in _plan_exports(agent, sessions, formats, output_dir_for_format):
-        output_path: Path | None = None
-        error = plan.error
-        if error is None and plan.output_dir is not None:
-            try:
-                output_dir = ensure_output_dir(plan.output_dir)
-                if plan.output_format == "markdown" and plan.session.id not in loaded_session_data:
-                    loaded_session_data[plan.session.id] = agent.get_cached_session_data(plan.session)
+        if isinstance(plan, _RejectedExport):
+            attempts.append(ExportFailure(plan.session, plan.output_format, plan.error))
+            continue
+        try:
+            output_dir = ensure_output_dir(plan.output_dir)
+            if plan.output_format == "markdown" and plan.session.id not in loaded_session_data:
+                loaded_session_data[plan.session.id] = agent.get_cached_session_data(plan.session)
 
-                output_path = export_session_in_format(
-                    agent,
-                    plan.session,
-                    output_dir,
-                    plan.output_format,
-                    session_data=loaded_session_data.get(plan.session.id),
-                    session_uri=session_uris.get(plan.session.id) if session_uris is not None else None,
-                    json_fields=(
-                        {"summary": summaries[plan.session.id]}
-                        if plan.output_format == "json" and summaries is not None and plan.session.id in summaries
-                        else None
-                    ),
-                )
-            except Exception as exc:
-                error = exc
-
-        attempts.append(
-            ExportAttempt(
-                session=plan.session,
-                output_format=plan.output_format,
-                output_path=output_path,
-                error=error,
+            output_path = export_session_in_format(
+                agent,
+                plan.session,
+                output_dir,
+                plan.output_format,
+                session_data=loaded_session_data.get(plan.session.id),
+                session_uri=session_uris.get(plan.session.id) if session_uris is not None else None,
+                json_fields=(
+                    {"summary": summaries[plan.session.id]}
+                    if plan.output_format == "json" and summaries is not None and plan.session.id in summaries
+                    else None
+                ),
             )
-        )
+            attempts.append(ExportSuccess(plan.session, plan.output_format, output_path))
+        except Exception as exc:
+            attempts.append(ExportFailure(plan.session, plan.output_format, exc))
 
     return ExportRunResult(tuple(attempts))

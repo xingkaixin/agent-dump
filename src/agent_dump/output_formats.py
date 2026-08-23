@@ -1,24 +1,36 @@
 """Output format definitions and validation."""
 
-from agent_dump.agents.base import BaseAgent
+from collections.abc import Sequence
+from typing import Literal, Protocol, TypeAlias
+
 from agent_dump.diagnostics import unsupported_capability
 from agent_dump.i18n import Keys, i18n
 
-VALID_FORMATS = {"json", "markdown", "raw", "print"}
-FORMAT_ALIASES = {"md": "markdown"}
+OutputFormat: TypeAlias = Literal["json", "markdown", "raw", "print"]
+FileOutputFormat: TypeAlias = Literal["json", "markdown", "raw"]
+
+VALID_FORMATS: frozenset[OutputFormat] = frozenset({"json", "markdown", "raw", "print"})
+FORMAT_ALIASES: dict[str, OutputFormat] = {"md": "markdown"}
 
 
-def parse_format_spec(raw: str) -> list[str]:
-    formats: list[str] = []
-    seen: set[str] = set()
+class UriFormatCapabilities(Protocol):
+    display_name: str
+    unsupported_uri_formats: frozenset[str]
+
+
+def parse_format_spec(raw: str) -> list[OutputFormat]:
+    formats: list[OutputFormat] = []
+    seen: set[OutputFormat] = set()
 
     for part in raw.split(","):
         candidate = part.strip().lower()
-        normalized = FORMAT_ALIASES.get(candidate, candidate)
-        if not normalized:
+        if not candidate:
             raise ValueError("empty format")
-        if normalized not in VALID_FORMATS:
-            raise ValueError(normalized)
+        normalized = FORMAT_ALIASES.get(candidate)
+        if normalized is None:
+            if candidate not in VALID_FORMATS:
+                raise ValueError(candidate)
+            normalized = candidate
         if normalized in seen:
             continue
         seen.add(normalized)
@@ -30,14 +42,18 @@ def parse_format_spec(raw: str) -> list[str]:
     return formats
 
 
-def validate_formats_for_mode(formats: list[str], is_uri_mode: bool, is_list_mode: bool) -> None:
+def file_output_formats(formats: Sequence[OutputFormat]) -> tuple[FileOutputFormat, ...]:
+    return tuple(output_format for output_format in formats if output_format != "print")
+
+
+def validate_formats_for_mode(formats: Sequence[OutputFormat], is_uri_mode: bool, is_list_mode: bool) -> None:
     if is_list_mode or is_uri_mode:
         return
     if "print" in formats:
         raise ValueError("interactive-print")
 
 
-def validate_uri_agent_formats(agent: BaseAgent, formats: list[str]) -> None:
+def validate_uri_agent_formats(agent: UriFormatCapabilities, formats: Sequence[OutputFormat]) -> None:
     unsupported = [output_format for output_format in formats if output_format in agent.unsupported_uri_formats]
     if not unsupported:
         return

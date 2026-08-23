@@ -8,7 +8,14 @@ from unittest import mock
 import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.exporting import ExportAttempt, ExportPathCollisionError, execute_exports
+from agent_dump.exporting import (
+    ExportFailure,
+    ExportPathCollisionError,
+    ExportRunResult,
+    ExportRunStatus,
+    ExportSuccess,
+    execute_exports,
+)
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
 
 
@@ -41,21 +48,8 @@ def make_session(session_id: str, title: str) -> Session:
     )
 
 
-@pytest.mark.parametrize(
-    ("output_path", "error"),
-    [
-        (None, None),
-        (Path("session.json"), RuntimeError("failed")),
-    ],
-)
-def test_export_attempt_rejects_ambiguous_outcomes(output_path: Path | None, error: Exception | None) -> None:
-    with pytest.raises(ValueError, match="exactly one"):
-        ExportAttempt(
-            session=make_session("session-001", "Session"),
-            output_format="json",
-            output_path=output_path,
-            error=error,
-        )
+def test_empty_export_run_has_explicit_status() -> None:
+    assert ExportRunResult(()).status is ExportRunStatus.EMPTY
 
 
 def test_execute_exports_retains_success_and_failure_outcomes(tmp_path: Path) -> None:
@@ -66,11 +60,10 @@ def test_execute_exports_retains_success_and_failure_outcomes(tmp_path: Path) ->
 
     result = execute_exports(agent, [first, second], ["json"], lambda _: tmp_path)
 
-    assert result.had_success is True
-    assert result.all_failed is False
+    assert result.status is ExportRunStatus.PARTIAL
     assert result.exported_paths == (tmp_path / "first.json",)
-    assert result.attempts[0].succeeded is True
-    assert result.attempts[1].succeeded is False
+    assert isinstance(result.attempts[0], ExportSuccess)
+    assert isinstance(result.attempts[1], ExportFailure)
     assert isinstance(result.attempts[1].error, RuntimeError)
 
 
@@ -88,9 +81,9 @@ def test_execute_exports_writes_summary_with_initial_json_export(tmp_path: Path)
             summaries={session.id: "# Summary"},
         )
 
-    assert result.had_success is True
+    assert result.status is ExportRunStatus.SUCCEEDED
     assert result.exported_paths == (output_path,)
-    assert result.attempts[0].error is None
+    assert isinstance(result.attempts[0], ExportSuccess)
     assert json.loads(output_path.read_text(encoding="utf-8"))["summary"] == "# Summary"
     replace.assert_called_once()
 
@@ -103,9 +96,12 @@ def test_execute_exports_rejects_duplicate_targets_before_writing(tmp_path: Path
     with mock.patch("agent_dump.exporting.get_session_export_path", return_value=tmp_path / "duplicate.json"):
         result = execute_exports(agent, [first, second], ["json"], lambda _: tmp_path)
 
-    assert result.all_failed is True
+    assert result.status is ExportRunStatus.FAILED
     assert not list(tmp_path.iterdir())
-    assert all(isinstance(attempt.error, ExportPathCollisionError) for attempt in result.attempts)
+    assert all(
+        isinstance(attempt, ExportFailure) and isinstance(attempt.error, ExportPathCollisionError)
+        for attempt in result.attempts
+    )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX modes are not meaningful on Windows")
