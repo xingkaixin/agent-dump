@@ -59,6 +59,9 @@ _SessionKey = tuple[str, str]
 
 
 _CJK_RANGE = ("\u4e00", "\u9fff")
+# Python re.IGNORECASE treats all four forms as equivalent, while SQLite's
+# trigram tokenizer keeps dotted and dotless I distinct.
+_TRIGRAM_UNSAFE_CASE_EQUIVALENTS = frozenset("iIİı")
 
 
 def _has_cjk(text: str) -> bool:
@@ -182,6 +185,8 @@ def _select_query_fts_table(query: TextQuery) -> str | None:
         return None
     if all(_is_cjk_literal(literal) for literal in query.literals):
         return "sessions_fts"
+    if any(_TRIGRAM_UNSAFE_CASE_EQUIVALENTS.intersection(literal) for literal in query.literals):
+        return None
     if not any(_has_cjk(literal) for literal in query.literals) and all(
         len(literal) >= 3 for literal in query.literals
     ):
