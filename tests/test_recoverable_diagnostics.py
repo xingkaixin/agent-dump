@@ -78,6 +78,17 @@ def test_scanner_can_disable_provider_diagnostics(capsys) -> None:
     assert capsys.readouterr().err == ""
 
 
+def test_scanner_diagnostic_destination_does_not_persist_after_operation() -> None:
+    agent = DiagnosticAgent()
+    diagnostics: list[RecoverableDiagnostic] = []
+    scanner = AgentScanner([agent], diagnostic_sink=diagnostics.append)
+
+    scanner.get_sessions()
+    agent.get_sessions()
+
+    assert len(diagnostics) == 1
+
+
 def test_scanners_keep_their_own_provider_diagnostic_destinations() -> None:
     agent = DiagnosticAgent()
     first_diagnostics: list[RecoverableDiagnostic] = []
