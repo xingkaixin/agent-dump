@@ -11,10 +11,7 @@ from unittest import mock
 from collect_test_support import configure_session_data_lease, make_query_spec
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.collect import (
-    _MAX_SESSION_PARSE_WORKERS,
-    collect_entries,
-)
+from agent_dump.collect_sessions import _MAX_SESSION_PARSE_WORKERS, collect_entries
 
 
 class TestCollectEntries:

@@ -9,7 +9,7 @@ import stat
 import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.collect import write_collect_markdown
+from agent_dump.collect_output import write_collect_markdown
 from agent_dump.private_files import (
     PRIVATE_DIR_MODE,
     PRIVATE_FILE_MODE,
