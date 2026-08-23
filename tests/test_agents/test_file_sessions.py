@@ -83,6 +83,32 @@ def test_available_file_sessions_reuse_one_file_discovery(tmp_path: Path) -> Non
     assert agent.file_discovery_count == 1
 
 
+def test_file_session_cache_reloads_when_source_changes(tmp_path: Path) -> None:
+    class ReadingFileAgent(FailingFileAgent):
+        def get_session_data(self, session: Session) -> dict[str, str]:
+            return {"content": session.source_path.read_text(encoding="utf-8")}
+
+    source_path = tmp_path / "session.jsonl"
+    source_path.write_text("first", encoding="utf-8")
+    now = datetime.now(timezone.utc)
+    session = Session(
+        id="changing",
+        title="Changing",
+        created_at=now,
+        updated_at=now,
+        source_path=source_path,
+        metadata={},
+    )
+    agent = ReadingFileAgent(tmp_path)
+
+    first = agent.get_cached_session_data(session)
+    source_path.write_text("second", encoding="utf-8")
+    second = agent.get_cached_session_data(session)
+
+    assert first == {"content": "first"}
+    assert second == {"content": "second"}
+
+
 def test_file_scan_bounds_pending_parse_tasks(tmp_path: Path, monkeypatch) -> None:
     for index in range(40):
         (tmp_path / f"{index:02}.jsonl").touch()
