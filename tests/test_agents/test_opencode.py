@@ -229,11 +229,10 @@ class TestOpenCodeAgent:
 
         agent = OpenCodeAgent()
         agent.db_path = populated_db
-        scanner = AgentScanner([agent])
-        with scanner.diagnostic_scope():
-            session = agent.find_session_by_id("session-001")
-            assert session is not None
-            data = agent.get_session_data(session)
+        AgentScanner([agent])
+        session = agent.find_session_by_id("session-001")
+        assert session is not None
+        data = agent.get_session_data(session)
 
         assert data["stats"]["message_count"] == 1
         assert [message["id"] for message in data["messages"]] == ["msg-001"]
@@ -260,11 +259,10 @@ class TestOpenCodeAgent:
 
         agent = OpenCodeAgent()
         agent.db_path = populated_db
-        scanner = AgentScanner([agent])
-        with scanner.diagnostic_scope():
-            session = agent.find_session_by_id("session-001")
-            assert session is not None
-            agent.get_session_data(session)
+        AgentScanner([agent])
+        session = agent.find_session_by_id("session-001")
+        assert session is not None
+        agent.get_session_data(session)
 
         lines = capsys.readouterr().err.splitlines()
         assert len(lines) == 2
