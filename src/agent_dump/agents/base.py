@@ -205,16 +205,6 @@ class BaseAgent(ABC):
                 return session
         return None
 
-    def filter_sessions_by_keyword(self, sessions: list[Session], keyword: str) -> list[Session] | None:
-        """Match one normalized literal phrase against the logical session corpus.
-
-        A provider storage fallback must return the same hit set as the shared title
-        and transcript matcher. It runs only when the persistent index is unavailable;
-        return None when storage cannot express that contract.
-        """
-        del sessions, keyword
-        return None
-
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         """Return provider roots checked during discovery."""
         return ()

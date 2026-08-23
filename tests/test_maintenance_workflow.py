@@ -315,9 +315,8 @@ class TestProvidersMode:
 
         assert result == 0
         output = capsys.readouterr().out
-        assert "存储级关键词回退" in output
         provider_row = next(line for line in output.splitlines() if line.startswith("OpenCode |"))
-        assert provider_row.split(" | ")[3] == "否"
+        assert provider_row.split(" | ")[3] == "已找到 1/2"
         assert "已找到 1/2" in output
         assert f"[已找到] existing root: {existing_root}" in output
         assert f"[未找到] missing root: {missing_root}" in output

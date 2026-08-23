@@ -19,8 +19,6 @@ from agent_dump.output_formats import FileOutputFormat
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
-    filter_sessions,
-    filter_sessions_by_query,
     query_session_groups,
     search_session_groups,
 )
@@ -212,16 +210,6 @@ def render_query_summary(spec: QuerySpec) -> str:
     if spec.limit is not None:
         parts.append(f"limit={spec.limit}")
     return "；".join(parts) if parts else i18n.t(Keys.QUERY_SUMMARY_ALL_SESSIONS)
-
-
-def apply_query_filter(agent: BaseAgent, sessions: list[Session], spec: QuerySpec | None) -> list[Session]:
-    if spec is None:
-        return sessions
-    if spec.project_path is None and spec.roles is None and spec.limit is None and spec.keyword is not None:
-        if spec.agent_names is not None and agent.name not in spec.agent_names:
-            return []
-        return filter_sessions(agent, sessions, spec.keyword)
-    return filter_sessions_by_query(agent, sessions, spec)
 
 
 def collect_query_matches(

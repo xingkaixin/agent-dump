@@ -14,6 +14,7 @@ import pytest
 from agent_dump import search_index as search_index_module
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys
+from agent_dump.query_filter import QuerySpec, query_session_groups
 from agent_dump.query_semantics import TextQuery, TextQueryMode
 from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.search_index import (
@@ -74,6 +75,21 @@ def make_session(session_id: str, title: str, source_path: Path) -> Session:
         source_path=source_path,
         metadata={},
     )
+
+
+def query_sessions_by_keyword(
+    agent: BaseAgent,
+    sessions: list[Session],
+    keyword: str,
+    *,
+    diagnostic_sink=None,
+) -> list[Session]:
+    matches = query_session_groups(
+        [(agent, sessions)],
+        QuerySpec(agent_names=None, keyword=keyword, project_path=None, roles=None, limit=None),
+        diagnostic_sink=diagnostic_sink,
+    )
+    return [match.session for match in matches]
 
 
 class TestHasFts5:
@@ -802,8 +818,6 @@ class TestSearchIndexFallback:
 
 class TestQueryFilterIntegration:
     def test_filter_sessions_uses_index_when_available(self, tmp_path):
-        from agent_dump.query_filter import filter_sessions
-
         index = SearchIndex(tmp_path / "index.db")
         agent = DummyAgent(
             session_data={
@@ -815,12 +829,10 @@ class TestQueryFilterIntegration:
         index.update(agent, [session])
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            results = filter_sessions(agent, [session], "indexed keyword")
+            results = query_sessions_by_keyword(agent, [session], "indexed keyword")
             assert len(results) == 1
 
     def test_filter_sessions_fallback_when_index_fails(self, tmp_path, capsys):
-        from agent_dump.query_filter import filter_sessions
-
         agent = DummyAgent(
             session_data={
                 "s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "fallback keyword"}]}]}
@@ -832,7 +844,7 @@ class TestQueryFilterIntegration:
         agent.display_name = poison
 
         with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=Exception(f"boom {poison}")):
-            results = filter_sessions(
+            results = query_sessions_by_keyword(
                 agent,
                 [session],
                 "fallback keyword",
@@ -1323,8 +1335,6 @@ class TestIndexFailureIsReported:
     """AD-133：索引出错必须说出来，而不是与「没有索引」混为一谈。"""
 
     def test_index_error_is_returned_as_a_structured_diagnostic(self, tmp_path, capsys):
-        from agent_dump.query_filter import filter_sessions
-
         agent = DummyAgent(
             session_data={"s1": {"messages": [{"role": "user", "content": "fallback kw"}]}},
         )
@@ -1332,7 +1342,7 @@ class TestIndexFailureIsReported:
         diagnostics = []
 
         with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=sqlite3.DatabaseError("db is locked")):
-            results = filter_sessions(
+            results = query_sessions_by_keyword(
                 agent,
                 [session],
                 "fallback kw",
@@ -1345,8 +1355,6 @@ class TestIndexFailureIsReported:
         assert capsys.readouterr().err == ""
 
     def test_index_error_warns_and_still_falls_back(self, tmp_path, capsys):
-        from agent_dump.query_filter import filter_sessions
-
         agent = DummyAgent(
             session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "fallback kw"}]}]}}
         )
@@ -1354,7 +1362,7 @@ class TestIndexFailureIsReported:
         session.source_path.write_text("fallback kw", encoding="utf-8")
 
         with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=sqlite3.DatabaseError("db is locked")):
-            results = filter_sessions(
+            results = query_sessions_by_keyword(
                 agent,
                 [session],
                 "fallback kw",
@@ -1369,8 +1377,6 @@ class TestIndexFailureIsReported:
 
     def test_missing_fts5_support_is_not_reported_as_an_error(self, tmp_path, capsys):
         """没编译 FTS5 是正常状态，不该每次查询都刷告警。"""
-        from agent_dump.query_filter import filter_sessions
-
         agent = DummyAgent(
             session_data={"s1": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "fallback kw"}]}]}}
         )
@@ -1378,7 +1384,7 @@ class TestIndexFailureIsReported:
         session.source_path.write_text("fallback kw", encoding="utf-8")
 
         with mock.patch.object(SearchIndex, "is_available", new_callable=mock.PropertyMock, return_value=False):
-            filter_sessions(agent, [session], "fallback kw")
+            query_sessions_by_keyword(agent, [session], "fallback kw")
         captured = capsys.readouterr()
 
         assert captured.err == ""
