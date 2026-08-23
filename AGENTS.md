@@ -64,7 +64,7 @@
 |------|------|
 | `agent_registry.py` | 注册 provider、URI scheme、用户可见路径说明 |
 | `bounded_concurrency.py` | 有界 Future 提交、完成等待与补位机制；业务失败和排序策略由调用方拥有 |
-| `scanner.py` | Provider availability、session list / locate 编排与逐 provider 失败隔离 |
+| `scanner.py` | Provider availability、session list / locate 编排与逐 provider 失败隔离，不负责终端展示 |
 | `cli.py` | 参数解析、模式选择、依赖装配 |
 | `cli_shared.py` | 跨工作流的会话筛选、输出目录与诊断渲染 |
 | `command_plan.py` | 将 `CommandRequest` 一次性归一化为闭集操作事实，解析 Query/URI 并校验模式、默认值与 modifier |
