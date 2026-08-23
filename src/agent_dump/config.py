@@ -1,6 +1,6 @@
 """Configuration models, parsing, validation, and persistence."""
 
-from copy import deepcopy
+from collections.abc import MutableMapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from enum import Enum
@@ -12,6 +12,9 @@ import re
 import sys
 from typing import Any
 from urllib.parse import urlsplit
+
+import tomlkit
+from tomlkit.toml_document import TOMLDocument
 
 from agent_dump.private_files import PRIVATE_FILE_MODE, write_private_text
 
@@ -81,6 +84,7 @@ class ConfigurationDocument:
     # 写回时按 "." 拆分就会把前者变成后者。空 tuple 是根表。
     sections: dict[tuple[str, ...], dict[str, Any]]
     parse_mode: ConfigurationParseMode = ConfigurationParseMode.TOML
+    source_text: str | None = None
 
     def ai_config(self) -> AIConfig | None:
         parsed = self.sections.get(("ai",))
@@ -356,26 +360,27 @@ def _child_of(section_path: tuple[str, ...], parent: str) -> str | None:
 
 def _read_config_sections(
     config_path: Path,
-) -> tuple[dict[tuple[str, ...], dict[str, Any]], ConfigurationParseMode]:
+) -> tuple[dict[tuple[str, ...], dict[str, Any]], ConfigurationParseMode, str]:
     text = config_path.read_text(encoding="utf-8")
     try:
         parsed = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
         # 旧版本写出的配置可能不是合法 TOML（如未转义的 Windows 路径），降级用宽松解析器读取
-        return _parse_simple_toml_sections(text), ConfigurationParseMode.LEGACY
-    return _collect_toml_sections(parsed), ConfigurationParseMode.TOML
+        return _parse_simple_toml_sections(text), ConfigurationParseMode.LEGACY, text
+    return _collect_toml_sections(parsed), ConfigurationParseMode.TOML, text
 
 
 def load_config_document(path: Path | None = None) -> ConfigurationDocument:
     """Read one complete configuration snapshot."""
     config_path = path if path is not None else get_config_path()
     if not config_path.exists():
-        return ConfigurationDocument(path=config_path, sections={})
-    sections, parse_mode = _read_config_sections(config_path)
+        return ConfigurationDocument(path=config_path, sections={}, source_text="")
+    sections, parse_mode, source_text = _read_config_sections(config_path)
     return ConfigurationDocument(
         path=config_path,
         sections=sections,
         parse_mode=parse_mode,
+        source_text=source_text,
     )
 
 
@@ -509,20 +514,28 @@ def _render_config_sections(sections: dict[tuple[str, ...], dict[str, Any]]) -> 
     return f"{content}\n" if content else ""
 
 
-def _replace_known_values(
-    sections: dict[tuple[str, ...], dict[str, Any]],
-    section_path: tuple[str, ...],
+def _replace_document_values(
+    document: TOMLDocument,
+    section_name: str,
     *,
     known_keys: frozenset[str],
     values: dict[str, Any] | None,
 ) -> None:
-    section = sections.setdefault(section_path, {})
-    for key in known_keys:
-        section.pop(key, None)
-    if values is not None:
-        section.update(values)
-    if not section:
-        sections.pop(section_path, None)
+    raw_section = document.get(section_name)
+    if not isinstance(raw_section, MutableMapping):
+        if values is None:
+            return
+        document.pop(section_name, None)
+        raw_section = tomlkit.table()
+        document[section_name] = raw_section
+
+    desired_values = values or {}
+    for key in known_keys - desired_values.keys():
+        raw_section.pop(key, None)
+    for key, value in desired_values.items():
+        raw_section[key] = value
+    if not raw_section:
+        document.pop(section_name, None)
 
 
 def write_config(
@@ -538,10 +551,13 @@ def write_config(
     if snapshot.parse_mode is ConfigurationParseMode.LEGACY:
         raise ValueError("cannot safely update a configuration parsed with the legacy fallback")
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    sections = deepcopy(snapshot.sections)
-    _replace_known_values(
-        sections,
-        ("ai",),
+    source_text = snapshot.source_text
+    if source_text is None:
+        source_text = _render_config_sections(snapshot.sections)
+    toml_document = tomlkit.loads(source_text)
+    _replace_document_values(
+        toml_document,
+        "ai",
         known_keys=frozenset({"provider", "base_url", "model", "api_key"}),
         values=(
             {
@@ -555,14 +571,14 @@ def write_config(
         ),
     )
     if export_config is not None:
-        _replace_known_values(
-            sections,
-            ("export",),
+        _replace_document_values(
+            toml_document,
+            "export",
             known_keys=frozenset({"output"}),
             values={"output": export_config.output},
         )
 
-    rendered_content = _render_config_sections(sections)
+    rendered_content = tomlkit.dumps(toml_document)
     return write_private_text(config_path, rendered_content)
 
 
