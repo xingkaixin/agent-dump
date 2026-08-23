@@ -900,7 +900,7 @@ class TestCodexAgent:
     def test_get_session_data_malformed_line_warns_to_stderr(self, tmp_path, capsys):
         """测试损坏的 JSONL 行只向 stderr 输出警告，不污染 stdout"""
         agent = CodexAgent()
-        scanner = AgentScanner([agent])
+        AgentScanner([agent])
         session_file = tmp_path / "test-malformed.jsonl"
         valid_line = json.dumps(
             {
@@ -924,8 +924,7 @@ class TestCodexAgent:
             metadata={"cwd": "/test", "cli_version": "1.0"},
         )
 
-        with scanner.diagnostic_scope():
-            result = agent.get_session_data(session)
+        result = agent.get_session_data(session)
 
         assert len(result["messages"]) == 1
         captured = capsys.readouterr()

@@ -277,19 +277,18 @@ def _prepare_collect_plan(
             print(i18n.t(Keys.NO_AGENTS_FOUND))
             return None
         available_agents = [agent for agent, _ in session_results]
-        with scanner.diagnostic_scope(available_agents):
-            entries, has_truncated = collect_entries(
-                session_groups=session_results,
-                since_date=since_date,
-                until_date=until_date,
-                collect_config=collect_config,
-                query_spec=operation.query_spec,
-                render_session_text_fn=render_session_text,
-                local_tz=local_tz,
-                progress_callback=progress_callback,
-                diagnostic_sink=print_search_diagnostic,
-                logger=logger,
-            )
+        entries, has_truncated = collect_entries(
+            session_groups=session_results,
+            since_date=since_date,
+            until_date=until_date,
+            collect_config=collect_config,
+            query_spec=operation.query_spec,
+            render_session_text_fn=render_session_text,
+            local_tz=local_tz,
+            progress_callback=progress_callback,
+            diagnostic_sink=print_search_diagnostic,
+            logger=logger,
+        )
         if not entries:
             print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
             return None

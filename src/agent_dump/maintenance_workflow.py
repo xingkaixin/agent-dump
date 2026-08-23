@@ -225,8 +225,7 @@ def handle_reindex_mode(
     for agent, sessions in scanned_sessions:
         if not sessions:
             continue
-        with scanner.diagnostic_scope([agent]):
-            added = index.rebuild(agent, sessions, diagnostic_sink=print_search_diagnostic)
+        added = index.rebuild(agent, sessions, diagnostic_sink=print_search_diagnostic)
         total_indexed += added
         print(render_terminal_message(Keys.REINDEX_AGENT_DONE, agent=agent.display_name, count=added))
 
