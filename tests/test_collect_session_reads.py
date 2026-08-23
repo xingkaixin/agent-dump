@@ -18,6 +18,7 @@ from agent_dump.collect_models import (
     CollectProgressEvent,
     ScanSessionsProgress,
 )
+import agent_dump.collect_sessions as collect_sessions_module
 from agent_dump.collect_sessions import collect_entries
 from agent_dump.config import CollectConfig
 
@@ -147,6 +148,45 @@ class TestCollectEntries:
 
         assert entries == []
         agent.get_session_facts.assert_called_once_with(session)
+
+    def test_collect_normalizes_each_configured_deny_path_once(self, monkeypatch) -> None:
+        now = datetime.now(timezone.utc)
+        sessions = [
+            Session(
+                id=f"session-{index}",
+                title=f"session {index}",
+                created_at=now - timedelta(days=40),
+                updated_at=now - timedelta(days=40),
+                source_path=Path(f"/tmp/session-{index}.jsonl"),
+                metadata={"cwd": f"/allowed/project-{index}"},
+            )
+            for index in range(2)
+        ]
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        configure_session_data_lease(agent)
+
+        normalized_values: list[str] = []
+        normalize_path = collect_sessions_module._normalize_collect_project_path
+
+        def record_normalization(value: str) -> Path | None:
+            normalized_values.append(value)
+            return normalize_path(value)
+
+        monkeypatch.setattr(collect_sessions_module, "_normalize_collect_project_path", record_normalization)
+
+        entries, _ = collect_entries(
+            session_groups=[(agent, sessions)],
+            since_date=now.date(),
+            until_date=now.date(),
+            collect_config=CollectConfig(agent_denies={"codex": ("/blocked/one", "/blocked/two")}),
+            render_session_text_fn=lambda uri, data: f"{uri} {data}",
+            local_tz=timezone.utc,
+        )
+
+        assert entries == []
+        assert normalized_values.count("/blocked/one") == 1
+        assert normalized_values.count("/blocked/two") == 1
 
     def test_collect_entries_parses_concurrently_and_preserves_order(self) -> None:
         now = datetime.now(timezone.utc)

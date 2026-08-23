@@ -51,19 +51,13 @@ def _normalize_collect_project_path(value: str) -> Path | None:
     return Path(normalized).expanduser().resolve(strict=False)
 
 
-def _is_session_denied(agent: BaseAgent, session: Session, deny_paths: tuple[str, ...]) -> bool:
+def _is_session_denied(agent: BaseAgent, session: Session, denied_roots: tuple[Path, ...]) -> bool:
     working_directory = agent.get_session_facts(session).working_directory
     session_path = _normalize_collect_project_path(str(working_directory or ""))
     if session_path is None:
         return False
 
-    for deny_path in deny_paths:
-        denied_root = _normalize_collect_project_path(deny_path)
-        if denied_root is None:
-            continue
-        if session_path == denied_root or denied_root in session_path.parents:
-            return True
-    return False
+    return any(session_path == denied_root or denied_root in session_path.parents for denied_root in denied_roots)
 
 
 def collect_entries(
@@ -90,7 +84,13 @@ def collect_entries(
     for agent, sessions in session_groups:
         deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
         if deny_paths:
-            sessions = [session for session in sessions if not _is_session_denied(agent, session, deny_paths)]
+            denied_roots = tuple(
+                denied_root
+                for deny_path in deny_paths
+                if (denied_root := _normalize_collect_project_path(deny_path)) is not None
+            )
+            if denied_roots:
+                sessions = [session for session in sessions if not _is_session_denied(agent, session, denied_roots)]
         eligible_session_groups.append(
             (
                 agent,
