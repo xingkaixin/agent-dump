@@ -2,7 +2,7 @@
 Session selection utilities
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 import sys
 
 import questionary
@@ -11,9 +11,10 @@ from questionary import Choice, Style
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
 from agent_dump.rendering import format_session_metadata_summary
+from agent_dump.session_time_groups import group_sessions_by_age
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
-from agent_dump.time_utils import get_local_timezone, to_local_datetime
+from agent_dump.time_utils import get_local_timezone
 
 
 def is_terminal() -> bool:
@@ -24,51 +25,15 @@ def is_terminal() -> bool:
 def get_time_group(session: Session) -> str:
     """Get time group for a session"""
     local_tz = get_local_timezone()
-    now = datetime.now(local_tz)
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    yesterday = today - timedelta(days=1)
-    week_ago = today - timedelta(days=7)
-    month_ago = today - timedelta(days=30)
-
-    session_time = to_local_datetime(session.created_at, local_tz)
-
-    if session_time >= today:
-        return i18n.t(Keys.TIME_TODAY)
-    elif session_time >= yesterday:
-        return i18n.t(Keys.TIME_YESTERDAY)
-    elif session_time >= week_ago:
-        return i18n.t(Keys.TIME_THIS_WEEK)
-    elif session_time >= month_ago:
-        return i18n.t(Keys.TIME_THIS_MONTH)
-    else:
-        return i18n.t(Keys.TIME_OLDER)
+    groups = group_sessions_by_age([session], now=datetime.now(local_tz), local_tz=local_tz)
+    return i18n.t(next(iter(groups)).value)
 
 
 def group_sessions(sessions: list[Session]) -> dict[str, list[Session]]:
     """Group sessions by time periods"""
-    groups: dict[str, list[Session]] = {}
-
-    for session in sessions:
-        group = get_time_group(session)
-        if group not in groups:
-            groups[group] = []
-        groups[group].append(session)
-
-    # Define order
-    order = [
-        i18n.t(Keys.TIME_TODAY),
-        i18n.t(Keys.TIME_YESTERDAY),
-        i18n.t(Keys.TIME_THIS_WEEK),
-        i18n.t(Keys.TIME_THIS_MONTH),
-        i18n.t(Keys.TIME_OLDER),
-        i18n.t(Keys.TIME_UNKNOWN),
-    ]
-    ordered_groups = {}
-    for key in order:
-        if key in groups:
-            ordered_groups[key] = groups[key]
-
-    return ordered_groups
+    local_tz = get_local_timezone()
+    groups = group_sessions_by_age(sessions, now=datetime.now(local_tz), local_tz=local_tz)
+    return {i18n.t(group.value): group_sessions for group, group_sessions in groups.items()}
 
 
 def select_agent_interactive(agents: list[BaseAgent], session_counts: dict[str, int]) -> BaseAgent | None:

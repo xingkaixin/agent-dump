@@ -31,7 +31,6 @@ EN_TRANSLATIONS = {
     Keys.TIME_THIS_WEEK: "This Week",
     Keys.TIME_THIS_MONTH: "This Month",
     Keys.TIME_OLDER: "Older",
-    Keys.TIME_UNKNOWN: "Unknown Time",
     Keys.SELECT_AGENT_PROMPT: "Select Agent Tool to export:",
     Keys.SELECT_INSTRUCTION: "\n↑↓ Move  |  Enter Select  |  q Quit",
     Keys.USER_CANCELLED: "⚠️  User cancelled, exiting.",

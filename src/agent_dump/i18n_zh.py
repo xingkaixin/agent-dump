@@ -31,7 +31,6 @@ ZH_TRANSLATIONS = {
     Keys.TIME_THIS_WEEK: "本周",
     Keys.TIME_THIS_MONTH: "本月",
     Keys.TIME_OLDER: "更早",
-    Keys.TIME_UNKNOWN: "未知时间",
     Keys.SELECT_AGENT_PROMPT: "选择要导出的 Agent Tool:",
     Keys.SELECT_INSTRUCTION: "\n↑↓ 移动  |  回车 选择  |  q 退出",
     Keys.USER_CANCELLED: "⚠️  用户取消操作，退出。",
