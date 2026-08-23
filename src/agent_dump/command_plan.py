@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 from pathlib import Path
-from typing import ClassVar
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS, get_uri_scheme_map
 from agent_dump.collect_models import CollectMode
@@ -17,7 +16,7 @@ from agent_dump.query_filter import QuerySpec, parse_query, parse_query_uri
 from agent_dump.uri_support import parse_uri
 
 
-class CommandMode(Enum):
+class _CommandMode(Enum):
     PROVIDERS = "providers"
     CONFIG = "config"
     COLLECT = "collect"
@@ -82,13 +81,12 @@ class CommandRequest:
 
 @dataclass(frozen=True)
 class ProvidersOperation:
-    mode: ClassVar[CommandMode] = CommandMode.PROVIDERS
+    pass
 
 
 @dataclass(frozen=True)
 class ConfigOperation:
     action: str
-    mode: ClassVar[CommandMode] = CommandMode.CONFIG
 
 
 @dataclass(frozen=True)
@@ -100,20 +98,17 @@ class CollectOperation:
     dry_run: bool
     collect_mode: CollectMode
     query_spec: QuerySpec | None
-    mode: ClassVar[CommandMode] = CommandMode.COLLECT
 
 
 @dataclass(frozen=True)
 class StatsOperation:
     days: int
     query_spec: QuerySpec | None
-    mode: ClassVar[CommandMode] = CommandMode.STATS
 
 
 @dataclass(frozen=True)
 class ReindexOperation:
     days: int
-    mode: ClassVar[CommandMode] = CommandMode.REINDEX
 
 
 @dataclass(frozen=True)
@@ -127,7 +122,6 @@ class UriOperation:
     output_formats: tuple[OutputFormat, ...]
     head: bool
     summary: bool
-    mode: ClassVar[CommandMode] = CommandMode.URI
 
 
 @dataclass(frozen=True)
@@ -137,7 +131,6 @@ class ListOperation:
     output_specified: bool
     format_specified: bool
     show_metadata_summary: bool
-    mode: ClassVar[CommandMode] = CommandMode.LIST
 
 
 @dataclass(frozen=True)
@@ -146,7 +139,6 @@ class SearchOperation:
     query_spec: QuerySpec
     output_specified: bool
     format_specified: bool
-    mode: ClassVar[CommandMode] = CommandMode.LIST
 
 
 @dataclass(frozen=True)
@@ -157,7 +149,6 @@ class InteractiveOperation:
     output_specified: bool
     output_formats: tuple[FileOutputFormat, ...]
     show_metadata_summary: bool
-    mode: ClassVar[CommandMode] = CommandMode.INTERACTIVE
 
 
 SessionOperation = ListOperation | SearchOperation | InteractiveOperation
@@ -165,7 +156,7 @@ SessionOperation = ListOperation | SearchOperation | InteractiveOperation
 
 @dataclass(frozen=True)
 class HelpOperation:
-    mode: ClassVar[CommandMode] = CommandMode.HELP
+    pass
 
 
 CommandOperation = (
@@ -188,14 +179,10 @@ class CommandPlan:
     warnings: tuple[CommandPlanWarning, ...] = ()
     ignored_mode_options: tuple[str, ...] = ()
 
-    @property
-    def mode(self) -> CommandMode:
-        return self.operation.mode
-
 
 @dataclass(frozen=True)
 class _ModeCandidate:
-    mode: CommandMode
+    mode: _CommandMode
     ignored_label: str | None = None
 
 
@@ -218,7 +205,7 @@ def build_command_plan(
         if candidate.ignored_label is not None and candidate.mode is not mode
     )
 
-    if mode is CommandMode.PROVIDERS:
+    if mode is _CommandMode.PROVIDERS:
         return CommandPlan(
             ProvidersOperation(),
             ignored_mode_options=ignored_mode_options,
@@ -241,29 +228,29 @@ def _build_mode_candidates(request: CommandRequest, *, is_query_uri: bool) -> tu
     """Build all applicable modes once, in compatibility-priority order."""
     candidates: list[_ModeCandidate] = []
     if request.providers:
-        candidates.append(_ModeCandidate(CommandMode.PROVIDERS, "--providers"))
+        candidates.append(_ModeCandidate(_CommandMode.PROVIDERS, "--providers"))
     if request.config_action:
-        candidates.append(_ModeCandidate(CommandMode.CONFIG, "--config"))
+        candidates.append(_ModeCandidate(_CommandMode.CONFIG, "--config"))
     if request.collect:
-        candidates.append(_ModeCandidate(CommandMode.COLLECT, "--collect"))
+        candidates.append(_ModeCandidate(_CommandMode.COLLECT, "--collect"))
     if request.stats:
-        candidates.append(_ModeCandidate(CommandMode.STATS, "--stats"))
+        candidates.append(_ModeCandidate(_CommandMode.STATS, "--stats"))
     if request.reindex:
-        candidates.append(_ModeCandidate(CommandMode.REINDEX, "--reindex"))
+        candidates.append(_ModeCandidate(_CommandMode.REINDEX, "--reindex"))
     if request.uri and not is_query_uri:
-        candidates.append(_ModeCandidate(CommandMode.URI, "session URI"))
+        candidates.append(_ModeCandidate(_CommandMode.URI, "session URI"))
     if request.search:
-        candidates.append(_ModeCandidate(CommandMode.LIST, "--search"))
+        candidates.append(_ModeCandidate(_CommandMode.LIST, "--search"))
     if request.list_requested:
-        candidates.append(_ModeCandidate(CommandMode.LIST, "--list"))
+        candidates.append(_ModeCandidate(_CommandMode.LIST, "--list"))
     if request.interactive:
-        candidates.append(_ModeCandidate(CommandMode.INTERACTIVE, "--interactive"))
+        candidates.append(_ModeCandidate(_CommandMode.INTERACTIVE, "--interactive"))
     if is_query_uri and not request.collect:
-        candidates.append(_ModeCandidate(CommandMode.LIST, "agents:// query URI"))
+        candidates.append(_ModeCandidate(_CommandMode.LIST, "agents:// query URI"))
     elif request.days is not None or request.query:
-        candidates.append(_ModeCandidate(CommandMode.LIST))
+        candidates.append(_ModeCandidate(_CommandMode.LIST))
     if not candidates:
-        candidates.append(_ModeCandidate(CommandMode.HELP))
+        candidates.append(_ModeCandidate(_CommandMode.HELP))
     return tuple(candidates)
 
 
@@ -284,13 +271,13 @@ def _parse_query_uri(
 def _build_operation(
     request: CommandRequest,
     *,
-    mode: CommandMode,
+    mode: _CommandMode,
     query_uri_spec: QuerySpec | None,
     valid_agents: set[str],
 ) -> CommandOperation:
-    if mode is CommandMode.CONFIG:
+    if mode is _CommandMode.CONFIG:
         return ConfigOperation(action=request.config_action or "view")
-    if mode is CommandMode.COLLECT:
+    if mode is _CommandMode.COLLECT:
         if request.interactive or request.list_requested or (request.uri and query_uri_spec is None):
             raise CommandPlanError(CommandPlanErrorCode.COLLECT_MODE_CONFLICT)
         return CollectOperation(
@@ -302,17 +289,17 @@ def _build_operation(
             collect_mode=request.collect_mode,
             query_spec=query_uri_spec,
         )
-    if mode is CommandMode.STATS:
+    if mode is _CommandMode.STATS:
         return StatsOperation(
             days=_days_or_default(request.days), query_spec=_parse_stats_query(request.query, valid_agents)
         )
-    if mode is CommandMode.REINDEX:
+    if mode is _CommandMode.REINDEX:
         return ReindexOperation(days=_days_or_default(request.days))
-    if mode is CommandMode.URI:
+    if mode is _CommandMode.URI:
         return _build_uri_operation(request)
-    if mode in {CommandMode.LIST, CommandMode.INTERACTIVE}:
+    if mode in {_CommandMode.LIST, _CommandMode.INTERACTIVE}:
         return _build_session_operation(request, mode=mode, query_uri_spec=query_uri_spec, valid_agents=valid_agents)
-    if mode is CommandMode.HELP:
+    if mode is _CommandMode.HELP:
         _resolve_output_formats(request, mode=mode)
         return HelpOperation()
     raise AssertionError(f"unsupported command mode: {mode.value}")
@@ -340,7 +327,7 @@ def _build_uri_operation(request: CommandRequest) -> UriOperation:
             raise CommandPlanError(CommandPlanErrorCode.URI_HEAD_WITH_SUMMARY)
         output_formats: tuple[OutputFormat, ...] = ()
     else:
-        output_formats = _resolve_output_formats(request, mode=CommandMode.URI)
+        output_formats = _resolve_output_formats(request, mode=_CommandMode.URI)
 
     uri_result = parse_uri(raw_uri)
     if uri_result is None:
@@ -362,7 +349,7 @@ def _build_uri_operation(request: CommandRequest) -> UriOperation:
 def _build_session_operation(
     request: CommandRequest,
     *,
-    mode: CommandMode,
+    mode: _CommandMode,
     query_uri_spec: QuerySpec | None,
     valid_agents: set[str],
 ) -> SessionOperation:
@@ -383,7 +370,7 @@ def _build_session_operation(
             output_specified=request.output_specified,
             format_specified=request.raw_format is not None,
         )
-    if mode is CommandMode.LIST:
+    if mode is _CommandMode.LIST:
         return ListOperation(
             days=days,
             query_spec=query_spec,
@@ -411,12 +398,12 @@ def _validate_days(days: int) -> int:
     return days
 
 
-def _resolve_output_formats(request: CommandRequest, *, mode: CommandMode) -> tuple[OutputFormat, ...]:
+def _resolve_output_formats(request: CommandRequest, *, mode: _CommandMode) -> tuple[OutputFormat, ...]:
     try:
         formats: list[OutputFormat] = (
             parse_format_spec(request.raw_format)
             if request.raw_format is not None
-            else (["print"] if mode is CommandMode.URI else ["json"])
+            else (["print"] if mode is _CommandMode.URI else ["json"])
         )
     except ValueError as exc:
         raise CommandPlanError(CommandPlanErrorCode.FORMAT_INVALID, detail=str(exc)) from exc
@@ -424,8 +411,8 @@ def _resolve_output_formats(request: CommandRequest, *, mode: CommandMode) -> tu
     try:
         validate_formats_for_mode(
             formats,
-            is_uri_mode=mode is CommandMode.URI,
-            is_list_mode=mode is CommandMode.LIST,
+            is_uri_mode=mode is _CommandMode.URI,
+            is_list_mode=mode is _CommandMode.LIST,
         )
     except ValueError as exc:
         if str(exc) == CommandPlanErrorCode.INTERACTIVE_PRINT.value:
@@ -434,8 +421,8 @@ def _resolve_output_formats(request: CommandRequest, *, mode: CommandMode) -> tu
     return tuple(formats)
 
 
-def _build_warnings(request: CommandRequest, *, mode: CommandMode) -> tuple[CommandPlanWarning, ...]:
-    if mode is CommandMode.URI:
+def _build_warnings(request: CommandRequest, *, mode: _CommandMode) -> tuple[CommandPlanWarning, ...]:
+    if mode is _CommandMode.URI:
         return ()
     warnings: list[CommandPlanWarning] = []
     if request.summary:
