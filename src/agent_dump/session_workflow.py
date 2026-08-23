@@ -15,7 +15,7 @@ from agent_dump.command_plan import InteractiveOperation, ListOperation, SearchO
 from agent_dump.diagnostics import DiagnosticError, print_recoverable_diagnostic, render_diagnostic, root_not_found
 from agent_dump.exporting import ExportFailure, ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
-from agent_dump.output_formats import FileOutputFormat
+from agent_dump.output_formats import FileOutputFormat, validate_agent_formats
 from agent_dump.query_filter import QuerySpec, SearchSessionMatch, select_session_groups
 from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.scanner import AgentScanner
@@ -331,6 +331,12 @@ def _handle_interactive_mode(
             print("\n" + i18n.t(Keys.NO_AGENT_SELECTED))
             return 1
         print(render_terminal_message(Keys.AGENT_SELECTED, agent_name=selected_agent.display_name))
+
+    try:
+        validate_agent_formats(selected_agent, operation.output_formats)
+    except DiagnosticError as error:
+        print_diagnostic(error)
+        return 1
 
     sessions = sessions_by_agent.get(selected_agent.name, [])
 

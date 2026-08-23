@@ -13,7 +13,7 @@ VALID_FORMATS: frozenset[OutputFormat] = frozenset({"json", "markdown", "raw", "
 FORMAT_ALIASES: dict[str, OutputFormat] = {"md": "markdown"}
 
 
-class UriFormatCapabilities(Protocol):
+class FormatCapabilities(Protocol):
     display_name: str
     unsupported_uri_formats: frozenset[str]
 
@@ -46,7 +46,7 @@ def file_output_formats(formats: Sequence[OutputFormat]) -> tuple[FileOutputForm
     return tuple(output_format for output_format in formats if output_format != "print")
 
 
-def validate_uri_agent_formats(agent: UriFormatCapabilities, formats: Sequence[OutputFormat]) -> None:
+def validate_agent_formats(agent: FormatCapabilities, formats: Sequence[OutputFormat]) -> None:
     unsupported = [output_format for output_format in formats if output_format in agent.unsupported_uri_formats]
     if not unsupported:
         return
@@ -66,3 +66,7 @@ def validate_uri_agent_formats(agent: UriFormatCapabilities, formats: Sequence[O
             i18n.t(Keys.DIAG_STEP_EXPORT_JSON_FIRST),
         ),
     )
+
+
+def validate_uri_agent_formats(agent: FormatCapabilities, formats: Sequence[OutputFormat]) -> None:
+    validate_agent_formats(agent, formats)

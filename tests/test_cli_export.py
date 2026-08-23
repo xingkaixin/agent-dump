@@ -288,6 +288,39 @@ class TestMain:
         assert result == 0
         assert mock_export.call_args.args[2] == ["raw"]
 
+    @pytest.mark.parametrize("output_format", ["markdown", "raw"])
+    def test_main_interactive_rejects_unsupported_provider_format(self, output_format, capsys):
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "cursor"
+            mock_agent.display_name = "Cursor"
+            mock_agent.unsupported_uri_formats = frozenset({"raw", "markdown"})
+            mock_agent.get_sessions.return_value = [mock.MagicMock()]
+            mock_scanner.get_available_agents.return_value = [mock_agent]
+            configure_scanner_sessions(mock_scanner)
+            mock_scanner_class.return_value = mock_scanner
+
+            with (
+                mock.patch("agent_dump.session_workflow.select_sessions_interactive") as mock_select,
+                mock.patch("agent_dump.session_workflow.export_sessions_for_formats") as mock_export,
+                mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", output_format]),
+            ):
+                result = main()
+
+        assert result == 1
+        mock_select.assert_not_called()
+        mock_export.assert_not_called()
+        assert (
+            expect(
+                LocaleKeys.DIAG_URI_CAPABILITY_DETAIL,
+                agent="Cursor",
+                supported="json, print",
+                requested=output_format,
+            )
+            in capsys.readouterr().out
+        )
+
     def test_main_invalid_format_list_exits(self, capsys):
         """测试无效格式列表会被 argparse 拒绝"""
         with mock.patch("sys.argv", ["agent-dump", "--interactive", "--format", "json,foo"]):
