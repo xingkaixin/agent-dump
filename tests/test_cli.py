@@ -90,7 +90,7 @@ class TestMain:
         """测试键盘中断处理"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
-            mock_scanner.get_available_agents.side_effect = KeyboardInterrupt()
+            mock_scanner.get_available_sessions.side_effect = KeyboardInterrupt()
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("sys.argv", ["agent-dump", "--interactive"]):

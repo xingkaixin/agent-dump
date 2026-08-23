@@ -162,9 +162,10 @@ class TestWarningsAreLocalized:
     def test_provider_failure_warning(self, language, codex_session_tree, monkeypatch, capsys):
         from agent_dump.agents.claudecode import ClaudeCodeAgent
 
-        monkeypatch.setattr(ClaudeCodeAgent, "is_available", lambda self: True)
         monkeypatch.setattr(
-            ClaudeCodeAgent, "get_sessions", lambda self, days=7: (_ for _ in ()).throw(ValueError("bad row"))
+            ClaudeCodeAgent,
+            "_get_available_sessions",
+            lambda self, days=7: (_ for _ in ()).throw(ValueError("bad row")),
         )
 
         run_cli("--list", "-d", "36500")

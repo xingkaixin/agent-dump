@@ -61,13 +61,6 @@ class AgentScanner:
             fields={"agent": agent.display_name, "error": exc},
         )
 
-    @staticmethod
-    def _scan_single_agent(agent: BaseAgent) -> list[Session] | None:
-        """Check availability and scan one agent."""
-        if agent.is_available():
-            return agent.scan()
-        return None
-
     def _run_concurrently(
         self,
         fn: Callable[[BaseAgent], T],
@@ -108,15 +101,14 @@ class AgentScanner:
         print(i18n.t(Keys.SCANNING_AGENTS))
 
         results: dict[str, list[Session]] = {}
-        agent_results = self._run_concurrently(self._scan_single_agent)
+        agent_results = self.get_available_sessions(days=None)
 
         for agent, sessions in agent_results:
-            if sessions is not None:
-                if sessions:
-                    results[agent.name] = sessions
-                    print(render_terminal_message(Keys.AGENT_FOUND, name=agent.display_name, count=len(sessions)))
-                else:
-                    print(render_terminal_message(Keys.AGENT_FOUND_EMPTY, name=agent.display_name))
+            if sessions:
+                results[agent.name] = sessions
+                print(render_terminal_message(Keys.AGENT_FOUND, name=agent.display_name, count=len(sessions)))
+            else:
+                print(render_terminal_message(Keys.AGENT_FOUND_EMPTY, name=agent.display_name))
 
         print()
         return results
@@ -139,6 +131,25 @@ class AgentScanner:
                 lambda selected: selected.get_sessions(days=days),
                 agents,
             )
+        ]
+
+    def get_available_sessions(
+        self,
+        days: int | None = 7,
+        *,
+        agents: Sequence[BaseAgent] | None = None,
+    ) -> list[tuple[BaseAgent, list[Session]]]:
+        """Read availability and sessions together without probing providers twice."""
+        results = self._run_concurrently(
+            lambda agent: agent._get_available_sessions(days),
+            agents,
+        )
+        return [
+            (agent, sessions)
+            for agent, result in results
+            if result is not None
+            for available, sessions in (result,)
+            if available
         ]
 
     def find_session_by_id(

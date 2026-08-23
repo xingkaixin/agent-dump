@@ -116,6 +116,19 @@ class TestBaseAgent:
         assert agent.scan() == []
         assert agent.requested_days == [None]
 
+    def test_available_session_read_skips_reader_when_unavailable(self):
+        agent = ConcreteAgent()
+        agent._available = False
+
+        assert agent._get_available_sessions(3) == (False, [])
+        assert agent.requested_days == []
+
+    def test_available_session_read_returns_requested_window(self):
+        agent = ConcreteAgent()
+
+        assert agent._get_available_sessions(3) == (True, [])
+        assert agent.requested_days == [3]
+
     def test_cached_session_data_reads_once_for_unchanged_session(self, tmp_path):
         agent = ConcreteAgent()
         session = Session(

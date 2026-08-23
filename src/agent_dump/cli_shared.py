@@ -231,10 +231,12 @@ def collect_query_matches(
     days: int,
     spec: QuerySpec,
     scanner: AgentScanner | None = None,
+    session_results: Sequence[tuple[BaseAgent, list[Session]]] | None = None,
 ) -> dict[str, list[Session]]:
     matches: list[SearchSessionMatch] = []
     session_scanner = scanner if scanner is not None else AgentScanner(agents)
-    for agent, sessions in session_scanner.get_sessions(days, agents=agents):
+    scanned = session_results if session_results is not None else session_scanner.get_sessions(days, agents=agents)
+    for agent, sessions in scanned:
         matches.extend(query_session_matches(agent, sessions, spec))
 
     limited_matches = limit_query_session_matches(matches, spec.limit)
@@ -250,10 +252,12 @@ def collect_search_matches(
     days: int,
     spec: QuerySpec,
     scanner: AgentScanner | None = None,
+    session_results: Sequence[tuple[BaseAgent, list[Session]]] | None = None,
 ) -> list[SearchSessionMatch]:
     matches: list[SearchSessionMatch] = []
     session_scanner = scanner if scanner is not None else AgentScanner(agents)
-    for agent, sessions in session_scanner.get_sessions(days, agents=agents):
+    scanned = session_results if session_results is not None else session_scanner.get_sessions(days, agents=agents)
+    for agent, sessions in scanned:
         matches.extend(search_sessions_by_query(agent, sessions, spec))
     return limit_search_matches(matches, spec.limit)
 

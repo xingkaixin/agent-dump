@@ -34,6 +34,12 @@ _MAX_SESSION_PARSE_WORKERS = 32
 _MatchedSession = tuple[BaseAgent, Session, date]
 
 
+def collect_scan_days(since_date: date, local_tz: tzinfo | None = None) -> int:
+    """Return the provider window needed to cover the requested local start date."""
+    resolved_local_tz = local_tz or get_local_timezone()
+    return max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
+
+
 def _iter_bounded_session_reads(
     executor: ThreadPoolExecutor,
     matched_sessions: list[_MatchedSession],
@@ -97,6 +103,7 @@ def collect_entries(
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     scanner: AgentScanner | None = None,
+    session_results: list[tuple[BaseAgent, list[Session]]] | None = None,
     logger: CollectLogger | None = None,
 ) -> tuple[list[CollectEntry], bool]:
     """Collect session entries for range."""
@@ -107,9 +114,13 @@ def collect_entries(
     matched_sessions: list[_MatchedSession] = []
     candidate_matches: list[SearchSessionMatch] = []
 
-    days_span = max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
     session_scanner = scanner if scanner is not None else AgentScanner(agents)
-    for agent, sessions in session_scanner.get_sessions(days_span, agents=agents):
+    scanned = (
+        session_results
+        if session_results is not None
+        else session_scanner.get_sessions(collect_scan_days(since_date, resolved_local_tz), agents=agents)
+    )
+    for agent, sessions in scanned:
         deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
         if deny_paths:
             sessions = [session for session in sessions if not _is_session_denied(agent, session, deny_paths)]

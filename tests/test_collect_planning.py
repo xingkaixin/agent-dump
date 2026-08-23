@@ -12,9 +12,16 @@ from agent_dump.collect import (
 from agent_dump.collect_progress import (
     build_collect_run_stats,
 )
+from agent_dump.collect_sessions import collect_scan_days
 
 
 class TestCollectEntries:
+    def test_collect_scan_days_covers_local_start_date(self, monkeypatch):
+        monkeypatch.setattr("agent_dump.collect_sessions.get_local_today", lambda _tz: date(2026, 3, 10))
+
+        assert collect_scan_days(date(2026, 3, 5)) == 6
+        assert collect_scan_days(date(2026, 3, 11)) == 1
+
     def test_plan_collect_entries_reports_chunk_totals(self):
         entries = [
             CollectEntry(

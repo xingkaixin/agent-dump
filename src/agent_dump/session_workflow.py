@@ -54,7 +54,8 @@ def _handle_session_modes(
 
     query_spec = operation.query_spec
 
-    available_agents = scanner.get_available_agents()
+    scanned_sessions = scanner.get_available_sessions(operation.days)
+    available_agents = [agent for agent, _ in scanned_sessions]
 
     if not available_agents:
         # 退 1 而不是 None：这里走的是诊断通道（错误语义），而 --stats / --reindex /
@@ -64,6 +65,9 @@ def _handle_session_modes(
 
     if query_spec and query_spec.agent_names:
         available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
+        scanned_sessions = [
+            (agent, sessions) for agent, sessions in scanned_sessions if agent.name in query_spec.agent_names
+        ]
         if not available_agents:
             print_diagnostic(
                 root_not_found(
@@ -90,7 +94,13 @@ def _handle_session_modes(
         )
         print("-" * 60)
         display_search_results(
-            collect_search_matches(available_agents, days=operation.days, spec=search_spec, scanner=scanner)
+            collect_search_matches(
+                available_agents,
+                days=operation.days,
+                spec=search_spec,
+                scanner=scanner,
+                session_results=scanned_sessions,
+            )
         )
         print("\n" + "=" * 60)
         return 0
@@ -102,23 +112,24 @@ def _handle_session_modes(
             days=operation.days,
             spec=query_spec,
             scanner=scanner,
+            session_results=scanned_sessions,
         )
 
     if isinstance(operation, ListOperation):
         return _handle_list_mode(
             operation,
-            scanner=scanner,
             query_spec=query_spec,
             matched_sessions_by_agent=matched_sessions_by_agent,
             available_agents=available_agents,
+            scanned_sessions=scanned_sessions,
         )
 
     return _handle_interactive_mode(
         operation,
-        scanner=scanner,
         query_spec=query_spec,
         matched_sessions_by_agent=matched_sessions_by_agent,
         available_agents=available_agents,
+        scanned_sessions=scanned_sessions,
         export_config=export_config,
     )
 
@@ -126,10 +137,10 @@ def _handle_session_modes(
 def _handle_list_mode(
     operation: ListOperation,
     *,
-    scanner: AgentScanner,
     query_spec: QuerySpec | None,
     matched_sessions_by_agent: dict[str, list[Session]],
     available_agents: list[BaseAgent],
+    scanned_sessions: list[tuple[BaseAgent, list[Session]]],
 ) -> int:
     warn_list_ignored_options(operation.output_specified, operation.format_specified)
     if query_spec:
@@ -147,7 +158,7 @@ def _handle_list_mode(
     listed = (
         [(agent, matched_sessions_by_agent.get(agent.name, [])) for agent in available_agents]
         if query_spec
-        else scanner.get_sessions(operation.days, agents=available_agents)
+        else scanned_sessions
     )
     for agent, sessions in listed:
         print(f"\n📁 {safe_display_text(agent.display_name)} ({len(sessions)} {i18n.t(Keys.SESSION_COUNT_SUFFIX)})")
@@ -170,10 +181,10 @@ def _handle_list_mode(
 def _handle_interactive_mode(
     operation: InteractiveOperation,
     *,
-    scanner: AgentScanner,
     query_spec: QuerySpec | None,
     matched_sessions_by_agent: dict[str, list[Session]],
     available_agents: list[BaseAgent],
+    scanned_sessions: list[tuple[BaseAgent, list[Session]]],
     export_config: ExportConfigLike,
 ) -> int:
     # 一次取全，选中后直接复用；之前无 query 时 selector 会为标签逐个扫 provider，
@@ -185,9 +196,7 @@ def _handle_interactive_mode(
             if agent.name in matched_sessions_by_agent
         }
     else:
-        sessions_by_agent = {
-            agent.name: sessions for agent, sessions in scanner.get_sessions(operation.days, agents=available_agents)
-        }
+        sessions_by_agent = {agent.name: sessions for agent, sessions in scanned_sessions}
 
     session_counts = {name: len(sessions) for name, sessions in sessions_by_agent.items()}
     interactive_agents = [agent for agent in available_agents if agent.name in sessions_by_agent]

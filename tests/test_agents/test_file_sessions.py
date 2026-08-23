@@ -14,8 +14,10 @@ class FailingFileAgent(FileSessionAgent):
     def __init__(self, root: Path) -> None:
         super().__init__("files", "Files")
         self.base_path = root
+        self.file_discovery_count = 0
 
     def _iter_session_files(self) -> Iterator[Path]:
+        self.file_discovery_count += 1
         if self.base_path is None:
             return iter(())
         return iter(sorted(self.base_path.glob("*.jsonl")))
@@ -67,6 +69,17 @@ def test_file_scan_reports_one_bad_file_and_keeps_valid_sessions(tmp_path: Path)
             fields={"path": str(bad_path), "error": "malformed session"},
         )
     ]
+
+
+def test_available_file_sessions_reuse_one_file_discovery(tmp_path: Path) -> None:
+    good_path = tmp_path / "good.jsonl"
+    good_path.touch()
+    agent = FailingFileAgent(tmp_path)
+
+    results = AgentScanner([agent]).get_available_sessions(days=7)
+
+    assert [(item.id, item.source_path) for item in results[0][1]] == [("target", good_path)]
+    assert agent.file_discovery_count == 1
 
 
 def test_file_lookup_reports_bad_candidate_and_continues(tmp_path: Path) -> None:

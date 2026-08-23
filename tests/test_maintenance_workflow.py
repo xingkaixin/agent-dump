@@ -23,10 +23,15 @@ from agent_dump.text_safety import has_unsafe_body_characters
 def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
     for agent in scanner.get_available_agents.return_value:
         agent.get_session_facts.side_effect = derive_session_facts
-    scanner.get_sessions.side_effect = lambda days=7, *, agents=None: [
-        (agent, agent.get_sessions(days=days))
-        for agent in (agents if agents is not None else scanner.get_available_agents.return_value)
-    ]
+
+    def read_sessions(days=7, *, agents=None):
+        return [
+            (agent, agent.get_sessions(days=days))
+            for agent in (agents if agents is not None else scanner.get_available_agents.return_value)
+        ]
+
+    scanner.get_sessions.side_effect = read_sessions
+    scanner.get_available_sessions.side_effect = read_sessions
 
 
 def make_session(

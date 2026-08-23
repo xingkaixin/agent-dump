@@ -77,17 +77,24 @@ class FileSessionAgent(BaseAgent):
 
     def get_sessions(self, days: int | None = 7) -> list[Session]:
         """Get sessions from the requested time window."""
+        _, sessions = self._get_available_sessions(days)
+        return sessions
+
+    def _get_available_sessions(self, days: int | None = 7) -> tuple[bool, list[Session]]:
+        """Discover candidate files once for availability and windowed parsing."""
         if not self._ensure_base_path():
-            return []
+            return False, []
 
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=days) if days is not None else None
         session_files = list(self._iter_session_files())
+        if not session_files:
+            return False, []
         if cutoff_time is not None:
             session_files = [
                 file_path for file_path in session_files if self._should_scan_file_or_report(file_path, cutoff_time)
             ]
         if not session_files:
-            return []
+            return True, []
 
         sessions: list[Session] = []
         max_workers = min(_MAX_SCAN_WORKERS, len(session_files))
@@ -98,7 +105,7 @@ class FileSessionAgent(BaseAgent):
                 if session and (cutoff_time is None or normalize_datetime_utc(session.created_at) >= cutoff_time):
                     sessions.append(session)
 
-        return sorted(sessions, key=lambda s: normalize_datetime_utc(s.created_at), reverse=True)
+        return True, sorted(sessions, key=lambda s: normalize_datetime_utc(s.created_at), reverse=True)
 
     def find_session_by_id(self, session_id: str) -> Session | None:
         """Try filename-based candidates before falling back to a full scan."""

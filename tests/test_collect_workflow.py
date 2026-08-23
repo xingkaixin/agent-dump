@@ -26,7 +26,9 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock]:
         summary_timeout_seconds=90,
     )
     scanner = mock.MagicMock()
-    scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+    agent = mock.MagicMock(name="codex")
+    scanner.get_available_agents.return_value = [agent]
+    scanner.get_available_sessions.return_value = [(agent, [])]
     logger = mock.MagicMock()
     error = RuntimeError(f"{failing_step} failed")
 
@@ -126,7 +128,9 @@ def test_collect_reports_output_write_failure(language, use_language, capsys) ->
         summary_timeout_seconds=90,
     )
     scanner = mock.MagicMock()
-    scanner.get_available_agents.return_value = [mock.MagicMock(name="codex")]
+    agent = mock.MagicMock(name="codex")
+    scanner.get_available_agents.return_value = [agent]
+    scanner.get_available_sessions.return_value = [(agent, [])]
     logger = mock.MagicMock()
 
     with (

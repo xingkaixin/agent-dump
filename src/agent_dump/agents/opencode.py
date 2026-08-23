@@ -87,15 +87,20 @@ class OpenCodeAgent(BaseAgent):
 
     def get_sessions(self, days: int | None = 7) -> list[Session]:
         """Get sessions from the requested time window."""
+        _, sessions = self._get_available_sessions(days)
+        return sessions
+
+    def _get_available_sessions(self, days: int | None = 7) -> tuple[bool, list[Session]]:
+        """Read database availability and sessions through one discovered path."""
         if not self._ensure_db_path():
-            return []
+            return False, []
 
         conn = self._connect_db()
         try:
             if days is None:
-                return self._select_sessions(conn, where_sql="1 = 1", params=())
+                return True, self._select_sessions(conn, where_sql="1 = 1", params=())
             cutoff_time = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
-            return self._select_sessions(conn, where_sql="s.time_created >= ?", params=(cutoff_time,))
+            return True, self._select_sessions(conn, where_sql="s.time_created >= ?", params=(cutoff_time,))
         finally:
             conn.close()
 
