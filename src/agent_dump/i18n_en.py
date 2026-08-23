@@ -259,6 +259,7 @@ EN_TRANSLATIONS = {
     Keys.DIAG_STEP_ZCODE_NO_LINUX: "Linux has no default ZCode session path.",
     Keys.QUERY_SUMMARY_PATH: "path={path}",
     Keys.QUERY_SUMMARY_KEYWORD: "keyword={keyword}",
+    Keys.QUERY_SUMMARY_SEPARATOR: "; ",
     Keys.QUERY_SUMMARY_ALL_SESSIONS: "all sessions",
     Keys.QUERY_ERROR_EMPTY_SPEC: "query expression cannot be empty",
     Keys.QUERY_ERROR_UNKNOWN_AGENT: "unknown agent name: {name}",

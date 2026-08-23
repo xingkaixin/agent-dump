@@ -115,7 +115,7 @@ def render_query_summary(spec: QuerySpec) -> str:
         parts.append(f"roles={roles}")
     if spec.limit is not None:
         parts.append(f"limit={spec.limit}")
-    return "；".join(parts) if parts else i18n.t(Keys.QUERY_SUMMARY_ALL_SESSIONS)
+    return i18n.t(Keys.QUERY_SUMMARY_SEPARATOR).join(parts) if parts else i18n.t(Keys.QUERY_SUMMARY_ALL_SESSIONS)
 
 
 def collect_search_matches(
