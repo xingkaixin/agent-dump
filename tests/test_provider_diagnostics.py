@@ -1,3 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys
 from agent_dump.provider_diagnostics import ProviderDiagnostic, render_provider_diagnostic
@@ -22,6 +25,17 @@ class DiagnosticAgent(BaseAgent):
     def get_session_data(self, session: Session) -> dict:
         del session
         return {"messages": []}
+
+
+class ConcurrentDiagnosticAgent(DiagnosticAgent):
+    def __init__(self) -> None:
+        super().__init__()
+        self._barrier = Barrier(2)
+
+    def get_sessions(self, days: int | None = 7) -> list[Session]:
+        self._barrier.wait()
+        self._report_diagnostic(Keys.WARN_TITLE_EXTRACT_FAILED, error="bad title", caller=days)
+        return []
 
 
 def test_direct_provider_use_has_no_terminal_side_effect(capsys) -> None:
@@ -60,6 +74,23 @@ def test_scanners_keep_their_own_provider_diagnostic_destinations() -> None:
 
     assert [diagnostic.fields["error"] for diagnostic in first_diagnostics] == ["bad title"]
     assert [diagnostic.fields["error"] for diagnostic in second_diagnostics] == ["bad title"]
+
+
+def test_concurrent_scanners_keep_their_own_provider_diagnostic_destinations() -> None:
+    agent = ConcurrentDiagnosticAgent()
+    first_diagnostics: list[ProviderDiagnostic] = []
+    second_diagnostics: list[ProviderDiagnostic] = []
+    first_scanner = AgentScanner([agent], diagnostic_sink=first_diagnostics.append)
+    second_scanner = AgentScanner([agent], diagnostic_sink=second_diagnostics.append)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(first_scanner.get_sessions, 1)
+        second = executor.submit(second_scanner.get_sessions, 2)
+        first.result()
+        second.result()
+
+    assert [diagnostic.fields["caller"] for diagnostic in first_diagnostics] == [1]
+    assert [diagnostic.fields["caller"] for diagnostic in second_diagnostics] == [2]
 
 
 def test_provider_diagnostic_renderer_sanitizes_untrusted_fields() -> None:

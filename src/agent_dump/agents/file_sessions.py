@@ -3,6 +3,7 @@
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import Context, copy_context
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -98,8 +99,12 @@ class FileSessionAgent(BaseAgent):
 
         sessions: list[Session] = []
         max_workers = min(_MAX_SCAN_WORKERS, len(session_files))
+
+        def parse_in_context(context: Context, path: Path) -> Session | None:
+            return context.run(self._parse_session_file_or_report, path)
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(self._parse_session_file_or_report, path) for path in session_files]
+            futures = [executor.submit(parse_in_context, copy_context(), path) for path in session_files]
             for future in as_completed(futures):
                 session = future.result()
                 if session and (cutoff_time is None or normalize_datetime_utc(session.created_at) >= cutoff_time):
