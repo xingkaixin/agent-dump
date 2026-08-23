@@ -93,6 +93,7 @@
 | `session_data.py` | 有界请求级会话数据缓存，按 provider-owned change sources 失效，并为批量投影提供临时 lease |
 | `session_exports.py` | Provider 默认 JSON / raw 文件写入与安全失败诊断 |
 | `session_projection.py` | Provider 默认标题、head 与摘要字段投影 |
+| `session_time_groups.py` | 会话年龄区间的闭集定义与本地日界线分组策略 |
 | `terminal_output.py` | 终端单行 i18n 文案的安全动态字段插值，不负责 IO |
 | `text_safety.py` | 第三方会话文本的输出净化（终端 / markdown / 文件名） |
 | `transcript.py` | 标准化消息的只读读取（role、正文、legacy content、tool / subagent facts） |
@@ -252,6 +253,7 @@ agent-dump/
 │   ├── search_index.py          # FTS5 搜索索引
 │   ├── session_exports.py       # 默认 JSON / raw 会话文件写入
 │   ├── session_projection.py    # 默认标题、head 与摘要字段投影
+│   ├── session_time_groups.py   # 会话年龄区间与本地日界线分组
 │   ├── selector.py              # 交互式选择
 │   ├── terminal_output.py       # 终端动态字段安全插值
 │   ├── text_safety.py           # 第三方文本输出净化

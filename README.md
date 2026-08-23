@@ -484,6 +484,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── session_data.py     # Bounded request cache and bulk-read leases
 │       ├── session_exports.py  # Default JSON and raw session file writes
 │       ├── session_projection.py # Default title, head, and summary projections
+│       ├── session_time_groups.py # Session age groups and local-day boundaries
 │       ├── terminal_output.py  # Safe interpolation of dynamic terminal fields
 │       ├── text_safety.py      # Output sanitizing for third-party session text
 │       ├── time_utils.py       # Time and timezone helpers
