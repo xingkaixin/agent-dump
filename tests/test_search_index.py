@@ -14,7 +14,7 @@ import pytest
 from agent_dump import search_index as search_index_module
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys
-from agent_dump.query_filter import QuerySpec, query_session_groups
+from agent_dump.query_filter import QuerySpec, select_session_groups
 from agent_dump.query_semantics import TextQuery, TextQueryMode
 from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.search_index import (
@@ -84,7 +84,7 @@ def query_sessions_by_keyword(
     *,
     diagnostic_sink=None,
 ) -> list[Session]:
-    matches = query_session_groups(
+    matches = select_session_groups(
         [(agent, sessions)],
         QuerySpec(agent_names=None, keyword=keyword, project_path=None, roles=None, limit=None),
         diagnostic_sink=diagnostic_sink,
@@ -1525,6 +1525,31 @@ class TestSearchLimitPushdown:
         )
 
         assert [result.session_id for result in scoped] == [sessions[0].id]
+
+    def test_literal_session_scope_is_applied_by_sql(self, tmp_path, monkeypatch) -> None:
+        index = SearchIndex(tmp_path / "index.db")
+        agent, sessions = self._seed(tmp_path, 5)
+        index.update(agent, sessions)
+        statements: list[str] = []
+        original_get_connection = index._get_connection
+
+        def traced_connection() -> sqlite3.Connection:
+            connection = original_get_connection()
+            connection.set_trace_callback(statements.append)
+            return connection
+
+        monkeypatch.setattr(index, "_get_connection", traced_connection)
+
+        scoped = index.search("c", session_keys={(agent.name, sessions[0].id)})
+
+        assert [result.session_id for result in scoped] == [sessions[0].id]
+        literal_selects = [
+            statement.lower()
+            for statement in statements
+            if "sessions_fts_trigram" in statement.lower() and "index_state" in statement.lower()
+        ]
+        assert literal_selects
+        assert all("s.session_id" in statement.split("where", 1)[-1] for statement in literal_selects)
 
     def test_limit_larger_than_the_hit_count_returns_everything(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")

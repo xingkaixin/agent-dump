@@ -22,6 +22,7 @@ from agent_dump.command_plan import (
     UriOperation,
     build_command_plan,
 )
+from agent_dump.query_semantics import TextQueryMode
 
 
 def make_request(**overrides: Any) -> CommandRequest:
@@ -184,6 +185,7 @@ def test_build_command_plan_combines_search_with_query_scope() -> None:
     assert operation.query_spec.agent_names == {"codex"}
     assert operation.query_spec.roles == {"user"}
     assert operation.query_spec.limit == 4
+    assert operation.query_spec.text_mode is TextQueryMode.SEARCH_TERMS
 
 
 def test_build_command_plan_normalizes_stats_query() -> None:
