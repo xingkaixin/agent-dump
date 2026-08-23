@@ -463,7 +463,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── coercion.py         # Fault-tolerant conversion of untrusted provider scalars
 │       ├── config.py           # TOML configuration models and persistence
 │       ├── config_command.py   # Interactive configuration command workflow
-│       ├── diagnostics.py      # Structured diagnostics
+│       ├── diagnostics.py      # Structured fatal and recoverable diagnostics
 │       ├── export_paths.py     # Safe export path construction
 │       ├── i18n.py             # Language selection and translation runtime
 │       ├── i18n_en.py          # English translation catalog
@@ -473,14 +473,12 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── paths.py            # Search root models
 │       ├── private_files.py     # Owner-only permissions for tool-created files
 │       ├── prompt_safety.py    # Safe summary request composition and typed data envelopes
-│       ├── provider_diagnostics.py # Structured provider warning boundary
 │       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch
 │       ├── exporting.py        # Unified export execution and structured outcome
 │       ├── output_formats.py   # Output format definitions and capability validation
 │       ├── query_filter.py     # Query parsing and filtering
 │       ├── query_semantics.py  # Literal Query/Search semantics and corpus
 │       ├── search_index.py     # FTS5 search index
-│       ├── search_diagnostics.py # Structured search diagnostics
 │       ├── scanner.py          # Agent scanner
 │       ├── selector.py         # Interactive selection
 │       ├── session_data.py     # Bounded request cache and bulk-read leases

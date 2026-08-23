@@ -13,10 +13,10 @@ import pytest
 
 from agent_dump import search_index as search_index_module
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.diagnostics import print_recoverable_diagnostic
 from agent_dump.i18n import Keys
 from agent_dump.query_filter import QuerySpec, select_session_groups
 from agent_dump.query_semantics import TextQuery, TextQueryMode
-from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.search_index import (
     _INDEX_BATCH_SIZE,
     _INDEX_RETENTION_SECONDS,
@@ -402,7 +402,7 @@ class TestSearchIndex:
             session.source_path.write_text("data")
             sessions.append(session)
 
-        index.update(agent, sessions, diagnostic_sink=print_search_diagnostic)
+        index.update(agent, sessions, diagnostic_sink=print_recoverable_diagnostic)
 
         captured = capsys.readouterr()
         assert "正在更新 Dummy-codex 的搜索索引（10 个会话" in captured.err
@@ -848,7 +848,7 @@ class TestQueryFilterIntegration:
                 agent,
                 [session],
                 "fallback keyword",
-                diagnostic_sink=print_search_diagnostic,
+                diagnostic_sink=print_recoverable_diagnostic,
             )
             assert len(results) == 1
 
@@ -1307,7 +1307,7 @@ class TestExtractionFailureIsNotRecordedAsIndexed:
         index.update(
             FailingAgent(name="opencode"),
             sessions,
-            diagnostic_sink=print_search_diagnostic,
+            diagnostic_sink=print_recoverable_diagnostic,
         )
         captured = capsys.readouterr()
 
@@ -1366,7 +1366,7 @@ class TestIndexFailureIsReported:
                 agent,
                 [session],
                 "fallback kw",
-                diagnostic_sink=print_search_diagnostic,
+                diagnostic_sink=print_recoverable_diagnostic,
             )
         captured = capsys.readouterr()
 

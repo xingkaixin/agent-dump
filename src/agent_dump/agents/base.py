@@ -12,9 +12,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar
 
+from agent_dump.diagnostics import RecoverableDiagnostic, RecoverableDiagnosticSink
 from agent_dump.export_paths import build_session_output_path
 from agent_dump.paths import SearchRoot
-from agent_dump.provider_diagnostics import ProviderDiagnostic, ProviderDiagnosticSink
 from agent_dump.session_data import SessionDataCache
 from agent_dump.session_exports import copy_raw_session_file, write_session_json
 from agent_dump.session_projection import build_session_head, build_session_summary_fields, format_session_title
@@ -132,17 +132,17 @@ class BaseAgent(ABC):
         self.name = resolved_name
         self.display_name = resolved_display_name
         self._session_data_cache = SessionDataCache()
-        self._diagnostic_sink: ContextVar[ProviderDiagnosticSink | None] = ContextVar(
+        self._diagnostic_sink: ContextVar[RecoverableDiagnosticSink | None] = ContextVar(
             f"{resolved_name}_diagnostic_sink",
             default=None,
         )
 
-    def configure_diagnostics(self, sink: ProviderDiagnosticSink | None) -> None:
+    def configure_diagnostics(self, sink: RecoverableDiagnosticSink | None) -> None:
         """Configure the diagnostic destination used while this provider is scanner-owned."""
         self._diagnostic_sink.set(sink)
 
     @contextmanager
-    def diagnostic_context(self, sink: ProviderDiagnosticSink | None) -> Iterator[None]:
+    def diagnostic_context(self, sink: RecoverableDiagnosticSink | None) -> Iterator[None]:
         """Route diagnostics to one scanner for the current execution context."""
         token = self._diagnostic_sink.set(sink)
         try:
@@ -155,7 +155,7 @@ class BaseAgent(ABC):
         sink = self._diagnostic_sink.get()
         if sink is None:
             return
-        sink(ProviderDiagnostic(message_key=message_key, fields=fields))
+        sink(RecoverableDiagnostic(message_key=message_key, fields=fields))
 
     def scan(self) -> list[Session]:
         """Scan all available sessions without a time limit."""

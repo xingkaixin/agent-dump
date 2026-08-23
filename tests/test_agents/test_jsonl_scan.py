@@ -18,7 +18,7 @@ from agent_dump.agents.jsonl_scan import (
     read_jsonl_scan_metadata,
     skipped_records_diagnostic,
 )
-from agent_dump.provider_diagnostics import render_provider_diagnostic
+from agent_dump.diagnostics import render_recoverable_diagnostic
 
 
 class TestFileModifiedSince:
@@ -328,7 +328,7 @@ class TestJsonlObjectScan:
         diagnostic = skipped_records_diagnostic(scan)
 
         assert diagnostic is not None
-        rendered = render_provider_diagnostic(diagnostic)
+        rendered = render_recoverable_diagnostic(diagnostic)
         assert "\n" not in rendered, "成千上万条坏记录只能产生一条诊断"
         assert "50" in rendered
         assert "\x1b" not in rendered, "路径来自不可信输入，必须净化后才进终端"

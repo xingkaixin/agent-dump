@@ -18,6 +18,7 @@ import time
 from typing import Any, TypeVar
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.diagnostics import RecoverableDiagnosticSink, emit_recoverable_diagnostic
 from agent_dump.i18n import Keys
 from agent_dump.private_files import ensure_private_dir, ensure_private_file
 from agent_dump.query_semantics import (
@@ -25,7 +26,6 @@ from agent_dump.query_semantics import (
     TextQueryMode,
     extract_transcript_searchable_text,
 )
-from agent_dump.search_diagnostics import SearchDiagnosticSink, emit_search_diagnostic
 from agent_dump.session_data import (
     serialize_session_updated_signal,
     session_updated_signal,
@@ -354,7 +354,7 @@ class SearchIndex:
         agent: BaseAgent,
         sessions: list[Session],
         *,
-        diagnostic_sink: SearchDiagnosticSink | None = None,
+        diagnostic_sink: RecoverableDiagnosticSink | None = None,
     ) -> tuple[int, int]:
         """Incrementally add or refresh the provided sessions.
 
@@ -395,7 +395,7 @@ class SearchIndex:
                     to_update.append((session, signature))
 
             if len(to_update) >= _INDEX_PROGRESS_THRESHOLD:
-                emit_search_diagnostic(
+                emit_recoverable_diagnostic(
                     diagnostic_sink,
                     Keys.INDEX_UPDATE_PROGRESS,
                     agent=agent.display_name,
@@ -433,7 +433,7 @@ class SearchIndex:
                     added += 1
 
             if skipped:
-                emit_search_diagnostic(
+                emit_recoverable_diagnostic(
                     diagnostic_sink,
                     Keys.WARN_INDEX_SKIPPED_SESSIONS,
                     agent=agent.display_name,
@@ -728,7 +728,7 @@ class SearchIndex:
         agent: BaseAgent,
         sessions: list[Session],
         *,
-        diagnostic_sink: SearchDiagnosticSink | None = None,
+        diagnostic_sink: RecoverableDiagnosticSink | None = None,
     ) -> int:
         """Force rebuild index for an agent. Returns indexed count."""
         self.clear_agent(agent.name)

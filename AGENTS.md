@@ -79,7 +79,7 @@
 | `query_filter.py` | QuerySpec 解析、QuerySessionMatch 匹配证据、过滤与全局 limit |
 | `query_semantics.py` | Query keyword、Search terms 与 Searchable Corpus 的统一字面匹配语义 |
 | `search_index.py` | SQLite FTS5 搜索索引 |
-| `search_diagnostics.py` | 搜索降级与索引进度的结构化诊断及终端展示 |
+| `diagnostics.py` | 失败与可恢复警告的统一结构化模型、终端渲染和并发输出边界 |
 | `selector.py` | 终端交互选择与非 TTY 输入回退 |
 | `config.py` | `ConfigurationDocument` TOML 快照、兼容投影、保留式更新与校验 |
 | `config_command.py` | 配置查看、交互编辑与终端展示工作流 |
@@ -90,7 +90,6 @@
 | `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
 | `prompt_safety.py` | 摘要 request composition：system 规则、typed JSON data envelope 与来源追踪 |
-| `provider_diagnostics.py` | Provider 读取层的结构化可恢复诊断与终端展示边界 |
 | `session_data.py` | 有界请求级会话数据缓存，按 provider-owned change sources 失效，并为批量投影提供临时 lease |
 | `session_exports.py` | Provider 默认 JSON / raw 文件写入与安全失败诊断 |
 | `session_projection.py` | Provider 默认标题、head 与摘要字段投影 |
@@ -236,7 +235,7 @@ agent-dump/
 │   ├── collect_summary.py       # collect 摘要 schema 与 payload 处理
 │   ├── config.py                # 配置模型、加载、校验与写入
 │   ├── config_command.py        # 配置查看与交互编辑
-│   ├── diagnostics.py           # 结构化诊断
+│   ├── diagnostics.py           # 失败与可恢复警告的统一结构化诊断
 │   ├── i18n.py                  # 语言选择与翻译运行时
 │   ├── i18n_en.py               # 英文翻译目录
 │   ├── i18n_keys.py             # 翻译键定义
@@ -251,7 +250,6 @@ agent-dump/
 │   ├── output_formats.py        # 输出格式闭集、别名与能力校验
 │   ├── scanner.py               # Provider discovery、list / locate 与失败隔离
 │   ├── search_index.py          # FTS5 搜索索引
-│   ├── search_diagnostics.py    # 搜索结构化诊断与终端展示
 │   ├── session_exports.py       # 默认 JSON / raw 会话文件写入
 │   ├── session_projection.py    # 默认标题、head 与摘要字段投影
 │   ├── selector.py              # 交互式选择

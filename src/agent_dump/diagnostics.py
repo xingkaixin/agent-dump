@@ -1,11 +1,48 @@
-"""Structured diagnostic errors for CLI-facing failures."""
+"""Structured fatal and recoverable diagnostics."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+import sys
+from threading import Lock
+from typing import Any
 
 from agent_dump.i18n import Keys, i18n
+from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
+
+
+@dataclass(frozen=True)
+class RecoverableDiagnostic:
+    """One recoverable warning without presentation side effects."""
+
+    message_key: str
+    fields: Mapping[str, Any]
+
+
+RecoverableDiagnosticSink = Callable[[RecoverableDiagnostic], None]
+_TERMINAL_DIAGNOSTIC_LOCK = Lock()
+
+
+def emit_recoverable_diagnostic(
+    sink: RecoverableDiagnosticSink | None,
+    message_key: str,
+    **fields: Any,
+) -> None:
+    if sink is not None:
+        sink(RecoverableDiagnostic(message_key=message_key, fields=fields))
+
+
+def render_recoverable_diagnostic(diagnostic: RecoverableDiagnostic) -> str:
+    """Render one recoverable warning for terminal display."""
+    return render_terminal_message(diagnostic.message_key, **diagnostic.fields)
+
+
+def print_recoverable_diagnostic(diagnostic: RecoverableDiagnostic) -> None:
+    """Write one recoverable warning without interleaving concurrent lines."""
+    message = render_recoverable_diagnostic(diagnostic)
+    with _TERMINAL_DIAGNOSTIC_LOCK:
+        print(message, file=sys.stderr)
 
 
 @dataclass(frozen=True)

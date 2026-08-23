@@ -9,9 +9,9 @@ import shlex
 from urllib.parse import ParseResult, parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.diagnostics import RecoverableDiagnosticSink, emit_recoverable_diagnostic
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_semantics import TextQuery, TextQueryMode, extract_transcript_searchable_text
-from agent_dump.search_diagnostics import SearchDiagnosticSink, emit_search_diagnostic
 from agent_dump.search_index import SearchIndex
 from agent_dump.time_utils import normalize_datetime_utc
 from agent_dump.transcript import read_messages
@@ -56,14 +56,14 @@ class _SearchRuntime:
         self,
         *,
         search_index: SearchIndex | None = None,
-        diagnostic_sink: SearchDiagnosticSink | None = None,
+        diagnostic_sink: RecoverableDiagnosticSink | None = None,
     ) -> None:
         self._search_index = search_index
         self._diagnostic_sink = diagnostic_sink
         self._index_initialized = search_index is not None
 
     @property
-    def diagnostic_sink(self) -> SearchDiagnosticSink | None:
+    def diagnostic_sink(self) -> RecoverableDiagnosticSink | None:
         return self._diagnostic_sink
 
     def search_index(self, agent: BaseAgent) -> SearchIndex | None:
@@ -79,7 +79,7 @@ class _SearchRuntime:
     def report_index_failure(self, agent: BaseAgent, exc: BaseException) -> None:
         self._search_index = None
         self._index_initialized = True
-        emit_search_diagnostic(
+        emit_recoverable_diagnostic(
             self._diagnostic_sink,
             Keys.WARN_INDEX_UNUSABLE,
             agent=agent.display_name,
@@ -88,7 +88,7 @@ class _SearchRuntime:
         )
 
     def report_session_read_failure(self, agent: BaseAgent, session: Session, error: object) -> None:
-        emit_search_diagnostic(
+        emit_recoverable_diagnostic(
             self._diagnostic_sink,
             Keys.WARN_SESSION_READ_SKIPPED,
             uri=agent.get_session_uri(session),
@@ -191,7 +191,7 @@ def select_session_groups(
     spec: QuerySpec,
     *,
     search_index: SearchIndex | None = None,
-    diagnostic_sink: SearchDiagnosticSink | None = None,
+    diagnostic_sink: RecoverableDiagnosticSink | None = None,
 ) -> list[SearchSessionMatch]:
     """Select sessions using the text semantics carried by the query specification."""
     runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)

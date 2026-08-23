@@ -180,7 +180,7 @@ class TestWarningsAreLocalized:
         )
 
 
-class TestProviderDiagnosticsAreLocalized:
+class TestRecoverableDiagnosticsAreLocalized:
     """AD-146：provider 专属的 next_steps 只在该 provider 数据缺失时出现。"""
 
     def test_missing_raw_source_next_steps(self, language, codex_session_tree, tmp_path):

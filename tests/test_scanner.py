@@ -7,8 +7,8 @@ import threading
 import pytest
 
 from agent_dump.agents.base import BaseAgent, ProviderDiscovery, Session
+from agent_dump.diagnostics import RecoverableDiagnostic
 from agent_dump.i18n import Keys
-from agent_dump.provider_diagnostics import ProviderDiagnostic
 from agent_dump.scanner import AgentScanner
 from agent_dump.text_safety import has_unsafe_line_characters
 
@@ -230,13 +230,13 @@ class TestAgentScanner:
         broken = FakeAgent("broken")
         error = ValueError("malformed row")
         broken.sessions_error = error
-        diagnostics: list[ProviderDiagnostic] = []
+        diagnostics: list[RecoverableDiagnostic] = []
 
         results = AgentScanner([broken], diagnostic_sink=diagnostics.append).get_sessions(days=7)
 
         assert results == [(broken, [])]
         assert diagnostics == [
-            ProviderDiagnostic(
+            RecoverableDiagnostic(
                 message_key=Keys.WARN_PROVIDER_OPERATION_FAILED,
                 fields={
                     "agent": "Broken",

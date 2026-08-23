@@ -14,6 +14,7 @@ import pytest
 from agent_dump.agents.base import BaseAgent, Session, derive_session_facts
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.zcode import ZCodeAgent
+from agent_dump.diagnostics import print_recoverable_diagnostic
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
@@ -23,7 +24,6 @@ from agent_dump.query_filter import (
     select_session_groups,
 )
 from agent_dump.query_semantics import TextQuery, TextQueryMode
-from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.search_index import SearchIndex, SearchResult
 
 
@@ -326,7 +326,7 @@ class TestQuerySessionsByKeyword:
                 agent,
                 [session],
                 "fatal",
-                diagnostic_sink=print_search_diagnostic,
+                diagnostic_sink=print_recoverable_diagnostic,
             )
 
         assert result == []
@@ -988,7 +988,7 @@ class TestSearchSessionsByQuery:
                 agent,
                 [broken, healthy],
                 make_query_spec(keyword="matching", roles={"user"}),
-                diagnostic_sink=print_search_diagnostic,
+                diagnostic_sink=print_recoverable_diagnostic,
             )
 
         assert [match.session for match in result] == [healthy]

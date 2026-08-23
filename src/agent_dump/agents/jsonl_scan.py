@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from agent_dump.coercion import safe_epoch_datetime
+from agent_dump.diagnostics import RecoverableDiagnostic
 from agent_dump.i18n import Keys
-from agent_dump.provider_diagnostics import ProviderDiagnostic
 
 FULL_SCAN_BYTE_LIMIT = 256 * 1024
 HEAD_SCAN_BYTE_LIMIT = 64 * 1024
@@ -145,11 +145,11 @@ def parse_object_lines(lines: list[str]) -> list[dict[str, Any]]:
     return _parse_jsonl_records(lines)
 
 
-def skipped_records_diagnostic(scan: JsonlObjectScan) -> ProviderDiagnostic | None:
+def skipped_records_diagnostic(scan: JsonlObjectScan) -> RecoverableDiagnostic | None:
     """Build one aggregate diagnostic after a JSONL scan is exhausted."""
     if not scan.skipped_count:
         return None
-    return ProviderDiagnostic(
+    return RecoverableDiagnostic(
         message_key=Keys.WARN_JSONL_RECORDS_SKIPPED,
         fields={
             "path": str(scan.file_path),

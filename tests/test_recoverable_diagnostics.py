@@ -2,8 +2,12 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.diagnostics import (
+    RecoverableDiagnostic,
+    emit_recoverable_diagnostic,
+    render_recoverable_diagnostic,
+)
 from agent_dump.i18n import Keys
-from agent_dump.provider_diagnostics import ProviderDiagnostic, render_provider_diagnostic
 from agent_dump.scanner import AgentScanner
 
 
@@ -47,6 +51,15 @@ def test_direct_provider_use_has_no_terminal_side_effect(capsys) -> None:
     assert capsys.readouterr().err == ""
 
 
+def test_emit_recoverable_diagnostic_uses_shared_event_model() -> None:
+    diagnostics: list[RecoverableDiagnostic] = []
+
+    emit_recoverable_diagnostic(diagnostics.append, "warning", reason="fallback")
+    emit_recoverable_diagnostic(None, "ignored")
+
+    assert diagnostics == [RecoverableDiagnostic(message_key="warning", fields={"reason": "fallback"})]
+
+
 def test_scanner_attaches_terminal_diagnostic_boundary(capsys) -> None:
     agent = DiagnosticAgent()
     scanner = AgentScanner([agent])
@@ -67,8 +80,8 @@ def test_scanner_can_disable_provider_diagnostics(capsys) -> None:
 
 def test_scanners_keep_their_own_provider_diagnostic_destinations() -> None:
     agent = DiagnosticAgent()
-    first_diagnostics: list[ProviderDiagnostic] = []
-    second_diagnostics: list[ProviderDiagnostic] = []
+    first_diagnostics: list[RecoverableDiagnostic] = []
+    second_diagnostics: list[RecoverableDiagnostic] = []
     first_scanner = AgentScanner([agent], diagnostic_sink=first_diagnostics.append)
     second_scanner = AgentScanner([agent], diagnostic_sink=second_diagnostics.append)
 
@@ -81,8 +94,8 @@ def test_scanners_keep_their_own_provider_diagnostic_destinations() -> None:
 
 def test_concurrent_scanners_keep_their_own_provider_diagnostic_destinations() -> None:
     agent = ConcurrentDiagnosticAgent()
-    first_diagnostics: list[ProviderDiagnostic] = []
-    second_diagnostics: list[ProviderDiagnostic] = []
+    first_diagnostics: list[RecoverableDiagnostic] = []
+    second_diagnostics: list[RecoverableDiagnostic] = []
     first_scanner = AgentScanner([agent], diagnostic_sink=first_diagnostics.append)
     second_scanner = AgentScanner([agent], diagnostic_sink=second_diagnostics.append)
 
@@ -96,13 +109,13 @@ def test_concurrent_scanners_keep_their_own_provider_diagnostic_destinations() -
     assert [diagnostic.fields["caller"] for diagnostic in second_diagnostics] == [2]
 
 
-def test_provider_diagnostic_renderer_sanitizes_untrusted_fields() -> None:
-    diagnostic = ProviderDiagnostic(
+def test_recoverable_diagnostic_renderer_sanitizes_untrusted_fields() -> None:
+    diagnostic = RecoverableDiagnostic(
         message_key=Keys.WARN_TITLE_EXTRACT_FAILED,
         fields={"error": "bad\x1b[2K\rFORGED\u202e"},
     )
 
-    rendered = render_provider_diagnostic(diagnostic)
+    rendered = render_recoverable_diagnostic(diagnostic)
 
     assert "FORGED" in rendered
     assert "\x1b" not in rendered

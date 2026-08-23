@@ -6,8 +6,8 @@ from pathlib import Path
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.file_sessions import FileSessionAgent
+from agent_dump.diagnostics import RecoverableDiagnostic
 from agent_dump.i18n import Keys
-from agent_dump.provider_diagnostics import ProviderDiagnostic
 from agent_dump.scanner import AgentScanner
 
 
@@ -59,13 +59,13 @@ def test_file_scan_reports_one_bad_file_and_keeps_valid_sessions(tmp_path: Path)
     bad_path.touch()
     good_path.touch()
     agent = FailingFileAgent(tmp_path)
-    diagnostics: list[ProviderDiagnostic] = []
+    diagnostics: list[RecoverableDiagnostic] = []
 
     results = AgentScanner([agent], diagnostic_sink=diagnostics.append).get_sessions(days=7)
 
     assert [(item.id, item.source_path) for item in results[0][1]] == [("target", good_path)]
     assert diagnostics == [
-        ProviderDiagnostic(
+        RecoverableDiagnostic(
             message_key=Keys.WARN_SESSION_PARSE_FAILED,
             fields={"path": str(bad_path), "error": "malformed session"},
         )
@@ -178,7 +178,7 @@ def test_file_lookup_reports_bad_candidate_and_continues(tmp_path: Path) -> None
     bad_path.touch()
     good_path.touch()
     agent = FailingFileAgent(tmp_path)
-    diagnostics: list[ProviderDiagnostic] = []
+    diagnostics: list[RecoverableDiagnostic] = []
 
     result = AgentScanner([agent], diagnostic_sink=diagnostics.append).find_session_by_id(
         "target",
@@ -188,7 +188,7 @@ def test_file_lookup_reports_bad_candidate_and_continues(tmp_path: Path) -> None
     assert result is not None
     assert result[1].source_path == good_path
     assert diagnostics == [
-        ProviderDiagnostic(
+        RecoverableDiagnostic(
             message_key=Keys.WARN_SESSION_PARSE_FAILED,
             fields={"path": str(bad_path), "error": "malformed session"},
         )
@@ -200,7 +200,7 @@ def test_codex_scan_reports_structurally_invalid_session(tmp_path: Path) -> None
     bad_path.write_text('{"type":"session_meta","payload":"not-an-object"}\n', encoding="utf-8")
     agent = CodexAgent()
     agent.base_path = tmp_path
-    diagnostics: list[ProviderDiagnostic] = []
+    diagnostics: list[RecoverableDiagnostic] = []
 
     results = AgentScanner([agent], diagnostic_sink=diagnostics.append).get_sessions(days=7)
 

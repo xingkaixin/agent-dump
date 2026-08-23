@@ -13,8 +13,8 @@ import pytest
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
+from agent_dump.diagnostics import print_recoverable_diagnostic
 from agent_dump.paths import ProviderRoots
-from agent_dump.provider_diagnostics import print_provider_diagnostic
 
 PATCH_INPUT = """*** Begin Patch
 *** Add File: /workspace/new.py
@@ -952,7 +952,7 @@ class TestCodexAgent:
             metadata={"cwd": "/test", "cli_version": "1.0"},
         )
 
-        with agent.diagnostic_context(print_provider_diagnostic):
+        with agent.diagnostic_context(print_recoverable_diagnostic):
             result = agent.get_session_data(session)
 
         assert len(result["messages"]) == 1
