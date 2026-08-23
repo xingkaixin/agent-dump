@@ -23,8 +23,7 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
-    limit_query_session_matches,
-    query_session_matches,
+    query_session_groups,
 )
 from agent_dump.scanner import AgentScanner
 from agent_dump.terminal_output import render_terminal_message
@@ -112,7 +111,7 @@ def collect_entries(
     resolved_local_tz = local_tz or get_local_timezone()
     resolved_collect_config = collect_config or CollectConfig()
     matched_sessions: list[_MatchedSession] = []
-    candidate_matches: list[SearchSessionMatch] = []
+    eligible_session_groups: list[tuple[BaseAgent, list[Session]]] = []
 
     session_scanner = scanner if scanner is not None else AgentScanner(agents)
     scanned = (
@@ -124,23 +123,26 @@ def collect_entries(
         deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
         if deny_paths:
             sessions = [session for session in sessions if not _is_session_denied(agent, session, deny_paths)]
-        matches = (
-            query_session_matches(agent, sessions, query_spec)
-            if query_spec is not None
-            else [
-                SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
-                for session in sessions
-            ]
+        eligible_session_groups.append(
+            (
+                agent,
+                [
+                    session
+                    for session in sessions
+                    if since_date <= _session_local_date(session, resolved_local_tz) <= until_date
+                ],
+            )
         )
-        for match in matches:
-            session = match.session
-            session_date = _session_local_date(session, resolved_local_tz)
-            if session_date < since_date or session_date > until_date:
-                continue
-            candidate_matches.append(match)
 
-    if query_spec is not None:
-        candidate_matches = limit_query_session_matches(candidate_matches, query_spec.limit)
+    candidate_matches = (
+        query_session_groups(eligible_session_groups, query_spec)
+        if query_spec is not None
+        else [
+            SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
+            for agent, sessions in eligible_session_groups
+            for session in sessions
+        ]
+    )
 
     for match in candidate_matches:
         matched_sessions.append(

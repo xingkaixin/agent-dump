@@ -21,10 +21,8 @@ from agent_dump.query_filter import (
     SearchSessionMatch,
     filter_sessions,
     filter_sessions_by_query,
-    limit_query_session_matches,
-    limit_search_matches,
-    query_session_matches,
-    search_sessions_by_query,
+    query_session_groups,
+    search_session_groups,
 )
 from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.scanner import AgentScanner
@@ -233,15 +231,10 @@ def collect_query_matches(
     scanner: AgentScanner | None = None,
     session_results: Sequence[tuple[BaseAgent, list[Session]]] | None = None,
 ) -> dict[str, list[Session]]:
-    matches: list[SearchSessionMatch] = []
     session_scanner = scanner if scanner is not None else AgentScanner(agents)
     scanned = session_results if session_results is not None else session_scanner.get_sessions(days, agents=agents)
-    for agent, sessions in scanned:
-        matches.extend(query_session_matches(agent, sessions, spec))
-
-    limited_matches = limit_query_session_matches(matches, spec.limit)
     grouped: dict[str, list[Session]] = {}
-    for match in limited_matches:
+    for match in query_session_groups(scanned, spec):
         grouped.setdefault(match.agent.name, []).append(match.session)
     return grouped
 
@@ -254,12 +247,9 @@ def collect_search_matches(
     scanner: AgentScanner | None = None,
     session_results: Sequence[tuple[BaseAgent, list[Session]]] | None = None,
 ) -> list[SearchSessionMatch]:
-    matches: list[SearchSessionMatch] = []
     session_scanner = scanner if scanner is not None else AgentScanner(agents)
     scanned = session_results if session_results is not None else session_scanner.get_sessions(days, agents=agents)
-    for agent, sessions in scanned:
-        matches.extend(search_sessions_by_query(agent, sessions, spec))
-    return limit_search_matches(matches, spec.limit)
+    return search_session_groups(scanned, spec)
 
 
 def display_search_results(matches: list[SearchSessionMatch]) -> None:

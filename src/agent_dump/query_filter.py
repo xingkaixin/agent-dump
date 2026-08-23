@@ -2,7 +2,7 @@
 Query parsing and session filtering helpers.
 """
 
-from collections.abc import Set
+from collections.abc import Sequence, Set
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -47,6 +47,7 @@ class QuerySessionMatch:
 
 
 SearchSessionMatch = QuerySessionMatch
+SessionGroup = tuple[BaseAgent, list[Session]]
 
 
 def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
@@ -170,6 +171,23 @@ def query_session_matches(agent: BaseAgent, sessions: list[Session], spec: Query
     return _session_matches(agent, sessions, spec, mode=TextQueryMode.KEYWORD)
 
 
+def query_session_groups(session_groups: Sequence[SessionGroup], spec: QuerySpec) -> list[SearchSessionMatch]:
+    """Query multiple providers and own the global recency limit."""
+    matches = [match for agent, sessions in session_groups for match in query_session_matches(agent, sessions, spec)]
+    if spec.limit is None:
+        return matches
+    return sorted(matches, key=_query_evidence_sort_key)[: spec.limit]
+
+
+def search_session_groups(session_groups: Sequence[SessionGroup], spec: QuerySpec) -> list[SearchSessionMatch]:
+    """Search multiple providers with one global ranking order and limit."""
+    matches = [match for agent, sessions in session_groups for match in search_sessions_by_query(agent, sessions, spec)]
+    sorted_matches = sorted(matches, key=_search_match_sort_key)
+    if spec.limit is None or spec.limit >= len(sorted_matches):
+        return sorted_matches
+    return sorted_matches[: spec.limit]
+
+
 def _session_matches(
     agent: BaseAgent,
     sessions: list[Session],
@@ -217,24 +235,6 @@ def _session_matches(
         return indexed
 
     return _fallback_search_matches(agent, scoped_sessions, text_query)
-
-
-def limit_search_matches(matches: list[SearchSessionMatch], limit: int | None) -> list[SearchSessionMatch]:
-    """Apply stable ranking and one global search limit."""
-    sorted_matches = sorted(matches, key=_search_match_sort_key)
-    if limit is None or limit >= len(sorted_matches):
-        return sorted_matches
-    return sorted_matches[:limit]
-
-
-def limit_query_session_matches(
-    matches: list[SearchSessionMatch],
-    limit: int | None,
-) -> list[SearchSessionMatch]:
-    """Apply list/collect recency ordering and one global limit to query evidence."""
-    if limit is None:
-        return matches
-    return sorted(matches, key=_query_evidence_sort_key)[:limit]
 
 
 def _normalize_agent_name(name: str, valid_agents: set[str]) -> str | None:
