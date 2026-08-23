@@ -4,6 +4,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import json
 import os
 from pathlib import Path
 import threading
@@ -483,3 +484,23 @@ class TestBaseAgent:
         assert result.name.endswith(".raw.jsonl")
         assert result.read_text(encoding="utf-8") == "{}\n"
         assert not (tmp_path / "escaped.raw.jsonl").exists()
+
+    def test_export_session_with_fields_uses_shared_json_writer(self, tmp_path):
+        agent = ConcreteAgent()
+        session = Session(
+            id="session",
+            title="Session",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            source_path=tmp_path / "session.jsonl",
+            metadata={},
+        )
+
+        result = agent.export_session_with_fields(session, tmp_path / "exports", {"uri": "concrete://session"})
+
+        assert json.loads(result.read_text(encoding="utf-8")) == {
+            "id": "session",
+            "title": "Session",
+            "messages": [],
+            "uri": "concrete://session",
+        }
