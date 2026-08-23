@@ -619,6 +619,25 @@ class TestSearchIndex:
 
         assert [result.session_id for result in index.search("auth timeout")] == ["s1"]
 
+    @pytest.mark.parametrize(
+        ("title", "query"),
+        [
+            ("İstanbul incident", "istanbul"),
+            ("ıstanbul incident", "Istanbul"),
+            ("Istanbul incident", "İstanbul"),
+            ("istanbul incident", "ıstanbul"),
+        ],
+    )
+    def test_search_matches_unicode_i_with_canonical_case_rules(self, tmp_path, title, query):
+        index = SearchIndex(tmp_path / "index.db")
+        agent = DummyAgent(session_data={"s1": {"messages": []}})
+        session = make_session("s1", title, tmp_path / "s1.jsonl")
+        session.source_path.write_text("data")
+
+        index.update(agent, [session])
+
+        assert [result.session_id for result in index.search(query)] == ["s1"]
+
     def test_keyword_phrase_normalizes_source_whitespace(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
         agent = DummyAgent(
