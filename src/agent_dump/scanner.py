@@ -63,8 +63,12 @@ class AgentScanner:
             return []
         self._configure_provider_diagnostics(selected_agents)
 
+        def run_for_scanner(agent: BaseAgent) -> T:
+            with agent._use_diagnostic_sink(self._diagnostic_sink):
+                return fn(agent)
+
         with ThreadPoolExecutor(max_workers=len(selected_agents)) as executor:
-            futures = [executor.submit(fn, agent) for agent in selected_agents]
+            futures = [executor.submit(run_for_scanner, agent) for agent in selected_agents]
             results: list[tuple[BaseAgent, T | None]] = []
             for agent, future in zip(selected_agents, futures, strict=True):
                 try:
@@ -158,6 +162,6 @@ class AgentScanner:
         """Get agent by name"""
         for agent in self.agents:
             if agent.name == name:
-                self._configure_provider_diagnostics([agent])
-                return agent if agent.is_available() else None
+                with agent._use_diagnostic_sink(self._diagnostic_sink):
+                    return agent if agent.is_available() else None
         return None

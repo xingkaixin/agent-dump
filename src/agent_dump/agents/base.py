@@ -5,6 +5,7 @@ Base agent handler interface
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -117,17 +118,30 @@ class BaseAgent(ABC):
         self.name = resolved_name
         self.display_name = resolved_display_name
         self._session_data_cache = SessionDataCache()
-        self._diagnostic_sink: ProviderDiagnosticSink | None = None
+        self._diagnostic_sink: ContextVar[ProviderDiagnosticSink | None] = ContextVar(
+            f"{resolved_name}_diagnostic_sink",
+            default=None,
+        )
 
     def _configure_diagnostic_sink(self, sink: ProviderDiagnosticSink | None) -> None:
         """Configure the diagnostic destination used while this provider is scanner-owned."""
-        self._diagnostic_sink = sink
+        self._diagnostic_sink.set(sink)
+
+    @contextmanager
+    def _use_diagnostic_sink(self, sink: ProviderDiagnosticSink | None) -> Iterator[None]:
+        """Route diagnostics to one scanner for the current execution context."""
+        token = self._diagnostic_sink.set(sink)
+        try:
+            yield
+        finally:
+            self._diagnostic_sink.reset(token)
 
     def _report_diagnostic(self, message_key: str, **fields: Any) -> None:
         """Emit a structured warning when a caller configured a diagnostic sink."""
-        if self._diagnostic_sink is None:
+        sink = self._diagnostic_sink.get()
+        if sink is None:
             return
-        self._diagnostic_sink(ProviderDiagnostic(message_key=message_key, fields=fields))
+        sink(ProviderDiagnostic(message_key=message_key, fields=fields))
 
     def scan(self) -> list[Session]:
         """Scan all available sessions without a time limit."""
