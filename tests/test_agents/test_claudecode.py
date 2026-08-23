@@ -1450,7 +1450,7 @@ class TestClaudeCodeAgent:
 
 
 class TestSessionsIndexCache:
-    """AD-155：sessions-index 每个 Project 只加载一次，缺失结果同样被缓存。"""
+    """AD-155：sessions-index 在单次读取中只加载一次，缺失结果同样被缓存。"""
 
     @staticmethod
     def _make_project(root: Path, name: str, session_ids: list[str]) -> Path:
@@ -1544,6 +1544,33 @@ class TestSessionsIndexCache:
 
         assert len(loads) == 1, "并发查询同一 Project 只应触发一次加载"
         assert all(result is not None for result in results)
+
+    def test_repeated_session_discovery_refreshes_project_index(self, monkeypatch, tmp_path):
+        claude_root = tmp_path / "claude-root"
+        project_dir = claude_root / "projects" / "project"
+        project_dir.mkdir(parents=True)
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude_root))
+        session_id = "session-001"
+        write_jsonl(
+            project_dir / f"{session_id}.jsonl",
+            [{"timestamp": datetime.now(timezone.utc).isoformat(), "message": {"role": "user", "content": "hi"}}],
+        )
+        index_path = project_dir / "sessions-index.json"
+        index_path.write_text(
+            json.dumps({"entries": [{"sessionId": session_id, "summary": "Old title"}]}),
+            encoding="utf-8",
+        )
+        agent = ClaudeCodeAgent()
+
+        first = agent.get_sessions(days=None)
+        index_path.write_text(
+            json.dumps({"entries": [{"sessionId": session_id, "summary": "New title"}]}),
+            encoding="utf-8",
+        )
+        second = agent.get_sessions(days=None)
+
+        assert [session.title for session in first] == ["Old title"]
+        assert [session.title for session in second] == ["New title"]
 
 
 class TestOversizedFirstRecordKeepsSessionVisible:

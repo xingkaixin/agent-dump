@@ -47,6 +47,9 @@ class FileSessionAgent(BaseAgent):
         """Whether a file may contain sessions inside the window; default prunes by mtime."""
         return file_modified_since(file_path, cutoff)
 
+    def _prepare_session_operation(self) -> None:
+        """Prepare provider-owned transient state for one public read operation."""
+
     def get_session_change_sources(self, session: Session) -> tuple[Path, ...]:
         """Use the provider-owned session file to invalidate parsed data."""
         return (session.source_path,)
@@ -100,6 +103,7 @@ class FileSessionAgent(BaseAgent):
 
     def discover_sessions(self, days: int | None = 7) -> ProviderDiscovery:
         """Discover candidate files once for availability and windowed parsing."""
+        self._prepare_session_operation()
         if not self._ensure_base_path():
             return ProviderDiscovery(available=False)
 
@@ -124,6 +128,7 @@ class FileSessionAgent(BaseAgent):
 
     def find_session_by_id(self, session_id: str) -> Session | None:
         """Try filename-based candidates before falling back to a full scan."""
+        self._prepare_session_operation()
         if base_path := self._ensure_base_path():
             resolved_base_path = base_path.resolve()
             for file_path in self._session_file_candidates(session_id):
