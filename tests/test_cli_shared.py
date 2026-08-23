@@ -167,7 +167,7 @@ class TestQueryHelpers:
         agent_b.get_sessions.return_value = [newer]
 
         match_b = SearchSessionMatch(agent=agent_b, session=newer, snippet="new", rank=0.0)
-        with mock.patch("agent_dump.cli_shared.query_session_groups", return_value=[match_b]):
+        with mock.patch("agent_dump.cli_shared.select_session_groups", return_value=[match_b]):
             matched = collect_query_matches(
                 [(agent_a, [older]), (agent_b, [newer])],
                 spec=make_query_spec(keyword="bug", limit=1),
@@ -189,7 +189,7 @@ class TestQueryHelpers:
 
         match_b = SearchSessionMatch(agent=agent_b, session=newer, snippet="new", rank=2.0)
 
-        with mock.patch("agent_dump.cli_shared.search_session_groups", return_value=[match_b]):
+        with mock.patch("agent_dump.cli_shared.select_session_groups", return_value=[match_b]):
             result = collect_search_matches(
                 [(agent_a, [older]), (agent_b, [newer])],
                 spec=make_query_spec(keyword="bug", limit=1),

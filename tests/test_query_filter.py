@@ -20,8 +20,7 @@ from agent_dump.query_filter import (
     extract_session_working_directory,
     parse_query,
     parse_query_uri,
-    query_session_groups,
-    search_session_groups,
+    select_session_groups,
 )
 from agent_dump.query_semantics import TextQuery, TextQueryMode
 from agent_dump.search_diagnostics import print_search_diagnostic
@@ -79,6 +78,7 @@ def make_query_spec(
     project_path: Path | None = None,
     roles: set[str] | None = None,
     limit: int | None = None,
+    text_mode: TextQueryMode = TextQueryMode.KEYWORD,
 ) -> QuerySpec:
     return QuerySpec(
         agent_names=frozenset(agent_names) if agent_names is not None else None,
@@ -86,6 +86,7 @@ def make_query_spec(
         project_path=project_path,
         roles=frozenset(roles) if roles is not None else None,
         limit=limit,
+        text_mode=text_mode,
     )
 
 
@@ -97,7 +98,7 @@ def query_sessions_by_keyword(
     search_index: SearchIndex | None = None,
     diagnostic_sink=None,
 ) -> list[Session]:
-    matches = query_session_groups(
+    matches = select_session_groups(
         [(agent, sessions)],
         make_query_spec(keyword=keyword),
         search_index=search_index,
@@ -116,7 +117,7 @@ def query_sessions(
 ) -> list[Session]:
     if spec is None:
         return sessions
-    matches = query_session_groups(
+    matches = select_session_groups(
         [(agent, sessions)],
         spec,
         search_index=search_index,
@@ -133,7 +134,7 @@ def query_matches(
     search_index: SearchIndex | None = None,
     diagnostic_sink=None,
 ) -> list[SearchSessionMatch]:
-    return query_session_groups(
+    return select_session_groups(
         [(agent, sessions)],
         spec,
         search_index=search_index,
@@ -151,7 +152,7 @@ def search_matches(
 ) -> list[SearchSessionMatch]:
     if not (spec.keyword or "").strip():
         return []
-    return search_session_groups(
+    return select_session_groups(
         [(agent, sessions)],
         spec,
         search_index=search_index,
@@ -373,6 +374,27 @@ class TestQuerySessionsByKeyword:
             result = query_sessions_by_keyword(agent, [session], "auth timeout")
 
         assert result == []
+
+    def test_query_spec_owns_text_matching_semantics(self, tmp_path) -> None:
+        session = make_session("s1", "普通标题", tmp_path / "s1.jsonl")
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "content": "auth failed before timeout"}]}},
+        )
+        unavailable = mock.MagicMock()
+        unavailable.is_available = False
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=unavailable):
+            keyword_matches = select_session_groups(
+                [(agent, [session])],
+                make_query_spec(keyword="auth timeout"),
+            )
+            search_term_matches = select_session_groups(
+                [(agent, [session])],
+                make_query_spec(keyword="auth timeout", text_mode=TextQueryMode.SEARCH_TERMS),
+            )
+
+        assert keyword_matches == []
+        assert [match.session.id for match in search_term_matches] == ["s1"]
 
     def test_filter_directory_session_uses_normalized_transcript_only(self, tmp_path):
         session_dir = tmp_path / "session"
@@ -689,7 +711,7 @@ class TestSearchSessionsByQuery:
         )
         index = SearchIndex(tmp_path / "index.db")
         index.update(agent, sessions)
-        spec = make_query_spec(keyword=keyword)
+        spec = make_query_spec(keyword=keyword, text_mode=TextQueryMode.SEARCH_TERMS)
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
             indexed = search_matches(agent, sessions, spec)
@@ -718,7 +740,11 @@ class TestSearchSessionsByQuery:
         ]
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_matches(agent, [session], make_query_spec(keyword="auth timeout"))
+            result = search_matches(
+                agent,
+                [session],
+                make_query_spec(keyword="auth timeout", text_mode=TextQueryMode.SEARCH_TERMS),
+            )
 
         assert result == [
             SearchSessionMatch(
@@ -753,7 +779,11 @@ class TestSearchSessionsByQuery:
             result = search_matches(
                 agent,
                 [scoped, outside],
-                make_query_spec(keyword="bug", project_path=tmp_path / "repo"),
+                make_query_spec(
+                    keyword="bug",
+                    project_path=tmp_path / "repo",
+                    text_mode=TextQueryMode.SEARCH_TERMS,
+                ),
             )
 
         assert [match.session.id for match in result] == ["s1"]
@@ -775,7 +805,11 @@ class TestSearchSessionsByQuery:
         index.is_available = False
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_matches(agent, [session], make_query_spec(keyword="auth timeout"))
+            result = search_matches(
+                agent,
+                [session],
+                make_query_spec(keyword="auth timeout", text_mode=TextQueryMode.SEARCH_TERMS),
+            )
 
         assert len(result) == 1
         assert result[0].snippet == "login failed after **auth** timeout"
@@ -793,7 +827,11 @@ class TestSearchSessionsByQuery:
         index.is_available = False
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_matches(agent, [session], make_query_spec(keyword="auth timeout"))
+            result = search_matches(
+                agent,
+                [session],
+                make_query_spec(keyword="auth timeout", text_mode=TextQueryMode.SEARCH_TERMS),
+            )
 
         assert [match.session.id for match in result] == ["s1"]
         assert "auth" in result[0].snippet.lower()
@@ -808,7 +846,11 @@ class TestSearchSessionsByQuery:
         index.is_available = False
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_matches(agent, [session], make_query_spec(keyword="认证"))
+            result = search_matches(
+                agent,
+                [session],
+                make_query_spec(keyword="认证", text_mode=TextQueryMode.SEARCH_TERMS),
+            )
 
         assert result == []
 
@@ -828,7 +870,11 @@ class TestSearchSessionsByQuery:
         index.is_available = False
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_matches(agent, [session], make_query_spec(keyword="认证"))
+            result = search_matches(
+                agent,
+                [session],
+                make_query_spec(keyword="认证", text_mode=TextQueryMode.SEARCH_TERMS),
+            )
 
         assert len(result) == 1
         assert result[0].snippet == "修复**认证**模块的问题"
@@ -855,7 +901,11 @@ class TestSearchSessionsByQuery:
             result = search_matches(
                 agent,
                 [session],
-                make_query_spec(keyword="fatal", roles={"assistant"}),
+                make_query_spec(
+                    keyword="fatal",
+                    roles={"assistant"},
+                    text_mode=TextQueryMode.SEARCH_TERMS,
+                ),
             )
 
         assert result == [
@@ -1070,11 +1120,11 @@ class TestRoleLimitPushdown:
             for session in sessions:
                 session.metadata = {"cwd": str(tmp_path)}
 
-        optimized = query_session_groups(
+        optimized = select_session_groups(
             list(zip(optimized_agents, session_groups, strict=True)),
             make_query_spec(keyword="matching", roles={"user"}, limit=2),
         )
-        full_matches = query_session_groups(
+        full_matches = select_session_groups(
             list(zip(full_agents, session_groups, strict=True)),
             make_query_spec(keyword="matching", roles={"user"}, project_path=tmp_path),
         )
@@ -1100,7 +1150,7 @@ class TestQuerySessionGroups:
         index.is_available = False
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index) as index_factory:
-            result = query_session_groups(
+            result = select_session_groups(
                 [(codex, [codex_session]), (kimi, [kimi_session])],
                 make_query_spec(keyword="matching"),
             )
@@ -1120,7 +1170,7 @@ class TestQuerySessionGroups:
         ]
 
         with mock.patch("agent_dump.query_filter._session_matches", return_value=matches):
-            result = query_session_groups([(agent, [older, newer])], make_query_spec(limit=1))
+            result = select_session_groups([(agent, [older, newer])], make_query_spec(limit=1))
 
         assert result == [matches[1]]
 
@@ -1136,7 +1186,7 @@ class TestQuerySessionGroups:
         ]
 
         with mock.patch("agent_dump.query_filter._session_matches", return_value=matches):
-            result = query_session_groups([(agent, [older, newer])], make_query_spec(limit=5))
+            result = select_session_groups([(agent, [older, newer])], make_query_spec(limit=5))
 
         assert result == [matches[1], matches[0]]
 
@@ -1161,7 +1211,10 @@ class TestSearchSessionGroups:
             SearchSessionMatch(agent=codex, session=older_high_rank, snippet="high", rank=2.0),
         ]
         with mock.patch("agent_dump.query_filter._session_matches", return_value=matches):
-            result = search_session_groups([(codex, [])], make_query_spec(keyword="bug", limit=3))
+            result = select_session_groups(
+                [(codex, [])],
+                make_query_spec(keyword="bug", limit=3, text_mode=TextQueryMode.SEARCH_TERMS),
+            )
 
         assert [(match.agent.name, match.session.id) for match in result] == [
             ("codex", "s1"),
@@ -1207,17 +1260,24 @@ class TestSearchLimitPushdownSafety:
         return index
 
     def test_plain_keyword_search_pushes_the_limit_down(self):
-        index = self._run(make_query_spec(keyword="alpha", limit=10))
+        index = self._run(make_query_spec(keyword="alpha", limit=10, text_mode=TextQueryMode.SEARCH_TERMS))
 
         assert index.search.call_args.kwargs["limit"] == 10
 
     def test_project_scope_keeps_the_full_result_set(self):
         """scope 过滤发生在拿到结果之后；先裁剪会把本该入选的会话挡在 top-L 之外。"""
-        index = self._run(make_query_spec(keyword="alpha", limit=10, project_path=Path("/work/project")))
+        index = self._run(
+            make_query_spec(
+                keyword="alpha",
+                limit=10,
+                project_path=Path("/work/project"),
+                text_mode=TextQueryMode.SEARCH_TERMS,
+            )
+        )
 
         assert index.search.call_args.kwargs["limit"] is None
 
     def test_no_limit_stays_unlimited(self):
-        index = self._run(make_query_spec(keyword="alpha"))
+        index = self._run(make_query_spec(keyword="alpha", text_mode=TextQueryMode.SEARCH_TERMS))
 
         assert index.search.call_args.kwargs["limit"] is None

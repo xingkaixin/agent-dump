@@ -13,6 +13,7 @@ from agent_dump.output_formats import (
     validate_formats_for_mode,
 )
 from agent_dump.query_filter import QuerySpec, parse_query, parse_query_uri
+from agent_dump.query_semantics import TextQueryMode
 from agent_dump.uri_support import parse_uri
 
 
@@ -363,6 +364,7 @@ def _build_session_operation(
             project_path=query_spec.project_path if query_spec else None,
             roles=query_spec.roles if query_spec else None,
             limit=query_spec.limit if query_spec else None,
+            text_mode=TextQueryMode.SEARCH_TERMS,
         )
         return SearchOperation(
             days=days,

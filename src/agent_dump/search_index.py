@@ -196,6 +196,9 @@ _INDEX_PROGRESS_THRESHOLD = 10
 _MAX_INDEX_PARSE_WORKERS = 32
 # 每批同时驻留内存的会话正文数量上限，与解析并行度对齐
 _INDEX_BATCH_SIZE = 32
+# SQLite commonly caps one statement at 999 bound values. Each scoped session
+# uses two values, leaving room for provider filters.
+_LITERAL_SCOPE_BATCH_SIZE = 400
 # 索引是可重建的私有缓存，不能无期保留已从 Provider 消失的会话正文
 _INDEX_RETENTION_SECONDS = 30 * 24 * 60 * 60
 
@@ -572,28 +575,39 @@ class SearchIndex:
     ) -> list[SearchResult]:
         conn = self._get_connection()
         try:
-            filters: list[str] = []
-            params: list[Any] = []
-            if agent_names:
-                filters.append(f"f.agent_name IN ({','.join('?' * len(agent_names))})")
-                params.extend(sorted(agent_names))
-            where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
-            cursor = conn.execute(
-                f"""
-                SELECT f.agent_name, f.session_id, f.title, f.content,
-                       s.session_updated_at, s.session_created_at
-                FROM sessions_fts_trigram f
-                JOIN index_state s ON s.fts_rowid = f.rowid
-                {where_clause}
-                """,
-                params,
-            )
+            session_key_batches: Iterator[list[_SessionKey]]
+            if session_keys is None:
+                session_key_batches = iter([[]])
+            else:
+                session_key_batches = _batched(sorted(session_keys), _LITERAL_SCOPE_BATCH_SIZE)
+
+            def iter_rows() -> Iterator[sqlite3.Row]:
+                for session_key_batch in session_key_batches:
+                    filters: list[str] = []
+                    params: list[Any] = []
+                    if agent_names:
+                        filters.append(f"s.agent IN ({','.join('?' * len(agent_names))})")
+                        params.extend(sorted(agent_names))
+                    if session_keys is not None:
+                        filters.append(
+                            "(" + " OR ".join("(s.agent = ? AND s.session_id = ?)" for _ in session_key_batch) + ")"
+                        )
+                        params.extend(value for session_key in session_key_batch for value in session_key)
+                    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+                    yield from conn.execute(
+                        f"""
+                        SELECT s.agent AS agent_name, s.session_id, f.title, f.content,
+                               s.session_updated_at, s.session_created_at
+                        FROM index_state s
+                        JOIN sessions_fts_trigram f ON f.rowid = s.fts_rowid
+                        {where_clause}
+                        """,
+                        params,
+                    )
 
             def iter_matches() -> Iterator[_LiteralMatch]:
-                for row in cursor:
+                for row in iter_rows():
                     session_key = (str(row["agent_name"]), str(row["session_id"]))
-                    if session_keys is not None and session_key not in session_keys:
-                        continue
                     fields = (row["title"] or "", row["content"] or "")
                     evidence = query.find_match(fields)
                     if evidence is None:

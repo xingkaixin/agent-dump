@@ -32,6 +32,7 @@ class QuerySpec:
     project_path: Path | None
     roles: frozenset[str] | None
     limit: int | None
+    text_mode: TextQueryMode = TextQueryMode.KEYWORD
 
 
 @dataclass(frozen=True)
@@ -184,43 +185,27 @@ def parse_query_uri(raw_uri: str | None, valid_agents: set[str], cwd: Path | Non
     )
 
 
-def query_session_groups(
+def select_session_groups(
     session_groups: Sequence[SessionGroup],
     spec: QuerySpec,
     *,
     search_index: SearchIndex | None = None,
     diagnostic_sink: SearchDiagnosticSink | None = None,
 ) -> list[SearchSessionMatch]:
-    """Query multiple providers and own the global recency limit."""
+    """Select sessions using the text semantics carried by the query specification."""
     runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
     matches = [
         match
         for agent, sessions in session_groups
-        for match in _session_matches(agent, sessions, spec, mode=TextQueryMode.KEYWORD, runtime=runtime)
+        for match in _session_matches(agent, sessions, spec, runtime=runtime)
     ]
-    if spec.limit is None:
+    if spec.text_mode is TextQueryMode.SEARCH_TERMS:
+        ordered_matches = sorted(matches, key=_search_match_sort_key)
+    elif spec.limit is not None:
+        ordered_matches = sorted(matches, key=_query_evidence_sort_key)
+    else:
         return matches
-    return sorted(matches, key=_query_evidence_sort_key)[: spec.limit]
-
-
-def search_session_groups(
-    session_groups: Sequence[SessionGroup],
-    spec: QuerySpec,
-    *,
-    search_index: SearchIndex | None = None,
-    diagnostic_sink: SearchDiagnosticSink | None = None,
-) -> list[SearchSessionMatch]:
-    """Search multiple providers with one global ranking order and limit."""
-    runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
-    matches = [
-        match
-        for agent, sessions in session_groups
-        for match in _session_matches(agent, sessions, spec, mode=TextQueryMode.SEARCH_TERMS, runtime=runtime)
-    ]
-    sorted_matches = sorted(matches, key=_search_match_sort_key)
-    if spec.limit is None or spec.limit >= len(sorted_matches):
-        return sorted_matches
-    return sorted_matches[: spec.limit]
+    return ordered_matches if spec.limit is None else ordered_matches[: spec.limit]
 
 
 def _session_matches(
@@ -228,14 +213,13 @@ def _session_matches(
     sessions: list[Session],
     spec: QuerySpec,
     *,
-    mode: TextQueryMode,
     runtime: _SearchRuntime,
 ) -> list[SearchSessionMatch]:
     if spec.agent_names is not None and agent.name not in spec.agent_names:
         return []
 
     keyword = (spec.keyword or "").strip()
-    text_query = TextQuery.parse(keyword, mode)
+    text_query = TextQuery.parse(keyword, spec.text_mode)
     scoped_sessions = sessions
     if spec.project_path is not None:
         scoped_sessions = [

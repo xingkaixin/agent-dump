@@ -19,8 +19,7 @@ from agent_dump.output_formats import FileOutputFormat
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
-    query_session_groups,
-    search_session_groups,
+    select_session_groups,
 )
 from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.scanner import AgentScanner
@@ -218,7 +217,7 @@ def collect_query_matches(
     spec: QuerySpec,
 ) -> dict[str, list[Session]]:
     grouped: dict[str, list[Session]] = {}
-    for match in query_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic):
+    for match in select_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic):
         grouped.setdefault(match.agent.name, []).append(match.session)
     return grouped
 
@@ -228,7 +227,7 @@ def collect_search_matches(
     *,
     spec: QuerySpec,
 ) -> list[SearchSessionMatch]:
-    return search_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic)
+    return select_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic)
 
 
 def display_search_results(matches: list[SearchSessionMatch]) -> None:

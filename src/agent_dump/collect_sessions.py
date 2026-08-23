@@ -23,7 +23,7 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
-    query_session_groups,
+    select_session_groups,
 )
 from agent_dump.search_diagnostics import SearchDiagnosticSink
 from agent_dump.terminal_output import render_terminal_message
@@ -128,7 +128,7 @@ def collect_entries(
         )
 
     candidate_matches = (
-        query_session_groups(eligible_session_groups, query_spec, diagnostic_sink=diagnostic_sink)
+        select_session_groups(eligible_session_groups, query_spec, diagnostic_sink=diagnostic_sink)
         if query_spec is not None
         else [
             SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
