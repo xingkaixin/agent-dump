@@ -10,6 +10,7 @@ from unittest import mock
 
 import pytest
 
+from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.zcode import ZCodeAgent
 from agent_dump.diagnostics import DiagnosticError
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
@@ -140,6 +141,10 @@ def test_init() -> None:
     assert agent.name == "zcode"
     assert agent.display_name == "ZCode"
     assert agent.db_path is None
+
+
+def test_zcode_does_not_inherit_opencode_provider_identity() -> None:
+    assert not issubclass(ZCodeAgent, OpenCodeAgent)
 
 
 def test_find_db_path_on_macos(monkeypatch, tmp_path) -> None:

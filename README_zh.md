@@ -493,6 +493,7 @@ deny = [
 │           ├── base.py         # BaseAgent 与 Session
 │           ├── opencode.py     # OpenCode Agent
 │           ├── zcode.py        # ZCode Agent
+│           ├── sqlite_sessions.py # OpenCode/ZCode 共享 SQLite 读取机制
 │           ├── claudecode.py   # Claude Code Agent
 │           ├── claude_transcript.py # Claude JSONL 转录解析
 │           ├── codex.py        # Codex Agent
