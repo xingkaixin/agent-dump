@@ -119,7 +119,7 @@ class TestAgentScanner:
 
         assert AgentScanner(agents).agents == agents
 
-    def test_scan_reports_available_and_empty_agents(self, capsys):
+    def test_scan_returns_available_sessions_without_terminal_output(self, capsys):
         session = make_session("one-session")
         scanner = AgentScanner(
             [
@@ -132,12 +132,7 @@ class TestAgentScanner:
         result = scanner.scan()
 
         assert result == {"one": [session]}
-        output = capsys.readouterr().out
-        assert "One" in output
-        assert "1 个会话" in output
-        assert "Empty" in output
-        assert "0 个会话" in output
-        assert "Missing" not in output
+        assert capsys.readouterr().out == ""
 
     @pytest.mark.parametrize(
         ("failure_stage", "error"),

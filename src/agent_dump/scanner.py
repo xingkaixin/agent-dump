@@ -9,8 +9,7 @@ from typing import TypeVar
 from agent_dump.agent_registry import create_registered_agents
 from agent_dump.agents.base import BaseAgent, ProviderDiscovery, Session
 from agent_dump.diagnostics import RecoverableDiagnostic, RecoverableDiagnosticSink, print_recoverable_diagnostic
-from agent_dump.i18n import Keys, i18n
-from agent_dump.terminal_output import render_terminal_message
+from agent_dump.i18n import Keys
 
 T = TypeVar("T")
 
@@ -76,24 +75,8 @@ class AgentScanner:
             return results
 
     def scan(self) -> dict[str, list[Session]]:
-        """
-        Scan all agents concurrently and return available sessions.
-        Returns a dict mapping agent name to list of sessions.
-        """
-        print(i18n.t(Keys.SCANNING_AGENTS))
-
-        results: dict[str, list[Session]] = {}
-        agent_results = self.get_available_sessions(days=None)
-
-        for agent, sessions in agent_results:
-            if sessions:
-                results[agent.name] = sessions
-                print(render_terminal_message(Keys.AGENT_FOUND, name=agent.display_name, count=len(sessions)))
-            else:
-                print(render_terminal_message(Keys.AGENT_FOUND_EMPTY, name=agent.display_name))
-
-        print()
-        return results
+        """Scan all available providers and return their non-empty sessions."""
+        return {agent.name: sessions for agent, sessions in self.get_available_sessions(days=None) if sessions}
 
     def get_available_agents(self) -> list[BaseAgent]:
         """Get list of available agents with sessions"""
