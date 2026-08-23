@@ -114,7 +114,7 @@ class TestUntrustedSessionContentIsIsolated:
         entry = self._entry()
         payloads = [{"done": ["real work"]}, {"done": [self.HOSTILE]}]
 
-        prompt = build_collect_merge_prompt(entry=entry, payloads=payloads, merge_label="session")
+        prompt = build_collect_merge_prompt(source_uri=entry.session_uri, payloads=payloads, merge_label="session")
 
         envelopes = self._envelopes(prompt)
         assert len(envelopes) == 2
@@ -125,14 +125,14 @@ class TestUntrustedSessionContentIsIsolated:
 
     def test_group_merge_sources_record_the_reduction_level(self):
         prompt = build_collect_merge_prompt(
-            entry=self._entry(),
+            source_uri="collect://group-level-2/group-1",
             payloads=[{"done": ["a"]}, {"done": ["b"]}],
             merge_label="group-level-2",
         )
 
         assert [envelope["source"] for envelope in self._envelopes(prompt)] == [
-            "collect://group-level-2/summary/1",
-            "collect://group-level-2/summary/2",
+            "collect://group-level-2/group-1#summary-1",
+            "collect://group-level-2/group-1#summary-2",
         ]
 
     def test_envelope_length_matches_its_content(self):
@@ -161,7 +161,7 @@ class TestUntrustedSessionContentIsIsolated:
         entry = self._entry()
         payloads = [{"done": ["a"]}, {"done": ["b"]}]
 
-        prompt = build_collect_merge_prompt(entry=entry, payloads=payloads, merge_label="session")
+        prompt = build_collect_merge_prompt(source_uri=entry.session_uri, payloads=payloads, merge_label="session")
 
         recovered = [json.loads(e["content"]) for e in self._envelopes(prompt)]
         assert recovered == payloads, "归并输入仍必须是可解析的合法摘要"
