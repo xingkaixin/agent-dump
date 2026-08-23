@@ -18,14 +18,10 @@ from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
     extract_session_working_directory,
-    filter_sessions,
-    filter_sessions_by_query,
     parse_query,
     parse_query_uri,
     query_session_groups,
-    query_session_matches,
     search_session_groups,
-    search_sessions_by_query,
 )
 from agent_dump.query_semantics import TextQuery, TextQueryMode
 from agent_dump.search_diagnostics import print_search_diagnostic
@@ -90,6 +86,76 @@ def make_query_spec(
         project_path=project_path,
         roles=frozenset(roles) if roles is not None else None,
         limit=limit,
+    )
+
+
+def query_sessions_by_keyword(
+    agent: BaseAgent,
+    sessions: list[Session],
+    keyword: str | None,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink=None,
+) -> list[Session]:
+    matches = query_session_groups(
+        [(agent, sessions)],
+        make_query_spec(keyword=keyword),
+        search_index=search_index,
+        diagnostic_sink=diagnostic_sink,
+    )
+    return [match.session for match in matches]
+
+
+def query_sessions(
+    agent: BaseAgent,
+    sessions: list[Session],
+    spec: QuerySpec | None,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink=None,
+) -> list[Session]:
+    if spec is None:
+        return sessions
+    matches = query_session_groups(
+        [(agent, sessions)],
+        spec,
+        search_index=search_index,
+        diagnostic_sink=diagnostic_sink,
+    )
+    return [match.session for match in matches]
+
+
+def query_matches(
+    agent: BaseAgent,
+    sessions: list[Session],
+    spec: QuerySpec,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink=None,
+) -> list[SearchSessionMatch]:
+    return query_session_groups(
+        [(agent, sessions)],
+        spec,
+        search_index=search_index,
+        diagnostic_sink=diagnostic_sink,
+    )
+
+
+def search_matches(
+    agent: BaseAgent,
+    sessions: list[Session],
+    spec: QuerySpec,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink=None,
+) -> list[SearchSessionMatch]:
+    if not (spec.keyword or "").strip():
+        return []
+    return search_session_groups(
+        [(agent, sessions)],
+        spec,
+        search_index=search_index,
+        diagnostic_sink=diagnostic_sink,
     )
 
 
@@ -213,43 +279,15 @@ class TestParseQueryUri:
         assert parse_query_uri("codex://session-1", {"codex"}, cwd=Path("/work")) is None
 
 
-class TestFilterSessions:
-    """测试 filter_sessions 函数"""
-
-    @pytest.mark.parametrize("agent_cls", (OpenCodeAgent, ZCodeAgent))
-    def test_index_precedes_sqlite_provider_full_scan(self, agent_cls, tmp_path):
-        agent = agent_cls()
-        session = make_session("s1", "title", tmp_path / "provider.db")
-
-        with (
-            mock.patch("agent_dump.query_filter._try_indexed_search", return_value=[session]) as indexed_search,
-            mock.patch.object(agent, "filter_sessions_by_keyword", return_value=[session]) as provider_search,
-        ):
-            result = filter_sessions(agent, [session], "keyword")
-
-        assert result == [session]
-        indexed_search.assert_called_once()
-        provider_search.assert_not_called()
-
-    def test_provider_fast_path_remains_the_index_fallback(self, tmp_path):
-        agent = DummyAgent(name="opencode")
-        session = make_session("s1", "title", tmp_path / "provider.db")
-
-        with (
-            mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None),
-            mock.patch.object(agent, "filter_sessions_by_keyword", return_value=[session]) as provider_search,
-        ):
-            result = filter_sessions(agent, [session], "keyword")
-
-        assert result == [session]
-        provider_search.assert_called_once_with([session], "keyword")
+class TestQuerySessionsByKeyword:
+    """测试 query_sessions_by_keyword 函数"""
 
     def test_filter_by_title(self, tmp_path):
         agent = DummyAgent(name="codex", session_data={"s1": {"messages": []}})
         session = make_session("s1", "修复报错会话", tmp_path / "s1.jsonl")
         session.source_path.write_text("no-hit")
 
-        result = filter_sessions(agent, [session], "报错")
+        result = query_sessions_by_keyword(agent, [session], "报错")
         assert result == [session]
 
     def test_filter_does_not_search_raw_source_fields(self, tmp_path, capsys):
@@ -257,8 +295,8 @@ class TestFilterSessions:
         session = make_session("s1", "普通标题", tmp_path / "s1.jsonl")
         session.source_path.write_text('{"internal_metadata": "fatal"}')
 
-        with mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None):
-            result = filter_sessions(
+        with mock.patch.object(SearchIndex, "is_available", new_callable=mock.PropertyMock, return_value=False):
+            result = query_sessions_by_keyword(
                 agent,
                 [session],
                 "fatal",
@@ -289,7 +327,7 @@ class TestFilterSessions:
             },
         )
 
-        result = filter_sessions(agent, [session], "session-data-keyword")
+        result = query_sessions_by_keyword(agent, [session], "session-data-keyword")
         assert result == [session]
 
     def test_filter_does_not_fallback_when_searchable_source_exists(self, tmp_path):
@@ -303,9 +341,9 @@ class TestFilterSessions:
 
         with (
             mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as mock_get_session_data,
-            mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None),
+            mock.patch.object(SearchIndex, "is_available", new_callable=mock.PropertyMock, return_value=False),
         ):
-            result = filter_sessions(agent, [session], "fatal")
+            result = query_sessions_by_keyword(agent, [session], "fatal")
 
         assert result == [session]
         mock_get_session_data.assert_called_once_with(session)
@@ -319,8 +357,8 @@ class TestFilterSessions:
             session_data={"s1": {"messages": [{"parts": [{"type": "text", "text": "认证"}]}]}},
         )
 
-        with mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None):
-            result = filter_sessions(agent, [session], "认证")
+        with mock.patch.object(SearchIndex, "is_available", new_callable=mock.PropertyMock, return_value=False):
+            result = query_sessions_by_keyword(agent, [session], "认证")
 
         assert result == [session]
 
@@ -331,8 +369,8 @@ class TestFilterSessions:
             session_data={"s1": {"messages": [{"parts": [{"type": "text", "text": "auth failed before timeout"}]}]}},
         )
 
-        with mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None):
-            result = filter_sessions(agent, [session], "auth timeout")
+        with mock.patch.object(SearchIndex, "is_available", new_callable=mock.PropertyMock, return_value=False):
+            result = query_sessions_by_keyword(agent, [session], "auth timeout")
 
         assert result == []
 
@@ -346,8 +384,8 @@ class TestFilterSessions:
             session_data={"s1": {"messages": [{"parts": [{"type": "text", "text": "logical-hit"}]}]}},
         )
 
-        assert filter_sessions(agent, [session], "logical-hit") == [session]
-        assert filter_sessions(agent, [session], "raw-only-hit") == []
+        assert query_sessions_by_keyword(agent, [session], "logical-hit") == [session]
+        assert query_sessions_by_keyword(agent, [session], "raw-only-hit") == []
 
     def test_filter_binary_like_source_falls_back_to_session_data(self, tmp_path):
         source_path = tmp_path / "state.vscdb"
@@ -359,7 +397,7 @@ class TestFilterSessions:
         )
 
         with mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as mock_get_session_data:
-            result = filter_sessions(agent, [session], "fatal")
+            result = query_sessions_by_keyword(agent, [session], "fatal")
 
         assert result == [session]
         mock_get_session_data.assert_called_once_with(session)
@@ -436,10 +474,10 @@ class TestFilterSessions:
             make_session("s2", "Another title", db_path),
         ]
 
-        result = filter_sessions(agent, sessions, "fatal")
+        result = query_sessions_by_keyword(agent, sessions, "fatal")
         assert [s.id for s in result] == ["s1"]
-        assert [s.id for s in filter_sessions(agent, sessions, "关键字")] == ["s1"]
-        assert filter_sessions(agent, sessions, "provider-private-token") == []
+        assert [s.id for s in query_sessions_by_keyword(agent, sessions, "关键字")] == ["s1"]
+        assert query_sessions_by_keyword(agent, sessions, "provider-private-token") == []
 
     def test_filter_opencode_with_sql_no_match(self, tmp_path):
         db_path = tmp_path / "opencode.db"
@@ -490,7 +528,7 @@ class TestFilterSessions:
         agent.db_path = db_path
         sessions = [make_session("s1", "Normal title", db_path)]
 
-        result = filter_sessions(agent, sessions, "missing-keyword")
+        result = query_sessions_by_keyword(agent, sessions, "missing-keyword")
         assert result == []
 
 
@@ -507,7 +545,7 @@ class TestFilterSessionsByQuery:
         child.metadata = {"cwd": str(tmp_path)}
 
         spec = make_query_spec(project_path=repo_root)
-        result = filter_sessions_by_query(agent, [equal, parent, child], spec)
+        result = query_sessions(agent, [equal, parent, child], spec)
         assert [session.id for session in result] == ["s1", "s2", "s3"]
 
     def test_path_scope_excludes_same_prefix_non_descendant(self, tmp_path):
@@ -517,14 +555,14 @@ class TestFilterSessionsByQuery:
         session.metadata = {"cwd": str(tmp_path / "repo-other")}
 
         spec = make_query_spec(project_path=repo_root)
-        assert filter_sessions_by_query(agent, [session], spec) == []
+        assert query_sessions(agent, [session], spec) == []
 
     def test_path_scope_excludes_session_without_project_path(self, tmp_path):
         agent = DummyAgent(name="cursor")
         session = make_session("s1", "no path", tmp_path / "s1.jsonl")
         spec = make_query_spec(project_path=tmp_path / "repo")
 
-        assert filter_sessions_by_query(agent, [session], spec) == []
+        assert query_sessions(agent, [session], spec) == []
 
     def test_path_scope_uses_provider_session_facts(self, tmp_path):
         agent = DummyAgent(name="cursor")
@@ -534,7 +572,7 @@ class TestFilterSessionsByQuery:
         facts_session.metadata = {"cwd": str(tmp_path / "repo")}
 
         with mock.patch.object(agent, "get_session_facts", return_value=derive_session_facts(facts_session)) as facts:
-            result = filter_sessions_by_query(agent, [session], make_query_spec(project_path=tmp_path / "repo"))
+            result = query_sessions(agent, [session], make_query_spec(project_path=tmp_path / "repo"))
 
         assert result == [session]
         facts.assert_called_once_with(session)
@@ -547,7 +585,7 @@ class TestFilterSessionsByQuery:
         session.metadata = {"project": str(repo_root)}
         spec = make_query_spec(project_path=repo_root)
 
-        assert filter_sessions_by_query(agent, [session], spec) == []
+        assert query_sessions(agent, [session], spec) == []
 
     def test_combines_path_scope_and_keyword(self, tmp_path):
         agent = DummyAgent(
@@ -562,7 +600,7 @@ class TestFilterSessionsByQuery:
         other.source_path.write_text("contains refactor", encoding="utf-8")
 
         spec = make_query_spec(keyword="refactor", project_path=tmp_path / "repo")
-        result = filter_sessions_by_query(agent, [session, other], spec)
+        result = query_sessions(agent, [session, other], spec)
         assert [item.id for item in result] == ["s1"]
 
     def test_provider_scope_excludes_other_agents(self, tmp_path):
@@ -570,7 +608,7 @@ class TestFilterSessionsByQuery:
         session = make_session("s1", "refactor", tmp_path / "s1.jsonl")
         spec = make_query_spec(agent_names={"codex"})
 
-        assert filter_sessions_by_query(agent, [session], spec) == []
+        assert query_sessions(agent, [session], spec) == []
 
     def test_role_scope_matches_keyword_only_inside_matching_roles(self, tmp_path):
         session = make_session("s1", "fatal in title", tmp_path / "s1.jsonl")
@@ -587,7 +625,7 @@ class TestFilterSessionsByQuery:
             },
         )
 
-        result = filter_sessions_by_query(
+        result = query_sessions(
             agent,
             [session],
             make_query_spec(keyword="fatal", roles={"assistant"}),
@@ -608,7 +646,7 @@ class TestFilterSessionsByQuery:
             },
         )
 
-        result = filter_sessions_by_query(
+        result = query_sessions(
             agent,
             [session],
             make_query_spec(roles={"tool"}),
@@ -654,11 +692,11 @@ class TestSearchSessionsByQuery:
         spec = make_query_spec(keyword=keyword)
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            indexed = search_sessions_by_query(agent, sessions, spec)
+            indexed = search_matches(agent, sessions, spec)
         unavailable = mock.MagicMock()
         unavailable.is_available = False
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=unavailable):
-            fallback = search_sessions_by_query(agent, sessions, spec)
+            fallback = search_matches(agent, sessions, spec)
 
         indexed_ids = {match.session.id for match in indexed}
         fallback_ids = {match.session.id for match in fallback}
@@ -680,7 +718,7 @@ class TestSearchSessionsByQuery:
         ]
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="auth timeout"))
+            result = search_matches(agent, [session], make_query_spec(keyword="auth timeout"))
 
         assert result == [
             SearchSessionMatch(
@@ -712,7 +750,7 @@ class TestSearchSessionsByQuery:
         ]
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_sessions_by_query(
+            result = search_matches(
                 agent,
                 [scoped, outside],
                 make_query_spec(keyword="bug", project_path=tmp_path / "repo"),
@@ -737,7 +775,7 @@ class TestSearchSessionsByQuery:
         index.is_available = False
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="auth timeout"))
+            result = search_matches(agent, [session], make_query_spec(keyword="auth timeout"))
 
         assert len(result) == 1
         assert result[0].snippet == "login failed after **auth** timeout"
@@ -755,7 +793,7 @@ class TestSearchSessionsByQuery:
         index.is_available = False
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="auth timeout"))
+            result = search_matches(agent, [session], make_query_spec(keyword="auth timeout"))
 
         assert [match.session.id for match in result] == ["s1"]
         assert "auth" in result[0].snippet.lower()
@@ -770,7 +808,7 @@ class TestSearchSessionsByQuery:
         index.is_available = False
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="认证"))
+            result = search_matches(agent, [session], make_query_spec(keyword="认证"))
 
         assert result == []
 
@@ -790,7 +828,7 @@ class TestSearchSessionsByQuery:
         index.is_available = False
 
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            result = search_sessions_by_query(agent, [session], make_query_spec(keyword="认证"))
+            result = search_matches(agent, [session], make_query_spec(keyword="认证"))
 
         assert len(result) == 1
         assert result[0].snippet == "修复**认证**模块的问题"
@@ -814,7 +852,7 @@ class TestSearchSessionsByQuery:
         )
 
         with mock.patch("agent_dump.query_filter.SearchIndex") as index_factory:
-            result = search_sessions_by_query(
+            result = search_matches(
                 agent,
                 [session],
                 make_query_spec(keyword="fatal", roles={"assistant"}),
@@ -844,7 +882,7 @@ class TestSearchSessionsByQuery:
             },
         )
 
-        result = query_session_matches(agent, [session], make_query_spec(roles={"tool"}))
+        result = query_matches(agent, [session], make_query_spec(roles={"tool"}))
 
         assert result[0].session is session
         assert result[0].matched_role == "tool"
@@ -871,7 +909,7 @@ class TestSearchSessionsByQuery:
             return original_get_session_data(session)
 
         with mock.patch.object(agent, "get_session_data", side_effect=get_session_data):
-            result = query_session_matches(
+            result = query_matches(
                 agent,
                 [broken, healthy],
                 make_query_spec(keyword="matching", roles={"user"}),
@@ -912,7 +950,7 @@ class TestRoleLimitPushdown:
         sessions.reverse()
         agent = CountingAgent(session_data=self._data(sessions))
 
-        result = query_session_matches(
+        result = query_matches(
             agent,
             sessions,
             make_query_spec(keyword="matching", roles={"user"}, limit=1),
@@ -929,7 +967,7 @@ class TestRoleLimitPushdown:
             data[session.id] = {"messages": [{"role": "user", "parts": [{"type": "text", "text": "not relevant"}]}]}
         agent = CountingAgent(session_data=data)
 
-        result = query_session_matches(
+        result = query_matches(
             agent,
             list(reversed(sessions)),
             make_query_spec(keyword="matching", roles={"user"}, limit=1),
@@ -943,7 +981,7 @@ class TestRoleLimitPushdown:
         sessions = [self._session(tmp_path, f"s-{index:02d}", now - timedelta(minutes=index)) for index in range(10)]
         agent = CountingAgent(session_data=self._data(sessions, text="not relevant"))
 
-        result = query_session_matches(
+        result = query_matches(
             agent,
             sessions,
             make_query_spec(keyword="matching", roles={"user"}, limit=1),
@@ -959,7 +997,7 @@ class TestRoleLimitPushdown:
         sessions = [older, newer]
         agent = CountingAgent(session_data=self._data(sessions))
 
-        result = query_session_matches(
+        result = query_matches(
             agent,
             sessions,
             make_query_spec(keyword="matching", roles={"user"}),
@@ -977,7 +1015,7 @@ class TestRoleLimitPushdown:
         sessions = [outside, inside]
         agent = CountingAgent(session_data=self._data(sessions))
 
-        result = query_session_matches(
+        result = query_matches(
             agent,
             sessions,
             make_query_spec(
@@ -1000,9 +1038,9 @@ class TestRoleLimitPushdown:
         sessions = [id_later, id_first, created_first]
         agent = CountingAgent(session_data=self._data(sessions))
 
-        first = query_session_matches(agent, sessions, make_query_spec(roles={"user"}, limit=1))
+        first = query_matches(agent, sessions, make_query_spec(roles={"user"}, limit=1))
         second_agent = CountingAgent(session_data=self._data(sessions[:2]))
-        second = query_session_matches(second_agent, sessions[:2], make_query_spec(roles={"user"}, limit=1))
+        second = query_matches(second_agent, sessions[:2], make_query_spec(roles={"user"}, limit=1))
 
         assert [match.session.id for match in first] == ["z"]
         assert [match.session.id for match in second] == ["a"]
@@ -1165,7 +1203,7 @@ class TestSearchLimitPushdownSafety:
         index.is_available = True
         index.search.return_value = []
         with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index):
-            search_sessions_by_query(agent, [session], spec)
+            search_matches(agent, [session], spec)
         return index
 
     def test_plain_keyword_search_pushes_the_limit_down(self):

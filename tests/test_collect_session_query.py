@@ -110,7 +110,6 @@ class TestCollectEntries:
         agent_a.display_name = "Codex"
         agent_a.get_sessions.return_value = [older]
         agent_a.get_session_uri.side_effect = lambda s: f"codex://{s.id}"
-        agent_a.filter_sessions_by_keyword.return_value = None
         agent_a.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "refactor app"}]}]
         }
@@ -121,7 +120,6 @@ class TestCollectEntries:
         agent_b.display_name = "Kimi"
         agent_b.get_sessions.return_value = [newer]
         agent_b.get_session_uri.side_effect = lambda s: f"kimi://{s.id}"
-        agent_b.filter_sessions_by_keyword.return_value = None
         agent_b.get_cached_session_data.return_value = {
             "messages": [{"role": "user", "parts": [{"type": "text", "text": "refactor app"}]}]
         }
