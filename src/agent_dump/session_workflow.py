@@ -95,11 +95,8 @@ def _handle_session_modes(
         print("-" * 60)
         display_search_results(
             collect_search_matches(
-                available_agents,
-                days=operation.days,
+                scanned_sessions,
                 spec=search_spec,
-                scanner=scanner,
-                session_results=scanned_sessions,
             )
         )
         print("\n" + "=" * 60)
@@ -108,11 +105,8 @@ def _handle_session_modes(
     matched_sessions_by_agent: dict[str, list[Session]] = {}
     if query_spec:
         matched_sessions_by_agent = collect_query_matches(
-            available_agents,
-            days=operation.days,
+            scanned_sessions,
             spec=query_spec,
-            scanner=scanner,
-            session_results=scanned_sessions,
         )
 
     if isinstance(operation, ListOperation):

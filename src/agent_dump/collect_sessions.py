@@ -1,6 +1,6 @@
-"""Session discovery and event planning for collect mode."""
+"""Session selection, reading, and event planning for collect mode."""
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import date, tzinfo
 from pathlib import Path
@@ -25,7 +25,6 @@ from agent_dump.query_filter import (
     SearchSessionMatch,
     query_session_groups,
 )
-from agent_dump.scanner import AgentScanner
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
@@ -93,7 +92,7 @@ def _is_session_denied(agent: BaseAgent, session: Session, deny_paths: tuple[str
 
 def collect_entries(
     *,
-    agents: list[BaseAgent],
+    session_groups: Sequence[tuple[BaseAgent, Sequence[Session]]],
     since_date: date,
     until_date: date,
     collect_config: CollectConfig | None = None,
@@ -101,8 +100,6 @@ def collect_entries(
     render_session_text_fn: Callable[[str, Mapping[str, Any]], str],
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
-    scanner: AgentScanner | None = None,
-    session_results: list[tuple[BaseAgent, list[Session]]] | None = None,
     logger: CollectLogger | None = None,
 ) -> tuple[list[CollectEntry], bool]:
     """Collect session entries for range."""
@@ -113,13 +110,7 @@ def collect_entries(
     matched_sessions: list[_MatchedSession] = []
     eligible_session_groups: list[tuple[BaseAgent, list[Session]]] = []
 
-    session_scanner = scanner if scanner is not None else AgentScanner(agents)
-    scanned = (
-        session_results
-        if session_results is not None
-        else session_scanner.get_sessions(collect_scan_days(since_date, resolved_local_tz), agents=agents)
-    )
-    for agent, sessions in scanned:
+    for agent, sessions in session_groups:
         deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
         if deny_paths:
             sessions = [session for session in sessions if not _is_session_denied(agent, session, deny_paths)]

@@ -455,7 +455,7 @@ deny = [
 │       ├── collect_progress.py # collect 进度上报与 run stats
 │       ├── collect_reduction.py # collect 并发总结与归并
 │       ├── collect_requests.py # collect 重试与结构化响应处理
-│       ├── collect_sessions.py # collect session 发现与 chunk 规划
+│       ├── collect_sessions.py # collect session 过滤、读取与 chunk 规划
 │       ├── collect_summary.py  # collect 摘要 payload 合并与 JSON 提取
 │       ├── coercion.py         # 不可信 provider 标量的容错转换
 │       ├── config.py           # TOML 配置模型与持久化

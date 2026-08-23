@@ -122,11 +122,8 @@ def handle_stats_mode(
 
     sessions_by_agent = (
         collect_query_matches(
-            available_agents,
-            days=operation.days,
+            scanned_sessions,
             spec=query_spec,
-            scanner=scanner,
-            session_results=scanned_sessions,
         )
         if query_spec is not None
         else None

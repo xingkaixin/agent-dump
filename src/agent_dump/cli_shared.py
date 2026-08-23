@@ -224,32 +224,22 @@ def apply_query_filter(agent: BaseAgent, sessions: list[Session], spec: QuerySpe
 
 
 def collect_query_matches(
-    agents: list[BaseAgent],
+    session_groups: Sequence[tuple[BaseAgent, list[Session]]],
     *,
-    days: int,
     spec: QuerySpec,
-    scanner: AgentScanner | None = None,
-    session_results: Sequence[tuple[BaseAgent, list[Session]]] | None = None,
 ) -> dict[str, list[Session]]:
-    session_scanner = scanner if scanner is not None else AgentScanner(agents)
-    scanned = session_results if session_results is not None else session_scanner.get_sessions(days, agents=agents)
     grouped: dict[str, list[Session]] = {}
-    for match in query_session_groups(scanned, spec):
+    for match in query_session_groups(session_groups, spec):
         grouped.setdefault(match.agent.name, []).append(match.session)
     return grouped
 
 
 def collect_search_matches(
-    agents: list[BaseAgent],
+    session_groups: Sequence[tuple[BaseAgent, list[Session]]],
     *,
-    days: int,
     spec: QuerySpec,
-    scanner: AgentScanner | None = None,
-    session_results: Sequence[tuple[BaseAgent, list[Session]]] | None = None,
 ) -> list[SearchSessionMatch]:
-    session_scanner = scanner if scanner is not None else AgentScanner(agents)
-    scanned = session_results if session_results is not None else session_scanner.get_sessions(days, agents=agents)
-    return search_session_groups(scanned, spec)
+    return search_session_groups(session_groups, spec)
 
 
 def display_search_results(matches: list[SearchSessionMatch]) -> None:
