@@ -15,7 +15,7 @@ from agent_dump.agents.cursor_storage import (
     key_prefix_bounds,
     parse_cursor_json,
 )
-from agent_dump.agents.message_assembly import build_plan_part, build_tool_part
+from agent_dump.agents.message_assembly import build_message, build_plan_part, build_text_part, build_tool_part
 from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart, NormalizedSessionData
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import unsupported_capability
@@ -437,20 +437,16 @@ class CursorAgent(BaseAgent):
         if not parts:
             return None
 
-        message: NormalizedMessage = {
-            "id": f"{composer_id}:subagent-output",
-            "role": "assistant",
-            "agent": "cursor",
-            "mode": None,
-            "model": self._extract_subagent_model(composer, child_data),
-            "provider": None,
-            "time_created": latest_time_created,
-            "time_completed": None,
-            "tokens": {"input": 0, "output": 0},
-            "cost": 0,
-            "parts": parts,
-            "subagent_id": composer_id,
-        }
+        message = build_message(
+            message_id=f"{composer_id}:subagent-output",
+            role="assistant",
+            agent="cursor",
+            model=self._extract_subagent_model(composer, child_data),
+            time_created=latest_time_created,
+            tokens={"input": 0, "output": 0},
+            parts=parts,
+            extra={"subagent_id": composer_id},
+        )
 
         subagent_info = composer.get("subagentInfo")
         if isinstance(subagent_info, dict):
@@ -620,19 +616,13 @@ class CursorAgent(BaseAgent):
             bubble = record.data
             if not bubble:
                 messages.append(
-                    {
-                        "id": bubble_id,
-                        "role": "assistant",
-                        "agent": "cursor",
-                        "mode": None,
-                        "model": None,
-                        "provider": None,
-                        "time_created": fallback_created_ms,
-                        "time_completed": None,
-                        "tokens": {},
-                        "cost": 0,
-                        "parts": [{"type": "text", "text": "[corrupted message]", "time_created": fallback_created_ms}],
-                    }
+                    build_message(
+                        message_id=bubble_id,
+                        role="assistant",
+                        agent="cursor",
+                        time_created=fallback_created_ms,
+                        parts=[build_text_part("[corrupted message]", fallback_created_ms)],
+                    )
                 )
                 continue
 
@@ -662,19 +652,15 @@ class CursorAgent(BaseAgent):
             parent_message_id = self._extract_tool_parent_message_id(bubble) if tool_part else None
 
             if text_content:
-                message: NormalizedMessage = {
-                    "id": bubble_id,
-                    "role": role,
-                    "agent": "cursor",
-                    "mode": None,
-                    "model": resolved_model_name,
-                    "provider": None,
-                    "time_created": timestamp_ms,
-                    "time_completed": None,
-                    "tokens": {"input": in_tokens, "output": out_tokens},
-                    "cost": 0,
-                    "parts": [{"type": "text", "text": text_content, "time_created": timestamp_ms}],
-                }
+                message = build_message(
+                    message_id=bubble_id,
+                    role=role,
+                    agent="cursor",
+                    model=resolved_model_name,
+                    time_created=timestamp_ms,
+                    tokens={"input": in_tokens, "output": out_tokens},
+                    parts=[build_text_part(text_content, timestamp_ms)],
+                )
                 if plan_part:
                     message["parts"].append(plan_part)
                 messages.append(message)
@@ -685,36 +671,29 @@ class CursorAgent(BaseAgent):
                     parent_idx = bubble_message_index[parent_message_id]
                     messages[parent_idx]["parts"].append(tool_part)
                 else:
-                    tool_message: NormalizedMessage = {
-                        "id": f"{bubble_id}:tool",
-                        "role": "tool",
-                        "agent": "cursor",
-                        "mode": "tool",
-                        "model": resolved_model_name,
-                        "provider": None,
-                        "time_created": timestamp_ms,
-                        "time_completed": None,
-                        "tokens": {"input": 0, "output": 0},
-                        "cost": 0,
-                        "parts": [tool_part],
-                    }
+                    tool_message = build_message(
+                        message_id=f"{bubble_id}:tool",
+                        role="tool",
+                        agent="cursor",
+                        mode="tool",
+                        model=resolved_model_name,
+                        time_created=timestamp_ms,
+                        tokens={"input": 0, "output": 0},
+                        parts=[tool_part],
+                    )
                     messages.append(tool_message)
 
             if plan_part and not text_content:
                 messages.append(
-                    {
-                        "id": bubble_id,
-                        "role": "assistant",
-                        "agent": "cursor",
-                        "mode": None,
-                        "model": resolved_model_name,
-                        "provider": None,
-                        "time_created": timestamp_ms,
-                        "time_completed": None,
-                        "tokens": {"input": in_tokens, "output": out_tokens},
-                        "cost": 0,
-                        "parts": [plan_part],
-                    }
+                    build_message(
+                        message_id=bubble_id,
+                        role="assistant",
+                        agent="cursor",
+                        model=resolved_model_name,
+                        time_created=timestamp_ms,
+                        tokens={"input": in_tokens, "output": out_tokens},
+                        parts=[plan_part],
+                    )
                 )
                 continue
 

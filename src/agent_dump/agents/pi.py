@@ -4,7 +4,7 @@ from collections.abc import Iterable, Iterator
 from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.file_sessions import FileSessionAgent
@@ -15,9 +15,9 @@ from agent_dump.agents.message_assembly import (
     build_message,
     build_text_part,
     build_tool_part,
+    normalize_message_role,
 )
 from agent_dump.agents.message_types import (
-    MessageRole,
     NormalizedMessage,
     NormalizedPart,
     NormalizedSessionData,
@@ -385,7 +385,7 @@ class PiAgent(FileSessionAgent):
             normalized_role = "custom"
         else:
             parts = self._normalize_content_parts(message.get("content"), timestamp_ms)
-            normalized_role = cast(MessageRole, role or "unknown")
+            normalized_role = normalize_message_role(role)
 
         if not parts:
             return None

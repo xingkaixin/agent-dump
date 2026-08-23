@@ -9,6 +9,7 @@ import threading
 import time
 from unittest import mock
 
+from message_test_support import require_text_part, require_tool_part
 import pytest
 
 from agent_dump.agents.base import Session
@@ -685,7 +686,7 @@ class TestClaudeCodeAgent:
         assert result is not None
         assert result["role"] == "user"
         assert result["id"] == "msg-001"
-        assert result["parts"][0]["text"] == "Hello"
+        assert require_text_part(result["parts"][0])["text"] == "Hello"
 
     def test_convert_to_opencode_format_assistant_text(self):
         """测试 assistant text 类型消息转换"""
@@ -735,8 +736,9 @@ class TestClaudeCodeAgent:
 
         assert result is not None
         assert result["parts"][0]["type"] == "tool"
-        assert result["parts"][0]["tool"] == "read_file"
-        assert result["parts"][0]["state"]["input"]["path"] == "/test/file.py"
+        tool_part = require_tool_part(result["parts"][0])
+        assert tool_part["tool"] == "read_file"
+        assert tool_part["state"]["input"]["path"] == "/test/file.py"
 
     def test_convert_to_opencode_format_tool_result(self):
         """测试 tool_result 类型消息转换"""
@@ -755,7 +757,7 @@ class TestClaudeCodeAgent:
 
         assert result is not None
         assert result["role"] == "tool"
-        assert result["parts"][0]["text"] == "Tool output"
+        assert require_text_part(result["parts"][0])["text"] == "Tool output"
 
     def test_convert_to_opencode_format_tool_result_string_content(self):
         """测试 tool_result 字符串 content 类型消息转换"""
@@ -773,7 +775,7 @@ class TestClaudeCodeAgent:
         result = agent._convert_to_opencode_format(data)
 
         assert result is not None
-        assert result["parts"][0]["text"] == "String content"
+        assert require_text_part(result["parts"][0])["text"] == "String content"
 
     def test_convert_to_opencode_format_unknown_type(self):
         """测试未知类型返回 None"""

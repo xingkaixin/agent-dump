@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from unittest import mock
 
+from message_test_support import require_text_part, require_tool_part
 import pytest
 
 from agent_dump.agents.base import Session, derive_session_facts
@@ -745,7 +746,10 @@ class TestKimiAgent:
         result = agent._get_session_data_from_context(make_session(session_dir))
 
         assert [message["id"] for message in result["messages"]] == ["context-1", "context-3"]
-        assert [message["parts"][0]["text"] for message in result["messages"]] == ["first", "last"]
+        assert [require_text_part(message["parts"][0])["text"] for message in result["messages"]] == [
+            "first",
+            "last",
+        ]
 
     def test_context_assistant_tool_outputs_are_backfilled_to_tool_parts(self, tmp_path):
         """测试 assistant 的 tool output 会按 tool_call_id 回填"""
@@ -803,12 +807,14 @@ class TestKimiAgent:
         message = result["messages"][0]
         assert message["role"] == "assistant"
         assert [part["type"] for part in message["parts"]] == ["reasoning", "text", "tool", "tool"]
-        assert message["parts"][2]["state"]["arguments"] == {"path": "/workspace/a.py"}
-        assert message["parts"][2]["state"]["output"] == [
+        first_tool_part = require_tool_part(message["parts"][2])
+        second_tool_part = require_tool_part(message["parts"][3])
+        assert first_tool_part["state"]["arguments"] == {"path": "/workspace/a.py"}
+        assert first_tool_part["state"]["output"] == [
             {"type": "text", "text": "<system>read ok</system>", "time_created": 0},
             {"type": "text", "text": "file body", "time_created": 0},
         ]
-        assert message["parts"][3]["state"]["output"] == [{"type": "text", "text": "workspace path", "time_created": 0}]
+        assert second_tool_part["state"]["output"] == [{"type": "text", "text": "workspace path", "time_created": 0}]
 
     def test_context_repeated_tool_outputs_are_preserved_in_order(self, tmp_path):
         """测试 Kimi 重复 tool output 按到达顺序累积。"""
@@ -836,7 +842,7 @@ class TestKimiAgent:
 
         result = agent._get_session_data_from_context(make_session(session_dir))
 
-        assert result["messages"][0]["parts"][0]["state"]["output"] == [
+        assert require_tool_part(result["messages"][0]["parts"][0])["state"]["output"] == [
             {"type": "text", "text": "first", "time_created": 0},
             {"type": "text", "text": "second", "time_created": 0},
         ]
@@ -938,8 +944,9 @@ class TestKimiAgent:
 
         message = result["messages"][0]
         assert message["mode"] == "tool"
-        assert message["parts"][0]["state"]["arguments"] == {"cmd": "ls", "cwd": "/workspace"}
-        assert message["parts"][0]["state"]["output"] is None
+        tool_part = require_tool_part(message["parts"][0])
+        assert tool_part["state"]["arguments"] == {"cmd": "ls", "cwd": "/workspace"}
+        assert tool_part["state"]["output"] is None
 
     def test_get_session_data_from_context_keeps_raw_tool_arguments_when_invalid_json(self, tmp_path):
         """测试非法 JSON 参数保留原始字符串"""
@@ -969,7 +976,7 @@ class TestKimiAgent:
 
         result = agent._get_session_data_from_context(make_session(session_dir))
 
-        assert result["messages"][0]["parts"][0]["state"]["arguments"] == raw_arguments
+        assert require_tool_part(result["messages"][0]["parts"][0])["state"]["arguments"] == raw_arguments
 
     def test_context_tool_titles_are_mapped(self, tmp_path):
         """测试 context 中已知工具 title 会被统一映射"""
@@ -997,7 +1004,7 @@ class TestKimiAgent:
 
         result = agent._get_session_data_from_context(make_session(session_dir))
 
-        assert [part["title"] for part in result["messages"][0]["parts"]] == [
+        assert [require_tool_part(part)["title"] for part in result["messages"][0]["parts"]] == [
             "read",
             "glob",
             "edit",
@@ -1030,7 +1037,7 @@ class TestKimiAgent:
 
         result = agent._get_session_data_from_context(make_session(session_dir))
 
-        assert result["messages"][0]["parts"][0]["title"] == "UnknownTool"
+        assert require_tool_part(result["messages"][0]["parts"][0])["title"] == "UnknownTool"
 
     def test_context_set_todo_list_tool_call_is_ignored(self, tmp_path):
         """测试 context 中 SetTodoList 不会生成 tool part"""
@@ -1145,11 +1152,10 @@ class TestKimiAgent:
 
         message = result["messages"][0]
         assert [part["type"] for part in message["parts"]] == ["reasoning", "tool"]
-        assert message["parts"][1]["tool"] == "ReadFile"
-        assert message["parts"][1]["title"] == "read"
-        assert message["parts"][1]["state"]["output"] == [
-            {"type": "text", "text": "<system>read ok</system>", "time_created": 0}
-        ]
+        tool_part = require_tool_part(message["parts"][1])
+        assert tool_part["tool"] == "ReadFile"
+        assert tool_part["title"] == "read"
+        assert tool_part["state"]["output"] == [{"type": "text", "text": "<system>read ok</system>", "time_created": 0}]
         assert "SetTodoList" not in json.dumps(result, ensure_ascii=False)
 
     def test_wire_rebuilds_single_assistant_message_from_content_and_tool_calls(self, tmp_path):
@@ -1213,7 +1219,7 @@ class TestKimiAgent:
         assistant = result["messages"][1]
         assert assistant["role"] == "assistant"
         assert [part["type"] for part in assistant["parts"]] == ["reasoning", "text", "tool"]
-        assert assistant["parts"][2]["state"]["output"] == [
+        assert require_tool_part(assistant["parts"][2])["state"]["output"] == [
             {
                 "type": "text",
                 "text": json.dumps({"content": "file body"}, ensure_ascii=False, indent=2),
@@ -1251,7 +1257,10 @@ class TestKimiAgent:
         result = agent._get_session_data_from_wire(make_session(session_dir))
 
         assert [message["id"] for message in result["messages"]] == ["wire-1", "wire-3"]
-        assert [message["parts"][0]["text"] for message in result["messages"]] == ["first", "last"]
+        assert [require_text_part(message["parts"][0])["text"] for message in result["messages"]] == [
+            "first",
+            "last",
+        ]
 
     def test_wire_tool_call_part_appends_arguments_to_open_call(self, tmp_path):
         """测试 wire ToolCallPart 会把参数碎片拼回对应 tool call"""
@@ -1292,7 +1301,7 @@ class TestKimiAgent:
         result = agent._get_session_data_from_wire(make_session(session_dir))
 
         assistant = result["messages"][1]
-        assert assistant["parts"][0]["state"]["arguments"] == {"path": "/workspace/a.py"}
+        assert require_tool_part(assistant["parts"][0])["state"]["arguments"] == {"path": "/workspace/a.py"}
 
     def test_wire_tool_titles_are_mapped(self, tmp_path):
         """测试 wire 中已知工具 title 会被统一映射"""
@@ -1329,7 +1338,7 @@ class TestKimiAgent:
         result = agent._get_session_data_from_wire(make_session(session_dir))
 
         assistant = result["messages"][1]
-        assert [part["title"] for part in assistant["parts"]] == [
+        assert [require_tool_part(part)["title"] for part in assistant["parts"]] == [
             "read",
             "glob",
             "edit",
@@ -1506,11 +1515,10 @@ class TestKimiAgent:
 
         assistant = result["messages"][1]
         assert [part["type"] for part in assistant["parts"]] == ["reasoning", "tool"]
-        assert assistant["parts"][1]["tool"] == "ReadFile"
-        assert assistant["parts"][1]["title"] == "read"
-        assert assistant["parts"][1]["state"]["output"] == [
-            {"type": "text", "text": "<system>read ok</system>", "time_created": 0}
-        ]
+        tool_part = require_tool_part(assistant["parts"][1])
+        assert tool_part["tool"] == "ReadFile"
+        assert tool_part["title"] == "read"
+        assert tool_part["state"]["output"] == [{"type": "text", "text": "<system>read ok</system>", "time_created": 0}]
         assert "SetTodoList" not in json.dumps(result, ensure_ascii=False)
 
     def test_wire_ignores_step_begin_status_update_and_approval_events(self, tmp_path):
