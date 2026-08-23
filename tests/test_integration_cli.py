@@ -265,7 +265,7 @@ class TestProviderFailureIsolation:
 
         monkeypatch.setattr(
             ClaudeCodeAgent,
-            "_get_available_sessions",
+            "discover_sessions",
             lambda self, days=7: (_ for _ in ()).throw(ValueError("malformed row")),
         )
 
@@ -395,13 +395,13 @@ class TestInteractiveModeScansOnce:
         from agent_dump.agents.file_sessions import FileSessionAgent
 
         scans: list[str] = []
-        original = FileSessionAgent._get_available_sessions
+        original = FileSessionAgent.discover_sessions
 
         def counting(self, days=7):
             scans.append(self.name)
             return original(self, days)
 
-        monkeypatch.setattr(FileSessionAgent, "_get_available_sessions", counting)
+        monkeypatch.setattr(FileSessionAgent, "discover_sessions", counting)
         monkeypatch.setattr(
             "agent_dump.session_workflow.select_sessions_interactive",
             lambda sessions, agent, show_metadata_summary=True: [],

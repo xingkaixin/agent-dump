@@ -164,7 +164,7 @@ class TestWarningsAreLocalized:
 
         monkeypatch.setattr(
             ClaudeCodeAgent,
-            "_get_available_sessions",
+            "discover_sessions",
             lambda self, days=7: (_ for _ in ()).throw(ValueError("bad row")),
         )
 

@@ -9,7 +9,8 @@ A supported coding assistant whose local records can be discovered and translate
 _Avoid_: Agent, when referring to the data source
 
 **Provider Discovery**:
-The Provider-owned resolution of its read-only source roots and Session records.
+The Provider-owned operation that resolves its read-only source roots and returns
+explicit availability plus a requested window of Session records in one pass.
 _Avoid_: Availability probe, when referring to the complete lookup process
 
 **Session**:
@@ -74,6 +75,8 @@ _Avoid_: Export
   do not interpret Provider-private metadata keys.
 - A Provider read entry point performs its own Provider Discovery; callers do
   not establish hidden state by probing availability first.
+- `discover_sessions()` is the explicit Provider Discovery operation;
+  `is_available()` and `get_sessions()` remain stable compatibility entry points.
 - The Scanner coordinates availability, listing, and locating across Providers,
   preserving Provider order while isolating failures.
 - Working Directory is the only filesystem fact used by path Query and Collect
