@@ -14,22 +14,24 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
     build_no_agents_found_diagnostic,
     collect_query_matches,
-    collect_search_matches,
-    display_search_results,
-    display_sessions_list,
-    export_sessions_for_formats,
-    group_sessions_by_time,
     render_agent_search_roots,
-    render_query_summary,
-    show_loading,
 )
 from agent_dump.exporting import ExportRunStatus
+from agent_dump.maintenance_workflow import group_sessions_by_time
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import QuerySpec, SearchSessionMatch
 from agent_dump.rendering import format_session_metadata_summary, render_session_head, render_session_text
 from agent_dump.scanner import AgentScanner
+from agent_dump.session_workflow import (
+    collect_search_matches,
+    display_search_results,
+    display_sessions_list,
+    export_sessions_for_formats,
+    render_query_summary,
+)
 from agent_dump.text_safety import has_unsafe_body_characters
 from agent_dump.uri_support import find_session_by_id, parse_uri
+from agent_dump.uri_workflow import show_loading
 
 
 def make_session(
@@ -189,7 +191,7 @@ class TestQueryHelpers:
 
         match_b = SearchSessionMatch(agent=agent_b, session=newer, snippet="new", rank=2.0)
 
-        with mock.patch("agent_dump.cli_shared.select_session_groups", return_value=[match_b]):
+        with mock.patch("agent_dump.session_workflow.select_session_groups", return_value=[match_b]):
             result = collect_search_matches(
                 [(agent_a, [older]), (agent_b, [newer])],
                 spec=make_query_spec(keyword="bug", limit=1),
@@ -782,9 +784,9 @@ class TestTimeHelpers:
             int((now_value - timedelta(hours=3)).astimezone(timezone.utc).timestamp() * 1000),
         )
 
-        with mock.patch("agent_dump.cli_shared.datetime") as mock_datetime:
+        with mock.patch("agent_dump.maintenance_workflow.datetime") as mock_datetime:
             mock_datetime.now.return_value = now_value
-            with mock.patch("agent_dump.cli_shared.get_local_timezone", return_value=local_tz):
+            with mock.patch("agent_dump.maintenance_workflow.get_local_timezone", return_value=local_tz):
                 groups = group_sessions_by_time(sessions)
 
         assert set(groups.keys()) == {"今天", "昨天", "本周", "本月", "更早"}
@@ -811,9 +813,9 @@ class TestTimeHelpers:
             ),
         ]
 
-        with mock.patch("agent_dump.cli_shared.datetime") as mock_datetime:
+        with mock.patch("agent_dump.maintenance_workflow.datetime") as mock_datetime:
             mock_datetime.now.return_value = now_value
-            with mock.patch("agent_dump.cli_shared.get_local_timezone", return_value=local_tz):
+            with mock.patch("agent_dump.maintenance_workflow.get_local_timezone", return_value=local_tz):
                 groups = group_sessions_by_time(sessions)
 
         assert [session.id for session in groups["今天"]] == ["today-local"]

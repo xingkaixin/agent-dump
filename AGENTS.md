@@ -66,7 +66,7 @@
 | `bounded_concurrency.py` | 有界 Future 提交、完成等待与补位机制；业务失败和排序策略由调用方拥有 |
 | `scanner.py` | Provider availability、session list / locate 编排与逐 provider 失败隔离 |
 | `cli.py` | 参数解析、模式选择、依赖装配 |
-| `cli_shared.py` | CLI 工作流共享能力：查询展示、批量导出、输出目录与诊断渲染 |
+| `cli_shared.py` | 跨工作流的会话筛选、输出目录与诊断渲染 |
 | `command_plan.py` | 将 `CommandRequest` 一次性归一化为闭集操作事实，解析 Query/URI 并校验模式、默认值与 modifier |
 | `shortcut.py` | 将配置化 shortcut 展开为普通 argv，并以结构化错误保留失败字段 |
 | `session_workflow.py` | list / interactive / query 会话工作流 |
@@ -214,7 +214,7 @@ agent-dump/
 │   ├── agent_registry.py        # provider 注册表
 │   ├── bounded_concurrency.py   # 有界 Future 调度机制
 │   ├── cli.py                   # CLI 参数解析与模式分发
-│   ├── cli_shared.py            # CLI 工作流共享展示、诊断与批量导出
+│   ├── cli_shared.py            # 跨工作流筛选、输出路径与诊断
 │   ├── command_plan.py          # CLI 操作事实、Query/URI、默认值与 modifier 归一化
 │   ├── shortcut.py              # shortcut argv 展开与结构化错误
 │   ├── session_workflow.py      # list / interactive / query 工作流

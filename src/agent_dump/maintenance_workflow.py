@@ -1,12 +1,12 @@
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS, AgentRegistration
 from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, MessageCountFact, Session
 from agent_dump.cli_shared import (
     build_no_agents_found_diagnostic,
     collect_query_matches,
-    group_sessions_by_time,
     print_diagnostic,
     render_agent_search_roots,
 )
@@ -19,6 +19,7 @@ from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.search_index import SearchIndex
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
+from agent_dump.time_utils import get_local_timezone, to_local_datetime
 
 
 @dataclass
@@ -33,6 +34,45 @@ class _MessageStats:
             self.unknown_sessions += 1
             return
         self.known_messages += fact.exact_value
+
+
+def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
+    groups: dict[str, list[Session]] = {
+        i18n.t(Keys.TIME_TODAY): [],
+        i18n.t(Keys.TIME_YESTERDAY): [],
+        i18n.t(Keys.TIME_THIS_WEEK): [],
+        i18n.t(Keys.TIME_THIS_MONTH): [],
+        i18n.t(Keys.TIME_OLDER): [],
+    }
+
+    key_today = i18n.t(Keys.TIME_TODAY)
+    key_yesterday = i18n.t(Keys.TIME_YESTERDAY)
+    key_week = i18n.t(Keys.TIME_THIS_WEEK)
+    key_month = i18n.t(Keys.TIME_THIS_MONTH)
+    key_older = i18n.t(Keys.TIME_OLDER)
+
+    local_tz = get_local_timezone()
+    now = datetime.now(local_tz)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday = today - timedelta(days=1)
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+
+    for session in sessions:
+        session_time = to_local_datetime(session.created_at, local_tz)
+
+        if session_time >= today:
+            groups[key_today].append(session)
+        elif session_time >= yesterday:
+            groups[key_yesterday].append(session)
+        elif session_time >= week_ago:
+            groups[key_week].append(session)
+        elif session_time >= month_ago:
+            groups[key_month].append(session)
+        else:
+            groups[key_older].append(session)
+
+    return {key: value for key, value in groups.items() if value}
 
 
 def handle_providers_mode(

@@ -1,5 +1,8 @@
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from pathlib import Path
+import sys
+import threading
 from typing import Any, Protocol
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -7,7 +10,6 @@ from agent_dump.cli_shared import (
     print_diagnostic,
     render_agent_search_roots,
     resolve_output_base_dir,
-    show_loading,
     wrap_runtime_fetch_error,
 )
 from agent_dump.collect_requests import request_summary_from_llm
@@ -21,13 +23,48 @@ from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
 from agent_dump.rendering import render_session_head, render_session_text
 from agent_dump.scanner import AgentScanner
 from agent_dump.terminal_output import render_terminal_message
-from agent_dump.text_safety import safe_body_text
+from agent_dump.text_safety import safe_body_text, safe_display_text
 from agent_dump.uri_support import find_session_by_id
 
 
 class ExportConfigLike(Protocol):
     @property
     def output(self) -> str: ...
+
+
+@contextmanager
+def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
+    """Show loading status for long-running URI operations."""
+    safe_message = safe_display_text(message)
+    if not sys.stderr.isatty():
+        print(safe_message, file=sys.stderr)
+        yield
+        return
+
+    stop_event = threading.Event()
+    spinner_frames = "|/-\\"
+
+    def _write_frame(frame: str) -> None:
+        sys.stderr.write(f"\r{frame} {safe_message}")
+        sys.stderr.flush()
+
+    def _spin() -> None:
+        index = 0
+        while not stop_event.wait(interval_seconds):
+            _write_frame(spinner_frames[index % len(spinner_frames)])
+            index += 1
+
+    spinner_thread = threading.Thread(target=_spin, daemon=True)
+    _write_frame(spinner_frames[0])
+    spinner_thread.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
+        spinner_thread.join(timeout=max(0.3, interval_seconds * 3))
+        clear_width = len(safe_message) + 4
+        sys.stderr.write("\r" + (" " * clear_width) + "\r")
+        sys.stderr.flush()
 
 
 def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:

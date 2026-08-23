@@ -8,10 +8,7 @@ import sys
 
 from agent_dump.__about__ import __version__
 from agent_dump.agent_registry import get_supported_uri_examples
-from agent_dump.cli_shared import (
-    is_option_specified,
-    print_diagnostic as _print_diagnostic,
-)
+from agent_dump.cli_shared import print_diagnostic as _print_diagnostic
 from agent_dump.collect_models import CollectMode
 from agent_dump.collect_requests import request_summary_from_llm
 from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
@@ -69,6 +66,10 @@ __all__ = (
     "handle_uri_mode",
     "main",
 )
+
+
+def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:
+    return any(arg.partition("=")[0] in (short_option, long_option) for arg in argv)
 
 
 def expand_shortcut_argv(argv: list[str]) -> list[str]:
