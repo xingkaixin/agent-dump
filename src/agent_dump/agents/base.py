@@ -82,6 +82,7 @@ class SessionFacts:
 
     working_directory: Path | None
     provider_project: str | None
+    model: str | None
     session_source: Path
     change_sources: tuple[Path, ...]
     message_count: MessageCountFact
@@ -106,6 +107,7 @@ def derive_session_facts(
     return SessionFacts(
         working_directory=_metadata_path(metadata.get("cwd") or metadata.get("directory")),
         provider_project=_metadata_text(metadata.get("project")),
+        model=_metadata_text(metadata.get("model") or metadata.get("model_provider")),
         session_source=session.source_path,
         change_sources=tuple(dict.fromkeys(change_sources)),
         message_count=MessageCountFact.from_provider_value(metadata.get("message_count")),

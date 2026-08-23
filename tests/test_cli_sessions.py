@@ -86,7 +86,6 @@ class TestMain:
             mock_agent.get_session_summary_fields.return_value = {
                 "cwd_project": "/workspace/demo",
                 "model": "gpt-5",
-                "branch": None,
                 "message_count": 2,
                 "updated_at": "2024-01-01 12:00",
             }

@@ -25,7 +25,6 @@ def build_session_head(
     agent_display_name: str,
 ) -> dict[str, Any]:
     """Build the default lightweight discovery projection."""
-    metadata = session.metadata
     return {
         "uri": uri,
         "agent": agent_display_name,
@@ -33,7 +32,7 @@ def build_session_head(
         "created_at": session.created_at,
         "updated_at": session.updated_at,
         "cwd_or_project": facts.display_location,
-        "model": metadata.get("model") or metadata.get("model_provider"),
+        "model": facts.model,
         "message_count": facts.message_count.value,
         "message_count_completeness": facts.message_count.completeness.value,
         "subtargets": [],
@@ -42,12 +41,9 @@ def build_session_head(
 
 def build_session_summary_fields(session: Session, facts: SessionFacts) -> dict[str, str | int | None]:
     """Build the default list and selector metadata projection."""
-    model = session.metadata.get("model")
-    branch = session.metadata.get("branch")
     return {
         "cwd_project": facts.display_location,
-        "model": str(model) if isinstance(model, str) and model.strip() else None,
-        "branch": str(branch) if isinstance(branch, str) and branch.strip() else None,
+        "model": facts.model,
         "message_count": facts.message_count.value,
         "message_count_completeness": facts.message_count.completeness.value,
         "updated_at": to_local_datetime(session.updated_at).strftime("%Y-%m-%d %H:%M"),

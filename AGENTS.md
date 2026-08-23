@@ -362,7 +362,7 @@ class BaseAgent(ABC):
 ```
 
 共享 workflow 统一通过 `agent.get_session_facts(session)` 读取 Working Directory、Provider
-Project、Session Source、provider-owned change sources 与带 exact/unknown 完整度的
+Project、Model、Session Source、provider-owned change sources 与带 exact/unknown 完整度的
 Message Count Fact。`derive_session_facts(session)` 只负责 `BaseAgent` 默认映射；调用方不得绕过
 provider 入口或自行解释对应 metadata key。facts 按需派生，不在 `Session` 上重复存储。术语边界见
 `CONTEXT.md`。

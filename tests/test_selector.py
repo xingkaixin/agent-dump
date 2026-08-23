@@ -36,7 +36,6 @@ def mock_agent():
     agent.get_session_summary_fields = lambda s: {
         "cwd_project": "/workspace/demo-project",
         "model": "gpt-5",
-        "branch": None,
         "message_count": 3,
         "updated_at": "2024-01-02 14:30",
     }

@@ -237,10 +237,6 @@ def format_session_metadata_summary(agent: BaseAgent, session: Session) -> str:
     if isinstance(model, str) and model.strip():
         parts.append(f"model={_truncate_summary_text(model, 24)}")
 
-    branch = fields.get("branch")
-    if isinstance(branch, str) and branch.strip():
-        parts.append(f"branch={_truncate_summary_text(branch, 24)}")
-
     message_count = fields.get("message_count")
     if isinstance(message_count, int):
         parts.append(f"msgs={message_count}")
