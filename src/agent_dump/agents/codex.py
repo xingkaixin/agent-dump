@@ -61,6 +61,10 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
             SearchRoot("local development fallback", Path("data/codex")),
         )
 
+    def _prepare_session_operation(self) -> None:
+        with self._titles_cache_lock:
+            self._titles_cache = None
+
     def _load_titles_cache(self) -> dict[str, str]:
         """Load session titles from session index."""
         if self._titles_cache is not None:

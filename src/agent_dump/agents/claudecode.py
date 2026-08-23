@@ -61,6 +61,10 @@ class ClaudeCodeAgent(FileSessionAgent):
             SearchRoot("local development fallback", Path("data/claudecode")),
         )
 
+    def _prepare_session_operation(self) -> None:
+        with self._sessions_index_lock:
+            self._sessions_index_cache.clear()
+
     def _load_sessions_index(self, project_dir: Path) -> dict[str, dict]:
         """Load sessions index for a project"""
         index_path = project_dir / "sessions-index.json"
@@ -77,7 +81,7 @@ class ClaudeCodeAgent(FileSessionAgent):
             return {}
 
     def _project_sessions_index(self, project_dir: Path) -> dict[str, dict]:
-        """Return a project's sessions index, loading it at most once per project.
+        """Return a project's sessions index, loading it once per provider operation.
 
         缓存整张索引而不是逐条命中项：缺失 Session ID 同样命中缓存，否则每个缺失
         ID 都要在锁内重读并展开整个索引，S 个文件对 E 个条目就是 O(S·E)，还会把

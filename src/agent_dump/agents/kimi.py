@@ -84,6 +84,10 @@ class KimiAgent(FileSessionAgent):
             SearchRoot("local development fallback", Path("data/kimi")),
         )
 
+    def _prepare_session_operation(self) -> None:
+        with self._work_dirs_lock:
+            self._work_dirs_by_hash = None
+
     def _get_session_files(self, session_dir: Path) -> dict[str, Path | None]:
         """Get available session files for a Kimi session directory."""
         context_path = session_dir / "context.jsonl"
@@ -94,7 +98,7 @@ class KimiAgent(FileSessionAgent):
         }
 
     def _load_work_dirs_by_hash(self) -> dict[str, str]:
-        """Build the md5(work dir) -> work dir map once per agent instance.
+        """Build the md5(work dir) -> work dir map once per provider operation.
 
         之前每解析一个会话都要重读 kimi.json 并对 work_dirs 逐项重算 MD5，
         N 个会话 W 个工作目录就是 N 次文件读 + 最多 N·W 次摘要。

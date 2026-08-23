@@ -1807,7 +1807,7 @@ def _build_kimi_home(tmp_path: Path, *, work_dirs: list[str], sessions_per_dir: 
 
 
 class TestWorkDirHashMapIsMemoized:
-    """AD-127：kimi.json 与 MD5 摘要表应只构建一次，而不是每会话一次。"""
+    """AD-127：kimi.json 与 MD5 摘要表在单次读取中只构建一次。"""
 
     def test_digests_are_computed_once_per_work_dir_not_per_session(self, monkeypatch, tmp_path):
         """统计 MD5 次数而不是文件读次数：前者是真正随会话数增长的那笔成本。"""
@@ -1842,6 +1842,26 @@ class TestWorkDirHashMapIsMemoized:
         sessions = agent.get_sessions(days=36500)
 
         assert [s.metadata.get("cwd") for s in sessions] == ["/w/project-a"]
+
+    def test_repeated_session_discovery_refreshes_work_dirs(self, monkeypatch, tmp_path):
+        kimi_home = _build_kimi_home(tmp_path, work_dirs=["/w/old"])
+        monkeypatch.setenv("KIMI_SHARE_DIR", str(kimi_home))
+        agent = KimiAgent()
+
+        first = agent.get_sessions(days=None)
+        old_hash = hashlib.md5(b"/w/old").hexdigest()  # noqa: S324
+        new_path = "/w/new"
+        new_hash = hashlib.md5(new_path.encode("utf-8")).hexdigest()  # noqa: S324
+        session_dir = kimi_home / "sessions" / old_hash
+        session_dir.rename(session_dir.with_name(new_hash))
+        (kimi_home / "kimi.json").write_text(
+            json.dumps({"work_dirs": [{"path": new_path, "kaos": "local"}]}),
+            encoding="utf-8",
+        )
+        second = agent.get_sessions(days=None)
+
+        assert [session.metadata.get("cwd") for session in first] == ["/w/old"]
+        assert [session.metadata.get("cwd") for session in second] == [new_path]
 
     def test_missing_kimi_json_yields_no_cwd_and_does_not_raise(self, monkeypatch, tmp_path):
         kimi_home = _build_kimi_home(tmp_path, work_dirs=["/w/a"])

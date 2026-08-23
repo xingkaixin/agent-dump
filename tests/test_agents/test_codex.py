@@ -149,6 +149,35 @@ class TestCodexAgent:
 
         assert result == {"cached": "data"}
 
+    def test_repeated_session_discovery_refreshes_title_index(self, monkeypatch, tmp_path):
+        codex_home = tmp_path / "codex-home"
+        sessions_dir = codex_home / "sessions"
+        sessions_dir.mkdir(parents=True)
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+        session_id = "019c213e-c251-73a3-af66-0ec9d7cb9e29"
+        session_file = sessions_dir / f"rollout-2026-02-03T10-04-47-{session_id}.jsonl"
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "timestamp": "2026-02-03T10:04:47Z",
+                    "payload": {"id": session_id, "timestamp": "2026-02-03T10:04:47Z"},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        index_path = codex_home / "session_index.jsonl"
+        index_path.write_text(json.dumps({"id": session_id, "thread_name": "Old title"}) + "\n", encoding="utf-8")
+        agent = CodexAgent()
+
+        first = agent.get_sessions(days=None)
+        index_path.write_text(json.dumps({"id": session_id, "thread_name": "New title"}) + "\n", encoding="utf-8")
+        second = agent.get_sessions(days=None)
+
+        assert [session.title for session in first] == ["Old title"]
+        assert [session.title for session in second] == ["New title"]
+
     def test_get_session_title_found(self, tmp_path):
         """测试获取存在的会话标题"""
         agent = CodexAgent()
