@@ -47,6 +47,10 @@ class FileSessionAgent(BaseAgent):
         """Whether a file may contain sessions inside the window; default prunes by mtime."""
         return file_modified_since(file_path, cutoff)
 
+    def get_session_change_sources(self, session: Session) -> tuple[Path, ...]:
+        """Use the provider-owned session file to invalidate parsed data."""
+        return (session.source_path,)
+
     def _report_parse_failure(self, file_path: Path, exc: Exception) -> None:
         self._report_diagnostic(Keys.WARN_SESSION_PARSE_FAILED, path=str(file_path), error=str(exc))
 
