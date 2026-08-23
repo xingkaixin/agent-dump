@@ -142,6 +142,41 @@ def _mode(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)
 
 
+class TestCopyPrivateFile:
+    def test_failed_copy_preserves_existing_target(self, tmp_path, monkeypatch):
+        source = tmp_path / "source.jsonl"
+        source.write_text("new complete export", encoding="utf-8")
+        target = tmp_path / "copy.jsonl"
+        target.write_text("old complete export", encoding="utf-8")
+
+        def fail_mid_copy(source_handle, destination_handle):
+            destination_handle.write(source_handle.read(3))
+            raise OSError("copy failed")
+
+        monkeypatch.setattr("agent_dump.private_files.shutil.copyfileobj", fail_mid_copy)
+
+        with pytest.raises(OSError, match="copy failed"):
+            copy_private_file(source, target)
+
+        assert target.read_text(encoding="utf-8") == "old complete export"
+        assert list(tmp_path.glob(f".{target.name}.*.tmp")) == []
+
+    @pytest.mark.skipif(os.name == "nt", reason="symbolic link behavior differs on Windows")
+    def test_copy_replaces_destination_symlink_without_touching_its_target(self, tmp_path):
+        source = tmp_path / "source.jsonl"
+        source.write_text("session export", encoding="utf-8")
+        linked_target = tmp_path / "unrelated.txt"
+        linked_target.write_text("keep me", encoding="utf-8")
+        destination = tmp_path / "copy.jsonl"
+        destination.symlink_to(linked_target)
+
+        copy_private_file(source, destination)
+
+        assert not destination.is_symlink()
+        assert destination.read_text(encoding="utf-8") == "session export"
+        assert linked_target.read_text(encoding="utf-8") == "keep me"
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX modes are not meaningful on Windows")
 class TestExportsAndReportsArePrivate:
     """AD-166：Export 与 Collect Report 含完整提示词、源码与工具输出。"""
