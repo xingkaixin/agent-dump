@@ -492,10 +492,12 @@ deny = [
 │           ├── zcode.py        # ZCode Agent
 │           ├── claudecode.py   # Claude Code Agent
 │           ├── codex.py        # Codex Agent
+│           ├── codex_transcript.py # Codex response stream 解析
 │           ├── codex_enrichment.py # Codex subagent 与 skill 增强
 │           ├── codex_patch.py  # Codex apply_patch 解析
 │           ├── cursor.py       # Cursor Agent
 │           ├── cursor_storage.py # Cursor SQLite 只读存储访问
+│           ├── cursor_transcript.py # Cursor 转录解析
 │           ├── kimi.py         # Kimi Agent
 │           ├── kimi_wire.py    # Kimi wire 事件流解析
 │           ├── pi.py           # Pi Agent

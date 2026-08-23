@@ -1,6 +1,5 @@
 """Codex-specific subagent and skill message enrichment."""
 
-from abc import ABC, abstractmethod
 import json
 import re
 from typing import Any
@@ -12,12 +11,19 @@ SKILL_NAME_PATTERN = re.compile(r"<name>\s*(.*?)\s*</name>", re.DOTALL)
 SUBAGENT_NOTIFICATION_PATTERN = re.compile(r"<subagent_notification>\s*(.*?)\s*</subagent_notification>", re.DOTALL)
 
 
-class CodexMessageEnrichmentMixin(ABC):
+class CodexMessageEnrichmentMixin:
     """Enrich Codex messages with subagent and skill metadata."""
 
-    @abstractmethod
     def _try_parse_json_string(self, value: Any) -> Any | None:
-        raise NotImplementedError
+        if not isinstance(value, str):
+            return None
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
 
     def _extract_subagent_prompt(self, arguments: Any) -> str:
         """Extract the visible subagent prompt from tool arguments."""
