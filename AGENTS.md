@@ -109,7 +109,7 @@
 | `collect_reduction.py` | session 并发总结、失败隔离与 tree reduction |
 | `collect_requests.py` | collect LLM 重试与结构化响应处理 |
 | `collect_sessions.py` | 已发现 session 的日期/查询过滤、读取与 chunk 规划 |
-| `collect_summary.py` | collect 摘要 payload 的归一化、合并与 JSON 提取 |
+| `collect_summary.py` | collect 摘要 schema、payload 归一化、合并与 JSON 提取 |
 | `agents/message_assembly.py` | 统一 message/part 组装与 assistant 分组判断 |
 | `agents/message_types.py` | Provider 组装阶段使用的统一 message / session payload 内部类型 |
 | `agents/jsonl_scan.py` | JSONL 头尾扫描、根对象保证、坏行计数与固定容量诊断样本 |
@@ -231,7 +231,7 @@ agent-dump/
 │   ├── collect_reduction.py     # collect 并发总结与 tree reduction
 │   ├── collect_requests.py      # collect 重试与结构化响应处理
 │   ├── collect_sessions.py      # collect session 过滤、读取与 chunk 规划
-│   ├── collect_summary.py       # collect 摘要 payload 处理
+│   ├── collect_summary.py       # collect 摘要 schema 与 payload 处理
 │   ├── config.py                # 配置模型、加载、校验与写入
 │   ├── config_command.py        # 配置查看与交互编辑
 │   ├── diagnostics.py           # 结构化诊断
@@ -440,7 +440,7 @@ collect 模式入口：
 - `collect_reduction.py`：session 并发总结、失败隔离与 tree reduction。
 - `collect_requests.py`：重试与结构化响应处理。
 - `collect_sessions.py`：已发现 session 的日期/查询过滤、读取与 chunk 规划。
-- `collect_summary.py`：摘要 payload 归一化、合并与 JSON 提取。
+- `collect_summary.py`：摘要 schema、payload 归一化、合并与 JSON 提取。
 
 ---
 

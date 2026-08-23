@@ -15,7 +15,7 @@ from agent_dump.collect_models import (
     collect_fields_for,
 )
 from agent_dump.collect_progress import truncate_log_preview, truncate_log_tail
-from agent_dump.collect_prompts import _build_structured_summary_retry_prompt
+from agent_dump.collect_prompts import build_structured_summary_retry_prompt
 from agent_dump.collect_summary import extract_json_object, normalize_summary_payload
 from agent_dump.config import AIConfig
 
@@ -156,7 +156,7 @@ def request_structured_summary_from_llm(
                 raise RuntimeError(f"{context_label}: invalid structured summary response: {exc}") from exc
             parse_attempt += 1
             transport_attempt = 0
-            current_prompt = _build_structured_summary_retry_prompt(
+            current_prompt = build_structured_summary_retry_prompt(
                 original_prompt=prompt,
                 invalid_response=response,
                 mode=mode,

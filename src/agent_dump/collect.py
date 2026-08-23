@@ -28,7 +28,6 @@ from agent_dump.collect_prompts import (
     build_collect_final_prompt as build_collect_final_prompt,
     build_collect_merge_prompt as build_collect_merge_prompt,
     build_collect_session_prompt as build_collect_session_prompt,
-    build_summary_json_schema as build_summary_json_schema,
 )
 from agent_dump.collect_reduction import (
     _build_summary_bucket_lines as _build_summary_bucket_lines,
@@ -45,3 +44,4 @@ from agent_dump.collect_sessions import (
     collect_entries as collect_entries,
     plan_collect_entries as plan_collect_entries,
 )
+from agent_dump.collect_summary import build_summary_json_schema as build_summary_json_schema

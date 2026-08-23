@@ -6,7 +6,7 @@ from typing import Any, cast
 from urllib import error, request
 from urllib.parse import urlsplit
 
-from agent_dump.collect_models import SUMMARY_FIELDS
+from agent_dump.collect_summary import build_summary_json_schema_for_fields
 from agent_dump.config import AIConfig, is_loopback_host
 from agent_dump.i18n import Keys, i18n
 from agent_dump.prompt_safety import summary_system_prompt
@@ -327,7 +327,7 @@ def _request_openai_structured_summary(
         "max_tokens": STRUCTURED_SUMMARY_MAX_TOKENS,
         "response_format": {
             "type": "json_schema",
-            "json_schema": build_summary_json_schema(summary_fields),
+            "json_schema": build_summary_json_schema_for_fields(summary_fields),
         },
     }
     return _read_openai_response_content(_request_openai_json(config, payload, timeout_seconds=timeout_seconds))
@@ -372,18 +372,3 @@ def _request_anthropic(config: AIConfig, prompt: str, *, timeout_seconds: int) -
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("Anthropic API returned empty content")
     return content
-
-
-def build_summary_json_schema(summary_fields: tuple[str, ...] | None = None) -> dict[str, Any]:
-    """Build structured summary JSON schema."""
-    fields = summary_fields if summary_fields is not None else SUMMARY_FIELDS
-    return {
-        "name": "collect_summary",
-        "schema": {
-            "type": "object",
-            "properties": {field_name: {"type": "array", "items": {"type": "string"}} for field_name in fields},
-            "required": list(fields),
-            "additionalProperties": False,
-        },
-        "strict": True,
-    }
