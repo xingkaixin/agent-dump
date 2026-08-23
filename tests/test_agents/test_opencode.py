@@ -12,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import MessageCountCompleteness, Session
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.diagnostics import print_recoverable_diagnostic
 from agent_dump.paths import ProviderRoots
@@ -211,6 +211,38 @@ class TestOpenCodeAgent:
         assert result[0].created_at.tzinfo == timezone.utc
         assert result[0].metadata["message_count"] == 1
         assert result[0].metadata["model"] == "gpt-5"
+
+    def test_get_sessions_marks_message_count_unknown_when_message_table_is_missing(self, tmp_path):
+        agent = OpenCodeAgent()
+        db_path = tmp_path / "opencode.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE session (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                time_created INTEGER,
+                time_updated INTEGER,
+                slug TEXT,
+                directory TEXT,
+                version INTEGER,
+                summary_files TEXT
+            )
+        """)
+        now = int(datetime.now().timestamp() * 1000)
+        conn.execute(
+            "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("session-001", "Test Session", now, now, "test", "/test", 1, None),
+        )
+        conn.commit()
+        conn.close()
+        agent.db_path = db_path
+
+        session = agent.get_sessions(days=7)[0]
+        message_count = agent.get_session_facts(session).message_count
+
+        assert session.metadata["message_count"] is None
+        assert message_count.value is None
+        assert message_count.completeness is MessageCountCompleteness.UNKNOWN
 
     def test_get_session_data_skips_malformed_rows_and_warns_to_stderr(self, populated_db, capsys):
         """测试损坏的 message/part 行被跳过并向 stderr 告警，有效数据保留"""
