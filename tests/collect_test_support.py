@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import Session, derive_session_facts
 from agent_dump.query_filter import QuerySpec
 
 
@@ -24,6 +24,8 @@ def make_query_spec(
 
 
 def configure_session_data_lease(agent: mock.MagicMock) -> None:
+    agent.get_session_facts.side_effect = derive_session_facts
+
     @contextmanager
     def lease(session: Session):
         yield agent.get_cached_session_data(session)

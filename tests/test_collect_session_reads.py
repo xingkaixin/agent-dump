@@ -11,7 +11,7 @@ from collect_test_support import configure_session_data_lease
 from locale_helpers import Keys, expect
 import pytest
 
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import Session, derive_session_facts
 from agent_dump.collect import (
     CollectEntry,
     CollectLogger,
@@ -68,6 +68,85 @@ class TestCollectEntries:
         assert isinstance(progress[-1], ScanSessionsProgress)
         assert progress[-1].current == 1
         assert progress[-1].total == 1
+
+    def test_collect_entry_uses_provider_session_facts_for_project_directory(self):
+        now = datetime.now(timezone.utc)
+        session = Session(
+            id="s-provider-facts",
+            title="provider facts",
+            created_at=now,
+            updated_at=now,
+            source_path=Path("/tmp/s-provider-facts.jsonl"),
+            metadata={"cwd": "/stale/project"},
+        )
+        facts_session = Session(
+            id="facts",
+            title="facts",
+            created_at=now,
+            updated_at=now,
+            source_path=session.source_path,
+            metadata={"cwd": "/provider/project"},
+        )
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [session]
+        agent.get_session_uri.return_value = "codex://s-provider-facts"
+        agent.get_cached_session_data.return_value = {
+            "messages": [{"role": "user", "parts": [{"type": "text", "text": "work"}]}]
+        }
+        configure_session_data_lease(agent)
+        agent.get_session_facts.side_effect = None
+        agent.get_session_facts.return_value = derive_session_facts(facts_session)
+
+        entries, _ = collect_entries(
+            agents=[agent],
+            since_date=now.date(),
+            until_date=now.date(),
+            render_session_text_fn=lambda uri, data: f"{uri} {data}",
+            local_tz=timezone.utc,
+        )
+
+        assert entries[0].project_directory == "/provider/project"
+        agent.get_session_facts.assert_called_with(session)
+
+    def test_collect_deny_uses_provider_session_facts(self):
+        now = datetime.now(timezone.utc)
+        session = Session(
+            id="s-denied-facts",
+            title="denied facts",
+            created_at=now,
+            updated_at=now,
+            source_path=Path("/tmp/s-denied-facts.jsonl"),
+            metadata={"cwd": "/metadata/allows"},
+        )
+        facts_session = Session(
+            id="facts",
+            title="facts",
+            created_at=now,
+            updated_at=now,
+            source_path=session.source_path,
+            metadata={"cwd": "/provider/denied"},
+        )
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [session]
+        configure_session_data_lease(agent)
+        agent.get_session_facts.side_effect = None
+        agent.get_session_facts.return_value = derive_session_facts(facts_session)
+
+        entries, _ = collect_entries(
+            agents=[agent],
+            since_date=now.date(),
+            until_date=now.date(),
+            collect_config=CollectConfig(agent_denies={"codex": ("/provider/denied",)}),
+            render_session_text_fn=lambda uri, data: f"{uri} {data}",
+            local_tz=timezone.utc,
+        )
+
+        assert entries == []
+        agent.get_session_facts.assert_called_once_with(session)
 
     def test_collect_entries_parses_concurrently_and_preserves_order(self) -> None:
         now = datetime.now(timezone.utc)
