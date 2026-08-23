@@ -354,28 +354,35 @@ class OpenCodeAgent(BaseAgent):
         head = super().get_session_head(session)
         head["subtargets"] = self._parse_summary_targets(session.metadata.get("summary_files"))
 
+        needs_message_count = "message_count" not in session.metadata
+        needs_model = "model" not in session.metadata
+        if not needs_message_count and not needs_model:
+            return head
+
         if not self.db_path:
             return head
 
         conn = self._connect_db()
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT COUNT(*) AS count FROM message WHERE session_id = ?", (session.id,))
-            row = cursor.fetchone()
-            head["message_count"] = safe_int(row["count"]) if row else 0
+            if needs_message_count:
+                cursor.execute("SELECT COUNT(*) AS count FROM message WHERE session_id = ?", (session.id,))
+                row = cursor.fetchone()
+                head["message_count"] = safe_int(row["count"]) if row else 0
 
-            cursor.execute(
-                "SELECT data FROM message WHERE session_id = ? ORDER BY time_created DESC",
-                (session.id,),
-            )
-            for model_row in cursor.fetchall():
-                payload = self._parse_json_dict(model_row["data"])
-                if payload is None:
-                    continue
-                model = payload.get("modelID")
-                if isinstance(model, str) and model.strip():
-                    head["model"] = model.strip()
-                    break
+            if needs_model:
+                cursor.execute(
+                    "SELECT data FROM message WHERE session_id = ? ORDER BY time_created DESC",
+                    (session.id,),
+                )
+                for model_row in cursor.fetchall():
+                    payload = self._parse_json_dict(model_row["data"])
+                    if payload is None:
+                        continue
+                    model = payload.get("modelID")
+                    if isinstance(model, str) and model.strip():
+                        head["model"] = model.strip()
+                        break
         finally:
             conn.close()
 

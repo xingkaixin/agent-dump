@@ -860,6 +860,26 @@ class TestOpenCodeAgent:
         assert head["message_count"] == 2
         assert head["subtargets"] == ["a.py", "b.py"]
 
+    def test_get_session_head_reuses_discovered_message_facts(self, populated_db):
+        agent = OpenCodeAgent()
+        agent.db_path = populated_db
+        session = agent.find_session_by_id("session-001")
+        assert session is not None
+        traced_statements: list[str] = []
+        original_connect = agent._connect_db
+
+        def _connect_with_trace():
+            traced_conn = original_connect()
+            traced_conn.set_trace_callback(traced_statements.append)
+            return traced_conn
+
+        with mock.patch.object(agent, "_connect_db", side_effect=_connect_with_trace):
+            head = agent.get_session_head(session)
+
+        assert head["message_count"] == 1
+        assert head["model"] == "claude-3-opus"
+        assert traced_statements == []
+
     @pytest.mark.parametrize("bad_payload", [[], 1, "text", None])
     def test_get_session_head_skips_non_object_message_payloads(self, tmp_path, bad_payload):
         db_path = tmp_path / "opencode.db"
