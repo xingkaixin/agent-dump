@@ -8,19 +8,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-import json
 from pathlib import Path
 from threading import RLock
 from typing import Any, ClassVar
 
-from agent_dump.diagnostics import source_missing, unsupported_capability
 from agent_dump.export_paths import build_session_output_path
-from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
-from agent_dump.private_files import copy_private_file, ensure_output_dir, write_private_text
 from agent_dump.provider_diagnostics import ProviderDiagnostic, ProviderDiagnosticSink
 from agent_dump.session_data import SessionDataCache
-from agent_dump.time_utils import to_local_datetime
+from agent_dump.session_exports import copy_raw_session_file, write_session_json
+from agent_dump.session_projection import build_session_head, build_session_summary_fields, format_session_title
 
 
 @dataclass
@@ -177,11 +174,8 @@ class BaseAgent(ABC):
     ) -> Path:
         """Export unified JSON after merging workflow-owned top-level fields."""
         payload = self._json_export_payload(session)
-        if fields:
-            payload.update(fields)
-        ensure_output_dir(output_dir)
         output_path = self._build_output_path(session, output_dir, ".json")
-        return write_private_text(output_path, json.dumps(payload, ensure_ascii=False, indent=2))
+        return write_session_json(output_path, payload, fields)
 
     def _json_export_payload(self, session: Session) -> dict[str, Any]:
         """Data to serialize for JSON export.
@@ -194,9 +188,7 @@ class BaseAgent(ABC):
 
     def get_formatted_title(self, session: Session) -> str:
         """Get formatted title for display"""
-        title = session.title[:60] + "..." if len(session.title) > 60 else session.title
-        time_str = to_local_datetime(session.created_at).strftime("%Y-%m-%d %H:%M")
-        return f"{title} ({time_str})"
+        return format_session_title(session)
 
     def get_session_uri(self, session: Session) -> str:
         """Get the agent session URI for a session"""
@@ -241,36 +233,16 @@ class BaseAgent(ABC):
 
     def get_session_head(self, session: Session) -> dict[str, Any]:
         """Get lightweight discovery metadata for one session."""
-        metadata = session.metadata
-        facts = self.get_session_facts(session)
-
-        return {
-            "uri": self.get_session_uri(session),
-            "agent": self.display_name,
-            "title": session.title,
-            "created_at": session.created_at,
-            "updated_at": session.updated_at,
-            "cwd_or_project": facts.display_location,
-            "model": metadata.get("model") or metadata.get("model_provider"),
-            "message_count": facts.message_count.value,
-            "message_count_completeness": facts.message_count.completeness.value,
-            "subtargets": [],
-        }
+        return build_session_head(
+            session,
+            self.get_session_facts(session),
+            uri=self.get_session_uri(session),
+            agent_display_name=self.display_name,
+        )
 
     def get_session_summary_fields(self, session: Session) -> dict[str, str | int | None]:
         """Return reduced metadata fields for list/selector display."""
-        facts = self.get_session_facts(session)
-        model = session.metadata.get("model")
-        branch = session.metadata.get("branch")
-
-        return {
-            "cwd_project": facts.display_location,
-            "model": str(model) if isinstance(model, str) and model.strip() else None,
-            "branch": str(branch) if isinstance(branch, str) and branch.strip() else None,
-            "message_count": facts.message_count.value,
-            "message_count_completeness": facts.message_count.completeness.value,
-            "updated_at": to_local_datetime(session.updated_at).strftime("%Y-%m-%d %H:%M"),
-        }
+        return build_session_summary_fields(session, self.get_session_facts(session))
 
     def _build_output_path(self, session: Session, output_dir: Path, suffix: str) -> Path:
         """Build a safe output path for a session export."""
@@ -282,31 +254,8 @@ class BaseAgent(ABC):
 
     def export_raw_session(self, session: Session, output_dir: Path) -> Path:
         """Export the original session file when one exists."""
-        source_path = session.source_path
-        if not source_path.exists():
-            raise source_missing(
-                "raw session source is missing",
-                missing_path=source_path,
-                searched_roots=[root.render() for root in self.get_search_roots()],
-                next_steps=(
-                    i18n.t(Keys.DIAG_STEP_RAW_SOURCE_LOCAL),
-                    i18n.t(Keys.DIAG_STEP_LIST_TO_CHECK_VISIBLE),
-                ),
-            )
-        if not source_path.is_file():
-            raise unsupported_capability(
-                "raw export is not supported for this session source",
-                capability_gap="session source is a directory, not a single raw file",
-                details=(f"source path: {source_path}",),
-                next_steps=(
-                    i18n.t(Keys.DIAG_STEP_USE_JSON_OR_MARKDOWN),
-                    i18n.t(Keys.DIAG_STEP_CHECK_PROVIDER_HAS_RAW),
-                ),
-            )
-
-        ensure_output_dir(output_dir)
         output_path = self._build_raw_output_path(session, output_dir)
-        return copy_private_file(source_path, output_path)
+        return copy_raw_session_file(session, output_path, self.get_search_roots())
 
     @abstractmethod
     def get_session_data(self, session: Session) -> dict[str, Any]:

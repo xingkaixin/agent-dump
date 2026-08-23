@@ -480,6 +480,8 @@ deny = [
 │       ├── scanner.py          # Agent 扫描器
 │       ├── selector.py         # 交互式选择
 │       ├── session_data.py     # 有界请求缓存与批量读取 lease
+│       ├── session_exports.py  # 默认 JSON 与 raw 会话文件写入
+│       ├── session_projection.py # 默认标题、head 与摘要字段投影
 │       ├── terminal_output.py  # 终端动态字段安全插值
 │       ├── text_safety.py      # 第三方会话文本的输出净化
 │       ├── time_utils.py       # 时间与时区工具
