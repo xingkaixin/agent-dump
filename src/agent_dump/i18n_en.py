@@ -276,6 +276,7 @@ EN_TRANSLATIONS = {
     Keys.QUERY_ERROR_UNKNOWN_FIELD: "unknown query field: {field}",
     Keys.QUERY_ERROR_DUPLICATE_PATH: "path/cwd may only be given once",
     Keys.QUERY_ERROR_DUPLICATE_LIMIT: "limit may only be given once",
+    Keys.QUERY_ERROR_INVALID_SYNTAX: "structured query has invalid quoting or escaping",
     Keys.PATCH_ERROR_EMPTY: "patch is empty",
     Keys.PATCH_ERROR_MISSING_HEADER: "patch is missing the Begin Patch header",
     Keys.PATCH_ERROR_MISSING_FOOTER: "patch is missing the End Patch footer",

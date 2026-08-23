@@ -22,6 +22,7 @@ uv run agent-dump --list -days 7
 uv run agent-dump --list -query "error"
 uv run agent-dump --list -query "codex,kimi:error"
 uv run agent-dump --list -query "bug provider:codex role:user path:. limit:20"
+uv run agent-dump --list -query 'bug path:"/Users/me/My Project"'
 uv run agent-dump --list "agents://.?q=refactor&providers=codex,claude&roles=user&limit=20"
 uv run agent-dump --list --lang en
 ```
@@ -131,7 +132,7 @@ uv run agent-dump "agents://.?q=timeout&providers=codex,claude&roles=user&limit=
 结构化查询字段：
 - `provider:` 限定 provider，支持逗号分隔；`claude` 会映射到 `claudecode`。
 - `role:` 限定消息角色，支持逗号分隔。
-- `path:` / `cwd:` 限定项目路径，支持相对路径、绝对路径和 `~`。
+- `path:` / `cwd:` 限定项目路径，支持相对路径、绝对路径和 `~`；包含空格时使用引号或转义。
 - `limit:` 对最终全局匹配结果集截断，且必须为有符号 64 位范围内的正整数。
 
 ### `--search`（全文搜索）

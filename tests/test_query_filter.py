@@ -194,6 +194,31 @@ class TestParseQuery:
             limit=20,
         )
 
+    def test_parse_structured_path_with_spaces(self, tmp_path):
+        project_path = tmp_path / "project with spaces"
+
+        result = parse_query(
+            f'bug provider:codex path:"{project_path}"',
+            {"opencode", "codex", "kimi", "claudecode"},
+        )
+
+        assert result == make_query_spec(
+            agent_names={"codex"},
+            keyword="bug",
+            project_path=project_path.resolve(),
+        )
+
+    def test_plain_keyword_with_unmatched_quote_stays_literal(self):
+        result = parse_query('error "timeout', {"codex"})
+
+        assert result == make_query_spec(keyword='error "timeout')
+
+    def test_malformed_quoted_structured_query_raises(self):
+        with pytest.raises(ValueError) as exc_info:
+            parse_query('bug path:"/tmp/project', {"codex"})
+
+        assert str(exc_info.value) == expect(Keys.QUERY_ERROR_INVALID_SYNTAX)
+
     def test_parse_empty_query_raises(self):
         with pytest.raises(ValueError, match="查询条件不能为空"):
             parse_query("   ", {"opencode", "codex", "kimi", "claudecode"})
