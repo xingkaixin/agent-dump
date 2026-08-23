@@ -256,6 +256,7 @@ ZH_TRANSLATIONS = {
     Keys.DIAG_STEP_ZCODE_NO_LINUX: "Linux 暂无 ZCode 默认会话路径。",
     Keys.QUERY_SUMMARY_PATH: "路径={path}",
     Keys.QUERY_SUMMARY_KEYWORD: "关键词={keyword}",
+    Keys.QUERY_SUMMARY_SEPARATOR: "；",
     Keys.QUERY_SUMMARY_ALL_SESSIONS: "全部会话",
     Keys.QUERY_ERROR_EMPTY_SPEC: "查询条件不能为空",
     Keys.QUERY_ERROR_UNKNOWN_AGENT: "未知 agent 名称: {name}",

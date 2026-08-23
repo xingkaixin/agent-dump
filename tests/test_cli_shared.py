@@ -156,6 +156,29 @@ class TestQueryHelpers:
         assert "roles=user" in summary
         assert "limit=5" in summary
 
+    @pytest.mark.parametrize(("language", "separator"), [("en", "; "), ("zh", "；")])
+    def test_render_query_summary_uses_localized_separator(self, tmp_path, use_language, language, separator):
+        use_language(language)
+        summary = render_query_summary(
+            make_query_spec(
+                agent_names={"codex"},
+                keyword="bug",
+                project_path=tmp_path,
+                roles={"user"},
+                limit=5,
+            )
+        )
+
+        assert summary == separator.join(
+            [
+                expect(Keys.QUERY_SUMMARY_PATH, path=tmp_path),
+                expect(Keys.QUERY_SUMMARY_KEYWORD, keyword="bug"),
+                "providers=codex",
+                "roles=user",
+                "limit=5",
+            ]
+        )
+
     def test_collect_query_matches_applies_global_limit(self):
         older = make_session("s-old", "old", created_at=datetime(2026, 1, 1, 10, 0, 0))
         newer = make_session("s-new", "new", created_at=datetime(2026, 1, 1, 11, 0, 0))
