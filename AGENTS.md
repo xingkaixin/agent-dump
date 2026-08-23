@@ -118,6 +118,7 @@
 | `agents/codex_patch.py` | Codex apply_patch 解析 |
 | `agents/codex_enrichment.py` | Codex subagent / skill 消息增强 |
 | `agents/codex_transcript.py` | Codex response stream 的状态化消息解析与组装 |
+| `agents/claude_transcript.py` | Claude JSONL 转录状态解析与消息组装 |
 | `agents/cursor_storage.py` | Cursor SQLite 路径发现、只读查询与原始记录解析 |
 | `agents/cursor_transcript.py` | Cursor bubble、tool 与 subagent 转录解析 |
 
@@ -267,6 +268,7 @@ agent-dump/
 │       ├── kimi.py              # Kimi JSONL provider
 │       ├── kimi_wire.py         # Kimi wire 事件流解析
 │       ├── claudecode.py        # Claude Code JSONL provider
+│       ├── claude_transcript.py # Claude JSONL 转录解析与消息组装
 │       ├── cursor.py            # Cursor SQLite provider
 │       ├── cursor_storage.py    # Cursor SQLite 只读存储访问
 │       ├── cursor_transcript.py # Cursor bubble、tool 与 subagent 转录解析
