@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from message_test_support import require_tool_part
+
 from agent_dump.agents.kimi_wire import parse_kimi_wire
 
 
@@ -53,7 +55,7 @@ def test_parse_kimi_wire_keeps_tool_owner_after_fallback_message(tmp_path: Path)
 
     assistant = result.messages[1]
     assert [part["type"] for part in assistant["parts"]] == ["text", "tool"]
-    assert assistant["parts"][1]["state"]["output"][0]["text"] == "contents"
+    assert require_tool_part(assistant["parts"][1])["state"]["output"][0]["text"] == "contents"
     assert result.messages[2]["role"] == "tool"
 
 

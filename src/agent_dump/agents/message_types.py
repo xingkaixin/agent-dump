@@ -1,6 +1,6 @@
 """Internal types for the normalized session message contract."""
 
-from typing import Any, Literal, TypeAlias, TypedDict
+from typing import Any, Literal, TypeAlias, TypedDict, TypeGuard
 
 MessageRole: TypeAlias = Literal[
     "user",
@@ -12,34 +12,20 @@ MessageRole: TypeAlias = Literal[
     "compaction",
     "custom",
 ]
+MESSAGE_ROLES: frozenset[MessageRole] = frozenset(
+    {
+        "user",
+        "assistant",
+        "tool",
+        "system",
+        "unknown",
+        "branch_summary",
+        "compaction",
+        "custom",
+    }
+)
 TextPartType: TypeAlias = Literal["text", "reasoning"]
 StepPartType: TypeAlias = Literal["step-start", "step-finish"]
-
-
-class _NormalizedPartRequired(TypedDict):
-    type: str
-
-
-class NormalizedPart(_NormalizedPartRequired, total=False):
-    """Serialized provider-neutral part, including open provider extensions."""
-
-    text: str
-    tool: str
-    callID: str
-    title: str
-    state: dict[str, Any]
-    time_created: int
-    mime_type: str | None
-    data: Any
-    input: Any
-    output: Any
-    approval_status: str
-    subagent_id: str
-    nickname: str
-    subagent_type: str
-    reason: Any
-    tokens: Any
-    cost: Any
 
 
 class TextPart(TypedDict):
@@ -99,9 +85,24 @@ class StepPart(_StepPartRequired, total=False):
     cost: Any
 
 
+NormalizedPart: TypeAlias = TextPart | ToolPart | PlanPart | ImagePart | StepPart
+
+
+def is_text_part(part: NormalizedPart) -> TypeGuard[TextPart]:
+    return part["type"] in {"text", "reasoning"}
+
+
+def is_tool_part(part: NormalizedPart) -> TypeGuard[ToolPart]:
+    return part["type"] == "tool"
+
+
+def is_plan_part(part: NormalizedPart) -> TypeGuard[PlanPart]:
+    return part["type"] == "plan"
+
+
 class _NormalizedMessageRequired(TypedDict):
     id: str
-    role: str
+    role: MessageRole
     parts: list[NormalizedPart]
 
 

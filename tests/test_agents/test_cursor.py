@@ -12,6 +12,7 @@ import sys
 import time
 from unittest import mock
 
+from message_test_support import require_tool_part
 import pytest
 
 from agent_dump.agents.base import Session
@@ -888,10 +889,11 @@ class TestCursorAgent:
         )
         assert completion is None
         assert tool_part is not None
-        assert tool_part["callID"] == "call-1"
-        assert tool_part["state"]["status"] == "failed"
-        assert tool_part["state"]["arguments"] == {"_raw": '{"targetFile":'}
-        assert tool_part["state"]["error"] == "boom"
+        normalized_tool_part = require_tool_part(tool_part)
+        assert normalized_tool_part["callID"] == "call-1"
+        assert normalized_tool_part["state"]["status"] == "failed"
+        assert normalized_tool_part["state"]["arguments"] == {"_raw": '{"targetFile":'}
+        assert normalized_tool_part["state"]["error"] == "boom"
 
     def test_get_session_data_attaches_tool_to_parent_and_exports_usage(self, monkeypatch, tmp_path):
         global_db = self._create_layout(monkeypatch, tmp_path)

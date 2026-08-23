@@ -9,9 +9,14 @@ import sqlite3
 from typing import Any, cast
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.agents.message_assembly import build_step_part, build_text_part, build_tool_part
+from agent_dump.agents.message_assembly import (
+    build_message,
+    build_step_part,
+    build_text_part,
+    build_tool_part,
+    normalize_message_role,
+)
 from agent_dump.agents.message_types import (
-    NormalizedMessage,
     NormalizedPart,
     NormalizedSessionData,
 )
@@ -253,27 +258,28 @@ class OpenCodeAgent(BaseAgent):
             if not isinstance(tokens, dict):
                 tokens = {}
 
-            role = msg_data.get("role")
+            role = normalize_message_role(msg_data.get("role"))
             agent = msg_data.get("agent")
             mode = msg_data.get("mode")
             model = msg_data.get("modelID")
             provider = msg_data.get("providerID")
-            message: NormalizedMessage = {
-                "id": str(msg_row["id"]),
-                "role": role if isinstance(role, str) else "unknown",
-                "agent": agent if isinstance(agent, str) else None,
-                "mode": mode if isinstance(mode, str) else None,
-                "model": model if isinstance(model, str) else None,
-                "provider": provider if isinstance(provider, str) else None,
-                "time_created": safe_int(msg_row["time_created"]),
-                "time_completed": message_time.get("completed") if isinstance(message_time, dict) else None,
-                "tokens": tokens,
-                "cost": safe_float(msg_data.get("cost")),
-                "parts": [],
-            }
+            cost = safe_float(msg_data.get("cost"))
+            message = build_message(
+                message_id=str(msg_row["id"]),
+                role=role,
+                agent=agent if isinstance(agent, str) else None,
+                mode=mode if isinstance(mode, str) else None,
+                model=model if isinstance(model, str) else None,
+                provider=provider if isinstance(provider, str) else None,
+                time_created=safe_int(msg_row["time_created"]),
+                time_completed=message_time.get("completed") if isinstance(message_time, dict) else None,
+                tokens=tokens,
+                cost=cost,
+                parts=[],
+            )
 
             session_data["stats"]["message_count"] += 1
-            session_data["stats"]["total_cost"] += safe_float(message["cost"])
+            session_data["stats"]["total_cost"] += cost
             session_data["stats"]["total_input_tokens"] += safe_int(tokens.get("input"))
             session_data["stats"]["total_output_tokens"] += safe_int(tokens.get("output"))
 

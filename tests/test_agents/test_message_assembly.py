@@ -1,3 +1,4 @@
+from message_test_support import require_text_part
 import pytest
 
 from agent_dump.agents.jsonl_scan import parse_iso_timestamp_ms
@@ -10,9 +11,16 @@ from agent_dump.agents.message_assembly import (
     build_step_part,
     build_text_part,
     build_tool_part,
+    normalize_message_role,
     try_append_to_assistant_group,
 )
-from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart
+from agent_dump.agents.message_types import (
+    NormalizedMessage,
+    NormalizedPart,
+    is_plan_part,
+    is_text_part,
+    is_tool_part,
+)
 
 
 def test_build_message_preserves_normalized_shape_and_extra():
@@ -27,6 +35,9 @@ def test_build_message_preserves_normalized_shape_and_extra():
         mode="tool",
         model="gpt-5",
         provider="openai",
+        time_completed=20,
+        tokens={"input": 1, "output": 2},
+        cost=0.5,
         extra={"entry_id": "entry-1"},
     )
 
@@ -38,12 +49,25 @@ def test_build_message_preserves_normalized_shape_and_extra():
         "model": "gpt-5",
         "provider": "openai",
         "time_created": 10,
-        "time_completed": None,
-        "tokens": {},
-        "cost": 0,
+        "time_completed": 20,
+        "tokens": {"input": 1, "output": 2},
+        "cost": 0.5,
         "parts": [{"type": "reasoning", "text": "hello", "time_created": 10}],
         "entry_id": "entry-1",
     }
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("assistant", "assistant"),
+        ("branch_summary", "branch_summary"),
+        ("unsupported", "unknown"),
+        (None, "unknown"),
+    ],
+)
+def test_normalize_message_role(value, expected):
+    assert normalize_message_role(value) == expected
 
 
 def test_build_tool_part_preserves_provider_state():
@@ -75,6 +99,12 @@ def test_specialized_part_builders_preserve_normalized_shapes():
         "approval_status": "success",
         "time_created": 10,
     }
+
+
+def test_part_type_guards_narrow_known_shapes():
+    assert is_text_part(build_text_part("text"))
+    assert is_tool_part(build_tool_part(tool_name="read", call_id="1", title="read", state={}, timestamp_ms=0))
+    assert is_plan_part(build_plan_part(text="plan", output=None, approval_status="success", timestamp_ms=0))
     assert build_image_part(mime_type="image/png", data="encoded", timestamp_ms=20) == {
         "type": "image",
         "mime_type": "image/png",
@@ -262,7 +292,7 @@ class TestTryAppendToAssistantGroup:
             blocking_part_types=("tool",),
         )
 
-        assert [p["text"] for p in messages[0]["parts"]] == ["a", "b"]
+        assert [require_text_part(part)["text"] for part in messages[0]["parts"]] == ["a", "b"]
 
 
 class TestParseIsoTimestampMs:
