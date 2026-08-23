@@ -17,6 +17,7 @@ from agent_dump.command_plan import ReindexOperation, StatsOperation
 from agent_dump.maintenance_workflow import handle_providers_mode as render_provider_capabilities
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import QuerySpec
+from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.text_safety import has_unsafe_body_characters
 
 
@@ -290,7 +291,7 @@ class TestReindexMode:
                 result = handle_reindex_mode(operation)
 
         assert result == 0
-        index.rebuild.assert_called_once_with(agent, [session])
+        index.rebuild.assert_called_once_with(agent, [session], diagnostic_sink=print_search_diagnostic)
         assert "索引重建完成" in capsys.readouterr().out
 
 

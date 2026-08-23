@@ -26,6 +26,7 @@ from agent_dump.query_filter import (
 )
 from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.scanner import AgentScanner
+from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
@@ -229,7 +230,7 @@ def collect_query_matches(
     spec: QuerySpec,
 ) -> dict[str, list[Session]]:
     grouped: dict[str, list[Session]] = {}
-    for match in query_session_groups(session_groups, spec):
+    for match in query_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic):
         grouped.setdefault(match.agent.name, []).append(match.session)
     return grouped
 
@@ -239,7 +240,7 @@ def collect_search_matches(
     *,
     spec: QuerySpec,
 ) -> list[SearchSessionMatch]:
-    return search_session_groups(session_groups, spec)
+    return search_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic)
 
 
 def display_search_results(matches: list[SearchSessionMatch]) -> None:

@@ -477,6 +477,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── query_filter.py     # Query parsing and filtering
 │       ├── query_semantics.py  # Literal Query/Search semantics and corpus
 │       ├── search_index.py     # FTS5 search index
+│       ├── search_diagnostics.py # Structured search diagnostics
 │       ├── scanner.py          # Agent scanner
 │       ├── selector.py         # Interactive selection
 │       ├── session_data.py     # Bounded request cache and bulk-read leases

@@ -78,6 +78,7 @@
 | `query_filter.py` | QuerySpec 解析、QuerySessionMatch 匹配证据、过滤与全局 limit |
 | `query_semantics.py` | Query keyword、Search terms 与 Searchable Corpus 的统一字面匹配语义 |
 | `search_index.py` | SQLite FTS5 搜索索引 |
+| `search_diagnostics.py` | 搜索降级与索引进度的结构化诊断及终端展示 |
 | `selector.py` | 终端交互选择与非 TTY 输入回退 |
 | `config.py` | `ConfigurationDocument` TOML 快照、兼容投影、保留式更新与校验 |
 | `config_command.py` | 配置查看、交互编辑与终端展示工作流 |
@@ -247,6 +248,7 @@ agent-dump/
 │   ├── output_formats.py        # 输出格式闭集、别名与能力校验
 │   ├── scanner.py               # Provider discovery、list / locate 与失败隔离
 │   ├── search_index.py          # FTS5 搜索索引
+│   ├── search_diagnostics.py    # 搜索结构化诊断与终端展示
 │   ├── session_exports.py       # 默认 JSON / raw 会话文件写入
 │   ├── session_projection.py    # 默认标题、head 与摘要字段投影
 │   ├── selector.py              # 交互式选择

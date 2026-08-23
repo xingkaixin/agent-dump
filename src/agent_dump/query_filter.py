@@ -5,14 +5,13 @@ Query parsing and session filtering helpers.
 from collections.abc import Sequence, Set
 from dataclasses import dataclass
 from pathlib import Path
-import sys
 from urllib.parse import ParseResult, parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_semantics import TextQuery, TextQueryMode, extract_transcript_searchable_text
+from agent_dump.search_diagnostics import SearchDiagnosticSink, emit_search_diagnostic
 from agent_dump.search_index import SearchIndex
-from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import normalize_datetime_utc
 from agent_dump.transcript import read_messages
 
@@ -48,6 +47,51 @@ class QuerySessionMatch:
 
 SearchSessionMatch = QuerySessionMatch
 SessionGroup = tuple[BaseAgent, list[Session]]
+
+
+class _SearchRuntime:
+    def __init__(
+        self,
+        *,
+        search_index: SearchIndex | None = None,
+        diagnostic_sink: SearchDiagnosticSink | None = None,
+    ) -> None:
+        self._search_index = search_index
+        self._diagnostic_sink = diagnostic_sink
+        self._index_initialized = search_index is not None
+
+    @property
+    def diagnostic_sink(self) -> SearchDiagnosticSink | None:
+        return self._diagnostic_sink
+
+    def search_index(self, agent: BaseAgent) -> SearchIndex | None:
+        if self._index_initialized:
+            return self._search_index
+        self._index_initialized = True
+        try:
+            self._search_index = SearchIndex()
+        except Exception as exc:  # noqa: BLE001 - 索引初始化失败时退回文件扫描
+            self.report_index_failure(agent, exc)
+        return self._search_index
+
+    def report_index_failure(self, agent: BaseAgent, exc: BaseException) -> None:
+        self._search_index = None
+        self._index_initialized = True
+        emit_search_diagnostic(
+            self._diagnostic_sink,
+            Keys.WARN_INDEX_UNUSABLE,
+            agent=agent.display_name,
+            error_type=type(exc).__name__,
+            error=exc,
+        )
+
+    def report_session_read_failure(self, agent: BaseAgent, session: Session, error: object) -> None:
+        emit_search_diagnostic(
+            self._diagnostic_sink,
+            Keys.WARN_SESSION_READ_SKIPPED,
+            uri=agent.get_session_uri(session),
+            error=error,
+        )
 
 
 def parse_query(raw: str | None, valid_agents: set[str]) -> QuerySpec | None:
@@ -140,7 +184,14 @@ def parse_query_uri(raw_uri: str | None, valid_agents: set[str], cwd: Path | Non
     )
 
 
-def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | None) -> list[Session]:
+def filter_sessions(
+    agent: BaseAgent,
+    sessions: list[Session],
+    keyword: str | None,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink: SearchDiagnosticSink | None = None,
+) -> list[Session]:
     """Filter sessions by keyword for one agent."""
     query = TextQuery.parse(keyword or "", TextQueryMode.KEYWORD)
     if query.is_empty:
@@ -148,7 +199,8 @@ def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | No
     if not sessions:
         return []
 
-    indexed = _try_indexed_search(agent, sessions, query)
+    runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
+    indexed = _try_indexed_search(agent, sessions, query, runtime)
     if indexed is not None:
         return indexed
 
@@ -156,32 +208,70 @@ def filter_sessions(agent: BaseAgent, sessions: list[Session], keyword: str | No
     if provider_matched is not None:
         return provider_matched
 
-    return _filter_sessions_from_data(agent, sessions, query)
+    return _filter_sessions_from_data(agent, sessions, query, runtime)
 
 
-def search_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: QuerySpec) -> list[SearchSessionMatch]:
+def search_sessions_by_query(
+    agent: BaseAgent,
+    sessions: list[Session],
+    spec: QuerySpec,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink: SearchDiagnosticSink | None = None,
+) -> list[SearchSessionMatch]:
     """Search sessions while preserving snippets and rank."""
     if not (spec.keyword or "").strip():
         return []
-    return _session_matches(agent, sessions, spec, mode=TextQueryMode.SEARCH_TERMS)
+    runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
+    return _session_matches(agent, sessions, spec, mode=TextQueryMode.SEARCH_TERMS, runtime=runtime)
 
 
-def query_session_matches(agent: BaseAgent, sessions: list[Session], spec: QuerySpec) -> list[SearchSessionMatch]:
+def query_session_matches(
+    agent: BaseAgent,
+    sessions: list[Session],
+    spec: QuerySpec,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink: SearchDiagnosticSink | None = None,
+) -> list[SearchSessionMatch]:
     """Apply a query while preserving the evidence used to select each session."""
-    return _session_matches(agent, sessions, spec, mode=TextQueryMode.KEYWORD)
+    runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
+    return _session_matches(agent, sessions, spec, mode=TextQueryMode.KEYWORD, runtime=runtime)
 
 
-def query_session_groups(session_groups: Sequence[SessionGroup], spec: QuerySpec) -> list[SearchSessionMatch]:
+def query_session_groups(
+    session_groups: Sequence[SessionGroup],
+    spec: QuerySpec,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink: SearchDiagnosticSink | None = None,
+) -> list[SearchSessionMatch]:
     """Query multiple providers and own the global recency limit."""
-    matches = [match for agent, sessions in session_groups for match in query_session_matches(agent, sessions, spec)]
+    runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
+    matches = [
+        match
+        for agent, sessions in session_groups
+        for match in _session_matches(agent, sessions, spec, mode=TextQueryMode.KEYWORD, runtime=runtime)
+    ]
     if spec.limit is None:
         return matches
     return sorted(matches, key=_query_evidence_sort_key)[: spec.limit]
 
 
-def search_session_groups(session_groups: Sequence[SessionGroup], spec: QuerySpec) -> list[SearchSessionMatch]:
+def search_session_groups(
+    session_groups: Sequence[SessionGroup],
+    spec: QuerySpec,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink: SearchDiagnosticSink | None = None,
+) -> list[SearchSessionMatch]:
     """Search multiple providers with one global ranking order and limit."""
-    matches = [match for agent, sessions in session_groups for match in search_sessions_by_query(agent, sessions, spec)]
+    runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
+    matches = [
+        match
+        for agent, sessions in session_groups
+        for match in _session_matches(agent, sessions, spec, mode=TextQueryMode.SEARCH_TERMS, runtime=runtime)
+    ]
     sorted_matches = sorted(matches, key=_search_match_sort_key)
     if spec.limit is None or spec.limit >= len(sorted_matches):
         return sorted_matches
@@ -194,6 +284,7 @@ def _session_matches(
     spec: QuerySpec,
     *,
     mode: TextQueryMode,
+    runtime: _SearchRuntime,
 ) -> list[SearchSessionMatch]:
     if spec.agent_names is not None and agent.name not in spec.agent_names:
         return []
@@ -218,6 +309,7 @@ def _session_matches(
             spec.roles,
             None if text_query.is_empty else text_query,
             limit=spec.limit,
+            runtime=runtime,
         )
 
     if text_query.is_empty:
@@ -230,11 +322,11 @@ def _session_matches(
     # 先裁剪就会把本该入选的会话挡在 top-L 之外。每个 Provider 取 top-L 后做全局
     # L 路合并是正确的——全局前 L 里不可能出现某个 Provider 的第 L+1 条。
     pushdown_limit = spec.limit if spec.project_path is None else None
-    indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, text_query, pushdown_limit)
+    indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, text_query, runtime, pushdown_limit)
     if indexed is not None:
         return indexed
 
-    return _fallback_search_matches(agent, scoped_sessions, text_query)
+    return _fallback_search_matches(agent, scoped_sessions, text_query, runtime)
 
 
 def _normalize_agent_name(name: str, valid_agents: set[str]) -> str | None:
@@ -324,11 +416,27 @@ def is_path_scope_match(project_path: Path, session_path: Path) -> bool:
     return session_path == project_path or project_path in session_path.parents or session_path in project_path.parents
 
 
-def filter_sessions_by_query(agent: BaseAgent, sessions: list[Session], spec: QuerySpec | None) -> list[Session]:
+def filter_sessions_by_query(
+    agent: BaseAgent,
+    sessions: list[Session],
+    spec: QuerySpec | None,
+    *,
+    search_index: SearchIndex | None = None,
+    diagnostic_sink: SearchDiagnosticSink | None = None,
+) -> list[Session]:
     """Apply structured query spec to one agent's sessions."""
     if spec is None:
         return sessions
-    return [match.session for match in query_session_matches(agent, sessions, spec)]
+    return [
+        match.session
+        for match in query_session_matches(
+            agent,
+            sessions,
+            spec,
+            search_index=search_index,
+            diagnostic_sink=diagnostic_sink,
+        )
+    ]
 
 
 def _contains_structured_query_terms(query: str) -> bool:
@@ -390,10 +498,11 @@ def _filter_sessions_from_data(
     agent: BaseAgent,
     sessions: list[Session],
     query: TextQuery,
+    runtime: _SearchRuntime,
 ) -> list[Session]:
     matched: list[Session] = []
     for session in sessions:
-        content = _read_searchable_text(agent, session)
+        content = _read_searchable_text(agent, session, runtime)
         if content is not None and query.matches((session.title, content)):
             matched.append(session)
 
@@ -407,13 +516,14 @@ def _role_search_matches(
     query: TextQuery | None,
     *,
     limit: int | None,
+    runtime: _SearchRuntime,
 ) -> list[SearchSessionMatch]:
     candidates = (
         sessions if limit is None else sorted(sessions, key=lambda session: _query_session_sort_key(agent, session))
     )
     matches: list[SearchSessionMatch] = []
     for session in candidates:
-        evidence = _find_role_evidence(agent, session, roles, query)
+        evidence = _find_role_evidence(agent, session, roles, query, runtime)
         if evidence is None:
             continue
         role, snippet = evidence
@@ -437,11 +547,12 @@ def _find_role_evidence(
     session: Session,
     roles: Set[str],
     query: TextQuery | None,
+    runtime: _SearchRuntime,
 ) -> tuple[str, str] | None:
     try:
         with agent.lease_cached_session_data(session) as session_data:
             if not isinstance(session_data.get("messages"), list):
-                _warn_session_read_skipped(agent, session, i18n.t(Keys.DIAG_SESSION_READ_FAILED))
+                runtime.report_session_read_failure(agent, session, i18n.t(Keys.DIAG_SESSION_READ_FAILED))
                 return None
             for message in read_messages(session_data):
                 role = message.role
@@ -453,7 +564,7 @@ def _find_role_evidence(
                 if evidence := query.find_match((text,)):
                     return role, evidence.snippet
     except Exception as exc:  # noqa: BLE001 - 单个坏会话不应中断查询，但结果不完整必须告警
-        _warn_session_read_skipped(agent, session, exc)
+        runtime.report_session_read_failure(agent, session, exc)
         return None
 
     return None
@@ -485,15 +596,18 @@ def _try_indexed_search_matches(
     all_sessions: list[Session],
     scoped_sessions: list[Session],
     query: TextQuery,
+    runtime: _SearchRuntime,
     limit: int | None = None,
 ) -> list[SearchSessionMatch] | None:
     """Try indexed search while retaining SearchResult metadata."""
     try:
-        index = SearchIndex()
+        index = runtime.search_index(agent)
+        if index is None:
+            return None
         if not index.is_available:
             return None
 
-        index.update(agent, all_sessions)
+        index.update(agent, all_sessions, diagnostic_sink=runtime.diagnostic_sink)
         scoped_by_id = {session.id: session for session in scoped_sessions}
         results = index.search(
             query,
@@ -517,38 +631,20 @@ def _try_indexed_search_matches(
             )
         return matches
     except Exception as exc:  # noqa: BLE001 - 索引出问题时退回文件扫描，但必须让用户看见
-        _warn_index_unusable(agent, exc)
+        runtime.report_index_failure(agent, exc)
         return None
-
-
-def _warn_index_unusable(agent: BaseAgent, exc: BaseException) -> None:
-    """Report a real index failure instead of silently degrading to a file scan.
-
-    「索引不可用」（SQLite 没编译 FTS5）与「索引出错」（库被锁、损坏、写失败）此前都被
-    同一个 except Exception 吞掉并当作前者，于是坏索引永远不会被报告，也就永远不会被
-    重建。这里仍然宽捕获——退回文件扫描比让整条命令崩掉更有用——但一定告警，
-    区别只在于：不可用是静默的正常状态，出错是要说出来的异常状态。
-    """
-    print(
-        render_terminal_message(
-            Keys.WARN_INDEX_UNUSABLE,
-            agent=agent.display_name,
-            error_type=type(exc).__name__,
-            error=exc,
-        ),
-        file=sys.stderr,
-    )
 
 
 def _fallback_search_matches(
     agent: BaseAgent,
     sessions: list[Session],
     query: TextQuery | str,
+    runtime: _SearchRuntime,
 ) -> list[SearchSessionMatch]:
     text_query = query if isinstance(query, TextQuery) else TextQuery.parse(query, TextQueryMode.SEARCH_TERMS)
     matches: list[SearchSessionMatch] = []
     for session in sessions:
-        content = _read_searchable_text(agent, session)
+        content = _read_searchable_text(agent, session, runtime)
         if content is None:
             continue
         evidence = text_query.find_match((session.title, content))
@@ -560,28 +656,17 @@ def _fallback_search_matches(
     return matches
 
 
-def _read_searchable_text(agent: BaseAgent, session: Session) -> str | None:
+def _read_searchable_text(agent: BaseAgent, session: Session, runtime: _SearchRuntime) -> str | None:
     try:
         with agent.lease_cached_session_data(session) as session_data:
             content = extract_transcript_searchable_text(session_data)
     except Exception as exc:  # noqa: BLE001 - 跳过一个坏会话比中断全局搜索更有用
-        _warn_session_read_skipped(agent, session, exc)
+        runtime.report_session_read_failure(agent, session, exc)
         return None
 
     if content is None:
-        _warn_session_read_skipped(agent, session, i18n.t(Keys.DIAG_SESSION_READ_FAILED))
+        runtime.report_session_read_failure(agent, session, i18n.t(Keys.DIAG_SESSION_READ_FAILED))
     return content
-
-
-def _warn_session_read_skipped(agent: BaseAgent, session: Session, error: object) -> None:
-    print(
-        render_terminal_message(
-            Keys.WARN_SESSION_READ_SKIPPED,
-            uri=agent.get_session_uri(session),
-            error=error,
-        ),
-        file=sys.stderr,
-    )
 
 
 def _build_evidence_excerpt(text: str, context_chars: int = 96) -> str:
@@ -591,14 +676,21 @@ def _build_evidence_excerpt(text: str, context_chars: int = 96) -> str:
     return normalized[:context_chars].rstrip() + "..."
 
 
-def _try_indexed_search(agent: BaseAgent, sessions: list[Session], query: TextQuery) -> list[Session] | None:
+def _try_indexed_search(
+    agent: BaseAgent,
+    sessions: list[Session],
+    query: TextQuery,
+    runtime: _SearchRuntime,
+) -> list[Session] | None:
     """Try using the local search index. Returns None to fall back."""
     try:
-        index = SearchIndex()
+        index = runtime.search_index(agent)
+        if index is None:
+            return None
         if not index.is_available:
             return None
 
-        index.update(agent, sessions)
+        index.update(agent, sessions, diagnostic_sink=runtime.diagnostic_sink)
         results = index.search(
             query,
             agent_names={agent.name},
@@ -607,5 +699,5 @@ def _try_indexed_search(agent: BaseAgent, sessions: list[Session], query: TextQu
         matched_ids = {r.session_id for r in results}
         return [s for s in sessions if s.id in matched_ids]
     except Exception as exc:  # noqa: BLE001 - 索引出问题时退回文件扫描，但必须让用户看见
-        _warn_index_unusable(agent, exc)
+        runtime.report_index_failure(agent, exc)
         return None

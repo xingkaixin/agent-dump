@@ -14,7 +14,6 @@ import os
 from pathlib import Path
 import re
 import sqlite3
-import sys
 import time
 from typing import Any, TypeVar
 
@@ -26,11 +25,11 @@ from agent_dump.query_semantics import (
     TextQueryMode,
     extract_transcript_searchable_text,
 )
+from agent_dump.search_diagnostics import SearchDiagnosticSink, emit_search_diagnostic
 from agent_dump.session_data import (
     serialize_session_updated_signal,
     session_updated_signal,
 )
-from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import normalize_datetime_utc
 
 _T = TypeVar("_T")
@@ -347,7 +346,13 @@ class SearchIndex:
         finally:
             conn.close()
 
-    def update(self, agent: BaseAgent, sessions: list[Session]) -> tuple[int, int]:
+    def update(
+        self,
+        agent: BaseAgent,
+        sessions: list[Session],
+        *,
+        diagnostic_sink: SearchDiagnosticSink | None = None,
+    ) -> tuple[int, int]:
         """Incrementally add or refresh the provided sessions.
 
         Absence from this list is not immediate deletion evidence because callers may
@@ -387,13 +392,11 @@ class SearchIndex:
                     to_update.append((session, signature))
 
             if len(to_update) >= _INDEX_PROGRESS_THRESHOLD:
-                print(
-                    render_terminal_message(
-                        Keys.INDEX_UPDATE_PROGRESS,
-                        agent=agent.display_name,
-                        count=len(to_update),
-                    ),
-                    file=sys.stderr,
+                emit_search_diagnostic(
+                    diagnostic_sink,
+                    Keys.INDEX_UPDATE_PROGRESS,
+                    agent=agent.display_name,
+                    count=len(to_update),
                 )
 
             def _extract_text(item: tuple[Session, str]) -> str | None:
@@ -426,14 +429,12 @@ class SearchIndex:
                     added += 1
 
             if skipped:
-                print(
-                    render_terminal_message(
-                        Keys.WARN_INDEX_SKIPPED_SESSIONS,
-                        agent=agent.display_name,
-                        count=len(skipped),
-                        examples=", ".join(skipped[:3]),
-                    ),
-                    file=sys.stderr,
+                emit_search_diagnostic(
+                    diagnostic_sink,
+                    Keys.WARN_INDEX_SKIPPED_SESSIONS,
+                    agent=agent.display_name,
+                    count=len(skipped),
+                    examples=", ".join(skipped[:3]),
                 )
 
             conn.commit()
@@ -707,10 +708,16 @@ class SearchIndex:
         finally:
             conn.close()
 
-    def rebuild(self, agent: BaseAgent, sessions: list[Session]) -> int:
+    def rebuild(
+        self,
+        agent: BaseAgent,
+        sessions: list[Session],
+        *,
+        diagnostic_sink: SearchDiagnosticSink | None = None,
+    ) -> int:
         """Force rebuild index for an agent. Returns indexed count."""
         self.clear_agent(agent.name)
-        added, _ = self.update(agent, sessions)
+        added, _ = self.update(agent, sessions, diagnostic_sink=diagnostic_sink)
         return added
 
     def get_stats(self) -> dict[str, dict[str, int]]:

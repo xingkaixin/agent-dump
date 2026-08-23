@@ -25,6 +25,7 @@ from agent_dump.query_filter import (
     SearchSessionMatch,
     query_session_groups,
 )
+from agent_dump.search_diagnostics import SearchDiagnosticSink
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
@@ -100,6 +101,7 @@ def collect_entries(
     render_session_text_fn: Callable[[str, Mapping[str, Any]], str],
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
+    diagnostic_sink: SearchDiagnosticSink | None = None,
     logger: CollectLogger | None = None,
 ) -> tuple[list[CollectEntry], bool]:
     """Collect session entries for range."""
@@ -126,7 +128,7 @@ def collect_entries(
         )
 
     candidate_matches = (
-        query_session_groups(eligible_session_groups, query_spec)
+        query_session_groups(eligible_session_groups, query_spec, diagnostic_sink=diagnostic_sink)
         if query_spec is not None
         else [
             SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)

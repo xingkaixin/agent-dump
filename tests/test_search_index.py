@@ -13,7 +13,9 @@ import pytest
 
 from agent_dump import search_index as search_index_module
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.i18n import Keys
 from agent_dump.query_semantics import TextQuery, TextQueryMode
+from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.search_index import (
     _INDEX_BATCH_SIZE,
     _INDEX_RETENTION_SECONDS,
@@ -384,7 +386,7 @@ class TestSearchIndex:
             session.source_path.write_text("data")
             sessions.append(session)
 
-        index.update(agent, sessions)
+        index.update(agent, sessions, diagnostic_sink=print_search_diagnostic)
 
         captured = capsys.readouterr()
         assert "正在更新 Dummy-codex 的搜索索引（10 个会话" in captured.err
@@ -830,7 +832,12 @@ class TestQueryFilterIntegration:
         agent.display_name = poison
 
         with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=Exception(f"boom {poison}")):
-            results = filter_sessions(agent, [session], "fallback keyword")
+            results = filter_sessions(
+                agent,
+                [session],
+                "fallback keyword",
+                diagnostic_sink=print_search_diagnostic,
+            )
             assert len(results) == 1
 
         warning = capsys.readouterr().err.rstrip("\n")
@@ -1261,7 +1268,11 @@ class TestExtractionFailureIsNotRecordedAsIndexed:
         sessions = [make_session(f"s{i}", f"标题{i}", db_path) for i in range(2)]
         index = SearchIndex(tmp_path / "index.db")
 
-        index.update(FailingAgent(name="opencode"), sessions)
+        index.update(
+            FailingAgent(name="opencode"),
+            sessions,
+            diagnostic_sink=print_search_diagnostic,
+        )
         captured = capsys.readouterr()
 
         assert "2 个会话读取失败" in captured.err
@@ -1270,19 +1281,44 @@ class TestExtractionFailureIsNotRecordedAsIndexed:
 class TestFallbackSearchHandlesUnreadableSessions:
     """AD-121：query_filter 的兜底匹配也要能吃 None。"""
 
-    def test_unreadable_session_is_skipped_not_crashed(self, tmp_path, capsys):
-        from agent_dump.query_filter import _fallback_search_matches
+    def test_unreadable_session_is_skipped_not_crashed(self, tmp_path):
+        from agent_dump.query_filter import _fallback_search_matches, _SearchRuntime
 
         source = tmp_path / "session.jsonl"
         source.write_text('{"internal_metadata": "keyword"}', encoding="utf-8")
         sessions = [make_session("s1", "无关标题", source)]
 
-        assert _fallback_search_matches(FailingAgent(name="opencode"), sessions, "keyword") == []
-        assert "opencode://s1" in capsys.readouterr().err
+        diagnostics = []
+        runtime = _SearchRuntime(diagnostic_sink=diagnostics.append)
+
+        assert _fallback_search_matches(FailingAgent(name="opencode"), sessions, "keyword", runtime) == []
+        assert diagnostics[0].fields["uri"] == "opencode://s1"
 
 
 class TestIndexFailureIsReported:
     """AD-133：索引出错必须说出来，而不是与「没有索引」混为一谈。"""
+
+    def test_index_error_is_returned_as_a_structured_diagnostic(self, tmp_path, capsys):
+        from agent_dump.query_filter import filter_sessions
+
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "content": "fallback kw"}]}},
+        )
+        session = make_session("s1", "Test", tmp_path / "s1.jsonl")
+        diagnostics = []
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=sqlite3.DatabaseError("db is locked")):
+            results = filter_sessions(
+                agent,
+                [session],
+                "fallback kw",
+                diagnostic_sink=diagnostics.append,
+            )
+
+        assert len(results) == 1
+        assert diagnostics[0].message_key == Keys.WARN_INDEX_UNUSABLE
+        assert diagnostics[0].fields["error_type"] == "DatabaseError"
+        assert capsys.readouterr().err == ""
 
     def test_index_error_warns_and_still_falls_back(self, tmp_path, capsys):
         from agent_dump.query_filter import filter_sessions
@@ -1294,7 +1330,12 @@ class TestIndexFailureIsReported:
         session.source_path.write_text("fallback kw", encoding="utf-8")
 
         with mock.patch("agent_dump.query_filter.SearchIndex", side_effect=sqlite3.DatabaseError("db is locked")):
-            results = filter_sessions(agent, [session], "fallback kw")
+            results = filter_sessions(
+                agent,
+                [session],
+                "fallback kw",
+                diagnostic_sink=print_search_diagnostic,
+            )
         captured = capsys.readouterr()
 
         assert len(results) == 1, "退回文件扫描仍应给出结果"
