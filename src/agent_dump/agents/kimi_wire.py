@@ -13,7 +13,7 @@ from agent_dump.agents.message_assembly import (
 )
 from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart, ToolPart
 from agent_dump.coercion import safe_epoch_datetime
-from agent_dump.provider_diagnostics import ProviderDiagnostic
+from agent_dump.diagnostics import RecoverableDiagnostic
 
 KIMI_TOOL_TITLE_MAP = {
     "ReadFile": "read",
@@ -30,7 +30,7 @@ KIMI_IGNORED_TOOLS = {"SetTodoList"}
 @dataclass(frozen=True)
 class KimiWireParseResult:
     messages: list[NormalizedMessage]
-    diagnostic: ProviderDiagnostic | None
+    diagnostic: RecoverableDiagnostic | None
 
 
 def map_kimi_tool_title(tool_name: str) -> str:

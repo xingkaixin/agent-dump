@@ -461,7 +461,7 @@ deny = [
 │       ├── coercion.py         # 不可信 provider 标量的容错转换
 │       ├── config.py           # TOML 配置模型与持久化
 │       ├── config_command.py   # 交互式配置命令工作流
-│       ├── diagnostics.py      # 结构化诊断
+│       ├── diagnostics.py      # 失败与可恢复告警的统一结构化诊断
 │       ├── export_paths.py     # 安全导出路径构造
 │       ├── i18n.py             # 语言选择与翻译运行时
 │       ├── i18n_en.py          # 英文翻译目录
@@ -471,14 +471,12 @@ deny = [
 │       ├── paths.py            # 搜索根路径模型
 │       ├── private_files.py     # 本工具创建文件的私有权限
 │       ├── prompt_safety.py    # 摘要 request composition 与 typed data envelope
-│       ├── provider_diagnostics.py # Provider 结构化告警边界
 │       ├── rendering.py        # print/head/markdown/json/raw 渲染调度
 │       ├── exporting.py        # 统一导出执行与结构化 outcome
 │       ├── output_formats.py   # 输出格式定义与能力校验
 │       ├── query_filter.py     # 查询解析与过滤
 │       ├── query_semantics.py  # Query/Search 字面语义与可搜索语料
 │       ├── search_index.py     # FTS5 搜索索引
-│       ├── search_diagnostics.py # 搜索结构化诊断
 │       ├── scanner.py          # Agent 扫描器
 │       ├── selector.py         # 交互式选择
 │       ├── session_data.py     # 有界请求缓存与批量读取 lease

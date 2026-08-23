@@ -19,6 +19,7 @@ from agent_dump.collect_models import (
 )
 from agent_dump.collect_progress import emit_collect_progress
 from agent_dump.config import CollectConfig
+from agent_dump.diagnostics import RecoverableDiagnosticSink
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import (
     QuerySpec,
@@ -26,7 +27,6 @@ from agent_dump.query_filter import (
     select_session_groups,
 )
 from agent_dump.rendering import render_session_text
-from agent_dump.search_diagnostics import SearchDiagnosticSink
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
@@ -68,7 +68,7 @@ def _select_collect_sessions(
     collect_config: CollectConfig,
     query_spec: QuerySpec | None = None,
     local_tz: tzinfo,
-    diagnostic_sink: SearchDiagnosticSink | None = None,
+    diagnostic_sink: RecoverableDiagnosticSink | None = None,
 ) -> list[_MatchedSession]:
     matched_sessions: list[_MatchedSession] = []
     eligible_session_groups: list[tuple[BaseAgent, list[Session]]] = []
@@ -218,7 +218,7 @@ def collect_entries(
     query_spec: QuerySpec | None = None,
     local_tz: tzinfo | None = None,
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
-    diagnostic_sink: SearchDiagnosticSink | None = None,
+    diagnostic_sink: RecoverableDiagnosticSink | None = None,
     logger: CollectLogger | None = None,
 ) -> tuple[list[CollectEntry], bool]:
     """Select and read collect entries for the requested range."""

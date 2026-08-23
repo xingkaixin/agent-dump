@@ -45,9 +45,9 @@ from agent_dump.config import (
     load_config_document,
     validate_ai_config,
 )
+from agent_dump.diagnostics import print_recoverable_diagnostic
 from agent_dump.i18n import Keys, i18n
 from agent_dump.scanner import AgentScanner
-from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_body_text, safe_display_text
 from agent_dump.time_utils import get_local_timezone
@@ -284,7 +284,7 @@ def _prepare_collect_plan(
             query_spec=operation.query_spec,
             local_tz=local_tz,
             progress_callback=progress_callback,
-            diagnostic_sink=print_search_diagnostic,
+            diagnostic_sink=print_recoverable_diagnostic,
             logger=logger,
         )
         if not entries:

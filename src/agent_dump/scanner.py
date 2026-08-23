@@ -8,8 +8,8 @@ from typing import TypeVar
 
 from agent_dump.agent_registry import create_registered_agents
 from agent_dump.agents.base import BaseAgent, ProviderDiscovery, Session
+from agent_dump.diagnostics import RecoverableDiagnostic, RecoverableDiagnosticSink, print_recoverable_diagnostic
 from agent_dump.i18n import Keys, i18n
-from agent_dump.provider_diagnostics import ProviderDiagnostic, ProviderDiagnosticSink, print_provider_diagnostic
 from agent_dump.terminal_output import render_terminal_message
 
 T = TypeVar("T")
@@ -22,14 +22,14 @@ class AgentScanner:
         self,
         agents: Sequence[BaseAgent] | None = None,
         *,
-        diagnostic_sink: ProviderDiagnosticSink | None = print_provider_diagnostic,
+        diagnostic_sink: RecoverableDiagnosticSink | None = print_recoverable_diagnostic,
     ) -> None:
         self.agents = list(agents) if agents is not None else create_registered_agents()
         self._diagnostic_sink = diagnostic_sink
 
     @staticmethod
-    def _operation_failure_diagnostic(agent: BaseAgent, exc: Exception) -> ProviderDiagnostic:
-        return ProviderDiagnostic(
+    def _operation_failure_diagnostic(agent: BaseAgent, exc: Exception) -> RecoverableDiagnostic:
+        return RecoverableDiagnostic(
             message_key=Keys.WARN_PROVIDER_OPERATION_FAILED,
             fields={
                 "agent": agent.display_name,
@@ -39,8 +39,8 @@ class AgentScanner:
         )
 
     @staticmethod
-    def _lookup_failure_diagnostic(agent: BaseAgent, exc: Exception) -> ProviderDiagnostic:
-        return ProviderDiagnostic(
+    def _lookup_failure_diagnostic(agent: BaseAgent, exc: Exception) -> RecoverableDiagnostic:
+        return RecoverableDiagnostic(
             message_key=Keys.WARN_SESSION_LOOKUP_FAILED,
             fields={"agent": agent.display_name, "error": exc},
         )
@@ -50,7 +50,7 @@ class AgentScanner:
         fn: Callable[[BaseAgent], T],
         agents: Sequence[BaseAgent] | None = None,
         *,
-        diagnostic_factory: Callable[[BaseAgent, Exception], ProviderDiagnostic] | None = None,
+        diagnostic_factory: Callable[[BaseAgent, Exception], RecoverableDiagnostic] | None = None,
     ) -> list[tuple[BaseAgent, T | None]]:
         """Execute one provider operation concurrently in registration order."""
         selected_agents = list(agents) if agents is not None else self.agents

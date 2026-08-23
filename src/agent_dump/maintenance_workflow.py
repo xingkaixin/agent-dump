@@ -11,11 +11,10 @@ from agent_dump.cli_shared import (
     render_agent_search_roots,
 )
 from agent_dump.command_plan import ReindexOperation, StatsOperation
-from agent_dump.diagnostics import root_not_found
+from agent_dump.diagnostics import print_recoverable_diagnostic, root_not_found
 from agent_dump.i18n import Keys, i18n
 from agent_dump.output_formats import VALID_FORMATS
 from agent_dump.scanner import AgentScanner
-from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.search_index import SearchIndex
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
@@ -265,7 +264,7 @@ def handle_reindex_mode(
     for agent, sessions in scanned_sessions:
         if not sessions:
             continue
-        added = index.rebuild(agent, sessions, diagnostic_sink=print_search_diagnostic)
+        added = index.rebuild(agent, sessions, diagnostic_sink=print_recoverable_diagnostic)
         total_indexed += added
         print(render_terminal_message(Keys.REINDEX_AGENT_DONE, agent=agent.display_name, count=added))
 

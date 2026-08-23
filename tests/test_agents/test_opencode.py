@@ -14,9 +14,9 @@ import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.opencode import OpenCodeAgent
+from agent_dump.diagnostics import print_recoverable_diagnostic
 from agent_dump.paths import ProviderRoots
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
-from agent_dump.provider_diagnostics import print_provider_diagnostic
 from agent_dump.text_safety import has_unsafe_line_characters
 
 
@@ -231,7 +231,7 @@ class TestOpenCodeAgent:
         agent.db_path = populated_db
         session = agent.find_session_by_id("session-001")
         assert session is not None
-        with agent.diagnostic_context(print_provider_diagnostic):
+        with agent.diagnostic_context(print_recoverable_diagnostic):
             data = agent.get_session_data(session)
 
         assert data["stats"]["message_count"] == 1
@@ -261,7 +261,7 @@ class TestOpenCodeAgent:
         agent.db_path = populated_db
         session = agent.find_session_by_id("session-001")
         assert session is not None
-        with agent.diagnostic_context(print_provider_diagnostic):
+        with agent.diagnostic_context(print_recoverable_diagnostic):
             agent.get_session_data(session)
 
         lines = capsys.readouterr().err.splitlines()

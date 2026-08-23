@@ -12,14 +12,13 @@ from agent_dump.cli_shared import (
     wrap_runtime_fetch_error,
 )
 from agent_dump.command_plan import InteractiveOperation, ListOperation, SearchOperation, SessionOperation
-from agent_dump.diagnostics import DiagnosticError, render_diagnostic, root_not_found
+from agent_dump.diagnostics import DiagnosticError, print_recoverable_diagnostic, render_diagnostic, root_not_found
 from agent_dump.exporting import ExportFailure, ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
 from agent_dump.output_formats import FileOutputFormat
 from agent_dump.query_filter import QuerySpec, SearchSessionMatch, select_session_groups
 from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.scanner import AgentScanner
-from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
@@ -124,7 +123,7 @@ def collect_search_matches(
     *,
     spec: QuerySpec,
 ) -> list[SearchSessionMatch]:
-    return select_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic)
+    return select_session_groups(session_groups, spec, diagnostic_sink=print_recoverable_diagnostic)
 
 
 def display_search_results(matches: list[SearchSessionMatch]) -> None:
