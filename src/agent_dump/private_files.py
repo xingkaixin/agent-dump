@@ -91,18 +91,25 @@ def write_private_text(path: Path, text: str) -> Path:
 
 
 def copy_private_file(source: Path, destination: Path) -> Path:
-    """Copy a file into an owner-only destination."""
+    """Atomically copy a file into an owner-only destination."""
     ensure_output_dir(destination.parent)
-    fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, PRIVATE_FILE_MODE)
+    fd, temporary_name = mkstemp(prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent)
+    temporary_path = Path(temporary_name)
     try:
         if os.name != "nt":
             os.fchmod(fd, PRIVATE_FILE_MODE)
         with source.open("rb") as source_handle, os.fdopen(fd, "wb") as destination_handle:
             fd = -1
             shutil.copyfileobj(source_handle, destination_handle)
-    finally:
+            destination_handle.flush()
+            os.fsync(destination_handle.fileno())
+        os.replace(temporary_path, destination)
+    except BaseException:
         if fd >= 0:
             os.close(fd)
+        with suppress(OSError):
+            temporary_path.unlink()
+        raise
     return destination
 
 
