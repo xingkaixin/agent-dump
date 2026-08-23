@@ -1247,6 +1247,30 @@ class TestExtractionFailureIsNotRecordedAsIndexed:
         assert added == 1
         assert index.get_stats()["opencode"]["sessions"] == 1
 
+    def test_failed_refresh_removes_stale_searchable_content(self, tmp_path):
+        source = tmp_path / "session.jsonl"
+        source.write_text("source", encoding="utf-8")
+        session = make_session("s1", "Unrelated title", source)
+        agent = DummyAgent(
+            session_data={"s1": {"messages": [{"role": "user", "content": "stale-keyword"}]}},
+        )
+        index = SearchIndex(tmp_path / "index.db")
+        index.update(agent, [session])
+
+        session.updated_at += timedelta(seconds=1)
+        with mock.patch.object(agent, "get_session_data", side_effect=OSError("transient read failure")):
+            added, _ = index.update(agent, [session])
+
+        assert added == 0
+        assert index.search("stale-keyword") == []
+        assert index.get_stats() == {}
+
+        agent._session_data["s1"] = {"messages": [{"role": "user", "content": "fresh-keyword"}]}
+        added, _ = index.update(agent, [session])
+
+        assert added == 1
+        assert [result.session_id for result in index.search("fresh-keyword")] == ["s1"]
+
     def test_empty_session_is_recorded_and_not_reparsed(self, tmp_path):
         source = tmp_path / "s.jsonl"
         source.write_text("x", encoding="utf-8")
