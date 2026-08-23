@@ -88,7 +88,7 @@ def build_collect_chunk_prompt(
 
 def build_collect_merge_prompt(
     *,
-    entry: CollectEntry,
+    source_uri: str,
     payloads: list[dict[str, list[str]]],
     merge_label: str,
     mode: CollectMode = CollectMode.PM,
@@ -108,11 +108,7 @@ def build_collect_merge_prompt(
     data = tuple(
         UntrustedData(
             kind="untrusted_derived_summary",
-            source=(
-                f"{entry.session_uri}#summary-{index}"
-                if merge_label == "session"
-                else f"collect://{merge_label}/summary/{index}"
-            ),
+            source=f"{source_uri}#summary-{index}",
             body=serialize_summary_payload(payload),
         )
         for index, payload in enumerate(payloads, start=1)

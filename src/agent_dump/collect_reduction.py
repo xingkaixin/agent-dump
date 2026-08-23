@@ -89,7 +89,12 @@ def _summarize_collect_entry(
         try:
             merged = request_structured_summary_from_llm(
                 config,
-                build_collect_merge_prompt(entry=entry, payloads=chunk_payloads, merge_label="session", mode=mode),
+                build_collect_merge_prompt(
+                    source_uri=entry.session_uri,
+                    payloads=chunk_payloads,
+                    merge_label="session",
+                    mode=mode,
+                ),
                 context_label=f"{entry.session_uri} session merge",
                 timeout_seconds=timeout_seconds,
                 logger=logger,
@@ -293,24 +298,24 @@ def reduce_collect_summaries(
         )
         for start in range(0, len(working), group_size):
             group = working[start : start + group_size]
+            group_index = start // group_size + 1
+            group_source = f"collect://group-level-{reduction_depth}/group-{group_index}"
             payloads = [item.summary_data for item in group]
             merged = merge_summary_payloads(payloads, mode=mode)
             if summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
-                dummy_entry = session_summaries[min(start, len(session_summaries) - 1)].collect_entry
                 try:
                     merged = request_structured_summary_from_llm(
                         config,
                         build_collect_merge_prompt(
-                            entry=dummy_entry,
+                            source_uri=group_source,
                             payloads=payloads,
                             merge_label=f"group-level-{reduction_depth}",
                             mode=mode,
                         ),
-                        context_label=f"group merge level {reduction_depth} index {start // group_size + 1}",
+                        context_label=group_source,
                         timeout_seconds=timeout_seconds,
                         logger=logger,
                         phase="group_merge",
-                        session_uri=dummy_entry.session_uri,
                         mode=mode,
                     )
                 except RuntimeError as exc:
@@ -318,9 +323,9 @@ def reduce_collect_summaries(
                         logger.log(
                             "llm_merge_fallback",
                             phase="group_merge",
-                            session_uri=dummy_entry.session_uri,
+                            context=group_source,
                             level=reduction_depth,
-                            group_index=start // group_size + 1,
+                            group_index=group_index,
                             error=str(exc),
                         )
             next_level.append(
@@ -333,7 +338,7 @@ def reduce_collect_summaries(
                 progress_callback,
                 TreeReductionProgress(
                     level=reduction_depth,
-                    current=(start // group_size) + 1,
+                    current=group_index,
                     total=total_groups,
                 ),
             )

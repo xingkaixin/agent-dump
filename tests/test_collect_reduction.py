@@ -339,6 +339,8 @@ class TestCollectStructuredSummary:
         assert aggregate.summary_data["topics"] == ["T0", "T1"]
         assert records[-1]["event"] == "llm_merge_fallback"
         assert records[-1]["phase"] == "group_merge"
+        assert records[-1].get("context") == "collect://group-level-1/group-1", records[-1]
+        assert records[-1].get("session_uri") is None
 
     def test_build_collect_final_prompt_contains_required_sections(self):
         aggregate = CollectAggregate(

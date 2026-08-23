@@ -90,7 +90,7 @@ class TestCollectInsightMode:
     def test_build_collect_merge_prompt_insight_mode(self):
         entry = self._entry()
         prompt = build_collect_merge_prompt(
-            entry=entry,
+            source_uri=entry.session_uri,
             payloads=[{"scene": ["S1"], "stuck": [], "turning": ["L1"]}],
             merge_label="session",
             mode=CollectMode.INSIGHT,
