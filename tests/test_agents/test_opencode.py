@@ -16,7 +16,7 @@ from agent_dump.agents.base import Session
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.paths import ProviderRoots
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
-from agent_dump.scanner import AgentScanner
+from agent_dump.provider_diagnostics import print_provider_diagnostic
 from agent_dump.text_safety import has_unsafe_line_characters
 
 
@@ -229,10 +229,10 @@ class TestOpenCodeAgent:
 
         agent = OpenCodeAgent()
         agent.db_path = populated_db
-        AgentScanner([agent])
         session = agent.find_session_by_id("session-001")
         assert session is not None
-        data = agent.get_session_data(session)
+        with agent.diagnostic_context(print_provider_diagnostic):
+            data = agent.get_session_data(session)
 
         assert data["stats"]["message_count"] == 1
         assert [message["id"] for message in data["messages"]] == ["msg-001"]
@@ -259,10 +259,10 @@ class TestOpenCodeAgent:
 
         agent = OpenCodeAgent()
         agent.db_path = populated_db
-        AgentScanner([agent])
         session = agent.find_session_by_id("session-001")
         assert session is not None
-        agent.get_session_data(session)
+        with agent.diagnostic_context(print_provider_diagnostic):
+            agent.get_session_data(session)
 
         lines = capsys.readouterr().err.splitlines()
         assert len(lines) == 2

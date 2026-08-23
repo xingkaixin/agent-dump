@@ -39,7 +39,10 @@ class ConcurrentDiagnosticAgent(DiagnosticAgent):
 
 
 def test_direct_provider_use_has_no_terminal_side_effect(capsys) -> None:
-    DiagnosticAgent().get_sessions()
+    agent = DiagnosticAgent()
+    AgentScanner([agent])
+
+    agent.get_sessions()
 
     assert capsys.readouterr().err == ""
 
