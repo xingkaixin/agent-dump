@@ -17,15 +17,16 @@ from agent_dump.collect_requests import request_summary_from_llm
 from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
 from agent_dump.command_plan import (
     CollectOperation,
-    CommandMode,
     CommandPlan,
     CommandPlanError,
     CommandPlanErrorCode,
     CommandPlanWarning,
     CommandRequest,
     ConfigOperation,
+    HelpOperation,
     InteractiveOperation,
     ListOperation,
+    ProvidersOperation,
     ReindexOperation,
     SearchOperation,
     SessionOperation,
@@ -391,7 +392,7 @@ def _report_command_plan_warnings(plan: CommandPlan) -> None:
 
 def _dispatch_command_plan(plan: CommandPlan, parser: argparse.ArgumentParser) -> int | None:
     operation = plan.operation
-    if plan.mode is CommandMode.PROVIDERS:
+    if isinstance(operation, ProvidersOperation):
         return handle_providers_mode()
     if isinstance(operation, ConfigOperation):
         return handle_config_command(operation.action)
@@ -401,7 +402,7 @@ def _dispatch_command_plan(plan: CommandPlan, parser: argparse.ArgumentParser) -
         return handle_stats_mode(operation)
     if isinstance(operation, ReindexOperation):
         return handle_reindex_mode(operation)
-    if plan.mode is CommandMode.HELP:
+    if isinstance(operation, HelpOperation):
         parser.print_help()
         return None
 
@@ -410,7 +411,7 @@ def _dispatch_command_plan(plan: CommandPlan, parser: argparse.ArgumentParser) -
         return handle_uri_mode(operation, export_config=export_config)
     if isinstance(operation, (ListOperation, SearchOperation, InteractiveOperation)):
         return handle_session_modes(operation, export_config=export_config)
-    raise AssertionError(f"unhandled command mode: {plan.mode.value}")
+    raise AssertionError(f"unhandled command operation: {type(operation).__name__}")
 
 
 def main() -> int | None:

@@ -7,13 +7,16 @@ import pytest
 from agent_dump.collect_models import CollectMode
 from agent_dump.command_plan import (
     CollectOperation,
-    CommandMode,
     CommandPlanError,
     CommandPlanErrorCode,
     CommandPlanWarning,
     CommandRequest,
+    ConfigOperation,
+    HelpOperation,
     InteractiveOperation,
     ListOperation,
+    ProvidersOperation,
+    ReindexOperation,
     SearchOperation,
     StatsOperation,
     UriOperation,
@@ -26,55 +29,56 @@ def make_request(**overrides: Any) -> CommandRequest:
 
 
 @pytest.mark.parametrize(
-    ("overrides", "expected_mode"),
+    ("overrides", "expected_operation_type"),
     [
-        ({"providers": True}, CommandMode.PROVIDERS),
-        ({"config_action": "view"}, CommandMode.CONFIG),
-        ({"collect": True}, CommandMode.COLLECT),
-        ({"stats": True}, CommandMode.STATS),
-        ({"reindex": True}, CommandMode.REINDEX),
-        ({"uri": "codex://session"}, CommandMode.URI),
-        ({"list_requested": True}, CommandMode.LIST),
-        ({"search": "bug"}, CommandMode.LIST),
-        ({"days": 3}, CommandMode.LIST),
-        ({"query": "bug"}, CommandMode.LIST),
-        ({"interactive": True}, CommandMode.INTERACTIVE),
-        ({"days": 7}, CommandMode.LIST),
+        ({"providers": True}, ProvidersOperation),
+        ({"config_action": "view"}, ConfigOperation),
+        ({"collect": True}, CollectOperation),
+        ({"stats": True}, StatsOperation),
+        ({"reindex": True}, ReindexOperation),
+        ({"uri": "codex://session"}, UriOperation),
+        ({"list_requested": True}, ListOperation),
+        ({"search": "bug"}, SearchOperation),
+        ({"days": 3}, ListOperation),
+        ({"query": "bug"}, ListOperation),
+        ({"interactive": True}, InteractiveOperation),
+        ({"days": 7}, ListOperation),
+        ({}, HelpOperation),
     ],
 )
 def test_build_command_plan_resolves_closed_operation_set(
     overrides: dict[str, object],
-    expected_mode: CommandMode,
+    expected_operation_type: type[object],
 ) -> None:
     plan = build_command_plan(make_request(**overrides))
 
-    assert plan.mode is expected_mode
+    assert isinstance(plan.operation, expected_operation_type)
 
 
 @pytest.mark.parametrize(
-    ("overrides", "expected_mode", "ignored_options"),
+    ("overrides", "expected_operation_type", "ignored_options"),
     [
         (
             {"providers": True, "config_action": "view", "uri": "agents://.?providers=unknown"},
-            CommandMode.PROVIDERS,
+            ProvidersOperation,
             ("--config", "agents:// query URI"),
         ),
-        ({"config_action": "view", "collect": True}, CommandMode.CONFIG, ("--collect",)),
-        ({"collect": True, "stats": True}, CommandMode.COLLECT, ("--stats",)),
-        ({"stats": True, "reindex": True}, CommandMode.STATS, ("--reindex",)),
-        ({"reindex": True, "uri": "codex://session"}, CommandMode.REINDEX, ("session URI",)),
-        ({"uri": "codex://session", "list_requested": True}, CommandMode.URI, ("--list",)),
-        ({"list_requested": True, "interactive": True}, CommandMode.LIST, ("--interactive",)),
+        ({"config_action": "view", "collect": True}, ConfigOperation, ("--collect",)),
+        ({"collect": True, "stats": True}, CollectOperation, ("--stats",)),
+        ({"stats": True, "reindex": True}, StatsOperation, ("--reindex",)),
+        ({"reindex": True, "uri": "codex://session"}, ReindexOperation, ("session URI",)),
+        ({"uri": "codex://session", "list_requested": True}, UriOperation, ("--list",)),
+        ({"list_requested": True, "interactive": True}, ListOperation, ("--interactive",)),
     ],
 )
 def test_build_command_plan_preserves_mode_priority(
     overrides: dict[str, object],
-    expected_mode: CommandMode,
+    expected_operation_type: type[object],
     ignored_options: tuple[str, ...],
 ) -> None:
     plan = build_command_plan(make_request(**overrides))
 
-    assert plan.mode is expected_mode
+    assert isinstance(plan.operation, expected_operation_type)
     assert plan.ignored_mode_options == ignored_options
 
 
@@ -93,7 +97,7 @@ def test_build_command_plan_orders_and_reports_all_explicit_mode_candidates() ->
         )
     )
 
-    assert plan.mode is CommandMode.PROVIDERS
+    assert isinstance(plan.operation, ProvidersOperation)
     assert plan.ignored_mode_options == (
         "--config",
         "--collect",
@@ -109,14 +113,14 @@ def test_build_command_plan_orders_and_reports_all_explicit_mode_candidates() ->
 def test_build_command_plan_does_not_report_selectors_for_the_same_mode() -> None:
     plan = build_command_plan(make_request(uri="agents://.?providers=codex", search="bug", list_requested=True))
 
-    assert plan.mode is CommandMode.LIST
+    assert isinstance(plan.operation, SearchOperation)
     assert plan.ignored_mode_options == ()
 
 
 def test_build_command_plan_does_not_report_implicit_list_inputs_as_ignored() -> None:
     plan = build_command_plan(make_request(interactive=True, days=30, query="bug"))
 
-    assert plan.mode is CommandMode.INTERACTIVE
+    assert isinstance(plan.operation, InteractiveOperation)
     assert plan.ignored_mode_options == ()
 
 
@@ -154,7 +158,6 @@ def test_build_command_plan_normalizes_query_uri_once() -> None:
 
     operation = plan.operation
     assert isinstance(operation, ListOperation)
-    assert operation.mode is CommandMode.LIST
     assert operation.days == 7
     assert operation.query_spec is not None
     assert operation.query_spec.keyword == "bug"
@@ -169,7 +172,6 @@ def test_build_command_plan_preserves_query_uri_in_explicit_interactive_mode() -
 
     operation = plan.operation
     assert isinstance(operation, InteractiveOperation)
-    assert operation.mode is CommandMode.INTERACTIVE
     assert operation.query_spec is not None
 
 
