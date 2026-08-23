@@ -139,7 +139,7 @@ class OpenCodeAgent(BaseAgent):
                     ) AS model_message_data"""
         else:
             metadata_columns = """
-                    0 AS message_count,
+                    NULL AS message_count,
                     NULL AS model_message_data"""
 
         # where_sql 与 metadata_columns 都是本文件内的固定常量，参数全部占位符化
