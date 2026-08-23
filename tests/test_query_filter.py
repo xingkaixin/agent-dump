@@ -20,11 +20,11 @@ from agent_dump.query_filter import (
     extract_session_working_directory,
     filter_sessions,
     filter_sessions_by_query,
-    limit_query_session_matches,
-    limit_search_matches,
     parse_query,
     parse_query_uri,
+    query_session_groups,
     query_session_matches,
+    search_session_groups,
     search_sessions_by_query,
 )
 from agent_dump.query_semantics import TextQuery, TextQueryMode
@@ -1021,31 +1021,19 @@ class TestRoleLimitPushdown:
             CountingAgent(name="kimi", session_data=self._data(kimi_sessions)),
         ]
         session_groups = [codex_sessions, kimi_sessions]
+        for sessions in session_groups:
+            for session in sessions:
+                session.metadata = {"cwd": str(tmp_path)}
 
-        optimized = limit_query_session_matches(
-            [
-                match
-                for agent, sessions in zip(optimized_agents, session_groups, strict=True)
-                for match in query_session_matches(
-                    agent,
-                    sessions,
-                    make_query_spec(keyword="matching", roles={"user"}, limit=2),
-                )
-            ],
-            2,
+        optimized = query_session_groups(
+            list(zip(optimized_agents, session_groups, strict=True)),
+            make_query_spec(keyword="matching", roles={"user"}, limit=2),
         )
-        oracle = limit_query_session_matches(
-            [
-                match
-                for agent, sessions in zip(full_agents, session_groups, strict=True)
-                for match in query_session_matches(
-                    agent,
-                    sessions,
-                    make_query_spec(keyword="matching", roles={"user"}),
-                )
-            ],
-            2,
+        full_matches = query_session_groups(
+            list(zip(full_agents, session_groups, strict=True)),
+            make_query_spec(keyword="matching", roles={"user"}, project_path=tmp_path),
         )
+        oracle = sorted(full_matches, key=lambda match: match.session.updated_at, reverse=True)[:2]
 
         def project(matches: list[SearchSessionMatch]) -> list[tuple[str, str, str, float, str | None]]:
             return [
@@ -1057,8 +1045,8 @@ class TestRoleLimitPushdown:
         assert [agent.data_reads for agent in full_agents] == [3, 3]
 
 
-class TestLimitQueryMatches:
-    def test_limit_query_session_matches_preserves_selected_evidence(self, tmp_path):
+class TestQuerySessionGroups:
+    def test_applies_global_limit_and_preserves_selected_evidence(self, tmp_path):
         agent = DummyAgent(name="codex")
         older = make_session("s-old", "old", tmp_path / "old.jsonl")
         older.updated_at = datetime(2026, 1, 1, 10, 0, 0)
@@ -1069,11 +1057,12 @@ class TestLimitQueryMatches:
             SearchSessionMatch(agent, newer, "**bug** new", 0.0, "assistant"),
         ]
 
-        result = limit_query_session_matches(matches, 1)
+        with mock.patch("agent_dump.query_filter.query_session_matches", return_value=matches):
+            result = query_session_groups([(agent, [older, newer])], make_query_spec(limit=1))
 
         assert result == [matches[1]]
 
-    def test_limit_sorts_even_when_it_does_not_truncate(self, tmp_path) -> None:
+    def test_sorts_when_limit_exceeds_match_count(self, tmp_path) -> None:
         agent = DummyAgent(name="codex")
         older = make_session("s-old", "old", tmp_path / "old.jsonl")
         older.updated_at = datetime(2026, 1, 1, 10, 0, 0)
@@ -1084,13 +1073,14 @@ class TestLimitQueryMatches:
             SearchSessionMatch(agent, newer, "new", 0.0, "user"),
         ]
 
-        result = limit_query_session_matches(matches, 5)
+        with mock.patch("agent_dump.query_filter.query_session_matches", return_value=matches):
+            result = query_session_groups([(agent, [older, newer])], make_query_spec(limit=5))
 
         assert result == [matches[1], matches[0]]
 
 
-class TestLimitSearchMatches:
-    def test_limit_search_matches_sorts_by_rank_time_and_provider(self, tmp_path):
+class TestSearchSessionGroups:
+    def test_sorts_by_rank_time_and_provider_before_global_limit(self, tmp_path):
         codex = DummyAgent(name="codex")
         kimi = DummyAgent(name="kimi")
         older_high_rank = make_session("s1", "high", tmp_path / "s1.jsonl")
@@ -1102,15 +1092,14 @@ class TestLimitSearchMatches:
         tie_older = make_session("s4", "tie older", tmp_path / "s4.jsonl")
         tie_older.updated_at = datetime(2026, 1, 1, 9, 0, 0)
 
-        result = limit_search_matches(
-            [
-                SearchSessionMatch(agent=kimi, session=newer_low_rank, snippet="low", rank=0.5),
-                SearchSessionMatch(agent=codex, session=tie_older, snippet="tie", rank=1.0),
-                SearchSessionMatch(agent=kimi, session=tie_newer, snippet="tie", rank=1.0),
-                SearchSessionMatch(agent=codex, session=older_high_rank, snippet="high", rank=2.0),
-            ],
-            limit=3,
-        )
+        matches = [
+            SearchSessionMatch(agent=kimi, session=newer_low_rank, snippet="low", rank=0.5),
+            SearchSessionMatch(agent=codex, session=tie_older, snippet="tie", rank=1.0),
+            SearchSessionMatch(agent=kimi, session=tie_newer, snippet="tie", rank=1.0),
+            SearchSessionMatch(agent=codex, session=older_high_rank, snippet="high", rank=2.0),
+        ]
+        with mock.patch("agent_dump.query_filter.search_sessions_by_query", return_value=matches):
+            result = search_session_groups([(codex, [])], make_query_spec(keyword="bug", limit=3))
 
         assert [(match.agent.name, match.session.id) for match in result] == [
             ("codex", "s1"),
