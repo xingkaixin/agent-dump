@@ -46,7 +46,6 @@ from agent_dump.config import (
     validate_ai_config,
 )
 from agent_dump.i18n import Keys, i18n
-from agent_dump.rendering import render_session_text
 from agent_dump.scanner import AgentScanner
 from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.terminal_output import render_terminal_message
@@ -283,7 +282,6 @@ def _prepare_collect_plan(
             until_date=until_date,
             collect_config=collect_config,
             query_spec=operation.query_spec,
-            render_session_text_fn=render_session_text,
             local_tz=local_tz,
             progress_callback=progress_callback,
             diagnostic_sink=print_search_diagnostic,
