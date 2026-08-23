@@ -130,7 +130,7 @@ class TestMain:
                         configure_scanner_sessions(mock_scanner)
                         mock_scanner_class.return_value = mock_scanner
                         with mock.patch(
-                            "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
+                            "agent_dump.collect_workflow.collect_entries", return_value=[mock_entry]
                         ) as mock_collect:
                             with mock.patch(
                                 "agent_dump.collect_workflow.plan_collect_entries",
@@ -201,7 +201,7 @@ class TestMain:
             mock.patch("agent_dump.collect_workflow.validate_ai_config") as mock_validate_ai,
             mock.patch("agent_dump.collect_workflow.create_collect_logger") as mock_create_logger,
             mock.patch("agent_dump.cli.AgentScanner", return_value=mock_scanner),
-            mock.patch("agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)),
+            mock.patch("agent_dump.collect_workflow.collect_entries", return_value=[mock_entry]),
             mock.patch("agent_dump.collect_workflow.plan_collect_entries", return_value=([mock_planned_entry], 2)),
             mock.patch("agent_dump.collect_workflow.summarize_collect_entries") as mock_summarize,
             mock.patch("agent_dump.cli.request_summary_from_llm") as mock_request_summary,
@@ -349,7 +349,7 @@ class TestMain:
                                 configure_scanner_sessions(mock_scanner)
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
-                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
+                                    "agent_dump.collect_workflow.collect_entries", return_value=[mock_entry]
                                 ) as mock_collect:
                                     with mock.patch(
                                         "agent_dump.collect_workflow.plan_collect_entries",
@@ -447,7 +447,7 @@ class TestMain:
                                 configure_scanner_sessions(mock_scanner)
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
-                                    "agent_dump.collect_workflow.collect_entries", return_value=([mock_entry], False)
+                                    "agent_dump.collect_workflow.collect_entries", return_value=[mock_entry]
                                 ):
                                     with mock.patch(
                                         "agent_dump.collect_workflow.plan_collect_entries",
@@ -516,7 +516,7 @@ class TestMain:
                                 mock_scanner_class.return_value = mock_scanner
                                 with mock.patch(
                                     "agent_dump.collect_workflow.collect_entries",
-                                    return_value=([mock.MagicMock()], False),
+                                    return_value=[mock.MagicMock()],
                                 ) as mock_collect:
                                     with mock.patch(
                                         "agent_dump.collect_workflow.plan_collect_entries",

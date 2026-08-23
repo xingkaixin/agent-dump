@@ -139,9 +139,8 @@ def _read_collect_entries(
     *,
     progress_callback: Callable[[CollectProgressEvent], None] | None,
     logger: CollectLogger | None,
-) -> tuple[list[CollectEntry], bool]:
+) -> list[CollectEntry]:
     entries: list[CollectEntry] = []
-    has_truncated = False
 
     total = len(matched_sessions)
     emit_collect_progress(
@@ -189,7 +188,6 @@ def _read_collect_entries(
                         )
                 else:
                     entries.append(entry)
-                    has_truncated = has_truncated or entry.is_truncated
                     session_uri = entry.session_uri
                 completed_session_uris[session_index] = session_uri
                 while next_progress_index in completed_session_uris:
@@ -206,7 +204,7 @@ def _read_collect_entries(
             print(i18n.t(Keys.WARN_SESSION_READ_FAILURES, count=failed_sessions), file=sys.stderr)
 
     entries.sort(key=lambda item: normalize_datetime_utc(item.created_at))
-    return entries, has_truncated
+    return entries
 
 
 def collect_entries(
@@ -220,7 +218,7 @@ def collect_entries(
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     diagnostic_sink: RecoverableDiagnosticSink | None = None,
     logger: CollectLogger | None = None,
-) -> tuple[list[CollectEntry], bool]:
+) -> list[CollectEntry]:
     """Select and read collect entries for the requested range."""
     resolved_local_tz = local_tz or get_local_timezone()
     matched_sessions = _select_collect_sessions(
