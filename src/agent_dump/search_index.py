@@ -412,8 +412,9 @@ class SearchIndex:
 
                 for (session, signature), text in zip(batch, texts, strict=True):
                     if text is None:
-                        # 读失败：不写 index_state，让下一次运行重试，而不是把失败
-                        # 缓存成「已索引」导致该会话永久搜不到
+                        previous = indexed.pop(session.id, None)
+                        if previous is not None:
+                            _delete_index_rows(conn, [previous.fts_rowid])
                         skipped.append(session.id)
                         continue
                     previous = indexed.get(session.id)
