@@ -7,7 +7,12 @@ import pytest
 
 from agent_dump.agents.cursor import CursorAgent
 from agent_dump.diagnostics import DiagnosticError
-from agent_dump.output_formats import file_output_formats, parse_format_spec, validate_uri_agent_formats
+from agent_dump.output_formats import (
+    file_output_formats,
+    parse_format_spec,
+    validate_agent_formats,
+    validate_uri_agent_formats,
+)
 
 
 class TestValidateUriAgentFormats:
@@ -28,6 +33,14 @@ class TestValidateUriAgentFormats:
             expect(Keys.DIAG_URI_CAPABILITY_DETAIL, agent="Cursor", supported="json, print", requested="raw")
             == excinfo.value.capability_gap
         )
+
+    def test_legacy_uri_validator_uses_provider_validator(self):
+        agent = CursorAgent()
+
+        with pytest.raises(DiagnosticError):
+            validate_agent_formats(agent, ["markdown"])
+        with pytest.raises(DiagnosticError):
+            validate_uri_agent_formats(agent, ["markdown"])
 
 
 class TestFormatSpec:

@@ -120,7 +120,7 @@ class BaseAgent(ABC):
     provider_name: ClassVar[str] = ""
     provider_display_name: ClassVar[str] = ""
 
-    #: URI 模式下该 provider 不支持的导出格式
+    #: 该 provider 不支持的导出格式；属性名为兼容既有扩展保留
     unsupported_uri_formats: frozenset[str] = frozenset()
     raw_export_suffix: str = ".raw.jsonl"
 

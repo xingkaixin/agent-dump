@@ -383,7 +383,7 @@ provider 应覆盖它；`AgentScanner` 只通过该入口执行组合发现，�
 可选扩展点：
 - `get_session_uri(session)`：默认返回 `<agent>://<session.id>`。
 - `find_session_by_id(session_id)`：URI 定位使用。默认全量扫描后按 id 匹配；provider 应尽量用直接查找（SQL 主键、文件名定位）覆盖。
-- `unsupported_uri_formats`（类属性）：声明 URI 模式下不支持的导出格式（如 Cursor 的 `raw`/`markdown`），由 `output_formats.validate_uri_agent_formats()` 统一校验。
+- `unsupported_uri_formats`（类属性）：声明 provider 不支持的导出格式（如 Cursor 的 `raw`/`markdown`）；属性名为兼容既有扩展保留，由 `output_formats.validate_agent_formats()` 统一校验。
 - `get_search_roots()`：结构化诊断和路径发现使用。
 - `get_session_head(session)`：URI `--head` 使用。
 - `get_session_summary_fields(session)`：列表和交互视图元数据摘要使用。
@@ -418,7 +418,7 @@ provider 应覆盖它；`AgentScanner` 只通过该入口执行组合发现，�
 - `output_formats.VALID_FORMATS`
 - `output_formats.FORMAT_ALIASES`
 - `output_formats.validate_formats_for_mode()`
-- `output_formats.validate_uri_agent_formats()`
+- `output_formats.validate_agent_formats()`
 - `rendering.export_session_in_format()`
 
 ### 5.5 `query_filter.py` 与搜索
@@ -478,7 +478,7 @@ collect 模式入口：
 步骤：
 1. 在 `output_formats.VALID_FORMATS` 添加格式名，必要时添加 `FORMAT_ALIASES`。
 2. 在 `rendering.export_session_in_format()` 增加分发。
-3. 若格式有模式限制，更新 `validate_formats_for_mode()` 或 `validate_uri_agent_formats()`。
+3. 若格式有模式限制，更新 `validate_formats_for_mode()`；若 provider 不支持该格式，更新 provider 声明并由 `validate_agent_formats()` 统一校验。
 4. 为 CLI 解析、分发、成功导出和错误路径补测试。
 5. 更新 README 与 skill recipes。
 
