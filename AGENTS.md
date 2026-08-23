@@ -111,6 +111,7 @@
 | `collect_requests.py` | collect LLM 重试与结构化响应处理 |
 | `collect_sessions.py` | 已发现 session 的日期/查询过滤、读取与 chunk 规划 |
 | `collect_summary.py` | collect 摘要 schema、payload 归一化、合并与 JSON 提取 |
+| `agents/sqlite_sessions.py` | OpenCode 与 ZCode 共用的 SQLite schema 读取、投影与导出机制 |
 | `agents/message_assembly.py` | 统一 message/part 组装与 assistant 分组判断 |
 | `agents/message_types.py` | Provider 组装阶段使用的统一 message / session payload 内部类型 |
 | `agents/jsonl_scan.py` | JSONL 头尾扫描、根对象保证、坏行计数与固定容量诊断样本 |
@@ -265,6 +266,7 @@ agent-dump/
 │       ├── base.py              # BaseAgent 与 Session
 │       ├── opencode.py          # OpenCode SQLite provider
 │       ├── zcode.py             # ZCode SQLite provider
+│       ├── sqlite_sessions.py   # OpenCode/ZCode 共享 SQLite 读取机制
 │       ├── codex.py             # Codex JSONL provider
 │       ├── codex_transcript.py  # Codex response stream 解析与消息组装
 │       ├── kimi.py              # Kimi JSONL provider

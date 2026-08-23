@@ -3,13 +3,13 @@
 from pathlib import Path
 import sys
 
-from agent_dump.agents.opencode import OpenCodeAgent
+from agent_dump.agents.sqlite_sessions import SQLiteSessionAgent
 from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
 
 
-class ZCodeAgent(OpenCodeAgent):
+class ZCodeAgent(SQLiteSessionAgent):
     """Handler for ZCode sessions."""
 
     provider_name = "zcode"
