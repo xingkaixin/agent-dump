@@ -1,11 +1,10 @@
 """Session selection, reading, and event planning for collect mode."""
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, tzinfo
 from pathlib import Path
 import sys
-from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.bounded_concurrency import iter_completed_futures
@@ -26,6 +25,7 @@ from agent_dump.query_filter import (
     SearchSessionMatch,
     select_session_groups,
 )
+from agent_dump.rendering import render_session_text
 from agent_dump.search_diagnostics import SearchDiagnosticSink
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
@@ -60,29 +60,21 @@ def _is_session_denied(agent: BaseAgent, session: Session, denied_roots: tuple[P
     return any(session_path == denied_root or denied_root in session_path.parents for denied_root in denied_roots)
 
 
-def collect_entries(
+def _select_collect_sessions(
     *,
     session_groups: Sequence[tuple[BaseAgent, Sequence[Session]]],
     since_date: date,
     until_date: date,
-    collect_config: CollectConfig | None = None,
+    collect_config: CollectConfig,
     query_spec: QuerySpec | None = None,
-    render_session_text_fn: Callable[[str, Mapping[str, Any]], str],
-    local_tz: tzinfo | None = None,
-    progress_callback: Callable[[CollectProgressEvent], None] | None = None,
+    local_tz: tzinfo,
     diagnostic_sink: SearchDiagnosticSink | None = None,
-    logger: CollectLogger | None = None,
-) -> tuple[list[CollectEntry], bool]:
-    """Collect session entries for range."""
-    entries: list[CollectEntry] = []
-    has_truncated = False
-    resolved_local_tz = local_tz or get_local_timezone()
-    resolved_collect_config = collect_config or CollectConfig()
+) -> list[_MatchedSession]:
     matched_sessions: list[_MatchedSession] = []
     eligible_session_groups: list[tuple[BaseAgent, list[Session]]] = []
 
     for agent, sessions in session_groups:
-        deny_paths = resolved_collect_config.agent_denies.get(agent.name, ())
+        deny_paths = collect_config.agent_denies.get(agent.name, ())
         if deny_paths:
             denied_roots = tuple(
                 denied_root
@@ -94,11 +86,7 @@ def collect_entries(
         eligible_session_groups.append(
             (
                 agent,
-                [
-                    session
-                    for session in sessions
-                    if since_date <= _session_local_date(session, resolved_local_tz) <= until_date
-                ],
+                [session for session in sessions if since_date <= _session_local_date(session, local_tz) <= until_date],
             )
         )
 
@@ -117,36 +105,49 @@ def collect_entries(
             (
                 match.agent,
                 match.session,
-                _session_local_date(match.session, resolved_local_tz),
+                _session_local_date(match.session, local_tz),
             )
         )
+
+    return matched_sessions
+
+
+def _read_collect_entry(matched_session: _MatchedSession) -> CollectEntry:
+    agent, session, session_date = matched_session
+    with agent.lease_cached_session_data(session) as session_data:
+        uri = agent.get_session_uri(session)
+        events, truncated = extract_collect_events(
+            session_data,
+            fallback_text_fn=lambda: render_session_text(uri, session_data),
+        )
+        return CollectEntry(
+            date_value=session_date,
+            created_at=session.created_at,
+            agent_name=agent.name,
+            agent_display_name=agent.display_name,
+            session_id=session.id,
+            session_title=session.title,
+            session_uri=uri,
+            project_directory=str(agent.get_session_facts(session).working_directory or ""),
+            events=events,
+            is_truncated=truncated,
+        )
+
+
+def _read_collect_entries(
+    matched_sessions: Sequence[_MatchedSession],
+    *,
+    progress_callback: Callable[[CollectProgressEvent], None] | None,
+    logger: CollectLogger | None,
+) -> tuple[list[CollectEntry], bool]:
+    entries: list[CollectEntry] = []
+    has_truncated = False
 
     total = len(matched_sessions)
     emit_collect_progress(
         progress_callback,
         ScanSessionsProgress(current=0, total=total),
     )
-
-    def _collect_entry(matched_session: tuple[BaseAgent, Session, date]) -> CollectEntry:
-        agent, session, session_date = matched_session
-        with agent.lease_cached_session_data(session) as session_data:
-            uri = agent.get_session_uri(session)
-            events, truncated = extract_collect_events(
-                session_data,
-                fallback_text_fn=lambda: render_session_text_fn(uri, session_data),
-            )
-            return CollectEntry(
-                date_value=session_date,
-                created_at=session.created_at,
-                agent_name=agent.name,
-                agent_display_name=agent.display_name,
-                session_id=session.id,
-                session_title=session.title,
-                session_uri=uri,
-                project_directory=str(agent.get_session_facts(session).working_directory or ""),
-                events=events,
-                is_truncated=truncated,
-            )
 
     if matched_sessions:
         max_workers = min(_MAX_SESSION_PARSE_WORKERS, total)
@@ -158,7 +159,7 @@ def collect_entries(
             for session_index, matched_session, future in iter_completed_futures(
                 matched_sessions,
                 max_pending=max_workers,
-                submit=lambda item: executor.submit(_collect_entry, item),
+                submit=lambda item: executor.submit(_read_collect_entry, item),
             ):
                 agent, session, _ = matched_session
                 try:
@@ -206,6 +207,36 @@ def collect_entries(
 
     entries.sort(key=lambda item: normalize_datetime_utc(item.created_at))
     return entries, has_truncated
+
+
+def collect_entries(
+    *,
+    session_groups: Sequence[tuple[BaseAgent, Sequence[Session]]],
+    since_date: date,
+    until_date: date,
+    collect_config: CollectConfig | None = None,
+    query_spec: QuerySpec | None = None,
+    local_tz: tzinfo | None = None,
+    progress_callback: Callable[[CollectProgressEvent], None] | None = None,
+    diagnostic_sink: SearchDiagnosticSink | None = None,
+    logger: CollectLogger | None = None,
+) -> tuple[list[CollectEntry], bool]:
+    """Select and read collect entries for the requested range."""
+    resolved_local_tz = local_tz or get_local_timezone()
+    matched_sessions = _select_collect_sessions(
+        session_groups=session_groups,
+        since_date=since_date,
+        until_date=until_date,
+        collect_config=collect_config or CollectConfig(),
+        query_spec=query_spec,
+        local_tz=resolved_local_tz,
+        diagnostic_sink=diagnostic_sink,
+    )
+    return _read_collect_entries(
+        matched_sessions,
+        progress_callback=progress_callback,
+        logger=logger,
+    )
 
 
 def plan_collect_entries(

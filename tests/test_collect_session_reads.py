@@ -55,7 +55,6 @@ class TestCollectEntries:
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=2)).date(),
             until_date=now.date(),
-            render_session_text_fn=lambda uri, data: f"# Session Dump\n{uri}\n{json.dumps(data)}",
             progress_callback=progress.append,
         )
 
@@ -104,7 +103,6 @@ class TestCollectEntries:
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=now.date(),
             until_date=now.date(),
-            render_session_text_fn=lambda uri, data: f"{uri} {data}",
             local_tz=timezone.utc,
         )
 
@@ -142,7 +140,6 @@ class TestCollectEntries:
             since_date=now.date(),
             until_date=now.date(),
             collect_config=CollectConfig(agent_denies={"codex": ("/provider/denied",)}),
-            render_session_text_fn=lambda uri, data: f"{uri} {data}",
             local_tz=timezone.utc,
         )
 
@@ -180,7 +177,6 @@ class TestCollectEntries:
             since_date=now.date(),
             until_date=now.date(),
             collect_config=CollectConfig(agent_denies={"codex": ("/blocked/one", "/blocked/two")}),
-            render_session_text_fn=lambda uri, data: f"{uri} {data}",
             local_tz=timezone.utc,
         )
 
@@ -234,7 +230,6 @@ class TestCollectEntries:
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
-            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
             local_tz=timezone.utc,
             progress_callback=progress.append,
         )
@@ -293,7 +288,6 @@ class TestCollectEntries:
                     session_groups=[(agent, agent.get_sessions.return_value)],
                     since_date=(now - timedelta(days=1)).date(),
                     until_date=now.date(),
-                    render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
                     local_tz=timezone.utc,
                 )
             )
@@ -335,7 +329,6 @@ class TestCollectEntries:
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=now.date(),
             until_date=now.date(),
-            render_session_text_fn=lambda _uri, _data: "",
             local_tz=timezone.utc,
             progress_callback=progress.append,
             logger=CollectLogger(enabled=True, path=log_path, run_id="run-1"),
@@ -376,7 +369,6 @@ class TestCollectEntries:
                 session_groups=[(agent, agent.get_sessions.return_value)],
                 since_date=now.date(),
                 until_date=now.date(),
-                render_session_text_fn=lambda _uri, _data: "",
                 local_tz=timezone.utc,
             )
 
@@ -438,7 +430,6 @@ class TestCollectEntries:
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             collect_config=CollectConfig(agent_denies={"claudecode": ("/repo/fin-agent/agent",)}),
-            render_session_text_fn=lambda uri, data: f"# Session Dump\n{uri}\n{json.dumps(data)}",
             local_tz=timezone.utc,
         )
 
@@ -471,7 +462,6 @@ class TestCollectEntries:
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             collect_config=CollectConfig(agent_denies={"claudecode": ("/repo/denied",)}),
-            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
             local_tz=timezone.utc,
         )
 

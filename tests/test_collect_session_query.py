@@ -2,7 +2,6 @@
 
 from datetime import date, datetime, timedelta, timezone
 import gc
-import json
 from pathlib import Path
 import threading
 import tracemalloc
@@ -39,7 +38,6 @@ class TestCollectEntries:
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=date(2026, 3, 5),
             until_date=date(2026, 3, 5),
-            render_session_text_fn=lambda uri, data: f"# Session Dump\n{uri}\n",
             local_tz=local_tz,
         )
 
@@ -79,7 +77,6 @@ class TestCollectEntries:
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             query_spec=make_query_spec(project_path=Path("/repo/app")),
-            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
             local_tz=timezone.utc,
         )
 
@@ -130,7 +127,6 @@ class TestCollectEntries:
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             query_spec=make_query_spec(keyword="refactor", limit=1),
-            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
             local_tz=timezone.utc,
         )
 
@@ -177,7 +173,6 @@ class TestCollectEntries:
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             query_spec=make_query_spec(keyword="fatal", roles={"assistant"}),
-            render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
             local_tz=timezone.utc,
         )
 
@@ -230,7 +225,6 @@ class TestCollectEntries:
             session_groups=[(agent, sessions)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
-            render_session_text_fn=lambda _uri, _data: "",
             local_tz=timezone.utc,
         )
         gc.collect()
