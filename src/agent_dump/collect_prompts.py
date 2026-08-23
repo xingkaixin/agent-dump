@@ -2,10 +2,8 @@
 
 from datetime import date, tzinfo
 import json
-from typing import Any
 
 from agent_dump.collect_events import chunk_collect_events, render_collect_event
-from agent_dump.collect_llm import build_summary_json_schema as _build_summary_json_schema
 from agent_dump.collect_models import (
     CollectAggregate,
     CollectEntry,
@@ -17,11 +15,6 @@ from agent_dump.collect_progress import truncate_log_preview
 from agent_dump.collect_summary import serialize_summary_payload
 from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
-
-
-def build_summary_json_schema(mode: CollectMode = CollectMode.PM) -> dict[str, Any]:
-    """Build one fixed schema for collect structured summaries."""
-    return _build_summary_json_schema(collect_fields_for(mode))
 
 
 def build_collect_chunk_prompt(
@@ -127,7 +120,7 @@ def build_collect_merge_prompt(
     return compose_summary_prompt(lines, data=data)
 
 
-def _build_structured_summary_retry_prompt(
+def build_structured_summary_retry_prompt(
     *,
     original_prompt: str,
     invalid_response: str,

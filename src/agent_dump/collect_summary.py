@@ -9,7 +9,7 @@ import json
 import re
 from typing import Any, cast
 
-from agent_dump.collect_models import MAX_SUMMARY_ITEMS_PER_FIELD, CollectMode, collect_fields_for
+from agent_dump.collect_models import MAX_SUMMARY_ITEMS_PER_FIELD, SUMMARY_FIELDS, CollectMode, collect_fields_for
 
 
 def normalize_text(value: str) -> str:
@@ -18,6 +18,26 @@ def normalize_text(value: str) -> str:
 
 
 SUMMARY_JSON_PATTERN = re.compile(r"```json\s*(\{[\s\S]*?\})\s*```", re.IGNORECASE)
+
+
+def build_summary_json_schema(mode: CollectMode = CollectMode.PM) -> dict[str, Any]:
+    """Build the strict schema for one collect mode."""
+    return build_summary_json_schema_for_fields(collect_fields_for(mode))
+
+
+def build_summary_json_schema_for_fields(summary_fields: tuple[str, ...] | None = None) -> dict[str, Any]:
+    """Build the strict schema for an explicit summary field set."""
+    fields = summary_fields if summary_fields is not None else SUMMARY_FIELDS
+    return {
+        "name": "collect_summary",
+        "schema": {
+            "type": "object",
+            "properties": {field_name: {"type": "array", "items": {"type": "string"}} for field_name in fields},
+            "required": list(fields),
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
 
 
 def dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_ITEMS_PER_FIELD) -> list[str]:
