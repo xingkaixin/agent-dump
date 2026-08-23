@@ -12,13 +12,13 @@ from locale_helpers import Keys, expect
 import pytest
 
 from agent_dump.agents.base import Session, derive_session_facts
-from agent_dump.collect import (
+from agent_dump.collect_logging import CollectLogger
+from agent_dump.collect_models import (
     CollectEntry,
-    CollectLogger,
     CollectProgressEvent,
     ScanSessionsProgress,
-    collect_entries,
 )
+from agent_dump.collect_sessions import collect_entries
 from agent_dump.config import CollectConfig
 
 

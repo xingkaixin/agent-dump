@@ -5,16 +5,19 @@ import json
 
 import pytest
 
-from agent_dump.collect import (
+from agent_dump.collect_events import extract_collect_events
+from agent_dump.collect_models import (
     CollectAggregate,
     CollectEntry,
     CollectEvent,
+    CollectMode,
+    collect_fields_for,
+)
+from agent_dump.collect_prompts import (
     build_collect_chunk_prompt,
     build_collect_final_prompt,
     build_collect_merge_prompt,
-    extract_collect_events,
 )
-from agent_dump.collect_models import CollectMode, collect_fields_for
 from agent_dump.collect_summary import (
     normalize_summary_payload,
 )

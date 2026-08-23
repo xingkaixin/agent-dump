@@ -30,7 +30,6 @@ from agent_dump.collect_prompts import (
     build_collect_session_prompt as build_collect_session_prompt,
 )
 from agent_dump.collect_reduction import (
-    _build_summary_bucket_lines as _build_summary_bucket_lines,
     reduce_collect_summaries as reduce_collect_summaries,
     summarize_collect_entries as summarize_collect_entries,
 )
@@ -40,7 +39,6 @@ from agent_dump.collect_requests import (
     request_summary_from_llm as request_summary_from_llm,
 )
 from agent_dump.collect_sessions import (
-    _MAX_SESSION_PARSE_WORKERS as _MAX_SESSION_PARSE_WORKERS,
     collect_entries as collect_entries,
     plan_collect_entries as plan_collect_entries,
 )

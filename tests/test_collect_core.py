@@ -4,13 +4,9 @@ from datetime import date, timedelta, timezone
 
 import pytest
 
-from agent_dump.collect import (
-    CollectEvent,
-    chunk_collect_events,
-    extract_collect_events,
-    resolve_collect_date_range,
-)
-from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, parse_user_date
+from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, parse_user_date, resolve_collect_date_range
+from agent_dump.collect_events import chunk_collect_events, extract_collect_events
+from agent_dump.collect_models import CollectEvent
 from agent_dump.collect_summary import (
     empty_summary_payload,
     merge_summary_payloads,

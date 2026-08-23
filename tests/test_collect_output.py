@@ -4,9 +4,7 @@ from datetime import date
 
 import pytest
 
-from agent_dump.collect import (
-    write_collect_markdown,
-)
+from agent_dump.collect_output import write_collect_markdown
 
 
 class TestCollectOutput:

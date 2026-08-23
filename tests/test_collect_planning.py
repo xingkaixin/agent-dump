@@ -2,17 +2,16 @@
 
 from datetime import date, datetime, timezone
 
-from agent_dump.collect import (
+from agent_dump.collect_models import (
     CollectEntry,
     CollectEvent,
     CollectProgressEvent,
     PlanChunksProgress,
-    plan_collect_entries,
 )
 from agent_dump.collect_progress import (
     build_collect_run_stats,
 )
-from agent_dump.collect_sessions import collect_scan_days
+from agent_dump.collect_sessions import collect_scan_days, plan_collect_entries
 
 
 class TestCollectEntries:
