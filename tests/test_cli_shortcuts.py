@@ -73,6 +73,17 @@ class TestShortcutExpansion:
 
         assert expanded == ["--collect", "--since", "20260408", "--until", "20260408", "--lang", "zh"]
 
+    def test_expand_shortcut_argv_maps_invalid_date_to_shortcut_error(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_dump.cli.load_shortcuts_config",
+            lambda: {"ob": mock.MagicMock(params=("date",), args=("--collect", "--since", "{date}"))},
+        )
+
+        with pytest.raises(ShortcutExpansionError) as exc_info:
+            expand_shortcut_argv(["--shortcut", "ob", "2026-02-29"])
+
+        assert exc_info.value.code is ShortcutErrorCode.DATE_INVALID
+
     def test_expand_shortcut_argv_rejects_unknown_variable(self, monkeypatch):
         monkeypatch.setattr(
             "agent_dump.cli.load_shortcuts_config",
