@@ -10,7 +10,6 @@ from agent_dump.output_formats import (
     OutputFormat,
     file_output_formats,
     parse_format_spec,
-    validate_formats_for_mode,
 )
 from agent_dump.query_filter import QuerySpec, parse_query, parse_query_uri
 from agent_dump.query_semantics import TextQueryMode
@@ -410,16 +409,8 @@ def _resolve_output_formats(request: CommandRequest, *, mode: _CommandMode) -> t
     except ValueError as exc:
         raise CommandPlanError(CommandPlanErrorCode.FORMAT_INVALID, detail=str(exc)) from exc
 
-    try:
-        validate_formats_for_mode(
-            formats,
-            is_uri_mode=mode is _CommandMode.URI,
-            is_list_mode=mode is _CommandMode.LIST,
-        )
-    except ValueError as exc:
-        if str(exc) == CommandPlanErrorCode.INTERACTIVE_PRINT.value:
-            raise CommandPlanError(CommandPlanErrorCode.INTERACTIVE_PRINT) from exc
-        raise
+    if mode not in (_CommandMode.URI, _CommandMode.LIST) and "print" in formats:
+        raise CommandPlanError(CommandPlanErrorCode.INTERACTIVE_PRINT)
     return tuple(formats)
 
 

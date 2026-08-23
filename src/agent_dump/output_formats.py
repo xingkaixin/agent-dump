@@ -46,13 +46,6 @@ def file_output_formats(formats: Sequence[OutputFormat]) -> tuple[FileOutputForm
     return tuple(output_format for output_format in formats if output_format != "print")
 
 
-def validate_formats_for_mode(formats: Sequence[OutputFormat], is_uri_mode: bool, is_list_mode: bool) -> None:
-    if is_list_mode or is_uri_mode:
-        return
-    if "print" in formats:
-        raise ValueError("interactive-print")
-
-
 def validate_uri_agent_formats(agent: UriFormatCapabilities, formats: Sequence[OutputFormat]) -> None:
     unsupported = [output_format for output_format in formats if output_format in agent.unsupported_uri_formats]
     if not unsupported:
