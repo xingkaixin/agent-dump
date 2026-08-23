@@ -12,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, MessageCountFact, Session
+from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, MessageCountFact, ProviderDiscovery, Session
 
 
 class TestSession:
@@ -48,6 +48,21 @@ class TestSession:
         )
 
         assert session.metadata == {}
+
+
+class TestProviderDiscovery:
+    def test_unavailable_result_cannot_contain_sessions(self) -> None:
+        session = Session(
+            id="test-id",
+            title="Test",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            source_path=Path("/test"),
+            metadata={},
+        )
+
+        with pytest.raises(ValueError, match="unavailable provider discovery"):
+            ProviderDiscovery(available=False, sessions=(session,))
 
 
 class TestMessageCountFact:
@@ -121,13 +136,13 @@ class TestBaseAgent:
         agent = ConcreteAgent()
         agent._available = False
 
-        assert agent._get_available_sessions(3) == (False, [])
+        assert agent.discover_sessions(3) == ProviderDiscovery(available=False)
         assert agent.requested_days == []
 
     def test_available_session_read_returns_requested_window(self):
         agent = ConcreteAgent()
 
-        assert agent._get_available_sessions(3) == (True, [])
+        assert agent.discover_sessions(3) == ProviderDiscovery(available=True)
         assert agent.requested_days == [3]
 
     def test_cached_session_data_reads_once_for_unchanged_session(self, tmp_path):

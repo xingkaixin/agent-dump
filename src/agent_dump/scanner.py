@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar
 
 from agent_dump.agent_registry import create_registered_agents
-from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.base import BaseAgent, ProviderDiscovery, Session
 from agent_dump.i18n import Keys, i18n
 from agent_dump.provider_diagnostics import ProviderDiagnostic, ProviderDiagnosticSink, print_provider_diagnostic
 from agent_dump.terminal_output import render_terminal_message
@@ -30,7 +30,7 @@ class AgentScanner:
 
     def _configure_provider_diagnostics(self, agents: Sequence[BaseAgent]) -> None:
         for agent in agents:
-            agent._configure_diagnostic_sink(self._diagnostic_sink)
+            agent.configure_diagnostics(self._diagnostic_sink)
 
     @staticmethod
     def _operation_failure_diagnostic(agent: BaseAgent, exc: Exception) -> ProviderDiagnostic:
@@ -64,7 +64,7 @@ class AgentScanner:
         self._configure_provider_diagnostics(selected_agents)
 
         def run_for_scanner(agent: BaseAgent) -> T:
-            with agent._use_diagnostic_sink(self._diagnostic_sink):
+            with agent.diagnostic_context(self._diagnostic_sink):
                 return fn(agent)
 
         with ThreadPoolExecutor(max_workers=len(selected_agents)) as executor:
@@ -128,16 +128,14 @@ class AgentScanner:
         agents: Sequence[BaseAgent] | None = None,
     ) -> list[tuple[BaseAgent, list[Session]]]:
         """Read availability and sessions together without probing providers twice."""
-        results = self._run_concurrently(
-            lambda agent: agent._get_available_sessions(days),
+        discoveries: list[tuple[BaseAgent, ProviderDiscovery | None]] = self._run_concurrently(
+            lambda agent: agent.discover_sessions(days),
             agents,
         )
         return [
-            (agent, sessions)
-            for agent, result in results
-            if result is not None
-            for available, sessions in (result,)
-            if available
+            (agent, list(discovery.sessions))
+            for agent, discovery in discoveries
+            if discovery is not None and discovery.available
         ]
 
     def find_session_by_id(
@@ -162,6 +160,6 @@ class AgentScanner:
         """Get agent by name"""
         for agent in self.agents:
             if agent.name == name:
-                with agent._use_diagnostic_sink(self._diagnostic_sink):
+                with agent.diagnostic_context(self._diagnostic_sink):
                     return agent if agent.is_available() else None
         return None

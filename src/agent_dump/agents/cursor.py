@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.base import BaseAgent, ProviderDiscovery, Session
 from agent_dump.agents.cursor_storage import (
     BUBBLE_RANGE_BATCH_SIZE,
     CursorStore,
@@ -103,14 +103,13 @@ class CursorAgent(BaseAgent):
 
     def get_sessions(self, days: int | None = 7) -> list[Session]:
         """Get Cursor sessions from the requested time window."""
-        _, sessions = self._get_available_sessions(days)
-        return sessions
+        return list(self.discover_sessions(days).sessions)
 
-    def _get_available_sessions(self, days: int | None = 7) -> tuple[bool, list[Session]]:
+    def discover_sessions(self, days: int | None = 7) -> ProviderDiscovery:
         """Open the store once to establish availability and read sessions."""
         global_db_path = self._store.database_path()
         if not global_db_path.exists():
-            return False, []
+            return ProviderDiscovery(available=False)
         cutoff = datetime.now(timezone.utc) - timedelta(days=days) if days is not None else None
         sessions: list[Session] = []
 
@@ -142,7 +141,7 @@ class CursorAgent(BaseAgent):
                         metadata=metadata,
                     )
                 )
-        return True, sessions
+        return ProviderDiscovery(available=True, sessions=tuple(sessions))
 
     def _build_session_from_composer(
         self,

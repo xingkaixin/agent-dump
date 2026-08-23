@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.base import BaseAgent, ProviderDiscovery, Session
 from agent_dump.i18n import Keys
 from agent_dump.provider_diagnostics import ProviderDiagnostic
 from agent_dump.scanner import AgentScanner
@@ -47,7 +47,7 @@ class FakeAgent(BaseAgent):
         self.scan_barrier: threading.Barrier | None = None
         self.sessions_barrier: threading.Barrier | None = None
         self.lookup_barrier: threading.Barrier | None = None
-        self.available_session_reads = 0
+        self.discovery_reads = 0
 
     def scan(self) -> list[Session]:
         if self.scan_error is not None:
@@ -81,12 +81,12 @@ class FakeAgent(BaseAgent):
         del session
         return {}
 
-    def _get_available_sessions(self, days: int | None = 7) -> tuple[bool, list[Session]]:
-        self.available_session_reads += 1
+    def discover_sessions(self, days: int | None = 7) -> ProviderDiscovery:
+        self.discovery_reads += 1
         if self.availability_error is not None:
             raise self.availability_error
         if not self.available:
-            return False, []
+            return ProviderDiscovery(available=False)
         if days is None:
             if self.scan_error is not None:
                 raise self.scan_error
@@ -97,7 +97,7 @@ class FakeAgent(BaseAgent):
                 raise self.sessions_error
             if self.sessions_barrier is not None:
                 self.sessions_barrier.wait()
-        return self.available, list(self.sessions)
+        return ProviderDiscovery(available=True, sessions=self.sessions)
 
 
 class TestAgentScanner:
@@ -267,7 +267,7 @@ class TestAgentScanner:
         results = AgentScanner([populated, empty, unavailable]).get_available_sessions(days=7)
 
         assert results == [(populated, [session]), (empty, [])]
-        assert [agent.available_session_reads for agent in (populated, empty, unavailable)] == [1, 1, 1]
+        assert [agent.discovery_reads for agent in (populated, empty, unavailable)] == [1, 1, 1]
 
     def test_find_session_runs_concurrently_and_uses_registration_order(self):
         barrier = threading.Barrier(2, timeout=10)

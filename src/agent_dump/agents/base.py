@@ -32,6 +32,18 @@ class Session:
     metadata: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class ProviderDiscovery:
+    """One provider's availability and sessions from a single discovery pass."""
+
+    available: bool
+    sessions: tuple[Session, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.available and self.sessions:
+            raise ValueError("unavailable provider discovery cannot contain sessions")
+
+
 class MessageCountCompleteness(str, Enum):
     EXACT = "exact"
     UNKNOWN = "unknown"
@@ -123,12 +135,12 @@ class BaseAgent(ABC):
             default=None,
         )
 
-    def _configure_diagnostic_sink(self, sink: ProviderDiagnosticSink | None) -> None:
+    def configure_diagnostics(self, sink: ProviderDiagnosticSink | None) -> None:
         """Configure the diagnostic destination used while this provider is scanner-owned."""
         self._diagnostic_sink.set(sink)
 
     @contextmanager
-    def _use_diagnostic_sink(self, sink: ProviderDiagnosticSink | None) -> Iterator[None]:
+    def diagnostic_context(self, sink: ProviderDiagnosticSink | None) -> Iterator[None]:
         """Route diagnostics to one scanner for the current execution context."""
         token = self._diagnostic_sink.set(sink)
         try:
@@ -161,11 +173,11 @@ class BaseAgent(ABC):
         """
         pass
 
-    def _get_available_sessions(self, days: int | None = 7) -> tuple[bool, list[Session]]:
-        """Read availability and the requested session window for scanner workflows."""
+    def discover_sessions(self, days: int | None = 7) -> ProviderDiscovery:
+        """Discover availability and the requested session window as one operation."""
         if not self.is_available():
-            return False, []
-        return True, self.get_sessions(days)
+            return ProviderDiscovery(available=False)
+        return ProviderDiscovery(available=True, sessions=tuple(self.get_sessions(days)))
 
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to unified JSON. Returns the exported file path."""
