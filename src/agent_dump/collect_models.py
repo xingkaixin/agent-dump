@@ -206,14 +206,6 @@ class SessionSummaryEntry:
 
 
 @dataclass
-class GroupSummaryEntry:
-    """Intermediate group summary used by tree reduction."""
-
-    summary_data: dict[str, list[str]]
-    session_count: int
-
-
-@dataclass
 class CollectAggregate:
     """Final aggregate input used to render the markdown report."""
 

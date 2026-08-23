@@ -15,7 +15,6 @@ from agent_dump.collect_models import (
     CollectAggregate,
     CollectMode,
     CollectProgressEvent,
-    GroupSummaryEntry,
     MergeSessionsProgress,
     PlannedCollectEntry,
     SessionSummaryEntry,
@@ -283,14 +282,12 @@ def reduce_collect_summaries(
             reduction_depth=0,
         )
 
-    working: list[GroupSummaryEntry] = [
-        GroupSummaryEntry(summary_data=entry.summary_data, session_count=1) for entry in session_summaries
-    ]
+    working = [entry.summary_data for entry in session_summaries]
     reduction_depth = 0
 
     while len(working) > 1:
         reduction_depth += 1
-        next_level: list[GroupSummaryEntry] = []
+        next_level: list[dict[str, list[str]]] = []
         total_groups = (len(working) + group_size - 1) // group_size
         emit_collect_progress(
             progress_callback,
@@ -300,15 +297,14 @@ def reduce_collect_summaries(
             group = working[start : start + group_size]
             group_index = start // group_size + 1
             group_source = f"collect://group-level-{reduction_depth}/group-{group_index}"
-            payloads = [item.summary_data for item in group]
-            merged = merge_summary_payloads(payloads, mode=mode)
+            merged = merge_summary_payloads(group, mode=mode)
             if summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
                 try:
                     merged = request_structured_summary_from_llm(
                         config,
                         build_collect_merge_prompt(
                             source_uri=group_source,
-                            payloads=payloads,
+                            payloads=group,
                             merge_label=f"group-level-{reduction_depth}",
                             mode=mode,
                         ),
@@ -328,12 +324,7 @@ def reduce_collect_summaries(
                             group_index=group_index,
                             error=str(exc),
                         )
-            next_level.append(
-                GroupSummaryEntry(
-                    summary_data=merged,
-                    session_count=sum(item.session_count for item in group),
-                )
-            )
+            next_level.append(merged)
             emit_collect_progress(
                 progress_callback,
                 TreeReductionProgress(
@@ -355,7 +346,7 @@ def reduce_collect_summaries(
         mode=mode,
     )
     return CollectAggregate(
-        summary_data=working[0].summary_data,
+        summary_data=working[0],
         date_summaries=date_summaries,
         project_summaries=project_summaries,
         session_count=len(session_summaries),

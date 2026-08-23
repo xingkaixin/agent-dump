@@ -51,7 +51,7 @@ class TestCollectEntries:
         configure_session_data_lease(agent)
 
         progress: list[CollectProgressEvent] = []
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=2)).date(),
             until_date=now.date(),
@@ -62,7 +62,6 @@ class TestCollectEntries:
         assert entries[0].session_id == "s-in"
         assert entries[0].project_directory == "/repo/a"
         assert entries[0].events[0].kind == "user_intent"
-        assert truncated is False
         assert entries[0].is_truncated is False
         assert [event.stage for event in progress] == ["scan_sessions", "scan_sessions"]
         assert isinstance(progress[-1], ScanSessionsProgress)
@@ -99,7 +98,7 @@ class TestCollectEntries:
         agent.get_session_facts.side_effect = None
         agent.get_session_facts.return_value = derive_session_facts(facts_session)
 
-        entries, _ = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=now.date(),
             until_date=now.date(),
@@ -135,7 +134,7 @@ class TestCollectEntries:
         agent.get_session_facts.side_effect = None
         agent.get_session_facts.return_value = derive_session_facts(facts_session)
 
-        entries, _ = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=now.date(),
             until_date=now.date(),
@@ -172,7 +171,7 @@ class TestCollectEntries:
 
         monkeypatch.setattr(collect_sessions_module, "_normalize_collect_project_path", record_normalization)
 
-        entries, _ = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, sessions)],
             since_date=now.date(),
             until_date=now.date(),
@@ -226,7 +225,7 @@ class TestCollectEntries:
         configure_session_data_lease(agent)
         progress: list[CollectProgressEvent] = []
 
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
@@ -234,7 +233,6 @@ class TestCollectEntries:
             progress_callback=progress.append,
         )
 
-        assert truncated is False
         assert len(worker_threads) == 2
         assert [entry.session_id for entry in entries] == ["older", "newer"]
         scan_events = [event for event in progress if isinstance(event, ScanSessionsProgress)]
@@ -281,7 +279,7 @@ class TestCollectEntries:
         monkeypatch.setattr("agent_dump.collect_sessions._MAX_SESSION_PARSE_WORKERS", 2)
         monkeypatch.setattr("agent_dump.collect_sessions.ThreadPoolExecutor", RecordingThreadPoolExecutor)
         monkeypatch.setattr("agent_dump.bounded_concurrency.wait", recording_wait)
-        results: list[tuple[list[CollectEntry], bool]] = []
+        results: list[list[CollectEntry]] = []
         collector = threading.Thread(
             target=lambda: results.append(
                 collect_entries(
@@ -301,7 +299,7 @@ class TestCollectEntries:
 
         assert not collector.is_alive()
         assert len(submitted_sessions) == len(sessions)
-        assert len(results[0][0]) == len(sessions)
+        assert len(results[0]) == len(sessions)
 
     def test_collect_entries_skips_one_unreadable_session_and_keeps_the_rest(self, tmp_path, capsys) -> None:
         now = datetime.now(timezone.utc)
@@ -325,7 +323,7 @@ class TestCollectEntries:
         progress: list[CollectProgressEvent] = []
         log_path = tmp_path / "collect.log"
 
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=now.date(),
             until_date=now.date(),
@@ -334,7 +332,6 @@ class TestCollectEntries:
             logger=CollectLogger(enabled=True, path=log_path, run_id="run-1"),
         )
 
-        assert truncated is False
         assert [entry.session_id for entry in entries] == ["good"]
         scan_events = [event for event in progress if isinstance(event, ScanSessionsProgress)]
         assert [(event.current, event.total) for event in scan_events] == [(0, 2), (1, 2), (2, 2)]
@@ -422,7 +419,7 @@ class TestCollectEntries:
         }
         configure_session_data_lease(codex_agent)
 
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[
                 (claude_agent, claude_agent.get_sessions.return_value),
                 (codex_agent, codex_agent.get_sessions.return_value),
@@ -433,7 +430,6 @@ class TestCollectEntries:
             local_tz=timezone.utc,
         )
 
-        assert truncated is False
         assert [entry.session_id for entry in entries] == ["s-codex", "s-allowed"]
         assert [entry.agent_name for entry in entries] == ["codex", "claudecode"]
 
@@ -457,7 +453,7 @@ class TestCollectEntries:
         }
         configure_session_data_lease(agent)
 
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
@@ -465,6 +461,5 @@ class TestCollectEntries:
             local_tz=timezone.utc,
         )
 
-        assert truncated is False
         assert [entry.session_id for entry in entries] == ["s-provider-project"]
         assert entries[0].project_directory == ""

@@ -34,14 +34,13 @@ class TestCollectEntries:
         }
         configure_session_data_lease(agent)
 
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=date(2026, 3, 5),
             until_date=date(2026, 3, 5),
             local_tz=local_tz,
         )
 
-        assert truncated is False
         assert len(entries) == 1
         assert entries[0].date_value == date(2026, 3, 5)
         assert entries[0].session_id == "cross-day"
@@ -72,7 +71,7 @@ class TestCollectEntries:
         }
         configure_session_data_lease(agent)
 
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
@@ -80,7 +79,6 @@ class TestCollectEntries:
             local_tz=timezone.utc,
         )
 
-        assert truncated is False
         assert [entry.session_id for entry in entries] == ["s-match"]
 
     def test_collect_entries_applies_global_limit_after_filtering(self):
@@ -119,7 +117,7 @@ class TestCollectEntries:
         }
         configure_session_data_lease(agent_b)
 
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[
                 (agent_a, agent_a.get_sessions.return_value),
                 (agent_b, agent_b.get_sessions.return_value),
@@ -130,7 +128,6 @@ class TestCollectEntries:
             local_tz=timezone.utc,
         )
 
-        assert truncated is False
         assert [(entry.agent_name, entry.session_id) for entry in entries] == [("kimi", "s-new")]
 
     def test_collect_entries_projects_only_role_evidence_matches(self):
@@ -168,7 +165,7 @@ class TestCollectEntries:
         agent.get_cached_session_data.side_effect = lambda session: session_data[session.id]
         configure_session_data_lease(agent)
 
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
@@ -176,7 +173,6 @@ class TestCollectEntries:
             local_tz=timezone.utc,
         )
 
-        assert truncated is False
         assert [entry.session_id for entry in entries] == ["s-assistant"]
 
     def test_full_payload_memory_does_not_accumulate_after_event_projection(self) -> None:
@@ -221,7 +217,7 @@ class TestCollectEntries:
         gc.collect()
         tracemalloc.start()
         baseline, _ = tracemalloc.get_traced_memory()
-        entries, truncated = collect_entries(
+        entries = collect_entries(
             session_groups=[(agent, sessions)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
@@ -231,7 +227,6 @@ class TestCollectEntries:
         current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
-        assert truncated is False
         assert len(entries) == len(sessions)
         assert agent.data_reads == len(sessions)
         assert not agent._session_data_cache._entries

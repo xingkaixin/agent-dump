@@ -222,7 +222,6 @@ class _SummaryRequester(Protocol):
 @dataclass(frozen=True)
 class _CollectPlan:
     planned_entries: list[PlannedCollectEntry]
-    has_truncated: bool
     run_stats: CollectRunStats
 
 
@@ -276,7 +275,7 @@ def _prepare_collect_plan(
             print(i18n.t(Keys.NO_AGENTS_FOUND))
             return None
         available_agents = [agent for agent, _ in session_results]
-        entries, has_truncated = collect_entries(
+        entries = collect_entries(
             session_groups=session_results,
             since_date=since_date,
             until_date=until_date,
@@ -324,7 +323,6 @@ def _prepare_collect_plan(
 
     return _CollectPlan(
         planned_entries=planned_entries,
-        has_truncated=has_truncated,
         run_stats=run_stats,
     )
 
@@ -371,7 +369,7 @@ def _execute_collect_plan(
             since_date=since_date,
             until_date=until_date,
             aggregate=aggregate,
-            has_truncated=plan.has_truncated,
+            has_truncated=any(entry.collect_entry.is_truncated for entry in plan.planned_entries),
             mode=operation.collect_mode,
         )
         markdown = request_summary(

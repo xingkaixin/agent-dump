@@ -9,7 +9,7 @@ from agent_dump.collect_workflow import handle_collect_mode
 from agent_dump.command_plan import CollectOperation
 
 
-def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock]:
+def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock, mock.MagicMock]:
     operation = CollectOperation(
         days=None,
         since=None,
@@ -31,6 +31,8 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock]:
     scanner.get_available_sessions.return_value = [(agent, [])]
     logger = mock.MagicMock()
     error = RuntimeError(f"{failing_step} failed")
+    planned_entry = mock.MagicMock()
+    planned_entry.collect_entry.is_truncated = True
 
     with (
         mock.patch(
@@ -42,10 +44,10 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock]:
         mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=logger),
         mock.patch(
             "agent_dump.collect_workflow.collect_entries",
-            return_value=([mock.MagicMock()], False),
+            return_value=[mock.MagicMock()],
             side_effect=error if failing_step == "read" else None,
         ),
-        mock.patch("agent_dump.collect_workflow.plan_collect_entries", return_value=([mock.MagicMock()], 1)),
+        mock.patch("agent_dump.collect_workflow.plan_collect_entries", return_value=([planned_entry], 1)),
         mock.patch(
             "agent_dump.collect_workflow.build_collect_run_stats",
             return_value=CollectRunStats(
@@ -67,7 +69,10 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock]:
             return_value=mock.MagicMock(),
             side_effect=error if failing_step == "render" else None,
         ),
-        mock.patch("agent_dump.collect_workflow.build_collect_final_prompt", return_value="prompt"),
+        mock.patch(
+            "agent_dump.collect_workflow.build_collect_final_prompt",
+            return_value="prompt",
+        ) as mock_build_final_prompt,
         mock.patch("agent_dump.collect_workflow.write_collect_markdown", return_value=mock.MagicMock()),
     ):
         result = handle_collect_mode(
@@ -76,7 +81,7 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock]:
             request_summary=lambda *_args, **_kwargs: "# summary",
         )
 
-    return result, logger
+    return result, logger, mock_build_final_prompt
 
 
 @pytest.mark.parametrize("language", ALL_LANGUAGES)
@@ -98,7 +103,7 @@ def test_collect_reports_failure_from_the_stage_that_raised(
 ) -> None:
     use_language(language)
 
-    result, logger = _run_collect_with_failure(failing_step)
+    result, logger, _ = _run_collect_with_failure(failing_step)
 
     assert result == 1
     assert expect_contains(capsys.readouterr().out, message_key, error=f"{failing_step} failed")
@@ -110,12 +115,20 @@ def test_collect_reports_failure_from_the_stage_that_raised(
 
 
 def test_collect_finish_log_uses_run_stats_session_count(capsys) -> None:
-    result, logger = _run_collect_with_failure("success")
+    result, logger, _ = _run_collect_with_failure("success")
     capsys.readouterr()
 
     finish_call = next(call for call in logger.log.call_args_list if call.args[0] == "collect_run_finish")
     assert result == 0
     assert finish_call.kwargs["session_count"] == 1
+
+
+def test_collect_derives_truncation_from_planned_entries(capsys) -> None:
+    result, _, mock_build_final_prompt = _run_collect_with_failure("success")
+    capsys.readouterr()
+
+    assert result == 0
+    assert mock_build_final_prompt.call_args.kwargs["has_truncated"] is True
 
 
 @pytest.mark.parametrize("language", ALL_LANGUAGES)
@@ -150,7 +163,7 @@ def test_collect_reports_output_write_failure(language, use_language, capsys) ->
         mock.patch("agent_dump.collect_workflow.load_config_document", return_value=config_document),
         mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])),
         mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=logger),
-        mock.patch("agent_dump.collect_workflow.collect_entries", return_value=([mock.MagicMock()], False)),
+        mock.patch("agent_dump.collect_workflow.collect_entries", return_value=[mock.MagicMock()]),
         mock.patch("agent_dump.collect_workflow.plan_collect_entries", return_value=([mock.MagicMock()], 1)),
         mock.patch("agent_dump.collect_workflow.build_collect_run_stats", return_value=mock.MagicMock()),
         mock.patch("agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]),
