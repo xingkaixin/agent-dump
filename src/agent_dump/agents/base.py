@@ -159,6 +159,12 @@ class BaseAgent(ABC):
         """
         pass
 
+    def _get_available_sessions(self, days: int | None = 7) -> tuple[bool, list[Session]]:
+        """Read availability and the requested session window for scanner workflows."""
+        if not self.is_available():
+            return False, []
+        return True, self.get_sessions(days)
+
     def export_session(self, session: Session, output_dir: Path) -> Path:
         """Export a single session to unified JSON. Returns the exported file path."""
         return self.export_session_with_fields(session, output_dir)

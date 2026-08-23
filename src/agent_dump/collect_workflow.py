@@ -9,7 +9,6 @@ import sys
 import threading
 from typing import Protocol
 
-from agent_dump.agents.base import BaseAgent
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, resolve_collect_date_range
 from agent_dump.collect_logging import CollectLogger, create_collect_logger
 from agent_dump.collect_models import (
@@ -37,7 +36,7 @@ from agent_dump.collect_progress import (
 from agent_dump.collect_prompts import build_collect_final_prompt
 from agent_dump.collect_reduction import reduce_collect_summaries, summarize_collect_entries
 from agent_dump.collect_requests import request_summary_from_llm
-from agent_dump.collect_sessions import collect_entries, plan_collect_entries
+from agent_dump.collect_sessions import collect_entries, collect_scan_days, plan_collect_entries
 from agent_dump.command_plan import CollectOperation
 from agent_dump.config import (
     AIConfig,
@@ -52,6 +51,7 @@ from agent_dump.rendering import render_session_text
 from agent_dump.scanner import AgentScanner
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_body_text, safe_display_text
+from agent_dump.time_utils import get_local_timezone
 
 
 def _collect_default_filename(*, since_date: date, until_date: date) -> str:
@@ -261,7 +261,6 @@ def _prepare_collect_plan(
     operation: CollectOperation,
     *,
     scanner: AgentScanner,
-    available_agents: list[BaseAgent],
     collect_config: CollectConfig,
     since_date: date,
     until_date: date,
@@ -273,6 +272,12 @@ def _prepare_collect_plan(
             progress_callback,
             CollectStartProgress(since=since_date.isoformat(), until=until_date.isoformat()),
         )
+        local_tz = get_local_timezone()
+        session_results = scanner.get_available_sessions(collect_scan_days(since_date, local_tz))
+        if not session_results:
+            print(i18n.t(Keys.NO_AGENTS_FOUND))
+            return None
+        available_agents = [agent for agent, _ in session_results]
         with scanner.diagnostic_scope(available_agents):
             entries, has_truncated = collect_entries(
                 scanner=scanner,
@@ -282,7 +287,9 @@ def _prepare_collect_plan(
                 collect_config=collect_config,
                 query_spec=operation.query_spec,
                 render_session_text_fn=render_session_text,
+                local_tz=local_tz,
                 progress_callback=progress_callback,
+                session_results=session_results,
                 logger=logger,
             )
         if not entries:
@@ -405,14 +412,6 @@ def _execute_collect_plan(
     return _CollectOutput(markdown=markdown, output_path=output_path)
 
 
-def _available_collect_agents(scanner: AgentScanner) -> list[BaseAgent] | None:
-    available_agents = scanner.get_available_agents()
-    if available_agents:
-        return available_agents
-    print(i18n.t(Keys.NO_AGENTS_FOUND))
-    return None
-
-
 def _handle_collect_dry_run(
     operation: CollectOperation,
     *,
@@ -422,14 +421,10 @@ def _handle_collect_dry_run(
     until_date: date,
 ) -> int:
     scanner = scanner_factory()
-    available_agents = _available_collect_agents(scanner)
-    if available_agents is None:
-        return 1
     with show_collect_progress() as update_progress:
         plan = _prepare_collect_plan(
             operation,
             scanner=scanner,
-            available_agents=available_agents,
             collect_config=collect_config,
             since_date=since_date,
             until_date=until_date,
@@ -463,14 +458,10 @@ def _handle_collect_execution(
     until_date: date,
 ) -> int:
     scanner = scanner_factory()
-    available_agents = _available_collect_agents(scanner)
-    if available_agents is None:
-        return 1
     with show_collect_progress() as update_progress:
         plan = _prepare_collect_plan(
             operation,
             scanner=scanner,
-            available_agents=available_agents,
             collect_config=collect_config,
             since_date=since_date,
             until_date=until_date,

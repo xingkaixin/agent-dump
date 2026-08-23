@@ -92,7 +92,8 @@ def handle_stats_mode(
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
 ) -> int:
     scanner = scanner_factory()
-    available_agents = scanner.get_available_agents()
+    scanned_sessions = scanner.get_available_sessions(operation.days)
+    available_agents = [agent for agent, _ in scanned_sessions]
 
     if not available_agents:
         print_diagnostic(build_no_agents_found_diagnostic(scanner))
@@ -102,6 +103,9 @@ def handle_stats_mode(
 
     if query_spec and query_spec.agent_names:
         available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
+        scanned_sessions = [
+            (agent, sessions) for agent, sessions in scanned_sessions if agent.name in query_spec.agent_names
+        ]
         if not available_agents:
             print_diagnostic(
                 root_not_found(
@@ -122,6 +126,7 @@ def handle_stats_mode(
             days=operation.days,
             spec=query_spec,
             scanner=scanner,
+            session_results=scanned_sessions,
         )
         if query_spec is not None
         else None
@@ -129,7 +134,7 @@ def handle_stats_mode(
     scanned_sessions = (
         [(agent, sessions_by_agent.get(agent.name, [])) for agent in available_agents]
         if sessions_by_agent is not None
-        else scanner.get_sessions(operation.days, agents=available_agents)
+        else scanned_sessions
     )
 
     all_sessions: list[tuple[BaseAgent, Session]] = []
@@ -205,7 +210,8 @@ def handle_reindex_mode(
     search_index_factory: Callable[[], SearchIndex] = SearchIndex,
 ) -> int:
     scanner = scanner_factory()
-    available_agents = scanner.get_available_agents()
+    scanned_sessions = scanner.get_available_sessions(operation.days)
+    available_agents = [agent for agent, _ in scanned_sessions]
 
     if not available_agents:
         print_diagnostic(build_no_agents_found_diagnostic(scanner))
@@ -220,7 +226,7 @@ def handle_reindex_mode(
     print()
 
     total_indexed = 0
-    for agent, sessions in scanner.get_sessions(operation.days, agents=available_agents):
+    for agent, sessions in scanned_sessions:
         if not sessions:
             continue
         with scanner.diagnostic_scope([agent]):
