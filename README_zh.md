@@ -436,6 +436,7 @@ deny = [
 │       ├── __about__.py        # 单一版本源
 │       ├── __main__.py         # python -m agent_dump 入口
 │       ├── agent_registry.py   # provider 注册表
+│       ├── bounded_concurrency.py # 有界 Future 调度机制
 │       ├── cli.py              # 参数解析与模式分发
 │       ├── cli_shared.py       # CLI 共享工具
 │       ├── command_plan.py     # 将 CLI 参数归一化为单一命令计划

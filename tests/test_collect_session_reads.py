@@ -245,7 +245,7 @@ class TestCollectEntries:
         configure_session_data_lease(agent)
         monkeypatch.setattr("agent_dump.collect_sessions._MAX_SESSION_PARSE_WORKERS", 2)
         monkeypatch.setattr("agent_dump.collect_sessions.ThreadPoolExecutor", RecordingThreadPoolExecutor)
-        monkeypatch.setattr("agent_dump.collect_sessions.wait", recording_wait)
+        monkeypatch.setattr("agent_dump.bounded_concurrency.wait", recording_wait)
         results: list[tuple[list[CollectEntry], bool]] = []
         collector = threading.Thread(
             target=lambda: results.append(

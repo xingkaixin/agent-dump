@@ -2,14 +2,15 @@
 
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from concurrent.futures import ThreadPoolExecutor
 from contextvars import Context, copy_context
 from datetime import datetime, timedelta, timezone
-from itertools import chain, islice
+from itertools import chain
 from pathlib import Path
 
 from agent_dump.agents.base import BaseAgent, ProviderDiscovery, Session
 from agent_dump.agents.jsonl_scan import file_modified_since
+from agent_dump.bounded_concurrency import iter_completed_futures
 from agent_dump.i18n import Keys
 from agent_dump.paths import first_existing_search_root
 from agent_dump.time_utils import normalize_datetime_utc
@@ -82,25 +83,16 @@ class FileSessionAgent(BaseAgent):
         return list(self.discover_sessions(days).sessions)
 
     def _iter_parsed_sessions(self, session_files: Iterable[Path]) -> Iterator[Session | None]:
-        file_iterator = iter(session_files)
-        initial_files = tuple(islice(file_iterator, _MAX_SCAN_WORKERS))
-        if not initial_files:
-            return
-
         def parse_in_context(context: Context, path: Path) -> Session | None:
             return context.run(self._parse_session_file_or_report, path)
 
-        with ThreadPoolExecutor(max_workers=len(initial_files)) as executor:
-            pending: set[Future[Session | None]] = {
-                executor.submit(parse_in_context, copy_context(), path) for path in initial_files
-            }
-            while pending:
-                completed, pending = wait(pending, return_when=FIRST_COMPLETED)
-                for future in completed:
-                    yield future.result()
-                    next_path = next(file_iterator, None)
-                    if next_path is not None:
-                        pending.add(executor.submit(parse_in_context, copy_context(), next_path))
+        with ThreadPoolExecutor(max_workers=_MAX_SCAN_WORKERS) as executor:
+            for _, _, future in iter_completed_futures(
+                session_files,
+                max_pending=_MAX_SCAN_WORKERS,
+                submit=lambda path: executor.submit(parse_in_context, copy_context(), path),
+            ):
+                yield future.result()
 
     def discover_sessions(self, days: int | None = 7) -> ProviderDiscovery:
         """Discover candidate files once for availability and windowed parsing."""

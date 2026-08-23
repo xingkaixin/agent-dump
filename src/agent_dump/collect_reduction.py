@@ -2,11 +2,12 @@
 
 from collections import defaultdict
 from collections.abc import Callable
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from concurrent.futures import ThreadPoolExecutor
 from datetime import tzinfo
 import sys
 import threading
 
+from agent_dump.bounded_concurrency import iter_completed_futures
 from agent_dump.collect_logging import CollectLogger
 from agent_dump.collect_models import (
     GROUP_SIZE,
@@ -201,44 +202,32 @@ def summarize_collect_entries(
             mode=mode,
         )
 
-    future_to_index: dict[Future[SessionSummaryEntry], int] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        pending_entries = iter(enumerate(planned_entries))
-
-        while len(future_to_index) < min(max_workers, total):
-            index, planned_entry = next(pending_entries)
-            future_to_index[executor.submit(_summarize, planned_entry)] = index
-
-        while future_to_index:
-            done, _ = wait(tuple(future_to_index), return_when=FIRST_COMPLETED)
-            for future in done:
-                index = future_to_index.pop(future)
-                try:
-                    results[index] = future.result()
-                except Exception as exc:  # noqa: BLE001
-                    failed_sessions += 1
-                    last_error = exc
-                    entry = planned_entries[index].collect_entry
-                    print(
-                        render_terminal_message(
-                            Keys.WARN_SESSION_SUMMARY_SKIPPED,
-                            uri=entry.session_uri,
-                            error=exc,
-                        ),
-                        file=sys.stderr,
+        for index, planned_entry, future in iter_completed_futures(
+            planned_entries,
+            max_pending=max_workers,
+            submit=lambda item: executor.submit(_summarize, item),
+        ):
+            try:
+                results[index] = future.result()
+            except Exception as exc:  # noqa: BLE001
+                failed_sessions += 1
+                last_error = exc
+                entry = planned_entry.collect_entry
+                print(
+                    render_terminal_message(
+                        Keys.WARN_SESSION_SUMMARY_SKIPPED,
+                        uri=entry.session_uri,
+                        error=exc,
+                    ),
+                    file=sys.stderr,
+                )
+                if logger is not None:
+                    logger.log(
+                        "session_summary_failed",
+                        session_uri=entry.session_uri,
+                        error=str(exc),
                     )
-                    if logger is not None:
-                        logger.log(
-                            "session_summary_failed",
-                            session_uri=entry.session_uri,
-                            error=str(exc),
-                        )
-
-                try:
-                    next_index, next_entry = next(pending_entries)
-                except StopIteration:
-                    continue
-                future_to_index[executor.submit(_summarize, next_entry)] = next_index
 
     summaries = [item for item in results if item is not None]
     if not summaries and last_error is not None:
