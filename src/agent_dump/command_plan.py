@@ -212,7 +212,11 @@ def build_command_plan(
         )
 
     effective_agents = valid_agents if valid_agents is not None else _VALID_AGENT_NAMES
-    query_uri_spec = _parse_query_uri(request.uri, valid_agents=effective_agents, cwd=cwd)
+    query_uri_spec = (
+        _parse_query_uri(request.uri, valid_agents=effective_agents, cwd=cwd)
+        if mode in {_CommandMode.COLLECT, _CommandMode.LIST, _CommandMode.INTERACTIVE}
+        else None
+    )
     if request.query and query_uri_spec is not None:
         raise CommandPlanError(CommandPlanErrorCode.QUERY_COMBINATION_INVALID)
 
