@@ -137,10 +137,6 @@ class BaseAgent(ABC):
             default=None,
         )
 
-    def configure_diagnostics(self, sink: RecoverableDiagnosticSink | None) -> None:
-        """Configure the diagnostic destination used while this provider is scanner-owned."""
-        self._diagnostic_sink.set(sink)
-
     @contextmanager
     def diagnostic_context(self, sink: RecoverableDiagnosticSink | None) -> Iterator[None]:
         """Route diagnostics to one scanner for the current execution context."""
