@@ -1,9 +1,5 @@
-from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
-from datetime import datetime, timedelta
+from collections.abc import Sequence
 from pathlib import Path
-import sys
-import threading
 
 from agent_dump.agent_registry import get_supported_agent_locations
 from agent_dump.agents.base import BaseAgent, Session
@@ -13,162 +9,16 @@ from agent_dump.diagnostics import (
     render_diagnostic,
     root_not_found,
 )
-from agent_dump.exporting import ExportFailure, ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
 from agent_dump.output_formats import FileOutputFormat
 from agent_dump.query_filter import (
     QuerySpec,
-    SearchSessionMatch,
     select_session_groups,
 )
-from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.scanner import AgentScanner
 from agent_dump.search_diagnostics import print_search_diagnostic
-from agent_dump.terminal_output import render_terminal_message
-from agent_dump.text_safety import safe_display_text
-from agent_dump.time_utils import get_local_timezone, to_local_datetime
 
 DEFAULT_OUTPUT_BASE_DIR = Path("./sessions")
-
-
-def group_sessions_by_time(sessions: list[Session]) -> dict[str, list[Session]]:
-    groups: dict[str, list[Session]] = {
-        i18n.t(Keys.TIME_TODAY): [],
-        i18n.t(Keys.TIME_YESTERDAY): [],
-        i18n.t(Keys.TIME_THIS_WEEK): [],
-        i18n.t(Keys.TIME_THIS_MONTH): [],
-        i18n.t(Keys.TIME_OLDER): [],
-    }
-
-    key_today = i18n.t(Keys.TIME_TODAY)
-    key_yesterday = i18n.t(Keys.TIME_YESTERDAY)
-    key_week = i18n.t(Keys.TIME_THIS_WEEK)
-    key_month = i18n.t(Keys.TIME_THIS_MONTH)
-    key_older = i18n.t(Keys.TIME_OLDER)
-
-    local_tz = get_local_timezone()
-    now = datetime.now(local_tz)
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    yesterday = today - timedelta(days=1)
-    week_ago = today - timedelta(days=7)
-    month_ago = today - timedelta(days=30)
-
-    for session in sessions:
-        session_time = to_local_datetime(session.created_at, local_tz)
-
-        if session_time >= today:
-            groups[key_today].append(session)
-        elif session_time >= yesterday:
-            groups[key_yesterday].append(session)
-        elif session_time >= week_ago:
-            groups[key_week].append(session)
-        elif session_time >= month_ago:
-            groups[key_month].append(session)
-        else:
-            groups[key_older].append(session)
-
-    return {k: v for k, v in groups.items() if v}
-
-
-def display_sessions_list(
-    agent: BaseAgent,
-    sessions: list[Session],
-    show_metadata_summary: bool = True,
-) -> None:
-    if not sessions:
-        print(i18n.t(Keys.NO_SESSIONS_PAREN))
-        return
-
-    for session in sessions:
-        title = safe_display_text(agent.get_formatted_title(session))
-        if show_metadata_summary:
-            summary = safe_display_text(format_session_metadata_summary(agent, session))
-            print(f"   • {title}")
-            print(f"     {summary}")
-        else:
-            uri = safe_display_text(agent.get_session_uri(session))
-            print(f"   • {title} {uri}")
-
-
-def export_sessions_for_formats(
-    agent: BaseAgent,
-    sessions: list[Session],
-    formats: list[FileOutputFormat],
-    output_base_dir: Path,
-    *,
-    output_base_dirs: dict[FileOutputFormat, Path] | None = None,
-) -> ExportRunResult:
-    print(render_terminal_message(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
-
-    def _output_dir_for_format(output_format: FileOutputFormat) -> Path:
-        format_base_dir = (
-            output_base_dirs.get(output_format, output_base_dir) if output_base_dirs is not None else output_base_dir
-        )
-        return format_base_dir / agent.name
-
-    result = execute_exports(
-        agent,
-        sessions,
-        formats,
-        _output_dir_for_format,
-        session_uris={session.id: agent.get_session_uri(session) for session in sessions},
-    )
-    for attempt in result.attempts:
-        if not isinstance(attempt, ExportFailure):
-            print(
-                render_terminal_message(
-                    Keys.EXPORT_SUCCESS_FORMAT,
-                    title=attempt.session.title[:50],
-                    format=attempt.output_format,
-                    filename=attempt.output_path.name,
-                )
-            )
-            continue
-
-        error = attempt.error
-        diagnostic = error if isinstance(error, DiagnosticError) else wrap_runtime_fetch_error(error, agent=agent)
-        print(render_diagnostic(diagnostic, t=i18n.t))
-
-    return result
-
-
-@contextmanager
-def show_loading(message: str, interval_seconds: float = 0.1) -> Iterator[None]:
-    """Show loading status for long-running operations."""
-    safe_message = safe_display_text(message)
-    if not sys.stderr.isatty():
-        print(safe_message, file=sys.stderr)
-        yield
-        return
-
-    stop_event = threading.Event()
-    spinner_frames = "|/-\\"
-
-    def _write_frame(frame: str) -> None:
-        sys.stderr.write(f"\r{frame} {safe_message}")
-        sys.stderr.flush()
-
-    def _spin() -> None:
-        idx = 0
-        while not stop_event.wait(interval_seconds):
-            _write_frame(spinner_frames[idx % len(spinner_frames)])
-            idx += 1
-
-    spinner_thread = threading.Thread(target=_spin, daemon=True)
-    _write_frame(spinner_frames[0])
-    spinner_thread.start()
-    try:
-        yield
-    finally:
-        stop_event.set()
-        spinner_thread.join(timeout=max(0.3, interval_seconds * 3))
-        clear_width = len(safe_message) + 4
-        sys.stderr.write("\r" + (" " * clear_width) + "\r")
-        sys.stderr.flush()
-
-
-def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:
-    return any(arg.partition("=")[0] in (short_option, long_option) for arg in argv)
 
 
 def resolve_output_base_dir(
@@ -185,32 +35,6 @@ def resolve_output_base_dir(
     return DEFAULT_OUTPUT_BASE_DIR
 
 
-def render_query_summary(spec: QuerySpec) -> str:
-    if (
-        spec.project_path is None
-        and spec.agent_names is None
-        and spec.roles is None
-        and spec.limit is None
-        and spec.keyword
-    ):
-        return safe_display_text(spec.keyword)
-
-    parts: list[str] = []
-    if spec.project_path is not None:
-        parts.append(render_terminal_message(Keys.QUERY_SUMMARY_PATH, path=spec.project_path))
-    if spec.keyword:
-        parts.append(render_terminal_message(Keys.QUERY_SUMMARY_KEYWORD, keyword=spec.keyword))
-    if spec.agent_names:
-        providers = safe_display_text(",".join(sorted(spec.agent_names)))
-        parts.append(f"providers={providers}")
-    if spec.roles:
-        roles = safe_display_text(",".join(sorted(spec.roles)))
-        parts.append(f"roles={roles}")
-    if spec.limit is not None:
-        parts.append(f"limit={spec.limit}")
-    return "；".join(parts) if parts else i18n.t(Keys.QUERY_SUMMARY_ALL_SESSIONS)
-
-
 def collect_query_matches(
     session_groups: Sequence[tuple[BaseAgent, list[Session]]],
     *,
@@ -220,38 +44,6 @@ def collect_query_matches(
     for match in select_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic):
         grouped.setdefault(match.agent.name, []).append(match.session)
     return grouped
-
-
-def collect_search_matches(
-    session_groups: Sequence[tuple[BaseAgent, list[Session]]],
-    *,
-    spec: QuerySpec,
-) -> list[SearchSessionMatch]:
-    return select_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic)
-
-
-def display_search_results(matches: list[SearchSessionMatch]) -> None:
-    if not matches:
-        print(i18n.t(Keys.SEARCH_NO_RESULTS))
-        return
-
-    for index, match in enumerate(matches, start=1):
-        title = match.agent.get_formatted_title(match.session)
-        uri = match.agent.get_session_uri(match.session)
-        updated = to_local_datetime(match.session.updated_at).strftime("%Y-%m-%d %H:%M:%S %Z")
-        print(f"\n{index}. {safe_display_text(title)}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_PROVIDER)}: {safe_display_text(match.agent.display_name)}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_UPDATED)}: {updated}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_URI)}: {safe_display_text(uri)}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_RANK)}: {match.rank:.6g}")
-        print(f"   {i18n.t(Keys.SEARCH_RESULT_SNIPPET)}: {safe_display_text(match.snippet)}")
-
-
-def warn_list_ignored_options(output_specified: bool, format_specified: bool) -> None:
-    if format_specified:
-        print(i18n.t(Keys.LIST_IGNORE_FORMAT))
-    if output_specified:
-        print(i18n.t(Keys.LIST_IGNORE_OUTPUT))
 
 
 def render_agent_search_roots(agents: Sequence[BaseAgent]) -> tuple[str, ...]:

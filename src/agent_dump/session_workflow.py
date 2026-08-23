@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 
@@ -6,30 +6,149 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
     build_no_agents_found_diagnostic,
     collect_query_matches,
-    collect_search_matches,
-    display_search_results,
-    display_sessions_list,
-    export_sessions_for_formats,
     print_diagnostic,
     render_agent_search_roots,
-    render_query_summary,
     resolve_output_base_dir,
-    warn_list_ignored_options,
+    wrap_runtime_fetch_error,
 )
 from agent_dump.command_plan import InteractiveOperation, ListOperation, SearchOperation, SessionOperation
-from agent_dump.diagnostics import root_not_found
+from agent_dump.diagnostics import DiagnosticError, render_diagnostic, root_not_found
+from agent_dump.exporting import ExportFailure, ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
 from agent_dump.output_formats import FileOutputFormat
-from agent_dump.query_filter import QuerySpec
+from agent_dump.query_filter import QuerySpec, SearchSessionMatch, select_session_groups
+from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.scanner import AgentScanner
+from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
+from agent_dump.time_utils import to_local_datetime
 
 
 class ExportConfigLike(Protocol):
     @property
     def output(self) -> str: ...
+
+
+def display_sessions_list(
+    agent: BaseAgent,
+    sessions: list[Session],
+    show_metadata_summary: bool = True,
+) -> None:
+    if not sessions:
+        print(i18n.t(Keys.NO_SESSIONS_PAREN))
+        return
+
+    for session in sessions:
+        title = safe_display_text(agent.get_formatted_title(session))
+        if show_metadata_summary:
+            summary = safe_display_text(format_session_metadata_summary(agent, session))
+            print(f"   • {title}")
+            print(f"     {summary}")
+        else:
+            uri = safe_display_text(agent.get_session_uri(session))
+            print(f"   • {title} {uri}")
+
+
+def export_sessions_for_formats(
+    agent: BaseAgent,
+    sessions: list[Session],
+    formats: list[FileOutputFormat],
+    output_base_dir: Path,
+    *,
+    output_base_dirs: dict[FileOutputFormat, Path] | None = None,
+) -> ExportRunResult:
+    print(render_terminal_message(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
+
+    def _output_dir_for_format(output_format: FileOutputFormat) -> Path:
+        format_base_dir = (
+            output_base_dirs.get(output_format, output_base_dir) if output_base_dirs is not None else output_base_dir
+        )
+        return format_base_dir / agent.name
+
+    result = execute_exports(
+        agent,
+        sessions,
+        formats,
+        _output_dir_for_format,
+        session_uris={session.id: agent.get_session_uri(session) for session in sessions},
+    )
+    for attempt in result.attempts:
+        if not isinstance(attempt, ExportFailure):
+            print(
+                render_terminal_message(
+                    Keys.EXPORT_SUCCESS_FORMAT,
+                    title=attempt.session.title[:50],
+                    format=attempt.output_format,
+                    filename=attempt.output_path.name,
+                )
+            )
+            continue
+
+        error = attempt.error
+        diagnostic = error if isinstance(error, DiagnosticError) else wrap_runtime_fetch_error(error, agent=agent)
+        print(render_diagnostic(diagnostic, t=i18n.t))
+
+    return result
+
+
+def render_query_summary(spec: QuerySpec) -> str:
+    if (
+        spec.project_path is None
+        and spec.agent_names is None
+        and spec.roles is None
+        and spec.limit is None
+        and spec.keyword
+    ):
+        return safe_display_text(spec.keyword)
+
+    parts: list[str] = []
+    if spec.project_path is not None:
+        parts.append(render_terminal_message(Keys.QUERY_SUMMARY_PATH, path=spec.project_path))
+    if spec.keyword:
+        parts.append(render_terminal_message(Keys.QUERY_SUMMARY_KEYWORD, keyword=spec.keyword))
+    if spec.agent_names:
+        providers = safe_display_text(",".join(sorted(spec.agent_names)))
+        parts.append(f"providers={providers}")
+    if spec.roles:
+        roles = safe_display_text(",".join(sorted(spec.roles)))
+        parts.append(f"roles={roles}")
+    if spec.limit is not None:
+        parts.append(f"limit={spec.limit}")
+    return "；".join(parts) if parts else i18n.t(Keys.QUERY_SUMMARY_ALL_SESSIONS)
+
+
+def collect_search_matches(
+    session_groups: Sequence[tuple[BaseAgent, list[Session]]],
+    *,
+    spec: QuerySpec,
+) -> list[SearchSessionMatch]:
+    return select_session_groups(session_groups, spec, diagnostic_sink=print_search_diagnostic)
+
+
+def display_search_results(matches: list[SearchSessionMatch]) -> None:
+    if not matches:
+        print(i18n.t(Keys.SEARCH_NO_RESULTS))
+        return
+
+    for index, match in enumerate(matches, start=1):
+        title = match.agent.get_formatted_title(match.session)
+        uri = match.agent.get_session_uri(match.session)
+        updated = to_local_datetime(match.session.updated_at).strftime("%Y-%m-%d %H:%M:%S %Z")
+        print(f"\n{index}. {safe_display_text(title)}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_PROVIDER)}: {safe_display_text(match.agent.display_name)}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_UPDATED)}: {updated}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_URI)}: {safe_display_text(uri)}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_RANK)}: {match.rank:.6g}")
+        print(f"   {i18n.t(Keys.SEARCH_RESULT_SNIPPET)}: {safe_display_text(match.snippet)}")
+
+
+def warn_list_ignored_options(output_specified: bool, format_specified: bool) -> None:
+    if format_specified:
+        print(i18n.t(Keys.LIST_IGNORE_FORMAT))
+    if output_specified:
+        print(i18n.t(Keys.LIST_IGNORE_OUTPUT))
 
 
 def handle_session_modes(
