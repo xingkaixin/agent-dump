@@ -168,7 +168,10 @@ class TestQueryHelpers:
 
         match_b = SearchSessionMatch(agent=agent_b, session=newer, snippet="new", rank=0.0)
         with mock.patch("agent_dump.cli_shared.query_session_groups", return_value=[match_b]):
-            matched = collect_query_matches([agent_a, agent_b], days=7, spec=make_query_spec(keyword="bug", limit=1))
+            matched = collect_query_matches(
+                [(agent_a, [older]), (agent_b, [newer])],
+                spec=make_query_spec(keyword="bug", limit=1),
+            )
 
         assert {name: [session.id for session in sessions] for name, sessions in matched.items()} == {"kimi": ["s-new"]}
 
@@ -187,7 +190,10 @@ class TestQueryHelpers:
         match_b = SearchSessionMatch(agent=agent_b, session=newer, snippet="new", rank=2.0)
 
         with mock.patch("agent_dump.cli_shared.search_session_groups", return_value=[match_b]):
-            result = collect_search_matches([agent_a, agent_b], days=7, spec=make_query_spec(keyword="bug", limit=1))
+            result = collect_search_matches(
+                [(agent_a, [older]), (agent_b, [newer])],
+                spec=make_query_spec(keyword="bug", limit=1),
+            )
 
         assert [(match.agent.name, match.session.id) for match in result] == [("kimi", "s-new")]
 

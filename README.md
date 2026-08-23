@@ -455,7 +455,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── collect_progress.py # Collect progress and run stats
 │       ├── collect_reduction.py # Collect concurrent summaries and reduction
 │       ├── collect_requests.py # Collect retries and structured responses
-│       ├── collect_sessions.py # Collect session discovery and chunk planning
+│       ├── collect_sessions.py # Collect session filtering, reading, and chunk planning
 │       ├── collect_summary.py  # Collect summary payload merge and JSON extraction
 │       ├── coercion.py         # Fault-tolerant conversion of untrusted provider scalars
 │       ├── config.py           # TOML configuration models and persistence

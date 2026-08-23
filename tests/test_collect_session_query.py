@@ -39,7 +39,7 @@ class TestCollectEntries:
         configure_session_data_lease(agent)
 
         entries, truncated = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=date(2026, 3, 5),
             until_date=date(2026, 3, 5),
             render_session_text_fn=lambda uri, data: f"# Session Dump\n{uri}\n",
@@ -78,7 +78,7 @@ class TestCollectEntries:
         configure_session_data_lease(agent)
 
         entries, truncated = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             query_spec=make_query_spec(project_path=Path("/repo/app")),
@@ -128,7 +128,10 @@ class TestCollectEntries:
         configure_session_data_lease(agent_b)
 
         entries, truncated = collect_entries(
-            agents=[agent_a, agent_b],
+            session_groups=[
+                (agent_a, agent_a.get_sessions.return_value),
+                (agent_b, agent_b.get_sessions.return_value),
+            ],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             query_spec=make_query_spec(keyword="refactor", limit=1),
@@ -175,7 +178,7 @@ class TestCollectEntries:
         configure_session_data_lease(agent)
 
         entries, truncated = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             query_spec=make_query_spec(keyword="fatal", roles={"assistant"}),
@@ -229,7 +232,7 @@ class TestCollectEntries:
         tracemalloc.start()
         baseline, _ = tracemalloc.get_traced_memory()
         entries, truncated = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, sessions)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             render_session_text_fn=lambda _uri, _data: "",

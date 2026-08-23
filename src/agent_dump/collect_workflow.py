@@ -278,8 +278,7 @@ def _prepare_collect_plan(
         available_agents = [agent for agent, _ in session_results]
         with scanner.diagnostic_scope(available_agents):
             entries, has_truncated = collect_entries(
-                scanner=scanner,
-                agents=available_agents,
+                session_groups=session_results,
                 since_date=since_date,
                 until_date=until_date,
                 collect_config=collect_config,
@@ -287,7 +286,6 @@ def _prepare_collect_plan(
                 render_session_text_fn=render_session_text,
                 local_tz=local_tz,
                 progress_callback=progress_callback,
-                session_results=session_results,
                 logger=logger,
             )
         if not entries:

@@ -51,7 +51,7 @@ class TestCollectEntries:
 
         progress: list[CollectProgressEvent] = []
         entries, truncated = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=2)).date(),
             until_date=now.date(),
             render_session_text_fn=lambda uri, data: f"# Session Dump\n{uri}\n{json.dumps(data)}",
@@ -100,7 +100,7 @@ class TestCollectEntries:
         agent.get_session_facts.return_value = derive_session_facts(facts_session)
 
         entries, _ = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=now.date(),
             until_date=now.date(),
             render_session_text_fn=lambda uri, data: f"{uri} {data}",
@@ -137,7 +137,7 @@ class TestCollectEntries:
         agent.get_session_facts.return_value = derive_session_facts(facts_session)
 
         entries, _ = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=now.date(),
             until_date=now.date(),
             collect_config=CollectConfig(agent_denies={"codex": ("/provider/denied",)}),
@@ -191,7 +191,7 @@ class TestCollectEntries:
         progress: list[CollectProgressEvent] = []
 
         entries, truncated = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
@@ -250,7 +250,7 @@ class TestCollectEntries:
         collector = threading.Thread(
             target=lambda: results.append(
                 collect_entries(
-                    agents=[agent],
+                    session_groups=[(agent, agent.get_sessions.return_value)],
                     since_date=(now - timedelta(days=1)).date(),
                     until_date=now.date(),
                     render_session_text_fn=lambda uri, data: f"{uri} {json.dumps(data)}",
@@ -292,7 +292,7 @@ class TestCollectEntries:
         log_path = tmp_path / "collect.log"
 
         entries, truncated = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=now.date(),
             until_date=now.date(),
             render_session_text_fn=lambda _uri, _data: "",
@@ -333,7 +333,7 @@ class TestCollectEntries:
 
         with pytest.raises(OSError, match="source disappeared"):
             collect_entries(
-                agents=[agent],
+                session_groups=[(agent, agent.get_sessions.return_value)],
                 since_date=now.date(),
                 until_date=now.date(),
                 render_session_text_fn=lambda _uri, _data: "",
@@ -391,7 +391,10 @@ class TestCollectEntries:
         configure_session_data_lease(codex_agent)
 
         entries, truncated = collect_entries(
-            agents=[claude_agent, codex_agent],
+            session_groups=[
+                (claude_agent, claude_agent.get_sessions.return_value),
+                (codex_agent, codex_agent.get_sessions.return_value),
+            ],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             collect_config=CollectConfig(agent_denies={"claudecode": ("/repo/fin-agent/agent",)}),
@@ -424,7 +427,7 @@ class TestCollectEntries:
         configure_session_data_lease(agent)
 
         entries, truncated = collect_entries(
-            agents=[agent],
+            session_groups=[(agent, agent.get_sessions.return_value)],
             since_date=(now - timedelta(days=1)).date(),
             until_date=now.date(),
             collect_config=CollectConfig(agent_denies={"claudecode": ("/repo/denied",)}),

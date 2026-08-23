@@ -545,8 +545,10 @@ class TestMain:
                                                             result = handle_collect_mode(collect_operation_from(args))
 
         assert result == 0
-        assert mock_collect.call_args.kwargs["agents"] == [cursor_agent]
-        assert mock_collect.call_args.kwargs["scanner"] is mock_scanner
+        assert mock_collect.call_args.kwargs["session_groups"] == [
+            (cursor_agent, cursor_agent.get_sessions.return_value)
+        ]
+        mock_scanner.get_available_sessions.assert_called_once()
 
     def test_collect_mode_logs_failure(self, tmp_path):
         args = argparse.Namespace(
