@@ -87,6 +87,7 @@
 | `i18n_keys.py` | 翻译键定义 |
 | `i18n_zh.py` | 中文翻译目录 |
 | `coercion.py` | 不可信 provider 标量的全输入域容错转换（safe_int / safe_float / safe_epoch_datetime） |
+| `date_input.py` | 用户日期输入的支持格式与纯解析策略 |
 | `export_paths.py` | 导出路径安全构造，拒绝越界与控制字符 |
 | `private_files.py` | 本工具在用户目录下创建的私有文件权限（0600 文件 / 0700 目录） |
 | `prompt_safety.py` | 摘要 request composition：system 规则、typed JSON data envelope 与来源追踪 |
@@ -100,7 +101,7 @@
 | `time_utils.py` | 时间与时区工具，全部转换的单一入口 |
 | `uri_support.py` | URI 解析与 Scanner locate 兼容 adapter |
 | `collect.py` | collect 内部兼容导入入口 |
-| `collect_dates.py` | collect 日期输入解析与日期范围归一化 |
+| `collect_dates.py` | collect 日期错误映射与日期范围归一化 |
 | `collect_events.py` | collect 高信号事件提取、渲染与 chunk 规划 |
 | `collect_llm.py` | collect 的 LLM 请求、错误分类与重试判定 |
 | `collect_logging.py` | collect 的私有 JSONL 诊断日志与一次性写入失败通知 |
@@ -237,6 +238,7 @@ agent-dump/
 │   ├── collect_summary.py       # collect 摘要 schema 与 payload 处理
 │   ├── config.py                # 配置模型、加载、校验与写入
 │   ├── config_command.py        # 配置查看与交互编辑
+│   ├── date_input.py            # 用户日期输入解析
 │   ├── diagnostics.py           # 失败与可恢复警告的统一结构化诊断
 │   ├── i18n.py                  # 语言选择与翻译运行时
 │   ├── i18n_en.py               # 英文翻译目录
@@ -445,7 +447,7 @@ list 与 collect 只在各自边界投影为 `Session`。带 `role:` 的查询�
 collect 模式入口：
 - `collect_workflow.py`：参数校验、dry-run、保存路径、进度编排。
 - `collect.py`：保留内部导入兼容，不拥有业务实现。
-- `collect_dates.py`：日期输入解析与日期范围归一化。
+- `collect_dates.py`：collect 日期错误映射与日期范围归一化。
 - `collect_events.py`：事件收集、渲染与 chunk planning。
 - `collect_llm.py`：AI 请求。
 - `collect_models.py`：`pm` / `insight` 模式、进度阶段与输出字段的闭集定义。

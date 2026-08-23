@@ -463,6 +463,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── coercion.py         # Fault-tolerant conversion of untrusted provider scalars
 │       ├── config.py           # TOML configuration models and persistence
 │       ├── config_command.py   # Interactive configuration command workflow
+│       ├── date_input.py       # Shared user date input parsing
 │       ├── diagnostics.py      # Structured fatal and recoverable diagnostics
 │       ├── export_paths.py     # Safe export path construction
 │       ├── i18n.py             # Language selection and translation runtime

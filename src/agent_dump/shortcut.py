@@ -1,12 +1,13 @@
 """Expand configured shortcut invocations into regular CLI arguments."""
 
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date
 from enum import Enum
 from pathlib import Path
 from string import Formatter
 
 from agent_dump.config import ShortcutConfig
+from agent_dump.date_input import parse_date_input
 
 
 class ShortcutErrorCode(str, Enum):
@@ -39,13 +40,10 @@ class ShortcutExpansionError(ValueError):
 
 
 def _parse_date(value: str) -> date:
-    normalized = value.strip()
-    for date_format in ("%Y%m%d", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(normalized, date_format).date()  # noqa: DTZ007
-        except ValueError:
-            continue
-    raise ShortcutExpansionError(ShortcutErrorCode.DATE_INVALID)
+    parsed_date = parse_date_input(value)
+    if parsed_date is None:
+        raise ShortcutExpansionError(ShortcutErrorCode.DATE_INVALID)
+    return parsed_date
 
 
 def _build_variables(params: tuple[str, ...], values: tuple[str, ...]) -> dict[str, str]:

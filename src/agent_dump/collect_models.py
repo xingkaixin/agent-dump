@@ -5,7 +5,6 @@ from datetime import date, datetime
 from enum import Enum
 from typing import ClassVar
 
-SUPPORTED_DATE_FORMATS = ("%Y-%m-%d", "%Y%m%d")
 SUMMARY_FIELDS = (
     "topics",
     "decisions",

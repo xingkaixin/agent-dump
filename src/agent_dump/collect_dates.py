@@ -1,9 +1,9 @@
 """Date parsing and range selection for collect mode."""
 
-from datetime import date, datetime, timedelta, tzinfo
+from datetime import date, timedelta, tzinfo
 from enum import Enum
 
-from agent_dump.collect_models import SUPPORTED_DATE_FORMATS
+from agent_dump.date_input import parse_date_input
 from agent_dump.time_utils import get_local_today
 
 
@@ -22,13 +22,10 @@ class CollectDateError(ValueError):
 
 def parse_user_date(value: str) -> date:
     """Parse a date from the formats accepted by collect mode."""
-    normalized = value.strip()
-    for date_format in SUPPORTED_DATE_FORMATS:
-        try:
-            return datetime.strptime(normalized, date_format).date()  # noqa: DTZ007
-        except ValueError:
-            continue
-    raise CollectDateError(CollectDateErrorCode.INVALID_FORMAT, value)
+    parsed_date = parse_date_input(value)
+    if parsed_date is None:
+        raise CollectDateError(CollectDateErrorCode.INVALID_FORMAT, value)
+    return parsed_date
 
 
 def resolve_collect_date_range(

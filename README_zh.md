@@ -461,6 +461,7 @@ deny = [
 │       ├── coercion.py         # 不可信 provider 标量的容错转换
 │       ├── config.py           # TOML 配置模型与持久化
 │       ├── config_command.py   # 交互式配置命令工作流
+│       ├── date_input.py       # 用户日期输入的共享解析
 │       ├── diagnostics.py      # 失败与可恢复告警的统一结构化诊断
 │       ├── export_paths.py     # 安全导出路径构造
 │       ├── i18n.py             # 语言选择与翻译运行时
