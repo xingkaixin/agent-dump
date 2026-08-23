@@ -2,9 +2,10 @@
 
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextvars import Context, copy_context
 from datetime import datetime, timedelta, timezone
+from itertools import chain, islice
 from pathlib import Path
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -81,34 +82,47 @@ class FileSessionAgent(BaseAgent):
         _, sessions = self._get_available_sessions(days)
         return sessions
 
+    def _iter_parsed_sessions(self, session_files: Iterable[Path]) -> Iterator[Session | None]:
+        file_iterator = iter(session_files)
+        initial_files = tuple(islice(file_iterator, _MAX_SCAN_WORKERS))
+        if not initial_files:
+            return
+
+        def parse_in_context(context: Context, path: Path) -> Session | None:
+            return context.run(self._parse_session_file_or_report, path)
+
+        with ThreadPoolExecutor(max_workers=len(initial_files)) as executor:
+            pending: set[Future[Session | None]] = {
+                executor.submit(parse_in_context, copy_context(), path) for path in initial_files
+            }
+            while pending:
+                completed, pending = wait(pending, return_when=FIRST_COMPLETED)
+                for future in completed:
+                    yield future.result()
+                    next_path = next(file_iterator, None)
+                    if next_path is not None:
+                        pending.add(executor.submit(parse_in_context, copy_context(), next_path))
+
     def _get_available_sessions(self, days: int | None = 7) -> tuple[bool, list[Session]]:
         """Discover candidate files once for availability and windowed parsing."""
         if not self._ensure_base_path():
             return False, []
 
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=days) if days is not None else None
-        session_files = list(self._iter_session_files())
-        if not session_files:
+        file_iterator = iter(self._iter_session_files())
+        first_file = next(file_iterator, None)
+        if first_file is None:
             return False, []
+        session_files: Iterable[Path] = chain((first_file,), file_iterator)
         if cutoff_time is not None:
-            session_files = [
+            session_files = (
                 file_path for file_path in session_files if self._should_scan_file_or_report(file_path, cutoff_time)
-            ]
-        if not session_files:
-            return True, []
+            )
 
         sessions: list[Session] = []
-        max_workers = min(_MAX_SCAN_WORKERS, len(session_files))
-
-        def parse_in_context(context: Context, path: Path) -> Session | None:
-            return context.run(self._parse_session_file_or_report, path)
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(parse_in_context, copy_context(), path) for path in session_files]
-            for future in as_completed(futures):
-                session = future.result()
-                if session and (cutoff_time is None or normalize_datetime_utc(session.created_at) >= cutoff_time):
-                    sessions.append(session)
+        for session in self._iter_parsed_sessions(session_files):
+            if session and (cutoff_time is None or normalize_datetime_utc(session.created_at) >= cutoff_time):
+                sessions.append(session)
 
         return True, sorted(sessions, key=lambda s: normalize_datetime_utc(s.created_at), reverse=True)
 
