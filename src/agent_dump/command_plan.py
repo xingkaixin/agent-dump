@@ -6,7 +6,13 @@ from typing import ClassVar
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS, get_uri_scheme_map
 from agent_dump.collect_models import CollectMode
-from agent_dump.output_formats import parse_format_spec, validate_formats_for_mode
+from agent_dump.output_formats import (
+    FileOutputFormat,
+    OutputFormat,
+    file_output_formats,
+    parse_format_spec,
+    validate_formats_for_mode,
+)
 from agent_dump.query_filter import QuerySpec, parse_query, parse_query_uri
 from agent_dump.uri_support import parse_uri
 
@@ -118,7 +124,7 @@ class UriOperation:
     expected_agent_name: str
     output: str | None
     output_specified: bool
-    output_formats: tuple[str, ...]
+    output_formats: tuple[OutputFormat, ...]
     head: bool
     summary: bool
     mode: ClassVar[CommandMode] = CommandMode.URI
@@ -149,7 +155,7 @@ class InteractiveOperation:
     query_spec: QuerySpec | None
     output: str | None
     output_specified: bool
-    output_formats: tuple[str, ...]
+    output_formats: tuple[FileOutputFormat, ...]
     show_metadata_summary: bool
     mode: ClassVar[CommandMode] = CommandMode.INTERACTIVE
 
@@ -332,7 +338,7 @@ def _build_uri_operation(request: CommandRequest) -> UriOperation:
             raise CommandPlanError(CommandPlanErrorCode.URI_HEAD_WITH_FORMAT)
         if request.summary:
             raise CommandPlanError(CommandPlanErrorCode.URI_HEAD_WITH_SUMMARY)
-        output_formats: tuple[str, ...] = ()
+        output_formats: tuple[OutputFormat, ...] = ()
     else:
         output_formats = _resolve_output_formats(request, mode=CommandMode.URI)
 
@@ -390,7 +396,7 @@ def _build_session_operation(
         query_spec=query_spec,
         output=request.output,
         output_specified=request.output_specified,
-        output_formats=output_formats,
+        output_formats=file_output_formats(output_formats),
         show_metadata_summary=not request.no_metadata_summary,
     )
 
@@ -405,9 +411,9 @@ def _validate_days(days: int) -> int:
     return days
 
 
-def _resolve_output_formats(request: CommandRequest, *, mode: CommandMode) -> tuple[str, ...]:
+def _resolve_output_formats(request: CommandRequest, *, mode: CommandMode) -> tuple[OutputFormat, ...]:
     try:
-        formats = (
+        formats: list[OutputFormat] = (
             parse_format_spec(request.raw_format)
             if request.raw_format is not None
             else (["print"] if mode is CommandMode.URI else ["json"])

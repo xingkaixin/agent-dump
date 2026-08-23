@@ -13,8 +13,9 @@ from agent_dump.diagnostics import (
     render_diagnostic,
     root_not_found,
 )
-from agent_dump.exporting import ExportRunResult, execute_exports
+from agent_dump.exporting import ExportFailure, ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
+from agent_dump.output_formats import FileOutputFormat
 from agent_dump.query_filter import (
     QuerySpec,
     SearchSessionMatch,
@@ -96,14 +97,14 @@ def display_sessions_list(
 def export_sessions_for_formats(
     agent: BaseAgent,
     sessions: list[Session],
-    formats: list[str],
+    formats: list[FileOutputFormat],
     output_base_dir: Path,
     *,
-    output_base_dirs: dict[str, Path] | None = None,
+    output_base_dirs: dict[FileOutputFormat, Path] | None = None,
 ) -> ExportRunResult:
     print(render_terminal_message(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
 
-    def _output_dir_for_format(output_format: str) -> Path:
+    def _output_dir_for_format(output_format: FileOutputFormat) -> Path:
         format_base_dir = (
             output_base_dirs.get(output_format, output_base_dir) if output_base_dirs is not None else output_base_dir
         )
@@ -117,7 +118,7 @@ def export_sessions_for_formats(
         session_uris={session.id: agent.get_session_uri(session) for session in sessions},
     )
     for attempt in result.attempts:
-        if attempt.output_path is not None:
+        if not isinstance(attempt, ExportFailure):
             print(
                 render_terminal_message(
                     Keys.EXPORT_SUCCESS_FORMAT,
@@ -128,7 +129,7 @@ def export_sessions_for_formats(
             )
             continue
 
-        error = attempt.error or RuntimeError("export failed without an error")
+        error = attempt.error
         diagnostic = error if isinstance(error, DiagnosticError) else wrap_runtime_fetch_error(error, agent=agent)
         print(render_diagnostic(diagnostic, t=i18n.t))
 
@@ -179,7 +180,7 @@ def resolve_output_base_dir(
     cli_output: str | None,
     output_specified: bool,
     export_output: str,
-    output_format: str,
+    output_format: FileOutputFormat,
 ) -> Path:
     if output_specified and cli_output:
         return Path(cli_output)

@@ -7,7 +7,7 @@ import pytest
 
 from agent_dump.agents.cursor import CursorAgent
 from agent_dump.diagnostics import DiagnosticError
-from agent_dump.output_formats import parse_format_spec, validate_uri_agent_formats
+from agent_dump.output_formats import file_output_formats, parse_format_spec, validate_uri_agent_formats
 
 
 class TestValidateUriAgentFormats:
@@ -42,3 +42,6 @@ class TestFormatSpec:
     def test_parse_format_spec_rejects_empty_part(self):
         with pytest.raises(ValueError):
             parse_format_spec("json,,raw")
+
+    def test_file_output_formats_excludes_print(self):
+        assert file_output_formats(["print", "json", "markdown", "raw"]) == ("json", "markdown", "raw")

@@ -10,12 +10,13 @@ from agent_dump.agents.base import Session
 from agent_dump.collect_models import CollectMode
 from agent_dump.command_plan import CollectOperation, CommandRequest, build_command_plan
 from agent_dump.config import CollectConfig
+from agent_dump.exporting import ExportRunStatus
 
 
 def make_export_result(*paths: Path) -> mock.MagicMock:
     result = mock.MagicMock()
     result.exported_paths = paths
-    result.had_success = bool(paths)
+    result.status = ExportRunStatus.SUCCEEDED if paths else ExportRunStatus.FAILED
     result.__len__.return_value = len(paths)
     return result
 

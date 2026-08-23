@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from pathlib import Path
 from typing import Protocol
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -18,6 +19,7 @@ from agent_dump.cli_shared import (
 from agent_dump.command_plan import InteractiveOperation, ListOperation, SearchOperation, SessionOperation
 from agent_dump.diagnostics import root_not_found
 from agent_dump.i18n import Keys, i18n
+from agent_dump.output_formats import FileOutputFormat
 from agent_dump.query_filter import QuerySpec
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
@@ -252,7 +254,7 @@ def _handle_interactive_mode(
 
     print(i18n.t(Keys.SESSIONS_SELECTED_COUNT, count=len(selected_sessions)))
 
-    output_base_dirs = {
+    output_base_dirs: dict[FileOutputFormat, Path] = {
         output_format: resolve_output_base_dir(
             cli_output=operation.output,
             output_specified=operation.output_specified,
@@ -261,7 +263,7 @@ def _handle_interactive_mode(
         )
         for output_format in operation.output_formats
     }
-    primary_output_format = operation.output_formats[0] if operation.output_formats else "json"
+    primary_output_format: FileOutputFormat = operation.output_formats[0] if operation.output_formats else "json"
     output_base_dir = output_base_dirs.get(
         primary_output_format,
         resolve_output_base_dir(
@@ -282,4 +284,4 @@ def _handle_interactive_mode(
     summary_paths = sorted({str(path.parent) for path in export_result.exported_paths})
     summary_path = ", ".join(summary_paths) if summary_paths else f"{output_base_dir}/{selected_agent.name}"
     print(render_terminal_message(Keys.EXPORT_SUMMARY, count=len(export_result), path=summary_path))
-    return 0 if export_result.had_success else 1
+    return 0 if export_result.status.has_success else 1

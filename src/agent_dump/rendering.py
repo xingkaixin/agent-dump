@@ -10,6 +10,7 @@ from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, Session
 from agent_dump.export_paths import build_session_output_path
 from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import should_filter_message_for_export
+from agent_dump.output_formats import FileOutputFormat
 from agent_dump.private_files import ensure_output_dir, write_private_text
 from agent_dump.text_safety import safe_body_text, safe_display_text
 from agent_dump.time_utils import to_local_datetime
@@ -158,7 +159,7 @@ def get_session_export_path(
     agent: BaseAgent,
     session: Session,
     output_dir: Path,
-    output_format: str,
+    output_format: FileOutputFormat,
 ) -> Path:
     """Derive the path an in-tree exporter will use without writing it."""
     if output_format == "json":
@@ -178,7 +179,7 @@ def export_session_in_format(
     agent: BaseAgent,
     session: Session,
     output_dir: Path,
-    output_format: str,
+    output_format: FileOutputFormat,
     *,
     session_data: Mapping[str, Any] | None = None,
     session_uri: str | None = None,

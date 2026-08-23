@@ -23,6 +23,7 @@ from agent_dump.cli_shared import (
     render_query_summary,
     show_loading,
 )
+from agent_dump.exporting import ExportRunStatus
 from agent_dump.paths import SearchRoot
 from agent_dump.query_filter import QuerySpec, SearchSessionMatch
 from agent_dump.rendering import format_session_metadata_summary, render_session_head, render_session_text
@@ -366,8 +367,7 @@ class TestExportSessions:
             tmp_path,
         )
 
-        assert result.all_failed is True
-        assert result.had_success is False
+        assert result.status is ExportRunStatus.FAILED
         assert result.exported_paths == ()
 
     def test_export_creates_directory(self, tmp_path):

@@ -14,9 +14,9 @@ from agent_dump.collect_requests import request_summary_from_llm
 from agent_dump.command_plan import UriOperation
 from agent_dump.config import AIConfig, AIConfigError, load_ai_config, validate_ai_config
 from agent_dump.diagnostics import DiagnosticError, session_not_found
-from agent_dump.exporting import execute_exports
+from agent_dump.exporting import ExportFailure, execute_exports
 from agent_dump.i18n import Keys, i18n
-from agent_dump.output_formats import validate_uri_agent_formats
+from agent_dump.output_formats import FileOutputFormat, OutputFormat, file_output_formats, validate_uri_agent_formats
 from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
 from agent_dump.rendering import render_session_head, render_session_text
 from agent_dump.scanner import AgentScanner
@@ -48,7 +48,7 @@ def build_uri_summary_prompt(uri: str, rendered_session_text: str) -> str:
 def maybe_generate_uri_summary(
     *,
     enabled: bool,
-    output_formats: list[str],
+    output_formats: list[OutputFormat],
     uri: str,
     agent: BaseAgent,
     session: Session,
@@ -169,9 +169,9 @@ def _handle_uri_mode(
             print(safe_body_text(output))
             had_success = True
 
-        file_formats = [fmt for fmt in operation.output_formats if fmt != "print"]
+        file_formats = file_output_formats(operation.output_formats)
 
-        def _output_dir_for_format(output_format: str) -> Path:
+        def _output_dir_for_format(output_format: FileOutputFormat) -> Path:
             return (
                 resolve_output_base_dir(
                     cli_output=operation.output,
@@ -192,8 +192,8 @@ def _handle_uri_mode(
             summaries={session.id: summary_markdown} if summary_markdown is not None else None,
         )
         for attempt in export_result.attempts:
-            if attempt.output_path is None:
-                error = attempt.error or RuntimeError("export failed without an error")
+            if isinstance(attempt, ExportFailure):
+                error = attempt.error
                 diagnostic = (
                     error if isinstance(error, DiagnosticError) else wrap_runtime_fetch_error(error, agent=agent)
                 )
@@ -201,10 +201,7 @@ def _handle_uri_mode(
                 continue
 
             if attempt.output_format == "json" and summary_markdown is not None:
-                if attempt.error is None:
-                    print(render_terminal_message(Keys.URI_SUMMARY_APPLIED, path=attempt.output_path))
-                else:
-                    print(render_terminal_message(Keys.URI_SUMMARY_API_FAILED_WARNING, error=attempt.error))
+                print(render_terminal_message(Keys.URI_SUMMARY_APPLIED, path=attempt.output_path))
             print(
                 render_terminal_message(
                     Keys.URI_EXPORT_SAVED,
@@ -212,7 +209,7 @@ def _handle_uri_mode(
                     format=attempt.output_format,
                 )
             )
-        had_success = had_success or export_result.had_success
+        had_success = had_success or export_result.status.has_success
         return 0 if had_success else 1
     except Exception as e:
         diagnostic = e if isinstance(e, DiagnosticError) else wrap_runtime_fetch_error(e, agent=agent)
