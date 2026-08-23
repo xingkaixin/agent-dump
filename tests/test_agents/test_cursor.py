@@ -813,6 +813,7 @@ class TestCursorAgent:
 
     def test_parse_helpers_cover_cursor_edge_shapes(self):
         agent = CursorAgent()
+        decoder = agent._transcript_decoder
 
         assert parse_cursor_json(b'{"ok": true}') == {"ok": True}
         assert parse_cursor_json(b"\xff") is None
@@ -830,25 +831,25 @@ class TestCursorAgent:
         assert agent._parse_datetime_utc(None) is None
 
         fallback_ms = 100
-        assert agent._extract_timestamp({"createdAt": "2026-01-01T00:00:00Z"}, fallback_ms) == 1767225600000
+        assert decoder._extract_timestamp({"createdAt": "2026-01-01T00:00:00Z"}, fallback_ms) == 1767225600000
         assert (
-            agent._extract_timestamp({"createdAt": "bad", "timingInfo": {"clientSettleTime": "123.0"}}, fallback_ms)
+            decoder._extract_timestamp({"createdAt": "bad", "timingInfo": {"clientSettleTime": "123.0"}}, fallback_ms)
             == 123
         )
-        assert agent._extract_timestamp({"timingInfo": {"clientRpcSendTime": "bad"}}, fallback_ms) == fallback_ms
+        assert decoder._extract_timestamp({"timingInfo": {"clientRpcSendTime": "bad"}}, fallback_ms) == fallback_ms
 
-        assert agent._extract_text_content({"codeBlocks": [{"content": "code"}]}, "user") == "code"
-        assert agent._extract_text_content({"thinking": {"text": "thought"}}, "assistant") == "thought"
-        assert agent._extract_text_content({"finalText": "done"}, "assistant") == "done"
+        assert decoder._extract_text_content({"codeBlocks": [{"content": "code"}]}, "user") == "code"
+        assert decoder._extract_text_content({"thinking": {"text": "thought"}}, "assistant") == "thought"
+        assert decoder._extract_text_content({"finalText": "done"}, "assistant") == "done"
 
-        assert agent._extract_subagent_prompt({"description": "Explore"}) == "Explore"
-        assert agent._extract_subagent_prompt("raw prompt") == "raw prompt"
-        assert agent._extract_subagent_prompt(["prompt"]) == json.dumps(["prompt"], ensure_ascii=False, indent=2)
-        assert agent._extract_subagent_type("raw") is None
+        assert decoder._extract_subagent_prompt({"description": "Explore"}) == "Explore"
+        assert decoder._extract_subagent_prompt("raw prompt") == "raw prompt"
+        assert decoder._extract_subagent_prompt(["prompt"]) == json.dumps(["prompt"], ensure_ascii=False, indent=2)
+        assert decoder._extract_subagent_type("raw") is None
 
-        assert agent._build_plan_part({"params": "raw"}, 1) is None
-        assert agent._build_plan_part({"params": json.dumps({"other": "value"})}, 1) is None
-        plan = agent._build_plan_part(
+        assert decoder._build_plan_part({"params": "raw"}, 1) is None
+        assert decoder._build_plan_part({"params": json.dumps({"other": "value"})}, 1) is None
+        plan = decoder._build_plan_part(
             {
                 "params": json.dumps({"plan": "  plan body  "}, ensure_ascii=False),
                 "result": json.dumps({"rejected": {"reason": "no"}}, ensure_ascii=False),
@@ -864,18 +865,18 @@ class TestCursorAgent:
             "time_created": 123,
         }
 
-        assert agent._extract_tool_output_parts([{"type": "text", "text": " output ", "time_created": 4}], 1) == [
+        assert decoder._extract_tool_output_parts([{"type": "text", "text": " output ", "time_created": 4}], 1) == [
             {"type": "text", "text": "output", "time_created": 4}
         ]
-        assert agent._extract_tool_output_parts("raw output", 5) == [
+        assert decoder._extract_tool_output_parts("raw output", 5) == [
             {"type": "text", "text": "raw output", "time_created": 5}
         ]
-        assert agent._extract_tool_output_parts(None, 5) == []
+        assert decoder._extract_tool_output_parts(None, 5) == []
 
-        assert agent._extract_tokens({"usage": {"input_tokens": 2, "output_tokens": 3}}) == (2, 3)
-        assert agent._extract_tokens({"contextWindowStatusAtCreation": {"tokensUsed": 9}}) == (9, 0)
+        assert decoder._extract_tokens({"usage": {"input_tokens": 2, "output_tokens": 3}}) == (2, 3)
+        assert decoder._extract_tokens({"contextWindowStatusAtCreation": {"tokensUsed": 9}}) == (9, 0)
 
-        tool_part, completion = agent._extract_tool_part(
+        tool_part, completion = decoder._extract_tool_part(
             {
                 "toolFormerData": {
                     "name": "read_file_v2",
@@ -1021,17 +1022,17 @@ class TestMalformedNumericFieldsInBubbles:
     """AD-122：bubble 里的非数字 token 计数不得让 cursor provider 抛异常。"""
 
     def test_non_numeric_token_counts_degrade_to_zero(self):
-        agent = CursorAgent()
+        decoder = CursorAgent()._transcript_decoder
 
-        assert agent._extract_tokens({"tokenCount": {"inputTokens": "abc", "outputTokens": None}}) == (0, 0)
-        assert agent._extract_tokens({"usage": {"input_tokens": [], "output_tokens": {}}}) == (0, 0)
-        assert agent._extract_tokens({"contextWindowStatusAtCreation": {"tokensUsed": "x"}}) == (0, 0)
+        assert decoder._extract_tokens({"tokenCount": {"inputTokens": "abc", "outputTokens": None}}) == (0, 0)
+        assert decoder._extract_tokens({"usage": {"input_tokens": [], "output_tokens": {}}}) == (0, 0)
+        assert decoder._extract_tokens({"contextWindowStatusAtCreation": {"tokensUsed": "x"}}) == (0, 0)
 
     def test_usable_token_counts_are_preserved(self):
-        agent = CursorAgent()
+        decoder = CursorAgent()._transcript_decoder
 
-        assert agent._extract_tokens({"tokenCount": {"inputTokens": 12, "outputTokens": 34}}) == (12, 34)
-        assert agent._extract_tokens({"tokenCount": {"inputTokens": "12", "outputTokens": "34"}}) == (12, 34)
+        assert decoder._extract_tokens({"tokenCount": {"inputTokens": 12, "outputTokens": 34}}) == (12, 34)
+        assert decoder._extract_tokens({"tokenCount": {"inputTokens": "12", "outputTokens": "34"}}) == (12, 34)
 
     def test_out_of_range_composer_timestamp_yields_none(self):
         agent = CursorAgent()
@@ -1054,7 +1055,7 @@ class TestMalformedNumericFieldsInBubbles:
         agent = CursorAgent()
 
         assert agent._parse_datetime_utc(value) is None
-        assert agent._extract_timestamp({"timingInfo": {"clientRpcSendTime": value}}, 123) == 123
+        assert agent._transcript_decoder._extract_timestamp({"timingInfo": {"clientRpcSendTime": value}}, 123) == 123
 
 
 def _subagent_tool_bubble(target_composer_id: str, timestamp_ms: int, tool_call_id: str) -> dict:
@@ -1168,9 +1169,10 @@ class TestSubagentExpansionIsBounded:
         )
 
         expansions: list[str] = []
-        original = agent._expand_subagent
+        decoder = agent._transcript_decoder
+        original = decoder._expand_subagent
         monkeypatch.setattr(
-            agent,
+            decoder,
             "_expand_subagent",
             lambda composer_id, **kwargs: (expansions.append(composer_id), original(composer_id, **kwargs))[1],
         )
@@ -1407,7 +1409,7 @@ class TestNaiveIsoIsInterpretedAsUtc:
         assert parsed.isoformat() == "2026-01-01T00:00:00+00:00"
         # Session 与 bubble 必须落在同一个瞬间，否则消息时间相对会话时间会整体漂移
         assert int(parsed.timestamp() * 1000) == self.NAIVE_EPOCH_MS
-        assert agent._extract_timestamp({"createdAt": self.NAIVE}, 0) == self.NAIVE_EPOCH_MS
+        assert agent._transcript_decoder._extract_timestamp({"createdAt": self.NAIVE}, 0) == self.NAIVE_EPOCH_MS
 
     @pytest.mark.parametrize("tz_name", ["UTC", "Asia/Shanghai"])
     @pytest.mark.parametrize(

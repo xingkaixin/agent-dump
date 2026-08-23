@@ -492,10 +492,12 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │           ├── zcode.py        # ZCode Agent
 │           ├── claudecode.py   # Claude Code Agent
 │           ├── codex.py        # Codex Agent
+│           ├── codex_transcript.py # Codex response stream decoder
 │           ├── codex_enrichment.py # Codex subagent and skill enrichment
 │           ├── codex_patch.py  # Codex apply_patch parser
 │           ├── cursor.py       # Cursor Agent
 │           ├── cursor_storage.py # Cursor read-only SQLite access
+│           ├── cursor_transcript.py # Cursor transcript decoder
 │           ├── kimi.py         # Kimi Agent
 │           ├── kimi_wire.py    # Kimi wire event stream parser
 │           ├── pi.py           # Pi Agent
