@@ -1,13 +1,14 @@
 """Session selection, reading, and event planning for collect mode."""
 
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, tzinfo
 from pathlib import Path
 import sys
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.bounded_concurrency import iter_completed_futures
 from agent_dump.collect_events import chunk_collect_events, extract_collect_events
 from agent_dump.collect_logging import CollectLogger
 from agent_dump.collect_models import (
@@ -37,32 +38,6 @@ def collect_scan_days(since_date: date, local_tz: tzinfo | None = None) -> int:
     """Return the provider window needed to cover the requested local start date."""
     resolved_local_tz = local_tz or get_local_timezone()
     return max((get_local_today(resolved_local_tz) - since_date).days + 1, 1)
-
-
-def _iter_bounded_session_reads(
-    executor: ThreadPoolExecutor,
-    matched_sessions: list[_MatchedSession],
-    read_entry: Callable[[_MatchedSession], CollectEntry],
-    max_pending: int,
-) -> Iterator[tuple[int, _MatchedSession, Future[CollectEntry]]]:
-    pending_sessions = iter(enumerate(matched_sessions))
-    future_to_session: dict[Future[CollectEntry], tuple[int, _MatchedSession]] = {}
-
-    for _ in range(min(max_pending, len(matched_sessions))):
-        session_index, matched_session = next(pending_sessions)
-        future_to_session[executor.submit(read_entry, matched_session)] = (session_index, matched_session)
-
-    while future_to_session:
-        done, _ = wait(tuple(future_to_session), return_when=FIRST_COMPLETED)
-        for future in done:
-            session_index, matched_session = future_to_session.pop(future)
-            try:
-                next_index, next_session = next(pending_sessions)
-            except StopIteration:
-                pass
-            else:
-                future_to_session[executor.submit(read_entry, next_session)] = (next_index, next_session)
-            yield session_index, matched_session, future
 
 
 def _session_local_date(session: Session, local_tz: tzinfo) -> date:
@@ -180,11 +155,10 @@ def collect_entries(
             last_error: Exception | None = None
             completed_session_uris: dict[int, str] = {}
             next_progress_index = 0
-            for session_index, matched_session, future in _iter_bounded_session_reads(
-                executor,
+            for session_index, matched_session, future in iter_completed_futures(
                 matched_sessions,
-                _collect_entry,
-                max_workers,
+                max_pending=max_workers,
+                submit=lambda item: executor.submit(_collect_entry, item),
             ):
                 agent, session, _ = matched_session
                 try:

@@ -436,6 +436,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── __about__.py        # Single version source
 │       ├── __main__.py         # python -m agent_dump entry point
 │       ├── agent_registry.py   # Provider registry
+│       ├── bounded_concurrency.py # Bounded Future scheduling
 │       ├── cli.py              # Argument parsing and mode dispatch
 │       ├── cli_shared.py       # Shared CLI helpers
 │       ├── command_plan.py     # Normalizes CLI arguments into one command plan

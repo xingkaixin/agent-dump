@@ -63,6 +63,7 @@
 | 模块 | 职责 |
 |------|------|
 | `agent_registry.py` | 注册 provider、URI scheme、用户可见路径说明 |
+| `bounded_concurrency.py` | 有界 Future 提交、完成等待与补位机制；业务失败和排序策略由调用方拥有 |
 | `scanner.py` | Provider availability、session list / locate 编排与逐 provider 失败隔离 |
 | `cli.py` | 参数解析、模式选择、依赖装配 |
 | `cli_shared.py` | CLI 工作流共享能力：查询展示、批量导出、输出目录与诊断渲染 |
@@ -211,6 +212,7 @@ agent-dump/
 │   ├── __about__.py             # 单一版本源
 │   ├── __main__.py              # python -m agent_dump 入口
 │   ├── agent_registry.py        # provider 注册表
+│   ├── bounded_concurrency.py   # 有界 Future 调度机制
 │   ├── cli.py                   # CLI 参数解析与模式分发
 │   ├── cli_shared.py            # CLI 工作流共享展示、诊断与批量导出
 │   ├── command_plan.py          # CLI 操作事实、Query/URI、默认值与 modifier 归一化
