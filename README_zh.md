@@ -494,6 +494,7 @@ deny = [
 │           ├── opencode.py     # OpenCode Agent
 │           ├── zcode.py        # ZCode Agent
 │           ├── claudecode.py   # Claude Code Agent
+│           ├── claude_transcript.py # Claude JSONL 转录解析
 │           ├── codex.py        # Codex Agent
 │           ├── codex_transcript.py # Codex response stream 解析
 │           ├── codex_enrichment.py # Codex subagent 与 skill 增强

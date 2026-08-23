@@ -13,6 +13,7 @@ from message_test_support import require_text_part, require_tool_part
 import pytest
 
 from agent_dump.agents.base import Session
+from agent_dump.agents.claude_transcript import ClaudeTranscriptDecoder
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
 from agent_dump.paths import ProviderRoots
@@ -670,8 +671,6 @@ class TestClaudeCodeAgent:
 
     def test_convert_to_opencode_format_user(self):
         """测试 user 类型消息转换"""
-        agent = ClaudeCodeAgent()
-
         data = {
             "type": "user",
             "uuid": "msg-001",
@@ -681,7 +680,7 @@ class TestClaudeCodeAgent:
                 "content": "Hello",
             },
         }
-        result = agent._convert_to_opencode_format(data)
+        result = ClaudeTranscriptDecoder.decode_record(data)
 
         assert result is not None
         assert result["role"] == "user"
@@ -690,8 +689,6 @@ class TestClaudeCodeAgent:
 
     def test_convert_to_opencode_format_assistant_text(self):
         """测试 assistant text 类型消息转换"""
-        agent = ClaudeCodeAgent()
-
         data = {
             "type": "assistant",
             "uuid": "msg-002",
@@ -703,7 +700,7 @@ class TestClaudeCodeAgent:
                 "usage": {"input_tokens": 10, "output_tokens": 20},
             },
         }
-        result = agent._convert_to_opencode_format(data)
+        result = ClaudeTranscriptDecoder.decode_record(data)
 
         assert result is not None
         assert result["role"] == "assistant"
@@ -714,8 +711,6 @@ class TestClaudeCodeAgent:
 
     def test_convert_to_opencode_format_assistant_tool_use(self):
         """测试 assistant tool_use 类型消息转换"""
-        agent = ClaudeCodeAgent()
-
         data = {
             "type": "assistant",
             "uuid": "msg-003",
@@ -732,7 +727,7 @@ class TestClaudeCodeAgent:
                 ],
             },
         }
-        result = agent._convert_to_opencode_format(data)
+        result = ClaudeTranscriptDecoder.decode_record(data)
 
         assert result is not None
         assert result["parts"][0]["type"] == "tool"
@@ -742,8 +737,6 @@ class TestClaudeCodeAgent:
 
     def test_convert_to_opencode_format_tool_result(self):
         """测试 tool_result 类型消息转换"""
-        agent = ClaudeCodeAgent()
-
         data = {
             "type": "tool_result",
             "uuid": "msg-004",
@@ -753,7 +746,7 @@ class TestClaudeCodeAgent:
                 "content": [{"text": "Tool output"}],
             },
         }
-        result = agent._convert_to_opencode_format(data)
+        result = ClaudeTranscriptDecoder.decode_record(data)
 
         assert result is not None
         assert result["role"] == "tool"
@@ -761,8 +754,6 @@ class TestClaudeCodeAgent:
 
     def test_convert_to_opencode_format_tool_result_string_content(self):
         """测试 tool_result 字符串 content 类型消息转换"""
-        agent = ClaudeCodeAgent()
-
         data = {
             "type": "tool_result",
             "uuid": "msg-005",
@@ -772,31 +763,27 @@ class TestClaudeCodeAgent:
                 "content": "String content",
             },
         }
-        result = agent._convert_to_opencode_format(data)
+        result = ClaudeTranscriptDecoder.decode_record(data)
 
         assert result is not None
         assert require_text_part(result["parts"][0])["text"] == "String content"
 
     def test_convert_to_opencode_format_unknown_type(self):
         """测试未知类型返回 None"""
-        agent = ClaudeCodeAgent()
-
         data = {"type": "unknown", "timestamp": "2026-01-01T00:00:00Z", "message": {}}
-        result = agent._convert_to_opencode_format(data)
+        result = ClaudeTranscriptDecoder.decode_record(data)
 
         assert result is None
 
     def test_convert_to_opencode_format_invalid_timestamp(self):
         """测试无效时间戳处理"""
-        agent = ClaudeCodeAgent()
-
         data = {
             "type": "user",
             "uuid": "msg-001",
             "timestamp": "invalid-timestamp",
             "message": {"content": "Hello"},
         }
-        result = agent._convert_to_opencode_format(data)
+        result = ClaudeTranscriptDecoder.decode_record(data)
 
         assert result is not None
         assert result["time_created"] == 0

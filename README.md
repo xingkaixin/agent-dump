@@ -494,6 +494,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │           ├── opencode.py     # OpenCode Agent
 │           ├── zcode.py        # ZCode Agent
 │           ├── claudecode.py   # Claude Code Agent
+│           ├── claude_transcript.py # Claude JSONL transcript decoder
 │           ├── codex.py        # Codex Agent
 │           ├── codex_transcript.py # Codex response stream decoder
 │           ├── codex_enrichment.py # Codex subagent and skill enrichment
