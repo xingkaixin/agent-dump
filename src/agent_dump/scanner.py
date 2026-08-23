@@ -26,11 +26,6 @@ class AgentScanner:
     ) -> None:
         self.agents = list(agents) if agents is not None else create_registered_agents()
         self._diagnostic_sink = diagnostic_sink
-        self._configure_provider_diagnostics(self.agents)
-
-    def _configure_provider_diagnostics(self, agents: Sequence[BaseAgent]) -> None:
-        for agent in agents:
-            agent.configure_diagnostics(self._diagnostic_sink)
 
     @staticmethod
     def _operation_failure_diagnostic(agent: BaseAgent, exc: Exception) -> ProviderDiagnostic:
@@ -61,7 +56,6 @@ class AgentScanner:
         selected_agents = list(agents) if agents is not None else self.agents
         if not selected_agents:
             return []
-        self._configure_provider_diagnostics(selected_agents)
 
         def run_for_scanner(agent: BaseAgent) -> T:
             with agent.diagnostic_context(self._diagnostic_sink):
