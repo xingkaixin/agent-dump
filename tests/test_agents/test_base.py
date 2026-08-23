@@ -383,7 +383,7 @@ class TestBaseAgent:
             source_path=Path("/test"),
             metadata={
                 "cwd": "/workspace/demo",
-                "model": "gpt-5",
+                "model_provider": "gpt-5",
                 "message_count": 12,
             },
         )
@@ -394,11 +394,11 @@ class TestBaseAgent:
         assert result == {
             "cwd_project": "/workspace/demo",
             "model": "gpt-5",
-            "branch": None,
             "message_count": 12,
             "message_count_completeness": "exact",
             "updated_at": "2024-01-01 11:00",
         }
+        assert agent.get_session_head(session)["model"] == result["model"]
 
     def test_get_session_facts_distinguishes_location_project_and_source(self):
         agent = ConcreteAgent()
@@ -413,6 +413,7 @@ class TestBaseAgent:
                 "cwd": "/workspace/real",
                 "directory": "/workspace/legacy",
                 "project": "project-hash",
+                "model": "gpt-5",
             },
         )
 
@@ -420,6 +421,7 @@ class TestBaseAgent:
 
         assert facts.working_directory == Path("/workspace/real")
         assert facts.provider_project == "project-hash"
+        assert facts.model == "gpt-5"
         assert facts.session_source == source
         assert facts.change_sources == ()
         assert facts.message_count.completeness is MessageCountCompleteness.UNKNOWN

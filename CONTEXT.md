@@ -33,6 +33,9 @@ _Avoid_: Working Directory
 The read-only file, directory, or database record from which a Session is derived.
 _Avoid_: Working Directory
 
+**Model**:
+The Provider-reported model identifier associated with a Session when known.
+
 **Message Count Fact**:
 The number of messages known for a Session together with its Count Completeness.
 _Avoid_: Total Messages, when any selected Session has an unknown count
@@ -95,5 +98,7 @@ _Avoid_: Export
   their smaller Search or Collect output has been derived.
 - List, Lightweight Head, and statistics project the same Message Count Fact;
   they do not interpret Provider metadata independently.
+- List and Lightweight Head project the same Model fact; they do not interpret
+  Provider metadata independently.
 - An unknown Message Count Fact remains visible as unknown. Shared workflows do
   not turn the sum of known counts into an apparently complete total.
