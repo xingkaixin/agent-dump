@@ -12,7 +12,6 @@ from typing import Protocol
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, resolve_collect_date_range
 from agent_dump.collect_logging import CollectLogger, create_collect_logger
 from agent_dump.collect_models import (
-    CollectEntry,
     CollectFailurePhase,
     CollectOverviewProgress,
     CollectProgressEvent,
@@ -222,7 +221,6 @@ class _SummaryRequester(Protocol):
 
 @dataclass(frozen=True)
 class _CollectPlan:
-    entries: list[CollectEntry]
     planned_entries: list[PlannedCollectEntry]
     has_truncated: bool
     run_stats: CollectRunStats
@@ -328,7 +326,6 @@ def _prepare_collect_plan(
         return None
 
     return _CollectPlan(
-        entries=entries,
         planned_entries=planned_entries,
         has_truncated=has_truncated,
         run_stats=run_stats,
@@ -484,7 +481,11 @@ def _handle_collect_execution(
     if output is None:
         return 1
 
-    logger.log("collect_run_finish", output_path=str(output.output_path), session_count=len(plan.entries))
+    logger.log(
+        "collect_run_finish",
+        output_path=str(output.output_path),
+        session_count=plan.run_stats.session_count,
+    )
     print(safe_body_text(output.markdown))
     print(render_terminal_message(Keys.COLLECT_OUTPUT_SAVED, path=output.output_path))
     return 0

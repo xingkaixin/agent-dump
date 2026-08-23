@@ -161,14 +161,11 @@ class TestCollectInsightMode:
     def test_build_summary_bucket_lines_insight_mode(self):
         summaries = [
             SessionSummaryEntry(
-                index=0,
                 collect_entry=self._entry(),
                 summary_data=normalize_summary_payload(
                     {"scene": ["调试断言"], "stuck": ["断言反复失败"], "turning": ["改用 waitFor"]},
                     mode=CollectMode.INSIGHT,
                 ),
-                chunk_count=1,
-                source_truncated=False,
             ),
         ]
 
