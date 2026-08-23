@@ -1,4 +1,5 @@
 from collections.abc import Iterable, Iterator
+from concurrent.futures import Future
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -80,6 +81,69 @@ def test_available_file_sessions_reuse_one_file_discovery(tmp_path: Path) -> Non
 
     assert [(item.id, item.source_path) for item in results[0][1]] == [("target", good_path)]
     assert agent.file_discovery_count == 1
+
+
+def test_file_scan_bounds_pending_parse_tasks(tmp_path: Path, monkeypatch) -> None:
+    for index in range(40):
+        (tmp_path / f"{index:02}.jsonl").touch()
+
+    class StreamingFileAgent(FailingFileAgent):
+        def __init__(self, root: Path) -> None:
+            super().__init__(root)
+            self.discovered = 0
+
+        def _iter_session_files(self) -> Iterator[Path]:
+            if self.base_path is None:
+                return
+            for path in sorted(self.base_path.glob("*.jsonl")):
+                self.discovered += 1
+                yield path
+
+    agent = StreamingFileAgent(tmp_path)
+
+    class RecordingFuture(Future[Session | None]):
+        def __init__(self, executor: "RecordingExecutor") -> None:
+            super().__init__()
+            self._executor = executor
+            self._consumed = False
+
+        def result(self, timeout: float | None = None) -> Session | None:
+            if not self._consumed:
+                self._executor.pending -= 1
+                self._consumed = True
+            return super().result(timeout)
+
+    class RecordingExecutor:
+        instance: "RecordingExecutor"
+
+        def __init__(self, max_workers: int) -> None:
+            self.max_workers = max_workers
+            self.pending = 0
+            self.max_pending = 0
+            self.discovered_before_start = agent.discovered
+            type(self).instance = self
+
+        def __enter__(self) -> "RecordingExecutor":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def submit(self, fn, *args) -> RecordingFuture:
+            self.pending += 1
+            self.max_pending = max(self.max_pending, self.pending)
+            future = RecordingFuture(self)
+            future.set_result(fn(*args))
+            return future
+
+    monkeypatch.setattr("agent_dump.agents.file_sessions.ThreadPoolExecutor", RecordingExecutor)
+
+    sessions = agent.get_sessions(days=None)
+
+    executor = RecordingExecutor.instance
+    assert len(sessions) == 40
+    assert executor.discovered_before_start <= executor.max_workers
+    assert executor.max_pending <= executor.max_workers
 
 
 def test_file_lookup_reports_bad_candidate_and_continues(tmp_path: Path) -> None:
