@@ -48,6 +48,7 @@ from agent_dump.config import (
 from agent_dump.i18n import Keys, i18n
 from agent_dump.rendering import render_session_text
 from agent_dump.scanner import AgentScanner
+from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_body_text, safe_display_text
 from agent_dump.time_utils import get_local_timezone
@@ -286,6 +287,7 @@ def _prepare_collect_plan(
                 render_session_text_fn=render_session_text,
                 local_tz=local_tz,
                 progress_callback=progress_callback,
+                diagnostic_sink=print_search_diagnostic,
                 logger=logger,
             )
         if not entries:

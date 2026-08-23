@@ -477,6 +477,7 @@ deny = [
 │       ├── query_filter.py     # 查询解析与过滤
 │       ├── query_semantics.py  # Query/Search 字面语义与可搜索语料
 │       ├── search_index.py     # FTS5 搜索索引
+│       ├── search_diagnostics.py # 搜索结构化诊断
 │       ├── scanner.py          # Agent 扫描器
 │       ├── selector.py         # 交互式选择
 │       ├── session_data.py     # 有界请求缓存与批量读取 lease

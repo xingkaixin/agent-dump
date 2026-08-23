@@ -28,6 +28,7 @@ from agent_dump.query_filter import (
     search_sessions_by_query,
 )
 from agent_dump.query_semantics import TextQuery, TextQueryMode
+from agent_dump.search_diagnostics import print_search_diagnostic
 from agent_dump.search_index import SearchIndex, SearchResult
 
 
@@ -257,7 +258,12 @@ class TestFilterSessions:
         session.source_path.write_text('{"internal_metadata": "fatal"}')
 
         with mock.patch("agent_dump.query_filter._try_indexed_search", return_value=None):
-            result = filter_sessions(agent, [session], "fatal")
+            result = filter_sessions(
+                agent,
+                [session],
+                "fatal",
+                diagnostic_sink=print_search_diagnostic,
+            )
 
         assert result == []
         assert (
@@ -684,7 +690,7 @@ class TestSearchSessionsByQuery:
                 rank=3.25,
             )
         ]
-        index.update.assert_called_once_with(agent, [session])
+        index.update.assert_called_once_with(agent, [session], diagnostic_sink=None)
         index.search.assert_called_once_with(
             TextQuery.parse("auth timeout", TextQueryMode.SEARCH_TERMS),
             agent_names={"codex"},
@@ -713,7 +719,7 @@ class TestSearchSessionsByQuery:
             )
 
         assert [match.session.id for match in result] == ["s1"]
-        index.update.assert_called_once_with(agent, [scoped, outside])
+        index.update.assert_called_once_with(agent, [scoped, outside], diagnostic_sink=None)
 
     def test_fallback_search_builds_english_snippet_when_fts_unavailable(self, tmp_path):
         session = make_session("s1", "Auth session", tmp_path / "s1.jsonl")
@@ -869,6 +875,7 @@ class TestSearchSessionsByQuery:
                 agent,
                 [broken, healthy],
                 make_query_spec(keyword="matching", roles={"user"}),
+                diagnostic_sink=print_search_diagnostic,
             )
 
         assert [match.session for match in result] == [healthy]
@@ -1046,6 +1053,23 @@ class TestRoleLimitPushdown:
 
 
 class TestQuerySessionGroups:
+    def test_reuses_one_search_index_for_all_providers(self, tmp_path):
+        codex = DummyAgent(name="codex", session_data={"codex-hit": {"messages": []}})
+        kimi = DummyAgent(name="kimi", session_data={"kimi-hit": {"messages": []}})
+        codex_session = make_session("codex-hit", "matching", tmp_path / "codex.jsonl")
+        kimi_session = make_session("kimi-hit", "matching", tmp_path / "kimi.jsonl")
+        index = mock.MagicMock()
+        index.is_available = False
+
+        with mock.patch("agent_dump.query_filter.SearchIndex", return_value=index) as index_factory:
+            result = query_session_groups(
+                [(codex, [codex_session]), (kimi, [kimi_session])],
+                make_query_spec(keyword="matching"),
+            )
+
+        assert [match.session.id for match in result] == ["codex-hit", "kimi-hit"]
+        index_factory.assert_called_once_with()
+
     def test_applies_global_limit_and_preserves_selected_evidence(self, tmp_path):
         agent = DummyAgent(name="codex")
         older = make_session("s-old", "old", tmp_path / "old.jsonl")
@@ -1057,7 +1081,7 @@ class TestQuerySessionGroups:
             SearchSessionMatch(agent, newer, "**bug** new", 0.0, "assistant"),
         ]
 
-        with mock.patch("agent_dump.query_filter.query_session_matches", return_value=matches):
+        with mock.patch("agent_dump.query_filter._session_matches", return_value=matches):
             result = query_session_groups([(agent, [older, newer])], make_query_spec(limit=1))
 
         assert result == [matches[1]]
@@ -1073,7 +1097,7 @@ class TestQuerySessionGroups:
             SearchSessionMatch(agent, newer, "new", 0.0, "user"),
         ]
 
-        with mock.patch("agent_dump.query_filter.query_session_matches", return_value=matches):
+        with mock.patch("agent_dump.query_filter._session_matches", return_value=matches):
             result = query_session_groups([(agent, [older, newer])], make_query_spec(limit=5))
 
         assert result == [matches[1], matches[0]]
@@ -1098,7 +1122,7 @@ class TestSearchSessionGroups:
             SearchSessionMatch(agent=kimi, session=tie_newer, snippet="tie", rank=1.0),
             SearchSessionMatch(agent=codex, session=older_high_rank, snippet="high", rank=2.0),
         ]
-        with mock.patch("agent_dump.query_filter.search_sessions_by_query", return_value=matches):
+        with mock.patch("agent_dump.query_filter._session_matches", return_value=matches):
             result = search_session_groups([(codex, [])], make_query_spec(keyword="bug", limit=3))
 
         assert [(match.agent.name, match.session.id) for match in result] == [
