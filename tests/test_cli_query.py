@@ -331,7 +331,7 @@ class TestMain:
         assert "查询条件无效" in captured.out
         assert "下一步" in captured.out
 
-    def test_main_list_mode_with_structured_query_uses_query_filter(self, capsys):
+    def test_main_list_mode_with_structured_query_uses_query_filter(self, capsys, tmp_path):
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
             mock_scanner = mock.MagicMock()
             known_agent = mock.MagicMock()
@@ -353,18 +353,22 @@ class TestMain:
             configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
+            project_path = tmp_path / "project with spaces"
             with mock.patch(
                 "agent_dump.cli_shared.select_session_groups",
                 return_value=[SearchSessionMatch(mock_agent, session, "bug", 0.0, "user")],
             ) as mock_filter:
-                with mock.patch("sys.argv", ["agent-dump", "--list", "-query", "bug role:user path:."]):
+                with mock.patch(
+                    "sys.argv",
+                    ["agent-dump", "--list", "-query", f'bug role:user path:"{project_path}"'],
+                ):
                     result = main()
 
         assert result == 0
         spec = mock_filter.call_args.args[1]
         assert spec.keyword == "bug"
         assert spec.roles == {"user"}
-        assert spec.project_path == Path.cwd().resolve()
+        assert spec.project_path == project_path.resolve()
         assert "roles=user" in capsys.readouterr().out
 
     def test_main_interactive_query_no_match_returns_1(self, capsys):

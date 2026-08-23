@@ -217,6 +217,7 @@ uv run agent-dump --list -days 3              # List sessions from last 3 days
 uv run agent-dump --list -query error         # List sessions matching keyword "error"
 uv run agent-dump --list -query codex,kimi:error  # Query only within Codex/Kimi
 uv run agent-dump --list -query 'bug provider:codex path:.'  # Structured query: keyword + provider + path
+uv run agent-dump --list -query 'bug path:"/Users/me/My Project"'  # Quote structured values containing spaces
 uv run agent-dump --interactive -query 'role:user limit:20 refactor'  # Structured query with role and global limit
 uv run agent-dump 'agents://.?q=refactor&providers=codex,claude'  # Query recent sessions for current repo
 uv run agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # Structured query URI
@@ -237,6 +238,7 @@ uv run agent-dump -query error                # Auto-activates list mode
 # - `error:timeout` remains a plain keyword query.
 # - `codex,kimi:error` remains the legacy agent-scoped query syntax.
 # - Structured mode is activated only when a known key appears: provider / role / path / cwd / limit.
+# - Quote or escape structured values containing spaces, for example `path:"/Users/me/My Project"`.
 # - `role:...` constrains keyword matching to messages of those roles.
 # - `limit:...` truncates the final global matched result set.
 
@@ -321,7 +323,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `-d`, `-days` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `-since/-until` are omitted. | 7 outside collect; today only in collect |
-| `-q`, `-query` | Query filter. The keyword is one case-insensitive literal phrase after whitespace normalization, matched within a session title or logical transcript. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
+| `-q`, `-query` | Query filter. The keyword is one case-insensitive literal phrase after whitespace normalization, matched within a session title or logical transcript. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print bounded discovery metadata without rereading the transcript; message count is exact when discovery scanned the complete source and explicitly `unknown` otherwise. Does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
 | `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |

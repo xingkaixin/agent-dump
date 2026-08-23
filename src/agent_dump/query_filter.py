@@ -5,6 +5,7 @@ Query parsing and session filtering helpers.
 from collections.abc import Sequence, Set
 from dataclasses import dataclass
 from pathlib import Path
+import shlex
 from urllib.parse import ParseResult, parse_qs, urlparse
 
 from agent_dump.agents.base import BaseAgent, Session
@@ -346,13 +347,26 @@ def is_path_scope_match(project_path: Path, session_path: Path) -> bool:
 
 
 def _contains_structured_query_terms(query: str) -> bool:
-    for token in query.split():
-        key, separator, _ = token.partition(":")
-        if not separator:
-            continue
-        if key.strip().lower() in STRUCTURED_QUERY_KEYS:
-            return True
-    return False
+    raw_tokens = query.split()
+    if any(_is_structured_query_token(token) for token in raw_tokens):
+        return True
+    try:
+        tokens = shlex.split(query)
+    except ValueError:
+        return False
+    return any(_is_structured_query_token(token) for token in tokens)
+
+
+def _is_structured_query_token(token: str) -> bool:
+    key, separator, _ = token.partition(":")
+    return bool(separator and key.strip().lower() in STRUCTURED_QUERY_KEYS)
+
+
+def _split_structured_query(raw: str) -> list[str]:
+    try:
+        return shlex.split(raw)
+    except ValueError as exc:
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_INVALID_SYNTAX)) from exc
 
 
 def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
@@ -362,7 +376,7 @@ def _parse_structured_query(raw: str, valid_agents: set[str]) -> QuerySpec:
     project_path: Path | None = None
     limit: int | None = None
 
-    for token in raw.split():
+    for token in _split_structured_query(raw):
         key, separator, value = token.partition(":")
         if not separator:
             keyword_terms.append(token)

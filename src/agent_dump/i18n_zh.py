@@ -273,6 +273,7 @@ ZH_TRANSLATIONS = {
     Keys.QUERY_ERROR_UNKNOWN_FIELD: "未知查询字段: {field}",
     Keys.QUERY_ERROR_DUPLICATE_PATH: "path/cwd 只能指定一次",
     Keys.QUERY_ERROR_DUPLICATE_LIMIT: "limit 只能指定一次",
+    Keys.QUERY_ERROR_INVALID_SYNTAX: "结构化查询的引号或转义无效",
     Keys.PATCH_ERROR_EMPTY: "patch 为空",
     Keys.PATCH_ERROR_MISSING_HEADER: "patch 缺少 Begin Patch 头",
     Keys.PATCH_ERROR_MISSING_FOOTER: "patch 缺少 End Patch 尾",
