@@ -109,6 +109,15 @@ def test_collect_reports_failure_from_the_stage_that_raised(
     )
 
 
+def test_collect_finish_log_uses_run_stats_session_count(capsys) -> None:
+    result, logger = _run_collect_with_failure("success")
+    capsys.readouterr()
+
+    finish_call = next(call for call in logger.log.call_args_list if call.args[0] == "collect_run_finish")
+    assert result == 0
+    assert finish_call.kwargs["session_count"] == 1
+
+
 @pytest.mark.parametrize("language", ALL_LANGUAGES)
 def test_collect_reports_output_write_failure(language, use_language, capsys) -> None:
     use_language(language)

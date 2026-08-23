@@ -201,18 +201,14 @@ class CollectEntry:
 class SessionSummaryEntry:
     """One summarized session entry for collect aggregation."""
 
-    index: int
     collect_entry: CollectEntry
     summary_data: dict[str, list[str]]
-    chunk_count: int
-    source_truncated: bool
 
 
 @dataclass
 class GroupSummaryEntry:
     """Intermediate group summary used by tree reduction."""
 
-    level: int
     summary_data: dict[str, list[str]]
     session_count: int
 

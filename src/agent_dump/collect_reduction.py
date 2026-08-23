@@ -39,7 +39,6 @@ def _summarize_collect_entry(
     *,
     config: AIConfig,
     planned_entry: PlannedCollectEntry,
-    index: int,
     timeout_seconds: int,
     local_tz: tzinfo | None,
     on_chunk_summarized: Callable[[SummarizeChunksProgress], None] | None = None,
@@ -118,11 +117,8 @@ def _summarize_collect_entry(
     )
 
     return SessionSummaryEntry(
-        index=index,
         collect_entry=entry,
         summary_data=merged,
-        chunk_count=len(chunks),
-        source_truncated=entry.is_truncated,
     )
 
 
@@ -193,11 +189,10 @@ def summarize_collect_entries(
             ),
         )
 
-    def _summarize(index: int, planned_entry: PlannedCollectEntry) -> SessionSummaryEntry:
+    def _summarize(planned_entry: PlannedCollectEntry) -> SessionSummaryEntry:
         return _summarize_collect_entry(
             config=config,
             planned_entry=planned_entry,
-            index=index,
             timeout_seconds=timeout_seconds,
             local_tz=local_tz,
             on_chunk_summarized=_mark_chunk_summarized,
@@ -212,7 +207,7 @@ def summarize_collect_entries(
 
         while len(future_to_index) < min(max_workers, total):
             index, planned_entry = next(pending_entries)
-            future_to_index[executor.submit(_summarize, index, planned_entry)] = index
+            future_to_index[executor.submit(_summarize, planned_entry)] = index
 
         while future_to_index:
             done, _ = wait(tuple(future_to_index), return_when=FIRST_COMPLETED)
@@ -243,7 +238,7 @@ def summarize_collect_entries(
                     next_index, next_entry = next(pending_entries)
                 except StopIteration:
                     continue
-                future_to_index[executor.submit(_summarize, next_index, next_entry)] = next_index
+                future_to_index[executor.submit(_summarize, next_entry)] = next_index
 
     summaries = [item for item in results if item is not None]
     if not summaries and last_error is not None:
@@ -295,7 +290,7 @@ def reduce_collect_summaries(
         )
 
     working: list[GroupSummaryEntry] = [
-        GroupSummaryEntry(level=0, summary_data=entry.summary_data, session_count=1) for entry in session_summaries
+        GroupSummaryEntry(summary_data=entry.summary_data, session_count=1) for entry in session_summaries
     ]
     reduction_depth = 0
 
@@ -341,7 +336,6 @@ def reduce_collect_summaries(
                         )
             next_level.append(
                 GroupSummaryEntry(
-                    level=reduction_depth,
                     summary_data=merged,
                     session_count=sum(item.session_count for item in group),
                 )

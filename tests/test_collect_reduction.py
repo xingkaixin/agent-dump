@@ -140,14 +140,14 @@ class TestCollectStructuredSummary:
         with mock.patch(
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             side_effect=lambda *args, **kwargs: next(responses),
-        ):
+        ) as request_summary:
             summaries = summarize_collect_entries(
                 config=self._config(),
                 planned_entries=[planned_entry],
                 summary_concurrency=1,
             )
 
-        assert summaries[0].chunk_count == 3
+        assert request_summary.call_count == 3
         assert summaries[0].summary_data["topics"] == ["T1", "T2", "T3"]
         assert summaries[0].summary_data["errors"] == ["E2"]
 
@@ -262,7 +262,6 @@ class TestCollectStructuredSummary:
     def test_reduce_collect_summaries_tree_reduction(self):
         summaries = [
             SessionSummaryEntry(
-                index=index,
                 collect_entry=CollectEntry(
                     date_value=date(2026, 3, 5 + index % 2),
                     created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
@@ -276,8 +275,6 @@ class TestCollectStructuredSummary:
                     is_truncated=False,
                 ),
                 summary_data=normalize_summary_payload({"topics": [f"T{index}"], "key_actions": [f"A{index}"]}),
-                chunk_count=1,
-                source_truncated=False,
             )
             for index in range(17)
         ]
@@ -300,7 +297,6 @@ class TestCollectStructuredSummary:
     def test_reduce_collect_summaries_falls_back_when_group_merge_fails(self, tmp_path):
         session_summaries = [
             SessionSummaryEntry(
-                index=index,
                 collect_entry=CollectEntry(
                     date_value=date(2026, 3, 5),
                     created_at=datetime(2026, 3, 5, 2, 0, 0, tzinfo=timezone.utc),
@@ -314,8 +310,6 @@ class TestCollectStructuredSummary:
                     is_truncated=False,
                 ),
                 summary_data=normalize_summary_payload({"topics": [f"T{index}"]}),
-                chunk_count=1,
-                source_truncated=False,
             )
             for index in range(2)
         ]
