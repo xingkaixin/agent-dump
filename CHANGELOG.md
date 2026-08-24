@@ -4,6 +4,49 @@
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-08-24
+
+### Added
+
+- Add a Japanese product landing page with localized navigation, metadata, installation guidance, capabilities, and FAQ content
+
+### Fixed
+
+- **CLI and query correctness**
+  - Accept short options written with `=`, reject invalid day ranges, non-positive or overflowing query limits, and explicitly empty formats, and warn when lower-priority explicit modes are ignored
+  - Preserve quoted or escaped spaces in structured `path:` / `cwd:` values, keep collect query URIs attached to collect mode, and apply provider/session scope before the final global result limit
+  - Preserve canonical Unicode case-insensitive matches and local calendar/timezone rules across supported platforms
+- **Search-index consistency**
+  - Index only provider-normalized session text, track every provider-owned change source with exact freshness signatures, and prevent narrow search windows from evicting wider indexed history
+  - Remove stale searchable content when a refresh fails, expire sessions not observed for 30 days, and continue with structured diagnostics when individual sessions or FTS5 operations fail
+- **Provider resilience**
+  - Skip invalid UTF-8 JSONL records and incomplete active tails without hiding surrounding committed records, retry file-provider roots that appear later, and prevent direct lookup candidates from escaping their session root
+  - Match Cursor request IDs literally, refresh provider metadata for each operation, normalize Kimi session identity and logical message counts, report incomplete OpenCode counts as unknown, and support older SQLite builds
+- **Exports and configuration**
+  - Enforce provider format support in URI and interactive workflows, reject ambiguous export outcomes, prevent filename collisions, and make raw copies and generated summaries atomic
+  - Preserve TOML comments, whitespace, and field order during configuration edits; refuse lossy rewrites of legacy invalid TOML; hide redirected secret input; and retain owner-only permissions for private files and logging directories
+- **Collect and diagnostics**
+  - Isolate unreadable sessions and provider warnings so healthy work continues, redact remote error bodies, classify output failures, and report private diagnostic-log write failures
+  - Scope diagnostic callbacks to the active operation, invalidate changed file-session caches, and refresh retained cache metadata instead of leaking stale facts between requests
+- **npm, release, and web reliability**
+  - Preserve npm scoped registries, authentication, proxy, and CA settings when obtaining native packages while retaining checksum verification and bounded extraction
+  - Make release retries content-aware, validate every native binary, wheel, npm tarball, and existing release asset before publishing, and keep the release workflow read-only until asset creation
+  - Avoid reporting failed clipboard writes as successful and replace the vulnerable landing-page icon toolchain
+
+### Performance
+
+- Bound pending file parsing, collect session reads, and summary requests so memory follows configured concurrency rather than total history
+- Prefer the persistent search index, stream limited results with memory proportional to the limit, and reuse query match evidence
+- Prune old Kimi metadata before transcript reads, batch Cursor bubble metadata access, and reuse OpenCode discovery facts
+- Discover each provider once per operation and share one bounded scheduling mechanism across scanner, provider, search, and collect workflows
+
+### Changed
+
+- Split CLI, collect, provider transcript, configuration, diagnostics, export, and localization responsibilities into focused typed modules while preserving the public API and default CLI behavior
+- Delegate native npm package retrieval to the user's npm client so standard registry configuration is honored consistently across npm, pnpm, Bun, and npx entry points
+- Add `tomlkit` for preserving configuration documents and `tzlocal` for platform-aware local timezone discovery; update the reviewed Python and landing-page toolchains
+- Centralize native target metadata and make repeated PyPI, npm, and GitHub release attempts skip only byte-identical artifacts
+
 ## [0.15.1] - 2026-08-16
 
 ### Fixed
@@ -927,6 +970,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.2
 [0.15.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.1
 [0.15.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.0
 [0.14.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.14.0
