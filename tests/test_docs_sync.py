@@ -138,7 +138,7 @@ class TestWebDeploymentTooling:
         wrangler_version = manifest["devDependencies"]["wrangler"]
 
         assert re.fullmatch(r"\d+\.\d+\.\d+", wrangler_version)
-        assert "pnpm --dir web exec wrangler pages deploy" in justfile
+        assert "pnpm --dir web exec wrangler pages deploy dist " in justfile
         assert "  workerd: true" in workspace
 
 

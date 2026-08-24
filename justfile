@@ -158,5 +158,5 @@ dev-web:
 # Deploy the built static site to Cloudflare Pages
 deploy-web: build-web
     @echo "🌐 Deploying web/dist to Cloudflare Pages..."
-    pnpm --dir web exec wrangler pages deploy web/dist --project-name=agent-dump --commit-dirty=true
+    pnpm --dir web exec wrangler pages deploy dist --project-name=agent-dump --commit-dirty=true
     @echo "✅ Web deployment complete!"
