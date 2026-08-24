@@ -79,8 +79,10 @@ runs:
         uv_bin_dir="$uv_install_dir/uv-$uv_target"
         chmod 0755 "$uv_bin_dir/uv" "$uv_bin_dir/uvx" 2>/dev/null || true
         echo "$uv_bin_dir" >> "$GITHUB_PATH"
-        uv_executable="$uv_bin_dir/uv"
         if [[ "$RUNNER_OS" == "Windows" ]]; then
-          uv_executable="$uv_executable.exe"
+          UV_EXECUTABLE="$uv_bin_dir/uv.exe" \
+            powershell.exe -NoLogo -NoProfile -NonInteractive -Command \
+            '& $env:UV_EXECUTABLE --version'
+        else
+          "$uv_bin_dir/uv" --version
         fi
-        "$uv_executable" --version
