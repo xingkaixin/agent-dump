@@ -53,7 +53,7 @@ from agent_dump.shortcut import (
     ShortcutExpansionError,
     expand_shortcut_argv as _expand_shortcut_argv,
 )
-from agent_dump.terminal_output import render_terminal_message
+from agent_dump.terminal_output import configure_standard_stream_encoding, render_terminal_message
 from agent_dump.uri_workflow import handle_uri_mode as _handle_uri_mode
 
 __all__ = (
@@ -423,6 +423,7 @@ def main() -> int | None:
     依赖它。
     """
     try:
+        configure_standard_stream_encoding(sys.platform, (sys.stdout, sys.stderr))
         return _run()
     except DiagnosticError as exc:
         _print_diagnostic(exc)
