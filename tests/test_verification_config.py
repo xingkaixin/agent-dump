@@ -121,6 +121,7 @@ class TestPinnedUvInstaller:
         assert 'UV_ARCHIVE="$uv_archive" UV_INSTALL_DIR="$uv_install_dir"' in action
         assert "powershell.exe -NoLogo -NoProfile -NonInteractive" in action
         assert "Expand-Archive -LiteralPath $env:UV_ARCHIVE" in action
+        assert 'uv_bin_dir="$uv_install_dir"' in action
         assert 'UV_EXECUTABLE="$uv_bin_dir/uv.exe"' in action
         assert "& $env:UV_EXECUTABLE --version" in action
 
