@@ -13,6 +13,16 @@ from agent_dump.cli import (
 
 
 class TestMain:
+    def test_main_configures_standard_stream_encoding(self):
+        with (
+            mock.patch("agent_dump.cli.configure_standard_stream_encoding") as mock_configure,
+            mock.patch("agent_dump.cli._run", return_value=0),
+        ):
+            result = main()
+
+        assert result == 0
+        mock_configure.assert_called_once()
+
     def test_main_short_version_prints_and_exits(self, capsys):
         with mock.patch("sys.argv", ["agent-dump", "-v"]), pytest.raises(SystemExit) as exc_info:
             main()
