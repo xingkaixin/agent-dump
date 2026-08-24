@@ -113,6 +113,19 @@ class TestDependencyPinning:
         assert "key_bindings" in block, "保留未直接 import 的依赖需注明必要性"
 
 
+class TestPinnedUvInstaller:
+    def test_windows_zip_uses_the_native_archive_extractor(self) -> None:
+        action = (REPO_ROOT / ".github" / "actions" / "setup-uv" / "action.yml").read_text(encoding="utf-8")
+
+        assert 'if [[ "$RUNNER_OS" == "Windows" ]]; then' in action
+        assert 'UV_ARCHIVE="$uv_archive" UV_INSTALL_DIR="$uv_install_dir"' in action
+        assert "powershell.exe -NoLogo -NoProfile -NonInteractive" in action
+        assert "Expand-Archive -LiteralPath $env:UV_ARCHIVE" in action
+        assert 'uv_bin_dir="$uv_install_dir"' in action
+        assert 'UV_EXECUTABLE="$uv_bin_dir/uv.exe"' in action
+        assert "& $env:UV_EXECUTABLE --version" in action
+
+
 class TestBuildBackendIsReproducible:
     @staticmethod
     def _constraints() -> str:
@@ -517,10 +530,16 @@ class TestCiDoesNotRepeatVersionIndependentWork:
         assert job.count("run: just cov") == 1
 
     def test_npm_and_web_are_their_own_jobs(self):
-        assert set(self._job_names()) == {"quality", "python-tests", "web", "npm-wrapper"}
+        assert set(self._job_names()) == {"uv-windows", "quality", "python-tests", "web", "npm-wrapper"}
         assert "matrix:" not in self._job("web"), "Web 只需构建一次"
         assert '"22"' in self._job("npm-wrapper")
         assert '"24"' in self._job("npm-wrapper")
+
+    def test_pinned_uv_installer_runs_on_windows_before_release(self):
+        job = self._job("uv-windows")
+
+        assert "runs-on: windows-latest" in job
+        assert "uses: ./.github/actions/setup-uv" in job
 
     def test_no_job_sets_up_a_runtime_it_does_not_use(self):
         """把不同 runtime 的环境事实混进一个 job，失败归因就不清楚了。"""
