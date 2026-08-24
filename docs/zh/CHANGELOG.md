@@ -2,6 +2,49 @@
 
 ## [未发布]
 
+## [0.15.2] - 2026-08-24
+
+### 新增功能
+
+- 新增日文产品落地页，提供本地化的导航、元数据、安装说明、能力介绍与常见问题
+
+### 问题修复
+
+- **CLI 与查询正确性**
+  - 支持使用 `=` 的短选项，拒绝非法日期范围、非正数或溢出的查询 limit 以及显式空格式，并在忽略低优先级显式模式时输出告警
+  - 保留结构化 `path:` / `cwd:` 值中带引号或转义的空格，使 collect 查询 URI 始终归属 collect 模式，并在最终全局 limit 前应用 provider/session 范围
+  - 在支持的平台上保持规范化 Unicode 大小写不敏感匹配，以及本地日历和时区规则
+- **搜索索引一致性**
+  - 只索引 provider 标准化后的会话文本，以精确 freshness signature 跟踪所有 provider 自有变更源，并防止窄搜索窗口淘汰较宽窗口已索引的历史
+  - 刷新失败时移除过期可搜索内容，自动清理 30 天未再发现的会话，并在单个会话或 FTS5 操作失败时输出结构化诊断后继续
+- **Provider 容错**
+  - 跳过非法 UTF-8 JSONL 记录与尚未写完的活动尾记录，且不隐藏前后已提交记录；重试稍后才出现的文件型 provider 根目录，并阻止直接定位候选路径越出会话根目录
+  - 按字面量匹配 Cursor request ID，每次操作刷新 provider 元数据，规范化 Kimi 会话身份和逻辑消息数，将不完整的 OpenCode 消息数报告为 unknown，并兼容较旧的 SQLite
+- **导出与配置**
+  - 在 URI 与交互工作流中统一校验 provider 格式能力，拒绝含糊的导出结果，避免文件名冲突，并原子写入 raw 副本与生成的摘要
+  - 配置编辑时保留 TOML 注释、空白与字段顺序；拒绝有损重写旧版非法 TOML；隐藏重定向场景下的密钥输入；保持私有文件与日志目录仅所有者可访问
+- **Collect 与诊断**
+  - 隔离不可读会话和 provider 告警，使其余正常任务继续；净化远端错误响应体，分类输出失败，并报告私有诊断日志写入失败
+  - 将诊断回调限制在当前操作内，在文件会话变化时使缓存失效，并刷新保留缓存的元数据，避免请求间泄漏过期事实
+- **npm、发布与落地页可靠性**
+  - 获取原生包时保留 npm scoped registry、认证、代理与 CA 配置，同时继续执行 checksum 校验和有界解压
+  - 让发布重试基于制品内容判断，发布前校验所有原生二进制、wheel、npm tarball 与已有 release asset，并让 release workflow 在创建资产前保持只读权限
+  - 剪贴板写入失败时不再误报成功，并替换存在漏洞的落地页图标工具链
+
+### 性能
+
+- 限制待处理的文件解析、collect 会话读取与摘要请求，使内存随配置的并发量而非全部历史增长
+- 优先使用持久化搜索索引，以与 limit 成比例的内存流式读取有限结果，并复用查询匹配证据
+- 在读取 transcript 前剪枝旧 Kimi 元数据，批量读取 Cursor bubble 元数据，并复用 OpenCode 发现事实
+- 每次操作只发现各 provider 一次，并让 scanner、provider、search 与 collect 共用一套有界调度机制
+
+### 变更
+
+- 将 CLI、collect、provider transcript、配置、诊断、导出与本地化职责拆分为聚焦的 typed module，同时保持公开 API 与默认 CLI 行为兼容
+- 将 npm 原生包获取委托给用户的 npm client，使 npm、pnpm、Bun 与 npx 入口一致遵循标准 registry 配置
+- 新增 `tomlkit` 以保留配置文档，新增 `tzlocal` 以发现各平台本地时区，并更新经过审查的 Python 与落地页工具链
+- 集中维护原生目标元数据，并让重复执行 PyPI、npm 与 GitHub 发布时仅跳过字节完全一致的制品
+
 ## [0.15.1] - 2026-08-16
 
 ### 问题修复
@@ -930,6 +973,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.15.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.2
 [0.15.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.1
 [0.15.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.0
 [0.14.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.14.0
