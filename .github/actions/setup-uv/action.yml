@@ -69,7 +69,11 @@ runs:
         fi
 
         mkdir -p "$uv_install_dir"
-        tar -xf "$uv_archive" -C "$uv_install_dir"
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          tar --force-local -xf "$uv_archive" -C "$uv_install_dir"
+        else
+          tar -xf "$uv_archive" -C "$uv_install_dir"
+        fi
         uv_bin_dir="$uv_install_dir/uv-$uv_target"
         chmod 0755 "$uv_bin_dir/uv" "$uv_bin_dir/uvx" 2>/dev/null || true
         echo "$uv_bin_dir" >> "$GITHUB_PATH"

@@ -23,6 +23,17 @@ env:
   COVERAGE_PYTHON_VERSION: "3.12"
 
 jobs:
+  uv-windows:
+    name: Verify pinned uv installer on Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: ./.github/actions/setup-uv
+
   quality:
     name: Lint and type-check
     runs-on: ubuntu-latest
