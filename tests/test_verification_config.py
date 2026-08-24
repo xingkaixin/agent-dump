@@ -114,11 +114,13 @@ class TestDependencyPinning:
 
 
 class TestPinnedUvInstaller:
-    def test_windows_archive_path_is_forced_local(self) -> None:
+    def test_windows_zip_uses_the_native_archive_extractor(self) -> None:
         action = (REPO_ROOT / ".github" / "actions" / "setup-uv" / "action.yml").read_text(encoding="utf-8")
 
         assert 'if [[ "$RUNNER_OS" == "Windows" ]]; then' in action
-        assert 'tar --force-local -xf "$uv_archive"' in action
+        assert 'UV_ARCHIVE="$uv_archive" UV_INSTALL_DIR="$uv_install_dir"' in action
+        assert "powershell.exe -NoLogo -NoProfile -NonInteractive" in action
+        assert "Expand-Archive -LiteralPath $env:UV_ARCHIVE" in action
 
 
 class TestBuildBackendIsReproducible:

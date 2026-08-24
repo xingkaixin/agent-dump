@@ -70,7 +70,9 @@ runs:
 
         mkdir -p "$uv_install_dir"
         if [[ "$RUNNER_OS" == "Windows" ]]; then
-          tar --force-local -xf "$uv_archive" -C "$uv_install_dir"
+          UV_ARCHIVE="$uv_archive" UV_INSTALL_DIR="$uv_install_dir" \
+            powershell.exe -NoLogo -NoProfile -NonInteractive -Command \
+            'Expand-Archive -LiteralPath $env:UV_ARCHIVE -DestinationPath $env:UV_INSTALL_DIR -Force'
         else
           tar -xf "$uv_archive" -C "$uv_install_dir"
         fi
