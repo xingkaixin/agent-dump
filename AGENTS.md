@@ -386,6 +386,8 @@ Collect 等批量一次性投影，离开 context 后释放完整 payload。两�
 provider 应覆盖它；`AgentScanner` 只通过该入口执行组合发现，不调用 provider 私有方法。
 既有 `is_available()` 与 `get_sessions()` 保持稳定兼容。
 
+URI 与交互工作流通过 `AgentScanner.diagnostic_context()` 将诊断接收器保持到完整会话读取结束；Query 和 Collect 的读取入口必须将已有 `diagnostic_sink` 显式带入解析线程。Provider 不直接打印，诊断上下文退出后不得保留或影响其他调用方。
+
 可选扩展点：
 - `get_session_uri(session)`：默认返回 `<agent>://<session.id>`。
 - `find_session_by_id(session_id)`：URI 定位使用。默认全量扫描后按 id 匹配；provider 应尽量用直接查找（SQL 主键、文件名定位）覆盖。

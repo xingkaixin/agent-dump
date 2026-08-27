@@ -139,7 +139,7 @@ class BaseAgent(ABC):
 
     @contextmanager
     def diagnostic_context(self, sink: RecoverableDiagnosticSink | None) -> Iterator[None]:
-        """Route diagnostics to one scanner for the current execution context."""
+        """Route diagnostics to one caller for the current execution context."""
         token = self._diagnostic_sink.set(sink)
         try:
             yield

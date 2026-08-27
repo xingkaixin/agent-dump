@@ -1,6 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
+import pytest
+
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.diagnostics import (
     RecoverableDiagnostic,
@@ -87,6 +89,27 @@ def test_scanner_diagnostic_destination_does_not_persist_after_operation() -> No
     agent.get_sessions()
 
     assert len(diagnostics) == 1
+
+
+def test_scanner_read_context_restores_the_previous_caller_after_failure() -> None:
+    agent = DiagnosticAgent()
+    outer_diagnostics: list[RecoverableDiagnostic] = []
+    inner_diagnostics: list[RecoverableDiagnostic] = []
+    outer = AgentScanner([agent], diagnostic_sink=outer_diagnostics.append)
+    inner = AgentScanner([agent], diagnostic_sink=inner_diagnostics.append)
+
+    with outer.diagnostic_context():
+        agent.get_sessions()
+        with pytest.raises(RuntimeError, match="read failed"), inner.diagnostic_context():
+            agent.get_sessions()
+            raise RuntimeError("read failed")
+        agent.get_sessions()
+        with AgentScanner([agent], diagnostic_sink=None).diagnostic_context():
+            agent.get_sessions()
+    agent.get_sessions()
+
+    assert len(outer_diagnostics) == 2
+    assert len(inner_diagnostics) == 1
 
 
 def test_scanners_keep_their_own_provider_diagnostic_destinations() -> None:
