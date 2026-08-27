@@ -37,10 +37,11 @@ _T = TypeVar("_T")
 
 @dataclass(frozen=True)
 class _IndexedRow:
-    """An already-indexed session's freshness signature and stable FTS rowid."""
+    """An indexed session's freshness, stable FTS rowid, and observation time."""
 
     signature: str
     fts_rowid: int
+    indexed_at: float
 
 
 @dataclass(frozen=True)
@@ -368,6 +369,10 @@ class SearchIndex:
         rows unseen beyond the cache retention period are removed during initialization.
         Returns (added_count, removed_count), with removed_count kept at zero for
         compatibility.
+
+        Provider parsing runs outside write transactions. Each completed batch
+        commits atomically without overwriting a later observation or restoring
+        a row removed while parsing.
         """
         if not self.is_available:
             return (0, 0)
@@ -381,15 +386,19 @@ class SearchIndex:
         try:
             # Get currently indexed sessions for this agent
             cursor = conn.execute(
-                "SELECT session_id, updated_signature, fts_rowid FROM index_state WHERE agent = ?",
+                "SELECT session_id, updated_signature, fts_rowid, indexed_at FROM index_state WHERE agent = ?",
                 (agent.name,),
             )
-            indexed = {row["session_id"]: _IndexedRow(row["updated_signature"], row["fts_rowid"]) for row in cursor}
+            indexed = {
+                row["session_id"]: _IndexedRow(row["updated_signature"], row["fts_rowid"], row["indexed_at"])
+                for row in cursor
+            }
 
-            conn.executemany(
-                "UPDATE index_state SET last_seen_at = ? WHERE agent = ? AND session_id = ?",
-                [(observed_at, agent.name, session.id) for session in sessions],
-            )
+            with conn:
+                conn.executemany(
+                    "UPDATE index_state SET last_seen_at = MAX(last_seen_at, ?) WHERE agent = ? AND session_id = ?",
+                    [(observed_at, agent.name, session.id) for session in sessions],
+                )
 
             # Determine which sessions need updating
             to_update: list[tuple[Session, str]] = []
@@ -419,24 +428,40 @@ class SearchIndex:
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     texts = list(executor.map(_extract_text, batch))
 
-                for (session, signature), text in zip(batch, texts, strict=True):
-                    if text is None:
-                        previous = indexed.pop(session.id, None)
-                        if previous is not None:
-                            _delete_index_rows(conn, [previous.fts_rowid])
-                        skipped.append(session.id)
-                        continue
-                    previous = indexed.get(session.id)
-                    self._write_session_rows(
-                        conn,
-                        agent_name=agent.name,
-                        session=session,
-                        signature=signature,
-                        text=text,
-                        fts_rowid=previous.fts_rowid if previous else None,
-                        observed_at=observed_at,
+                with conn:
+                    conn.execute("BEGIN IMMEDIATE")
+                    cursor = conn.execute(
+                        "SELECT session_id, updated_signature, fts_rowid, indexed_at FROM index_state "
+                        f"WHERE agent = ? AND session_id IN ({','.join('?' for _ in batch)})",
+                        (agent.name, *(session.id for session, _ in batch)),
                     )
-                    added += 1
+                    current = {
+                        row["session_id"]: _IndexedRow(row["updated_signature"], row["fts_rowid"], row["indexed_at"])
+                        for row in cursor
+                    }
+                    for (session, signature), text in zip(batch, texts, strict=True):
+                        previous = indexed.get(session.id)
+                        latest = current.get(session.id)
+                        # 观察顺序决定新旧，解析完成顺序不代表内容新旧。
+                        if latest is not None and (latest.signature == signature or latest.indexed_at > observed_at):
+                            continue
+                        if latest is None and previous is not None:
+                            continue
+                        if text is None:
+                            if latest is not None:
+                                _delete_index_rows(conn, [latest.fts_rowid])
+                            skipped.append(session.id)
+                            continue
+                        self._write_session_rows(
+                            conn,
+                            agent_name=agent.name,
+                            session=session,
+                            signature=signature,
+                            text=text,
+                            fts_rowid=latest.fts_rowid if latest else None,
+                            observed_at=observed_at,
+                        )
+                        added += 1
 
             if skipped:
                 emit_recoverable_diagnostic(
@@ -446,8 +471,6 @@ class SearchIndex:
                     count=len(skipped),
                     examples=", ".join(skipped[:3]),
                 )
-
-            conn.commit()
         finally:
             conn.close()
 
@@ -681,7 +704,7 @@ class SearchIndex:
             _delete_fts_rows(conn, [fts_rowid])
             conn.execute(
                 """UPDATE index_state
-                   SET source_path = ?, updated_signature = ?, indexed_at = ?, last_seen_at = ?,
+                   SET source_path = ?, updated_signature = ?, indexed_at = ?, last_seen_at = MAX(last_seen_at, ?),
                        session_updated_at = ?, session_created_at = ?
                    WHERE fts_rowid = ?""",
                 (
