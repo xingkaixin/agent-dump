@@ -140,12 +140,13 @@ def handle_uri_mode(
     request_summary: Callable[[AIConfig, str], str] = request_summary_from_llm,
 ) -> int:
     scanner = scanner_factory()
-    return _handle_uri_mode(
-        operation,
-        export_config=export_config,
-        scanner=scanner,
-        request_summary=request_summary,
-    )
+    with scanner.diagnostic_context():
+        return _handle_uri_mode(
+            operation,
+            export_config=export_config,
+            scanner=scanner,
+            request_summary=request_summary,
+        )
 
 
 def _handle_uri_mode(

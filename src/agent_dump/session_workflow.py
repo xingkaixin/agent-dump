@@ -157,7 +157,8 @@ def handle_session_modes(
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
 ) -> int | None:
     scanner = scanner_factory()
-    return _handle_session_modes(operation, export_config=export_config, scanner=scanner)
+    with scanner.diagnostic_context():
+        return _handle_session_modes(operation, export_config=export_config, scanner=scanner)
 
 
 def _handle_session_modes(

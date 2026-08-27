@@ -195,11 +195,10 @@ def select_session_groups(
 ) -> list[SearchSessionMatch]:
     """Select sessions using the text semantics carried by the query specification."""
     runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
-    matches = [
-        match
-        for agent, sessions in session_groups
-        for match in _session_matches(agent, sessions, spec, runtime=runtime)
-    ]
+    matches: list[SearchSessionMatch] = []
+    for agent, sessions in session_groups:
+        with agent.diagnostic_context(diagnostic_sink):
+            matches.extend(_session_matches(agent, sessions, spec, runtime=runtime))
     if spec.text_mode is TextQueryMode.SEARCH_TERMS:
         ordered_matches = sorted(matches, key=_search_match_sort_key)
     elif spec.limit is not None:

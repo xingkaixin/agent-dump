@@ -112,9 +112,11 @@ def _select_collect_sessions(
     return matched_sessions
 
 
-def _read_collect_entry(matched_session: _MatchedSession) -> CollectEntry:
+def _read_collect_entry(
+    matched_session: _MatchedSession, *, diagnostic_sink: RecoverableDiagnosticSink | None
+) -> CollectEntry:
     agent, session, session_date = matched_session
-    with agent.lease_cached_session_data(session) as session_data:
+    with agent.diagnostic_context(diagnostic_sink), agent.lease_cached_session_data(session) as session_data:
         uri = agent.get_session_uri(session)
         events, truncated = extract_collect_events(
             session_data,
@@ -138,6 +140,7 @@ def _read_collect_entries(
     matched_sessions: Sequence[_MatchedSession],
     *,
     progress_callback: Callable[[CollectProgressEvent], None] | None,
+    diagnostic_sink: RecoverableDiagnosticSink | None,
     logger: CollectLogger | None,
 ) -> list[CollectEntry]:
     entries: list[CollectEntry] = []
@@ -158,7 +161,7 @@ def _read_collect_entries(
             for session_index, matched_session, future in iter_completed_futures(
                 matched_sessions,
                 max_pending=max_workers,
-                submit=lambda item: executor.submit(_read_collect_entry, item),
+                submit=lambda item: executor.submit(_read_collect_entry, item, diagnostic_sink=diagnostic_sink),
             ):
                 agent, session, _ = matched_session
                 try:
@@ -233,6 +236,7 @@ def collect_entries(
     return _read_collect_entries(
         matched_sessions,
         progress_callback=progress_callback,
+        diagnostic_sink=diagnostic_sink,
         logger=logger,
     )
 

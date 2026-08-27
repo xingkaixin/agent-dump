@@ -2,8 +2,9 @@
 Scanner for agent tools
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, contextmanager
 from typing import TypeVar
 
 from agent_dump.agent_registry import create_registered_agents
@@ -25,6 +26,14 @@ class AgentScanner:
     ) -> None:
         self.agents = list(agents) if agents is not None else create_registered_agents()
         self._diagnostic_sink = diagnostic_sink
+
+    @contextmanager
+    def diagnostic_context(self) -> Iterator[None]:
+        """Keep this caller's diagnostics active while consuming discovered sessions."""
+        with ExitStack() as stack:
+            for agent in self.agents:
+                stack.enter_context(agent.diagnostic_context(self._diagnostic_sink))
+            yield
 
     @staticmethod
     def _operation_failure_diagnostic(agent: BaseAgent, exc: Exception) -> RecoverableDiagnostic:

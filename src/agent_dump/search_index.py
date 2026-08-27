@@ -409,7 +409,8 @@ class SearchIndex:
 
             def _extract_text(item: tuple[Session, str]) -> str | None:
                 session, _ = item
-                return extract_session_searchable_text_once(agent, session)
+                with agent.diagnostic_context(diagnostic_sink):
+                    return extract_session_searchable_text_once(agent, session)
 
             # 分批解析并即时写入：一次性 list(executor.map(...)) 会让全部待索引会话
             # 的正文同时驻留内存，会话历史大的用户可能直接 OOM
