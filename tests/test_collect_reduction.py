@@ -12,6 +12,7 @@ from agent_dump.collect_models import (
     CollectAggregate,
     CollectEntry,
     CollectEvent,
+    CollectMode,
     CollectProgressEvent,
     MergeSessionsProgress,
     PlannedCollectEntry,
@@ -60,6 +61,55 @@ class TestCollectStructuredSummary:
     def _planned_entry(self, *, text: str = "修复 collect", session_id: str = "s-1") -> PlannedCollectEntry:
         entry = self._entry(text=text, session_id=session_id)
         return PlannedCollectEntry(collect_entry=entry, chunks=tuple(chunk_collect_events(entry.events)))
+
+    @pytest.mark.parametrize("mode", list(CollectMode))
+    @pytest.mark.parametrize("merge_fails", [False, True])
+    def test_reduction_preserves_all_inputs_until_compression(self, mode: CollectMode, merge_fails: bool) -> None:
+        field = "scene" if mode is CollectMode.INSIGHT else "key_actions"
+        evidence = [f"evidence-{index:02d}" for index in range(17)]
+        summaries = [
+            SessionSummaryEntry(
+                self._entry(session_id=f"s-{index}"),
+                normalize_summary_payload({field: [value]}, mode=mode),
+            )
+            for index, value in enumerate(evidence)
+        ]
+        compressed = normalize_summary_payload({field: ["all facts compressed"]}, mode=mode)
+        with mock.patch(
+            "agent_dump.collect_reduction.request_structured_summary_from_llm",
+            side_effect=RuntimeError("unavailable") if merge_fails else None,
+            return_value=compressed,
+        ) as request:
+            aggregate = reduce_collect_summaries(config=self._config(), session_summaries=summaries, mode=mode)
+
+        assert request.call_count == 1
+        assert all(value in request.call_args.args[1] for value in evidence)
+        assert aggregate.summary_data[field] == (evidence if merge_fails else compressed[field])
+        assert aggregate.session_count == 17
+
+    @pytest.mark.parametrize("mode", list(CollectMode))
+    def test_session_merge_receives_every_chunk_fact(self, mode: CollectMode) -> None:
+        field = "scene" if mode is CollectMode.INSIGHT else "key_actions"
+        entry = self._entry()
+        plan = PlannedCollectEntry(entry, (entry.events, entry.events))
+        evidence = [f"evidence-{index:02d}" for index in range(16)]
+        compressed = normalize_summary_payload({field: ["all facts compressed"]}, mode=mode)
+        with mock.patch(
+            "agent_dump.collect_reduction.request_structured_summary_from_llm",
+            side_effect=[
+                normalize_summary_payload({field: evidence[:8]}, mode=mode),
+                normalize_summary_payload({field: evidence[8:]}, mode=mode),
+                compressed,
+            ],
+        ) as request:
+            summaries = summarize_collect_entries(
+                config=self._config(), planned_entries=[plan], summary_concurrency=1, mode=mode
+            )
+
+        assert request.call_count == 3
+        assert request.call_args.kwargs["phase"] == "session_merge"
+        assert all(value in request.call_args.args[1] for value in evidence)
+        assert summaries[0].summary_data == compressed
 
     def test_build_collect_session_prompt_contains_required_sections(self):
         prompt = build_collect_session_prompt(self._entry(), source_truncated=False)
@@ -284,11 +334,15 @@ class TestCollectStructuredSummary:
         ]
 
         progress: list[CollectProgressEvent] = []
-        aggregate = reduce_collect_summaries(
-            config=self._config(),
-            session_summaries=summaries,
-            progress_callback=progress.append,
-        )
+        with mock.patch(
+            "agent_dump.collect_reduction.request_structured_summary_from_llm",
+            return_value=normalize_summary_payload({"topics": ["combined"]}),
+        ):
+            aggregate = reduce_collect_summaries(
+                config=self._config(),
+                session_summaries=summaries,
+                progress_callback=progress.append,
+            )
 
         assert aggregate.session_count == 17
         assert aggregate.reduction_depth >= 2

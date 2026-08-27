@@ -259,3 +259,10 @@ class TestCollectExtraction:
 
         assert merged["topics"] == ["A", "B"]
         assert merged["errors"] == ["E1", "E2"]
+
+    @pytest.mark.parametrize("limit", [None, 12])
+    def test_merge_summary_payloads_can_preserve_uncompressed_facts(self, limit: int | None) -> None:
+        values = [f"fact-{index}" for index in range(17)]
+        merged = merge_summary_payloads([{"topics": values[:10]}, {"topics": values[5:]}], max_items_per_field=limit)
+
+        assert merged["topics"] == values[:limit]

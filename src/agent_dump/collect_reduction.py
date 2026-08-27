@@ -11,6 +11,7 @@ from agent_dump.bounded_concurrency import iter_completed_futures
 from agent_dump.collect_logging import CollectLogger
 from agent_dump.collect_models import (
     GROUP_SIZE,
+    MAX_SUMMARY_ITEMS_PER_FIELD,
     SESSION_MERGE_LLM_THRESHOLD,
     CollectAggregate,
     CollectMode,
@@ -33,6 +34,12 @@ from agent_dump.collect_summary import (
 from agent_dump.config import MAX_COLLECT_SUMMARY_CONCURRENCY, AIConfig
 from agent_dump.i18n import Keys, i18n
 from agent_dump.terminal_output import render_terminal_message
+
+
+def _summary_needs_compression(payload: dict[str, list[str]]) -> bool:
+    return summary_payload_size(payload) > SESSION_MERGE_LLM_THRESHOLD or any(
+        len(items) > MAX_SUMMARY_ITEMS_PER_FIELD for items in payload.values()
+    )
 
 
 def _summarize_collect_entry(
@@ -83,8 +90,8 @@ def _summarize_collect_entry(
             ),
         )
 
-    merged = merge_summary_payloads(chunk_payloads, mode=mode)
-    if len(chunk_payloads) > 1 and summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
+    merged = merge_summary_payloads(chunk_payloads, max_items_per_field=None, mode=mode)
+    if len(chunk_payloads) > 1 and _summary_needs_compression(merged):
         try:
             merged = request_structured_summary_from_llm(
                 config,
@@ -297,8 +304,8 @@ def reduce_collect_summaries(
             group = working[start : start + group_size]
             group_index = start // group_size + 1
             group_source = f"collect://group-level-{reduction_depth}/group-{group_index}"
-            merged = merge_summary_payloads(group, mode=mode)
-            if summary_payload_size(merged) > SESSION_MERGE_LLM_THRESHOLD:
+            merged = merge_summary_payloads(group, max_items_per_field=None, mode=mode)
+            if _summary_needs_compression(merged):
                 try:
                     merged = request_structured_summary_from_llm(
                         config,
