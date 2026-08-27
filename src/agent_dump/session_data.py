@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 MAX_COMPLETED_SESSION_DATA_ENTRIES = 32
 _SessionIdentity = tuple[str, str]
 _PathChangeSignal = tuple[str, int | None, int | None, int | None]
-SessionUpdatedSignal = tuple[str, tuple[_PathChangeSignal, ...]]
+SessionUpdatedSignal = tuple[str, tuple[_PathChangeSignal, ...], str]
 
 
 @dataclass
@@ -33,11 +33,12 @@ class _CacheEntry:
 
 
 def session_updated_signal(agent: BaseAgent, session: Session) -> SessionUpdatedSignal:
-    """Return exact session and provider-owned source facts used for invalidation."""
+    """Include titles that can change independently of transcript timestamps and files."""
     facts = agent.get_session_facts(session)
     return (
         normalize_datetime_utc(session.updated_at).isoformat(timespec="microseconds"),
         tuple(_path_change_signal(path) for path in facts.change_sources),
+        session.title,
     )
 
 

@@ -3,8 +3,10 @@
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import gc
+import json
 from pathlib import Path
 import threading
 import time
@@ -14,6 +16,8 @@ from typing import Any
 import pytest
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.codex import CodexAgent
+from agent_dump.search_index import SearchIndex
 from agent_dump.session_data import SessionDataCache
 
 
@@ -163,6 +167,46 @@ def test_changed_signal_replaces_completed_entry() -> None:
     assert first == {"generation": 1}
     assert second == {"generation": 2}
     assert len(cache._entries) == 1
+
+
+def test_title_change_invalidates_cached_payload_for_get_and_lease() -> None:
+    agent = DataAgent(lambda session: {"title": session.title})
+    original = make_session("original")
+    renamed = replace(original, title="renamed")
+
+    assert agent.get_cached_session_data(original) == {"title": "original"}
+    with agent.lease_cached_session_data(renamed) as data:
+        assert data == {"title": "renamed"}
+    assert agent.get_cached_session_data(renamed) == {"title": "renamed"}
+    assert agent.reads[original.id] == 3
+
+
+def test_codex_title_change_refreshes_export_and_persistent_search(
+    codex_session_tree: dict[str, Any], tmp_path: Path
+) -> None:
+    title_path = codex_session_tree["home"] / ".codex" / "session_index.jsonl"
+    title_path.write_text(
+        json.dumps({"id": codex_session_tree["session_id"], "thread_name": "Original"}) + "\n", encoding="utf-8"
+    )
+    agent = CodexAgent()
+    first = agent.get_sessions(days=None)[0]
+    assert agent.get_cached_session_data(first)["title"] == first.title
+    index_path = tmp_path / "search.db"
+    index = SearchIndex(index_path)
+    assert index.update(agent, [first]) == (1, 0)
+    source_mtime = first.source_path.stat().st_mtime_ns
+    title_path.write_text(json.dumps({"id": first.id, "thread_name": "Rocket"}) + "\n", encoding="utf-8")
+
+    second = agent.get_sessions(days=None)[0]
+    exported = agent.export_session(second, tmp_path / "export")
+    assert json.loads(exported.read_text(encoding="utf-8"))["title"] == "Rocket"
+    assert index.update(agent, [second]) == (1, 0)
+    results = SearchIndex(index_path).search("Rocket")
+
+    assert second.updated_at == first.updated_at
+    assert first.source_path.stat().st_mtime_ns == source_mtime
+    assert [(result.session_id, result.title) for result in results] == [(first.id, "Rocket")]
+    assert index.search(first.title) == []
 
 
 def test_changed_signal_waits_for_old_in_flight_read_before_replacing_it() -> None:

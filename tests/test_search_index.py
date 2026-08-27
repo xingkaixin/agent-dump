@@ -168,6 +168,7 @@ class TestSessionUpdatedSignal:
         assert _session_updated_signal(DummyAgent(), session) == (
             session.updated_at.replace(tzinfo=timezone.utc).isoformat(timespec="microseconds"),
             (),
+            session.title,
         )
 
     def test_related_paths_are_recorded_independently(self, tmp_path):
@@ -367,6 +368,19 @@ class TestSearchIndex:
         added, removed = index.update(agent, [session])
         assert added == 1
         assert len(index.search("new")) == 1
+
+    def test_title_update_does_not_reload_other_sessions(self, tmp_path: Path) -> None:
+        index = SearchIndex(tmp_path / "index.db")
+        sessions = [make_session(name, name, tmp_path / f"{name}.jsonl") for name in ("original", "unchanged")]
+        agent = DummyAgent(session_data={session.id: {"messages": []} for session in sessions})
+        assert index.update(agent, sessions) == (2, 0)
+
+        sessions[0].title = "Rocket"
+
+        assert index.update(agent, sessions) == (1, 0)
+        assert agent.data_reads == 3
+        assert [result.session_id for result in index.search("Rocket")] == ["original"]
+        assert index.search("original") == []
 
     def test_incremental_detects_submillisecond_source_change(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
