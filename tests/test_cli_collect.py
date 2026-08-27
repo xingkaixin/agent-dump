@@ -12,6 +12,7 @@ from cli_test_support import (
     make_config_document,
     make_session,
 )
+from locale_helpers import Keys, expect_contains
 import pytest
 
 from agent_dump.cli import (
@@ -37,6 +38,45 @@ from agent_dump.command_plan import (
 )
 from agent_dump.config import CollectConfig
 from agent_dump.text_safety import has_unsafe_line_characters
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize(
+    ("settings", "invalid_field"),
+    [
+        ('[collect]\nsummary_concurrency = 4oops\n[agent.codex]\ndeny = ["/private, work"]\n', "TOML"),
+        ('[agent.codex]\ndeny = "/private"\n', "agent.codex.deny"),
+        ('[agent.codex]\ndeny = ["/private", 42]\n', "agent.codex.deny"),
+    ],
+)
+def test_collect_rejects_unsafe_config_before_discovery_or_requests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    dry_run: bool,
+    settings: str,
+    invalid_field: str,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        '[ai]\nprovider = "openai"\nbase_url = "https://example.invalid/v1"\n'
+        'model = "test"\napi_key = "test"\n' + settings,
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("agent_dump.config.get_config_path", lambda: config_path)
+    argv = ["agent-dump", "--collect", *(["--dry-run"] if dry_run else [])]
+    with (
+        mock.patch("sys.argv", argv),
+        mock.patch("agent_dump.cli.AgentScanner") as scanner,
+        mock.patch("agent_dump.collect_requests.request_structured_summary_payload_from_llm") as chunk_request,
+        mock.patch("agent_dump.cli.request_summary_from_llm") as final_request,
+    ):
+        assert main() == 1
+
+    scanner.assert_not_called()
+    chunk_request.assert_not_called()
+    final_request.assert_not_called()
+    assert expect_contains(capsys.readouterr().out, Keys.COLLECT_CONFIG_UNSAFE, field=invalid_field)
 
 
 class TestMain:

@@ -123,6 +123,20 @@ class ConfigurationDocument:
             agent_denies=agent_denies,
         )
 
+    def validate_collect_safety(self) -> None:
+        """Reject configuration whose session exclusions cannot be trusted."""
+        if self.parse_mode is not ConfigurationParseMode.TOML:
+            raise ValueError("TOML")
+        for section_path, values in self.sections.items():
+            agent_name = _child_of(section_path, "agent")
+            if agent_name is None or "deny" not in values:
+                continue
+            paths = values["deny"]
+            if not isinstance(paths, (list, tuple)) or any(
+                not isinstance(path, str) or not path.strip() or "\0" in path for path in paths
+            ):
+                raise ValueError(f"agent.{agent_name}.deny")
+
     def logging_config(self) -> LoggingConfig:
         default_path = _default_log_path_for_config(self.path)
         parsed = self.sections.get(("logging",), {})

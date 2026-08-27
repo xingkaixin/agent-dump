@@ -421,6 +421,8 @@ deny = [
 
 `[agent.<name>].deny` only applies to `--collect`. When a session `cwd` matches one of the configured paths, or is inside that path, the session is ignored during collect.
 
+Collect and `--collect --dry-run` require valid TOML and exclusion arrays containing only nonempty path strings. Invalid configuration stops the command before session discovery or AI requests; compatibility parsing never disables exclusions for collect.
+
 `[export].output` defines the global default output root for `json/raw` exports. It accepts absolute or relative paths. Relative paths are resolved from the directory where `agent-dump` is executed, not from the config file location.
 
 `[shortcut.<name>]` defines a reusable shortcut preset. `params` declares positional input names. `args` declares the expanded CLI argv template. When `date` is provided, `{year}` / `{month}` / `{year_month}` are derived automatically.

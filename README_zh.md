@@ -419,6 +419,8 @@ deny = [
 
 `[agent.<name>].deny` 仅对 `--collect` 生效。当会话 `cwd` 与配置路径匹配或位于该路径下时，collect 阶段会忽略该会话。
 
+collect 与 `--collect --dry-run` 均要求合法 TOML，且排除路径必须是非空路径字符串组成的数组。配置不可靠时，命令会在发现会话和发送 AI 请求前停止；collect 不会通过兼容解析静默取消排除规则。
+
 `[export].output` 定义 `json/raw` 导出的全局默认输出根目录。接受绝对或相对路径。相对路径从 `agent-dump` 执行目录解析，而非配置文件所在目录。
 
 `[shortcut.<name>]` 定义可复用的快捷预设。`params` 声明位置输入名称。`args` 声明展开的 CLI argv 模板。提供 `date` 时，`{year}` / `{month}` / `{year_month}` 会自动派生。

@@ -48,6 +48,30 @@ class TestConfigPath:
 
 
 class TestConfigReadWrite:
+    @pytest.mark.parametrize("deny", ['"/private"', '["/private", 42]', '[""]', '["   "]', '["\\u0000"]'])
+    def test_collect_safety_rejects_invalid_exclusions(self, tmp_path: Path, deny: str) -> None:
+        path = tmp_path / "config.toml"
+        path.write_text(f"[agent.codex]\ndeny = {deny}\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match=r"agent\.codex\.deny"):
+            load_config_document(path).validate_collect_safety()
+
+    def test_collect_safety_rejects_legacy_parse(self, tmp_path: Path) -> None:
+        path = tmp_path / "config.toml"
+        path.write_text("[collect]\nsummary_concurrency = 4oops\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="TOML"):
+            load_config_document(path).validate_collect_safety()
+
+    @pytest.mark.parametrize(
+        "settings", ["", "[agent.codex]\ndeny = []\n", '[agent.codex]\ndeny = ["/private, work"]\n']
+    )
+    def test_collect_safety_accepts_valid_exclusions(self, tmp_path: Path, settings: str) -> None:
+        path = tmp_path / "config.toml"
+        path.write_text(settings, encoding="utf-8")
+
+        load_config_document(path).validate_collect_safety()
+
     def test_write_and_load(self, tmp_path):
         path = tmp_path / "config.toml"
         write_ai_config(
