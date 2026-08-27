@@ -248,10 +248,8 @@ def _session_matches(
             for session in scoped_sessions
         ]
 
-    # 只有在没有任何后置过滤时下推 limit：project scope 会在拿到结果之后再筛，
-    # 先裁剪就会把本该入选的会话挡在 top-L 之外。每个 Provider 取 top-L 后做全局
-    # L 路合并是正确的——全局前 L 里不可能出现某个 Provider 的第 L+1 条。
-    pushdown_limit = spec.limit if spec.project_path is None else None
+    # Query 按时间排序，索引按相关度排序；只有排序一致时才可提前截断。
+    pushdown_limit = spec.limit if spec.text_mode is TextQueryMode.SEARCH_TERMS and spec.project_path is None else None
     indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, text_query, runtime, pushdown_limit)
     if indexed is not None:
         return indexed

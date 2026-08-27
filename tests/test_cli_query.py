@@ -6,6 +6,7 @@ from unittest import mock
 
 from cli_test_support import (
     configure_scanner_sessions,
+    configure_session_data_lease,
     make_export_result,
     make_session,
 )
@@ -17,6 +18,28 @@ from agent_dump.query_filter import SearchSessionMatch
 
 
 class TestMain:
+    def test_keyword_limit_lists_the_latest_match(self, isolated_provider_home: Path) -> None:
+        old = make_session("old", "alpha", created_at=datetime(2026, 1, 1, 10))
+        new = make_session("new", "Recent", created_at=datetime(2026, 1, 1, 12))
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        configure_session_data_lease(agent)
+        agent.get_cached_session_data.side_effect = lambda session: {
+            "messages": [{"role": "user", "content": "alpha " * 30 if session is old else "alpha " + "other " * 200}]
+        }
+        scanner = mock.MagicMock()
+        scanner.get_available_sessions.return_value = [(agent, [old, new])]
+
+        with (
+            mock.patch("sys.argv", ["agent-dump", "--list", "-query", "alpha limit:1"]),
+            mock.patch("agent_dump.cli.AgentScanner", return_value=scanner),
+            mock.patch("agent_dump.session_workflow.display_sessions_list") as display,
+        ):
+            assert main() == 0
+
+        assert display.call_args.args[1] == [new]
+
     def test_main_agents_query_uri_conflicts_with_query_option(self, capsys):
         with mock.patch("sys.argv", ["agent-dump", "agents://.?q=bug", "-q", "fatal"]):
             result = main()

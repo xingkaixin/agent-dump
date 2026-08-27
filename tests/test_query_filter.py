@@ -1289,6 +1289,36 @@ class TestSearchLimitPushdownSafety:
 
         assert index.search.call_args.kwargs["limit"] == 10
 
+    @pytest.mark.parametrize("keyword", ["alpha", "认证", "it"])
+    @pytest.mark.parametrize("limit", [1, 2, 10])
+    def test_keyword_limit_preserves_global_time_order(self, tmp_path: Path, keyword: str, limit: int) -> None:
+        groups = []
+        for name, newest_hour in [("codex", 12), ("kimi", 13)]:
+            old = make_session(f"{name}-old", keyword, tmp_path / f"{name}-old.jsonl")
+            new = make_session(f"{name}-new", "Recent", tmp_path / f"{name}-new.jsonl")
+            old.updated_at = datetime(2026, 1, 1, newest_hour - 4)
+            new.updated_at = datetime(2026, 1, 1, newest_hour)
+            agent = DummyAgent(
+                name=name,
+                session_data={
+                    old.id: {"messages": [{"role": "user", "content": f"{keyword} " * 30}]},
+                    new.id: {"messages": [{"role": "user", "content": f"{keyword} " + "other " * 200}]},
+                },
+            )
+            groups.append((agent, [old, new]))
+        index = SearchIndex(tmp_path / "index.db")
+        if not index.is_available:
+            pytest.skip("FTS5 unavailable")
+        spec = make_query_spec(keyword=keyword, limit=limit)
+
+        indexed = select_session_groups(groups, spec, search_index=index)
+        unavailable = mock.MagicMock(is_available=False)
+        fallback = select_session_groups(groups, spec, search_index=unavailable)
+
+        expected = ["kimi-new", "codex-new", "kimi-old", "codex-old"][:limit]
+        assert [match.session.id for match in indexed] == expected
+        assert [match.session.id for match in fallback] == expected
+
     def test_project_scope_keeps_the_full_result_set(self):
         """scope 过滤发生在拿到结果之后；先裁剪会把本该入选的会话挡在 top-L 之外。"""
         index = self._run(
