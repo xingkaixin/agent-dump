@@ -461,6 +461,7 @@ collect 模式入口：
 - `collect_progress.py`：进度上报与 run stats。
 - `collect_reduction.py`：session 并发总结、失败隔离与 tree reduction。
 - `collect_requests.py`：重试与结构化响应处理。
+- 模型摘要响应先校验字段和字符串数组类型，再规范化；空对象、未知字段和错误类型走现有纠正重试。为兼容既有响应，允许省略空字段，但必须至少显式提供一个当前模式字段。
 - `collect_sessions.py`：已发现 session 的日期/查询过滤、读取与 chunk 规划。
 - `collect_summary.py`：摘要 schema、payload 归一化、合并与 JSON 提取。
 

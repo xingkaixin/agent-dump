@@ -16,7 +16,7 @@ from agent_dump.collect_models import (
 )
 from agent_dump.collect_progress import truncate_log_preview, truncate_log_tail
 from agent_dump.collect_prompts import build_structured_summary_retry_prompt
-from agent_dump.collect_summary import extract_json_object, normalize_summary_payload
+from agent_dump.collect_summary import extract_json_object, normalize_summary_payload, validate_summary_payload
 from agent_dump.config import AIConfig
 
 
@@ -134,7 +134,9 @@ def request_structured_summary_from_llm(
                 **attempt_fields,
             )
         try:
-            return normalize_summary_payload(extract_json_object(response), mode=mode)
+            payload = extract_json_object(response)
+            validate_summary_payload(payload, mode=mode)
+            return normalize_summary_payload(payload, mode=mode)
         except Exception as exc:  # noqa: BLE001
             will_retry = parse_attempt < parse_retry_count
             if logger is not None:
