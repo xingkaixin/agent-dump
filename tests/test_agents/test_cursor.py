@@ -2,7 +2,7 @@
 测试 agents/cursor.py 模块
 """
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -18,6 +18,7 @@ import pytest
 from agent_dump.agents.base import Session
 from agent_dump.agents.cursor import _BUBBLE_RANGE_BATCH_SIZE, CursorAgent, _key_prefix_bounds
 from agent_dump.agents.cursor_storage import _METADATA_BUBBLE_SCAN_LIMIT, CursorStoreReader, parse_cursor_json
+from agent_dump.search_index import SearchIndex
 
 
 def _create_cursor_global_db(path: Path) -> None:
@@ -70,6 +71,50 @@ class TestCursorAgent:
 
         agent = CursorAgent()
         assert agent.is_available() is True
+
+    @pytest.mark.parametrize("journal_mode", ["DELETE", "WAL"])
+    @pytest.mark.parametrize("has_updated_time", [False, True])
+    def test_body_changes_refresh_cache_and_persistent_index(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, journal_mode: str, has_updated_time: bool
+    ) -> None:
+        database = self._create_layout(monkeypatch, tmp_path)
+        created_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        composer = {"composerId": "composer-1", "name": "stable", "createdAt": created_ms}
+        if has_updated_time:
+            composer["lastUpdatedAt"] = created_ms
+        _insert_kv(database, "composerData:composer-1", composer)
+        bubble_key = "bubbleId:composer-1:b1"
+        _insert_kv(database, bubble_key, {"requestId": "request-1", "type": 1, "text": "oldbody"})
+        index_path = tmp_path / "index" / "search.db"
+
+        with closing(sqlite3.connect(database)) as writer:
+            assert writer.execute(f"PRAGMA journal_mode={journal_mode}").fetchone()[0].upper() == journal_mode
+            writer.execute("PRAGMA wal_autocheckpoint=0")
+            agent = CursorAgent()
+            session = agent.get_sessions(days=None)[0]
+            with mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as read:
+                assert "oldbody" in json.dumps(agent.get_cached_session_data(session))
+                SearchIndex(index_path).update(agent, [session])
+                agent.get_cached_session_data(session)
+                assert read.call_count == 1
+                before = database.stat()
+                writer.execute(
+                    "UPDATE cursorDiskKV SET value=? WHERE key=?",
+                    (json.dumps({"requestId": "request-1", "type": 1, "text": "newbody"}), bubble_key),
+                )
+                writer.commit()
+                if journal_mode == "WAL":
+                    after = database.stat()
+                    assert (after.st_mtime_ns, after.st_size) == (before.st_mtime_ns, before.st_size)
+                refreshed = agent.get_sessions(days=None)[0]
+                assert (refreshed.title, refreshed.updated_at) == (session.title, session.updated_at)
+                assert "newbody" in json.dumps(agent.get_cached_session_data(refreshed))
+                assert read.call_count == 2
+
+            reopened = SearchIndex(index_path)
+            assert reopened.update(CursorAgent(), [refreshed]) == (1, 0)
+            assert [result.session_id for result in reopened.search("newbody")] == [session.id]
+            assert reopened.search("oldbody") == []
 
     def test_get_sessions_uses_request_id(self, monkeypatch, tmp_path):
         global_db = self._create_layout(monkeypatch, tmp_path)

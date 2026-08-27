@@ -625,6 +625,7 @@ just lint-format   # ruff format
 ### 8.6 Cursor
 
 - 路径：Cursor 默认用户目录下的 `globalStorage/state.vscdb`
+- 缓存失效：由 Cursor Provider 同时声明数据库和 `-wal` 文件作为变更来源；composer 时间戳可能不随 bubble 正文变化。当前按数据库级别保守失效，数据库变化会使已观察到的 Cursor 会话重新索引，不影响其他 Provider。
 - 存储：SQLite `cursorDiskKV`
 - URI：`cursor://<requestid>`
 - 能力边界：Cursor URI 支持 `json` 与 `print`
