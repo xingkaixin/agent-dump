@@ -444,6 +444,8 @@ list 与 collect 只在各自边界投影为 `Session`。带 `role:` 的查询�
 
 ### 5.6 `collect` 模块
 
+collect 与 dry-run 在发现会话前通过 `ConfigurationDocument.validate_collect_safety()` 校验配置；TOML 降级解析或无效的排除路径数组必须阻止执行，不得静默取消排除规则。
+
 collect 模式入口：
 - `collect_workflow.py`：参数校验、dry-run、保存路径、进度编排。
 - `collect.py`：保留内部导入兼容，不拥有业务实现。

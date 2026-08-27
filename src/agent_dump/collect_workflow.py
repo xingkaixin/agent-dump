@@ -507,6 +507,11 @@ def handle_collect_mode(
         return 1
 
     config_document = load_config_document()
+    try:
+        config_document.validate_collect_safety()
+    except ValueError as exc:
+        print(render_terminal_message(Keys.COLLECT_CONFIG_UNSAFE, field=exc))
+        return 1
     if operation.dry_run:
         return _handle_collect_dry_run(
             operation,

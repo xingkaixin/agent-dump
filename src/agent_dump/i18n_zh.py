@@ -134,6 +134,7 @@ ZH_TRANSLATIONS = {
     Keys.COLLECT_DATE_FORMAT_INVALID: "❌ 日期格式无效，请使用 YYYY-MM-DD 或 YYYYMMDD。",
     Keys.COLLECT_DATE_RANGE_INVALID: "❌ 日期区间无效，since 必须小于等于 until。",
     Keys.COLLECT_CONFIG_MISSING: "❌ collect 模式需要配置文件。",
+    Keys.COLLECT_CONFIG_UNSAFE: "❌ collect 无法安全使用配置项 {field}；请修正 TOML 语法和排除路径数组后重试。",
     Keys.COLLECT_CONFIG_INCOMPLETE: "❌ collect 配置缺少字段: {fields}",
     Keys.COLLECT_CONFIG_BAD_SCHEME: "❌ ai.base_url 必须使用 http 或 https。",
     Keys.COLLECT_CONFIG_PLAINTEXT_KEY: (

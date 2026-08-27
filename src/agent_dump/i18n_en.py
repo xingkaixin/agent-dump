@@ -137,6 +137,7 @@ EN_TRANSLATIONS = {
     Keys.COLLECT_DATE_FORMAT_INVALID: "❌ Invalid date format. Use YYYY-MM-DD or YYYYMMDD.",
     Keys.COLLECT_DATE_RANGE_INVALID: "❌ Invalid date range: since must be <= until.",
     Keys.COLLECT_CONFIG_MISSING: "❌ Collect requires config file.",
+    Keys.COLLECT_CONFIG_UNSAFE: "❌ collect cannot safely use configuration field {field}; fix the TOML syntax and exclusion path arrays before retrying.",
     Keys.COLLECT_CONFIG_INCOMPLETE: "❌ Collect config missing fields: {fields}",
     Keys.COLLECT_CONFIG_HINT: "Run: agent-dump -config edit",
     Keys.COLLECT_CONFIG_BAD_SCHEME: "❌ ai.base_url must use http or https.",
