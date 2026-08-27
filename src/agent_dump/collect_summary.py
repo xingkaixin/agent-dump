@@ -63,6 +63,16 @@ def empty_summary_payload(mode: CollectMode = CollectMode.PM) -> dict[str, list[
     return {field_name: [] for field_name in collect_fields_for(mode)}
 
 
+def validate_summary_payload(payload: dict[str, Any], *, mode: CollectMode = CollectMode.PM) -> None:
+    """Reject malformed model output while allowing omitted empty fields for compatibility."""
+    fields = collect_fields_for(mode)
+    if not payload or any(field not in fields for field in payload):
+        raise ValueError("summary must contain only recognized fields and cannot be an empty object")
+    for field, value in payload.items():
+        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+            raise ValueError(f"summary field {field} must be an array of strings")
+
+
 def normalize_summary_payload(payload: dict[str, Any], *, mode: CollectMode = CollectMode.PM) -> dict[str, list[str]]:
     """Normalize unknown payload to the fixed summary schema."""
     fields = collect_fields_for(mode)

@@ -6,11 +6,12 @@ import pytest
 
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, parse_user_date, resolve_collect_date_range
 from agent_dump.collect_events import chunk_collect_events, extract_collect_events
-from agent_dump.collect_models import CollectEvent
+from agent_dump.collect_models import CollectEvent, CollectMode
 from agent_dump.collect_summary import (
     empty_summary_payload,
     merge_summary_payloads,
     normalize_summary_payload,
+    validate_summary_payload,
 )
 
 
@@ -248,6 +249,16 @@ class TestCollectExtraction:
             "open_questions",
             "notes",
         }
+
+    @pytest.mark.parametrize("mode", list(CollectMode))
+    def test_validate_summary_payload_checks_mode_and_unknown_fields(self, mode: CollectMode) -> None:
+        payload = empty_summary_payload(mode)
+        validate_summary_payload(payload, mode=mode)
+        with pytest.raises(ValueError, match="recognized fields"):
+            validate_summary_payload({**payload, "unknown": []}, mode=mode)
+        other_mode = CollectMode.PM if mode is CollectMode.INSIGHT else CollectMode.INSIGHT
+        with pytest.raises(ValueError, match="recognized fields"):
+            validate_summary_payload(payload, mode=other_mode)
 
     def test_merge_summary_payloads_dedupes_per_field(self):
         merged = merge_summary_payloads(

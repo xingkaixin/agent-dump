@@ -126,7 +126,7 @@ def build_structured_summary_retry_prompt(
     fields = collect_fields_for(mode)
     retry = compose_summary_prompt(
         (
-            "上一轮输出不是合法 JSON，不能被解析。",
+            "上一轮输出不是合法 JSON 摘要，语法或字段结构不符合要求。",
             "请重新生成完整结果，仍然只输出一个 JSON 对象。",
             f"JSON 只能包含这些字段: {', '.join(fields)}。",
             "每个字段必须是字符串数组；没有内容时返回空数组。",

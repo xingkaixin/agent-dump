@@ -4,6 +4,8 @@ from datetime import date, datetime, timezone
 from email.message import Message
 import io
 import json
+from pathlib import Path
+from typing import Any
 from unittest import mock
 from urllib import error as urllib_error
 
@@ -16,6 +18,7 @@ from agent_dump.collect_logging import CollectLogger
 from agent_dump.collect_models import (
     CollectEntry,
     CollectEvent,
+    CollectMode,
     PlannedCollectEntry,
 )
 from agent_dump.collect_requests import (
@@ -66,6 +69,51 @@ class TestCollectStructuredSummary:
             )
 
         assert result["topics"] == ["A"]
+
+    @pytest.mark.parametrize("mode", list(CollectMode))
+    @pytest.mark.parametrize("bad_value", [None, False, 7, "text", {}, [None], ["ok", 7]])
+    def test_invalid_summary_field_types_retry(self, mode: CollectMode, bad_value: Any) -> None:
+        field = "scene" if mode is CollectMode.INSIGHT else "topics"
+        with mock.patch(
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
+            side_effect=[json.dumps({field: bad_value}), json.dumps({field: ["recovered"]})],
+        ) as request:
+            result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1", mode=mode)
+
+        assert request.call_count == 2
+        assert result[field] == ["recovered"]
+
+    @pytest.mark.parametrize("mode", list(CollectMode))
+    @pytest.mark.parametrize("response", ["{}", '{"error":"unavailable"}', '{"unknown":[]}'])
+    def test_invalid_summary_fields_exhaust_retries(self, mode: CollectMode, response: str, tmp_path: Path) -> None:
+        log_path = tmp_path / "collect.log"
+        logger = CollectLogger(enabled=True, path=log_path, run_id="shape-validation")
+        with (
+            mock.patch(
+                "agent_dump.collect_requests.request_structured_summary_payload_from_llm", return_value=response
+            ) as request,
+            pytest.raises(RuntimeError, match="invalid structured summary response"),
+        ):
+            request_structured_summary_from_llm(
+                self._config(), "prompt", context_label="chunk-1", mode=mode, logger=logger
+            )
+
+        assert request.call_count == 2
+        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        failures = [record for record in records if record["event"] == "llm_parse_error"]
+        assert [record["will_retry"] for record in failures] == [True, False]
+
+    @pytest.mark.parametrize("mode", list(CollectMode))
+    def test_explicit_empty_summary_fields_remain_valid(self, mode: CollectMode) -> None:
+        field = "scene" if mode is CollectMode.INSIGHT else "topics"
+        with mock.patch(
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
+            return_value=json.dumps({field: []}),
+        ) as request:
+            result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1", mode=mode)
+
+        assert request.call_count == 1
+        assert all(value == [] for value in result.values())
 
     def test_request_structured_summary_from_llm_parses_first_json_object(self):
         with mock.patch(
