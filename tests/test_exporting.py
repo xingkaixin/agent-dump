@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import tracemalloc
 from unittest import mock
 
 import pytest
@@ -16,7 +17,9 @@ from agent_dump.exporting import (
     ExportSuccess,
     execute_exports,
 )
+from agent_dump.output_formats import FileOutputFormat
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
+from agent_dump.session_data import MAX_COMPLETED_SESSION_DATA_ENTRIES
 
 
 class ExportingTestAgent(BaseAgent):
@@ -102,6 +105,55 @@ def test_execute_exports_rejects_duplicate_targets_before_writing(tmp_path: Path
         isinstance(attempt, ExportFailure) and isinstance(attempt.error, ExportPathCollisionError)
         for attempt in result.attempts
     )
+
+
+def test_markdown_batch_keeps_full_payload_memory_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    agent = ExportingTestAgent()
+    payload_size = 256 * 1024
+    sessions = [make_session(f"session-{index}", "Session") for index in range(100)]
+    monkeypatch.setattr(
+        agent, "get_session_data", lambda session: {"id": session.id, "messages": [], "blob": bytearray(payload_size)}
+    )
+
+    tracemalloc.start()
+    try:
+        baseline, _ = tracemalloc.get_traced_memory()
+        result = execute_exports(agent, sessions, ["markdown"], lambda _: tmp_path)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert result.status is ExportRunStatus.SUCCEEDED
+    assert len(result) == len(sessions)
+    assert all(path.is_file() for path in result.exported_paths)
+    assert peak - baseline < payload_size * (MAX_COMPLETED_SESSION_DATA_ENTRIES + 16)
+
+
+@pytest.mark.parametrize("formats", [["json", "markdown"], ["markdown", "json"]])
+def test_multiple_formats_reuse_one_provider_read(tmp_path: Path, formats: list[FileOutputFormat]) -> None:
+    agent = ExportingTestAgent()
+    session = make_session("session", "Session")
+    with mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as load:
+        result = execute_exports(agent, [session], formats, lambda _: tmp_path)
+
+    assert result.status is ExportRunStatus.SUCCEEDED
+    assert len(result) == 2
+    load.assert_called_once_with(session)
+
+
+def test_markdown_uses_prepared_payload_without_loading(tmp_path: Path) -> None:
+    agent = ExportingTestAgent()
+    session = make_session("session", "Session")
+    prepared = {"messages": [{"role": "user", "parts": [{"type": "text", "text": "prepared body"}]}]}
+
+    with mock.patch.object(agent, "get_session_data", side_effect=AssertionError("unexpected read")) as load:
+        result = execute_exports(
+            agent, [session], ["markdown"], lambda _: tmp_path, prepared_session_data={session.id: prepared}
+        )
+
+    assert result.status is ExportRunStatus.SUCCEEDED
+    assert "prepared body" in result.exported_paths[0].read_text(encoding="utf-8")
+    load.assert_not_called()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX modes are not meaningful on Windows")

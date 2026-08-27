@@ -135,7 +135,6 @@ def execute_exports(
 ) -> ExportRunResult:
     """Execute every requested file export and retain each observable outcome."""
     attempts: list[ExportAttempt] = []
-    loaded_session_data: dict[str, Mapping[str, Any]] = dict(prepared_session_data or {})
 
     for plan in _plan_exports(agent, sessions, formats, output_dir_for_format):
         if isinstance(plan, _RejectedExport):
@@ -143,15 +142,12 @@ def execute_exports(
             continue
         try:
             output_dir = ensure_output_dir(plan.output_dir)
-            if plan.output_format == "markdown" and plan.session.id not in loaded_session_data:
-                loaded_session_data[plan.session.id] = agent.get_cached_session_data(plan.session)
-
             output_path = export_session_in_format(
                 agent,
                 plan.session,
                 output_dir,
                 plan.output_format,
-                session_data=loaded_session_data.get(plan.session.id),
+                session_data=prepared_session_data.get(plan.session.id) if prepared_session_data is not None else None,
                 session_uri=session_uris.get(plan.session.id) if session_uris is not None else None,
                 json_fields=(
                     {"summary": summaries[plan.session.id]}
