@@ -40,6 +40,11 @@ class CursorAgent(BaseAgent):
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         return self._store.search_roots()
 
+    def get_session_change_sources(self, session: Session) -> tuple[Path, ...]:
+        """Track bubble edits even when composer timestamps do not advance."""
+        database = session.source_path
+        return (database, database.with_name(f"{database.name}-wal"))
+
     def is_available(self) -> bool:
         return self._store.is_available()
 
