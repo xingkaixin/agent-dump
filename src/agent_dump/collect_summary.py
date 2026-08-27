@@ -40,7 +40,7 @@ def build_summary_json_schema_for_fields(summary_fields: tuple[str, ...] | None 
     }
 
 
-def dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_ITEMS_PER_FIELD) -> list[str]:
+def dedupe_preserve_order(values: Iterable[str], *, limit: int | None = MAX_SUMMARY_ITEMS_PER_FIELD) -> list[str]:
     """Normalize and deduplicate text values without changing their first-seen order."""
     seen: set[str] = set()
     result: list[str] = []
@@ -53,7 +53,7 @@ def dedupe_preserve_order(values: Iterable[str], *, limit: int = MAX_SUMMARY_ITE
             continue
         seen.add(lowered)
         result.append(normalized)
-        if len(result) >= limit:
+        if limit is not None and len(result) >= limit:
             break
     return result
 
@@ -83,7 +83,7 @@ def normalize_summary_payload(payload: dict[str, Any], *, mode: CollectMode = Co
 def merge_summary_payloads(
     payloads: Iterable[dict[str, list[str]]],
     *,
-    max_items_per_field: int = MAX_SUMMARY_ITEMS_PER_FIELD,
+    max_items_per_field: int | None = MAX_SUMMARY_ITEMS_PER_FIELD,
     mode: CollectMode = CollectMode.PM,
 ) -> dict[str, list[str]]:
     """Merge structured summaries deterministically."""
