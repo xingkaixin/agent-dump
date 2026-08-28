@@ -27,6 +27,10 @@ const locales = [
   },
 ] as const;
 
+test.beforeEach(async ({ page }) => {
+  await page.route("https://umami.xingkaixin.me/**", (route) => route.abort());
+});
+
 for (const locale of locales) {
   test(`${locale.name} landing page interactions survive hydration`, async ({ context, page }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -43,6 +47,11 @@ for (const locale of locales) {
     );
     await expect(page.locator('link[rel="alternate"]')).toHaveCount(4);
     await expect(page.locator('header a[aria-current="page"]')).toHaveAttribute("href", locale.path);
+
+    const analyticsScript = page.locator('head script[src="https://umami.xingkaixin.me/script.js"]');
+    await expect(analyticsScript).toHaveCount(1);
+    await expect(analyticsScript).toHaveAttribute("defer", "");
+    await expect(analyticsScript).toHaveAttribute("data-website-id", "7141781d-b011-454b-a16b-8c1e524140c6");
 
     const install = page.locator("#install");
     const npmTab = install.getByRole("tab", { name: "npm", exact: true });
