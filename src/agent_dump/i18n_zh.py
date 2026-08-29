@@ -269,6 +269,7 @@ ZH_TRANSLATIONS = {
     Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE: "limit 必须是正整数",
     Keys.QUERY_ERROR_LIMIT_TOO_LARGE: "limit 数值过大",
     Keys.QUERY_ERROR_UNKNOWN_FIELD: "未知查询字段: {field}",
+    Keys.QUERY_ERROR_DUPLICATE_FIELD: "查询字段只能指定一次: {field}",
     Keys.QUERY_ERROR_DUPLICATE_PATH: "path/cwd 只能指定一次",
     Keys.QUERY_ERROR_DUPLICATE_LIMIT: "limit 只能指定一次",
     Keys.QUERY_ERROR_INVALID_SYNTAX: "结构化查询的引号或转义无效",
