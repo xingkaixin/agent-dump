@@ -181,6 +181,7 @@ ZH_TRANSLATIONS = {
     Keys.WARN_PROVIDER_OPERATION_FAILED: "警告: {agent} provider 操作失败: {error_type}: {error}",
     Keys.WARN_SESSION_PARSE_FAILED: "警告: 解析会话文件失败 {path}: {error}",
     Keys.WARN_TITLE_CACHE_FAILED: "警告: 加载标题缓存失败: {error}",
+    Keys.WARN_TITLE_CACHE_ENTRIES_SKIPPED: "警告: {path} 跳过了 {count} 条格式错误的标题缓存记录",
     Keys.WARN_TITLE_EXTRACT_FAILED: "警告: 提取标题失败: {error}",
     Keys.WARN_MESSAGE_CONVERT_FAILED: "警告: 转换消息格式失败: {error}",
     Keys.WARN_PI_RECORD_CONVERT_FAILED: "警告: 转换 Pi 记录失败: {error}",

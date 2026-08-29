@@ -16,6 +16,7 @@ from agent_dump.agents.base import Session
 from agent_dump.agents.claude_transcript import ClaudeTranscriptDecoder
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
+from agent_dump.i18n import Keys
 from agent_dump.paths import ProviderRoots
 
 
@@ -124,6 +125,52 @@ class TestClaudeCodeAgent:
             "session-001": {"sessionId": "session-001", "summary": "Test Session"},
             "session-002": {"sessionId": "session-002", "summary": "Another Session"},
         }
+
+    def test_load_sessions_index_keeps_valid_entries_around_malformed_entries(self, tmp_path: Path) -> None:
+        agent = ClaudeCodeAgent()
+        project_dir = tmp_path / "project1"
+        project_dir.mkdir()
+        index_path = project_dir / "sessions-index.json"
+        index_path.write_text(
+            json.dumps(
+                {
+                    "entries": [
+                        {"sessionId": "session-001", "summary": "First"},
+                        {"summary": "Missing ID"},
+                        "not an object",
+                        {"sessionId": "", "summary": "Empty ID"},
+                        {"sessionId": "session-002", "summary": "Second"},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        diagnostics = []
+
+        with agent.diagnostic_context(diagnostics.append):
+            result = agent._load_sessions_index(project_dir)
+
+        assert result == {
+            "session-001": {"sessionId": "session-001", "summary": "First"},
+            "session-002": {"sessionId": "session-002", "summary": "Second"},
+        }
+        assert len(diagnostics) == 1
+        assert diagnostics[0].message_key == Keys.WARN_TITLE_CACHE_ENTRIES_SKIPPED
+        assert diagnostics[0].fields == {"path": str(index_path), "count": 3}
+
+    def test_load_sessions_index_reports_unreadable_document(self, tmp_path: Path) -> None:
+        agent = ClaudeCodeAgent()
+        project_dir = tmp_path / "project1"
+        project_dir.mkdir()
+        (project_dir / "sessions-index.json").write_text("{broken", encoding="utf-8")
+        diagnostics = []
+
+        with agent.diagnostic_context(diagnostics.append):
+            result = agent._load_sessions_index(project_dir)
+
+        assert result == {}
+        assert len(diagnostics) == 1
+        assert diagnostics[0].message_key == Keys.WARN_TITLE_CACHE_FAILED
 
     def test_get_session_metadata_from_cache(self, tmp_path):
         """测试从缓存获取会话元数据"""
