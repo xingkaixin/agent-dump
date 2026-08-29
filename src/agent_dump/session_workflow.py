@@ -1,4 +1,4 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Protocol
 
@@ -54,17 +54,12 @@ def export_sessions_for_formats(
     agent: BaseAgent,
     sessions: list[Session],
     formats: list[FileOutputFormat],
-    output_base_dir: Path,
-    *,
-    output_base_dirs: dict[FileOutputFormat, Path] | None = None,
+    output_base_dirs: Mapping[FileOutputFormat, Path],
 ) -> ExportRunResult:
     print(render_terminal_message(Keys.EXPORTING_AGENT, agent_name=agent.display_name))
 
     def _output_dir_for_format(output_format: FileOutputFormat) -> Path:
-        format_base_dir = (
-            output_base_dirs.get(output_format, output_base_dir) if output_base_dirs is not None else output_base_dir
-        )
-        return format_base_dir / agent.name
+        return output_base_dirs[output_format] / agent.name
 
     result = execute_exports(
         agent,
@@ -379,25 +374,16 @@ def _handle_interactive_mode(
         )
         for output_format in operation.output_formats
     }
-    primary_output_format: FileOutputFormat = operation.output_formats[0] if operation.output_formats else "json"
-    output_base_dir = output_base_dirs.get(
-        primary_output_format,
-        resolve_output_base_dir(
-            cli_output=operation.output,
-            output_specified=operation.output_specified,
-            export_output=export_config.output,
-            output_format=primary_output_format,
-        ),
-    )
+    primary_output_format = operation.output_formats[0]
+    primary_output_base_dir = output_base_dirs[primary_output_format]
     export_result = export_sessions_for_formats(
         selected_agent,
         selected_sessions,
         list(operation.output_formats),
-        output_base_dir,
-        output_base_dirs=output_base_dirs,
+        output_base_dirs,
     )
 
     summary_paths = sorted({str(path.parent) for path in export_result.exported_paths})
-    summary_path = ", ".join(summary_paths) if summary_paths else f"{output_base_dir}/{selected_agent.name}"
+    summary_path = ", ".join(summary_paths) if summary_paths else f"{primary_output_base_dir}/{selected_agent.name}"
     print(render_terminal_message(Keys.EXPORT_SUMMARY, count=len(export_result), path=summary_path))
     return 0 if export_result.status.has_success else 1
