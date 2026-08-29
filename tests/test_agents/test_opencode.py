@@ -136,6 +136,19 @@ class TestOpenCodeAgent:
 
         finder.assert_called_once_with()
 
+    def test_missing_database_is_discovered_when_it_appears(self, tmp_path: Path) -> None:
+        agent = OpenCodeAgent()
+        db_path = tmp_path / "opencode.db"
+        finder = mock.MagicMock(side_effect=[None, db_path])
+
+        with mock.patch.object(agent, "_find_db_path", finder):
+            assert agent.is_available() is False
+            db_path.touch()
+            assert agent.is_available() is True
+
+        assert finder.call_count == 2
+        assert agent.db_path == db_path
+
     def test_scan_no_db(self, monkeypatch):
         """测试没有数据库时 scan 返回空列表"""
         agent = OpenCodeAgent()
