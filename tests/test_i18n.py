@@ -2,7 +2,7 @@ from string import Formatter
 
 import pytest
 
-from agent_dump.i18n import TRANSLATIONS, I18n, Keys
+from agent_dump.i18n import TRANSLATIONS, I18n, Keys, _detect_environment_language
 
 
 def _placeholder_names(template: str) -> frozenset[str]:
@@ -38,6 +38,20 @@ def test_translation_falls_back_to_english_then_key() -> None:
 
     assert translator.t("EN_ONLY", name="Ada") == "Hello Ada"
     assert translator.t("UNKNOWN") == "UNKNOWN"
+
+
+@pytest.mark.parametrize(
+    ("environ", "expected"),
+    [
+        ({"LANG": "zh_CN.UTF-8", "LC_ALL": "C"}, "en"),
+        ({"LANG": "en_US.UTF-8", "LC_MESSAGES": "zh_CN.UTF-8"}, "zh"),
+        ({"LANG": "zh_CN.UTF-8", "LC_MESSAGES": "en_US.UTF-8"}, "en"),
+        ({"LANG": "en_US.UTF-8", "LC_MESSAGES": "en_US.UTF-8", "LC_ALL": "zh_TW.UTF-8"}, "zh"),
+        ({}, None),
+    ],
+)
+def test_environment_language_uses_posix_precedence(environ: dict[str, str], expected: str | None) -> None:
+    assert _detect_environment_language(environ) == expected
 
 
 # 两语言值刻意相同的 key。用显式白名单而不是启发式：新增 key 时必须在这里做一次决定，

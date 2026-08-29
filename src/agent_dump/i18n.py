@@ -1,5 +1,6 @@
 """Internationalization support for agent-dump."""
 
+from collections.abc import Mapping
 import locale
 import os
 
@@ -18,6 +19,13 @@ TRANSLATIONS = {
 STRICT_FORMATTING = False
 
 
+def _detect_environment_language(environ: Mapping[str, str]) -> str | None:
+    locale_name = environ.get("LC_ALL") or environ.get("LC_MESSAGES") or environ.get("LANG")
+    if not locale_name:
+        return None
+    return "zh" if "zh" in locale_name.lower() else "en"
+
+
 class I18n:
     def __init__(self) -> None:
         self.lang = "en"
@@ -31,10 +39,8 @@ class I18n:
             self.lang = "en"
 
     def detect_language(self) -> str:
-        # Check environment variables first
-        lang = os.environ.get("LANG", "") or os.environ.get("LC_ALL", "")
-        if "zh" in lang.lower():
-            return "zh"
+        if environment_language := _detect_environment_language(os.environ):
+            return environment_language
 
         # Check locale
         try:
