@@ -129,6 +129,7 @@ ZH_TRANSLATIONS = {
     Keys.CONFIG_SAVED: "✅ 配置已保存: {path}",
     Keys.CONFIG_ACTION_INVALID: "❌ 无效的 --config 参数: {action}",
     Keys.CONFIG_INVALID_FIELDS: "❌ 配置项不完整: {fields}",
+    Keys.CONFIG_PARSE_INVALID: "❌ 配置不是合法 TOML: {path}",
     Keys.CONFIG_EDIT_REQUIRES_VALID_TOML: ("❌ 配置不是合法 TOML，无法安全编辑: {path}。请手动修正转义或替换该文件。"),
     Keys.CONFIG_INPUT_PROMPT: "> ",
     Keys.COLLECT_MODE_CONFLICT: "❌ --collect 不能与 URI/--interactive/--list 同时使用。",

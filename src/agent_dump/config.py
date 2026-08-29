@@ -75,6 +75,14 @@ class ConfigurationParseMode(Enum):
     INVALID = "invalid"
 
 
+class ConfigurationParseError(ValueError):
+    """Raised when a configuration projection would discard a parse failure."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(f"configuration is not valid TOML: {path}")
+        self.path = path
+
+
 @dataclass(frozen=True)
 class ConfigurationDocument:
     """One parsed configuration snapshot."""
@@ -314,29 +322,36 @@ def load_config_document(path: Path | None = None) -> ConfigurationDocument:
     )
 
 
+def _load_projectable_config_document(path: Path | None = None) -> ConfigurationDocument:
+    document = load_config_document(path)
+    if document.parse_mode is ConfigurationParseMode.INVALID:
+        raise ConfigurationParseError(document.path)
+    return document
+
+
 def load_ai_config(path: Path | None = None) -> AIConfig | None:
-    """Load AI config if file exists and parseable."""
-    return load_config_document(path).ai_config()
+    """Load AI config without hiding a document parse failure."""
+    return _load_projectable_config_document(path).ai_config()
 
 
 def load_collect_config(path: Path | None = None) -> CollectConfig:
-    """Load collect config with defaults for missing or invalid values."""
-    return load_config_document(path).collect_config()
+    """Load collect config with defaults for missing or invalid field values."""
+    return _load_projectable_config_document(path).collect_config()
 
 
 def load_logging_config(path: Path | None = None) -> LoggingConfig:
-    """Load logging config with defaults for missing or invalid values."""
-    return load_config_document(path).logging_config()
+    """Load logging config with defaults for missing or invalid field values."""
+    return _load_projectable_config_document(path).logging_config()
 
 
 def load_export_config(path: Path | None = None) -> ExportConfig:
-    """Load export config with defaults for missing or invalid values."""
-    return load_config_document(path).export_config()
+    """Load export config with defaults for missing or invalid field values."""
+    return _load_projectable_config_document(path).export_config()
 
 
 def load_shortcuts_config(path: Path | None = None) -> dict[str, ShortcutConfig]:
     """Load configured shortcut presets."""
-    return load_config_document(path).shortcuts_config()
+    return _load_projectable_config_document(path).shortcuts_config()
 
 
 SUPPORTED_AI_URL_SCHEMES = frozenset({"http", "https"})

@@ -17,10 +17,61 @@ from agent_dump.command_plan import (
     ListOperation,
     SearchOperation,
 )
-from agent_dump.config import ExportConfig
+from agent_dump.config import ConfigurationParseError, ExportConfig
 
 
 class TestMain:
+    def test_main_does_not_load_export_config_for_list(self) -> None:
+        with (
+            mock.patch(
+                "agent_dump.cli.load_export_config",
+                side_effect=AssertionError("list mode does not use export config"),
+            ) as load_export_config,
+            mock.patch("agent_dump.cli.handle_session_modes", return_value=0),
+            mock.patch("sys.argv", ["agent-dump", "--list"]),
+        ):
+            result = main()
+
+        assert result == 0
+        load_export_config.assert_not_called()
+
+    def test_main_does_not_load_export_config_with_explicit_output(self, tmp_path: Path) -> None:
+        with (
+            mock.patch(
+                "agent_dump.cli.load_export_config",
+                side_effect=AssertionError("explicit output does not use export config"),
+            ) as load_export_config,
+            mock.patch("agent_dump.cli.handle_session_modes", return_value=0),
+            mock.patch(
+                "sys.argv",
+                ["agent-dump", "--interactive", "--output", str(tmp_path / "exports")],
+            ),
+        ):
+            result = main()
+
+        assert result == 0
+        load_export_config.assert_not_called()
+
+    def test_main_reports_invalid_config_when_default_output_needs_it(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        config_path = tmp_path / "config.toml"
+        with (
+            mock.patch(
+                "agent_dump.cli.load_export_config",
+                side_effect=ConfigurationParseError(config_path),
+            ),
+            mock.patch("agent_dump.cli.handle_session_modes") as handle_session_modes,
+            mock.patch("sys.argv", ["agent-dump", "--interactive"]),
+        ):
+            result = main()
+
+        assert result == 1
+        handle_session_modes.assert_not_called()
+        assert expect(LocaleKeys.CONFIG_PARSE_INVALID, path=config_path) in capsys.readouterr().out
+
     @pytest.mark.parametrize(
         "argv",
         [

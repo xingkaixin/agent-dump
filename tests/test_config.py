@@ -1,5 +1,6 @@
 """配置模块测试。"""
 
+from collections.abc import Callable
 import os
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,27 @@ class TestConfigPath:
 
 
 class TestConfigReadWrite:
+    @pytest.mark.parametrize(
+        "loader",
+        [
+            load_ai_config,
+            load_collect_config,
+            load_logging_config,
+            load_export_config,
+            load_shortcuts_config,
+        ],
+    )
+    def test_invalid_toml_is_not_silently_projected(
+        self,
+        tmp_path: Path,
+        loader: Callable[[Path | None], object],
+    ) -> None:
+        path = tmp_path / "config.toml"
+        path.write_text('[export\noutput = "./exports"\n', encoding="utf-8")
+
+        with pytest.raises(ValueError, match="not valid TOML"):
+            loader(path)
+
     @pytest.mark.parametrize("deny", ['"/private"', '["/private", 42]', '[""]', '["   "]', '["\\u0000"]'])
     def test_collect_safety_rejects_invalid_exclusions(self, tmp_path: Path, deny: str) -> None:
         path = tmp_path / "config.toml"
