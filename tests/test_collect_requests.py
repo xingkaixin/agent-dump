@@ -20,6 +20,8 @@ from agent_dump.collect_models import (
     CollectEvent,
     CollectMode,
     PlannedCollectEntry,
+    StructuredSummaryContext,
+    StructuredSummaryPhase,
 )
 from agent_dump.collect_requests import (
     request_structured_summary_from_llm,
@@ -57,6 +59,22 @@ class TestCollectStructuredSummary:
         entry = self._entry(text=text, session_id=session_id)
         return PlannedCollectEntry(collect_entry=entry, chunks=tuple(chunk_collect_events(entry.events)))
 
+    def _context(
+        self,
+        *,
+        phase: StructuredSummaryPhase = StructuredSummaryPhase.STRUCTURED_SUMMARY,
+        session_uri: str | None = None,
+        chunk_index: int | None = None,
+        chunk_total: int | None = None,
+    ) -> StructuredSummaryContext:
+        return StructuredSummaryContext(
+            label="chunk-1",
+            phase=phase,
+            session_uri=session_uri,
+            chunk_index=chunk_index,
+            chunk_total=chunk_total,
+        )
+
     def test_request_structured_summary_from_llm_parses_json_fence(self):
         with mock.patch(
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
@@ -65,7 +83,7 @@ class TestCollectStructuredSummary:
             result = request_structured_summary_from_llm(
                 self._config(),
                 "prompt",
-                context_label="chunk-1",
+                context=self._context(),
             )
 
         assert result["topics"] == ["A"]
@@ -78,7 +96,7 @@ class TestCollectStructuredSummary:
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             side_effect=[json.dumps({field: bad_value}), json.dumps({field: ["recovered"]})],
         ) as request:
-            result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1", mode=mode)
+            result = request_structured_summary_from_llm(self._config(), "prompt", context=self._context(), mode=mode)
 
         assert request.call_count == 2
         assert result[field] == ["recovered"]
@@ -95,7 +113,7 @@ class TestCollectStructuredSummary:
             pytest.raises(RuntimeError, match="invalid structured summary response"),
         ):
             request_structured_summary_from_llm(
-                self._config(), "prompt", context_label="chunk-1", mode=mode, logger=logger
+                self._config(), "prompt", context=self._context(), mode=mode, logger=logger
             )
 
         assert request.call_count == 2
@@ -110,7 +128,7 @@ class TestCollectStructuredSummary:
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             return_value=json.dumps({field: []}),
         ) as request:
-            result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1", mode=mode)
+            result = request_structured_summary_from_llm(self._config(), "prompt", context=self._context(), mode=mode)
 
         assert request.call_count == 1
         assert all(value == [] for value in result.values())
@@ -123,7 +141,7 @@ class TestCollectStructuredSummary:
             result = request_structured_summary_from_llm(
                 self._config(),
                 "prompt",
-                context_label="chunk-1",
+                context=self._context(),
             )
 
         assert result["topics"] == ["A"]
@@ -138,7 +156,7 @@ class TestCollectStructuredSummary:
             request_structured_summary_from_llm(
                 self._config(),
                 "prompt",
-                context_label="chunk-1",
+                context=self._context(),
             )
 
     def test_request_structured_summary_from_llm_retries_with_parse_feedback(self):
@@ -154,7 +172,7 @@ class TestCollectStructuredSummary:
             result = request_structured_summary_from_llm(
                 self._config(),
                 "original prompt",
-                context_label="chunk-1",
+                context=self._context(),
             )
 
         retry_prompt = mock_request.call_args_list[1].args[1]
@@ -176,7 +194,7 @@ class TestCollectStructuredSummary:
         with mock.patch(
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm", side_effect=responses
         ) as mock_request:
-            request_structured_summary_from_llm(self._config(), "original prompt", context_label="chunk-1")
+            request_structured_summary_from_llm(self._config(), "original prompt", context=self._context())
 
         retry_prompt = mock_request.call_args_list[1].args[1]
         envelope = next(
@@ -332,12 +350,13 @@ class TestCollectStructuredSummary:
             request_structured_summary_from_llm(
                 self._config(),
                 "prompt",
-                context_label="chunk-1",
+                context=self._context(
+                    phase=StructuredSummaryPhase.CHUNK_SUMMARY,
+                    session_uri="codex://s-1",
+                    chunk_index=1,
+                    chunk_total=2,
+                ),
                 logger=logger,
-                phase="chunk_summary",
-                session_uri="codex://s-1",
-                chunk_index=1,
-                chunk_total=2,
             )
 
         records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
@@ -376,7 +395,7 @@ class TestCollectStructuredSummary:
             result = request_structured_summary_from_llm(
                 self._config(),
                 "prompt",
-                context_label="chunk-1",
+                context=self._context(),
                 logger=logger,
             )
 
@@ -403,7 +422,7 @@ class TestCollectStructuredSummary:
             ) as mocked,
             pytest.raises(RuntimeError, match=f"HTTP {status}"),
         ):
-            request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
+            request_structured_summary_from_llm(self._config(), "prompt", context=self._context())
 
         assert mocked.call_count == 1
 
@@ -413,7 +432,7 @@ class TestCollectStructuredSummary:
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             side_effect=[LLMRequestError(f"HTTP {status}", status=status), '{"topics":["A"]}'],
         ) as mocked:
-            result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
+            result = request_structured_summary_from_llm(self._config(), "prompt", context=self._context())
 
         assert result["topics"] == ["A"]
         assert mocked.call_count == 2
@@ -426,7 +445,7 @@ class TestCollectStructuredSummary:
             ) as mocked,
             pytest.raises(RuntimeError, match="missing response content"),
         ):
-            request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
+            request_structured_summary_from_llm(self._config(), "prompt", context=self._context())
 
         assert mocked.call_count == 1
 
@@ -441,7 +460,7 @@ class TestCollectStructuredSummary:
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
             side_effect=responses,
         ) as mocked:
-            result = request_structured_summary_from_llm(self._config(), "prompt", context_label="chunk-1")
+            result = request_structured_summary_from_llm(self._config(), "prompt", context=self._context())
 
         assert result["topics"] == ["recovered"]
         assert mocked.call_count == 4

@@ -47,6 +47,22 @@ class CollectFailurePhase(str, Enum):
     WRITE = "write"
 
 
+class StructuredSummaryPhase(str, Enum):
+    STRUCTURED_SUMMARY = "structured_summary"
+    CHUNK_SUMMARY = "chunk_summary"
+    SESSION_MERGE = "session_merge"
+    GROUP_MERGE = "group_merge"
+
+
+@dataclass(frozen=True)
+class StructuredSummaryContext:
+    label: str
+    phase: StructuredSummaryPhase = StructuredSummaryPhase.STRUCTURED_SUMMARY
+    session_uri: str | None = None
+    chunk_index: int | None = None
+    chunk_total: int | None = None
+
+
 _COLLECT_MODE_FIELDS = {
     CollectMode.PM: SUMMARY_FIELDS,
     CollectMode.INSIGHT: INSIGHT_SUMMARY_FIELDS,

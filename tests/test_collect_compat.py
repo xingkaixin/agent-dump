@@ -36,6 +36,8 @@ from agent_dump import (
         ("PlannedCollectEntry", collect_models),
         ("ScanSessionsProgress", collect_models),
         ("SessionSummaryEntry", collect_models),
+        ("StructuredSummaryContext", collect_models),
+        ("StructuredSummaryPhase", collect_models),
         ("SummarizeChunksProgress", collect_models),
         ("TreeReductionProgress", collect_models),
         ("write_collect_markdown", collect_output),
