@@ -16,6 +16,7 @@ from agent_dump.cli_shared import (
     collect_query_matches,
     render_agent_search_roots,
     scope_session_groups_by_provider,
+    uses_configured_export_output,
 )
 from agent_dump.exporting import ExportRunStatus
 from agent_dump.maintenance_workflow import group_sessions_by_time
@@ -99,6 +100,13 @@ def test_diagnostic_search_roots_use_the_base_agent_contract(tmp_path: Path) -> 
 
     assert rendered == (f"Typed Agent: typed root: {tmp_path / 'sessions'}",)
     assert diagnostic.searched_roots == rendered
+
+
+def test_configured_export_output_applies_only_to_json_and_raw_defaults() -> None:
+    assert uses_configured_export_output(output_specified=False, output_formats=("json",))
+    assert uses_configured_export_output(output_specified=False, output_formats=("raw",))
+    assert not uses_configured_export_output(output_specified=False, output_formats=("markdown",))
+    assert not uses_configured_export_output(output_specified=True, output_formats=("json", "raw"))
 
 
 def test_scope_session_groups_filters_requested_providers() -> None:
