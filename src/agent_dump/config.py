@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 import tomlkit
 from tomlkit.toml_document import TOMLDocument
 
-from agent_dump.private_files import PRIVATE_FILE_MODE, write_private_text
+from agent_dump.private_files import write_private_text
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -182,17 +182,6 @@ class ConfigurationDocument:
 
 DEFAULT_COLLECT_SUMMARY_CONCURRENCY = 4
 MAX_COLLECT_SUMMARY_CONCURRENCY = 32
-PRIVATE_CONFIG_MODE = PRIVATE_FILE_MODE
-
-
-def get_default_log_path(
-    *,
-    home: Path | None = None,
-    environ: dict[str, str] | None = None,
-    is_windows: bool | None = None,
-) -> Path:
-    """Return default collect log file path under the config directory."""
-    return get_config_path(home=home, environ=environ, is_windows=is_windows).parent / "logs" / "collect.log"
 
 
 def _default_log_path_for_config(config_path: Path) -> Path:
@@ -332,21 +321,6 @@ def load_projectable_config_document(path: Path | None = None) -> ConfigurationD
     if document.parse_mode is ConfigurationParseMode.INVALID:
         raise ConfigurationParseError(document.path)
     return document
-
-
-def load_ai_config(path: Path | None = None) -> AIConfig | None:
-    """Load AI config without hiding a document parse failure."""
-    return load_projectable_config_document(path).ai_config()
-
-
-def load_collect_config(path: Path | None = None) -> CollectConfig:
-    """Load collect config with defaults for missing or invalid field values."""
-    return load_projectable_config_document(path).collect_config()
-
-
-def load_logging_config(path: Path | None = None) -> LoggingConfig:
-    """Load logging config with defaults for missing or invalid field values."""
-    return load_projectable_config_document(path).logging_config()
 
 
 def load_export_config(path: Path | None = None) -> ExportConfig:
@@ -541,8 +515,3 @@ def write_config(
 
     rendered_content = tomlkit.dumps(toml_document)
     return write_private_text(config_path, rendered_content)
-
-
-def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
-    """Persist AI config to TOML file."""
-    return write_config(config, path=path)

@@ -16,8 +16,8 @@ from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.zcode import ZCodeAgent
 from agent_dump.diagnostics import print_recoverable_diagnostic
 from agent_dump.query_filter import (
+    QuerySessionMatch,
     QuerySpec,
-    SearchSessionMatch,
     extract_session_working_directory,
     parse_query,
     parse_query_uri,
@@ -133,7 +133,7 @@ def query_matches(
     *,
     search_index: SearchIndex | None = None,
     diagnostic_sink=None,
-) -> list[SearchSessionMatch]:
+) -> list[QuerySessionMatch]:
     return select_session_groups(
         [(agent, sessions)],
         spec,
@@ -149,7 +149,7 @@ def search_matches(
     *,
     search_index: SearchIndex | None = None,
     diagnostic_sink=None,
-) -> list[SearchSessionMatch]:
+) -> list[QuerySessionMatch]:
     if not (spec.keyword or "").strip():
         return []
     return select_session_groups(
@@ -811,7 +811,7 @@ class TestSearchSessionsByQuery:
             )
 
         assert result == [
-            SearchSessionMatch(
+            QuerySessionMatch(
                 agent=agent,
                 session=session,
                 snippet="...**auth** timeout during login...",
@@ -973,7 +973,7 @@ class TestSearchSessionsByQuery:
             )
 
         assert result == [
-            SearchSessionMatch(
+            QuerySessionMatch(
                 agent=agent,
                 session=session,
                 snippet="**fatal** assistant evidence",
@@ -1194,7 +1194,7 @@ class TestRoleLimitPushdown:
         )
         oracle = sorted(full_matches, key=lambda match: match.session.updated_at, reverse=True)[:2]
 
-        def project(matches: list[SearchSessionMatch]) -> list[tuple[str, str, str, float, str | None]]:
+        def project(matches: list[QuerySessionMatch]) -> list[tuple[str, str, str, float, str | None]]:
             return [
                 (match.agent.name, match.session.id, match.snippet, match.rank, match.matched_role) for match in matches
             ]
@@ -1229,8 +1229,8 @@ class TestQuerySessionGroups:
         newer = make_session("s-new", "new", tmp_path / "new.jsonl")
         newer.updated_at = datetime(2026, 1, 1, 11, 0, 0)
         matches = [
-            SearchSessionMatch(agent, older, "**bug** old", 0.0, "user"),
-            SearchSessionMatch(agent, newer, "**bug** new", 0.0, "assistant"),
+            QuerySessionMatch(agent, older, "**bug** old", 0.0, "user"),
+            QuerySessionMatch(agent, newer, "**bug** new", 0.0, "assistant"),
         ]
 
         with mock.patch("agent_dump.query_filter._session_matches", return_value=matches):
@@ -1245,8 +1245,8 @@ class TestQuerySessionGroups:
         newer = make_session("s-new", "new", tmp_path / "new.jsonl")
         newer.updated_at = datetime(2026, 1, 1, 11, 0, 0)
         matches = [
-            SearchSessionMatch(agent, older, "old", 0.0, "user"),
-            SearchSessionMatch(agent, newer, "new", 0.0, "user"),
+            QuerySessionMatch(agent, older, "old", 0.0, "user"),
+            QuerySessionMatch(agent, newer, "new", 0.0, "user"),
         ]
 
         with mock.patch("agent_dump.query_filter._session_matches", return_value=matches):
@@ -1269,10 +1269,10 @@ class TestSearchSessionGroups:
         tie_older.updated_at = datetime(2026, 1, 1, 9, 0, 0)
 
         matches = [
-            SearchSessionMatch(agent=kimi, session=newer_low_rank, snippet="low", rank=0.5),
-            SearchSessionMatch(agent=codex, session=tie_older, snippet="tie", rank=1.0),
-            SearchSessionMatch(agent=kimi, session=tie_newer, snippet="tie", rank=1.0),
-            SearchSessionMatch(agent=codex, session=older_high_rank, snippet="high", rank=2.0),
+            QuerySessionMatch(agent=kimi, session=newer_low_rank, snippet="low", rank=0.5),
+            QuerySessionMatch(agent=codex, session=tie_older, snippet="tie", rank=1.0),
+            QuerySessionMatch(agent=kimi, session=tie_newer, snippet="tie", rank=1.0),
+            QuerySessionMatch(agent=codex, session=older_high_rank, snippet="high", rank=2.0),
         ]
         with mock.patch("agent_dump.query_filter._session_matches", return_value=matches):
             result = select_session_groups(

@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import sys
 import threading
-from typing import Any, Protocol
+from typing import Any
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
@@ -14,7 +14,13 @@ from agent_dump.cli_shared import (
 )
 from agent_dump.collect_requests import request_summary_from_llm
 from agent_dump.command_plan import UriOperation
-from agent_dump.config import AIConfig, AIConfigError, load_projectable_config_document, validate_ai_config
+from agent_dump.config import (
+    AIConfig,
+    AIConfigError,
+    ExportConfig,
+    load_projectable_config_document,
+    validate_ai_config,
+)
 from agent_dump.diagnostics import DiagnosticError, session_not_found
 from agent_dump.exporting import ExportFailure, execute_exports
 from agent_dump.i18n import Keys, i18n
@@ -25,11 +31,6 @@ from agent_dump.scanner import AgentScanner
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_body_text, safe_display_text
 from agent_dump.uri_support import find_session_by_id
-
-
-class ExportConfigLike(Protocol):
-    @property
-    def output(self) -> str: ...
 
 
 @contextmanager
@@ -142,7 +143,7 @@ def maybe_generate_uri_summary(
 def handle_uri_mode(
     operation: UriOperation,
     *,
-    export_config: ExportConfigLike,
+    export_config: ExportConfig,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
     request_summary: Callable[[AIConfig, str], str] = request_summary_from_llm,
 ) -> int:
@@ -159,7 +160,7 @@ def handle_uri_mode(
 def _handle_uri_mode(
     operation: UriOperation,
     *,
-    export_config: ExportConfigLike,
+    export_config: ExportConfig,
     scanner: AgentScanner,
     request_summary: Callable[[AIConfig, str], str],
 ) -> int:

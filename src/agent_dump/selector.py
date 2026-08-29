@@ -22,13 +22,6 @@ def is_terminal() -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
-def get_time_group(session: Session) -> str:
-    """Get time group for a session"""
-    local_tz = get_local_timezone()
-    groups = group_sessions_by_age([session], now=datetime.now(local_tz), local_tz=local_tz)
-    return i18n.t(next(iter(groups)).value)
-
-
 def group_sessions(sessions: list[Session]) -> dict[str, list[Session]]:
     """Group sessions by time periods"""
     local_tz = get_local_timezone()

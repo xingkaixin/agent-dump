@@ -132,11 +132,6 @@ class TestDerivedDataFilePermissions:
         assert mode_of(log_path) == PRIVATE_FILE_MODE
         assert mode_of(log_path.parent) == PRIVATE_DIR_MODE
 
-    def test_config_file_shares_the_same_mode_constant(self):
-        from agent_dump.config import PRIVATE_CONFIG_MODE
-
-        assert PRIVATE_CONFIG_MODE == PRIVATE_FILE_MODE
-
 
 def _mode(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)

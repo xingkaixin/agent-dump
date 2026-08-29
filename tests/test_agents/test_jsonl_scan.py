@@ -14,7 +14,7 @@ from agent_dump.agents.jsonl_scan import (
     TAIL_SCAN_BYTE_LIMIT,
     JsonlObjectScan,
     file_modified_since,
-    parse_object_line,
+    parse_object_lines,
     read_jsonl_scan_metadata,
     skipped_records_diagnostic,
 )
@@ -334,9 +334,5 @@ class TestJsonlObjectScan:
         assert "\x1b" not in rendered, "路径来自不可信输入，必须净化后才进终端"
         assert "Traceback" not in rendered
 
-    def test_parse_object_line_rejects_non_objects(self, tmp_path):
-        assert parse_object_line('{"n": 1}') == {"n": 1}
-        assert parse_object_line("1") is None
-        assert parse_object_line("[]") is None
-        assert parse_object_line('"text"') is None
-        assert parse_object_line("{bad") is None
+    def test_parse_object_lines_rejects_non_objects(self) -> None:
+        assert parse_object_lines(['{"n": 1}', "1", "[]", '"text"', "{bad"]) == [{"n": 1}]

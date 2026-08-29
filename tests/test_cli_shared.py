@@ -21,7 +21,7 @@ from agent_dump.cli_shared import (
 from agent_dump.exporting import ExportRunStatus
 from agent_dump.maintenance_workflow import group_sessions_by_time
 from agent_dump.paths import SearchRoot
-from agent_dump.query_filter import QuerySpec, SearchSessionMatch
+from agent_dump.query_filter import QuerySessionMatch, QuerySpec
 from agent_dump.rendering import format_session_metadata_summary, render_session_head, render_session_text
 from agent_dump.scanner import AgentScanner
 from agent_dump.session_workflow import (
@@ -234,7 +234,7 @@ class TestQueryHelpers:
         agent_b.name = "kimi"
         agent_b.get_sessions.return_value = [newer]
 
-        match_b = SearchSessionMatch(agent=agent_b, session=newer, snippet="new", rank=0.0)
+        match_b = QuerySessionMatch(agent=agent_b, session=newer, snippet="new", rank=0.0)
         with mock.patch("agent_dump.cli_shared.select_session_groups", return_value=[match_b]):
             matched = collect_query_matches(
                 [(agent_a, [older]), (agent_b, [newer])],
@@ -255,7 +255,7 @@ class TestQueryHelpers:
         agent_b.name = "kimi"
         agent_b.get_sessions.return_value = [newer]
 
-        match_b = SearchSessionMatch(agent=agent_b, session=newer, snippet="new", rank=2.0)
+        match_b = QuerySessionMatch(agent=agent_b, session=newer, snippet="new", rank=2.0)
 
         with mock.patch("agent_dump.session_workflow.select_session_groups", return_value=[match_b]):
             result = collect_search_matches(
@@ -271,7 +271,7 @@ class TestQueryHelpers:
         agent.display_name = "Codex"
         agent.get_formatted_title.return_value = "Auth Timeout (2026-01-01 10:00)"
         agent.get_session_uri.return_value = "codex://s1"
-        match = SearchSessionMatch(
+        match = QuerySessionMatch(
             agent=agent,
             session=session,
             snippet="login failed after **auth timeout**",
@@ -295,7 +295,7 @@ class TestQueryHelpers:
         agent.get_formatted_title.return_value = poison
         agent.get_session_uri.return_value = poison
 
-        display_search_results([SearchSessionMatch(agent=agent, session=session, snippet=poison, rank=1.0)])
+        display_search_results([QuerySessionMatch(agent=agent, session=session, snippet=poison, rank=1.0)])
 
         output = capsys.readouterr().out
         assert not has_unsafe_body_characters(output)

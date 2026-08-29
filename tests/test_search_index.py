@@ -330,7 +330,7 @@ class TestSearchIndex:
                 raise AssertionError("search index reads did not overlap")
             return f"keyword {session.id}"
 
-        with mock.patch("agent_dump.search_index.extract_session_searchable_text_once", side_effect=extract_text):
+        with mock.patch("agent_dump.search_index.extract_session_searchable_text", side_effect=extract_text):
             added, removed = index.update(agent, sessions)
 
         assert (added, removed) == (2, 0)

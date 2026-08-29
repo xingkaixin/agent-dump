@@ -14,7 +14,6 @@ import pytest
 from agent_dump.agents.base import BaseAgent, Session
 import agent_dump.selector as selector_module
 from agent_dump.selector import (
-    get_time_group,
     group_sessions,
     is_terminal,
     select_agent_interactive,
@@ -452,7 +451,7 @@ class TestSelectAgentInteractiveEdgeCases:
 class TestTimeGrouping:
     """测试会话时间分组使用本地时区"""
 
-    def test_get_time_group_uses_local_timezone_for_aware_utc(self):
+    def test_group_sessions_uses_local_timezone_for_aware_utc(self) -> None:
         """测试 aware UTC 时间会先转本地时区再分组"""
         session = Session(
             id="session-local-today",
@@ -468,7 +467,7 @@ class TestTimeGrouping:
         with mock.patch("agent_dump.selector.get_local_timezone", return_value=local_tz):
             with mock.patch("agent_dump.selector.datetime") as mock_datetime:
                 mock_datetime.now.return_value = fixed_now
-                assert get_time_group(session) == "今天"
+                assert list(group_sessions([session])) == ["今天"]
 
     def test_group_sessions_supports_timestamp_variants_in_local_timezone(self):
         """测试秒/毫秒时间戳分组按本地时区生效"""

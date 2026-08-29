@@ -1,6 +1,5 @@
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Protocol
 
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
@@ -12,22 +11,18 @@ from agent_dump.cli_shared import (
     wrap_runtime_fetch_error,
 )
 from agent_dump.command_plan import InteractiveOperation, ListOperation, SearchOperation, SessionOperation
+from agent_dump.config import ExportConfig
 from agent_dump.diagnostics import DiagnosticError, print_recoverable_diagnostic, render_diagnostic
 from agent_dump.exporting import ExportFailure, ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
 from agent_dump.output_formats import FileOutputFormat, validate_agent_formats
-from agent_dump.query_filter import QuerySpec, SearchSessionMatch, select_session_groups
+from agent_dump.query_filter import QuerySessionMatch, QuerySpec, select_session_groups
 from agent_dump.rendering import format_session_metadata_summary
 from agent_dump.scanner import AgentScanner
 from agent_dump.selector import select_agent_interactive, select_sessions_interactive
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.text_safety import safe_display_text
 from agent_dump.time_utils import to_local_datetime
-
-
-class ExportConfigLike(Protocol):
-    @property
-    def output(self) -> str: ...
 
 
 def display_sessions_list(
@@ -117,11 +112,11 @@ def collect_search_matches(
     session_groups: Sequence[tuple[BaseAgent, list[Session]]],
     *,
     spec: QuerySpec,
-) -> list[SearchSessionMatch]:
+) -> list[QuerySessionMatch]:
     return select_session_groups(session_groups, spec, diagnostic_sink=print_recoverable_diagnostic)
 
 
-def display_search_results(matches: list[SearchSessionMatch]) -> None:
+def display_search_results(matches: list[QuerySessionMatch]) -> None:
     if not matches:
         print(i18n.t(Keys.SEARCH_NO_RESULTS))
         return
@@ -148,7 +143,7 @@ def warn_list_ignored_options(output_specified: bool, format_specified: bool) ->
 def handle_session_modes(
     operation: SessionOperation,
     *,
-    export_config: ExportConfigLike,
+    export_config: ExportConfig,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
 ) -> int | None:
     scanner = scanner_factory()
@@ -159,7 +154,7 @@ def handle_session_modes(
 def _handle_session_modes(
     operation: SessionOperation,
     *,
-    export_config: ExportConfigLike,
+    export_config: ExportConfig,
     scanner: AgentScanner,
 ) -> int | None:
     print("🚀 Agent Session Exporter\n")
@@ -281,7 +276,7 @@ def _handle_interactive_mode(
     matched_sessions_by_agent: dict[str, list[Session]],
     available_agents: list[BaseAgent],
     scanned_sessions: list[tuple[BaseAgent, list[Session]]],
-    export_config: ExportConfigLike,
+    export_config: ExportConfig,
 ) -> int:
     # 一次取全，选中后直接复用；之前无 query 时 selector 会为标签逐个扫 provider，
     # 用户选完再把选中的 provider 完整扫第二遍

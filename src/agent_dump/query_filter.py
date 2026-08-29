@@ -46,7 +46,6 @@ class QuerySessionMatch:
     matched_role: str | None = None
 
 
-SearchSessionMatch = QuerySessionMatch
 SessionGroup = tuple[BaseAgent, list[Session]]
 
 
@@ -194,10 +193,10 @@ def select_session_groups(
     *,
     search_index: SearchIndex | None = None,
     diagnostic_sink: RecoverableDiagnosticSink | None = None,
-) -> list[SearchSessionMatch]:
+) -> list[QuerySessionMatch]:
     """Select sessions using the text semantics carried by the query specification."""
     runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
-    matches: list[SearchSessionMatch] = []
+    matches: list[QuerySessionMatch] = []
     for agent, sessions in session_groups:
         with agent.diagnostic_context(diagnostic_sink):
             matches.extend(_session_matches(agent, sessions, spec, runtime=runtime))
@@ -216,7 +215,7 @@ def _session_matches(
     spec: QuerySpec,
     *,
     runtime: _SearchRuntime,
-) -> list[SearchSessionMatch]:
+) -> list[QuerySessionMatch]:
     if spec.agent_names is not None and agent.name not in spec.agent_names:
         return []
 
@@ -245,7 +244,7 @@ def _session_matches(
 
     if text_query.is_empty:
         return [
-            SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
+            QuerySessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
             for session in scoped_sessions
         ]
 
@@ -423,18 +422,18 @@ def _role_search_matches(
     *,
     limit: int | None,
     runtime: _SearchRuntime,
-) -> list[SearchSessionMatch]:
+) -> list[QuerySessionMatch]:
     candidates = (
         sessions if limit is None else sorted(sessions, key=lambda session: _query_session_sort_key(agent, session))
     )
-    matches: list[SearchSessionMatch] = []
+    matches: list[QuerySessionMatch] = []
     for session in candidates:
         evidence = _find_role_evidence(agent, session, roles, query, runtime)
         if evidence is None:
             continue
         role, snippet = evidence
         matches.append(
-            SearchSessionMatch(
+            QuerySessionMatch(
                 agent=agent,
                 session=session,
                 snippet=snippet,
@@ -476,7 +475,7 @@ def _find_role_evidence(
     return None
 
 
-def _query_evidence_sort_key(match: SearchSessionMatch) -> tuple[float, float, str, str]:
+def _query_evidence_sort_key(match: QuerySessionMatch) -> tuple[float, float, str, str]:
     return _query_session_sort_key(match.agent, match.session)
 
 
@@ -491,7 +490,7 @@ def _query_session_sort_key(agent: BaseAgent, session: Session) -> tuple[float, 
     )
 
 
-def _search_match_sort_key(match: SearchSessionMatch) -> tuple[float, float, float, str, str]:
+def _search_match_sort_key(match: QuerySessionMatch) -> tuple[float, float, float, str, str]:
     updated_at = normalize_datetime_utc(match.session.updated_at)
     created_at = normalize_datetime_utc(match.session.created_at)
     return (-match.rank, -updated_at.timestamp(), -created_at.timestamp(), match.agent.name, match.session.id)
@@ -504,7 +503,7 @@ def _try_indexed_search_matches(
     query: TextQuery,
     runtime: _SearchRuntime,
     limit: int | None = None,
-) -> list[SearchSessionMatch] | None:
+) -> list[QuerySessionMatch] | None:
     """Try indexed search while retaining SearchResult metadata."""
     try:
         index = runtime.search_index(agent)
@@ -521,14 +520,14 @@ def _try_indexed_search_matches(
             session_keys={(agent.name, session_id) for session_id in scoped_by_id},
             limit=limit,
         )
-        matches: list[SearchSessionMatch] = []
+        matches: list[QuerySessionMatch] = []
         for result in results:
             session = scoped_by_id.get(result.session_id)
             if session is None:
                 continue
             snippet = result.snippet or query.build_snippet((session.title,)) or session.title
             matches.append(
-                SearchSessionMatch(
+                QuerySessionMatch(
                     agent=agent,
                     session=session,
                     snippet=snippet,
@@ -546,9 +545,9 @@ def _fallback_search_matches(
     sessions: list[Session],
     query: TextQuery | str,
     runtime: _SearchRuntime,
-) -> list[SearchSessionMatch]:
+) -> list[QuerySessionMatch]:
     text_query = query if isinstance(query, TextQuery) else TextQuery.parse(query, TextQueryMode.SEARCH_TERMS)
-    matches: list[SearchSessionMatch] = []
+    matches: list[QuerySessionMatch] = []
     for session in sessions:
         content = _read_searchable_text(agent, session, runtime)
         if content is None:
@@ -557,7 +556,7 @@ def _fallback_search_matches(
         if evidence is None:
             continue
         rank = 1.0 if 0 in evidence.fully_matching_field_indexes else 0.0
-        matches.append(SearchSessionMatch(agent=agent, session=session, snippet=evidence.snippet, rank=rank))
+        matches.append(QuerySessionMatch(agent=agent, session=session, snippet=evidence.snippet, rank=rank))
 
     return matches
 
