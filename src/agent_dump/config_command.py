@@ -267,7 +267,7 @@ def handle_config_command(action: str, *, input_fn: Callable[[str], str] = input
         print(render_terminal_message(Keys.CONFIG_ACTION_INVALID, action=action))
         return 1
 
-    if document.parse_mode is ConfigurationParseMode.LEGACY:
+    if document.parse_mode is not ConfigurationParseMode.TOML:
         print(render_terminal_message(Keys.CONFIG_EDIT_REQUIRES_VALID_TOML, path=config_path))
         return 1
 
