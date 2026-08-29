@@ -100,27 +100,33 @@ def maybe_generate_uri_summary(
         print(i18n.t(Keys.URI_SUMMARY_NO_JSON_WARNING))
         return session_data, None
 
-    config = load_ai_config()
-    valid, errors = validate_ai_config(config)
-    if not valid or config is None:
-        if AIConfigError.MISSING_FILE in errors:
-            print(i18n.t(Keys.URI_SUMMARY_CONFIG_MISSING_WARNING))
-        elif AIConfigError.BASE_URL_SCHEME in errors:
-            print(i18n.t(Keys.COLLECT_CONFIG_BAD_SCHEME))
-        elif AIConfigError.BASE_URL_PLAINTEXT_KEY in errors:
-            print(i18n.t(Keys.COLLECT_CONFIG_PLAINTEXT_KEY))
-        else:
-            print(
-                render_terminal_message(
-                    Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING,
-                    fields=",".join(error.value for error in errors),
+    effective_session_data = session_data
+    try:
+        config = load_ai_config()
+        valid, errors = validate_ai_config(config)
+        if not valid or config is None:
+            if AIConfigError.MISSING_FILE in errors:
+                print(i18n.t(Keys.URI_SUMMARY_CONFIG_MISSING_WARNING))
+            elif AIConfigError.BASE_URL_SCHEME in errors:
+                print(i18n.t(Keys.COLLECT_CONFIG_BAD_SCHEME))
+            elif AIConfigError.BASE_URL_PLAINTEXT_KEY in errors:
+                print(i18n.t(Keys.COLLECT_CONFIG_PLAINTEXT_KEY))
+            else:
+                print(
+                    render_terminal_message(
+                        Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING,
+                        fields=",".join(error.value for error in errors),
+                    )
                 )
-            )
-        return session_data, None
+            return effective_session_data, None
 
-    effective_session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
-    rendered = render_session_text(uri, effective_session_data)
-    prompt = build_uri_summary_prompt(uri, rendered)
+        if effective_session_data is None:
+            effective_session_data = agent.get_cached_session_data(session)
+        rendered = render_session_text(uri, effective_session_data)
+        prompt = build_uri_summary_prompt(uri, rendered)
+    except Exception as e:
+        print(render_terminal_message(Keys.URI_SUMMARY_PREPARATION_FAILED_WARNING, error=e))
+        return effective_session_data, None
 
     try:
         with show_loading(i18n.t(Keys.URI_SUMMARY_LOADING)):
