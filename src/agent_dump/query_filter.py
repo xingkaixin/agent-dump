@@ -8,6 +8,7 @@ from pathlib import Path
 import shlex
 from urllib.parse import ParseResult, parse_qs, urlparse
 
+from agent_dump.agent_registry import get_uri_scheme_map
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.diagnostics import RecoverableDiagnosticSink, emit_recoverable_diagnostic
 from agent_dump.i18n import Keys, i18n
@@ -16,9 +17,6 @@ from agent_dump.search_index import SearchIndex
 from agent_dump.time_utils import normalize_datetime_utc
 from agent_dump.transcript import read_messages
 
-AGENT_ALIASES = {
-    "claude": "claudecode",
-}
 STRUCTURED_QUERY_KEYS = {"provider", "role", "path", "cwd", "limit"}
 QUERY_PATH_KEYS = {"path", "cwd"}
 QUERY_URI_PARAMS = frozenset({"q", "providers", "roles", "limit"})
@@ -261,7 +259,7 @@ def _session_matches(
 
 
 def _normalize_agent_name(name: str, valid_agents: set[str]) -> str | None:
-    normalized = AGENT_ALIASES.get(name, name)
+    normalized = get_uri_scheme_map().get(name, name)
     if normalized in valid_agents:
         return normalized
     return None
