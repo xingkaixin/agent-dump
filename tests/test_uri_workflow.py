@@ -11,6 +11,13 @@ from agent_dump.text_safety import has_unsafe_body_characters
 from agent_dump.uri_workflow import build_uri_summary_prompt, maybe_generate_uri_summary
 
 
+def _config_document(config: AIConfig | None, *, source_exists: bool = True) -> mock.Mock:
+    document = mock.Mock()
+    document.ai_config.return_value = config
+    document.source_exists = source_exists
+    return document
+
+
 def test_build_uri_summary_prompt_isolates_the_transcript() -> None:
     """AD-167：会话正文是数据，必须在 envelope 里而不是与规则同处一段纯文本。"""
     transcript = "# Session Dump\n\n## 1. User\n\nHello"
@@ -48,8 +55,11 @@ def test_maybe_generate_uri_summary_dispatches_rendered_session(
     agent = mock.Mock()
     session = mock.Mock()
     request_summary = mock.Mock(return_value="# Summary")
-    monkeypatch.setattr("agent_dump.uri_workflow.load_ai_config", lambda: config)
-    monkeypatch.setattr("agent_dump.uri_workflow.validate_ai_config", lambda candidate: (candidate is config, []))
+    monkeypatch.setattr("agent_dump.uri_workflow.load_projectable_config_document", lambda: _config_document(config))
+    monkeypatch.setattr(
+        "agent_dump.uri_workflow.validate_ai_config",
+        lambda candidate, **_kwargs: (candidate is config, []),
+    )
 
     loaded_data, summary = maybe_generate_uri_summary(
         enabled=True,
@@ -82,8 +92,11 @@ def test_maybe_generate_uri_summary_returns_loaded_data_when_request_fails(
     agent.get_cached_session_data.return_value = agent.get_session_data.return_value = session_data
     session = mock.Mock()
     request_summary = mock.Mock(side_effect=RuntimeError("service unavailable"))
-    monkeypatch.setattr("agent_dump.uri_workflow.load_ai_config", lambda: config)
-    monkeypatch.setattr("agent_dump.uri_workflow.validate_ai_config", lambda candidate: (candidate is config, []))
+    monkeypatch.setattr("agent_dump.uri_workflow.load_projectable_config_document", lambda: _config_document(config))
+    monkeypatch.setattr(
+        "agent_dump.uri_workflow.validate_ai_config",
+        lambda candidate, **_kwargs: (candidate is config, []),
+    )
 
     loaded_data, summary = maybe_generate_uri_summary(
         enabled=True,
@@ -110,8 +123,11 @@ def test_maybe_generate_uri_summary_isolates_session_preparation_failure(
     agent.get_cached_session_data.side_effect = OSError("transcript unreadable")
     session = mock.Mock()
     request_summary = mock.Mock()
-    monkeypatch.setattr("agent_dump.uri_workflow.load_ai_config", lambda: config)
-    monkeypatch.setattr("agent_dump.uri_workflow.validate_ai_config", lambda candidate: (candidate is config, []))
+    monkeypatch.setattr("agent_dump.uri_workflow.load_projectable_config_document", lambda: _config_document(config))
+    monkeypatch.setattr(
+        "agent_dump.uri_workflow.validate_ai_config",
+        lambda candidate, **_kwargs: (candidate is config, []),
+    )
 
     loaded_data, summary = maybe_generate_uri_summary(
         enabled=True,
@@ -141,7 +157,7 @@ def test_maybe_generate_uri_summary_reports_invalid_toml(
     config_path = tmp_path / "config.toml"
     error = ConfigurationParseError(config_path)
     request_summary = mock.Mock()
-    monkeypatch.setattr("agent_dump.uri_workflow.load_ai_config", mock.Mock(side_effect=error))
+    monkeypatch.setattr("agent_dump.uri_workflow.load_projectable_config_document", mock.Mock(side_effect=error))
 
     loaded_data, summary = maybe_generate_uri_summary(
         enabled=True,
@@ -163,6 +179,38 @@ def test_maybe_generate_uri_summary_reports_invalid_toml(
     )
 
 
+def test_maybe_generate_uri_summary_reports_existing_config_without_ai_as_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('[export]\noutput = "./exports"\n', encoding="utf-8")
+    monkeypatch.setattr("agent_dump.config.get_config_path", lambda: config_path)
+    request_summary = mock.Mock()
+
+    loaded_data, summary = maybe_generate_uri_summary(
+        enabled=True,
+        output_formats=["json"],
+        uri="codex://session-001",
+        agent=mock.Mock(),
+        session=mock.Mock(),
+        session_data=None,
+        request_summary=request_summary,
+    )
+
+    assert loaded_data is None
+    assert summary is None
+    request_summary.assert_not_called()
+    output = capsys.readouterr().out
+    assert expect_contains(
+        output,
+        Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING,
+        fields="provider,base_url,model,api_key",
+    )
+    assert not expect_contains(output, Keys.URI_SUMMARY_CONFIG_MISSING_WARNING)
+
+
 def test_maybe_generate_uri_summary_sanitizes_remote_error_at_stdout(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -172,8 +220,11 @@ def test_maybe_generate_uri_summary_sanitizes_remote_error_at_stdout(
     session_data = {"messages": []}
     agent = mock.Mock()
     session = mock.Mock()
-    monkeypatch.setattr("agent_dump.uri_workflow.load_ai_config", lambda: config)
-    monkeypatch.setattr("agent_dump.uri_workflow.validate_ai_config", lambda candidate: (candidate is config, []))
+    monkeypatch.setattr("agent_dump.uri_workflow.load_projectable_config_document", lambda: _config_document(config))
+    monkeypatch.setattr(
+        "agent_dump.uri_workflow.validate_ai_config",
+        lambda candidate, **_kwargs: (candidate is config, []),
+    )
 
     maybe_generate_uri_summary(
         enabled=True,

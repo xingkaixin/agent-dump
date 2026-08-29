@@ -237,7 +237,7 @@ class _CollectOutput:
 
 def _validated_collect_ai_config(config_document: ConfigurationDocument) -> AIConfig | None:
     config = config_document.ai_config()
-    valid, errors = validate_ai_config(config)
+    valid, errors = validate_ai_config(config, config_file_exists=config_document.source_exists)
     if valid and config is not None:
         return config
 

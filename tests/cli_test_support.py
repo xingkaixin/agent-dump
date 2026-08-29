@@ -28,6 +28,7 @@ def make_config_document(
     logging_config: object | None = None,
 ) -> mock.MagicMock:
     document = mock.MagicMock()
+    document.source_exists = True
     document.ai_config.return_value = ai_config
     document.collect_config.return_value = collect_config if collect_config is not None else CollectConfig()
     document.logging_config.return_value = logging_config if logging_config is not None else mock.MagicMock()

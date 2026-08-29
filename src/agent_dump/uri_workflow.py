@@ -14,7 +14,7 @@ from agent_dump.cli_shared import (
 )
 from agent_dump.collect_requests import request_summary_from_llm
 from agent_dump.command_plan import UriOperation
-from agent_dump.config import AIConfig, AIConfigError, load_ai_config, validate_ai_config
+from agent_dump.config import AIConfig, AIConfigError, load_projectable_config_document, validate_ai_config
 from agent_dump.diagnostics import DiagnosticError, session_not_found
 from agent_dump.exporting import ExportFailure, execute_exports
 from agent_dump.i18n import Keys, i18n
@@ -102,8 +102,9 @@ def maybe_generate_uri_summary(
 
     effective_session_data = session_data
     try:
-        config = load_ai_config()
-        valid, errors = validate_ai_config(config)
+        config_document = load_projectable_config_document()
+        config = config_document.ai_config()
+        valid, errors = validate_ai_config(config, config_file_exists=config_document.source_exists)
         if not valid or config is None:
             if AIConfigError.MISSING_FILE in errors:
                 print(i18n.t(Keys.URI_SUMMARY_CONFIG_MISSING_WARNING))

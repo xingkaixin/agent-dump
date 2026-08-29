@@ -50,6 +50,15 @@ class TestConfigPath:
 
 
 class TestConfigReadWrite:
+    def test_document_records_source_presence(self, tmp_path: Path) -> None:
+        path = tmp_path / "config.toml"
+
+        assert load_config_document(path).source_exists is False
+
+        path.touch()
+
+        assert load_config_document(path).source_exists is True
+
     @pytest.mark.parametrize(
         "loader",
         [
@@ -686,10 +695,21 @@ class TestAiBaseUrlSchemeValidation:
         return AIConfig(provider="openai", base_url=base_url, model="m", api_key=api_key)
 
     def test_missing_config_reports_typed_error(self):
-        valid, errors = validate_ai_config(None)
+        valid, errors = validate_ai_config(None, config_file_exists=False)
 
         assert not valid
         assert errors == [AIConfigError.MISSING_FILE]
+
+    def test_missing_ai_section_reports_missing_fields(self):
+        valid, errors = validate_ai_config(None)
+
+        assert not valid
+        assert errors == [
+            AIConfigError.PROVIDER,
+            AIConfigError.BASE_URL,
+            AIConfigError.MODEL,
+            AIConfigError.API_KEY,
+        ]
 
     @pytest.mark.parametrize(
         "base_url",

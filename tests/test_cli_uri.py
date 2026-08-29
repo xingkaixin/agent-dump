@@ -19,6 +19,13 @@ from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
 
 
+def _ai_config_document(config: object | None, *, source_exists: bool = True) -> mock.MagicMock:
+    document = mock.MagicMock()
+    document.ai_config.return_value = config
+    document.source_exists = source_exists
+    return document
+
+
 class TestMain:
     def test_main_uri_mode_codex_threads_variant(self, capsys):
         """测试 URI 模式支持 codex://threads/<id> 变体"""
@@ -608,7 +615,10 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                with mock.patch(
+                    "agent_dump.uri_workflow.load_projectable_config_document",
+                    return_value=_ai_config_document(mock.MagicMock()),
+                ):
                     with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(True, [])):
                         with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# summary markdown"):
                             with mock.patch(
@@ -663,7 +673,10 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                with mock.patch(
+                    "agent_dump.uri_workflow.load_projectable_config_document",
+                    return_value=_ai_config_document(mock.MagicMock()),
+                ):
                     with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(True, [])):
                         with mock.patch("agent_dump.cli.request_summary_from_llm", return_value="# summary markdown"):
                             with mock.patch(
@@ -752,7 +765,10 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=None):
+                with mock.patch(
+                    "agent_dump.uri_workflow.load_projectable_config_document",
+                    return_value=_ai_config_document(None, source_exists=False),
+                ):
                     with mock.patch(
                         "agent_dump.uri_workflow.validate_ai_config",
                         return_value=(False, [AIConfigError.MISSING_FILE]),
@@ -801,7 +817,10 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                with mock.patch(
+                    "agent_dump.uri_workflow.load_projectable_config_document",
+                    return_value=_ai_config_document(mock.MagicMock()),
+                ):
                     with mock.patch(
                         "agent_dump.uri_workflow.validate_ai_config",
                         return_value=(False, [AIConfigError.MODEL, AIConfigError.API_KEY]),
@@ -853,7 +872,10 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                with mock.patch(
+                    "agent_dump.uri_workflow.load_projectable_config_document",
+                    return_value=_ai_config_document(mock.MagicMock()),
+                ):
                     with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(True, [])):
                         with mock.patch("agent_dump.cli.request_summary_from_llm", side_effect=RuntimeError("boom")):
                             with mock.patch(
@@ -896,7 +918,10 @@ class TestMain:
             mock_scanner_class.return_value = mock_scanner
 
             with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
-                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                with mock.patch(
+                    "agent_dump.uri_workflow.load_projectable_config_document",
+                    return_value=_ai_config_document(mock.MagicMock()),
+                ):
                     with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(True, [])):
                         with mock.patch("agent_dump.cli.request_summary_from_llm") as request_summary:
                             with mock.patch(

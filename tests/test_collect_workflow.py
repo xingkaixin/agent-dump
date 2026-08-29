@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 from unittest import mock
 
 from locale_helpers import ALL_LANGUAGES, Keys, expect_contains
@@ -89,6 +90,39 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock, m
         assert mock_reduce.call_args.kwargs["request_structured_summary"] is structured_requester
 
     return result, logger, mock_build_final_prompt
+
+
+def test_collect_reports_existing_config_without_ai_as_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('[export]\noutput = "./exports"\n', encoding="utf-8")
+    monkeypatch.setattr("agent_dump.config.get_config_path", lambda: config_path)
+    operation = CollectOperation(
+        days=1,
+        since=None,
+        until=None,
+        save=None,
+        dry_run=False,
+        collect_mode=CollectMode.PM,
+        query_spec=None,
+    )
+
+    result = handle_collect_mode(
+        operation,
+        scanner_factory=lambda: pytest.fail("invalid AI config must stop before scanning"),
+    )
+
+    assert result == 1
+    output = capsys.readouterr().out
+    assert expect_contains(
+        output,
+        Keys.COLLECT_CONFIG_INCOMPLETE,
+        fields="provider,base_url,model,api_key",
+    )
+    assert not expect_contains(output, Keys.COLLECT_CONFIG_MISSING)
 
 
 @pytest.mark.parametrize("language", ALL_LANGUAGES)
