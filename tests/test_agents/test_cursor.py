@@ -16,8 +16,14 @@ from message_test_support import require_tool_part
 import pytest
 
 from agent_dump.agents.base import Session
-from agent_dump.agents.cursor import _BUBBLE_RANGE_BATCH_SIZE, CursorAgent, _key_prefix_bounds
-from agent_dump.agents.cursor_storage import _METADATA_BUBBLE_SCAN_LIMIT, CursorStoreReader, parse_cursor_json
+from agent_dump.agents.cursor import CursorAgent
+from agent_dump.agents.cursor_storage import (
+    _METADATA_BUBBLE_SCAN_LIMIT,
+    BUBBLE_RANGE_BATCH_SIZE,
+    CursorStoreReader,
+    key_prefix_bounds,
+    parse_cursor_json,
+)
 from agent_dump.search_index import SearchIndex
 
 
@@ -211,7 +217,7 @@ class TestCursorAgent:
             f"查询数应与会话数无关，2 个会话用了 {two_count} 条、8 个会话用了 {eight_count} 条"
         )
 
-        over_one_batch = _BUBBLE_RANGE_BATCH_SIZE + 1
+        over_one_batch = BUBBLE_RANGE_BATCH_SIZE + 1
         _seed(over_one_batch)
         agent = CursorAgent()
         assert agent.is_available() is True
@@ -515,7 +521,7 @@ class TestCursorAgent:
 
     def test_key_prefix_bounds_covers_exactly_prefix_matches(self):
         """测试范围边界与 LIKE 前缀匹配语义一致"""
-        lower, upper = _key_prefix_bounds("bubbleId:abc:")
+        lower, upper = key_prefix_bounds("bubbleId:abc:")
 
         assert lower == "bubbleId:abc:"
         assert upper == "bubbleId:abc;"
@@ -1410,7 +1416,7 @@ class TestDaysWindowAppliesBeforeBubbleAggregation:
         _create_cursor_global_db(global_db)
 
         now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
-        total = _BUBBLE_RANGE_BATCH_SIZE * 2 + 3
+        total = BUBBLE_RANGE_BATCH_SIZE * 2 + 3
         conn = sqlite3.connect(global_db)
         for i in range(total):
             conn.execute(

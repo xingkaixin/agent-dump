@@ -7,11 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_dump.agents.base import BaseAgent, ProviderDiscovery, Session
-from agent_dump.agents.cursor_storage import (
-    BUBBLE_RANGE_BATCH_SIZE,
-    CursorStore,
-    key_prefix_bounds,
-)
+from agent_dump.agents.cursor_storage import CursorStore
 from agent_dump.agents.cursor_transcript import CursorTranscriptDecoder, parse_cursor_iso_utc
 from agent_dump.coercion import safe_epoch_datetime, safe_float
 from agent_dump.diagnostics import unsupported_capability
@@ -19,8 +15,6 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.paths import SearchRoot
 
 _EPOCH_UTC = datetime.fromtimestamp(0, tz=timezone.utc)
-_BUBBLE_RANGE_BATCH_SIZE = BUBBLE_RANGE_BATCH_SIZE
-_key_prefix_bounds = key_prefix_bounds
 
 
 class CursorAgent(BaseAgent):
