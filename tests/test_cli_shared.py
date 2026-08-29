@@ -362,7 +362,7 @@ class TestExportSessions:
 
         mock_agent.export_session.return_value = tmp_path / "test_agent" / "session-001.json"
 
-        result = export_sessions_for_formats(mock_agent, [mock_session], ["json"], tmp_path)
+        result = export_sessions_for_formats(mock_agent, [mock_session], ["json"], {"json": tmp_path})
 
         assert len(result) == 1
         mock_agent.export_session.assert_called_once_with(mock_session, tmp_path / "test_agent")
@@ -383,7 +383,7 @@ class TestExportSessions:
             tmp_path / "test_agent" / "session-002.json",
         ]
 
-        result = export_sessions_for_formats(mock_agent, sessions, ["json"], tmp_path)
+        result = export_sessions_for_formats(mock_agent, sessions, ["json"], {"json": tmp_path})
 
         assert len(result) == 2
         assert mock_agent.export_session.call_count == 2
@@ -405,7 +405,7 @@ class TestExportSessions:
             Exception("Export failed"),
         ]
 
-        result = export_sessions_for_formats(mock_agent, sessions, ["json"], tmp_path)
+        result = export_sessions_for_formats(mock_agent, sessions, ["json"], {"json": tmp_path})
 
         assert len(result) == 1
         captured = capsys.readouterr()
@@ -419,7 +419,7 @@ class TestExportSessions:
         agent.get_search_roots.return_value = ()
         agent.export_session.side_effect = RuntimeError(f"Export failed {poison}")
 
-        export_sessions_for_formats(agent, [make_session("s1", poison)], ["json"], tmp_path)
+        export_sessions_for_formats(agent, [make_session("s1", poison)], ["json"], {"json": tmp_path})
 
         output = capsys.readouterr().out
         assert not has_unsafe_body_characters(output)
@@ -436,7 +436,7 @@ class TestExportSessions:
             mock_agent,
             [make_session("session-001", "Session 1")],
             ["json"],
-            tmp_path,
+            {"json": tmp_path},
         )
 
         assert result.status is ExportRunStatus.FAILED
@@ -453,7 +453,7 @@ class TestExportSessions:
         output_dir = tmp_path / "new_output"
         mock_agent.export_session.return_value = output_dir / "test_agent" / "session.json"
 
-        export_sessions_for_formats(mock_agent, [mock_session], ["json"], output_dir)
+        export_sessions_for_formats(mock_agent, [mock_session], ["json"], {"json": output_dir})
 
         assert (output_dir / "test_agent").exists()
 
@@ -470,7 +470,12 @@ class TestExportSessions:
         mock_agent.export_session.return_value = tmp_path / "test_agent" / "session-001.json"
         mock_agent.export_raw_session.return_value = tmp_path / "test_agent" / "session-001.raw.jsonl"
 
-        result = export_sessions_for_formats(mock_agent, [session], ["json", "markdown", "raw"], tmp_path)
+        result = export_sessions_for_formats(
+            mock_agent,
+            [session],
+            ["json", "markdown", "raw"],
+            {"json": tmp_path, "markdown": tmp_path, "raw": tmp_path},
+        )
 
         assert len(result) == 3
         mock_agent.export_session.assert_called_once_with(session, tmp_path / "test_agent")
@@ -494,8 +499,7 @@ class TestExportSessions:
             mock_agent,
             [session],
             ["json", "markdown", "raw"],
-            tmp_path,
-            output_base_dirs={"json": json_root, "markdown": markdown_root, "raw": raw_root},
+            {"json": json_root, "markdown": markdown_root, "raw": raw_root},
         )
 
         mock_agent.export_session.assert_called_once_with(session, json_root / "test_agent")

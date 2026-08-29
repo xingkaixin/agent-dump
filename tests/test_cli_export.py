@@ -120,7 +120,7 @@ class TestMain:
 
             mock_export.assert_called_once()
             args = mock_export.call_args
-            assert str(output_dir) in str(args[0][3])
+            assert args.args[3]["json"] == output_dir
 
     def test_main_with_output_short_argument(self, tmp_path):
         """测试指定 -output 参数"""
@@ -149,7 +149,7 @@ class TestMain:
 
             mock_export.assert_called_once()
             args = mock_export.call_args
-            assert str(output_dir) in str(args[0][3])
+            assert args.args[3]["json"] == output_dir
 
     def test_main_uses_configured_output_for_interactive_json(self, tmp_path):
         configured_output = tmp_path / "configured-output"
@@ -180,8 +180,7 @@ class TestMain:
 
             mock_export.assert_called_once()
             args = mock_export.call_args
-            assert args.kwargs["output_base_dirs"]["json"] == configured_output
-            assert args.args[3] == configured_output
+            assert args.args[3]["json"] == configured_output
 
     def test_main_interactive_markdown_ignores_configured_output(self, tmp_path):
         configured_output = tmp_path / "configured-output"
@@ -211,8 +210,7 @@ class TestMain:
                             main()
 
             args = mock_export.call_args
-            assert args.kwargs["output_base_dirs"]["markdown"] == Path("./sessions")
-            assert args.args[3] == Path("./sessions")
+            assert args.args[3]["markdown"] == Path("./sessions")
 
     def test_main_interactive_with_format_long_alias_md(self):
         """测试 --format md 会走 Markdown 导出"""
