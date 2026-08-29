@@ -180,6 +180,29 @@ class TestParseQuery:
         result = parse_query("ClAuDe:bug", {"opencode", "codex", "kimi", "claudecode"})
         assert result == make_query_spec(agent_names={"claudecode"}, keyword="bug")
 
+    def test_parse_agent_scope_uses_registry_schemes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from agent_dump.agent_registry import AGENT_REGISTRATIONS
+
+        patched = tuple(
+            (
+                type(registration)(
+                    factory=registration.factory,
+                    uri_schemes=(*registration.uri_schemes, "moon"),
+                    location_line=registration.location_line,
+                    uri_path_prefixes=registration.uri_path_prefixes,
+                    uri_identifier_label=registration.uri_identifier_label,
+                )
+                if registration.name == "kimi"
+                else registration
+            )
+            for registration in AGENT_REGISTRATIONS
+        )
+        monkeypatch.setattr("agent_dump.agent_registry.AGENT_REGISTRATIONS", patched)
+
+        result = parse_query("moon:bug", {"kimi"})
+
+        assert result == make_query_spec(agent_names={"kimi"}, keyword="bug")
+
     def test_parse_structured_terms(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         result = parse_query(
