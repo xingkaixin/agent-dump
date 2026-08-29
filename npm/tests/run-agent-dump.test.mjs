@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+const { BinaryMissingError } = require("../packages/cli/lib/resolve-binary.cjs");
 const { getForwardSignals, runCli } = require("../packages/cli/lib/run-agent-dump.cjs");
 
 class FakeProcess extends EventEmitter {
@@ -84,7 +85,9 @@ test("runCli installs the binary on demand when the vendored file is missing", a
     platform: "linux",
     arch: "x64",
     resolveBinaryImpl: () => {
-      throw new Error("Binary file is missing for linux-x64: /tmp/vendor/agent-dump. Reinstall @agent-dump/cli.");
+      const error = new BinaryMissingError("linux-x64", "/tmp/vendor/agent-dump");
+      error.message = "Vendored executable unavailable";
+      throw error;
     },
     ensureBinaryImpl: async ({ platform, arch }) => {
       ensured = { platform, arch };
@@ -110,6 +113,35 @@ test("runCli installs the binary on demand when the vendored file is missing", a
   });
 });
 
+test("runCli does not infer a missing binary from an unrelated error message", async () => {
+  const messages = [];
+  let exitCode = null;
+  let installAttempted = false;
+
+  const child = await runCli({
+    platform: "linux",
+    arch: "x64",
+    resolveBinaryImpl: () => {
+      throw new Error("Registry response says Binary file is missing metadata");
+    },
+    ensureBinaryImpl: async () => {
+      installAttempted = true;
+      return "/tmp/agent-dump";
+    },
+    writeError: (message) => {
+      messages.push(message);
+    },
+    exit: (code) => {
+      exitCode = code;
+    }
+  });
+
+  assert.equal(child, null);
+  assert.equal(exitCode, 1);
+  assert.equal(installAttempted, false);
+  assert.deepEqual(messages, ["Registry response says Binary file is missing metadata\n"]);
+});
+
 test("runCli reports install failures when the binary cannot be recovered", async () => {
   const messages = [];
   let exitCode = null;
@@ -118,7 +150,7 @@ test("runCli reports install failures when the binary cannot be recovered", asyn
     platform: "linux",
     arch: "x64",
     resolveBinaryImpl: () => {
-      throw new Error("Binary file is missing for linux-x64: /tmp/vendor/agent-dump. Reinstall @agent-dump/cli.");
+      throw new BinaryMissingError("linux-x64", "/tmp/vendor/agent-dump");
     },
     ensureBinaryImpl: async () => {
       throw new Error("network down");

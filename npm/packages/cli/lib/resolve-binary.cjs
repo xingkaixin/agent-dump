@@ -3,6 +3,13 @@ const path = require("node:path");
 
 const { RELEASES_URL, SUPPORTED_TARGETS, getBinarySpec } = require("./targets.cjs");
 
+class BinaryMissingError extends Error {
+  constructor(target, binaryPath) {
+    super(`Binary file is missing for ${target}: ${binaryPath}. Reinstall @agent-dump/cli.`);
+    this.name = "BinaryMissingError";
+  }
+}
+
 function getVendorBinaryPath(spec, options = {}) {
   const packageRoot = options.packageRoot || path.resolve(__dirname, "..");
   return path.join(packageRoot, "vendor", spec.target, spec.executableName);
@@ -13,7 +20,7 @@ function resolveInstalledBinary(spec, options = {}) {
   const binaryPath = getVendorBinaryPath(spec, options);
 
   if (!existsSync(binaryPath)) {
-    throw new Error(`Binary file is missing for ${spec.target}: ${binaryPath}. Reinstall @agent-dump/cli.`);
+    throw new BinaryMissingError(spec.target, binaryPath);
   }
 
   return binaryPath;
@@ -25,6 +32,7 @@ function resolveBinary(options = {}) {
 }
 
 module.exports = {
+  BinaryMissingError,
   RELEASES_URL,
   SUPPORTED_TARGETS,
   getBinarySpec,
