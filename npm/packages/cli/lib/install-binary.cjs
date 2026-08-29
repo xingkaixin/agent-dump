@@ -128,10 +128,16 @@ function parseNpmPackResult(stdout, spec, version) {
   ) {
     throw new Error(`npm returned invalid package metadata for ${spec.packageName}@${version}`);
   }
-  if (path.basename(metadata.filename) !== metadata.filename) {
-    throw new Error(`npm returned an unsafe tarball filename for ${spec.packageName}@${version}`);
-  }
   return metadata;
+}
+
+async function findPackedTarball(tempDir, spec, version) {
+  const entries = await fsp.readdir(tempDir, { withFileTypes: true });
+  const tarballs = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".tgz"));
+  if (tarballs.length !== 1) {
+    throw new Error(`npm produced ${tarballs.length} package tarballs for ${spec.packageName}@${version}`);
+  }
+  return path.join(tempDir, tarballs[0].name);
 }
 
 async function downloadPackageTarball(spec, version, options = {}) {
@@ -151,8 +157,8 @@ async function downloadPackageTarball(spec, version, options = {}) {
       cwd: npmConfigDirectory,
       env
     });
-    const metadata = parseNpmPackResult(result.stdout, spec, version);
-    const tarballPath = path.join(tempDir, metadata.filename);
+    parseNpmPackResult(result.stdout, spec, version);
+    const tarballPath = await findPackedTarball(tempDir, spec, version);
     const stats = await fsp.stat(tarballPath);
     const maxTarballBytes = options.maxTarballBytes ?? MAX_COMPRESSED_TARBALL_BYTES;
     if (!stats.isFile() || stats.size > maxTarballBytes) {
