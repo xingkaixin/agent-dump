@@ -310,6 +310,60 @@ test("downloadPackageTarball rejects an archive over the configured limit", asyn
   );
 });
 
+test("downloadPackageTarball accepts npm scoped metadata filenames", async () => {
+  const spec = getBinarySpec("linux", "x64");
+  const version = "0.6.13";
+  const tarball = Buffer.from("packed archive");
+
+  const downloaded = await downloadPackageTarball(spec, version, {
+    async runNpmImpl(_args, { env }) {
+      const filename = "agent-dump-cli-linux-x64-0.6.13.tgz";
+      await fs.writeFile(path.join(env.npm_config_pack_destination, filename), tarball);
+      return {
+        stdout: JSON.stringify([
+          {
+            name: spec.packageName,
+            version,
+            filename: `@agent-dump/cli-linux-x64-${version}.tgz`,
+            integrity: "sha512-test"
+          }
+        ]),
+        stderr: ""
+      };
+    }
+  });
+
+  assert.deepEqual(downloaded, tarball);
+});
+
+test("downloadPackageTarball rejects multiple npm tarballs", async () => {
+  const spec = getBinarySpec("linux", "x64");
+  const version = "0.6.13";
+
+  await assert.rejects(
+    downloadPackageTarball(spec, version, {
+      async runNpmImpl(_args, { env }) {
+        await Promise.all([
+          fs.writeFile(path.join(env.npm_config_pack_destination, "first.tgz"), "first"),
+          fs.writeFile(path.join(env.npm_config_pack_destination, "second.tgz"), "second")
+        ]);
+        return {
+          stdout: JSON.stringify([
+            {
+              name: spec.packageName,
+              version,
+              filename: `@agent-dump/cli-linux-x64-${version}.tgz`,
+              integrity: "sha512-test"
+            }
+          ]),
+          stderr: ""
+        };
+      }
+    }),
+    /npm produced 2 package tarballs/
+  );
+});
+
 test("downloadPackageTarball rejects a package version that is unsafe for the Windows shell", async () => {
   const spec = getBinarySpec("win32", "x64");
 
