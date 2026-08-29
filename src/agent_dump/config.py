@@ -95,6 +95,10 @@ class ConfigurationDocument:
     parse_mode: ConfigurationParseMode = ConfigurationParseMode.TOML
     source_text: str | None = None
 
+    @property
+    def source_exists(self) -> bool:
+        return self.source_text is not None
+
     def ai_config(self) -> AIConfig | None:
         parsed = self.sections.get(("ai",))
         if parsed is None:
@@ -312,7 +316,7 @@ def load_config_document(path: Path | None = None) -> ConfigurationDocument:
     """Read one complete configuration snapshot."""
     config_path = path if path is not None else get_config_path()
     if not config_path.exists():
-        return ConfigurationDocument(path=config_path, sections={}, source_text="")
+        return ConfigurationDocument(path=config_path, sections={})
     sections, parse_mode, source_text = _read_config_sections(config_path)
     return ConfigurationDocument(
         path=config_path,
@@ -322,7 +326,8 @@ def load_config_document(path: Path | None = None) -> ConfigurationDocument:
     )
 
 
-def _load_projectable_config_document(path: Path | None = None) -> ConfigurationDocument:
+def load_projectable_config_document(path: Path | None = None) -> ConfigurationDocument:
+    """Read a configuration snapshot that can be safely projected."""
     document = load_config_document(path)
     if document.parse_mode is ConfigurationParseMode.INVALID:
         raise ConfigurationParseError(document.path)
@@ -331,27 +336,27 @@ def _load_projectable_config_document(path: Path | None = None) -> Configuration
 
 def load_ai_config(path: Path | None = None) -> AIConfig | None:
     """Load AI config without hiding a document parse failure."""
-    return _load_projectable_config_document(path).ai_config()
+    return load_projectable_config_document(path).ai_config()
 
 
 def load_collect_config(path: Path | None = None) -> CollectConfig:
     """Load collect config with defaults for missing or invalid field values."""
-    return _load_projectable_config_document(path).collect_config()
+    return load_projectable_config_document(path).collect_config()
 
 
 def load_logging_config(path: Path | None = None) -> LoggingConfig:
     """Load logging config with defaults for missing or invalid field values."""
-    return _load_projectable_config_document(path).logging_config()
+    return load_projectable_config_document(path).logging_config()
 
 
 def load_export_config(path: Path | None = None) -> ExportConfig:
     """Load export config with defaults for missing or invalid field values."""
-    return _load_projectable_config_document(path).export_config()
+    return load_projectable_config_document(path).export_config()
 
 
 def load_shortcuts_config(path: Path | None = None) -> dict[str, ShortcutConfig]:
     """Load configured shortcut presets."""
-    return _load_projectable_config_document(path).shortcuts_config()
+    return load_projectable_config_document(path).shortcuts_config()
 
 
 SUPPORTED_AI_URL_SCHEMES = frozenset({"http", "https"})
@@ -373,12 +378,23 @@ def is_loopback_host(host: str) -> bool:
     return host.strip().lower().strip("[]") in {h.strip("[]") for h in _LOOPBACK_HOSTS}
 
 
-def validate_ai_config(config: AIConfig | None) -> tuple[bool, list[AIConfigError]]:
+def validate_ai_config(
+    config: AIConfig | None,
+    *,
+    config_file_exists: bool = True,
+) -> tuple[bool, list[AIConfigError]]:
     """Validate collect-required AI config."""
-    if config is None:
+    if not config_file_exists:
         return False, [AIConfigError.MISSING_FILE]
 
     errors: list[AIConfigError] = []
+    if config is None:
+        return False, [
+            AIConfigError.PROVIDER,
+            AIConfigError.BASE_URL,
+            AIConfigError.MODEL,
+            AIConfigError.API_KEY,
+        ]
     if config.provider not in {"openai", "anthropic"}:
         errors.append(AIConfigError.PROVIDER)
     if not config.base_url:
