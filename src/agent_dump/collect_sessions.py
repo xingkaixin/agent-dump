@@ -22,8 +22,8 @@ from agent_dump.config import CollectConfig
 from agent_dump.diagnostics import RecoverableDiagnosticSink
 from agent_dump.i18n import Keys, i18n
 from agent_dump.query_filter import (
+    QuerySessionMatch,
     QuerySpec,
-    SearchSessionMatch,
     select_session_groups,
 )
 from agent_dump.rendering import render_session_text
@@ -94,7 +94,7 @@ def _select_collect_sessions(
         select_session_groups(eligible_session_groups, query_spec, diagnostic_sink=diagnostic_sink)
         if query_spec is not None
         else [
-            SearchSessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
+            QuerySessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
             for agent, sessions in eligible_session_groups
             for session in sessions
         ]

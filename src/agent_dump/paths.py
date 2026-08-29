@@ -69,8 +69,3 @@ def first_existing_search_root(*roots: SearchRoot) -> Path | None:
         if root.path.exists():
             return root.path
     return None
-
-
-def render_search_roots(*roots: SearchRoot) -> tuple[str, ...]:
-    """Render labeled search roots for diagnostics."""
-    return tuple(root.render() for root in roots)

@@ -126,22 +126,12 @@ def _has_fts5(conn: sqlite3.Connection) -> bool:
 
 
 def extract_session_searchable_text(agent: BaseAgent, session: Session) -> str | None:
-    """Extract all searchable text from a session, or None when it could not be read.
+    """Extract searchable text while releasing the full parsed payload afterwards.
 
     None 与 "" 的区别是刻意的：`""` 表示会话确实没有可搜索内容，可以正常记为
     已索引；`None` 表示这次读取失败了，调用方必须跳过 index_state 写入，否则
     一次瞬时失败会被永久缓存成「已索引且最新」，该会话在之后所有搜索里静默消失。
     """
-    try:
-        session_data = agent.get_cached_session_data(session)
-    except Exception:
-        return None
-
-    return extract_transcript_searchable_text(session_data)
-
-
-def extract_session_searchable_text_once(agent: BaseAgent, session: Session) -> str | None:
-    """Extract searchable text while releasing the full parsed payload afterwards."""
     try:
         with agent.lease_cached_session_data(session) as session_data:
             return extract_transcript_searchable_text(session_data)
@@ -419,7 +409,7 @@ class SearchIndex:
             def _extract_text(item: tuple[Session, str]) -> str | None:
                 session, _ = item
                 with agent.diagnostic_context(diagnostic_sink):
-                    return extract_session_searchable_text_once(agent, session)
+                    return extract_session_searchable_text(agent, session)
 
             # 分批解析并即时写入：一次性 list(executor.map(...)) 会让全部待索引会话
             # 的正文同时驻留内存，会话历史大的用户可能直接 OOM

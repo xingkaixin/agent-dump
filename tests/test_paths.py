@@ -11,7 +11,6 @@ from agent_dump.agents.cursor import CursorAgent
 from agent_dump.paths import (
     SearchRoot,
     first_existing_search_root,
-    render_search_roots,
     resolve_data_home,
     resolve_env_path,
 )
@@ -78,17 +77,6 @@ class TestSearchRoots:
         existing.path.mkdir()
 
         assert first_existing_search_root(missing, existing) == existing.path
-
-    def test_render_search_roots_preserves_labels_and_order(self, tmp_path):
-        roots = (
-            SearchRoot("CODEX_HOME/sessions", tmp_path / "codex"),
-            SearchRoot("local development fallback", tmp_path / "data/codex"),
-        )
-
-        assert render_search_roots(*roots) == (
-            f"CODEX_HOME/sessions: {tmp_path / 'codex'}",
-            f"local development fallback: {tmp_path / 'data/codex'}",
-        )
 
     def test_supported_locations_use_provider_search_roots(
         self,

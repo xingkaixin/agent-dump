@@ -16,7 +16,7 @@ import pytest
 from agent_dump.cli import (
     main,
 )
-from agent_dump.query_filter import SearchSessionMatch
+from agent_dump.query_filter import QuerySessionMatch
 
 
 class TestMain:
@@ -161,7 +161,7 @@ class TestMain:
             configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
 
-            match = SearchSessionMatch(
+            match = QuerySessionMatch(
                 agent=agent,
                 session=session,
                 snippet="login failed after **auth timeout**",
@@ -211,7 +211,7 @@ class TestMain:
 
             with mock.patch(
                 "agent_dump.cli_shared.select_session_groups",
-                return_value=[SearchSessionMatch(mock_agent, session2, "error", 0.0)],
+                return_value=[QuerySessionMatch(mock_agent, session2, "error", 0.0)],
             ) as mock_filter:
                 with mock.patch("agent_dump.session_workflow.display_search_results") as mock_display_search:
                     with mock.patch("sys.argv", ["agent-dump", "--list", "-query", "error"]):
@@ -267,8 +267,8 @@ class TestMain:
                 with mock.patch(
                     "agent_dump.cli_shared.select_session_groups",
                     return_value=[
-                        SearchSessionMatch(agent2, selected_session, "bug", 0.0),
-                        SearchSessionMatch(agent3, kimi_session, "bug", 0.0),
+                        QuerySessionMatch(agent2, selected_session, "bug", 0.0),
+                        QuerySessionMatch(agent3, kimi_session, "bug", 0.0),
                     ],
                 ) as mock_filter:
                     with mock.patch(
@@ -316,7 +316,7 @@ class TestMain:
             selected_sessions = [mock.MagicMock()]
             with mock.patch(
                 "agent_dump.cli_shared.select_session_groups",
-                return_value=[SearchSessionMatch(mock_agent, selected_sessions[0], "bug", 0.0)],
+                return_value=[QuerySessionMatch(mock_agent, selected_sessions[0], "bug", 0.0)],
             ) as mock_filter:
                 with mock.patch(
                     "agent_dump.session_workflow.select_sessions_interactive", return_value=selected_sessions
@@ -402,7 +402,7 @@ class TestMain:
             project_path = tmp_path / "project with spaces"
             with mock.patch(
                 "agent_dump.cli_shared.select_session_groups",
-                return_value=[SearchSessionMatch(mock_agent, session, "bug", 0.0, "user")],
+                return_value=[QuerySessionMatch(mock_agent, session, "bug", 0.0, "user")],
             ) as mock_filter:
                 with mock.patch(
                     "sys.argv",
@@ -485,7 +485,7 @@ class TestMain:
             with (
                 mock.patch(
                     "agent_dump.cli_shared.select_session_groups",
-                    return_value=[SearchSessionMatch(agent_kimi, kimi_session, "bug", 0.0)],
+                    return_value=[QuerySessionMatch(agent_kimi, kimi_session, "bug", 0.0)],
                 ) as mock_filter,
                 mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent,
             ):
@@ -537,7 +537,7 @@ class TestMain:
             with (
                 mock.patch(
                     "agent_dump.cli_shared.select_session_groups",
-                    return_value=[SearchSessionMatch(agent_codex, selected_session, "bug", 0.0)],
+                    return_value=[QuerySessionMatch(agent_codex, selected_session, "bug", 0.0)],
                 ) as mock_filter,
                 mock.patch("agent_dump.session_workflow.select_agent_interactive") as mock_select_agent,
                 mock.patch(

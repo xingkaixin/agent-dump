@@ -20,19 +20,32 @@ from agent_dump.config import (
     LoggingConfig,
     ShortcutConfig,
     get_config_path,
-    load_ai_config,
-    load_collect_config,
     load_config_document,
     load_export_config,
-    load_logging_config,
+    load_projectable_config_document,
     load_shortcuts_config,
     tomllib,
     validate_ai_config,
-    write_ai_config,
     write_config,
 )
 from agent_dump.config_command import handle_config_command, mask_api_key, prompt_edit_config
 from agent_dump.text_safety import has_unsafe_body_characters
+
+
+def load_ai_config(path: Path | None = None) -> AIConfig | None:
+    return load_projectable_config_document(path).ai_config()
+
+
+def load_collect_config(path: Path | None = None) -> CollectConfig:
+    return load_projectable_config_document(path).collect_config()
+
+
+def load_logging_config(path: Path | None = None) -> LoggingConfig:
+    return load_projectable_config_document(path).logging_config()
+
+
+def write_ai_config(config: AIConfig, path: Path | None = None) -> Path:
+    return write_config(config, path=path)
 
 
 class TestConfigPath:

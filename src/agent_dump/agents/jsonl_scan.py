@@ -132,14 +132,6 @@ class JsonlObjectScan:
                 yield line_number, data
 
 
-def parse_object_line(line: str) -> dict[str, Any] | None:
-    """Parse one JSONL line into its root object, or None when it is not one.
-
-    与 JsonlObjectScan 同一个事实的单行入口，给已经持有行、且自己负责诊断的调用方用。
-    """
-    return _parse_json_object(line)
-
-
 def parse_object_lines(lines: list[str]) -> list[dict[str, Any]]:
     """Parse already-read lines into root objects, dropping anything that is not one."""
     return _parse_jsonl_records(lines)
