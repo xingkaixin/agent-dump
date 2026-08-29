@@ -21,6 +21,7 @@ AGENT_ALIASES = {
 }
 STRUCTURED_QUERY_KEYS = {"provider", "role", "path", "cwd", "limit"}
 QUERY_PATH_KEYS = {"path", "cwd"}
+QUERY_URI_PARAMS = frozenset({"q", "providers", "roles", "limit"})
 _MAX_QUERY_LIMIT = (1 << 63) - 1
 
 
@@ -164,6 +165,9 @@ def parse_query_uri(raw_uri: str | None, valid_agents: set[str], cwd: Path | Non
 
     project_path = _parse_query_uri_project_path(parsed, cwd=cwd)
     params = parse_qs(parsed.query, keep_blank_values=True)
+    unknown_params = sorted(params.keys() - QUERY_URI_PARAMS)
+    if unknown_params:
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_UNKNOWN_FIELD, field=", ".join(unknown_params)))
     keyword = _extract_single_query_param(params, "q")
     providers = _extract_single_query_param(params, "providers")
     roles = _extract_single_query_param(params, "roles")
@@ -274,7 +278,9 @@ def _extract_single_query_param(params: dict[str, list[str]], name: str) -> str 
     values = params.get(name)
     if not values:
         return None
-    return values[-1]
+    if len(values) > 1:
+        raise ValueError(i18n.t(Keys.QUERY_ERROR_DUPLICATE_FIELD, field=name))
+    return values[0]
 
 
 def _parse_provider_scope(raw: str, valid_agents: set[str]) -> frozenset[str]:

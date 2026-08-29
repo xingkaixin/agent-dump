@@ -269,6 +269,8 @@ def test_build_command_plan_rejects_query_with_query_uri() -> None:
     ("command_request", "error_code"),
     [
         (make_request(uri="agents://.?providers=unknown"), CommandPlanErrorCode.QUERY_URI_INVALID),
+        (make_request(uri="agents://.?providres=codex"), CommandPlanErrorCode.QUERY_URI_INVALID),
+        (make_request(uri="agents://.?q=bug&q=secret"), CommandPlanErrorCode.QUERY_URI_INVALID),
         (make_request(list_requested=True, query="provider:unknown bug"), CommandPlanErrorCode.QUERY_SPEC_INVALID),
         (make_request(uri="not-a-uri"), CommandPlanErrorCode.URI_INVALID),
         (

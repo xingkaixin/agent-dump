@@ -301,6 +301,23 @@ class TestParseQueryUri:
         with pytest.raises(ValueError, match="limit 必须是正整数"):
             parse_query_uri("agents://.?limit=bad", {"opencode", "codex"}, cwd=Path("/work"))
 
+    def test_parse_unknown_parameter_raises(self):
+        with pytest.raises(ValueError) as exc_info:
+            parse_query_uri("agents://.?qq=bug", {"opencode", "codex"}, cwd=Path("/work"))
+
+        assert str(exc_info.value) == expect(Keys.QUERY_ERROR_UNKNOWN_FIELD, field="qq")
+
+    @pytest.mark.parametrize("field", ["q", "providers", "roles", "limit"])
+    def test_parse_duplicate_parameter_raises(self, field):
+        with pytest.raises(ValueError) as exc_info:
+            parse_query_uri(
+                f"agents://.?{field}=first&{field}=second",
+                {"opencode", "codex"},
+                cwd=Path("/work"),
+            )
+
+        assert str(exc_info.value) == expect(Keys.QUERY_ERROR_DUPLICATE_FIELD, field=field)
+
     def test_parse_non_agents_uri_returns_none(self):
         assert parse_query_uri("codex://session-1", {"codex"}, cwd=Path("/work")) is None
 

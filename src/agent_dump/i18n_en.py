@@ -272,6 +272,7 @@ EN_TRANSLATIONS = {
     Keys.QUERY_ERROR_LIMIT_NOT_POSITIVE: "limit must be a positive integer",
     Keys.QUERY_ERROR_LIMIT_TOO_LARGE: "limit is too large",
     Keys.QUERY_ERROR_UNKNOWN_FIELD: "unknown query field: {field}",
+    Keys.QUERY_ERROR_DUPLICATE_FIELD: "query field may only be given once: {field}",
     Keys.QUERY_ERROR_DUPLICATE_PATH: "path/cwd may only be given once",
     Keys.QUERY_ERROR_DUPLICATE_LIMIT: "limit may only be given once",
     Keys.QUERY_ERROR_INVALID_SYNTAX: "structured query has invalid quoting or escaping",
