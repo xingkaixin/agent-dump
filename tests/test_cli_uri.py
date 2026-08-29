@@ -877,6 +877,56 @@ class TestMain:
         assert "正在调用 AI 生成会话总结，请稍候" in captured.err
         assert "AI 总结请求失败: boom" in captured.out
 
+    def test_main_uri_mode_summary_preparation_failure_still_exports_raw(self, capsys, tmp_path):
+        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+            mock_scanner = mock.MagicMock()
+            mock_agent = mock.MagicMock()
+            mock_agent.name = "codex"
+            mock_agent.display_name = "Codex"
+            read_error = OSError("transcript unreadable")
+            mock_agent.get_cached_session_data.side_effect = read_error
+            mock_agent.export_session.side_effect = read_error
+
+            mock_session = mock.MagicMock()
+            mock_session.id = "session-001"
+            output_root = tmp_path / "out"
+            raw_output = output_root / "codex" / "session-001.raw.jsonl"
+            mock_agent.export_raw_session.return_value = raw_output
+            configure_scanner_sessions(mock_scanner)
+            mock_scanner_class.return_value = mock_scanner
+
+            with mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(mock_agent, mock_session)):
+                with mock.patch("agent_dump.uri_workflow.load_ai_config", return_value=mock.MagicMock()):
+                    with mock.patch("agent_dump.uri_workflow.validate_ai_config", return_value=(True, [])):
+                        with mock.patch("agent_dump.cli.request_summary_from_llm") as request_summary:
+                            with mock.patch(
+                                "sys.argv",
+                                [
+                                    "agent-dump",
+                                    "codex://session-001",
+                                    "--format",
+                                    "json,raw",
+                                    "--summary",
+                                    "--output",
+                                    str(output_root),
+                                ],
+                            ):
+                                result = main()
+
+        assert result == 0
+        request_summary.assert_not_called()
+        mock_agent.export_session.assert_called_once()
+        mock_agent.export_raw_session.assert_called_once_with(mock_session, output_root / "codex")
+        captured = capsys.readouterr()
+        assert (
+            expect(
+                LocaleKeys.URI_SUMMARY_PREPARATION_FAILED_WARNING,
+                error="transcript unreadable",
+            )
+            in captured.out
+        )
+        assert str(raw_output) in captured.out
+
     def test_main_non_uri_mode_summary_warns_and_continues(self, capsys):
         """测试非 URI 模式使用 --summary 时警告并继续原流程"""
         with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:

@@ -101,6 +101,7 @@ ZH_TRANSLATIONS = {
     Keys.URI_SUMMARY_NO_JSON_WARNING: "⚠️  --summary 需要 --format 中包含 json；已跳过 summary。",
     Keys.URI_SUMMARY_CONFIG_MISSING_WARNING: "⚠️  已跳过 --summary：未找到配置文件。",
     Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING: "⚠️  已跳过 --summary：配置缺少字段: {fields}",
+    Keys.URI_SUMMARY_PREPARATION_FAILED_WARNING: "⚠️  已跳过 --summary：总结准备失败: {error}",
     Keys.URI_SUMMARY_API_FAILED_WARNING: "⚠️  已跳过 --summary：AI 总结请求失败: {error}",
     Keys.URI_SUMMARY_APPLIED: "✅ 已将 summary 写入 JSON: {path}",
     Keys.URI_SUMMARY_LOADING: "⏳ 正在调用 AI 生成会话总结，请稍候...",

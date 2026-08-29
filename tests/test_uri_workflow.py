@@ -1,6 +1,7 @@
 import json
 from unittest import mock
 
+from locale_helpers import Keys, expect_contains
 import pytest
 
 from agent_dump.config import AIConfig
@@ -97,6 +98,38 @@ def test_maybe_generate_uri_summary_returns_loaded_data_when_request_fails(
     assert summary is None
     agent.get_cached_session_data.assert_called_once_with(session)
     assert "AI 总结请求失败: service unavailable" in capsys.readouterr().out
+
+
+def test_maybe_generate_uri_summary_isolates_session_preparation_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config = AIConfig(provider="openai", base_url="https://example.com", model="model", api_key="key")
+    agent = mock.Mock()
+    agent.get_cached_session_data.side_effect = OSError("transcript unreadable")
+    session = mock.Mock()
+    request_summary = mock.Mock()
+    monkeypatch.setattr("agent_dump.uri_workflow.load_ai_config", lambda: config)
+    monkeypatch.setattr("agent_dump.uri_workflow.validate_ai_config", lambda candidate: (candidate is config, []))
+
+    loaded_data, summary = maybe_generate_uri_summary(
+        enabled=True,
+        output_formats=["json", "raw"],
+        uri="codex://session-001",
+        agent=agent,
+        session=session,
+        session_data=None,
+        request_summary=request_summary,
+    )
+
+    assert loaded_data is None
+    assert summary is None
+    request_summary.assert_not_called()
+    assert expect_contains(
+        capsys.readouterr().out,
+        Keys.URI_SUMMARY_PREPARATION_FAILED_WARNING,
+        error="transcript unreadable",
+    )
 
 
 def test_maybe_generate_uri_summary_sanitizes_remote_error_at_stdout(

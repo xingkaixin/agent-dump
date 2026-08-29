@@ -101,6 +101,7 @@ EN_TRANSLATIONS = {
     Keys.URI_SUMMARY_NO_JSON_WARNING: "⚠️  --summary requires json in --format; summary is skipped.",
     Keys.URI_SUMMARY_CONFIG_MISSING_WARNING: "⚠️  --summary skipped: config file not found.",
     Keys.URI_SUMMARY_CONFIG_INCOMPLETE_WARNING: "⚠️  --summary skipped: config missing fields: {fields}",
+    Keys.URI_SUMMARY_PREPARATION_FAILED_WARNING: "⚠️  --summary skipped: summary preparation failed: {error}",
     Keys.URI_SUMMARY_API_FAILED_WARNING: "⚠️  --summary skipped: AI summary request failed: {error}",
     Keys.URI_SUMMARY_APPLIED: "✅ Applied summary to JSON: {path}",
     Keys.URI_SUMMARY_LOADING: "⏳ Calling AI to generate URI summary, please wait...",
