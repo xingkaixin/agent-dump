@@ -34,7 +34,7 @@ class ClaudeCodeAgent(FileSessionAgent):
 
     def __init__(self) -> None:
         super().__init__()
-        self._sessions_index_cache: dict[Path, dict[str, dict]] = {}
+        self._sessions_index_cache: dict[Path, dict[str, dict[str, Any]]] = {}
         self._sessions_index_lock = Lock()
 
     def _iter_session_files(self) -> Iterator[Path]:
@@ -65,7 +65,7 @@ class ClaudeCodeAgent(FileSessionAgent):
         with self._sessions_index_lock:
             self._sessions_index_cache.clear()
 
-    def _load_sessions_index(self, project_dir: Path) -> dict[str, dict]:
+    def _load_sessions_index(self, project_dir: Path) -> dict[str, dict[str, Any]]:
         """Load sessions index for a project"""
         index_path = project_dir / "sessions-index.json"
         if not index_path.exists():
@@ -74,13 +74,36 @@ class ClaudeCodeAgent(FileSessionAgent):
         try:
             with open(index_path, encoding="utf-8") as f:
                 data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("sessions index root must be an object")
             entries = data.get("entries", [])
-            # Build a map of sessionId to entry data
-            return {entry["sessionId"]: entry for entry in entries}
-        except Exception:
+            if not isinstance(entries, list):
+                raise ValueError("sessions index entries must be an array")
+        except Exception as exc:
+            self._report_diagnostic(Keys.WARN_TITLE_CACHE_FAILED, error=str(exc))
             return {}
 
-    def _project_sessions_index(self, project_dir: Path) -> dict[str, dict]:
+        sessions_index: dict[str, dict[str, Any]] = {}
+        skipped_count = 0
+        for entry in entries:
+            if not isinstance(entry, dict):
+                skipped_count += 1
+                continue
+            session_id = entry.get("sessionId")
+            if not isinstance(session_id, str) or not session_id.strip():
+                skipped_count += 1
+                continue
+            sessions_index[session_id] = entry
+
+        if skipped_count:
+            self._report_diagnostic(
+                Keys.WARN_TITLE_CACHE_ENTRIES_SKIPPED,
+                path=str(index_path),
+                count=skipped_count,
+            )
+        return sessions_index
+
+    def _project_sessions_index(self, project_dir: Path) -> dict[str, dict[str, Any]]:
         """Return a project's sessions index, loading it once per provider operation.
 
         缓存整张索引而不是逐条命中项：缺失 Session ID 同样命中缓存，否则每个缺失
@@ -98,7 +121,7 @@ class ClaudeCodeAgent(FileSessionAgent):
                 self._sessions_index_cache[project_dir] = cached
         return cached
 
-    def _get_session_metadata(self, session_id: str, project_dir: Path) -> dict | None:
+    def _get_session_metadata(self, session_id: str, project_dir: Path) -> dict[str, Any] | None:
         """Get session metadata from sessions-index.json"""
         return self._project_sessions_index(project_dir).get(session_id)
 

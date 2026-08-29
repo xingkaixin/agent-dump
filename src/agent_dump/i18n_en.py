@@ -184,6 +184,7 @@ EN_TRANSLATIONS = {
     Keys.WARN_PROVIDER_OPERATION_FAILED: "⚠️  {agent} provider operation failed: {error_type}: {error}",
     Keys.WARN_SESSION_PARSE_FAILED: "⚠️  Failed to parse session file {path}: {error}",
     Keys.WARN_TITLE_CACHE_FAILED: "⚠️  Failed to load title cache: {error}",
+    Keys.WARN_TITLE_CACHE_ENTRIES_SKIPPED: "⚠️  {path}: skipped {count} malformed title cache entries",
     Keys.WARN_TITLE_EXTRACT_FAILED: "⚠️  Failed to extract title: {error}",
     Keys.WARN_MESSAGE_CONVERT_FAILED: "⚠️  Failed to convert message format: {error}",
     Keys.WARN_PI_RECORD_CONVERT_FAILED: "⚠️  Failed to convert Pi record: {error}",
