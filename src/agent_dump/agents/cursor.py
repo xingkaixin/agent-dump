@@ -205,15 +205,6 @@ class CursorAgent(BaseAgent):
         request_id = session.metadata.get("request_id") or session.id
         return f"cursor://{request_id}"
 
-    def get_formatted_title(self, session: Session) -> str:
-        """Render Cursor session title in local timezone for display."""
-        title = session.title[:60] + "..." if len(session.title) > 60 else session.title
-        session_time = session.created_at
-        if session_time.tzinfo is not None:
-            session_time = session_time.astimezone()
-        time_str = session_time.strftime("%Y-%m-%d %H:%M")
-        return f"{title} ({time_str})"
-
     def get_session_data(self, session: Session) -> dict[str, Any]:
         return self._transcript_decoder.build_session_data(session)
 
