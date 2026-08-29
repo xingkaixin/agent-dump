@@ -31,7 +31,12 @@ from agent_dump.command_plan import (
     UriOperation,
     build_command_plan,
 )
-from agent_dump.config import ExportConfig, load_export_config, load_shortcuts_config
+from agent_dump.config import (
+    ConfigurationParseError,
+    ExportConfig,
+    load_export_config,
+    load_shortcuts_config,
+)
 from agent_dump.config_command import handle_config_command
 from agent_dump.diagnostics import (
     DiagnosticError,
@@ -396,6 +401,14 @@ def _report_command_plan_warnings(plan: CommandPlan) -> None:
         )
 
 
+def _uses_configured_export_output(operation: SessionOperation | UriOperation) -> bool:
+    if not isinstance(operation, (InteractiveOperation, UriOperation)):
+        return False
+    return not operation.output_specified and any(
+        output_format in {"json", "raw"} for output_format in operation.output_formats
+    )
+
+
 def _dispatch_command_plan(plan: CommandPlan, parser: argparse.ArgumentParser) -> int | None:
     operation = plan.operation
     if isinstance(operation, ProvidersOperation):
@@ -412,7 +425,7 @@ def _dispatch_command_plan(plan: CommandPlan, parser: argparse.ArgumentParser) -
         parser.print_help()
         return None
 
-    export_config = load_export_config()
+    export_config = load_export_config() if _uses_configured_export_output(operation) else ExportConfig()
     if isinstance(operation, UriOperation):
         return handle_uri_mode(operation, export_config=export_config)
     if isinstance(operation, (ListOperation, SearchOperation, InteractiveOperation)):
@@ -432,6 +445,9 @@ def main() -> int | None:
         return _run()
     except DiagnosticError as exc:
         _print_diagnostic(exc)
+        return 1
+    except ConfigurationParseError as exc:
+        print(render_terminal_message(Keys.CONFIG_PARSE_INVALID, path=exc.path))
         return 1
     except Exception as exc:  # noqa: BLE001 - 顶层兜底，转成诊断后以退出码 1 结束
         _print_diagnostic(unexpected_failure(exc))

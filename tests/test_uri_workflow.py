@@ -1,10 +1,11 @@
 import json
+from pathlib import Path
 from unittest import mock
 
 from locale_helpers import Keys, expect_contains
 import pytest
 
-from agent_dump.config import AIConfig
+from agent_dump.config import AIConfig, ConfigurationParseError
 from agent_dump.prompt_safety import UNTRUSTED_DATA_RULES
 from agent_dump.text_safety import has_unsafe_body_characters
 from agent_dump.uri_workflow import build_uri_summary_prompt, maybe_generate_uri_summary
@@ -129,6 +130,36 @@ def test_maybe_generate_uri_summary_isolates_session_preparation_failure(
         capsys.readouterr().out,
         Keys.URI_SUMMARY_PREPARATION_FAILED_WARNING,
         error="transcript unreadable",
+    )
+
+
+def test_maybe_generate_uri_summary_reports_invalid_toml(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    error = ConfigurationParseError(config_path)
+    request_summary = mock.Mock()
+    monkeypatch.setattr("agent_dump.uri_workflow.load_ai_config", mock.Mock(side_effect=error))
+
+    loaded_data, summary = maybe_generate_uri_summary(
+        enabled=True,
+        output_formats=["json"],
+        uri="codex://session-001",
+        agent=mock.Mock(),
+        session=mock.Mock(),
+        session_data=None,
+        request_summary=request_summary,
+    )
+
+    assert loaded_data is None
+    assert summary is None
+    request_summary.assert_not_called()
+    assert expect_contains(
+        capsys.readouterr().out,
+        Keys.URI_SUMMARY_PREPARATION_FAILED_WARNING,
+        error=error,
     )
 
 

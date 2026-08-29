@@ -129,6 +129,7 @@ EN_TRANSLATIONS = {
     Keys.CONFIG_SAVED: "✅ Config saved: {path}",
     Keys.CONFIG_ACTION_INVALID: "❌ Invalid --config action: {action}",
     Keys.CONFIG_INVALID_FIELDS: "❌ Invalid config fields: {fields}",
+    Keys.CONFIG_PARSE_INVALID: "❌ Config is not valid TOML: {path}",
     Keys.CONFIG_EDIT_REQUIRES_VALID_TOML: (
         "❌ Config is not valid TOML and cannot be edited safely: {path}. "
         "Fix its escaping manually or replace the file."
