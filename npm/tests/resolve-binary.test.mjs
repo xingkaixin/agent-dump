@@ -7,6 +7,7 @@ import { NATIVE_TARGETS } from "../scripts/native-targets.mjs";
 
 const require = createRequire(import.meta.url);
 const {
+  BinaryMissingError,
   RELEASES_URL,
   SUPPORTED_TARGETS,
   getBinarySpec,
@@ -51,4 +52,18 @@ test("resolveInstalledBinary resolves the vendored binary path from the main pac
   });
 
   assert.equal(binaryPath, expectedPath);
+});
+
+test("resolveInstalledBinary identifies a missing vendored binary", () => {
+  const spec = getBinarySpec("linux", "x64");
+  const packageRoot = path.join("/tmp", "agent-dump", "node_modules", "@agent-dump", "cli");
+  const expectedPath = path.join(packageRoot, "vendor", "linux-x64", "agent-dump");
+
+  assert.throws(
+    () => resolveInstalledBinary(spec, { packageRoot, existsSync: () => false }),
+    (error) =>
+      error instanceof BinaryMissingError &&
+      error.message.includes("linux-x64") &&
+      error.message.includes(expectedPath)
+  );
 });

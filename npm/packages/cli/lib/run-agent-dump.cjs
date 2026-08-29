@@ -1,7 +1,7 @@
 const os = require("node:os");
 const { spawn } = require("node:child_process");
 
-const { resolveBinary } = require("./resolve-binary.cjs");
+const { BinaryMissingError, resolveBinary } = require("./resolve-binary.cjs");
 const { ensureBinary } = require("./install-binary.cjs");
 
 function getForwardSignals(platform) {
@@ -62,7 +62,7 @@ async function runCli(options = {}) {
   try {
     binaryPath = resolveBinaryImpl({ platform, arch });
   } catch (error) {
-    if (!error.message.includes("Binary file is missing")) {
+    if (!(error instanceof BinaryMissingError)) {
       writeError(`${error.message}\n`);
       exit(1);
       return null;
