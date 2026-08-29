@@ -1,3 +1,5 @@
+const path = require("node:path");
+
 const manifest = require("./native-targets.json");
 
 const TARGETS = {};
@@ -25,9 +27,14 @@ function getBinarySpec(platform = process.platform, arch = process.arch) {
   );
 }
 
+function getVendorBinaryPath(packageRoot, spec) {
+  return path.join(packageRoot, "vendor", spec.target, spec.executableName);
+}
+
 module.exports = {
   RELEASES_URL,
   SUPPORTED_TARGETS,
   TARGETS,
-  getBinarySpec
+  getBinarySpec,
+  getVendorBinaryPath
 };
