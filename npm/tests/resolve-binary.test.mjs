@@ -6,6 +6,8 @@ import path from "node:path";
 import { NATIVE_TARGETS } from "../scripts/native-targets.mjs";
 
 const require = createRequire(import.meta.url);
+const installBinaryModule = require("../packages/cli/lib/install-binary.cjs");
+const targetsModule = require("../packages/cli/lib/targets.cjs");
 const {
   BinaryMissingError,
   RELEASES_URL,
@@ -14,6 +16,12 @@ const {
   getVendorBinaryPath,
   resolveInstalledBinary
 } = require("../packages/cli/lib/resolve-binary.cjs");
+
+test("vendored binary path construction has one shared owner", () => {
+  assert.equal(typeof targetsModule.getVendorBinaryPath, "function");
+  assert.equal(getVendorBinaryPath, targetsModule.getVendorBinaryPath);
+  assert.equal(installBinaryModule.getVendorBinaryPath, targetsModule.getVendorBinaryPath);
+});
 
 test("getBinarySpec returns the expected package metadata for each supported target", () => {
   for (const target of NATIVE_TARGETS) {
@@ -41,7 +49,7 @@ test("resolveInstalledBinary resolves the vendored binary path from the main pac
   const spec = getBinarySpec("linux", "x64");
   const packageRoot = path.join("/tmp", "agent-dump", "node_modules", "@agent-dump", "cli");
   const expectedPath = path.join(packageRoot, "vendor", "linux-x64", "agent-dump");
-  assert.equal(getVendorBinaryPath(spec, { packageRoot }), expectedPath);
+  assert.equal(getVendorBinaryPath(packageRoot, spec), expectedPath);
 
   const binaryPath = resolveInstalledBinary(spec, {
     packageRoot,

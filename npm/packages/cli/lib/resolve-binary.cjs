@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { RELEASES_URL, SUPPORTED_TARGETS, getBinarySpec } = require("./targets.cjs");
+const { RELEASES_URL, SUPPORTED_TARGETS, getBinarySpec, getVendorBinaryPath } = require("./targets.cjs");
 
 class BinaryMissingError extends Error {
   constructor(target, binaryPath) {
@@ -10,14 +10,10 @@ class BinaryMissingError extends Error {
   }
 }
 
-function getVendorBinaryPath(spec, options = {}) {
-  const packageRoot = options.packageRoot || path.resolve(__dirname, "..");
-  return path.join(packageRoot, "vendor", spec.target, spec.executableName);
-}
-
 function resolveInstalledBinary(spec, options = {}) {
   const existsSync = options.existsSync || fs.existsSync;
-  const binaryPath = getVendorBinaryPath(spec, options);
+  const packageRoot = options.packageRoot || path.resolve(__dirname, "..");
+  const binaryPath = getVendorBinaryPath(packageRoot, spec);
 
   if (!existsSync(binaryPath)) {
     throw new BinaryMissingError(spec.target, binaryPath);

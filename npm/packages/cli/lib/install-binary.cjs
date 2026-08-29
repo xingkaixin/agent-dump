@@ -6,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const zlib = require("node:zlib");
 
-const { getBinarySpec } = require("./targets.cjs");
+const { getBinarySpec, getVendorBinaryPath } = require("./targets.cjs");
 
 const MAX_COMPRESSED_TARBALL_BYTES = 64 * 1024 * 1024;
 const MAX_DECOMPRESSED_TAR_BYTES = 128 * 1024 * 1024;
@@ -246,10 +246,6 @@ async function readPackageVersion(packageRoot, options = {}) {
   const packageJsonPath = path.join(packageRoot, "package.json");
   const raw = await fsp.readFile(packageJsonPath, "utf8");
   return JSON.parse(raw).version;
-}
-
-function getVendorBinaryPath(packageRoot, spec) {
-  return path.join(packageRoot, "vendor", spec.target, spec.executableName);
 }
 
 function isBinaryInstalled(options = {}) {
