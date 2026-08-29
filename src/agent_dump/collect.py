@@ -19,6 +19,8 @@ from agent_dump.collect_models import (
     PlannedCollectEntry as PlannedCollectEntry,
     ScanSessionsProgress as ScanSessionsProgress,
     SessionSummaryEntry as SessionSummaryEntry,
+    StructuredSummaryContext as StructuredSummaryContext,
+    StructuredSummaryPhase as StructuredSummaryPhase,
     SummarizeChunksProgress as SummarizeChunksProgress,
     TreeReductionProgress as TreeReductionProgress,
 )

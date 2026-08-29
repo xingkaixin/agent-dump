@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import tzinfo
 import sys
 import threading
-from typing import Protocol
 
 from agent_dump.bounded_concurrency import iter_completed_futures
 from agent_dump.collect_logging import CollectLogger
@@ -20,12 +19,14 @@ from agent_dump.collect_models import (
     MergeSessionsProgress,
     PlannedCollectEntry,
     SessionSummaryEntry,
+    StructuredSummaryContext,
+    StructuredSummaryPhase,
     SummarizeChunksProgress,
     TreeReductionProgress,
 )
 from agent_dump.collect_progress import emit_collect_progress
 from agent_dump.collect_prompts import build_collect_chunk_prompt, build_collect_merge_prompt
-from agent_dump.collect_requests import request_structured_summary_from_llm
+from agent_dump.collect_requests import StructuredSummaryRequester, request_structured_summary_from_llm
 from agent_dump.collect_summary import (
     dedupe_preserve_order,
     empty_summary_payload,
@@ -35,23 +36,6 @@ from agent_dump.collect_summary import (
 from agent_dump.config import MAX_COLLECT_SUMMARY_CONCURRENCY, AIConfig
 from agent_dump.i18n import Keys, i18n
 from agent_dump.terminal_output import render_terminal_message
-
-
-class StructuredSummaryRequester(Protocol):
-    def __call__(
-        self,
-        config: AIConfig,
-        prompt: str,
-        *,
-        context_label: str,
-        timeout_seconds: int = 90,
-        logger: CollectLogger | None = None,
-        phase: str = "structured_summary",
-        session_uri: str | None = None,
-        chunk_index: int | None = None,
-        chunk_total: int | None = None,
-        mode: CollectMode = CollectMode.PM,
-    ) -> dict[str, list[str]]: ...
 
 
 def _summary_needs_compression(payload: dict[str, list[str]]) -> bool:
@@ -87,13 +71,15 @@ def _summarize_collect_entry(
         payload = request_structured_summary(
             config,
             prompt,
-            context_label=f"{entry.session_uri} chunk {chunk_index + 1}/{len(chunks)}",
+            context=StructuredSummaryContext(
+                label=f"{entry.session_uri} chunk {chunk_index + 1}/{len(chunks)}",
+                phase=StructuredSummaryPhase.CHUNK_SUMMARY,
+                session_uri=entry.session_uri,
+                chunk_index=chunk_index + 1,
+                chunk_total=len(chunks),
+            ),
             timeout_seconds=timeout_seconds,
             logger=logger,
-            phase="chunk_summary",
-            session_uri=entry.session_uri,
-            chunk_index=chunk_index + 1,
-            chunk_total=len(chunks),
             mode=mode,
         )
         chunk_payloads.append(payload)
@@ -120,19 +106,21 @@ def _summarize_collect_entry(
                     merge_label="session",
                     mode=mode,
                 ),
-                context_label=f"{entry.session_uri} session merge",
+                context=StructuredSummaryContext(
+                    label=f"{entry.session_uri} session merge",
+                    phase=StructuredSummaryPhase.SESSION_MERGE,
+                    session_uri=entry.session_uri,
+                    chunk_total=len(chunks),
+                ),
                 timeout_seconds=timeout_seconds,
                 logger=logger,
-                phase="session_merge",
-                session_uri=entry.session_uri,
-                chunk_total=len(chunks),
                 mode=mode,
             )
         except RuntimeError as exc:
             if logger is not None:
                 logger.log(
                     "llm_merge_fallback",
-                    phase="session_merge",
+                    phase=StructuredSummaryPhase.SESSION_MERGE.value,
                     session_uri=entry.session_uri,
                     chunk_total=len(chunks),
                     error=str(exc),
@@ -337,17 +325,19 @@ def reduce_collect_summaries(
                             merge_label=f"group-level-{reduction_depth}",
                             mode=mode,
                         ),
-                        context_label=group_source,
+                        context=StructuredSummaryContext(
+                            label=group_source,
+                            phase=StructuredSummaryPhase.GROUP_MERGE,
+                        ),
                         timeout_seconds=timeout_seconds,
                         logger=logger,
-                        phase="group_merge",
                         mode=mode,
                     )
                 except RuntimeError as exc:
                     if logger is not None:
                         logger.log(
                             "llm_merge_fallback",
-                            phase="group_merge",
+                            phase=StructuredSummaryPhase.GROUP_MERGE.value,
                             context=group_source,
                             level=reduction_depth,
                             group_index=group_index,

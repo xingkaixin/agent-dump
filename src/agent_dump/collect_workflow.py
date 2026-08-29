@@ -33,12 +33,12 @@ from agent_dump.collect_progress import (
     emit_collect_progress,
 )
 from agent_dump.collect_prompts import build_collect_final_prompt
-from agent_dump.collect_reduction import (
+from agent_dump.collect_reduction import reduce_collect_summaries, summarize_collect_entries
+from agent_dump.collect_requests import (
     StructuredSummaryRequester,
-    reduce_collect_summaries,
-    summarize_collect_entries,
+    request_structured_summary_from_llm,
+    request_summary_from_llm,
 )
-from agent_dump.collect_requests import request_structured_summary_from_llm, request_summary_from_llm
 from agent_dump.collect_sessions import collect_entries, collect_scan_days, plan_collect_entries
 from agent_dump.command_plan import CollectOperation
 from agent_dump.config import (

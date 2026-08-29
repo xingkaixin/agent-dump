@@ -17,6 +17,7 @@ from agent_dump.collect_models import (
     MergeSessionsProgress,
     PlannedCollectEntry,
     SessionSummaryEntry,
+    StructuredSummaryPhase,
     SummarizeChunksProgress,
     TreeReductionProgress,
 )
@@ -116,7 +117,7 @@ class TestCollectStructuredSummary:
             )
 
         assert request.call_count == 3
-        assert request.call_args.kwargs["phase"] == "session_merge"
+        assert request.call_args.kwargs["context"].phase is StructuredSummaryPhase.SESSION_MERGE
         assert all(value in request.call_args.args[1] for value in evidence)
         assert summaries[0].summary_data == compressed
 
