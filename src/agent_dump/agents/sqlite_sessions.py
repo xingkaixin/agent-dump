@@ -36,7 +36,6 @@ class SQLiteSessionAgent(BaseAgent, ABC):
     def __init__(self) -> None:
         super().__init__()
         self.db_path: Path | None = None
-        self._db_path_discovered = False
 
     def _find_db_path(self) -> Path | None:
         """Find the first existing provider database path."""
@@ -51,12 +50,8 @@ class SQLiteSessionAgent(BaseAgent, ABC):
         return self._ensure_db_path() is not None
 
     def _ensure_db_path(self) -> Path | None:
-        if self.db_path is not None:
-            self._db_path_discovered = True
-            return self.db_path
-        if not self._db_path_discovered:
+        if self.db_path is None:
             self.db_path = self._find_db_path()
-            self._db_path_discovered = True
         return self.db_path
 
     @abstractmethod
