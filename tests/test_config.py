@@ -14,6 +14,7 @@ from agent_dump.config import (
     AIConfig,
     AIConfigError,
     CollectConfig,
+    ConfigurationParseMode,
     ExportConfig,
     LoggingConfig,
     ShortcutConfig,
@@ -56,7 +57,7 @@ class TestConfigReadWrite:
         with pytest.raises(ValueError, match=r"agent\.codex\.deny"):
             load_config_document(path).validate_collect_safety()
 
-    def test_collect_safety_rejects_legacy_parse(self, tmp_path: Path) -> None:
+    def test_collect_safety_rejects_invalid_parse(self, tmp_path: Path) -> None:
         path = tmp_path / "config.toml"
         path.write_text("[collect]\nsummary_concurrency = 4oops\n", encoding="utf-8")
 
@@ -156,7 +157,7 @@ class TestConfigReadWrite:
     def test_load_collect_config_ignores_invalid_agent_deny(self, tmp_path):
         path = tmp_path / "config.toml"
         path.write_text(
-            ("[collect]\nsummary_concurrency = 2\n\n[agent.claudecode]\ndeny = bad\n\n[agent.codex]\ndeny = []\n"),
+            ('[collect]\nsummary_concurrency = 2\n\n[agent.claudecode]\ndeny = "bad"\n\n[agent.codex]\ndeny = []\n'),
             encoding="utf-8",
         )
 
@@ -792,20 +793,38 @@ class TestTableKeyPathsSurviveRoundTrip:
         assert document.logging_config().enabled is False
         assert document.export_config().output == "/tmp/out"
 
-    def test_legacy_parser_produces_the_same_structure(self, tmp_path):
-        """旧版写出的非法 TOML 走宽松 parser，结构必须与标准路径一致。"""
+    def test_legacy_windows_path_recovery_preserves_toml_values(self, tmp_path):
         config_path = tmp_path / "config.toml"
-        # 未转义的 Windows 路径让标准解析器失败
         config_path.write_text(
-            '[export]\noutput = "C:\\Users\\kevin"\n\n["plugin.with.dot"]\nenabled = true\n',
+            '[ai]\napi_key = "abc#def"\n\n'
+            '[shortcut.demo]\nparams = []\nargs = ["--query", "a,b"]\n\n'
+            '[export]\noutput = "C:\\Users\\kevin"\n\n'
+            '["plugin.with.dot"]\nenabled = true\n',
             encoding="utf-8",
         )
 
         document = load_config_document(config_path)
 
+        assert document.parse_mode is ConfigurationParseMode.LEGACY
+        assert document.sections[("ai",)]["api_key"] == "abc#def"
+        assert document.shortcuts_config()["demo"].args == ("--query", "a,b")
+        assert document.export_config().output == "C:\\Users\\kevin"
         assert ("export",) in document.sections
-        assert ("plugin.with.dot",) in document.sections, "宽松 parser 也不得按 . 拆引号 key"
+        assert ("plugin.with.dot",) in document.sections
         assert ("plugin",) not in document.sections
+
+    def test_invalid_toml_does_not_expose_partial_values(self, tmp_path):
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            '[ai]\napi_key = "abc#def"\n\n[collect]\nsummary_concurrency = 4oops\n',
+            encoding="utf-8",
+        )
+
+        document = load_config_document(config_path)
+
+        assert document.parse_mode is ConfigurationParseMode.INVALID
+        assert document.sections == {}
+        assert document.ai_config() is None
 
     def test_legacy_document_cannot_be_rewritten_lossily(self, tmp_path):
         config_path = tmp_path / "config.toml"
@@ -813,7 +832,10 @@ class TestTableKeyPathsSurviveRoundTrip:
         config_path.write_text(original, encoding="utf-8")
         document = load_config_document(config_path)
 
-        with pytest.raises(ValueError, match="legacy fallback"):
+        assert document.sections[("plugin",)]["token"].split("#") == ["abc", "def"]
+        assert document.sections[("plugin",)]["items"] == ["a,b", "c"]
+
+        with pytest.raises(ValueError, match="valid TOML"):
             write_config(document.ai_config(), path=config_path, document=document)
 
         assert config_path.read_text(encoding="utf-8") == original

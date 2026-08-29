@@ -72,6 +72,7 @@ class ConfigurationParseMode(Enum):
 
     TOML = "toml"
     LEGACY = "legacy"
+    INVALID = "invalid"
 
 
 @dataclass(frozen=True)
@@ -209,45 +210,6 @@ def get_config_path(
     return resolved_home / ".config" / "agent-dump" / "config.toml"
 
 
-def _strip_quotes(value: str) -> str:
-    text = value.strip()
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
-        return text[1:-1]
-    return text
-
-
-def _parse_toml_string_array(value: str) -> tuple[str, ...] | None:
-    normalized = value.strip()
-    if not (normalized.startswith("[") and normalized.endswith("]")):
-        return None
-
-    body = normalized[1:-1].strip()
-    if not body:
-        return ()
-    if body.endswith(","):
-        body = body[:-1].rstrip()
-    if not body:
-        return ()
-
-    items: list[str] = []
-    for raw_item in body.split(","):
-        item = raw_item.strip()
-        if not item:
-            continue
-        stripped = _strip_quotes(item)
-        if stripped == item or not stripped:
-            return None
-        items.append(stripped)
-    return tuple(items)
-
-
-def _parse_toml_value(value: str) -> str | tuple[str, ...]:
-    array_value = _parse_toml_string_array(value)
-    if array_value is not None:
-        return array_value
-    return _strip_quotes(value)
-
-
 def _parse_bool(value: Any, default: bool) -> bool:
     if isinstance(value, bool):
         return value
@@ -282,73 +244,21 @@ def _coerce_str_tuple(value: Any) -> tuple[str, ...] | None:
     return None
 
 
-def _split_section_header(header: str) -> tuple[str, ...]:
-    """Split a table header into segments, keeping quoted segments whole.
-
-    宽松 parser 只在标准解析器失败时兜底，但它产出的结构必须和标准路径一致：
-    ["plugin.with.dot"] 是一个含点的 key，按 "." 无脑拆会变成三层表。
-    """
-    segments: list[str] = []
-    current: list[str] = []
-    quote: str | None = None
-    for char in header:
-        if quote is not None:
-            if char == quote:
-                quote = None
-            else:
-                current.append(char)
-            continue
-        if char in ('"', "'"):
-            quote = char
-            continue
-        if char == ".":
-            segments.append("".join(current).strip())
-            current = []
-            continue
-        current.append(char)
-    segments.append("".join(current).strip())
-    return tuple(segment for segment in segments if segment)
+_LEGACY_WINDOWS_PATH = re.compile(r'"(?P<path>[A-Za-z]:\\[^"\r\n]*)"')
+_BACKSLASH_RUN = re.compile(r"\\+")
 
 
-def _parse_simple_toml_sections(text: str) -> dict[tuple[str, ...], dict[str, Any]]:
-    """Parse minimal TOML sections without third-party deps."""
-    current_section: tuple[str, ...] = ()
-    parsed: dict[tuple[str, ...], dict[str, Any]] = {}
-    pending_array_key: str | None = None
-    pending_array_lines: list[str] = []
+def _repair_legacy_windows_paths(text: str) -> str:
+    """Escape odd backslash runs in drive paths before standard TOML parsing."""
 
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
+    def repair_path(match: re.Match[str]) -> str:
+        path = _BACKSLASH_RUN.sub(
+            lambda run: run.group(0) if len(run.group(0)) % 2 == 0 else f"{run.group(0)}\\",
+            match.group("path"),
+        )
+        return f'"{path}"'
 
-        if pending_array_key is not None:
-            pending_array_lines.append(line.split("#", 1)[0].strip())
-            if "]" not in line:
-                continue
-            parsed.setdefault(current_section, {})[pending_array_key] = _parse_toml_value(" ".join(pending_array_lines))
-            pending_array_key = None
-            pending_array_lines = []
-            continue
-
-        if line.startswith("[") and line.endswith("]"):
-            current_section = _split_section_header(line[1:-1].strip())
-            parsed.setdefault(current_section, {})
-            continue
-
-        key, sep, value = line.partition("=")
-        if not sep:
-            continue
-
-        normalized_key = key.strip()
-        normalized_value = value.split("#", 1)[0].strip()
-        if normalized_value.startswith("[") and "]" not in normalized_value:
-            pending_array_key = normalized_key
-            pending_array_lines = [normalized_value]
-            continue
-        parsed.setdefault(current_section, {})[normalized_key] = _parse_toml_value(normalized_value)
-
-    return parsed
+    return _LEGACY_WINDOWS_PATH.sub(repair_path, text)
 
 
 def _collect_toml_sections(data: dict[str, Any], prefix: tuple[str, ...] = ()) -> dict[tuple[str, ...], dict[str, Any]]:
@@ -379,8 +289,14 @@ def _read_config_sections(
     try:
         parsed = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
-        # 旧版本写出的配置可能不是合法 TOML（如未转义的 Windows 路径），降级用宽松解析器读取
-        return _parse_simple_toml_sections(text), ConfigurationParseMode.LEGACY, text
+        repaired_text = _repair_legacy_windows_paths(text)
+        if repaired_text == text:
+            return {}, ConfigurationParseMode.INVALID, text
+        try:
+            parsed = tomllib.loads(repaired_text)
+        except tomllib.TOMLDecodeError:
+            return {}, ConfigurationParseMode.INVALID, text
+        return _collect_toml_sections(parsed), ConfigurationParseMode.LEGACY, text
     return _collect_toml_sections(parsed), ConfigurationParseMode.TOML, text
 
 
@@ -562,8 +478,8 @@ def write_config(
     """Update known config keys while preserving the complete document."""
     config_path = path if path is not None else get_config_path()
     snapshot = document if document is not None else load_config_document(config_path)
-    if snapshot.parse_mode is ConfigurationParseMode.LEGACY:
-        raise ValueError("cannot safely update a configuration parsed with the legacy fallback")
+    if snapshot.parse_mode is not ConfigurationParseMode.TOML:
+        raise ValueError("cannot safely update a configuration that is not valid TOML")
     config_path.parent.mkdir(parents=True, exist_ok=True)
     source_text = snapshot.source_text
     if source_text is None:
