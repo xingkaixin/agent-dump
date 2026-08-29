@@ -11,7 +11,7 @@ from agent_dump.diagnostics import (
     root_not_found,
 )
 from agent_dump.i18n import Keys, i18n
-from agent_dump.output_formats import FileOutputFormat
+from agent_dump.output_formats import FileOutputFormat, OutputFormat
 from agent_dump.query_filter import (
     QuerySpec,
     select_session_groups,
@@ -19,6 +19,14 @@ from agent_dump.query_filter import (
 from agent_dump.scanner import AgentScanner
 
 DEFAULT_OUTPUT_BASE_DIR = Path("./sessions")
+
+
+def uses_configured_export_output(
+    *,
+    output_specified: bool,
+    output_formats: Collection[OutputFormat],
+) -> bool:
+    return not output_specified and any(output_format in {"json", "raw"} for output_format in output_formats)
 
 
 def resolve_output_base_dir(
@@ -30,7 +38,13 @@ def resolve_output_base_dir(
 ) -> Path:
     if output_specified and cli_output:
         return Path(cli_output)
-    if output_format in {"json", "raw"} and export_output:
+    if (
+        uses_configured_export_output(
+            output_specified=output_specified,
+            output_formats=(output_format,),
+        )
+        and export_output
+    ):
         return Path(export_output)
     return DEFAULT_OUTPUT_BASE_DIR
 

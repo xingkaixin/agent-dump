@@ -8,7 +8,10 @@ import sys
 
 from agent_dump.__about__ import __version__
 from agent_dump.agent_registry import get_supported_uri_examples
-from agent_dump.cli_shared import print_diagnostic as _print_diagnostic
+from agent_dump.cli_shared import (
+    print_diagnostic as _print_diagnostic,
+    uses_configured_export_output,
+)
 from agent_dump.collect_models import CollectMode
 from agent_dump.collect_requests import request_structured_summary_from_llm, request_summary_from_llm
 from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
@@ -401,14 +404,6 @@ def _report_command_plan_warnings(plan: CommandPlan) -> None:
         )
 
 
-def _uses_configured_export_output(operation: SessionOperation | UriOperation) -> bool:
-    if not isinstance(operation, (InteractiveOperation, UriOperation)):
-        return False
-    return not operation.output_specified and any(
-        output_format in {"json", "raw"} for output_format in operation.output_formats
-    )
-
-
 def _dispatch_command_plan(plan: CommandPlan, parser: argparse.ArgumentParser) -> int | None:
     operation = plan.operation
     if isinstance(operation, ProvidersOperation):
@@ -425,7 +420,15 @@ def _dispatch_command_plan(plan: CommandPlan, parser: argparse.ArgumentParser) -
         parser.print_help()
         return None
 
-    export_config = load_export_config() if _uses_configured_export_output(operation) else ExportConfig()
+    export_config = (
+        load_export_config()
+        if isinstance(operation, (InteractiveOperation, UriOperation))
+        and uses_configured_export_output(
+            output_specified=operation.output_specified,
+            output_formats=operation.output_formats,
+        )
+        else ExportConfig()
+    )
     if isinstance(operation, UriOperation):
         return handle_uri_mode(operation, export_config=export_config)
     if isinstance(operation, (ListOperation, SearchOperation, InteractiveOperation)):
