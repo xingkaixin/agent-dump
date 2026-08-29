@@ -10,6 +10,8 @@ from cli_test_support import (
     make_export_result,
     make_session,
 )
+from locale_helpers import Keys, expect_contains
+import pytest
 
 from agent_dump.cli import (
     main,
@@ -18,6 +20,27 @@ from agent_dump.query_filter import SearchSessionMatch
 
 
 class TestMain:
+    @pytest.mark.parametrize(("mode_args", "expected"), [(["--list"], 0), (["--interactive"], 1)])
+    def test_missing_provider_scope_preserves_mode_exit_policy(self, mode_args, expected, capsys):
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [make_session("s1", "Bug")]
+        agent.get_search_roots.return_value = ()
+        scanner = mock.MagicMock()
+        scanner.agents = [agent]
+        scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
+
+        with (
+            mock.patch("sys.argv", ["agent-dump", *mode_args, "-query", "bug provider:kimi"]),
+            mock.patch("agent_dump.cli.AgentScanner", return_value=scanner),
+        ):
+            result = main()
+
+        assert result == expected
+        assert expect_contains(capsys.readouterr().out, Keys.DIAG_NO_PROVIDER_IN_SCOPE)
+
     def test_keyword_limit_lists_the_latest_match(self, isolated_provider_home: Path) -> None:
         old = make_session("old", "alpha", created_at=datetime(2026, 1, 1, 10))
         new = make_session("new", "Recent", created_at=datetime(2026, 1, 1, 12))
