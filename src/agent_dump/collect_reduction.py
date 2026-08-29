@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import tzinfo
 import sys
 import threading
+from typing import Protocol
 
 from agent_dump.bounded_concurrency import iter_completed_futures
 from agent_dump.collect_logging import CollectLogger
@@ -36,6 +37,23 @@ from agent_dump.i18n import Keys, i18n
 from agent_dump.terminal_output import render_terminal_message
 
 
+class StructuredSummaryRequester(Protocol):
+    def __call__(
+        self,
+        config: AIConfig,
+        prompt: str,
+        *,
+        context_label: str,
+        timeout_seconds: int = 90,
+        logger: CollectLogger | None = None,
+        phase: str = "structured_summary",
+        session_uri: str | None = None,
+        chunk_index: int | None = None,
+        chunk_total: int | None = None,
+        mode: CollectMode = CollectMode.PM,
+    ) -> dict[str, list[str]]: ...
+
+
 def _summary_needs_compression(payload: dict[str, list[str]]) -> bool:
     return summary_payload_size(payload) > SESSION_MERGE_LLM_THRESHOLD or any(
         len(items) > MAX_SUMMARY_ITEMS_PER_FIELD for items in payload.values()
@@ -52,6 +70,7 @@ def _summarize_collect_entry(
     on_session_merged: Callable[[MergeSessionsProgress], None] | None = None,
     logger: CollectLogger | None = None,
     mode: CollectMode = CollectMode.PM,
+    request_structured_summary: StructuredSummaryRequester = request_structured_summary_from_llm,
 ) -> SessionSummaryEntry:
     entry = planned_entry.collect_entry
     chunks = planned_entry.chunks
@@ -65,7 +84,7 @@ def _summarize_collect_entry(
             local_tz=local_tz,
             mode=mode,
         )
-        payload = request_structured_summary_from_llm(
+        payload = request_structured_summary(
             config,
             prompt,
             context_label=f"{entry.session_uri} chunk {chunk_index + 1}/{len(chunks)}",
@@ -93,7 +112,7 @@ def _summarize_collect_entry(
     merged = merge_summary_payloads(chunk_payloads, max_items_per_field=None, mode=mode)
     if len(chunk_payloads) > 1 and _summary_needs_compression(merged):
         try:
-            merged = request_structured_summary_from_llm(
+            merged = request_structured_summary(
                 config,
                 build_collect_merge_prompt(
                     source_uri=entry.session_uri,
@@ -144,6 +163,7 @@ def summarize_collect_entries(
     timeout_seconds: int = 90,
     logger: CollectLogger | None = None,
     mode: CollectMode = CollectMode.PM,
+    request_structured_summary: StructuredSummaryRequester = request_structured_summary_from_llm,
 ) -> list[SessionSummaryEntry]:
     """Generate structured per-session summaries with limited concurrency."""
     if not planned_entries:
@@ -211,6 +231,7 @@ def summarize_collect_entries(
             on_session_merged=_mark_session_merged,
             logger=logger,
             mode=mode,
+            request_structured_summary=request_structured_summary,
         )
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -278,6 +299,7 @@ def reduce_collect_summaries(
     progress_callback: Callable[[CollectProgressEvent], None] | None = None,
     logger: CollectLogger | None = None,
     mode: CollectMode = CollectMode.PM,
+    request_structured_summary: StructuredSummaryRequester = request_structured_summary_from_llm,
 ) -> CollectAggregate:
     """Reduce per-session summaries via tree reduction into one final aggregate."""
     if not session_summaries:
@@ -307,7 +329,7 @@ def reduce_collect_summaries(
             merged = merge_summary_payloads(group, max_items_per_field=None, mode=mode)
             if _summary_needs_compression(merged):
                 try:
-                    merged = request_structured_summary_from_llm(
+                    merged = request_structured_summary(
                         config,
                         build_collect_merge_prompt(
                             source_uri=group_source,

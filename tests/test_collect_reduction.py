@@ -80,7 +80,12 @@ class TestCollectStructuredSummary:
             side_effect=RuntimeError("unavailable") if merge_fails else None,
             return_value=compressed,
         ) as request:
-            aggregate = reduce_collect_summaries(config=self._config(), session_summaries=summaries, mode=mode)
+            aggregate = reduce_collect_summaries(
+                config=self._config(),
+                session_summaries=summaries,
+                mode=mode,
+                request_structured_summary=request,
+            )
 
         assert request.call_count == 1
         assert all(value in request.call_args.args[1] for value in evidence)
@@ -103,7 +108,11 @@ class TestCollectStructuredSummary:
             ],
         ) as request:
             summaries = summarize_collect_entries(
-                config=self._config(), planned_entries=[plan], summary_concurrency=1, mode=mode
+                config=self._config(),
+                planned_entries=[plan],
+                summary_concurrency=1,
+                mode=mode,
+                request_structured_summary=request,
             )
 
         assert request.call_count == 3
@@ -337,11 +346,12 @@ class TestCollectStructuredSummary:
         with mock.patch(
             "agent_dump.collect_reduction.request_structured_summary_from_llm",
             return_value=normalize_summary_payload({"topics": ["combined"]}),
-        ):
+        ) as request:
             aggregate = reduce_collect_summaries(
                 config=self._config(),
                 session_summaries=summaries,
                 progress_callback=progress.append,
+                request_structured_summary=request,
             )
 
         assert aggregate.session_count == 17

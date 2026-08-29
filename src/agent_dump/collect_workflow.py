@@ -33,8 +33,12 @@ from agent_dump.collect_progress import (
     emit_collect_progress,
 )
 from agent_dump.collect_prompts import build_collect_final_prompt
-from agent_dump.collect_reduction import reduce_collect_summaries, summarize_collect_entries
-from agent_dump.collect_requests import request_summary_from_llm
+from agent_dump.collect_reduction import (
+    StructuredSummaryRequester,
+    reduce_collect_summaries,
+    summarize_collect_entries,
+)
+from agent_dump.collect_requests import request_structured_summary_from_llm, request_summary_from_llm
 from agent_dump.collect_sessions import collect_entries, collect_scan_days, plan_collect_entries
 from agent_dump.command_plan import CollectOperation
 from agent_dump.config import (
@@ -338,6 +342,7 @@ def _execute_collect_plan(
     progress_callback: Callable[[CollectProgressEvent], None],
     logger: CollectLogger,
     request_summary: _SummaryRequester,
+    request_structured_summary: StructuredSummaryRequester,
 ) -> _CollectOutput | None:
     try:
         session_summaries = summarize_collect_entries(
@@ -348,6 +353,7 @@ def _execute_collect_plan(
             timeout_seconds=collect_config.summary_timeout_seconds,
             logger=logger,
             mode=operation.collect_mode,
+            request_structured_summary=request_structured_summary,
         )
     except Exception as exc:
         _log_collect_failure(logger, CollectFailurePhase.SUMMARIZE, exc)
@@ -363,6 +369,7 @@ def _execute_collect_plan(
             timeout_seconds=collect_config.summary_timeout_seconds,
             logger=logger,
             mode=operation.collect_mode,
+            request_structured_summary=request_structured_summary,
         )
         emit_collect_progress(progress_callback, RenderFinalProgress(current=1, total=2))
         prompt = build_collect_final_prompt(
@@ -443,6 +450,7 @@ def _handle_collect_execution(
     *,
     scanner_factory: Callable[[], AgentScanner],
     request_summary: _SummaryRequester,
+    request_structured_summary: StructuredSummaryRequester,
     ai_config: AIConfig,
     collect_config: CollectConfig,
     logger: CollectLogger,
@@ -472,6 +480,7 @@ def _handle_collect_execution(
             progress_callback=update_progress,
             logger=logger,
             request_summary=request_summary,
+            request_structured_summary=request_structured_summary,
         )
     if output is None:
         return 1
@@ -491,6 +500,7 @@ def handle_collect_mode(
     *,
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
     request_summary: _SummaryRequester = request_summary_from_llm,
+    request_structured_summary: StructuredSummaryRequester = request_structured_summary_from_llm,
 ) -> int:
     """Handle `--collect` flow."""
     try:
@@ -533,6 +543,7 @@ def handle_collect_mode(
         operation,
         scanner_factory=scanner_factory,
         request_summary=request_summary,
+        request_structured_summary=request_structured_summary,
         ai_config=ai_config,
         collect_config=collect_config,
         logger=collect_logger,

@@ -10,7 +10,7 @@ from agent_dump.__about__ import __version__
 from agent_dump.agent_registry import get_supported_uri_examples
 from agent_dump.cli_shared import print_diagnostic as _print_diagnostic
 from agent_dump.collect_models import CollectMode
-from agent_dump.collect_requests import request_summary_from_llm
+from agent_dump.collect_requests import request_structured_summary_from_llm, request_summary_from_llm
 from agent_dump.collect_workflow import handle_collect_mode as _handle_collect_mode
 from agent_dump.command_plan import (
     CollectOperation,
@@ -93,7 +93,12 @@ def _language_from_argv(argv: list[str]) -> str | None:
 
 def handle_collect_mode(operation: CollectOperation) -> int:
     """Handle `--collect` flow."""
-    return _handle_collect_mode(operation, scanner_factory=AgentScanner, request_summary=request_summary_from_llm)
+    return _handle_collect_mode(
+        operation,
+        scanner_factory=AgentScanner,
+        request_summary=request_summary_from_llm,
+        request_structured_summary=request_structured_summary_from_llm,
+    )
 
 
 def handle_stats_mode(operation: StatsOperation) -> int:

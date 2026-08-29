@@ -80,6 +80,23 @@ def test_collect_rejects_unsafe_config_before_discovery_or_requests(
 
 
 class TestMain:
+    def test_collect_handler_injects_all_llm_requesters(self) -> None:
+        operation = collect_operation_from(argparse.Namespace())
+        with (
+            mock.patch("agent_dump.cli._handle_collect_mode", return_value=0) as workflow,
+            mock.patch("agent_dump.cli.AgentScanner") as scanner_factory,
+            mock.patch("agent_dump.cli.request_summary_from_llm") as final_requester,
+            mock.patch("agent_dump.cli.request_structured_summary_from_llm") as structured_requester,
+        ):
+            assert handle_collect_mode(operation) == 0
+
+        workflow.assert_called_once_with(
+            operation,
+            scanner_factory=scanner_factory,
+            request_summary=final_requester,
+            request_structured_summary=structured_requester,
+        )
+
     def test_main_dispatches_collect_mode(self):
         with mock.patch("agent_dump.cli.handle_collect_mode", return_value=0) as mock_handle:
             with mock.patch("sys.argv", ["agent-dump", "--collect"]):

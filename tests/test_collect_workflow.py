@@ -30,6 +30,7 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock, m
     scanner.get_available_agents.return_value = [agent]
     scanner.get_available_sessions.return_value = [(agent, [])]
     logger = mock.MagicMock()
+    structured_requester = mock.MagicMock()
     error = RuntimeError(f"{failing_step} failed")
     planned_entry = mock.MagicMock()
     planned_entry.collect_entry.is_truncated = True
@@ -63,12 +64,12 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock, m
             "agent_dump.collect_workflow.summarize_collect_entries",
             return_value=[mock.MagicMock()],
             side_effect=error if failing_step == "summarize" else None,
-        ),
+        ) as mock_summarize,
         mock.patch(
             "agent_dump.collect_workflow.reduce_collect_summaries",
             return_value=mock.MagicMock(),
             side_effect=error if failing_step == "render" else None,
-        ),
+        ) as mock_reduce,
         mock.patch(
             "agent_dump.collect_workflow.build_collect_final_prompt",
             return_value="prompt",
@@ -79,7 +80,13 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock, m
             operation,
             scanner_factory=lambda: scanner,
             request_summary=lambda *_args, **_kwargs: "# summary",
+            request_structured_summary=structured_requester,
         )
+
+    if failing_step != "read":
+        assert mock_summarize.call_args.kwargs["request_structured_summary"] is structured_requester
+    if failing_step not in {"read", "summarize"}:
+        assert mock_reduce.call_args.kwargs["request_structured_summary"] is structured_requester
 
     return result, logger, mock_build_final_prompt
 
