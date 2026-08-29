@@ -78,6 +78,19 @@ class TestCursorAgent:
         agent = CursorAgent()
         assert agent.is_available() is True
 
+    def test_formatted_title_uses_shared_local_timezone(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        monkeypatch.setattr("agent_dump.time_utils.get_local_timezone", lambda: timezone(timedelta(hours=8)))
+        session = Session(
+            id="request-1",
+            title="Cursor Session",
+            created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            source_path=tmp_path / "state.vscdb",
+            metadata={},
+        )
+
+        assert CursorAgent().get_formatted_title(session) == "Cursor Session (2024-01-01 08:00)"
+
     @pytest.mark.parametrize("journal_mode", ["DELETE", "WAL"])
     @pytest.mark.parametrize("has_updated_time", [False, True])
     def test_body_changes_refresh_cache_and_persistent_index(
