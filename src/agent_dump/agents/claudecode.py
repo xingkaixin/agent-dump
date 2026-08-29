@@ -23,7 +23,7 @@ from agent_dump.agents.message_types import NormalizedSessionData, NormalizedSes
 from agent_dump.agents.title_fallback import basename_title, normalize_title_text, resolve_session_title
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
-from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.paths import SearchRoot, resolve_env_path
 
 
 class ClaudeCodeAgent(FileSessionAgent):
@@ -55,9 +55,9 @@ class ClaudeCodeAgent(FileSessionAgent):
         return self.base_path.glob(f"*/{session_id}.jsonl")
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
-        roots = ProviderRoots.from_env_or_home()
+        root = resolve_env_path("CLAUDE_CONFIG_DIR", Path.home() / ".claude")
         return (
-            SearchRoot("CLAUDE_CONFIG_DIR/projects", roots.claude_root / "projects"),
+            SearchRoot("CLAUDE_CONFIG_DIR/projects", root / "projects"),
             SearchRoot("local development fallback", Path("data/claudecode")),
         )
 

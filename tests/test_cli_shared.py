@@ -1005,7 +1005,6 @@ class TestUriShapesComeFromTheRegistry:
                 type(registration)(
                     factory=registration.factory,
                     uri_schemes=registration.uri_schemes,
-                    location_line=registration.location_line,
                     uri_path_prefixes=("runs/",),
                     uri_identifier_label=registration.uri_identifier_label,
                 )

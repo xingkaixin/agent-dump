@@ -14,7 +14,6 @@ from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
 from agent_dump.diagnostics import print_recoverable_diagnostic
-from agent_dump.paths import ProviderRoots
 
 PATCH_INPUT = """*** Begin Patch
 *** Add File: /workspace/new.py
@@ -56,24 +55,17 @@ class TestCodexAgent:
 
         assert result is None
 
-    def test_load_titles_cache_not_exists(self, tmp_path):
+    def test_load_titles_cache_not_exists(self, monkeypatch, tmp_path):
         """测试加载不存在的标题缓存"""
         agent = CodexAgent()
-        roots = ProviderRoots(
-            codex_root=tmp_path / ".codex",
-            claude_root=tmp_path / ".claude",
-            kimi_root=tmp_path / ".kimi",
-            opencode_root=tmp_path / ".local" / "share" / "opencode",
-            pi_root=tmp_path / ".pi",
-        )
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path / ".codex"))
 
-        with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):
-            result = agent._load_titles_cache()
+        result = agent._load_titles_cache()
 
         assert result == {}
         assert agent._titles_cache == {}
 
-    def test_load_titles_cache_with_data(self, tmp_path):
+    def test_load_titles_cache_with_data(self, monkeypatch, tmp_path):
         """测试从 session_index.jsonl 加载标题缓存"""
         agent = CodexAgent()
 
@@ -91,16 +83,9 @@ class TestCodexAgent:
             encoding="utf-8",
         )
 
-        roots = ProviderRoots(
-            codex_root=codex_dir,
-            claude_root=tmp_path / ".claude",
-            kimi_root=tmp_path / ".kimi",
-            opencode_root=tmp_path / ".local" / "share" / "opencode",
-            pi_root=tmp_path / ".pi",
-        )
+        monkeypatch.setenv("CODEX_HOME", str(codex_dir))
 
-        with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):
-            result = agent._load_titles_cache()
+        result = agent._load_titles_cache()
 
         assert result == {
             "session-001": "Test Session",
@@ -127,16 +112,9 @@ class TestCodexAgent:
         local_dev_path = tmp_path / "data" / "codex"
         local_dev_path.mkdir(parents=True)
 
-        roots = ProviderRoots(
-            codex_root=tmp_path / "missing-codex-home",
-            claude_root=tmp_path / ".claude",
-            kimi_root=tmp_path / ".kimi",
-            opencode_root=tmp_path / ".local" / "share" / "opencode",
-            pi_root=tmp_path / ".pi",
-        )
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path / "missing-codex-home"))
 
-        with mock.patch("agent_dump.agents.codex.ProviderRoots.from_env_or_home", return_value=roots):
-            result = agent._find_base_path()
+        result = agent._find_base_path()
 
         assert result == Path("data/codex")
 

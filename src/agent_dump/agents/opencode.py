@@ -5,7 +5,7 @@ from pathlib import Path
 from agent_dump.agents.sqlite_sessions import SQLiteSessionAgent
 from agent_dump.diagnostics import DiagnosticError, source_missing
 from agent_dump.i18n import Keys, i18n
-from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.paths import SearchRoot, resolve_data_home
 
 
 class OpenCodeAgent(SQLiteSessionAgent):
@@ -15,9 +15,9 @@ class OpenCodeAgent(SQLiteSessionAgent):
     provider_display_name = "OpenCode"
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
-        roots = ProviderRoots.from_env_or_home()
+        root = resolve_data_home() / "opencode"
         return (
-            SearchRoot("XDG/LOCALAPPDATA opencode.db", roots.opencode_root / "opencode.db"),
+            SearchRoot("XDG/LOCALAPPDATA opencode.db", root / "opencode.db"),
             SearchRoot("local development fallback", Path("data/opencode/opencode.db")),
         )
 

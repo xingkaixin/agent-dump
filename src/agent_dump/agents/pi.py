@@ -27,7 +27,7 @@ from agent_dump.agents.title_fallback import basename_title, normalize_title_tex
 from agent_dump.coercion import safe_epoch_datetime, safe_float, safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
-from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.paths import SearchRoot, resolve_env_path
 
 PI_TOOL_TITLE_MAP = {
     "bash": "bash",
@@ -48,9 +48,9 @@ class PiAgent(FileSessionAgent):
         super().__init__()
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
-        roots = ProviderRoots.from_env_or_home()
+        root = resolve_env_path("PI_HOME", Path.home() / ".pi")
         return (
-            SearchRoot("PI_HOME/agent/sessions", roots.pi_root / "agent" / "sessions"),
+            SearchRoot("PI_HOME/agent/sessions", root / "agent" / "sessions"),
             SearchRoot("local development fallback", Path("data/pi")),
         )
 

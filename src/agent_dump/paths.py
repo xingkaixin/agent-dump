@@ -25,22 +25,42 @@ def _get_env_path(environ: Mapping[str, str], name: str) -> Path | None:
     return Path(value)
 
 
-def _get_data_home(*, home: Path, environ: Mapping[str, str], is_windows: bool) -> Path:
+def resolve_env_path(
+    name: str,
+    default: Path,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> Path:
+    """Resolve one optional environment path with a provider-owned default."""
+    resolved_environ = environ if environ is not None else os.environ
+    return _get_env_path(resolved_environ, name) or default
+
+
+def resolve_data_home(
+    *,
+    home: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+    is_windows: bool | None = None,
+) -> Path:
     """Resolve a platform-specific data home directory."""
-    xdg_data_home = _get_env_path(environ, "XDG_DATA_HOME")
+    resolved_home = home if home is not None else Path.home()
+    resolved_environ = environ if environ is not None else os.environ
+    resolved_is_windows = os.name == "nt" if is_windows is None else is_windows
+
+    xdg_data_home = _get_env_path(resolved_environ, "XDG_DATA_HOME")
     if xdg_data_home is not None:
         return xdg_data_home
 
-    if is_windows:
-        local_app_data = _get_env_path(environ, "LOCALAPPDATA")
+    if resolved_is_windows:
+        local_app_data = _get_env_path(resolved_environ, "LOCALAPPDATA")
         if local_app_data is not None:
             return local_app_data
 
-        app_data = _get_env_path(environ, "APPDATA")
+        app_data = _get_env_path(resolved_environ, "APPDATA")
         if app_data is not None:
             return app_data
 
-    return home / ".local" / "share"
+    return resolved_home / ".local" / "share"
 
 
 def first_existing_search_root(*roots: SearchRoot) -> Path | None:
@@ -54,46 +74,3 @@ def first_existing_search_root(*roots: SearchRoot) -> Path | None:
 def render_search_roots(*roots: SearchRoot) -> tuple[str, ...]:
     """Render labeled search roots for diagnostics."""
     return tuple(root.render() for root in roots)
-
-
-@dataclass(frozen=True)
-class ProviderRoots:
-    """Resolved provider root directories."""
-
-    codex_root: Path
-    claude_root: Path
-    kimi_root: Path
-    opencode_root: Path
-    pi_root: Path
-
-    @classmethod
-    def from_env_or_home(
-        cls,
-        *,
-        home: Path | None = None,
-        environ: Mapping[str, str] | None = None,
-        is_windows: bool | None = None,
-    ) -> "ProviderRoots":
-        """Build provider roots from environment variables and platform defaults."""
-        resolved_home = home if home is not None else Path.home()
-        resolved_environ = environ if environ is not None else os.environ
-        resolved_is_windows = os.name == "nt" if is_windows is None else is_windows
-
-        codex_root = _get_env_path(resolved_environ, "CODEX_HOME") or resolved_home / ".codex"
-        claude_root = _get_env_path(resolved_environ, "CLAUDE_CONFIG_DIR") or resolved_home / ".claude"
-        kimi_root = _get_env_path(resolved_environ, "KIMI_SHARE_DIR") or resolved_home / ".kimi"
-        pi_root = _get_env_path(resolved_environ, "PI_HOME") or resolved_home / ".pi"
-        data_home = _get_data_home(
-            home=resolved_home,
-            environ=resolved_environ,
-            is_windows=resolved_is_windows,
-        )
-        opencode_root = data_home / "opencode"
-
-        return cls(
-            codex_root=codex_root,
-            claude_root=claude_root,
-            kimi_root=kimi_root,
-            opencode_root=opencode_root,
-            pi_root=pi_root,
-        )

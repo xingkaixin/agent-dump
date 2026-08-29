@@ -15,7 +15,6 @@ import pytest
 from agent_dump.agents.base import MessageCountCompleteness, Session
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.diagnostics import print_recoverable_diagnostic
-from agent_dump.paths import ProviderRoots
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
 from agent_dump.text_safety import has_unsafe_line_characters
 
@@ -39,45 +38,16 @@ class TestOpenCodeAgent:
 
         assert result is None
 
-    def test_find_db_path_home_directory(self, tmp_path):
+    def test_find_db_path_home_directory(self, monkeypatch, tmp_path):
         """测试在用户目录找到数据库"""
         agent = OpenCodeAgent()
         opencode_root = tmp_path / ".local" / "share" / "opencode"
         opencode_root.mkdir(parents=True)
         db_path = opencode_root / "opencode.db"
         db_path.touch()
+        monkeypatch.setenv("XDG_DATA_HOME", str(opencode_root.parent))
 
-        roots = ProviderRoots(
-            codex_root=tmp_path / ".codex",
-            claude_root=tmp_path / ".claude",
-            kimi_root=tmp_path / ".kimi",
-            opencode_root=opencode_root,
-            pi_root=tmp_path / ".pi",
-        )
-
-        with mock.patch("agent_dump.agents.opencode.ProviderRoots.from_env_or_home", return_value=roots):
-            result = agent._find_db_path()
-
-        assert result == db_path
-
-    def test_find_db_path_uses_windows_data_root(self, tmp_path):
-        """测试使用 Windows 风格数据目录"""
-        agent = OpenCodeAgent()
-        opencode_root = tmp_path / "LocalAppData" / "opencode"
-        opencode_root.mkdir(parents=True)
-        db_path = opencode_root / "opencode.db"
-        db_path.touch()
-
-        roots = ProviderRoots(
-            codex_root=tmp_path / ".codex",
-            claude_root=tmp_path / ".claude",
-            kimi_root=tmp_path / ".kimi",
-            opencode_root=opencode_root,
-            pi_root=tmp_path / ".pi",
-        )
-
-        with mock.patch("agent_dump.agents.opencode.ProviderRoots.from_env_or_home", return_value=roots):
-            result = agent._find_db_path()
+        result = agent._find_db_path()
 
         assert result == db_path
 
@@ -88,17 +58,9 @@ class TestOpenCodeAgent:
         local_db_path = tmp_path / "data" / "opencode" / "opencode.db"
         local_db_path.parent.mkdir(parents=True)
         local_db_path.touch()
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "missing-data-home"))
 
-        roots = ProviderRoots(
-            codex_root=tmp_path / ".codex",
-            claude_root=tmp_path / ".claude",
-            kimi_root=tmp_path / ".kimi",
-            opencode_root=tmp_path / "missing-opencode-root",
-            pi_root=tmp_path / ".pi",
-        )
-
-        with mock.patch("agent_dump.agents.opencode.ProviderRoots.from_env_or_home", return_value=roots):
-            result = agent._find_db_path()
+        result = agent._find_db_path()
 
         assert result == Path("data/opencode/opencode.db")
 

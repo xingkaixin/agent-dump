@@ -4,82 +4,71 @@
 
 from pathlib import Path
 
-from agent_dump.paths import ProviderRoots, SearchRoot, first_existing_search_root, render_search_roots
+import pytest
+
+from agent_dump.agent_registry import get_supported_agent_locations
+from agent_dump.agents.cursor import CursorAgent
+from agent_dump.paths import (
+    SearchRoot,
+    first_existing_search_root,
+    render_search_roots,
+    resolve_data_home,
+    resolve_env_path,
+)
 
 
-class TestProviderRoots:
-    """测试 ProviderRoots。"""
+class TestPathResolution:
+    """测试通用路径解析原语。"""
 
-    def test_prefers_official_env_roots(self, tmp_path):
-        environ = {
-            "CODEX_HOME": str(tmp_path / "codex-home"),
-            "CLAUDE_CONFIG_DIR": str(tmp_path / "claude-home"),
-            "KIMI_SHARE_DIR": str(tmp_path / "kimi-home"),
-            "PI_HOME": str(tmp_path / "pi-home"),
-            "XDG_DATA_HOME": str(tmp_path / "xdg-data"),
-        }
+    def test_resolve_env_path_prefers_non_empty_value(self, tmp_path: Path) -> None:
+        resolved = resolve_env_path(
+            "AGENT_HOME",
+            tmp_path / "default",
+            environ={"AGENT_HOME": str(tmp_path / "configured")},
+        )
 
-        roots = ProviderRoots.from_env_or_home(
+        assert resolved == tmp_path / "configured"
+
+    def test_resolve_env_path_uses_default_for_empty_value(self, tmp_path: Path) -> None:
+        default = tmp_path / "default"
+
+        assert resolve_env_path("AGENT_HOME", default, environ={"AGENT_HOME": ""}) == default
+
+    def test_resolve_data_home_prefers_xdg(self, tmp_path: Path) -> None:
+        resolved = resolve_data_home(
             home=tmp_path / "home",
-            environ=environ,
+            environ={"XDG_DATA_HOME": str(tmp_path / "xdg-data")},
             is_windows=False,
         )
 
-        assert roots.codex_root == tmp_path / "codex-home"
-        assert roots.claude_root == tmp_path / "claude-home"
-        assert roots.kimi_root == tmp_path / "kimi-home"
-        assert roots.pi_root == tmp_path / "pi-home"
-        assert roots.opencode_root == tmp_path / "xdg-data" / "opencode"
+        assert resolved == tmp_path / "xdg-data"
 
-    def test_ignores_empty_env_values(self, tmp_path):
-        roots = ProviderRoots.from_env_or_home(
-            home=tmp_path / "home",
-            environ={
-                "CODEX_HOME": "",
-                "CLAUDE_CONFIG_DIR": "",
-                "KIMI_SHARE_DIR": "",
-                "PI_HOME": "",
-                "XDG_DATA_HOME": "",
-            },
-            is_windows=False,
-        )
-
-        assert roots.codex_root == tmp_path / "home" / ".codex"
-        assert roots.claude_root == tmp_path / "home" / ".claude"
-        assert roots.kimi_root == tmp_path / "home" / ".kimi"
-        assert roots.pi_root == tmp_path / "home" / ".pi"
-        assert roots.opencode_root == tmp_path / "home" / ".local" / "share" / "opencode"
-
-    def test_uses_local_app_data_on_windows(self, tmp_path):
-        roots = ProviderRoots.from_env_or_home(
+    def test_resolve_data_home_uses_local_app_data_on_windows(self, tmp_path: Path) -> None:
+        resolved = resolve_data_home(
             home=tmp_path / "home",
             environ={"LOCALAPPDATA": str(tmp_path / "LocalAppData")},
             is_windows=True,
         )
 
-        assert roots.opencode_root == Path(tmp_path / "LocalAppData" / "opencode")
+        assert resolved == tmp_path / "LocalAppData"
 
-    def test_uses_app_data_when_local_app_data_missing(self, tmp_path):
-        roots = ProviderRoots.from_env_or_home(
+    def test_resolve_data_home_uses_app_data_when_local_app_data_missing(self, tmp_path: Path) -> None:
+        resolved = resolve_data_home(
             home=tmp_path / "home",
             environ={"APPDATA": str(tmp_path / "AppData")},
             is_windows=True,
         )
 
-        assert roots.opencode_root == Path(tmp_path / "AppData" / "opencode")
+        assert resolved == tmp_path / "AppData"
 
-    def test_uses_home_defaults_without_env(self, tmp_path):
-        roots = ProviderRoots.from_env_or_home(
+    def test_resolve_data_home_uses_home_default(self, tmp_path: Path) -> None:
+        resolved = resolve_data_home(
             home=tmp_path / "home",
             environ={},
             is_windows=False,
         )
 
-        assert roots.codex_root == tmp_path / "home" / ".codex"
-        assert roots.claude_root == tmp_path / "home" / ".claude"
-        assert roots.kimi_root == tmp_path / "home" / ".kimi"
-        assert roots.pi_root == tmp_path / "home" / ".pi"
-        assert roots.opencode_root == tmp_path / "home" / ".local" / "share" / "opencode"
+        assert resolved == tmp_path / "home" / ".local" / "share"
 
 
 class TestSearchRoots:
@@ -100,3 +89,15 @@ class TestSearchRoots:
             f"CODEX_HOME/sessions: {tmp_path / 'codex'}",
             f"local development fallback: {tmp_path / 'data/codex'}",
         )
+
+    def test_supported_locations_use_provider_search_roots(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        root = SearchRoot("platform-specific Cursor database", tmp_path / "state.vscdb")
+        monkeypatch.setattr(CursorAgent, "get_search_roots", lambda _self: (root,))
+
+        locations = get_supported_agent_locations()
+
+        assert f"  - Cursor: {root.render()}" in locations

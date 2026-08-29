@@ -64,7 +64,7 @@ def isolated_provider_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
     """把全部 provider 的路径发现指向临时 home，禁止触达真实用户会话目录。
 
     覆盖三条发现渠道：官方环境变量、Path.home() 派生的默认目录（HOME 生效于
-    ProviderRoots、zcode、cursor 与 config.toml），以及 `data/<agent>` 这个相对
+    各 provider、zcode、cursor 与 config.toml），以及 `data/<agent>` 这个相对
     CWD 的本地开发回退（靠 chdir 到空目录中和）。
     """
     home = tmp_path / "home"
