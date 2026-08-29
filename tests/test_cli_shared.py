@@ -15,6 +15,7 @@ from agent_dump.cli_shared import (
     build_no_agents_found_diagnostic,
     collect_query_matches,
     render_agent_search_roots,
+    scope_session_groups_by_provider,
 )
 from agent_dump.exporting import ExportRunStatus
 from agent_dump.maintenance_workflow import group_sessions_by_time
@@ -98,6 +99,40 @@ def test_diagnostic_search_roots_use_the_base_agent_contract(tmp_path: Path) -> 
 
     assert rendered == (f"Typed Agent: typed root: {tmp_path / 'sessions'}",)
     assert diagnostic.searched_roots == rendered
+
+
+def test_scope_session_groups_filters_requested_providers() -> None:
+    codex = mock.MagicMock(name="codex_agent")
+    codex.name = "codex"
+    kimi = mock.MagicMock(name="kimi_agent")
+    kimi.name = "kimi"
+    codex_session = make_session("codex-1", "Codex")
+    kimi_session = make_session("kimi-1", "Kimi")
+
+    scoped, error = scope_session_groups_by_provider(
+        [(codex, [codex_session]), (kimi, [kimi_session])],
+        agent_names={"kimi"},
+        all_agents=(codex, kimi),
+    )
+
+    assert scoped == [(kimi, [kimi_session])]
+    assert error is None
+
+
+def test_scope_session_groups_returns_shared_diagnostic(tmp_path: Path) -> None:
+    agent = SearchRootAgent((SearchRoot("typed root", tmp_path / "sessions"),))
+
+    scoped, error = scope_session_groups_by_provider(
+        [(agent, [make_session("typed-1", "Typed")])],
+        agent_names={"kimi", "codex"},
+        all_agents=(agent,),
+    )
+
+    assert scoped == []
+    assert error is not None
+    assert error.summary == expect(Keys.DIAG_NO_PROVIDER_IN_SCOPE)
+    assert error.details == ("query providers: codex,kimi",)
+    assert error.searched_roots == (f"Typed Agent: typed root: {tmp_path / 'sessions'}",)
 
 
 class TestParseUri:

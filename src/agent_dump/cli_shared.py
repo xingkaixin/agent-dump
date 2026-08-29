@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from pathlib import Path
 
 from agent_dump.agent_registry import get_supported_agent_locations
@@ -71,6 +71,30 @@ def build_no_agents_found_diagnostic(scanner: AgentScanner) -> DiagnosticError:
             i18n.t(Keys.DIAG_STEP_CHECK_AGENT_DATA),
             i18n.t(Keys.DIAG_STEP_CHECK_ENV_VARS),
             i18n.t(Keys.DIAG_STEP_CHECK_DEV_FALLBACK),
+        ),
+    )
+
+
+def scope_session_groups_by_provider(
+    session_groups: Sequence[tuple[BaseAgent, list[Session]]],
+    *,
+    agent_names: Collection[str] | None,
+    all_agents: Sequence[BaseAgent],
+) -> tuple[list[tuple[BaseAgent, list[Session]]], DiagnosticError | None]:
+    if not agent_names:
+        return list(session_groups), None
+
+    scoped_groups = [(agent, sessions) for agent, sessions in session_groups if agent.name in agent_names]
+    if scoped_groups:
+        return scoped_groups, None
+
+    return [], root_not_found(
+        i18n.t(Keys.DIAG_NO_PROVIDER_IN_SCOPE),
+        searched_roots=render_agent_search_roots(all_agents),
+        details=(f"query providers: {','.join(sorted(agent_names))}",),
+        next_steps=(
+            i18n.t(Keys.DIAG_STEP_CONFIRM_PROVIDERS_HAVE_DATA),
+            i18n.t(Keys.DIAG_STEP_WIDEN_PROVIDERS),
         ),
     )
 

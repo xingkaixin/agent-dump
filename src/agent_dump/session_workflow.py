@@ -7,12 +7,12 @@ from agent_dump.cli_shared import (
     build_no_agents_found_diagnostic,
     collect_query_matches,
     print_diagnostic,
-    render_agent_search_roots,
     resolve_output_base_dir,
+    scope_session_groups_by_provider,
     wrap_runtime_fetch_error,
 )
 from agent_dump.command_plan import InteractiveOperation, ListOperation, SearchOperation, SessionOperation
-from agent_dump.diagnostics import DiagnosticError, print_recoverable_diagnostic, render_diagnostic, root_not_found
+from agent_dump.diagnostics import DiagnosticError, print_recoverable_diagnostic, render_diagnostic
 from agent_dump.exporting import ExportFailure, ExportRunResult, execute_exports
 from agent_dump.i18n import Keys, i18n
 from agent_dump.output_formats import FileOutputFormat, validate_agent_formats
@@ -173,32 +173,21 @@ def _handle_session_modes(
     query_spec = operation.query_spec
 
     scanned_sessions = scanner.get_available_sessions(operation.days)
-    available_agents = [agent for agent, _ in scanned_sessions]
-
-    if not available_agents:
+    if not scanned_sessions:
         # 退 1 而不是 None：这里走的是诊断通道（错误语义），而 --stats / --reindex /
         # URI 模式在同一条件下已经退 1。约定见 README 的 Exit Codes 一节。
         print_diagnostic(build_no_agents_found_diagnostic(scanner))
         return 1
 
-    if query_spec and query_spec.agent_names:
-        available_agents = [agent for agent in available_agents if agent.name in query_spec.agent_names]
-        scanned_sessions = [
-            (agent, sessions) for agent, sessions in scanned_sessions if agent.name in query_spec.agent_names
-        ]
-        if not available_agents:
-            print_diagnostic(
-                root_not_found(
-                    i18n.t(Keys.DIAG_NO_PROVIDER_IN_SCOPE),
-                    searched_roots=render_agent_search_roots(scanner.agents),
-                    details=(f"query providers: {','.join(sorted(query_spec.agent_names))}",),
-                    next_steps=(
-                        i18n.t(Keys.DIAG_STEP_CONFIRM_PROVIDERS_HAVE_DATA),
-                        i18n.t(Keys.DIAG_STEP_WIDEN_PROVIDERS),
-                    ),
-                )
-            )
-            return 1 if isinstance(operation, InteractiveOperation) else 0
+    scanned_sessions, scope_error = scope_session_groups_by_provider(
+        scanned_sessions,
+        agent_names=query_spec.agent_names if query_spec is not None else None,
+        all_agents=scanner.agents,
+    )
+    if scope_error is not None:
+        print_diagnostic(scope_error)
+        return 1 if isinstance(operation, InteractiveOperation) else 0
+    available_agents = [agent for agent, _ in scanned_sessions]
 
     if isinstance(operation, SearchOperation):
         search_spec = operation.query_spec

@@ -88,6 +88,27 @@ class TestStatsMode:
         captured = capsys.readouterr()
         assert "未找到会话" in captured.out or "最近 7 天内未找到会话" in captured.out
 
+    def test_stats_missing_provider_scope_is_not_an_error(self, capsys):
+        operation = StatsOperation(
+            days=7,
+            query_spec=QuerySpec(frozenset({"kimi"}), "bug", None, None, None),
+        )
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [make_session("s1", "Bug")]
+        agent.get_search_roots.return_value = ()
+        scanner = mock.MagicMock()
+        scanner.agents = [agent]
+        scanner.get_available_agents.return_value = [agent]
+        configure_scanner_sessions(scanner)
+
+        with mock.patch("agent_dump.cli.AgentScanner", return_value=scanner):
+            result = handle_stats_mode(operation)
+
+        assert result == 0
+        assert expect_contains(capsys.readouterr().out, Keys.DIAG_NO_PROVIDER_IN_SCOPE)
+
     def test_stats_shows_counts(self, capsys):
         operation = StatsOperation(days=7, query_spec=None)
         session1 = make_session("s1", "Session 1", metadata={"message_count": 10})
