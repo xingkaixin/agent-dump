@@ -28,7 +28,11 @@ from agent_dump.coercion import safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
 from agent_dump.message_filter import filter_messages_for_export
-from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.paths import SearchRoot, resolve_env_path
+
+
+def _codex_root() -> Path:
+    return resolve_env_path("CODEX_HOME", Path.home() / ".codex")
 
 
 class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
@@ -55,9 +59,9 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         return self.base_path.rglob(f"*-{session_id}.jsonl")
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
-        roots = ProviderRoots.from_env_or_home()
+        root = _codex_root()
         return (
-            SearchRoot("CODEX_HOME/sessions", roots.codex_root / "sessions"),
+            SearchRoot("CODEX_HOME/sessions", root / "sessions"),
             SearchRoot("local development fallback", Path("data/codex")),
         )
 
@@ -75,8 +79,7 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
                 return self._titles_cache
 
             titles: dict[str, str] = {}
-            roots = ProviderRoots.from_env_or_home()
-            session_index_path = roots.codex_root / "session_index.jsonl"
+            session_index_path = _codex_root() / "session_index.jsonl"
 
             if session_index_path.exists():
                 try:

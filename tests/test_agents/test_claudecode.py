@@ -17,7 +17,6 @@ from agent_dump.agents.claude_transcript import ClaudeTranscriptDecoder
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
 from agent_dump.i18n import Keys
-from agent_dump.paths import ProviderRoots
 
 
 def write_jsonl(file_path: Path, records: list[dict]) -> None:
@@ -80,16 +79,9 @@ class TestClaudeCodeAgent:
         local_dev_path = tmp_path / "data" / "claudecode"
         local_dev_path.mkdir(parents=True)
 
-        roots = ProviderRoots(
-            codex_root=tmp_path / ".codex",
-            claude_root=tmp_path / "missing-claude-root",
-            kimi_root=tmp_path / ".kimi",
-            opencode_root=tmp_path / ".local" / "share" / "opencode",
-            pi_root=tmp_path / ".pi",
-        )
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "missing-claude-root"))
 
-        with mock.patch("agent_dump.agents.claudecode.ProviderRoots.from_env_or_home", return_value=roots):
-            result = agent._find_base_path()
+        result = agent._find_base_path()
 
         assert result == Path("data/claudecode")
 

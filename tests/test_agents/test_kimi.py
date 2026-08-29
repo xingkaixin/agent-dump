@@ -16,7 +16,6 @@ from agent_dump.agents.base import Session, derive_session_facts
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.message_types import NormalizedSessionStats
-from agent_dump.paths import ProviderRoots
 
 
 def write_metadata(
@@ -96,16 +95,9 @@ class TestKimiAgent:
         local_dev_path = tmp_path / "data" / "kimi"
         local_dev_path.mkdir(parents=True)
 
-        roots = ProviderRoots(
-            codex_root=tmp_path / ".codex",
-            claude_root=tmp_path / ".claude",
-            kimi_root=tmp_path / "missing-kimi-root",
-            opencode_root=tmp_path / ".local" / "share" / "opencode",
-            pi_root=tmp_path / ".pi",
-        )
+        monkeypatch.setenv("KIMI_SHARE_DIR", str(tmp_path / "missing-kimi-root"))
 
-        with mock.patch("agent_dump.agents.kimi.ProviderRoots.from_env_or_home", return_value=roots):
-            result = agent._find_base_path()
+        result = agent._find_base_path()
 
         assert result == Path("data/kimi")
 

@@ -245,7 +245,7 @@ agent-dump/
 │   ├── i18n_keys.py             # 翻译键定义
 │   ├── i18n_zh.py               # 中文翻译目录
 │   ├── message_filter.py        # 消息过滤
-│   ├── paths.py                 # 搜索根路径模型
+│   ├── paths.py                 # 搜索根模型与通用路径解析
 │   ├── prompt_safety.py         # 摘要 prompt 的不可信数据隔离
 │   ├── query_filter.py          # 查询解析与过滤
 │   ├── query_semantics.py       # Query/Search 字面语义与可搜索语料
@@ -478,7 +478,7 @@ collect 模式入口：
 1. 在 `src/agent_dump/agents/<agent_name>.py` 创建 `BaseAgent` 子类。会话以文件形式存储的 provider 应继承 `FileSessionAgent`，只需实现 `_iter_session_files()` 与 `_parse_session_file()`（可选 `_session_file_candidates()` 加速 URI 定位）。
 2. 实现 `is_available()`、`get_sessions()`、`get_session_data()`；若底层能在一次读取中同时确定可用性和会话列表，覆盖 `discover_sessions()` 并让 `get_sessions()` 投影其结果。`scan()` 由 `BaseAgent` 统一通过 `get_sessions(days=None)` 提供（继承 `FileSessionAgent` 时这些发现入口由基类提供）。`get_sessions()` 与 `find_session_by_id()` 必须能在未预先调用 `is_available()` 时直接工作。`export_session()` 由 `BaseAgent` 统一实现，只在需要导出专属变换时覆盖 `_json_export_payload()`；返回的 payload 是当前消费者的隔离副本，可直接变换。
 3. 实现 `get_search_roots()`，让诊断信息显示真实搜索路径。
-4. 在 provider 类上声明 `provider_name` 与 `provider_display_name`，并在 `src/agent_dump/agent_registry.py` 添加 `AgentRegistration`，声明 `factory`、`uri_schemes`、`location_line`；registry 的身份字段直接从 provider 类派生，不得重复填写。若该 provider 的 URI 带路径前缀（如 `codex://threads/<id>`）或 session id 用别的名字（如 Cursor 的 requestId），一并声明 `uri_path_prefixes` 与 `uri_identifier_label`——parse_uri 与 URI 示例都由这些字段驱动，不要在共享模块里加 provider 分支。
+4. 在 provider 类上声明 `provider_name` 与 `provider_display_name`，并在 `src/agent_dump/agent_registry.py` 添加 `AgentRegistration`，声明 `factory`、`uri_schemes`；registry 的身份字段直接从 provider 类派生，路径展示也必须从 provider 的 `get_search_roots()` 生成，不得重复填写。若该 provider 的 URI 带路径前缀（如 `codex://threads/<id>`）或 session id 用别的名字（如 Cursor 的 requestId），一并声明 `uri_path_prefixes` 与 `uri_identifier_label`——parse_uri 与 URI 示例都由这些字段驱动，不要在共享模块里加 provider 分支。
 5. 在 `src/agent_dump/agents/__init__.py` 导出 provider。
 6. 若该 provider 属于稳定库 API，在 `src/agent_dump/__init__.py` 导出，并更新本文件第 2 节、README 与 `tests/test_version.py`。
 7. 为 provider 增加 `tests/test_agents/test_<agent>.py`，并在 `tests/test_agents/test_contracts.py` 补充合约用例。

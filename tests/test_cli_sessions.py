@@ -1,6 +1,7 @@
 """Session listing and interactive selection CLI tests."""
 
 from pathlib import Path
+import sys
 from unittest import mock
 
 from cli_test_support import (
@@ -32,8 +33,11 @@ class TestMain:
             assert "CODEX_HOME/sessions" in captured.out
             assert "KIMI_SHARE_DIR/sessions" in captured.out
             assert "CLAUDE_CONFIG_DIR/projects" in captured.out
-            assert "XDG_DATA_HOME/opencode/opencode.db" in captured.out
-            assert ".zcode/cli/db/db.sqlite" in captured.out
+            assert "XDG/LOCALAPPDATA opencode.db" in captured.out
+            if sys.platform.startswith(("darwin", "win")):
+                assert ".zcode/cli/db/db.sqlite" in captured.out
+            else:
+                assert "ZCode:" not in captured.out
 
     def test_main_list_mode(self, capsys):
         """测试列表模式"""

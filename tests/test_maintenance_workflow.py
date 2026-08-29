@@ -324,7 +324,6 @@ class TestProvidersMode:
         registration = AgentRegistration(
             factory=OpenCodeAgent,
             uri_schemes=("opencode",),
-            location_line="",
         )
 
         roots = (
@@ -351,7 +350,6 @@ class TestProvidersMode:
         registration = AgentRegistration(
             factory=PoisonAgent,
             uri_schemes=(poison,),
-            location_line="",
         )
         roots = (SearchRoot(poison, tmp_path / poison),)
 

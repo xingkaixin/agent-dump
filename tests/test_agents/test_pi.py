@@ -11,7 +11,6 @@ import pytest
 from agent_dump.agents.base import Session
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT
 from agent_dump.agents.pi import PiAgent
-from agent_dump.paths import ProviderRoots
 
 
 def _write_jsonl(path: Path, records: list[dict]) -> None:
@@ -48,16 +47,9 @@ class TestPiAgent:
         local_dev_path = tmp_path / "data" / "pi"
         local_dev_path.mkdir(parents=True)
 
-        roots = ProviderRoots(
-            codex_root=tmp_path / ".codex",
-            claude_root=tmp_path / ".claude",
-            kimi_root=tmp_path / ".kimi",
-            opencode_root=tmp_path / ".local" / "share" / "opencode",
-            pi_root=tmp_path / "missing-pi-root",
-        )
+        monkeypatch.setenv("PI_HOME", str(tmp_path / "missing-pi-root"))
 
-        with mock.patch("agent_dump.agents.pi.ProviderRoots.from_env_or_home", return_value=roots):
-            result = agent._find_base_path()
+        result = agent._find_base_path()
 
         assert result == Path("data/pi")
 

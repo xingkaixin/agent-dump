@@ -40,7 +40,7 @@ from agent_dump.agents.title_fallback import basename_title, resolve_session_tit
 from agent_dump.coercion import safe_epoch_datetime, safe_int
 from agent_dump.diagnostics import source_missing
 from agent_dump.i18n import Keys, i18n
-from agent_dump.paths import ProviderRoots, SearchRoot
+from agent_dump.paths import SearchRoot, resolve_env_path
 from agent_dump.private_files import copy_private_file, ensure_output_dir
 
 
@@ -78,9 +78,9 @@ class KimiAgent(FileSessionAgent):
         return created_at is not None and created_at >= cutoff
 
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
-        roots = ProviderRoots.from_env_or_home()
+        root = resolve_env_path("KIMI_SHARE_DIR", Path.home() / ".kimi")
         return (
-            SearchRoot("KIMI_SHARE_DIR/sessions", roots.kimi_root / "sessions"),
+            SearchRoot("KIMI_SHARE_DIR/sessions", root / "sessions"),
             SearchRoot("local development fallback", Path("data/kimi")),
         )
 

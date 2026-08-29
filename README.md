@@ -473,7 +473,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── i18n_keys.py        # Translation key definitions
 │       ├── i18n_zh.py          # Chinese translation catalog
 │       ├── message_filter.py   # Shared message filtering
-│       ├── paths.py            # Search root models
+│       ├── paths.py            # Search roots and generic path resolution
 │       ├── private_files.py     # Owner-only permissions for tool-created files
 │       ├── prompt_safety.py    # Safe summary request composition and typed data envelopes
 │       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch

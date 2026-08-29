@@ -18,7 +18,6 @@ class AgentRegistration:
 
     factory: type[BaseAgent]
     uri_schemes: tuple[str, ...]
-    location_line: str
     # 该 provider 额外接受的 URI 路径前缀，如 codex 的 `codex://threads/<id>`。
     # 之前这个形状硬编码在 uri_support.parse_uri 与 get_supported_uri_examples 里，
     # 违反「provider schema 只在对应 Agent 内处理」，也让 registry 不是它被文档化的单一真源。
@@ -39,39 +38,32 @@ AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
     AgentRegistration(
         factory=OpenCodeAgent,
         uri_schemes=("opencode",),
-        location_line="  - OpenCode: XDG_DATA_HOME/opencode/opencode.db or ~/.local/share/opencode/opencode.db",
     ),
     AgentRegistration(
         factory=ZCodeAgent,
         uri_schemes=("zcode",),
-        location_line="  - ZCode: ~/.zcode/cli/db/db.sqlite on macOS or %USERPROFILE%\\.zcode\\cli\\db\\db.sqlite on Windows",
     ),
     AgentRegistration(
         factory=CodexAgent,
         uri_schemes=("codex",),
         uri_path_prefixes=("threads/",),
-        location_line="  - Codex: CODEX_HOME/sessions or ~/.codex/sessions",
     ),
     AgentRegistration(
         factory=KimiAgent,
         uri_schemes=("kimi",),
-        location_line="  - Kimi: KIMI_SHARE_DIR/sessions or ~/.kimi/sessions",
     ),
     AgentRegistration(
         factory=ClaudeCodeAgent,
         uri_schemes=("claude",),
-        location_line="  - Claude Code: CLAUDE_CONFIG_DIR/projects or ~/.claude/projects",
     ),
     AgentRegistration(
         factory=CursorAgent,
         uri_schemes=("cursor",),
         uri_identifier_label="<requestid>",
-        location_line="  - Cursor: ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
     ),
     AgentRegistration(
         factory=PiAgent,
         uri_schemes=("pi",),
-        location_line="  - Pi: PI_HOME/agent/sessions or ~/.pi/agent/sessions",
     ),
 )
 
@@ -88,9 +80,11 @@ def get_uri_scheme_map() -> dict[str, str]:
 
 def get_supported_agent_locations() -> list[str]:
     """Return storage location help text for all supported agents."""
-    lines = [registration.location_line for registration in AGENT_REGISTRATIONS]
-    lines.append("  - Local development fallback: data/opencode, data/codex, data/kimi, data/claudecode, data/pi")
-    return lines
+    return [
+        f"  - {registration.display_name}: {root.render()}"
+        for registration in AGENT_REGISTRATIONS
+        for root in registration.factory().get_search_roots()
+    ]
 
 
 def get_uri_path_prefixes() -> dict[str, tuple[str, ...]]:
