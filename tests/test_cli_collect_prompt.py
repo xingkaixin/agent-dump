@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 import json
 from pathlib import Path
 import subprocess
+import sys
 from typing import Any
 from unittest import mock
 
@@ -13,13 +14,80 @@ import pytest
 
 from agent_dump.agents.base import BaseAgent
 from agent_dump.cli import main
+from agent_dump.collect_handoff import MANIFEST_END_MARKER
 from agent_dump.collect_sessions import collect_entries
 from agent_dump.command_plan import CollectOperation, CommandRequest, build_command_plan
-from agent_dump.config import CollectConfig, ConfigurationParseError, ShortcutConfig
+from agent_dump.config import CollectConfig, ConfigurationParseError, ShortcutConfig, get_config_path
 
 
 def _prompt_records(prompt: str) -> list[dict[str, Any]]:
     return [json.loads(json.loads(line)["content"]) for line in prompt.splitlines() if line.startswith("{")]
+
+
+def test_large_shortcut_prompt_is_complete_when_stdout_is_saved_directly(
+    codex_session_tree: dict[str, object], tmp_path: Path
+) -> None:
+    source_path = Path(str(codex_session_tree["session_file"]))
+    original = source_path.read_text(encoding="utf-8")
+    original_id = str(codex_session_tree["session_id"])
+    session_ids = {original_id}
+    for index in range(208):
+        identity = f"019c213e-c251-73a3-af66-{index:012x}"
+        source_path.with_name(source_path.name.replace(original_id, identity)).write_text(
+            original.replace(original_id, identity), encoding="utf-8"
+        )
+        session_ids.add(identity)
+    config = get_config_path()
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(
+        '[shortcut.daily]\nparams = ["date"]\nargs = ["--collect", "--since", "{date}", "--until", "{date}"]\n',
+        encoding="utf-8",
+    )
+    report_path = tmp_path / "report.md"
+    task_dir = tmp_path / "handoff"
+    task_dir.mkdir(mode=0o700)
+    prompt_path = task_dir / "prompt.md"
+    diagnostics_path = task_dir / "diagnostics.txt"
+    argv = [
+        sys.executable,
+        "-m",
+        "agent_dump",
+        "--shortcut",
+        "daily",
+        "20260720",
+        "--emit-prompt",
+        "--save",
+        str(report_path),
+        "--lang",
+        "zh",
+    ]
+
+    with prompt_path.open("w", encoding="utf-8") as stdout, diagnostics_path.open("w", encoding="utf-8") as stderr:
+        result = subprocess.run(  # noqa: S603 - Runs the CLI only against isolated provider fixtures.
+            argv, cwd=tmp_path, stdout=stdout, stderr=stderr, timeout=30
+        )
+
+    assert result.returncode == 0, diagnostics_path.read_text(encoding="utf-8")
+    prompt = prompt_path.read_text(encoding="utf-8")
+    context, *entries = _prompt_records(prompt)
+    assert context["session_count"] == len(entries) == 209
+    assert context["report_path"] == str(report_path)
+    assert {entry["uri"] for entry in entries} == {f"codex://{identity}" for identity in session_ids}
+    assert all(entry["read_argv"][-3:] == [entry["uri"], "--format", "print"] for entry in entries)
+    envelopes = [json.loads(line) for line in prompt.splitlines() if line.startswith("{")]
+    assert all(envelope["length"] == len(envelope["content"]) for envelope in envelopes)
+    assert all(envelope["source"] == entry["uri"] for envelope, entry in zip(envelopes[1:], entries, strict=True))
+    assert prompt.splitlines()[-1] == MANIFEST_END_MARKER
+    assert prompt.splitlines().count(MANIFEST_END_MARKER) == 1
+    assert expect(Keys.COLLECT_PROGRESS_START, since="2026-07-20", until="2026-07-20") not in prompt
+    assert expect_contains(
+        diagnostics_path.read_text(encoding="utf-8"),
+        Keys.COLLECT_PROGRESS_START,
+        since="2026-07-20",
+        until="2026-07-20",
+    )
+    assert not report_path.exists()
+    assert source_path.read_text(encoding="utf-8") == original
 
 
 @pytest.mark.parametrize("entry_point", ["direct", "shortcut_args", "shortcut_trailing"])
