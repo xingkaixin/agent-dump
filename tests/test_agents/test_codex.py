@@ -13,7 +13,9 @@ import pytest
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
+from agent_dump.collect_events import extract_collect_events
 from agent_dump.diagnostics import print_recoverable_diagnostic
+from agent_dump.rendering import render_session_text
 
 PATCH_INPUT = """*** Begin Patch
 *** Add File: /workspace/new.py
@@ -762,7 +764,12 @@ class TestCodexAgent:
                 "payload": {
                     "type": "message",
                     "role": "user",
-                    "content": [{"type": "input_text", "text": "<environment_context>\n  <cwd>/tmp</cwd>"}],
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "<environment_context>\n  <cwd>/tmp</cwd>\n</environment_context>",
+                        }
+                    ],
                 },
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
@@ -804,6 +811,7 @@ class TestCodexAgent:
 
         messages = exported["messages"]
         assert all(message["role"] != "developer" for message in messages)
+        assert "System instruction" not in json.dumps(messages)
         assert all(
             "<environment_context>" not in part.get("text", "")
             for message in messages
@@ -814,6 +822,78 @@ class TestCodexAgent:
             for message in messages
             for part in message.get("parts", [])
         )
+
+    @pytest.mark.parametrize(
+        ("text", "is_context"),
+        [
+            ("Explain the XML <instructions> tag.", False),
+            ("Update the AGENTS.md instructions for example.", False),
+            ("```xml\n<instructions>example</instructions>\n```", False),
+            ("> <environment_context>quoted</environment_context>", False),
+            ("    <instructions>example XML</instructions>", False),
+            ("\t<instructions>example XML</instructions>", False),
+            ("<instructions>context</instructions>\n    <instructions>example XML</instructions>", False),
+            ("<environment_context>example", False),
+            ("<instructions>context</instructions>\nPlease fix the bug.", False),
+            ("<instructions>one</instructions>\nMy question\n<instructions>two</instructions>", False),
+            ("<environment_context>\n<cwd>/tmp</cwd>\n</environment_context>", True),
+            ("# AGENTS.md instructions for /workspace\n\n<INSTRUCTIONS>rules</INSTRUCTIONS>", True),
+            ("<instructions>rules</instructions>\n<environment_context>cwd</environment_context>", True),
+            ("<permissions instructions>rules</permissions instructions>", True),
+            ("<collaboration_mode>Default</collaboration_mode>", True),
+        ],
+    )
+    def test_context_classification_is_shared_by_export_projections(
+        self, tmp_path: Path, text: str, is_context: bool
+    ) -> None:
+        source = tmp_path / "context.jsonl"
+        source.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        now = datetime.now(timezone.utc)
+        session = Session("context", "Context", now, now, source, {})
+        agent = CodexAgent()
+
+        data = agent.get_session_data(session)
+        markdown = render_session_text("codex://context", data)
+        events, _ = extract_collect_events(data)
+        exported = json.loads(agent.export_session(session, tmp_path / "out").read_text(encoding="utf-8"))
+
+        assert data["messages"][0]["role"] == ("developer" if is_context else "user")
+        assert (text.strip() in markdown) is not is_context
+        assert bool(exported["messages"]) is not is_context
+        assert any(event.role == "user" for event in events) is not is_context
+        if not is_context:
+            assert exported["messages"][0]["parts"][0]["text"] == text
+
+    def test_context_with_nontext_content_remains_user_input(self) -> None:
+        from agent_dump.agents.codex_transcript import CodexTranscriptDecoder
+
+        decoder = CodexTranscriptDecoder()
+        state = decoder.new_state()
+        decoder.append_record(
+            state,
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "<instructions>example</instructions>"},
+                        {"type": "input_image", "image_url": "data:image/png;base64,example"},
+                    ],
+                },
+            },
+        )
+
+        assert decoder.finish(state)[0]["role"] == "user"
 
     def test_get_sessions_skips_files_older_than_cutoff_without_parsing(self, tmp_path):
         """测试 mtime 早于 cutoff 的文件不进入解析"""
@@ -1808,7 +1888,10 @@ class TestCodexAgent:
         assert message["tool_call_id"] == "call-patch-404"
         assert message["parts"] == [{"type": "text", "text": "orphan custom output", "time_created": 1767225600000}]
 
-    def test_plan_part_merges_rejected_user_response(self, tmp_path):
+    @pytest.mark.parametrize(
+        "feedback", ["不行，先别做这个。", "Keep the <instructions> example in the documentation."]
+    )
+    def test_plan_part_merges_rejected_user_response(self, tmp_path: Path, feedback: str) -> None:
         """测试 plan 会合并后续拒绝 user 响应，并移除该 user 消息"""
         agent = CodexAgent()
         session_file = tmp_path / "test-plan-reject.jsonl"
@@ -1833,7 +1916,7 @@ class TestCodexAgent:
                 "payload": {
                     "type": "message",
                     "role": "user",
-                    "content": [{"type": "input_text", "text": "不行，先别做这个。"}],
+                    "content": [{"type": "input_text", "text": feedback}],
                 },
             },
         ]
@@ -1855,7 +1938,7 @@ class TestCodexAgent:
         assert plan_part == {
             "type": "plan",
             "input": "# 方案\n\n先改 parser",
-            "output": "不行，先别做这个。",
+            "output": feedback,
             "approval_status": "fail",
             "time_created": 1767225600000,
         }
@@ -2000,7 +2083,14 @@ class TestCodexAgent:
         assert second_plan["approval_status"] == "success"
         assert second_plan["output"] is None
 
-    def test_injected_user_context_is_not_used_as_plan_approval(self, tmp_path):
+    @pytest.mark.parametrize(
+        ("role", "text"),
+        [
+            ("user", "<environment_context>\n<cwd>/tmp</cwd>\n</environment_context>"),
+            ("developer", "Continue following the developer instructions."),
+        ],
+    )
+    def test_injected_user_context_is_not_used_as_plan_approval(self, tmp_path: Path, role: str, text: str) -> None:
         """测试注入上下文 user 不参与 plan 审批"""
         agent = CodexAgent()
         session_file = tmp_path / "test-plan-context.jsonl"
@@ -2019,8 +2109,8 @@ class TestCodexAgent:
                 "timestamp": "2026-01-01T00:00:01Z",
                 "payload": {
                     "type": "message",
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": "<environment_context>\n  <cwd>/tmp</cwd>"}],
+                    "role": role,
+                    "content": [{"type": "input_text", "text": text}],
                 },
             },
             {
@@ -2050,7 +2140,7 @@ class TestCodexAgent:
         plan_part = result["messages"][0]["parts"][0]
         assert plan_part["approval_status"] == "fail"
         assert plan_part["output"] is None
-        assert result["messages"][1]["role"] == "user"
+        assert result["messages"][1]["role"] == "developer"
 
     def test_export_session_converts_skill_user_message_to_tool_message(self, tmp_path):
         """测试 JSON 导出时 skill user 消息会转换为 assistant tool 消息"""

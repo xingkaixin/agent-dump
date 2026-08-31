@@ -14,12 +14,14 @@ from agent_dump.message_filter import (
         "<environment_context>",
         "<permissions instructions>",
         "<collaboration_mode>",
+        "<instructions>user-authored XML</instructions>",
+        "# AGENTS.md instructions for /workspace\n<instructions>quoted rules</instructions>",
     ],
 )
-def test_filters_each_injected_context_marker(marker: str) -> None:
+def test_preserves_user_messages_containing_context_markers(marker: str) -> None:
     message = {"role": "USER", "parts": [{"type": "text", "text": marker}]}
 
-    assert should_filter_message_for_export(message) is True
+    assert should_filter_message_for_export(message) is False
 
 
 @pytest.mark.parametrize(
@@ -31,7 +33,7 @@ def test_filters_each_injected_context_marker(marker: str) -> None:
         ({"role": "user", "parts": []}, False),
     ],
 )
-def test_filters_only_developer_and_injected_user_messages(message: dict[str, object], expected: bool) -> None:
+def test_filters_only_provider_identified_context(message: dict[str, object], expected: bool) -> None:
     assert should_filter_message_for_export(message) is expected
 
 
