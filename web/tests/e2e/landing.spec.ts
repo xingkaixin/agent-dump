@@ -32,6 +32,27 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const locale of locales) {
+  test(`${locale.name} landing page fits a narrow viewport`, async ({ page }) => {
+    for (const width of [360, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(locale.path);
+
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      const boxes = await page
+        .locator("#hero h1, #hero [role='img'], #install code, #install button")
+        .evaluateAll((elements) =>
+          elements.map((element) => ({
+            left: element.getBoundingClientRect().left,
+            right: element.getBoundingClientRect().right,
+          })),
+        );
+      for (const box of boxes) {
+        expect(box.left).toBeGreaterThanOrEqual(0);
+        expect(box.right).toBeLessThanOrEqual(width);
+      }
+    }
+  });
+
   test(`${locale.name} landing page interactions survive hydration`, async ({ context, page }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(locale.path);
