@@ -576,6 +576,7 @@ git push origin v{version}
 - 仅匹配 `vX.Y.Z` 的标签会触发统一发布流水线
 - 发布包含 PyPI 制品、GitHub Release 资产和 `@agent-dump/cli` npm 包
 - 同一版本的发布可以安全重试：字节一致的 registry 制品会跳过，已存在但内容不同则失败
+- npm 发布会确认每个包已可下载且完整性校验一致后再继续，所有原生平台包就绪后才发布 CLI 主包
 - npm CLI 包在 `npm`/`npx` 安装阶段会下载并校验匹配的原生二进制
 - PyPI 发布使用 GitHub `release` 环境中的环境级 secret `UV_PUBLISH_TOKEN`
 - 每个 `@agent-dump/*` npm 包均使用绑定到本仓库、`release.yml` 与 GitHub `release` 环境的

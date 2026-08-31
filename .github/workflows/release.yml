@@ -246,9 +246,14 @@ jobs:
 
       - name: Smoke test npx package
         shell: bash
+        env:
+          npm_config_yes: "true"
+          npm_config_prefer_online: "true"
+          npm_config_foreground_scripts: "true"
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           for attempt in 1 2 3 4 5; do
+            echo "Testing npx @agent-dump/cli@${VERSION} (${attempt}/5)"
             if npx @agent-dump/cli@"${VERSION}" --help; then
               exit 0
             fi
@@ -272,9 +277,12 @@ jobs:
 
       - name: Smoke test bunx package
         shell: bash
+        env:
+          npm_config_prefer_online: "true"
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           for attempt in 1 2 3 4 5; do
+            echo "Testing bunx @agent-dump/cli@${VERSION} (${attempt}/5)"
             if bunx @agent-dump/cli@"${VERSION}" --help; then
               exit 0
             fi
