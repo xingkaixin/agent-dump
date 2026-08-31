@@ -578,6 +578,7 @@ git push origin v{version}
 - Only tags matching `vX.Y.Z` trigger the unified release pipeline
 - Release publishes PyPI artifacts, GitHub release assets, and npm packages for `@agent-dump/cli`
 - Retrying the same release skips byte-identical registry artifacts and fails if an existing version or asset differs
+- npm publishing waits until each package is downloadable with the expected integrity before proceeding to the next package; native packages precede the CLI wrapper
 - The npm CLI package installs the matching native binary during `npm`/`npx` installation and verifies its checksum
 - PyPI publishing uses `UV_PUBLISH_TOKEN`, stored as an environment secret in the GitHub `release` environment
 - npm publishing uses Trusted Publisher/OIDC for every `@agent-dump/*` package, bound to this repository,
