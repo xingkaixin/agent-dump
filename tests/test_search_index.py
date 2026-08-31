@@ -136,6 +136,37 @@ def test_content_version_refreshes_unchanged_legacy_tool_sessions(tmp_path):
     assert refreshed.update(agent, [session]) == (0, 0)
 
 
+def test_content_version_refreshes_unchanged_mixed_cjk_sessions(tmp_path: Path) -> None:
+    source = tmp_path / "source.txt"
+    source.write_text("OAuth认证失败", encoding="utf-8")
+    original_stat = source.stat()
+    session = make_session("mixed-cjk", "Title", source)
+    agent = DummyAgent(session_data={session.id: {"messages": [{"role": "user", "content": "OAuth认证失败"}]}})
+    db_path = tmp_path / "index.db"
+    index = SearchIndex(db_path)
+    assert index.update(agent, [session]) == (1, 0)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("UPDATE sessions_fts SET content = ?", ("OAuth认 证 失 败",))
+        conn.execute("PRAGMA user_version = 1")
+        conn.commit()
+        assert conn.execute(
+            "SELECT COUNT(*) FROM sessions_fts WHERE sessions_fts MATCH ?", ('"认 证"',)
+        ).fetchone() == (0,)
+    finally:
+        conn.close()
+
+    refreshed = SearchIndex(db_path)
+    assert refreshed.update(agent, [session]) == (1, 0)
+    assert [(result.session_id, result.snippet) for result in refreshed.search("认证")] == [
+        (session.id, "OAuth**认证**失败")
+    ]
+    assert refreshed.update(agent, [session]) == (0, 0)
+    assert agent.data_reads == 2
+    assert source.read_text(encoding="utf-8") == "OAuth认证失败"
+    assert source.stat().st_mtime_ns == original_stat.st_mtime_ns
+
+
 @pytest.mark.parametrize("reverse_providers", [False, True])
 @pytest.mark.parametrize("limit", [1, None])
 def test_cross_provider_ranking_is_stable_from_the_first_search(tmp_path, reverse_providers, limit):
@@ -747,6 +778,41 @@ class TestSearchIndex:
         results = index.search("修复问题")
         assert results == []
 
+    @pytest.mark.parametrize("mode", list(TextQueryMode))
+    @pytest.mark.parametrize("field", ["title", "content"])
+    def test_cjk_search_preserves_adjacent_text_and_original_snippets(
+        self, tmp_path: Path, mode: TextQueryMode, field: str
+    ) -> None:
+        texts = {
+            "ascii-prefix": "OAuth认证失败",
+            "ascii-suffix": "更新认证API",
+            "digits": "2认证3",
+            "unicode-letters": "é认证Ω",
+            "combining-marks": "e\u0301认证\u0301x",
+            "kana": "の认证テ",
+            "emoji": "emoji🎉认证🔥",
+            "existing-spaces": "OAuth 认证 API",
+        }
+        corpus = {**texts, "nonliteral": "认 证"}
+        sessions = [
+            make_session(session_id, text if field == "title" else "Title", tmp_path / f"{session_id}.jsonl")
+            for session_id, text in corpus.items()
+        ]
+        agent = DummyAgent(
+            session_data={
+                session_id: {"messages": [{"role": "user", "content": text if field == "content" else "Body"}]}
+                for session_id, text in corpus.items()
+            }
+        )
+        index = SearchIndex(tmp_path / "index.db")
+        index.update(agent, sessions)
+
+        results = index.search(TextQuery.parse("认证", mode))
+
+        assert {result.session_id: result.snippet for result in results} == {
+            session_id: text.replace("认证", "**认证**") for session_id, text in texts.items()
+        }
+
     def test_search_cjk_does_not_join_unrelated_characters(self, tmp_path):
         index = SearchIndex(tmp_path / "index.db")
         agent = DummyAgent(
@@ -949,43 +1015,29 @@ class TestQueryFilterIntegration:
         assert "FORGED" in warning
 
 
-def _legacy_preprocess_for_unicode61(text: str) -> str:
-    """AD-120 前的逐字符实现，作为正则改写的等价性基准。"""
-    result: list[str] = []
-    prev_was_cjk = False
-    for char in text:
-        is_cjk = "一" <= char <= "鿿"
-        if prev_was_cjk and is_cjk:
-            result.append(" ")
-        result.append(char)
-        prev_was_cjk = is_cjk
-    return "".join(result)
-
-
 class TestUnicode61Preprocessing:
-    """AD-120：逐字符循环改零宽断言正则，必须逐字节等价。"""
+    """Isolate CJK tokens without changing existing whitespace or other text."""
 
     @pytest.mark.parametrize(
-        "text",
+        ("text", "expected"),
         [
-            "",
-            "修",
-            "修复认证",
-            "abc修复def",
-            "修a复",
-            "修 复",
-            "fix 认证 timeout 超时问题",
-            "混合ASCII与中文123测试",
-            "emoji🎉不受影响的中文",
-            "换行\n分隔的中文\t制表",
-            "日本語のテキスト",  # 平假名/片假名不在 CJK 统一表意区间内
+            ("", ""),
+            ("修", "修"),
+            ("修复认证", "修 复 认 证"),
+            ("abc修复def", "abc 修 复 def"),
+            ("修a复", "修 a 复"),
+            ("修 复", "修 复"),
+            ("fix 认证 timeout 超时问题", "fix 认 证 timeout 超 时 问 题"),
+            ("混合ASCII与中文123测试", "混 合 ASCII 与 中 文 123 测 试"),
+            ("emoji🎉不受影响的中文", "emoji🎉 不 受 影 响 的 中 文"),
+            ("换行\n分隔的中文\t制表", "换 行\n分 隔 的 中 文\t制 表"),
+            ("日本語のテキスト", "日 本 語 のテキスト"),
         ],
     )
-    def test_matches_legacy_char_loop(self, text):
-        assert _preprocess_for_unicode61(text) == _legacy_preprocess_for_unicode61(text)
+    def test_preserves_text_while_separating_cjk_tokens(self, text: str, expected: str) -> None:
+        assert _preprocess_for_unicode61(text) == expected
 
-    def test_inserts_space_between_adjacent_cjk_only(self):
-        assert _preprocess_for_unicode61("修复认证") == "修 复 认 证"
+    def test_leaves_non_cjk_text_unchanged(self) -> None:
         assert _preprocess_for_unicode61("abc") == "abc"
 
 
