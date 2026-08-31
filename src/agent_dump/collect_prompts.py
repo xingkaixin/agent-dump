@@ -13,8 +13,11 @@ from agent_dump.collect_models import (
 )
 from agent_dump.collect_progress import truncate_log_preview
 from agent_dump.collect_summary import serialize_summary_payload
+from agent_dump.i18n import Keys, i18n
 from agent_dump.prompt_safety import UntrustedData, compose_summary_prompt
 from agent_dump.time_utils import get_local_timezone, to_local_datetime
+
+FINAL_PROMPT_CHAR_BUDGET = 64000
 
 
 def build_collect_chunk_prompt(
@@ -216,27 +219,24 @@ def build_collect_final_prompt(
     if has_truncated:
         lines.append("注意：部分 session 在事件提取阶段达到预算上限，最终结论可能遗漏低优先级细节。")
 
-    data = [
+    lines.append("按各组的日期、项目和会话来源归纳，不得把一组事实归到另一组。")
+    data = tuple(
         UntrustedData(
             kind="untrusted_derived_summary",
-            source="collect://final/aggregate",
-            body=serialize_summary_payload(aggregate.summary_data),
+            source=f"collect://final/group/{index}",
+            body=json.dumps(
+                {
+                    "date": group.date_value.isoformat(),
+                    "project_directory": group.project_directory,
+                    "session_uris": group.session_uris,
+                    "summary": group.summary_data,
+                },
+                ensure_ascii=False,
+            ),
         )
-    ]
-    data.extend(
-        UntrustedData(
-            kind="date_summary_bucket",
-            source=f"collect://final/date/{index}",
-            body=json.dumps({"bucket": bucket, "values": values}, ensure_ascii=False),
-        )
-        for index, (bucket, values) in enumerate(aggregate.date_summaries.items(), start=1)
+        for index, group in enumerate(aggregate.groups, start=1)
     )
-    data.extend(
-        UntrustedData(
-            kind="project_summary_bucket",
-            source=f"collect://final/project/{index}",
-            body=json.dumps({"bucket": bucket, "values": values}, ensure_ascii=False),
-        )
-        for index, (bucket, values) in enumerate(aggregate.project_summaries.items(), start=1)
-    )
-    return compose_summary_prompt(lines, data=tuple(data))
+    prompt = compose_summary_prompt(lines, data=data)
+    if len(prompt) > FINAL_PROMPT_CHAR_BUDGET:
+        raise ValueError(i18n.t(Keys.COLLECT_FINAL_INPUT_TOO_LARGE, limit=FINAL_PROMPT_CHAR_BUDGET))
+    return prompt

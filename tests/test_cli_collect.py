@@ -2,6 +2,7 @@
 
 import argparse
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 from unittest import mock
 
@@ -32,6 +33,7 @@ from agent_dump.collect_models import (
     TreeReductionProgress,
     WriteOutputProgress,
 )
+from agent_dump.collect_prompts import FINAL_PROMPT_CHAR_BUDGET
 from agent_dump.collect_workflow import resolve_collect_save_path, show_collect_progress
 from agent_dump.command_plan import (
     CollectOperation,
@@ -80,6 +82,36 @@ def test_collect_rejects_unsafe_config_before_discovery_or_requests(
     chunk_request.assert_not_called()
     final_request.assert_not_called()
     assert expect_contains(capsys.readouterr().out, Keys.COLLECT_CONFIG_UNSAFE, field=invalid_field)
+
+
+def test_collect_rejects_oversized_final_input_before_request(
+    codex_session_tree: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        '[ai]\nprovider="openai"\nbase_url="https://example.invalid"\nmodel="test"\napi_key="test"\n'
+        "[logging]\nenabled=false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("agent_dump.config.get_config_path", lambda: config_path)
+    monkeypatch.setattr("sys.argv", ["agent-dump", "--collect", "-since", "20260720", "-until", "20260720"])
+
+    with (
+        mock.patch(
+            "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
+            return_value=json.dumps({"topics": ["x" * FINAL_PROMPT_CHAR_BUDGET]}),
+        ) as chunk_request,
+        mock.patch("agent_dump.cli.request_summary_from_llm") as final_request,
+    ):
+        result = main()
+
+    assert result == 1
+    chunk_request.assert_called()
+    final_request.assert_not_called()
+    assert expect_contains(capsys.readouterr().out, Keys.COLLECT_FINAL_INPUT_TOO_LARGE, limit=FINAL_PROMPT_CHAR_BUDGET)
 
 
 class TestMain:

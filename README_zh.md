@@ -289,7 +289,8 @@ uv run agent-dump --shortcut ob 20260408
 
 # 说明：--collect 会先把每条 session 转成高信号事件流，按预算切 chunk，
 #       为每个 chunk 请求固定 JSON 结构摘要，再做 session 级 deterministic merge，
-#       最后通过 tree reduction 聚合结构化结果，再交给 Markdown prompt。
+#       最后在同一日期/项目内归并（insight 按 session），保留归属后生成 Markdown。
+#       最终输入超过 64,000 字符时需要缩小日期范围或查询条件，不会静默丢弃来源。
 # 说明：collect 日期优先级为显式 -since/-until，其次显式 -days，最后缺省为当天。
 # 说明：--collect --dry-run 会完成扫描、查询过滤和 chunk planning，并输出 provider 分布、
 #       session 数、chunk 数、并发配置、日期范围和保存路径预览。
