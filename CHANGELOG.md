@@ -4,6 +4,55 @@
 
 ## [Unreleased]
 
+## [0.15.3] - 2026-08-31
+
+### Added
+
+- Add visit analytics tracking via Umami to the product landing page
+
+### Fixed
+
+- **Search and query correctness**
+  - Isolate CJK tokens at mixed-text boundaries so FTS5 search indexing and snippet extraction accurately segment Chinese mixed with English or punctuation
+  - Update all participating providers before querying a unified snapshot during cross-provider search, ensuring relevance scores are ranked on a single consistent corpus
+  - Keep document body parsing outside SQLite write transactions to minimize write-lock duration and eliminate transaction contention during index updates
+  - Preserve stable descending time order before applying query limits so top results consistently return the latest matching sessions
+  - Derive provider aliases directly from the registry and strictly reject ambiguous or duplicated query URI parameters
+- **Collect and AI summarization**
+  - Preserve collect summary attribution (by date/project in PM mode, and per-session in INSIGHT mode) and reject payloads exceeding 64,000 characters with guidance to narrow scope
+  - Preserve session facts and metadata before summary compression to prevent loss of critical context during hierarchical merges
+  - Strictly validate and normalize structured LLM response fields (including string array types) and trigger corrective retries on malformed outputs
+  - Unify collect summary request context and inject structured request dependencies cleanly across workflows
+  - Strictly validate `exclude` configuration before collect and dry-run executions, rejecting broken TOML or non-array exclusion structures to prevent unintended exposure of excluded paths
+- **Provider resilience and transcripts**
+  - Parse legacy tool arguments in transcripts (supporting OpenCode, Claude Code, and related formats) so exports and search indexes do not drop tool arguments
+  - Preserve user context discussion entries in Codex transcripts without accidental filtering
+  - Isolate malformed index entries in Claude Code project directories with structured diagnostics, continuing discovery of valid sessions
+  - Invalidate Cursor cached session data conservatively upon SQLite database or WAL modifications, reuse shared title formatting, and remove test-only storage aliases
+  - Allow SQLite database discovery to retry gracefully when the database file is not yet initialized
+- **Exports, sessions, and diagnostics**
+  - Share a single read session snapshot across print, JSON, and Markdown exports within one request to prevent data drift from ongoing source changes
+  - Bound memory usage during batch Markdown exports by releasing payloads after projection using a temporary lease
+  - Invalidate cached session titles and facts upon session rename or metadata modification
+  - Preserve diagnostic sinks through full session reads across query, collect, and URI workflows to capture recoverable warnings
+  - Isolate optional summary generation failures in URI workflows so core session exports succeed
+  - Centralize output path policies and map export directories uniformly across interactive, query, and URI modes
+- **Configuration, i18n, and npm packaging**
+  - Preserve valid values during legacy TOML recovery without silent drops, and distinguish parse errors from empty configurations
+  - Derive search roots and storage locations dynamically from providers instead of hardcoded paths
+  - Follow POSIX locale environment variable precedence (`LC_ALL` > `LC_MESSAGES` > `LANG`)
+  - Classify missing binary errors in the npm wrapper by specific failure cause (unsupported platform, corrupted file, permissions), and optimize tarball staging and binary path resolution
+
+### Performance
+
+- Parse transcript text outside search index transactions to avoid blocking concurrent database access
+- Bound Markdown batch export payload retention to active worker concurrency rather than accumulating entire session histories
+
+### Changed
+
+- Update development and build dependencies: bump `ty` to 0.0.74, `astro` to 7.2.7, `wrangler` to 4.126.0, and `@types/react-dom` to 19.2.5
+- Remove test-only helpers and storage aliases from production modules
+
 ## [0.15.2] - 2026-08-24
 
 ### Added
@@ -970,6 +1019,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.3
 [0.15.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.2
 [0.15.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.1
 [0.15.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.0
