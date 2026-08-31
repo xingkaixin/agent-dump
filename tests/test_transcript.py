@@ -79,6 +79,23 @@ class TestLegacyContent:
 
 
 class TestToolCalls:
+    @pytest.mark.parametrize(
+        ("state", "expected"),
+        [
+            ({"input": {"command": "legacy"}}, {"command": "legacy"}),
+            ({"arguments": {"command": "current"}, "input": {"command": "legacy"}}, {"command": "current"}),
+            ({"arguments": None, "input": "legacy"}, None),
+            ({"arguments": {}, "input": "legacy"}, {}),
+            ({"arguments": "", "input": "legacy"}, ""),
+        ],
+    )
+    def test_reads_legacy_tool_input_without_changing_exported_state(self, state, expected):
+        original = dict(state)
+        message = {"parts": [{"type": "tool", "tool": "bash", "state": state}]}
+
+        assert read_message(message).tool_calls[0].arguments == expected
+        assert state == original
+
     def test_reads_identity_and_state(self):
         message = {
             "parts": [

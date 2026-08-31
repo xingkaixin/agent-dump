@@ -16,6 +16,7 @@ from agent_dump.agents.base import MessageCountCompleteness, Session
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.diagnostics import print_recoverable_diagnostic
 from agent_dump.private_files import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
+from agent_dump.query_semantics import extract_transcript_searchable_text
 from agent_dump.text_safety import has_unsafe_line_characters
 
 
@@ -927,7 +928,7 @@ class TestOpenCodeAgent:
         assert head["model"] == "gpt-valid"
         assert head["message_count"] == 2
 
-    def test_export_session_with_tool_parts(self, tmp_path):
+    def test_export_session_with_tool_parts(self, tmp_path: Path) -> None:
         """测试导出包含 tool 类型的 part"""
         agent = OpenCodeAgent()
         db_path = tmp_path / "opencode.db"
@@ -985,7 +986,7 @@ class TestOpenCodeAgent:
                 "tool": "read_file",
                 "callID": "call-001",
                 "title": "Read File",
-                "state": {"path": "/test/file.py"},
+                "state": {"input": {"path": "/test/file.py"}, "status": "completed", "output": "file content"},
             }
         )
         cursor.execute(
@@ -1007,6 +1008,9 @@ class TestOpenCodeAgent:
             metadata={},
         )
 
+        session_data = agent.get_session_data(session)
+        corpus = extract_transcript_searchable_text(session_data)
+        assert corpus is not None and "/test/file.py" in corpus
         result = agent.export_session(session, output_dir)
 
         with open(result) as f:
@@ -1014,6 +1018,11 @@ class TestOpenCodeAgent:
 
         assert data["messages"][0]["parts"][0]["type"] == "tool"
         assert data["messages"][0]["parts"][0]["tool"] == "read_file"
+        assert data["messages"][0]["parts"][0]["state"] == {
+            "input": {"path": "/test/file.py"},
+            "status": "completed",
+            "output": "file content",
+        }
 
     def test_export_session_with_step_parts(self, tmp_path):
         """测试导出包含 step-start/step-finish 类型的 part"""

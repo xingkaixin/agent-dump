@@ -186,6 +186,7 @@ def _select_query_fts_table(query: TextQuery) -> str | None:
 
 
 _FTS_TABLES = ("sessions_fts", "sessions_fts_trigram")
+_INDEX_CONTENT_VERSION = 1
 
 # 待索引会话数达到该阈值时向 stderr 提示进度（关键词过滤会隐式建索引，首次运行可能较慢）
 _INDEX_PROGRESS_THRESHOLD = 10
@@ -283,10 +284,11 @@ class SearchIndex:
 
         conn = self._get_connection()
         try:
-            # Schema migration: rebuild if old schema detected
+            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='index_state'")
             has_index_state = cursor.fetchone() is not None
-            if has_index_state and not self._check_schema_ok(conn):
+            content_version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if has_index_state and (not self._check_schema_ok(conn) or content_version != _INDEX_CONTENT_VERSION):
                 self._drop_all_tables(conn)
 
             # AUTOINCREMENT 保证 rowid 永不复用：默认分配是 max(rowid)+1，删掉末尾行后
@@ -341,6 +343,7 @@ class SearchIndex:
             ]
             _delete_index_rows(conn, expired_rowids)
 
+            conn.execute(f"PRAGMA user_version = {_INDEX_CONTENT_VERSION}")
             conn.commit()
         finally:
             conn.close()

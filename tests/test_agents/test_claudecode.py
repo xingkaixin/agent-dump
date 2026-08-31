@@ -17,6 +17,7 @@ from agent_dump.agents.claude_transcript import ClaudeTranscriptDecoder
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
 from agent_dump.i18n import Keys
+from agent_dump.query_semantics import extract_transcript_searchable_text
 
 
 def write_jsonl(file_path: Path, records: list[dict]) -> None:
@@ -920,7 +921,7 @@ class TestClaudeCodeAgent:
         assert result["messages"][0]["role"] == "assistant"
         assert result["messages"][0]["parts"] == [{"type": "text", "text": "先分析一下", "time_created": 1767225600000}]
 
-    def test_get_session_data_backfills_regular_tool_output(self, tmp_path):
+    def test_get_session_data_backfills_regular_tool_output(self, tmp_path: Path) -> None:
         """测试普通工具输出会回填到 assistant tool part。"""
         agent = ClaudeCodeAgent()
         session_file = tmp_path / "tool-merge.jsonl"
@@ -964,7 +965,8 @@ class TestClaudeCodeAgent:
             ],
         )
 
-        result = agent.get_session_data(make_session(session_file))
+        session = make_session(session_file)
+        result = agent.get_session_data(session)
 
         assert len(result["messages"]) == 1
         assistant = result["messages"][0]
@@ -979,6 +981,14 @@ class TestClaudeCodeAgent:
             {"type": "text", "text": "file content", "time_created": 1767225601000}
         ]
         assert assistant["parts"][1]["state"]["status"] == "completed"
+
+        corpus = extract_transcript_searchable_text(result)
+        assert corpus is not None and "src/main.py" in corpus
+        exported_path = agent.export_session(session, tmp_path / "export")
+        exported = json.loads(exported_path.read_text(encoding="utf-8"))
+        exported_state = exported["messages"][0]["parts"][1]["state"]
+        assert exported_state["input"] == {"path": "src/main.py"}
+        assert "arguments" not in exported_state
 
     def test_get_session_data_groups_thinking_only_as_single_message(self, tmp_path):
         """测试只有 thinking 时保持单独 assistant 消息。"""

@@ -24,7 +24,7 @@ _SUBAGENT_TOOL = "subagent"
 
 @dataclass(frozen=True)
 class ToolCall:
-    """One tool part's identity and state, without deciding what to do with it."""
+    """Tool facts, accepting exported legacy state.input as the arguments alias."""
 
     tool: str
     arguments: Any
@@ -119,7 +119,7 @@ def _tool_calls(parts: Any) -> tuple[ToolCall, ...]:
         calls.append(
             ToolCall(
                 tool=str(part.get("tool") or ""),
-                arguments=state.get("arguments"),
+                arguments=state.get("arguments", state.get("input")),
                 output=state.get("output"),
                 prompt=_clean(state.get("prompt")),
                 nickname=_clean(part.get("nickname")),
