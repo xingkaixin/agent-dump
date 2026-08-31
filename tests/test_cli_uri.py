@@ -1,8 +1,10 @@
 """URI CLI workflow tests."""
 
+from collections.abc import Mapping
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from cli_test_support import (
@@ -11,12 +13,14 @@ from cli_test_support import (
 from locale_helpers import Keys as LocaleKeys, expect
 
 from agent_dump.agents.base import Session
+from agent_dump.agents.codex import CodexAgent
 from agent_dump.cli import (
     main,
 )
-from agent_dump.config import AIConfigError, ExportConfig
+from agent_dump.config import AIConfig, AIConfigError, ExportConfig
 from agent_dump.diagnostics import source_missing
 from agent_dump.paths import SearchRoot
+from agent_dump.scanner import AgentScanner
 
 
 def _ai_config_document(config: object | None, *, source_exists: bool = True) -> mock.MagicMock:
@@ -422,7 +426,7 @@ class TestMain:
             output_root = tmp_path / "out"
             expected_output_dir = output_root / "codex"
             expected_output = expected_output_dir / "session-001.json"
-            mock_agent.export_session.return_value = expected_output
+            mock_agent.export_session_with_fields.return_value = expected_output
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
 
@@ -437,7 +441,13 @@ class TestMain:
                     result = main()
 
         assert result == 0
-        mock_agent.export_session.assert_called_once_with(mock_session, expected_output_dir)
+        mock_agent.export_session.assert_not_called()
+        mock_agent.export_session_with_fields.assert_called_once_with(
+            mock_session,
+            expected_output_dir,
+            None,
+            session_data=mock_agent.get_cached_session_data.return_value,
+        )
         captured = capsys.readouterr()
         assert "# Session Dump" in captured.out
         assert str(expected_output) in captured.out
@@ -461,7 +471,7 @@ class TestMain:
             expected_output_dir = output_root / "codex"
             json_output = expected_output_dir / "session-001.json"
             raw_output = expected_output_dir / "session-001.raw.jsonl"
-            mock_agent.export_session.return_value = json_output
+            mock_agent.export_session_with_fields.return_value = json_output
             mock_agent.export_raw_session.return_value = raw_output
 
             mock_scanner.get_available_agents.return_value = [mock_agent]
@@ -484,7 +494,13 @@ class TestMain:
                     result = main()
 
         assert result == 0
-        mock_agent.export_session.assert_called_once_with(mock_session, expected_output_dir)
+        mock_agent.export_session.assert_not_called()
+        mock_agent.export_session_with_fields.assert_called_once_with(
+            mock_session,
+            expected_output_dir,
+            None,
+            session_data=mock_agent.get_cached_session_data.return_value,
+        )
         mock_agent.export_raw_session.assert_called_once_with(mock_session, expected_output_dir)
         captured = capsys.readouterr()
         assert "# Session Dump" in captured.out
@@ -529,7 +545,7 @@ class TestMain:
             mock_session = mock.MagicMock()
             mock_session.id = "request-001"
             expected_output = tmp_path / "out" / "cursor" / "request-001.json"
-            mock_agent.export_session.return_value = expected_output
+            mock_agent.export_session_with_fields.return_value = expected_output
             mock_scanner.get_available_agents.return_value = [mock_agent]
             configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
@@ -549,6 +565,12 @@ class TestMain:
                     result = main()
 
         assert result == 0
+        mock_agent.export_session_with_fields.assert_called_once_with(
+            mock_session,
+            expected_output.parent,
+            None,
+            session_data=mock_agent.get_cached_session_data.return_value,
+        )
         captured = capsys.readouterr()
         assert "# Session Dump" in captured.out
         assert str(expected_output) in captured.out
@@ -592,7 +614,8 @@ class TestMain:
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
             mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
-                "messages": []
+                "id": "session-001",
+                "messages": [{"role": "user", "parts": [{"type": "text", "text": "Snapshot body"}]}],
             }
 
             mock_session = mock.MagicMock()
@@ -601,10 +624,16 @@ class TestMain:
             output_root = tmp_path / "out"
             expected_output = output_root / "codex" / "session-001.json"
 
-            def _export_json(session, output_dir, fields):
+            def _export_json(
+                session: Session,
+                output_dir: Path,
+                fields: Mapping[str, Any] | None,
+                *,
+                session_data: Mapping[str, Any],
+            ) -> Path:
                 output_dir.mkdir(parents=True, exist_ok=True)
                 expected_output.write_text(
-                    json.dumps({"id": "session-001", "messages": [], **fields}),
+                    json.dumps({**session_data, **(fields or {})}),
                     encoding="utf-8",
                 )
                 return expected_output
@@ -637,7 +666,13 @@ class TestMain:
 
         assert result == 0
         exported = json.loads(expected_output.read_text(encoding="utf-8"))
-        assert exported["summary"] == "# summary markdown"
+        assert exported == {**mock_agent.get_cached_session_data.return_value, "summary": "# summary markdown"}
+        mock_agent.export_session_with_fields.assert_called_once_with(
+            mock_session,
+            expected_output.parent,
+            {"summary": "# summary markdown"},
+            session_data=mock_agent.get_cached_session_data.return_value,
+        )
         captured = capsys.readouterr()
         assert "正在调用 AI 生成会话总结，请稍候" in captured.err
         assert "已将 summary 写入 JSON" in captured.out
@@ -659,10 +694,16 @@ class TestMain:
             output_root = tmp_path / "out"
             expected_output = output_root / "codex" / "session-001.json"
 
-            def _export_json(session, output_dir, fields):
+            def _export_json(
+                session: Session,
+                output_dir: Path,
+                fields: Mapping[str, Any] | None,
+                *,
+                session_data: Mapping[str, Any],
+            ) -> Path:
                 output_dir.mkdir(parents=True, exist_ok=True)
                 expected_output.write_text(
-                    json.dumps({"id": "session-001", "messages": [], **fields}),
+                    json.dumps({**session_data, **(fields or {})}),
                     encoding="utf-8",
                 )
                 return expected_output
@@ -695,10 +736,88 @@ class TestMain:
 
         assert result == 0
         exported = json.loads(expected_output.read_text(encoding="utf-8"))
-        assert exported["summary"] == "# summary markdown"
+        assert exported == {**mock_agent.get_cached_session_data.return_value, "summary": "# summary markdown"}
+        mock_agent.export_session_with_fields.assert_called_once_with(
+            mock_session,
+            expected_output.parent,
+            {"summary": "# summary markdown"},
+            session_data=mock_agent.get_cached_session_data.return_value,
+        )
         captured = capsys.readouterr()
         assert "# Session Dump" in captured.out
         assert str(expected_output) in captured.out
+
+    def test_main_uri_summary_keeps_snapshot_when_source_changes(
+        self, codex_session_tree: dict[str, Any], tmp_path: Path
+    ) -> None:
+        session_id = codex_session_tree["session_id"]
+        source_file = codex_session_tree["session_file"]
+        original_source = source_file.read_text(encoding="utf-8")
+        new_message = "NEW_AFTER_SUMMARY_SNAPSHOT"
+        agent = CodexAgent()
+        output_root = tmp_path / "out"
+        config = AIConfig(provider="openai", base_url="https://example.invalid/v1", model="test", api_key="test")
+
+        def summarize(config: AIConfig, prompt: str) -> str:
+            assert config.model == "test"
+            assert codex_session_tree["user_text"] in prompt
+            assert codex_session_tree["assistant_text"] in prompt
+            assert new_message not in prompt
+            source_file.write_text(
+                original_source
+                + json.dumps(
+                    {
+                        "type": "response_item",
+                        "timestamp": "2026-07-20T10:06:00Z",
+                        "payload": {
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": new_message}],
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            return "# snapshot summary"
+
+        with (
+            mock.patch("agent_dump.cli.AgentScanner", return_value=AgentScanner([agent])),
+            mock.patch(
+                "agent_dump.uri_workflow.load_projectable_config_document", return_value=_ai_config_document(config)
+            ),
+            mock.patch("agent_dump.cli.request_summary_from_llm", side_effect=summarize) as request_summary,
+            mock.patch(
+                "sys.argv",
+                [
+                    "agent-dump",
+                    f"codex://{session_id}",
+                    "--summary",
+                    "--format",
+                    "json,markdown,raw",
+                    "--output",
+                    str(output_root),
+                ],
+            ),
+        ):
+            result = main()
+
+        assert result == 0
+        request_summary.assert_called_once()
+        output_dir = output_root / "codex"
+        exported = json.loads((output_dir / f"{session_id}.json").read_text(encoding="utf-8"))
+        exported_messages = json.dumps(exported["messages"], ensure_ascii=False)
+        assert exported["summary"] == "# snapshot summary"
+        assert codex_session_tree["user_text"] in exported_messages
+        assert codex_session_tree["assistant_text"] in exported_messages
+        assert new_message not in exported_messages
+        markdown = (output_dir / f"{session_id}.md").read_text(encoding="utf-8")
+        assert codex_session_tree["user_text"] in markdown
+        assert new_message not in markdown
+        assert (output_dir / f"{session_id}.raw.jsonl").read_bytes() == source_file.read_bytes()
+        session = agent.find_session_by_id(session_id)
+        assert session is not None
+        assert new_message in json.dumps(agent.get_cached_session_data(session), ensure_ascii=False)
 
     def test_main_uri_mode_summary_without_json_warns_and_skips(self, capsys, tmp_path):
         """测试 URI + --summary 但 format 不含 json 时警告并跳过"""
@@ -853,7 +972,8 @@ class TestMain:
             mock_agent.name = "codex"
             mock_agent.display_name = "Codex"
             mock_agent.get_cached_session_data.return_value = mock_agent.get_session_data.return_value = {
-                "messages": []
+                "id": "session-001",
+                "messages": [{"role": "user", "parts": [{"type": "text", "text": "Snapshot body"}]}],
             }
             mock_session = mock.MagicMock()
             mock_session.id = "session-001"
@@ -861,12 +981,18 @@ class TestMain:
             output_root = tmp_path / "out"
             expected_output = output_root / "codex" / "session-001.json"
 
-            def _export_json(session, output_dir):
+            def _export_json(
+                session: Session,
+                output_dir: Path,
+                fields: Mapping[str, Any] | None,
+                *,
+                session_data: Mapping[str, Any],
+            ) -> Path:
                 output_dir.mkdir(parents=True, exist_ok=True)
-                expected_output.write_text(json.dumps({"id": "session-001", "messages": []}), encoding="utf-8")
+                expected_output.write_text(json.dumps({**session_data, **(fields or {})}), encoding="utf-8")
                 return expected_output
 
-            mock_agent.export_session.side_effect = _export_json
+            mock_agent.export_session_with_fields.side_effect = _export_json
             mock_scanner.get_available_agents.return_value = [mock_agent]
             configure_scanner_sessions(mock_scanner)
             mock_scanner_class.return_value = mock_scanner
@@ -894,7 +1020,13 @@ class TestMain:
 
         assert result == 0
         exported = json.loads(expected_output.read_text(encoding="utf-8"))
-        assert "summary" not in exported
+        assert exported == mock_agent.get_cached_session_data.return_value
+        mock_agent.export_session_with_fields.assert_called_once_with(
+            mock_session,
+            expected_output.parent,
+            None,
+            session_data=mock_agent.get_cached_session_data.return_value,
+        )
         captured = capsys.readouterr()
         assert "正在调用 AI 生成会话总结，请稍候" in captured.err
         assert "AI 总结请求失败: boom" in captured.out

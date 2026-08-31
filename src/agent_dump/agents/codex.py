@@ -2,7 +2,7 @@
 Codex agent handler
 """
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
@@ -317,13 +317,18 @@ class CodexAgent(CodexMessageEnrichmentMixin, FileSessionAgent):
         }
         return dict(session_data)
 
-    def _json_export_payload(self, session: Session) -> dict[str, Any]:
+    def _json_export_payload(
+        self,
+        session: Session,
+        *,
+        session_data: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Apply Codex's JSON-export-only message transforms."""
-        session_data = super()._json_export_payload(session)
-        messages = session_data.get("messages")
+        payload = super()._json_export_payload(session, session_data=session_data)
+        messages = payload.get("messages")
         if isinstance(messages, list):
-            session_data["messages"] = self._prepare_json_export_messages(messages)
-        return session_data
+            payload["messages"] = self._prepare_json_export_messages(messages)
+        return payload
 
     def _filter_json_export_only_tools(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Filter Codex-only tool parts that should not appear in JSON export."""

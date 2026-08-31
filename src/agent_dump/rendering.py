@@ -187,6 +187,8 @@ def export_session_in_format(
 ) -> Path:
     """Export one session in the requested file format."""
     if output_format == "json":
+        if session_data is not None:
+            return agent.export_session_with_fields(session, output_dir, json_fields, session_data=session_data)
         if json_fields:
             return agent.export_session_with_fields(session, output_dir, json_fields)
         return agent.export_session(session, output_dir)

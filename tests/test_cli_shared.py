@@ -463,11 +463,11 @@ class TestExportSessions:
         mock_agent.name = "test_agent"
         mock_agent.display_name = "Test Agent"
         mock_agent.get_session_uri.return_value = "codex://session-001"
-        mock_agent.get_session_data.return_value = {"messages": []}
+        mock_agent.get_cached_session_data.return_value = {"messages": []}
 
         session = make_session("session-001", "Session 1")
 
-        mock_agent.export_session.return_value = tmp_path / "test_agent" / "session-001.json"
+        mock_agent.export_session_with_fields.return_value = tmp_path / "test_agent" / "session-001.json"
         mock_agent.export_raw_session.return_value = tmp_path / "test_agent" / "session-001.raw.jsonl"
 
         result = export_sessions_for_formats(
@@ -478,7 +478,9 @@ class TestExportSessions:
         )
 
         assert len(result) == 3
-        mock_agent.export_session.assert_called_once_with(session, tmp_path / "test_agent")
+        mock_agent.export_session_with_fields.assert_called_once_with(
+            session, tmp_path / "test_agent", None, session_data={"messages": []}
+        )
         mock_agent.export_raw_session.assert_called_once_with(session, tmp_path / "test_agent")
 
     def test_export_sessions_for_multiple_formats_supports_per_format_output_dirs(self, tmp_path):
@@ -486,13 +488,13 @@ class TestExportSessions:
         mock_agent.name = "test_agent"
         mock_agent.display_name = "Test Agent"
         mock_agent.get_session_uri.return_value = "codex://session-001"
-        mock_agent.get_session_data.return_value = {"messages": []}
+        mock_agent.get_cached_session_data.return_value = {"messages": []}
 
         session = make_session("session-001", "Session 1")
         json_root = tmp_path / "json-root"
         markdown_root = tmp_path / "markdown-root"
         raw_root = tmp_path / "raw-root"
-        mock_agent.export_session.return_value = json_root / "test_agent" / "session-001.json"
+        mock_agent.export_session_with_fields.return_value = json_root / "test_agent" / "session-001.json"
         mock_agent.export_raw_session.return_value = raw_root / "test_agent" / "session-001.raw.jsonl"
 
         export_sessions_for_formats(
@@ -502,7 +504,9 @@ class TestExportSessions:
             {"json": json_root, "markdown": markdown_root, "raw": raw_root},
         )
 
-        mock_agent.export_session.assert_called_once_with(session, json_root / "test_agent")
+        mock_agent.export_session_with_fields.assert_called_once_with(
+            session, json_root / "test_agent", None, session_data={"messages": []}
+        )
         mock_agent.export_raw_session.assert_called_once_with(session, raw_root / "test_agent")
 
 

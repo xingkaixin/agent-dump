@@ -8,6 +8,7 @@ from unittest import mock
 
 import pytest
 
+from agent_dump import exporting
 from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.exporting import (
     ExportFailure,
@@ -141,19 +142,85 @@ def test_multiple_formats_reuse_one_provider_read(tmp_path: Path, formats: list[
     load.assert_called_once_with(session)
 
 
-def test_markdown_uses_prepared_payload_without_loading(tmp_path: Path) -> None:
+@pytest.mark.parametrize("output_format", ["json", "markdown"])
+def test_export_uses_prepared_payload_without_loading(tmp_path: Path, output_format: FileOutputFormat) -> None:
     agent = ExportingTestAgent()
     session = make_session("session", "Session")
     prepared = {"messages": [{"role": "user", "parts": [{"type": "text", "text": "prepared body"}]}]}
 
     with mock.patch.object(agent, "get_session_data", side_effect=AssertionError("unexpected read")) as load:
         result = execute_exports(
-            agent, [session], ["markdown"], lambda _: tmp_path, prepared_session_data={session.id: prepared}
+            agent, [session], [output_format], lambda _: tmp_path, prepared_session_data={session.id: prepared}
         )
 
     assert result.status is ExportRunStatus.SUCCEEDED
     assert "prepared body" in result.exported_paths[0].read_text(encoding="utf-8")
     load.assert_not_called()
+
+
+@pytest.mark.parametrize("formats", [["json", "markdown"], ["markdown", "json"]])
+@pytest.mark.parametrize("prepared", [False, True])
+def test_exports_keep_one_snapshot_when_source_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, formats: list[FileOutputFormat], prepared: bool
+) -> None:
+    agent = ExportingTestAgent()
+    session = make_session("session", "Session")
+    session.source_path = tmp_path / "source.txt"
+    session.source_path.write_text("old body", encoding="utf-8")
+    monkeypatch.setattr(agent, "get_session_change_sources", lambda value: (value.source_path,))
+
+    def read_data(value: Session) -> dict:
+        return {
+            "messages": [
+                {"role": "user", "parts": [{"type": "text", "text": value.source_path.read_text(encoding="utf-8")}]}
+            ]
+        }
+
+    monkeypatch.setattr(agent, "get_session_data", read_data)
+    initial_data = agent.get_cached_session_data(session) if prepared else None
+    if prepared:
+        session.source_path.write_text("new body before export", encoding="utf-8")
+    original_export = exporting.export_session_in_format
+
+    def export_then_update(*args, **kwargs):
+        path = original_export(*args, **kwargs)
+        session.source_path.write_text("new body between formats", encoding="utf-8")
+        return path
+
+    monkeypatch.setattr(exporting, "export_session_in_format", export_then_update)
+    with mock.patch.object(agent, "get_session_data", wraps=agent.get_session_data) as read:
+        result = execute_exports(
+            agent,
+            [session],
+            formats,
+            lambda _: tmp_path / "out",
+            prepared_session_data={session.id: initial_data} if initial_data is not None else None,
+            summaries={session.id: "Summary of old body"} if prepared else None,
+        )
+
+    assert result.status is ExportRunStatus.SUCCEEDED
+    assert read.call_count == (0 if prepared else 1)
+    for path in result.exported_paths:
+        text = path.read_text(encoding="utf-8")
+        assert "old body" in text
+        assert "new body" not in text
+        if prepared and path.suffix == ".json":
+            assert json.loads(text)["summary"] == "Summary of old body"
+
+
+def test_snapshot_read_failure_does_not_block_raw_export(tmp_path: Path) -> None:
+    agent = ExportingTestAgent()
+    session = make_session("session", "Session")
+    session.source_path = tmp_path / "source.jsonl"
+    session.source_path.write_text("raw source", encoding="utf-8")
+
+    with mock.patch.object(agent, "get_session_data", side_effect=ValueError("cannot parse")) as read:
+        result = execute_exports(agent, [session], ["json", "raw", "markdown"], lambda _: tmp_path / "out")
+
+    assert result.status is ExportRunStatus.PARTIAL
+    assert [type(attempt) for attempt in result.attempts] == [ExportFailure, ExportSuccess, ExportFailure]
+    assert result.exported_paths[0].read_text(encoding="utf-8") == "raw source"
+    read.assert_called_once_with(session)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX modes are not meaningful on Windows")

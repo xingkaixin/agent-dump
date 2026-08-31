@@ -3,6 +3,7 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from itertools import groupby
 from pathlib import Path
 from typing import Any, TypeAlias
 import unicodedata
@@ -136,27 +137,45 @@ def execute_exports(
     """Execute every requested file export and retain each observable outcome."""
     attempts: list[ExportAttempt] = []
 
-    for plan in _plan_exports(agent, sessions, formats, output_dir_for_format):
-        if isinstance(plan, _RejectedExport):
-            attempts.append(ExportFailure(plan.session, plan.output_format, plan.error))
-            continue
-        try:
-            output_dir = ensure_output_dir(plan.output_dir)
-            output_path = export_session_in_format(
-                agent,
-                plan.session,
-                output_dir,
-                plan.output_format,
-                session_data=prepared_session_data.get(plan.session.id) if prepared_session_data is not None else None,
-                session_uri=session_uris.get(plan.session.id) if session_uris is not None else None,
-                json_fields=(
-                    {"summary": summaries[plan.session.id]}
-                    if plan.output_format == "json" and summaries is not None and plan.session.id in summaries
-                    else None
-                ),
-            )
-            attempts.append(ExportSuccess(plan.session, plan.output_format, output_path))
-        except Exception as exc:
-            attempts.append(ExportFailure(plan.session, plan.output_format, exc))
+    plans = _plan_exports(agent, sessions, formats, output_dir_for_format)
+    for _, session_plans in groupby(plans, key=lambda plan: id(plan.session)):
+        group = list(session_plans)
+        session = group[0].session
+        snapshot: Mapping[str, Any] | Exception | None = (
+            prepared_session_data.get(session.id) if prepared_session_data is not None else None
+        )
+        normalized_exports = sum(
+            isinstance(plan, _ReadyExport) and plan.output_format in {"json", "markdown"} for plan in group
+        )
+        if snapshot is None and normalized_exports > 1:
+            try:
+                snapshot = agent.get_cached_session_data(session)
+            except Exception as exc:
+                snapshot = exc
+
+        for plan in group:
+            if isinstance(plan, _RejectedExport):
+                attempts.append(ExportFailure(plan.session, plan.output_format, plan.error))
+                continue
+            try:
+                if plan.output_format != "raw" and isinstance(snapshot, Exception):
+                    raise snapshot
+                output_dir = ensure_output_dir(plan.output_dir)
+                output_path = export_session_in_format(
+                    agent,
+                    plan.session,
+                    output_dir,
+                    plan.output_format,
+                    session_data=None if isinstance(snapshot, Exception) else snapshot,
+                    session_uri=session_uris.get(plan.session.id) if session_uris is not None else None,
+                    json_fields=(
+                        {"summary": summaries[plan.session.id]}
+                        if plan.output_format == "json" and summaries is not None and plan.session.id in summaries
+                        else None
+                    ),
+                )
+                attempts.append(ExportSuccess(plan.session, plan.output_format, output_path))
+            except Exception as exc:
+                attempts.append(ExportFailure(plan.session, plan.output_format, exc))
 
     return ExportRunResult(tuple(attempts))

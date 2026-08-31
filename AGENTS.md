@@ -396,7 +396,7 @@ URI 与交互工作流通过 `AgentScanner.diagnostic_context()` 将诊断接收
 - `get_session_head(session)`：URI `--head` 使用。
 - `get_session_summary_fields(session)`：列表和交互视图元数据摘要使用。
 - `export_raw_session(session, output_dir)`：默认复制原始单文件，目录型 source 会返回能力缺失诊断。
-- `_json_export_payload(session)`：JSON 导出的数据来源，默认返回 `get_cached_session_data(session)`。Codex 覆盖它以施加导出专属的消息变换。
+- `_json_export_payload(session, *, session_data=None)`：JSON 导出的数据来源；优先使用调用方显式准备的数据，否则读取 `get_cached_session_data(session)`，均返回隔离副本。覆盖该内部扩展点时须接收并透传 `session_data`；Codex 在副本上施加导出专属的消息变换。既有 `export_session(session, output_dir)` 调用方式不变。
 
 ### 5.3 `agent_registry.py`
 
@@ -421,6 +421,8 @@ URI 与交互工作流通过 `AgentScanner.diagnostic_context()` 将诊断接收
 - `raw`：调用 `agent.export_raw_session()`。
 - `markdown`：调用 `agent.get_session_data()` 后渲染 Markdown 文件。
 - `print`：URI 模式直接打印 `render_session_text()` 结果。
+
+一次导出的摘要、print、JSON 与 Markdown 复用同一份已读取内容；多格式导出按会话保留临时快照，不因源变化重新读取。raw 仍独立复制源文件，规范化内容读取失败不得阻止 raw 导出。
 
 格式相关入口：
 - `output_formats.VALID_FORMATS`
