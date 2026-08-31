@@ -1222,6 +1222,28 @@ class TestQuerySessionGroups:
         assert [match.session.id for match in result] == ["codex-hit", "kimi-hit"]
         index_factory.assert_called_once_with()
 
+    def test_unlimited_keyword_query_preserves_provider_order(self, tmp_path: Path) -> None:
+        codex = DummyAgent(name="codex")
+        kimi = DummyAgent(name="kimi")
+        codex_session = make_session("shared", "Codex", tmp_path / "codex.jsonl")
+        kimi_session = make_session("shared", "Kimi", tmp_path / "kimi.jsonl")
+        index = mock.MagicMock(is_available=True)
+        index.search.return_value = [
+            SearchResult("codex", "shared", "Codex", "codex **matching**", 2.0),
+            SearchResult("kimi", "shared", "Kimi", "kimi **matching**", 1.0),
+        ]
+
+        results = select_session_groups(
+            [(kimi, [kimi_session]), (codex, [codex_session])],
+            make_query_spec(keyword="matching"),
+            search_index=index,
+        )
+
+        assert results == [
+            QuerySessionMatch(kimi, kimi_session, "kimi **matching**", 1.0),
+            QuerySessionMatch(codex, codex_session, "codex **matching**", 2.0),
+        ]
+
     def test_applies_global_limit_and_preserves_selected_evidence(self, tmp_path):
         agent = DummyAgent(name="codex")
         older = make_session("s-old", "old", tmp_path / "old.jsonl")
@@ -1256,6 +1278,36 @@ class TestQuerySessionGroups:
 
 
 class TestSearchSessionGroups:
+    def test_provider_index_failure_uses_fallback_ranks_for_every_provider(self, tmp_path: Path, capsys) -> None:
+        codex_session = make_session("codex-hit", "Unrelated", tmp_path / "codex.jsonl")
+        kimi_session = make_session("kimi-hit", "matching", tmp_path / "kimi.jsonl")
+        codex = CountingAgent(
+            name="codex", session_data={"codex-hit": {"messages": [{"role": "user", "content": "matching"}]}}
+        )
+        kimi = CountingAgent(name="kimi", session_data={"kimi-hit": {"messages": []}})
+        index = mock.MagicMock(is_available=True)
+        index.update.side_effect = [None, OSError("index unavailable")]
+        index.search.return_value = [SearchResult("codex", "codex-hit", "Unrelated", "**matching**", 100.0)]
+
+        results = select_session_groups(
+            [(codex, [codex_session]), (kimi, [kimi_session])],
+            make_query_spec(keyword="matching", text_mode=TextQueryMode.SEARCH_TERMS),
+            search_index=index,
+            diagnostic_sink=print_recoverable_diagnostic,
+        )
+
+        assert [(match.agent.name, match.rank) for match in results] == [("kimi", 1.0), ("codex", 0.0)]
+        assert codex.data_reads == kimi.data_reads == 1
+        assert (
+            expect(
+                Keys.WARN_INDEX_UNUSABLE,
+                agent=kimi.display_name,
+                error_type="OSError",
+                error="index unavailable",
+            )
+            in capsys.readouterr().err
+        )
+
     def test_sorts_by_rank_time_and_provider_before_global_limit(self, tmp_path):
         codex = DummyAgent(name="codex")
         kimi = DummyAgent(name="kimi")

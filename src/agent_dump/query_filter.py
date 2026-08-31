@@ -196,10 +196,7 @@ def select_session_groups(
 ) -> list[QuerySessionMatch]:
     """Select sessions using the text semantics carried by the query specification."""
     runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
-    matches: list[QuerySessionMatch] = []
-    for agent, sessions in session_groups:
-        with agent.diagnostic_context(diagnostic_sink):
-            matches.extend(_session_matches(agent, sessions, spec, runtime=runtime))
+    matches = _session_matches(session_groups, spec, runtime=runtime)
     if spec.text_mode is TextQueryMode.SEARCH_TERMS:
         ordered_matches = sorted(matches, key=_search_match_sort_key)
     elif spec.limit is not None:
@@ -210,51 +207,63 @@ def select_session_groups(
 
 
 def _session_matches(
-    agent: BaseAgent,
-    sessions: list[Session],
+    session_groups: Sequence[SessionGroup],
     spec: QuerySpec,
     *,
     runtime: _SearchRuntime,
 ) -> list[QuerySessionMatch]:
-    if spec.agent_names is not None and agent.name not in spec.agent_names:
-        return []
-
     keyword = (spec.keyword or "").strip()
     text_query = TextQuery.parse(keyword, spec.text_mode)
-    scoped_sessions = sessions
-    if spec.project_path is not None:
-        scoped_sessions = [
-            session
-            for session in scoped_sessions
-            if (
-                (session_path := extract_session_working_directory(agent, session)) is not None
-                and is_path_scope_match(spec.project_path, session_path)
-            )
-        ]
+    all_groups: list[SessionGroup] = []
+    scoped_groups: list[SessionGroup] = []
+    for agent, sessions in session_groups:
+        if spec.agent_names is not None and agent.name not in spec.agent_names:
+            continue
+        all_groups.append((agent, sessions))
+        with agent.diagnostic_context(runtime.diagnostic_sink):
+            scoped_sessions = sessions
+            if spec.project_path is not None:
+                scoped_sessions = [
+                    session
+                    for session in sessions
+                    if (
+                        (session_path := extract_session_working_directory(agent, session)) is not None
+                        and is_path_scope_match(spec.project_path, session_path)
+                    )
+                ]
+        scoped_groups.append((agent, scoped_sessions))
 
-    if spec.roles is not None:
-        return _role_search_matches(
-            agent,
-            scoped_sessions,
-            spec.roles,
-            None if text_query.is_empty else text_query,
-            limit=spec.limit,
-            runtime=runtime,
+    if spec.roles is None and not text_query.is_empty:
+        # Query 按时间排序，索引按相关度排序；只有排序一致时才可提前截断。
+        pushdown_limit = (
+            spec.limit if spec.text_mode is TextQueryMode.SEARCH_TERMS and spec.project_path is None else None
         )
+        indexed = _try_indexed_search_matches(all_groups, scoped_groups, text_query, runtime, pushdown_limit)
+        if indexed is not None:
+            return indexed
 
-    if text_query.is_empty:
-        return [
-            QuerySessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
-            for session in scoped_sessions
-        ]
-
-    # Query 按时间排序，索引按相关度排序；只有排序一致时才可提前截断。
-    pushdown_limit = spec.limit if spec.text_mode is TextQueryMode.SEARCH_TERMS and spec.project_path is None else None
-    indexed = _try_indexed_search_matches(agent, sessions, scoped_sessions, text_query, runtime, pushdown_limit)
-    if indexed is not None:
-        return indexed
-
-    return _fallback_search_matches(agent, scoped_sessions, text_query, runtime)
+    matches: list[QuerySessionMatch] = []
+    for agent, sessions in scoped_groups:
+        with agent.diagnostic_context(runtime.diagnostic_sink):
+            if spec.roles is not None:
+                matches.extend(
+                    _role_search_matches(
+                        agent,
+                        sessions,
+                        spec.roles,
+                        None if text_query.is_empty else text_query,
+                        limit=spec.limit,
+                        runtime=runtime,
+                    )
+                )
+            elif text_query.is_empty:
+                matches.extend(
+                    QuerySessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
+                    for session in sessions
+                )
+            else:
+                matches.extend(_fallback_search_matches(agent, sessions, text_query, runtime))
+    return matches
 
 
 def _normalize_agent_name(name: str, valid_agents: set[str]) -> str | None:
@@ -497,14 +506,16 @@ def _search_match_sort_key(match: QuerySessionMatch) -> tuple[float, float, floa
 
 
 def _try_indexed_search_matches(
-    agent: BaseAgent,
-    all_sessions: list[Session],
-    scoped_sessions: list[Session],
+    all_groups: Sequence[SessionGroup],
+    scoped_groups: Sequence[SessionGroup],
     query: TextQuery,
     runtime: _SearchRuntime,
     limit: int | None = None,
 ) -> list[QuerySessionMatch] | None:
     """Try indexed search while retaining SearchResult metadata."""
+    if not all_groups:
+        return []
+    agent = all_groups[0][0]
     try:
         index = runtime.search_index(agent)
         if index is None:
@@ -512,21 +523,26 @@ def _try_indexed_search_matches(
         if not index.is_available:
             return None
 
-        index.update(agent, all_sessions, diagnostic_sink=runtime.diagnostic_sink)
-        scoped_by_id = {session.id: session for session in scoped_sessions}
+        for agent, sessions in all_groups:
+            with agent.diagnostic_context(runtime.diagnostic_sink):
+                index.update(agent, sessions, diagnostic_sink=runtime.diagnostic_sink)
+        scoped_by_key = {
+            (agent.name, session.id): (agent, session) for agent, sessions in scoped_groups for session in sessions
+        }
         results = index.search(
             query,
-            agent_names={agent.name},
-            session_keys={(agent.name, session_id) for session_id in scoped_by_id},
+            agent_names={agent.name for agent, _ in all_groups},
+            session_keys=set(scoped_by_key),
             limit=limit,
         )
-        matches: list[QuerySessionMatch] = []
+        matches_by_agent: dict[str, list[QuerySessionMatch]] = {agent.name: [] for agent, _ in scoped_groups}
         for result in results:
-            session = scoped_by_id.get(result.session_id)
-            if session is None:
+            scoped_session = scoped_by_key.get((result.agent_name, result.session_id))
+            if scoped_session is None:
                 continue
+            agent, session = scoped_session
             snippet = result.snippet or query.build_snippet((session.title,)) or session.title
-            matches.append(
+            matches_by_agent[agent.name].append(
                 QuerySessionMatch(
                     agent=agent,
                     session=session,
@@ -534,7 +550,7 @@ def _try_indexed_search_matches(
                     rank=result.rank,
                 )
             )
-        return matches
+        return [match for agent, _ in scoped_groups for match in matches_by_agent[agent.name]]
     except Exception as exc:  # noqa: BLE001 - 索引出问题时退回文件扫描，但必须让用户看见
         runtime.report_index_failure(agent, exc)
         return None
