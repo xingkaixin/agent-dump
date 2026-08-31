@@ -46,6 +46,26 @@ class TestHelpIsLocalized:
         assert expect(Keys.CLI_PAGE_SIZE_HELP) in output
 
 
+class TestCollectPromptIsLocalized:
+    @pytest.mark.parametrize(
+        ("arguments", "message_key"),
+        [
+            (["--emit-prompt"], Keys.EMIT_PROMPT_REQUIRES_COLLECT),
+            (["--collect", "--emit-prompt", "--dry-run"], Keys.COLLECT_ACTION_CONFLICT),
+            (["--collect", "--emit-prompt", "codex://session"], Keys.COLLECT_MODE_CONFLICT),
+        ],
+    )
+    def test_invalid_prompt_mode_reports_only_to_stderr(
+        self, language: str, capsys: pytest.CaptureFixture[str], arguments: list[str], message_key: str
+    ) -> None:
+        with mock.patch("sys.argv", ["agent-dump", "--lang", language, *arguments]):
+            assert main() == 1
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert expect(message_key) in captured.err
+
+
 class TestListModeIsLocalized:
     def test_header_and_session_are_shown(self, language, codex_session_tree, capsys):
         exit_code = run_cli("--list", "-d", "36500")

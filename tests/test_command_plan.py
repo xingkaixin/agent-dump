@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from agent_dump.collect_models import CollectMode
+from agent_dump.collect_models import CollectAction, CollectMode
 from agent_dump.command_plan import (
     CollectOperation,
     CommandPlanError,
@@ -222,10 +222,42 @@ def test_build_command_plan_normalizes_collect_query_uri() -> None:
     assert operation.since == "2026-08-01"
     assert operation.until == "2026-08-10"
     assert operation.save == "report.md"
-    assert operation.dry_run is True
+    assert operation.action is CollectAction.DRY_RUN
     assert operation.collect_mode is CollectMode.INSIGHT
     assert operation.query_spec is not None
     assert operation.query_spec.agent_names == {"codex"}
+
+
+@pytest.mark.parametrize(
+    ("options", "action"),
+    [
+        ({}, CollectAction.EXECUTE),
+        ({"dry_run": True}, CollectAction.DRY_RUN),
+        ({"emit_prompt": True}, CollectAction.EMIT_PROMPT),
+    ],
+)
+def test_collect_action_is_normalized_once(options: dict[str, bool], action: CollectAction) -> None:
+    operation = build_command_plan(make_request(collect=True, **options)).operation
+
+    assert isinstance(operation, CollectOperation)
+    assert operation.action is action
+
+
+@pytest.mark.parametrize(
+    ("options", "code"),
+    [
+        ({}, CommandPlanErrorCode.EMIT_PROMPT_REQUIRES_COLLECT),
+        ({"list_requested": True}, CommandPlanErrorCode.EMIT_PROMPT_REQUIRES_COLLECT),
+        ({"collect": True, "providers": True}, CommandPlanErrorCode.EMIT_PROMPT_REQUIRES_COLLECT),
+        ({"collect": True, "config_action": "view"}, CommandPlanErrorCode.EMIT_PROMPT_REQUIRES_COLLECT),
+        ({"collect": True, "dry_run": True}, CommandPlanErrorCode.COLLECT_ACTION_CONFLICT),
+    ],
+)
+def test_emit_prompt_rejects_incompatible_operations(options: dict[str, object], code: CommandPlanErrorCode) -> None:
+    with pytest.raises(CommandPlanError) as exc_info:
+        build_command_plan(make_request(emit_prompt=True, **options))
+
+    assert exc_info.value.code is code
 
 
 @pytest.mark.parametrize(

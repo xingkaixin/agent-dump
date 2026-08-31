@@ -63,6 +63,9 @@ EN_TRANSLATIONS = {
     Keys.CLI_COLLECT_HELP: "Collect session prints by date range and summarize with AI",
     Keys.CLI_COLLECT_MODE_HELP: "Collect output mode: pm (project management) or insight (author insights)",
     Keys.CLI_DRY_RUN_HELP: "Preview collect workload without AI calls or file writes",
+    Keys.CLI_EMIT_PROMPT_HELP: (
+        "Emit a collect prompt for an external agent without API configuration; --save names the final report"
+    ),
     Keys.CLI_SHORTCUT_HELP: "Run a configured shortcut preset",
     Keys.CLI_SINCE_HELP: "Collect start date (YYYY-MM-DD or YYYYMMDD)",
     Keys.CLI_UNTIL_HELP: "Collect end date (YYYY-MM-DD or YYYYMMDD)",
@@ -136,6 +139,8 @@ EN_TRANSLATIONS = {
     ),
     Keys.CONFIG_INPUT_PROMPT: "> ",
     Keys.COLLECT_MODE_CONFLICT: "❌ --collect cannot be used with URI/--interactive/--list.",
+    Keys.EMIT_PROMPT_REQUIRES_COLLECT: "❌ --emit-prompt requires --collect mode.",
+    Keys.COLLECT_ACTION_CONFLICT: "❌ --emit-prompt cannot be used with --dry-run.",
     Keys.COLLECT_DATE_FORMAT_INVALID: "❌ Invalid date format. Use YYYY-MM-DD or YYYYMMDD.",
     Keys.COLLECT_DATE_RANGE_INVALID: "❌ Invalid date range: since must be <= until.",
     Keys.COLLECT_CONFIG_MISSING: "❌ Collect requires config file.",

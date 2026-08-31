@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS, get_uri_scheme_map
-from agent_dump.collect_models import CollectMode
+from agent_dump.collect_models import CollectAction, CollectMode
 from agent_dump.output_formats import (
     FileOutputFormat,
     OutputFormat,
@@ -33,6 +33,8 @@ class CommandPlanErrorCode(Enum):
     QUERY_SPEC_INVALID = "query-spec-invalid"
     QUERY_COMBINATION_INVALID = "query-combination-invalid"
     COLLECT_MODE_CONFLICT = "collect-mode-conflict"
+    EMIT_PROMPT_REQUIRES_COLLECT = "emit-prompt-requires-collect"
+    COLLECT_ACTION_CONFLICT = "collect-action-conflict"
     URI_INVALID = "uri-invalid"
     URI_HEAD_WITH_FORMAT = "uri-head-with-format"
     URI_HEAD_WITH_SUMMARY = "uri-head-with-summary"
@@ -65,6 +67,7 @@ class CommandRequest:
     collect: bool = False
     collect_mode: CollectMode = CollectMode.PM
     dry_run: bool = False
+    emit_prompt: bool = False
     stats: bool = False
     providers: bool = False
     reindex: bool = False
@@ -95,7 +98,7 @@ class CollectOperation:
     since: str | None
     until: str | None
     save: str | None
-    dry_run: bool
+    action: CollectAction
     collect_mode: CollectMode
     query_spec: QuerySpec | None
 
@@ -199,6 +202,11 @@ def build_command_plan(
     is_query_uri = request.uri is not None and request.uri.startswith("agents://")
     mode_candidates = _build_mode_candidates(request, is_query_uri=is_query_uri)
     mode = mode_candidates[0].mode
+    if request.emit_prompt:
+        if mode is not _CommandMode.COLLECT:
+            raise CommandPlanError(CommandPlanErrorCode.EMIT_PROMPT_REQUIRES_COLLECT)
+        if request.dry_run:
+            raise CommandPlanError(CommandPlanErrorCode.COLLECT_ACTION_CONFLICT)
     ignored_mode_options = tuple(
         candidate.ignored_label
         for candidate in mode_candidates
@@ -284,12 +292,17 @@ def _build_operation(
     if mode is _CommandMode.COLLECT:
         if request.interactive or request.list_requested or (request.uri and query_uri_spec is None):
             raise CommandPlanError(CommandPlanErrorCode.COLLECT_MODE_CONFLICT)
+        action = CollectAction.EXECUTE
+        if request.emit_prompt:
+            action = CollectAction.EMIT_PROMPT
+        elif request.dry_run:
+            action = CollectAction.DRY_RUN
         return CollectOperation(
             days=None if request.days is None else _validate_days(request.days),
             since=request.since,
             until=request.until,
             save=request.save,
-            dry_run=request.dry_run,
+            action=action,
             collect_mode=request.collect_mode,
             query_spec=query_uri_spec,
         )

@@ -317,6 +317,42 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 # --head is a URI discovery mode. It does not replace --format print and cannot be combined with --format/--summary.
 ```
 
+### Summarize with an external agent
+
+Generate a self-contained task prompt instead of configuring an AI endpoint. No skill is required:
+
+```bash
+uv run agent-dump --collect --emit-prompt \
+  -since 20260824 -until 20260830 \
+  --collect-mode pm --save ./reports/weekly.md > ./collect-prompt.md
+
+# Keep an existing collect shortcut and opt in for this invocation
+uv run agent-dump --shortcut ob 20260831 --emit-prompt
+```
+
+Give the prompt to an agent that can run commands and read/write files in the same local environment.
+It includes a fixed candidate manifest, per-session read commands, the working directory and timezone,
+the existing `pm`/`insight` report requirements, and the absolute final report path.
+Commands use the generating Python interpreter or packaged executable; they do not require another global install.
+Keep the same provider-path environment variables. If the original runtime is no longer available,
+confirm a replacement entry point before proceeding.
+
+- stdout contains the prompt; diagnostics go to stderr. `--save` still names the **final report**, not the prompt file.
+- Generation does not validate AI settings, call a model, plan summary chunks, write collect logs, or create the report.
+  Content queries may still read transcripts and update the local search index while selecting candidates.
+- All collect exclusions and query filters still apply. Dates include both endpoints and select sessions by their local
+  **creation date**, not individual message timestamps. The manifest is not a content snapshot.
+- The external agent reads sessions in batches, discloses failures/truncation, and verifies the saved file.
+  `print` is a readable conversation view, not a lossless tool log; the prompt explains JSON export when needed.
+- `--emit-prompt` requires collect mode and conflicts with `--dry-run`. No matching candidates produces no prompt
+  and exits `0`; no available provider or a preparation error exits `1`.
+- To make this permanent for a shortcut, add `"--emit-prompt"` to its `args`; shortcut expansion needs no special handling.
+
+Like the built-in collect prompts, the generated model instructions and report headings are Chinese;
+`--lang` controls CLI help and diagnostics. Treat the prompt's titles and paths as private data.
+External processing is subject to the chosen agent's data-transfer policy, not necessarily offline.
+Generating a prompt does not mean that a report has been created, and does not automatically launch an external agent.
+
 ### Full Parameter Reference
 
 | Parameter | Description | Default |
@@ -329,6 +365,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
 | `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
+| `--emit-prompt` | Use with `--collect` to print a self-contained task for an external agent, without AI configuration or report writes. Incompatible with `--dry-run`; `--save` specifies the eventual report path. | - |
 | `--stats` | Show session usage statistics for the last N days, grouped by agent and time. If any message count is unknown, reports the known subtotal and number of unknown Sessions instead of presenting a partial sum as a total. Supports `-days` and `-query`; use it as a standalone mode. | - |
 | `--providers`, `--capabilities` | Show the registered provider capability matrix, including URI schemes, supported and unsupported export formats, and whether local search roots exist. Does not scan sessions. | - |
 | `--search` | Full-text search across provider-normalized session titles, messages, reasoning, and tool state using local SQLite FTS5; raw provider metadata is not searched. Whitespace-delimited terms are matched literally (FTS5 operator syntax such as `AND`/`NEAR`/`*` is not interpreted), all distinct terms are required, and terms may occur in different corpus fields. CJK terms require literal adjacency. FTS5-unavailable and unsupported-tokenizer cases use the same in-process logical-text matcher; unreadable sessions and index errors are reported on stderr. Cached session text not seen for 30 days is removed automatically. Can be combined with `--list`. | - |
@@ -339,7 +376,7 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
 | `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
 | `-until`, `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
-| `--save` | collect output path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. | - |
+| `--save` | collect report path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. With `--emit-prompt`, the path is included as an instruction for the external agent; no report is written. | - |
 | `-config`, `--config` | Config management: `view` or `edit` | - |
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
 | `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor supports only `json` and `print` (no `raw/markdown`). | - |
@@ -422,7 +459,7 @@ deny = [
 
 `[agent.<name>].deny` only applies to `--collect`. When a session `cwd` matches one of the configured paths, or is inside that path, the session is ignored during collect.
 
-Collect and `--collect --dry-run` require valid TOML and exclusion arrays containing only nonempty path strings. Invalid configuration stops the command before session discovery or AI requests; compatibility parsing never disables exclusions for collect.
+Collect, `--collect --dry-run`, and `--collect --emit-prompt` require valid TOML and exclusion arrays containing only nonempty path strings. Invalid configuration stops the command before session discovery or AI requests; compatibility parsing never disables exclusions for collect.
 
 `[export].output` defines the global default output root for `json/raw` exports. It accepts absolute or relative paths. Relative paths are resolved from the directory where `agent-dump` is executed, not from the config file location.
 
@@ -458,6 +495,7 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 │       ├── collect_output.py   # Collect Markdown output
 │       ├── collect_logging.py  # Collect private diagnostics logging
 │       ├── collect_prompts.py  # Collect prompt construction
+│       ├── collect_handoff.py  # External-agent instructions and candidate manifest
 │       ├── collect_progress.py # Collect progress and run stats
 │       ├── collect_reduction.py # Collect concurrent summaries and reduction
 │       ├── collect_requests.py # Collect retries and structured responses

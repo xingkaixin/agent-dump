@@ -3,15 +3,17 @@
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 import sys
 import threading
 from typing import Protocol
 
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, resolve_collect_date_range
+from agent_dump.collect_handoff import build_collect_handoff_prompt
 from agent_dump.collect_logging import CollectLogger, create_collect_logger
 from agent_dump.collect_models import (
+    CollectAction,
     CollectFailurePhase,
     CollectOverviewProgress,
     CollectProgressEvent,
@@ -39,7 +41,12 @@ from agent_dump.collect_requests import (
     request_structured_summary_from_llm,
     request_summary_from_llm,
 )
-from agent_dump.collect_sessions import collect_entries, collect_scan_days, plan_collect_entries
+from agent_dump.collect_sessions import (
+    collect_entries,
+    collect_scan_days,
+    plan_collect_entries,
+    select_collect_sessions,
+)
 from agent_dump.command_plan import CollectOperation
 from agent_dump.config import (
     AIConfig,
@@ -495,6 +502,58 @@ def _handle_collect_execution(
     return 0
 
 
+def _handle_collect_prompt(
+    operation: CollectOperation,
+    *,
+    scanner_factory: Callable[[], AgentScanner],
+    collect_config: CollectConfig,
+    since_date: date,
+    until_date: date,
+) -> int:
+    try:
+        local_tz = get_local_timezone()
+        print(
+            i18n.t(Keys.COLLECT_PROGRESS_START, since=since_date.isoformat(), until=until_date.isoformat()),
+            file=sys.stderr,
+        )
+        scanner = scanner_factory()
+        session_groups = scanner.get_available_sessions(collect_scan_days(since_date, local_tz))
+        if not session_groups:
+            print(i18n.t(Keys.NO_AGENTS_FOUND), file=sys.stderr)
+            return 1
+        selected = select_collect_sessions(
+            session_groups=session_groups,
+            since_date=since_date,
+            until_date=until_date,
+            collect_config=collect_config,
+            query_spec=operation.query_spec,
+            local_tz=local_tz,
+            diagnostic_sink=print_recoverable_diagnostic,
+        )
+        if not selected:
+            print(
+                i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()),
+                file=sys.stderr,
+            )
+            return 0
+        prompt = build_collect_handoff_prompt(
+            sessions=selected,
+            since_date=since_date,
+            until_date=until_date,
+            mode=operation.collect_mode,
+            output_path=preview_collect_save_path(
+                operation.save, since_date=since_date, until_date=until_date
+            ).resolve(),
+            working_directory=Path.cwd(),
+            generated_at=datetime.now(local_tz),
+        )
+    except Exception as exc:
+        print(render_terminal_message(Keys.COLLECT_READ_FAILED, error=exc), file=sys.stderr)
+        return 1
+    print(prompt)
+    return 0
+
+
 def handle_collect_mode(
     operation: CollectOperation,
     *,
@@ -503,6 +562,7 @@ def handle_collect_mode(
     request_structured_summary: StructuredSummaryRequester = request_structured_summary_from_llm,
 ) -> int:
     """Handle `--collect` flow."""
+    diagnostic_output = sys.stderr if operation.action is CollectAction.EMIT_PROMPT else sys.stdout
     try:
         since_date, until_date = resolve_collect_date_range(
             operation.since,
@@ -511,18 +571,26 @@ def handle_collect_mode(
         )
     except CollectDateError as exc:
         if exc.code is CollectDateErrorCode.SINCE_AFTER_UNTIL:
-            print(i18n.t(Keys.COLLECT_DATE_RANGE_INVALID))
+            print(i18n.t(Keys.COLLECT_DATE_RANGE_INVALID), file=diagnostic_output)
         else:
-            print(i18n.t(Keys.COLLECT_DATE_FORMAT_INVALID))
+            print(i18n.t(Keys.COLLECT_DATE_FORMAT_INVALID), file=diagnostic_output)
         return 1
 
-    config_document = load_config_document()
     try:
+        config_document = load_config_document()
         config_document.validate_collect_safety()
-    except ValueError as exc:
-        print(render_terminal_message(Keys.COLLECT_CONFIG_UNSAFE, field=exc))
+    except (OSError, ValueError) as exc:
+        print(render_terminal_message(Keys.COLLECT_CONFIG_UNSAFE, field=exc), file=diagnostic_output)
         return 1
-    if operation.dry_run:
+    if operation.action is CollectAction.EMIT_PROMPT:
+        return _handle_collect_prompt(
+            operation,
+            scanner_factory=scanner_factory,
+            collect_config=config_document.collect_config(),
+            since_date=since_date,
+            until_date=until_date,
+        )
+    if operation.action is CollectAction.DRY_RUN:
         return _handle_collect_dry_run(
             operation,
             scanner_factory=scanner_factory,

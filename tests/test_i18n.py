@@ -166,6 +166,8 @@ CHINESE_LITERAL_EXEMPTIONS = {
     "collect_events.py",
     "collect_llm.py",
     "collect_prompts.py",
+    # 外部 agent 执行说明同样是模型输入，复用内置 collect 的中文报告约定。
+    "collect_handoff.py",
     "prompt_safety.py",
     "uri_workflow.py",
     # i18n 目录本身
