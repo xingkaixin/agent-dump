@@ -3,7 +3,7 @@
 from collections import defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import tzinfo
+from datetime import date, tzinfo
 import sys
 import threading
 
@@ -16,6 +16,7 @@ from agent_dump.collect_models import (
     CollectAggregate,
     CollectMode,
     CollectProgressEvent,
+    CollectSummaryGroup,
     MergeSessionsProgress,
     PlannedCollectEntry,
     SessionSummaryEntry,
@@ -28,8 +29,6 @@ from agent_dump.collect_progress import emit_collect_progress
 from agent_dump.collect_prompts import build_collect_chunk_prompt, build_collect_merge_prompt
 from agent_dump.collect_requests import StructuredSummaryRequester, request_structured_summary_from_llm
 from agent_dump.collect_summary import (
-    dedupe_preserve_order,
-    empty_summary_payload,
     merge_summary_payloads,
     summary_payload_size,
 )
@@ -257,27 +256,6 @@ def summarize_collect_entries(
     return summaries
 
 
-def _build_summary_bucket_lines(
-    session_summaries: list[SessionSummaryEntry],
-    *,
-    key_fn: Callable[[SessionSummaryEntry], str],
-    mode: CollectMode = CollectMode.PM,
-) -> dict[str, list[str]]:
-    grouped: dict[str, list[str]] = defaultdict(list)
-    for summary in session_summaries:
-        key = key_fn(summary)
-        payload = summary.summary_data
-        if mode is CollectMode.INSIGHT:
-            highlights = payload.get("scene", [])[:2] + payload.get("stuck", [])[:1]
-        else:
-            highlights = (
-                payload.get("key_actions", [])[:2] + payload.get("decisions", [])[:1] + payload.get("errors", [])[:1]
-            )
-        line = f"{summary.collect_entry.session_title}: {'; '.join(dedupe_preserve_order(highlights, limit=4)) or '(no highlights)'}"
-        grouped[key].append(line)
-    return {key: dedupe_preserve_order(values, limit=6) for key, values in grouped.items()}
-
-
 def reduce_collect_summaries(
     *,
     config: AIConfig,
@@ -289,85 +267,82 @@ def reduce_collect_summaries(
     mode: CollectMode = CollectMode.PM,
     request_structured_summary: StructuredSummaryRequester = request_structured_summary_from_llm,
 ) -> CollectAggregate:
-    """Reduce per-session summaries via tree reduction into one final aggregate."""
-    if not session_summaries:
-        return CollectAggregate(
-            summary_data=empty_summary_payload(mode),
-            date_summaries={},
-            project_summaries={},
-            session_count=0,
-            reduction_depth=0,
+    """Reduce summaries only within the attribution required by the report mode."""
+    working = [
+        CollectSummaryGroup(
+            date_value=summary.collect_entry.date_value,
+            project_directory=summary.collect_entry.project_directory,
+            session_uris=(summary.collect_entry.session_uri,),
+            summary_data=summary.summary_data,
         )
-
-    working = [entry.summary_data for entry in session_summaries]
+        for summary in session_summaries
+    ]
     reduction_depth = 0
 
-    while len(working) > 1:
+    while working:
+        grouped: dict[tuple[date, str, str], list[CollectSummaryGroup]] = defaultdict(list)
+        for group in working:
+            scope = group.session_uris[0] if mode is CollectMode.INSIGHT else ""
+            grouped[(group.date_value, group.project_directory, scope)].append(group)
+        if len(grouped) == len(working):
+            break
+
         reduction_depth += 1
-        next_level: list[dict[str, list[str]]] = []
-        total_groups = (len(working) + group_size - 1) // group_size
+        next_level: list[CollectSummaryGroup] = []
+        total_groups = sum((len(groups) + group_size - 1) // group_size for groups in grouped.values())
         emit_collect_progress(
             progress_callback,
             TreeReductionProgress(level=reduction_depth, current=0, total=total_groups),
         )
-        for start in range(0, len(working), group_size):
-            group = working[start : start + group_size]
-            group_index = start // group_size + 1
-            group_source = f"collect://group-level-{reduction_depth}/group-{group_index}"
-            merged = merge_summary_payloads(group, max_items_per_field=None, mode=mode)
-            if _summary_needs_compression(merged):
-                try:
-                    merged = request_structured_summary(
-                        config,
-                        build_collect_merge_prompt(
-                            source_uri=group_source,
-                            payloads=group,
-                            merge_label=f"group-level-{reduction_depth}",
+        group_index = 0
+        for groups in grouped.values():
+            for start in range(0, len(groups), group_size):
+                batch = groups[start : start + group_size]
+                group_index += 1
+                first = batch[0]
+                payloads = [group.summary_data for group in batch]
+                merged = merge_summary_payloads(payloads, max_items_per_field=None, mode=mode)
+                group_source = f"collect://group-level-{reduction_depth}/group-{group_index}"
+                if len(batch) > 1 and _summary_needs_compression(merged):
+                    try:
+                        merged = request_structured_summary(
+                            config,
+                            build_collect_merge_prompt(
+                                source_uri=group_source,
+                                payloads=payloads,
+                                merge_label=f"group-level-{reduction_depth}",
+                                mode=mode,
+                            ),
+                            context=StructuredSummaryContext(
+                                label=group_source,
+                                phase=StructuredSummaryPhase.GROUP_MERGE,
+                            ),
+                            timeout_seconds=timeout_seconds,
+                            logger=logger,
                             mode=mode,
-                        ),
-                        context=StructuredSummaryContext(
-                            label=group_source,
-                            phase=StructuredSummaryPhase.GROUP_MERGE,
-                        ),
-                        timeout_seconds=timeout_seconds,
-                        logger=logger,
-                        mode=mode,
-                    )
-                except RuntimeError as exc:
-                    if logger is not None:
-                        logger.log(
-                            "llm_merge_fallback",
-                            phase=StructuredSummaryPhase.GROUP_MERGE.value,
-                            context=group_source,
-                            level=reduction_depth,
-                            group_index=group_index,
-                            error=str(exc),
                         )
-            next_level.append(merged)
-            emit_collect_progress(
-                progress_callback,
-                TreeReductionProgress(
-                    level=reduction_depth,
-                    current=group_index,
-                    total=total_groups,
-                ),
-            )
+                    except RuntimeError as exc:
+                        if logger is not None:
+                            logger.log(
+                                "llm_merge_fallback",
+                                phase=StructuredSummaryPhase.GROUP_MERGE.value,
+                                context=group_source,
+                                level=reduction_depth,
+                                group_index=group_index,
+                                error=str(exc),
+                            )
+                next_level.append(
+                    CollectSummaryGroup(
+                        date_value=first.date_value,
+                        project_directory=first.project_directory,
+                        session_uris=tuple(uri for group in batch for uri in group.session_uris),
+                        summary_data=merged,
+                    )
+                )
+                emit_collect_progress(
+                    progress_callback,
+                    TreeReductionProgress(level=reduction_depth, current=group_index, total=total_groups),
+                )
         working = next_level
 
-    date_summaries = _build_summary_bucket_lines(
-        session_summaries,
-        key_fn=lambda item: item.collect_entry.date_value.isoformat(),
-        mode=mode,
-    )
-    project_summaries = _build_summary_bucket_lines(
-        session_summaries,
-        key_fn=lambda item: item.collect_entry.project_directory or "(unknown)",
-        mode=mode,
-    )
-    return CollectAggregate(
-        summary_data=working[0],
-        date_summaries=date_summaries,
-        project_summaries=project_summaries,
-        session_count=len(session_summaries),
-        reduction_depth=reduction_depth,
-    )
+    return CollectAggregate(groups=tuple(working), reduction_depth=reduction_depth)

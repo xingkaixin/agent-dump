@@ -151,6 +151,7 @@ EN_TRANSLATIONS = {
     Keys.COLLECT_LOG_WRITE_FAILED: "⚠️  Failed to write collect diagnostics to {path}: {error}",
     Keys.COLLECT_NO_SESSIONS: "⚠️  No sessions found in range {since} ~ {until}.",
     Keys.COLLECT_API_FAILED: "❌ AI summary request failed: {error}",
+    Keys.COLLECT_FINAL_INPUT_TOO_LARGE: "Attributed report input exceeds {limit} characters; narrow the date range or query and retry.",
     Keys.COLLECT_OUTPUT_SAVED: "✅ Collect summary saved: {path}",
     Keys.COLLECT_DRY_RUN_HEADER: "Collect dry-run preview",
     Keys.COLLECT_DRY_RUN_DATE_RANGE: "Date range: {since} ~ {until}",

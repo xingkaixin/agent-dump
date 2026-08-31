@@ -291,7 +291,8 @@ uv run agent-dump --shortcut ob 20260408
 
 # Note: --collect converts each session into high-signal events, plans chunks by budget,
 #       requests fixed JSON summaries per chunk, merges them deterministically per session,
-#       then uses tree reduction for the final aggregate before rendering Markdown.
+#       then reduces within each date/project group (or each session in insight mode).
+#       Final Markdown input retains these sources; inputs over 64,000 characters require a narrower range/query.
 # Note: collect date precedence is explicit -since/-until, then explicit -days, then today only.
 # Note: --collect --dry-run completes scanning, query filtering, and chunk planning, then
 #       prints provider breakdown, session/chunk counts, concurrency, dates, and save path preview.

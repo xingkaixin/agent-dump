@@ -220,15 +220,26 @@ class SessionSummaryEntry:
     summary_data: dict[str, list[str]]
 
 
-@dataclass
-class CollectAggregate:
-    """Final aggregate input used to render the markdown report."""
+@dataclass(frozen=True)
+class CollectSummaryGroup:
+    """Summary facts whose report attribution is owned by the grouping workflow."""
 
+    date_value: date
+    project_directory: str
+    session_uris: tuple[str, ...]
     summary_data: dict[str, list[str]]
-    date_summaries: dict[str, list[str]]
-    project_summaries: dict[str, list[str]]
-    session_count: int
+
+
+@dataclass(frozen=True)
+class CollectAggregate:
+    """Final attributed summaries used to render the markdown report."""
+
+    groups: tuple[CollectSummaryGroup, ...]
     reduction_depth: int
+
+    @property
+    def session_count(self) -> int:
+        return sum(len(group.session_uris) for group in self.groups)
 
 
 @dataclass(frozen=True)

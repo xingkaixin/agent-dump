@@ -14,6 +14,7 @@ from agent_dump.collect_models import (
     CollectEntry,
     CollectEvent,
     CollectMode,
+    CollectSummaryGroup,
     SessionSummaryEntry,
     collect_fields_for,
 )
@@ -22,7 +23,7 @@ from agent_dump.collect_prompts import (
     build_collect_final_prompt,
     build_collect_merge_prompt,
 )
-from agent_dump.collect_reduction import _build_summary_bucket_lines
+from agent_dump.collect_reduction import reduce_collect_summaries
 from agent_dump.collect_requests import request_structured_summary_payload_from_llm
 from agent_dump.collect_summary import (
     build_summary_json_schema,
@@ -101,13 +102,17 @@ class TestCollectInsightMode:
 
     def test_build_collect_final_prompt_insight_mode(self):
         aggregate = CollectAggregate(
-            summary_data=normalize_summary_payload(
-                {"scene": ["调试断言"], "stuck": ["断言反复失败"], "turning": ["改用 waitFor"]},
-                mode=CollectMode.INSIGHT,
+            groups=(
+                CollectSummaryGroup(
+                    date_value=date(2026, 3, 5),
+                    project_directory="/repo",
+                    session_uris=("codex://s-1",),
+                    summary_data=normalize_summary_payload(
+                        {"scene": ["调试断言"], "stuck": ["断言反复失败"], "turning": ["改用 waitFor"]},
+                        mode=CollectMode.INSIGHT,
+                    ),
+                ),
             ),
-            date_summaries={"2026-03-05": ["task: 调试断言"]},
-            project_summaries={"/repo": ["task: 调试断言"]},
-            session_count=1,
             reduction_depth=0,
         )
 
@@ -124,12 +129,22 @@ class TestCollectInsightMode:
         assert "**想做什么**" in prompt
         assert "**卡在哪**" in prompt
         assert "**转折点**" in prompt
-        aggregate_envelope = next(
+        group_envelope = next(
             json.loads(line)
             for line in prompt.splitlines()
             if line.startswith('{"untrusted_data": "untrusted_derived_summary"')
         )
-        assert json.loads(aggregate_envelope["content"])["scene"] == ["调试断言"]
+        assert group_envelope["source"] == "collect://final/group/1"
+        assert json.loads(group_envelope["content"]) == {
+            "date": "2026-03-05",
+            "project_directory": "/repo",
+            "session_uris": ["codex://s-1"],
+            "summary": {
+                "scene": ["调试断言"],
+                "stuck": ["断言反复失败"],
+                "turning": ["改用 waitFor"],
+            },
+        }
 
     def test_build_summary_json_schema_insight_mode(self):
         schema = build_summary_json_schema(mode=CollectMode.INSIGHT)
@@ -163,27 +178,50 @@ class TestCollectInsightMode:
         assert merged["turning"] == ["L1"]
         assert merged["stuck"] == ["C1"]
 
-    def test_build_summary_bucket_lines_insight_mode(self):
+    @pytest.mark.parametrize("session_count", [2, 8])
+    def test_insight_reduction_keeps_each_sessions_related_facts(self, session_count: int) -> None:
         summaries = [
             SessionSummaryEntry(
-                collect_entry=self._entry(),
+                collect_entry=self._entry(session_id=f"s-{index}"),
                 summary_data=normalize_summary_payload(
-                    {"scene": ["调试断言"], "stuck": ["断言反复失败"], "turning": ["改用 waitFor"]},
+                    {
+                        "scene": ["调试断言"],
+                        "stuck": [f"failure-{index}"],
+                        "turning": [f"recovery-{index}"],
+                    },
                     mode=CollectMode.INSIGHT,
                 ),
-            ),
+            )
+            for index in range(session_count)
         ]
+        request_summary = mock.Mock(side_effect=AssertionError("independent sessions must not be merged"))
 
-        buckets = _build_summary_bucket_lines(
-            summaries,
-            key_fn=lambda item: item.collect_entry.date_value.isoformat(),
+        aggregate = reduce_collect_summaries(
+            config=AIConfig(provider="openai", base_url="https://example.com/v1", model="test", api_key="test"),
+            session_summaries=summaries,
+            request_structured_summary=request_summary,
             mode=CollectMode.INSIGHT,
         )
+        prompt = build_collect_final_prompt(
+            since_date=date(2026, 3, 1),
+            until_date=date(2026, 3, 5),
+            aggregate=aggregate,
+            has_truncated=False,
+            mode=CollectMode.INSIGHT,
+        )
+        groups = [
+            json.loads(json.loads(line)["content"])
+            for line in prompt.splitlines()
+            if line.startswith('{"untrusted_data": "untrusted_derived_summary"')
+        ]
 
-        assert "2026-03-05" in buckets
-        line = buckets["2026-03-05"][0]
-        assert "调试断言" in line
-        assert "断言反复失败" in line
+        request_summary.assert_not_called()
+        assert aggregate.session_count == session_count
+        assert len(groups) == session_count
+        assert all(group["date"] == "2026-03-05" and group["project_directory"] == "/repo" for group in groups)
+        assert {tuple(group["session_uris"]): group["summary"] for group in groups} == {
+            (summary.collect_entry.session_uri,): summary.summary_data for summary in summaries
+        }
 
     def test_empty_summary_payload_insight_mode(self):
         payload = empty_summary_payload(CollectMode.INSIGHT)
