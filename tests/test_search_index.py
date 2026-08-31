@@ -108,6 +108,34 @@ class TestHasFts5:
         assert "trigram" in conn.execute.call_args.args[0]
 
 
+def test_content_version_refreshes_unchanged_legacy_tool_sessions(tmp_path):
+    session = make_session("tool-session", "Tool session", tmp_path / "source.json")
+    payload = {
+        "messages": [
+            {
+                "role": "assistant",
+                "parts": [{"type": "tool", "tool": "bash", "state": {"input": {"command": "quartz"}}}],
+            }
+        ]
+    }
+    agent = DummyAgent(session_data={session.id: payload})
+    db_path = tmp_path / "index.db"
+    index = SearchIndex(db_path)
+    with mock.patch.object(search_index_module, "extract_session_searchable_text", return_value=""):
+        assert index.update(agent, [session]) == (1, 0)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("PRAGMA user_version = 0")
+        conn.commit()
+    finally:
+        conn.close()
+
+    refreshed = SearchIndex(db_path)
+    assert refreshed.update(agent, [session]) == (1, 0)
+    assert [result.session_id for result in refreshed.search("quartz")] == [session.id]
+    assert refreshed.update(agent, [session]) == (0, 0)
+
+
 class TestHasCjk:
     def test_detects_chinese(self):
         assert _has_cjk("中文") is True
