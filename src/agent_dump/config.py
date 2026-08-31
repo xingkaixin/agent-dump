@@ -140,9 +140,15 @@ class ConfigurationDocument:
         """Reject configuration whose session exclusions cannot be trusted."""
         if self.parse_mode is not ConfigurationParseMode.TOML:
             raise ValueError("TOML")
-        for section_path, values in self.sections.items():
-            agent_name = _child_of(section_path, "agent")
-            if agent_name is None or "deny" not in values:
+        # 扁平视图会隐藏错误的表结构；安全校验必须检查原始配置快照。
+        text = self.source_text if self.source_text is not None else _render_config_sections(self.sections)
+        agents = tomllib.loads(text).get("agent", {})
+        if not isinstance(agents, dict):
+            raise ValueError("agent")
+        for agent_name, values in agents.items():
+            if not isinstance(values, dict):
+                raise ValueError(f"agent.{agent_name}")
+            if "deny" not in values:
                 continue
             paths = values["deny"]
             if not isinstance(paths, (list, tuple)) or any(

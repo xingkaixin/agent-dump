@@ -109,7 +109,35 @@ class TestConfigReadWrite:
             load_config_document(path).validate_collect_safety()
 
     @pytest.mark.parametrize(
-        "settings", ["", "[agent.codex]\ndeny = []\n", '[agent.codex]\ndeny = ["/private, work"]\n']
+        ("settings", "field"),
+        [
+            ('agent = "codex"', "agent"),
+            ('[[agent]]\ncodex = {deny = ["/private"]}', "agent"),
+            ('[agent]\ncodex = ["/private"]', "agent.codex"),
+            ('[[agent.codex]]\ndeny = ["/private"]', "agent.codex"),
+            ('[agent.codex.deny]\npaths = ["/private"]', "agent.codex.deny"),
+            ("[agent.codex.deny]", "agent.codex.deny"),
+            ('[[agent.codex.deny]]\npath = "/private"', "agent.codex.deny"),
+        ],
+    )
+    def test_collect_safety_rejects_invalid_table_structure(self, tmp_path: Path, settings: str, field: str) -> None:
+        path = tmp_path / "config.toml"
+        path.write_text(settings, encoding="utf-8")
+
+        with pytest.raises(ValueError) as error:
+            load_config_document(path).validate_collect_safety()
+
+        assert str(error.value) == field
+
+    @pytest.mark.parametrize(
+        "settings",
+        [
+            "",
+            "[agent.codex]\ndeny = []\n",
+            '[agent.codex]\ndeny = ["/private, work"]\n',
+            'agent = {codex = {deny = ["/private"]}}',
+            '[agent.codex.future]\nmode = "keep"',
+        ],
     )
     def test_collect_safety_accepts_valid_exclusions(self, tmp_path: Path, settings: str) -> None:
         path = tmp_path / "config.toml"
