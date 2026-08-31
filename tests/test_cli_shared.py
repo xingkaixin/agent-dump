@@ -578,8 +578,8 @@ class TestRenderSessionText:
         assert "line one" in output and "\nline two" in output
         assert output.count("\n") >= 5
 
-    def test_render_session_text_skips_developer_like_user_context(self):
-        """测试 URI 输出会过滤伪装成 user 的系统上下文"""
+    def test_render_session_text_preserves_user_context_mentions(self):
+        """共享渲染保留用户正文，由 provider 识别上下文角色。"""
         session_data = {
             "messages": [
                 {
@@ -603,11 +603,11 @@ class TestRenderSessionText:
 
         output = render_session_text("codex://abc", session_data)
 
-        assert "AGENTS.md instructions" not in output
-        assert "<environment_context>" not in output
+        assert "AGENTS.md instructions" in output
+        assert "<environment_context>" in output
         assert "## 1. User" in output
         assert "真实用户问题" in output
-        assert "## 2. Assistant" in output
+        assert "## 4. Assistant" in output
         assert "真实助手回复" in output
 
     def test_render_session_text_skips_messages_without_text_parts(self):

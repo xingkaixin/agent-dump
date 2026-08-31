@@ -20,7 +20,6 @@ from agent_dump.agents.message_assembly import (
     try_append_to_assistant_group,
 )
 from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart, is_plan_part
-from agent_dump.message_filter import is_developer_like_user_message
 
 CODEX_TOOL_TITLE_MAP = {
     "exec_command": "bash",
@@ -30,6 +29,12 @@ CODEX_TOOL_TITLE_MAP = {
 }
 PROPOSED_PLAN_PATTERN = re.compile(r"<proposed_plan>\s*(.*?)\s*</proposed_plan>", re.DOTALL)
 PLAN_APPROVAL_PREFIX = "PLEASE IMPLEMENT THIS PLAN"
+_USER_CONTEXT_BLOCK = re.compile(
+    r"(?:# AGENTS\.md instructions for [^\r\n]+\r?\n(?:[ \t]*\r?\n)*)?"
+    r"<(?P<tag>instructions|environment_context|permissions instructions|collaboration_mode)>"
+    r".*?</(?P=tag)>(?:[ \t]*\r?\n)*",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 @dataclass
@@ -338,16 +343,26 @@ class CodexTranscriptDecoder(CodexMessageEnrichmentMixin):
 
         return "\n\n".join(text_parts)
 
-    def _is_plan_approval_user_message(self, parts: list[NormalizedPart]) -> tuple[bool, str | None]:
-        """Whether one user message should be consumed as plan approval input."""
-        user_text = self._extract_visible_user_text(parts)
-        if user_text is None:
-            return False, None
-
-        if is_developer_like_user_message("user", [user_text]):
-            return False, None
-
-        return True, user_text
+    @staticmethod
+    def _is_injected_user_context(content: Any) -> bool:
+        """Recognize complete Codex context blocks without discarding mixed user input."""
+        if not isinstance(content, list) or not content:
+            return False
+        if any(
+            not isinstance(item, dict) or item.get("type") != "input_text" or not isinstance(item.get("text"), str)
+            for item in content
+        ):
+            return False
+        user_text = "\n\n".join(item["text"] for item in content).lstrip("\r\n").rstrip()
+        if not user_text:
+            return False
+        offset = 0
+        while offset < len(user_text):
+            match = _USER_CONTEXT_BLOCK.match(user_text, offset)
+            if match is None:
+                return False
+            offset = match.end()
+        return True
 
     def _attach_tool_part_to_latest_assistant(
         self,
@@ -495,6 +510,8 @@ class CodexTranscriptDecoder(CodexMessageEnrichmentMixin):
         parts = self._extract_message_content_parts(role, payload.get("content", []), timestamp_ms)
         if not parts:
             return
+        if role == "user" and self._is_injected_user_context(payload.get("content")):
+            role = "developer"
 
         if role == "assistant":
             self._append_assistant_message_item(
@@ -505,8 +522,8 @@ class CodexTranscriptDecoder(CodexMessageEnrichmentMixin):
             )
             return
 
-        can_consume_for_plan, user_text = self._is_plan_approval_user_message(parts)
-        if state.pending_plan_location is not None and can_consume_for_plan and user_text is not None:
+        user_text = self._extract_visible_user_text(parts) if role == "user" else None
+        if state.pending_plan_location is not None and user_text is not None:
             approval_status = "success" if user_text.lstrip().startswith(PLAN_APPROVAL_PREFIX) else "fail"
             output = None if approval_status == "success" else user_text
             self._finalize_pending_plan(
