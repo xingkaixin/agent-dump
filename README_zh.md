@@ -322,11 +322,30 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 ```bash
 uv run agent-dump --collect --emit-prompt \
   -since 20260824 -until 20260830 \
-  --collect-mode pm --save ./reports/weekly.md > ./collect-prompt.md
+  --collect-mode pm --save ./reports/weekly.md
 
 # 已有 collect shortcut 也可以临时启用
 uv run agent-dump --shortcut ob 20260831 --emit-prompt
 ```
+
+上面的命令直接输出提示词。交给 agent 执行时，推荐**首次运行就把 stdout 和 stderr 分别保存到私有文件**，
+避免候选清单被命令工具的输出上限截断。macOS/Linux 的 shortcut 示例（不需要新增 CLI 参数）：
+
+```bash
+(
+  umask 077
+  collect_task_dir=$(mktemp -d) || exit 1
+  uv run agent-dump --shortcut ob 20260831 --emit-prompt \
+    > "$collect_task_dir/prompt.md" 2> "$collect_task_dir/diagnostics.txt"
+  collect_exit_code=$?
+  printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
+    "$collect_exit_code" "$collect_task_dir/prompt.md" "$collect_task_dir/diagnostics.txt"
+  exit "$collect_exit_code"
+)
+```
+
+将返回的两个文件路径交给 agent，让它读取说明、用脚本校验完整清单并分批处理，不要再次把整个文件打印进工具输出。
+其他平台也应使用私有临时目录、分别保存两个输出流，并检查退出码。
 
 把提示词交给能在原本地环境中执行命令、读取会话和写文件的 agent。
 它包含固定候选清单、逐会话读取命令、工作目录、时区、现有 `pm`/`insight` 报告要求和最终绝对路径。
@@ -336,7 +355,13 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
 - stdout 只输出提示词，诊断走 stderr；`--save` 仍是**最终报告路径**，不是提示词文件路径。
 - 不校验 AI 配置、不调用模型、不规划摘要 chunk、不创建 collect 日志或报告。内容查询仍可能读取正文并更新本地搜索索引。
 - 复用 collect 的排除规则和查询筛选。日期两端均包含，按会话的**本地创建日期**筛选，不按单条消息时间裁剪；清单不是内容快照。
-- 外部 agent 分批读取，披露失败或截断，并核验落盘文件。`print` 不是完整工具日志，需要时按提示词导出 JSON 核实。
+- 读取正文前，核对清单结束标记、候选数量、唯一 URI、JSON 长度和命令对应关系；JSON 能解析不等于清单完整。
+  清单损坏时先使用已保存的完整文件；没有完整文件时，仅允许按原筛选条件重新生成一次提示词并直接保存输出。
+  重生成是新候选清单，不是恢复旧快照；原条件不明或仍损坏时先询问，未经同意不交付残缺清单的部分日报。
+- 外部 agent 将会话 stdout/stderr 分别落盘，分段读到结尾；导出成功不算完整阅读。
+  清单完整但个别来源不可读时可带覆盖说明交付。`print` 不是完整工具日志，需要时按提示词导出 JSON 核实。
+- 无实质内容的来源仍计入覆盖附录，审批或重复转录不重复计为成果，当前汇总过程不作为被汇总的工作产出。
+  覆盖已有报告需要用户明确同意；先完成并核验新内容，再替换旧报告。
 - 仅支持 collect 模式，与 `--dry-run` 互斥。候选为空时不输出提示词，退出 `0`；无可用 provider 或准备失败时退出 `1`。
 - 要让 shortcut 始终生成提示词，在它的 `args` 中加入 `"--emit-prompt"` 即可，无需其他调整。
 

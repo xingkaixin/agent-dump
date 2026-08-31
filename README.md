@@ -324,11 +324,32 @@ Generate a self-contained task prompt instead of configuring an AI endpoint. No 
 ```bash
 uv run agent-dump --collect --emit-prompt \
   -since 20260824 -until 20260830 \
-  --collect-mode pm --save ./reports/weekly.md > ./collect-prompt.md
+  --collect-mode pm --save ./reports/weekly.md
 
 # Keep an existing collect shortcut and opt in for this invocation
 uv run agent-dump --shortcut ob 20260831 --emit-prompt
 ```
+
+These commands print the prompt directly. For agent execution, **save stdout and stderr to separate private files
+on the first invocation** so a command tool's output limit cannot discard candidates. A macOS/Linux shortcut example
+(no additional CLI option is needed):
+
+```bash
+(
+  umask 077
+  collect_task_dir=$(mktemp -d) || exit 1
+  uv run agent-dump --shortcut ob 20260831 --emit-prompt \
+    > "$collect_task_dir/prompt.md" 2> "$collect_task_dir/diagnostics.txt"
+  collect_exit_code=$?
+  printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
+    "$collect_exit_code" "$collect_task_dir/prompt.md" "$collect_task_dir/diagnostics.txt"
+  exit "$collect_exit_code"
+)
+```
+
+Give the agent both file paths. It should read the instructions, validate the full manifest programmatically, and
+process it in batches, without printing the entire file back into tool output. On other platforms, likewise use a
+private temporary directory, capture both streams separately, and check the exit code.
 
 Give the prompt to an agent that can run commands and read/write files in the same local environment.
 It includes a fixed candidate manifest, per-session read commands, the working directory and timezone,
@@ -342,8 +363,17 @@ confirm a replacement entry point before proceeding.
   Content queries may still read transcripts and update the local search index while selecting candidates.
 - All collect exclusions and query filters still apply. Dates include both endpoints and select sessions by their local
   **creation date**, not individual message timestamps. The manifest is not a content snapshot.
-- The external agent reads sessions in batches, discloses failures/truncation, and verifies the saved file.
-  `print` is a readable conversation view, not a lossless tool log; the prompt explains JSON export when needed.
+- Before reading transcripts, validate the manifest end marker, candidate count, unique URIs, JSON lengths, and command
+  identities. Parseable JSON alone does not prove completeness. Recover a damaged manifest from the full saved file first;
+  otherwise regenerate the prompt at most once with the original selection conditions and capture output directly.
+  Regeneration creates a new candidate manifest, not the old snapshot. If the conditions are unknown or recovery fails,
+  ask the user before delivering a partial report from a damaged manifest.
+- Save each session's stdout/stderr separately and read the transcript in bounded chunks through EOF; successful export
+  does not mean complete reading. A complete manifest with individual unreadable sources may produce a report disclosing
+  those gaps. `print` is not a lossless tool log; use the documented JSON fallback to verify tool results when needed.
+- Keep sources without substantive content in the coverage appendix, avoid counting approvals or duplicate transcripts
+  as separate achievements, and keep the current reporting process out of the work being summarized. Replacing an existing
+  report requires explicit user permission; prepare and verify the new content before replacing the old report.
 - `--emit-prompt` requires collect mode and conflicts with `--dry-run`. No matching candidates produces no prompt
   and exits `0`; no available provider or a preparation error exits `1`.
 - To make this permanent for a shortcut, add `"--emit-prompt"` to its `args`; shortcut expansion needs no special handling.

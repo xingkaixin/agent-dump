@@ -58,6 +58,8 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - 保留用户显式给出的 `--output`、`--format`、`--lang`、`-days`、`-query`、`--summary`、`--collect`、`-since/-until`、`--config` 参数。
 - 保留用户显式给出的 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--shortcut`、`--save`、`--search`、`--reindex`、`--providers`、`--capabilities`、`--no-metadata-summary` 参数。
 - 保留用户显式给出的 `--head` 参数，用于 URI 轻量元数据查看。
+- 用户要实际执行外部汇总时，首次生成就将 stdout/stderr 分别保存到私有文件，只回传路径和退出码；
+  按 recipes 的“外部 agent 汇总”先校验清单再读取正文，避免大清单在工具回传中丢失。
 
 3. 执行并检查退出状态
 - 退出码 `0`：命令完成了被要求的事（包括时间窗/关键词本就无命中，以及交互式导出部分成功）。
