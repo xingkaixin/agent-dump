@@ -137,3 +137,22 @@ test("copy fallback does not report success when execCommand rejects it", async 
 
   expect(await copyButton.getAttribute("aria-label")).toBe("Copy");
 });
+
+test("section artwork renders within the image transfer budget", async ({ page }) => {
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/");
+
+    const artworks = page.locator(".section-artwork");
+    await expect(artworks).toHaveCount(2);
+    for (const artwork of await artworks.all()) {
+      await artwork.scrollIntoViewIfNeeded();
+      await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+      const source = await artwork.evaluate((image: HTMLImageElement) => image.currentSrc);
+      const response = await page.request.get(source);
+      expect(response.ok()).toBe(true);
+      expect(response.headers()["content-type"]).toContain("image/webp");
+      expect((await response.body()).byteLength).toBeLessThan(100 * 1024);
+    }
+  }
+});
