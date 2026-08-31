@@ -76,10 +76,6 @@ __all__ = (
 )
 
 
-def is_option_specified(argv: list[str], short_option: str, long_option: str) -> bool:
-    return any(arg.partition("=")[0] in (short_option, long_option) for arg in argv)
-
-
 def expand_shortcut_argv(argv: list[str]) -> list[str]:
     """Expand configured shortcut preset into regular CLI argv."""
     if "--shortcut" not in argv:
@@ -149,17 +145,13 @@ def handle_session_modes(
     )
 
 
-def _build_command_request(
-    args: argparse.Namespace,
-    *,
-    output_specified: bool,
-) -> CommandRequest:
+def _build_command_request(args: argparse.Namespace) -> CommandRequest:
     return CommandRequest(
         uri=args.uri,
         days=args.days,
         output=args.output,
         raw_format=args.format,
-        output_specified=output_specified,
+        output_specified=args.output is not None,
         head=args.head,
         summary=args.summary,
         collect=args.collect,
@@ -469,14 +461,9 @@ def _run() -> int | None:
 
     setup_i18n(_language_from_argv(argv))
 
-    output_specified = is_option_specified(argv, "-output", "--output")
-
     parser = _build_argument_parser()
     args = parser.parse_args(argv)
-    request = _build_command_request(
-        args,
-        output_specified=output_specified,
-    )
+    request = _build_command_request(args)
 
     try:
         plan = build_command_plan(request, cwd=Path.cwd())

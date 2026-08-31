@@ -11,6 +11,7 @@ from cli_test_support import (
     configure_scanner_sessions,
 )
 from locale_helpers import Keys as LocaleKeys, expect
+import pytest
 
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
@@ -320,7 +321,18 @@ class TestMain:
         assert str(expected_output) in capsys.readouterr().out
         expected_output.unlink()
 
-    def test_main_uri_mode_json_creates_missing_output_dir(self, capsys, tmp_path):
+    @pytest.mark.parametrize(
+        "output_args",
+        [
+            ("--output", "{output}"),
+            ("--out", "{output}"),
+            ("--output={output}",),
+            ("--out={output}",),
+        ],
+    )
+    def test_main_uri_mode_json_creates_missing_output_dir(
+        self, capsys: pytest.CaptureFixture[str], tmp_path: Path, output_args: tuple[str, ...]
+    ) -> None:
         """测试 URI + --format json 在输出目录不存在时也能导出"""
         from agent_dump.agents.claudecode import ClaudeCodeAgent
 
@@ -349,9 +361,13 @@ class TestMain:
         )
 
         output_root = tmp_path / "missing-root"
+        configured_output = tmp_path / "configured-out"
         expected_output = output_root / "claudecode" / "session-001.json"
 
-        with mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class:
+        with (
+            mock.patch("agent_dump.cli.AgentScanner") as mock_scanner_class,
+            mock.patch("agent_dump.cli.load_export_config", return_value=ExportConfig(output=str(configured_output))),
+        ):
             mock_scanner = mock.MagicMock()
             mock_scanner.get_available_agents.return_value = [agent]
             configure_scanner_sessions(mock_scanner)
@@ -361,13 +377,20 @@ class TestMain:
                 mock.patch("agent_dump.uri_workflow.find_session_by_id", return_value=(agent, session)),
                 mock.patch(
                     "sys.argv",
-                    ["agent-dump", "claude://session-001", "--format", "json", "--output", str(output_root)],
+                    [
+                        "agent-dump",
+                        "claude://session-001",
+                        "--format",
+                        "json",
+                        *(arg.format(output=output_root) for arg in output_args),
+                    ],
                 ),
             ):
                 result = main()
 
         assert result == 0
         assert expected_output.exists()
+        assert not configured_output.exists()
         captured = capsys.readouterr()
         assert str(expected_output) in captured.out
 
