@@ -150,6 +150,74 @@
   }
 }
 
+.section-surface {
+  position: relative;
+  isolation: isolate;
+}
+
+.section-artwork,
+.section-surface--providers::before,
+.section-surface--install::before {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.section-artwork {
+  object-fit: cover;
+}
+
+.section-artwork--hero {
+  object-position: center 70%;
+  opacity: 0.85;
+  mask-image:
+    linear-gradient(to bottom, transparent, black 14%, black 74%, transparent),
+    linear-gradient(to right, #0003, black 65%);
+  mask-composite: intersect;
+}
+
+.section-artwork--archive {
+  opacity: 0.9;
+  mask-image: linear-gradient(to bottom, transparent, black 18%, black 80%, transparent);
+}
+
+.section-surface--providers::before {
+  content: "";
+  background: var(--color-surface);
+  opacity: 0.48;
+  mask-image: linear-gradient(to bottom, transparent, black 16%, black 86%, transparent);
+}
+
+.section-surface--install::before {
+  content: "";
+  background: linear-gradient(
+    115deg,
+    color-mix(in srgb, var(--color-accent) 8%, var(--color-bg)),
+    var(--color-surface) 64%,
+    var(--color-bg)
+  );
+  mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+}
+
+:where([data-theme="dark"]) .section-artwork {
+  filter: invert(1) hue-rotate(180deg);
+  opacity: 0.55;
+}
+
+@media (max-width: 767px) {
+  .section-artwork--hero {
+    object-position: 65% bottom;
+    opacity: 0.42;
+  }
+
+  .section-artwork--archive {
+    opacity: 0.24;
+  }
+}
+
 /*
   Scroll reveal. Hidden state applies only when JS is available (.js on <html>),
   so no-JS and reduced-motion users always see content.

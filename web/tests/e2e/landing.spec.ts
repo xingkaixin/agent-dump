@@ -32,6 +32,27 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const locale of locales) {
+  test(`${locale.name} landing page fits a narrow viewport`, async ({ page }) => {
+    for (const width of [360, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(locale.path);
+
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      const boxes = await page
+        .locator("#hero h1, #hero [role='img'], #install code, #install button")
+        .evaluateAll((elements) =>
+          elements.map((element) => ({
+            left: element.getBoundingClientRect().left,
+            right: element.getBoundingClientRect().right,
+          })),
+        );
+      for (const box of boxes) {
+        expect(box.left).toBeGreaterThanOrEqual(0);
+        expect(box.right).toBeLessThanOrEqual(width);
+      }
+    }
+  });
+
   test(`${locale.name} landing page interactions survive hydration`, async ({ context, page }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(locale.path);
@@ -115,4 +136,23 @@ test("copy fallback does not report success when execCommand rejects it", async 
   }).toPass();
 
   expect(await copyButton.getAttribute("aria-label")).toBe("Copy");
+});
+
+test("section artwork renders within the image transfer budget", async ({ page }) => {
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/");
+
+    const artworks = page.locator(".section-artwork");
+    await expect(artworks).toHaveCount(2);
+    for (const artwork of await artworks.all()) {
+      await artwork.scrollIntoViewIfNeeded();
+      await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+      const source = await artwork.evaluate((image: HTMLImageElement) => image.currentSrc);
+      const response = await page.request.get(source);
+      expect(response.ok()).toBe(true);
+      expect(response.headers()["content-type"]).toContain("image/webp");
+      expect((await response.body()).byteLength).toBeLessThan(100 * 1024);
+    }
+  }
 });

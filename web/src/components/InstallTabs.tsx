@@ -29,7 +29,7 @@ function CommandLine({ code, copy, copied }: { code: string; copy: string; copie
 
 export function InstallTabs({ groups, skill, copy, copied }: Props) {
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       {groups.map((group) => (
         <div
           key={group.label}
