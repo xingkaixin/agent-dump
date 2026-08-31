@@ -31,7 +31,7 @@ from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
 _MAX_SESSION_PARSE_WORKERS = 32
-_MatchedSession = tuple[BaseAgent, Session, date]
+SelectedCollectSession = tuple[BaseAgent, Session, date]
 
 
 def collect_scan_days(since_date: date, local_tz: tzinfo | None = None) -> int:
@@ -60,7 +60,7 @@ def _is_session_denied(agent: BaseAgent, session: Session, denied_roots: tuple[P
     return any(session_path == denied_root or denied_root in session_path.parents for denied_root in denied_roots)
 
 
-def _select_collect_sessions(
+def select_collect_sessions(
     *,
     session_groups: Sequence[tuple[BaseAgent, Sequence[Session]]],
     since_date: date,
@@ -69,8 +69,9 @@ def _select_collect_sessions(
     query_spec: QuerySpec | None = None,
     local_tz: tzinfo,
     diagnostic_sink: RecoverableDiagnosticSink | None = None,
-) -> list[_MatchedSession]:
-    matched_sessions: list[_MatchedSession] = []
+) -> list[SelectedCollectSession]:
+    """Select candidates without reading transcripts unless the query requires them."""
+    matched_sessions: list[SelectedCollectSession] = []
     eligible_session_groups: list[tuple[BaseAgent, list[Session]]] = []
 
     for agent, sessions in session_groups:
@@ -113,7 +114,7 @@ def _select_collect_sessions(
 
 
 def _read_collect_entry(
-    matched_session: _MatchedSession, *, diagnostic_sink: RecoverableDiagnosticSink | None
+    matched_session: SelectedCollectSession, *, diagnostic_sink: RecoverableDiagnosticSink | None
 ) -> CollectEntry:
     agent, session, session_date = matched_session
     with agent.diagnostic_context(diagnostic_sink), agent.lease_cached_session_data(session) as session_data:
@@ -137,7 +138,7 @@ def _read_collect_entry(
 
 
 def _read_collect_entries(
-    matched_sessions: Sequence[_MatchedSession],
+    matched_sessions: Sequence[SelectedCollectSession],
     *,
     progress_callback: Callable[[CollectProgressEvent], None] | None,
     diagnostic_sink: RecoverableDiagnosticSink | None,
@@ -224,7 +225,7 @@ def collect_entries(
 ) -> list[CollectEntry]:
     """Select and read collect entries for the requested range."""
     resolved_local_tz = local_tz or get_local_timezone()
-    matched_sessions = _select_collect_sessions(
+    matched_sessions = select_collect_sessions(
         session_groups=session_groups,
         since_date=since_date,
         until_date=until_date,

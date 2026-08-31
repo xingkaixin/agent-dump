@@ -22,6 +22,7 @@ from agent_dump.collect_prompts import (
     build_collect_chunk_prompt,
     build_collect_final_prompt,
     build_collect_merge_prompt,
+    collect_report_instructions,
 )
 from agent_dump.collect_reduction import reduce_collect_summaries
 from agent_dump.collect_requests import request_structured_summary_payload_from_llm
@@ -35,6 +36,23 @@ from agent_dump.config import AIConfig
 
 
 class TestCollectInsightMode:
+    @pytest.mark.parametrize("mode", list(CollectMode))
+    def test_final_prompt_uses_shared_report_instructions(self, mode: CollectMode) -> None:
+        day = date(2026, 3, 5)
+        instructions = collect_report_instructions(since_date=day, until_date=day, mode=mode)
+        prompt = build_collect_final_prompt(
+            since_date=day,
+            until_date=day,
+            aggregate=CollectAggregate(groups=(), reduction_depth=0),
+            has_truncated=False,
+            mode=mode,
+        )
+
+        assert instructions
+        assert prompt.startswith("\n".join(instructions) + "\n")
+        assert sum(line.startswith("# ") for line in instructions) == 1
+        assert day.isoformat() in "\n".join(instructions)
+
     def _entry(self, *, text: str = "调试 manage.spec.ts", session_id: str = "s-1") -> CollectEntry:
         return CollectEntry(
             date_value=date(2026, 3, 5),

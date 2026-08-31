@@ -10,10 +10,30 @@ from unittest import mock
 from collect_test_support import configure_session_data_lease, make_query_spec
 
 from agent_dump.agents.base import BaseAgent, Session
-from agent_dump.collect_sessions import _MAX_SESSION_PARSE_WORKERS, collect_entries
+from agent_dump.collect_sessions import _MAX_SESSION_PARSE_WORKERS, collect_entries, select_collect_sessions
+from agent_dump.config import CollectConfig
 
 
 class TestCollectEntries:
+    def test_select_collect_sessions_does_not_read_transcripts_without_a_content_query(self) -> None:
+        created_at = datetime(2026, 3, 4, 18, tzinfo=timezone.utc)
+        session = Session("selected", "title", created_at, created_at, Path("source.jsonl"), {})
+        agent = mock.MagicMock(spec=BaseAgent)
+        agent.name = "codex"
+        local_date = date(2026, 3, 5)
+
+        selected = select_collect_sessions(
+            session_groups=[(agent, [session])],
+            since_date=local_date,
+            until_date=local_date,
+            collect_config=CollectConfig(),
+            local_tz=timezone(timedelta(hours=8)),
+        )
+
+        assert selected == [(agent, session, local_date)]
+        agent.get_session_data.assert_not_called()
+        agent.lease_cached_session_data.assert_not_called()
+
     def test_collect_entries_filters_by_user_local_date(self):
         local_tz = timezone(timedelta(hours=8))
         utc_time = datetime(2026, 3, 4, 18, 0, tzinfo=timezone.utc)
