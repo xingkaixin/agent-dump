@@ -2,6 +2,7 @@
 测试 agents/codex.py 模块
 """
 
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -2335,7 +2336,10 @@ class TestCodexAgent:
             }
         ]
 
-    def test_export_session_filters_wait_agent_tool_only_in_json_export(self, tmp_path):
+    @pytest.mark.parametrize("use_prepared", [False, True])
+    def test_export_session_filters_wait_agent_tool_only_in_json_export(
+        self, tmp_path: Path, use_prepared: bool
+    ) -> None:
         """测试 wait_agent 只在 Codex JSON 导出中过滤，不影响原始 session_data"""
         agent = CodexAgent()
         output_dir = tmp_path / "output"
@@ -2386,16 +2390,23 @@ class TestCodexAgent:
         session_data = agent.get_session_data(session)
         tool_names = [part["tool"] for part in session_data["messages"][0]["parts"] if part["type"] == "tool"]
         assert tool_names == ["wait_agent", "subagent"]
+        before = deepcopy(session_data)
 
-        result = agent.export_session(session, output_dir)
+        if use_prepared:
+            with mock.patch.object(agent, "get_session_data", side_effect=AssertionError("unexpected source read")):
+                result = agent.export_session_with_fields(session, output_dir, session_data=session_data)
+        else:
+            result = agent.export_session(session, output_dir)
 
         with open(result, encoding="utf-8") as f:
             exported = json.load(f)
 
         exported_tool_names = [part["tool"] for part in exported["messages"][0]["parts"] if part["type"] == "tool"]
         assert exported_tool_names == ["subagent"]
+        assert session_data == before
 
-    def test_skill_message_transforms_only_in_json_export(self, tmp_path):
+    @pytest.mark.parametrize("use_prepared", [False, True])
+    def test_skill_message_transforms_only_in_json_export(self, tmp_path: Path, use_prepared: bool) -> None:
         """测试 skill 消息仅在 JSON 导出时转换，get_session_data 保持原样"""
         agent = CodexAgent()
         output_dir = tmp_path / "output"
@@ -2434,8 +2445,13 @@ class TestCodexAgent:
                 "time_created": 1767225600000,
             }
         ]
+        before = deepcopy(session_data)
 
-        result = agent.export_session(session, output_dir)
+        if use_prepared:
+            with mock.patch.object(agent, "get_session_data", side_effect=AssertionError("unexpected source read")):
+                result = agent.export_session_with_fields(session, output_dir, session_data=session_data)
+        else:
+            result = agent.export_session(session, output_dir)
 
         with open(result, encoding="utf-8") as f:
             exported = json.load(f)
@@ -2444,6 +2460,7 @@ class TestCodexAgent:
         assert converted["role"] == "assistant"
         assert converted["mode"] == "tool"
         assert converted["parts"][0]["tool"] == "skill"
+        assert session_data == before
 
 
 class TestTokenStatsAccumulation:

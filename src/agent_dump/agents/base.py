@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -186,19 +187,31 @@ class BaseAgent(ABC):
         session: Session,
         output_dir: Path,
         fields: Mapping[str, Any] | None = None,
+        *,
+        session_data: Mapping[str, Any] | None = None,
     ) -> Path:
         """Export unified JSON after merging workflow-owned top-level fields."""
-        payload = self._json_export_payload(session)
+        payload = (
+            self._json_export_payload(session)
+            if session_data is None
+            else self._json_export_payload(session, session_data=session_data)
+        )
         output_path = self._build_output_path(session, output_dir, ".json")
         return write_session_json(output_path, payload, fields)
 
-    def _json_export_payload(self, session: Session) -> dict[str, Any]:
+    def _json_export_payload(
+        self,
+        session: Session,
+        *,
+        session_data: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Data to serialize for JSON export.
 
-        走请求级缓存，同一条命令里 print/markdown/search 已经解析过的会话不再重解析。
-        需要做导出专属变换的 provider 可直接修改返回值；缓存为每个消费者
-        提供隔离的副本。
+        优先使用调用方准备的数据，否则读取请求级缓存。
+        返回值始终是隔离副本，provider 可直接施加导出专属变换。
         """
+        if session_data is not None:
+            return deepcopy(dict(session_data))
         return self.get_cached_session_data(session)
 
     def get_formatted_title(self, session: Session) -> str:

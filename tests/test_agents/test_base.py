@@ -521,3 +521,37 @@ class TestBaseAgent:
             "messages": [],
             "uri": "concrete://session",
         }
+
+    def test_export_session_preserves_legacy_payload_hook(self, tmp_path: Path) -> None:
+        agent = ConcreteAgent()
+        now = datetime.now(timezone.utc)
+        session = Session("session", "Session", now, now, tmp_path / "missing.jsonl", {})
+
+        def legacy_payload(selected: Session) -> dict[str, object]:
+            return {"id": selected.id, "custom": "legacy export"}
+
+        with mock.patch.object(agent, "_json_export_payload", side_effect=legacy_payload) as prepare:
+            result = BaseAgent.export_session(agent, session, tmp_path / "exports")
+
+        prepare.assert_called_once_with(session)
+        assert json.loads(result.read_text(encoding="utf-8")) == {"id": "session", "custom": "legacy export"}
+        assert agent.data_reads == 0
+
+    @pytest.mark.parametrize("prepared", [{}, {"messages": [{"parts": [{"text": "prepared"}]}]}])
+    def test_export_uses_isolated_prepared_payload_without_loading(self, tmp_path: Path, prepared: dict) -> None:
+        agent = ConcreteAgent()
+        now = datetime.now(timezone.utc)
+        session = Session("session", "Session", now, now, tmp_path / "missing.jsonl", {})
+        before = json.loads(json.dumps(prepared))
+
+        result = agent.export_session_with_fields(
+            session, tmp_path / "exports", {"summary": "prepared summary"}, session_data=prepared
+        )
+
+        assert json.loads(result.read_text(encoding="utf-8")) == {**before, "summary": "prepared summary"}
+        payload = agent._json_export_payload(session, session_data=prepared)
+        payload.setdefault("messages", []).append({"parts": [{"text": "export only"}]})
+        if before:
+            payload["messages"][0]["parts"][0]["text"] = "changed for export"
+        assert prepared == before
+        assert agent.data_reads == 0
