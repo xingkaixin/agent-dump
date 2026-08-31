@@ -22,6 +22,7 @@ from agent_dump.cli import (
 )
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode
 from agent_dump.collect_models import (
+    CollectAction,
     CollectOverviewProgress,
     CollectProgressEvent,
     CollectStartProgress,
@@ -42,7 +43,7 @@ from agent_dump.config import CollectConfig
 from agent_dump.text_safety import has_unsafe_line_characters
 
 
-@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize("modifier", [None, "--dry-run", "--emit-prompt"])
 @pytest.mark.parametrize(
     ("settings", "invalid_field"),
     [
@@ -58,7 +59,7 @@ def test_collect_rejects_unsafe_config_before_discovery_or_requests(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    dry_run: bool,
+    modifier: str | None,
     settings: str,
     invalid_field: str,
 ) -> None:
@@ -69,7 +70,7 @@ def test_collect_rejects_unsafe_config_before_discovery_or_requests(
         encoding="utf-8",
     )
     monkeypatch.setattr("agent_dump.config.get_config_path", lambda: config_path)
-    argv = ["agent-dump", "--collect", *(["--dry-run"] if dry_run else [])]
+    argv = ["agent-dump", "--collect", *([modifier] if modifier else [])]
     with (
         mock.patch("sys.argv", argv),
         mock.patch("agent_dump.cli.AgentScanner") as scanner,
@@ -81,7 +82,11 @@ def test_collect_rejects_unsafe_config_before_discovery_or_requests(
     scanner.assert_not_called()
     chunk_request.assert_not_called()
     final_request.assert_not_called()
-    assert expect_contains(capsys.readouterr().out, Keys.COLLECT_CONFIG_UNSAFE, field=invalid_field)
+    captured = capsys.readouterr()
+    output = captured.err if modifier == "--emit-prompt" else captured.out
+    assert expect_contains(output, Keys.COLLECT_CONFIG_UNSAFE, field=invalid_field)
+    if modifier == "--emit-prompt":
+        assert captured.out == ""
 
 
 def test_collect_rejects_oversized_final_input_before_request(
@@ -157,7 +162,7 @@ class TestMain:
         assert result == 0
         operation = mock_handle.call_args.args[0]
         assert isinstance(operation, CollectOperation)
-        assert operation.dry_run is True
+        assert operation.action is CollectAction.DRY_RUN
 
     def test_collect_mode_conflict(self, capsys):
         with mock.patch("sys.argv", ["agent-dump", "codex://session-001", "--collect"]):

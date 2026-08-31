@@ -47,6 +47,7 @@ def collect_operation_from(args: argparse.Namespace) -> CollectOperation:
             until=getattr(args, "until", None),
             save=getattr(args, "save", None),
             dry_run=getattr(args, "dry_run", False),
+            emit_prompt=getattr(args, "emit_prompt", False),
             collect_mode=CollectMode(getattr(args, "collect_mode", CollectMode.PM)),
         )
     )

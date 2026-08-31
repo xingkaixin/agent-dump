@@ -3,6 +3,7 @@ Command-line interface for agent-dump
 """
 
 import argparse
+from contextlib import nullcontext, redirect_stdout
 from pathlib import Path
 import sys
 
@@ -157,6 +158,7 @@ def _build_command_request(args: argparse.Namespace) -> CommandRequest:
         collect=args.collect,
         collect_mode=CollectMode(args.collect_mode),
         dry_run=args.dry_run,
+        emit_prompt=args.emit_prompt,
         stats=args.stats,
         providers=args.providers,
         reindex=args.reindex,
@@ -196,6 +198,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         help=i18n.t(Keys.CLI_COLLECT_MODE_HELP),
     )
     parser.add_argument("--dry-run", action="store_true", help=i18n.t(Keys.CLI_DRY_RUN_HELP))
+    parser.add_argument("--emit-prompt", action="store_true", help=i18n.t(Keys.CLI_EMIT_PROMPT_HELP))
     parser.add_argument("--stats", action="store_true", help=i18n.t(Keys.CLI_STATS_HELP))
     parser.add_argument(
         "--providers",
@@ -348,6 +351,12 @@ def _report_command_plan_error(
     if exc.code is CommandPlanErrorCode.COLLECT_MODE_CONFLICT:
         print(i18n.t(Keys.COLLECT_MODE_CONFLICT))
         return 1
+    if exc.code is CommandPlanErrorCode.EMIT_PROMPT_REQUIRES_COLLECT:
+        print(i18n.t(Keys.EMIT_PROMPT_REQUIRES_COLLECT))
+        return 1
+    if exc.code is CommandPlanErrorCode.COLLECT_ACTION_CONFLICT:
+        print(i18n.t(Keys.COLLECT_ACTION_CONFLICT))
+        return 1
     if exc.code is CommandPlanErrorCode.URI_INVALID:
         _print_diagnostic(
             invalid_query_or_uri(
@@ -438,14 +447,14 @@ def main() -> int | None:
     try:
         configure_standard_stream_encoding(sys.platform, (sys.stdout, sys.stderr))
         return _run()
-    except DiagnosticError as exc:
-        _print_diagnostic(exc)
-        return 1
-    except ConfigurationParseError as exc:
-        print(render_terminal_message(Keys.CONFIG_PARSE_INVALID, path=exc.path))
-        return 1
     except Exception as exc:  # noqa: BLE001 - 顶层兜底，转成诊断后以退出码 1 结束
-        _print_diagnostic(unexpected_failure(exc))
+        with redirect_stdout(sys.stderr) if "--emit-prompt" in sys.argv[1:] else nullcontext():
+            if isinstance(exc, DiagnosticError):
+                _print_diagnostic(exc)
+            elif isinstance(exc, ConfigurationParseError):
+                print(render_terminal_message(Keys.CONFIG_PARSE_INVALID, path=exc.path))
+            else:
+                _print_diagnostic(unexpected_failure(exc))
         return 1
 
 
@@ -457,7 +466,8 @@ def _run() -> int | None:
     try:
         argv = expand_shortcut_argv(raw_argv)
     except ShortcutExpansionError as exc:
-        return _report_shortcut_error(exc)
+        with redirect_stdout(sys.stderr) if "--emit-prompt" in raw_argv else nullcontext():
+            return _report_shortcut_error(exc)
 
     setup_i18n(_language_from_argv(argv))
 
@@ -465,12 +475,13 @@ def _run() -> int | None:
     args = parser.parse_args(argv)
     request = _build_command_request(args)
 
-    try:
-        plan = build_command_plan(request, cwd=Path.cwd())
-    except CommandPlanError as exc:
-        return _report_command_plan_error(exc, parser=parser, request=request)
+    with redirect_stdout(sys.stderr) if request.emit_prompt else nullcontext():
+        try:
+            plan = build_command_plan(request, cwd=Path.cwd())
+        except CommandPlanError as exc:
+            return _report_command_plan_error(exc, parser=parser, request=request)
 
-    _report_command_plan_warnings(plan)
+        _report_command_plan_warnings(plan)
     return _dispatch_command_plan(plan, parser)
 
 

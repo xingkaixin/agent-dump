@@ -71,7 +71,7 @@
 | `shortcut.py` | 将配置化 shortcut 展开为普通 argv，并以结构化错误保留失败字段 |
 | `session_workflow.py` | list / interactive / query 会话工作流 |
 | `uri_workflow.py` | 单 URI 查看、head、summary、单会话导出 |
-| `collect_workflow.py` | collect 模式编排、dry-run、保存路径解析 |
+| `collect_workflow.py` | collect 执行、dry-run、提示词生成编排与保存路径解析 |
 | `maintenance_workflow.py` | providers capability、stats 与 reindex 模式 |
 | `rendering.py` | print/head/markdown 渲染与 format 导出分发 |
 | `exporting.py` | 跨 URI / interactive 模式的统一导出执行与结构化 outcome |
@@ -107,6 +107,7 @@
 | `collect_logging.py` | collect 的私有 JSONL 诊断日志与一次性写入失败通知 |
 | `collect_output.py` | collect Markdown 输出 |
 | `collect_prompts.py` | collect 各阶段 prompt 构造 |
+| `collect_handoff.py` | 外部 agent 执行说明、固定候选清单和安全读取命令的只读渲染 |
 | `collect_progress.py` | collect 的进度上报与 run stats |
 | `collect_reduction.py` | session 并发总结、失败隔离与 tree reduction |
 | `collect_requests.py` | collect LLM 重试与结构化响应处理 |
@@ -198,6 +199,9 @@ LLM chunk summary → session merge → tree reduction
 Markdown 输出到 --save 或默认文件名
 ```
 
+`--collect --emit-prompt` 在共享会话筛选后分支，由 `collect_handoff.py` 输出自包含提示词，
+不进入内部事件提取、chunk 规划和 LLM 请求。外部 agent 使用提示词中的 URI 命令读取内容并写最终报告。
+
 改动某个阶段时，必须维护上下游契约：
 - Provider 返回 `Session`，完整内容通过 `get_session_data()` 获取。
 - URI scheme 由 `agent_registry.AGENT_REGISTRATIONS` 统一声明。
@@ -231,6 +235,7 @@ agent-dump/
 │   ├── collect_models.py        # collect 模式、阶段与输出字段定义
 │   ├── collect_output.py        # collect Markdown 输出
 │   ├── collect_prompts.py       # collect prompt 构造
+│   ├── collect_handoff.py       # 外部 agent 执行说明与候选会话清单
 │   ├── collect_progress.py      # collect 进度与 run stats
 │   ├── collect_reduction.py     # collect 并发总结与 tree reduction
 │   ├── collect_requests.py      # collect 重试与结构化响应处理
@@ -451,7 +456,16 @@ list 与 collect 只在各自边界投影为 `Session`。带 `role:` 的查询�
 
 ### 5.6 `collect` 模块
 
-collect 与 dry-run 在发现会话前通过 `ConfigurationDocument.validate_collect_safety()` 校验配置；TOML 降级解析或无效的排除路径数组必须阻止执行，不得静默取消排除规则。
+collect 的执行、dry-run 和 emit-prompt 均在发现会话前通过 `ConfigurationDocument.validate_collect_safety()` 校验配置；TOML 降级解析或无效的排除路径数组必须阻止执行，不得静默取消排除规则。
+
+`CollectOperation.action` 用 `CollectAction` 表示执行、预览或生成提示词，不保留可矛盾的并行布尔状态。
+`--emit-prompt` 仅 collect 可用且与 `--dry-run` 互斥；shortcut 仅展开普通 argv，无专属逻辑。
+提示词模式复用 `select_collect_sessions()`，不校验 AI 配置、不创建 collect 日志或报告；
+内容查询仍可能读取正文和更新搜索索引。日期沿用会话本地创建日期，清单不是消息时间切片或内容快照。
+stdout 仅承载提示词，诊断走 stderr；合法空清单退出 0 且无提示词，无 provider 或准备失败退出 1。
+`--save` 仍表示最终报告路径，按原路径规则解析后以绝对路径写入提示词。
+模型指令沿用内置 collect 的中文约定；`--lang` 控制 CLI 文案。会话字段按不可信 JSON 数据输出，
+命令使用当前解释器或打包程序，并同时提供 argv 与 POSIX/PowerShell 字面参数转义后的形式。
 
 collect 模式入口：
 - `collect_workflow.py`：参数校验、dry-run、保存路径、进度编排。
@@ -459,10 +473,11 @@ collect 模式入口：
 - `collect_dates.py`：collect 日期错误映射与日期范围归一化。
 - `collect_events.py`：事件收集、渲染与 chunk planning。
 - `collect_llm.py`：AI 请求。
-- `collect_models.py`：`pm` / `insight` 模式、进度阶段与输出字段的闭集定义。
+- `collect_models.py`：collect action、`pm` / `insight` 模式、进度阶段与输出字段的闭集定义。
 - `collect_output.py`：Markdown 输出。
 - `collect_logging.py`：私有 JSONL 诊断日志与写入失败通知。
 - `collect_prompts.py`：各阶段 prompt 构造。
+- `collect_handoff.py`：外部 agent 执行说明与候选清单，复用 `collect_report_instructions()` 报告约定。
 - `collect_progress.py`：进度上报与 run stats。
 - `collect_reduction.py`：session 并发总结、失败隔离与 tree reduction。
 - 跨会话归并只在 PM 的同一日期/项目内执行，INSIGHT 保留单会话归属；最终 prompt 使用带来源的摘要组，不恢复全局裸摘要和文字分桶。最终输入超过 64,000 字符时拒绝请求并提示缩小范围。

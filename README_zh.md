@@ -315,6 +315,60 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 # --head 是 URI 发现模式，不能替代 --format print，也不能与 --format/--summary 组合。
 ```
 
+### 交给外部 agent 汇总
+
+不配置大模型 API，也不依赖 skill，可以直接生成一份外部 agent 能执行的汇总提示词：
+
+```bash
+uv run agent-dump --collect --emit-prompt \
+  -since 20260824 -until 20260830 \
+  --collect-mode pm --save ./reports/weekly.md
+
+# 已有 collect shortcut 也可以临时启用
+uv run agent-dump --shortcut ob 20260831 --emit-prompt
+```
+
+上面的命令直接输出提示词。交给 agent 执行时，推荐**首次运行就把 stdout 和 stderr 分别保存到私有文件**，
+避免候选清单被命令工具的输出上限截断。macOS/Linux 的 shortcut 示例（不需要新增 CLI 参数）：
+
+```bash
+(
+  umask 077
+  collect_task_dir=$(mktemp -d) || exit 1
+  uv run agent-dump --shortcut ob 20260831 --emit-prompt \
+    > "$collect_task_dir/prompt.md" 2> "$collect_task_dir/diagnostics.txt"
+  collect_exit_code=$?
+  printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
+    "$collect_exit_code" "$collect_task_dir/prompt.md" "$collect_task_dir/diagnostics.txt"
+  exit "$collect_exit_code"
+)
+```
+
+将返回的两个文件路径交给 agent，让它读取说明、用脚本校验完整清单并分批处理，不要再次把整个文件打印进工具输出。
+其他平台也应使用私有临时目录、分别保存两个输出流，并检查退出码。
+
+把提示词交给能在原本地环境中执行命令、读取会话和写文件的 agent。
+它包含固定候选清单、逐会话读取命令、工作目录、时区、现有 `pm`/`insight` 报告要求和最终绝对路径。
+读取命令使用生成时的解释器或打包程序，无需另外全局安装 `agent-dump`；需要保留原来的 provider 路径环境变量。
+如果原运行程序已不可用，应先确认新的可用入口。
+
+- stdout 只输出提示词，诊断走 stderr；`--save` 仍是**最终报告路径**，不是提示词文件路径。
+- 不校验 AI 配置、不调用模型、不规划摘要 chunk、不创建 collect 日志或报告。内容查询仍可能读取正文并更新本地搜索索引。
+- 复用 collect 的排除规则和查询筛选。日期两端均包含，按会话的**本地创建日期**筛选，不按单条消息时间裁剪；清单不是内容快照。
+- 读取正文前，核对清单结束标记、候选数量、唯一 URI、JSON 长度和命令对应关系；JSON 能解析不等于清单完整。
+  清单损坏时先使用已保存的完整文件；没有完整文件时，仅允许按原筛选条件重新生成一次提示词并直接保存输出。
+  重生成是新候选清单，不是恢复旧快照；原条件不明或仍损坏时先询问，未经同意不交付残缺清单的部分日报。
+- 外部 agent 将会话 stdout/stderr 分别落盘，分段读到结尾；导出成功不算完整阅读。
+  清单完整但个别来源不可读时可带覆盖说明交付。`print` 不是完整工具日志，需要时按提示词导出 JSON 核实。
+- 无实质内容的来源仍计入覆盖附录，审批或重复转录不重复计为成果，当前汇总过程不作为被汇总的工作产出。
+  覆盖已有报告需要用户明确同意；先完成并核验新内容，再替换旧报告。
+- 仅支持 collect 模式，与 `--dry-run` 互斥。候选为空时不输出提示词，退出 `0`；无可用 provider 或准备失败时退出 `1`。
+- 要让 shortcut 始终生成提示词，在它的 `args` 中加入 `"--emit-prompt"` 即可，无需其他调整。
+
+模型指令及报告标题与内置 collect 一样使用中文，`--lang` 控制 CLI 帮助和诊断。
+提示词包含本地标题和路径，分享时应按私有数据处理；外部处理受对应 agent 的数据传输策略约束，不等于离线处理。
+提示词生成成功不代表报告已生成，也不会自动启动外部 agent。
+
 ### 完整参数说明
 
 | 参数 | 说明 | 默认值 |
@@ -327,6 +381,7 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `--collect` | 按日期范围采集会话 print 内容，可选通过 `agents://...` 查询 URI 约束范围。将会话转成高信号事件流，按固定 JSON schema 做 chunk 摘要，session 级 deterministic merge，再 tree-reduce 结构化结果生成最终 AI 总结。多阶段进度显示在 stderr。 | - |
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |
 | `--dry-run` | 与 `--collect` 搭配使用，预览 provider 分布、session 数、chunk 数、并发配置、日期范围和保存路径，跳过 AI 请求和文件写入。 | - |
+| `--emit-prompt` | 与 `--collect` 搭配使用，输出交给外部 agent 的自包含任务提示词，不需要 AI 配置，不写报告。与 `--dry-run` 互斥；`--save` 指定最终报告位置。 | - |
 | `--stats` | 显示最近 N 天会话使用统计，按 Agent 和时间分组。存在未知消息数时显示已知小计与未知会话数，不把部分和冒充总数。支持 `-days` 与 `-query`，推荐独立使用。 | - |
 | `--providers`, `--capabilities` | 显示已注册 provider 的能力矩阵，包括 URI scheme、支持及不支持的导出格式、持久索引不可用时采用的存储级关键词回退，以及本地搜索路径是否存在。不扫描会话。 | - |
 | `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。按空白切分的 distinct term 均按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），所有 term 都必须存在，但可以分别落在不同 corpus 字段；CJK term 必须连续。FTS5 不可用或 tokenizer 无法等价表达时使用同一套进程内逻辑文本 matcher；索引错误会在 stderr 提示并给出 `--reindex` 建议。可与 `--list` 组合。 | - |
@@ -337,7 +392,7 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 | `--shortcut` | 运行已配置的快捷预设。示例：`agent-dump --shortcut ob 20260408` | - |
 | `-since`, `--since` | collect 开始日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
 | `-until`, `--until` | collect 结束日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
-| `--save` | collect 输出路径。支持绝对/相对目录或 `.md` 文件路径。未提供文件名时使用默认 collect 文件名。 | - |
+| `--save` | collect 报告路径。支持绝对/相对目录或 `.md` 文件路径。未提供文件名时使用默认 collect 文件名。配合 `--emit-prompt` 时只把路径写入提示词，由外部 agent 生成报告。 | - |
 | `-config`, `--config` | 配置管理：`view` 或 `edit` | - |
 | `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `-days` 或 `-query` 且未指定 `--interactive` 则自动启用） | - |
 | `-format`, `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`，兼容 `md` 别名。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略；`--head` 不能与此选项组合。Cursor URI 仅支持 `json` 和 `print`（不支持 `raw/markdown`）。 | - |
@@ -420,7 +475,7 @@ deny = [
 
 `[agent.<name>].deny` 仅对 `--collect` 生效。当会话 `cwd` 与配置路径匹配或位于该路径下时，collect 阶段会忽略该会话。
 
-collect 与 `--collect --dry-run` 均要求合法 TOML，且排除路径必须是非空路径字符串组成的数组。配置不可靠时，命令会在发现会话和发送 AI 请求前停止；collect 不会通过兼容解析静默取消排除规则。
+collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TOML，且排除路径必须是非空路径字符串组成的数组。配置不可靠时，命令会在发现会话和发送 AI 请求前停止；collect 不会通过兼容解析静默取消排除规则。
 
 `[export].output` 定义 `json/raw` 导出的全局默认输出根目录。接受绝对或相对路径。相对路径从 `agent-dump` 执行目录解析，而非配置文件所在目录。
 
@@ -456,6 +511,7 @@ collect 与 `--collect --dry-run` 均要求合法 TOML，且排除路径必须�
 │       ├── collect_output.py   # collect Markdown 输出
 │       ├── collect_logging.py  # collect 私有诊断日志
 │       ├── collect_prompts.py  # collect prompt 构造
+│       ├── collect_handoff.py  # 外部 agent 执行说明与候选会话清单
 │       ├── collect_progress.py # collect 进度上报与 run stats
 │       ├── collect_reduction.py # collect 并发总结与归并
 │       ├── collect_requests.py # collect 重试与结构化响应处理

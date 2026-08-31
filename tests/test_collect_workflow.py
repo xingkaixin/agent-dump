@@ -5,7 +5,7 @@ from unittest import mock
 from locale_helpers import ALL_LANGUAGES, Keys, expect_contains
 import pytest
 
-from agent_dump.collect_models import CollectFailurePhase, CollectMode, CollectRunStats
+from agent_dump.collect_models import CollectAction, CollectFailurePhase, CollectMode, CollectRunStats
 from agent_dump.collect_workflow import handle_collect_mode
 from agent_dump.command_plan import CollectOperation
 
@@ -16,7 +16,7 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock, m
         since=None,
         until=None,
         save=None,
-        dry_run=False,
+        action=CollectAction.EXECUTE,
         collect_mode=CollectMode.PM,
         query_spec=None,
     )
@@ -105,7 +105,7 @@ def test_collect_reports_existing_config_without_ai_as_incomplete(
         since=None,
         until=None,
         save=None,
-        dry_run=False,
+        action=CollectAction.EXECUTE,
         collect_mode=CollectMode.PM,
         query_spec=None,
     )
@@ -180,7 +180,7 @@ def test_collect_reports_output_write_failure(language, use_language, capsys) ->
         since=None,
         until=None,
         save=None,
-        dry_run=False,
+        action=CollectAction.EXECUTE,
         collect_mode=CollectMode.PM,
         query_spec=None,
     )

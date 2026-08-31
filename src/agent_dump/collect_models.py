@@ -28,6 +28,12 @@ class CollectMode(str, Enum):
         return self.value
 
 
+class CollectAction(Enum):
+    EXECUTE = "execute"
+    DRY_RUN = "dry_run"
+    EMIT_PROMPT = "emit_prompt"
+
+
 class CollectStage(str, Enum):
     COLLECT_START = "collect_start"
     COLLECT_OVERVIEW = "collect_overview"

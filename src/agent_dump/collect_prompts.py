@@ -166,15 +166,13 @@ def build_collect_session_prompt(
     ) + ("\n\n注意：原始 session 内容在事件提取阶段已截断。" if source_truncated else "")
 
 
-def build_collect_final_prompt(
+def collect_report_instructions(
     *,
     since_date: date,
     until_date: date,
-    aggregate: CollectAggregate,
-    has_truncated: bool,
     mode: CollectMode = CollectMode.PM,
-) -> str:
-    """Build final collect markdown prompt from the final aggregate."""
+) -> list[str]:
+    """Return the report requirements shared by internal and external summarizers."""
     if mode is CollectMode.INSIGHT:
         lines = [
             "任务：从用户视角整理给定聚合数据中的关键事实片段。",
@@ -209,6 +207,19 @@ def build_collect_final_prompt(
             "要求：避免空话，按事实归纳；同一事项合并去重；可按优先级标注。",
         ]
 
+    return lines
+
+
+def build_collect_final_prompt(
+    *,
+    since_date: date,
+    until_date: date,
+    aggregate: CollectAggregate,
+    has_truncated: bool,
+    mode: CollectMode = CollectMode.PM,
+) -> str:
+    """Build final collect markdown prompt from the final aggregate."""
+    lines = collect_report_instructions(since_date=since_date, until_date=until_date, mode=mode)
     lines.extend(
         [
             "",

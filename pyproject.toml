@@ -59,9 +59,6 @@ packaging = [
     "pyinstaller==6.22.2",
 ]
 
-[tool.uv]
-required-version = "==0.12.5"
-
 [build-system]
 # The exact version and hashes live in packaging/build-constraints.txt. Keep the
 # backend API on the current major while letting that reviewed file select one build.
