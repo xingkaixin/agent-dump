@@ -47,6 +47,9 @@ from agent_dump.text_safety import has_unsafe_line_characters
         ('[collect]\nsummary_concurrency = 4oops\n[agent.codex]\ndeny = ["/private, work"]\n', "TOML"),
         ('[agent.codex]\ndeny = "/private"\n', "agent.codex.deny"),
         ('[agent.codex]\ndeny = ["/private", 42]\n', "agent.codex.deny"),
+        ('[[agent.codex]]\ndeny = ["/private"]\n', "agent.codex"),
+        ('[agent.codex.deny]\npaths = ["/private"]\n', "agent.codex.deny"),
+        ('[[agent]]\ncodex = {deny = ["/private"]}\n', "agent"),
     ],
 )
 def test_collect_rejects_unsafe_config_before_discovery_or_requests(
