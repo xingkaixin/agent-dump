@@ -70,41 +70,23 @@ def _has_cjk(text: str) -> bool:
     return any(_CJK_RANGE[0] <= char <= _CJK_RANGE[1] for char in text)
 
 
-_ADJACENT_CJK_BOUNDARY = re.compile(f"(?<=[{_CJK_RANGE[0]}-{_CJK_RANGE[1]}])(?=[{_CJK_RANGE[0]}-{_CJK_RANGE[1]}])")
+_CJK_TOKEN_BOUNDARY = re.compile(
+    rf"(?<=[{_CJK_RANGE[0]}-{_CJK_RANGE[1]}])(?=\S)|(?<=\S)(?=[{_CJK_RANGE[0]}-{_CJK_RANGE[1]}])"
+)
 
 
 def _preprocess_for_unicode61(text: str) -> str:
-    """Insert spaces between consecutive CJK characters.
+    """Separate each CJK character from adjacent non-whitespace text.
 
     unicode61 tokenizer only splits on non-alphanumeric characters.
     Without spaces, a CJK string like '修复认证' is treated as a single
     token and substrings like '认证' cannot match. By inserting spaces
-    between adjacent CJK characters, each character becomes its own token
-    and can be matched independently.
+    around CJK characters, including mixed-script boundaries, each character
+    becomes its own token and can be matched independently.
     """
-    # 零宽断言只在两个 CJK 字符之间插空格；逐字符 Python 循环会为会话正文构造一个
+    # 零宽断言在 CJK token 边界插空格；逐字符 Python 循环会为会话正文构造一个
     # 等长的单字符 list，1 字符 str 约 50-60 字节，代价是正文体积的数十倍
-    return _ADJACENT_CJK_BOUNDARY.sub(" ", text)
-
-
-def _cleanup_unicode61_snippet(snippet: str) -> str:
-    """Remove CJK tokenization spaces from highlighted snippets."""
-    cleaned = " ".join(snippet.split())
-    replacements = (
-        (re.compile(r"\*\*([\u4e00-\u9fff]+)\*\*\s+\*\*([\u4e00-\u9fff]+)\*\*"), r"**\1\2**"),
-        (re.compile(r"([\u4e00-\u9fff])\s+([\u4e00-\u9fff])"), r"\1\2"),
-        (re.compile(r"([\u4e00-\u9fff])\s+(\*\*[\u4e00-\u9fff])"), r"\1\2"),
-        (re.compile(r"([\u4e00-\u9fff]\*\*)\s+([\u4e00-\u9fff])"), r"\1\2"),
-    )
-    changed = True
-    while changed:
-        changed = False
-        for pattern, replacement in replacements:
-            updated = pattern.sub(replacement, cleaned)
-            if updated != cleaned:
-                changed = True
-                cleaned = updated
-    return cleaned
+    return _CJK_TOKEN_BOUNDARY.sub(" ", text)
 
 
 def _get_default_index_path() -> Path:
@@ -186,7 +168,7 @@ def _select_query_fts_table(query: TextQuery) -> str | None:
 
 
 _FTS_TABLES = ("sessions_fts", "sessions_fts_trigram")
-_INDEX_CONTENT_VERSION = 1
+_INDEX_CONTENT_VERSION = 2
 
 # 待索引会话数达到该阈值时向 stderr 提示进度（关键词过滤会隐式建索引，首次运行可能较慢）
 _INDEX_PROGRESS_THRESHOLD = 10
@@ -565,9 +547,7 @@ class SearchIndex:
                 evidence = query.find_match(fields)
                 if evidence is None:
                     continue
-                snippet = row["snippet"]
-                if snippet and fts_table == "sessions_fts":
-                    snippet = _cleanup_unicode61_snippet(snippet)
+                snippet = evidence.snippet if fts_table == "sessions_fts" else row["snippet"]
                 if not snippet or not query.has_evidence(snippet):
                     snippet = evidence.snippet
 
