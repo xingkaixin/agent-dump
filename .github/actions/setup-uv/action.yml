@@ -1,5 +1,5 @@
 name: Set up uv
-description: Install the project-pinned uv release without querying a version manifest
+description: Install the CI-pinned uv release without querying a version manifest
 
 runs:
   using: composite
@@ -9,23 +9,7 @@ runs:
       run: |
         set -euo pipefail
 
-        uv_requirement="$(
-          awk '
-              $0 == "[tool.uv]" { in_uv = 1; next }
-              /^\[/ { in_uv = 0 }
-              in_uv && $1 == "required-version" {
-                value = $3
-                gsub(/"/, "", value)
-                print value
-                exit
-              }
-            ' pyproject.toml
-        )"
-        if [[ ! "$uv_requirement" =~ ^==[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "tool.uv.required-version must pin one exact release" >&2
-          exit 1
-        fi
-        uv_version="${uv_requirement#==}"
+        uv_version="0.12.5"
 
         case "$uv_version:$RUNNER_OS/$RUNNER_ARCH" in
           "0.12.5:Linux/X64")

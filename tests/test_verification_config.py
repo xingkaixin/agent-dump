@@ -114,6 +114,21 @@ class TestDependencyPinning:
 
 
 class TestPinnedUvInstaller:
+    def test_local_commands_do_not_require_the_ci_uv_version(self) -> None:
+        uv_options = _read_toml("pyproject.toml")["tool"].get("uv", {})
+
+        assert "required-version" not in uv_options
+
+    def test_ci_owns_its_uv_pin_and_checksum_verification(self) -> None:
+        action = (REPO_ROOT / ".github" / "actions" / "setup-uv" / "action.yml").read_text(encoding="utf-8")
+
+        assert re.search(r'uv_version="\d+\.\d+\.\d+"', action)
+        assert re.search(r'uv_sha256="[0-9a-f]{64}"', action)
+        assert "pyproject.toml" not in action
+        assert "releases/download/$uv_version/" in action
+        assert "sha256sum --check" in action
+        assert "shasum -a 256 --check" in action
+
     def test_windows_zip_uses_the_native_archive_extractor(self) -> None:
         action = (REPO_ROOT / ".github" / "actions" / "setup-uv" / "action.yml").read_text(encoding="utf-8")
 
