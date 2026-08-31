@@ -136,6 +136,37 @@ def test_content_version_refreshes_unchanged_legacy_tool_sessions(tmp_path):
     assert refreshed.update(agent, [session]) == (0, 0)
 
 
+@pytest.mark.parametrize("reverse_providers", [False, True])
+@pytest.mark.parametrize("limit", [1, None])
+def test_cross_provider_ranking_is_stable_from_the_first_search(tmp_path, reverse_providers, limit):
+    strong = make_session("strong", "Record", tmp_path / "strong.json")
+    weak = make_session("weak", "Record", tmp_path / "weak.json")
+    background = [make_session(f"background-{i}", "Record", tmp_path / f"bg-{i}.json") for i in range(50)]
+    alpha = DummyAgent("alpha", {strong.id: {"messages": [{"role": "user", "content": "quartz " * 20}]}})
+    beta = DummyAgent(
+        "beta",
+        {
+            session.id: {
+                "messages": [{"role": "user", "content": "quartz" if session is weak else "unrelated background text"}]
+            }
+            for session in [weak, *background]
+        },
+    )
+    groups = [(alpha, [strong]), (beta, [weak, *background])]
+    if reverse_providers:
+        groups.reverse()
+    spec = QuerySpec(None, "quartz", None, None, limit, TextQueryMode.SEARCH_TERMS)
+    index = SearchIndex(tmp_path / "index.db")
+
+    cold = select_session_groups(groups, spec, search_index=index)
+    warm = select_session_groups(list(reversed(groups)), spec, search_index=index)
+
+    expected = [("alpha", "strong")] if limit == 1 else [("alpha", "strong"), ("beta", "weak")]
+    assert [(match.agent.name, match.session.id) for match in cold] == expected
+    assert [(match.agent.name, match.session.id) for match in warm] == expected
+    assert [match.rank for match in cold] == pytest.approx([match.rank for match in warm])
+
+
 class TestHasCjk:
     def test_detects_chinese(self):
         assert _has_cjk("中文") is True

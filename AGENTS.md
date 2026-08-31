@@ -439,6 +439,7 @@ URI 与交互工作流通过 `AgentScanner.diagnostic_context()` 将诊断接收
 - Query keyword：`-query` 与 `agents://...?q=` 将归一化后的输入视为一个字面短语。
 - Search terms：`--search "auth timeout"` 按空白解析 distinct 字面 term，全部 term 必须命中，且可跨标题与逻辑 transcript 字段。
 - full-text search：`search_index.py` 优先提供等价 FTS5 adapter；tokenizer 无法完整表达语义或 FTS5 不可用时使用同一进程内 matcher。
+- 跨 provider 搜索先完成本次参与 provider 的索引更新，再执行一次全局检索，保证相关度分数来自同一份语料；索引失败时整组回退，不混用索引分数与字面匹配分数。
 - 索引正文解析在写事务外执行，每批通过短事务原子更新两张 FTS 表和状态表；写入前核对当前行、签名与已有 `indexed_at` 观察时间，按观察顺序保留新结果，旧请求的成功或失败均不得覆盖较新的结果，慢读取不恢复已被删除的行。
 
 查询内部先保留 `QuerySessionMatch`（session、snippet、rank、matched role）证据；
