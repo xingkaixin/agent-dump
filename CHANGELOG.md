@@ -4,7 +4,26 @@
 
 ## [Unreleased]
 
-## [0.15.3] - 2026-08-31
+## [0.15.4] - 2026-09-01
+
+### Added
+
+- **Collect handoff prompt generation**
+  - Add `--emit-prompt` option for `--collect` mode to output a self-contained, structured prompt containing safe read-only URI commands and candidate session manifests for external AI agents without requiring local LLM API configuration
+  - Support `--save` alongside `--emit-prompt` to specify the absolute report destination path within generated prompt instructions
+  - Support `--emit-prompt` through `--shortcut` presets for one-command external agent handoff workflows
+- **Product landing page styling**
+  - Add optimized section backgrounds with subtle grids, glow gradients, and terminal-inspired visual depth across landing page sections
+
+### Fixed
+
+- **Collect transcript extraction and outcome boundaries**
+  - Extract only visible user and assistant dialogue during collect session processing, filtering out system messages, developer instructions, reasoning traces, plans, tool calls, and tool outputs
+  - Restrict PM mode outcomes strictly to explicitly reported results in user/assistant conversations rather than inferring completion status from tool call traces
+- **npm release verification and availability**
+  - Poll and verify npm package availability and sha512 integrity for all native platform packages before publishing the CLI wrapper package, preventing 404 installation errors caused by registry replication lag
+  - Output detailed progress during release smoke tests for `npx` and `bunx` package verification
+
 
 ### Added
 
@@ -1019,6 +1038,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.4
 [0.15.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.3
 [0.15.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.2
 [0.15.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.1
