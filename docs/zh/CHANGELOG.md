@@ -2,7 +2,26 @@
 
 ## [未发布]
 
-## [0.15.3] - 2026-08-31
+## [0.15.4] - 2026-09-01
+
+### 新增功能
+
+- **外部 Agent 提示词生成（Collect Handoff）**
+  - `--collect` 模式新增 `--emit-prompt` 选项，直接输出结构化的外部 Agent 执行提示词、候选会话清单和只读读取命令，无需配置本地 LLM API 即可交由外部 AI Agent 独立完成会话收集与报告编写
+  - `--emit-prompt` 支持通过 `--save` 指定最终生成的 Markdown 报告绝对路径
+  - 支持通过 `--shortcut` 预设直接生成外部 Agent 提示词，实现一键任务交接
+- **产品落地页背景视觉优化**
+  - 为落地页不同区域（Hero、特性、演示等）定制细腻的终端网格与渐变背景质感，提升层次感与交互质感
+
+### 问题修复
+
+- **Collect 会话正文提取与结果边界**
+  - 会话收集时仅提取可见的 user 与 assistant 对话正文，排除 system/developer 提示、reasoning、plan、工具调用及工具执行结果
+  - 严格限定 PM 模式下的 outcomes 仅记录对话中已明确汇报的结果，不再从工具调用轨迹中过度推断任务完成状态
+- **npm 发布流水线与可用性校验**
+  - 在 npm 发布流水线中自动轮询并校验各平台原生包在 registry 的可下载性与 sha512 完整性，待所有原生包均就绪后再发布 CLI wrapper 包，杜绝因 registry 延迟同步导致的 404 安装失败
+  - 增强发布流水线中 `npx` 与 `bunx` smoke test 的日志输出与排错能力
+
 
 ### 新增功能
 
@@ -1022,6 +1041,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.15.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.4
 [0.15.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.3
 [0.15.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.2
 [0.15.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.1

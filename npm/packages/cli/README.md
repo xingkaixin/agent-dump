@@ -102,6 +102,7 @@ agent-dump --collect -days 7
 agent-dump --collect -since 2026-04-01 -until 2026-04-15
 agent-dump --collect --collect-mode insight
 agent-dump --collect --dry-run --save ./reports
+agent-dump --collect --emit-prompt --save ./reports/weekly.md
 agent-dump --collect --save ./reports
 ```
 
@@ -134,6 +135,7 @@ agent-dump --config edit
 - **AI collect**: `--collect` summarizes sessions over a date range using your configured LLM, with `pm` and `insight` modes
 - **Relative collect windows**: Explicit `-days N` selects today minus N days through today; `-since/-until` takes precedence, while collect without either remains today-only
 - **Collect dry-run**: `--collect --dry-run` previews provider breakdown, session/chunk counts, concurrency, and save path
+- **External agent handoff**: `--collect --emit-prompt` outputs a self-contained prompt with safe read-only URI commands and candidate manifests for external agents without requiring local LLM configuration
 - **Full-text search**: `--search` requires every distinct whitespace-delimited term, allows terms to match across corpus fields, keeps CJK matches contiguous, and gives FTS5 and in-process fallbacks the same literal semantics
 - **Structured queries**: `-query` treats its keyword as one normalized literal phrase and supports `provider:`, `role:`, `path:`, and `limit:` filters (`role:` snippets come only from allowed messages)
 - **Scoped queries**: `agents://<path>?q=keyword&providers=codex,claude` for repo-scoped searches
