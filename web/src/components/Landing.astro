@@ -8,6 +8,7 @@ import Header from "./Header.astro";
 import Hero from "./Hero.astro";
 import Providers from "./Providers.astro";
 import Capabilities from "./Capabilities.astro";
+import UpdatesSection from "./UpdatesSection.astro";
 import InstallSection from "./InstallSection.astro";
 import FaqSection from "./FaqSection.astro";
 import Footer from "./Footer.astro";
@@ -52,6 +53,7 @@ const { locale } = Astro.props;
     />
     <Capabilities locale={locale} />
   </div>
+  <UpdatesSection locale={locale} />
   <div class="section-surface section-surface--install">
     <InstallSection locale={locale} />
   </div>
