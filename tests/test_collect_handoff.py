@@ -73,6 +73,9 @@ def test_handoff_contains_fixed_scope_shared_report_and_safe_commands(
     assert "\x1b" not in prompt
     requirements = collect_report_instructions(since_date=generated.date(), until_date=generated.date(), mode=mode)
     assert "\n".join(requirements) in prompt
+    assert "只读取 user 与 assistant 的可见自然语言" in prompt
+    assert "不从工具轨迹推断" in prompt
+    assert "不切换到 JSON 核实工具结果" in prompt
     assert not output.parent.exists()
     agent.get_session_data.assert_not_called()
     agent.get_cached_session_data.assert_not_called()

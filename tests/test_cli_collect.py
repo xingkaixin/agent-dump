@@ -107,7 +107,7 @@ def test_collect_rejects_oversized_final_input_before_request(
     with (
         mock.patch(
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
-            return_value=json.dumps({"topics": ["x" * FINAL_PROMPT_CHAR_BUDGET]}),
+            return_value=json.dumps({"requests": ["x" * FINAL_PROMPT_CHAR_BUDGET]}),
         ) as chunk_request,
         mock.patch("agent_dump.cli.request_summary_from_llm") as final_request,
     ):

@@ -33,8 +33,8 @@ class TestCollectEntries:
                 session_title="task-1",
                 project_directory="/repo",
                 events=(
-                    CollectEvent(kind="user_intent", role="user", text="a" * 1800),
-                    CollectEvent(kind="assistant_key", role="assistant", text="b" * 1800),
+                    CollectEvent(kind="user_message", role="user", text="a" * 1800),
+                    CollectEvent(kind="agent_message", role="assistant", text="b" * 1800),
                 ),
                 is_truncated=False,
             ),
@@ -47,7 +47,7 @@ class TestCollectEntries:
                 session_uri="codex://s-2",
                 session_title="task-2",
                 project_directory="/repo",
-                events=(CollectEvent(kind="user_intent", role="user", text="c" * 100),),
+                events=(CollectEvent(kind="user_message", role="user", text="c" * 100),),
                 is_truncated=False,
             ),
         ]
@@ -73,7 +73,7 @@ class TestCollectEntries:
                 session_uri="codex://s-1",
                 session_title="task-1",
                 project_directory="/repo",
-                events=(CollectEvent(kind="user_intent", role="user", text="a" * 1800),),
+                events=(CollectEvent(kind="user_message", role="user", text="a" * 1800),),
                 is_truncated=False,
             ),
             CollectEntry(
@@ -86,8 +86,8 @@ class TestCollectEntries:
                 session_title="task-2",
                 project_directory="/repo",
                 events=(
-                    CollectEvent(kind="user_intent", role="user", text="b" * 1800),
-                    CollectEvent(kind="assistant_key", role="assistant", text="c" * 1800),
+                    CollectEvent(kind="user_message", role="user", text="b" * 1800),
+                    CollectEvent(kind="agent_message", role="assistant", text="c" * 1800),
                 ),
                 is_truncated=False,
             ),

@@ -6,8 +6,9 @@ import pytest
 
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, parse_user_date, resolve_collect_date_range
 from agent_dump.collect_events import chunk_collect_events, extract_collect_events
-from agent_dump.collect_models import CollectEvent, CollectMode
+from agent_dump.collect_models import MAX_SUMMARY_ITEMS_PER_FIELD, CollectEvent, CollectMode
 from agent_dump.collect_summary import (
+    build_summary_json_schema,
     empty_summary_payload,
     merge_summary_payloads,
     normalize_summary_payload,
@@ -83,7 +84,7 @@ class TestCollectDates:
 
 
 class TestCollectExtraction:
-    def test_extract_collect_events_keeps_high_signal_structures(self):
+    def test_extract_collect_events_keeps_visible_dialogue_only(self):
         session_data = {
             "messages": [
                 {
@@ -97,6 +98,8 @@ class TestCollectExtraction:
                     "role": "assistant",
                     "parts": [
                         {"type": "text", "text": "我决定先检查 app.py。"},
+                        {"type": "reasoning", "text": "内部推理"},
+                        {"type": "plan", "input": "内部计划"},
                         {"type": "tool", "tool": "read_file", "state": {"path": "/repo/app.py"}},
                         {"type": "text", "text": "```py\nprint('x')\n```"},
                     ],
@@ -112,12 +115,10 @@ class TestCollectExtraction:
         events, truncated = extract_collect_events(session_data)
 
         assert truncated is False
-        assert [event.kind for event in events] == [
-            "user_intent",
-            "decision",
-            "code",
-        ]
-        assert events[0].files == ("/repo/app.py",)
+        assert [event.kind for event in events] == ["user_message", "agent_message", "agent_message"]
+        assert [event.role for event in events] == ["user", "assistant", "assistant"]
+        assert "内部推理" not in "\n".join(event.text for event in events)
+        assert "内部计划" not in "\n".join(event.text for event in events)
 
     def test_extract_collect_events_ignores_tool_only_sessions(self):
         session_data = {
@@ -143,12 +144,10 @@ class TestCollectExtraction:
             ]
         }
 
-        events, truncated = extract_collect_events(session_data, fallback_text_fn=lambda: "fallback text")
+        events, truncated = extract_collect_events(session_data)
 
         assert truncated is False
-        assert len(events) == 1
-        assert events[0].kind == "fallback"
-        assert events[0].text == "fallback text"
+        assert events == ()
 
     def test_extract_collect_events_ignores_tool_messages_and_parts(self):
         session_data = {
@@ -183,17 +182,48 @@ class TestCollectExtraction:
 
         assert truncated is False
         assert [event.role for event in events] == ["user", "assistant"]
-        assert [event.kind for event in events] == ["user_intent", "assistant_key"]
+        assert [event.kind for event in events] == ["user_message", "agent_message"]
         assert "exec_command" not in "\n".join(event.text for event in events)
         assert "Traceback" not in "\n".join(event.text for event in events)
 
-    def test_extract_collect_events_falls_back_when_empty(self):
-        events, truncated = extract_collect_events({"messages": []}, fallback_text_fn=lambda: "fallback text")
+    def test_extract_collect_events_returns_empty_when_session_has_no_dialogue(self):
+        events, truncated = extract_collect_events({"messages": []})
 
         assert truncated is False
-        assert len(events) == 1
-        assert events[0].kind == "fallback"
-        assert events[0].text == "fallback text"
+        assert events == ()
+
+    def test_extract_collect_events_drops_only_standalone_acknowledgements(self):
+        session_data = {
+            "messages": [
+                {"role": "user", "parts": [{"type": "text", "text": "好的"}]},
+                {"role": "assistant", "parts": [{"type": "text", "text": "收到。"}]},
+                {"role": "user", "parts": [{"type": "text", "text": "好的，就按方案 A 处理"}]},
+            ]
+        }
+
+        events, _ = extract_collect_events(session_data)
+
+        assert [(event.kind, event.text) for event in events] == [("user_message", "好的，就按方案 A 处理")]
+
+    def test_extract_collect_events_uses_legacy_visible_content_without_duplication(self):
+        session_data = {
+            "messages": [
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "text": "请修复问题"}],
+                    "content": "请修复问题",
+                },
+                {"role": "assistant", "content": "已经完成"},
+            ]
+        }
+
+        events, truncated = extract_collect_events(session_data)
+
+        assert truncated is False
+        assert [(event.kind, event.text) for event in events] == [
+            ("user_message", "请修复问题"),
+            ("agent_message", "已经完成"),
+        ]
 
     def test_extract_collect_events_respects_char_budget(self):
         session_data = {
@@ -216,9 +246,9 @@ class TestCollectExtraction:
 
     def test_chunk_collect_events_splits_long_event_sequences(self):
         events = [
-            CollectEvent(kind="user_intent", role="user", text="a" * 1200),
-            CollectEvent(kind="assistant_key", role="assistant", text="b" * 1200),
-            CollectEvent(kind="decision", role="assistant", text="c" * 1200),
+            CollectEvent(kind="user_message", role="user", text="a" * 1200),
+            CollectEvent(kind="agent_message", role="assistant", text="b" * 1200),
+            CollectEvent(kind="agent_message", role="assistant", text="c" * 1200),
         ]
 
         chunks = chunk_collect_events(events, target_chars=1500)
@@ -229,26 +259,23 @@ class TestCollectExtraction:
     def test_normalize_summary_payload_filters_unknown_and_dedupes(self):
         payload = normalize_summary_payload(
             {
-                "topics": ["修复 collect", "修复 collect", ""],
-                "errors": "timeout",
+                "requests": ["修复 collect", "修复 collect", ""],
+                "outcomes": "已完成",
                 "unknown": ["x"],
             }
         )
 
-        assert payload["topics"] == ["修复 collect"]
-        assert payload["errors"] == ["timeout"]
-        assert set(payload) == {
-            "topics",
-            "decisions",
-            "key_actions",
-            "code_changes",
-            "errors",
-            "tools_used",
-            "files",
-            "artifacts",
-            "open_questions",
-            "notes",
-        }
+        assert payload["requests"] == ["修复 collect"]
+        assert payload["outcomes"] == ["已完成"]
+        assert set(payload) == {"requests", "decisions", "outcomes"}
+
+    def test_summary_schema_bounds_each_dialogue_field(self):
+        schema = build_summary_json_schema()["schema"]
+
+        assert set(schema["properties"]) == {"requests", "decisions", "outcomes"}
+        assert all(
+            field_schema["maxItems"] == MAX_SUMMARY_ITEMS_PER_FIELD for field_schema in schema["properties"].values()
+        )
 
     @pytest.mark.parametrize("mode", list(CollectMode))
     def test_validate_summary_payload_checks_mode_and_unknown_fields(self, mode: CollectMode) -> None:
@@ -263,17 +290,19 @@ class TestCollectExtraction:
     def test_merge_summary_payloads_dedupes_per_field(self):
         merged = merge_summary_payloads(
             [
-                {**empty_summary_payload(), "topics": ["A"], "errors": ["E1"]},
-                {**empty_summary_payload(), "topics": ["A", "B"], "errors": ["E2"]},
+                {**empty_summary_payload(), "requests": ["A"], "outcomes": ["R1"]},
+                {**empty_summary_payload(), "requests": ["A", "B"], "outcomes": ["R2"]},
             ]
         )
 
-        assert merged["topics"] == ["A", "B"]
-        assert merged["errors"] == ["E1", "E2"]
+        assert merged["requests"] == ["A", "B"]
+        assert merged["outcomes"] == ["R1", "R2"]
 
     @pytest.mark.parametrize("limit", [None, 12])
     def test_merge_summary_payloads_can_preserve_uncompressed_facts(self, limit: int | None) -> None:
         values = [f"fact-{index}" for index in range(17)]
-        merged = merge_summary_payloads([{"topics": values[:10]}, {"topics": values[5:]}], max_items_per_field=limit)
+        merged = merge_summary_payloads(
+            [{"requests": values[:10]}, {"requests": values[5:]}], max_items_per_field=limit
+        )
 
-        assert merged["topics"] == values[:limit]
+        assert merged["requests"] == values[:limit]

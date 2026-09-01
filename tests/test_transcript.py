@@ -35,6 +35,19 @@ class TestPartTexts:
 
         assert read_message(message).texts == ("first", "second", "third")
 
+    def test_visible_texts_exclude_reasoning_plans_and_tools(self):
+        message = {
+            "parts": [
+                {"type": "text", "text": "visible"},
+                {"type": "reasoning", "text": "internal reasoning"},
+                {"type": "plan", "input": "internal plan"},
+                {"type": "tool", "state": {"output": "internal output"}},
+            ],
+            "content": "legacy visible",
+        }
+
+        assert read_message(message).visible_texts == ("visible", "legacy visible")
+
     @pytest.mark.parametrize("parts", [None, "not-a-list", 42, {}])
     def test_malformed_parts_yield_nothing(self, parts):
         assert read_message({"parts": parts}).texts == ()

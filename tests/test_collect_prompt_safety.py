@@ -24,11 +24,8 @@ from agent_dump.collect_summary import (
 )
 
 
-class TestFallbackRenderingIsLazy:
-    """AD-126：渲染整段会话正文只在真的没有事件时才该发生。"""
-
-    def test_fallback_is_not_rendered_when_events_exist(self):
-        calls: list[int] = []
+class TestEmptyDialogueFiltering:
+    def test_visible_dialogue_produces_events(self):
         session_data = {
             "messages": [
                 {"role": "user", "parts": [{"type": "text", "text": "修复登录超时"}]},
@@ -36,29 +33,14 @@ class TestFallbackRenderingIsLazy:
             ]
         }
 
-        events, _ = extract_collect_events(
-            session_data,
-            fallback_text_fn=lambda: (calls.append(1), "never used")[1],
-        )
+        events, _ = extract_collect_events(session_data)
 
-        assert events, "该会话本应产出事件"
-        assert calls == [], "有事件时不得调用 fallback 渲染"
+        assert [event.kind for event in events] == ["user_message", "agent_message"]
 
-    def test_fallback_is_rendered_for_an_empty_session(self):
-        calls: list[int] = []
-
-        events, _ = extract_collect_events(
-            {"messages": []},
-            fallback_text_fn=lambda: (calls.append(1), "recovered text")[1],
-        )
-
-        assert calls == [1], "空会话必须调用一次 fallback 渲染"
-        assert events[0].text == "recovered text"
-
-    def test_missing_fallback_fn_yields_the_empty_marker(self):
+    def test_empty_session_produces_no_events(self):
         events, _ = extract_collect_events({"messages": []})
 
-        assert events[0].text == "(empty session)"
+        assert events == ()
 
 
 class TestUntrustedSessionContentIsIsolated:

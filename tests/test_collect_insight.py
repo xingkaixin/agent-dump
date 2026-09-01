@@ -63,7 +63,7 @@ class TestCollectInsightMode:
             session_uri=f"codex://{session_id}",
             session_title="task",
             project_directory="/repo",
-            events=(CollectEvent(kind="user_intent", role="user", text=text),),
+            events=(CollectEvent(kind="user_message", role="user", text=text),),
             is_truncated=False,
         )
 
@@ -79,7 +79,7 @@ class TestCollectInsightMode:
     def test_build_collect_chunk_prompt_insight_mode(self):
         prompt = build_collect_chunk_prompt(
             self._entry(),
-            (CollectEvent(kind="user_intent", role="user", text="toBeVisible 断言失败"),),
+            (CollectEvent(kind="user_message", role="user", text="toBeVisible 断言失败"),),
             chunk_index=0,
             chunk_total=1,
             mode=CollectMode.INSIGHT,
@@ -93,16 +93,16 @@ class TestCollectInsightMode:
         assert '"source": "codex://s-1#chunk-1/' in prompt
         assert "字符串内部如需引用英文双引号" in prompt
 
-    def test_build_collect_chunk_prompt_pm_mode_unchanged(self):
+    def test_build_collect_chunk_prompt_pm_mode_uses_dialogue_summary_fields(self):
         prompt = build_collect_chunk_prompt(
             self._entry(),
-            (CollectEvent(kind="user_intent", role="user", text="修复"),),
+            (CollectEvent(kind="user_message", role="user", text="修复"),),
             chunk_index=0,
             chunk_total=1,
             mode=CollectMode.PM,
         )
 
-        assert "工作记录结构化摘要" in prompt
+        assert "用户与 Agent 的可见对话" in prompt
         for field in SUMMARY_FIELDS:
             assert field in prompt
 

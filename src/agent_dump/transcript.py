@@ -44,6 +44,7 @@ class TranscriptMessage:
     role: str
     nickname: str
     texts: tuple[str, ...]
+    visible_texts: tuple[str, ...]
     legacy_texts: tuple[str, ...]
     tool_calls: tuple[ToolCall, ...]
     raw: dict[str, Any]
@@ -80,6 +81,16 @@ def _part_texts(parts: Any) -> tuple[str, ...]:
         if text:
             texts.append(text)
     return tuple(texts)
+
+
+def _visible_part_texts(parts: Any) -> tuple[str, ...]:
+    if not isinstance(parts, list):
+        return ()
+    return tuple(
+        text
+        for part in parts
+        if isinstance(part, dict) and part.get("type") == "text" and (text := _clean(part.get("text")))
+    )
 
 
 def _legacy_content_texts(content: Any) -> tuple[str, ...]:
@@ -131,11 +142,13 @@ def _tool_calls(parts: Any) -> tuple[ToolCall, ...]:
 def read_message(message: dict[str, Any]) -> TranscriptMessage:
     """Read one normalized message's facts."""
     parts = message.get("parts")
+    legacy_texts = _legacy_content_texts(message.get("content"))
     return TranscriptMessage(
         role=str(message.get("role", "unknown")).lower(),
         nickname=_clean(message.get("nickname")),
         texts=_part_texts(parts),
-        legacy_texts=_legacy_content_texts(message.get("content")),
+        visible_texts=_visible_part_texts(parts) + legacy_texts,
+        legacy_texts=legacy_texts,
         tool_calls=_tool_calls(parts),
         raw=message,
     )
