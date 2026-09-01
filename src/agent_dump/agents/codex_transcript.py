@@ -31,7 +31,8 @@ PROPOSED_PLAN_PATTERN = re.compile(r"<proposed_plan>\s*(.*?)\s*</proposed_plan>"
 PLAN_APPROVAL_PREFIX = "PLEASE IMPLEMENT THIS PLAN"
 _USER_CONTEXT_BLOCK = re.compile(
     r"(?:# AGENTS\.md instructions for [^\r\n]+\r?\n(?:[ \t]*\r?\n)*)?"
-    r"<(?P<tag>instructions|environment_context|permissions instructions|collaboration_mode)>"
+    r"<(?P<tag>instructions|skills_instructions|apps_instructions|plugins_instructions|recommended_plugins|"
+    r"environment_context|permissions instructions|collaboration_mode|multi_agent_mode)>"
     r".*?</(?P=tag)>(?:[ \t]*\r?\n)*",
     re.IGNORECASE | re.DOTALL,
 )

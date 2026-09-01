@@ -842,6 +842,16 @@ class TestCodexAgent:
             ("<instructions>rules</instructions>\n<environment_context>cwd</environment_context>", True),
             ("<permissions instructions>rules</permissions instructions>", True),
             ("<collaboration_mode>Default</collaboration_mode>", True),
+            ("<multi_agent_mode>disabled</multi_agent_mode>", True),
+            (
+                "<recommended_plugins>plugins</recommended_plugins>\n"
+                "# AGENTS.md instructions for /workspace\n\n<INSTRUCTIONS>rules</INSTRUCTIONS>\n"
+                "<skills_instructions>skills</skills_instructions>\n"
+                "<apps_instructions>apps</apps_instructions>\n"
+                "<plugins_instructions>plugins</plugins_instructions>",
+                True,
+            ),
+            ("<skills_instructions>context</skills_instructions>\nPlease fix the bug.", False),
         ],
     )
     def test_context_classification_is_shared_by_export_projections(
