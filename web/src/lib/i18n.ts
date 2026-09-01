@@ -87,6 +87,16 @@ export const terminalScenes: TerminalScene[] = [
     ],
   },
 ];
+export type UpdateItem = {
+  version: string;
+  date: string;
+  isLatest?: boolean;
+  title: string;
+  description: string;
+  command?: string;
+  tags: string[];
+};
+
 type UiStrings = {
   htmlLang: string;
   ogLocale: string;
@@ -115,6 +125,10 @@ type UiStrings = {
   moreTools: { title: string; note: string };
   capabilitiesHeading: string;
   capabilities: { title: string; body: string; command: string }[];
+  updatesHeading: string;
+  updatesSubheading: string;
+  viewFullChangelog: string;
+  updates: UpdateItem[];
   installHeading: string;
   installNote: string;
   skillNote: string;
@@ -163,7 +177,7 @@ export const ui: Record<Locale, UiStrings> = {
     websiteDescription:
       "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions.",
     keywords:
-      "agent-dump, AI session export, Claude Code sessions, Codex sessions, ZCode sessions, Cursor sessions, Pi sessions, AI coding tool, session dump, CLI export, developer tool",
+      "agent-dump, AI session export, Claude Code sessions, Codex sessions, ZCode sessions, Cursor sessions, Pi sessions, AI coding tool, session dump, CLI export, collect prompt, agent handoff, full-text search, developer tool",
     ogImageAlt: "Agent Dump CLI exporting AI coding sessions to readable files",
     skipLink: "Skip to content",
     langLabel: "Language",
@@ -207,6 +221,40 @@ export const ui: Record<Locale, UiStrings> = {
         command: "agent-dump --collect",
       },
     ],
+    updatesHeading: "What's New",
+    updatesSubheading:
+      "Continuous evolution towards seamless multi-agent coding workflows, deep search, and high-signal session memory.",
+    viewFullChangelog: "View full changelog on GitHub",
+    updates: [
+      {
+        version: "v0.15.4",
+        date: "2026-09-01",
+        isLatest: true,
+        title: "External Agent Handoff & Visible Dialogue Summaries",
+        description:
+          "Generate self-contained prompts with safe read-only URI commands using `--emit-prompt`, allowing external AI agents to autonomously collect sessions and author reports without local API configuration. Session summarization now strictly filters for visible human/assistant dialogue.",
+        command: "agent-dump --collect --emit-prompt --save ./reports/weekly.md",
+        tags: ["Agent Handoff", "AI Collect", "Dialogue Filter"],
+      },
+      {
+        version: "v0.15.0",
+        date: "2026-08-18",
+        title: "Full-Text Search & Unified Relevance Ranking",
+        description:
+          "Fast SQLite FTS5 full-text indexing with intelligent CJK boundary segmentation. Search titles, transcripts, and reasoning across all seven AI coding tools with unified corpus scoring and literal phrase matching.",
+        command: 'agent-dump --search "auth timeout" --days 30',
+        tags: ["Full-Text Search", "FTS5", "Multi-Provider"],
+      },
+      {
+        version: "v0.14.0",
+        date: "2026-08-04",
+        title: "Multi-Format Export & Time-Grouped Selection",
+        description:
+          "Export sessions to Markdown, JSON, raw files, or terminal streams. Interactive TUI selector organizes sessions by calendar age for effortless navigation and batch processing.",
+        command: "agent-dump claude://<id> --format markdown",
+        tags: ["Markdown Export", "Interactive TUI", "URI Grammar"],
+      },
+    ],
     installHeading: "Install",
     installNote: "Works with uv, npm, pnpm, and bun. JavaScript package wrappers require Node.js 22+.",
     skillNote: "Or add it as an agent skill",
@@ -247,7 +295,7 @@ export const ui: Record<Locale, UiStrings> = {
     websiteDescription:
       "Agent Dump 是一个用于列出、导出、搜索和汇总 AI 编码会话的命令行工具。",
     keywords:
-      "agent-dump, AI 会话导出, Claude Code 会话, Codex 会话, ZCode 会话, Cursor 会话, Pi 会话, AI 编码工具, 会话导出, CLI 工具, 开发者工具",
+      "agent-dump, AI 会话导出, Claude Code 会话, Codex 会话, ZCode 会话, Cursor 会话, Pi 会话, AI 编码工具, 会话导出, CLI 工具, 会话收集, 外部 Agent 交接, 全文搜索, 开发者工具",
     ogImageAlt: "Agent Dump CLI 将 AI 编码会话导出为可读文件",
     skipLink: "跳到正文",
     langLabel: "语言",
@@ -291,6 +339,40 @@ export const ui: Record<Locale, UiStrings> = {
         command: "agent-dump --collect",
       },
     ],
+    updatesHeading: "最新动态",
+    updatesSubheading:
+      "持续演进，打通多 AI 编程助手的会话连接、本地深度检索与自主摘要工作流。",
+    viewFullChangelog: "在 GitHub 查看完整更新日志",
+    updates: [
+      {
+        version: "v0.15.4",
+        date: "2026-09-01",
+        isLatest: true,
+        title: "外部 Agent 提示词交接与纯净对话提取",
+        description:
+          "新增 `--emit-prompt` 选项，输出自包含的外部 Agent 提示词与只读 URI 指令，无需配置本地 API Key 即可交由外部 AI 独立完成会话收集与报告编写。会话摘要精准过滤工具执行与推理轨迹，仅保留用户与助手对话正文。",
+        command: "agent-dump --collect --emit-prompt --save ./reports/weekly.md",
+        tags: ["外部 Agent 交接", "AI 收集", "纯净对话提取"],
+      },
+      {
+        version: "v0.15.0",
+        date: "2026-08-18",
+        title: "本地全文搜索与跨 Provider 统一检索",
+        description:
+          "内置 SQLite FTS5 全文搜索与中英文智能分词，支持跨七款 AI 编码工具秒级检索标题、正文对话与推理过程，提供全局一致的相关度打分与精确字面量匹配。",
+        command: 'agent-dump --search "auth timeout" --days 30',
+        tags: ["全文搜索", "FTS5", "多 Provider 检索"],
+      },
+      {
+        version: "v0.14.0",
+        date: "2026-08-04",
+        title: "多格式导出与日历时间分组选择",
+        description:
+          "支持将 AI 会话导出为 Markdown、JSON、原始文件或终端管道流。交互式 TUI 终端界面按自然日历区间智能分组，方便快速浏览与批量导出历史记录。",
+        command: "agent-dump claude://<id> --format markdown",
+        tags: ["Markdown 导出", "交互式 TUI", "统一 URI 语法"],
+      },
+    ],
     installHeading: "安装",
     installNote: "支持 uv、npm、pnpm 和 bun；JavaScript 包装器需要 Node.js 22+。",
     skillNote: "或作为 agent skill 添加",
@@ -331,7 +413,7 @@ export const ui: Record<Locale, UiStrings> = {
     websiteDescription:
       "Agent Dumpは、AIコーディングセッションを一覧表示、エクスポート、検索、要約するCLIです。",
     keywords:
-      "agent-dump, AIセッションのエクスポート, Claude Codeセッション, Codexセッション, ZCodeセッション, Cursorセッション, Piセッション, AIコーディングツール, セッション出力, CLIツール, 開発者ツール",
+      "agent-dump, AIセッションのエクスポート, Claude Codeセッション, Codexセッション, ZCodeセッション, Cursorセッション, Piセッション, AIコーディングツール, セッション出力, CLIツール, プロンプト生成, 全文検索, 開発者ツール",
     ogImageAlt: "AIコーディングセッションを読みやすいファイルに出力するAgent Dump CLI",
     skipLink: "本文へ移動",
     langLabel: "言語",
@@ -373,6 +455,40 @@ export const ui: Record<Locale, UiStrings> = {
         title: "セッションを要約する",
         body: "プロジェクト管理やインサイトレポートに使える、重要度の高いセッション要約を生成します。",
         command: "agent-dump --collect",
+      },
+    ],
+    updatesHeading: "更新履歴とロードマップ",
+    updatesSubheading:
+      "複数のAIコーディングツールのセッション統合、高速検索、自動要約に向けて進化し続けています。",
+    viewFullChangelog: "GitHubで完全な変更履歴を表示",
+    updates: [
+      {
+        version: "v0.15.4",
+        date: "2026-09-01",
+        isLatest: true,
+        title: "外部Agentへのプロンプト引き継ぎと対話抽出",
+        description:
+          "`--emit-prompt`により、API設定なしで外部AIエージェントにセッション収集とレポート作成を委譲できるプロンプトを生成可能に。セッション要约時に対話本文のみを正確に抽出し、ノイズを排除します。",
+        command: "agent-dump --collect --emit-prompt --save ./reports/weekly.md",
+        tags: ["Agent引き継ぎ", "AI要約", "対話抽出"],
+      },
+      {
+        version: "v0.15.0",
+        date: "2026-08-18",
+        title: "ローカル全文検索とプロバイダー横断スコアリング",
+        description:
+          "SQLite FTS5による高速な全文検索を搭載。7つのAIツールのタイトル、対話、推論履歴を横断して瞬時に検索し、一貫したスコアで関連セッションを見つけ出せます。",
+        command: 'agent-dump --search "auth timeout" --days 30',
+        tags: ["全文検索", "FTS5", "マルチプロバイダー"],
+      },
+      {
+        version: "v0.14.0",
+        date: "2026-08-04",
+        title: "複数フォーマット書き出しと日付グループ表示",
+        description:
+          "Markdown、JSON、rawファイル、ターミナル出力など柔軟なエクスポートに対応。対話型TUIで日付別にグループ化されたセッションを素早く確認できます。",
+        command: "agent-dump claude://<id> --format markdown",
+        tags: ["Markdown出力", "対話型TUI", "URI構文"],
       },
     ],
     installHeading: "インストール",

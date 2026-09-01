@@ -107,6 +107,11 @@ for (const locale of locales) {
     expect(answerId).toBeTruthy();
     await expect(page.locator(`#${answerId}`)).toBeVisible();
 
+    const updates = page.locator("#updates");
+    await expect(updates).toBeVisible();
+    await expect(updates.locator("article")).toHaveCount(3);
+    await expect(updates.getByText("v0.15.4")).toBeVisible();
+
     const themeToggle = page.locator("[data-theme-toggle]");
     await themeToggle.click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
