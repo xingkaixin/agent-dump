@@ -289,16 +289,17 @@ uv run agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
 uv run agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
 uv run agent-dump --shortcut ob 20260408
 
-# Note: --collect converts each session into high-signal events, plans chunks by budget,
-#       requests fixed JSON summaries per chunk, merges them deterministically per session,
-#       then reduces within each date/project group (or each session in insight mode).
+# Note: --collect keeps only visible user/assistant text, excluding system/developer/tool messages,
+#       reasoning, plans, tool calls, and tool results. Sessions empty after this projection are ignored.
+#       PM chunks summarize requests, decisions, and agent-reported outcomes, then merge per session
+#       and reduce within each date/project group (or each session in insight mode).
 #       Final Markdown input retains these sources; inputs over 64,000 characters require a narrower range/query.
 # Note: collect date precedence is explicit -since/-until, then explicit -days, then today only.
 # Note: --collect --dry-run completes scanning, query filtering, and chunk planning, then
 #       prints provider breakdown, session/chunk counts, concurrency, dates, and save path preview.
 # Note: during --collect, stderr shows multi-stage progress such as scan_sessions,
 #       plan_chunks, summarize_chunks, merge_sessions, tree_reduction, render_final, and write_output.
-# Note: unreadable sessions are reported on stderr and omitted while readable sessions continue.
+# Note: unreadable sessions are reported on stderr; readable sessions without visible dialogue are silently ignored.
 # Note: collect writes files like agent-dump-collect-20260301-20260305.md.
 # Note: --save accepts either a directory or a .md file path. Missing non-.md paths are treated as directories.
 
@@ -369,10 +370,10 @@ confirm a replacement entry point before proceeding.
   Regeneration creates a new candidate manifest, not the old snapshot. If the conditions are unknown or recovery fails,
   ask the user before delivering a partial report from a damaged manifest.
 - Save each session's stdout/stderr separately and read the transcript in bounded chunks through EOF; successful export
-  does not mean complete reading. A complete manifest with individual unreadable sources may produce a report disclosing
-  those gaps. `print` is not a lossless tool log; use the documented JSON fallback to verify tool results when needed.
-- Keep sources without substantive content in the coverage appendix, avoid counting approvals or duplicate transcripts
-  as separate achievements, and keep the current reporting process out of the work being summarized. Replacing an existing
+  does not mean complete reading. Analyze only visible user/assistant text and do not switch to JSON to inspect tool results.
+  A complete manifest with individual unreadable sources may produce a report disclosing those gaps.
+- Ignore sessions without substantive visible dialogue. Keep approvals or duplicate transcripts only when they change a
+  request, decision, or outcome, and keep the current reporting process out of the work being summarized. Replacing an existing
   report requires explicit user permission; prepare and verify the new content before replacing the old report.
 - `--emit-prompt` requires collect mode and conflicts with `--dry-run`. No matching candidates produces no prompt
   and exits `0`; no available provider or a preparation error exits `1`.
@@ -392,7 +393,7 @@ Generating a prompt does not mean that a report has been created, and does not a
 | `-d`, `-days` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `-since/-until` are omitted. | 7 outside collect; today only in collect |
 | `-q`, `-query` | Query filter. The keyword is one case-insensitive literal phrase after whitespace normalization, matched within a session title or logical transcript. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print bounded discovery metadata without rereading the transcript; message count is exact when discovery scanned the complete source and explicitly `unknown` otherwise. Does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
-| `--collect` | Collect session print content by date range, optionally constrained by an `agents://...` query URI, convert sessions into high-signal event streams, summarize fixed-schema JSON chunks, merge them deterministically per session, then tree-reduce the structured results into one final AI summary. Multi-stage progress is shown on stderr. | - |
+| `--collect` | Collect sessions by date range, optionally constrained by an `agents://...` query URI. Only visible user/assistant text is summarized; system/developer/tool messages, reasoning, plans, tool calls, and tool results are excluded, and empty projected sessions are ignored. PM mode extracts requests, decisions, and agent-reported outcomes before deterministic session merge and tree reduction. Multi-stage progress is shown on stderr. | - |
 | `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
 | `--emit-prompt` | Use with `--collect` to print a self-contained task for an external agent, without AI configuration or report writes. Incompatible with `--dry-run`; `--save` specifies the eventual report path. | - |

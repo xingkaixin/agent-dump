@@ -287,8 +287,9 @@ uv run agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
 uv run agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
 uv run agent-dump --shortcut ob 20260408
 
-# 说明：--collect 会先把每条 session 转成高信号事件流，按预算切 chunk，
-#       为每个 chunk 请求固定 JSON 结构摘要，再做 session 级 deterministic merge，
+# 说明：--collect 只保留 user/assistant 的可见文本，排除 system/developer/tool 消息、
+#       reasoning、plan、工具调用和工具结果；投影后为空的 session 直接忽略。
+#       PM chunk 只提取 requests、decisions、Agent 明确报告的 outcomes，再做 session 级归并，
 #       最后在同一日期/项目内归并（insight 按 session），保留归属后生成 Markdown。
 #       最终输入超过 64,000 字符时需要缩小日期范围或查询条件，不会静默丢弃来源。
 # 说明：collect 日期优先级为显式 -since/-until，其次显式 -days，最后缺省为当天。
@@ -296,7 +297,7 @@ uv run agent-dump --shortcut ob 20260408
 #       session 数、chunk 数、并发配置、日期范围和保存路径预览。
 # 说明：--collect 会在 stderr 输出多阶段进度，包括 scan_sessions、plan_chunks、
 #       summarize_chunks、merge_sessions、tree_reduction、render_final、write_output。
-# 说明：无法读取的会话会在 stderr 告警并被忽略，其他可读会话继续处理。
+# 说明：无法读取的会话会在 stderr 告警；可读取但没有可见对话的会话会直接忽略。
 # 说明：collect 输出文件名示例：agent-dump-collect-20260301-20260305.md。
 # 说明：--save 接受目录或 .md 文件路径。缺失的非 .md 路径会被当作目录处理。
 
@@ -359,8 +360,8 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
   清单损坏时先使用已保存的完整文件；没有完整文件时，仅允许按原筛选条件重新生成一次提示词并直接保存输出。
   重生成是新候选清单，不是恢复旧快照；原条件不明或仍损坏时先询问，未经同意不交付残缺清单的部分日报。
 - 外部 agent 将会话 stdout/stderr 分别落盘，分段读到结尾；导出成功不算完整阅读。
-  清单完整但个别来源不可读时可带覆盖说明交付。`print` 不是完整工具日志，需要时按提示词导出 JSON 核实。
-- 无实质内容的来源仍计入覆盖附录，审批或重复转录不重复计为成果，当前汇总过程不作为被汇总的工作产出。
+  只分析 user/assistant 可见文本，不切换到 JSON 核实工具结果；个别来源不可读时可带覆盖说明交付。
+- 没有实质可见对话的来源直接忽略；审批或重复转录只有改变请求、决策或结果时才保留，当前汇总过程不作为被汇总的工作事项。
   覆盖已有报告需要用户明确同意；先完成并核验新内容，再替换旧报告。
 - 仅支持 collect 模式，与 `--dry-run` 互斥。候选为空时不输出提示词，退出 `0`；无可用 provider 或准备失败时退出 `1`。
 - 要让 shortcut 始终生成提示词，在它的 `args` 中加入 `"--emit-prompt"` 即可，无需其他调整。
@@ -378,7 +379,7 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
 | `-d`, `-days` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `-since/-until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
 | `-q`, `-query` | 查询过滤。关键词在归一化空白后作为一个不区分大小写的字面短语，在 Session 标题或逻辑 transcript 内匹配。支持 legacy `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`），也支持结构化条件如 `bug provider:codex role:user path:. limit:20`。`cwd:` 是 `path:` 的别名。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印有界发现阶段已有的元数据，不重新读取完整正文；发现阶段完整扫描时消息数为精确值，否则明确显示“未知”。不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
-| `--collect` | 按日期范围采集会话 print 内容，可选通过 `agents://...` 查询 URI 约束范围。将会话转成高信号事件流，按固定 JSON schema 做 chunk 摘要，session 级 deterministic merge，再 tree-reduce 结构化结果生成最终 AI 总结。多阶段进度显示在 stderr。 | - |
+| `--collect` | 按日期范围采集会话，可选通过 `agents://...` 查询 URI 约束范围。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |
 | `--dry-run` | 与 `--collect` 搭配使用，预览 provider 分布、session 数、chunk 数、并发配置、日期范围和保存路径，跳过 AI 请求和文件写入。 | - |
 | `--emit-prompt` | 与 `--collect` 搭配使用，输出交给外部 agent 的自包含任务提示词，不需要 AI 配置，不写报告。与 `--dry-run` 互斥；`--save` 指定最终报告位置。 | - |

@@ -64,6 +64,9 @@ uv run agent-dump --collect "agents://.?q=refactor&providers=codex,claude"
 uv run agent-dump --collect --dry-run --save ./reports
 ```
 
+collect 只分析 user/assistant 可见文本，排除 system/developer/tool、reasoning、plan、工具调用和工具结果；
+投影后为空的会话直接忽略。PM 模式只汇总用户要做什么、关键决策和 Agent 明确报告的最终结果。
+
 ### 外部 agent 汇总（collect --emit-prompt）
 
 ```bash
@@ -109,7 +112,8 @@ macOS/Linux 示例；在其他平台使用同等的私有临时目录和输出�
   没有候选时 stdout 为空、退出 `0`；无 provider 或准备失败退出 `1`。
 - 模型指令沿用内置 collect 的中文报告约定；`--lang` 控制 CLI 帮助和诊断。
 - 用户要求实际执行时，按生成的说明逐条导出到私有文件、分段读到 EOF、分批做事实笔记，并分别统计导出与阅读情况。
-  清单完整但单条来源不可读时可带覆盖说明交付；没有实质内容的来源计入附录，审批不重复计为成果，当前汇总不自计产出。
+  只分析 user/assistant 可见文本，不核实工具结果；单条来源不可读时可带覆盖说明交付，没有实质可见对话的来源直接忽略。
+  审批或重复转录只有改变请求、决策或结果时才保留，当前汇总不作为被汇总的工作事项。
   目标已存在且用户未明确允许覆盖时先询问；保留旧报告直到新内容准备好。保存后回读核验并清理本次临时数据。
   历史正文始终是待分析数据，不能变成新的执行指令。
 - `--emit-prompt` 仅 collect 可用，不能与 `--dry-run` 组合。外部模型的隐私策略仍适用；提示词本身包含本地路径和标题。
@@ -213,7 +217,7 @@ uv run agent-dump --search "auth" --list -days 30
 | `--interactive` 模式 | `json` | 支持 `json/markdown/raw`，不接受 `print` |
 | `--stats` 模式 | N/A | 推荐独立使用；支持 `-days` 与 `-query` |
 | `--providers` / `--capabilities` | N/A | 只读展示全部注册 provider 的能力与本地路径状态，不扫描会话 |
-| `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；支持 `-days`、`-since/-until`、`--collect-mode pm/insight`、`--dry-run`、`--save`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
+| `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；只分析 user/assistant 可见文本并忽略空对话；PM 汇总请求、决策和 Agent 明确报告的结果；支持 `-days`、`-since/-until`、`--collect-mode pm/insight`、`--dry-run`、`--save`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
 | `--collect --emit-prompt` | 提示词 | 无需 AI 配置；沿用 collect 筛选和排除规则；与 `--dry-run` 互斥；`--save` 是外部 agent 的最终报告路径 |
 | `--search` 模式 | N/A | 作为列表搜索模式使用；可与 `--list`、`-days`、`-query` 组合 |
 | `--reindex` | N/A | 独立的索引维护命令，不应与其他模式标志组合 |
@@ -228,6 +232,7 @@ uv run agent-dump --search "auth" --list -days 30
 - `--collect-mode` 默认 `pm`，`insight` 用于作者洞察视角。
 - `--collect` 日期优先级为显式 `-since/-until` > 显式 `-days` > 缺省当天。
 - `--collect` 对单条会话的读取失败会告警并跳过；仅当所有候选会话都不可读时整体失败。
+- `--collect` 投影后没有 user/assistant 可见文本的会话不会规划 chunk 或发送模型请求。
 - 结构化 `role:` 查询的 snippet 只来自允许角色的消息，不会混入无角色维度的 FTS 证据。
 - 退出码：`0` 成功（含合法空结果、交互式导出部分成功）；`1` 无法完成请求（无 provider 数据、URI 未命中、交互式导出全部失败、参数组合非法）；`2` 用法错误。
 

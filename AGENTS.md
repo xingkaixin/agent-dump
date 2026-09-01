@@ -102,7 +102,7 @@
 | `uri_support.py` | URI 解析与 Scanner locate 兼容 adapter |
 | `collect.py` | collect 内部兼容导入入口 |
 | `collect_dates.py` | collect 日期错误映射与日期范围归一化 |
-| `collect_events.py` | collect 高信号事件提取、渲染与 chunk 规划 |
+| `collect_events.py` | collect 可见 user/assistant 对话提取、渲染与 chunk 规划 |
 | `collect_llm.py` | collect 的 LLM 请求、错误分类与重试判定 |
 | `collect_logging.py` | collect 的私有 JSONL 诊断日志与一次性写入失败通知 |
 | `collect_output.py` | collect Markdown 输出 |
@@ -192,7 +192,7 @@ collect_workflow.handle_collect_mode()
   ↓
 AgentScanner + 可选 agents:// 查询 URI
   ↓
-collect_workflow.py 发现 Session，collect_sessions.py 过滤并读取，collect_events.py 渲染高信号事件流
+collect_workflow.py 发现 Session，collect_sessions.py 过滤并读取，collect_events.py 投影可见 user/assistant 对话
   ↓
 LLM chunk summary → session merge → tree reduction
   ↓
@@ -467,11 +467,15 @@ stdout 仅承载提示词，诊断走 stderr；合法空清单退出 0 且无提
 模型指令沿用内置 collect 的中文约定；`--lang` 控制 CLI 文案。会话字段按不可信 JSON 数据输出，
 命令使用当前解释器或打包程序，并同时提供 argv 与 POSIX/PowerShell 字面参数转义后的形式。
 
+collect 只读取 user/assistant 的可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用与工具结果；
+投影后没有真实对话的会话在 chunk 规划前忽略。PM 摘要字段固定为 requests、decisions、outcomes，
+其中 outcomes 只表示 Agent 在对话中明确报告的结果，不从工具轨迹、文件、代码或产物推断完成状态。
+
 collect 模式入口：
 - `collect_workflow.py`：参数校验、dry-run、保存路径、进度编排。
 - `collect.py`：保留内部导入兼容，不拥有业务实现。
 - `collect_dates.py`：collect 日期错误映射与日期范围归一化。
-- `collect_events.py`：事件收集、渲染与 chunk planning。
+- `collect_events.py`：可见 user/assistant 对话收集、渲染与 chunk planning。
 - `collect_llm.py`：AI 请求。
 - `collect_models.py`：collect action、`pm` / `insight` 模式、进度阶段与输出字段的闭集定义。
 - `collect_output.py`：Markdown 输出。
