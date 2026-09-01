@@ -5,18 +5,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import ClassVar
 
-SUMMARY_FIELDS = (
-    "topics",
-    "decisions",
-    "key_actions",
-    "code_changes",
-    "errors",
-    "tools_used",
-    "files",
-    "artifacts",
-    "open_questions",
-    "notes",
-)
+SUMMARY_FIELDS = ("requests", "decisions", "outcomes")
 INSIGHT_SUMMARY_FIELDS = ("scene", "stuck", "turning")
 
 
@@ -92,12 +81,11 @@ MAX_LOG_PREVIEW_CHARS = 400
 
 @dataclass(frozen=True)
 class CollectEvent:
-    """One extracted high-signal event from a session."""
+    """One visible user or agent message from a session."""
 
     kind: str
     role: str
     text: str
-    files: tuple[str, ...] = ()
 
 
 class CollectProgressEvent:

@@ -200,7 +200,7 @@ class TestBoundedResponses:
         assert all(size > 0 for size in response.read_sizes)
 
     def test_response_limit_accommodates_a_large_valid_structured_payload(self) -> None:
-        content = json.dumps({"topics": ["总结" * 8192]}, ensure_ascii=False)
+        content = json.dumps({"requests": ["总结" * 8192]}, ensure_ascii=False)
         body = json.dumps({"choices": [{"message": {"content": content}}]}, ensure_ascii=False).encode("utf-8")
         response = _StreamingResponse(body, content_length=len(body))
 

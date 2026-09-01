@@ -26,7 +26,6 @@ from agent_dump.query_filter import (
     QuerySpec,
     select_session_groups,
 )
-from agent_dump.rendering import render_session_text
 from agent_dump.terminal_output import render_terminal_message
 from agent_dump.time_utils import get_local_timezone, get_local_today, normalize_datetime_utc, to_local_datetime
 
@@ -121,7 +120,6 @@ def _read_collect_entry(
         uri = agent.get_session_uri(session)
         events, truncated = extract_collect_events(
             session_data,
-            fallback_text_fn=lambda: render_session_text(uri, session_data),
         )
         return CollectEntry(
             date_value=session_date,
@@ -191,8 +189,9 @@ def _read_collect_entries(
                             error=str(exc),
                         )
                 else:
-                    entries.append(entry)
                     session_uri = entry.session_uri
+                    if entry.events:
+                        entries.append(entry)
                 completed_session_uris[session_index] = session_uri
                 while next_progress_index in completed_session_uris:
                     session_uri = completed_session_uris.pop(next_progress_index)

@@ -61,12 +61,42 @@ class TestCollectEntries:
         assert len(entries) == 1
         assert entries[0].session_id == "s-in"
         assert entries[0].project_directory == "/repo/a"
-        assert entries[0].events[0].kind == "user_intent"
+        assert entries[0].events[0].kind == "user_message"
         assert entries[0].is_truncated is False
         assert [event.stage for event in progress] == ["scan_sessions", "scan_sessions"]
         assert isinstance(progress[-1], ScanSessionsProgress)
         assert progress[-1].current == 1
         assert progress[-1].total == 1
+
+    def test_collect_entries_ignores_sessions_without_visible_dialogue(self):
+        now = datetime.now(timezone.utc)
+        empty_session = Session("empty", "empty", now, now, Path("/tmp/empty.jsonl"), {})
+        visible_session = Session("visible", "visible", now, now, Path("/tmp/visible.jsonl"), {})
+        session_data = {
+            "empty": {
+                "messages": [
+                    {"role": "assistant", "parts": [{"type": "reasoning", "text": "internal"}]},
+                    {"role": "assistant", "parts": [{"type": "tool", "tool": "exec_command", "state": {}}]},
+                ]
+            },
+            "visible": {"messages": [{"role": "user", "parts": [{"type": "text", "text": "修复问题"}]}]},
+        }
+        agent = mock.MagicMock()
+        agent.name = "codex"
+        agent.display_name = "Codex"
+        agent.get_sessions.return_value = [empty_session, visible_session]
+        agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+        agent.get_cached_session_data.side_effect = lambda session: session_data[session.id]
+        configure_session_data_lease(agent)
+
+        entries = collect_entries(
+            session_groups=[(agent, agent.get_sessions.return_value)],
+            since_date=now.date(),
+            until_date=now.date(),
+            local_tz=timezone.utc,
+        )
+
+        assert [entry.session_id for entry in entries] == ["visible"]
 
     def test_collect_entry_uses_provider_session_facts_for_project_directory(self):
         now = datetime.now(timezone.utc)

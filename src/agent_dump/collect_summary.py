@@ -32,7 +32,14 @@ def build_summary_json_schema_for_fields(summary_fields: tuple[str, ...] | None 
         "name": "collect_summary",
         "schema": {
             "type": "object",
-            "properties": {field_name: {"type": "array", "items": {"type": "string"}} for field_name in fields},
+            "properties": {
+                field_name: {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": MAX_SUMMARY_ITEMS_PER_FIELD,
+                }
+                for field_name in fields
+            },
             "required": list(fields),
             "additionalProperties": False,
         },

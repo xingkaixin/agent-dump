@@ -59,7 +59,7 @@ class TestCollectStructuredSummary:
             session_uri=f"codex://{session_id}",
             session_title="task",
             project_directory="/repo",
-            events=(CollectEvent(kind="user_intent", role="user", text=text),),
+            events=(CollectEvent(kind="user_message", role="user", text=text),),
             is_truncated=False,
         )
 
@@ -73,11 +73,11 @@ class TestCollectStructuredSummary:
         summaries = [
             SessionSummaryEntry(
                 self._entry(session_id=f"s-{index}"),
-                normalize_summary_payload({"key_actions": [value]}),
+                normalize_summary_payload({"decisions": [value]}),
             )
             for index, value in enumerate(evidence)
         ]
-        compressed = normalize_summary_payload({"key_actions": ["all facts compressed"]})
+        compressed = normalize_summary_payload({"decisions": ["all facts compressed"]})
         with mock.patch(
             "agent_dump.collect_reduction.request_structured_summary_from_llm",
             side_effect=RuntimeError("unavailable") if merge_fails else None,
@@ -92,15 +92,13 @@ class TestCollectStructuredSummary:
         assert request.call_count == 1
         assert all(value in request.call_args.args[1] for value in evidence)
         assert len(aggregate.groups) == 1
-        assert aggregate.groups[0].summary_data["key_actions"] == (
-            evidence if merge_fails else compressed["key_actions"]
-        )
+        assert aggregate.groups[0].summary_data["decisions"] == (evidence if merge_fails else compressed["decisions"])
         assert aggregate.groups[0].session_uris == tuple(f"codex://s-{index}" for index in range(17))
         assert aggregate.session_count == 17
 
     @pytest.mark.parametrize("mode", list(CollectMode))
     def test_session_merge_receives_every_chunk_fact(self, mode: CollectMode) -> None:
-        field = "scene" if mode is CollectMode.INSIGHT else "key_actions"
+        field = "scene" if mode is CollectMode.INSIGHT else "decisions"
         entry = self._entry()
         plan = PlannedCollectEntry(entry, (entry.events, entry.events))
         evidence = [f"evidence-{index:02d}" for index in range(16)]
@@ -141,8 +139,8 @@ class TestCollectStructuredSummary:
         def _summary_side_effect(config, prompt, *, timeout_seconds=90, **_kwargs):
             del config, timeout_seconds
             if "codex://s-1" in prompt:
-                return '{"topics":["T1"],"key_actions":["A1"]}'
-            return '{"topics":["T2"],"errors":["E2"]}'
+                return '{"requests":["T1"],"decisions":["A1"]}'
+            return '{"requests":["T2"],"outcomes":["R2"]}'
 
         with mock.patch(
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect
@@ -154,7 +152,7 @@ class TestCollectStructuredSummary:
                 progress_callback=progress.append,
             )
 
-        assert [item.summary_data["topics"] for item in summaries] == [["T1"], ["T2"]]
+        assert [item.summary_data["requests"] for item in summaries] == [["T1"], ["T2"]]
         summarize_events = [event for event in progress if isinstance(event, SummarizeChunksProgress)]
         merge_events = [event for event in progress if isinstance(event, MergeSessionsProgress)]
         assert summarize_events[0].current == 0
@@ -167,7 +165,7 @@ class TestCollectStructuredSummary:
 
         with mock.patch(
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
-            return_value='{"topics":["T1"]}',
+            return_value='{"requests":["T1"]}',
         ):
             summarize_collect_entries(
                 config=self._config(),
@@ -181,7 +179,7 @@ class TestCollectStructuredSummary:
 
     def test_summarize_collect_entries_splits_long_session_into_multiple_chunks(self):
         events = tuple(
-            CollectEvent(kind="assistant_key", role="assistant", text=f"event-{index}-{'x' * 1800}")
+            CollectEvent(kind="agent_message", role="assistant", text=f"event-{index}-{'x' * 1800}")
             for index in range(3)
         )
         entry = CollectEntry(
@@ -200,9 +198,9 @@ class TestCollectStructuredSummary:
 
         responses = iter(
             [
-                '{"topics":["T1"],"key_actions":["A1"]}',
-                '{"topics":["T2"],"errors":["E2"]}',
-                '{"topics":["T3"],"files":["/repo/a.py"]}',
+                '{"requests":["T1"],"decisions":["A1"]}',
+                '{"requests":["T2"],"outcomes":["R2"]}',
+                '{"requests":["T3"],"outcomes":["R3"]}',
             ]
         )
 
@@ -217,19 +215,19 @@ class TestCollectStructuredSummary:
             )
 
         assert request_summary.call_count == 3
-        assert summaries[0].summary_data["topics"] == ["T1", "T2", "T3"]
-        assert summaries[0].summary_data["errors"] == ["E2"]
+        assert summaries[0].summary_data["requests"] == ["T1", "T2", "T3"]
+        assert summaries[0].summary_data["outcomes"] == ["R2", "R3"]
 
     def test_summarize_collect_entries_falls_back_when_session_merge_fails(self, tmp_path):
         entry = self._entry()
-        event = CollectEvent(kind="assistant_key", role="assistant", text="event")
+        event = CollectEvent(kind="agent_message", role="assistant", text="event")
         planned_entry = PlannedCollectEntry(collect_entry=entry, chunks=((event,), (event,)))
         log_path = tmp_path / "collect.log"
         logger = CollectLogger(enabled=True, path=log_path, run_id="run-1")
         responses = iter(
             [
-                '{"topics":["T1"],"key_actions":["A1"]}',
-                '{"topics":["T2"],"key_actions":["A2"]}',
+                '{"requests":["T1"],"decisions":["A1"]}',
+                '{"requests":["T2"],"decisions":["A2"]}',
                 "bad json",
                 "bad json",
             ]
@@ -250,8 +248,8 @@ class TestCollectStructuredSummary:
             )
 
         records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
-        assert summaries[0].summary_data["topics"] == ["T1", "T2"]
-        assert summaries[0].summary_data["key_actions"] == ["A1", "A2"]
+        assert summaries[0].summary_data["requests"] == ["T1", "T2"]
+        assert summaries[0].summary_data["decisions"] == ["A1", "A2"]
         assert records[-1]["event"] == "llm_merge_fallback"
         assert records[-1]["phase"] == "session_merge"
 
@@ -279,7 +277,7 @@ class TestCollectStructuredSummary:
             del config, timeout_seconds
             if "codex://s-bad" in prompt:
                 return "bad json"
-            return '{"topics":["T1"]}'
+            return '{"requests":["T1"]}'
 
         with mock.patch(
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm", side_effect=_summary_side_effect
@@ -292,7 +290,7 @@ class TestCollectStructuredSummary:
             )
 
         assert [item.collect_entry.session_id for item in summaries] == ["s-ok"]
-        assert summaries[0].summary_data["topics"] == ["T1"]
+        assert summaries[0].summary_data["requests"] == ["T1"]
         captured = capsys.readouterr()
         assert "codex://s-bad" in captured.err
         assert "1 个会话摘要失败" in captured.err
@@ -310,7 +308,7 @@ class TestCollectStructuredSummary:
             del config, timeout_seconds
             if "s-bad-" in prompt:
                 raise RuntimeError(f"remote {poison}")
-            return '{"topics":["T1"]}'
+            return '{"requests":["T1"]}'
 
         with mock.patch(
             "agent_dump.collect_requests.request_structured_summary_payload_from_llm",
@@ -335,7 +333,7 @@ class TestCollectStructuredSummary:
                     self._entry(session_id=f"s-{index}"),
                     project_directory=f"/repo/{index % 2}",
                 ),
-                summary_data=normalize_summary_payload({"topics": [f"T{index}"], "key_actions": [f"A{index}"]}),
+                summary_data=normalize_summary_payload({"requests": [f"T{index}"], "decisions": [f"A{index}"]}),
             )
             for index in range(34)
         ]
@@ -343,7 +341,7 @@ class TestCollectStructuredSummary:
         progress: list[CollectProgressEvent] = []
         with mock.patch(
             "agent_dump.collect_reduction.request_structured_summary_from_llm",
-            return_value=normalize_summary_payload({"topics": ["combined"]}),
+            return_value=normalize_summary_payload({"requests": ["combined"]}),
         ) as request:
             aggregate = reduce_collect_summaries(
                 config=self._config(),
@@ -365,7 +363,7 @@ class TestCollectStructuredSummary:
             assert [event.current for event in level_events] == list(range(total + 1))
             assert all(event.total == total for event in level_events)
 
-    def test_reduction_preserves_all_artifacts_by_date_and_project(self) -> None:
+    def test_reduction_preserves_all_outcomes_by_date_and_project(self) -> None:
         scopes = ((date(2026, 3, 5), "/repo"), (date(2026, 3, 6), "/repo"), (date(2026, 3, 5), "/other"))
         summaries = [
             SessionSummaryEntry(
@@ -374,7 +372,7 @@ class TestCollectStructuredSummary:
                     date_value=day,
                     project_directory=project,
                 ),
-                normalize_summary_payload({"key_actions": ["shared action"], "artifacts": [f"{scope_index}-{index}"]}),
+                normalize_summary_payload({"decisions": ["shared action"], "outcomes": [f"{scope_index}-{index}"]}),
             )
             for scope_index, (day, project) in enumerate(scopes)
             for index in range(7)
@@ -390,29 +388,29 @@ class TestCollectStructuredSummary:
         assert len(aggregate.groups) == 3
         groups = {(group.date_value, group.project_directory): group for group in aggregate.groups}
         for scope_index, scope in enumerate(scopes):
-            assert groups[scope].summary_data["artifacts"] == [f"{scope_index}-{index}" for index in range(7)]
+            assert groups[scope].summary_data["outcomes"] == [f"{scope_index}-{index}" for index in range(7)]
             assert groups[scope].session_uris == tuple(f"codex://{scope_index}-{index}" for index in range(7))
 
-    def test_final_prompt_distinguishes_artifacts_assigned_to_different_projects(self) -> None:
+    def test_final_prompt_distinguishes_outcomes_assigned_to_different_projects(self) -> None:
         common_summaries = [
             SessionSummaryEntry(
                 replace(self._entry(session_id=f"alpha-{index}"), project_directory="/alpha"),
-                normalize_summary_payload({"key_actions": ["shared action"], "artifacts": [artifact]}),
+                normalize_summary_payload({"decisions": ["shared action"], "outcomes": [outcome]}),
             )
-            for index, artifact in enumerate(("component X", "component Y"))
+            for index, outcome in enumerate(("component X", "component Y"))
         ]
         beta_entry = replace(self._entry(session_id="beta"), date_value=date(2026, 3, 6), project_directory="/beta")
         request = mock.Mock(side_effect=AssertionError("These summaries do not need compression"))
         prompts: list[str] = []
 
-        for artifact in ("component X", "component Y"):
+        for outcome in ("component X", "component Y"):
             aggregate = reduce_collect_summaries(
                 config=self._config(),
                 session_summaries=[
                     *common_summaries,
                     SessionSummaryEntry(
                         beta_entry,
-                        normalize_summary_payload({"key_actions": ["shared action"], "artifacts": [artifact]}),
+                        normalize_summary_payload({"decisions": ["shared action"], "outcomes": [outcome]}),
                     ),
                 ],
                 request_structured_summary=request,
@@ -430,10 +428,10 @@ class TestCollectStructuredSummary:
                 if line.startswith('{"untrusted_data"')
             ]
             groups = {body["project_directory"]: body for body in bodies}
-            assert groups["/alpha"]["summary"]["artifacts"] == ["component X", "component Y"]
+            assert groups["/alpha"]["summary"]["outcomes"] == ["component X", "component Y"]
             assert groups["/beta"]["date"] == "2026-03-06"
             assert groups["/beta"]["session_uris"] == ["codex://beta"]
-            assert groups["/beta"]["summary"]["artifacts"] == [artifact]
+            assert groups["/beta"]["summary"]["outcomes"] == [outcome]
 
         request.assert_not_called()
         assert prompts[0] != prompts[1]
@@ -448,7 +446,7 @@ class TestCollectStructuredSummary:
                     date_value=day,
                     project_directory=project,
                 ),
-                normalize_summary_payload({"artifacts": [f"{scope_index}:artifact-{index}"]}),
+                normalize_summary_payload({"outcomes": [f"{scope_index}:outcome-{index}"]}),
             )
             for scope_index, (day, project) in enumerate(scopes)
             for index in range(3)
@@ -461,11 +459,11 @@ class TestCollectStructuredSummary:
                 for line in prompt.splitlines()
                 if line.startswith('{"untrusted_data"')
             ]
-            scope_ids = {artifact.split(":")[0] for payload in payloads for artifact in payload["artifacts"]}
+            scope_ids = {outcome.split(":")[0] for payload in payloads for outcome in payload["outcomes"]}
             assert len(scope_ids) == 1
             if merge_fails:
                 raise RuntimeError("unavailable")
-            return normalize_summary_payload({"artifacts": [f"{scope_ids.pop()}:merged"]})
+            return normalize_summary_payload({"outcomes": [f"{scope_ids.pop()}:merged"]})
 
         request = mock.Mock(side_effect=summarize_group)
         with mock.patch("agent_dump.collect_reduction.SESSION_MERGE_LLM_THRESHOLD", 1):
@@ -482,9 +480,9 @@ class TestCollectStructuredSummary:
         groups = {(group.date_value, group.project_directory): group for group in aggregate.groups}
         for scope_index, scope in enumerate(scopes):
             expected = (
-                [f"{scope_index}:artifact-{index}" for index in range(3)] if merge_fails else [f"{scope_index}:merged"]
+                [f"{scope_index}:outcome-{index}" for index in range(3)] if merge_fails else [f"{scope_index}:merged"]
             )
-            assert groups[scope].summary_data["artifacts"] == expected
+            assert groups[scope].summary_data["outcomes"] == expected
             assert groups[scope].session_uris == tuple(f"codex://{scope_index}-{index}" for index in range(3))
 
     def test_reduce_collect_summaries_falls_back_when_group_merge_fails(self, tmp_path):
@@ -499,10 +497,10 @@ class TestCollectStructuredSummary:
                     session_uri=f"codex://s-{index}",
                     session_title=f"task-{index}",
                     project_directory="/repo",
-                    events=(CollectEvent(kind="user_intent", role="user", text="修复"),),
+                    events=(CollectEvent(kind="user_message", role="user", text="修复"),),
                     is_truncated=False,
                 ),
-                summary_data=normalize_summary_payload({"topics": [f"T{index}"]}),
+                summary_data=normalize_summary_payload({"requests": [f"T{index}"]}),
             )
             for index in range(2)
         ]
@@ -526,7 +524,7 @@ class TestCollectStructuredSummary:
 
         records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
         assert len(aggregate.groups) == 1
-        assert aggregate.groups[0].summary_data["topics"] == ["T0", "T1"]
+        assert aggregate.groups[0].summary_data["requests"] == ["T0", "T1"]
         assert aggregate.groups[0].session_uris == ("codex://s-0", "codex://s-1")
         assert records[-1]["event"] == "llm_merge_fallback"
         assert records[-1]["phase"] == "group_merge"
@@ -540,7 +538,7 @@ class TestCollectStructuredSummary:
                     date_value=date(2026, 3, 5),
                     project_directory="/repo",
                     session_uris=("codex://s-1",),
-                    summary_data=normalize_summary_payload({"topics": ["collect"], "errors": ["timeout"]}),
+                    summary_data=normalize_summary_payload({"requests": ["collect"], "outcomes": ["未完成"]}),
                 ),
             ),
             reduction_depth=0,
@@ -554,9 +552,9 @@ class TestCollectStructuredSummary:
         )
 
         assert "# 时段工作总结（2026-03-01 ~ 2026-03-05）" in prompt
-        assert "## 按日期" in prompt
-        assert "## 按项目/目录" in prompt
-        assert "## 重点事项（决策/风险/阻塞）" in prompt
+        assert "## 要做什么" in prompt
+        assert "## 关键决策" in prompt
+        assert "## 最终做了什么" in prompt
         envelopes = [json.loads(line) for line in prompt.splitlines() if line.startswith('{"untrusted_data"')]
         assert len(envelopes) == 1
         assert envelopes[0]["source"] == "collect://final/group/1"
@@ -568,15 +566,15 @@ class TestCollectStructuredSummary:
         }
 
     @pytest.mark.parametrize(
-        ("project_directory", "session_uri", "artifact"),
+        ("project_directory", "session_uri", "outcome"),
         [
-            ("/repo/" + "x" * 256, "codex://s-1", "artifact"),
-            ("/repo", "codex://" + "x" * 256, "artifact"),
-            ("/repo", "codex://s-1", 'artifact "quoted"\\path\n' * 16),
+            ("/repo/" + "x" * 256, "codex://s-1", "outcome"),
+            ("/repo", "codex://" + "x" * 256, "outcome"),
+            ("/repo", "codex://s-1", 'outcome "quoted"\\path\n' * 16),
         ],
     )
     def test_final_prompt_budget_counts_serialized_metadata_and_summary(
-        self, project_directory: str, session_uri: str, artifact: str
+        self, project_directory: str, session_uri: str, outcome: str
     ) -> None:
         aggregate = CollectAggregate(
             groups=(
@@ -584,7 +582,7 @@ class TestCollectStructuredSummary:
                     date_value=date(2026, 3, 5),
                     project_directory=project_directory,
                     session_uris=(session_uri,),
-                    summary_data=normalize_summary_payload({"artifacts": [artifact]}),
+                    summary_data=normalize_summary_payload({"outcomes": [outcome]}),
                 ),
             ),
             reduction_depth=0,
@@ -620,13 +618,13 @@ class TestCollectStructuredSummary:
         assert str(error.value) == expect(Keys.COLLECT_FINAL_INPUT_TOO_LARGE, limit=len(prompt) - 1)
 
     def test_uncompressed_fallback_cannot_bypass_final_prompt_budget(self) -> None:
-        artifacts = [f"artifact-{index}:" + "x" * (FINAL_PROMPT_CHAR_BUDGET // 2) for index in range(2)]
+        outcomes = [f"outcome-{index}:" + "x" * (FINAL_PROMPT_CHAR_BUDGET // 2) for index in range(2)]
         summaries = [
             SessionSummaryEntry(
                 self._entry(session_id=f"s-{index}"),
-                normalize_summary_payload({"artifacts": [artifact]}),
+                normalize_summary_payload({"outcomes": [outcome]}),
             )
-            for index, artifact in enumerate(artifacts)
+            for index, outcome in enumerate(outcomes)
         ]
         request = mock.Mock(side_effect=RuntimeError("unavailable"))
         with mock.patch("agent_dump.collect_reduction.SESSION_MERGE_LLM_THRESHOLD", 1):
@@ -635,7 +633,7 @@ class TestCollectStructuredSummary:
             )
 
         request.assert_called_once()
-        assert aggregate.groups[0].summary_data["artifacts"] == artifacts
+        assert aggregate.groups[0].summary_data["outcomes"] == outcomes
         with pytest.raises(ValueError) as error:
             build_collect_final_prompt(
                 since_date=date(2026, 3, 5),
