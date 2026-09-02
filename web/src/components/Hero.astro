@@ -1,6 +1,6 @@
 ---
 import { ArrowDownIcon, GithubLogoIcon } from "@phosphor-icons/react";
-import { site, ui, type Locale } from "../lib/i18n";
+import { providers, site, ui, type Locale } from "../lib/i18n";
 import FocusScene from "./FocusScene.astro";
 
 interface Props {
@@ -44,7 +44,7 @@ const t = ui[locale];
     </div>
 
     <div data-reveal class="hero-visual" style="--reveal-delay: 120ms">
-      <FocusScene />
+      <FocusScene caption={t.providersHeading} sources={providers.map((provider) => provider.name)} />
     </div>
   </div>
 </section>
