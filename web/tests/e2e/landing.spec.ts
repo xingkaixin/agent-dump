@@ -154,8 +154,8 @@ test("generated artwork and WebGL scene render within budget", async ({ page }) 
     await expect(scene).toHaveAttribute("data-ready", "true");
     await expect(scene).toHaveAttribute("data-webgl", /^(ready|unavailable)$/);
     await expect(scene).toHaveAttribute("role", "img");
-    await expect(scene.locator(".focus-scene__sources li")).toHaveCount(7);
-    await expect(scene.locator(".focus-scene__target")).toContainText("agent-dump");
+    await expect(scene.locator(".focus-scene__uri")).toContainText("agents://*");
+    await expect(scene.locator(".focus-scene__pill")).toBeVisible();
     await expect
       .poll(() => page.locator(".focus-scene__canvas").evaluate((canvas: HTMLCanvasElement) => canvas.width))
       .toBeGreaterThan(0);
