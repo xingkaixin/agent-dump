@@ -9,86 +9,80 @@ const { locale } = Astro.props;
 const t = ui[locale];
 ---
 
-<section id="updates" aria-labelledby="updates-heading" class="shell py-16 sm:py-20">
-  <div data-reveal class="max-w-[65ch]">
-    <h2
-      id="updates-heading"
-      class="text-[clamp(1.35rem,3vw,1.9rem)] font-semibold tracking-[-0.01em] text-fg"
-    >
-      {t.updatesHeading}
-    </h2>
-    <p class="mt-3 text-[14.5px] leading-relaxed text-muted">{t.updatesSubheading}</p>
-  </div>
+<section id="updates" aria-labelledby="updates-heading" class="updates-section">
+  <div class="shell">
+    <div data-reveal class="section-heading section-heading--wide">
+      <h2 id="updates-heading">
+        {t.updatesHeading}
+      </h2>
+      <p>{t.updatesSubheading}</p>
+    </div>
 
-  <div class="mt-10 space-y-6">
-    {
-      t.updates.map((update, i) => (
-        <article
-          data-reveal
-          style={`--reveal-delay: ${i * 60}ms`}
-          class="rounded-[var(--radius-md)] border border-line bg-surface/30 p-5 transition-[border-color,background-color] duration-150 ease-out hover:border-line-strong hover:bg-surface/50 sm:p-6"
-        >
-          <header class="flex flex-wrap items-center justify-between gap-2.5">
-            <div class="flex items-center gap-2.5">
-              <span class="rounded-[var(--radius-xs)] bg-fg px-2 py-0.5 font-mono text-[12px] font-medium text-bg">
-                {update.version}
-              </span>
-              {update.isLatest && (
-                <span class="rounded-[var(--radius-xs)] border border-accent/40 bg-accent/10 px-2 py-0.5 font-mono text-[11px] font-medium text-accent">
-                  Latest
+    <div class="updates-grid">
+      {
+        t.updates.map((update, i) => (
+          <article
+            data-reveal
+            style={`--reveal-delay: ${i * 60}ms`}
+            class:list={["update-entry", i === 0 && "update-entry--featured"]}
+          >
+            <header class="update-entry__meta">
+              <div class="update-entry__version">
+                <span>
+                  {update.version}
                 </span>
-              )}
-              <time
-                datetime={update.date}
-                class="font-mono text-[12.5px] text-muted"
-              >
-                {update.date}
-              </time>
-            </div>
-            <div class="flex flex-wrap gap-1.5">
-              {update.tags.map((tag) => (
-                <span class="rounded-[var(--radius-xs)] border border-line bg-bg/60 px-2 py-0.5 font-mono text-[11px] text-muted">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </header>
+                {update.isLatest && (
+                  <span class="update-entry__latest">
+                    Latest
+                  </span>
+                )}
+                <time datetime={update.date}>
+                  {update.date}
+                </time>
+              </div>
+              <div class="update-entry__tags">
+                {update.tags.map((tag) => (
+                  <span>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </header>
 
-          <h3 class="mt-3 font-mono text-[15.5px] font-semibold text-fg">
-            {update.title}
-          </h3>
-          <p class="mt-2 text-[14px] leading-relaxed text-muted">
-            {update.description}
-          </p>
+            <h3>
+              {update.title}
+            </h3>
+            <p class="update-entry__description">
+              {update.description}
+            </p>
 
-          {update.command && (
-            <div class="mt-4 flex items-center gap-2.5 rounded-[var(--radius-sm)] border border-line bg-bg/80 px-3.5 py-2.5">
-              <span aria-hidden="true" class="select-none font-mono text-[13px] text-accent">
-                $
-              </span>
-              <code class="overflow-x-auto whitespace-nowrap font-mono text-[13px] text-fg">
-                {update.command}
-              </code>
-            </div>
-          )}
-        </article>
-      ))
-    }
-  </div>
+            {update.command && (
+              <div class="command-line">
+                <span aria-hidden="true">$</span>
+                <code>
+                  {update.command}
+                </code>
+              </div>
+            )}
+          </article>
+        ))
+      }
+    </div>
 
-  <div data-reveal class="mt-6 flex justify-end">
-    <a
-      href={site.changelogUrl[locale]}
-      target="_blank"
-      rel="noopener noreferrer"
-      class="group inline-flex items-center gap-1.5 font-mono text-[13px] text-muted no-underline transition-colors duration-150 ease-out hover:text-accent"
-    >
-      <span>{t.viewFullChangelog}</span>
-      <ArrowUpRightIcon
-        weight="bold"
-        aria-hidden="true"
-        className="size-3.5 transition-transform duration-150 ease-out group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-      />
-    </a>
+    <div data-reveal class="updates-link">
+      <a
+        href={site.changelogUrl[locale]}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="group inline-flex items-center gap-1.5 font-mono text-[13px] text-muted no-underline transition-colors duration-150 ease-out hover:text-accent"
+      >
+        <span>{t.viewFullChangelog}</span>
+        <ArrowUpRightIcon
+          weight="bold"
+          aria-hidden="true"
+          className="size-3.5 transition-transform duration-150 ease-out group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+        />
+      </a>
+    </div>
   </div>
 </section>

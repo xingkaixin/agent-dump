@@ -1,0 +1,345 @@
+<div class="focus-scene" data-focus-scene aria-hidden="true">
+  <canvas class="focus-scene__canvas"></canvas>
+  <div class="focus-scene__fallback"></div>
+</div>
+
+<script is:inline>
+  (function () {
+    var vertexSource = `
+      attribute vec2 aPosition;
+      void main() {
+        gl_Position = vec4(aPosition, 0.0, 1.0);
+      }
+    `;
+
+    var fragmentSource = `
+      precision highp float;
+
+      uniform vec2 uResolution;
+      uniform vec2 uPointer;
+      uniform float uTime;
+      uniform float uDark;
+
+      const int MAX_STEPS = 78;
+      const float MAX_DISTANCE = 8.0;
+      const float SURFACE_DISTANCE = 0.0015;
+
+      mat2 rotate2d(float angle) {
+        float c = cos(angle);
+        float s = sin(angle);
+        return mat2(c, -s, s, c);
+      }
+
+      float roundedBox(vec3 p, vec3 bounds, float radius) {
+        vec3 q = abs(p) - bounds;
+        return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - radius;
+      }
+
+      float torus(vec3 p, vec2 radii) {
+        vec2 q = vec2(length(p.xz) - radii.x, p.y);
+        return length(q) - radii.y;
+      }
+
+      float sceneDistance(vec3 p) {
+        float orbit = uTime * 0.16;
+        p.xz *= rotate2d(orbit + uPointer.x * 0.22);
+        p.xy *= rotate2d(-0.18 + uPointer.y * 0.14);
+
+        float shell = roundedBox(p, vec3(0.78, 0.63, 0.52), 0.14);
+        float layer = abs(mod(p.y + 0.095, 0.19) - 0.095) - 0.032;
+        float archive = max(shell, layer);
+
+        vec3 ringPosition = p;
+        ringPosition.xy *= rotate2d(0.56);
+        float ring = torus(ringPosition, vec2(0.94, 0.025));
+
+        vec3 satellite = p - vec3(-0.84, 0.46, 0.0);
+        float marker = roundedBox(satellite, vec3(0.16, 0.055, 0.24), 0.035);
+
+        return min(min(archive, ring), marker);
+      }
+
+      vec3 sceneNormal(vec3 p) {
+        vec2 e = vec2(0.0015, 0.0);
+        return normalize(vec3(
+          sceneDistance(p + e.xyy) - sceneDistance(p - e.xyy),
+          sceneDistance(p + e.yxy) - sceneDistance(p - e.yxy),
+          sceneDistance(p + e.yyx) - sceneDistance(p - e.yyx)
+        ));
+      }
+
+      float raymarch(vec3 origin, vec3 direction) {
+        float distanceFromOrigin = 0.0;
+        for (int i = 0; i < MAX_STEPS; i++) {
+          vec3 point = origin + direction * distanceFromOrigin;
+          float distanceToScene = sceneDistance(point);
+          distanceFromOrigin += distanceToScene;
+          if (distanceToScene < SURFACE_DISTANCE || distanceFromOrigin > MAX_DISTANCE) break;
+        }
+        return distanceFromOrigin;
+      }
+
+      void main() {
+        vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
+        uv.x -= 0.08;
+
+        vec3 backgroundLight = vec3(0.925, 0.935, 0.91);
+        vec3 backgroundDark = vec3(0.045, 0.058, 0.06);
+        vec3 background = mix(backgroundLight, backgroundDark, uDark);
+        float vignette = smoothstep(1.8, 0.18, length(uv * vec2(0.8, 1.0)));
+        background *= mix(0.92, 1.04, vignette);
+
+        vec3 origin = vec3(0.0, 0.0, 3.55);
+        vec3 direction = normalize(vec3(uv, -1.95));
+        float distanceFromOrigin = raymarch(origin, direction);
+
+        vec3 color = background;
+        if (distanceFromOrigin < MAX_DISTANCE) {
+          vec3 point = origin + direction * distanceFromOrigin;
+          vec3 normal = sceneNormal(point);
+          vec3 lightDirection = normalize(vec3(-0.6, 0.9, 0.7));
+          vec3 halfVector = normalize(lightDirection - direction);
+
+          float diffuse = max(dot(normal, lightDirection), 0.0);
+          float rim = pow(1.0 - max(dot(normal, -direction), 0.0), 2.2);
+          float specular = pow(max(dot(normal, halfVector), 0.0), 48.0);
+          float layerHighlight = smoothstep(0.048, 0.0, abs(mod(point.y + 0.095, 0.19) - 0.095));
+          float accentMask = smoothstep(0.085, 0.012, abs(point.x + point.y * 0.42 + 0.22));
+
+          vec3 graphiteLight = vec3(0.22, 0.245, 0.25);
+          vec3 graphiteDark = vec3(0.64, 0.69, 0.68);
+          vec3 graphite = mix(graphiteLight, graphiteDark, uDark);
+          vec3 vermilionLight = vec3(0.72, 0.16, 0.09);
+          vec3 vermilionDark = vec3(0.91, 0.30, 0.20);
+          vec3 vermilion = mix(vermilionLight, vermilionDark, uDark);
+
+          vec3 material = mix(graphite, vermilion, accentMask * 0.9);
+          float lighting = 0.26 + diffuse * 0.58 + layerHighlight * 0.15;
+          color = material * lighting;
+          color += specular * mix(vec3(0.55), vec3(0.9), uDark);
+          color += rim * mix(vec3(0.08), vec3(0.18), uDark);
+
+          float fog = smoothstep(2.4, 5.5, distanceFromOrigin);
+          color = mix(color, background, fog);
+        }
+
+        color = pow(color, vec3(0.92));
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    function compileShader(gl, type, source) {
+      var shader = gl.createShader(type);
+      if (!shader) return null;
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
+    }
+
+    function initScene(root) {
+      if (root.dataset.ready === "true") return;
+      root.dataset.ready = "true";
+
+      var canvas = root.querySelector("canvas");
+      var gl = canvas && canvas.getContext("webgl", {
+        alpha: false,
+        antialias: false,
+        depth: false,
+        powerPreference: "high-performance",
+      });
+      if (!gl) {
+        root.dataset.webgl = "unavailable";
+        return;
+      }
+
+      var vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
+      var fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+      if (!vertexShader || !fragmentShader) {
+        root.dataset.webgl = "unavailable";
+        return;
+      }
+
+      var program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        root.dataset.webgl = "unavailable";
+        return;
+      }
+
+      var buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+        gl.STATIC_DRAW,
+      );
+
+      var position = gl.getAttribLocation(program, "aPosition");
+      var resolution = gl.getUniformLocation(program, "uResolution");
+      var pointerUniform = gl.getUniformLocation(program, "uPointer");
+      var time = gl.getUniformLocation(program, "uTime");
+      var dark = gl.getUniformLocation(program, "uDark");
+      var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      var pointer = { x: 0, y: 0 };
+      var target = { x: 0, y: 0 };
+      var animationFrame = 0;
+      var start = performance.now();
+      var destroyed = false;
+
+      function resize() {
+        var bounds = canvas.getBoundingClientRect();
+        var scale = Math.min(window.devicePixelRatio || 1, 1.75);
+        var width = Math.max(1, Math.round(bounds.width * scale));
+        var height = Math.max(1, Math.round(bounds.height * scale));
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+      }
+
+      function draw(now) {
+        if (destroyed) return;
+        resize();
+        pointer.x += (target.x - pointer.x) * 0.055;
+        pointer.y += (target.y - pointer.y) * 0.055;
+
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.enableVertexAttribArray(position);
+        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+        gl.uniform2f(resolution, canvas.width, canvas.height);
+        gl.uniform2f(pointerUniform, pointer.x, pointer.y);
+        gl.uniform1f(time, reducedMotion.matches ? 0.0 : (now - start) / 1000);
+        gl.uniform1f(dark, document.documentElement.dataset.theme === "dark" ? 1 : 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        if (!reducedMotion.matches) animationFrame = window.requestAnimationFrame(draw);
+      }
+
+      function onPointerMove(event) {
+        var bounds = canvas.getBoundingClientRect();
+        target.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+        target.y = ((event.clientY - bounds.top) / bounds.height) * -2 + 1;
+      }
+
+      function onPointerLeave() {
+        target.x = 0;
+        target.y = 0;
+      }
+
+      function restart() {
+        window.cancelAnimationFrame(animationFrame);
+        draw(performance.now());
+      }
+
+      var resizeObserver = new ResizeObserver(restart);
+      var themeObserver = new MutationObserver(restart);
+      resizeObserver.observe(canvas);
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme"],
+      });
+      canvas.addEventListener("pointermove", onPointerMove, { passive: true });
+      canvas.addEventListener("pointerleave", onPointerLeave);
+      reducedMotion.addEventListener("change", restart);
+      root.dataset.webgl = "ready";
+      draw(performance.now());
+
+      window.addEventListener(
+        "pagehide",
+        function () {
+          destroyed = true;
+          window.cancelAnimationFrame(animationFrame);
+          resizeObserver.disconnect();
+          themeObserver.disconnect();
+          canvas.removeEventListener("pointermove", onPointerMove);
+          canvas.removeEventListener("pointerleave", onPointerLeave);
+          reducedMotion.removeEventListener("change", restart);
+          gl.deleteBuffer(buffer);
+          gl.deleteProgram(program);
+          gl.deleteShader(vertexShader);
+          gl.deleteShader(fragmentShader);
+        },
+        { once: true },
+      );
+    }
+
+    document.querySelectorAll("[data-focus-scene]").forEach(initScene);
+  })();
+</script>
+
+<style>
+  .focus-scene {
+    position: relative;
+    min-height: 31rem;
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--color-fg) 6%, transparent),
+      0 2.5rem 7rem -4rem color-mix(in srgb, var(--color-fg) 38%, transparent);
+  }
+
+  .focus-scene::after {
+    position: absolute;
+    inset: 1rem;
+    border: 1px solid color-mix(in srgb, var(--color-fg) 9%, transparent);
+    border-radius: calc(var(--radius-lg) - 0.65rem);
+    content: "";
+    pointer-events: none;
+  }
+
+  .focus-scene__canvas,
+  .focus-scene__fallback {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .focus-scene__canvas {
+    display: block;
+    cursor: crosshair;
+    touch-action: pan-y;
+  }
+
+  .focus-scene__fallback {
+    display: none;
+    background:
+      radial-gradient(circle at 58% 46%, color-mix(in srgb, var(--color-accent) 35%, transparent), transparent 15%),
+      repeating-linear-gradient(
+        0deg,
+        transparent 0 2.4rem,
+        color-mix(in srgb, var(--color-fg) 16%, transparent) 2.4rem 2.55rem
+      ),
+      var(--color-surface);
+  }
+
+  .focus-scene[data-webgl="unavailable"] .focus-scene__fallback {
+    display: block;
+  }
+
+  @media (max-width: 767px) {
+    .focus-scene {
+      min-height: 16rem;
+    }
+
+    .focus-scene__canvas {
+      cursor: default;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .focus-scene__canvas {
+      cursor: default;
+    }
+  }
+</style>

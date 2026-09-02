@@ -7,17 +7,11 @@ interface Props {
 }
 const { locale } = Astro.props;
 const t = ui[locale];
-
 ---
 
-<header
-  class="sticky top-0 z-40 border-b border-line bg-bg/80 backdrop-blur-md supports-[backdrop-filter]:bg-bg/70"
->
-  <div class="shell flex h-16 items-center justify-between">
-    <a
-      href={site.paths[locale]}
-      class="group inline-flex items-center gap-2.5 no-underline"
-    >
+<header class="site-header">
+  <div class="shell site-header__inner">
+    <a href={site.paths[locale]} class="site-brand">
       <img
         src={site.logo}
         alt=""
@@ -25,15 +19,17 @@ const t = ui[locale];
         height="26"
         class="rounded-[var(--radius-xs)]"
       />
-      <span class="font-mono text-[15px] font-semibold tracking-tight text-fg">agent-dump</span>
+      <span>agent-dump</span>
     </a>
 
-    <div class="flex items-center gap-2.5">
-      <div
-        role="group"
-        aria-label={t.langLabel}
-        class="inline-flex overflow-hidden rounded-[var(--radius-sm)] border border-line"
-      >
+    <nav class="site-nav" aria-label="Primary">
+      <a href="#capabilities">{t.capabilitiesHeading}</a>
+      <a href="#updates">{t.updatesHeading}</a>
+      <a href="#install">{t.installHeading}</a>
+    </nav>
+
+    <div class="site-tools">
+      <div role="group" aria-label={t.langLabel} class="language-switcher">
         {
           LOCALES.map((code) => {
             const current = code === locale;
@@ -43,10 +39,10 @@ const t = ui[locale];
                 lang={ui[code].htmlLang}
                 aria-current={current ? "page" : undefined}
                 class:list={[
-                  "px-2 py-1.5 font-mono text-[12px] no-underline transition-colors duration-150 ease-out",
+                  "language-switcher__link",
                   current
-                    ? "bg-fg text-bg"
-                    : "text-muted hover:bg-surface hover:text-fg",
+                    ? "language-switcher__link--active"
+                    : "language-switcher__link--idle",
                 ]}
               >
                 {localeLabels[code]}
@@ -62,7 +58,7 @@ const t = ui[locale];
           data-theme-toggle
           aria-label={t.themeLabel}
           title={t.themeLabel}
-          class="grid size-9 cursor-pointer place-items-center rounded-[var(--radius-sm)] border border-line text-muted transition-[transform,color,background-color,border-color] duration-150 ease-out hover:border-line-strong hover:text-fg active:scale-95"
+          class="theme-toggle"
         >
           <span class="relative block size-[18px]">
             <SunIcon
@@ -95,7 +91,7 @@ const t = ui[locale];
       }
       root.setAttribute("data-theme", next);
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", next === "dark" ? "#141109" : "#faf8f4");
+      if (meta) meta.setAttribute("content", next === "dark" ? "#0c1011" : "#f1f3ef");
       try {
         localStorage.setItem("agent-dump-theme", next);
       } catch (e) {}

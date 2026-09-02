@@ -1,5 +1,8 @@
 ---
-import { ui, type Locale } from "../lib/i18n";
+import { Image } from "astro:assets";
+import sessionConvergence from "../assets/editorial/session-convergence.png";
+import { terminalScenes, ui, type Locale } from "../lib/i18n";
+import Terminal from "./Terminal.astro";
 
 interface Props {
   locale: Locale;
@@ -8,36 +11,49 @@ const { locale } = Astro.props;
 const t = ui[locale];
 ---
 
-<section id="capabilities" class="shell py-16 sm:py-20">
-  <div data-reveal class="max-w-[65ch]">
-    <h2 class="text-[clamp(1.35rem,3vw,1.9rem)] font-semibold tracking-[-0.01em] text-fg">
-      {t.capabilitiesHeading}
-    </h2>
-    <p class="mt-3 text-[14.5px] leading-relaxed text-muted">{t.answerSummary}</p>
-  </div>
+<section id="capabilities" class="capabilities-section">
+  <div class="shell">
+    <div data-reveal class="section-heading section-heading--wide">
+      <h2>
+        {t.capabilitiesHeading}
+      </h2>
+      <p>{t.answerSummary}</p>
+    </div>
 
-  <div class="mt-10 border-b border-line">
-    {
-      t.capabilities.map((cap, i) => (
-        <div
-          data-reveal
-          style={`--reveal-delay: ${i * 60}ms`}
-          class="grid grid-cols-1 gap-x-8 gap-y-3 border-t border-line py-6 lg:grid-cols-[1fr_1.05fr] lg:items-center"
-        >
-          <div>
-            <h3 class="font-mono text-[15.5px] font-medium text-fg">{cap.title}</h3>
-            <p class="mt-1.5 max-w-[48ch] text-[14px] leading-relaxed text-muted">{cap.body}</p>
-          </div>
-          <div class="flex items-center gap-2.5 rounded-[var(--radius-sm)] border border-line bg-surface/50 px-3.5 py-2.5">
-            <span aria-hidden="true" class="select-none font-mono text-[13px] text-accent">
-              $
-            </span>
-            <code class="overflow-x-auto whitespace-nowrap font-mono text-[13px] text-fg">
-              {cap.command}
-            </code>
-          </div>
-        </div>
-      ))
-    }
+    <div class="convergence-stage" data-reveal>
+      <Image
+        src={sessionConvergence}
+        alt=""
+        aria-hidden="true"
+        widths={[640, 960, 1440]}
+        sizes="(max-width: 767px) 100vw, 72rem"
+        format="webp"
+        quality={78}
+        loading="lazy"
+        class="convergence-image"
+      />
+      <div class="convergence-terminal">
+        <Terminal scene={terminalScenes[1]} label={t.terminalLabel} />
+      </div>
+    </div>
+
+    <div class="capability-grid">
+      {
+        t.capabilities.map((capability, index) => (
+          <article
+            data-reveal
+            style={`--reveal-delay: ${index * 60}ms`}
+            class:list={["capability-block", `capability-block--${index + 1}`]}
+          >
+            <h3>{capability.title}</h3>
+            <p>{capability.body}</p>
+            <div class="command-line">
+              <span aria-hidden="true">$</span>
+              <code>{capability.command}</code>
+            </div>
+          </article>
+        ))
+      }
+    </div>
   </div>
 </section>

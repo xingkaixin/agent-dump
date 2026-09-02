@@ -1,8 +1,4 @@
 ---
-// Astro's prerendered image service needs Sharp declared in this project's build dependencies.
-import { Image } from "astro:assets";
-import sessionStream from "../assets/backgrounds/session-stream.png";
-import sessionArchive from "../assets/backgrounds/session-archive.png";
 import type { Locale } from "../lib/i18n";
 import Header from "./Header.astro";
 import Hero from "./Hero.astro";
@@ -21,42 +17,11 @@ const { locale } = Astro.props;
 
 <Header locale={locale} />
 <main id="main" tabindex="-1">
-  <div class="section-surface">
-    <Image
-      src={sessionStream}
-      alt=""
-      aria-hidden="true"
-      widths={[640, 960, 1536]}
-      sizes="100vw"
-      format="webp"
-      quality={75}
-      priority
-      class="section-artwork section-artwork--hero"
-    />
-    <Hero locale={locale} />
-  </div>
-  <div class="section-surface section-surface--providers">
-    <Providers locale={locale} />
-  </div>
-  <div class="section-surface">
-    <Image
-      src={sessionArchive}
-      alt=""
-      aria-hidden="true"
-      widths={[640, 960, 1536]}
-      sizes="100vw"
-      format="webp"
-      quality={75}
-      loading="lazy"
-      fetchpriority="low"
-      class="section-artwork section-artwork--archive"
-    />
-    <Capabilities locale={locale} />
-  </div>
+  <Hero locale={locale} />
+  <Providers locale={locale} />
+  <Capabilities locale={locale} />
   <UpdatesSection locale={locale} />
-  <div class="section-surface section-surface--install">
-    <InstallSection locale={locale} />
-  </div>
+  <InstallSection locale={locale} />
   <FaqSection locale={locale} />
 </main>
 <Footer locale={locale} />

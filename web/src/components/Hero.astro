@@ -1,7 +1,7 @@
 ---
 import { ArrowDownIcon, GithubLogoIcon } from "@phosphor-icons/react";
-import { site, ui, terminalScenes, type Locale } from "../lib/i18n";
-import Terminal from "./Terminal.astro";
+import { site, ui, type Locale } from "../lib/i18n";
+import FocusScene from "./FocusScene.astro";
 
 interface Props {
   locale: Locale;
@@ -10,23 +10,23 @@ const { locale } = Astro.props;
 const t = ui[locale];
 ---
 
-<section id="hero" class="shell pt-14 pb-16 sm:pt-20 sm:pb-20">
-  <div class="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-14">
-    <div data-reveal>
-      <p class="mb-5 font-mono text-[12px] font-medium uppercase tracking-[0.16em] text-accent">
+<section id="hero" class="shell hero-section">
+  <div class="hero-grid">
+    <div data-reveal class="hero-copy">
+      <p class="hero-eyebrow">
         {t.eyebrow}
       </p>
-      <h1 class="text-[clamp(2rem,5.5vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.02em] text-fg">
+      <h1 class="hero-title">
         {t.heroTitle}{" "}
-        <span class="text-accent">{t.heroTitleAccent}</span>
+        <span>{t.heroTitleAccent}</span>
       </h1>
-      <p class="mt-5 max-w-[46ch] text-[15px] leading-relaxed text-muted">
+      <p class="hero-description">
         {t.heroDescription}
       </p>
-      <div class="mt-8 flex flex-wrap items-center gap-3">
+      <div class="hero-actions">
         <a
           href="#install"
-          class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-accent px-4 py-2.5 text-[14px] font-medium text-accent-fg no-underline transition-[transform,filter] duration-150 ease-out hover:brightness-95 active:scale-[0.98]"
+          class="button button--primary"
         >
           {t.ctaInstall}
           <ArrowDownIcon className="size-4" aria-hidden="true" />
@@ -35,7 +35,7 @@ const t = ui[locale];
           href={site.repo}
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-line-strong px-4 py-2.5 text-[14px] font-medium text-fg no-underline transition-[transform,background-color] duration-150 ease-out hover:bg-surface active:scale-[0.98]"
+          class="button button--secondary"
         >
           <GithubLogoIcon className="size-4" aria-hidden="true" />
           {t.ctaSource}
@@ -43,8 +43,8 @@ const t = ui[locale];
       </div>
     </div>
 
-    <div data-reveal style="--reveal-delay: 120ms">
-      <Terminal scene={terminalScenes[0]} label={t.terminalLabel} />
+    <div data-reveal class="hero-visual" style="--reveal-delay: 120ms">
+      <FocusScene />
     </div>
   </div>
 </section>

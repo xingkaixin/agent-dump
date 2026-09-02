@@ -18,13 +18,10 @@ const toneClass: Record<OutputTone, string> = {
 <div
   role="img"
   aria-label={label}
-  class="overflow-hidden rounded-[var(--radius-lg)] border border-line-strong bg-term shadow-[0_24px_60px_-24px_rgba(0,0,0,0.5)]"
+  class="terminal-window"
 >
-  <div class="flex items-center gap-2 border-b border-white/8 px-4 py-3">
-    <span class="size-2.5 rounded-full bg-white/15"></span>
-    <span class="size-2.5 rounded-full bg-white/15"></span>
-    <span class="size-2.5 rounded-full bg-white/15"></span>
-    <span class="ml-2 font-mono text-[11px] text-term-dim">agent-dump</span>
+  <div class="terminal-window__bar">
+    <span class="font-mono text-[11px] text-term-dim">agent-dump / local</span>
   </div>
   <div class="min-h-[13.5rem] px-4 py-4 font-mono text-[13px] leading-[1.7] sm:px-5">
     <div class="flex items-baseline gap-2">
