@@ -39,7 +39,9 @@ for (const locale of locales) {
 
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       const boxes = await page
-        .locator("#hero h1, #hero [role='img'], #install code, #install button")
+        .locator(
+          "#hero h1, #hero canvas, #capabilities img, #capabilities [role='img'], #install code, #install button",
+        )
         .evaluateAll((elements) =>
           elements.map((element) => ({
             left: element.getBoundingClientRect().left,
@@ -118,7 +120,7 @@ for (const locale of locales) {
     await expect.poll(() => page.evaluate(() => localStorage.getItem("agent-dump-theme"))).toBe("dark");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#141109");
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#0c1011");
   });
 }
 
@@ -143,21 +145,29 @@ test("copy fallback does not report success when execCommand rejects it", async 
   expect(await copyButton.getAttribute("aria-label")).toBe("Copy");
 });
 
-test("section artwork renders within the image transfer budget", async ({ page }) => {
+test("generated artwork and WebGL scene render within budget", async ({ page }) => {
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/");
 
-    const artworks = page.locator(".section-artwork");
-    await expect(artworks).toHaveCount(2);
-    for (const artwork of await artworks.all()) {
-      await artwork.scrollIntoViewIfNeeded();
-      await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
-      const source = await artwork.evaluate((image: HTMLImageElement) => image.currentSrc);
-      const response = await page.request.get(source);
-      expect(response.ok()).toBe(true);
-      expect(response.headers()["content-type"]).toContain("image/webp");
-      expect((await response.body()).byteLength).toBeLessThan(100 * 1024);
-    }
+    const scene = page.locator("[data-focus-scene]");
+    await expect(scene).toHaveAttribute("data-ready", "true");
+    await expect(scene).toHaveAttribute("data-webgl", /^(ready|unavailable)$/);
+    await expect(scene).toHaveAttribute("role", "img");
+    await expect(scene.locator(".focus-scene__uri")).toContainText("agents://*");
+    await expect(scene.locator(".focus-scene__pill")).toBeVisible();
+    await expect
+      .poll(() => page.locator(".focus-scene__canvas").evaluate((canvas: HTMLCanvasElement) => canvas.width))
+      .toBeGreaterThan(0);
+
+    const artwork = page.locator(".convergence-image");
+    await expect(artwork).toHaveCount(1);
+    await artwork.scrollIntoViewIfNeeded();
+    await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    const source = await artwork.evaluate((image: HTMLImageElement) => image.currentSrc);
+    const response = await page.request.get(source);
+    expect(response.ok()).toBe(true);
+    expect(response.headers()["content-type"]).toContain("image/webp");
+    expect((await response.body()).byteLength).toBeLessThan(100 * 1024);
   }
 });

@@ -14,21 +14,23 @@ const groups = [
 ];
 ---
 
-<section id="install" class="shell py-16 sm:py-20">
-  <div data-reveal class="max-w-[46ch]">
-    <h2 class="text-[clamp(1.35rem,3vw,1.9rem)] font-semibold tracking-[-0.01em] text-fg">
-      {t.installHeading}
-    </h2>
-    <p class="mt-3 text-[14.5px] leading-relaxed text-muted">{t.installNote}</p>
-  </div>
+<section id="install" class="install-section">
+  <div class="shell install-layout">
+    <div data-reveal class="section-heading">
+      <h2>
+        {t.installHeading}
+      </h2>
+      <p>{t.installNote}</p>
+    </div>
 
-  <div data-reveal class="mt-10 max-w-[42rem]">
-    <InstallTabs
-      client:visible
-      groups={groups}
-      skill={{ note: t.skillNote, command: site.skillCommand }}
-      copy={t.copy}
-      copied={t.copied}
-    />
+    <div data-reveal class="install-panel">
+      <InstallTabs
+        client:visible
+        groups={groups}
+        skill={{ note: t.skillNote, command: site.skillCommand }}
+        copy={t.copy}
+        copied={t.copied}
+      />
+    </div>
   </div>
 </section>

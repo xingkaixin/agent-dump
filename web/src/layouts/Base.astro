@@ -77,7 +77,7 @@ const jsonLd = {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#faf8f4" />
+    <meta name="theme-color" content="#f1f3ef" />
     <meta name="description" content={t.description} />
     <meta name="keywords" content={t.keywords} />
     <meta name="author" content={site.author.name} />
@@ -131,7 +131,7 @@ const jsonLd = {
         } catch (e) {}
         root.setAttribute("data-theme", theme);
         var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute("content", theme === "dark" ? "#141109" : "#faf8f4");
+        if (meta) meta.setAttribute("content", theme === "dark" ? "#0c1011" : "#f1f3ef");
       })();
     </script>
   </head>

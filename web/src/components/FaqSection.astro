@@ -9,13 +9,15 @@ const { locale } = Astro.props;
 const t = ui[locale];
 ---
 
-<section id="faq" class="shell py-16 sm:py-24">
-  <div data-reveal class="max-w-[46ch]">
-    <h2 class="text-[clamp(1.35rem,3vw,1.9rem)] font-semibold tracking-[-0.01em] text-fg">
-      {t.faqHeading}
-    </h2>
-  </div>
-  <div data-reveal class="mt-8 max-w-[46rem]">
-    <Faq client:visible items={t.faq} />
+<section id="faq" class="faq-section">
+  <div class="shell faq-layout">
+    <div data-reveal class="section-heading">
+      <h2>
+        {t.faqHeading}
+      </h2>
+    </div>
+    <div data-reveal class="faq-panel">
+      <Faq client:visible items={t.faq} />
+    </div>
   </div>
 </section>

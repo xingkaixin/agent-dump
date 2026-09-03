@@ -9,46 +9,41 @@ const { locale } = Astro.props;
 const t = ui[locale];
 ---
 
-<section id="providers" class="shell py-16 sm:py-20">
-  <div data-reveal class="max-w-[42ch]">
-    <h2 class="text-[clamp(1.35rem,3vw,1.9rem)] font-semibold tracking-[-0.01em] text-fg">
-      {t.providersHeading}
-    </h2>
-    <p class="mt-3 text-[14.5px] leading-relaxed text-muted">{t.providersNote}</p>
-  </div>
+<section id="providers" class="providers-section">
+  <div class="shell">
+    <div data-reveal class="section-heading">
+      <h2>
+        {t.providersHeading}
+      </h2>
+      <p>{t.providersNote}</p>
+    </div>
 
-  <ul class="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-    {
-      providers.map((p, i) => (
-        <li
-          data-reveal
-          style={`--reveal-delay: ${i * 45}ms`}
-          class="rounded-[var(--radius-md)] border border-line bg-surface/50 p-4 transition-colors duration-200 ease-out hover:border-line-strong"
-        >
-          <p class="font-mono text-[13.5px] font-medium text-fg">{p.name}</p>
-          <p class="mt-2 break-all font-mono text-[12px] text-accent">{p.example}</p>
+    <div class="provider-scroll" data-reveal>
+      <ul class="provider-track">
+        {
+          providers.map((provider, index) => (
+            <li class="provider-stop" style={`--provider-index: ${index}`}>
+              <span class="provider-name">{provider.name}</span>
+              <code>{provider.example}</code>
+            </li>
+          ))
+        }
+        <li class="provider-stop provider-stop--more">
+          <a
+            href={`${site.repo}/pulls`}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="group no-underline"
+          >
+            <span class="provider-name">{t.moreTools.title}</span>
+            <span class="provider-link">
+              {t.moreTools.note}
+              <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
+            </span>
+          </a>
         </li>
-      ))
-    }
-    <li
-      data-reveal
-      style={`--reveal-delay: ${providers.length * 45}ms`}
-      class="flex flex-col justify-between rounded-[var(--radius-md)] border border-dashed border-line-strong p-4"
-    >
-      <a
-        href={`${site.repo}/pulls`}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="group flex h-full flex-col justify-between no-underline"
-      >
-        <span class="font-mono text-[13.5px] font-medium text-muted transition-colors duration-200 ease-out group-hover:text-fg">
-          {t.moreTools.title}
-        </span>
-        <span class="mt-2 inline-flex items-center gap-1 font-mono text-[12px] text-subtle transition-colors duration-200 ease-out group-hover:text-accent">
-          {t.moreTools.note}
-          <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
-        </span>
-      </a>
-    </li>
-  </ul>
+      </ul>
+    </div>
+
+  </div>
 </section>

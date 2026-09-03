@@ -1,6 +1,5 @@
 ---
 import { site, ui, type Locale } from "../lib/i18n";
-import { version } from "../lib/version";
 
 interface Props {
   locale: Locale;
@@ -12,24 +11,24 @@ const links = [
   { label: t.footerGithub, href: site.repo },
   { label: "npm", href: site.npm },
   { label: "PyPI", href: site.pypi },
-  { label: `${t.changelogLabel} · v${version}`, href: site.changelogUrl[locale] },
+  { label: t.changelogLabel, href: site.changelogUrl[locale] },
 ];
 ---
 
-<footer class="border-t border-line">
-  <div class="shell flex flex-col gap-6 py-10 sm:flex-row sm:items-end sm:justify-between">
+<footer class="site-footer">
+  <div class="shell site-footer__inner">
     <div>
-      <p class="font-mono text-[15px] font-semibold text-fg">agent-dump</p>
-      <p class="mt-1.5 text-[13px] text-muted">{t.footerTagline}</p>
+      <p class="site-footer__brand">agent-dump</p>
+      <p class="site-footer__tagline">{t.footerTagline}</p>
     </div>
-    <nav aria-label="Footer" class="flex flex-wrap gap-x-5 gap-y-2">
+    <nav aria-label="Footer" class="site-footer__nav">
       {
         links.map((link) => (
           <a
             href={link.href}
             target="_blank"
             rel="noopener noreferrer"
-            class="font-mono text-[13px] text-muted no-underline transition-colors duration-150 ease-out hover:text-accent"
+            class="site-footer__link"
           >
             {link.label}
           </a>

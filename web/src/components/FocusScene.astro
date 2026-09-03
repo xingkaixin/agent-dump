@@ -1,0 +1,508 @@
+---
+interface Props {
+  caption?: string;
+}
+
+const { caption = "Universal session convergence and index core" } = Astro.props;
+---
+
+<div class="focus-scene" data-focus-scene role="img" aria-label={caption}>
+  <canvas class="focus-scene__canvas" aria-hidden="true"></canvas>
+  <div class="focus-scene__fallback" aria-hidden="true"></div>
+
+  <!-- Telemetry HUD: Universal indicators without hardcoded agent dependencies -->
+  <div class="focus-scene__telemetry focus-scene__telemetry--top-left" aria-hidden="true">
+    <div class="focus-scene__pill">
+      <span class="focus-scene__dot"></span>
+      <span>ACTIVE // STREAM</span>
+    </div>
+    <span class="focus-scene__tag">INGEST // LOCAL SOURCES</span>
+    <span class="focus-scene__tag">HETEROGENEOUS → UNIFIED</span>
+  </div>
+
+  <div class="focus-scene__telemetry focus-scene__telemetry--top-right" aria-hidden="true">
+    <strong class="focus-scene__uri">agents://*</strong>
+    <span class="focus-scene__subtag">FTS5 // INDEX MATRIX</span>
+  </div>
+
+  <div class="focus-scene__telemetry focus-scene__telemetry--bottom-left" aria-hidden="true">
+    <span class="focus-scene__dim">DISCOVER → INDEX → EXPORT</span>
+  </div>
+
+  <div class="focus-scene__telemetry focus-scene__telemetry--bottom-right" aria-hidden="true">
+    <span class="focus-scene__dim">LOCAL-FIRST // ZERO-CLOUD</span>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    var vertexSource = `
+      attribute vec2 aPosition;
+      void main() {
+        gl_Position = vec4(aPosition, 0.0, 1.0);
+      }
+    `;
+
+    var fragmentSource = `
+      precision highp float;
+
+      uniform vec2 uResolution;
+      uniform float uTime;
+      uniform float uDark;
+
+      const int MAX_STEPS = 90;
+      const float MAX_DISTANCE = 8.5;
+      const float SURFACE_DISTANCE = 0.0015;
+
+      mat2 rotate2d(float angle) {
+        float c = cos(angle);
+        float s = sin(angle);
+        return mat2(c, -s, s, c);
+      }
+
+      float roundedBox(vec3 p, vec3 bounds, float radius) {
+        vec3 q = abs(p) - bounds;
+        return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - radius;
+      }
+
+      vec2 sceneMap(vec3 p) {
+        float cycle = mod(uTime, 7.6);
+        vec2 result = vec2(MAX_DISTANCE, 0.0);
+
+        float wobble = sin(uTime * 0.42) * 0.025;
+
+        for (int i = 0; i < 9; i++) {
+          float fi = float(i);
+          // Phase 1: Convergence (each layer arrives smoothly from alternating flanks)
+          float arrive = smoothstep(0.18 + fi * 0.12, 1.55 + fi * 0.09, cycle);
+          // Phase 4: Reset loop near cycle end
+          float depart = smoothstep(6.8 + (8.0 - fi) * 0.06, 7.5 + (8.0 - fi) * 0.05, cycle);
+          float assembled = arrive * (1.0 - depart);
+
+          // Phase 2 & 3: Hit extraction on middle layer (i == 4)
+          float hitPhase = smoothstep(3.2, 4.0, cycle) * (1.0 - smoothstep(5.8, 6.6, cycle));
+
+          float side = mod(fi, 2.0) == 0.0 ? -1.0 : 1.0;
+          vec3 sourcePos = vec3(side * (1.35 + fi * 0.07), (fi - 4.0) * 0.26, sin(fi * 1.5) * 0.22);
+          vec3 targetPos = vec3(0.0, (fi - 4.0) * 0.15 + wobble, 0.0);
+
+          if (i == 4) {
+            targetPos += vec3(0.46, 0.04, 0.3) * hitPhase;
+          }
+
+          vec3 pos = mix(sourcePos, targetPos, assembled);
+          vec3 q = p - pos;
+
+          q.xz *= rotate2d(-0.3);
+          q.yz *= rotate2d(0.16);
+
+          float slab = roundedBox(q, vec3(0.72, 0.038, 0.52), 0.042);
+          if (slab < result.x) {
+            result = vec2(slab, fi + 1.0);
+          }
+        }
+
+        return result;
+      }
+
+      float sceneDistance(vec3 p) {
+        return sceneMap(p).x;
+      }
+
+      vec3 sceneNormal(vec3 p) {
+        vec2 e = vec2(0.0015, 0.0);
+        return normalize(vec3(
+          sceneDistance(p + e.xyy) - sceneDistance(p - e.xyy),
+          sceneDistance(p + e.yxy) - sceneDistance(p - e.yxy),
+          sceneDistance(p + e.yyx) - sceneDistance(p - e.yyx)
+        ));
+      }
+
+      float raymarch(vec3 origin, vec3 direction) {
+        float distanceFromOrigin = 0.0;
+        for (int i = 0; i < MAX_STEPS; i++) {
+          vec3 point = origin + direction * distanceFromOrigin;
+          float distanceToScene = sceneDistance(point);
+          distanceFromOrigin += distanceToScene;
+          if (distanceToScene < SURFACE_DISTANCE || distanceFromOrigin > MAX_DISTANCE) break;
+        }
+        return distanceFromOrigin;
+      }
+
+      void main() {
+        vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
+        vec3 backgroundLight = vec3(0.925, 0.935, 0.91);
+        vec3 backgroundDark = vec3(0.045, 0.058, 0.06);
+        vec3 background = mix(backgroundLight, backgroundDark, uDark);
+
+        float vignette = smoothstep(1.9, 0.2, length(uv * vec2(0.78, 1.0)));
+        background *= mix(0.93, 1.03, vignette);
+
+        vec3 origin = vec3(0.0, 0.0, 3.8);
+        vec3 direction = normalize(vec3(uv, -1.9));
+        float distanceFromOrigin = raymarch(origin, direction);
+        vec3 color = background;
+
+        float cycle = mod(uTime, 7.6);
+        float scanY = mix(0.85, -0.85, smoothstep(2.3, 4.3, cycle));
+        float scanActive = smoothstep(2.1, 2.5, cycle) * (1.0 - smoothstep(4.4, 4.8, cycle));
+
+        if (distanceFromOrigin < MAX_DISTANCE) {
+          vec3 point = origin + direction * distanceFromOrigin;
+          vec3 normal = sceneNormal(point);
+          float layerId = sceneMap(point).y;
+
+          vec3 lightDirection = normalize(vec3(-0.6, 0.9, 0.65));
+          vec3 halfVector = normalize(lightDirection - direction);
+          float diffuse = max(dot(normal, lightDirection), 0.0);
+          float rim = pow(1.0 - max(dot(normal, -direction), 0.0), 2.2);
+          float specular = pow(max(dot(normal, halfVector), 0.0), 52.0);
+
+          float laserDist = abs(point.y - scanY);
+          float laserSlice = exp(-laserDist * 28.0) * scanActive;
+
+          float selectedPhase = smoothstep(3.2, 4.0, cycle) * (1.0 - smoothstep(5.8, 6.6, cycle));
+          float isSelected = 1.0 - step(0.5, abs(layerId - 5.0));
+
+          vec3 graphiteLight = vec3(0.20, 0.22, 0.23);
+          vec3 graphiteDark = vec3(0.54, 0.60, 0.61);
+          vec3 graphite = mix(graphiteLight, graphiteDark, uDark);
+          graphite *= 0.84 + (layerId / 9.0) * 0.16;
+
+          vec3 accentLight = vec3(0.82, 0.18, 0.10);
+          vec3 accentDark = vec3(0.96, 0.34, 0.18);
+          vec3 accent = mix(accentLight, accentDark, uDark);
+
+          vec3 material = mix(graphite, accent, isSelected * selectedPhase);
+
+          color = material * (0.30 + diffuse * 0.66);
+          color += specular * mix(vec3(0.45), vec3(0.88), uDark);
+          color += rim * mix(vec3(0.08), vec3(0.20), uDark);
+          color += accent * laserSlice * 1.5;
+
+          color = mix(color, background, smoothstep(2.8, 6.2, distanceFromOrigin));
+        }
+
+        gl_FragColor = vec4(pow(color, vec3(0.92)), 1.0);
+      }
+    `;
+
+    function compileShader(gl, type, source) {
+      var shader = gl.createShader(type);
+      if (!shader) return null;
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
+    }
+
+    function initScene(root) {
+      if (root.dataset.ready === "true") return;
+      root.dataset.ready = "true";
+
+      var canvas = root.querySelector("canvas");
+      var gl = canvas && canvas.getContext("webgl", {
+        alpha: false,
+        antialias: false,
+        depth: false,
+        powerPreference: "high-performance",
+      });
+      if (!gl) {
+        root.dataset.webgl = "unavailable";
+        return;
+      }
+
+      var vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
+      var fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+      if (!vertexShader || !fragmentShader) {
+        root.dataset.webgl = "unavailable";
+        return;
+      }
+
+      var program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        root.dataset.webgl = "unavailable";
+        return;
+      }
+
+      var buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+        gl.STATIC_DRAW,
+      );
+
+      var position = gl.getAttribLocation(program, "aPosition");
+      var resolution = gl.getUniformLocation(program, "uResolution");
+      var time = gl.getUniformLocation(program, "uTime");
+      var dark = gl.getUniformLocation(program, "uDark");
+      var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      var animationFrame = 0;
+      var start = performance.now();
+      var destroyed = false;
+
+      function resize() {
+        var bounds = canvas.getBoundingClientRect();
+        var scale = Math.min(window.devicePixelRatio || 1, 1.75);
+        var width = Math.max(1, Math.round(bounds.width * scale));
+        var height = Math.max(1, Math.round(bounds.height * scale));
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+      }
+
+      function draw(now) {
+        if (destroyed) return;
+        resize();
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.enableVertexAttribArray(position);
+        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+        gl.uniform2f(resolution, canvas.width, canvas.height);
+        gl.uniform1f(time, reducedMotion.matches ? 3.8 : (now - start) / 1000);
+        gl.uniform1f(dark, document.documentElement.dataset.theme === "dark" ? 1 : 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        if (!reducedMotion.matches) animationFrame = window.requestAnimationFrame(draw);
+      }
+
+      function restart() {
+        window.cancelAnimationFrame(animationFrame);
+        draw(performance.now());
+      }
+
+      var resizeObserver = new ResizeObserver(restart);
+      var themeObserver = new MutationObserver(restart);
+      resizeObserver.observe(canvas);
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme"],
+      });
+      reducedMotion.addEventListener("change", restart);
+      root.dataset.webgl = "ready";
+      draw(performance.now());
+
+      window.addEventListener(
+        "pagehide",
+        function () {
+          destroyed = true;
+          window.cancelAnimationFrame(animationFrame);
+          resizeObserver.disconnect();
+          themeObserver.disconnect();
+          reducedMotion.removeEventListener("change", restart);
+          gl.deleteBuffer(buffer);
+          gl.deleteProgram(program);
+          gl.deleteShader(vertexShader);
+          gl.deleteShader(fragmentShader);
+        },
+        { once: true },
+      );
+    }
+
+    document.querySelectorAll("[data-focus-scene]").forEach(initScene);
+  })();
+</script>
+
+<style>
+  .focus-scene {
+    position: relative;
+    min-height: 31rem;
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--color-fg) 6%, transparent),
+      0 2.5rem 7rem -4rem color-mix(in srgb, var(--color-fg) 38%, transparent);
+  }
+
+  .focus-scene::after {
+    position: absolute;
+    inset: 1rem;
+    border: 1px solid color-mix(in srgb, var(--color-fg) 9%, transparent);
+    border-radius: calc(var(--radius-lg) - 0.65rem);
+    content: "";
+    pointer-events: none;
+  }
+
+  .focus-scene__canvas,
+  .focus-scene__fallback {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .focus-scene__canvas {
+    display: block;
+  }
+
+  .focus-scene__fallback {
+    display: none;
+    background:
+      radial-gradient(circle at 68% 50%, color-mix(in srgb, var(--color-accent) 34%, transparent), transparent 14%),
+      linear-gradient(90deg, transparent 22%, color-mix(in srgb, var(--color-fg) 10%, transparent) 65%, transparent),
+      var(--color-surface);
+  }
+
+  .focus-scene__telemetry {
+    position: absolute;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .focus-scene__telemetry--top-left {
+    top: 1.65rem;
+    left: 1.75rem;
+    gap: 0.35rem;
+  }
+
+  .focus-scene__telemetry--top-right {
+    top: 1.65rem;
+    right: 1.75rem;
+    gap: 0.25rem;
+    text-align: right;
+  }
+
+  .focus-scene__telemetry--bottom-left {
+    bottom: 1.65rem;
+    left: 1.75rem;
+  }
+
+  .focus-scene__telemetry--bottom-right {
+    bottom: 1.65rem;
+    right: 1.75rem;
+    text-align: right;
+  }
+
+  .focus-scene__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    padding: 0.2rem 0.5rem;
+    width: fit-content;
+    border: 1px solid color-mix(in srgb, var(--color-fg) 15%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+    backdrop-filter: blur(8px);
+    color: var(--color-fg);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.06em;
+    line-height: 1;
+  }
+
+  .focus-scene__dot {
+    width: 0.38rem;
+    height: 0.38rem;
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 8px var(--color-accent);
+    animation: focus-pulse 2.2s ease-in-out infinite;
+  }
+
+  .focus-scene__tag {
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+    line-height: 1.35;
+  }
+
+  .focus-scene__uri {
+    color: var(--color-fg);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  .focus-scene__subtag {
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    line-height: 1.35;
+  }
+
+  .focus-scene__dim {
+    color: color-mix(in srgb, var(--color-muted) 75%, transparent);
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.06em;
+  }
+
+  @keyframes focus-pulse {
+    0%,
+    100% {
+      opacity: 0.45;
+      transform: scale(0.9);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.15);
+    }
+  }
+
+  .focus-scene[data-webgl="unavailable"] .focus-scene__fallback {
+    display: block;
+  }
+
+  @media (max-width: 767px) {
+    .focus-scene {
+      min-height: 17rem;
+    }
+
+    .focus-scene::after {
+      inset: 0.65rem;
+    }
+
+    .focus-scene__telemetry--top-left {
+      top: 1.1rem;
+      left: 1.1rem;
+      gap: 0.25rem;
+    }
+
+    .focus-scene__telemetry--top-right {
+      top: 1.1rem;
+      right: 1.1rem;
+      gap: 0.2rem;
+    }
+
+    .focus-scene__telemetry--bottom-left,
+    .focus-scene__telemetry--bottom-right {
+      display: none;
+    }
+
+    .focus-scene__pill {
+      padding: 0.16rem 0.42rem;
+      font-size: 0.52rem;
+    }
+
+    .focus-scene__dot {
+      width: 0.32rem;
+      height: 0.32rem;
+    }
+
+    .focus-scene__tag,
+    .focus-scene__subtag {
+      font-size: 0.52rem;
+    }
+
+    .focus-scene__uri {
+      font-size: 0.68rem;
+    }
+  }
+</style>
