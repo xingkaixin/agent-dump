@@ -942,8 +942,8 @@ class TestDisplaySessionsList:
 class TestUriShapesComeFromTheRegistry:
     """AD-140：URI 形状此前硬编码在 uri_support 与 agent_registry 的 if 分支里。
 
-    AGENTS.md §1.3/§3.3 声明 provider schema 只在对应 Agent 内处理、URI scheme 由
-    AGENT_REGISTRATIONS 统一声明；那两处 `if scheme == ...` 直接违反了这一点，
+    AGENTS.md §1.3 与 docs/architecture.md §2.2 声明 Provider schema 只在 Provider
+    层处理、URI scheme 由 AGENT_REGISTRATIONS 统一声明；按 scheme 分支直接违反这一点，
     也让新增「session id 带路径前缀」的 provider 必须改共享模块。
     """
 

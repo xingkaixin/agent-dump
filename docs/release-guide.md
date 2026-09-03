@@ -118,3 +118,13 @@ just isok
    git push origin vX.Y.Z
    ```
    *(GitHub Actions 监测到 `vX.Y.Z` Tag 会自动执行统一流水线，完成 PyPI、npm 与 GitHub Release 发布)*。
+
+---
+
+## 构建约束
+
+- `npm/packages/cli/lib/native-targets.json` 是原生目标闭集的唯一机器可读定义；runtime、npm 发布脚本和 release matrix 从该文件派生。
+- `packaging/build-constraints.in` 保存直接构建后端的精确版本，由 Dependabot 的 pip 入口更新。
+- `packaging/build-constraints.txt` 保存完整传递闭包和可信 hash，只通过 `just update-build-constraints` 重新生成。
+- 本地 `just build`、CI quality job 和 release PyPI build 使用同一约束文件及 `--require-hashes`，不得关闭 PEP 517 build isolation。
+- 合并和发布仍属于上节定义的用户控制阶段。构建约束不扩大 Agent 的发布权限。

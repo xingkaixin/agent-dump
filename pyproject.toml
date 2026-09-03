@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     # 代码不直接 import prompt-toolkit，但 selector.py 依赖它经 questionary 暴露的
-    # `q.application.key_bindings`（见 AGENTS.md §9.3）。questionary 自身只要求
+    # `q.application.key_bindings`（见 docs/development-guide.md §3）。questionary 自身只要求
     # >=2.0,<4.0，这条更紧的下界用来阻止解析到 3.0 以下、该键绑定 API 不同的版本。
     "prompt-toolkit>=3.0.0",
     "questionary>=2.0.0",
