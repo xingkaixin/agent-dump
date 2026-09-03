@@ -105,7 +105,7 @@ class TestDependencyPinning:
         assert any("pyinstaller==" in spec for spec in packaging)
 
     def test_prompt_toolkit_is_justified_in_place(self):
-        """代码不直接 import 它，保留的理由必须写在旁边（AGENTS.md §1.2）。"""
+        """代码不直接 import 它，保留的理由必须写在旁边（AGENTS.md §1.4）。"""
         content = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         block = content[content.index("dependencies = [") : content.index("[project.urls]")]
 

@@ -33,7 +33,7 @@ def select_agent_interactive(agents: list[BaseAgent], session_counts: dict[str, 
     """Let user select an agent tool interactively.
 
     session_counts 是必填的：selector 属于 UI 层，不得自己去扫 provider
-    （AGENTS.md §1.4）。调用方本来就要扫一次，把计数传进来即可。
+    （AGENTS.md §1.3）。调用方本来就要扫一次，把计数传进来即可。
     """
     if not agents:
         print(i18n.t(Keys.NO_AGENTS_FOUND))

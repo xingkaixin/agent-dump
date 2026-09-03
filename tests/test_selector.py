@@ -372,11 +372,11 @@ class TestSelectAgentInteractiveEdgeCases:
         assert "3 个会话" in call_args.kwargs.get("title", "") or any("3 个会话" in str(arg) for arg in call_args.args)
 
     @pytest.mark.parametrize("terminal", [True, False])
-    def test_selector_never_touches_a_provider(self, mock_agent, terminal, monkeypatch):
-        """AD-128：selector 是 UI 层，不得访问 provider（AGENTS.md §1.4）。"""
+    def test_agent_selector_never_reads_provider_data(self, mock_agent, terminal, monkeypatch):
+        """AD-128：selector 不得触发 Provider 发现或内容读取（AGENTS.md §1.3）。"""
 
         def _forbidden(*args, **kwargs):
-            raise AssertionError("selector 不得调用 provider 方法")
+            raise AssertionError("selector 不得读取 Provider 数据")
 
         for method in ("get_sessions", "scan", "is_available", "get_session_data"):
             monkeypatch.setattr(mock_agent, method, _forbidden)

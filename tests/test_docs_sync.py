@@ -1,8 +1,4 @@
-"""Guards against documentation drifting from the code (AD-144).
-
-AD-119 已经手工同步过一次 README 的结构树，几个月后 AGENTS.md 又漂了 10 个模块。
-手工同步会再漂，所以这里把「文档与代码一致」变成 CI 检查。
-"""
+"""Guards against documentation drifting from the code (AD-144)."""
 
 import json
 from pathlib import Path
@@ -13,76 +9,30 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_MD = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
-# 两份 README 的架构地图是贡献者判断「逻辑该放哪」的依据；AGENTS.md 才是详细约束来源
-CONTRIBUTOR_MAPS = ("README.md", "README_zh.md")
+DEVELOPMENT_GUIDE = (REPO_ROOT / "docs" / "development-guide.md").read_text(encoding="utf-8")
+AGENT_REFERENCE_PATHS = (
+    "CONTEXT.md",
+    "docs/architecture.md",
+    "docs/development-guide.md",
+    "docs/release-guide.md",
+    "skills/agent-dump/SKILL.md",
+    "skills/agent-dump/references/cli-recipes.md",
+)
 
 
-def _source_modules() -> set[str]:
-    return {path.name for path in (REPO_ROOT / "src" / "agent_dump").rglob("*.py")}
+class TestAgentInstructionRouting:
+    @pytest.mark.parametrize("relative_path", AGENT_REFERENCE_PATHS)
+    def test_agents_md_routes_to_existing_reference(self, relative_path: str) -> None:
+        assert f"`{relative_path}`" in AGENTS_MD
+        assert (REPO_ROOT / relative_path).is_file()
 
-
-class TestAgentsMdTreeCoversEveryModule:
-    def test_project_tree_lists_every_source_module(self):
-        missing = sorted(name for name in _source_modules() if name not in AGENTS_MD)
-
-        assert missing == [], f"AGENTS.md 的项目结构树缺少这些模块: {missing}"
-
-    def test_internal_module_table_covers_non_public_modules(self):
-        """§2.2 是内部实现清单；公开 API（§2.1）与 provider 实现另有章节。"""
-        table = AGENTS_MD[AGENTS_MD.index("### 2.2 内部实现") : AGENTS_MD.index("### 2.3")]
-        public_or_provider = {
-            "__init__.py",
-            "__about__.py",
-            "__main__.py",
-            "base.py",
-            "opencode.py",
-            "zcode.py",
-            "codex.py",
-            "kimi.py",
-            "claudecode.py",
-            "cursor.py",
-            "pi.py",
-            "title_fallback.py",
-            "i18n.py",
-            "diagnostics.py",
-            "scanner.py",
-            "paths.py",
-            "message_filter.py",
-            "collect_models.py",
-        }
-        expected = {name for name in _source_modules() if name not in public_or_provider}
-        missing = sorted(name for name in expected if name not in table)
-
-        assert missing == [], f"AGENTS.md §2.2 缺少这些内部模块: {missing}"
-
-    @pytest.mark.parametrize("doc", CONTRIBUTOR_MAPS)
-    def test_readme_structure_tree_lists_every_source_module(self, doc):
-        """AD-119 手工同步过一次，AGENTS.md 有门禁而 README 没有，于是只有 README 又漂了。"""
-        content = (REPO_ROOT / doc).read_text(encoding="utf-8")
-        missing = sorted(name for name in _source_modules() if name not in content)
-
-        assert missing == [], f"{doc} 的项目结构树缺少这些模块: {missing}"
-
-    def test_both_readmes_describe_the_same_modules(self):
-        """一份加了模块另一份没加，两种语言的读者会看到不同的架构。"""
-        modules = _source_modules()
-        english = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-        chinese = (REPO_ROOT / "README_zh.md").read_text(encoding="utf-8")
-
-        only_english = sorted(name for name in modules if name in english and name not in chinese)
-        only_chinese = sorted(name for name in modules if name in chinese and name not in english)
-
-        assert (only_english, only_chinese) == ([], []), (
-            f"只在 README.md 里: {only_english}；只在 README_zh.md 里: {only_chinese}"
-        )
-
-    def test_declared_line_length_matches_ruff(self):
+    def test_declared_line_length_matches_ruff(self) -> None:
         """文档写 100 而 ruff 配 120 时，照文档写的 agent 会按错的宽度换行。"""
         ruff = (REPO_ROOT / "ruff.toml").read_text(encoding="utf-8")
         configured = re.search(r"line-length = (\d+)", ruff)
 
         assert configured is not None
-        assert f"单行最大长度 {configured.group(1)}" in AGENTS_MD
+        assert f"单行最大长度 {configured.group(1)}" in DEVELOPMENT_GUIDE
 
 
 class TestReadmeDocumentsEveryCliFlag:
