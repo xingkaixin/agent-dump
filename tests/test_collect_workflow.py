@@ -1,13 +1,23 @@
-from datetime import date
+from datetime import date, datetime, timezone
+import json
 from pathlib import Path
 from unittest import mock
 
-from locale_helpers import ALL_LANGUAGES, Keys, expect_contains
+from collect_test_support import configure_session_data_lease
+from locale_helpers import ALL_LANGUAGES, Keys, expect, expect_contains
 import pytest
 
-from agent_dump.collect_models import CollectAction, CollectFailurePhase, CollectMode, CollectRunStats
+from agent_dump.agents.base import Session
+from agent_dump.collect_models import (
+    CollectAction,
+    CollectFailurePhase,
+    CollectMode,
+    CollectReadResult,
+    CollectRunStats,
+)
 from agent_dump.collect_workflow import handle_collect_mode
 from agent_dump.command_plan import CollectOperation
+from agent_dump.scanner import AgentScanner
 
 
 def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock, mock.MagicMock]:
@@ -45,8 +55,8 @@ def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock, m
         mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])),
         mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=logger),
         mock.patch(
-            "agent_dump.collect_workflow.collect_entries",
-            return_value=[mock.MagicMock()],
+            "agent_dump.collect_workflow.collect_entries_with_status",
+            return_value=CollectReadResult([mock.MagicMock()]),
             side_effect=error if failing_step == "read" else None,
         ),
         mock.patch("agent_dump.collect_workflow.plan_collect_entries", return_value=([planned_entry], 1)),
@@ -155,7 +165,7 @@ def test_collect_reports_failure_from_the_stage_that_raised(
     )
 
 
-def test_collect_finish_log_uses_run_stats_session_count(capsys) -> None:
+def test_collect_finish_log_uses_successful_session_count(capsys) -> None:
     result, logger, _ = _run_collect_with_failure("success")
     capsys.readouterr()
 
@@ -204,7 +214,10 @@ def test_collect_reports_output_write_failure(language, use_language, capsys) ->
         mock.patch("agent_dump.collect_workflow.load_config_document", return_value=config_document),
         mock.patch("agent_dump.collect_workflow.validate_ai_config", return_value=(True, [])),
         mock.patch("agent_dump.collect_workflow.create_collect_logger", return_value=logger),
-        mock.patch("agent_dump.collect_workflow.collect_entries", return_value=[mock.MagicMock()]),
+        mock.patch(
+            "agent_dump.collect_workflow.collect_entries_with_status",
+            return_value=CollectReadResult([mock.MagicMock()]),
+        ),
         mock.patch("agent_dump.collect_workflow.plan_collect_entries", return_value=([mock.MagicMock()], 1)),
         mock.patch("agent_dump.collect_workflow.build_collect_run_stats", return_value=mock.MagicMock()),
         mock.patch("agent_dump.collect_workflow.summarize_collect_entries", return_value=[mock.MagicMock()]),
@@ -230,3 +243,69 @@ def test_collect_reports_output_write_failure(language, use_language, capsys) ->
         phase=CollectFailurePhase.WRITE.value,
         error="read-only filesystem",
     )
+
+
+@pytest.mark.parametrize("language", ALL_LANGUAGES)
+@pytest.mark.parametrize("read_fails,summary_fails", [(False, False), (True, False), (False, True), (True, True)])
+@pytest.mark.parametrize("mode", list(CollectMode))
+def test_collect_saved_report_and_log_preserve_partial_failures(
+    tmp_path, monkeypatch, capsys, read_fails, summary_fails, mode, language, use_language
+) -> None:
+    use_language(language)
+    config_path = tmp_path / "config.toml"
+    log_path = tmp_path / "collect.log"
+    config_path.write_text(
+        '[ai]\nprovider="openai"\nbase_url="https://example.invalid"\nmodel="test"\napi_key="test"\n'
+        f"[logging]\nenabled=true\npath={json.dumps(str(log_path))}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("agent_dump.config.get_config_path", lambda: config_path)
+    now = datetime(2026, 9, 5, 12, tzinfo=timezone.utc)
+    sessions = [Session(name, name, now, now, tmp_path / name, {}) for name in ("good", "read", "summary", "empty")]
+    agent = mock.MagicMock()
+    agent.name = "codex"
+    agent.display_name = "Codex"
+    agent.discover_sessions.return_value = mock.MagicMock(available=True, sessions=sessions)
+    agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+
+    def read_session(session):
+        if read_fails and session.id == "read":
+            raise OSError("unreadable source")
+        return {"messages": [] if session.id == "empty" else [{"role": "user", "content": session.id}]}
+
+    agent.get_cached_session_data.side_effect = read_session
+    configure_session_data_lease(agent)
+
+    def summarize(config, prompt, **kwargs):
+        if summary_fails and kwargs["context"].session_uri == "codex://summary":
+            raise RuntimeError("summary unavailable")
+        field = "scene" if mode is CollectMode.INSIGHT else "requests"
+        return {field: ["fact"]}
+
+    output_path = tmp_path / "report.md"
+    result = handle_collect_mode(
+        CollectOperation(None, "2026-09-05", "2026-09-05", str(output_path), CollectAction.EXECUTE, mode, None),
+        scanner_factory=lambda: AgentScanner([agent]),
+        request_structured_summary=summarize,
+        request_summary=lambda *args, **kwargs: "# report",
+    )
+
+    successful = 3 - int(read_fails) - int(summary_fails)
+    markdown = output_path.read_text(encoding="utf-8")
+    assert result == 0
+    if read_fails or summary_fails:
+        notice = expect(
+            Keys.COLLECT_INCOMPLETE_REPORT,
+            read_failed=int(read_fails),
+            summary_failed=int(summary_fails),
+            included=successful,
+        )
+        assert markdown == f"> {notice}\n\n# report"
+    else:
+        assert markdown == "# report"
+    assert markdown in capsys.readouterr().out
+    records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    finished = next(record for record in records if record["event"] == "collect_run_finish")
+    assert finished["session_count"] == successful
+    assert finished["read_failed_count"] == int(read_fails)
+    assert finished["summary_failed_count"] == int(summary_fails)

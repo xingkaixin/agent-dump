@@ -42,7 +42,7 @@ from agent_dump.collect_requests import (
     request_summary_from_llm,
 )
 from agent_dump.collect_sessions import (
-    collect_entries,
+    collect_entries_with_status,
     collect_scan_days,
     plan_collect_entries,
     select_collect_sessions,
@@ -234,12 +234,15 @@ class _SummaryRequester(Protocol):
 class _CollectPlan:
     planned_entries: list[PlannedCollectEntry]
     run_stats: CollectRunStats
+    read_failed_count: int
 
 
 @dataclass(frozen=True)
 class _CollectOutput:
     markdown: str
     output_path: Path
+    session_count: int
+    summary_failed_count: int
 
 
 def _validated_collect_ai_config(config_document: ConfigurationDocument) -> AIConfig | None:
@@ -286,7 +289,7 @@ def _prepare_collect_plan(
             print(i18n.t(Keys.NO_AGENTS_FOUND))
             return None
         available_agents = [agent for agent, _ in session_results]
-        entries = collect_entries(
+        read_result = collect_entries_with_status(
             session_groups=session_results,
             since_date=since_date,
             until_date=until_date,
@@ -297,6 +300,7 @@ def _prepare_collect_plan(
             diagnostic_sink=print_recoverable_diagnostic,
             logger=logger,
         )
+        entries = read_result.entries
         if not entries:
             print(i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()))
             return None
@@ -335,6 +339,7 @@ def _prepare_collect_plan(
     return _CollectPlan(
         planned_entries=planned_entries,
         run_stats=run_stats,
+        read_failed_count=read_result.failed_count,
     )
 
 
@@ -397,6 +402,16 @@ def _execute_collect_plan(
         print(i18n.t(Keys.COLLECT_API_FAILED, error=safe_display_text(str(exc))))
         return None
 
+    summary_failed_count = len(plan.planned_entries) - len(session_summaries)
+    if plan.read_failed_count or summary_failed_count:
+        notice = i18n.t(
+            Keys.COLLECT_INCOMPLETE_REPORT,
+            read_failed=plan.read_failed_count,
+            summary_failed=summary_failed_count,
+            included=len(session_summaries),
+        )
+        markdown = f"> {notice}\n\n{markdown}"
+
     try:
         emit_collect_progress(progress_callback, WriteOutputProgress(current=0, total=1))
         output_path = write_collect_markdown(
@@ -415,7 +430,12 @@ def _execute_collect_plan(
         print(i18n.t(Keys.COLLECT_WRITE_FAILED, error=safe_display_text(str(exc))))
         return None
 
-    return _CollectOutput(markdown=markdown, output_path=output_path)
+    return _CollectOutput(
+        markdown=markdown,
+        output_path=output_path,
+        session_count=len(session_summaries),
+        summary_failed_count=summary_failed_count,
+    )
 
 
 def _handle_collect_dry_run(
@@ -495,7 +515,9 @@ def _handle_collect_execution(
     logger.log(
         "collect_run_finish",
         output_path=str(output.output_path),
-        session_count=plan.run_stats.session_count,
+        session_count=output.session_count,
+        read_failed_count=plan.read_failed_count,
+        summary_failed_count=output.summary_failed_count,
     )
     print(safe_body_text(output.markdown))
     print(render_terminal_message(Keys.COLLECT_OUTPUT_SAVED, path=output.output_path))

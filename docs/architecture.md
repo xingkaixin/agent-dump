@@ -96,6 +96,7 @@ Provider 私有 schema 只能在 `agent_dump.agents` 层解释。Provider 类可
 - 没有真实对话的 Session 在 chunk 规划前忽略。
 - PM 摘要字段固定为 requests、decisions、outcomes；outcomes 只记录 Agent 明确报告的结果，不从工具轨迹或文件推断完成状态。
 - 跨会话归并只在 PM 的同一日期和明确相同的工作目录内执行；工作目录未知时保留单会话归属；INSIGHT 保留单会话归属。
+- 读取阶段返回失败数量，摘要失败数由计划与成功摘要数之差派生；部分失败时 Markdown 固定标明遗漏，完成日志记录实际成功数。兼容 `collect_entries()` 保持列表返回值。
 - 最终输入超过 64,000 字符时拒绝请求并提示缩小范围。
 - 模型响应先校验字段和字符串数组类型，再规范化。空对象、未知字段和错误类型进入现有纠正重试。
 
