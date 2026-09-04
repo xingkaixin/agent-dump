@@ -453,6 +453,8 @@ for agent in scanner.get_available_agents():
 
 ### collect configuration file
 
+PM summaries merge sessions only within the same date and known working directory. Sessions without a working directory retain separate attribution.
+
 Default config path:
 
 - macOS/Linux: `~/.config/agent-dump/config.toml`

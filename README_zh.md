@@ -439,6 +439,8 @@ for agent in scanner.get_available_agents():
 
 ### collect 配置文件
 
+PM 摘要只合并同一天、工作目录明确且相同的会话；工作目录未知的会话保留独立归属。
+
 默认配置文件路径：
 
 - macOS/Linux: `~/.config/agent-dump/config.toml`

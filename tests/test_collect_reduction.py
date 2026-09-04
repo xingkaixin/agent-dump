@@ -97,6 +97,25 @@ class TestCollectStructuredSummary:
         assert aggregate.session_count == 17
 
     @pytest.mark.parametrize("mode", list(CollectMode))
+    def test_unknown_projects_keep_session_attribution(self, mode: CollectMode) -> None:
+        field = "scene" if mode is CollectMode.INSIGHT else "requests"
+        summaries = [
+            SessionSummaryEntry(
+                replace(self._entry(session_id=f"s-{index}"), project_directory=project),
+                normalize_summary_payload({field: [f"fact-{index}"]}, mode=mode),
+            )
+            for index, project in enumerate(("", "", "/repo", "/repo"))
+        ]
+
+        aggregate = reduce_collect_summaries(config=self._config(), session_summaries=summaries, mode=mode)
+
+        unknown_groups = [group for group in aggregate.groups if not group.project_directory]
+        assert [group.session_uris for group in unknown_groups] == [("codex://s-0",), ("codex://s-1",)]
+        assert [group.summary_data[field] for group in unknown_groups] == [["fact-0"], ["fact-1"]]
+        assert len(aggregate.groups) == (4 if mode is CollectMode.INSIGHT else 3)
+        assert aggregate.session_count == 4
+
+    @pytest.mark.parametrize("mode", list(CollectMode))
     def test_session_merge_receives_every_chunk_fact(self, mode: CollectMode) -> None:
         field = "scene" if mode is CollectMode.INSIGHT else "decisions"
         entry = self._entry()

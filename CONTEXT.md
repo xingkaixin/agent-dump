@@ -102,3 +102,5 @@ _Avoid_: Export
   Provider metadata independently.
 - An unknown Message Count Fact remains visible as unknown. Shared workflows do
   not turn the sum of known counts into an apparently complete total.
+- Collect may merge Sessions only when their date and known Working Directory
+  match. An unknown Working Directory does not establish shared project identity.

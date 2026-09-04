@@ -282,7 +282,7 @@ def reduce_collect_summaries(
     while working:
         grouped: dict[tuple[date, str, str], list[CollectSummaryGroup]] = defaultdict(list)
         for group in working:
-            scope = group.session_uris[0] if mode is CollectMode.INSIGHT else ""
+            scope = group.session_uris[0] if mode is CollectMode.INSIGHT or not group.project_directory else ""
             grouped[(group.date_value, group.project_directory, scope)].append(group)
         if len(grouped) == len(working):
             break
