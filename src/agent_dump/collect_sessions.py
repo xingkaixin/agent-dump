@@ -13,6 +13,7 @@ from agent_dump.collect_logging import CollectLogger
 from agent_dump.collect_models import (
     CollectEntry,
     CollectProgressEvent,
+    CollectReadResult,
     PlanChunksProgress,
     PlannedCollectEntry,
     ScanSessionsProgress,
@@ -141,8 +142,9 @@ def _read_collect_entries(
     progress_callback: Callable[[CollectProgressEvent], None] | None,
     diagnostic_sink: RecoverableDiagnosticSink | None,
     logger: CollectLogger | None,
-) -> list[CollectEntry]:
+) -> CollectReadResult:
     entries: list[CollectEntry] = []
+    failed_sessions = 0
 
     total = len(matched_sessions)
     emit_collect_progress(
@@ -153,7 +155,6 @@ def _read_collect_entries(
     if matched_sessions:
         max_workers = min(_MAX_SESSION_PARSE_WORKERS, total)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            failed_sessions = 0
             last_error: Exception | None = None
             completed_session_uris: dict[int, str] = {}
             next_progress_index = 0
@@ -207,7 +208,7 @@ def _read_collect_entries(
             print(i18n.t(Keys.WARN_SESSION_READ_FAILURES, count=failed_sessions), file=sys.stderr)
 
     entries.sort(key=lambda item: normalize_datetime_utc(item.created_at))
-    return entries
+    return CollectReadResult(entries=entries, failed_count=failed_sessions)
 
 
 def collect_entries(
@@ -223,6 +224,32 @@ def collect_entries(
     logger: CollectLogger | None = None,
 ) -> list[CollectEntry]:
     """Select and read collect entries for the requested range."""
+    return collect_entries_with_status(
+        session_groups=session_groups,
+        since_date=since_date,
+        until_date=until_date,
+        collect_config=collect_config,
+        query_spec=query_spec,
+        local_tz=local_tz,
+        progress_callback=progress_callback,
+        diagnostic_sink=diagnostic_sink,
+        logger=logger,
+    ).entries
+
+
+def collect_entries_with_status(
+    *,
+    session_groups: Sequence[tuple[BaseAgent, Sequence[Session]]],
+    since_date: date,
+    until_date: date,
+    collect_config: CollectConfig | None = None,
+    query_spec: QuerySpec | None = None,
+    local_tz: tzinfo | None = None,
+    progress_callback: Callable[[CollectProgressEvent], None] | None = None,
+    diagnostic_sink: RecoverableDiagnosticSink | None = None,
+    logger: CollectLogger | None = None,
+) -> CollectReadResult:
+    """Select and read entries while preserving the number of failed reads."""
     resolved_local_tz = local_tz or get_local_timezone()
     matched_sessions = select_collect_sessions(
         session_groups=session_groups,

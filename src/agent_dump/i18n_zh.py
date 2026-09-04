@@ -152,6 +152,7 @@ ZH_TRANSLATIONS = {
     Keys.COLLECT_NO_SESSIONS: "⚠️  在 {since} ~ {until} 区间内未找到会话。",
     Keys.COLLECT_API_FAILED: "❌ AI 总结请求失败: {error}",
     Keys.COLLECT_FINAL_INPUT_TOO_LARGE: "保留来源的报告输入超过 {limit} 字符；请缩小日期范围或查询条件后重试。",
+    Keys.COLLECT_INCOMPLETE_REPORT: "注意：本报告不完整。读取失败 {read_failed} 个会话，摘要失败 {summary_failed} 个会话；实际包含 {included} 个会话。",
     Keys.COLLECT_OUTPUT_SAVED: "✅ collect 总结已保存: {path}",
     Keys.COLLECT_DRY_RUN_HEADER: "Collect dry-run 预览",
     Keys.COLLECT_DRY_RUN_DATE_RANGE: "日期范围：{since} ~ {until}",

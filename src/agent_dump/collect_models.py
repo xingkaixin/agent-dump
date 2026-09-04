@@ -206,6 +206,12 @@ class CollectEntry:
     is_truncated: bool
 
 
+@dataclass(frozen=True)
+class CollectReadResult:
+    entries: list[CollectEntry]
+    failed_count: int = 0
+
+
 @dataclass
 class SessionSummaryEntry:
     """One summarized session entry for collect aggregation."""

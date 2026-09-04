@@ -126,7 +126,7 @@ def test_prompt_needs_no_api_and_its_command_reads_the_selected_session(
     with (
         mock.patch("agent_dump.config.ConfigurationDocument.ai_config") as ai_config,
         mock.patch("agent_dump.collect_workflow.create_collect_logger") as logger,
-        mock.patch("agent_dump.collect_workflow.collect_entries") as entries,
+        mock.patch("agent_dump.collect_workflow.collect_entries_with_status") as entries,
         mock.patch("agent_dump.collect_workflow.plan_collect_entries") as chunks,
         mock.patch("agent_dump.agents.codex.CodexAgent.get_session_data") as transcript,
         mock.patch("agent_dump.cli.request_summary_from_llm") as final_request,

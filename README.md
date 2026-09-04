@@ -453,6 +453,8 @@ for agent in scanner.get_available_agents():
 
 ### collect configuration file
 
+When some session reads or summaries fail, collection continues with successful sessions. The saved Markdown includes a fixed incomplete-report notice with failure and included-session counts; an entirely failed run still fails.
+
 PM summaries merge sessions only within the same date and known working directory. Sessions without a working directory retain separate attribution.
 
 Default config path:
