@@ -230,6 +230,7 @@ uv run agent-dump --search "auth" --list -days 30
 - `--head` 仅 URI 模式可用，用于查看有界发现元数据，不重读完整正文；消息数可能明确为未知。不能与 `--format` 或 `--summary` 组合。
 - `--summary` 仅 URI 模式可用，且需 `--format` 包含 `json`。
 - PM 只在同一天且工作目录明确相同的会话间归并；未知工作目录按会话独立保留。
+- 显式 Provider 范围在扫描前生效，未选中的来源不参与发现；列表、搜索、交互、统计与 collect 各动作共用这一规则。
 - `--collect-mode` 默认 `pm`，`insight` 用于作者洞察视角。
 - `--collect` 日期优先级为显式 `-since/-until` > 显式 `-days` > 缺省当天。
 - `--collect` 对单条会话的读取失败会告警并跳过；仅当所有候选会话都不可读时整体失败。

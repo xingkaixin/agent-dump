@@ -9,6 +9,7 @@ import sys
 import threading
 from typing import Protocol
 
+from agent_dump.cli_shared import discover_query_sessions
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, resolve_collect_date_range
 from agent_dump.collect_handoff import build_collect_handoff_prompt
 from agent_dump.collect_logging import CollectLogger, create_collect_logger
@@ -284,8 +285,10 @@ def _prepare_collect_plan(
             CollectStartProgress(since=since_date.isoformat(), until=until_date.isoformat()),
         )
         local_tz = get_local_timezone()
-        session_results = scanner.get_available_sessions(collect_scan_days(since_date, local_tz))
-        if not session_results:
+        session_results = discover_query_sessions(
+            scanner, collect_scan_days(since_date, local_tz), operation.query_spec
+        )
+        if not session_results and (operation.query_spec is None or operation.query_spec.agent_names is None):
             print(i18n.t(Keys.NO_AGENTS_FOUND))
             return None
         available_agents = [agent for agent, _ in session_results]
@@ -539,8 +542,8 @@ def _handle_collect_prompt(
             file=sys.stderr,
         )
         scanner = scanner_factory()
-        session_groups = scanner.get_available_sessions(collect_scan_days(since_date, local_tz))
-        if not session_groups:
+        session_groups = discover_query_sessions(scanner, collect_scan_days(since_date, local_tz), operation.query_spec)
+        if not session_groups and (operation.query_spec is None or operation.query_spec.agent_names is None):
             print(i18n.t(Keys.NO_AGENTS_FOUND), file=sys.stderr)
             return 1
         selected = select_collect_sessions(

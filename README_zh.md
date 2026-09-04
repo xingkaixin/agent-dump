@@ -195,6 +195,8 @@ uv run agent-dump opencode://session-id-abc123
 
 ### 退出码
 
+显式 Provider 范围（`provider:`、旧式 Provider 前缀或查询 URI 的 `providers=`）在发现会话前生效，不扫描未选中的 Provider。范围内无会话时按对应模式的无匹配行为处理，不探测其他来源。
+
 | 退出码 | 含义 |
 |------|------|
 | `0` | 命令做到了被要求的事——包括结果集本就为空（`-days` 窗口内没有会话、关键词或 `--search` 没有命中），以及交互式导出部分成功。 |

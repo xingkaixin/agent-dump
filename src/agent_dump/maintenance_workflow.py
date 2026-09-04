@@ -7,6 +7,7 @@ from agent_dump.agents.base import BaseAgent, MessageCountCompleteness, MessageC
 from agent_dump.cli_shared import (
     build_no_agents_found_diagnostic,
     collect_query_matches,
+    discover_query_sessions,
     print_diagnostic,
     scope_session_groups_by_provider,
 )
@@ -98,13 +99,13 @@ def handle_stats_mode(
     scanner_factory: Callable[[], AgentScanner] = AgentScanner,
 ) -> int:
     scanner = scanner_factory()
-    scanned_sessions = scanner.get_available_sessions(operation.days)
+    query_spec = operation.query_spec
+    scanned_sessions = discover_query_sessions(scanner, operation.days, query_spec)
 
-    if not scanned_sessions:
+    if not scanned_sessions and (query_spec is None or query_spec.agent_names is None):
         print_diagnostic(build_no_agents_found_diagnostic(scanner))
         return 1
 
-    query_spec = operation.query_spec
     scanned_sessions, scope_error = scope_session_groups_by_provider(
         scanned_sessions,
         agent_names=query_spec.agent_names if query_spec is not None else None,

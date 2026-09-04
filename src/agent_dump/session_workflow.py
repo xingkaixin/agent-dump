@@ -5,6 +5,7 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import (
     build_no_agents_found_diagnostic,
     collect_query_matches,
+    discover_query_sessions,
     print_diagnostic,
     resolve_output_base_dir,
     scope_session_groups_by_provider,
@@ -162,8 +163,8 @@ def _handle_session_modes(
 
     query_spec = operation.query_spec
 
-    scanned_sessions = scanner.get_available_sessions(operation.days)
-    if not scanned_sessions:
+    scanned_sessions = discover_query_sessions(scanner, operation.days, query_spec)
+    if not scanned_sessions and (query_spec is None or query_spec.agent_names is None):
         # 退 1 而不是 None：这里走的是诊断通道（错误语义），而 --stats / --reindex /
         # URI 模式在同一条件下已经退 1。约定见 README 的 Exit Codes 一节。
         print_diagnostic(build_no_agents_found_diagnostic(scanner))

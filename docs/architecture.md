@@ -23,6 +23,8 @@ cli.py
   → rendering.py / exporting.py
 ```
 
+跨工作流的 `discover_query_sessions()` 在调用 Scanner 前按显式 Provider 条件筛选实例；无 Provider 条件时保持全来源发现。
+
 `cli.py` 是装配根。它解析参数并注入真实变化的依赖，不读取 Provider 数据，也不重复执行 operation 已完成的 Query 或 URI 解析。
 
 ### 2.2 URI
