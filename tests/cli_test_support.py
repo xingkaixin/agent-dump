@@ -57,9 +57,11 @@ def collect_operation_from(args: argparse.Namespace) -> CollectOperation:
 
 def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
     def read_sessions(days=7, *, agents=None):
+        names = {agent.name for agent in agents} if agents is not None else None
         return [
             (agent, agent.get_sessions(days=days))
-            for agent in (agents if agents is not None else scanner.get_available_agents.return_value)
+            for agent in scanner.get_available_agents.return_value
+            if names is None or agent.name in names
         ]
 
     scanner.get_sessions.side_effect = read_sessions

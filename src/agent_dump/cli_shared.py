@@ -49,6 +49,18 @@ def resolve_output_base_dir(
     return DEFAULT_OUTPUT_BASE_DIR
 
 
+def discover_query_sessions(
+    scanner: AgentScanner,
+    days: int | None,
+    spec: QuerySpec | None,
+) -> list[tuple[BaseAgent, list[Session]]]:
+    """Apply an explicit provider scope before starting discovery."""
+    if spec is None or spec.agent_names is None:
+        return scanner.get_available_sessions(days)
+    agents = [agent for agent in scanner.agents if agent.name in spec.agent_names]
+    return scanner.get_available_sessions(days, agents=agents)
+
+
 def collect_query_matches(
     session_groups: Sequence[tuple[BaseAgent, list[Session]]],
     *,

@@ -195,6 +195,8 @@ Next steps:
 
 ### Exit Codes
 
+Explicit provider scopes (`provider:`, legacy provider prefixes, or `providers=` in query URIs) are applied before discovery. Unselected providers are not scanned. An empty explicit scope result keeps the mode’s no-match behavior, without probing unrelated providers.
+
 | Code | Meaning |
 |------|---------|
 | `0` | The command did what was asked — including when the result set is legitimately empty (no sessions in the `-days` window, a keyword or `--search` that matched nothing), and when interactive export partially succeeds. |
