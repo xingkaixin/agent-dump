@@ -929,14 +929,6 @@ class TestCursorAgent:
             "time_created": 123,
         }
 
-        assert decoder._extract_tool_output_parts([{"type": "text", "text": " output ", "time_created": 4}], 1) == [
-            {"type": "text", "text": "output", "time_created": 4}
-        ]
-        assert decoder._extract_tool_output_parts("raw output", 5) == [
-            {"type": "text", "text": "raw output", "time_created": 5}
-        ]
-        assert decoder._extract_tool_output_parts(None, 5) == []
-
         assert decoder._extract_tokens({"usage": {"input_tokens": 2, "output_tokens": 3}}) == (2, 3)
         assert decoder._extract_tokens({"contextWindowStatusAtCreation": {"tokensUsed": 9}}) == (9, 0)
 

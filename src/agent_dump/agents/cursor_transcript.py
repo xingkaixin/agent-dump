@@ -159,25 +159,6 @@ class CursorTranscriptDecoder:
             timestamp_ms=timestamp_ms,
         )
 
-    def _extract_tool_output_parts(self, output: Any, timestamp_ms: int) -> list[NormalizedPart]:
-        if isinstance(output, list):
-            parts: list[NormalizedPart] = []
-            for item in output:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    text = item.get("text")
-                    if isinstance(text, str) and text.strip():
-                        parts.append(
-                            {
-                                "type": "text",
-                                "text": text.strip(),
-                                "time_created": safe_int(item.get("time_created"), timestamp_ms),
-                            }
-                        )
-            return parts
-        if isinstance(output, str) and output.strip():
-            return [{"type": "text", "text": output.strip(), "time_created": timestamp_ms}]
-        return []
-
     def _extract_subagent_model(self, composer: dict[str, Any], child_data: Mapping[str, Any]) -> str | None:
         model_config = composer.get("modelConfig")
         if isinstance(model_config, dict):
