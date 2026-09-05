@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import threading
 import time
+from typing import Any
 from unittest import mock
 
 from message_test_support import require_text_part, require_tool_part
@@ -16,8 +17,15 @@ from agent_dump.agents.base import Session
 from agent_dump.agents.claude_transcript import ClaudeTranscriptDecoder
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.jsonl_scan import FULL_SCAN_BYTE_LIMIT, HEAD_SCAN_BYTE_LIMIT, TAIL_SCAN_BYTE_LIMIT
+from agent_dump.agents.message_types import NormalizedMessage
 from agent_dump.i18n import Keys
 from agent_dump.query_semantics import extract_transcript_searchable_text
+
+
+def decode_record(data: dict[str, Any]) -> NormalizedMessage | None:
+    decoder = ClaudeTranscriptDecoder()
+    decoder.append_record(data)
+    return decoder.messages[0] if decoder.messages else None
 
 
 def write_jsonl(file_path: Path, records: list[dict]) -> None:
@@ -720,7 +728,7 @@ class TestClaudeCodeAgent:
                 "content": "Hello",
             },
         }
-        result = ClaudeTranscriptDecoder.decode_record(data)
+        result = decode_record(data)
 
         assert result is not None
         assert result["role"] == "user"
@@ -740,7 +748,7 @@ class TestClaudeCodeAgent:
                 "usage": {"input_tokens": 10, "output_tokens": 20},
             },
         }
-        result = ClaudeTranscriptDecoder.decode_record(data)
+        result = decode_record(data)
 
         assert result is not None
         assert result["role"] == "assistant"
@@ -767,7 +775,7 @@ class TestClaudeCodeAgent:
                 ],
             },
         }
-        result = ClaudeTranscriptDecoder.decode_record(data)
+        result = decode_record(data)
 
         assert result is not None
         assert result["parts"][0]["type"] == "tool"
@@ -786,7 +794,7 @@ class TestClaudeCodeAgent:
                 "content": [{"text": "Tool output"}],
             },
         }
-        result = ClaudeTranscriptDecoder.decode_record(data)
+        result = decode_record(data)
 
         assert result is not None
         assert result["role"] == "tool"
@@ -803,7 +811,7 @@ class TestClaudeCodeAgent:
                 "content": "String content",
             },
         }
-        result = ClaudeTranscriptDecoder.decode_record(data)
+        result = decode_record(data)
 
         assert result is not None
         assert require_text_part(result["parts"][0])["text"] == "String content"
@@ -811,7 +819,7 @@ class TestClaudeCodeAgent:
     def test_convert_to_opencode_format_unknown_type(self):
         """测试未知类型返回 None"""
         data = {"type": "unknown", "timestamp": "2026-01-01T00:00:00Z", "message": {}}
-        result = ClaudeTranscriptDecoder.decode_record(data)
+        result = decode_record(data)
 
         assert result is None
 
@@ -823,7 +831,7 @@ class TestClaudeCodeAgent:
             "timestamp": "invalid-timestamp",
             "message": {"content": "Hello"},
         }
-        result = ClaudeTranscriptDecoder.decode_record(data)
+        result = decode_record(data)
 
         assert result is not None
         assert result["time_created"] == 0

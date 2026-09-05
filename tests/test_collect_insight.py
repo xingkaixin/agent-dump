@@ -5,6 +5,7 @@ import io
 import json
 from unittest import mock
 
+from collect_test_support import empty_summary_payload
 import pytest
 
 from agent_dump.collect_models import (
@@ -28,7 +29,6 @@ from agent_dump.collect_reduction import reduce_collect_summaries
 from agent_dump.collect_requests import request_structured_summary_payload_from_llm
 from agent_dump.collect_summary import (
     build_summary_json_schema,
-    empty_summary_payload,
     merge_summary_payloads,
     normalize_summary_payload,
 )
@@ -240,12 +240,6 @@ class TestCollectInsightMode:
         assert {tuple(group["session_uris"]): group["summary"] for group in groups} == {
             (summary.collect_entry.session_uri,): summary.summary_data for summary in summaries
         }
-
-    def test_empty_summary_payload_insight_mode(self):
-        payload = empty_summary_payload(CollectMode.INSIGHT)
-
-        assert set(payload) == {"scene", "stuck", "turning"}
-        assert all(v == [] for v in payload.values())
 
     def test_request_structured_summary_payload_openai_insight_schema(self):
         response = mock.MagicMock()
