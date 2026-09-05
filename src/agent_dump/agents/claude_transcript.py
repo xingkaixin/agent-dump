@@ -64,12 +64,6 @@ class ClaudeTranscriptDecoder:
             self._state.messages.append(fallback_message)
         self._state.reset_assistant_group()
 
-    @classmethod
-    def decode_record(cls, data: dict[str, Any]) -> NormalizedMessage | None:
-        decoder = cls()
-        decoder.append_record(data)
-        return decoder.messages[0] if decoder.messages else None
-
     def token_totals(self) -> tuple[int, int]:
         input_tokens = 0
         output_tokens = 0

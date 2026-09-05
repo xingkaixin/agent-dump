@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta, timezone
 
+from collect_test_support import empty_summary_payload
 import pytest
 
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, parse_user_date, resolve_collect_date_range
@@ -9,7 +10,6 @@ from agent_dump.collect_events import chunk_collect_events, extract_collect_even
 from agent_dump.collect_models import MAX_SUMMARY_ITEMS_PER_FIELD, CollectEvent, CollectMode
 from agent_dump.collect_summary import (
     build_summary_json_schema,
-    empty_summary_payload,
     merge_summary_payloads,
     normalize_summary_payload,
     validate_summary_payload,

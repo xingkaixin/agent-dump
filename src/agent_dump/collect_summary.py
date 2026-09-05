@@ -65,11 +65,6 @@ def dedupe_preserve_order(values: Iterable[str], *, limit: int | None = MAX_SUMM
     return result
 
 
-def empty_summary_payload(mode: CollectMode = CollectMode.PM) -> dict[str, list[str]]:
-    """Create one empty structured summary payload."""
-    return {field_name: [] for field_name in collect_fields_for(mode)}
-
-
 def validate_summary_payload(payload: dict[str, Any], *, mode: CollectMode = CollectMode.PM) -> None:
     """Reject malformed model output while allowing omitted empty fields for compatibility."""
     fields = collect_fields_for(mode)

@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest import mock
 
 from agent_dump.agents.base import Session, derive_session_facts
+from agent_dump.collect_models import CollectMode, collect_fields_for
 from agent_dump.query_filter import QuerySpec
 
 
@@ -31,3 +32,7 @@ def configure_session_data_lease(agent: mock.MagicMock) -> None:
         yield agent.get_cached_session_data(session)
 
     agent.lease_cached_session_data.side_effect = lease
+
+
+def empty_summary_payload(mode: CollectMode = CollectMode.PM) -> dict[str, list[str]]:
+    return {field_name: [] for field_name in collect_fields_for(mode)}
