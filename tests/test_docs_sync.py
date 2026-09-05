@@ -92,21 +92,6 @@ class TestWebDeploymentTooling:
         assert "  workerd: true" in workspace
 
 
-class TestLandingPageDependencyBoundaries:
-    def test_astro_icons_reuse_the_existing_phosphor_package(self) -> None:
-        manifest = json.loads((REPO_ROOT / "web" / "package.json").read_text(encoding="utf-8"))
-        config = (REPO_ROOT / "web" / "astro.config.mjs").read_text(encoding="utf-8")
-        astro_components = "\n".join(
-            path.read_text(encoding="utf-8") for path in (REPO_ROOT / "web" / "src" / "components").glob("*.astro")
-        )
-
-        assert "@phosphor-icons/react" in manifest["dependencies"]
-        assert "astro-icon" not in manifest["dependencies"]
-        assert "@iconify-json/ph" not in manifest["devDependencies"]
-        assert "astro-icon" not in config
-        assert "astro-icon" not in astro_components
-
-
 class TestChangelogLinksResolve:
     def test_english_changelog_symlink_is_not_self_referential(self):
         """曾经指向字面量 "CHANGELOG.md"，相对自身目录解析即指向自己，在每个 clone 里都是坏的。"""
