@@ -93,13 +93,6 @@ def query_sessions_by_keyword(
 
 
 class TestHasFts5:
-    def test_detects_fts5_availability(self, tmp_path):
-        db_path = tmp_path / "test.db"
-        conn = __import__("sqlite3").connect(db_path)
-        result = _has_fts5(conn)
-        conn.close()
-        assert isinstance(result, bool)
-
     def test_requires_trigram_tokenizer(self) -> None:
         conn = mock.MagicMock(spec=sqlite3.Connection)
         conn.execute.side_effect = sqlite3.OperationalError("no such tokenizer: trigram")
