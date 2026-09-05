@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from agent_dump.collect_llm import (
     is_retryable_error,
-    request_structured_summary_payload_from_llm as _request_structured_summary_payload_from_llm,
+    request_structured_summary_payload_from_llm as request_structured_summary_payload_from_llm,
     request_summary_from_llm as _request_summary_from_llm,
 )
 from agent_dump.collect_logging import CollectLogger
@@ -168,19 +168,3 @@ def request_structured_summary_from_llm(
                 mode=mode,
                 request_source=f"{context.phase.value}://request/{request_id}",
             )
-
-
-def request_structured_summary_payload_from_llm(
-    config: AIConfig,
-    prompt: str,
-    *,
-    timeout_seconds: int = 90,
-    summary_fields: tuple[str, ...] | None = None,
-) -> str:
-    """Call provider API and return one structured summary payload string."""
-    return _request_structured_summary_payload_from_llm(
-        config,
-        prompt,
-        timeout_seconds=timeout_seconds,
-        summary_fields=summary_fields,
-    )
