@@ -282,14 +282,6 @@ class TestMalformedTimestamps:
 
         assert agent._parse_datetime(1704067200000) == datetime(2024, 1, 1, tzinfo=timezone.utc)
 
-    @pytest.mark.parametrize("value", [10**400, float("nan"), float("inf"), float("-inf")])
-    def test_stats_coercion_never_raises_for_unrepresentable_numbers(self, value):
-        agent = PiAgent()
-        expected_int = value if isinstance(value, int) else 0
-
-        assert agent._int_value(value) == expected_int
-        assert agent._float_value(value) == 0.0
-
     def test_session_parse_uses_header_when_file_mtime_is_unrepresentable(self, tmp_path):
         path = tmp_path / "20260101_s1.jsonl"
         path.write_text(

@@ -256,18 +256,12 @@ class PiAgent(FileSessionAgent):
         if not isinstance(usage, dict):
             return
 
-        stats["total_input_tokens"] += self._int_value(usage.get("input"))
-        stats["total_output_tokens"] += self._int_value(usage.get("output"))
-        stats["total_tokens"] = stats.get("total_tokens", 0) + self._int_value(usage.get("totalTokens"))
+        stats["total_input_tokens"] += safe_int(usage.get("input"))
+        stats["total_output_tokens"] += safe_int(usage.get("output"))
+        stats["total_tokens"] = stats.get("total_tokens", 0) + safe_int(usage.get("totalTokens"))
         cost = usage.get("cost")
         if isinstance(cost, dict):
-            stats["total_cost"] += self._float_value(cost.get("total"))
-
-    def _int_value(self, value: Any) -> int:
-        return safe_int(value)
-
-    def _float_value(self, value: Any) -> float:
-        return safe_float(value)
+            stats["total_cost"] += safe_float(cost.get("total"))
 
     def _convert_entry_to_message(self, record: dict[str, Any], seq: int) -> NormalizedMessage | None:
         entry_type = record.get("type")
