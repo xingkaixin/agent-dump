@@ -4,6 +4,32 @@
 
 ## [Unreleased]
 
+## [0.15.5] - 2026-09-05
+
+### Added
+
+- **Landing experience redesign and release updates**
+  - Redesign landing page with an abstract WebGL session convergence matrix, dynamic laser search beam sweep, and universal protocol HUD indicators (#353)
+  - Add user-facing "What's New" updates feed and standardized release guide documentation with multilingual support (#352)
+
+### Fixed
+
+- **Provider scoping before session discovery**
+  - Scope and prune providers before initiating local session discovery in query and maintenance workflows, eliminating unnecessary provider scans and providing precise scope diagnostics (#357)
+- **Collect partial failure resilience**
+  - Preserve successfully collected sessions and record partial export failures when batch processing fails on individual sessions, preventing pipeline aborts (#356)
+- **Unknown collect project segregation**
+  - Separate sessions with unidentified or missing projects into distinct groups during collect reduction rather than coalescing unrelated sessions into a single group (#355)
+
+### Changed
+
+- Re-export structured LLM transport cleanly at internal boundaries (#362)
+- Reuse shared coercion logic directly within the Pi provider (#363)
+- Remove unused Cursor output parser legacy code (#358)
+- Move test-only helpers out of production modules (#361)
+- Streamline repository agent instructions (#354)
+- Remove weak assertions and eliminate icon dependency implementation locks in tests (#359, #360, #364)
+
 ## [0.15.4] - 2026-09-01
 
 ### Added
@@ -1038,6 +1064,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.5
 [0.15.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.4
 [0.15.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.3
 [0.15.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.2
