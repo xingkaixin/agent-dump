@@ -34,6 +34,6 @@
     "@types/react-dom": "^19.2.5",
     "sharp": "^0.35.4",
     "typescript": "^6.0.3",
-    "wrangler": "4.126.0"
+    "wrangler": "4.128.0"
   }
 }
