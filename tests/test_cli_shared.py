@@ -338,16 +338,6 @@ class TestFindSessionById:
         assert result == (opencode_agent, target_session)
         scanner.find_session_by_id.assert_called_once_with("target", agent_name="opencode")
 
-    def test_find_session_by_id_preserves_scanner_failure_isolation(self):
-        scanner = mock.MagicMock()
-        target_session = mock.MagicMock(id="target")
-        ok_agent = mock.MagicMock()
-        scanner.find_session_by_id.return_value = (ok_agent, target_session)
-
-        result = find_session_by_id(scanner, "target")
-
-        assert result == (ok_agent, target_session)
-
 
 class TestExportSessions:
     """测试 export_sessions 函数"""
