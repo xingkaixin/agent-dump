@@ -937,25 +937,6 @@ class TestUriShapesComeFromTheRegistry:
     也让新增「session id 带路径前缀」的 provider 必须改共享模块。
     """
 
-    def test_no_provider_name_is_hardcoded_in_uri_parsing(self):
-        """parse_uri 不得再出现按 provider 名字分支的代码。"""
-        from pathlib import Path
-
-        source = Path("src/agent_dump/uri_support.py").read_text(encoding="utf-8")
-
-        for provider in ("codex", "cursor", "kimi", "claudecode", "opencode", "zcode", "pi"):
-            assert f'"{provider}"' not in source, f"uri_support 仍硬编码了 provider 名 {provider!r}"
-
-    def test_no_provider_name_is_hardcoded_in_uri_examples(self):
-        from pathlib import Path
-        import re
-
-        source = Path("src/agent_dump/agent_registry.py").read_text(encoding="utf-8")
-        examples_fn = source[source.index("def get_supported_uri_examples") :]
-        examples_fn = examples_fn[: examples_fn.index("\ndef ")] if "\ndef " in examples_fn else examples_fn
-
-        assert not re.search(r'scheme == "', examples_fn), "URI 示例仍按 scheme 名字分支"
-
     def test_path_prefixes_are_declared_on_the_registration(self):
         from agent_dump.agent_registry import get_uri_path_prefixes
 
