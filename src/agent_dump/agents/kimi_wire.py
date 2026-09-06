@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from agent_dump.agents.jsonl_scan import JsonlObjectScan, skipped_records_diagnostic
 from agent_dump.agents.message_assembly import (
@@ -11,7 +11,7 @@ from agent_dump.agents.message_assembly import (
     build_text_part,
     build_tool_part,
 )
-from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart, ToolPart
+from agent_dump.agents.message_types import NormalizedMessage, NormalizedPart
 from agent_dump.coercion import safe_epoch_datetime
 from agent_dump.diagnostics import RecoverableDiagnostic
 
@@ -156,7 +156,7 @@ class _KimiWireParser:
         part = self.messages[message_index]["parts"][part_index]
         if part["type"] != "tool":
             return
-        cast(ToolPart, part)["state"]["arguments"] = parsed_arguments
+        part["state"]["arguments"] = parsed_arguments
         self.open_tool_argument_buffer.pop(call_id, None)
 
     def _consume_tool_result(self, seq: int, payload: dict[str, Any]) -> None:
