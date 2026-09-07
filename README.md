@@ -418,6 +418,8 @@ Generating a prompt does not mean that a report has been created, and does not a
 | `-output`, `--output` | Output directory. For `json/raw`, priority is `--output` > `config.toml` `[export].output` > `./sessions`. Relative paths are resolved from the current working directory. Markdown keeps using `./sessions` unless `--output` is explicitly passed. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
 | `-h, --help` | Show help message | - |
 
+When URI mode combines `print` with file formats, a print read/render failure is reported without blocking file exports. Raw source copying can still succeed when normalized parsing fails. Exit status remains `0` if any requested output succeeds, otherwise `1`.
+
 ### Library Usage
 
 OpenCode and ZCode read and export an existing `Session` from its `source_path`, including on a fresh provider instance. No prior availability check or scan is required; a missing source raises an error rather than falling back to another database.

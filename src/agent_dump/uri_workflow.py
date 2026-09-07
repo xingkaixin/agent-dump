@@ -209,10 +209,14 @@ def _handle_uri_mode(
             request_summary=request_summary,
         )
         if "print" in operation.output_formats:
-            session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
-            output = render_session_text(operation.raw_uri, session_data)
-            print(safe_body_text(output))
-            had_success = True
+            try:
+                session_data = session_data if session_data is not None else agent.get_cached_session_data(session)
+                output = render_session_text(operation.raw_uri, session_data)
+                print(safe_body_text(output))
+                had_success = True
+            except Exception as exc:
+                diagnostic = exc if isinstance(exc, DiagnosticError) else wrap_runtime_fetch_error(exc, agent=agent)
+                print_diagnostic(diagnostic)
 
         file_formats = file_output_formats(operation.output_formats)
 

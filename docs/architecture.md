@@ -85,7 +85,7 @@ SQLite Provider 声明 Session 源数据库及其 `-wal` 文件作为 change sou
 
 格式闭集和别名由 `output_formats.VALID_FORMATS`、`FORMAT_ALIASES` 定义；模式和 Provider 能力分别由 `validate_formats_for_mode()`、`validate_agent_formats()` 校验；`rendering.export_session_in_format()` 负责分发。
 
-同一次导出的 summary、print、JSON 和 Markdown 复用同一份已读取内容。raw 独立复制 Provider 源；标准化读取失败不得阻止 raw 导出。
+同一次导出的 summary、print、JSON 和 Markdown 复用同一份已读取内容。raw 独立复制 Provider 源；标准化读取失败不得阻止 raw 导出。URI print 的读取和渲染失败单独隔离，继续执行文件导出；已读取的 snapshot 仍供 JSON/Markdown 复用。
 
 ## 5. Query 与 Search
 

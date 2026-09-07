@@ -58,6 +58,8 @@ uv run agent-dump cursor://<request_id> --format print,json --output ./my-sessio
 uv run agent-dump codex://<session_id> --head
 ```
 
+URI 混合输出中 print 读取或渲染失败不会阻断文件导出；raw 可以在标准化解析失败时成功。任一输出成功则退出 `0`，全部失败则退出 `1`。
+
 ### 汇总分析（collect）
 
 ```bash
