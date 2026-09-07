@@ -838,3 +838,22 @@ class TestMain:
         output = "".join(fake_stderr.chunks)
         assert f"\r{' ' * (len(expected_progress) + 4)}\r" in output
         assert "本次将处理 2 个 session，拆分为 5 个总结单元；并发 2" in output
+
+
+@pytest.mark.parametrize("modifier", [[], ["--dry-run"], ["--emit-prompt"]])
+def test_collect_cli_dispatches_query_scope(modifier, monkeypatch):
+    monkeypatch.setattr("sys.argv", ["agent-dump", "--collect", *modifier, "-query", "provider:codex path:. limit:2"])
+    with mock.patch("agent_dump.cli.handle_collect_mode", return_value=0) as workflow:
+        assert main() == 0
+    operation = workflow.call_args.args[0]
+    assert operation.query_spec.agent_names == {"codex"}
+    assert operation.query_spec.project_path == Path.cwd().resolve()
+    assert operation.query_spec.limit == 2
+
+
+def test_collect_cli_rejects_invalid_query_before_workflow(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["agent-dump", "--collect", "-query", "limit:0"])
+    with mock.patch("agent_dump.cli.handle_collect_mode") as workflow:
+        assert main() == 1
+    workflow.assert_not_called()
+    assert capsys.readouterr().out

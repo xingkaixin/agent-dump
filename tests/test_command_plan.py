@@ -363,3 +363,25 @@ def test_build_command_plan_rejects_explicit_empty_format() -> None:
         build_command_plan(make_request(list_requested=True, raw_format=""))
 
     assert exc_info.value.code is CommandPlanErrorCode.FORMAT_INVALID
+
+
+@pytest.mark.parametrize("options", [{}, {"dry_run": True}, {"emit_prompt": True}])
+def test_collect_preserves_query_scope(options):
+    plan = build_command_plan(
+        make_request(collect=True, query="bug provider:codex role:user path:. limit:2", **options)
+    )
+    assert isinstance(plan.operation, CollectOperation)
+    spec = plan.operation.query_spec
+    assert spec is not None
+    assert spec.agent_names == {"codex"}
+    assert spec.project_path == Path.cwd().resolve()
+    assert spec.keyword == "bug"
+    assert spec.roles == {"user"}
+    assert spec.limit == 2
+
+
+@pytest.mark.parametrize("query", ["", "provider:unknown", "limit:0"])
+def test_collect_rejects_invalid_query(query):
+    with pytest.raises(CommandPlanError) as exc:
+        build_command_plan(make_request(collect=True, query=query))
+    assert exc.value.code is CommandPlanErrorCode.QUERY_SPEC_INVALID

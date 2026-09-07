@@ -63,12 +63,15 @@ uv run agent-dump codex://<session_id> --head
 ```bash
 uv run agent-dump --collect
 uv run agent-dump --collect -days 7
+uv run agent-dump --collect -query "provider:codex path:. limit:20"
 uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
 uv run agent-dump --collect -since 20260301 -until 20260305
 uv run agent-dump --collect --collect-mode insight
 uv run agent-dump --collect "agents://.?q=refactor&providers=codex,claude"
 uv run agent-dump --collect --dry-run --save ./reports
 ```
+
+collect 的执行、dry-run 和 emit-prompt 均支持 `-query`；不能与 `agents://` 查询 URI 同用，无效查询在扫描前报错。
 
 collect 只分析 user/assistant 可见文本，排除 system/developer/tool、reasoning、plan、工具调用和工具结果；
 投影后为空的会话直接忽略。PM 模式只汇总用户要做什么、关键决策和 Agent 明确报告的最终结果。
