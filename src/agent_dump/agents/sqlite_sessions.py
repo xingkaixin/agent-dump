@@ -41,6 +41,10 @@ class SQLiteSessionAgent(BaseAgent, ABC):
         """Find the first existing provider database path."""
         return first_existing_search_root(*self.get_search_roots())
 
+    def get_session_change_sources(self, session: Session) -> tuple[Path, ...]:
+        source = session.source_path
+        return (source, Path(f"{source}-wal"))
+
     @abstractmethod
     def get_search_roots(self) -> tuple[SearchRoot, ...]:
         """Return provider-owned database search roots."""

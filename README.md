@@ -424,6 +424,8 @@ OpenCode and ZCode read and export an existing `Session` from its `source_path`,
 
 Their head and list projections use the same discovery facts without querying messages again. A manually constructed Session without model or message-count facts keeps those fields unknown; discover the Session to populate them.
 
+SQLite payload caches and search indexes also track the source database and its WAL file. Committed content changes invalidate cached text even when the same Session object is reused; metadata projections still reflect discovery-time facts.
+
 The top-level public API matches `agent_dump.__all__`:
 
 | Symbol | Description |

@@ -35,6 +35,8 @@ uv run agent-dump --list --lang en
 
 `--head` 与列表复用发现阶段的计数和模型。库调用手动构造的 Session 如果没有这些 facts，展示保持未知，不触发数据库补查。
 
+OpenCode/ZCode 的正文缓存与搜索索引会跟踪数据库及 WAL 的变化，无需先重新扫描才能刷新正文；需要更新计数、模型等发现 facts 时仍应重新发现 Session。
+
 ```bash
 # 默认 print 到终端
 uv run agent-dump opencode://<session_id>
