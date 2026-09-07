@@ -1,4 +1,4 @@
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
 from pathlib import Path
 
 from agent_dump.agent_registry import get_supported_agent_locations
@@ -53,12 +53,16 @@ def discover_query_sessions(
     scanner: AgentScanner,
     days: int | None,
     spec: QuerySpec | None,
+    *,
+    on_provider_failure: Callable[[BaseAgent], None] | None = None,
 ) -> list[tuple[BaseAgent, list[Session]]]:
     """Apply an explicit provider scope before starting discovery."""
-    if spec is None or spec.agent_names is None:
-        return scanner.get_available_sessions(days)
-    agents = [agent for agent in scanner.agents if agent.name in spec.agent_names]
-    return scanner.get_available_sessions(days, agents=agents)
+    agents = (
+        [agent for agent in scanner.agents if agent.name in spec.agent_names]
+        if spec is not None and spec.agent_names is not None
+        else None
+    )
+    return scanner.get_available_sessions(days, agents=agents, on_provider_failure=on_provider_failure)
 
 
 def collect_query_matches(

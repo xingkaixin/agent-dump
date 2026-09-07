@@ -308,3 +308,20 @@ class TestAgentScanner:
         result = AgentScanner([agent]).get_agent_by_name(name)
 
         assert (result is agent) is found
+
+
+def test_discovery_failure_callback_distinguishes_unavailable_providers():
+    good = FakeAgent("codex", sessions=(make_session("good"),))
+    absent = FakeAgent("pi", available=False)
+    broken = FakeAgent("kimi")
+    broken.availability_error = OSError("cannot discover")
+    failures = []
+    scanner = AgentScanner([good, absent, broken], diagnostic_sink=None)
+
+    groups = scanner.get_available_sessions(on_provider_failure=failures.append)
+
+    assert groups == [(good, list(good.sessions))]
+    assert failures == [broken]
+    failures.clear()
+    assert scanner.get_available_sessions(agents=[good], on_provider_failure=failures.append) == groups
+    assert failures == []

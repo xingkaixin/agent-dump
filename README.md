@@ -455,6 +455,8 @@ for agent in scanner.get_available_agents():
 
 ### collect configuration file
 
+Discovery failures are counted separately because the number of missing sessions is unknown. Reads that fail during query filtering also count as session read failures. These gaps are included in saved reports and completion logs; `--emit-prompt` carries them in its task metadata and fails if failures leave no candidates.
+
 When some session reads or summaries fail, collection continues with successful sessions. The saved Markdown includes a fixed incomplete-report notice with failure and included-session counts; an entirely failed run still fails.
 
 Collect preserves visible message text within a 12,000-character per-session extraction budget (including event labels). Text beyond that budget is omitted and marked as truncated for the final summary.

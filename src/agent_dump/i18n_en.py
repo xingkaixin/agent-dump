@@ -157,6 +157,7 @@ EN_TRANSLATIONS = {
     Keys.COLLECT_NO_SESSIONS: "⚠️  No sessions found in range {since} ~ {until}.",
     Keys.COLLECT_API_FAILED: "❌ AI summary request failed: {error}",
     Keys.COLLECT_FINAL_INPUT_TOO_LARGE: "Attributed report input exceeds {limit} characters; narrow the date range or query and retry.",
+    Keys.COLLECT_DISCOVERY_INCOMPLETE_REPORT: "Warning: This report is incomplete. Discovery failed for {count} providers; the number of omitted sessions is unknown.",
     Keys.COLLECT_INCOMPLETE_REPORT: "Warning: This report is incomplete. Session read failures: {read_failed}; summary failures: {summary_failed}; sessions included: {included}.",
     Keys.COLLECT_OUTPUT_SAVED: "✅ Collect summary saved: {path}",
     Keys.COLLECT_DRY_RUN_HEADER: "Collect dry-run preview",
