@@ -3,6 +3,8 @@ from concurrent.futures import Future
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from agent_dump.agents.base import Session
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.file_sessions import FileSessionAgent
@@ -209,3 +211,24 @@ def test_codex_scan_reports_structurally_invalid_session(tmp_path: Path) -> None
     assert diagnostics[0].message_key == Keys.WARN_SESSION_PARSE_FAILED
     assert diagnostics[0].fields["path"] == str(bad_path)
     assert "has no attribute 'get'" in str(diagnostics[0].fields["error"])
+
+
+@pytest.mark.parametrize("days", [None, 7])
+def test_discovery_preserves_failures_and_resets_completeness(tmp_path, days):
+    (tmp_path / "bad.jsonl").touch()
+    (tmp_path / "good.jsonl").touch()
+    agent = FailingFileAgent(tmp_path)
+    failed = []
+    scanner = AgentScanner([agent], diagnostic_sink=None)
+
+    groups = scanner.get_available_sessions(days, on_provider_failure=failed.append)
+    assert [session.id for session in groups[0][1]] == ["target"]
+    assert failed == [agent]
+    assert not agent.discover_sessions(days).complete
+
+    (tmp_path / "bad.jsonl").unlink()
+    assert agent.discover_sessions(days).complete
+    (tmp_path / "good.jsonl").unlink()
+    empty = agent.discover_sessions(days)
+    assert empty.complete
+    assert not empty.available

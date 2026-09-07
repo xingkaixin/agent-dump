@@ -121,7 +121,7 @@ class AgentScanner:
         )
         if on_provider_failure is not None:
             for agent, discovery in discoveries:
-                if discovery is None:
+                if discovery is None or not discovery.complete:
                     on_provider_failure(agent)
         return [
             (agent, list(discovery.sessions))

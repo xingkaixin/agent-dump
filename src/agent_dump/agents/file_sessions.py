@@ -1,12 +1,13 @@
 """Shared scan machinery for providers whose sessions are discovered by scanning files."""
 
 from abc import abstractmethod
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import Context, copy_context
 from datetime import datetime, timedelta, timezone
 from itertools import chain
 from pathlib import Path
+from threading import Event
 
 from agent_dump.agents.base import BaseAgent, ProviderDiscovery, Session
 from agent_dump.agents.jsonl_scan import file_modified_since
@@ -57,17 +58,22 @@ class FileSessionAgent(BaseAgent):
     def _report_parse_failure(self, file_path: Path, exc: Exception) -> None:
         self._report_diagnostic(Keys.WARN_SESSION_PARSE_FAILED, path=str(file_path), error=str(exc))
 
-    def _should_scan_file_or_report(self, file_path: Path, cutoff: datetime) -> bool:
+    def _should_scan_file_or_report(self, file_path: Path, cutoff: datetime, on_failure: Callable[[], None]) -> bool:
         try:
             return self._should_scan_file(file_path, cutoff)
         except Exception as exc:
+            on_failure()
             self._report_parse_failure(file_path, exc)
             return False
 
-    def _parse_session_file_or_report(self, file_path: Path) -> Session | None:
+    def _parse_session_file_or_report(
+        self, file_path: Path, on_failure: Callable[[], None] | None = None
+    ) -> Session | None:
         try:
             return self._parse_session_file(file_path)
         except Exception as exc:
+            if on_failure is not None:
+                on_failure()
             self._report_parse_failure(file_path, exc)
             return None
 
@@ -89,9 +95,11 @@ class FileSessionAgent(BaseAgent):
         """Get sessions from the requested time window."""
         return list(self.discover_sessions(days).sessions)
 
-    def _iter_parsed_sessions(self, session_files: Iterable[Path]) -> Iterator[Session | None]:
+    def _iter_parsed_sessions(
+        self, session_files: Iterable[Path], on_failure: Callable[[], None]
+    ) -> Iterator[Session | None]:
         def parse_in_context(context: Context, path: Path) -> Session | None:
-            return context.run(self._parse_session_file_or_report, path)
+            return context.run(self._parse_session_file_or_report, path, on_failure)
 
         with ThreadPoolExecutor(max_workers=_MAX_SCAN_WORKERS) as executor:
             for _, _, future in iter_completed_futures(
@@ -113,18 +121,21 @@ class FileSessionAgent(BaseAgent):
         if first_file is None:
             return ProviderDiscovery(available=False)
         session_files: Iterable[Path] = chain((first_file,), file_iterator)
+        failed = Event()
         if cutoff_time is not None:
             session_files = (
-                file_path for file_path in session_files if self._should_scan_file_or_report(file_path, cutoff_time)
+                file_path
+                for file_path in session_files
+                if self._should_scan_file_or_report(file_path, cutoff_time, failed.set)
             )
 
         sessions: list[Session] = []
-        for session in self._iter_parsed_sessions(session_files):
+        for session in self._iter_parsed_sessions(session_files, failed.set):
             if session and (cutoff_time is None or normalize_datetime_utc(session.created_at) >= cutoff_time):
                 sessions.append(session)
 
         ordered_sessions = sorted(sessions, key=lambda s: normalize_datetime_utc(s.created_at), reverse=True)
-        return ProviderDiscovery(available=True, sessions=tuple(ordered_sessions))
+        return ProviderDiscovery(available=True, sessions=tuple(ordered_sessions), complete=not failed.is_set())
 
     def find_session_by_id(self, session_id: str) -> Session | None:
         """Try filename-based candidates before falling back to a full scan."""
