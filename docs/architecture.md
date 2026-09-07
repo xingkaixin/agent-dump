@@ -64,6 +64,8 @@ collect_workflow.py
 
 OpenCode/ZCode 的正文读取以 `session.source_path` 为数据库来源，不依赖实例此前发现的 `db_path`，也不在源缺失时回退到其他数据库。
 
+SQLite head 与列表直接投影相同的发现 facts；手动构造的 Session 缺少计数或模型时保留未知，不在展示阶段补查数据库。
+
 Provider 私有 schema 只能在 `agent_dump.agents` 层解释。Provider 类可以复用 `FileSessionAgent`、`SQLiteSessionAgent`、transcript decoder、storage helper 和 message assembly helper；共享 workflow 不得自行解释 metadata key 或数据库字段。
 
 完整 payload 有两种所有权入口：

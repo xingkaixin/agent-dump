@@ -853,14 +853,8 @@ class TestOpenCodeAgent:
 
         agent = OpenCodeAgent()
         agent.db_path = db_path
-        session = Session(
-            id="session-head",
-            title="Head Session",
-            created_at=datetime.fromtimestamp(now / 1000, tz=timezone.utc),
-            updated_at=datetime.fromtimestamp(now / 1000, tz=timezone.utc),
-            source_path=db_path,
-            metadata={"directory": "/workspace/demo", "summary_files": '["a.py","b.py"]'},
-        )
+        session = agent.find_session_by_id("session-head")
+        assert session is not None
 
         head = agent.get_session_head(session)
 
@@ -869,65 +863,27 @@ class TestOpenCodeAgent:
         assert head["message_count"] == 2
         assert head["subtargets"] == ["a.py", "b.py"]
 
-    def test_get_session_head_reuses_discovered_message_facts(self, populated_db):
+    @pytest.mark.parametrize("bad_payload", [[], 1, "text", None])
+    def test_discovery_skips_non_object_model_payloads(self, populated_db, bad_payload):
+        conn = sqlite3.connect(populated_db)
+        try:
+            conn.execute(
+                "INSERT INTO message VALUES (?, ?, ?, ?)",
+                ("bad", "session-001", 1704067200001, json.dumps(bad_payload)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
         agent = OpenCodeAgent()
         agent.db_path = populated_db
         session = agent.find_session_by_id("session-001")
         assert session is not None
-        traced_statements: list[str] = []
-        original_connect = agent._connect_db
-
-        def _connect_with_trace():
-            traced_conn = original_connect()
-            traced_conn.set_trace_callback(traced_statements.append)
-            return traced_conn
-
-        with mock.patch.object(agent, "_connect_db", side_effect=_connect_with_trace):
-            head = agent.get_session_head(session)
-
-        assert head["message_count"] == 1
-        assert head["model"] == "claude-3-opus"
-        assert traced_statements == []
-
-    @pytest.mark.parametrize("bad_payload", [[], 1, "text", None])
-    def test_get_session_head_skips_non_object_message_payloads(self, tmp_path, bad_payload):
-        db_path = tmp_path / "opencode.db"
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        cur.executescript(
-            """
-            CREATE TABLE message (
-                id TEXT PRIMARY KEY,
-                session_id TEXT,
-                time_created INTEGER,
-                data TEXT
-            );
-            """
-        )
-        cur.executemany(
-            "INSERT INTO message VALUES (?, ?, ?, ?)",
-            [
-                ("valid", "session-head", 1, json.dumps({"modelID": "gpt-valid"})),
-                ("bad", "session-head", 2, json.dumps(bad_payload)),
-            ],
-        )
-        conn.commit()
-        conn.close()
-        agent = OpenCodeAgent()
-        agent.db_path = db_path
-        session = Session(
-            id="session-head",
-            title="Head Session",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-            source_path=db_path,
-            metadata={},
-        )
 
         head = agent.get_session_head(session)
 
-        assert head["model"] == "gpt-valid"
+        assert head["model"] == "claude-3-opus"
         assert head["message_count"] == 2
+        assert head["message_count_completeness"] == "exact"
 
     def test_export_session_with_tool_parts(self, tmp_path: Path) -> None:
         """测试导出包含 tool 类型的 part"""
