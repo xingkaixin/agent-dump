@@ -458,6 +458,7 @@ class TestOpenCodeAgent:
         agent.db_path = None
 
         mock_session = mock.MagicMock()
+        mock_session.source_path = tmp_path / "missing.db"
 
         with pytest.raises(FileNotFoundError):
             agent.export_session(mock_session, tmp_path)
@@ -781,8 +782,8 @@ class TestOpenCodeAgent:
         traced_statements: list[str] = []
         original_connect = agent._connect_db
 
-        def _connect_with_trace():
-            traced_conn = original_connect()
+        def _connect_with_trace(db_path=None):
+            traced_conn = original_connect(db_path)
             traced_conn.set_trace_callback(traced_statements.append)
             return traced_conn
 

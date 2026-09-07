@@ -31,6 +31,8 @@ uv run agent-dump --list --lang en
 
 ### URI 直读 / 单会话导出（uri）
 
+库调用中，OpenCode/ZCode 可以用新的 Provider 实例直接读取或导出已有 `Session`；数据库由 `Session.source_path` 指定，源缺失时不回退。
+
 ```bash
 # 默认 print 到终端
 uv run agent-dump opencode://<session_id>
