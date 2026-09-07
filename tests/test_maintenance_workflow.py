@@ -25,7 +25,7 @@ def configure_scanner_sessions(scanner: mock.MagicMock) -> None:
     for agent in scanner.get_available_agents.return_value:
         agent.get_session_facts.side_effect = derive_session_facts
 
-    def read_sessions(days=7, *, agents=None):
+    def read_sessions(days=7, *, agents=None, on_provider_failure=None):
         return [
             (agent, agent.get_sessions(days=days))
             for agent in (agents if agents is not None else scanner.get_available_agents.return_value)

@@ -60,6 +60,8 @@ def test_handoff_contains_fixed_scope_shared_report_and_safe_commands(
         "report_path": str(output),
         "shell": "POSIX",
         "session_count": 1,
+        "discovery_failed_count": 0,
+        "query_read_failed_count": 0,
     }
     assert entry["date"] == "2026-08-31"
     assert entry["created_at"] == "2026-08-31T02:00:00+08:00"

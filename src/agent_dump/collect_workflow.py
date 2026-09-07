@@ -9,6 +9,7 @@ import sys
 import threading
 from typing import Protocol
 
+from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.cli_shared import discover_query_sessions
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, resolve_collect_date_range
 from agent_dump.collect_handoff import build_collect_handoff_prompt
@@ -236,6 +237,7 @@ class _CollectPlan:
     planned_entries: list[PlannedCollectEntry]
     run_stats: CollectRunStats
     read_failed_count: int
+    discovery_failed_count: int
 
 
 @dataclass(frozen=True)
@@ -285,8 +287,12 @@ def _prepare_collect_plan(
             CollectStartProgress(since=since_date.isoformat(), until=until_date.isoformat()),
         )
         local_tz = get_local_timezone()
+        discovery_failures: list[BaseAgent] = []
         session_results = discover_query_sessions(
-            scanner, collect_scan_days(since_date, local_tz), operation.query_spec
+            scanner,
+            collect_scan_days(since_date, local_tz),
+            operation.query_spec,
+            on_provider_failure=discovery_failures.append,
         )
         if not session_results and (operation.query_spec is None or operation.query_spec.agent_names is None):
             print(i18n.t(Keys.NO_AGENTS_FOUND))
@@ -343,6 +349,7 @@ def _prepare_collect_plan(
         planned_entries=planned_entries,
         run_stats=run_stats,
         read_failed_count=read_result.failed_count,
+        discovery_failed_count=len(discovery_failures),
     )
 
 
@@ -413,6 +420,10 @@ def _execute_collect_plan(
             summary_failed=summary_failed_count,
             included=len(session_summaries),
         )
+        markdown = f"> {notice}\n\n{markdown}"
+
+    if plan.discovery_failed_count:
+        notice = i18n.t(Keys.COLLECT_DISCOVERY_INCOMPLETE_REPORT, count=plan.discovery_failed_count)
         markdown = f"> {notice}\n\n{markdown}"
 
     try:
@@ -520,6 +531,7 @@ def _handle_collect_execution(
         output_path=str(output.output_path),
         session_count=output.session_count,
         read_failed_count=plan.read_failed_count,
+        discovery_failed_count=plan.discovery_failed_count,
         summary_failed_count=output.summary_failed_count,
     )
     print(safe_body_text(output.markdown))
@@ -542,7 +554,14 @@ def _handle_collect_prompt(
             file=sys.stderr,
         )
         scanner = scanner_factory()
-        session_groups = discover_query_sessions(scanner, collect_scan_days(since_date, local_tz), operation.query_spec)
+        discovery_failures: list[BaseAgent] = []
+        query_failures: list[Session] = []
+        session_groups = discover_query_sessions(
+            scanner,
+            collect_scan_days(since_date, local_tz),
+            operation.query_spec,
+            on_provider_failure=discovery_failures.append,
+        )
         if not session_groups and (operation.query_spec is None or operation.query_spec.agent_names is None):
             print(i18n.t(Keys.NO_AGENTS_FOUND), file=sys.stderr)
             return 1
@@ -554,13 +573,14 @@ def _handle_collect_prompt(
             query_spec=operation.query_spec,
             local_tz=local_tz,
             diagnostic_sink=print_recoverable_diagnostic,
+            on_read_failure=lambda agent, session: query_failures.append(session),
         )
         if not selected:
             print(
                 i18n.t(Keys.COLLECT_NO_SESSIONS, since=since_date.isoformat(), until=until_date.isoformat()),
                 file=sys.stderr,
             )
-            return 0
+            return 1 if discovery_failures or query_failures else 0
         prompt = build_collect_handoff_prompt(
             sessions=selected,
             since_date=since_date,
@@ -571,6 +591,8 @@ def _handle_collect_prompt(
             ).resolve(),
             working_directory=Path.cwd(),
             generated_at=datetime.now(local_tz),
+            discovery_failed_count=len(discovery_failures),
+            query_read_failed_count=len(query_failures),
         )
     except Exception as exc:
         print(render_terminal_message(Keys.COLLECT_READ_FAILED, error=exc), file=sys.stderr)

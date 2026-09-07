@@ -112,12 +112,17 @@ class AgentScanner:
         days: int | None = 7,
         *,
         agents: Sequence[BaseAgent] | None = None,
+        on_provider_failure: Callable[[BaseAgent], None] | None = None,
     ) -> list[tuple[BaseAgent, list[Session]]]:
         """Read availability and sessions together without probing providers twice."""
         discoveries: list[tuple[BaseAgent, ProviderDiscovery | None]] = self._run_concurrently(
             lambda agent: agent.discover_sessions(days),
             agents,
         )
+        if on_provider_failure is not None:
+            for agent, discovery in discoveries:
+                if discovery is None:
+                    on_provider_failure(agent)
         return [
             (agent, list(discovery.sessions))
             for agent, discovery in discoveries

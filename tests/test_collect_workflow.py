@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from unittest import mock
 
-from collect_test_support import configure_session_data_lease
+from collect_test_support import configure_session_data_lease, make_query_spec
 from locale_helpers import ALL_LANGUAGES, Keys, expect, expect_contains
 import pytest
 
@@ -18,6 +18,7 @@ from agent_dump.collect_models import (
 from agent_dump.collect_workflow import handle_collect_mode
 from agent_dump.command_plan import CollectOperation
 from agent_dump.scanner import AgentScanner
+from agent_dump.search_index import SearchIndex
 
 
 def _run_collect_with_failure(failing_step: str) -> tuple[int, mock.MagicMock, mock.MagicMock]:
@@ -248,8 +249,9 @@ def test_collect_reports_output_write_failure(language, use_language, capsys) ->
 @pytest.mark.parametrize("language", ALL_LANGUAGES)
 @pytest.mark.parametrize("read_fails,summary_fails", [(False, False), (True, False), (False, True), (True, True)])
 @pytest.mark.parametrize("mode", list(CollectMode))
+@pytest.mark.parametrize("query_mode", ["none", "role", "index", "fallback"])
 def test_collect_saved_report_and_log_preserve_partial_failures(
-    tmp_path, monkeypatch, capsys, read_fails, summary_fails, mode, language, use_language
+    tmp_path, monkeypatch, capsys, read_fails, summary_fails, mode, language, use_language, query_mode
 ) -> None:
     use_language(language)
     config_path = tmp_path / "config.toml"
@@ -271,7 +273,7 @@ def test_collect_saved_report_and_log_preserve_partial_failures(
     def read_session(session):
         if read_fails and session.id == "read":
             raise OSError("unreadable source")
-        return {"messages": [] if session.id == "empty" else [{"role": "user", "content": session.id}]}
+        return {"messages": [] if session.id == "empty" else [{"role": "user", "content": f"fact {session.id}"}]}
 
     agent.get_cached_session_data.side_effect = read_session
     configure_session_data_lease(agent)
@@ -282,9 +284,18 @@ def test_collect_saved_report_and_log_preserve_partial_failures(
         field = "scene" if mode is CollectMode.INSIGHT else "requests"
         return {field: ["fact"]}
 
+    query_spec = (
+        None
+        if query_mode == "none"
+        else make_query_spec(keyword="fact", roles={"user"} if query_mode == "role" else None)
+    )
+    if query_mode == "index" and not SearchIndex(tmp_path / "probe.db").is_available:
+        pytest.skip("FTS5 unavailable")
+    if query_mode == "fallback":
+        monkeypatch.setattr(SearchIndex, "is_available", property(lambda self: False))
     output_path = tmp_path / "report.md"
     result = handle_collect_mode(
-        CollectOperation(None, "2026-09-05", "2026-09-05", str(output_path), CollectAction.EXECUTE, mode, None),
+        CollectOperation(None, "2026-09-05", "2026-09-05", str(output_path), CollectAction.EXECUTE, mode, query_spec),
         scanner_factory=lambda: AgentScanner([agent]),
         request_structured_summary=summarize,
         request_summary=lambda *args, **kwargs: "# report",
@@ -309,3 +320,68 @@ def test_collect_saved_report_and_log_preserve_partial_failures(
     assert finished["session_count"] == successful
     assert finished["read_failed_count"] == int(read_fails)
     assert finished["summary_failed_count"] == int(summary_fails)
+
+
+@pytest.mark.parametrize("action", [CollectAction.EXECUTE, CollectAction.EMIT_PROMPT])
+@pytest.mark.parametrize("has_good_session", [False, True])
+def test_collect_preserves_discovery_and_query_failures_in_saved_output(
+    tmp_path, monkeypatch, capsys, action, has_good_session
+):
+    config_path = tmp_path / "config.toml"
+    log_path = tmp_path / "collect.log"
+    config_path.write_text(
+        '[ai]\nprovider="openai"\nbase_url="https://example.invalid"\nmodel="test"\napi_key="test"\n'
+        f"[logging]\nenabled=true\npath={json.dumps(str(log_path))}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("agent_dump.config.get_config_path", lambda: config_path)
+    now = datetime(2026, 9, 5, 12, tzinfo=timezone.utc)
+    sessions = [Session(name, name, now, now, tmp_path / name, {}) for name in ("good", "broken")]
+    agent = mock.MagicMock()
+    agent.name, agent.display_name = "codex", "Codex"
+    agent.discover_sessions.return_value = mock.MagicMock(
+        available=True, sessions=sessions if has_good_session else sessions[1:]
+    )
+    agent.get_session_uri.side_effect = lambda session: f"codex://{session.id}"
+
+    def read_session(session):
+        if session.id == "broken":
+            raise OSError("query read failed")
+        return {"messages": [{"role": "user", "content": "fix bug"}]}
+
+    agent.get_cached_session_data.side_effect = read_session
+    configure_session_data_lease(agent)
+    failed_provider = mock.MagicMock()
+    failed_provider.name, failed_provider.display_name = "pi", "Pi"
+    failed_provider.discover_sessions.side_effect = OSError("discovery failed")
+    output_path = tmp_path / "report.md"
+    result = handle_collect_mode(
+        CollectOperation(
+            None, "2026-09-05", "2026-09-05", str(output_path), action, CollectMode.PM, make_query_spec(roles={"user"})
+        ),
+        scanner_factory=lambda: AgentScanner([agent, failed_provider], diagnostic_sink=None),
+        request_structured_summary=lambda *args, **kwargs: {"requests": ["fact"]},
+        request_summary=lambda *args, **kwargs: "# report",
+    )
+
+    output = capsys.readouterr().out
+    assert result == (0 if has_good_session else 1)
+    if not has_good_session:
+        assert not output_path.exists()
+        assert "collect_task" not in output
+    elif action is CollectAction.EMIT_PROMPT:
+        envelopes = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
+        context = json.loads(envelopes[0]["content"])
+        assert context["discovery_failed_count"] == 1
+        assert context["query_read_failed_count"] == 1
+        assert context["session_count"] == 1
+        assert not output_path.exists()
+    else:
+        markdown = output_path.read_text(encoding="utf-8")
+        assert expect(Keys.COLLECT_DISCOVERY_INCOMPLETE_REPORT, count=1) in markdown
+        assert expect(Keys.COLLECT_INCOMPLETE_REPORT, read_failed=1, summary_failed=0, included=1) in markdown
+        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        finished = next(record for record in records if record["event"] == "collect_run_finish")
+        assert finished["discovery_failed_count"] == 1
+        assert finished["read_failed_count"] == 1
+        assert finished["session_count"] == 1

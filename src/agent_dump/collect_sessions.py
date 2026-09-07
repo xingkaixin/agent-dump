@@ -69,6 +69,7 @@ def select_collect_sessions(
     query_spec: QuerySpec | None = None,
     local_tz: tzinfo,
     diagnostic_sink: RecoverableDiagnosticSink | None = None,
+    on_read_failure: Callable[[BaseAgent, Session], None] | None = None,
 ) -> list[SelectedCollectSession]:
     """Select candidates without reading transcripts unless the query requires them."""
     matched_sessions: list[SelectedCollectSession] = []
@@ -92,7 +93,9 @@ def select_collect_sessions(
         )
 
     candidate_matches = (
-        select_session_groups(eligible_session_groups, query_spec, diagnostic_sink=diagnostic_sink)
+        select_session_groups(
+            eligible_session_groups, query_spec, diagnostic_sink=diagnostic_sink, on_read_failure=on_read_failure
+        )
         if query_spec is not None
         else [
             QuerySessionMatch(agent=agent, session=session, snippet=session.title, rank=0.0)
@@ -251,6 +254,7 @@ def collect_entries_with_status(
 ) -> CollectReadResult:
     """Select and read entries while preserving the number of failed reads."""
     resolved_local_tz = local_tz or get_local_timezone()
+    query_failures: list[Session] = []
     matched_sessions = select_collect_sessions(
         session_groups=session_groups,
         since_date=since_date,
@@ -259,13 +263,15 @@ def collect_entries_with_status(
         query_spec=query_spec,
         local_tz=resolved_local_tz,
         diagnostic_sink=diagnostic_sink,
+        on_read_failure=lambda agent, session: query_failures.append(session),
     )
-    return _read_collect_entries(
+    read_result = _read_collect_entries(
         matched_sessions,
         progress_callback=progress_callback,
         diagnostic_sink=diagnostic_sink,
         logger=logger,
     )
+    return CollectReadResult(read_result.entries, read_result.failed_count + len(query_failures))
 
 
 def plan_collect_entries(

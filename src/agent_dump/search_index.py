@@ -5,7 +5,7 @@ All SQL f-strings in this file use FTS5 virtual table names that are
 hardcoded internal constants (_FTS_TABLES), never user input.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -336,6 +336,7 @@ class SearchIndex:
         sessions: list[Session],
         *,
         diagnostic_sink: RecoverableDiagnosticSink | None = None,
+        on_read_failure: Callable[[Session], None] | None = None,
     ) -> tuple[int, int]:
         """Incrementally add or refresh the provided sessions.
 
@@ -343,7 +344,8 @@ class SearchIndex:
         pass a time or project window. Seen rows refresh their retention timestamp;
         rows unseen beyond the cache retention period are removed during initialization.
         Returns (added_count, removed_count), with removed_count kept at zero for
-        compatibility.
+        compatibility. The optional failure callback reports unreadable sessions
+        after database work has completed.
 
         Provider parsing runs outside write transactions. Each completed batch
         commits atomically without overwriting a later observation or restoring
@@ -355,7 +357,7 @@ class SearchIndex:
         self.ensure_initialized()
         conn = self._get_connection()
         added = 0
-        skipped: list[str] = []
+        skipped: list[Session] = []
         observed_at = time.time()
 
         try:
@@ -425,7 +427,7 @@ class SearchIndex:
                         if text is None:
                             if latest is not None:
                                 _delete_index_rows(conn, [latest.fts_rowid])
-                            skipped.append(session.id)
+                            skipped.append(session)
                             continue
                         self._write_session_rows(
                             conn,
@@ -444,11 +446,14 @@ class SearchIndex:
                     Keys.WARN_INDEX_SKIPPED_SESSIONS,
                     agent=agent.display_name,
                     count=len(skipped),
-                    examples=", ".join(skipped[:3]),
+                    examples=", ".join(session.id for session in skipped[:3]),
                 )
         finally:
             conn.close()
 
+        if on_read_failure is not None:
+            for session in skipped:
+                on_read_failure(session)
         return (added, 0)
 
     def search(

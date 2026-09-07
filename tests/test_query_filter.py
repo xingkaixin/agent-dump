@@ -818,7 +818,7 @@ class TestSearchSessionsByQuery:
                 rank=3.25,
             )
         ]
-        index.update.assert_called_once_with(agent, [session], diagnostic_sink=None)
+        index.update.assert_called_once_with(agent, [session], diagnostic_sink=None, on_read_failure=mock.ANY)
         index.search.assert_called_once_with(
             TextQuery.parse("auth timeout", TextQueryMode.SEARCH_TERMS),
             agent_names={"codex"},
@@ -851,7 +851,7 @@ class TestSearchSessionsByQuery:
             )
 
         assert [match.session.id for match in result] == ["s1"]
-        index.update.assert_called_once_with(agent, [scoped, outside], diagnostic_sink=None)
+        index.update.assert_called_once_with(agent, [scoped, outside], diagnostic_sink=None, on_read_failure=mock.ANY)
 
     def test_fallback_search_builds_english_snippet_when_fts_unavailable(self, tmp_path):
         session = make_session("s1", "Auth session", tmp_path / "s1.jsonl")
@@ -1427,3 +1427,34 @@ class TestSearchLimitPushdownSafety:
         index = self._run(make_query_spec(keyword="alpha", text_mode=TextQueryMode.SEARCH_TERMS))
 
         assert index.search.call_args.kwargs["limit"] is None
+
+
+@pytest.mark.parametrize("recover_with_fallback", [False, True])
+def test_query_failure_evidence_is_scoped_and_discards_recovered_index_failures(tmp_path, recover_with_fallback):
+    good, broken, outside = [make_session(name, name, tmp_path / name) for name in ("good", "broken", "outside")]
+    for session in (good, broken):
+        session.metadata = {"cwd": str(tmp_path / "repo")}
+    outside.metadata = {"cwd": str(tmp_path / "other")}
+    payload = {"messages": [{"role": "user", "content": "fix bug"}]}
+    agent = DummyAgent(session_data={"good": payload})
+    index = SearchIndex(tmp_path / "index.db")
+    if not index.is_available:
+        pytest.skip("FTS5 unavailable")
+    failures = []
+
+    def fail_search(*args, **kwargs):
+        agent._session_data["broken"] = payload
+        raise OSError("index query failed")
+
+    with mock.patch.object(
+        index, "search", side_effect=fail_search if recover_with_fallback else None, wraps=index.search
+    ):
+        matches = select_session_groups(
+            [(agent, [good, broken, outside])],
+            make_query_spec(keyword="bug", project_path=tmp_path / "repo"),
+            search_index=index,
+            on_read_failure=lambda provider, session: failures.append((provider.name, session.id)),
+        )
+
+    assert {match.session.id for match in matches} == ({"good", "broken"} if recover_with_fallback else {"good"})
+    assert failures == ([] if recover_with_fallback else [(agent.name, "broken")])

@@ -2,7 +2,7 @@
 Query parsing and session filtering helpers.
 """
 
-from collections.abc import Sequence, Set
+from collections.abc import Callable, Sequence, Set
 from dataclasses import dataclass
 from pathlib import Path
 import shlex
@@ -56,6 +56,7 @@ class _SearchRuntime:
         search_index: SearchIndex | None = None,
         diagnostic_sink: RecoverableDiagnosticSink | None = None,
     ) -> None:
+        self.failed_sessions: dict[tuple[str, str], tuple[BaseAgent, Session]] = {}
         self._search_index = search_index
         self._diagnostic_sink = diagnostic_sink
         self._index_initialized = search_index is not None
@@ -86,6 +87,7 @@ class _SearchRuntime:
         )
 
     def report_session_read_failure(self, agent: BaseAgent, session: Session, error: object) -> None:
+        self.failed_sessions[(agent.name, session.id)] = (agent, session)
         emit_recoverable_diagnostic(
             self._diagnostic_sink,
             Keys.WARN_SESSION_READ_SKIPPED,
@@ -193,10 +195,14 @@ def select_session_groups(
     *,
     search_index: SearchIndex | None = None,
     diagnostic_sink: RecoverableDiagnosticSink | None = None,
+    on_read_failure: Callable[[BaseAgent, Session], None] | None = None,
 ) -> list[QuerySessionMatch]:
     """Select sessions using the text semantics carried by the query specification."""
     runtime = _SearchRuntime(search_index=search_index, diagnostic_sink=diagnostic_sink)
     matches = _session_matches(session_groups, spec, runtime=runtime)
+    if on_read_failure is not None:
+        for agent, session in runtime.failed_sessions.values():
+            on_read_failure(agent, session)
     if spec.text_mode is TextQueryMode.SEARCH_TERMS:
         ordered_matches = sorted(matches, key=_search_match_sort_key)
     elif spec.limit is not None:
@@ -523,12 +529,18 @@ def _try_indexed_search_matches(
         if not index.is_available:
             return None
 
-        for agent, sessions in all_groups:
-            with agent.diagnostic_context(runtime.diagnostic_sink):
-                index.update(agent, sessions, diagnostic_sink=runtime.diagnostic_sink)
         scoped_by_key = {
             (agent.name, session.id): (agent, session) for agent, sessions in scoped_groups for session in sessions
         }
+        failed_keys: set[tuple[str, str]] = set()
+        for agent, sessions in all_groups:
+            with agent.diagnostic_context(runtime.diagnostic_sink):
+                index.update(
+                    agent,
+                    sessions,
+                    diagnostic_sink=runtime.diagnostic_sink,
+                    on_read_failure=lambda session, agent_name=agent.name: failed_keys.add((agent_name, session.id)),
+                )
         results = index.search(
             query,
             agent_names={agent.name for agent, _ in all_groups},
@@ -550,6 +562,7 @@ def _try_indexed_search_matches(
                     rank=result.rank,
                 )
             )
+        runtime.failed_sessions.update({key: scoped_by_key[key] for key in failed_keys if key in scoped_by_key})
         return [match for agent, _ in scoped_groups for match in matches_by_agent[agent.name]]
     except Exception as exc:  # noqa: BLE001 - 索引出问题时退回文件扫描，但必须让用户看见
         runtime.report_index_failure(agent, exc)
