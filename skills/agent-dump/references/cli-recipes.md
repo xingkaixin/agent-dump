@@ -33,6 +33,8 @@ uv run agent-dump --list --lang en
 
 库调用中，OpenCode/ZCode 可以用新的 Provider 实例直接读取或导出已有 `Session`；数据库由 `Session.source_path` 指定，源缺失时不回退。
 
+`--head` 与列表复用发现阶段的计数和模型。库调用手动构造的 Session 如果没有这些 facts，展示保持未知，不触发数据库补查。
+
 ```bash
 # 默认 print 到终端
 uv run agent-dump opencode://<session_id>

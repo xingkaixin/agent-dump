@@ -422,6 +422,8 @@ Generating a prompt does not mean that a report has been created, and does not a
 
 OpenCode and ZCode read and export an existing `Session` from its `source_path`, including on a fresh provider instance. No prior availability check or scan is required; a missing source raises an error rather than falling back to another database.
 
+Their head and list projections use the same discovery facts without querying messages again. A manually constructed Session without model or message-count facts keeps those fields unknown; discover the Session to populate them.
+
 The top-level public API matches `agent_dump.__all__`:
 
 | Symbol | Description |
