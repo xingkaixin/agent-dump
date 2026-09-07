@@ -225,7 +225,7 @@ def build_command_plan(
         if mode in {_CommandMode.COLLECT, _CommandMode.LIST, _CommandMode.INTERACTIVE}
         else None
     )
-    if request.query and query_uri_spec is not None:
+    if request.query is not None and query_uri_spec is not None:
         raise CommandPlanError(CommandPlanErrorCode.QUERY_COMBINATION_INVALID)
 
     operation = _build_operation(request, mode=mode, query_uri_spec=query_uri_spec, valid_agents=effective_agents)
@@ -304,7 +304,7 @@ def _build_operation(
             save=request.save,
             action=action,
             collect_mode=request.collect_mode,
-            query_spec=query_uri_spec,
+            query_spec=query_uri_spec if query_uri_spec is not None else _parse_query(request.query, valid_agents),
         )
     if mode is _CommandMode.STATS:
         return StatsOperation(
