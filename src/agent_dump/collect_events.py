@@ -16,18 +16,6 @@ IGNORABLE_DIALOGUE_PATTERN = re.compile(
 EVENT_KIND_BY_ROLE = {"user": "user_message", "assistant": "agent_message"}
 
 
-def _truncate_excerpt(text: str, limit: int = 280) -> str:
-    normalized = normalize_text(text)
-    return normalized if len(normalized) <= limit else f"{normalized[: limit - 3].rstrip()}..."
-
-
-def _build_collect_event(role: str, text: str) -> CollectEvent | None:
-    normalized_text = _truncate_excerpt(text)
-    if not normalized_text or IGNORABLE_DIALOGUE_PATTERN.fullmatch(normalized_text):
-        return None
-    return CollectEvent(kind=EVENT_KIND_BY_ROLE[role], role=role, text=normalized_text)
-
-
 def extract_collect_events(
     session_data: Mapping[str, Any],
     *,
@@ -36,19 +24,6 @@ def extract_collect_events(
     """Extract visible user and agent messages from one normalized session."""
     events: list[CollectEvent] = []
     used_chars = 0
-    truncated = False
-
-    def _append_event(event: CollectEvent | None) -> None:
-        nonlocal used_chars, truncated
-        if event is None:
-            return
-        event_size = len(event.text) + 32
-        if events and used_chars + event_size > char_budget:
-            truncated = True
-            return
-        events.append(event)
-        used_chars += event_size
-
     for transcript_message in read_messages(session_data):
         if should_filter_message_for_export(transcript_message.raw):
             continue
@@ -61,12 +36,20 @@ def extract_collect_events(
         for part_text in transcript_message.visible_texts:
             normalized = normalize_text(part_text)
             identity = normalized.casefold()
-            if not normalized or identity in seen_texts:
+            if not normalized or identity in seen_texts or IGNORABLE_DIALOGUE_PATTERN.fullmatch(normalized):
                 continue
             seen_texts.add(identity)
-            _append_event(_build_collect_event(role, normalized))
+            event = CollectEvent(kind=EVENT_KIND_BY_ROLE[role], role=role, text=normalized)
+            event_size = len(render_collect_event(event)) + 1
+            if used_chars + event_size > char_budget:
+                remaining = char_budget - used_chars - (event_size - len(normalized))
+                if remaining > 0:
+                    events.append(CollectEvent(kind=event.kind, role=role, text=normalized[:remaining]))
+                return tuple(events), True
+            events.append(event)
+            used_chars += event_size
 
-    return tuple(events), truncated
+    return tuple(events), False
 
 
 def render_collect_event(event: CollectEvent) -> str:
