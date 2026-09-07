@@ -13,7 +13,7 @@ from cli_test_support import (
 from locale_helpers import Keys as LocaleKeys, expect
 import pytest
 
-from agent_dump.agents.base import Session
+from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.cli import (
     main,
@@ -1125,3 +1125,52 @@ class TestMain:
         assert result == 0
         captured = capsys.readouterr()
         assert "--summary 仅支持 URI 模式" in captured.out
+
+
+@pytest.mark.parametrize(
+    ("failure", "formats", "exit_code"),
+    [("read", "print,raw", 0), ("read", "print", 1), ("render", "print,json,raw", 0), ("render", "print", 1)],
+)
+def test_uri_print_failure_does_not_block_file_exports(tmp_path, monkeypatch, capsys, failure, formats, exit_code):
+    source = tmp_path / "source.jsonl"
+    source.write_text("original source", encoding="utf-8")
+    now = datetime.now(timezone.utc)
+    session = Session("session", "Session", now, now, source, {})
+
+    class TestAgent(BaseAgent):
+        def __init__(self):
+            super().__init__("codex", "Codex")
+            self.reads = 0
+
+        def is_available(self):
+            return True
+
+        def get_sessions(self, days=7):
+            return [session]
+
+        def get_session_data(self, session):
+            self.reads += 1
+            if failure == "read":
+                raise ValueError("transcript read failed")
+            return {"id": session.id, "messages": []}
+
+    agent = TestAgent()
+    output_dir = tmp_path / "exports"
+    monkeypatch.setattr("agent_dump.config.get_config_path", lambda: tmp_path / "config.toml")
+    monkeypatch.setattr("agent_dump.cli.AgentScanner", lambda: AgentScanner([agent], diagnostic_sink=None))
+    monkeypatch.setattr("sys.argv", ["agent-dump", "codex://session", "--format", formats, "--output", str(output_dir)])
+    if failure == "render":
+        monkeypatch.setattr(
+            "agent_dump.uri_workflow.render_session_text", mock.Mock(side_effect=ValueError("render failed"))
+        )
+
+    assert main() == exit_code
+    assert agent.reads == 1
+    output = capsys.readouterr().out
+    assert ("transcript read failed" if failure == "read" else "render failed") in output
+    if "raw" in formats:
+        assert (output_dir / "codex/session.raw.jsonl").read_bytes() == source.read_bytes()
+    if "json" in formats:
+        assert json.loads((output_dir / "codex/session.json").read_text(encoding="utf-8"))["id"] == session.id
+    if formats == "print":
+        assert not output_dir.exists()

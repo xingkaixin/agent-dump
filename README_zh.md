@@ -406,6 +406,8 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
 
 ### 作为库使用
 
+URI 模式混用 `print` 和文件格式时，print 读取或渲染失败会报告诊断并继续文件导出；标准化解析失败不阻止 raw 复制。任一请求输出成功时退出码为 `0`，全部失败时为 `1`。
+
 OpenCode 和 ZCode 按已有 `Session.source_path` 读取和导出，新的 Provider 实例也无需先检查可用性或扫描；源数据库缺失时直接报错，不回退到其他数据库。
 
 两者的 head 和列表投影使用同一份发现阶段的 facts，不再补查消息。手动构造的 Session 缺少模型或消息计数时保持未知；需要这些事实时应通过发现入口获取 Session。
