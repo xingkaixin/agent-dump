@@ -55,7 +55,7 @@ collect_workflow.py
 
 `src/agent_dump/agents/base.py` 定义 `Session`、`ProviderDiscovery` 和 `BaseAgent`。共享工作流通过以下入口访问 Provider：
 
-- `discover_sessions(days)`：一次返回可用性和会话窗口。
+- `discover_sessions(days)`：一次返回可用性、完整性和会话窗口。
 - `get_sessions(days)`、`find_session_by_id(id)`：自包含读取入口，不依赖预先调用 `is_available()`。
 - `get_session_data(session)`：读取标准化完整 payload。
 - `get_session_facts(session)`：读取 Working Directory、Provider Project、Model、Session Source、change sources 和 Message Count Fact。
@@ -78,6 +78,8 @@ Provider 私有 schema 只能在 `agent_dump.agents` 层解释。Provider 类可
 SQLite Provider 声明 Session 源数据库及其 `-wal` 文件作为 change sources，兼容普通提交及未 checkpoint 的 WAL 提交。数据库级变化会保守地使该数据库中已缓存的 Session 正文失效；不跟踪读取也可能改变的 `-shm` 文件。
 
 诊断通过 `AgentScanner.diagnostic_context()` 或显式 `diagnostic_sink` 传播。Provider 不直接打印，诊断 context 退出后不得影响其他调用方。
+
+`ProviderDiscovery.complete` 默认为 `True`。文件候选检查或解析异常时返回 `complete=False`，保留成功会话；Scanner 对整体失败或部分失败的 Provider 调用一次 `on_provider_failure`。失败事实独立于诊断输出，collect 复用现有的不完整报告、日志及 handoff 计数。
 
 ## 4. 导出格式
 

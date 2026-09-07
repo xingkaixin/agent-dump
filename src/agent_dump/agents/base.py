@@ -39,6 +39,7 @@ class ProviderDiscovery:
 
     available: bool
     sessions: tuple[Session, ...] = ()
+    complete: bool = True
 
     def __post_init__(self) -> None:
         if not self.available and self.sessions:

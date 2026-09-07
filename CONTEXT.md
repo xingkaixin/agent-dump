@@ -10,7 +10,7 @@ _Avoid_: Agent, when referring to the data source
 
 **Provider Discovery**:
 The Provider-owned operation that resolves its read-only source roots and returns
-explicit availability plus a requested window of Session records in one pass.
+explicit availability, discovery completeness, and a requested window of Session records in one pass.
 _Avoid_: Availability probe, when referring to the complete lookup process
 
 **Session**:
@@ -88,7 +88,7 @@ _Avoid_: Export
   is never treated as a filesystem path.
 - Session Source is the read-only origin and the final display fallback. It is
   never inferred to be the Working Directory.
-- A failed Provider Discovery leaves an unknown number of Sessions unobserved; a failed Query read leaves that Session’s eligibility unknown. Neither is evidence of a non-match. Collect retains these gaps in its reports and handoff metadata.
+- A failed or partially failed Provider Discovery leaves an unknown number of Sessions unobserved; a failed Query read leaves that Session’s eligibility unknown. Neither is evidence of a non-match. Collect retains these gaps in its reports and handoff metadata.
 - Query and Search match logical Searchable Corpus fields. JSON escaping,
   Provider-private metadata, and other serialized Source details are not user
   search semantics.

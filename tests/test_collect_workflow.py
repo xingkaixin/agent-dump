@@ -8,6 +8,7 @@ from locale_helpers import ALL_LANGUAGES, Keys, expect, expect_contains
 import pytest
 
 from agent_dump.agents.base import Session
+from agent_dump.agents.file_sessions import FileSessionAgent
 from agent_dump.collect_models import (
     CollectAction,
     CollectFailurePhase,
@@ -384,4 +385,60 @@ def test_collect_preserves_discovery_and_query_failures_in_saved_output(
         finished = next(record for record in records if record["event"] == "collect_run_finish")
         assert finished["discovery_failed_count"] == 1
         assert finished["read_failed_count"] == 1
+        assert finished["session_count"] == 1
+
+
+@pytest.mark.parametrize("action", [CollectAction.EXECUTE, CollectAction.EMIT_PROMPT])
+@pytest.mark.parametrize("has_good_session", [True, False])
+def test_collect_retains_partial_file_discovery_failures(tmp_path, monkeypatch, capsys, action, has_good_session):
+    class FileAgent(FileSessionAgent):
+        def __init__(self):
+            super().__init__("codex", "Codex")
+            self.base_path = tmp_path
+
+        def _iter_session_files(self):
+            return iter(sorted(tmp_path.glob("*.jsonl")))
+
+        def _parse_session_file(self, file_path):
+            if file_path.stem == "bad":
+                raise OSError("unreadable candidate")
+            now = datetime.now(timezone.utc)
+            return Session(file_path.stem, file_path.stem, now, now, file_path, {})
+
+        def get_session_data(self, session):
+            return {"messages": [{"role": "user", "content": "fix the regression"}]}
+
+    (tmp_path / "bad.jsonl").touch()
+    if has_good_session:
+        (tmp_path / "good.jsonl").touch()
+    config_path = tmp_path / "config.toml"
+    log_path = tmp_path / "collect.log"
+    config_path.write_text(
+        '[ai]\nprovider="openai"\nbase_url="https://example.invalid"\nmodel="test"\napi_key="test"\n'
+        f"[logging]\npath={json.dumps(str(log_path))}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("agent_dump.config.get_config_path", lambda: config_path)
+    output_path = tmp_path / "report.md"
+    result = handle_collect_mode(
+        CollectOperation(1, None, None, str(output_path), action, CollectMode.PM, None),
+        scanner_factory=lambda: AgentScanner([FileAgent()], diagnostic_sink=None),
+        request_structured_summary=lambda *args, **kwargs: {"requests": ["fix the regression"]},
+        request_summary=lambda *args, **kwargs: "# report",
+    )
+    output = capsys.readouterr().out
+    assert result == (0 if has_good_session else 1)
+    if not has_good_session:
+        assert not output_path.exists()
+        assert "collect_task" not in output
+    elif action is CollectAction.EMIT_PROMPT:
+        envelopes = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
+        context = json.loads(envelopes[0]["content"])
+        assert context["discovery_failed_count"] == 1
+        assert context["session_count"] == 1
+    else:
+        assert expect(Keys.COLLECT_DISCOVERY_INCOMPLETE_REPORT, count=1) in output_path.read_text(encoding="utf-8")
+        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        finished = next(record for record in records if record["event"] == "collect_run_finish")
+        assert finished["discovery_failed_count"] == 1
         assert finished["session_count"] == 1
