@@ -420,6 +420,8 @@ Generating a prompt does not mean that a report has been created, and does not a
 
 ### Library Usage
 
+OpenCode and ZCode read and export an existing `Session` from its `source_path`, including on a fresh provider instance. No prior availability check or scan is required; a missing source raises an error rather than falling back to another database.
+
 The top-level public API matches `agent_dump.__all__`:
 
 | Symbol | Description |

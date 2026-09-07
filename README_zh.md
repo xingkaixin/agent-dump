@@ -406,6 +406,8 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
 
 ### 作为库使用
 
+OpenCode 和 ZCode 按已有 `Session.source_path` 读取和导出，新的 Provider 实例也无需先检查可用性或扫描；源数据库缺失时直接报错，不回退到其他数据库。
+
 顶层公开 API 与 `agent_dump.__all__` 保持一致：
 
 | 符号 | 说明 |

@@ -58,8 +58,8 @@ class SQLiteSessionAgent(BaseAgent, ABC):
     def _missing_database_error(self, db_path: Path | None) -> DiagnosticError:
         """Build the provider-specific missing database diagnostic."""
 
-    def _connect_db(self) -> sqlite3.Connection:
-        db_path = self.db_path
+    def _connect_db(self, db_path: Path | None = None) -> sqlite3.Connection:
+        db_path = db_path if db_path is not None else self.db_path
         if not db_path or not db_path.exists():
             raise self._missing_database_error(db_path)
 
@@ -184,7 +184,7 @@ class SQLiteSessionAgent(BaseAgent, ABC):
 
     def get_session_data(self, session: Session) -> dict[str, Any]:
         """Get session data as a dictionary"""
-        conn = self._connect_db()
+        conn = self._connect_db(session.source_path)
         try:
             return dict(self._build_session_data(conn, session))
         finally:
