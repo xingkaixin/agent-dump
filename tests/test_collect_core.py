@@ -6,7 +6,7 @@ from collect_test_support import empty_summary_payload
 import pytest
 
 from agent_dump.collect_dates import CollectDateError, CollectDateErrorCode, parse_user_date, resolve_collect_date_range
-from agent_dump.collect_events import chunk_collect_events, extract_collect_events
+from agent_dump.collect_events import chunk_collect_events, extract_collect_events, render_collect_event
 from agent_dump.collect_models import MAX_SUMMARY_ITEMS_PER_FIELD, CollectEvent, CollectMode
 from agent_dump.collect_summary import (
     build_summary_json_schema,
@@ -243,6 +243,42 @@ class TestCollectExtraction:
 
         assert truncated is True
         assert len(events) == 1
+
+    def test_collect_preserves_long_message_tail_through_chunking(self) -> None:
+        text = "上下文" * 200 + "最终结果：修复完成，但部署尚未执行。"
+        events, truncated = extract_collect_events(
+            {"messages": [{"role": "assistant", "parts": [{"type": "text", "text": text}]}]}
+        )
+
+        chunks = chunk_collect_events(events)
+
+        assert truncated is False
+        assert [event.text for chunk in chunks for event in chunk] == [text]
+
+    @pytest.mark.parametrize("char_budget", [0, 30, 100, 12000])
+    def test_collect_bounds_oversized_first_message_and_marks_truncation(self, char_budget: int) -> None:
+        events, truncated = extract_collect_events(
+            {"messages": [{"role": "user", "content": "x" * 13000}]}, char_budget=char_budget
+        )
+
+        assert truncated is True
+        assert sum(len(render_collect_event(event)) + 1 for event in events) <= char_budget
+        assert all(event.text and set(event.text) == {"x"} for event in events)
+
+    def test_collect_marks_truncation_only_when_visible_text_is_omitted(self) -> None:
+        messages = [{"role": "user", "content": "请修复问题"}]
+        expected = CollectEvent(kind="user_message", role="user", text="请修复问题")
+        budget = len(render_collect_event(expected)) + 1
+
+        events, truncated = extract_collect_events({"messages": messages}, char_budget=budget)
+        assert events == (expected,)
+        assert truncated is False
+
+        events, truncated = extract_collect_events(
+            {"messages": [*messages, {"role": "assistant", "content": "修复完成"}]}, char_budget=budget
+        )
+        assert events == (expected,)
+        assert truncated is True
 
     def test_chunk_collect_events_splits_long_event_sequences(self):
         events = [

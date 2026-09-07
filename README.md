@@ -457,6 +457,8 @@ for agent in scanner.get_available_agents():
 
 When some session reads or summaries fail, collection continues with successful sessions. The saved Markdown includes a fixed incomplete-report notice with failure and included-session counts; an entirely failed run still fails.
 
+Collect preserves visible message text within a 12,000-character per-session extraction budget (including event labels). Text beyond that budget is omitted and marked as truncated for the final summary.
+
 PM summaries merge sessions only within the same date and known working directory. Sessions without a working directory retain separate attribution.
 
 Default config path:
