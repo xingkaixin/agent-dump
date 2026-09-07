@@ -75,6 +75,8 @@ Provider 私有 schema 只能在 `agent_dump.agents` 层解释。Provider 类可
 
 二者按 Provider 声明的 change sources 失效，合并同一 Session 的并发读取，并向消费者返回隔离副本。批量调用方不得使用普通缓存恢复全量驻留。
 
+SQLite Provider 声明 Session 源数据库及其 `-wal` 文件作为 change sources，兼容普通提交及未 checkpoint 的 WAL 提交。数据库级变化会保守地使该数据库中已缓存的 Session 正文失效；不跟踪读取也可能改变的 `-shm` 文件。
+
 诊断通过 `AgentScanner.diagnostic_context()` 或显式 `diagnostic_sink` 传播。Provider 不直接打印，诊断 context 退出后不得影响其他调用方。
 
 ## 4. 导出格式

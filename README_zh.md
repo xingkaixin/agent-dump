@@ -410,6 +410,8 @@ OpenCode 和 ZCode 按已有 `Session.source_path` 读取和导出，新的 Prov
 
 两者的 head 和列表投影使用同一份发现阶段的 facts，不再补查消息。手动构造的 Session 缺少模型或消息计数时保持未知；需要这些事实时应通过发现入口获取 Session。
 
+SQLite 正文缓存和搜索索引同时跟踪源数据库及其 WAL 文件；即使复用同一个 Session 对象，已提交的正文变化也会使缓存失效。元数据投影仍保留发现时的 facts。
+
 顶层公开 API 与 `agent_dump.__all__` 保持一致：
 
 | 符号 | 说明 |
