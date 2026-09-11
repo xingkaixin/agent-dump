@@ -247,6 +247,7 @@ const { caption = "Universal session convergence and index core" } = Astro.props
       var animationFrame = 0;
       var start = performance.now();
       var destroyed = false;
+      var visible = false;
 
       function resize() {
         var bounds = canvas.getBoundingClientRect();
@@ -261,7 +262,6 @@ const { caption = "Universal session convergence and index core" } = Astro.props
 
       function draw(now) {
         if (destroyed) return;
-        resize();
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.useProgram(program);
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -277,38 +277,55 @@ const { caption = "Universal session convergence and index core" } = Astro.props
 
       function restart() {
         window.cancelAnimationFrame(animationFrame);
+        if (destroyed || !visible || document.hidden) return;
+        resize();
         draw(performance.now());
       }
 
       var resizeObserver = new ResizeObserver(restart);
       var themeObserver = new MutationObserver(restart);
+      var visibilityObserver = new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting;
+        restart();
+      });
       resizeObserver.observe(canvas);
+      visibilityObserver.observe(root);
       themeObserver.observe(document.documentElement, {
         attributes: true,
         attributeFilter: ["data-theme"],
       });
       reducedMotion.addEventListener("change", restart);
+      document.addEventListener("visibilitychange", restart);
+      window.addEventListener("pageshow", restart);
       root.dataset.webgl = "ready";
-      draw(performance.now());
 
-      window.addEventListener(
-        "pagehide",
-        function () {
-          destroyed = true;
-          window.cancelAnimationFrame(animationFrame);
-          resizeObserver.disconnect();
-          themeObserver.disconnect();
-          reducedMotion.removeEventListener("change", restart);
-          gl.deleteBuffer(buffer);
-          gl.deleteProgram(program);
-          gl.deleteShader(vertexShader);
-          gl.deleteShader(fragmentShader);
-        },
-        { once: true },
-      );
+      function cleanup(event) {
+        window.cancelAnimationFrame(animationFrame);
+        if (event.persisted) return;
+        destroyed = true;
+        resizeObserver.disconnect();
+        themeObserver.disconnect();
+        visibilityObserver.disconnect();
+        reducedMotion.removeEventListener("change", restart);
+        document.removeEventListener("visibilitychange", restart);
+        window.removeEventListener("pageshow", restart);
+        window.removeEventListener("pagehide", cleanup);
+        gl.deleteBuffer(buffer);
+        gl.deleteProgram(program);
+        gl.deleteShader(vertexShader);
+        gl.deleteShader(fragmentShader);
+      }
+      window.addEventListener("pagehide", cleanup);
     }
 
-    document.querySelectorAll("[data-focus-scene]").forEach(initScene);
+    window.addEventListener("load", function () {
+      // Shader compilation must wait until the browser has painted the hero.
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(function () {
+          document.querySelectorAll("[data-focus-scene]").forEach(initScene);
+        });
+      });
+    }, { once: true });
   })();
 </script>
 
@@ -456,7 +473,7 @@ const { caption = "Universal session convergence and index core" } = Astro.props
     }
   }
 
-  .focus-scene[data-webgl="unavailable"] .focus-scene__fallback {
+  .focus-scene:not([data-webgl="ready"]) .focus-scene__fallback {
     display: block;
   }
 

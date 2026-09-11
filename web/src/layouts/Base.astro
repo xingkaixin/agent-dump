@@ -1,6 +1,8 @@
 ---
 import "@fontsource-variable/geist";
 import "@fontsource/ibm-plex-mono/400.css";
+import geistLatin from "@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url";
+import monoLatin from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url";
 import "../styles/global.css";
 import { site, ui, LOCALES, type Locale } from "../lib/i18n";
 import { version } from "../lib/version";
@@ -77,6 +79,8 @@ const jsonLd = {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preload" href={geistLatin} as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href={monoLatin} as="font" type="font/woff2" crossorigin="anonymous" />
     <meta name="theme-color" content="#f1f3ef" />
     <meta name="description" content={t.description} />
     <meta name="keywords" content={t.keywords} />
