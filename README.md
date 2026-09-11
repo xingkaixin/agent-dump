@@ -620,6 +620,8 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 
 ## Development
 
+Landing page build, deployment, and free Cloudflare performance settings are documented in the [development guide](docs/development-guide.md#5-落地页性能与-cloudflare-pages).
+
 ```bash
 # Run local CI checks with the current Python
 # (includes npm tests when Node.js is available, and the landing page check when pnpm is)

@@ -604,6 +604,8 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 
 ## Development
 
+落地页构建、部署及 Cloudflare 免费性能配置见[开发指南](docs/development-guide.md#5-落地页性能与-cloudflare-pages)。
+
 ```bash
 # 使用当前 Python 运行本地 CI 检查
 # （Node.js 可用时包含 npm 测试，pnpm 可用时包含 landing page 检查）

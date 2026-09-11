@@ -67,3 +67,27 @@ uv add --dev package-name
 ```
 
 不新增无法证明必要的第三方依赖。必要但不被代码直接 import 的依赖，应在 `pyproject.toml` 声明附近说明运行时关系；不要用泛化注释解释显而易见的依赖。
+
+## 5. 落地页性能与 Cloudflare Pages
+
+落地页继续使用 Pages 免费静态托管。`just check-web` 检查构建与浏览器行为；`just deploy-web` 才会发布，创建或合并 PR 本身不会部署网站。
+
+- `Base.astro` 预加载首屏实际使用的两个 Latin 字体文件，URL 由构建生成，并使用 `crossorigin="anonymous"` 与字体请求保持一致。
+- `astro.config.mjs` 从生成的 HTML 提取样式表和字体预加载，写入 `dist/_headers` 的逐页面 `Link` 头。不要手写带 hash 的资源路径，也不要预加载首屏以下的图片或 React 组件。
+- Pages 自动支持 [Early Hints](https://developers.cloudflare.com/pages/configuration/early-hints/)。部署后检查 `/`、`/zh/`、`/ja/` 的 `Link` 头与资源 URL；`103` 是否发出受缓存和浏览器支持影响，不能只靠一次请求判断。
+- 保留 `public/_headers` 中 `/_astro/*` 的一年期 immutable 缓存。HTML 使用 Pages 默认缓存策略，避免叠加 Cache Everything 后出现旧版本。
+- 首屏标题直接显示。WebGL 在页面加载并完成首屏绘制后初始化；离开视口或隐藏标签页时暂停，减少动态效果时只绘制静态帧。
+
+Cloudflare 统计由 Pages 项目的 Web Analytics 注入。自定义域名额外注入的 RUM 脚本通过以下 Configuration Rule 关闭，避免两份 CF 脚本竞争采集。该规则仅匹配落地页；Umami 保留。
+
+```json
+{
+  "action": "set_config",
+  "action_parameters": { "disable_rum": true },
+  "description": "Keep Pages analytics as the single agent-dump beacon",
+  "enabled": true,
+  "expression": "http.host eq \"agent-dump.xingkaixin.me\""
+}
+```
+
+规则属于 Cloudflare 域名配置，Pages 部署不会创建或覆盖它。首次配置后确认浏览器只加载一份 CF beacon、Pages 统计端点正常接收数据；回滚时禁用这一条规则即可。使用现有 Web Analytics 按地区、设备比较 LCP、INP、CLS，不新增计费产品。
