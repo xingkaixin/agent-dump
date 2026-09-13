@@ -45,7 +45,7 @@ class I18n:
         # Check locale
         try:
             loc = locale.getdefaultlocale()
-            if loc and loc[0] and "zh" in loc[0].lower():
+            if loc[0] and "zh" in loc[0].lower():
                 return "zh"
         except Exception:  # noqa: S110
             pass
