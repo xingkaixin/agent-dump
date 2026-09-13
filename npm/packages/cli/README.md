@@ -99,12 +99,17 @@ agent-dump --reindex
 ```bash
 agent-dump --collect
 agent-dump --collect -days 7
+agent-dump --collect -days 7 -query "provider:codex path:. limit:20" --dry-run
 agent-dump --collect -since 2026-04-01 -until 2026-04-15
 agent-dump --collect --collect-mode insight
 agent-dump --collect --dry-run --save ./reports
 agent-dump --collect --emit-prompt --save ./reports/weekly.md
 agent-dump --collect --save ./reports
 ```
+
+Collect execution, dry-run, and prompt handoff all support `-query` filters. Do not combine
+`-query` with an `agents://...` query URI. Reports and handoff metadata retain discovery and
+session read failures so incomplete input remains visible.
 
 ### Config
 

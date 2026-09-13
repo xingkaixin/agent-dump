@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+## [0.15.6] - 2026-09-13
+
+### Fixed
+
+- Preserve visible collect text within the 12,000-character per-session extraction budget and mark omitted text as truncated (#370)
+- Retain discovery and query-filter read failures in collect reports, completion logs, and handoff metadata; preserve usable sessions from partially unreadable file providers (#371, #376)
+- Apply `-query` filters consistently to collect execution, dry-run, and prompt handoff; reject invalid queries before scanning (#375)
+- Read OpenCode and ZCode sessions from their recorded `source_path` without requiring a prior scan, and fail explicitly when that source is missing (#372)
+- Project SQLite head metadata from discovery facts without rereading messages; leave unavailable facts unknown (#373)
+- Invalidate SQLite payload caches and search indexes when the source database or WAL changes (#374)
+- Allow URI file exports to continue after print read/render failures; return success when any requested output succeeds (#377)
+
+### Changed
+
+- Improve landing page loading with font and stylesheet preload hints, immediate hero text, and deferred WebGL initialization that pauses offscreen or in hidden tabs (#378)
+- Update Python development tools, web dependencies, and GitHub Actions; remove redundant type checks and casts (#366–#369, #379–#382)
+
 ## [0.15.5] - 2026-09-05
 
 ### Added
@@ -1064,6 +1081,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.6
 [0.15.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.5
 [0.15.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.4
 [0.15.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.3
