@@ -227,9 +227,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v0.15.6",
+        date: "2026-09-13",
+        isLatest: true,
+        title: "More Reliable Collect and Up-to-Date Session Reads",
+        description:
+          "Keep more visible dialogue in AI collect summaries, apply query filters consistently, and see when unreadable sessions leave gaps. OpenCode and ZCode session reads and full-text search now refresh after database changes. The landing page also loads faster.",
+        command: 'agent-dump --collect -days 7 -query "provider:codex path:. limit:20" --dry-run',
+        tags: ["AI Collect", "Session Reliability", "Faster Loading"],
+      },
+      {
         version: "v0.15.5",
         date: "2026-09-05",
-        isLatest: true,
         title: "Resilient Collect, Provider Pre-Scoping & Visual Redesign",
         description:
           "Collect workflows now gracefully preserve partial session successes during batch failures and isolate unknown projects cleanly. Scope providers upfront before discovery to accelerate queries, paired with an all-new WebGL landing visual experience.",
@@ -345,9 +354,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v0.15.6",
+        date: "2026-09-13",
+        isLatest: true,
+        title: "会话收集更可靠，读取与搜索及时更新",
+        description:
+          "AI collect 在预算内保留更多可见对话，一致应用查询筛选，并明确报告无法读取的会话。OpenCode 与 ZCode 数据库变化后，会话读取和全文搜索会刷新缓存内容。落地页加载也得到改善。",
+        command: 'agent-dump --collect -days 7 -query "provider:codex path:. limit:20" --dry-run',
+        tags: ["AI 会话收集", "会话可靠性", "加载优化"],
+      },
+      {
         version: "v0.15.5",
         date: "2026-09-05",
-        isLatest: true,
         title: "会话收集容错保留、Provider 预剪裁与全新落地页视效",
         description:
           "批量会话收集全面支持部分失败保留，单会话读取异常不再中断全局任务，未识别项目独立安全归组；按 Provider 查询时提前剪裁扫描范围。落地页全新重塑，带来多层会话聚合与激光检索视效。",
@@ -463,9 +481,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v0.15.6",
+        date: "2026-09-13",
+        isLatest: true,
+        title: "より確実なセッション収集と最新データの読み取り",
+        description:
+          "AI collect は文字数の上限内で対話を保持し、検索条件を一貫して適用。読み取れないセッションも明示します。OpenCode と ZCode のデータベース更新後は、セッション読み取りと全文検索のキャッシュを更新。ランディングページの読み込みも改善しました。",
+        command: 'agent-dump --collect -days 7 -query "provider:codex path:. limit:20" --dry-run',
+        tags: ["AIセッション収集", "セッションの信頼性", "読み込み改善"],
+      },
+      {
         version: "v0.15.5",
         date: "2026-09-05",
-        isLatest: true,
         title: "セッション収集のエラー耐性強化とProvider事前絞り込み",
         description:
           "セッション一括収集時に一部の取得失敗があっても成功分を確実に保持し、未知プロジェクトを安全に分離。Provider指定時のスキャン範囲を事前剪定して高速化。製品ランディングページのデザインとビジュアルも全面刷新。",

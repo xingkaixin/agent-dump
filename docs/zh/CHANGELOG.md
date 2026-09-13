@@ -2,6 +2,23 @@
 
 ## [未发布]
 
+## [0.15.6] - 2026-09-13
+
+### 问题修复
+
+- 在每会话 12,000 字符的提取预算内保留 collect 可见正文，并明确标记超出预算而省略的文本 (#370)
+- 在 collect 报告、完成日志和交接元数据中保留会话发现与查询筛选读取失败记录；文件型 Provider 部分不可读时仍保留可用会话 (#371, #376)
+- 在 collect 执行、dry-run 和提示词交接中一致应用 `-query` 筛选，并在扫描前拒绝无效查询 (#375)
+- OpenCode 和 ZCode 直接从 Session 记录的 `source_path` 读取会话，无需预先扫描；源文件缺失时明确报错 (#372)
+- SQLite head 元数据直接使用发现阶段 facts，不重新读取消息；缺少的事实保持未知 (#373)
+- 源数据库或 WAL 变化时使 SQLite 正文缓存和搜索索引失效 (#374)
+- URI 模式打印读取或渲染失败后继续执行文件导出；任一请求输出成功即返回成功退出码 (#377)
+
+### 变更
+
+- 通过字体与样式表预加载提示、首屏标题直接显示、延迟初始化 WebGL 改善落地页加载；离开视口或隐藏标签页时暂停 WebGL (#378)
+- 更新 Python 开发工具、Web 依赖与 GitHub Actions，并移除冗余类型检查和类型转换 (#366–#369, #379–#382)
+
 ## [0.15.5] - 2026-09-05
 
 ### 新增功能
@@ -1067,6 +1084,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.15.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.6
 [0.15.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.5
 [0.15.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.4
 [0.15.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.3
