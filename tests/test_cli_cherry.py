@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import json
+import sqlite3
 import sys
 
 from cherry_fixtures import create_cherry_db
@@ -10,11 +11,17 @@ from agent_dump.cli import main
 from agent_dump.i18n import Keys
 
 
-@pytest.fixture
-def cherry_database(isolated_provider_home, monkeypatch):
+@pytest.fixture(params=["before-soft-delete", "current"])
+def cherry_database(isolated_provider_home, monkeypatch, request):
     root = isolated_provider_home / "cherry"
     monkeypatch.setenv("CHERRY_STUDIO_USER_DATA_DIR", str(root))
-    return create_cherry_db(root / "Data" / "cherrystudio.sqlite", int(datetime.now(timezone.utc).timestamp() * 1000))
+    database = create_cherry_db(
+        root / "Data" / "cherrystudio.sqlite", int(datetime.now(timezone.utc).timestamp() * 1000)
+    )
+    if request.param == "before-soft-delete":
+        with sqlite3.connect(database) as conn:
+            conn.execute("ALTER TABLE agent_session DROP COLUMN deleted_at")
+    return database
 
 
 @pytest.mark.parametrize(

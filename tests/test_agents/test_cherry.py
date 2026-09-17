@@ -94,6 +94,24 @@ def test_window_soft_deletes_and_direct_lookup(database):
         assert agent.find_session_by_id(session_id) is None
 
 
+def test_agent_sessions_before_soft_delete_migration_remain_readable(database, tmp_path):
+    with sqlite3.connect(database) as conn:
+        conn.execute("ALTER TABLE agent_session DROP COLUMN deleted_at")
+    before = database.read_bytes()
+    agent = CherryStudioAgent(database)
+    discovery = agent.discover_sessions(None)
+    assert discovery.available and discovery.complete
+    assert {session.id for session in discovery.sessions} == {"topic-contract", "session-contract"}
+    for listed in discovery.sessions:
+        session = agent.find_session_by_id(listed.id)
+        assert session is not None
+        assert agent.get_session_head(session)["message_count"] == 2
+        exported = json.loads(agent.export_session(session, tmp_path / "exports").read_text())
+        assert exported["stats"]["message_count"] == 2
+        assert [message["parts"][0]["text"] for message in exported["messages"]] == ["Cherry prompt", "Cherry answer"]
+    assert database.read_bytes() == before
+
+
 def test_fresh_reader_uses_session_source_and_rejects_missing_records(database, tmp_path):
     session = CherryStudioAgent(database).find_session_by_id("session-contract")
     assert session is not None

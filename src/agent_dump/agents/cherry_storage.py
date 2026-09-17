@@ -38,8 +38,11 @@ def search_roots(db_path: Path | None) -> tuple[SearchRoot, ...]:
 def session_rows(
     conn: sqlite3.Connection, session_id: str | None = None, cutoff: int | None = None
 ) -> list[dict[str, Any]]:
+    session_columns = {row["name"] for row in conn.execute("PRAGMA table_info(agent_session)")}
+    # Cherry Studio added agent-session soft deletion in migration 0023.
+    session_filter = "WHERE s.deleted_at IS NULL" if "deleted_at" in session_columns else ""
     rows = conn.execute(
-        """
+        f"""
         SELECT * FROM (
             SELECT 'topic-' || id AS session_id, 'topic' AS kind, id, name, created_at, updated_at,
                    active_node_id, NULL AS directory
@@ -48,10 +51,10 @@ def session_rows(
             SELECT 'session-' || s.id, 'session', s.id, s.name, s.created_at, s.updated_at,
                    NULL, w.path
             FROM agent_session s LEFT JOIN agent_workspace w ON w.id = s.workspace_id
-            WHERE s.deleted_at IS NULL
+            {session_filter}
         ) WHERE (? IS NULL OR session_id = ?) AND (? IS NULL OR created_at >= ?)
         ORDER BY created_at DESC, session_id
-        """,
+        """,  # noqa: S608
         (session_id, session_id, cutoff, cutoff),
     )
     return [dict(row) for row in rows]
