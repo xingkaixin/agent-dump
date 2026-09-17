@@ -14,6 +14,7 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 - **Cursor** - Cursor composer 会话
 - **Pi** - Earendil 的 AI coding agent
 - **DeepChat** - 当前版本的本地会话（未加密数据库）
+- **Cherry Studio** - 2.x 的本地聊天和 Agent 会话
 - **更多工具** - 欢迎提交 PR 支持其他 AI 编码工具
 
 ## 功能特性
@@ -44,6 +45,7 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 - **Cursor**: Cursor 默认用户目录下的 `globalStorage/state.vscdb`
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
+- **Cherry Studio**: `CHERRY_STUDIO_USER_DATA_DIR/Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。该覆盖变量由 agent-dump 提供，可用于便携版、开发版或选择多个安装中的一个。
 
 注意：
 
@@ -53,6 +55,10 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`；保留正文、思考和工具记录，压缩提示不进入 collect。JSON 还保留附件引用、链接及其他消息块，不读取附件实体或外置工具输出文件。Token 来自消息记录，不提供计费金额。
 
 暂不支持 SQLCipher 加密库、旧版 `chat.db` 直读和 raw 导出；不会执行 DeepChat 的迁移或 Tape 恢复。`DEEPCHAT_USER_DATA_DIR` 可用于指定自定义用户数据目录。
+
+Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含已迁移历史），可用于列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。普通聊天仅包含当前选中的根到叶路径，其他分支和多模型并列回复不进入导出、搜索或计数；虚拟根和空的待输入叶节点不计入消息。Agent 会话按时间排序，并从 workspace 获取工作目录；普通聊天不推断工作目录。已删除会话和聊天消息不会导出。
+
+正文、思考、工具调用及结果、代码和翻译会转换为统一格式。JSON 保留附件引用和控制事件，压缩摘要与内部事件不进入 collect 或搜索。Token 来自消息统计；各币种费用仅在 JSON 中保留，不换算或汇总计费金额。不读取附件实体、SDK 日志，也不执行应用迁移。暂不支持 1.x IndexedDB/Redux 原始数据和 raw 导出。
 
 ## 安装
 
@@ -161,6 +167,7 @@ uv run agent-dump opencode://session-id-abc123
 - `cursor://<requestid>` - Cursor 会话（`requestid` 作为 URI 标识符）
 - `pi://<session_id>` - Pi 会话
 - `deepchat://<session_id>` - DeepChat 会话
+- `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio 普通聊天 / Agent 会话
 
 ### 典型错误
 
@@ -416,7 +423,7 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
 
 URI 模式混用 `print` 和文件格式时，print 读取或渲染失败会报告诊断并继续文件导出；标准化解析失败不阻止 raw 复制。任一请求输出成功时退出码为 `0`，全部失败时为 `1`。
 
-OpenCode、ZCode 和 DeepChat 按已有 `Session.source_path` 读取和导出，新的 Provider 实例也无需先检查可用性或扫描；源数据库缺失时直接报错，不回退到其他数据库。
+OpenCode、ZCode、DeepChat 和 Cherry Studio 按已有 `Session.source_path` 读取和导出，新的 Provider 实例也无需先检查可用性或扫描；源数据库缺失时直接报错，不回退到其他数据库。
 
 这些 Provider 的 head 和列表投影使用同一份发现阶段的 facts，不再补查消息。手动构造的 Session 缺少模型或消息计数时保持未知；需要这些事实时应通过发现入口获取 Session。
 

@@ -143,6 +143,8 @@ SQLite Provider 声明 Session 源数据库及其 `-wal` 文件作为 change sou
 
 准确路径和 schema 由各 Provider 的 `get_search_roots()` 与实现代码拥有；URI 形状由 registry 拥有。诊断和文档展示必须从这些来源派生，不在共享模块复制 Provider 分支。
 
-当前支持 OpenCode、ZCode、Codex、Kimi、Claude Code、Cursor、Pi 和 DeepChat。新增或移除 Provider 时以 registry、公开 API 和用户文档为同步边界，不在根 `AGENTS.md` 维护重复清单。
+当前支持 OpenCode、ZCode、Codex、Kimi、Claude Code、Cursor、Pi、DeepChat 和 Cherry Studio。新增或移除 Provider 时以 registry、公开 API 和用户文档为同步边界，不在根 `AGENTS.md` 维护重复清单。
 
 DeepChat 使用独立 `DeepChatAgent` 读取当前未加密 `agent.db`；不复用 OpenCode schema 的 `SQLiteSessionAgent`。正文优先读取结构化 user/assistant 表，缺失时回退到 `deepchat_messages.content`，消息按 `order_seq` 排序。每次正文读取使用一个只读事务，change sources 包含数据库和 WAL。草稿不参与发现；compaction 消息映射为独立角色，避免进入 collect。附件实体、外置工具输出、旧版 `chat.db`、SQLCipher 和 Tape 恢复不在当前支持范围，raw 导出明确拒绝。
+
+Cherry Studio 使用 `CherryStudioAgent` 只读访问 2.x `Data/cherrystudio.sqlite`，共享 parts 转换位于 `cherry_messages.py`，路径与查询位于 `cherry_storage.py`。`topic-` 与 `session-` 区分普通聊天和 Agent 会话。普通聊天沿当前叶节点追溯父链，排除虚拟根、空的待输入叶节点和旁支，发现计数与正文使用同一选取逻辑。Agent 会话按 `created_at, id` 排序，workspace 路径映射为 Working Directory。head 只读取消息身份、模型快照及分支结构，不解码正文；每次读取使用只读事务，数据库及 WAL 参与缓存失效。损坏的聊天分支保留其他会话并标记发现不完整，直接读取则报错。内部事件保留为 Provider 私有 part，不投影成 collect 对话。

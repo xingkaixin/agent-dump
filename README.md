@@ -14,6 +14,7 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 - **Cursor** - Cursor composer sessions
 - **Pi** - Earendil's AI coding agent
 - **DeepChat** - Current local sessions from unencrypted databases
+- **Cherry Studio** - Local 2.x chats and agent sessions
 - **More Tools** - PRs are welcome to support other AI coding tools
 
 ## Features
@@ -44,6 +45,7 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 - **Cursor**: Cursor's default user `globalStorage/state.vscdb`
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
+- **Cherry Studio**: `CHERRY_STUDIO_USER_DATA_DIR/Data/cherrystudio.sqlite`; otherwise the first existing database in the user data directories configured by `~/.cherrystudio/boot-config.json`, then the platform default: macOS `~/Library/Application Support/CherryStudio`, Windows `%APPDATA%\CherryStudio`, or Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio` (each with `Data/cherrystudio.sqlite`). The override is provided by agent-dump; use it for portable/dev installations or to select among multiple installations.
 
 Notes:
 
@@ -53,6 +55,10 @@ Notes:
 DeepChat reads saved sessions in the current `agent.db`, including migrated history, ACP sessions, and subagent sessions; drafts are excluded. It supports listing, query, search, stats, collect, and print / JSON / Markdown exports. Structured messages take precedence over the `content` fallback. Text, reasoning, and tool records are normalized; compaction markers do not enter collect. JSON also retains attachment references, links, and other message blocks. Attachment files and offloaded tool output are not read. Token totals come from message records; billing cost is unavailable.
 
 SQLCipher databases, direct reads of legacy `chat.db`, and raw export are unsupported. The reader does not run DeepChat migrations or Tape recovery. Set `DEEPCHAT_USER_DATA_DIR` to read a custom user data directory.
+
+Cherry Studio supports listing, query, search, stats, collect, and print / JSON / Markdown exports from its current 2.x database, including migrated history. Ordinary chats expose only the active root-to-leaf path; other branches and parallel model replies are excluded from exports, search, and counts. Structural roots and empty reserved user leaves are excluded. Agent sessions are read chronologically and use their workspace as the working directory; ordinary chats have no working directory. Deleted sessions and chat messages are excluded.
+
+Text, reasoning, tool calls/results, code, and translations are normalized. JSON retains file references and control events; compaction summaries and internal events do not enter collect or search. Token totals come from message stats. Per-currency costs are preserved in JSON without conversion or an aggregate billing total. The reader never opens attachment files, scans SDK logs, or runs application migrations. Direct reads of 1.x IndexedDB/Redux data and raw export are unsupported.
 
 ## Installation
 
@@ -161,6 +167,7 @@ Supported URI schemes:
 - `cursor://<requestid>` - Cursor sessions (`requestid` is used as URI identifier)
 - `pi://<session_id>` - Pi sessions
 - `deepchat://<session_id>` - DeepChat sessions
+- `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
 
 ### Typical Errors
 
@@ -430,7 +437,7 @@ When URI mode combines `print` with file formats, a print read/render failure is
 
 ### Library Usage
 
-OpenCode, ZCode, and DeepChat read and export an existing `Session` from its `source_path`, including on a fresh provider instance. No prior availability check or scan is required; a missing source raises an error rather than falling back to another database.
+OpenCode, ZCode, DeepChat, and Cherry Studio read and export an existing `Session` from its `source_path`, including on a fresh provider instance. No prior availability check or scan is required; a missing source raises an error rather than falling back to another database.
 
 Their head and list projections use the same discovery facts without querying messages again. A manually constructed Session without model or message-count facts keeps those fields unknown; discover the Session to populate them.
 
