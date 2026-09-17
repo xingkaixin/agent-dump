@@ -38,7 +38,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 ## 执行工作流
 
 1. 识别任务模式
-- 用户给了 `opencode://...`、`zcode://...`、`codex://...`、`kimi://...`、`claude://...`、`cursor://...`、`pi://...` 这类 URI：使用 URI 模式。
+- 用户给了 `opencode://...`、`zcode://...`、`codex://...`、`kimi://...`、`claude://...`、`cursor://...`、`pi://...`、`deepchat://...` 这类 URI：使用 URI 模式。
 - 用户给了 `agents://<path>?q=...&providers=...`：使用路径作用域查询，可配合 list、interactive 或 collect。
 - 用户给了 `--collect`：使用 collect 模式，默认调用已配置的 AI 总结。
 - 用户要使用自有外部 agent 汇总、不配置 API，或只要汇总提示词：使用 `--collect --emit-prompt`；详细用法见 recipes 的“外部 agent 汇总”。
@@ -97,10 +97,12 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。
 - 同时传入多个显式模式时，CLI 保留既有优先级并告警列出被忽略的较低优先级模式；应按告警修正命令，而不是依赖优先级。
 - `--providers` 是只读能力发现命令，不扫描会话；输出格式与路径能力均从 provider 声明派生。
-- 仅使用当前 CLI 已支持的 URI 协议：`opencode`、`zcode`、`codex`、`kimi`、`claude`、`cursor`、`pi`（其中 `claude` 对应 Claude Code）。
+- 仅使用当前 CLI 已支持的 URI 协议：`opencode`、`zcode`、`codex`、`kimi`、`claude`、`cursor`、`pi`、`deepchat`（其中 `claude` 对应 Claude Code）。
 - 路径作用域查询 URI 使用 `agents://<path>?q=<keyword>&providers=<names>&roles=<roles>&limit=<n>`；`limit` 必须为有符号 64 位范围内的正整数。
 - `--list` 在本机完全没有 provider 数据时退出 `1`；时间窗或关键词无命中仍为 `0`。
 
 ## 参数与错误参考
 
 读取 [references/cli-recipes.md](references/cli-recipes.md) 获取完整命令模板、行为矩阵、查询语法和错误处理策略。
+
+DeepChat 使用当前未加密的 `app_db/agent.db`，可通过 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。支持 print / JSON / Markdown；不支持 raw、SQLCipher 或旧版 `chat.db` 直读。附件仅保留引用，外置工具输出和 Tape 恢复不在导出范围。

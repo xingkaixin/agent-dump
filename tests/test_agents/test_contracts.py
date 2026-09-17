@@ -11,6 +11,7 @@ import sqlite3
 import sys
 from typing import Any
 
+from deepchat_fixtures import create_deepchat_db
 import pytest
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS
@@ -18,6 +19,7 @@ from agent_dump.agents.base import BaseAgent, Session
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
+from agent_dump.agents.deepchat import DeepChatAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.pi import PiAgent
@@ -651,6 +653,23 @@ def _build_pi_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Provi
     )
 
 
+def _build_deepchat_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ProviderContractFixture:
+    db_path = create_deepchat_db(tmp_path / "deepchat" / "app_db" / "agent.db", _now_ms())
+    monkeypatch.setenv("DEEPCHAT_USER_DATA_DIR", str(db_path.parent.parent))
+    return ProviderContractFixture(
+        agent=DeepChatAgent(),
+        session_id="deepchat-contract",
+        uri="deepchat://deepchat-contract",
+        title="DeepChat Contract",
+        location="/workspace/deepchat-contract",
+        model="gpt-4.1",
+        head_message_count=2,
+        data_message_count=2,
+        texts=("DeepChat prompt", "DeepChat answer"),
+        remove_source=lambda: db_path.unlink(),
+    )
+
+
 CONTRACT_BUILDERS: dict[str, ProviderBuilder] = {
     "opencode": _build_opencode_contract,
     "zcode": _build_zcode_contract,
@@ -659,6 +678,7 @@ CONTRACT_BUILDERS: dict[str, ProviderBuilder] = {
     "claudecode": _build_claude_contract,
     "cursor": _build_cursor_contract,
     "pi": _build_pi_contract,
+    "deepchat": _build_deepchat_contract,
 }
 
 

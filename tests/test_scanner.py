@@ -112,6 +112,7 @@ class TestAgentScanner:
             "claudecode",
             "cursor",
             "pi",
+            "deepchat",
         ]
 
     def test_accepts_injected_agents(self):

@@ -185,6 +185,7 @@ uv run agent-dump --config edit
 - `claudecode`
 - `cursor`
 - `pi`
+- `deepchat`
 
 示例：
 
@@ -270,6 +271,7 @@ uv run agent-dump --search "auth" --list -days 30
    - `claude://<session_id>`
    - `cursor://<request_id>`
    - `pi://<session_id>`
+   - `deepchat://<session_id>`
 2. 确认 `<session_id>` 非空。
 
 ### URI 协议与实际会话来源不匹配
@@ -309,7 +311,7 @@ uv run agent-dump --search "auth" --list -days 30
 
 处理：
 1. 改为 `keyword` 或 `agent1,agent2:keyword`。
-2. 将 agent 名称改为 `opencode/zcode/codex/kimi/claudecode/cursor/pi` 中的合法值。
+2. 将 agent 名称改为 `opencode/zcode/codex/kimi/claudecode/cursor/pi/deepchat` 中的合法值。
 
 ### collect 模式参数冲突
 
@@ -338,3 +340,13 @@ uv run agent-dump --search "auth" --list -days 30
 处理：
 1. 仅使用 `json/markdown/raw/print`（支持逗号组合）。
 2. 需要 markdown 简写时使用 `md`（等价 `markdown`）。
+
+## DeepChat
+
+```bash
+uv run agent-dump --list -query "provider:deepchat"
+uv run agent-dump 'deepchat://<session_id>' --head
+uv run agent-dump 'deepchat://<session_id>' --format json,markdown --output ./sessions
+```
+
+读取当前未加密的 `app_db/agent.db`，可用 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。草稿不列出，已迁移历史可直接读取。暂不支持 raw、SQLCipher 和旧版 `chat.db` 直读；附件仅保留引用，不读取外置工具输出或执行 Tape 恢复。遇到加密或 schema 诊断时应保留报错，不把它当成没有会话。

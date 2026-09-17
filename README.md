@@ -13,6 +13,7 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 - **Kimi** - Moonshot AI assistant
 - **Cursor** - Cursor composer sessions
 - **Pi** - Earendil's AI coding agent
+- **DeepChat** - Current local sessions from unencrypted databases
 - **More Tools** - PRs are welcome to support other AI coding tools
 
 ## Features
@@ -42,11 +43,16 @@ AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw sessio
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
 - **Cursor**: Cursor's default user `globalStorage/state.vscdb`
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
+- **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
 
 Notes:
 
 - On Windows, prefer configuring the tool's official environment variable when available.
 - The `data/<agent>` fallback is kept for local development and tests.
+
+DeepChat reads saved sessions in the current `agent.db`, including migrated history, ACP sessions, and subagent sessions; drafts are excluded. It supports listing, query, search, stats, collect, and print / JSON / Markdown exports. Structured messages take precedence over the `content` fallback. Text, reasoning, and tool records are normalized; compaction markers do not enter collect. JSON also retains attachment references, links, and other message blocks. Attachment files and offloaded tool output are not read. Token totals come from message records; billing cost is unavailable.
+
+SQLCipher databases, direct reads of legacy `chat.db`, and raw export are unsupported. The reader does not run DeepChat migrations or Tape recovery. Set `DEEPCHAT_USER_DATA_DIR` to read a custom user data directory.
 
 ## Installation
 
@@ -154,6 +160,7 @@ Supported URI schemes:
 - `claude://<session_id>` - Claude Code sessions
 - `cursor://<requestid>` - Cursor sessions (`requestid` is used as URI identifier)
 - `pi://<session_id>` - Pi sessions
+- `deepchat://<session_id>` - DeepChat sessions
 
 ### Typical Errors
 
@@ -252,6 +259,7 @@ uv run agent-dump kimi://<session-id>         # View Kimi session content
 uv run agent-dump claude://<session-id>       # View Claude Code session content
 uv run agent-dump cursor://<request-id>       # View Cursor session content
 uv run agent-dump pi://<session-id>           # View Pi session content
+uv run agent-dump deepchat://<session-id>     # View DeepChat session content
 uv run agent-dump codex://<session-id> --head # View lightweight session metadata before exporting
 uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
 uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file
@@ -422,7 +430,7 @@ When URI mode combines `print` with file formats, a print read/render failure is
 
 ### Library Usage
 
-OpenCode and ZCode read and export an existing `Session` from its `source_path`, including on a fresh provider instance. No prior availability check or scan is required; a missing source raises an error rather than falling back to another database.
+OpenCode, ZCode, and DeepChat read and export an existing `Session` from its `source_path`, including on a fresh provider instance. No prior availability check or scan is required; a missing source raises an error rather than falling back to another database.
 
 Their head and list projections use the same discovery facts without querying messages again. A manually constructed Session without model or message-count facts keeps those fields unknown; discover the Session to populate them.
 

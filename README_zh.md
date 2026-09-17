@@ -13,6 +13,7 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 - **Kimi** - Moonshot AI 助手
 - **Cursor** - Cursor composer 会话
 - **Pi** - Earendil 的 AI coding agent
+- **DeepChat** - 当前版本的本地会话（未加密数据库）
 - **更多工具** - 欢迎提交 PR 支持其他 AI 编码工具
 
 ## 功能特性
@@ -42,11 +43,16 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
 - **Cursor**: Cursor 默认用户目录下的 `globalStorage/state.vscdb`
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
+- **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
 
 注意：
 
 - Windows 上建议优先配置工具官方环境变量。
 - `data/<agent>` 回退路径保留用于本地开发和测试。
+
+DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`；保留正文、思考和工具记录，压缩提示不进入 collect。JSON 还保留附件引用、链接及其他消息块，不读取附件实体或外置工具输出文件。Token 来自消息记录，不提供计费金额。
+
+暂不支持 SQLCipher 加密库、旧版 `chat.db` 直读和 raw 导出；不会执行 DeepChat 的迁移或 Tape 恢复。`DEEPCHAT_USER_DATA_DIR` 可用于指定自定义用户数据目录。
 
 ## 安装
 
@@ -154,6 +160,7 @@ uv run agent-dump opencode://session-id-abc123
 - `claude://<session_id>` - Claude Code 会话
 - `cursor://<requestid>` - Cursor 会话（`requestid` 作为 URI 标识符）
 - `pi://<session_id>` - Pi 会话
+- `deepchat://<session_id>` - DeepChat 会话
 
 ### 典型错误
 
@@ -250,6 +257,7 @@ uv run agent-dump kimi://<session-id>         # 查看 Kimi 会话内容
 uv run agent-dump claude://<session-id>       # 查看 Claude Code 会话内容
 uv run agent-dump cursor://<request-id>       # 查看 Cursor 会话内容
 uv run agent-dump pi://<session-id>           # 查看 Pi 会话内容
+uv run agent-dump deepchat://<session-id>     # 查看 DeepChat 会话内容
 uv run agent-dump codex://<session-id> --head # 查看轻量会话元数据，不导出也不打印正文
 uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # 导出 JSON 文件
 uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # 导出 Markdown 文件
@@ -408,9 +416,9 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
 
 URI 模式混用 `print` 和文件格式时，print 读取或渲染失败会报告诊断并继续文件导出；标准化解析失败不阻止 raw 复制。任一请求输出成功时退出码为 `0`，全部失败时为 `1`。
 
-OpenCode 和 ZCode 按已有 `Session.source_path` 读取和导出，新的 Provider 实例也无需先检查可用性或扫描；源数据库缺失时直接报错，不回退到其他数据库。
+OpenCode、ZCode 和 DeepChat 按已有 `Session.source_path` 读取和导出，新的 Provider 实例也无需先检查可用性或扫描；源数据库缺失时直接报错，不回退到其他数据库。
 
-两者的 head 和列表投影使用同一份发现阶段的 facts，不再补查消息。手动构造的 Session 缺少模型或消息计数时保持未知；需要这些事实时应通过发现入口获取 Session。
+这些 Provider 的 head 和列表投影使用同一份发现阶段的 facts，不再补查消息。手动构造的 Session 缺少模型或消息计数时保持未知；需要这些事实时应通过发现入口获取 Session。
 
 SQLite 正文缓存和搜索索引同时跟踪源数据库及其 WAL 文件；即使复用同一个 Session 对象，已提交的正文变化也会使缓存失效。元数据投影仍保留发现时的 facts。
 
