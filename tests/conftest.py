@@ -13,9 +13,10 @@ from agent_dump.i18n import i18n
 
 
 @pytest.fixture(autouse=True)
-def isolated_deepchat_data_dir(tmp_path, monkeypatch):
+def isolated_desktop_chat_data_dirs(tmp_path, monkeypatch):
     """A newly registered provider must never discover the developer's real database in tests."""
     monkeypatch.setenv("DEEPCHAT_USER_DATA_DIR", str(tmp_path / "deepchat-data"))
+    monkeypatch.setenv("CHERRY_STUDIO_USER_DATA_DIR", str(tmp_path / "cherry-data"))
 
 
 @pytest.fixture(autouse=True)
@@ -86,6 +87,7 @@ def isolated_provider_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
         "KIMI_SHARE_DIR",
         "PI_HOME",
         "DEEPCHAT_USER_DATA_DIR",
+        "CHERRY_STUDIO_USER_DATA_DIR",
         "LOCALAPPDATA",
         "APPDATA",
     ):

@@ -3,6 +3,7 @@ Agent handlers for different AI tools
 """
 
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.cherry import CherryStudioAgent
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
@@ -23,4 +24,5 @@ __all__ = [
     "CursorAgent",
     "PiAgent",
     "DeepChatAgent",
+    "CherryStudioAgent",
 ]

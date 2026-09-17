@@ -11,11 +11,13 @@ import sqlite3
 import sys
 from typing import Any
 
+from cherry_fixtures import create_cherry_db
 from deepchat_fixtures import create_deepchat_db
 import pytest
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS
 from agent_dump.agents.base import BaseAgent, Session
+from agent_dump.agents.cherry import CherryStudioAgent
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
@@ -670,6 +672,23 @@ def _build_deepchat_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
     )
 
 
+def _build_cherry_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ProviderContractFixture:
+    db_path = create_cherry_db(tmp_path / "cherry" / "Data" / "cherrystudio.sqlite", _now_ms())
+    monkeypatch.setenv("CHERRY_STUDIO_USER_DATA_DIR", str(db_path.parent.parent))
+    return ProviderContractFixture(
+        agent=CherryStudioAgent(),
+        session_id="session-contract",
+        uri="cherry://session-contract",
+        title="Cherry Agent",
+        location="/workspace/cherry-contract",
+        model="gpt-4.1",
+        head_message_count=2,
+        data_message_count=2,
+        texts=("Cherry prompt", "Cherry answer"),
+        remove_source=lambda: db_path.unlink(),
+    )
+
+
 CONTRACT_BUILDERS: dict[str, ProviderBuilder] = {
     "opencode": _build_opencode_contract,
     "zcode": _build_zcode_contract,
@@ -679,6 +698,7 @@ CONTRACT_BUILDERS: dict[str, ProviderBuilder] = {
     "cursor": _build_cursor_contract,
     "pi": _build_pi_contract,
     "deepchat": _build_deepchat_contract,
+    "cherry": _build_cherry_contract,
 }
 
 
