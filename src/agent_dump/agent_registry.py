@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from agent_dump.agents.base import BaseAgent
+from agent_dump.agents.cherry import CherryStudioAgent
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
@@ -69,6 +70,11 @@ AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
     AgentRegistration(
         factory=DeepChatAgent,
         uri_schemes=("deepchat",),
+    ),
+    AgentRegistration(
+        factory=CherryStudioAgent,
+        uri_schemes=("cherry",),
+        uri_identifier_label="topic-<id>",
     ),
 )
 

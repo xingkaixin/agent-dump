@@ -3,6 +3,10 @@
 from agent_dump.i18n_keys import Keys
 
 ZH_TRANSLATIONS = {
+    Keys.DIAG_CHERRY_SOURCE_MISSING: "Cherry Studio 会话数据源不存在。",
+    Keys.DIAG_CHERRY_SCHEMA: "数据库不包含受支持的 Cherry Studio 会话表。",
+    Keys.DIAG_CHERRY_CURRENT_DATABASE_ONLY: "请使用 Cherry Studio 2.x 的 Data/cherrystudio.sqlite 数据库，暂不支持旧版 IndexedDB 数据。",
+    Keys.WARN_CHERRY_SESSION_READ_FAILED: "读取 Cherry Studio 会话 {session_id} 失败：{error}",
     Keys.DIAG_DEEPCHAT_SOURCE_MISSING: "DeepChat 会话数据源不存在。",
     Keys.DIAG_DEEPCHAT_UNREADABLE: "DeepChat 数据库已加密，或不是可读取的 SQLite 数据库。",
     Keys.DIAG_DEEPCHAT_PLAIN_DATABASE_ONLY: "仅支持未加密的 DeepChat 数据库，暂不支持 SQLCipher 解密。",

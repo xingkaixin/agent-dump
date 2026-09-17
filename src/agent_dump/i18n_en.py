@@ -3,6 +3,10 @@
 from agent_dump.i18n_keys import Keys
 
 EN_TRANSLATIONS = {
+    Keys.DIAG_CHERRY_SOURCE_MISSING: "Cherry Studio session source is missing.",
+    Keys.DIAG_CHERRY_SCHEMA: "This database does not contain the supported Cherry Studio session tables.",
+    Keys.DIAG_CHERRY_CURRENT_DATABASE_ONLY: "Use the Cherry Studio 2.x Data/cherrystudio.sqlite database. Legacy IndexedDB data is not supported.",
+    Keys.WARN_CHERRY_SESSION_READ_FAILED: "Failed to read Cherry Studio session {session_id}: {error}",
     Keys.DIAG_DEEPCHAT_SOURCE_MISSING: "DeepChat session source is missing.",
     Keys.DIAG_DEEPCHAT_UNREADABLE: "DeepChat database is encrypted or is not a readable SQLite database.",
     Keys.DIAG_DEEPCHAT_PLAIN_DATABASE_ONLY: "Only unencrypted DeepChat databases are supported; SQLCipher decryption is unavailable.",
