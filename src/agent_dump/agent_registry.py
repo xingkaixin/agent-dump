@@ -6,6 +6,7 @@ from agent_dump.agents.base import BaseAgent
 from agent_dump.agents.claudecode import ClaudeCodeAgent
 from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
+from agent_dump.agents.deepchat import DeepChatAgent
 from agent_dump.agents.kimi import KimiAgent
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.pi import PiAgent
@@ -64,6 +65,10 @@ AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
     AgentRegistration(
         factory=PiAgent,
         uri_schemes=("pi",),
+    ),
+    AgentRegistration(
+        factory=DeepChatAgent,
+        uri_schemes=("deepchat",),
     ),
 )
 

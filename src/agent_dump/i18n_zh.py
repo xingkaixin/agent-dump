@@ -3,6 +3,11 @@
 from agent_dump.i18n_keys import Keys
 
 ZH_TRANSLATIONS = {
+    Keys.DIAG_DEEPCHAT_SOURCE_MISSING: "DeepChat 会话数据源不存在。",
+    Keys.DIAG_DEEPCHAT_UNREADABLE: "DeepChat 数据库已加密，或不是可读取的 SQLite 数据库。",
+    Keys.DIAG_DEEPCHAT_PLAIN_DATABASE_ONLY: "仅支持未加密的 DeepChat 数据库，暂不支持 SQLCipher 解密。",
+    Keys.DIAG_DEEPCHAT_SCHEMA: "数据库不包含受支持的 DeepChat 会话表。",
+    Keys.DIAG_DEEPCHAT_CURRENT_DATABASE_ONLY: "请使用当前版本的 app_db/agent.db 数据库，暂不支持旧版 chat.db。",
     Keys.NO_AGENTS_FOUND: "❌ 未找到任何可用的 Agent Tools 会话。",
     Keys.LIST_HEADER_FILTERED: "📋 列出最近 {days} 天且匹配「{query}」的会话:\n",
     Keys.LIST_HEADER: "📋 列出最近 {days} 天的会话:\n",

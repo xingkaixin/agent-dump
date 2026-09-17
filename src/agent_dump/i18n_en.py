@@ -3,6 +3,11 @@
 from agent_dump.i18n_keys import Keys
 
 EN_TRANSLATIONS = {
+    Keys.DIAG_DEEPCHAT_SOURCE_MISSING: "DeepChat session source is missing.",
+    Keys.DIAG_DEEPCHAT_UNREADABLE: "DeepChat database is encrypted or is not a readable SQLite database.",
+    Keys.DIAG_DEEPCHAT_PLAIN_DATABASE_ONLY: "Only unencrypted DeepChat databases are supported; SQLCipher decryption is unavailable.",
+    Keys.DIAG_DEEPCHAT_SCHEMA: "This database does not contain the supported DeepChat session tables.",
+    Keys.DIAG_DEEPCHAT_CURRENT_DATABASE_ONLY: "Use the current app_db/agent.db database. Legacy chat.db is not supported.",
     Keys.NO_AGENTS_FOUND: "❌ No available Agent Tools sessions found.",
     Keys.LIST_HEADER_FILTERED: "📋 Listing sessions from last {days} days matching '{query}':\n",
     Keys.LIST_HEADER: "📋 Listing sessions from last {days} days:\n",

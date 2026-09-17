@@ -13,6 +13,12 @@ from agent_dump.i18n import i18n
 
 
 @pytest.fixture(autouse=True)
+def isolated_deepchat_data_dir(tmp_path, monkeypatch):
+    """A newly registered provider must never discover the developer's real database in tests."""
+    monkeypatch.setenv("DEEPCHAT_USER_DATA_DIR", str(tmp_path / "deepchat-data"))
+
+
+@pytest.fixture(autouse=True)
 def isolated_search_index_cache(tmp_path_factory, monkeypatch):
     """所有测试的搜索索引写入临时目录，避免读写真实用户缓存并防止跨测试污染。"""
     cache_dir = tmp_path_factory.mktemp("xdg-cache")
@@ -74,7 +80,15 @@ def isolated_provider_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("XDG_DATA_HOME", str(home / ".local" / "share"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
-    for env_var in ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "KIMI_SHARE_DIR", "PI_HOME", "LOCALAPPDATA", "APPDATA"):
+    for env_var in (
+        "CODEX_HOME",
+        "CLAUDE_CONFIG_DIR",
+        "KIMI_SHARE_DIR",
+        "PI_HOME",
+        "DEEPCHAT_USER_DATA_DIR",
+        "LOCALAPPDATA",
+        "APPDATA",
+    ):
         monkeypatch.delenv(env_var, raising=False)
     return home
 
