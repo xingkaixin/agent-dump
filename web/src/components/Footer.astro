@@ -1,4 +1,5 @@
 ---
+import { codexGuideLinks } from "../lib/guides";
 import { site, ui, type Locale } from "../lib/i18n";
 
 interface Props {
@@ -6,6 +7,7 @@ interface Props {
 }
 const { locale } = Astro.props;
 const t = ui[locale];
+const guide = codexGuideLinks[locale];
 
 const links = [
   { label: t.footerGithub, href: site.repo },
@@ -22,6 +24,7 @@ const links = [
       <p class="site-footer__tagline">{t.footerTagline}</p>
     </div>
     <nav aria-label="Footer" class="site-footer__nav">
+      <a href={guide.href} class="site-footer__link">{guide.label}</a>
       {
         links.map((link) => (
           <a

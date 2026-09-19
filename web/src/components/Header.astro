@@ -4,8 +4,11 @@ import { LOCALES, localeLabels, site, ui, type Locale } from "../lib/i18n";
 
 interface Props {
   locale: Locale;
+  paths?: Partial<Record<Locale, string>>;
+  homeLinks?: boolean;
 }
-const { locale } = Astro.props;
+const { locale, paths = site.paths, homeLinks = false } = Astro.props;
+const home = homeLinks ? site.paths[locale] : "";
 const t = ui[locale];
 ---
 
@@ -23,19 +26,19 @@ const t = ui[locale];
     </a>
 
     <nav class="site-nav" aria-label="Primary">
-      <a href="#capabilities">{t.capabilitiesHeading}</a>
-      <a href="#updates">{t.updatesHeading}</a>
-      <a href="#install">{t.installHeading}</a>
+      <a href={`${home}#capabilities`}>{t.capabilitiesHeading}</a>
+      <a href={`${home}#updates`}>{t.updatesHeading}</a>
+      <a href={`${home}#install`}>{t.installHeading}</a>
     </nav>
 
     <div class="site-tools">
       <div role="group" aria-label={t.langLabel} class="language-switcher">
         {
-          LOCALES.map((code) => {
+          LOCALES.filter((code) => paths[code]).map((code) => {
             const current = code === locale;
             return (
               <a
-                href={site.paths[code]}
+                href={paths[code]}
                 lang={ui[code].htmlLang}
                 aria-current={current ? "page" : undefined}
                 class:list={[

@@ -1,5 +1,7 @@
 # agent-dump CLI Recipes
 
+完整上手流程见[将 Codex 会话导出为 Markdown](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/)。
+
 ## 1) 常用命令模板
 
 ### 交互式导出（interactive）

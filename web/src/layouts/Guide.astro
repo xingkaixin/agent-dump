@@ -1,0 +1,39 @@
+---
+import Base from "./Base.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import { codexGuidePaths } from "../lib/guides";
+import { site } from "../lib/i18n";
+
+interface Props {
+  frontmatter: { locale: "en" | "zh"; title: string; description: string };
+}
+
+const { locale, title, description } = Astro.props.frontmatter;
+---
+
+<Base locale={locale} page={{ title: `${title} | Agent Dump`, description, paths: codexGuidePaths }}>
+  <Header locale={locale} paths={codexGuidePaths} homeLinks />
+  <main id="main" tabindex="-1" class="shell">
+    <article class="guide">
+      <a class="guide-back" href={site.paths[locale]}>{locale === "zh" ? "Agent Dump 首页" : "Agent Dump home"}</a>
+      <h1>{title}</h1>
+      <div class="guide-content"><slot /></div>
+    </article>
+  </main>
+  <Footer locale={locale} />
+</Base>
+
+<style is:global>
+  .guide { max-width: 48rem; margin-inline: auto; padding-block: 3rem 5rem; }
+  .guide-back { display: inline-block; margin-bottom: 1.5rem; }
+  .guide h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.2; letter-spacing: -0.035em; }
+  .guide-content { line-height: 1.85; overflow-wrap: anywhere; }
+  .guide-content h2 { margin-top: 2.5rem; margin-bottom: 0.75rem; font-size: 1.4rem; line-height: 1.4; }
+  .guide-content p, .guide-content ul, .guide-content pre { margin-block: 1rem; }
+  .guide-content ul { padding-left: 1.5rem; list-style: disc; }
+  .guide-content li + li { margin-top: 0.5rem; }
+  .guide a, .guide-link { text-decoration: underline; text-underline-offset: 0.2em; }
+  .guide-content pre { padding: 1rem; border: 1px solid var(--color-line); border-radius: var(--radius-xs); overflow-x: auto; font-size: 0.875rem; }
+  .guide-content :not(pre) > code { font-size: 0.9em; }
+</style>

@@ -9,19 +9,23 @@ import { version } from "../lib/version";
 
 interface Props {
   locale: Locale;
+  page?: { title: string; description: string; paths: Partial<Record<Locale, string>> };
 }
 
-const { locale } = Astro.props;
+const { locale, page } = Astro.props;
 const t = ui[locale];
-const canonical = new URL(site.paths[locale], site.origin).href;
+const paths = page?.paths ?? site.paths;
+const canonical = new URL(paths[locale]!, site.origin).href;
+const title = page?.title ?? t.title;
+const description = page?.description ?? t.description;
 const ogImage = new URL(site.ogImage.path, site.origin).href;
 
 const alternates = [
-  ...LOCALES.map((loc) => ({
+  ...LOCALES.filter((loc) => paths[loc]).map((loc) => ({
     hreflang: ui[loc].htmlLang,
-    href: new URL(site.paths[loc], site.origin).href,
+    href: new URL(paths[loc]!, site.origin).href,
   })),
-  { hreflang: "x-default", href: new URL(site.paths.en, site.origin).href },
+  { hreflang: "x-default", href: new URL(paths.en!, site.origin).href },
 ];
 
 const jsonLd = {
@@ -36,14 +40,23 @@ const jsonLd = {
     },
     {
       "@type": "WebSite",
-      "@id": `${canonical}#website`,
+      "@id": `${site.origin}/#website`,
       name: "Agent Dump",
-      url: canonical,
+      url: site.origin,
       inLanguage: t.htmlLang,
       description: t.websiteDescription,
       publisher: { "@id": `${site.origin}/#author` },
     },
-    {
+    ...(page ? [{
+      "@type": "WebPage",
+      "@id": canonical,
+      url: canonical,
+      name: title,
+      description,
+      inLanguage: t.htmlLang,
+      isPartOf: { "@id": `${site.origin}/#website` },
+      author: { "@id": `${site.origin}/#author` },
+    }] : [{
       "@type": "SoftwareApplication",
       "@id": `${site.origin}/#software`,
       name: "Agent Dump",
@@ -69,7 +82,7 @@ const jsonLd = {
         name: item.question,
         acceptedAnswer: { "@type": "Answer", text: item.answer },
       })),
-    },
+    }]),
   ],
 };
 ---
@@ -82,11 +95,11 @@ const jsonLd = {
     <link rel="preload" href={geistLatin} as="font" type="font/woff2" crossorigin="anonymous" />
     <link rel="preload" href={monoLatin} as="font" type="font/woff2" crossorigin="anonymous" />
     <meta name="theme-color" content="#f1f3ef" />
-    <meta name="description" content={t.description} />
+    <meta name="description" content={description} />
     <meta name="keywords" content={t.keywords} />
     <meta name="author" content={site.author.name} />
     <meta name="robots" content="index, follow" />
-    <title>{t.title}</title>
+    <title>{title}</title>
     <link rel="canonical" href={canonical} />
     {alternates.map((alt) => <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />)}
     <link rel="icon" type="image/png" href={site.logo} />
@@ -96,8 +109,8 @@ const jsonLd = {
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
     <meta property="og:site_name" content="Agent Dump" />
-    <meta property="og:title" content={t.title} />
-    <meta property="og:description" content={t.description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content={String(site.ogImage.width)} />
     <meta property="og:image:height" content={String(site.ogImage.height)} />
@@ -106,8 +119,8 @@ const jsonLd = {
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={t.title} />
-    <meta name="twitter:description" content={t.description} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:image:alt" content={t.ogImageAlt} />
 

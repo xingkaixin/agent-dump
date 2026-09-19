@@ -1,4 +1,5 @@
 ---
+import { codexGuideLinks } from "../lib/guides";
 import { Image } from "astro:assets";
 import sessionConvergence from "../assets/editorial/session-convergence.png";
 import { terminalScenes, ui, type Locale } from "../lib/i18n";
@@ -9,6 +10,7 @@ interface Props {
 }
 const { locale } = Astro.props;
 const t = ui[locale];
+const guide = codexGuideLinks[locale];
 ---
 
 <section id="capabilities" class="capabilities-section">
@@ -51,6 +53,7 @@ const t = ui[locale];
               <span aria-hidden="true">$</span>
               <code>{capability.command}</code>
             </div>
+            {index === 1 && <p><a class="underline underline-offset-4" href={guide.href}>{guide.label}</a></p>}
           </article>
         ))
       }
