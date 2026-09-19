@@ -17,6 +17,7 @@ def isolated_desktop_chat_data_dirs(tmp_path, monkeypatch):
     """A newly registered provider must never discover the developer's real database in tests."""
     monkeypatch.setenv("DEEPCHAT_USER_DATA_DIR", str(tmp_path / "deepchat-data"))
     monkeypatch.setenv("CHERRY_STUDIO_USER_DATA_DIR", str(tmp_path / "cherry-data"))
+    monkeypatch.setenv("MINIMAX_DATA_DIR", str(tmp_path / "minimax-data"))
 
 
 @pytest.fixture(autouse=True)
@@ -88,6 +89,8 @@ def isolated_provider_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
         "PI_HOME",
         "DEEPCHAT_USER_DATA_DIR",
         "CHERRY_STUDIO_USER_DATA_DIR",
+        "MINIMAX_DATA_DIR",
+        "MAVIS_DATA_DIR",
         "LOCALAPPDATA",
         "APPDATA",
     ):

@@ -3,6 +3,11 @@
 from agent_dump.i18n_keys import Keys
 
 EN_TRANSLATIONS = {
+    Keys.DIAG_MINIMAX_SOURCE_MISSING: "MiniMax Code session source is missing.",
+    Keys.DIAG_MINIMAX_SCHEMA: "This database does not contain the supported MiniMax Code session tables and columns.",
+    Keys.DIAG_MINIMAX_CURRENT_DATABASE_ONLY: "Use the current CLI v2/sqlite/runtime-state.sqlite database. Legacy history recovery and desktop data are not supported.",
+    Keys.DIAG_MINIMAX_MIGRATION_REQUIRED: "MiniMax Code session storage is unsupported or its display migration is incomplete. Open the session in a compatible MiniMax Code CLI to complete migration; agent-dump never migrates source data.",
+    Keys.WARN_MINIMAX_SESSION_READ_FAILED: "Failed to read MiniMax Code session {session_id}: {error}",
     Keys.DIAG_CHERRY_SOURCE_MISSING: "Cherry Studio session source is missing.",
     Keys.DIAG_CHERRY_SCHEMA: "This database does not contain the supported Cherry Studio session tables.",
     Keys.DIAG_CHERRY_CURRENT_DATABASE_ONLY: "Use the Cherry Studio 2.x Data/cherrystudio.sqlite database. Legacy IndexedDB data is not supported.",
