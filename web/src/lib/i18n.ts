@@ -188,7 +188,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitle: "Export your AI coding",
     heroTitleAccent: "sessions.",
     heroDescription:
-      "One command lists, dumps, searches, and summarizes sessions across seven AI coding tools.",
+      "Export local conversations from Codex, Claude Code, and other AI coding tools to Markdown or JSON. Search your session history from one CLI.",
     terminalLabel: "Terminal demo running agent-dump commands",
     answerSummary:
       "Agent Dump gives developers one command-line interface for local AI coding session history across seven tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.",
@@ -315,7 +315,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitle: "导出你的 AI 编码",
     heroTitleAccent: "会话。",
     heroDescription:
-      "一条命令，列出、直读、导出、搜索并汇总七款 AI 编码工具的会话。",
+      "将 Codex、Claude Code 等 AI 编码工具的本地对话导出为 Markdown 或 JSON，用一个 CLI 搜索会话历史。",
     terminalLabel: "运行 agent-dump 命令的终端演示",
     answerSummary:
       "Agent Dump 为开发者提供一个统一的命令行入口，读取七类 AI 编码工具的本地会话历史，并输出可读导出、URI 直读、搜索结果、统计和汇总报告。",
@@ -442,7 +442,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitle: "AIコーディングの",
     heroTitleAccent: "セッションを書き出す。",
     heroDescription:
-      "1つのコマンドで、7つのAIコーディングツールのセッションを一覧表示、閲覧、エクスポート、検索、要約できます。",
+      "Codex、Claude CodeなどのAIコーディングツールのローカル会話をMarkdownやJSONにエクスポート。1つのCLIでセッション履歴を検索できます。",
     terminalLabel: "agent-dumpコマンドを実行するターミナルのデモ",
     answerSummary:
       "Agent Dumpは、7つのAIコーディングツールに保存されたローカルセッション履歴を、1つのコマンドラインインターフェースから扱えるようにします。各ツール固有の保存形式を、読みやすいエクスポート、URIによる直接表示、検索結果、統計、収集レポートへ変換します。",
