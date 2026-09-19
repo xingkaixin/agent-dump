@@ -49,6 +49,7 @@ uv run agent-dump kimi://<session_id>
 uv run agent-dump claude://<session_id>
 uv run agent-dump cursor://<request_id>
 uv run agent-dump pi://<session_id>
+uv run agent-dump minimax://<session_id>
 
 # 导出单会话
 uv run agent-dump codex://<session_id> --format json --output ./my-sessions
@@ -189,6 +190,7 @@ uv run agent-dump --config edit
 - `pi`
 - `deepchat`
 - `cherry`
+- `minimax`
 
 示例：
 
@@ -276,6 +278,7 @@ uv run agent-dump --search "auth" --list -days 30
    - `pi://<session_id>`
    - `deepchat://<session_id>`
    - `cherry://topic-<id>` / `cherry://session-<id>`
+   - `minimax://<session_id>`
 2. 确认 `<session_id>` 非空。
 
 ### URI 协议与实际会话来源不匹配
@@ -315,7 +318,7 @@ uv run agent-dump --search "auth" --list -days 30
 
 处理：
 1. 改为 `keyword` 或 `agent1,agent2:keyword`。
-2. 将 agent 名称改为 `opencode/zcode/codex/kimi/claudecode/cursor/pi/deepchat/cherry` 中的合法值。
+2. 将 agent 名称改为 `opencode/zcode/codex/kimi/claudecode/cursor/pi/deepchat/cherry/minimax` 中的合法值。
 
 ### collect 模式参数冲突
 
@@ -366,3 +369,16 @@ uv run agent-dump 'cherry://session-<id>' --format json,markdown --output ./sess
 读取当前 2.x 的 `Data/cherrystudio.sqlite`，可用 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录；未指定时先查启动配置中的目录，再查平台默认目录。使用第一个存在的数据库，便携版、开发版或多个安装应显式指定目录。普通聊天只导出当前选中的路径，其他分支和并列回复不参与搜索与计数；Agent 会话按时间排序，可按 workspace 工作目录筛选。普通聊天没有工作目录，不能用路径筛选找到。
 
 支持列表、查询、搜索、统计、collect 及 print / JSON / Markdown。附件仅保留引用，压缩摘要和内部事件不进入 collect；不读取 SDK 日志或执行迁移。暂不支持 raw 和 1.x IndexedDB/Redux 原始数据，已迁移到当前数据库的历史记录可读。分支损坏或读取失败属于不完整发现，不能当作没有会话。
+
+## MiniMax Code
+
+```bash
+uv run agent-dump --list -query "provider:minimax"
+uv run agent-dump 'minimax://<session_id>' --head
+uv run agent-dump 'minimax://<session_id>' --format json,markdown --output ./sessions
+uv run agent-dump --search "timeout" -query "provider:minimax"
+```
+
+读取当前 CLI 已迁移的 SQLite 展示消息。数据目录按非空 `MINIMAX_DATA_DIR`、非空 `MAVIS_DATA_DIR`、`~/.minimax` 选择，数据库为其下的 `v2/sqlite/runtime-state.sqlite`。显式目录缺失时不回退；profile、早期源码版或其他安装使用 `MINIMAX_DATA_DIR` 指定。
+
+保留可见会话、子任务和归档会话，排除隐藏及 peek/channel/cron 内部会话。工具参数和结果参与搜索，思考、工具和内部事件不进入 collect。附件只保留引用，JSON 保留已知的消息 token 用量。支持 print / JSON / Markdown，不支持 raw、桌面端、旧存储或模型上下文恢复。待迁移和损坏记录是读取失败，不能当成没有会话；agent-dump 不运行客户端迁移。

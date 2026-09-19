@@ -38,7 +38,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 ## 执行工作流
 
 1. 识别任务模式
-- 用户给了 `opencode://...`、`zcode://...`、`codex://...`、`kimi://...`、`claude://...`、`cursor://...`、`pi://...`、`deepchat://...`、`cherry://...` 这类 URI：使用 URI 模式。
+- 用户给了 `opencode://...`、`zcode://...`、`codex://...`、`kimi://...`、`claude://...`、`cursor://...`、`pi://...`、`deepchat://...`、`cherry://...`、`minimax://...` 这类 URI：使用 URI 模式。
 - 用户给了 `agents://<path>?q=...&providers=...`：使用路径作用域查询，可配合 list、interactive 或 collect。
 - 用户给了 `--collect`：使用 collect 模式，默认调用已配置的 AI 总结。
 - 用户要使用自有外部 agent 汇总、不配置 API，或只要汇总提示词：使用 `--collect --emit-prompt`；详细用法见 recipes 的“外部 agent 汇总”。
@@ -108,3 +108,5 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 DeepChat 使用当前未加密的 `app_db/agent.db`，可通过 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。支持 print / JSON / Markdown；不支持 raw、SQLCipher 或旧版 `chat.db` 直读。附件仅保留引用，外置工具输出和 Tape 恢复不在导出范围。
 
 Cherry Studio 使用 2.x 的 `Data/cherrystudio.sqlite`，可通过 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录。URI 为 `cherry://topic-<id>` 或 `cherry://session-<id>`。普通聊天仅包含当前分支，Agent 会话按时间排序；支持 print / JSON / Markdown，不支持 raw 或 1.x IndexedDB/Redux 原始数据。
+
+MiniMax Code 使用 `minimax://<session_id>`，读取当前 CLI 的 `v2/sqlite/runtime-state.sqlite` 展示消息；路径按 `MINIMAX_DATA_DIR`、`MAVIS_DATA_DIR`、`~/.minimax` 选择。自定义 profile 需显式指定目录。支持 print / JSON / Markdown，不支持 raw、旧存储恢复和桌面端；遇到迁移诊断时保留错误，不代替客户端迁移。

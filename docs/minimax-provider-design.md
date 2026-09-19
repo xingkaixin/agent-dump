@@ -89,6 +89,7 @@ agent-dump --search "fix timeout" -query "provider:minimax"
 | 其他非空 `kind` | custom 角色，保留原始 kind |
 | `msg_type = 3` | system 角色 |
 | 未知消息类型或角色 | unknown，避免伪装成普通对话 |
+| user 正文以 `<permission-response>` 开头 | custom，保留权限响应但不作为用户需求收集 |
 
 内部事件仍作为一条消息计数。其状态保存在 Provider 私有 part/metadata，不把状态 JSON 变成用户正文。collect 复用既有角色与 part 规则，排除思考、工具、压缩和其他内部事件。JSON 保留单条消息已知用量，不用当前模型补写历史模型，也不推算费用。
 
@@ -104,7 +105,7 @@ agent-dump --search "fix timeout" -query "provider:minimax"
 
 ## 7. 实现边界
 
-新增 `agents/minimax.py` 负责路径、只读连接、Session facts 和导出入口，`agents/minimax_messages.py` 负责消息 schema 转換。只有具体职责需要时才拆出存储 helper。
+新增 `agents/minimax.py` 负责路径、只读连接、Session facts 和导出入口，`agents/minimax_messages.py` 负责消息 schema 转换。只有具体职责需要时才拆出存储 helper。
 
 继承 `BaseAgent`，复用 message builders、facts、缓存、搜索、渲染和 collect。既有 `PiAgent` 是文件型 Provider，`SQLiteSessionAgent` 绑定 OpenCode schema，均不作为父类。无需增加依赖、CLI 参数或跨工作流 Provider 分支。
 
@@ -132,3 +133,17 @@ agent-dump --search "fix timeout" -query "provider:minimax"
 3. 用户文档与验证记录。
 
 实现发现的新事实直接修订本设计，以最终行为为准。历史恢复、桌面端和 raw 另行设计，不预先增加抽象。
+
+## 10. 发布包验证记录
+
+2026-09-19 在 macOS、Node.js 24.21.0 下，将官方 `@minimax-ai/code@0.4.12` 安装到临时目录。数据目录、工作目录、模型配置和导出目录均隔离。使用本机 HTTP 模型 fixture，阻断外部网络连接；未登录 MiniMax，也未访问真实用户会话。
+
+- 通过 `mcode provider add` / `provider test` 配置并验证本地模型。该 npm 版仅使用 `exec --model` 仍会受默认 MiniMax 模型的登录检查影响；在临时 `config.yaml` 中将 `defaultModel` 设置为已验证的本地模型后运行成功。这是验证环境配置，不属于 agent-dump 接入逻辑。
+- `mcode exec` 新建会话并实际调用 `read` 读取临时文件，再通过 `--continue` 继续同一会话，两次退出成功。
+- 实际数据库包含一个可见 conversation、5 条展示消息：两条 user、一条工具调用 assistant、两条包含 reasoning/text 的 assistant。发现数量与正文数量一致，模型与工作目录可读。
+- agent-dump 的 list/query、head、print/JSON/Markdown 导出和工具结果搜索均成功。collect 提取 4 段可见正文，没有思考或工具结果。
+- 完成 agent-dump 读取、索引和导出后，数据库与已有 WAL 的 SHA-256 均未改变。
+
+该验证证明当前 npm 包的实际存储能被读取；不代表测试了在线模型质量、桌面端、TUI/ACP 独立流程或所有历史版本。压缩/内部事件、损坏数据、WAL 增量、迁移边界和未知字段由本仓库临时 SQLite 行为测试覆盖；未声称在官方客户端中实际操作过 compaction 或 rewind。
+
+本地 `just isok` 通过：Ruff、Pyright、ty、2,551 项 Python 测试（另有 1 项既有 skip）、74 项 npm wrapper 测试、网页类型检查/构建及 13 项 Playwright 测试。

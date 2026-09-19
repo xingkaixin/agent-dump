@@ -8,7 +8,7 @@
 
 - CLI 参数和模式变更覆盖 `command_plan` 归一化、顶层分发、输出或退出码。
 - Provider 测试使用 `tmp_path` 创建临时 SQLite、JSONL 或目录结构，并通过环境变量或构造参数注入路径。
-- 测试不得读取真实 `~/.codex`、`~/.claude`、`~/.kimi`、OpenCode、ZCode、Cursor、Pi、DeepChat 或 Cherry Studio 数据目录，也不得写入真实用户导出目录。
+- 测试不得读取真实 `~/.codex`、`~/.claude`、`~/.kimi`、OpenCode、ZCode、Cursor、Pi、DeepChat、Cherry Studio 或 MiniMax Code 数据目录，也不得写入真实用户导出目录。
 - 终端交互通过受控的 questionary 边界或 stdin/stdout 测试；只有需要隔离交互时才使用 mock。
 
 ### i18n 断言
