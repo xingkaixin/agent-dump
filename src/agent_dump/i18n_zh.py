@@ -3,6 +3,11 @@
 from agent_dump.i18n_keys import Keys
 
 ZH_TRANSLATIONS = {
+    Keys.DIAG_MINIMAX_SOURCE_MISSING: "MiniMax Code 会话数据源不存在。",
+    Keys.DIAG_MINIMAX_SCHEMA: "数据库不包含受支持的 MiniMax Code 会话表和字段。",
+    Keys.DIAG_MINIMAX_CURRENT_DATABASE_ONLY: "请使用当前 CLI 的 v2/sqlite/runtime-state.sqlite 数据库，暂不支持旧版历史恢复和桌面端数据。",
+    Keys.DIAG_MINIMAX_MIGRATION_REQUIRED: "MiniMax Code 会话存储版本不受支持，或展示消息尚未完成迁移。请使用兼容的 MiniMax Code CLI 打开会话完成迁移；agent-dump 不会迁移源数据。",
+    Keys.WARN_MINIMAX_SESSION_READ_FAILED: "读取 MiniMax Code 会话 {session_id} 失败：{error}",
     Keys.DIAG_CHERRY_SOURCE_MISSING: "Cherry Studio 会话数据源不存在。",
     Keys.DIAG_CHERRY_SCHEMA: "数据库不包含受支持的 Cherry Studio 会话表。",
     Keys.DIAG_CHERRY_CURRENT_DATABASE_ONLY: "请使用 Cherry Studio 2.x 的 Data/cherrystudio.sqlite 数据库，暂不支持旧版 IndexedDB 数据。",

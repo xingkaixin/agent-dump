@@ -17,6 +17,7 @@ Step-by-step guide: [Export a Codex session to Markdown](https://agent-dump.xing
 - **Pi** - Earendil's AI coding agent
 - **DeepChat** - Current local sessions from unencrypted databases
 - **Cherry Studio** - Local 2.x chats and agent sessions
+- **MiniMax Code** - Current CLI sessions from local SQLite storage
 - **More Tools** - PRs are welcome to support other AI coding tools
 
 ## Features
@@ -48,6 +49,7 @@ Step-by-step guide: [Export a Codex session to Markdown](https://agent-dump.xing
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
 - **Cherry Studio**: `CHERRY_STUDIO_USER_DATA_DIR/Data/cherrystudio.sqlite`; otherwise the first existing database in the user data directories configured by `~/.cherrystudio/boot-config.json`, then the platform default: macOS `~/Library/Application Support/CherryStudio`, Windows `%APPDATA%\CherryStudio`, or Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio` (each with `Data/cherrystudio.sqlite`). The override is provided by agent-dump; use it for portable/dev installations or to select among multiple installations.
+- **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`; the database is `v2/sqlite/runtime-state.sqlite` under the selected root. Only one root is selected; a missing explicit path never falls back to another installation.
 
 Notes:
 
@@ -61,6 +63,10 @@ SQLCipher databases, direct reads of legacy `chat.db`, and raw export are unsupp
 Cherry Studio supports listing, query, search, stats, collect, and print / JSON / Markdown exports from its current 2.x database, including migrated history. Ordinary chats expose only the active root-to-leaf path; other branches and parallel model replies are excluded from exports, search, and counts. Structural roots and empty reserved user leaves are excluded. Agent sessions are read chronologically and use their workspace as the working directory; ordinary chats have no working directory. Deleted sessions and chat messages are excluded.
 
 Text, reasoning, tool calls/results, code, and translations are normalized. JSON retains file references and control events; compaction summaries and internal events do not enter collect or search. Token totals come from message stats. Per-currency costs are preserved in JSON without conversion or an aggregate billing total. The reader never opens attachment files, scans SDK logs, or runs application migrations. Direct reads of 1.x IndexedDB/Redux data and raw export are unsupported.
+
+MiniMax Code supports listing, query, search, stats, collect, and print / JSON / Markdown exports from the current CLI's migrated display messages. Visible conversations, child tasks, and archived sessions are included; hidden and internal peek/channel/cron sessions are excluded. Messages follow database row order and preserve text, reasoning, tool state/results, and attachment references. Compaction, review, and system events do not enter collect or search. The model comes from session metadata and remains unknown when absent; JSON retains recorded per-message token usage without estimating billing cost.
+
+Set `MINIMAX_DATA_DIR` explicitly for custom profiles, earlier source builds using `~/.minimax-code`, or other directories. The reader does not read model-context JSONL or attachment files, run migrations, or recover rewound messages. Raw export, direct legacy storage reads, and desktop data are unsupported. Pending migrations and corrupt sessions produce diagnostics instead of appearing empty. See the [MiniMax Code design and acceptance scope](docs/minimax-provider-design.md).
 
 ## Installation
 
@@ -170,6 +176,7 @@ Supported URI schemes:
 - `pi://<session_id>` - Pi sessions
 - `deepchat://<session_id>` - DeepChat sessions
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
+- `minimax://<session_id>` - MiniMax Code CLI sessions
 
 ### Typical Errors
 
@@ -269,6 +276,7 @@ uv run agent-dump claude://<session-id>       # View Claude Code session content
 uv run agent-dump cursor://<request-id>       # View Cursor session content
 uv run agent-dump pi://<session-id>           # View Pi session content
 uv run agent-dump deepchat://<session-id>     # View DeepChat session content
+uv run agent-dump minimax://<session-id>      # View MiniMax Code session content
 uv run agent-dump codex://<session-id> --head # View lightweight session metadata before exporting
 uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
 uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file

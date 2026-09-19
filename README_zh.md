@@ -17,6 +17,7 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 - **Pi** - Earendil 的 AI coding agent
 - **DeepChat** - 当前版本的本地会话（未加密数据库）
 - **Cherry Studio** - 2.x 的本地聊天和 Agent 会话
+- **MiniMax Code** - 当前 CLI 的本地 SQLite 会话
 - **更多工具** - 欢迎提交 PR 支持其他 AI 编码工具
 
 ## 功能特性
@@ -48,6 +49,7 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
 - **Cherry Studio**: `CHERRY_STUDIO_USER_DATA_DIR/Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。该覆盖变量由 agent-dump 提供，可用于便携版、开发版或选择多个安装中的一个。
+- **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`；数据库位于所选目录的 `v2/sqlite/runtime-state.sqlite`。只选择一个目录，显式路径不存在时不回退。
 
 注意：
 
@@ -61,6 +63,10 @@ DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史�
 Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含已迁移历史），可用于列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。普通聊天仅包含当前选中的根到叶路径，其他分支和多模型并列回复不进入导出、搜索或计数；虚拟根和空的待输入叶节点不计入消息。Agent 会话按时间排序，并从 workspace 获取工作目录；普通聊天不推断工作目录。已删除会话和聊天消息不会导出。
 
 正文、思考、工具调用及结果、代码和翻译会转换为统一格式。JSON 保留附件引用和控制事件，压缩摘要与内部事件不进入 collect 或搜索。Token 来自消息统计；各币种费用仅在 JSON 中保留，不换算或汇总计费金额。不读取附件实体、SDK 日志，也不执行应用迁移。暂不支持 1.x IndexedDB/Redux 原始数据和 raw 导出。
+
+MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。包含可见的普通会话、子任务和归档会话，排除隐藏及 peek/channel/cron 内部会话。正文按数据库消息行顺序读取，保留文字、思考、工具状态/结果和附件引用；压缩、审查和系统事件不进入 collect 或搜索。模型来自会话元数据，缺失时显示未知；JSON 保留消息中已记录的 token 用量，不推算费用。
+
+自定义 profile、早期源码版 `~/.minimax-code` 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/minimax-provider-design.md)。
 
 ## 安装
 
@@ -170,6 +176,7 @@ uv run agent-dump opencode://session-id-abc123
 - `pi://<session_id>` - Pi 会话
 - `deepchat://<session_id>` - DeepChat 会话
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio 普通聊天 / Agent 会话
+- `minimax://<session_id>` - MiniMax Code CLI 会话
 
 ### 典型错误
 
@@ -267,6 +274,7 @@ uv run agent-dump claude://<session-id>       # 查看 Claude Code 会话内容
 uv run agent-dump cursor://<request-id>       # 查看 Cursor 会话内容
 uv run agent-dump pi://<session-id>           # 查看 Pi 会话内容
 uv run agent-dump deepchat://<session-id>     # 查看 DeepChat 会话内容
+uv run agent-dump minimax://<session-id>      # 查看 MiniMax Code 会话
 uv run agent-dump codex://<session-id> --head # 查看轻量会话元数据，不导出也不打印正文
 uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # 导出 JSON 文件
 uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # 导出 Markdown 文件

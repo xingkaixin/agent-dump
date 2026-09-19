@@ -9,6 +9,7 @@ from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
 from agent_dump.agents.deepchat import DeepChatAgent
 from agent_dump.agents.kimi import KimiAgent
+from agent_dump.agents.minimax import MiniMaxAgent
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.pi import PiAgent
 from agent_dump.agents.zcode import ZCodeAgent
@@ -75,6 +76,10 @@ AGENT_REGISTRATIONS: tuple[AgentRegistration, ...] = (
         factory=CherryStudioAgent,
         uri_schemes=("cherry",),
         uri_identifier_label="topic-<id>",
+    ),
+    AgentRegistration(
+        factory=MiniMaxAgent,
+        uri_schemes=("minimax",),
     ),
 )
 

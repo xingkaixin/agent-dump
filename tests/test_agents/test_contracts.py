@@ -13,6 +13,7 @@ from typing import Any
 
 from cherry_fixtures import create_cherry_db
 from deepchat_fixtures import create_deepchat_db
+from minimax_fixtures import create_minimax_db
 import pytest
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS
@@ -23,6 +24,7 @@ from agent_dump.agents.codex import CodexAgent
 from agent_dump.agents.cursor import CursorAgent
 from agent_dump.agents.deepchat import DeepChatAgent
 from agent_dump.agents.kimi import KimiAgent
+from agent_dump.agents.minimax import MiniMaxAgent
 from agent_dump.agents.opencode import OpenCodeAgent
 from agent_dump.agents.pi import PiAgent
 from agent_dump.agents.zcode import ZCodeAgent
@@ -689,6 +691,23 @@ def _build_cherry_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> P
     )
 
 
+def _build_minimax_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ProviderContractFixture:
+    db_path = create_minimax_db(tmp_path / "minimax" / "v2" / "sqlite" / "runtime-state.sqlite", _now_ms())
+    monkeypatch.setenv("MINIMAX_DATA_DIR", str(db_path.parent.parent.parent))
+    return ProviderContractFixture(
+        agent=MiniMaxAgent(),
+        session_id="minimax-contract",
+        uri="minimax://minimax-contract",
+        title="MiniMax Contract",
+        location="/workspace/minimax-contract",
+        model="minimax/MiniMax-M3",
+        head_message_count=2,
+        data_message_count=2,
+        texts=("MiniMax prompt", "MiniMax answer"),
+        remove_source=lambda: db_path.unlink(),
+    )
+
+
 CONTRACT_BUILDERS: dict[str, ProviderBuilder] = {
     "opencode": _build_opencode_contract,
     "zcode": _build_zcode_contract,
@@ -699,6 +718,7 @@ CONTRACT_BUILDERS: dict[str, ProviderBuilder] = {
     "pi": _build_pi_contract,
     "deepchat": _build_deepchat_contract,
     "cherry": _build_cherry_contract,
+    "minimax": _build_minimax_contract,
 }
 
 
