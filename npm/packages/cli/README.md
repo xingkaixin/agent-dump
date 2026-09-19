@@ -69,6 +69,9 @@ agent-dump kimi://<session-id>
 agent-dump claude://<session-id>
 agent-dump cursor://<request-id>
 agent-dump pi://<session-id>
+agent-dump deepchat://<session-id>
+agent-dump cherry://topic-<id>
+agent-dump cherry://session-<id>
 agent-dump codex://<session-id> --head
 ```
 
@@ -128,10 +131,25 @@ agent-dump --config edit
 - `claude://<session_id>` - Claude Code sessions
 - `cursor://<requestid>` - Cursor sessions
 - `pi://<session_id>` - Pi sessions
+- `deepchat://<session_id>` - DeepChat sessions
+- `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
+
+DeepChat supports saved sessions in its current unencrypted `app_db/agent.db`, including migrated
+history, ACP sessions, and subagent sessions. Set `DEEPCHAT_USER_DATA_DIR` for a custom user data
+directory. SQLCipher databases and direct reads of legacy `chat.db` are unsupported.
+
+Cherry Studio supports chats and agent sessions in its 2.x `Data/cherrystudio.sqlite`. Ordinary
+chats include only the active branch; deleted records are excluded. Set
+`CHERRY_STUDIO_USER_DATA_DIR` for a custom user data directory. Direct reads of 1.x IndexedDB/Redux
+data are unsupported.
+
+Both providers support list, query, search, stats, collect, and print / JSON / Markdown exports.
+They read source databases without modifying them, retain attachment references without opening
+attachment files, and do not support raw export.
 
 ## Key features
 
-- **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, and Pi
+- **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, Pi, DeepChat, and Cherry Studio
 - **Interactive selection**: Friendly CLI selector with time-based grouping
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` reuses bounded discovery metadata without rereading the transcript and marks incomplete message counts as unknown

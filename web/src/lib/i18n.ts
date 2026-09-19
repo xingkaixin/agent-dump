@@ -227,9 +227,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v0.15.7",
+        date: "2026-09-19",
+        isLatest: true,
+        title: "Export and Search DeepChat and Cherry Studio Sessions",
+        description:
+          "Bring saved DeepChat conversations and Cherry Studio 2.x chats and agent sessions into your AI session export, full-text search, and AI collect workflows. Export Markdown or JSON while keeping source data unchanged. New English and Chinese guides walk you through exporting Codex sessions.",
+        command: 'agent-dump --list -days 30 -query "provider:deepchat,cherry"',
+        tags: ["DeepChat", "Cherry Studio", "Codex Export Guides"],
+      },
+      {
         version: "v0.15.6",
         date: "2026-09-13",
-        isLatest: true,
         title: "More Reliable Collect and Up-to-Date Session Reads",
         description:
           "Keep more visible dialogue in AI collect summaries, apply query filters consistently, and see when unreadable sessions leave gaps. OpenCode and ZCode session reads and full-text search now refresh after database changes. The landing page also loads faster.",
@@ -354,9 +363,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v0.15.7",
+        date: "2026-09-19",
+        isLatest: true,
+        title: "导出与搜索 DeepChat、Cherry Studio 会话",
+        description:
+          "DeepChat 已保存对话、Cherry Studio 2.x 普通聊天与 Agent 会话现已支持统一导出、全文搜索和 AI collect。可导出为 Markdown 或 JSON，源数据保持不变。新增中英文 Codex 导出教程，从查找会话到保存文件逐步说明。",
+        command: 'agent-dump --list -days 30 -query "provider:deepchat,cherry"',
+        tags: ["DeepChat", "Cherry Studio", "Codex 导出教程"],
+      },
+      {
         version: "v0.15.6",
         date: "2026-09-13",
-        isLatest: true,
         title: "会话收集更可靠，读取与搜索及时更新",
         description:
           "AI collect 在预算内保留更多可见对话，一致应用查询筛选，并明确报告无法读取的会话。OpenCode 与 ZCode 数据库变化后，会话读取和全文搜索会刷新缓存内容。落地页加载也得到改善。",
@@ -481,9 +499,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v0.15.7",
+        date: "2026-09-19",
+        isLatest: true,
+        title: "DeepChat・Cherry Studio のセッションをエクスポート・検索",
+        description:
+          "DeepChat の保存済み対話と Cherry Studio 2.x のチャット・エージェントセッションで、AIセッションのエクスポート、全文検索、AI collect が利用可能に。元データを変更せず Markdown や JSON に保存できます。Codex のセッションをエクスポートする手順を解説した英語・中国語ガイドも追加しました。",
+        command: 'agent-dump --list -days 30 -query "provider:deepchat,cherry"',
+        tags: ["DeepChat", "Cherry Studio", "Codex エクスポートガイド"],
+      },
+      {
         version: "v0.15.6",
         date: "2026-09-13",
-        isLatest: true,
         title: "より確実なセッション収集と最新データの読み取り",
         description:
           "AI collect は文字数の上限内で対話を保持し、検索条件を一貫して適用。読み取れないセッションも明示します。OpenCode と ZCode のデータベース更新後は、セッション読み取りと全文検索のキャッシュを更新。ランディングページの読み込みも改善しました。",
