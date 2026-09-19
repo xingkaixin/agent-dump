@@ -2,6 +2,14 @@
 
 ## [未发布]
 
+## [0.15.7] - 2026-09-19
+
+### 新增功能
+
+- 新增只读 DeepChat Provider，支持当前未加密 `agent.db` 中的已保存会话，包括已迁移历史、ACP 会话和子会话；可通过 `deepchat://` URI 使用列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出 (#384)
+- 新增只读 Cherry Studio 2.x Provider，通过 `cherry://topic-<id>` 和 `cherry://session-<id>` URI 读取普通聊天与 Agent 会话；保留当前聊天分支、排除已删除记录，并兼容引入软删除前的数据库 (#385)
+- 新增中英文 Codex 会话导出教程，涵盖安装、查找会话、Markdown / JSON 导出及会话缺失排查，并在落地页和 README 中提供入口 (#386)
+
 ## [0.15.6] - 2026-09-13
 
 ### 问题修复
@@ -1084,6 +1092,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.15.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.7
 [0.15.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.6
 [0.15.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.5
 [0.15.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.4

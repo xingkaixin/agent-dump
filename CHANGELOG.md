@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [0.15.7] - 2026-09-19
+
+### Added
+
+- Add a read-only DeepChat provider for saved sessions in the current unencrypted `agent.db`, including migrated history, ACP sessions, and subagent sessions; support list, query, search, stats, collect, and print / JSON / Markdown exports with `deepchat://` URIs (#384)
+- Add a read-only Cherry Studio 2.x provider for ordinary chats and agent sessions with `cherry://topic-<id>` and `cherry://session-<id>` URIs; preserve the active chat branch, exclude deleted records, and support databases from before soft deletion was introduced (#385)
+- Add English and Chinese Codex session export guides covering installation, session discovery, Markdown / JSON export, and missing-session checks, with links from the landing pages and README files (#386)
+
 ## [0.15.6] - 2026-09-13
 
 ### Fixed
@@ -1081,6 +1089,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.7
 [0.15.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.6
 [0.15.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.5
 [0.15.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.4
