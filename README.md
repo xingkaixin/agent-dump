@@ -4,6 +4,8 @@
 
 AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw session data from multiple AI coding tools, with direct URI printing.
 
+Step-by-step guide: [Export a Codex session to Markdown](https://agent-dump.xingkaixin.me/guides/export-codex-session/).
+
 ## Supported AI Tools
 
 - **OpenCode** - Open source AI coding assistant

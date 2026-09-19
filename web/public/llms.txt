@@ -4,6 +4,9 @@
 
 ## Documentation
 
+- [Export a Codex session to Markdown](https://agent-dump.xingkaixin.me/guides/export-codex-session/): Find a local session, export Markdown or JSON, and locate the output file.
+- [Codex 导出教程](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/): 安装、会话 URI、导出路径和排查步骤。
+
 - [Project README](https://github.com/xingkaixin/agent-dump#readme): Installation, supported providers, URI formats, search, export, and collection workflows.
 - [Chinese landing page](https://agent-dump.xingkaixin.me/zh/): Simplified Chinese product overview and installation commands.
 - [Changelog](https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md): Release history and behavior changes.

@@ -4,6 +4,8 @@
 
 AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON、Markdown、raw，并通过 URI 直接打印会话内容。
 
+操作教程：[将 Codex 会话导出为 Markdown](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/)。
+
 ## 支持的 AI 工具
 
 - **OpenCode** - 开源 AI 编程助手
