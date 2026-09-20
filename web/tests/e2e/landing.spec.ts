@@ -32,10 +32,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const locale of locales) {
-  test(`${locale.name} landing page fits a narrow viewport`, async ({ page }) => {
-    for (const width of [360, 390]) {
+  test(`${locale.name} landing page fits narrow and expanded viewports`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(locale.path);
+    for (const width of [360, 382, 390, 951]) {
       await page.setViewportSize({ width, height: 844 });
-      await page.goto(locale.path);
 
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       const boxes = await page
@@ -52,11 +53,33 @@ for (const locale of locales) {
         expect(box.left).toBeGreaterThanOrEqual(0);
         expect(box.right).toBeLessThanOrEqual(width);
       }
+
+      const install = page.locator("#install");
+      for (const tab of await install.getByRole("tab").all()) {
+        await expect(async () => {
+          await tab.click();
+          await expect(tab).toHaveAttribute("aria-selected", "true");
+        }).toPass();
+        const commands = await install.locator("code").evaluateAll((elements) =>
+          elements.map((element) => ({
+            text: element.textContent,
+            width: element.clientWidth,
+            contentWidth: element.scrollWidth,
+            height: element.clientHeight,
+            contentHeight: element.scrollHeight,
+          })),
+        );
+        for (const command of commands) {
+          expect(command.contentWidth, command.text ?? "").toBeLessThanOrEqual(command.width);
+          expect(command.contentHeight, command.text ?? "").toBeLessThanOrEqual(command.height);
+        }
+      }
     }
   });
 
   test(`${locale.name} landing page interactions survive hydration`, async ({ context, page }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.setViewportSize({ width: 382, height: 678 });
     await page.goto(locale.path);
     await page.evaluate(() => localStorage.removeItem("agent-dump-theme"));
     await page.reload();
@@ -88,11 +111,19 @@ for (const locale of locales) {
     await expect(npmPanel.getByText("npm install -g @agent-dump/cli", { exact: true })).toBeVisible();
     const copyButton = npmPanel.getByRole("button");
     await expect(copyButton).toHaveAccessibleName(locale.copy);
-    await copyButton.click();
-    await expect(copyButton).toHaveAccessibleName(locale.copied);
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
-      "npm install -g @agent-dump/cli",
-    );
+    for (const viewport of [
+      { width: 382, height: 678 },
+      { width: 951, height: 669 },
+      { width: 382, height: 678 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect(npmTab).toHaveAttribute("aria-selected", "true");
+      await copyButton.click();
+      await expect(copyButton).toHaveAccessibleName(locale.copied);
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
+        "npm install -g @agent-dump/cli",
+      );
+    }
 
     const faq = page.locator("#faq");
     const firstQuestion = faq.getByRole("button").first();
