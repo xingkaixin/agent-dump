@@ -227,9 +227,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v0.15.8",
+        date: "2026-09-21",
+        isLatest: true,
+        title: "Export and Search MiniMax Code Sessions",
+        description:
+          "Bring your MiniMax Code CLI conversations, child tasks, and archived sessions into AI session export, full-text search, and AI collect workflows. Save Markdown or JSON without changing source data. Long installation commands now wrap on narrow screens for easier reading and copying.",
+        command: 'agent-dump --list -days 30 -query "provider:minimax"',
+        tags: ["MiniMax Code", "Session Export", "Full-Text Search"],
+      },
+      {
         version: "v0.15.7",
         date: "2026-09-19",
-        isLatest: true,
         title: "Export and Search DeepChat and Cherry Studio Sessions",
         description:
           "Bring saved DeepChat conversations and Cherry Studio 2.x chats and agent sessions into your AI session export, full-text search, and AI collect workflows. Export Markdown or JSON while keeping source data unchanged. New English and Chinese guides walk you through exporting Codex sessions.",
@@ -363,9 +372,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v0.15.8",
+        date: "2026-09-21",
+        isLatest: true,
+        title: "导出与搜索 MiniMax Code 会话",
+        description:
+          "MiniMax Code CLI 的可见对话、子任务与归档会话现已支持统一导出、全文搜索和 AI collect。可保存为 Markdown 或 JSON，源数据保持不变。落地页的长安装命令在窄屏下自动换行，方便阅读与复制。",
+        command: 'agent-dump --list -days 30 -query "provider:minimax"',
+        tags: ["MiniMax Code", "会话导出", "全文搜索"],
+      },
+      {
         version: "v0.15.7",
         date: "2026-09-19",
-        isLatest: true,
         title: "导出与搜索 DeepChat、Cherry Studio 会话",
         description:
           "DeepChat 已保存对话、Cherry Studio 2.x 普通聊天与 Agent 会话现已支持统一导出、全文搜索和 AI collect。可导出为 Markdown 或 JSON，源数据保持不变。新增中英文 Codex 导出教程，从查找会话到保存文件逐步说明。",
@@ -499,9 +517,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v0.15.8",
+        date: "2026-09-21",
+        isLatest: true,
+        title: "MiniMax Code のセッションをエクスポート・検索",
+        description:
+          "MiniMax Code CLI の表示可能な対話、子タスク、アーカイブ済みセッションで、AIセッションのエクスポート、全文検索、AI collect が利用可能に。元データを変更せず Markdown や JSON に保存できます。長いインストールコマンドは狭い画面でも折り返され、読み取りやコピーがしやすくなりました。",
+        command: 'agent-dump --list -days 30 -query "provider:minimax"',
+        tags: ["MiniMax Code", "セッションエクスポート", "全文検索"],
+      },
+      {
         version: "v0.15.7",
         date: "2026-09-19",
-        isLatest: true,
         title: "DeepChat・Cherry Studio のセッションをエクスポート・検索",
         description:
           "DeepChat の保存済み対話と Cherry Studio 2.x のチャット・エージェントセッションで、AIセッションのエクスポート、全文検索、AI collect が利用可能に。元データを変更せず Markdown や JSON に保存できます。Codex のセッションをエクスポートする手順を解説した英語・中国語ガイドも追加しました。",
