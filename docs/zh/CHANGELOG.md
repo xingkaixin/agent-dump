@@ -2,6 +2,20 @@
 
 ## [未发布]
 
+## [0.15.8] - 2026-09-21
+
+### 新增功能
+
+- 新增只读 MiniMax Code Provider，读取当前 CLI 已迁移的 SQLite 展示消息，通过 `minimax://` URI 支持列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出；包含可见对话、子任务与归档会话，排除隐藏和内部会话 (#388)
+
+### 问题修复
+
+- 落地页的长安装命令在窄屏下自动换行，并保持复制按钮可用 (#392)
+
+### 变更
+
+- 升级 Python 开发与打包工具、React 及其类型定义和 Wrangler (#389–#391)
+
 ## [0.15.7] - 2026-09-19
 
 ### 新增功能
@@ -1092,6 +1106,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.15.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.8
 [0.15.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.7
 [0.15.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.6
 [0.15.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.5

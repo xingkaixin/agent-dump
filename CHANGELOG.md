@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [0.15.8] - 2026-09-21
+
+### Added
+
+- Add a read-only MiniMax Code provider for the current CLI's migrated SQLite display messages, with `minimax://` URIs and list, query, search, stats, collect, and print / JSON / Markdown exports; include visible conversations, child tasks, and archived sessions while excluding hidden and internal sessions (#388)
+
+### Fixed
+
+- Wrap long landing page installation commands on narrow screens while keeping the copy button accessible (#392)
+
+### Changed
+
+- Update Python development and packaging tools, React and its type definitions, and Wrangler (#389–#391)
+
 ## [0.15.7] - 2026-09-19
 
 ### Added
@@ -1089,6 +1103,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.8
 [0.15.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.7
 [0.15.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.6
 [0.15.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.5
