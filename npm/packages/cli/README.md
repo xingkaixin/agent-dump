@@ -72,6 +72,7 @@ agent-dump pi://<session-id>
 agent-dump deepchat://<session-id>
 agent-dump cherry://topic-<id>
 agent-dump cherry://session-<id>
+agent-dump minimax://<session-id>
 agent-dump codex://<session-id> --head
 ```
 
@@ -133,6 +134,7 @@ agent-dump --config edit
 - `pi://<session_id>` - Pi sessions
 - `deepchat://<session_id>` - DeepChat sessions
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
+- `minimax://<session_id>` - MiniMax Code CLI sessions
 
 DeepChat supports saved sessions in its current unencrypted `app_db/agent.db`, including migrated
 history, ACP sessions, and subagent sessions. Set `DEEPCHAT_USER_DATA_DIR` for a custom user data
@@ -143,13 +145,21 @@ chats include only the active branch; deleted records are excluded. Set
 `CHERRY_STUDIO_USER_DATA_DIR` for a custom user data directory. Direct reads of 1.x IndexedDB/Redux
 data are unsupported.
 
-Both providers support list, query, search, stats, collect, and print / JSON / Markdown exports.
+MiniMax Code supports the current CLI's migrated display messages in
+`v2/sqlite/runtime-state.sqlite`, including visible conversations, child tasks, and archived
+sessions. Hidden and internal sessions are excluded. The data root is selected from
+`MINIMAX_DATA_DIR`, then `MAVIS_DATA_DIR`, then `~/.minimax`; a missing explicit path never falls
+back. Set `MINIMAX_DATA_DIR` for custom profiles or other installations. Direct legacy storage
+reads and desktop data are unsupported; pending migrations and corrupt sessions produce
+diagnostics.
+
+These providers support list, query, search, stats, collect, and print / JSON / Markdown exports.
 They read source databases without modifying them, retain attachment references without opening
 attachment files, and do not support raw export.
 
 ## Key features
 
-- **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, Pi, DeepChat, and Cherry Studio
+- **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, Pi, DeepChat, Cherry Studio, and MiniMax Code
 - **Interactive selection**: Friendly CLI selector with time-based grouping
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` reuses bounded discovery metadata without rereading the transcript and marks incomplete message counts as unknown
