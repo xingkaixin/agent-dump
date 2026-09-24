@@ -6,7 +6,7 @@
 
 `just check-rust` 构建 Rust 后运行 `rust/tests/`。每个行为用例在隔离的临时目录创建合成 Provider 源，分别调用 Python 和 Rust 的真实命令行入口。成功路径比较退出码、完整 stdout/stderr、JSON 对象和 Markdown/raw 字节，并验证所有源文件 hash 不变。文件权限和符号链接边界使用独立断言。
 
-异常诊断尚未统一。损坏行用例比较恢复后的内容和警告存在性；文件导出失败用例比较退出码、成功文件内容、清理结果和源数据不变性，不把诊断文案或输出通道算作已对齐。
+异常诊断尚未统一。损坏行用例比较恢复后的内容和警告存在性；文件导出失败用例比较退出码、成功文件内容、清理结果和源数据不变性，本批不把诊断文案或输出通道算作已对齐；后续 JSONL 坏行的完整中英文差分见[坏记录警告验收](rust-record-diagnostics-parity.md)。
 
 2026-09-24，macOS arm64 本机 `just isok` 通过：Python 2596 passed / 1 skipped，Rust/Python 差分及边界用例 172 passed，npm 74 passed，网页 E2E 13 passed；Ruff、类型检查、Rust fmt 和 Clippy 通过。`just build-rust` 使用固定的 Rust 1.90.0 构建 release 成功。
 

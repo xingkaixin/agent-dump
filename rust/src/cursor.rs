@@ -98,7 +98,12 @@ impl Provider for Cursor {
                 .find(|s| s.id == id),
         ))
     }
-    fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
+    fn read(
+        &self,
+        session: &Session,
+        _zh: bool,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<SessionData> {
         if !session.source_path.exists() {
             return Err(crate::provider_error::ProviderError::missing(
                 ["Cursor global database is missing"; 2],
@@ -377,7 +382,10 @@ mod tests {
         };
         let session = provider.find("kept").unwrap().session.unwrap();
         std::fs::remove_file(&path).unwrap();
-        let error = provider.read(&session, false).err().unwrap();
+        let error = provider
+            .read(&session, false, &mut |_| Ok(()))
+            .err()
+            .unwrap();
         crate::source_tests::assert_missing(
             error.as_ref(),
             "Cursor global database is missing",

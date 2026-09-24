@@ -101,7 +101,12 @@ pub fn run(
         .iter()
         .any(|format| *format != OutputFormat::Raw)
         || matches!(raw, Ok(RawExport::Session)))
-    .then(|| provider.read(&session, zh));
+    .then(|| {
+        provider.read(&session, zh, &mut |diagnostic| {
+            writeln!(warnings, "{}", diagnostics::record_warning(&diagnostic, zh))?;
+            Ok(())
+        })
+    });
     let mut success = false;
     if operation.formats.contains(&OutputFormat::Print) {
         match prepared.as_ref().unwrap() {

@@ -33,7 +33,7 @@ impl Codex {
     fn prepare(&mut self) -> crate::Result<()> {
         self.titles.clear();
         if self.index.exists() {
-            jsonl::scan(&self.index, |record| {
+            jsonl::scan(&self.index, &mut |_| Ok(()), |record| {
                 let id = text(&record["id"]);
                 if !id.trim().is_empty()
                     && let Some(title) = normalize_title(text(&record["thread_name"]))
@@ -167,7 +167,12 @@ impl Provider for Codex {
         )
     }
 
-    fn read(&self, session: &Session, zh: bool) -> crate::Result<SessionData> {
+    fn read(
+        &self,
+        session: &Session,
+        zh: bool,
+        diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<SessionData> {
         if !session.source_path.exists() {
             return Err(crate::provider_error::ProviderError::missing(
                 ["session source file is missing"; 2],
@@ -180,7 +185,7 @@ impl Provider for Codex {
                 ],
             ).into());
         }
-        super::codex_transcript::read(session, zh)
+        super::codex_transcript::read(session, zh, diagnostics)
     }
 
     fn json_payload(&self, data: &SessionData) -> serde_json::Value {

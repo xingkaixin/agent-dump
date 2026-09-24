@@ -12,7 +12,7 @@ just build-rust
 ./rust/target/release/agent-dump --help
 ```
 
-`check-rust` 运行 fmt、Clippy、Rust 单元测试、debug 构建与 `rust/tests/`。差分套件通过子进程调用两种 CLI，只使用隔离的合成会话目录；比较完整 stdout/stderr、JSON 结构、Markdown 与 JSONL raw 字节、源数据 hash。SQLite raw 比较 JSON 结构；WAL 用例单独校验数据库与 WAL 持久数据，区分 SQLite 的 `-shm` 协调文件。URI 格式无效、会话不存在和 Provider 格式能力拒绝已做中英文完整输出差分；底层库错误文本、部分 Provider 专属诊断与损坏行警告仍单独检查，不作为全量文案一致。
+`check-rust` 运行 fmt、Clippy、Rust 单元测试、debug 构建与 `rust/tests/`。差分套件通过子进程调用两种 CLI，只使用隔离的合成会话目录；比较完整 stdout/stderr、JSON 结构、Markdown 与 JSONL raw 字节、源数据 hash。SQLite raw 比较 JSON 结构；WAL 用例单独校验数据库与 WAL 持久数据，区分 SQLite 的 `-shm` 协调文件。URI 格式无效、会话不存在和 Provider 格式能力拒绝已做中英文完整输出差分；JSONL 坏行和旧 SQLite 坏记录警告也已做中英文完整差分；底层库错误文本、标题缓存和消息转换错误尚未全量对齐。
 
 ## 已实现范围
 
@@ -56,6 +56,7 @@ just build-rust
 - print、JSON、Markdown（含 md 别名）、raw，格式去重与顺序；单个文件格式失败后继续其他格式，任一成功返回 0，全部失败返回 1。JSONL raw 直接复制源字节；OpenCode/ZCode raw 需要成功解码正文，输出单会话 `.raw.json`，不是数据库副本。
 - 共享发现区分源不可用、时间窗口内无会话和部分失败；坏文件、坏数据库或 Provider 初始化异常不阻止其他来源。无可用来源输出中英文诊断和候选路径：无过滤时返回 1，显式 Provider 过滤时返回 0；部分可用返回 0，警告走 stderr。
 - URI 无效/无匹配/格式能力拒绝使用结构化诊断；最终诊断走 stdout，查找失败警告走 stderr。`--head` 与 `--format` 冲突返回 1；head 允许 `--output` 且不写文件。无效格式列表返回 2，完整 argparse/Clap usage 文案仍未对齐。
+- JSONL 坏行按扫描汇总，最多展示前五个行号，未完成的坏尾行不告警；旧 SQLite 坏消息/part 跳过后继续处理。警告走 stderr 并跟随 `--lang`，head/list 和 JSONL raw 不触发正文警告。
 - 已定位来源消失时保留 Provider 的路径证据和本地化恢复建议；OpenCode V2 会话或表消失时不读取旧表中的同 ID 副本。
 - 文件名快速定位失败时回退到完整 metadata 扫描，同 ID 选择创建时间最新的会话；保留查找期间的逐文件失败。
 - 中英文成功输出，终端控制字符清理，导出文件名身份保留与原子私有写入；拒绝写入 Provider 根目录及覆盖符号链接。
@@ -69,11 +70,11 @@ just build-rust
 - 配置文件尚不读取；因此不应用保存的语言、默认目录等配置。帮助、错误文案、错误组合的退出码与全部工作流的部分失败策略未完成全量对齐；未支持的参数会报错。
 - 本地验证只代表 macOS arm64。CI 增加 Linux/macOS 差分任务；Windows 行为和全部发布平台在后续阶段验证。
 
-行为映射和待验收边界见 [Codex](../docs/rust-codex-parity.md)、[Claude Code / Kimi / Pi](../docs/rust-jsonl-parity.md)、[OpenCode / ZCode](../docs/rust-sqlite-parity.md)及 [Cursor / DeepChat / Cherry Studio / MiniMax](../docs/rust-desktop-parity.md) 差分验收记录。共享发现与跨 Provider 隔离见[验收记录](../docs/rust-discovery-parity.md)。URI 共用诊断见[验收记录](../docs/rust-uri-parity.md)。DeepChat / Cherry / MiniMax 的 schema、源缺失与迁移错误见[专属错误验收](../docs/rust-provider-errors-parity.md)。其余七个 Provider 的源缺失与 Kimi raw 文件身份见[源缺失验收](../docs/rust-source-parity.md)。损坏记录警告、底层错误文案、缓存刷新、极端输入和跨平台行为仍需后续验收；功能矩阵尚未完成。
+行为映射和待验收边界见 [Codex](../docs/rust-codex-parity.md)、[Claude Code / Kimi / Pi](../docs/rust-jsonl-parity.md)、[OpenCode / ZCode](../docs/rust-sqlite-parity.md)及 [Cursor / DeepChat / Cherry Studio / MiniMax](../docs/rust-desktop-parity.md) 差分验收记录。共享发现与跨 Provider 隔离见[验收记录](../docs/rust-discovery-parity.md)。URI 共用诊断见[验收记录](../docs/rust-uri-parity.md)。DeepChat / Cherry / MiniMax 的 schema、源缺失与迁移错误见[专属错误验收](../docs/rust-provider-errors-parity.md)。其余七个 Provider 的源缺失与 Kimi raw 文件身份见[源缺失验收](../docs/rust-source-parity.md)。JSONL/旧 SQLite 坏记录警告见[验收记录](../docs/rust-record-diagnostics-parity.md)。标题缓存、消息转换、底层错误文案、缓存刷新、极端输入和跨平台行为仍需后续验收；功能矩阵尚未完成。
 
 ## 模块归属
 
-`main.rs` 解析参数并装配工作流，`list_workflow.rs` 管理 Provider 范围、发现、失败隔离及列表输出，`uri_workflow.rs` 管理单 URI 的读取与输出分发。`provider.rs` 的发现结果保存可用性、会话和逐源失败事实；完整性由失败集合是否为空确定，与警告输出独立。各 Provider 通过统一读取契约和 `registry.rs` 的静态注册表进入工作流；共享路径、文件发现与失败隔离位于 `file_sessions.rs`。各 Provider 模块解释自己的 metadata 与 transcript，Kimi wire 单独解析。SQLite 连接与行转换位于 `sqlite.rs`，路径/schema/发现位于 `sqlite_provider.rs`，旧表和 V2 正文分别由 `sqlite_legacy.rs`、`opencode_v2.rs` 解释。`desktop.rs` 装配 DeepChat / Cherry / MiniMax 的只读连接与标准化导出，各自模块拥有路径与 schema；Cursor 的存储/发现和正文展开分别在 `cursor.rs`、`cursor_transcript.rs`。`SessionData` 的扩展字段用于保留已有导出字段，renderer 不解释 Provider 私有事件。共享 JSONL 字节读取在 `jsonl.rs`，assistant 合并和工具结果回填在 `message_assembly.rs`。`session.rs` 保存稳定的会话/消息字段；其中 `source_metadata` 是只由所属 Provider 解释的发现快照。`render.rs` 负责会话展示，`diagnostics.rs` 统一列表与 URI 诊断结构、本地化及动态字段清理；`Lookup` 保存可选的定位结果和逐文件失败，工作流决定输出通道。`provider_error.rs` 保留 Provider 的本地化原因、恢复建议、证据及能力限制，逐源失败保存错误对象，展示层选择语言；URI 多格式输出保留原始读取错误。`export.rs` 负责文件身份、权限与原子写入。
+`main.rs` 解析参数并装配工作流，`list_workflow.rs` 管理 Provider 范围、发现、失败隔离及列表输出，`uri_workflow.rs` 管理单 URI 的读取与输出分发。`provider.rs` 的发现结果保存可用性、会话和逐源失败事实；完整性由失败集合是否为空确定，与警告输出独立。各 Provider 通过统一读取契约和 `registry.rs` 的静态注册表进入工作流；共享路径、文件发现与失败隔离位于 `file_sessions.rs`。各 Provider 模块解释自己的 metadata 与 transcript，Kimi wire 单独解析。SQLite 连接与行转换位于 `sqlite.rs`，路径/schema/发现位于 `sqlite_provider.rs`，旧表和 V2 正文分别由 `sqlite_legacy.rs`、`opencode_v2.rs` 解释。`desktop.rs` 装配 DeepChat / Cherry / MiniMax 的只读连接与标准化导出，各自模块拥有路径与 schema；Cursor 的存储/发现和正文展开分别在 `cursor.rs`、`cursor_transcript.rs`。`SessionData` 的扩展字段用于保留已有导出字段，renderer 不解释 Provider 私有事件。共享 JSONL 字节读取在 `jsonl.rs`，assistant 合并和工具结果回填在 `message_assembly.rs`。`session.rs` 保存稳定的会话/消息字段；其中 `source_metadata` 是只由所属 Provider 解释的发现快照。`render.rs` 负责会话展示，`diagnostics.rs` 统一列表与 URI 诊断结构、本地化及动态字段清理；`Lookup` 保存可选的定位结果和逐文件失败，工作流决定输出通道。`provider_error.rs` 保留 Provider 的本地化原因、恢复建议、证据及能力限制，逐源失败保存错误对象，展示层选择语言；URI 多格式输出保留原始读取错误。正文读取显式接收诊断 sink，JSONL 和旧 SQLite 发送结构化坏记录事实，由工作流选择警告输出流和语言；静默扫描使用空 sink。`export.rs` 负责文件身份、权限与原子写入。
 
 直接依赖各有明确用途：Clap 解析参数，Serde/serde_json 处理契约与源记录，regex 识别完整上下文块，Jiff 处理时间与本地时区名称，WalkDir 递归发现，SHA-256 保持特殊 ID 的文件身份，MD5 对齐 Kimi 既有工作目录映射，rusqlite 的 bundled SQLite 负责只读数据库查询，tempfile 保证导出原子替换和异常清理。不调用 Python 作为 Rust 的运行时依赖。
 

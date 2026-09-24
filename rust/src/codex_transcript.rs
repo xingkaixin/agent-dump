@@ -269,10 +269,14 @@ impl Decoder {
     }
 }
 
-pub fn read(session: &Session, zh: bool) -> crate::Result<SessionData> {
+pub fn read(
+    session: &Session,
+    zh: bool,
+    diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+) -> crate::Result<SessionData> {
     let mut decoder = Decoder::default();
     let mut stats = Stats::default();
-    jsonl::scan(&session.source_path, |record| {
+    jsonl::scan(&session.source_path, diagnostics, |record| {
         decoder.record(&record, zh)?;
         let usage = &record["payload"]["info"]["total_token_usage"];
         stats.add_tokens(&usage["input_tokens"], &usage["output_tokens"])?;

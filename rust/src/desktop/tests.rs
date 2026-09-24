@@ -55,7 +55,7 @@ fn source_removed_after_lookup_keeps_missing_path_and_provider_roots() {
         let (_directory, provider, session, _) = fixture(kind);
         std::fs::remove_file(&session.source_path).unwrap();
         for zh in [false, true] {
-            let error = provider.read(&session, zh).err().unwrap();
+            let error = provider.read(&session, zh, &mut |_| Ok(())).err().unwrap();
             let diagnostic = Diagnostic::read_failed(
                 error.as_ref(),
                 vec!["must not replace provider roots".into()],
@@ -94,7 +94,10 @@ fn session_removed_after_lookup_is_not_exported_as_empty_content() {
             .execute_batch(&format!("DELETE FROM {table}"))
             .unwrap();
         let before = std::fs::read(&session.source_path).unwrap();
-        let error = provider.read(&session, false).err().unwrap();
+        let error = provider
+            .read(&session, false, &mut |_| Ok(()))
+            .err()
+            .unwrap();
         let diagnostic = Diagnostic::read_failed(error.as_ref(), Vec::new(), false).render(false);
         assert!(diagnostic.contains(&format!(
             "  - missing path: {}\n  - session id: {}\n",
@@ -123,7 +126,10 @@ fn source_replaced_after_lookup_preserves_capability_details() {
             std::fs::write(&session.source_path, b"synthetic unreadable source").unwrap();
         }
         let before = std::fs::read(&session.source_path).unwrap();
-        let error = provider.read(&session, false).err().unwrap();
+        let error = provider
+            .read(&session, false, &mut |_| Ok(()))
+            .err()
+            .unwrap();
         for zh in [false, true] {
             let diagnostic = Diagnostic::read_failed(error.as_ref(), Vec::new(), zh).render(zh);
             assert!(diagnostic.contains(&format!("  - {}\n", session.source_path.display())));
@@ -153,7 +159,10 @@ fn migration_required_after_lookup_uses_localized_read_failure() {
         .execute_batch("UPDATE local_runtime_sessions SET columnar_version = 2")
         .unwrap();
     let before = std::fs::read(&session.source_path).unwrap();
-    let error = provider.read(&session, false).err().unwrap();
+    let error = provider
+        .read(&session, false, &mut |_| Ok(()))
+        .err()
+        .unwrap();
     for zh in [false, true] {
         let diagnostic =
             Diagnostic::read_failed(error.as_ref(), vec!["Synthetic source".into()], zh).render(zh);

@@ -1,8 +1,42 @@
 use crate::output_formats::OutputFormat;
-use crate::provider::{Provider, ProviderInfo, SessionFailure};
+use crate::provider::{Provider, ProviderInfo, RecoverableDiagnostic, SessionFailure};
 use crate::provider_error::{self, ProviderError};
 use crate::render::safe_line;
 use std::fmt::Write;
+
+pub fn record_warning(diagnostic: &RecoverableDiagnostic, zh: bool) -> String {
+    match diagnostic {
+        RecoverableDiagnostic::JsonlRecordsSkipped { path, count, lines } => {
+            let path = safe_line(&path.display().to_string());
+            let lines = lines
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            if zh {
+                format!("警告: {path} 跳过了 {count} 条格式错误的记录（行 {lines}）")
+            } else {
+                format!("⚠️  {path}: skipped {count} malformed records (lines {lines})")
+            }
+        }
+        RecoverableDiagnostic::MessageDataParseFailed(id) => {
+            let id = safe_line(id);
+            if zh {
+                format!("警告: 解析消息数据失败 message={id}")
+            } else {
+                format!("⚠️  Failed to parse message data message={id}")
+            }
+        }
+        RecoverableDiagnostic::PartDataParseFailed(id) => {
+            let id = safe_line(id);
+            if zh {
+                format!("警告: 解析消息分段数据失败 part={id}")
+            } else {
+                format!("⚠️  Failed to parse message part data part={id}")
+            }
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct Diagnostic {

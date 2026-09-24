@@ -28,7 +28,7 @@ CLI 套件净增 25 个用例，合计 706 个；新增 4 个读取边界单元�
 
 ## 仍待完成
 
-- JSONL 坏行、标题缓存、消息转换和旧 SQLite 损坏记录的警告。其余七个 Provider 的源缺失路径已在后续补齐，见[源缺失验收](rust-source-parity.md)。
+- 标题缓存和消息转换失败的警告。其余七个 Provider 的[源缺失路径](rust-source-parity.md)及 JSONL/旧 SQLite [坏记录警告](rust-record-diagnostics-parity.md)已在后续补齐。
 - 全部 JSON/SQLite/文件系统底层原因文本和异常类别、无效导出 ID、完整 CLI usage；本批只映射已验证的错误类型。
 - 长生命周期发现刷新、正文缓存/lease/LRU、并发读取合并与失效；读取同一已定位 Session 的故障测试不等于完整缓存验收。
 - 更多 schema 历史版本、真实锁竞争与平台发布。现有源目录导出保护差异和 SQLite SHM 边界继续见[桌面 Provider 验收](rust-desktop-parity.md)。

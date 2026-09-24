@@ -94,7 +94,7 @@ impl Kimi {
             .unwrap_or_else(|| "Untitled Session".into());
         let message_count =
             if context.exists() && context.metadata()?.len() <= crate::jsonl::FULL_SCAN_LIMIT {
-                crate::kimi_transcript::read(&context, false)
+                crate::kimi_transcript::read(&context, &mut |_| Ok(()))
                     .ok()
                     .map(|messages| messages.len())
             } else {
@@ -143,11 +143,16 @@ impl Provider for Kimi {
         )
     }
 
-    fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
+    fn read(
+        &self,
+        session: &Session,
+        _zh: bool,
+        diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<SessionData> {
         let context = session.source_path.join("context.jsonl");
         let wire = session.source_path.join("wire.jsonl");
         let messages = if context.exists() {
-            crate::kimi_transcript::read(&context, true)?
+            crate::kimi_transcript::read(&context, diagnostics)?
         } else {
             if !wire.exists() {
                 return Err(crate::provider_error::ProviderError::missing(
@@ -161,7 +166,7 @@ impl Provider for Kimi {
                     ],
                 ).into());
             }
-            crate::kimi_wire::read(&wire)?
+            crate::kimi_wire::read(&wire, diagnostics)?
         };
         let mut stats = Stats {
             message_count: messages.len(),
@@ -169,13 +174,13 @@ impl Provider for Kimi {
             ..Stats::default()
         };
         if wire.exists() {
-            crate::jsonl::scan(&wire, |record| {
+            crate::jsonl::scan(&wire, diagnostics, |record| {
                 let usage = &record["message"]["usage"];
                 stats.add_tokens(&usage["input_tokens"], &usage["output_tokens"])
             })?;
         }
         let raw = if context.exists() { &context } else { &wire };
-        crate::jsonl::scan(raw, |record| {
+        crate::jsonl::scan(raw, diagnostics, |record| {
             if record["role"] == "_usage" && record["token_count"].is_number() {
                 stats.total_tokens = Some(integer(&record["token_count"]));
             }
@@ -280,7 +285,8 @@ mod tests {
     }
 
     fn text(provider: &Kimi, session: &Session) -> String {
-        let data = serde_json::to_value(provider.read(session, false).unwrap()).unwrap();
+        let data =
+            serde_json::to_value(provider.read(session, false, &mut |_| Ok(())).unwrap()).unwrap();
         data["messages"][0]["parts"][0]["text"]
             .as_str()
             .unwrap()
@@ -336,7 +342,10 @@ mod tests {
         let wire = session.source_path.join("wire.jsonl");
         std::fs::remove_file(&context).unwrap();
         std::fs::remove_file(&wire).unwrap();
-        let error = provider.read(&session, false).err().unwrap();
+        let error = provider
+            .read(&session, false, &mut |_| Ok(()))
+            .err()
+            .unwrap();
         assert_missing(
             error.as_ref(),
             "wire.jsonl is missing for this Kimi session",

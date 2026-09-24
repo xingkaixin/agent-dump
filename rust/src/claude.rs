@@ -173,7 +173,12 @@ impl Provider for Claude {
         )
     }
 
-    fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
+    fn read(
+        &self,
+        session: &Session,
+        _zh: bool,
+        diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<SessionData> {
         if !session.source_path.exists() {
             return Err(crate::provider_error::ProviderError::missing(
                 ["session source file is missing"; 2],
@@ -186,7 +191,7 @@ impl Provider for Claude {
                 ],
             ).into());
         }
-        crate::claude_transcript::read(session)
+        crate::claude_transcript::read(session, diagnostics)
     }
 
     fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {

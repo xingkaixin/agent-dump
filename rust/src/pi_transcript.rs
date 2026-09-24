@@ -3,7 +3,10 @@ use crate::session::{ImagePart, Message, Part, Session, SessionData, Stats, Text
 use crate::value::{field, integer, text, truthy};
 use serde_json::{Value, json};
 
-pub fn read(session: &Session) -> crate::Result<SessionData> {
+pub fn read(
+    session: &Session,
+    diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+) -> crate::Result<SessionData> {
     let mut messages = Vec::new();
     let mut stats = Stats {
         total_tokens: Some(0),
@@ -11,7 +14,7 @@ pub fn read(session: &Session) -> crate::Result<SessionData> {
     };
     let mut title = session.title.clone();
     let mut sequence = 0;
-    crate::jsonl::scan(&session.source_path, |record| {
+    crate::jsonl::scan(&session.source_path, diagnostics, |record| {
         sequence += 1;
         if let Some(name) = session_name(&record) {
             title = name;

@@ -4,7 +4,7 @@
 
 ## 验收方式
 
-`rust/tests/` 在临时目录生成合成会话，分别调用 Python 和 Rust CLI。成功路径比较退出码、完整 stdout/stderr、JSON 结构和 Markdown/raw 文件字节；检查源文件 hash 不变及导出权限。损坏行和单文件读取失败单独检查恢复后的内容、警告与源数据，不宣称诊断文案已对齐。
+`rust/tests/` 在临时目录生成合成会话，分别调用 Python 和 Rust CLI。成功路径比较退出码、完整 stdout/stderr、JSON 结构和 Markdown/raw 文件字节；检查源文件 hash 不变及导出权限。损坏行和单文件读取失败单独检查恢复后的内容、警告与源数据，本批不宣称诊断文案已对齐；后续 JSONL 坏行的完整中英文差分见[坏记录警告验收](rust-record-diagnostics-parity.md)。
 
 2026-09-24，macOS arm64 本机完整 `just isok` 通过：Python 2596 passed / 1 skipped，Rust/Python 差分及边界用例 313 passed（本批新增 141 个），npm 74 passed，网页 E2E 13 passed；Ruff、类型检查、Rust fmt 与 Clippy 通过。固定 Rust 1.90.0 的 `just build-rust` release 构建通过。未运行远端 CI 或 Windows 验证。
 
@@ -18,7 +18,7 @@
 | Kimi context、wire 流、分段参数、tool result、SetTodoList、usage/token_count | `kimi_transcript.rs`、`kimi_wire.rs` | 同上：工具别名、JSON/null/标量参数、混合输出、assistant 归属、内部事件、未完成参数、时间/token 转换 |
 | Pi header、文件后缀定位与 ID 回退、最新 session_info、最大更新时间、轻量扫描计数 | `pi.rs` | `test_pi.py`：列表/head、标题优先级、数值/ISO 时间、全文与 head 标题差异、无效 header、fallback |
 | Pi 分支消息、compaction/custom、bashExecution/toolResult、图片、usage/cost | `pi_transcript.rs` | 同上：保留全部分支、独立工具结果、entry/parent 字段、content 形态、空消息统计、原始版本值、中英文输出 |
-| 字面环境变量路径、文件失败隔离、源数据只读、损坏行恢复 | `file_sessions.rs`、`jsonl.rs`、`export.rs` | `test_pi.py` 的相对/空/空格/字面 `~` 路径，`test_kimi.py` 的坏 metadata，`test_jsonl_sources.py` 的损坏 JSON/UTF-8/非对象/未完成尾行和 raw 原字节保留，各 Provider 的源目录拒写 |
+| 字面环境变量路径、文件失败隔离、源数据只读、损坏行恢复 | `file_sessions.rs`、`jsonl.rs`、`export.rs` | `test_pi.py` 的相对/空/空格/字面 `~` 路径，`test_kimi.py` 的坏 metadata，`test_record_diagnostics.py`（替代原 `test_jsonl_sources.py`）的损坏 JSON/UTF-8/非对象/未完成尾行和 raw 原字节保留，各 Provider 的源目录拒写 |
 
 已有 Codex 差分测试继续覆盖共享装配、Session 字段、列表、head 和导出，防止公共模块抽取改变既有行为。
 

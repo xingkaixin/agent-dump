@@ -16,7 +16,7 @@
 | SQLite raw 为标准化单会话 JSON，普通 JSON 保留 developer | `provider.rs`、`uri_workflow.rs`、`export.rs` | 两个 SQLite 套件的混合导出；Pi developer 回归用例保护共享默认投影，Codex 保留专属 JSON 转换 |
 | 数据库只读、WAL 更新可见、导出源目录保护 | `sqlite.rs`、`export.rs` | `test_sqlite_legacy.py`：DELETE/WAL 两次提交、新 CLI 读取当前正文、持久字节不变、源目录拒写 |
 
-成功路径比较退出码、完整 stdout/stderr、JSON 对象、Markdown 字节及文件权限。JSONL raw 比较原字节；SQLite `.raw.json` 比较 JSON 对象，空白排版与对象键顺序不作为契约。错误诊断文案仍未完全对齐，异常测试比较失败/恢复行为、文件内容和持久源数据。
+成功路径比较退出码、完整 stdout/stderr、JSON 对象、Markdown 字节及文件权限。JSONL raw 比较原字节；SQLite `.raw.json` 比较 JSON 对象，空白排版与对象键顺序不作为契约。错误诊断文案仍未完全对齐，异常测试比较失败/恢复行为、文件内容和持久源数据。旧表坏消息/part 的后续完整中英文差分见[坏记录警告验收](rust-record-diagnostics-parity.md)。
 
 ## SQLite 读取与共享模块
 

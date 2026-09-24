@@ -103,21 +103,6 @@ def test_portable_export_identity(cli, identity):
     )
 
 
-def test_malformed_records_and_active_tail(cli):
-    cli.write([header(), message("user", "retained")], suffix=b'not-json\n[]\n{"partial":')
-    before = cli.fixtures.source_manifest(cli.root)
-    outputs = []
-    for candidate in ("python", "rust"):
-        result = cli.run(
-            candidate, f"codex://{IDENTITY}", "--format", "json", "--output", str(cli.root / "exports"), "--lang", "en"
-        )
-        assert result.returncode == 0
-        assert "2" in result.stdout + result.stderr
-        outputs.append(json.loads(next((cli.root / "exports").rglob("*.json")).read_text()))
-    assert outputs[0] == outputs[1]
-    assert cli.fixtures.source_manifest(cli.root) == before
-
-
 @pytest.mark.parametrize(
     "args",
     [

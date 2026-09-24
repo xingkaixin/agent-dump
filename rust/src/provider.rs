@@ -2,6 +2,18 @@ use crate::provider_error::ProviderError;
 use crate::session::{Session, SessionData};
 use std::path::{Path, PathBuf};
 
+pub type DiagnosticSink<'a> = dyn FnMut(RecoverableDiagnostic) -> crate::Result<()> + 'a;
+
+pub enum RecoverableDiagnostic {
+    JsonlRecordsSkipped {
+        path: PathBuf,
+        count: usize,
+        lines: Vec<usize>,
+    },
+    MessageDataParseFailed(String),
+    PartDataParseFailed(String),
+}
+
 pub struct ProviderInfo {
     pub name: &'static str,
     pub display_name: &'static str,
@@ -60,7 +72,12 @@ impl Discovery {
 pub trait Provider {
     fn discover(&mut self, days: i64) -> crate::Result<Discovery>;
     fn find(&mut self, id: &str) -> crate::Result<Lookup>;
-    fn read(&self, session: &Session, zh: bool) -> crate::Result<SessionData>;
+    fn read(
+        &self,
+        session: &Session,
+        zh: bool,
+        diagnostics: &mut DiagnosticSink<'_>,
+    ) -> crate::Result<SessionData>;
     fn source_root(&self) -> &Path;
     fn search_roots(&self) -> Vec<(&'static str, PathBuf)>;
 

@@ -117,7 +117,12 @@ impl Provider for SqliteProvider {
         ))
     }
 
-    fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
+    fn read(
+        &self,
+        session: &Session,
+        _zh: bool,
+        diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<SessionData> {
         if !session.source_path.exists() {
             let (summary, steps) = match self.kind {
                 Kind::OpenCode => (
@@ -178,7 +183,7 @@ impl Provider for SqliteProvider {
         } else if session.source_metadata["schema"] == "v2" {
             return Err(format!("OpenCode V2 session source is missing: {}", session.id).into());
         }
-        crate::sqlite_legacy::read(&connection, session)
+        crate::sqlite_legacy::read(&connection, session, diagnostics)
     }
 
     fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
@@ -339,7 +344,10 @@ mod tests {
             let alternative = directory.path().join("unrelated.sqlite");
             std::fs::write(&alternative, b"must not read or change").unwrap();
             provider.database = Some(alternative.clone());
-            let error = provider.read(&session, false).err().unwrap();
+            let error = provider
+                .read(&session, false, &mut |_| Ok(()))
+                .err()
+                .unwrap();
             crate::source_tests::assert_missing(
                 error.as_ref(),
                 summary,
@@ -374,7 +382,10 @@ mod tests {
             assert_eq!(session.title, "V2");
             Connection::open(&path).unwrap().execute_batch(sql).unwrap();
             let before = std::fs::read(&path).unwrap();
-            let error = provider.read(&session, false).err().unwrap();
+            let error = provider
+                .read(&session, false, &mut |_| Ok(()))
+                .err()
+                .unwrap();
             assert_eq!(error.to_string(), expected);
             assert_eq!(std::fs::read(path).unwrap(), before);
         }

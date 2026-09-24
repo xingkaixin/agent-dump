@@ -149,9 +149,14 @@ impl Decoder {
     }
 }
 
-pub fn read(path: &Path) -> crate::Result<Vec<Message>> {
+pub fn read(
+    path: &Path,
+    diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+) -> crate::Result<Vec<Message>> {
     let mut decoder = Decoder::default();
-    crate::jsonl::scan_numbered(path, true, |seq, record| decoder.record(seq, &record))?;
+    crate::jsonl::scan_numbered(path, diagnostics, |seq, record| {
+        decoder.record(seq, &record)
+    })?;
     decoder.messages.retain(|message| !message.parts.is_empty());
     Ok(decoder.messages)
 }

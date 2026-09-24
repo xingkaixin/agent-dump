@@ -276,9 +276,14 @@ impl Decoder {
     }
 }
 
-pub fn read(session: &Session) -> crate::Result<SessionData> {
+pub fn read(
+    session: &Session,
+    diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+) -> crate::Result<SessionData> {
     let mut decoder = Decoder::default();
-    crate::jsonl::scan(&session.source_path, |record| decoder.record(&record))?;
+    crate::jsonl::scan(&session.source_path, diagnostics, |record| {
+        decoder.record(&record)
+    })?;
     let mut stats = Stats {
         message_count: decoder.messages.len(),
         ..Stats::default()

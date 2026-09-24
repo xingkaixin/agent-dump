@@ -1,3 +1,4 @@
+use crate::provider::{DiagnosticSink, RecoverableDiagnostic};
 use serde_json::Value;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
@@ -79,13 +80,17 @@ pub fn metadata(path: &Path, head_lines: usize) -> io::Result<Metadata> {
     })
 }
 
-pub fn scan(path: &Path, mut append: impl FnMut(Value) -> crate::Result<()>) -> crate::Result<()> {
-    scan_numbered(path, true, |_, record| append(record))
+pub fn scan(
+    path: &Path,
+    diagnostics: &mut DiagnosticSink<'_>,
+    mut append: impl FnMut(Value) -> crate::Result<()>,
+) -> crate::Result<()> {
+    scan_numbered(path, diagnostics, |_, record| append(record))
 }
 
 pub fn scan_numbered(
     path: &Path,
-    warn: bool,
+    diagnostics: &mut DiagnosticSink<'_>,
     mut append: impl FnMut(usize, Value) -> crate::Result<()>,
 ) -> crate::Result<()> {
     let mut reader = BufReader::new(File::open(path)?);
@@ -107,16 +112,16 @@ pub fn scan_numbered(
         } else if matches!(line.last(), Some(b'\n' | b'\r')) {
             count += 1;
             if skipped.len() < 5 {
-                skipped.push(number.to_string());
+                skipped.push(number);
             }
         }
     }
-    if warn && count > 0 {
-        eprintln!(
-            "Warning: skipped {count} invalid JSONL records in {} (lines {}).",
-            crate::render::safe_line(&path.display().to_string()),
-            skipped.join(", ")
-        );
+    if count > 0 {
+        diagnostics(RecoverableDiagnostic::JsonlRecordsSkipped {
+            path: path.to_owned(),
+            count,
+            lines: skipped,
+        })?;
     }
     Ok(())
 }

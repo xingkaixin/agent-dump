@@ -1,3 +1,4 @@
+use crate::provider::{DiagnosticSink, RecoverableDiagnostic};
 use crate::session::{
     Message, Part, Session, SessionData, Stats, StepPart, TextPart, ToolPart, UnknownPart,
 };
@@ -7,10 +8,16 @@ use rusqlite::{Connection, ToSql};
 use serde_json::Value;
 use std::collections::HashMap;
 
-pub fn read(connection: &Connection, session: &Session) -> crate::Result<SessionData> {
+pub fn read(
+    connection: &Connection,
+    session: &Session,
+    diagnostics: &mut DiagnosticSink<'_>,
+) -> crate::Result<SessionData> {
+    // Non-text payloads must reach record validation instead of aborting SQLite row decoding.
     let records = rows(
         connection,
-        "SELECT * FROM message WHERE session_id = ? ORDER BY time_created ASC",
+        "SELECT id, time_created, CASE WHEN typeof(data) = 'text' THEN data END AS data
+         FROM message WHERE session_id = ? ORDER BY time_created ASC",
         &[&session.id],
     )?;
     let mut parts_by_id: HashMap<String, Vec<Value>> = HashMap::new();
@@ -21,7 +28,8 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
         for part in rows(
             connection,
             &format!(
-                "SELECT * FROM part WHERE message_id IN ({placeholders}) ORDER BY message_id ASC, time_created ASC"
+                "SELECT id, message_id, time_created, CASE WHEN typeof(data) = 'text' THEN data END AS data
+                 FROM part WHERE message_id IN ({placeholders}) ORDER BY message_id ASC, time_created ASC"
             ),
             &parameters,
         )? {
@@ -39,7 +47,7 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
     for row in records {
         let id = string(&row["id"]);
         let Some(data) = json_object(&row["data"]) else {
-            warn("message", &id);
+            diagnostics(RecoverableDiagnostic::MessageDataParseFailed(id))?;
             continue;
         };
         let mut message = Message::new(
@@ -61,7 +69,9 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
         stats.add_tokens(&data["tokens"]["input"], &data["tokens"]["output"])?;
         for row in parts_by_id.remove(&id).unwrap_or_default() {
             let Some(data) = json_object(&row["data"]) else {
-                warn("part", &string(&row["id"]));
+                diagnostics(RecoverableDiagnostic::PartDataParseFailed(string(
+                    &row["id"],
+                )))?;
                 continue;
             };
             message
@@ -116,11 +126,4 @@ fn part(data: &Value, time: i64) -> Part {
             time_created: time,
         }),
     }
-}
-
-fn warn(kind: &str, id: &str) {
-    eprintln!(
-        "Warning: invalid {kind} data: {}",
-        crate::render::safe_line(id)
-    );
 }

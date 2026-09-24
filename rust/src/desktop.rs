@@ -159,7 +159,12 @@ impl Provider for Desktop {
         ))
     }
 
-    fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
+    fn read(
+        &self,
+        session: &Session,
+        _zh: bool,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<SessionData> {
         self.with_database(&session.source_path, |connection| match self.kind {
             Kind::DeepChat => crate::deepchat::read(connection, session),
             Kind::Cherry => crate::cherry::read(connection, session),

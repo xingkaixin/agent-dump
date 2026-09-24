@@ -61,11 +61,14 @@ fn output_parts(content: &Value) -> Vec<Part> {
         .collect()
 }
 
-pub fn read(path: &Path, warn: bool) -> crate::Result<Vec<Message>> {
+pub fn read(
+    path: &Path,
+    diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+) -> crate::Result<Vec<Message>> {
     let mut messages = Vec::new();
     let mut pending = HashMap::new();
     let mut ignored = HashSet::new();
-    crate::jsonl::scan_numbered(path, warn, |seq, record| {
+    crate::jsonl::scan_numbered(path, diagnostics, |seq, record| {
         let id = format!("context-{seq}");
         match text(&record["role"]) {
             "user" => {
