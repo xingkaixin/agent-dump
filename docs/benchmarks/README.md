@@ -4,6 +4,8 @@
 
 完整迁移验收见 [Rust 迁移计划](../rust-migration-plan.md)。这里的结果校验只保护 benchmark 工作负载，不能代替完整功能矩阵。
 
+当前 P2 结果：[最终七场景配对复测](rust-p2-final.md)，功能与平台验收见 [P2 最终验收](../rust-p2-completion.md)。
+
 首份已归档结果：[2026-09-24 Python 基线](python-baseline.md)，包含源码运行与 PyInstaller 原生制品。
 
 阶段复测：[Rust P1 四场景比较](rust-p1.md)，保留同期 Python 源码、PyInstaller 与 Rust 的原始样本；仅代表已实现子集。
