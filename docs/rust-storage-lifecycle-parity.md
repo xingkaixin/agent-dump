@@ -28,3 +28,5 @@ SQLite 的只读事务新增真实 WAL 并发提交验证：第一次查询建�
 单次文件读取期间持续改写文件、进程外更改符号链接或配置，不提供 Python 没有的跨文件原子快照。已验证定位后来源移走/替换、操作间配置变更、缓存加载中信号改变和 SQLite 事务快照；不以无法穷举的任意调度作为未完成的功能。索引 generation/旧请求竞争属于 P3。
 
 本轮针对性 CLI 回归 219 passed，包含既有 URI/共享发现路径；Rust 单元测试新增 boot-config 与事务两个用例。最终平台和完整门禁结果集中记入 [P2 最终验收](rust-p2-completion.md)。
+
+另外 5 个来源边界用例验证：OpenCode/DeepChat 的真实独占锁超时与解锁后恢复；Codex/Claude 标题索引失去读取权限后的完整警告和权限恢复；Cursor 128 层子会话引用链的导出。锁测试持锁期间不在当前进程读取 manifest，避免 POSIX 关闭同 inode 文件描述符意外释放 SQLite 锁；源 hash 在锁前后核对。权限用例仅在 POSIX 运行，Windows 不模拟 chmod 权限语义。
