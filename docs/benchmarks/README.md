@@ -18,6 +18,8 @@
 
 [共享发现后的七场景复测](rust-p2-discovery.md)增加原有 `list-all` 场景，验证跨 Provider 列表；fixture 仍只有 Codex 与 OpenCode 数据。
 
+[URI 诊断对齐后的七场景复测](rust-p2-uri.md)记录共享工作流调整后的成功路径表现；不把这些测量当作错误路径性能证据。
+
 ## 运行
 
 ```bash

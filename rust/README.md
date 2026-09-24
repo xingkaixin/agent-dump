@@ -86,7 +86,9 @@ just build-rust
 
 接入其余四个 Provider 后的[六场景复测](../docs/benchmarks/rust-p2-desktop.md)仍使用这六个场景，记录共享消息/JSON 投影变化后的结果与历史差值；它不代表 Cursor、DeepChat、Cherry Studio、MiniMax 的性能。
 
-共享发现后的[最新七场景复测](../docs/benchmarks/rust-p2-discovery.md)增加 `list-all`，覆盖 501 个 Codex 和 500 个 OpenCode 会话的跨 Provider 列表；其他八个来源在此 fixture 中不可用。
+共享发现后的[七场景复测](../docs/benchmarks/rust-p2-discovery.md)增加 `list-all`，覆盖 501 个 Codex 和 500 个 OpenCode 会话的跨 Provider 列表；其他八个来源在此 fixture 中不可用。
+
+URI 诊断对齐后的[最新七场景复测](../docs/benchmarks/rust-p2-uri.md)沿用同一 fixture 和 evaluator，记录共享工作流调整后的表现；未测量失败诊断性能。
 
 使用原有 [CLI evaluator](../docs/benchmarks/README.md)，不为 Rust 改写 fixture 或验收摘要。本阶段只运行以下已实现子集：
 
@@ -96,7 +98,7 @@ just benchmark --command './rust/target/release/agent-dump' \
   --case startup-version --case list-jsonl --case list-sqlite --case list-all \
   --case head-large-jsonl --case print-large-jsonl \
   --case export-large-json-md \
-  --output dist/benchmarks/rust-p2-discovery.json
+  --output dist/benchmarks/rust-p2-uri.json
 ```
 
-Python 用同样的 `--case` 组合重测；Rust 再传入该报告的 `--baseline` 做严格比较。本批增加 `list-all`，共七个场景；不得解释为应用整体加速比。复杂工具消息由差分测试验证，benchmark 仍使用 P0 的固定文本工作负载。
+Python 用同样的 `--case` 组合重测；Rust 再传入该报告的 `--baseline` 做严格比较。当前共七个场景；不得解释为应用整体加速比。复杂工具消息由差分测试验证，benchmark 仍使用 P0 的固定文本工作负载。

@@ -33,6 +33,8 @@ URI 诊断的每个动态字段分别清理终端控制字符并限制展示长�
 
 `just isok` 全部通过：Python 2596 passed / 1 skipped，Rust 单元测试 1 passed、CLI 差分与边界 681 passed，npm 74 passed，Web E2E 13 passed。固定工具链 `just build-rust` release 构建通过。Python 生产源码相对 `dca2d97`、P0 evaluator 相对 `9c1cf61` 均无改动。
 
+实现提交：`f3af42a`。[原七场景复测](benchmarks/rust-p2-uri.md)全部通过结果比较，保留同期 Python/Rust 原始样本；这些成功场景不测失败诊断耗时。
+
 ## 仍待验收
 
 - Provider 专属的源缺失、加密/不支持 schema、待迁移存储等诊断，还没有全部转为对应 Python 结构；当前部分错误使用通用读取诊断或查找警告。
