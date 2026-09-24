@@ -107,7 +107,7 @@ jobs:
         run: just cov
 
   rust:
-    name: Rust CLI parity (${{ matrix.os }})
+    name: Rust CLI parity (${{ matrix.os }}, shard ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
     env:
       PYTHONUTF8: "1"
@@ -115,6 +115,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        shard: [0, 1, 2, 3]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -133,14 +134,17 @@ jobs:
         run: rustup show active-toolchain
 
       - name: Check Rust formatting
+        if: matrix.shard == 0
         working-directory: rust
         run: cargo fmt --check
 
       - name: Check Rust types
+        if: matrix.shard == 0
         working-directory: rust
         run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Test Rust
+        if: matrix.shard == 0
         working-directory: rust
         run: cargo test --locked
 
@@ -149,7 +153,11 @@ jobs:
         run: cargo build --locked
 
       - name: Compare Rust and Python CLI behavior
-        run: uv run --locked pytest -q --maxfail=10 rust/tests
+        run: >-
+          uv run --locked python -c
+          "import pathlib, subprocess, sys; files = sorted(pathlib.Path('rust/tests').glob('test_*.py'));
+          sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q', '--maxfail=10', *map(str, files[int(sys.argv[1])::4])]))"
+          ${{ matrix.shard }}
 
   web:
     name: Check landing page

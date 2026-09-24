@@ -38,7 +38,7 @@ just isok
 安装 rustup 后，`just check-rust` 会使用 `rust/rust-toolchain.toml` 固定的工具链运行
 fmt、Clippy、Rust 单元测试、构建和跨语言 CLI 差分测试。跨语言测试位于 `rust/tests/`，缺少二进制会失败，不会静默跳过。
 `just isok` 包含该门禁；`just build-rust` 生成性能评估用的 release 二进制。
-CI 在 Linux、macOS、Windows 分别运行同一 Rust 门禁；每条 Cargo 命令独立作为步骤，避免 PowerShell 后续成功命令掩盖前一条失败。CLI 差分使用 UTF-8 子进程输出，平台特有行为在 fixture 或明确标注的用例中处理。
+CI 在 Linux、macOS、Windows 分别运行同一 Rust 门禁；每条 Cargo 命令独立作为步骤，避免 PowerShell 后续成功命令掩盖前一条失败。CLI 差分按排序后的测试文件分成四组并行运行，每组独立 runner，全部用例恰好运行一次；每个平台第 0 组同时执行 fmt、Clippy 和单元测试。CLI 差分使用 UTF-8 子进程输出，平台特有行为在 fixture 或明确标注的用例中处理。
 
 Rust 重写的阶段与功能验收见 [迁移计划](rust-migration-plan.md)。性能比较使用
 [CLI benchmark](benchmarks/README.md)，例如
