@@ -39,3 +39,5 @@ P2 仍未完成。搜索、配置、Collect、Ratatui 与 pip/npm Rust 发布切
 2026-09-24，macOS arm64，固定 Rust 1.90.0：最终代码的完整 `just isok` 通过，Python 2596 passed / 1 skipped、Rust 单元测试 15 passed、CLI 差分与边界 732 passed、npm 74 passed、Web E2E 13 passed。`just build-rust` release 构建通过。
 
 Python 生产源码与 `dca2d97` 相同，P0 evaluator 四个脚本相对 `9c1cf61` 无改动；没有新增依赖。
+
+实现提交：`dd95821`。[原七场景复测](benchmarks/rust-p2-record-warnings.md)在干净 checkout 上通过结果比较与源 hash 校验；这些健康数据场景不测坏记录警告的性能。

@@ -111,7 +111,7 @@ URI 共用诊断实现：`f3af42a`，新增 84 个 CLI 用例，合计 681 个�
 
 其余七个 Provider 的源缺失与 Kimi raw 文件身份实现：`0d2fc2a`，新增 10 个 Rust 单元用例至 15 个，CLI 套件保持 706 个；完整 `just isok` 与 release 构建通过。OpenCode V2 行/表消失时保留不同原因且不读取旧表副本；具体读取边界和 Python 参考核验见[验收记录](rust-source-parity.md)。[原七场景复测](benchmarks/rust-p2-source-errors.md)全部通过：跨 Provider 列表为 Python 239.77 ms / Rust 51.39 ms（4.67×），JSON＋Markdown 导出为 231.07 / 77.26 ms（2.99×）；未测量 Kimi 或失败路径性能。
 
-JSONL 坏行与旧 SQLite 坏消息/part 警告已通过显式诊断 sink 接入 URI 工作流，并修正非 TEXT 数据使旧表导出整体中止的问题。新增 30 个完整 CLI 差分用例，替代 4 个旧用例，净增 26 个至 732 个；完整 `just isok` 与 release 构建通过。中英文文案、次数、静默扫描与源数据验证见[坏记录警告验收](rust-record-diagnostics-parity.md)。
+JSONL 坏行与旧 SQLite 坏消息/part 警告实现：`dd95821`，通过显式诊断 sink 接入 URI 工作流，并修正 BLOB 坏记录使旧表导出整体中止的问题。新增 30 个完整 CLI 差分用例，替代 4 个旧用例，净增 26 个至 732 个；完整 `just isok` 与 release 构建通过。中英文文案、次数、静默扫描与源数据验证见[坏记录警告验收](rust-record-diagnostics-parity.md)。[原七场景复测](benchmarks/rust-p2-record-warnings.md)全部通过：跨 Provider 列表为 Python 246.92 ms / Rust 53.69 ms（4.60×），JSON＋Markdown 导出为 276.68 / 79.03 ms（3.50×）；不测坏记录警告或旧 SQLite 性能。
 
 ### P3：查询、索引、维护命令
 
