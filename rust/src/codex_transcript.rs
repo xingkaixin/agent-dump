@@ -2,6 +2,7 @@ use crate::codex_enrichment::{
     injected_context, inner_tag, output_parts, record_subagent_output, subagent_notification,
 };
 use crate::jsonl;
+use crate::provider::RecoverableDiagnostic;
 use crate::session::{
     Message, Part, PlanPart, Session, SessionData, Stats, TextPart, ToolPart, parse_timestamp,
 };
@@ -20,7 +21,7 @@ struct Decoder {
     pending_plan: Option<(usize, usize)>,
 }
 
-fn content_parts(payload: &Value, timestamp: i64, reasoning: bool) -> Vec<Part> {
+fn content_parts(payload: &Value, timestamp: i64, reasoning: bool) -> crate::Result<Vec<Part>> {
     let key = if reasoning { "summary" } else { "content" };
     let expected = if reasoning {
         "summary_text"
@@ -30,33 +31,42 @@ fn content_parts(payload: &Value, timestamp: i64, reasoning: bool) -> Vec<Part> 
         "input_text"
     };
     let Some(items) = payload[key].as_array() else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
-    items
-        .iter()
-        .filter(|item| item["type"] == expected)
-        .map(|item| {
-            let body = field(item, "text");
-            if reasoning {
-                return Part::Reasoning(TextPart {
-                    text: body,
-                    time_created: timestamp,
-                });
-            }
-            if payload["role"] == "assistant"
-                && let Some(plan) =
-                    inner_tag(&body, "proposed_plan").filter(|plan| !plan.is_empty())
-            {
-                return Part::Plan(PlanPart {
-                    input: plan.into(),
-                    output: Value::Null,
-                    approval_status: "fail".into(),
-                    time_created: timestamp,
-                });
-            }
-            Part::text(body, timestamp)
-        })
-        .collect()
+    let mut parts = Vec::new();
+    for item in items {
+        if !reasoning && matches!(item["type"], Value::Array(_) | Value::Object(_)) {
+            return Err(format!(
+                "unhashable type: '{}'",
+                crate::value::type_name(&item["type"])
+            )
+            .into());
+        }
+        if item["type"] != expected {
+            continue;
+        }
+        let body = field(item, "text");
+        if reasoning {
+            parts.push(Part::Reasoning(TextPart {
+                text: body,
+                time_created: timestamp,
+            }));
+            continue;
+        }
+        if payload["role"] == "assistant"
+            && let Some(plan) = inner_tag(&body, "proposed_plan").filter(|plan| !plan.is_empty())
+        {
+            parts.push(Part::Plan(PlanPart {
+                input: plan.into(),
+                output: Value::Null,
+                approval_status: "fail".into(),
+                time_created: timestamp,
+            }));
+            continue;
+        }
+        parts.push(Part::text(body, timestamp));
+    }
+    Ok(parts)
 }
 
 impl Decoder {
@@ -65,12 +75,19 @@ impl Decoder {
         if record["type"] != "response_item" || !payload.is_object() {
             return Ok(());
         }
+        if matches!(payload["type"], Value::Array(_) | Value::Object(_)) {
+            return Err(format!(
+                "unhashable type: '{}'",
+                crate::value::type_name(&payload["type"])
+            )
+            .into());
+        }
         let id = field(record, "timestamp");
         let timestamp = parse_timestamp(id.trim()).map_or(0, |time| time.as_millisecond());
         match text(&payload["type"]) {
-            "message" => self.message(payload, id, timestamp),
+            "message" => self.message(payload, id, timestamp)?,
             "reasoning" => {
-                let parts = content_parts(payload, timestamp, true);
+                let parts = content_parts(payload, timestamp, true)?;
                 self.assistant(id, timestamp, parts, true);
             }
             "function_call" => self.tool_call(payload, timestamp, false, zh),
@@ -82,10 +99,10 @@ impl Decoder {
         Ok(())
     }
 
-    fn message(&mut self, payload: &Value, id: String, timestamp: i64) {
-        let parts = content_parts(payload, timestamp, false);
+    fn message(&mut self, payload: &Value, id: String, timestamp: i64) -> crate::Result<()> {
+        let parts = content_parts(payload, timestamp, false)?;
         if parts.is_empty() {
-            return;
+            return Ok(());
         }
         let role = payload
             .get("role")
@@ -109,7 +126,7 @@ impl Decoder {
                 self.pending_plan = Some((index, self.messages[index].parts.len() - 1));
                 self.latest_assistant_text = None;
             }
-            return;
+            return Ok(());
         }
         let user_text = parts
             .iter()
@@ -137,6 +154,7 @@ impl Decoder {
         }
         self.current_assistant = None;
         self.latest_assistant_text = None;
+        Ok(())
     }
 
     fn assistant(&mut self, id: String, timestamp: i64, mut parts: Vec<Part>, reasoning: bool) {
@@ -276,10 +294,16 @@ pub fn read(
 ) -> crate::Result<SessionData> {
     let mut decoder = Decoder::default();
     let mut stats = Stats::default();
-    jsonl::scan(&session.source_path, diagnostics, |record| {
-        decoder.record(&record, zh)?;
-        let usage = &record["payload"]["info"]["total_token_usage"];
-        stats.add_tokens(&usage["input_tokens"], &usage["output_tokens"])?;
+    jsonl::scan(&session.source_path, diagnostics, |record, diagnostics| {
+        let result = decoder.record(&record, zh).and_then(|()| {
+            let usage = &record["payload"]["info"]["total_token_usage"];
+            stats.add_tokens(&usage["input_tokens"], &usage["output_tokens"])
+        });
+        if let Err(error) = result {
+            diagnostics(RecoverableDiagnostic::MessageConvertFailed(
+                error.to_string(),
+            ))?;
+        }
         Ok(())
     })?;
     decoder.finish_plan("fail", None);

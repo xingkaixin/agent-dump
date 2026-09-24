@@ -1,5 +1,17 @@
 use serde_json::Value;
 
+pub fn type_name(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "NoneType",
+        Value::Bool(_) => "bool",
+        Value::Number(number) if number.is_f64() => "float",
+        Value::Number(_) => "int",
+        Value::String(_) => "str",
+        Value::Array(_) => "list",
+        Value::Object(_) => "dict",
+    }
+}
+
 pub fn text(value: &Value) -> &str {
     value.as_str().unwrap_or("")
 }

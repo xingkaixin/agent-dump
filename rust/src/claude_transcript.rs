@@ -1,4 +1,5 @@
 use crate::message_assembly::{backfill, fold_assistant};
+use crate::provider::RecoverableDiagnostic;
 use crate::session::{
     Message, Part, Session, SessionData, Stats, TextPart, ToolPart, parse_timestamp,
 };
@@ -183,7 +184,8 @@ impl Decoder {
     }
 
     fn user(&mut self, record: &Value, source: &Value, timestamp: i64) -> crate::Result<()> {
-        let content = &source["content"];
+        let empty = Value::String(String::new());
+        let content = source.get("content").unwrap_or(&empty);
         let visible = user_parts(content, timestamp);
         if content.is_string() && visible.is_empty() {
             return Ok(());
@@ -252,9 +254,17 @@ impl Decoder {
         if record["isMeta"] == true {
             return Ok(());
         }
-        let source = &record["message"];
-        if !source.is_object() {
+        if !matches!(text(&record["type"]), "assistant" | "user" | "tool_result") {
             return Ok(());
+        }
+        let empty = json!({});
+        let source = record.get("message").unwrap_or(&empty);
+        if !source.is_object() {
+            return Err(format!(
+                "'{}' object has no attribute 'get'",
+                crate::value::type_name(source)
+            )
+            .into());
         }
         let timestamp =
             parse_timestamp(text(&record["timestamp"])).map_or(0, |time| time.as_millisecond());
@@ -281,8 +291,13 @@ pub fn read(
     diagnostics: &mut crate::provider::DiagnosticSink<'_>,
 ) -> crate::Result<SessionData> {
     let mut decoder = Decoder::default();
-    crate::jsonl::scan(&session.source_path, diagnostics, |record| {
-        decoder.record(&record)
+    crate::jsonl::scan(&session.source_path, diagnostics, |record, diagnostics| {
+        if let Err(error) = decoder.record(&record) {
+            diagnostics(RecoverableDiagnostic::MessageConvertFailed(
+                error.to_string(),
+            ))?;
+        }
+        Ok(())
     })?;
     let mut stats = Stats {
         message_count: decoder.messages.len(),

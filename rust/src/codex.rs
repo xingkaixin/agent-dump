@@ -38,7 +38,7 @@ impl Codex {
         if self.titles.is_none() {
             let mut titles = HashMap::new();
             if self.index.exists()
-                && let Err(error) = jsonl::scan(&self.index, &mut |_| Ok(()), |record| {
+                && let Err(error) = jsonl::scan(&self.index, &mut |_| Ok(()), |record, _| {
                     let id = text(&record["id"]);
                     if !id.trim().is_empty()
                         && let Some(title) = normalize_title(text(&record["thread_name"]))
@@ -128,6 +128,11 @@ impl Codex {
                 updated_at = time;
             }
             let p = &record["payload"];
+            if p["type"].is_array() || p["type"].is_object() {
+                return Err(
+                    format!("unhashable type: '{}'", crate::value::type_name(&p["type"])).into(),
+                );
+            }
             if matches!(
                 text(&p["type"]),
                 "message" | "function_call" | "function_call_output"

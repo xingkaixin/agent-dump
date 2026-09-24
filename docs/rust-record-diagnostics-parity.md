@@ -1,6 +1,6 @@
 # P2：损坏记录可恢复警告验收
 
-本批对齐完整正文读取中的 JSONL 坏行和旧 SQLite 消息/part 坏记录警告，覆盖文案、语言、输出通道、次数和继续读取行为。Python 生产源码、P0 evaluator 及 pip/npm 默认入口保持不变；本批之后的标题缓存恢复见[标题缓存验收](rust-title-cache-parity.md)，消息转换异常仍未完成。
+本批对齐完整正文读取中的 JSONL 坏行和旧 SQLite 消息/part 坏记录警告，覆盖文案、语言、输出通道、次数和继续读取行为。Python 生产源码、P0 evaluator 及 pip/npm 默认入口保持不变；本批之后的标题缓存恢复见[标题缓存验收](rust-title-cache-parity.md)，后续的记录转换恢复见[验收记录](rust-message-conversion-parity.md)，其他极端输入仍未全部验收。
 
 ## 行为与证据
 
@@ -27,7 +27,7 @@
 ## 仍待完成
 
 - Codex/Claude 标题索引打开、解析、条目跳过及同实例刷新已在后续验证，见[标题缓存验收](rust-title-cache-parity.md)；底层错误全文与其他极端标题字段仍待对齐。
-- Codex/Claude/Pi 单条消息转换失败时的继续读取与本地化原因；底层错误全文和异常类型尚未全部一致。
+- Codex/Claude/Pi 的记录级转换恢复与已验证原因在后续补齐，见[转换恢复验收](rust-message-conversion-parity.md)；底层错误全文和其他极端字段尚未全部一致。
 - 长生命周期发现刷新、缓存、lease/LRU、并发失效，以及极端输入与跨平台验证。
 
 P2 仍未完成。搜索、配置、Collect、Ratatui 与 pip/npm Rust 发布切换保持在后续阶段。

@@ -6,6 +6,22 @@ use std::fmt::Write;
 
 pub fn record_warning(diagnostic: &RecoverableDiagnostic, zh: bool) -> String {
     match diagnostic {
+        RecoverableDiagnostic::MessageConvertFailed(error) => {
+            let error = safe_line(error);
+            if zh {
+                format!("警告: 转换消息格式失败: {error}")
+            } else {
+                format!("⚠️  Failed to convert message format: {error}")
+            }
+        }
+        RecoverableDiagnostic::PiRecordConvertFailed(error) => {
+            let error = safe_line(error);
+            if zh {
+                format!("警告: 转换 Pi 记录失败: {error}")
+            } else {
+                format!("⚠️  Failed to convert Pi record: {error}")
+            }
+        }
         RecoverableDiagnostic::TitleCacheFailed(error) => {
             let error = safe_line(error);
             if zh {

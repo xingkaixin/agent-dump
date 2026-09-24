@@ -117,14 +117,7 @@ impl Claude {
         {
             Some(Value::String(title)) => normalize_title(title),
             Some(value) => {
-                let kind = match value {
-                    Value::Bool(_) => "bool",
-                    Value::Number(number) if number.is_f64() => "float",
-                    Value::Number(_) => "int",
-                    Value::Array(_) => "list",
-                    Value::Object(_) => "dict",
-                    _ => unreachable!(),
-                };
+                let kind = crate::value::type_name(value);
                 return Err(format!("expected string or bytes-like object, got '{kind}'").into());
             }
             None => None,

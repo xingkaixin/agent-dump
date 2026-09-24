@@ -1,4 +1,5 @@
 use crate::pi::{datetime, session_name};
+use crate::provider::RecoverableDiagnostic;
 use crate::session::{ImagePart, Message, Part, Session, SessionData, Stats, TextPart, ToolPart};
 use crate::value::{field, integer, text, truthy};
 use serde_json::{Value, json};
@@ -14,15 +15,23 @@ pub fn read(
     };
     let mut title = session.title.clone();
     let mut sequence = 0;
-    crate::jsonl::scan(&session.source_path, diagnostics, |record| {
+    crate::jsonl::scan(&session.source_path, diagnostics, |record, diagnostics| {
         sequence += 1;
         if let Some(name) = session_name(&record) {
             title = name;
         }
-        if let Some(message) = convert(&record, sequence)? {
-            messages.push(message);
+        let result = (|| -> crate::Result<()> {
+            if let Some(message) = convert(&record, sequence)? {
+                messages.push(message);
+            }
+            accumulate(&mut stats, &record)
+        })();
+        if let Err(error) = result {
+            diagnostics(RecoverableDiagnostic::PiRecordConvertFailed(
+                error.to_string(),
+            ))?;
         }
-        accumulate(&mut stats, &record)
+        Ok(())
     })?;
     stats.message_count = messages.len();
     let mut data = session.payload(messages, stats);
@@ -61,6 +70,29 @@ fn accumulate(stats: &mut Stats, record: &Value) -> crate::Result<()> {
     Ok(())
 }
 
+fn timestamp_ms(value: &Value) -> crate::Result<Option<i64>> {
+    if let Some(text) = value.as_str()
+        && let Ok(pieces) = jiff::fmt::temporal::DateTimeParser::new().parse_pieces(text.trim())
+    {
+        if pieces.date().year() < 1 {
+            return Ok(None);
+        }
+        if let Some(offset) = pieces.to_numeric_offset() {
+            let local = pieces
+                .date()
+                .to_datetime(pieces.time().unwrap_or(jiff::civil::Time::MIN));
+            // Python's astimezone rejects UTC dates outside years 1..=9999.
+            if local
+                .checked_sub(jiff::SignedDuration::from_secs(i64::from(offset.seconds())))
+                .map_or(true, |utc| utc.year() < 1)
+            {
+                return Err("date value out of range".into());
+            }
+        }
+    }
+    Ok(datetime(value).map(|time| time.as_millisecond()))
+}
+
 fn convert(record: &Value, sequence: usize) -> crate::Result<Option<Message>> {
     let raw_id = field(record, "id").trim().to_owned();
     let id = if raw_id.is_empty() {
@@ -68,7 +100,7 @@ fn convert(record: &Value, sequence: usize) -> crate::Result<Option<Message>> {
     } else {
         raw_id.clone()
     };
-    let timestamp = datetime(&record["timestamp"]).map_or(0, |time| time.as_millisecond());
+    let timestamp = timestamp_ms(&record["timestamp"])?.unwrap_or(0);
     let message = match text(&record["type"]) {
         "message" if record["message"].is_object() => {
             agent_message(&record["message"], id, timestamp)?
@@ -103,8 +135,7 @@ fn convert(record: &Value, sequence: usize) -> crate::Result<Option<Message>> {
 fn agent_message(source: &Value, id: String, entry_time: i64) -> crate::Result<Option<Message>> {
     let role = field(source, "role");
     let role = role.trim();
-    let time = datetime(&source["timestamp"])
-        .map(|time| time.as_millisecond())
+    let time = timestamp_ms(&source["timestamp"])?
         .filter(|time| *time != 0)
         .unwrap_or(entry_time);
     if role == "bashExecution" {

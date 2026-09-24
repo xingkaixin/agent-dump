@@ -4,7 +4,7 @@
 
 以下 recipes 面向当前 Python 发布版。实验性 Rust 的命令子集见 [`rust/README.md`](../../../rust/README.md)：支持十个 Provider 的 `--list` 列表、`-q provider:codex,opencode` 来源范围和 URI 导出；单个 Provider 失败不阻止其他来源。Cursor 仅支持 JSON/print；DeepChat、Cherry Studio、MiniMax 支持 JSON/Markdown/print；其余六个还支持 raw。
 
-文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余七个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。配置、搜索、collect 与交互尚未迁移。
+文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余七个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。Codex、Claude、Pi 的单条记录转换失败走本地化 stderr 警告并继续读取；head/list/raw 不执行正文转换。配置、搜索、collect 与交互尚未迁移。
 
 ## 1) 常用命令模板
 

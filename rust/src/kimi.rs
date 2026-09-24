@@ -182,13 +182,13 @@ impl Provider for Kimi {
             ..Stats::default()
         };
         if wire.exists() {
-            crate::jsonl::scan(&wire, diagnostics, |record| {
+            crate::jsonl::scan(&wire, diagnostics, |record, _| {
                 let usage = &record["message"]["usage"];
                 stats.add_tokens(&usage["input_tokens"], &usage["output_tokens"])
             })?;
         }
         let raw = if context.exists() { &context } else { &wire };
-        crate::jsonl::scan(raw, diagnostics, |record| {
+        crate::jsonl::scan(raw, diagnostics, |record, _| {
             if record["role"] == "_usage" && record["token_count"].is_number() {
                 stats.total_tokens = Some(integer(&record["token_count"]));
             }

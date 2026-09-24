@@ -27,7 +27,7 @@ Kimi 的正文选择与 raw 选择遵循不同的已有契约：正文检查当�
 
 ## 仍待完成
 
-- 消息转换失败的可恢复警告；JSONL/旧 SQLite [坏记录警告](rust-record-diagnostics-parity.md)及 Codex/Claude [标题缓存恢复](rust-title-cache-parity.md)已在后续补齐，底层错误全文仍有差异。
+- Codex/Claude/Pi [记录转换恢复](rust-message-conversion-parity.md)已在后续验证，其他极端消息字段仍待验收；JSONL/旧 SQLite [坏记录警告](rust-record-diagnostics-parity.md)及 Codex/Claude [标题缓存恢复](rust-title-cache-parity.md)已在后续补齐，底层错误全文仍有差异。
 - 文件存在性检查与打开之间的竞争、权限等底层错误全文及异常类别、无效导出 ID 和完整 CLI usage。
 - 长生命周期发现刷新、缓存、lease/LRU、并发读取合并与失效；本批的旧 Session 验证不等于完整缓存验收。
 - 极端输入、历史 schema 与跨平台发布。配置、搜索、Collect、Ratatui 和 pip/npm Rust 发布切换保持在后续阶段。

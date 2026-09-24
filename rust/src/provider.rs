@@ -12,6 +12,8 @@ pub enum RecoverableDiagnostic {
     },
     MessageDataParseFailed(String),
     PartDataParseFailed(String),
+    MessageConvertFailed(String),
+    PiRecordConvertFailed(String),
     TitleCacheFailed(String),
     TitleCacheEntriesSkipped {
         path: PathBuf,

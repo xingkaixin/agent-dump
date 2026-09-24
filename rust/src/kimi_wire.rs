@@ -154,7 +154,7 @@ pub fn read(
     diagnostics: &mut crate::provider::DiagnosticSink<'_>,
 ) -> crate::Result<Vec<Message>> {
     let mut decoder = Decoder::default();
-    crate::jsonl::scan_numbered(path, diagnostics, |seq, record| {
+    crate::jsonl::scan_numbered(path, diagnostics, |seq, record, _| {
         decoder.record(seq, &record)
     })?;
     decoder.messages.retain(|message| !message.parts.is_empty());

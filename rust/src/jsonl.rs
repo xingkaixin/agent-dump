@@ -83,15 +83,17 @@ pub fn metadata(path: &Path, head_lines: usize) -> io::Result<Metadata> {
 pub fn scan(
     path: &Path,
     diagnostics: &mut DiagnosticSink<'_>,
-    mut append: impl FnMut(Value) -> crate::Result<()>,
+    mut append: impl FnMut(Value, &mut DiagnosticSink<'_>) -> crate::Result<()>,
 ) -> crate::Result<()> {
-    scan_numbered(path, diagnostics, |_, record| append(record))
+    scan_numbered(path, diagnostics, |_, record, diagnostics| {
+        append(record, diagnostics)
+    })
 }
 
 pub fn scan_numbered(
     path: &Path,
     diagnostics: &mut DiagnosticSink<'_>,
-    mut append: impl FnMut(usize, Value) -> crate::Result<()>,
+    mut append: impl FnMut(usize, Value, &mut DiagnosticSink<'_>) -> crate::Result<()>,
 ) -> crate::Result<()> {
     let mut reader = BufReader::new(File::open(path)?);
     let mut line = Vec::new();
@@ -108,7 +110,7 @@ pub fn scan_numbered(
             continue;
         }
         if let Some(value) = object(&line) {
-            append(number, value)?;
+            append(number, value, diagnostics)?;
         } else if matches!(line.last(), Some(b'\n' | b'\r')) {
             count += 1;
             if skipped.len() < 5 {

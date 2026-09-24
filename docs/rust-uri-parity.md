@@ -39,7 +39,7 @@ URI 诊断的每个动态字段分别清理终端控制字符并限制展示长�
 
 - Provider 专属诊断的后续验证见 DeepChat / Cherry / MiniMax [专属错误验收](rust-provider-errors-parity.md)及其余七个 Provider [源缺失验收](rust-source-parity.md)；尚不涵盖所有底层错误。
 - JSON、SQLite、文件系统的底层原因文本和异常类型并不全部相同。新的失败测试明确区分逐字差分和结构/行为检查，不将后者算作完整文本一致。
-- 正文转换等旧警告路径仍需统一。JSONL/旧 SQLite [坏记录警告](rust-record-diagnostics-parity.md)及 Codex/Claude [标题缓存警告](rust-title-cache-parity.md)已通过显式诊断 sink 接入工作流；不代表所有错误全文已对齐。
+- Codex/Claude/Pi [记录转换恢复](rust-message-conversion-parity.md)已在后续接入，其他极端消息字段仍需验收。JSONL/旧 SQLite [坏记录警告](rust-record-diagnostics-parity.md)及 Codex/Claude [标题缓存警告](rust-title-cache-parity.md)已通过显式诊断 sink 接入工作流；不代表所有错误全文已对齐。
 - 非法导出 ID 的能力诊断、文件系统故障详情、完整 CLI usage、查询/列表参数组合仍待验收。文件导出仍要求显式 `--output`，配置默认值留在 P4。
 - 复用 Provider 实例的刷新/缓存、并发失效、读取中源消失和跨平台发布验收仍未关闭。
 

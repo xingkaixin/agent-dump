@@ -68,7 +68,7 @@ pub fn read(
     let mut messages = Vec::new();
     let mut pending = HashMap::new();
     let mut ignored = HashSet::new();
-    crate::jsonl::scan_numbered(path, diagnostics, |seq, record| {
+    crate::jsonl::scan_numbered(path, diagnostics, |seq, record, _| {
         let id = format!("context-{seq}");
         match text(&record["role"]) {
             "user" => {
