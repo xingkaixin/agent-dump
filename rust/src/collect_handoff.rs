@@ -50,7 +50,7 @@ pub fn handoff(
                 .collect::<Vec<_>>()
                 .join(" ")
         };
-        let record = json!({"uri":uri, "date":session.created_at.format_local("%Y-%m-%d"), "created_at":session.created_at.iso_local(), "updated_at":session.updated_at.iso_local(), "title":session.title, "project_directory":session.directory, "read_argv":argv, "read_command":command});
+        let record = json!({"uri":uri, "date":session.created_at.format_local("%Y-%m-%d"), "created_at":session.created_at.iso_local(), "updated_at":session.updated_at.iso_local(), "title":session.title, "project_directory":session.working_directory(), "read_argv":argv, "read_command":command});
         prompt += "\n";
         prompt += &crate::collect_prompts::envelope(
             "collect_session",

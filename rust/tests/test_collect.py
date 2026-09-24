@@ -81,7 +81,13 @@ def test_collect_requests_and_output(cli, provider, mode, lang):
     for source in cli.source.parent.rglob("*.jsonl"):
         if source != cli.source:
             source.unlink()
-    cli.write([header(), message("user", "请检查认证问题"), message("assistant", "认证缺陷已修复 😺")])
+    cli.write(
+        [
+            header(cwd="  /project/./nested//  "),
+            message("user", "请检查认证问题"),
+            message("assistant", "认证缺陷已修复 😺"),
+        ]
+    )
     fields = ["requests", "decisions", "outcomes"] if mode == "pm" else ["scene", "stuck", "turning"]
     summary = json.dumps({field: [f"{field} fact"] for field in fields}, ensure_ascii=False)
     calls = []

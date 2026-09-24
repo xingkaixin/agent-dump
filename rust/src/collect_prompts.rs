@@ -29,13 +29,14 @@ pub fn envelope(kind: &str, source: &str, body: &str) -> String {
 
 pub fn chunk(entry: &Entry, events: &[Event], index: usize, mode: Mode) -> String {
     let uri = entry.uri();
+    let directory = entry.session.working_directory();
     let metadata = format!(
         "title: {}\nproject_directory: {}\ncreated_at: {}\nchunk: {}/{}",
         entry.session.title,
-        if entry.session.directory.is_empty() {
+        if directory.is_empty() {
             "(unknown)"
         } else {
-            &entry.session.directory
+            &directory
         },
         entry.session.created_at.iso_local(),
         index + 1,

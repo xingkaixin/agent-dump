@@ -187,7 +187,7 @@ pub fn run(
         .filter_map(|(entry, summary)| {
             summary.map(|summary| Group {
                 date: entry.date.to_string(),
-                project_directory: entry.session.directory.clone(),
+                project_directory: entry.session.working_directory(),
                 session_uris: vec![entry.uri()],
                 summary,
             })

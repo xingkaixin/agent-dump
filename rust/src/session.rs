@@ -298,13 +298,17 @@ impl Session {
         }
     }
 
+    pub fn working_directory(&self) -> String {
+        let path = std::path::Path::new(self.directory.trim())
+            .components()
+            .collect::<PathBuf>();
+        crate::source_io::path_text(&path)
+    }
+
     pub fn display_location(&self) -> String {
-        if !self.directory.trim().is_empty() {
-            return std::path::Path::new(self.directory.trim())
-                .components()
-                .collect::<PathBuf>()
-                .display()
-                .to_string();
+        let directory = self.working_directory();
+        if !directory.is_empty() {
+            return directory;
         }
         if let Some(project) = &self.project {
             return project.clone();
