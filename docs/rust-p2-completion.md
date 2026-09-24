@@ -67,7 +67,7 @@ P3 查询/索引/维护，P4 配置/shortcut/Collect/summary，P5 Ratatui，P6 �
 
 平台排除只针对操作系统不支持的条件；不跳过普通来源、schema、正文、错误原因或导出内容差分。Windows 路径使用原生分隔符，列表短路径与 Python 一致；Markdown 文件采用平台文本换行。Linux 保留 glibc 小年份 `%Y` 行为。SQLite 测试连接在移动数据库前关闭；冻结的 benchmark fixture 在 Windows 测试装配后回收不可达连接，原 evaluator 未修改。
 
-Rust release 使用固定 1.90.0 工具链构建，性能测量 checkout 为 `d074c63`，后续只有验收文档和原始报告。Python 生产源码、P0 evaluator、`uv.lock` 与合成 fixture 的 hash 均保持不变。性能比较、全部原始样本、体积及历史波动见[P2 最终复测](benchmarks/rust-p2-final.md)。这些场景仅覆盖健康 Codex/OpenCode V2 路径，不外推为十个 Provider 的统一加速比。
+Rust release 使用固定 1.90.0 工具链构建，性能测量 checkout 为 `d074c63`，后续只有验收文档、原始报告和平台测试断言修正，生产 Rust 不变。Python 生产源码、P0 evaluator、`uv.lock` 与合成 fixture 的 hash 均保持不变。性能比较、全部原始样本、体积及历史波动见[P2 最终复测](benchmarks/rust-p2-final.md)。这些场景仅覆盖健康 Codex/OpenCode V2 路径，不外推为十个 Provider 的统一加速比。
 
 ## 交付状态
 

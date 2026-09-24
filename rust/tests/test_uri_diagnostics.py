@@ -119,7 +119,7 @@ def test_fallback_lookup_chooses_newest_matching_session(cli, lang):
     cli.source.rename(cli.source.with_name("older.jsonl"))
     write_jsonl(cli.source.with_name("newer.jsonl"), [header(cwd="/newest", timestamp="2026-02-01T00:00:00Z")])
     cli.parity(f"codex://{IDENTITY}", "--head", "--lang", lang)
-    assert "/newest" in cli.run("rust", f"codex://{IDENTITY}", "--head").stdout
+    assert str(Path("/newest")) in cli.run("rust", f"codex://{IDENTITY}", "--head").stdout
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
