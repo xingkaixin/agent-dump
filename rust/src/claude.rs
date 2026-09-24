@@ -18,7 +18,7 @@ impl Claude {
     pub fn open() -> crate::Result<Self> {
         let root = file_sessions::environment_root("CLAUDE_CONFIG_DIR", ".claude")?;
         Ok(Self {
-            roots: SourceRoots::resolve(
+            roots: SourceRoots::new(
                 root,
                 "projects",
                 "data/claudecode",
@@ -28,11 +28,14 @@ impl Claude {
         })
     }
 
-    fn files(&self) -> crate::Result<Vec<PathBuf>> {
-        self.roots.files(Some(2), |path| {
-            path.extension().is_some_and(|ext| ext == "jsonl")
-                && path.parent() != Some(self.roots.base.as_path())
-        })
+    fn files(&mut self) -> crate::Result<Vec<PathBuf>> {
+        let files = self.roots.files(Some(2), |path, base| {
+            path.extension().is_some_and(|ext| ext == "jsonl") && path.parent() != Some(base)
+        })?;
+        if let Some(base) = &self.roots.base {
+            std::fs::read_dir(base)?;
+        }
+        Ok(files)
     }
 
     fn titles(
@@ -206,9 +209,10 @@ impl Provider for Claude {
         diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Lookup> {
         self.titles.clear();
+        let files = self.files()?;
         file_sessions::find(
-            &self.roots.base.clone(),
-            &self.files()?,
+            self.roots.base.clone().as_deref(),
+            &files,
             id,
             |path| path.file_stem().is_some_and(|name| name == id),
             |path| self.parse(path, diagnostics),
@@ -241,13 +245,31 @@ impl Provider for Claude {
     }
 
     fn source_root(&self) -> &Path {
-        &self.roots.owned
+        self.roots.owned()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_selection_retries_absence_and_keeps_selected_root() {
+        crate::source_tests::source_selection(
+            "projects",
+            true,
+            |root, fallback| Claude {
+                roots: SourceRoots::new(root, "projects", fallback, "Synthetic Claude"),
+                titles: HashMap::new(),
+            },
+            |base| {
+                let path = base.join("project/kept.jsonl");
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(&path, concat!(r#"{"type":"user","timestamp":"2026-01-15T00:00:00Z","message":{"role":"user","content":"Keep"}}"#, "\n")).unwrap();
+                path
+            },
+        );
+    }
 
     #[test]
     fn title_cache_is_per_project_and_refreshes_after_recovery() {
@@ -270,7 +292,7 @@ mod tests {
         )
         .unwrap();
         let mut provider = Claude {
-            roots: SourceRoots::resolve(
+            roots: SourceRoots::new(
                 directory.path().into(),
                 "projects",
                 "data/claudecode",
@@ -325,7 +347,7 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "{\"type\":\"user\",\"sessionId\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\",\"message\":{\"role\":\"user\",\"content\":\"hello\"}}\n").unwrap();
         let provider = Claude {
-            roots: SourceRoots::resolve(
+            roots: SourceRoots::new(
                 directory.path().into(),
                 "projects",
                 "data/claudecode",

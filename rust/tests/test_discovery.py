@@ -123,6 +123,27 @@ def test_bad_file_keeps_good_sessions_and_warning_is_one_line(cli, lang):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
+@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_claude_projects_file_is_a_source_failure(cli, lang):
+    source = cli.root / "sources/claude/projects"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    if source.exists():
+        shutil.rmtree(source)
+    source.write_text("not a project directory")
+    before = cli.fixtures.source_manifest(cli.root)
+    for args, exit_code in [
+        (("--list", "-q", "provider:claude", "-d", "36500"), 0),
+        (("claude://missing", "--head"), 1),
+    ]:
+        results = [cli.run(candidate, *args, "--lang", lang) for candidate in ("python", "rust")]
+        assert results[0].stdout == results[1].stdout
+        for result in results:
+            assert result.returncode == exit_code
+            assert len(result.stderr.splitlines()) == 1
+            assert str(source) in result.stderr or "directory" in result.stderr.lower()
+            assert cli.fixtures.source_manifest(cli.root) == before
+
+
 @pytest.mark.parametrize("provider", ["cherry", "minimax"])
 def test_partial_desktop_failure_keeps_other_providers(tmp_path, monkeypatch, provider):
     cli, _ = desktop(tmp_path, monkeypatch, provider)

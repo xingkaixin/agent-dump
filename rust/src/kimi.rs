@@ -18,13 +18,13 @@ impl Kimi {
     pub fn open() -> crate::Result<Self> {
         let root = file_sessions::environment_root("KIMI_SHARE_DIR", ".kimi")?;
         Ok(Self {
-            roots: SourceRoots::resolve(root, "sessions", "data/kimi", "KIMI_SHARE_DIR/sessions"),
+            roots: SourceRoots::new(root, "sessions", "data/kimi", "KIMI_SHARE_DIR/sessions"),
             work_dirs: None,
         })
     }
 
-    fn files(&self) -> crate::Result<Vec<PathBuf>> {
-        self.roots.files(None, |path| {
+    fn files(&mut self) -> crate::Result<Vec<PathBuf>> {
+        self.roots.files(None, |path, _| {
             path.file_name().is_some_and(|name| name == "metadata.json")
         })
     }
@@ -32,12 +32,10 @@ impl Kimi {
     fn working_directory(&mut self, hash: &str) -> String {
         let mapping = self.work_dirs.get_or_insert_with(|| {
             let mut mapping = HashMap::new();
-            let path = self
-                .roots
-                .base
-                .parent()
-                .unwrap_or(&self.roots.base)
-                .join("kimi.json");
+            let Some(base) = self.roots.base.as_deref() else {
+                return mapping;
+            };
+            let path = base.parent().unwrap_or(base).join("kimi.json");
             if let Some(raw) = std::fs::read(path)
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
@@ -138,9 +136,10 @@ impl Provider for Kimi {
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Lookup> {
         self.work_dirs = None;
+        let files = self.files()?;
         file_sessions::find(
-            &self.roots.base.clone(),
-            &self.files()?,
+            self.roots.base.clone().as_deref(),
+            &files,
             id,
             |path| {
                 path.parent()
@@ -202,7 +201,7 @@ impl Provider for Kimi {
     }
 
     fn source_root(&self) -> &Path {
-        &self.roots.owned
+        self.roots.owned()
     }
 
     fn raw_export(&self, session: &Session) -> crate::Result<RawExport> {
@@ -255,6 +254,33 @@ impl Provider for Kimi {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_selection_retries_absence_and_keeps_selected_root() {
+        crate::source_tests::source_selection(
+            "sessions",
+            false,
+            |root, fallback| Kimi {
+                roots: SourceRoots::new(root, "sessions", fallback, "Synthetic Kimi"),
+                work_dirs: None,
+            },
+            |base| {
+                let path = base.join("project/kept");
+                std::fs::create_dir_all(&path).unwrap();
+                std::fs::write(
+                    path.join("metadata.json"),
+                    r#"{"session_id":"kept","title":"Kept","wire_mtime":1768478400}"#,
+                )
+                .unwrap();
+                std::fs::write(
+                    path.join("context.jsonl"),
+                    concat!(r#"{"role":"user","content":"Keep"}"#, "\n"),
+                )
+                .unwrap();
+                path
+            },
+        );
+    }
     use crate::source_tests::assert_missing;
 
     fn fixture(root: &Path, context: bool) -> (Kimi, Session) {
@@ -274,7 +300,7 @@ mod tests {
         }
         std::fs::write(directory.join("wire.jsonl"), "{\"timestamp\":1768478400,\"message\":{\"type\":\"TurnBegin\",\"payload\":{\"user_input\":[{\"text\":\"Wire\"}]}}}\n").unwrap();
         let mut provider = Kimi {
-            roots: SourceRoots::resolve(
+            roots: SourceRoots::new(
                 root.into(),
                 "sessions",
                 "data/kimi",

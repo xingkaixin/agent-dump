@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 pub struct SourceRoots {
-    pub base: PathBuf,
-    pub owned: PathBuf,
+    pub base: Option<PathBuf>,
+    root: PathBuf,
     primary: PathBuf,
-    fallback: &'static str,
+    fallback: PathBuf,
     label: &'static str,
 }
 
@@ -23,24 +23,18 @@ pub fn environment_root(variable: &str, default: &str) -> crate::Result<PathBuf>
 }
 
 impl SourceRoots {
-    pub fn resolve(
+    pub fn new(
         root: PathBuf,
         suffix: &str,
-        fallback: &'static str,
+        fallback: impl Into<PathBuf>,
         label: &'static str,
     ) -> Self {
         let primary = root.join(suffix);
-        let (base, owned) = if primary.exists() {
-            (primary.clone(), root)
-        } else {
-            let base = PathBuf::from(fallback);
-            (base.clone(), base)
-        };
         Self {
-            base,
-            owned,
+            base: None,
+            root,
             primary,
-            fallback,
+            fallback: fallback.into(),
             label,
         }
     }
@@ -48,26 +42,43 @@ impl SourceRoots {
     pub fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
         vec![
             (self.label, self.primary.clone()),
-            ("local development fallback", self.fallback.into()),
+            ("local development fallback", self.fallback.clone()),
         ]
     }
 
+    pub fn owned(&self) -> &Path {
+        if self.base.as_ref() == Some(&self.primary) {
+            &self.root
+        } else {
+            &self.fallback
+        }
+    }
+
     pub fn files(
-        &self,
+        &mut self,
         depth: Option<usize>,
-        accept: impl Fn(&Path) -> bool,
+        accept: impl Fn(&Path, &Path) -> bool,
     ) -> crate::Result<Vec<PathBuf>> {
-        if !self.base.exists() {
+        if self.base.is_none() {
+            self.base = [&self.primary, &self.fallback]
+                .into_iter()
+                .find(|path| path.exists())
+                .cloned();
+        }
+        let Some(base) = &self.base else {
+            return Ok(Vec::new());
+        };
+        if !base.exists() {
             return Ok(Vec::new());
         }
-        let mut walker = WalkDir::new(&self.base);
+        let mut walker = WalkDir::new(base);
         if let Some(depth) = depth {
             walker = walker.max_depth(depth);
         }
         let mut paths = Vec::new();
         for entry in walker {
             let entry = entry?;
-            if !entry.file_type().is_dir() && accept(entry.path()) {
+            if !entry.file_type().is_dir() && accept(entry.path(), base) {
                 paths.push(entry.into_path());
             }
         }
@@ -110,14 +121,14 @@ pub fn discover(
 }
 
 pub fn find(
-    base: &Path,
+    base: Option<&Path>,
     paths: &[PathBuf],
     id: &str,
     preferred: impl Fn(&Path) -> bool,
     mut parse: impl FnMut(&Path) -> crate::Result<Option<Session>>,
 ) -> crate::Result<Lookup> {
     let mut lookup = Lookup::default();
-    if base.exists() {
+    if let Some(base) = base.filter(|base| base.exists()) {
         let root = base.canonicalize()?;
         for direct in [true, false] {
             for path in paths {

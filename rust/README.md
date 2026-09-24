@@ -59,6 +59,7 @@ just build-rust
 - JSONL 坏行按扫描汇总，最多展示前五个行号，未完成的坏尾行不告警；旧 SQLite 坏消息/part 跳过后继续处理。警告走 stderr 并跟随 `--lang`，head/list 和 JSONL raw 不触发正文警告。
 - Codex、Claude 仅在有效 metadata 需要标题时加载索引，加载失败告警后回退；同一操作内缓存空结果，下次操作重新加载。Claude 坏索引条目按项目汇总数量，非空非字符串 summary 保留为单会话解析失败。
 - Codex、Claude、Pi 的单条记录转换失败告警后继续，保留已有消息与工具关联；Codex 不累计转换失败记录的 usage，Pi 保留有效 JSON 对象序号。具体已验收错误与 metadata 阶段差异见[转换恢复验收](../docs/rust-message-conversion-parity.md)。
+- 固定配置下，Codex/Claude/Kimi/Pi 和 OpenCode/ZCode 首次发现或查找时选择来源；全部缺失则下次重试，空目录或空数据库也会固定选择。后出现的 primary 不替换已选 fallback，移走来源后不改选，恢复后可继续读取。
 - 已定位来源消失时保留 Provider 的路径证据和本地化恢复建议；OpenCode V2 会话或表消失时不读取旧表中的同 ID 副本。
 - 文件名快速定位失败时回退到完整 metadata 扫描，同 ID 选择创建时间最新的会话；保留查找期间的逐文件失败。
 - 中英文成功输出，终端控制字符清理，导出文件名身份保留与原子私有写入；拒绝写入 Provider 根目录及覆盖符号链接。
@@ -72,7 +73,7 @@ just build-rust
 - 配置文件尚不读取；因此不应用保存的语言、默认目录等配置。帮助、错误文案、错误组合的退出码与全部工作流的部分失败策略未完成全量对齐；未支持的参数会报错。
 - 本地验证只代表 macOS arm64。CI 增加 Linux/macOS 差分任务；Windows 行为和全部发布平台在后续阶段验证。
 
-行为映射和待验收边界见 [Codex](../docs/rust-codex-parity.md)、[Claude Code / Kimi / Pi](../docs/rust-jsonl-parity.md)、[OpenCode / ZCode](../docs/rust-sqlite-parity.md)及 [Cursor / DeepChat / Cherry Studio / MiniMax](../docs/rust-desktop-parity.md) 差分验收记录。共享发现与跨 Provider 隔离见[验收记录](../docs/rust-discovery-parity.md)。URI 共用诊断见[验收记录](../docs/rust-uri-parity.md)。DeepChat / Cherry / MiniMax 的 schema、源缺失与迁移错误见[专属错误验收](../docs/rust-provider-errors-parity.md)。其余七个 Provider 的源缺失与 Kimi raw 文件身份见[源缺失验收](../docs/rust-source-parity.md)。JSONL/旧 SQLite 坏记录警告见[验收记录](../docs/rust-record-diagnostics-parity.md)。Codex/Claude 标题缓存恢复与刷新见[验收记录](../docs/rust-title-cache-parity.md)。Codex/Claude/Pi 消息转换恢复见[验收记录](../docs/rust-message-conversion-parity.md)。底层错误文案、其他刷新/缓存边界、极端输入和跨平台行为仍需后续验收；功能矩阵尚未完成。
+行为映射和待验收边界见 [Codex](../docs/rust-codex-parity.md)、[Claude Code / Kimi / Pi](../docs/rust-jsonl-parity.md)、[OpenCode / ZCode](../docs/rust-sqlite-parity.md)及 [Cursor / DeepChat / Cherry Studio / MiniMax](../docs/rust-desktop-parity.md) 差分验收记录。共享发现与跨 Provider 隔离见[验收记录](../docs/rust-discovery-parity.md)。URI 共用诊断见[验收记录](../docs/rust-uri-parity.md)。DeepChat / Cherry / MiniMax 的 schema、源缺失与迁移错误见[专属错误验收](../docs/rust-provider-errors-parity.md)。其余七个 Provider 的源缺失与 Kimi raw 文件身份见[源缺失验收](../docs/rust-source-parity.md)。JSONL/旧 SQLite 坏记录警告见[验收记录](../docs/rust-record-diagnostics-parity.md)。Codex/Claude 标题缓存恢复与刷新见[验收记录](../docs/rust-title-cache-parity.md)。Codex/Claude/Pi 消息转换恢复见[验收记录](../docs/rust-message-conversion-parity.md)。固定配置下六个 Provider 的来源选择与重试见[验收记录](../docs/rust-source-selection-parity.md)。运行中修改环境变量、其他 Provider 刷新、底层错误文案、正文缓存、极端输入和跨平台行为仍需后续验收；功能矩阵尚未完成。
 
 ## 模块归属
 

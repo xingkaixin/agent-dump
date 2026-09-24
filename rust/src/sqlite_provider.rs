@@ -23,22 +23,26 @@ pub struct SqliteProvider {
 impl SqliteProvider {
     pub fn open(kind: Kind) -> crate::Result<Self> {
         let candidates = database_paths(kind)?;
-        let database = candidates
-            .iter()
-            .map(|(_, path)| path)
-            .find(|path| path.exists())
-            .cloned();
-        let root = database
-            .as_deref()
-            .and_then(Path::parent)
-            .unwrap_or(Path::new("."))
-            .to_owned();
         Ok(Self {
             kind,
-            database,
-            root,
+            database: None,
+            root: PathBuf::from("."),
             search_roots: candidates,
         })
+    }
+
+    fn ensure_database(&mut self) {
+        if self.database.is_none() {
+            self.database = self
+                .search_roots
+                .iter()
+                .map(|(_, path)| path)
+                .find(|path| path.exists())
+                .cloned();
+            if let Some(path) = &self.database {
+                self.root = path.parent().unwrap_or(Path::new(".")).to_owned();
+            }
+        }
     }
 
     fn select(
@@ -98,6 +102,7 @@ impl Provider for SqliteProvider {
         days: i64,
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Discovery> {
+        self.ensure_database();
         let Some(path) = &self.database else {
             return Ok(crate::provider::Discovery::default());
         };
@@ -115,6 +120,7 @@ impl Provider for SqliteProvider {
         id: &str,
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Lookup> {
+        self.ensure_database();
         let Some(path) = self.database.as_deref() else {
             return Ok(crate::provider::Lookup::default());
         };
@@ -323,6 +329,103 @@ fn database_paths(kind: Kind) -> crate::Result<Vec<(&'static str, PathBuf)>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn database_selection_retries_absence_and_keeps_selected_database() {
+        for kind in [Kind::OpenCode, Kind::ZCode] {
+            for initial in ["absent", "primary", "fallback", "both"] {
+                for find_first in [false, true] {
+                    let directory = tempfile::tempdir().unwrap();
+                    let primary = directory.path().join("primary/source.sqlite");
+                    let fallback = directory.path().join("fallback/source.sqlite");
+                    let mut provider = SqliteProvider {
+                        kind,
+                        database: None,
+                        root: PathBuf::from("."),
+                        search_roots: vec![
+                            ("Primary", primary.clone()),
+                            ("Fallback", fallback.clone()),
+                        ],
+                    };
+                    for (path, present) in [
+                        (&primary, matches!(initial, "primary" | "both")),
+                        (&fallback, matches!(initial, "fallback" | "both")),
+                    ] {
+                        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                        if present {
+                            fixture(path, kind, false);
+                            Connection::open(path)
+                                .unwrap()
+                                .execute("DELETE FROM session", [])
+                                .unwrap();
+                        }
+                    }
+                    if find_first {
+                        assert!(
+                            provider
+                                .find("kept", &mut |_| panic!("unexpected warning"))
+                                .unwrap()
+                                .session
+                                .is_none()
+                        );
+                    } else {
+                        let found = provider
+                            .discover(36500, &mut |_| panic!("unexpected warning"))
+                            .unwrap();
+                        assert_eq!(found.available, initial != "absent");
+                        assert!(found.sessions.is_empty() && found.failures.is_empty());
+                    }
+                    for path in [&primary, &fallback] {
+                        if path.exists() {
+                            Connection::open(path).unwrap().execute_batch("INSERT INTO session VALUES ('kept', 'Kept', 1768478400000, 1768478400000, NULL, '/project', NULL, NULL);").unwrap();
+                        } else {
+                            fixture(path, kind, false);
+                        }
+                    }
+                    let expected = if initial == "fallback" {
+                        &fallback
+                    } else {
+                        &primary
+                    };
+                    let session = provider
+                        .find("kept", &mut |_| panic!("unexpected warning"))
+                        .unwrap()
+                        .session
+                        .unwrap();
+                    assert_eq!(&session.source_path, expected);
+                    assert_eq!(provider.source_root(), expected.parent().unwrap());
+                    let found = provider
+                        .discover(36500, &mut |_| panic!("unexpected warning"))
+                        .unwrap();
+                    assert!(found.available && found.failures.is_empty());
+                    assert_eq!(found.sessions.len(), 1);
+                    assert_eq!(&found.sessions[0].source_path, expected);
+
+                    let saved = directory.path().join("removed.sqlite");
+                    std::fs::rename(expected, &saved).unwrap();
+                    assert!(
+                        provider
+                            .find("kept", &mut |_| panic!("unexpected warning"))
+                            .is_err()
+                    );
+                    assert!(
+                        provider
+                            .discover(36500, &mut |_| panic!("unexpected warning"))
+                            .is_err()
+                    );
+                    assert!(!expected.exists());
+                    assert_eq!(provider.source_root(), expected.parent().unwrap());
+                    std::fs::rename(saved, expected).unwrap();
+                    let restored = provider
+                        .find("kept", &mut |_| panic!("unexpected warning"))
+                        .unwrap()
+                        .session
+                        .unwrap();
+                    assert_eq!(&restored.source_path, expected);
+                }
+            }
+        }
+    }
 
     fn fixture(path: &Path, kind: Kind, v2: bool) -> SqliteProvider {
         let connection = Connection::open(path).unwrap();

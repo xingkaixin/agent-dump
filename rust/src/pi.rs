@@ -15,17 +15,12 @@ impl Pi {
     pub fn open() -> crate::Result<Self> {
         let root = file_sessions::environment_root("PI_HOME", ".pi")?;
         Ok(Self {
-            roots: SourceRoots::resolve(
-                root,
-                "agent/sessions",
-                "data/pi",
-                "PI_HOME/agent/sessions",
-            ),
+            roots: SourceRoots::new(root, "agent/sessions", "data/pi", "PI_HOME/agent/sessions"),
         })
     }
 
-    fn files(&self) -> crate::Result<Vec<PathBuf>> {
-        self.roots.files(None, |path| {
+    fn files(&mut self) -> crate::Result<Vec<PathBuf>> {
+        self.roots.files(None, |path, _| {
             path.extension().is_some_and(|ext| ext == "jsonl")
         })
     }
@@ -113,9 +108,10 @@ impl Provider for Pi {
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Lookup> {
         let suffix = format!("{id}.jsonl");
+        let files = self.files()?;
         file_sessions::find(
-            &self.roots.base,
-            &self.files()?,
+            self.roots.base.as_deref(),
+            &files,
             id,
             |path| {
                 path.file_name()
@@ -151,7 +147,7 @@ impl Provider for Pi {
     }
 
     fn source_root(&self) -> &Path {
-        &self.roots.owned
+        self.roots.owned()
     }
 }
 
@@ -197,6 +193,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn source_selection_retries_absence_and_keeps_selected_root() {
+        crate::source_tests::source_selection(
+            "agent/sessions",
+            false,
+            |root, fallback| Pi {
+                roots: SourceRoots::new(root, "agent/sessions", fallback, "Synthetic Pi"),
+            },
+            |base| {
+                let path = base.join("kept.jsonl");
+                std::fs::create_dir_all(base).unwrap();
+                std::fs::write(
+                    &path,
+                    concat!(
+                        r#"{"type":"session","id":"kept","timestamp":"2026-01-15T00:00:00Z"}"#,
+                        "\n",
+                        r#"{"type":"message","message":{"role":"user","content":"Keep"}}"#,
+                        "\n"
+                    ),
+                )
+                .unwrap();
+                path
+            },
+        );
+    }
+
+    #[test]
     fn removed_source_keeps_provider_diagnostic() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("agent/sessions/kept.jsonl");
@@ -207,7 +229,7 @@ mod tests {
         )
         .unwrap();
         let provider = Pi {
-            roots: SourceRoots::resolve(
+            roots: SourceRoots::new(
                 directory.path().into(),
                 "agent/sessions",
                 "data/pi",

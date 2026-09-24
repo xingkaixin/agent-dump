@@ -17,7 +17,7 @@ pub struct Codex {
 impl Codex {
     pub fn open() -> crate::Result<Self> {
         let root = file_sessions::environment_root("CODEX_HOME", ".codex")?;
-        let roots = SourceRoots::resolve(
+        let roots = SourceRoots::new(
             root.clone(),
             "sessions",
             "data/codex",
@@ -59,8 +59,8 @@ impl Codex {
             .cloned())
     }
 
-    fn files(&self) -> crate::Result<Vec<PathBuf>> {
-        self.roots.files(None, |path| {
+    fn files(&mut self) -> crate::Result<Vec<PathBuf>> {
+        self.roots.files(None, |path, _| {
             path.extension().is_some_and(|ext| ext == "jsonl")
         })
     }
@@ -185,9 +185,10 @@ impl Provider for Codex {
     ) -> crate::Result<crate::provider::Lookup> {
         self.titles = None;
         let suffix = format!("-{id}.jsonl");
+        let files = self.files()?;
         file_sessions::find(
-            &self.roots.base.clone(),
-            &self.files()?,
+            self.roots.base.clone().as_deref(),
+            &files,
             id,
             |path| {
                 path.file_name()
@@ -227,13 +228,32 @@ impl Provider for Codex {
     }
 
     fn source_root(&self) -> &Path {
-        &self.roots.owned
+        self.roots.owned()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_selection_retries_absence_and_keeps_selected_root() {
+        crate::source_tests::source_selection(
+            "sessions",
+            false,
+            |root, fallback| Codex {
+                roots: SourceRoots::new(root.clone(), "sessions", fallback, "Synthetic Codex"),
+                titles: None,
+                index: root.join("session_index.jsonl"),
+            },
+            |base| {
+                let path = base.join("rollout-kept.jsonl");
+                std::fs::create_dir_all(base).unwrap();
+                std::fs::write(&path, concat!(r#"{"type":"session_meta","payload":{"id":"kept","timestamp":"2026-01-15T00:00:00Z"}}"#, "\n", r#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Keep"}]}}"#, "\n")).unwrap();
+                path
+            },
+        );
+    }
 
     #[test]
     fn title_cache_failure_is_recoverable_once_per_operation_and_refreshes() {
@@ -248,7 +268,7 @@ mod tests {
         let index = directory.path().join("session_index.jsonl");
         std::fs::create_dir(&index).unwrap();
         let mut provider = Codex {
-            roots: SourceRoots::resolve(
+            roots: SourceRoots::new(
                 directory.path().into(),
                 "sessions",
                 "data/codex",
@@ -308,7 +328,7 @@ mod tests {
         std::fs::create_dir(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "{\"type\":\"session_meta\",\"payload\":{\"id\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\"}}\n").unwrap();
         let provider = Codex {
-            roots: SourceRoots::resolve(
+            roots: SourceRoots::new(
                 directory.path().into(),
                 "sessions",
                 "data/codex",
