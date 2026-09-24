@@ -1,6 +1,6 @@
 mod diagnostic;
 mod encoding;
-pub use diagnostic::Error;
+pub use diagnostic::{Error, invalid_utf8};
 pub use encoding::from_bytes;
 
 use serde_json::{Number, Value};

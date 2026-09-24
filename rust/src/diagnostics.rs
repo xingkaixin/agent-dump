@@ -87,6 +87,15 @@ struct ParsedUri {
 }
 
 impl Diagnostic {
+    pub fn interactive_print(zh: bool) -> Self {
+        Self {
+            summary: crate::i18n::t("DIAG_PRINT_UNSUPPORTED_MODE", zh, &[]),
+            capability: Some(crate::i18n::t("DIAG_PRINT_UNSUPPORTED_DETAIL", zh, &[])),
+            next_steps: vec![crate::i18n::t("DIAG_STEP_DROP_PRINT", zh, &[])],
+            ..Self::default()
+        }
+    }
+
     pub fn query_error(detail: &str, uri: Option<&str>, combination: bool, zh: bool) -> Self {
         let (summary, steps) = if combination {
             ("DIAG_QUERY_COMBINATION_INVALID", vec!["DIAG_STEP_DROP_Q"])

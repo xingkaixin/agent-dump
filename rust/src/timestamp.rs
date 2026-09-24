@@ -26,7 +26,11 @@ impl Timestamp {
 
     fn checked(value: DateTime) -> crate::Result<Self> {
         if value.year() < 1 {
-            return Err("date value out of range".into());
+            return Err(crate::provider_error::ProviderError::Cause {
+                kind: "OverflowError",
+                message: "date value out of range".into(),
+            }
+            .into());
         }
         Ok(Self(value))
     }
@@ -45,6 +49,26 @@ impl Timestamp {
             self.0.strftime("%Y-%m-%dT%H:%M:%S"),
             self.0.subsec_nanosecond() / 1_000
         )
+    }
+
+    pub fn local_date(self) -> jiff::civil::Date {
+        let text = self.format_local("%Y-%m-%d");
+        let parts: Vec<_> = text.split('-').collect();
+        jiff::civil::Date::new(
+            parts[0].parse().unwrap(),
+            parts[1].parse().unwrap(),
+            parts[2].parse().unwrap(),
+        )
+        .unwrap()
+    }
+
+    pub fn iso_local(self) -> String {
+        let mut result = format!("{}T{}", self.local_date(), self.format_local("%H:%M:%S"));
+        let micros = self.0.subsec_nanosecond() / 1_000;
+        if micros != 0 {
+            result += &format!(".{micros:06}");
+        }
+        result + &self.format_local("%:z")
     }
 
     pub fn as_millisecond(self) -> i64 {

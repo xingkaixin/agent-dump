@@ -95,9 +95,9 @@ pub fn message(error: &(dyn std::error::Error + 'static), zh: bool) -> String {
     }
 }
 
-pub fn operation_message(error: &(dyn std::error::Error + 'static), zh: bool) -> String {
+pub fn kind(error: &(dyn std::error::Error + 'static)) -> Option<&'static str> {
     let error = original(error);
-    let kind = match error.downcast_ref::<ProviderError>() {
+    match error.downcast_ref::<ProviderError>() {
         Some(ProviderError::Cause { kind, .. }) => Some(*kind),
         Some(ProviderError::Message(_)) => Some("ValueError"),
         Some(ProviderError::Diagnostic {
@@ -133,7 +133,11 @@ pub fn operation_message(error: &(dyn std::error::Error + 'static), zh: bool) ->
             }
             _ => None,
         },
-    };
+    }
+}
+
+pub fn operation_message(error: &(dyn std::error::Error + 'static), zh: bool) -> String {
+    let kind = kind(error);
     let summary = message(error, zh);
     match kind {
         Some(kind) => format!("{kind}: {summary}"),

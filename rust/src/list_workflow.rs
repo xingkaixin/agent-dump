@@ -9,6 +9,7 @@ pub fn run(
     query: Option<Query>,
     days: i64,
     summary: bool,
+    ignored: (bool, bool),
     zh: bool,
     out: &mut impl Write,
     warnings: &mut impl Write,
@@ -43,10 +44,19 @@ pub fn run(
         .as_ref()
         .map(|query| crate::query_filter::select(&scan.groups, query, zh, warnings))
         .transpose()?;
+    let mut ignored_text = String::new();
+    for (present, key) in [
+        (ignored.0, "LIST_IGNORE_FORMAT"),
+        (ignored.1, "LIST_IGNORE_OUTPUT"),
+    ] {
+        if present {
+            ignored_text += &(t(key, zh, &[]) + "\n");
+        }
+    }
     if let Some(query) = &query
         && query.mode == Mode::Terms
     {
-        write!(out, "{}", crate::render::list_banner())?;
+        write!(out, "{}{}", crate::render::list_banner(), ignored_text)?;
         writeln!(
             out,
             "{}",
@@ -122,6 +132,11 @@ pub fn run(
             days,
             summary,
             zh
+        )
+        .replacen(
+            &crate::render::list_banner(),
+            &(crate::render::list_banner() + &ignored_text),
+            1
         )
     )?;
     Ok(true)

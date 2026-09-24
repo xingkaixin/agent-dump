@@ -106,12 +106,10 @@ def test_portable_export_identity(cli, identity):
 @pytest.mark.parametrize(
     "args",
     [
-        ["--collect"],
         [f"codex://{IDENTITY}", "--format", "xml"],
-        [f"codex://{IDENTITY}", "--format", "json"],
     ],
 )
-def test_unimplemented_commands_fail_explicitly(cli, args):
+def test_unsupported_format_fails_explicitly(cli, args):
     result = cli.run("rust", *args)
     assert result.returncode != 0
     assert result.stderr

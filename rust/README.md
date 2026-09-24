@@ -1,6 +1,6 @@
-# Rust CLI（P2：共享发现与十个 Provider 的读取、导出）
+# Rust CLI（P3～P5：查询、Collect 与终端交互）
 
-此目录是 Rust 重写的实验实现，已接入全部十个 Provider 的发现、消息装配、支持格式的单 URI 导出和正文缓存。ZCode 路径沿用 macOS/Windows 限制。Python 仍是默认实现和发布来源；Rust 二进制尚不能替代完整的 `agent-dump`。P2 完成证据集中在[最终验收](../docs/rust-p2-completion.md)，后续阶段见[迁移计划](../docs/rust-migration-plan.md)。
+此目录是 Rust 重写的实验实现，已接入全部十个 Provider 的发现、消息装配、支持格式的单 URI 导出和正文缓存。ZCode 路径沿用 macOS/Windows 限制。Python 仍是默认实现和发布来源；Rust 二进制继续作为实验入口，完整验收与发布切换属于 P6。P2 完成证据集中在[最终验收](../docs/rust-p2-completion.md)，后续阶段见[迁移计划](../docs/rust-migration-plan.md)。
 
 ## 构建与验证
 
@@ -77,9 +77,9 @@ just build-rust
 
 ## 尚未实现的行为
 
-- Collect、摘要、配置和 shortcut（P4）；批量交互导出与 Ratatui（P5）。
+- P4 的配置、shortcut、Collect、URI summary、emit-prompt，以及 P5 的批量导出和 Ratatui 已接入；最终验收与性能复测进行中。
 - P3 查询和维护命令已接入；阶段验收与待完成项见 [P3～P5 跟踪](../docs/rust-p3-p5-progress.md)。
-- 配置文件尚不读取；因此不应用保存的语言、默认目录等配置。帮助、错误文案、错误组合的退出码与全部工作流的部分失败策略未完成全量对齐；未支持的参数会报错。
+- argparse/Clap 的帮助布局和参数解析器 usage 文案保持既有实验实现差异，P6 做最终兼容性审查。常用模式优先级、冲突、忽略参数、输出路径和业务诊断已纳入差分测试。
 - Rust CI 包含 Linux、macOS、Windows 的构建、Clippy、单元与 CLI 差分门禁；三平台运行同一套契约，具体计数和平台跳过项见 [P2 最终验收](../docs/rust-p2-completion.md)。所有发布架构、libc、wheel/npm 安装与正式切换属于 P6。
 
 行为映射和待验收边界见 [Codex](../docs/rust-codex-parity.md)、[Claude Code / Kimi / Pi](../docs/rust-jsonl-parity.md)、[OpenCode / ZCode](../docs/rust-sqlite-parity.md)及 [Cursor / DeepChat / Cherry Studio / MiniMax](../docs/rust-desktop-parity.md) 差分验收记录。共享发现与跨 Provider 隔离见[验收记录](../docs/rust-discovery-parity.md)。URI 共用诊断见[验收记录](../docs/rust-uri-parity.md)。DeepChat / Cherry / MiniMax 的 schema、源缺失与迁移错误见[专属错误验收](../docs/rust-provider-errors-parity.md)。其余七个 Provider 的源缺失与 Kimi raw 文件身份见[源缺失验收](../docs/rust-source-parity.md)。JSONL/旧 SQLite 坏记录警告见[验收记录](../docs/rust-record-diagnostics-parity.md)。Codex/Claude 标题缓存恢复与刷新见[验收记录](../docs/rust-title-cache-parity.md)。Codex/Claude/Pi 消息转换恢复见[验收记录](../docs/rust-message-conversion-parity.md)。固定配置下六个 Provider 的来源选择与重试见[验收记录](../docs/rust-source-selection-parity.md)。运行中来源配置与其余 Provider 选择见[验收记录](../docs/rust-runtime-sources-parity.md)。这些文件保留各批次当时的状态；开放项的最终归属、功能矩阵和验证证据以 [P2 最终验收](../docs/rust-p2-completion.md)为准。
@@ -132,3 +132,30 @@ just benchmark --command './rust/target/release/agent-dump' \
 ```
 
 Python 用同样的 `--case` 组合重测；Rust 再传入该报告的 `--baseline` 做严格比较。当前共七个场景；不得解释为应用整体加速比。复杂工具消息由差分测试验证，benchmark 仍使用 P0 的固定文本工作负载。
+
+## Collect、配置和交互
+
+```bash
+./rust/target/release/agent-dump --config view
+./rust/target/release/agent-dump --config edit
+./rust/target/release/agent-dump --shortcut NAME ARGUMENT
+./rust/target/release/agent-dump --collect --dry-run --since 20260115 --until 20260116
+./rust/target/release/agent-dump --collect --emit-prompt --since 20260115 --until 20260116
+./rust/target/release/agent-dump --collect --collect-mode insight --since 20260115 --save report.md
+./rust/target/release/agent-dump codex://SESSION_ID --summary --format json --output exports
+./rust/target/release/agent-dump --interactive -d 7 -q provider:codex --format json,md
+```
+
+配置沿用当前 TOML 路径，编辑保留未知字段与注释；密钥在查看和确认时遮蔽。
+Collect 保留日期、deny 路径、Query、事件预算、分块、并发、PM/Insight 归属与失败缺口。
+只向已配置的 OpenAI/Anthropic 协议端点发送请求；自动测试使用临时配置和本机确定性 HTTP 服务。
+压缩失败保留归并前的事实，部分会话失败在最终报告标明；响应正文有大小上限，跨源重定向移除密钥。
+日志、配置和报告按私有权限写入。Rust 拒绝把 Collect 报告或日志写入所选 Provider 源目录，这是只读约束的延伸。
+
+TTY 中使用 Ratatui/Crossterm。方向键移动，空格多选，`a` 全选，`i` 反选，Enter 确认，`q`/`Q`/Esc/Ctrl+C 取消。
+配置输入支持中文、粘贴、密码遮蔽、默认值与取消；退出和错误路径恢复终端。
+非 TTY 保留编号及 `all` 输入；批量导出先拒绝冲突的目标路径，再执行其他有效导出。
+UI 只接收工作流生成的标题、计数和 metadata，不在绘制时扫描 Provider 或读取正文。
+
+代码归属：`config` / `config_command` / `shortcut`，`collect_*`，`llm`，`selector` / `tui` / `interactive_workflow`。
+CLI 解析在 `cli_args`，模式分发在 `command`，文件写入与路径策略归 `export` / `private_files`。

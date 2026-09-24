@@ -57,33 +57,6 @@ fn absolute_existing_ancestor(path: &Path) -> crate::Result<PathBuf> {
     Ok(absolute_existing_ancestor(parent)?.join(path.file_name().ok_or("Invalid output path")?))
 }
 
-fn ensure_directory(path: &Path) -> crate::Result<()> {
-    if path.as_os_str().is_empty() {
-        return Ok(());
-    }
-    let builder = fs::DirBuilder::new();
-    #[cfg(unix)]
-    let builder = {
-        use std::os::unix::fs::DirBuilderExt;
-        let mut builder = builder;
-        builder.mode(0o700);
-        builder
-    };
-    let result = match builder.create(path) {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            if let Some(parent) = path.parent() {
-                ensure_directory(parent)?;
-            }
-            builder.create(path)
-        }
-        result => result,
-    };
-    match result {
-        Err(_) if path.is_dir() => Ok(()),
-        result => result.map_err(|error| crate::source_io::Error::native(path, error).into()),
-    }
-}
-
 fn write(
     output: &Path,
     session_id: &str,
@@ -101,7 +74,7 @@ fn write(
     if destination.is_symlink() {
         return Err("Export destination must not be a symlink".into());
     }
-    ensure_directory(output)?;
+    crate::private_files::ensure_directory(output)?;
     let mut temporary = tempfile::Builder::new()
         .prefix(&format!(
             ".{}.",
@@ -163,4 +136,108 @@ pub fn raw(
         io::copy(&mut fs::File::open(source)?, file)?;
         Ok(())
     })
+}
+
+pub struct SessionExport<'a> {
+    pub provider: &'a dyn crate::provider::Provider,
+    pub session: &'a crate::session::Session,
+    pub uri: &'a str,
+    pub data: Option<&'a crate::session::SessionData>,
+    pub raw: &'a crate::Result<crate::provider::RawExport>,
+}
+impl SessionExport<'_> {
+    pub fn write(
+        &self,
+        format: crate::output_formats::OutputFormat,
+        output: &Path,
+        summary: Option<&str>,
+    ) -> crate::Result<PathBuf> {
+        use crate::output_formats::OutputFormat;
+        use crate::provider::RawExport;
+        match format {
+            OutputFormat::Raw => match self.raw.as_ref().unwrap() {
+                RawExport::File(source) => raw(
+                    &self.session.id,
+                    source,
+                    output,
+                    self.provider.source_root(),
+                ),
+                RawExport::Session => json(
+                    &self.session.id,
+                    self.data.unwrap(),
+                    output,
+                    self.provider.source_root(),
+                    ".raw.json",
+                ),
+            },
+            OutputFormat::Json => {
+                let mut payload = self.provider.json_payload(self.data.unwrap());
+                if let Some(summary) = summary
+                    && let Some(object) = payload.as_object_mut()
+                {
+                    object.insert("summary".into(), summary.into());
+                }
+                json(
+                    &self.session.id,
+                    &payload,
+                    output,
+                    self.provider.source_root(),
+                    ".json",
+                )
+            }
+            OutputFormat::Markdown => markdown(
+                &self.session.id,
+                &crate::render::transcript(self.uri, self.data.unwrap()),
+                output,
+                self.provider.source_root(),
+            ),
+            OutputFormat::Print => unreachable!(),
+        }
+    }
+}
+
+pub fn output_base(
+    explicit: Option<&Path>,
+    configured: &str,
+    format: crate::output_formats::OutputFormat,
+) -> PathBuf {
+    explicit
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| {
+            if explicit.is_none()
+                && matches!(
+                    format,
+                    crate::output_formats::OutputFormat::Json
+                        | crate::output_formats::OutputFormat::Raw
+                )
+                && !configured.is_empty()
+            {
+                configured.into()
+            } else {
+                "sessions".into()
+            }
+        })
+}
+
+pub fn target(
+    id: &str,
+    output: &Path,
+    format: crate::output_formats::OutputFormat,
+    raw: Option<&crate::provider::RawExport>,
+) -> crate::Result<PathBuf> {
+    use crate::output_formats::OutputFormat;
+    let suffix = match format {
+        OutputFormat::Json => ".json",
+        OutputFormat::Markdown => ".md",
+        OutputFormat::Raw => {
+            if matches!(raw, Some(crate::provider::RawExport::Session)) {
+                ".raw.json"
+            } else {
+                ".raw.jsonl"
+            }
+        }
+        OutputFormat::Print => unreachable!(),
+    };
+    Ok(output.join(format!("{}{suffix}", filename(id)?)))
 }

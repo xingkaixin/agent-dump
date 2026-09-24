@@ -18,3 +18,12 @@ tempfile = "3"
 walkdir = "2"
 rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
 num-bigint = "0.4"
+toml_edit = "0.23"
+ureq = { version = "3", features = ["json"] }
+url = "2"
+caseless = "0.2"
+uuid = { version = "1", features = ["v4"] }
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+crossterm = "0.29"
+unicode-width = "0.2"
+unicode-normalization = "0.1"

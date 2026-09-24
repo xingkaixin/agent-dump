@@ -247,42 +247,7 @@ fn append_list_group(
             continue;
         }
         writeln!(output, "   • {title}").unwrap();
-        let mut fields = Vec::new();
-        let location = session.display_location();
-        if !location.trim().is_empty() {
-            let parts: Vec<_> = std::path::Path::new(location.trim())
-                .components()
-                .filter(|part| {
-                    matches!(
-                        part,
-                        std::path::Component::Normal(_) | std::path::Component::ParentDir
-                    )
-                })
-                .map(|part| part.as_os_str().to_string_lossy())
-                .collect();
-            let compact = if parts.is_empty() {
-                location.clone()
-            } else {
-                parts[parts.len().saturating_sub(2)..].join("/")
-            };
-            fields.push(format!("cwd={}", truncate(&compact, 32)));
-        }
-        if !session.model.trim().is_empty() {
-            fields.push(format!("model={}", truncate(&session.model, 24)));
-        }
-        fields.push(format!(
-            "msgs={}",
-            session.message_count.map_or_else(
-                || if zh { "未知" } else { "unknown" }.into(),
-                |n| n.to_string()
-            )
-        ));
-        fields.push(format!(
-            "updated={}",
-            session.updated_at.format_local("%Y-%m-%d %H:%M")
-        ));
-        fields.push(format!("uri={scheme}://{}", session.id));
-        writeln!(output, "     {}", safe_line(&fields.join(" | "))).unwrap();
+        writeln!(output, "     {}", metadata_summary(session, scheme, zh)).unwrap();
     }
     if sessions.is_empty() {
         writeln!(
@@ -308,4 +273,43 @@ pub fn formatted_title(session: &Session) -> String {
         "{title} ({})",
         session.created_at.format_local("%Y-%m-%d %H:%M")
     ))
+}
+
+pub fn metadata_summary(session: &Session, scheme: &str, zh: bool) -> String {
+    let mut fields = Vec::new();
+    let location = session.display_location();
+    if !location.trim().is_empty() {
+        let parts: Vec<_> = std::path::Path::new(location.trim())
+            .components()
+            .filter(|part| {
+                matches!(
+                    part,
+                    std::path::Component::Normal(_) | std::path::Component::ParentDir
+                )
+            })
+            .map(|part| part.as_os_str().to_string_lossy())
+            .collect();
+        let compact = if parts.is_empty() {
+            location.clone()
+        } else {
+            parts[parts.len().saturating_sub(2)..].join("/")
+        };
+        fields.push(format!("cwd={}", truncate(&compact, 32)));
+    }
+    if !session.model.trim().is_empty() {
+        fields.push(format!("model={}", truncate(&session.model, 24)));
+    }
+    fields.push(format!(
+        "msgs={}",
+        session.message_count.map_or_else(
+            || if zh { "未知" } else { "unknown" }.into(),
+            |n| n.to_string()
+        )
+    ));
+    fields.push(format!(
+        "updated={}",
+        session.updated_at.format_local("%Y-%m-%d %H:%M")
+    ));
+    fields.push(format!("uri={scheme}://{}", session.id));
+    safe_line(&fields.join(" | "))
 }

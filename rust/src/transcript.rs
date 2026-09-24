@@ -18,6 +18,29 @@ pub fn message_texts(message: &Message) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
         .collect();
+    texts.extend(legacy_texts(message));
+    texts
+}
+
+pub fn visible_texts(message: &Message) -> Vec<String> {
+    let mut texts: Vec<_> = message
+        .parts
+        .iter()
+        .filter_map(|part| {
+            if let Part::Text(part) = part {
+                Some(part.text.trim().to_owned())
+            } else {
+                None
+            }
+        })
+        .filter(|s| !s.is_empty())
+        .collect();
+    texts.extend(legacy_texts(message));
+    texts
+}
+
+fn legacy_texts(message: &Message) -> Vec<String> {
+    let mut texts = Vec::new();
     if let Some(content) = message.extra.get("content") {
         match content {
             Value::String(text) if !text.trim().is_empty() => texts.push(text.clone()),

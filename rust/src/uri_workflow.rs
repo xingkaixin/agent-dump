@@ -9,6 +9,7 @@ use std::path::PathBuf;
 pub struct UriOperation {
     pub uri: String,
     pub head: bool,
+    pub summary: bool,
     pub formats: Vec<OutputFormat>,
     pub output: Option<PathBuf>,
 }
@@ -91,17 +92,21 @@ pub fn run(
         )?;
         return Ok(true);
     }
-    if operation
-        .formats
-        .iter()
-        .any(|format| *format != OutputFormat::Print)
-        && operation.output.is_none()
+    let default_output = if operation.output.is_none()
+        && operation
+            .formats
+            .iter()
+            .any(|f| matches!(f, OutputFormat::Json | OutputFormat::Raw))
     {
-        return Err(
-            "Rust file export requires --output; configuration defaults are not implemented yet"
-                .into(),
-        );
-    }
+        let config = crate::config::Config::load()?;
+        if let Err(error) = config.require_valid(zh) {
+            writeln!(out, "{error}")?;
+            return Ok(false);
+        }
+        config.output()
+    } else {
+        String::new()
+    };
     let raw = provider.raw_export(&session);
     let cache = crate::session_data::SessionDataCache::default();
     let prepared = (operation
@@ -121,6 +126,11 @@ pub fn run(
             },
         )
     });
+    let summary = if operation.summary {
+        generate_summary(uri, &operation.formats, &prepared, zh, out, warnings)?
+    } else {
+        None
+    };
     let mut success = false;
     if operation.formats.contains(&OutputFormat::Print) {
         match prepared.as_ref().unwrap() {
@@ -168,43 +178,26 @@ pub fn run(
             .as_ref()
             .and_then(|result| result.as_ref().ok())
             .map(|data| data.as_ref());
-        let output = operation
-            .output
-            .as_ref()
-            .unwrap()
+        let output = export::output_base(operation.output.as_deref(), &default_output, *format)
             .join(registration.info.name);
-        let result = if *format == OutputFormat::Raw {
-            match raw.as_ref().unwrap() {
-                RawExport::File(source) => {
-                    export::raw(&session.id, source, &output, provider.source_root())
-                }
-                RawExport::Session => export::json(
-                    &session.id,
-                    data.unwrap(),
-                    &output,
-                    provider.source_root(),
-                    ".raw.json",
-                ),
-            }
-        } else if *format == OutputFormat::Json {
-            export::json(
-                &session.id,
-                &provider.json_payload(data.unwrap()),
-                &output,
-                provider.source_root(),
-                ".json",
-            )
-        } else {
-            export::markdown(
-                &session.id,
-                &render::transcript(uri, data.unwrap()),
-                &output,
-                provider.source_root(),
-            )
-        };
+        let result = export::SessionExport {
+            provider: provider.as_ref(),
+            session: &session,
+            uri,
+            data,
+            raw: &raw,
+        }
+        .write(*format, &output, summary.as_deref());
         match result {
             Ok(path) => {
                 let path = render::safe_line(&crate::source_io::path_text(&path));
+                if *format == OutputFormat::Json && summary.is_some() {
+                    writeln!(
+                        out,
+                        "{}",
+                        crate::i18n::terminal("URI_SUMMARY_APPLIED", zh, &[("path", path.clone())])
+                    )?;
+                }
                 let format = format.name();
                 writeln!(
                     out,
@@ -230,4 +223,83 @@ pub fn run(
         }
     }
     Ok(success)
+}
+
+fn generate_summary(
+    uri: &str,
+    formats: &[OutputFormat],
+    prepared: &Option<crate::Result<std::sync::Arc<crate::session::SessionData>>>,
+    zh: bool,
+    out: &mut impl Write,
+    warnings: &mut impl Write,
+) -> crate::Result<Option<String>> {
+    use crate::i18n::{t, terminal};
+    if !formats.contains(&OutputFormat::Json) {
+        writeln!(out, "{}", t("URI_SUMMARY_NO_JSON_WARNING", zh, &[]))?;
+        return Ok(None);
+    }
+    let mut prepare = || -> crate::Result<Option<(crate::config::AiConfig, String)>> {
+        let config = crate::config::Config::load()?;
+        config.require_valid(zh)?;
+        let ai = config.ai();
+        let errors = crate::config::validate_ai(ai.as_ref(), config.exists);
+        if !errors.is_empty() {
+            let key = if errors.contains(&"missing_file") {
+                "URI_SUMMARY_CONFIG_MISSING_WARNING"
+            } else if errors.contains(&"base_url_scheme") {
+                "COLLECT_CONFIG_BAD_SCHEME"
+            } else if errors.contains(&"base_url_plaintext_key") {
+                "COLLECT_CONFIG_PLAINTEXT_KEY"
+            } else {
+                "URI_SUMMARY_CONFIG_INCOMPLETE_WARNING"
+            };
+            writeln!(
+                out,
+                "{}",
+                terminal(key, zh, &[("fields", errors.join(","))])
+            )?;
+            return Ok(None);
+        }
+        let data = prepared
+            .as_ref()
+            .unwrap()
+            .as_ref()
+            .map_err(|e| e.to_string())?;
+        Ok(Some((
+            ai.unwrap(),
+            crate::collect_prompts::uri_summary(uri, &render::transcript(uri, data)),
+        )))
+    };
+    let (ai, prompt) = match prepare() {
+        Ok(Some(prepared)) => prepared,
+        Ok(None) => return Ok(None),
+        Err(error) => {
+            writeln!(
+                out,
+                "{}",
+                terminal(
+                    "URI_SUMMARY_PREPARATION_FAILED_WARNING",
+                    zh,
+                    &[("error", error.to_string())]
+                )
+            )?;
+            return Ok(None);
+        }
+    };
+    writeln!(warnings, "{}", t("URI_SUMMARY_LOADING", zh, &[]))?;
+    match crate::llm::summary(&ai, &prompt, 90) {
+        Ok(summary) => Ok(Some(summary)),
+        Err(error) => {
+            writeln!(
+                out,
+                "{}",
+                terminal(
+                    "URI_SUMMARY_API_FAILED_WARNING",
+                    zh,
+                    &[("error", error.to_string())]
+                )
+            )?;
+            Ok(None)
+        }
+    }
 }

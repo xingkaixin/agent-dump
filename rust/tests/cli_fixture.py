@@ -24,12 +24,13 @@ class CliFixture:
     source: Path
     fixtures: Any
 
-    def run(self, candidate: str, *args: str) -> subprocess.CompletedProcess[str]:
+    def run(self, candidate: str, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
         command = [sys.executable, "-m", "agent_dump"] if candidate == "python" else [str(RUST)]
         return subprocess.run(  # noqa: S603
             [*command, *args],
             cwd=self.root,
             env=self.environment,
+            input=stdin,
             capture_output=True,
             text=True,
             encoding="utf-8",
