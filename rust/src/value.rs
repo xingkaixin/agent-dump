@@ -1,5 +1,17 @@
 use serde_json::Value;
 
+pub fn text(value: &Value) -> &str {
+    value.as_str().unwrap_or("")
+}
+
+pub fn integer(value: &Value) -> i64 {
+    value
+        .as_i64()
+        .or_else(|| value.as_str().and_then(|value| value.trim().parse().ok()))
+        .or_else(|| value.as_f64().map(|value| value as i64))
+        .unwrap_or(0)
+}
+
 pub fn field(value: &Value, key: &str) -> String {
     value.get(key).map(string).unwrap_or_default()
 }

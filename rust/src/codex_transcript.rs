@@ -1,4 +1,3 @@
-use crate::codex::text;
 use crate::codex_enrichment::{
     injected_context, inner_tag, output_parts, record_subagent_output, subagent_notification,
 };
@@ -6,6 +5,7 @@ use crate::jsonl;
 use crate::session::{
     Message, Part, PlanPart, Session, SessionData, Stats, TextPart, ToolPart, parse_timestamp,
 };
+use crate::value::text;
 use crate::value::{field, parsed_string, string, truthy};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -139,20 +139,18 @@ impl Decoder {
         self.latest_assistant_text = None;
     }
 
-    fn assistant(&mut self, id: String, timestamp: i64, parts: Vec<Part>, reasoning: bool) {
+    fn assistant(&mut self, id: String, timestamp: i64, mut parts: Vec<Part>, reasoning: bool) {
         if parts.is_empty() {
             return;
         }
-        if let Some(index) = self.current_assistant
-            && !self.messages[index].parts.iter().any(|part| {
-                matches!(part, Part::Tool(_)) || (reasoning && matches!(part, Part::Text(_)))
-            })
+        if crate::message_assembly::fold_assistant(
+            &mut self.messages,
+            self.current_assistant,
+            &mut parts,
+            reasoning,
+        )
+        .is_some()
         {
-            for part in parts {
-                if self.messages[index].parts.last() != Some(&part) {
-                    self.messages[index].parts.push(part);
-                }
-            }
             return;
         }
         if !reasoning
@@ -252,16 +250,14 @@ impl Decoder {
         if parts.is_empty() {
             return Ok(());
         }
-        if !call_id.is_empty()
-            && let Some(&(message, part)) = self.pending_calls.get(&call_id)
-            && let Part::Tool(tool) = &mut self.messages[message].parts[part]
-        {
+        if let Some(tool) = crate::message_assembly::backfill(
+            &mut self.messages,
+            &self.pending_calls,
+            &call_id,
+            &parts,
+            None,
+        )? {
             let output = serde_json::to_value(&parts)?;
-            let previous = tool.state.entry("output").or_insert_with(|| json!([]));
-            previous
-                .as_array_mut()
-                .unwrap()
-                .extend(output.as_array().unwrap().iter().cloned());
             record_subagent_output(tool, raw, &output, &mut self.nicknames);
             return Ok(());
         }
@@ -272,42 +268,16 @@ impl Decoder {
     }
 }
 
-fn token_count(value: &Value) -> i64 {
-    value
-        .as_i64()
-        .or_else(|| value.as_str().and_then(|v| v.trim().parse().ok()))
-        .or_else(|| value.as_f64().map(|v| v as i64))
-        .unwrap_or(0)
-}
-
 pub fn read(session: &Session, zh: bool) -> crate::Result<SessionData> {
     let mut decoder = Decoder::default();
     let mut stats = Stats::default();
     jsonl::scan(&session.source_path, |record| {
         decoder.record(&record, zh)?;
         let usage = &record["payload"]["info"]["total_token_usage"];
-        stats.total_input_tokens = stats
-            .total_input_tokens
-            .checked_add(token_count(&usage["input_tokens"]))
-            .ok_or("input token total is out of range")?;
-        stats.total_output_tokens = stats
-            .total_output_tokens
-            .checked_add(token_count(&usage["output_tokens"]))
-            .ok_or("output token total is out of range")?;
+        stats.add_tokens(&usage["input_tokens"], &usage["output_tokens"])?;
         Ok(())
     })?;
     decoder.finish_plan("fail", None);
     stats.message_count = decoder.messages.len();
-    Ok(SessionData {
-        id: session.id.clone(),
-        title: session.title.clone(),
-        slug: None,
-        directory: session.directory.clone(),
-        version: session.version.clone(),
-        time_created: session.created_at.as_millisecond(),
-        time_updated: session.updated_at.as_millisecond(),
-        summary_files: None,
-        stats,
-        messages: decoder.messages,
-    })
+    Ok(session.payload(decoder.messages, stats))
 }

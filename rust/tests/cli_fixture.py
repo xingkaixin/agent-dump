@@ -79,6 +79,20 @@ def header(identity: str = IDENTITY, **fields: Any) -> dict[str, Any]:
     return {"type": "session_meta", "payload": {"id": identity, "timestamp": STAMP, "cwd": "/project", **fields}}
 
 
+def write_jsonl(path: Path, records: list[dict[str, Any]], *, suffix: bytes = b"") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"".join(json.dumps(record, ensure_ascii=False).encode() + b"\n" for record in records) + suffix)
+    os.utime(path, (1768478400, 1768478400))
+    return path
+
+
+def provider_export(cli: CliFixture, uri: str, provider: str, *, lang: str = "en") -> dict[str, Any]:
+    cli.parity(
+        uri, "--format", "json,md,raw,print", "--output", "exports", "--lang", lang, formats=("json", "markdown", "raw")
+    )
+    return json.loads(next((cli.root / "exports" / provider).glob("*.json")).read_text())
+
+
 def message(role: str | None, text: str, *, stamp: str = STAMP) -> dict[str, Any]:
     return {
         "type": "response_item",

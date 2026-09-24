@@ -1,12 +1,24 @@
+mod claude;
+mod claude_transcript;
 mod codex;
 mod codex_enrichment;
 mod codex_patch;
 mod codex_transcript;
 mod export;
+mod file_sessions;
 mod jsonl;
+mod kimi;
+mod kimi_transcript;
+mod kimi_wire;
+mod message_assembly;
 mod output_formats;
+mod pi;
+mod pi_transcript;
+mod provider;
+mod registry;
 mod render;
 mod session;
+mod title;
 mod uri_workflow;
 mod value;
 
@@ -21,8 +33,8 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[command(
     name = "agent-dump",
     version,
-    about = "Experimental Rust: Codex session discovery and export",
-    after_help = "Python remains the default CLI. Other Providers, search, collect, configuration and TUI are not implemented yet.",
+    about = "Experimental Rust: JSONL session discovery and export",
+    after_help = "Python remains the default CLI. Rust supports Codex, Claude Code, Kimi and Pi. Other Providers, search, collect, configuration and TUI are not implemented yet.",
     arg_required_else_help = true
 )]
 struct Args {
@@ -99,19 +111,25 @@ fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         |lang| lang == "zh",
     );
     if args.list {
-        if args.query.as_deref() != Some("provider:codex") {
-            return Err("Rust list requires -q provider:codex; other Providers and queries are not implemented yet".into());
-        }
-        let provider = codex::Codex::open()?;
+        let name = args.query.as_deref().and_then(|query| query.strip_prefix("provider:"))
+            .ok_or("Rust list requires an explicit -q provider:NAME; general queries are not implemented yet")?;
+        let registration = registry::for_name(name)?;
+        let mut provider = (registration.open)()?;
         let sessions = provider.discover(args.days)?;
         write!(
             out,
             "{}",
-            render::list(&sessions, args.days, !args.no_metadata_summary, zh)
+            render::list(
+                &sessions,
+                &registration.info,
+                args.days,
+                !args.no_metadata_summary,
+                zh
+            )
         )?;
         return Ok(true);
     }
-    let uri = args.uri.ok_or("Provide a Codex URI or --list")?;
+    let uri = args.uri.ok_or("Provide a session URI or --list")?;
     let formats = output_formats::parse(args.format.as_deref().unwrap_or("print"))?;
     uri_workflow::run(
         uri_workflow::UriOperation {

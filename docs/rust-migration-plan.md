@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0、P1 已完成；P2 进行中，已实现 Codex 消息装配与 Markdown/raw/混合导出，正在逐批扩展 Provider。Python 仍是默认实现和发布来源。
+状态：P0、P1 已完成；P2 进行中，已接入 Codex、Claude Code、Kimi、Pi 的消息装配与单 URI 导出，下一批为 OpenCode / ZCode。Python 仍是默认实现和发布来源。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -82,11 +82,15 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 - [x] Codex 工具调用/输出、patch、计划审批、skill/subagent、注入上下文；非文本和未知事件按 Python 当前规则忽略，移除 P1 的临时拒绝分支。
 - [x] Codex Markdown/raw/混合导出、JSON 专用转换隔离、逐格式部分成功与源数据保护；使用实际 CLI 做差分验收。
 - [ ] Codex 发现刷新/缓存、完整诊断、极端输入和跨平台验收，见[剩余边界](rust-codex-parity.md)。
+- [x] Claude Code、Kimi（context / wire）、Pi 的发现、head、消息装配和 print/JSON/Markdown/raw 导出；共享 Provider 入口与只读文件发现，见[行为映射与剩余边界](rust-jsonl-parity.md)。
+- [ ] OpenCode / ZCode SQLite Provider（下一批）。
 - 按 JSONL Provider、SQLite Provider、桌面聊天 Provider 分批迁移。
 - 每批增加合成 fixture 与差分验收，覆盖 malformed/缺字段/旧 schema/部分失败。
 - 对齐 metadata、消息装配、raw/JSON/Markdown 和数据源只读契约。
 
 Codex 本批实现：`ca4b1db`；benchmark 发现并修复 JSON 小写入瓶颈：`1c037d3`。优化后 `just isok` 通过，Rust 差分与边界用例现为 172 个。[五场景复测](benchmarks/rust-p2-codex.md)中，JSON＋Markdown 导出相对同期 Python 源码为 2.88×，峰值 RSS 中位数下降约 65%；原始慢路径数据同样保留。P2 整体仍未完成。
+
+Claude Code / Kimi / Pi 批次新增 141 个差分及边界用例，合计 313 个；本机完整 `just isok` 与 release 构建通过。已验证具体行为与未关闭边界见[JSONL Provider 验收记录](rust-jsonl-parity.md)，不将三个 Provider 的接入计作完整功能迁移完成。
 
 ### P3：查询、索引、维护命令
 

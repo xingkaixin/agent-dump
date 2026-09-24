@@ -35,11 +35,11 @@ fn truncate(text: &str, limit: usize) -> String {
     }
 }
 
-pub fn head(uri: &str, session: &Session, zh: bool) -> String {
+pub fn head(uri: &str, session: &Session, display_name: &str, zh: bool) -> String {
     let unknown = if zh { "未知" } else { "unknown" };
     let fields = [
         ("URI", uri.to_owned()),
-        ("Agent", "Codex".into()),
+        ("Agent", display_name.into()),
         ("Title", session.title.clone()),
         (
             "Created",
@@ -162,18 +162,27 @@ pub fn transcript(uri: &str, data: &SessionData) -> String {
     output
 }
 
-pub fn list(sessions: &[Session], days: i64, summary: bool, zh: bool) -> String {
+pub fn list(
+    sessions: &[Session],
+    provider: &crate::provider::ProviderInfo,
+    days: i64,
+    summary: bool,
+    zh: bool,
+) -> String {
+    let name = provider.name;
+    let scheme = provider.scheme;
+    let display_name = provider.display_name;
     let header = format!("🚀 Agent Session Exporter\n\n{}\n\n", "=".repeat(60));
     let mut output = header
         + &if zh {
-            format!("📋 列出最近 {days} 天且匹配「providers=codex」的会话:\n\n")
+            format!("📋 列出最近 {days} 天且匹配「providers={name}」的会话:\n\n")
         } else {
-            format!("📋 Listing sessions from last {days} days matching 'providers=codex':\n\n")
+            format!("📋 Listing sessions from last {days} days matching 'providers={name}':\n\n")
         };
     writeln!(output, "{}", "-".repeat(60)).unwrap();
     writeln!(
         output,
-        "\n📁 Codex ({} {})",
+        "\n📁 {display_name} ({} {})",
         sessions.len(),
         if zh { "个会话" } else { "sessions" }
     )
@@ -195,7 +204,7 @@ pub fn list(sessions: &[Session], days: i64, summary: bool, zh: bool) -> String 
             writeln!(
                 output,
                 "   • {title} {}",
-                safe_line(&format!("codex://{}", session.id))
+                safe_line(&format!("{scheme}://{}", session.id))
             )
             .unwrap();
             continue;
@@ -227,7 +236,7 @@ pub fn list(sessions: &[Session], days: i64, summary: bool, zh: bool) -> String 
                 .to_zoned(TimeZone::system())
                 .strftime("%Y-%m-%d %H:%M")
         ));
-        fields.push(format!("uri=codex://{}", session.id));
+        fields.push(format!("uri={scheme}://{}", session.id));
         writeln!(output, "     {}", safe_line(&fields.join(" | "))).unwrap();
     }
     if sessions.is_empty() {

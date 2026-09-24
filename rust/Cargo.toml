@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 jiff = "0.2"
+md-5 = "0.10"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 # Tool output and subagent prompts contain JSON strings whose key order is observable.

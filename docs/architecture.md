@@ -2,6 +2,8 @@
 
 本文档面向修改架构、Provider、查询、导出或 collect 的贡献者和 Agent。根目录 `AGENTS.md` 保存常驻约束；本文件保存只在相关任务中需要的实现契约。
 
+下文描述当前 Python 发布实现。实验性 Rust 的模块归属和支持范围见 [`rust/README.md`](../rust/README.md)；迁移中的 Provider 同样保留 schema 私有边界，发现、读取与导出通过统一契约进入工作流。
+
 ## 1. 公共接口
 
 `src/agent_dump/__init__.py` 的 `__all__` 是公开 Python API 的单一机器可读来源。公开符号的行为由 `tests/test_version.py` 和对应模块测试保护，用户示例位于 README。

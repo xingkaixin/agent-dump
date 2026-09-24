@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
-const FULL_SCAN_LIMIT: u64 = 256 * 1024;
+pub const FULL_SCAN_LIMIT: u64 = 256 * 1024;
 const WINDOW: u64 = 64 * 1024;
 
 pub struct Metadata {
@@ -23,7 +23,7 @@ fn nonempty(bytes: &[u8]) -> bool {
     bytes.iter().any(|byte| !byte.is_ascii_whitespace())
 }
 
-pub fn metadata(path: &Path) -> io::Result<Metadata> {
+pub fn metadata(path: &Path, head_lines: usize) -> io::Result<Metadata> {
     let mut file = File::open(path)?;
     let size = file.metadata()?.len();
     let mut bytes = Vec::new();
@@ -46,7 +46,7 @@ pub fn metadata(path: &Path) -> io::Result<Metadata> {
         .map(|end| {
             bytes[..=end]
                 .split(|byte| *byte == b'\n')
-                .take(10)
+                .take(head_lines)
                 .filter(|line| nonempty(line))
                 .collect()
         })
@@ -80,6 +80,14 @@ pub fn metadata(path: &Path) -> io::Result<Metadata> {
 }
 
 pub fn scan(path: &Path, mut append: impl FnMut(Value) -> crate::Result<()>) -> crate::Result<()> {
+    scan_numbered(path, true, |_, record| append(record))
+}
+
+pub fn scan_numbered(
+    path: &Path,
+    warn: bool,
+    mut append: impl FnMut(usize, Value) -> crate::Result<()>,
+) -> crate::Result<()> {
     let mut reader = BufReader::new(File::open(path)?);
     let mut line = Vec::new();
     let mut number = 0;
@@ -95,7 +103,7 @@ pub fn scan(path: &Path, mut append: impl FnMut(Value) -> crate::Result<()>) -> 
             continue;
         }
         if let Some(value) = object(&line) {
-            append(value)?;
+            append(number, value)?;
         } else if matches!(line.last(), Some(b'\n' | b'\r')) {
             count += 1;
             if skipped.len() < 5 {
@@ -103,7 +111,7 @@ pub fn scan(path: &Path, mut append: impl FnMut(Value) -> crate::Result<()>) -> 
             }
         }
     }
-    if count > 0 {
+    if warn && count > 0 {
         eprintln!(
             "Warning: skipped {count} invalid JSONL records in {} (lines {}).",
             crate::render::safe_line(&path.display().to_string()),

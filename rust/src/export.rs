@@ -1,4 +1,4 @@
-use crate::session::{Session, SessionData};
+use crate::session::SessionData;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, Write};
@@ -108,9 +108,14 @@ pub fn markdown(
     })
 }
 
-pub fn raw(session: &Session, output: &Path, source_root: &Path) -> crate::Result<PathBuf> {
-    write(output, &session.id, ".raw.jsonl", source_root, |file| {
-        io::copy(&mut fs::File::open(&session.source_path)?, file)?;
+pub fn raw(
+    session_id: &str,
+    source: &Path,
+    output: &Path,
+    source_root: &Path,
+) -> crate::Result<PathBuf> {
+    write(output, session_id, ".raw.jsonl", source_root, |file| {
+        io::copy(&mut fs::File::open(source)?, file)?;
         Ok(())
     })
 }

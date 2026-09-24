@@ -1,5 +1,5 @@
-use crate::codex::Codex;
 use crate::output_formats::OutputFormat;
+use crate::registry;
 use crate::{export, render};
 use std::io::Write;
 use std::path::PathBuf;
@@ -13,13 +13,7 @@ pub struct UriOperation {
 
 pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Result<bool> {
     let uri = &operation.uri;
-    let id = uri
-        .strip_prefix("codex://")
-        .ok_or("Rust currently only supports codex:// URIs")?;
-    let id = id.strip_prefix("threads/").unwrap_or(id);
-    if id.is_empty() {
-        return Err("Empty Codex session id".into());
-    }
+    let (registration, id) = registry::for_uri(uri)?;
     if operation
         .formats
         .iter()
@@ -31,10 +25,14 @@ pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Re
                 .into(),
         );
     }
-    let provider = Codex::open()?;
+    let mut provider = (registration.open)()?;
     let session = provider.find(id)?;
     if operation.head {
-        write!(out, "{}", render::head(uri, &session, zh))?;
+        write!(
+            out,
+            "{}",
+            render::head(uri, &session, registration.info.display_name, zh)
+        )?;
         return Ok(true);
     }
     let prepared = operation
@@ -57,9 +55,15 @@ pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Re
         .iter()
         .filter(|format| **format != OutputFormat::Print)
     {
-        let output = operation.output.as_ref().unwrap().join("codex");
+        let output = operation
+            .output
+            .as_ref()
+            .unwrap()
+            .join(registration.info.name);
         let result = if *format == OutputFormat::Raw {
-            export::raw(&session, &output, provider.source_root())
+            provider.raw_source(&session).and_then(|source| {
+                export::raw(&session.id, &source, &output, provider.source_root())
+            })
         } else {
             match prepared.as_ref().unwrap() {
                 Ok(data) if *format == OutputFormat::Json => export::json(
