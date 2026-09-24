@@ -2,6 +2,18 @@
 
 ## [未发布]
 
+## [0.15.9] - 2026-09-24
+
+### 新增功能
+
+- 支持 OpenCode 2.x 的 `session_v2` / `session_message` 存储，接入现有列表、查询、搜索、统计、collect 和 `opencode://` 导出工作流；同 ID 优先读取 V2，保留旧版独有会话，按序解析消息并保留推理、工具状态与附件元数据 (#394)
+- 支持通过 `OPENCODE_DB` 选择自定义或 channel 数据库；显式指定的路径缺失时直接报告，不回退到其他数据源 (#394)
+
+### 变更
+
+- 各平台默认按 OpenCode 的 XDG 数据位置发现数据库，保留旧 Windows 路径和本地开发路径回退；使旧搜索索引失效以使用更新后的消息解析结果 (#394)
+- 在中英文 README 和 Agent recipes 中补充 OpenCode 2.x 兼容性、数据库选择、collect 边界及标准化 raw 导出说明 (#394)，并同步补充 npm 使用示例
+
 ## [0.15.8] - 2026-09-21
 
 ### 新增功能
@@ -1106,6 +1118,7 @@
 - 完整的会话数据导出，包括消息、工具调用和元数据
 - 支持 `uv tool install` 和 `uvx` 运行
 
+[0.15.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.9
 [0.15.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.8
 [0.15.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.7
 [0.15.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.6
