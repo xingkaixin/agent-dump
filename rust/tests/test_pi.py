@@ -1,5 +1,6 @@
 """Pi tree entries, content and metadata through both public CLI implementations."""
 
+import os
 from pathlib import Path
 import shutil
 
@@ -199,7 +200,20 @@ def test_exports_cannot_write_into_pi_sources(cli):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize("root", ["", "relative provider", "~/literal-provider", " "])
+@pytest.mark.parametrize(
+    "root",
+    [
+        "",
+        "relative provider",
+        "~/literal-provider",
+        pytest.param(
+            " ",
+            marks=pytest.mark.skipif(
+                os.name == "nt", reason="Windows cannot create a whitespace-only directory component"
+            ),
+        ),
+    ],
+)
 def test_environment_paths_follow_python_path_semantics(cli, root):
     create(cli, STREAM)
     target = Path(cli.environment["HOME"]) / ".pi" if root == "" else cli.root / root

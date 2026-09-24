@@ -108,6 +108,7 @@ def test_corrupt_database_isolated_and_explicit_scope_skips_it(cli, lang, scope)
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
+@pytest.mark.skipif(os.name == "nt", reason="Windows forbids control characters in filenames")
 def test_bad_file_keeps_good_sessions_and_warning_is_one_line(cli, lang):
     bad = cli.source.parent / "bad\n\x1b[31m.jsonl"
     write_jsonl(bad, [{"type": "session_meta", "payload": 42}])

@@ -1,6 +1,7 @@
 """Isolated subprocess fixtures shared by Rust/Python CLI differential tests."""
 
 from dataclasses import dataclass
+import gc
 import importlib
 import json
 import os
@@ -76,6 +77,9 @@ def make_cli(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     fixtures = importlib.import_module("benchmark_fixtures")
     environment = fixtures.create_fixture(tmp_path, fixtures.PROFILES["smoke"])
+    if os.name == "nt":
+        # The frozen benchmark fixture leaves SQLite handles for cyclic GC.
+        gc.collect()
     environment["PYTHONPATH"] = str(ROOT / "src")
     source = next((tmp_path / "sources" / "codex" / "sessions").rglob(f"*-{IDENTITY}.jsonl"))
     return CliFixture(tmp_path, environment, source, fixtures)
