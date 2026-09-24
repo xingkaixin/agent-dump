@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0、P1 已完成；P2 进行中，已接入 Codex、Claude Code、Kimi、Pi 的消息装配与单 URI 导出，下一批为 OpenCode / ZCode。Python 仍是默认实现和发布来源。
+状态：P0、P1 已完成；P2 进行中，已接入 Codex、Claude Code、Kimi、Pi、OpenCode、ZCode 的消息装配与单 URI 导出，下一批为桌面聊天 Provider。Python 仍是默认实现和发布来源。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -83,7 +83,8 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 - [x] Codex Markdown/raw/混合导出、JSON 专用转换隔离、逐格式部分成功与源数据保护；使用实际 CLI 做差分验收。
 - [ ] Codex 发现刷新/缓存、完整诊断、极端输入和跨平台验收，见[剩余边界](rust-codex-parity.md)。
 - [x] Claude Code、Kimi（context / wire）、Pi 的发现、head、消息装配和 print/JSON/Markdown/raw 导出；共享 Provider 入口与只读文件发现，见[行为映射与剩余边界](rust-jsonl-parity.md)。
-- [ ] OpenCode / ZCode SQLite Provider（下一批）。
+- [x] OpenCode 旧表 / V2 与 ZCode 的发现、head 和单 URI 四种导出，见[SQLite 差分记录与剩余边界](rust-sqlite-parity.md)。
+- [ ] Cursor / DeepChat / Cherry Studio / MiniMax 等其余 Provider。
 - 按 JSONL Provider、SQLite Provider、桌面聊天 Provider 分批迁移。
 - 每批增加合成 fixture 与差分验收，覆盖 malformed/缺字段/旧 schema/部分失败。
 - 对齐 metadata、消息装配、raw/JSON/Markdown 和数据源只读契约。

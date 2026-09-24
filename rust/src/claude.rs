@@ -137,6 +137,8 @@ impl Claude {
             title,
             created_at,
             updated_at,
+            subtargets: Vec::new(),
+            source_metadata: serde_json::Value::Null,
             source_path: path.to_owned(),
             directory: text(&header["cwd"]).to_owned(),
             version: header.get("version").cloned().unwrap_or_else(|| "".into()),

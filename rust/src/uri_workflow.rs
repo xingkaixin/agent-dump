@@ -1,4 +1,5 @@
 use crate::output_formats::OutputFormat;
+use crate::provider::RawExport;
 use crate::registry;
 use crate::{export, render};
 use std::io::Write;
@@ -35,11 +36,13 @@ pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Re
         )?;
         return Ok(true);
     }
-    let prepared = operation
+    let raw = provider.raw_export(&session);
+    let prepared = (operation
         .formats
         .iter()
         .any(|format| *format != OutputFormat::Raw)
-        .then(|| provider.read(&session, zh));
+        || matches!(raw, RawExport::Session))
+    .then(|| provider.read(&session, zh));
     let mut success = false;
     if operation.formats.contains(&OutputFormat::Print) {
         match prepared.as_ref().unwrap() {
@@ -61,15 +64,22 @@ pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Re
             .unwrap()
             .join(registration.info.name);
         let result = if *format == OutputFormat::Raw {
-            provider.raw_source(&session).and_then(|source| {
-                export::raw(&session.id, &source, &output, provider.source_root())
-            })
+            match &raw {
+                RawExport::File(source) => {
+                    export::raw(&session.id, source, &output, provider.source_root())
+                }
+                RawExport::Session => match prepared.as_ref().unwrap() {
+                    Ok(data) => export::json(data, &output, provider.source_root(), ".raw.json"),
+                    Err(error) => Err(error.to_string().into()),
+                },
+            }
         } else {
             match prepared.as_ref().unwrap() {
                 Ok(data) if *format == OutputFormat::Json => export::json(
                     &provider.json_payload(data),
                     &output,
                     provider.source_root(),
+                    ".json",
                 ),
                 Ok(data) => export::markdown(
                     &session.id,

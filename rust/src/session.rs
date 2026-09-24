@@ -13,18 +13,22 @@ pub struct Session {
     pub model: String,
     pub project: Option<String>,
     pub message_count: Option<usize>,
+    pub subtargets: Vec<String>,
+    pub source_metadata: serde_json::Value,
 }
 
 #[derive(Clone, Serialize)]
 pub struct SessionData {
     pub id: String,
     pub title: String,
-    pub slug: Option<String>,
-    pub directory: String,
+    pub slug: serde_json::Value,
+    pub directory: serde_json::Value,
     pub version: serde_json::Value,
     pub time_created: i64,
     pub time_updated: i64,
-    pub summary_files: Option<Vec<String>>,
+    pub summary_files: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
     pub stats: Stats,
     pub messages: Vec<Message>,
 }
@@ -78,9 +82,9 @@ pub struct Message {
     pub model: Option<serde_json::Value>,
     pub provider: Option<String>,
     pub time_created: i64,
-    pub time_completed: Option<i64>,
+    pub time_completed: serde_json::Value,
     pub tokens: serde_json::Map<String, serde_json::Value>,
-    pub cost: u64,
+    pub cost: serde_json::Number,
     pub parts: Vec<Part>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nickname: Option<String>,
@@ -94,6 +98,8 @@ pub struct Message {
     pub entry_type: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 impl Message {
@@ -111,9 +117,9 @@ impl Message {
             model: None,
             provider: None,
             time_created,
-            time_completed: None,
+            time_completed: serde_json::Value::Null,
             tokens: Default::default(),
-            cost: 0,
+            cost: 0.into(),
             parts,
             nickname: None,
             subagent_id: None,
@@ -121,6 +127,7 @@ impl Message {
             entry_id: None,
             entry_type: None,
             parent_id: None,
+            metadata: None,
         }
     }
 }
@@ -133,6 +140,27 @@ pub enum Part {
     Plan(PlanPart),
     Tool(Box<ToolPart>),
     Image(ImagePart),
+    #[serde(rename = "step-start")]
+    StepStart(StepPart),
+    #[serde(rename = "step-finish")]
+    StepFinish(StepPart),
+    #[serde(untagged)]
+    Unknown(UnknownPart),
+}
+
+#[derive(Clone, PartialEq, Serialize)]
+pub struct StepPart {
+    pub time_created: i64,
+    pub reason: serde_json::Value,
+    pub tokens: serde_json::Value,
+    pub cost: serde_json::Value,
+}
+
+#[derive(Clone, PartialEq, Serialize)]
+pub struct UnknownPart {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub time_created: i64,
 }
 
 #[derive(Clone, PartialEq, Serialize)]
@@ -179,7 +207,11 @@ impl Part {
         match self {
             Self::Text(part) | Self::Reasoning(part) => Some(&part.text),
             Self::Plan(part) => Some(&part.input),
-            Self::Tool(_) | Self::Image(_) => None,
+            Self::Tool(_)
+            | Self::Image(_)
+            | Self::StepStart(_)
+            | Self::StepFinish(_)
+            | Self::Unknown(_) => None,
         }
     }
 }
@@ -209,12 +241,13 @@ impl Session {
         SessionData {
             id: self.id.clone(),
             title: self.title.clone(),
-            slug: None,
-            directory: self.directory.clone(),
+            slug: serde_json::Value::Null,
+            directory: self.directory.clone().into(),
             version: self.version.clone(),
             time_created: self.created_at.as_millisecond(),
             time_updated: self.updated_at.as_millisecond(),
-            summary_files: None,
+            summary_files: serde_json::Value::Null,
+            metadata: None,
             stats,
             messages,
         }

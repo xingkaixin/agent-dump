@@ -123,7 +123,7 @@ def test_malformed_records_and_active_tail(cli):
     [
         ["--search", "anything"],
         ["--list"],
-        ["--list", "-q", "provider:opencode"],
+        ["--list", "-q", "provider:cursor"],
         ["--collect"],
         [f"codex://{IDENTITY}", "--format", "xml"],
         [f"codex://{IDENTITY}", "--format", "json"],

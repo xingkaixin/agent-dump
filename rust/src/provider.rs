@@ -8,6 +8,11 @@ pub struct ProviderInfo {
     pub uri_prefixes: &'static [&'static str],
 }
 
+pub enum RawExport {
+    File(PathBuf),
+    Session,
+}
+
 pub trait Provider {
     fn discover(&mut self, days: i64) -> crate::Result<Vec<Session>>;
     fn find(&mut self, id: &str) -> crate::Result<Session>;
@@ -15,14 +20,10 @@ pub trait Provider {
     fn source_root(&self) -> &Path;
 
     fn json_payload(&self, data: &SessionData) -> SessionData {
-        let mut payload = data.clone();
-        payload
-            .messages
-            .retain(|message| message.role != "developer");
-        payload
+        data.clone()
     }
 
-    fn raw_source(&self, session: &Session) -> crate::Result<PathBuf> {
-        Ok(session.source_path.clone())
+    fn raw_export(&self, session: &Session) -> RawExport {
+        RawExport::File(session.source_path.clone())
     }
 }

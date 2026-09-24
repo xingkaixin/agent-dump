@@ -12,6 +12,24 @@ pub fn integer(value: &Value) -> i64 {
         .unwrap_or(0)
 }
 
+pub fn float(value: &Value) -> f64 {
+    value
+        .as_f64()
+        .or_else(|| {
+            value
+                .as_str()
+                .and_then(|text| text.trim().parse::<f64>().ok())
+        })
+        .filter(|number| number.is_finite())
+        .unwrap_or(0.0)
+}
+
+pub fn json_object(raw: &Value) -> Option<Value> {
+    serde_json::from_str::<Value>(raw.as_str()?)
+        .ok()
+        .filter(Value::is_object)
+}
+
 pub fn field(value: &Value, key: &str) -> String {
     value.get(key).map(string).unwrap_or_default()
 }

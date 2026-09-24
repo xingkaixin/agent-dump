@@ -11,6 +11,7 @@ mod kimi;
 mod kimi_transcript;
 mod kimi_wire;
 mod message_assembly;
+mod opencode_v2;
 mod output_formats;
 mod pi;
 mod pi_transcript;
@@ -18,6 +19,9 @@ mod provider;
 mod registry;
 mod render;
 mod session;
+mod sqlite;
+mod sqlite_legacy;
+mod sqlite_provider;
 mod title;
 mod uri_workflow;
 mod value;
@@ -33,8 +37,8 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[command(
     name = "agent-dump",
     version,
-    about = "Experimental Rust: JSONL session discovery and export",
-    after_help = "Python remains the default CLI. Rust supports Codex, Claude Code, Kimi and Pi. Other Providers, search, collect, configuration and TUI are not implemented yet.",
+    about = "Experimental Rust: session discovery and export",
+    after_help = "Python remains the default CLI. Rust supports Codex, Claude Code, Kimi, Pi, OpenCode and ZCode. Other Providers, search, collect, configuration and TUI are not implemented yet.",
     arg_required_else_help = true
 )]
 struct Args {

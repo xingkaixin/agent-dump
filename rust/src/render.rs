@@ -65,11 +65,25 @@ pub fn head(uri: &str, session: &Session, display_name: &str, zh: bool) -> Strin
                 .message_count
                 .map_or_else(|| unknown.into(), |n| n.to_string()),
         ),
-        ("Subtargets", "-".into()),
+        (
+            "Subtargets",
+            session
+                .subtargets
+                .iter()
+                .filter(|text| !text.trim().is_empty())
+                .take(5)
+                .map(|text| truncate(text, 48))
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
     ];
     let mut output = String::from("# Session Head\n\n");
     for (label, value) in fields {
-        let value = truncate(&value, 120);
+        let value = if label == "Subtargets" {
+            value
+        } else {
+            truncate(&value, 120)
+        };
         let value = if value.is_empty() { "-" } else { &value };
         writeln!(output, "- {label}: {}", safe_line(value)).unwrap();
     }

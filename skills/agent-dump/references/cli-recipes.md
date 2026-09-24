@@ -2,7 +2,7 @@
 
 完整上手流程见[将 Codex 会话导出为 Markdown](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/)。
 
-以下 recipes 面向当前 Python 发布版。实验性 Rust 的命令子集见 [`rust/README.md`](../../../rust/README.md)：支持 Codex、Claude Code、Kimi、Pi 的显式单 Provider 列表和 URI 导出，文件导出必须传 `--output`；配置、搜索、collect 与交互尚未迁移。
+以下 recipes 面向当前 Python 发布版。实验性 Rust 的命令子集见 [`rust/README.md`](../../../rust/README.md)：支持 Codex、Claude Code、Kimi、Pi、OpenCode、ZCode 的显式单 Provider 列表和 URI 导出，文件导出必须传 `--output`；配置、搜索、collect 与交互尚未迁移。
 
 ## 1) 常用命令模板
 

@@ -16,3 +16,4 @@ regex = "1"
 sha2 = "0.10"
 tempfile = "3"
 walkdir = "2"
+rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }

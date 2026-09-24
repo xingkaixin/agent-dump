@@ -81,6 +81,8 @@ impl Pi {
             title,
             created_at,
             updated_at,
+            subtargets: Vec::new(),
+            source_metadata: serde_json::Value::Null,
             source_path: path.to_owned(),
             directory: text(&header["cwd"]).into(),
             version: header["version"].clone(),

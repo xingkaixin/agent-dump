@@ -87,8 +87,13 @@ fn write(
     Ok(output_path)
 }
 
-pub fn json(data: &SessionData, output: &Path, source_root: &Path) -> crate::Result<PathBuf> {
-    write(output, &data.id, ".json", source_root, |file| {
+pub fn json(
+    data: &SessionData,
+    output: &Path,
+    source_root: &Path,
+    suffix: &str,
+) -> crate::Result<PathBuf> {
+    write(output, &data.id, suffix, source_root, |file| {
         let mut writer = io::BufWriter::new(file);
         serde_json::to_writer_pretty(&mut writer, data)?;
         writer.flush()?;

@@ -48,7 +48,7 @@ class CliFixture:
             files = sorted(path for path in output.rglob("*") if path.is_file())
             expected = formats or (("json",) if json_export else ())
             if expected:
-                suffixes = {"json": ".json", "markdown": ".md", "raw": ".jsonl"}
+                suffixes = {"json": ".json", "markdown": ".md", "raw": ".jsonl", "raw-json": ".json"}
                 assert sorted(path.suffix for path in files) == sorted(suffixes[item] for item in expected)
             outputs.append(
                 {

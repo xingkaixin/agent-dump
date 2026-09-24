@@ -121,6 +121,8 @@ impl Codex {
             title,
             created_at,
             updated_at,
+            subtargets: Vec::new(),
+            source_metadata: serde_json::Value::Null,
             source_path: path.to_owned(),
             directory: text(&payload["cwd"]).to_owned(),
             version: text(&payload["cli_version"]).into(),

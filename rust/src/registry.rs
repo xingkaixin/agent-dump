@@ -8,6 +8,32 @@ pub struct Registration {
 static REGISTRATIONS: &[Registration] = &[
     Registration {
         info: ProviderInfo {
+            name: "opencode",
+            display_name: "OpenCode",
+            scheme: "opencode",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::sqlite_provider::SqliteProvider::open(
+                crate::sqlite_provider::Kind::OpenCode,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "zcode",
+            display_name: "ZCode",
+            scheme: "zcode",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::sqlite_provider::SqliteProvider::open(
+                crate::sqlite_provider::Kind::ZCode,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
             name: "codex",
             display_name: "Codex",
             scheme: "codex",

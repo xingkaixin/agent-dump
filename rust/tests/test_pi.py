@@ -113,6 +113,7 @@ def test_content_shapes_images_and_tools(cli, content):
         ("custom", {}),
         ("future-role", {}),
         ("system", {}),
+        ("developer", {}),
     ],
 )
 def test_special_roles(cli, role, fields):

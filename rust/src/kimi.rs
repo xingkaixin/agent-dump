@@ -1,5 +1,5 @@
 use crate::file_sessions::{self, SourceRoots};
-use crate::provider::Provider;
+use crate::provider::{Provider, RawExport};
 use crate::session::{Session, SessionData, Stats, epoch_seconds};
 use crate::title::{basename, normalize_title};
 use crate::value::{integer, text};
@@ -105,6 +105,8 @@ impl Kimi {
             title,
             created_at,
             updated_at: created_at,
+            subtargets: Vec::new(),
+            source_metadata: serde_json::Value::Null,
             source_path: directory.to_owned(),
             directory: cwd,
             version: Value::Null,
@@ -171,9 +173,9 @@ impl Provider for Kimi {
         &self.roots.owned
     }
 
-    fn raw_source(&self, session: &Session) -> crate::Result<PathBuf> {
+    fn raw_export(&self, session: &Session) -> RawExport {
         let context = session.source_path.join("context.jsonl");
-        Ok(if context.exists() {
+        RawExport::File(if context.exists() {
             context
         } else {
             session.source_path.join("wire.jsonl")
