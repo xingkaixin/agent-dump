@@ -1,4 +1,4 @@
-use crate::provider::{Discovery, SessionFailure};
+use crate::provider::{Discovery, Lookup, SessionFailure};
 use crate::session::Session;
 use jiff::{SignedDuration, Timestamp};
 use std::path::{Path, PathBuf};
@@ -115,12 +115,13 @@ pub fn find(
     id: &str,
     preferred: impl Fn(&Path) -> bool,
     mut parse: impl FnMut(&Path) -> crate::Result<Option<Session>>,
-) -> crate::Result<Session> {
+) -> crate::Result<Lookup> {
+    let mut lookup = Lookup::default();
     if base.exists() {
         let root = base.canonicalize()?;
         for direct in [true, false] {
             for path in paths {
-                if preferred(path) != direct {
+                if direct && !preferred(path) {
                     continue;
                 }
                 let result = (|| {
@@ -130,22 +131,28 @@ pub fn find(
                     parse(path)
                 })();
                 match result {
-                    Ok(Some(session)) if session.id == id => return Ok(session),
-                    Err(error) => warn(path, &error),
+                    Ok(Some(session)) if session.id == id => {
+                        if lookup
+                            .session
+                            .as_ref()
+                            .is_none_or(|found| session.created_at > found.created_at)
+                        {
+                            lookup.session = Some(session);
+                        }
+                        if direct {
+                            return Ok(lookup);
+                        }
+                    }
+                    Err(error) => lookup.failures.push(SessionFailure {
+                        source: path.display().to_string(),
+                        error: error.to_string(),
+                    }),
                     _ => {}
                 }
             }
         }
     }
-    Err(format!("Session not found: {id}").into())
-}
-
-fn warn(path: &Path, error: &dyn std::fmt::Display) {
-    eprintln!(
-        "Warning: could not read session {}: {}",
-        crate::render::safe_line(&path.display().to_string()),
-        crate::render::safe_line(&error.to_string())
-    );
+    Ok(lookup)
 }
 
 #[cfg(test)]

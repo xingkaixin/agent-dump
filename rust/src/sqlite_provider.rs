@@ -106,15 +106,15 @@ impl Provider for SqliteProvider {
             .map(crate::provider::Discovery::available)
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<Session> {
-        let path = self
-            .database
-            .as_deref()
-            .ok_or("Provider database not found")?;
-        self.select(&connect(path)?, path, "s.id = ?", &[&id])?
-            .into_iter()
-            .next()
-            .ok_or_else(|| format!("Session not found: {id}").into())
+    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
+        let Some(path) = self.database.as_deref() else {
+            return Ok(crate::provider::Lookup::default());
+        };
+        Ok(crate::provider::Lookup::new(
+            self.select(&connect(path)?, path, "s.id = ?", &[&id])?
+                .into_iter()
+                .next(),
+        ))
     }
 
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {

@@ -77,12 +77,16 @@ impl Provider for Desktop {
         self.sessions(&crate::sqlite::connect(&self.database)?, None, Some(cutoff))
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<Session> {
-        self.sessions(&crate::sqlite::connect(&self.database)?, Some(id), None)?
-            .sessions
-            .into_iter()
-            .next()
-            .ok_or_else(|| format!("Session not found: {id}").into())
+    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
+        if !self.database.exists() {
+            return Ok(crate::provider::Lookup::default());
+        }
+        Ok(crate::provider::Lookup::new(
+            self.sessions(&crate::sqlite::connect(&self.database)?, Some(id), None)?
+                .sessions
+                .into_iter()
+                .next(),
+        ))
     }
 
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {

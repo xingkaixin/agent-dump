@@ -11,6 +11,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "opencode",
             display_name: "OpenCode",
             scheme: "opencode",
+            identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
         open: || {
@@ -24,6 +25,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "zcode",
             display_name: "ZCode",
             scheme: "zcode",
+            identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
         open: || {
@@ -37,6 +39,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "codex",
             display_name: "Codex",
             scheme: "codex",
+            identifier_label: "<session_id>",
             uri_prefixes: &["threads/"],
         },
         open: || Ok(Box::new(crate::codex::Codex::open()?)),
@@ -46,6 +49,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "kimi",
             display_name: "Kimi",
             scheme: "kimi",
+            identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
         open: || Ok(Box::new(crate::kimi::Kimi::open()?)),
@@ -55,6 +59,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "claudecode",
             display_name: "Claude Code",
             scheme: "claude",
+            identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
         open: || Ok(Box::new(crate::claude::Claude::open()?)),
@@ -64,6 +69,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "cursor",
             display_name: "Cursor",
             scheme: "cursor",
+            identifier_label: "<requestid>",
             uri_prefixes: &[],
         },
         open: || Ok(Box::new(crate::cursor::Cursor::open()?)),
@@ -73,6 +79,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "pi",
             display_name: "Pi",
             scheme: "pi",
+            identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
         open: || Ok(Box::new(crate::pi::Pi::open()?)),
@@ -82,6 +89,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "deepchat",
             display_name: "DeepChat",
             scheme: "deepchat",
+            identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
         open: || {
@@ -95,6 +103,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "cherry",
             display_name: "Cherry Studio",
             scheme: "cherry",
+            identifier_label: "topic-<id>",
             uri_prefixes: &[],
         },
         open: || {
@@ -108,6 +117,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "minimax",
             display_name: "MiniMax Code",
             scheme: "minimax",
+            identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
         open: || {
@@ -129,22 +139,49 @@ pub fn for_name(name: &str) -> crate::Result<&'static Registration> {
         .ok_or_else(|| format!("Provider not implemented in Rust: {name}").into())
 }
 
-pub fn for_uri(uri: &str) -> crate::Result<(&'static Registration, &str)> {
-    let (scheme, mut id) = uri
-        .split_once("://")
-        .ok_or("Expected a Provider session URI")?;
+pub fn for_uri(uri: &str) -> Option<(&'static Registration, &str)> {
+    let (scheme, mut id) = uri.split_once("://")?;
+    // Python's URI regex allows one trailing newline, outside the captured id.
+    id = id.strip_suffix('\n').unwrap_or(id);
+    if id.contains('\n') {
+        return None;
+    }
     let registration = REGISTRATIONS
         .iter()
-        .find(|registration| registration.info.scheme == scheme)
-        .ok_or_else(|| format!("URI scheme not implemented in Rust: {scheme}"))?;
+        .find(|registration| registration.info.scheme == scheme)?;
     for prefix in registration.info.uri_prefixes {
         if let Some(stripped) = id.strip_prefix(prefix) {
             id = stripped;
             break;
         }
     }
-    if id.is_empty() {
-        return Err("Empty session id".into());
+    (!id.is_empty()).then_some((registration, id))
+}
+
+pub fn search_roots() -> Vec<String> {
+    all()
+        .iter()
+        .filter_map(|registration| {
+            let provider = (registration.open)().ok()?;
+            Some(crate::provider::render_search_roots(
+                &registration.info,
+                provider.as_ref(),
+            ))
+        })
+        .flatten()
+        .collect()
+}
+
+pub fn uri_examples() -> Vec<String> {
+    let mut examples = Vec::new();
+    for registration in all() {
+        let info = &registration.info;
+        examples.push(format!("- {}://{}", info.scheme, info.identifier_label));
+        examples.extend(
+            info.uri_prefixes
+                .iter()
+                .map(|prefix| format!("- {}://{prefix}{}", info.scheme, info.identifier_label)),
+        );
     }
-    Ok((registration, id))
+    examples
 }

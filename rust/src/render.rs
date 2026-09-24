@@ -217,7 +217,7 @@ pub fn list(
     output
 }
 
-fn list_banner() -> String {
+pub fn list_banner() -> String {
     format!("🚀 Agent Session Exporter\n\n{}\n\n", "=".repeat(60))
 }
 
@@ -302,70 +302,4 @@ fn append_list_group(
         )
         .unwrap();
     }
-}
-
-pub fn empty_list(providers: Option<&str>, roots: &[String], zh: bool) -> String {
-    let mut output = list_banner();
-    let summary = match (zh, providers) {
-        (true, Some(_)) => "查询范围内没有可用 provider。",
-        (false, Some(_)) => "No usable provider within the query scope.",
-        (true, None) => "未找到任何可用的本地会话数据。",
-        (false, None) => "No usable local session data found.",
-    };
-    writeln!(
-        output,
-        "{}\n{}: {summary}",
-        if zh { "诊断信息" } else { "Diagnostic" },
-        if zh { "结论" } else { "Summary" }
-    )
-    .unwrap();
-    if let Some(names) = providers {
-        writeln!(
-            output,
-            "{}:\n  - query providers: {}",
-            if zh { "证据" } else { "Details" },
-            safe_line(names)
-        )
-        .unwrap();
-    }
-    if !roots.is_empty() {
-        writeln!(
-            output,
-            "{}:",
-            if zh {
-                "已检查路径"
-            } else {
-                "Searched roots"
-            }
-        )
-        .unwrap();
-        for root in roots {
-            writeln!(output, "  - {}", safe_line(root)).unwrap();
-        }
-    }
-    writeln!(output, "{}:", if zh { "下一步" } else { "Next steps" }).unwrap();
-    let steps: &[&str] = match (zh, providers) {
-        (true, Some(_)) => &[
-            "确认这些 provider 在本机上确实存在会话数据。",
-            "放宽 providers 范围，或先不加 provider 过滤执行 `--list`。",
-        ],
-        (false, Some(_)) => &[
-            "Confirm those providers actually have session data on this machine.",
-            "Widen the providers scope, or run `--list` without a provider filter first.",
-        ],
-        (true, None) => &[
-            "确认对应 agent 已在本机生成过会话数据。",
-            "若使用自定义目录，检查相关环境变量是否指向正确位置。",
-            "若在开发环境，检查 `data/<agent>` 回退目录是否存在。",
-        ],
-        (false, None) => &[
-            "Confirm the agent has produced session data on this machine.",
-            "If you use a custom directory, check that the relevant environment variable points at it.",
-            "In a development environment, check whether the `data/<agent>` fallback directory exists.",
-        ],
-    };
-    for step in steps {
-        writeln!(output, "  - {step}").unwrap();
-    }
-    output
 }

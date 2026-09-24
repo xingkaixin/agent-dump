@@ -68,7 +68,10 @@ impl Provider for Cursor {
         self.sessions(&crate::sqlite::connect(&self.database)?, Some(cutoff))
             .map(crate::provider::Discovery::available)
     }
-    fn find(&mut self, id: &str) -> crate::Result<Session> {
+    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
+        if !self.database.exists() {
+            return Ok(crate::provider::Lookup::default());
+        }
         let connection = crate::sqlite::connect(&self.database)?;
         for (key, data) in records(
             &connection,
@@ -84,15 +87,16 @@ impl Provider for Cursor {
                         &summaries(&connection, &[composer_id])?[composer_id],
                         false,
                     );
-                    return Ok(session);
+                    return Ok(crate::provider::Lookup::new(Some(session)));
                 }
                 break;
             }
         }
-        self.sessions(&connection, None)?
-            .into_iter()
-            .find(|s| s.id == id)
-            .ok_or_else(|| format!("Cursor session not found: {id}").into())
+        Ok(crate::provider::Lookup::new(
+            self.sessions(&connection, None)?
+                .into_iter()
+                .find(|s| s.id == id),
+        ))
     }
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
         crate::cursor_transcript::read(&crate::sqlite::connect(&session.source_path)?, session)

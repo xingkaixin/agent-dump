@@ -9,6 +9,7 @@ mod cursor;
 mod cursor_transcript;
 mod deepchat;
 mod desktop;
+mod diagnostics;
 mod export;
 mod file_sessions;
 mod jsonl;
@@ -52,7 +53,7 @@ struct Args {
     uri: Option<String>,
     #[arg(long, conflicts_with = "uri")]
     list: bool,
-    #[arg(long, requires = "uri", conflicts_with_all = ["format", "output"])]
+    #[arg(long, requires = "uri")]
     head: bool,
     #[arg(short = 'd', long = "days", default_value_t = 7, value_parser = clap::value_parser!(i64).range(1..))]
     days: i64,
@@ -62,7 +63,7 @@ struct Args {
     no_metadata_summary: bool,
     #[arg(long, requires = "uri")]
     format: Option<String>,
-    #[arg(long, requires = "format")]
+    #[arg(long, requires = "uri")]
     output: Option<PathBuf>,
     #[arg(long, value_parser = ["en", "zh"])]
     lang: Option<String>,
@@ -132,7 +133,34 @@ fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         );
     }
     let uri = args.uri.ok_or("Provide a session URI or --list")?;
-    let formats = output_formats::parse(args.format.as_deref().unwrap_or("print"))?;
+    if args.head && args.format.is_some() {
+        writeln!(
+            out,
+            "{}",
+            if zh {
+                "❌ --head 不能与 -format/--format 同时使用。"
+            } else {
+                "❌ --head cannot be used with -format/--format."
+            }
+        )?;
+        return Ok(false);
+    }
+    let formats = if args.head {
+        Vec::new()
+    } else {
+        let spec = args.format.as_deref().unwrap_or("print");
+        output_formats::parse(spec).map_err(|_| {
+            let spec = render::safe_line(spec);
+            clap::Error::raw(
+                clap::error::ErrorKind::ValueValidation,
+                if zh {
+                    format!("无效的格式列表: {spec}")
+                } else {
+                    format!("Invalid format list: {spec}")
+                },
+            )
+        })?
+    };
     uri_workflow::run(
         uri_workflow::UriOperation {
             uri,
@@ -142,6 +170,7 @@ fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         },
         zh,
         out,
+        &mut io::stderr().lock(),
     )
 }
 
@@ -155,6 +184,10 @@ fn main() -> std::process::ExitCode {
         Ok(true) => std::process::ExitCode::SUCCESS,
         Ok(false) => std::process::ExitCode::FAILURE,
         Err(error) => {
+            if let Some(error) = error.downcast_ref::<clap::Error>() {
+                let _ = error.print();
+                return std::process::ExitCode::from(error.exit_code() as u8);
+            }
             if error
                 .downcast_ref::<io::Error>()
                 .is_some_and(|e| e.kind() == io::ErrorKind::BrokenPipe)

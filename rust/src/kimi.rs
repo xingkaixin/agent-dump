@@ -125,7 +125,7 @@ impl Provider for Kimi {
         })
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<Session> {
+    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
         self.work_dirs = None;
         file_sessions::find(
             &self.roots.base.clone(),

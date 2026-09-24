@@ -24,7 +24,8 @@ def test_file_export_failures_do_not_stop_other_formats(cli, blocked):
             (directory / f"{IDENTITY}{suffix}").mkdir()
         result = cli.run(candidate, f"codex://{IDENTITY}", "--format", "json,md,raw", "--output", "exports")
         assert result.returncode == (1 if len(blocked) == 3 else 0), result.stdout + result.stderr
-        assert "Error:" in result.stderr if candidate == "rust" else "Diagnostic\n" in result.stdout
+        assert "Diagnostic\n" in result.stdout
+        assert not result.stderr
         files = sorted(path for path in directory.iterdir() if path.is_file())
         assert len(files) == 3 - len(blocked)
         artifacts.append({path.name: path.read_bytes() for path in files})

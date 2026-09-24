@@ -103,7 +103,7 @@ impl Provider for Pi {
         file_sessions::discover(&self.files()?, days, true, |path, _| Self::parse(path))
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<Session> {
+    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
         let suffix = format!("{id}.jsonl");
         file_sessions::find(
             &self.roots.base,

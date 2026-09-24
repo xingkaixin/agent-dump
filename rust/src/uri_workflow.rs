@@ -1,5 +1,6 @@
+use crate::diagnostics::{self, Diagnostic};
 use crate::output_formats::OutputFormat;
-use crate::provider::RawExport;
+use crate::provider::{RawExport, render_search_roots};
 use crate::registry;
 use crate::{export, render};
 use std::io::Write;
@@ -12,9 +13,77 @@ pub struct UriOperation {
     pub output: Option<PathBuf>,
 }
 
-pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Result<bool> {
+pub fn run(
+    operation: UriOperation,
+    zh: bool,
+    out: &mut impl Write,
+    warnings: &mut impl Write,
+) -> crate::Result<bool> {
     let uri = &operation.uri;
-    let (registration, id) = registry::for_uri(uri)?;
+    let Some((registration, id)) = registry::for_uri(uri) else {
+        write!(
+            out,
+            "{}",
+            Diagnostic::invalid_uri(uri, registry::uri_examples(), zh).render(zh)
+        )?;
+        return Ok(false);
+    };
+    let found = (registration.open)().and_then(|mut provider| {
+        let lookup = provider.find(id)?;
+        Ok((provider, lookup))
+    });
+    let found = match found {
+        Ok((provider, lookup)) => {
+            for failure in &lookup.failures {
+                writeln!(
+                    warnings,
+                    "{}",
+                    diagnostics::session_warning(&registration.info, failure, zh)
+                )?;
+            }
+            lookup.session.map(|session| (provider, session))
+        }
+        Err(error) => {
+            writeln!(
+                warnings,
+                "{}",
+                diagnostics::lookup_warning(&registration.info, &error, zh)
+            )?;
+            None
+        }
+    };
+    let Some((provider, session)) = found else {
+        write!(
+            out,
+            "{}",
+            Diagnostic::missing_session(
+                uri,
+                registration.info.scheme,
+                id,
+                registry::search_roots(),
+                zh
+            )
+            .render(zh)
+        )?;
+        return Ok(false);
+    };
+    if let Some(diagnostic) = Diagnostic::unsupported_formats(
+        &registration.info,
+        provider.as_ref(),
+        &operation.formats,
+        zh,
+    ) {
+        write!(out, "{}", diagnostic.render(zh))?;
+        return Ok(false);
+    }
+    if operation.head {
+        write!(
+            out,
+            "{}",
+            render::head(uri, &session, registration.info.display_name, zh)
+        )?;
+        return Ok(true);
+    }
     if operation
         .formats
         .iter()
@@ -25,26 +94,6 @@ pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Re
             "Rust file export requires --output; configuration defaults are not implemented yet"
                 .into(),
         );
-    }
-    let mut provider = (registration.open)()?;
-    let session = provider.find(id)?;
-    if operation.head {
-        write!(
-            out,
-            "{}",
-            render::head(uri, &session, registration.info.display_name, zh)
-        )?;
-        return Ok(true);
-    }
-    for format in &operation.formats {
-        if !provider.supports_format(*format) {
-            return Err(format!(
-                "{} does not support {} export",
-                registration.info.display_name,
-                format.name()
-            )
-            .into());
-        }
     }
     let raw = provider.raw_export(&session);
     let prepared = (operation
@@ -60,7 +109,16 @@ pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Re
                 writeln!(out, "{}", render::transcript(uri, data))?;
                 success = true;
             }
-            Err(error) => eprintln!("Error: {}", render::safe_line(&error.to_string())),
+            Err(error) => write!(
+                out,
+                "{}",
+                Diagnostic::read_failed(
+                    &error,
+                    render_search_roots(&registration.info, provider.as_ref()),
+                    zh
+                )
+                .render(zh)
+            )?,
         }
     }
     for format in operation
@@ -122,7 +180,16 @@ pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Re
                 )?;
                 success = true;
             }
-            Err(error) => eprintln!("Error: {}", render::safe_line(&error.to_string())),
+            Err(error) => write!(
+                out,
+                "{}",
+                Diagnostic::read_failed(
+                    &error,
+                    render_search_roots(&registration.info, provider.as_ref()),
+                    zh
+                )
+                .render(zh)
+            )?,
         }
     }
     Ok(success)

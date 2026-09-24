@@ -5,6 +5,7 @@ pub struct ProviderInfo {
     pub name: &'static str,
     pub display_name: &'static str,
     pub scheme: &'static str,
+    pub identifier_label: &'static str,
     pub uri_prefixes: &'static [&'static str],
 }
 
@@ -30,6 +31,21 @@ pub struct SessionFailure {
     pub error: String,
 }
 
+#[derive(Default)]
+pub struct Lookup {
+    pub session: Option<Session>,
+    pub failures: Vec<SessionFailure>,
+}
+
+impl Lookup {
+    pub fn new(session: Option<Session>) -> Self {
+        Self {
+            session,
+            failures: Vec::new(),
+        }
+    }
+}
+
 impl Discovery {
     pub fn available(sessions: Vec<Session>) -> Self {
         Self {
@@ -42,7 +58,7 @@ impl Discovery {
 
 pub trait Provider {
     fn discover(&mut self, days: i64) -> crate::Result<Discovery>;
-    fn find(&mut self, id: &str) -> crate::Result<Session>;
+    fn find(&mut self, id: &str) -> crate::Result<Lookup>;
     fn read(&self, session: &Session, zh: bool) -> crate::Result<SessionData>;
     fn source_root(&self) -> &Path;
     fn search_roots(&self) -> Vec<(&'static str, PathBuf)>;
@@ -58,4 +74,12 @@ pub trait Provider {
     fn raw_export(&self, session: &Session) -> RawExport {
         RawExport::File(session.source_path.clone())
     }
+}
+
+pub fn render_search_roots(info: &ProviderInfo, provider: &dyn Provider) -> Vec<String> {
+    provider
+        .search_roots()
+        .into_iter()
+        .map(|(label, path)| format!("{}: {label}: {}", info.display_name, path.display()))
+        .collect()
 }

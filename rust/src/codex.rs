@@ -152,7 +152,7 @@ impl Provider for Codex {
         file_sessions::discover(&self.files()?, days, true, |path, _| self.parse(path))
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<Session> {
+    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
         self.prepare()?;
         let suffix = format!("-{id}.jsonl");
         file_sessions::find(

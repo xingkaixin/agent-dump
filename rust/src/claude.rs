@@ -162,7 +162,7 @@ impl Provider for Claude {
         file_sessions::discover(&self.files()?, days, true, |path, _| self.parse(path))
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<Session> {
+    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
         self.titles.clear();
         file_sessions::find(
             &self.roots.base.clone(),

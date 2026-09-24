@@ -35,7 +35,7 @@ class CliFixture:
         )
         os.utime(self.source, (1768478400, 1768478400))
 
-    def parity(self, *args: str, json_export: bool = False, formats: tuple[str, ...] = ()) -> None:
+    def parity(self, *args: str, json_export: bool = False, formats: tuple[str, ...] = (), exit_code: int = 0) -> None:
         before = self.fixtures.source_manifest(self.root)
         results = []
         outputs = []
@@ -43,7 +43,7 @@ class CliFixture:
             output = self.root / "exports"
             shutil.rmtree(output, ignore_errors=True)
             result = self.run(candidate, *args)
-            assert result.returncode == 0, result.stdout + result.stderr
+            assert result.returncode == exit_code, result.stdout + result.stderr
             results.append((result.stdout, result.stderr))
             files = sorted(path for path in output.rglob("*") if path.is_file())
             expected = formats or (("json",) if json_export else ())

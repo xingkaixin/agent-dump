@@ -1,4 +1,5 @@
-use crate::provider::{ProviderInfo, SessionFailure, SessionGroup};
+use crate::diagnostics::session_warning;
+use crate::provider::SessionGroup;
 use crate::registry::{self, Registration};
 use std::collections::BTreeSet;
 use std::io::Write;
@@ -33,23 +34,6 @@ fn scope(query: Option<&str>) -> crate::Result<Option<BTreeSet<String>>> {
         return Err("Empty provider scope".into());
     }
     Ok(Some(names))
-}
-
-fn session_warning(provider: &ProviderInfo, failure: &SessionFailure, zh: bool) -> String {
-    let source = crate::render::safe_line(&failure.source);
-    let error = crate::render::safe_line(&failure.error);
-    if matches!(provider.name, "cherry" | "minimax") {
-        let name = provider.display_name;
-        if zh {
-            format!("读取 {name} 会话 {source} 失败：{error}")
-        } else {
-            format!("Failed to read {name} session {source}: {error}")
-        }
-    } else if zh {
-        format!("警告: 解析会话文件失败 {source}: {error}")
-    } else {
-        format!("⚠️  Failed to parse session file {source}: {error}")
-    }
 }
 
 fn discover(
@@ -115,22 +99,13 @@ pub fn run(
         .as_ref()
         .map(|names| names.iter().cloned().collect::<Vec<_>>().join(","));
     if groups.is_empty() {
-        let mut roots = Vec::new();
-        for registration in registry::all() {
-            if let Ok(provider) = (registration.open)() {
-                roots.extend(provider.search_roots().into_iter().map(|(label, path)| {
-                    format!(
-                        "{}: {label}: {}",
-                        registration.info.display_name,
-                        path.display()
-                    )
-                }));
-            }
-        }
+        let roots = registry::search_roots();
         write!(
             out,
             "{}",
-            crate::render::empty_list(names.as_deref(), &roots, zh)
+            crate::render::list_banner()
+                + &crate::diagnostics::Diagnostic::empty_list(names.as_deref(), roots, zh)
+                    .render(zh)
         )?;
         return Ok(scope.is_some());
     }
