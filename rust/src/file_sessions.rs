@@ -98,7 +98,7 @@ pub fn discover(
             Ok(Some(session)) if session.created_at >= cutoff => discovery.sessions.push(session),
             Err(error) => discovery.failures.push(SessionFailure {
                 source: path.display().to_string(),
-                error: error.to_string(),
+                error,
             }),
             _ => {}
         }
@@ -145,7 +145,7 @@ pub fn find(
                     }
                     Err(error) => lookup.failures.push(SessionFailure {
                         source: path.display().to_string(),
-                        error: error.to_string(),
+                        error,
                     }),
                     _ => {}
                 }

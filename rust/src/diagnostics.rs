@@ -1,5 +1,6 @@
 use crate::output_formats::OutputFormat;
 use crate::provider::{Provider, ProviderInfo, SessionFailure};
+use crate::provider_error::{self, ProviderError};
 use crate::render::safe_line;
 use std::fmt::Write;
 
@@ -153,7 +154,26 @@ impl Diagnostic {
         })
     }
 
-    pub fn read_failed(error: &dyn std::fmt::Display, roots: Vec<String>, zh: bool) -> Self {
+    pub fn read_failed(
+        error: &(dyn std::error::Error + 'static),
+        roots: Vec<String>,
+        zh: bool,
+    ) -> Self {
+        if let Some(ProviderError::Diagnostic {
+            summary,
+            details,
+            roots,
+            capability,
+        }) = error.downcast_ref::<ProviderError>()
+        {
+            return Self {
+                summary: summary[usize::from(zh)].into(),
+                details: details.clone(),
+                roots: roots.clone(),
+                capability: capability.map(|text| text[usize::from(zh)].into()),
+                ..Self::default()
+            };
+        }
         Self {
             summary: if zh {
                 "读取会话数据失败。"
@@ -161,7 +181,7 @@ impl Diagnostic {
                 "Failed to read session data."
             }
             .into(),
-            details: vec![error.to_string()],
+            details: vec![provider_error::message(error, zh)],
             roots,
             next_steps: if zh {
                 vec![
@@ -281,7 +301,7 @@ fn append_items(output: &mut String, label: &str, items: &[String]) {
 
 pub fn session_warning(provider: &ProviderInfo, failure: &SessionFailure, zh: bool) -> String {
     let source = safe_line(&failure.source);
-    let error = safe_line(&failure.error);
+    let error = safe_line(&provider_error::message(failure.error.as_ref(), zh));
     if matches!(provider.name, "cherry" | "minimax") {
         let name = provider.display_name;
         if zh {
@@ -296,9 +316,13 @@ pub fn session_warning(provider: &ProviderInfo, failure: &SessionFailure, zh: bo
     }
 }
 
-pub fn lookup_warning(provider: &ProviderInfo, error: &dyn std::fmt::Display, zh: bool) -> String {
+pub fn lookup_warning(
+    provider: &ProviderInfo,
+    error: &(dyn std::error::Error + 'static),
+    zh: bool,
+) -> String {
     let name = provider.display_name;
-    let error = safe_line(&error.to_string());
+    let error = safe_line(&provider_error::message(error, zh));
     if zh {
         format!("警告: {name} 查找会话失败: {error}")
     } else {

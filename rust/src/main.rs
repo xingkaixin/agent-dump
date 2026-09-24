@@ -24,6 +24,7 @@ mod output_formats;
 mod pi;
 mod pi_transcript;
 mod provider;
+mod provider_error;
 mod registry;
 mod render;
 mod session;

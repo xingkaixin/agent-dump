@@ -59,7 +59,10 @@ fn discover(
         }
         Err(error) => {
             let name = registration.info.display_name;
-            let error = crate::render::safe_line(&error.to_string());
+            let error = crate::render::safe_line(&crate::provider_error::operation_message(
+                error.as_ref(),
+                zh,
+            ));
             writeln!(
                 warnings,
                 "{}",

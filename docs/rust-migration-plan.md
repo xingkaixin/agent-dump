@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0、P1 已完成；P2 进行中，十个 Provider 均已接入消息装配与支持格式的单 URI 导出；已增加跨 Provider 列表、可用性与部分失败隔离，URI 共用失败诊断已对齐，接下来补齐 Provider 专属错误和剩余边界。Python 仍是默认实现和发布来源。
+状态：P0、P1 已完成；P2 进行中，十个 Provider 均已接入消息装配与支持格式的单 URI 导出；跨 Provider 列表、URI 共用失败诊断及三个桌面 Provider 的 schema/迁移诊断已对齐，接下来补齐其余错误和刷新/缓存边界。Python 仍是默认实现和发布来源。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -87,6 +87,7 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 - [x] Cursor / DeepChat / Cherry Studio / MiniMax 的发现、head、消息读取与支持格式导出，见[本批差分记录](rust-desktop-parity.md)。
 - [x] 统一 discovery 的可用性与逐源失败事实、跨 Provider 列表/隔离、中英文无数据诊断，见[共享发现验收记录](rust-discovery-parity.md)。
 - [x] URI 格式/无匹配/Provider 格式能力拒绝的中英文诊断，读取/导出失败的输出通道及 head 参数组合，见[URI 验收记录](rust-uri-parity.md)。
+- [x] DeepChat / Cherry / MiniMax 的 schema、不可读来源和迁移诊断，定位后源消失/变化的读取边界，见[专属错误验收](rust-provider-errors-parity.md)。
 - [ ] Provider 专属错误、底层错误文案、复用实例的发现刷新/缓存与所有 Provider 剩余边界；十个入口接通不代表 P2 完整验收。
 - 按 JSONL Provider、SQLite Provider、桌面聊天 Provider 分批迁移。
 - 每批增加合成 fixture 与差分验收，覆盖 malformed/缺字段/旧 schema/部分失败。
@@ -148,4 +149,4 @@ URI 共用诊断实现：`f3af42a`，新增 84 个 CLI 用例，合计 681 个�
 
 每次结束更新阶段状态和下一项工作，保留 Python 参考实现。提交 PR 前运行 `just isok`；引入 Rust 后增加 `cargo fmt --check`、Clippy 和 Rust 测试门禁。发布切换之前，不把部分完成的 Rust 二进制发布为正式 `agent-dump`。
 
-当前下一项：对齐 Provider 专属的源缺失、schema/迁移能力诊断和损坏记录警告，再逐项关闭复用实例的发现刷新、缓存和极端输入边界。已接入 Provider 的剩余边界持续保留在验收清单；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
+当前下一项：补齐其余七个 Provider 的源缺失诊断与 JSONL/SQLite 损坏记录警告，再逐项关闭复用实例的发现刷新、缓存和极端输入边界。已接入 Provider 的剩余边界持续保留在验收清单；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。

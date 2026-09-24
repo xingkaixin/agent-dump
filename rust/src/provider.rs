@@ -28,7 +28,7 @@ pub struct Discovery {
 
 pub struct SessionFailure {
     pub source: String,
-    pub error: String,
+    pub error: Box<dyn std::error::Error>,
 }
 
 #[derive(Default)]

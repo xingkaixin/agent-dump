@@ -1,4 +1,5 @@
-use crate::desktop::{require_tables, timestamp};
+use crate::desktop::{Kind, has_tables, timestamp};
+use crate::provider_error::ProviderError;
 use crate::session::{Message, Part, Session, SessionData, Stats, TextPart};
 use crate::sqlite::rows;
 use crate::value::{integer, objects, string, text, truthy};
@@ -46,10 +47,11 @@ pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
 
 fn records(
     connection: &Connection,
+    path: &Path,
     id: Option<&str>,
     cutoff: Option<i64>,
 ) -> crate::Result<Vec<Value>> {
-    require_tables(
+    if !has_tables(
         connection,
         &[
             "topic",
@@ -58,7 +60,13 @@ fn records(
             "agent_session_message",
             "agent_workspace",
         ],
-    )?;
+    )? {
+        return Err(ProviderError::capability(
+            ["This database does not contain the supported Cherry Studio session tables.", "数据库不包含受支持的 Cherry Studio 会话表。"],
+            ["Use the Cherry Studio 2.x Data/cherrystudio.sqlite database. Legacy IndexedDB data is not supported.", "请使用 Cherry Studio 2.x 的 Data/cherrystudio.sqlite 数据库，暂不支持旧版 IndexedDB 数据。"],
+            vec![path.display().to_string()],
+        ).into());
+    }
     let deleted = rows(connection, "PRAGMA table_info(agent_session)", &[])?
         .iter()
         .any(|row| row["name"] == "deleted_at");
@@ -83,12 +91,12 @@ pub fn sessions(
     cutoff: Option<i64>,
 ) -> crate::Result<crate::provider::Discovery> {
     let mut result = crate::provider::Discovery::available(Vec::new());
-    for row in records(connection, id, cutoff)? {
+    for row in records(connection, path, id, cutoff)? {
         match session(connection, path, &row) {
             Ok(session) => result.sessions.push(session),
             Err(error) if id.is_none() => result.failures.push(crate::provider::SessionFailure {
                 source: string(&row["session_id"]),
-                error: error.to_string(),
+                error,
             }),
             Err(error) => return Err(error),
         }
@@ -177,10 +185,12 @@ fn message_rows(connection: &Connection, session: &Value, full: bool) -> crate::
 }
 
 pub fn read(connection: &Connection, session: &Session) -> crate::Result<SessionData> {
-    let row = records(connection, Some(&session.id), None)?
+    let row = records(connection, &session.source_path, Some(&session.id), None)?
         .into_iter()
         .next()
-        .ok_or("Cherry Studio session source is missing")?;
+        .ok_or_else(|| {
+            Kind::Cherry.missing_source(&session.source_path, Some(&session.id), Vec::new())
+        })?;
     let messages = message_rows(connection, &row, true)?
         .iter()
         .map(|row| {

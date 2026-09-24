@@ -1,4 +1,5 @@
-use crate::desktop::timestamp;
+use crate::desktop::{Kind, timestamp};
+use crate::provider_error::ProviderError;
 use crate::session::{Message, Part, Session, SessionData, Stats, TextPart};
 use crate::sqlite::rows;
 use crate::value::{integer, objects, parse_json, string, text, truthy};
@@ -26,7 +27,7 @@ pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
     Ok(vec![(label, root.join("v2/sqlite/runtime-state.sqlite"))])
 }
 
-fn validate(connection: &Connection) -> crate::Result<()> {
+fn validate(connection: &Connection, path: &Path) -> crate::Result<()> {
     for (table, required) in [
         (
             "local_runtime_sessions",
@@ -44,7 +45,11 @@ fn validate(connection: &Connection) -> crate::Result<()> {
             .split_whitespace()
             .any(|name| !columns.iter().any(|column| column["name"] == name))
         {
-            return Err(format!("Unsupported MiniMax schema: {table}").into());
+            return Err(ProviderError::capability(
+                ["This database does not contain the supported MiniMax Code session tables and columns.", "数据库不包含受支持的 MiniMax Code 会话表和字段。"],
+                ["Use the current CLI v2/sqlite/runtime-state.sqlite database. Legacy history recovery and desktop data are not supported.", "请使用当前 CLI 的 v2/sqlite/runtime-state.sqlite 数据库，暂不支持旧版历史恢复和桌面端数据。"],
+                vec![path.display().to_string(), table.into()],
+            ).into());
         }
     }
     Ok(())
@@ -56,7 +61,7 @@ pub fn sessions(
     id: Option<&str>,
     cutoff: Option<i64>,
 ) -> crate::Result<crate::provider::Discovery> {
-    validate(connection)?;
+    validate(connection, path)?;
     let records = rows(
         connection,
         "SELECT s.*, (SELECT COUNT(*) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_count, (NOT EXISTS (SELECT 1 FROM local_runtime_message_row_migrations r WHERE r.session_id = s.session_id) AND EXISTS (SELECT 1 FROM local_runtime_messages l WHERE l.session_id = s.session_id AND trim(l.display_messages_json) <> '[]')) AS legacy_pending FROM local_runtime_sessions s WHERE (? IS NULL OR s.session_id = ?) AND (? IS NULL OR COALESCE(s.created_at_ms, s.updated_at_ms) >= ?) ORDER BY COALESCE(s.created_at_ms, s.updated_at_ms) DESC, s.session_id",
@@ -69,7 +74,7 @@ pub fn sessions(
             Ok(None) => (),
             Err(error) if id.is_none() => result.failures.push(crate::provider::SessionFailure {
                 source: string(&row["session_id"]),
-                error: error.to_string(),
+                error,
             }),
             Err(error) => return Err(error),
         }
@@ -79,7 +84,10 @@ pub fn sessions(
 
 fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
     if row["columnar_version"] != 3 || truthy(&row["legacy_pending"]) {
-        return Err("MiniMax display storage requires migration".into());
+        return Err(ProviderError::Message([
+            "MiniMax Code session storage is unsupported or its display migration is incomplete. Open the session in a compatible MiniMax Code CLI to complete migration; agent-dump never migrates source data.",
+            "MiniMax Code 会话存储版本不受支持，或展示消息尚未完成迁移。请使用兼容的 MiniMax Code CLI 打开会话完成迁移；agent-dump 不会迁移源数据。",
+        ]).into());
     }
     if row["runtime"] != "pi-agent"
         || row["visibility"] == "hidden"
@@ -90,16 +98,18 @@ fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
     {
         return Ok(None);
     }
+    let id = string(&row["session_id"]);
     let extra = crate::value::json_object(&row["extra_data_json"])
-        .ok_or("Invalid MiniMax session metadata")?;
+        .ok_or_else(|| format!("Invalid MiniMax Code session metadata: {id}"))?;
     let created = if row["created_at_ms"].is_null() {
         &row["updated_at_ms"]
     } else {
         &row["created_at_ms"]
     };
-    let created = timestamp(created).ok_or("Invalid MiniMax session timestamp")?;
-    let updated = timestamp(&row["updated_at_ms"]).ok_or("Invalid MiniMax session timestamp")?;
-    let id = string(&row["session_id"]);
+    let created = timestamp(created)
+        .ok_or_else(|| format!("Invalid MiniMax Code session timestamp: {id}"))?;
+    let updated = timestamp(&row["updated_at_ms"])
+        .ok_or_else(|| format!("Invalid MiniMax Code session timestamp: {id}"))?;
     let directory = text(&row["workspace_dir"]);
     let title = crate::title::normalize_title(text(&row["title"]))
         .or_else(|| crate::title::basename(directory))
@@ -119,7 +129,9 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
         .sessions
         .into_iter()
         .next()
-        .ok_or("MiniMax session source is missing")?;
+        .ok_or_else(|| {
+            Kind::MiniMax.missing_source(&session.source_path, Some(&session.id), Vec::new())
+        })?;
     let messages = rows(connection, "SELECT msg_id, role, turn_id, source, created_at_ms, data_json FROM local_runtime_message_rows WHERE session_id = ? ORDER BY id", &[&session.id])?.iter().map(|row| decode(row).map_err(|error| format!("Invalid MiniMax message {}: {error}", string(&row["msg_id"])).into())).collect::<crate::Result<Vec<_>>>()?;
     let stats = Stats {
         message_count: messages.len(),

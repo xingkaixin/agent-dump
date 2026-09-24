@@ -76,12 +76,21 @@ def test_invalid_display_message_fails_whole_export(tmp_path, monkeypatch, extra
         "DELETE FROM local_runtime_message_row_migrations",
     ],
 )
-def test_unmigrated_or_invalid_sessions_fail_without_writing(tmp_path, monkeypatch, mutation):
+@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_unmigrated_or_invalid_sessions_fail_without_writing(tmp_path, monkeypatch, mutation, lang):
     cli, identity = desktop(tmp_path, monkeypatch, "minimax")
     with sqlite3.connect(cli.source) as conn:
         conn.execute("INSERT INTO local_runtime_messages VALUES (?, '[{}]')", (identity,))
         conn.execute(mutation)
-    fails(cli, f"minimax://{identity}")
+        conn.execute(
+            "INSERT INTO local_runtime_sessions (session_id, title, created_at_ms, updated_at_ms) VALUES ('healthy', 'Healthy', 1768478400000, 1768478400000)"
+        )
+    cli.parity(f"minimax://{identity}", "--format", "json,md,print", "--output", "exports", "--lang", lang, exit_code=1)
+    cli.parity("--list", "-d", "36500", "-q", "provider:minimax", "--lang", lang)
+    result = cli.run("rust", "--list", "-d", "36500", "-q", "provider:minimax", "--lang", lang)
+    assert "minimax://healthy" in result.stdout and f"minimax://{identity}" not in result.stdout
+    assert len(result.stderr.splitlines()) == 1
+    assert not list((cli.root / "exports").rglob("*"))
 
 
 @pytest.mark.parametrize(

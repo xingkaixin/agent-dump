@@ -47,7 +47,7 @@ pub fn run(
             writeln!(
                 warnings,
                 "{}",
-                diagnostics::lookup_warning(&registration.info, &error, zh)
+                diagnostics::lookup_warning(&registration.info, error.as_ref(), zh)
             )?;
             None
         }
@@ -113,7 +113,7 @@ pub fn run(
                 out,
                 "{}",
                 Diagnostic::read_failed(
-                    &error,
+                    error.as_ref(),
                     render_search_roots(&registration.info, provider.as_ref()),
                     zh
                 )
@@ -126,6 +126,22 @@ pub fn run(
         .iter()
         .filter(|format| **format != OutputFormat::Print)
     {
+        if (*format != OutputFormat::Raw || matches!(raw, RawExport::Session))
+            && let Some(Err(error)) = &prepared
+        {
+            write!(
+                out,
+                "{}",
+                Diagnostic::read_failed(
+                    error.as_ref(),
+                    render_search_roots(&registration.info, provider.as_ref()),
+                    zh
+                )
+                .render(zh)
+            )?;
+            continue;
+        }
+        let data = prepared.as_ref().and_then(|result| result.as_ref().ok());
         let output = operation
             .output
             .as_ref()
@@ -136,34 +152,29 @@ pub fn run(
                 RawExport::File(source) => {
                     export::raw(&session.id, source, &output, provider.source_root())
                 }
-                RawExport::Session => match prepared.as_ref().unwrap() {
-                    Ok(data) => export::json(
-                        &session.id,
-                        data,
-                        &output,
-                        provider.source_root(),
-                        ".raw.json",
-                    ),
-                    Err(error) => Err(error.to_string().into()),
-                },
+                RawExport::Session => export::json(
+                    &session.id,
+                    data.unwrap(),
+                    &output,
+                    provider.source_root(),
+                    ".raw.json",
+                ),
             }
+        } else if *format == OutputFormat::Json {
+            export::json(
+                &session.id,
+                &provider.json_payload(data.unwrap()),
+                &output,
+                provider.source_root(),
+                ".json",
+            )
         } else {
-            match prepared.as_ref().unwrap() {
-                Ok(data) if *format == OutputFormat::Json => export::json(
-                    &session.id,
-                    &provider.json_payload(data),
-                    &output,
-                    provider.source_root(),
-                    ".json",
-                ),
-                Ok(data) => export::markdown(
-                    &session.id,
-                    &render::transcript(uri, data),
-                    &output,
-                    provider.source_root(),
-                ),
-                Err(error) => Err(error.to_string().into()),
-            }
+            export::markdown(
+                &session.id,
+                &render::transcript(uri, data.unwrap()),
+                &output,
+                provider.source_root(),
+            )
         };
         match result {
             Ok(path) => {
@@ -184,7 +195,7 @@ pub fn run(
                 out,
                 "{}",
                 Diagnostic::read_failed(
-                    &error,
+                    error.as_ref(),
                     render_search_roots(&registration.info, provider.as_ref()),
                     zh
                 )

@@ -27,13 +27,22 @@ def test_unsupported_raw_rejects_whole_request(tmp_path, monkeypatch, provider, 
         ("deepchat", "DROP TABLE deepchat_messages"),
         ("cherry", "DROP TABLE agent_workspace"),
         ("minimax", "ALTER TABLE local_runtime_sessions DROP COLUMN columnar_version"),
+        ("minimax", "ALTER TABLE local_runtime_message_rows DROP COLUMN data_json"),
+        ("minimax", "DROP TABLE local_runtime_messages"),
+        ("minimax", "DROP TABLE local_runtime_message_row_migrations"),
     ],
 )
-def test_unknown_schema_is_not_exported(tmp_path, monkeypatch, provider, sql):
+@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_unknown_schema_is_not_exported(tmp_path, monkeypatch, provider, sql, lang):
     cli, identity = desktop(tmp_path, monkeypatch, provider)
     with sqlite3.connect(cli.source) as connection:
         connection.execute(sql)
-    fails(cli, f"{provider}://{identity}")
+    cli.parity(
+        f"{provider}://{identity}", "--format", "json,md,print", "--output", "exports", "--lang", lang, exit_code=1
+    )
+    cli.parity("--list", "-d", "36500", "-q", f"provider:{provider}", "--lang", lang)
+    cli.parity("--list", "-d", "36500", "--lang", lang)
+    assert not list((cli.root / "exports").rglob("*"))
 
 
 @pytest.mark.parametrize(

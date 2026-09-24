@@ -1,4 +1,5 @@
-use crate::desktop::{require_tables, timestamp};
+use crate::desktop::{Kind, has_tables, timestamp};
+use crate::provider_error::ProviderError;
 use crate::session::{ImagePart, Message, Part, PlanPart, Session, SessionData, Stats, TextPart};
 use crate::sqlite::rows;
 use crate::value::{integer, objects, parse_json, string, text, truthy};
@@ -14,10 +15,23 @@ pub fn sessions(
     id: Option<&str>,
     cutoff: Option<i64>,
 ) -> crate::Result<Vec<Session>> {
-    require_tables(
+    if !has_tables(
         connection,
         &["new_sessions", "deepchat_sessions", "deepchat_messages"],
-    )?;
+    )? {
+        return Err(ProviderError::capability(
+            [
+                "This database does not contain the supported DeepChat session tables.",
+                "数据库不包含受支持的 DeepChat 会话表。",
+            ],
+            [
+                "Use the current app_db/agent.db database. Legacy chat.db is not supported.",
+                "请使用当前版本的 app_db/agent.db 数据库，暂不支持旧版 chat.db。",
+            ],
+            vec![path.display().to_string()],
+        )
+        .into());
+    }
     rows(connection, "SELECT s.*, d.model_id, d.provider_id, (SELECT COUNT(*) FROM deepchat_messages m WHERE m.session_id = s.id) AS message_count FROM new_sessions s LEFT JOIN deepchat_sessions d ON d.id = s.id WHERE s.is_draft = 0 AND (? IS NULL OR s.id = ?) AND (? IS NULL OR s.created_at >= ?) ORDER BY s.created_at DESC, s.id", &[&id, &id, &cutoff, &cutoff])?
         .into_iter().map(|row| {
             let mut session = Session::new(string(&row["id"]), if truthy(&row["title"]) { string(&row["title"]) } else { "Untitled".into() }, path.to_owned(), timestamp(&row["created_at"]).unwrap_or(Timestamp::UNIX_EPOCH), timestamp(&row["updated_at"]).unwrap_or(Timestamp::UNIX_EPOCH));
@@ -37,7 +51,9 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
     )?
     .is_empty()
     {
-        return Err("DeepChat session source is missing".into());
+        return Err(Kind::DeepChat
+            .missing_source(&session.source_path, Some(&session.id), Vec::new())
+            .into());
     }
     let users = details(
         connection,

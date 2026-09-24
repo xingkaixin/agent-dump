@@ -1,5 +1,6 @@
 use crate::output_formats::OutputFormat;
 use crate::provider::Provider;
+use crate::provider_error::ProviderError;
 use crate::session::{Session, SessionData};
 use jiff::{SignedDuration, Timestamp};
 use rusqlite::Connection;
@@ -11,6 +12,38 @@ pub enum Kind {
     DeepChat,
     Cherry,
     MiniMax,
+}
+
+impl Kind {
+    pub fn missing_source(
+        &self,
+        path: &Path,
+        id: Option<&str>,
+        roots: Vec<String>,
+    ) -> ProviderError {
+        let summary = match self {
+            Self::DeepChat => [
+                "DeepChat session source is missing.",
+                "DeepChat 会话数据源不存在。",
+            ],
+            Self::Cherry => [
+                "Cherry Studio session source is missing.",
+                "Cherry Studio 会话数据源不存在。",
+            ],
+            Self::MiniMax => [
+                "MiniMax Code session source is missing.",
+                "MiniMax Code 会话数据源不存在。",
+            ],
+        };
+        ProviderError::missing(
+            summary,
+            path,
+            id.map(|id| format!("session id: {id}"))
+                .into_iter()
+                .collect(),
+            roots,
+        )
+    }
 }
 
 pub struct Desktop {
@@ -62,6 +95,38 @@ impl Desktop {
             Kind::MiniMax => crate::minimax::sessions(connection, &self.database, id, cutoff),
         }
     }
+
+    fn with_database<T>(
+        &self,
+        path: &Path,
+        read: impl FnOnce(&Connection) -> crate::Result<T>,
+    ) -> crate::Result<T> {
+        if !path.is_file() {
+            let roots = if matches!(self.kind, Kind::Cherry) {
+                Vec::new()
+            } else {
+                self.search_roots
+                    .iter()
+                    .map(|(label, path)| format!("{label}: {}", path.display()))
+                    .collect()
+            };
+            return Err(self.kind.missing_source(path, None, roots).into());
+        }
+        let result = crate::sqlite::connect(path).and_then(|connection| read(&connection));
+        if matches!(self.kind, Kind::DeepChat)
+            && result.as_ref().err().is_some_and(|error| matches!(
+                error.downcast_ref::<rusqlite::Error>(),
+                Some(rusqlite::Error::SqliteFailure(failure, _)) if failure.code == rusqlite::ErrorCode::NotADatabase
+            ))
+        {
+            return Err(ProviderError::capability(
+                ["DeepChat database is encrypted or is not a readable SQLite database.", "DeepChat 数据库已加密，或不是可读取的 SQLite 数据库。"],
+                ["Only unencrypted DeepChat databases are supported; SQLCipher decryption is unavailable.", "仅支持未加密的 DeepChat 数据库，暂不支持 SQLCipher 解密。"],
+                vec![path.display().to_string()],
+            ).into());
+        }
+        result
+    }
 }
 
 impl Provider for Desktop {
@@ -74,7 +139,9 @@ impl Provider for Desktop {
                 days.checked_mul(86400).ok_or("days is out of range")?,
             ))?
             .as_millisecond();
-        self.sessions(&crate::sqlite::connect(&self.database)?, None, Some(cutoff))
+        self.with_database(&self.database, |connection| {
+            self.sessions(connection, None, Some(cutoff))
+        })
     }
 
     fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
@@ -82,20 +149,21 @@ impl Provider for Desktop {
             return Ok(crate::provider::Lookup::default());
         }
         Ok(crate::provider::Lookup::new(
-            self.sessions(&crate::sqlite::connect(&self.database)?, Some(id), None)?
-                .sessions
-                .into_iter()
-                .next(),
+            self.with_database(&self.database, |connection| {
+                self.sessions(connection, Some(id), None)
+            })?
+            .sessions
+            .into_iter()
+            .next(),
         ))
     }
 
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
-        let connection = crate::sqlite::connect(&session.source_path)?;
-        match self.kind {
-            Kind::DeepChat => crate::deepchat::read(&connection, session),
-            Kind::Cherry => crate::cherry::read(&connection, session),
-            Kind::MiniMax => crate::minimax::read(&connection, session),
-        }
+        self.with_database(&session.source_path, |connection| match self.kind {
+            Kind::DeepChat => crate::deepchat::read(connection, session),
+            Kind::Cherry => crate::cherry::read(connection, session),
+            Kind::MiniMax => crate::minimax::read(connection, session),
+        })
     }
 
     fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
@@ -144,11 +212,14 @@ pub fn timestamp(value: &Value) -> Option<Timestamp> {
         .and_then(|value| crate::session::epoch_seconds(value / 1000.0))
 }
 
-pub fn require_tables(connection: &Connection, tables: &[&str]) -> crate::Result<()> {
+pub fn has_tables(connection: &Connection, tables: &[&str]) -> crate::Result<bool> {
     for table in tables {
         if !crate::sqlite::has_table(connection, table)? {
-            return Err(format!("Unsupported database schema: missing {table}").into());
+            return Ok(false);
         }
     }
-    Ok(())
+    Ok(true)
 }
+
+#[cfg(test)]
+mod tests;

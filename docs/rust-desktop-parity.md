@@ -45,6 +45,8 @@ SQLite 数据库与 `-wal` 的持久字节在读取中保持不变。原生只�
 
 ## 仍需验收
 
+后续共享发现、URI 诊断及本批三个桌面来源的 schema/迁移/源消失错误已分别补齐，最新范围见[共享发现](rust-discovery-parity.md)、[URI](rust-uri-parity.md)和[Provider 专属错误](rust-provider-errors-parity.md)。下列清单保留本批接入时的边界，未由后续记录明确关闭的项目仍待验收。
+
 - 完整 discovery 的可用性/完整性、部分失败计数与诊断 i18n；当前只隔离 Cherry/MiniMax 单会话发现错误并告警。
 - 长生命周期缓存、lease/LRU、并发读取合并、同一 Session 重复读取和索引的 WAL 失效；当前用例验证每次新 CLI 能看到提交。
 - 跨 Provider 列表、复杂 Query/Search、批量导出、全部 URI 参数组合、默认配置和非 TTY/TUI 入口。
