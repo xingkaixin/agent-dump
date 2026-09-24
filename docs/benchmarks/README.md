@@ -12,6 +12,8 @@
 
 [JSONL Provider 接入后的 Codex 复测](rust-p2-jsonl.md)验证共享模块变化后的五场景表现；三个新 Provider 的性能仍待独立测量。
 
+[SQLite Provider 接入后的六场景复测](rust-p2-sqlite.md)增加原有 OpenCode V2 列表场景，保留两轮配对测量、波动说明及 SQLite 引擎版本差异。
+
 ## 运行
 
 ```bash

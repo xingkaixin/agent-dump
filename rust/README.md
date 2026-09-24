@@ -66,7 +66,9 @@ just build-rust
 
 历史四场景对比见 [P1 性能复测](../docs/benchmarks/rust-p1.md)。[P2 Codex 复测](../docs/benchmarks/rust-p2-codex.md)增加现有的 JSON＋Markdown 导出场景，并保留缓冲优化前后的数据。
 
-接入 Claude Code / Kimi / Pi 后的[最新复测](../docs/benchmarks/rust-p2-jsonl.md)仍使用同五个 Codex 场景，检查共享模块变化后的表现；不代表新 Provider 的性能。
+接入 Claude Code / Kimi / Pi 后的[复测](../docs/benchmarks/rust-p2-jsonl.md)仍使用同五个 Codex 场景，检查共享模块变化后的表现；不代表这三个 Provider 的性能。
+
+接入 OpenCode / ZCode 后的[最新六场景复测](../docs/benchmarks/rust-p2-sqlite.md)增加 OpenCode V2 列表，保留两轮数据、SQLite 引擎版本差异和二进制体积变化；尚未测量 SQLite 正文导出或 ZCode 的性能。
 
 使用原有 [CLI evaluator](../docs/benchmarks/README.md)，不为 Rust 改写 fixture 或验收摘要。本阶段只运行以下已实现子集：
 

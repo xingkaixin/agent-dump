@@ -34,6 +34,8 @@ WAL 验证明确区分数据库/`-wal` 持久会话数据和 SQLite `-shm` 协�
 
 新增 79 个 SQLite 用例和 1 个 Pi developer 回归用例。测试只使用临时合成数据，没有访问真实用户会话目录。Python 生产源码与 `dca2d97` 相同；原 P0 evaluator 与 fixture 未修改。
 
+实现提交：`aec8b47`。[六场景性能报告](benchmarks/rust-p2-sqlite.md)保留两轮配对测量与全部原始样本；新增的 OpenCode V2 列表通过原比较器，第二轮为 Python 148.94 ms / Rust 9.15 ms。两种实现使用不同 SQLite 版本，不能把差异全部归因于语言。
+
 ## 仍需验收
 
 - 完整 CLI 参数、跨 Provider 可用性/部分失败计数、诊断 i18n、查询/统计/索引/配置/交互。

@@ -93,6 +93,8 @@ Codex 本批实现：`ca4b1db`；benchmark 发现并修复 JSON 小写入瓶颈�
 
 Claude Code / Kimi / Pi 实现：`3669542`，新增 141 个差分及边界用例，合计 313 个；本机完整 `just isok` 与 release 构建通过。已验证具体行为与未关闭边界见[JSONL Provider 验收记录](rust-jsonl-parity.md)。[原五场景复测](benchmarks/rust-p2-jsonl.md)全部通过，Codex JSON＋Markdown 导出为 Python 241.28 ms / Rust 74.89 ms（3.22×）；未测量三个新 Provider 的性能，不将接入或 benchmark 通过计作完整功能迁移完成。
 
+OpenCode / ZCode 实现：`aec8b47`，新增 79 个 SQLite 用例和 1 个 Pi 回归用例，合计 393 个；本机完整 `just isok` 与 release 构建通过。[六场景复测](benchmarks/rust-p2-sqlite.md)增加原有 OpenCode V2 列表，两轮均通过比较器；第二轮列表为 Python 148.94 ms / Rust 9.15 ms（16.28×）。两轮原始数据、引擎版本差异、体积增长及波动说明均已保留。具体范围与剩余边界见[SQLite 验收记录](rust-sqlite-parity.md)。
+
 ### P3：查询、索引、维护命令
 
 - 对齐 Query/Search 语义，然后实现 SQLite FTS5 与 fallback。
@@ -137,4 +139,4 @@ Claude Code / Kimi / Pi 实现：`3669542`，新增 141 个差分及边界用例
 
 每次结束更新阶段状态和下一项工作，保留 Python 参考实现。提交 PR 前运行 `just isok`；引入 Rust 后增加 `cargo fmt --check`、Clippy 和 Rust 测试门禁。发布切换之前，不把部分完成的 Rust 二进制发布为正式 `agent-dump`。
 
-当前下一项：P2 的 Claude Code / Kimi / Pi JSONL Provider，复用现有会话模型、渲染和导出边界，逐个建立差分验收。Codex 剩余边界持续保留在验收清单；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
+当前下一项：P2 的 Cursor / DeepChat / Cherry Studio / MiniMax Provider，复用现有会话模型、SQLite 读取、渲染和导出边界，逐个建立差分验收。已接入 Provider 的剩余边界持续保留在验收清单；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
