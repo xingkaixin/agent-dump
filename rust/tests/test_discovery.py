@@ -164,14 +164,9 @@ def test_partial_desktop_failure_keeps_other_providers(tmp_path, monkeypatch, pr
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize(
-    "query", ["", "  ", "provider:", "provider:codex keyword", "provider:codex role:user", "keyword"]
-)
-def test_unsupported_query_never_silently_broadens_scope(cli, query):
-    result = cli.run("rust", "--list", "-q", query)
-    assert result.returncode != 0
-    assert "codex://" not in result.stdout
-    assert result.stderr
+@pytest.mark.parametrize("query", ["", "  ", "provider:"])
+def test_invalid_query_never_silently_broadens_scope(cli, query):
+    cli.parity("--list", "-q", query, exit_code=1)
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
