@@ -40,3 +40,5 @@ CLI 套件净增 25 个用例，合计 706 个；新增 4 个读取边界单元�
 2026-09-24，macOS arm64，固定 Rust 1.90.0：完整 `just isok` 通过，Python 2596 passed / 1 skipped、Rust 单元测试 5 passed、CLI 差分与边界 706 passed、npm 74 passed、Web E2E 13 passed。`just build-rust` release 构建通过。
 
 Python 生产源码与 `dca2d97` 相同；P0 evaluator 四个脚本相对 `9c1cf61` 无改动。没有新增第三方依赖。
+
+实现提交：`99575b9`。[原七场景复测](benchmarks/rust-p2-provider-errors.md)通过比较器和源 hash 校验；原始报告记录干净 checkout。这些成功场景不作为桌面 Provider 或失败诊断的性能证据。

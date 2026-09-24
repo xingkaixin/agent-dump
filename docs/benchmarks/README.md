@@ -20,6 +20,8 @@
 
 [URI 诊断对齐后的七场景复测](rust-p2-uri.md)记录共享工作流调整后的成功路径表现；不把这些测量当作错误路径性能证据。
 
+[Provider 专属错误接入后的七场景复测](rust-p2-provider-errors.md)验证共享错误传播调整后的成功路径，保留相同 fixture、evaluator 和原始样本。
+
 ## 运行
 
 ```bash

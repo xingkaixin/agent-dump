@@ -105,6 +105,8 @@ Cursor / DeepChat / Cherry Studio / MiniMax 实现：`a884907`，新增 161 个�
 
 URI 共用诊断实现：`f3af42a`，新增 84 个 CLI 用例，合计 681 个；完整 `just isok` 与 release 构建通过。[原七场景复测](benchmarks/rust-p2-uri.md)全部通过，跨 Provider 列表为 Python 257.45 ms / Rust 50.94 ms（5.05×），JSON＋Markdown 导出为 253.94 / 78.26 ms（3.24×）。这些成功场景不测错误诊断耗时；Provider 专属错误和底层文案等剩余项见 [URI 验收记录](rust-uri-parity.md)。
 
+桌面 Provider 专属错误实现：`99575b9`，CLI 套件净增 25 个用例至 706 个，新增 4 个读取边界单元用例至 5 个；完整 `just isok` 与 release 构建通过。源消失/schema 变化的读取验证与 CLI 差分分别记录在[验收清单](rust-provider-errors-parity.md)。[原七场景复测](benchmarks/rust-p2-provider-errors.md)全部通过：跨 Provider 列表为 Python 249.61 ms / Rust 51.37 ms（4.86×），JSON＋Markdown 导出为 247.53 / 78.95 ms（3.14×）；未测量三个桌面 Provider 或错误路径的性能。
+
 ### P3：查询、索引、维护命令
 
 - 对齐 Query/Search 语义，然后实现 SQLite FTS5 与 fallback。
