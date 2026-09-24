@@ -1,6 +1,7 @@
 """Source locks, permissions and long references use only isolated fixtures."""
 
 import os
+import shutil
 import sqlite3
 
 from cli_fixture import IDENTITY, make_cli
@@ -9,6 +10,18 @@ import pytest
 from sqlite_fixture import create_v2
 from test_cursor import cursor, export as cursor_export, put
 from test_title_cache import sessions
+
+
+def test_default_home_uses_the_platform_environment(cli):
+    selected = cli.root / "sources/platform-home"
+    ignored = cli.root / "sources/ignored-home"
+    shutil.copytree(cli.root / "sources/codex", selected / ".codex")
+    cli.environment.pop("CODEX_HOME")
+    cli.environment.update(
+        HOME=str(ignored if os.name == "nt" else selected),
+        USERPROFILE=str(selected if os.name == "nt" else ignored),
+    )
+    cli.parity(f"codex://{IDENTITY}", "--head", "--lang", "en")
 
 
 @pytest.mark.parametrize("provider", ["opencode", "deepchat"])

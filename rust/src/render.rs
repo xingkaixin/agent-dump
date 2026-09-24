@@ -258,11 +258,22 @@ fn append_list_group(
         let mut fields = Vec::new();
         let location = session.display_location();
         if !location.trim().is_empty() {
-            let parts: Vec<_> = location.split('/').filter(|v| !v.is_empty()).collect();
-            fields.push(format!(
-                "cwd={}",
-                truncate(&parts[parts.len().saturating_sub(2)..].join("/"), 32)
-            ));
+            let parts: Vec<_> = std::path::Path::new(location.trim())
+                .components()
+                .filter(|part| {
+                    matches!(
+                        part,
+                        std::path::Component::Normal(_) | std::path::Component::ParentDir
+                    )
+                })
+                .map(|part| part.as_os_str().to_string_lossy())
+                .collect();
+            let compact = if parts.is_empty() {
+                location.clone()
+            } else {
+                parts[parts.len().saturating_sub(2)..].join("/")
+            };
+            fields.push(format!("cwd={}", truncate(&compact, 32)));
         }
         if !session.model.trim().is_empty() {
             fields.push(format!("model={}", truncate(&session.model, 24)));

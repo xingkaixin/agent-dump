@@ -15,12 +15,21 @@ pub struct SourceRoots {
 }
 
 pub fn environment_root(variable: &str, default: &str) -> crate::Result<PathBuf> {
-    if let Some(value) = std::env::var_os(variable).filter(|value| !value.is_empty()) {
+    if variable != "HOME"
+        && let Some(value) = std::env::var_os(variable).filter(|value| !value.is_empty())
+    {
         return Ok(PathBuf::from(value));
     }
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .ok_or("HOME or USERPROFILE is required")?;
+    let home = if cfg!(windows) {
+        std::env::var_os("USERPROFILE").or_else(|| {
+            let mut drive = std::env::var_os("HOMEDRIVE")?;
+            drive.push(std::env::var_os("HOMEPATH")?);
+            Some(drive)
+        })
+    } else {
+        std::env::var_os("HOME")
+    }
+    .ok_or("Could not determine home directory")?;
     Ok(PathBuf::from(home).join(default))
 }
 
