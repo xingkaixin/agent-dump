@@ -61,12 +61,14 @@ fn ensure_directory(path: &Path) -> crate::Result<()> {
     if path.as_os_str().is_empty() {
         return Ok(());
     }
-    let mut builder = fs::DirBuilder::new();
+    let builder = fs::DirBuilder::new();
     #[cfg(unix)]
-    {
+    let builder = {
         use std::os::unix::fs::DirBuilderExt;
+        let mut builder = builder;
         builder.mode(0o700);
-    }
+        builder
+    };
     let result = match builder.create(path) {
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             if let Some(parent) = path.parent() {
