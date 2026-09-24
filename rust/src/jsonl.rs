@@ -1,7 +1,6 @@
 use crate::provider::{DiagnosticSink, RecoverableDiagnostic};
 use serde_json::Value;
-use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 pub const FULL_SCAN_LIMIT: u64 = 256 * 1024;
@@ -24,12 +23,12 @@ fn nonempty(bytes: &[u8]) -> bool {
     bytes.iter().any(|byte| !byte.is_ascii_whitespace())
 }
 
-pub fn metadata(path: &Path, head_lines: usize) -> io::Result<Metadata> {
-    let mut file = File::open(path)?;
+pub fn metadata(path: &Path, head_lines: usize) -> crate::Result<Metadata> {
+    let mut file = crate::source_io::open(path)?;
     let size = file.metadata()?.len();
     let mut bytes = Vec::new();
     if size <= FULL_SCAN_LIMIT {
-        file.read_to_end(&mut bytes)?;
+        crate::source_io::at(path, file.read_to_end(&mut bytes))?;
         let lines: Vec<_> = bytes
             .split(|byte| *byte == b'\n')
             .filter(|line| nonempty(line))
@@ -41,7 +40,7 @@ pub fn metadata(path: &Path, head_lines: usize) -> io::Result<Metadata> {
             complete: true,
         });
     }
-    file.by_ref().take(WINDOW).read_to_end(&mut bytes)?;
+    crate::source_io::at(path, file.by_ref().take(WINDOW).read_to_end(&mut bytes))?;
     let end = bytes.iter().rposition(|byte| *byte == b'\n');
     let lines: Vec<_> = end
         .map(|end| {
@@ -95,14 +94,14 @@ pub fn scan_numbered(
     diagnostics: &mut DiagnosticSink<'_>,
     mut append: impl FnMut(usize, Value, &mut DiagnosticSink<'_>) -> crate::Result<()>,
 ) -> crate::Result<()> {
-    let mut reader = BufReader::new(File::open(path)?);
+    let mut reader = BufReader::new(crate::source_io::open(path)?);
     let mut line = Vec::new();
     let mut number = 0;
     let mut skipped = Vec::new();
     let mut count = 0;
     loop {
         line.clear();
-        if reader.read_until(b'\n', &mut line)? == 0 {
+        if crate::source_io::at(path, reader.read_until(b'\n', &mut line))? == 0 {
             break;
         }
         number += 1;

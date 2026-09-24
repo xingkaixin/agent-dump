@@ -5,6 +5,10 @@ pub type LocalizedText = [&'static str; 2];
 
 #[derive(Debug)]
 pub enum ProviderError {
+    Cause {
+        kind: &'static str,
+        message: String,
+    },
     Message(LocalizedText),
     Diagnostic {
         summary: LocalizedText,
@@ -16,6 +20,13 @@ pub enum ProviderError {
 }
 
 impl ProviderError {
+    pub fn invalid(message: impl Into<String>) -> Self {
+        Self::Cause {
+            kind: "ValueError",
+            message: message.into(),
+        }
+    }
+
     pub fn capability(
         summary: LocalizedText,
         capability: LocalizedText,
@@ -48,8 +59,9 @@ impl ProviderError {
         }
     }
 
-    pub fn summary(&self, zh: bool) -> &'static str {
+    pub fn summary(&self, zh: bool) -> &str {
         match self {
+            Self::Cause { message, .. } => message,
             Self::Message(summary) | Self::Diagnostic { summary, .. } => summary[usize::from(zh)],
         }
     }
@@ -65,14 +77,25 @@ impl std::error::Error for ProviderError {}
 
 pub fn message(error: &(dyn std::error::Error + 'static), zh: bool) -> String {
     let error = original(error);
-    error
-        .downcast_ref::<ProviderError>()
-        .map_or_else(|| error.to_string(), |error| error.summary(zh).to_owned())
+    if let Some(error) = error.downcast_ref::<ProviderError>() {
+        return error.summary(zh).to_owned();
+    }
+    match error.downcast_ref::<rusqlite::Error>() {
+        Some(rusqlite::Error::SqlInputError { msg, .. }) => msg.clone(),
+        Some(rusqlite::Error::SqliteFailure(failure, _))
+            if failure.code == rusqlite::ErrorCode::CannotOpen =>
+        {
+            "unable to open database file".into()
+        }
+        Some(rusqlite::Error::SqliteFailure(_, Some(message))) => message.clone(),
+        _ => error.to_string(),
+    }
 }
 
 pub fn operation_message(error: &(dyn std::error::Error + 'static), zh: bool) -> String {
     let error = original(error);
     let kind = match error.downcast_ref::<ProviderError>() {
+        Some(ProviderError::Cause { kind, .. }) => Some(*kind),
         Some(ProviderError::Message(_)) => Some("ValueError"),
         Some(ProviderError::Diagnostic {
             capability: Some(_),
@@ -81,11 +104,29 @@ pub fn operation_message(error: &(dyn std::error::Error + 'static), zh: bool) ->
         Some(ProviderError::Diagnostic {
             capability: None, ..
         }) => Some("DiagnosticFileNotFoundError"),
+        None if error.is::<crate::source_io::Error>() => Some(
+            error
+                .downcast_ref::<crate::source_io::Error>()
+                .unwrap()
+                .kind,
+        ),
+        None if error.is::<crate::python_json::Error>() => Some(
+            error
+                .downcast_ref::<crate::python_json::Error>()
+                .unwrap()
+                .kind,
+        ),
         None => match error.downcast_ref::<rusqlite::Error>() {
             Some(rusqlite::Error::SqliteFailure(failure, _))
-                if failure.code == rusqlite::ErrorCode::NotADatabase =>
+                if matches!(
+                    failure.code,
+                    rusqlite::ErrorCode::NotADatabase | rusqlite::ErrorCode::DatabaseCorrupt
+                ) =>
             {
                 Some("DatabaseError")
+            }
+            Some(rusqlite::Error::SqliteFailure(..) | rusqlite::Error::SqlInputError { .. }) => {
+                Some("OperationalError")
             }
             _ => None,
         },

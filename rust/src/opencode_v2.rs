@@ -34,16 +34,23 @@ pub fn read(connection: &Connection, session: &Session, row: Value) -> crate::Re
 
 fn decode(row: &Value) -> crate::Result<Message> {
     build_message(row).map_err(|error| {
-        format!(
+        crate::provider_error::ProviderError::invalid(format!(
             "Invalid OpenCode V2 message {}: {error}",
             crate::value::string(&row["id"])
-        )
+        ))
         .into()
     })
 }
 
 fn build_message(row: &Value) -> crate::Result<Message> {
-    let data = json_object(&row["data"]).ok_or("message data must be a JSON object")?;
+    let data = crate::python_json::from_str(
+        row["data"]
+            .as_str()
+            .ok_or("the JSON object must be str, bytes or bytearray, not NoneType")?,
+    )?;
+    if !data.is_object() {
+        return Err("message data must be an object".into());
+    }
     let kind = crate::value::text(&row["type"]);
     let role = match kind {
         "user" => "user",

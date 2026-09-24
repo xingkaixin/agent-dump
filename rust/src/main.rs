@@ -30,6 +30,7 @@ mod registry;
 mod render;
 mod session;
 mod session_data;
+mod source_io;
 #[cfg(test)]
 mod source_tests;
 mod sqlite;

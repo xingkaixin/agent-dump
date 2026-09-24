@@ -132,7 +132,7 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
         .ok_or_else(|| {
             Kind::MiniMax.missing_source(&session.source_path, Some(&session.id), Vec::new())
         })?;
-    let messages = rows(connection, "SELECT msg_id, role, turn_id, source, created_at_ms, data_json FROM local_runtime_message_rows WHERE session_id = ? ORDER BY id", &[&session.id])?.iter().map(|row| decode(row).map_err(|error| format!("Invalid MiniMax message {}: {error}", string(&row["msg_id"])).into())).collect::<crate::Result<Vec<_>>>()?;
+    let messages = rows(connection, "SELECT msg_id, role, turn_id, source, created_at_ms, data_json FROM local_runtime_message_rows WHERE session_id = ? ORDER BY id", &[&session.id])?.iter().map(decode).collect::<crate::Result<Vec<_>>>()?;
     let stats = Stats {
         message_count: messages.len(),
         ..Default::default()
@@ -150,9 +150,17 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
 }
 
 fn decode(row: &Value) -> crate::Result<Message> {
-    let data = crate::value::json_object(&row["data_json"])
-        .filter(|v| v["msg_id"] == row["msg_id"])
-        .ok_or("Invalid display message")?;
+    let id = string(&row["msg_id"]);
+    let data = crate::python_json::from_str(
+        row["data_json"]
+            .as_str()
+            .ok_or("the JSON object must be str, bytes or bytearray, not NoneType")?,
+    )?;
+    if !data.is_object() || data["msg_id"] != row["msg_id"] {
+        return Err(
+            ProviderError::invalid(format!("Invalid MiniMax Code display message: {id}")).into(),
+        );
+    }
     let time = integer(&row["created_at_ms"]);
     let kind = text(&data["kind"]);
     let role = if !kind.is_empty() {
@@ -189,7 +197,8 @@ fn decode(row: &Value) -> crate::Result<Message> {
     let empty = json!([]);
     message.extra.insert(
         "attachments".into(),
-        objects(data.get("attachments").unwrap_or(&empty))?
+        objects(data.get("attachments").unwrap_or(&empty))
+            .map_err(|_| ProviderError::invalid(format!("Invalid MiniMax Code attachments: {id}")))?
             .iter()
             .map(attachment)
             .collect(),
@@ -233,14 +242,22 @@ fn decode(row: &Value) -> crate::Result<Message> {
                 })
             }
             Value::Null | Value::String(_) => (),
-            _ => return Err(format!("Invalid {field}").into()),
+            _ => {
+                return Err(
+                    ProviderError::invalid(format!("Invalid MiniMax Code {field}: {id}")).into(),
+                );
+            }
         }
     }
-    for tool in objects(data.get("tool_calls").unwrap_or(&empty))? {
-        let name = tool["tool_name"].as_str().ok_or("Invalid tool name")?;
-        let id = tool["tool_call_id"]
-            .as_str()
-            .ok_or("Invalid tool call id")?;
+    for tool in objects(data.get("tool_calls").unwrap_or(&empty))
+        .map_err(|_| ProviderError::invalid(format!("Invalid MiniMax Code tool_calls: {id}")))?
+    {
+        let name = tool["tool_name"].as_str().ok_or_else(|| {
+            ProviderError::invalid(format!("Invalid MiniMax Code tool call: {id}"))
+        })?;
+        let id = tool["tool_call_id"].as_str().ok_or_else(|| {
+            ProviderError::invalid(format!("Invalid MiniMax Code tool call: {id}"))
+        })?;
         let status = match integer(&tool["tool_call_status"]) {
             1 => "running",
             2 => "completed",

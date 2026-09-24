@@ -57,9 +57,9 @@ impl Kimi {
     }
 
     fn parse(&mut self, path: &Path, cutoff: Option<Timestamp>) -> crate::Result<Option<Session>> {
-        let metadata: Value = crate::python_json::from_slice(&std::fs::read(path)?)?;
+        let metadata: Value = crate::python_json::from_slice(&crate::source_io::read(path)?)?;
         if !metadata.is_object() {
-            return Err("Kimi session metadata must be a JSON object".into());
+            return Err("session metadata must be a JSON object".into());
         }
         let created_at = metadata["wire_mtime"]
             .as_f64()

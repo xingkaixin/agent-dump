@@ -20,7 +20,7 @@ pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
         crate::file_sessions::environment_root("HOME", "")?.join(".cherrystudio/boot-config.json");
     let mut roots = Vec::new();
     if boot.is_file() {
-        let config: Value = crate::python_json::from_slice(&std::fs::read(boot)?)?;
+        let config: Value = crate::python_json::from_slice(&crate::source_io::read(&boot)?)?;
         if let Some(paths) = config["app.user_data_path"].as_object() {
             for value in paths.values().filter_map(Value::as_str) {
                 if Path::new(value).is_absolute() {
@@ -164,14 +164,19 @@ fn message_rows(connection: &Connection, session: &Value, full: bool) -> crate::
     let mut node = active;
     while !node.is_empty() {
         if !seen.insert(node) {
-            return Err("Invalid Cherry Studio active branch: cycle".into());
+            return Err(ProviderError::invalid(format!(
+                "Invalid Cherry Studio active branch: {id}"
+            ))
+            .into());
         }
-        let row = *by_id
-            .get(node)
-            .ok_or("Invalid Cherry Studio active branch: missing node")?;
+        let row = *by_id.get(node).ok_or_else(|| {
+            ProviderError::invalid(format!("Invalid Cherry Studio active branch: {id}"))
+        })?;
         if row["role"] == "root" {
             if !row["parent_id"].is_null() {
-                return Err("Invalid Cherry Studio root".into());
+                return Err(
+                    ProviderError::invalid(format!("Invalid Cherry Studio root: {id}")).into(),
+                );
             }
             chain.reverse();
             return Ok(chain);
@@ -181,7 +186,7 @@ fn message_rows(connection: &Connection, session: &Value, full: bool) -> crate::
         }
         node = text(&row["parent_id"]);
     }
-    Err("Missing Cherry Studio root".into())
+    Err(ProviderError::invalid(format!("Missing Cherry Studio root: {id}")).into())
 }
 
 pub fn read(connection: &Connection, session: &Session) -> crate::Result<SessionData> {
@@ -193,15 +198,7 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
         })?;
     let messages = message_rows(connection, &row, true)?
         .iter()
-        .map(|row| {
-            decode(row).map_err(|error| {
-                format!(
-                    "Invalid Cherry Studio message {}: {error}",
-                    string(&row["id"])
-                )
-                .into()
-            })
-        })
+        .map(decode)
         .collect::<crate::Result<Vec<_>>>()?;
     let mut stats = Stats {
         total_cost: serde_json::Number::from_f64(0.0).unwrap(),
@@ -259,10 +256,20 @@ fn message_model(row: &Value) -> crate::Result<(Value, Value)> {
 }
 
 fn decode(row: &Value) -> crate::Result<Message> {
-    let data = object(&row["data"])?;
-    let stats = object(&row["stats"])?;
+    let (data, stats, model, provider) = (|| -> crate::Result<_> {
+        let data = object(&row["data"])?;
+        objects(data.get("parts").unwrap_or(&json!([])))?;
+        let stats = object(&row["stats"])?;
+        let (model, provider) = message_model(row)?;
+        Ok((data, stats, model, provider))
+    })()
+    .map_err(|_| {
+        ProviderError::invalid(format!(
+            "Invalid Cherry Studio message: {}",
+            string(&row["id"])
+        ))
+    })?;
     let cache = object(&stats["inputTokenDetails"])?;
-    let (model, provider) = message_model(row)?;
     let time = integer(&row["created_at"]);
     let mut message = Message::new(string(&row["id"]), text(&row["role"]), time, Vec::new());
     message.model = model.as_str().map(|v| v.into());

@@ -96,8 +96,7 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
             blocks.get(id).map_or(&[], Vec::as_slice),
             files.get(id).map_or(&[], Vec::as_slice),
             links.get(id).map_or(&[], Vec::as_slice),
-        )
-        .map_err(|error| format!("Invalid DeepChat message {id}: {error}"))?;
+        )?;
         stats.add_tokens(&message.tokens["input"], &message.tokens["output"])?;
         messages.push(message);
     }
@@ -208,7 +207,13 @@ fn decode(
     } else {
         blocks.iter().map(structured_block).collect()
     };
-    message.parts = objects(&content)?
+    message.parts = objects(&content)
+        .map_err(|_| {
+            ProviderError::invalid(format!(
+                "Invalid DeepChat assistant content: {}",
+                string(&row["id"])
+            ))
+        })?
         .iter()
         .map(|block| decode_block(block, time))
         .collect::<crate::Result<_>>()?;

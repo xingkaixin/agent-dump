@@ -40,8 +40,12 @@ def exports(cli, provider, identity, lang="en"):
 
 def fails(cli, uri, formats="json,md,print"):
     before = cli.fixtures.source_manifest(cli.root)
+    results = []
     for candidate in ("python", "rust"):
         result = cli.run(candidate, uri, "--format", formats, "--output", "exports", "--lang", "en")
+        results.append((result.returncode, result.stdout, result.stderr))
         assert result.returncode != 0, result.stdout + result.stderr
         assert not [p for p in (cli.root / "exports").rglob("*") if p.is_file()]
         assert cli.fixtures.source_manifest(cli.root) == before
+
+    assert results[0] == results[1], results

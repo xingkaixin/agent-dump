@@ -32,7 +32,7 @@ impl Claude {
             path.extension().is_some_and(|ext| ext == "jsonl") && path.parent() != Some(base)
         })?;
         if let Some(base) = &self.roots.base {
-            std::fs::read_dir(base)?;
+            crate::source_io::at(base, std::fs::read_dir(base))?;
         }
         Ok(files)
     }
@@ -58,7 +58,7 @@ impl Claude {
             return Ok(titles);
         }
         let result = (|| -> crate::Result<Value> {
-            let value: Value = crate::python_json::from_slice(&std::fs::read(path)?)?;
+            let value: Value = crate::python_json::from_slice(&crate::source_io::read(path)?)?;
             if !value.is_object() {
                 return Err("sessions index root must be an object".into());
             }

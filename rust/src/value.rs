@@ -153,7 +153,7 @@ pub fn pretty_json(value: &Value) -> String {
     output
 }
 
-fn repr(value: &Value) -> String {
+pub fn repr(value: &Value) -> String {
     match value {
         Value::String(text) => quoted(text),
         _ => string(value),

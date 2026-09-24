@@ -2,19 +2,35 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use tempfile::NamedTempFile;
 
 fn filename(id: &str) -> crate::Result<String> {
     let normalized = id.replace('\\', "/");
     let name = normalized
-        .trim_end_matches('/')
         .rsplit('/')
-        .next()
+        .find(|component| !component.is_empty() && *component != ".")
         .unwrap_or("");
-    if matches!(name, "" | "." | "..")
-        || (crate::render::safe_body(name) != name || name.contains(['\t', '\n']))
-    {
-        return Err("Session id cannot be used as an export filename".into());
+    let reason = if matches!(name, "" | "." | "..") {
+        Some("no usable filename component")
+    } else if crate::render::safe_body(name) != name || name.contains(['\t', '\n']) {
+        Some("filename contains a control character")
+    } else {
+        None
+    };
+    if let Some(reason) = reason {
+        return Err(crate::provider_error::ProviderError::Diagnostic {
+            summary: ["session id cannot be used as an export filename"; 2],
+            details: vec![
+                format!("session id: {}", crate::value::repr(&id.into())),
+                format!("reason: {reason}"),
+            ],
+            roots: Vec::new(),
+            capability: Some(["session id does not produce a safe filename"; 2]),
+            next_steps: vec![[
+                "Pick another session, or fix the session id in the provider data.",
+                "选择其他会话，或修复 provider 数据中的 session id。",
+            ]],
+        }
+        .into());
     }
     let edge = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-';
     let stem = name.split('.').next().unwrap_or("");
@@ -41,12 +57,9 @@ fn absolute_existing_ancestor(path: &Path) -> crate::Result<PathBuf> {
     Ok(absolute_existing_ancestor(parent)?.join(path.file_name().ok_or("Invalid output path")?))
 }
 
-fn ensure_directory(path: &Path) -> std::io::Result<()> {
-    if path.is_dir() {
+fn ensure_directory(path: &Path) -> crate::Result<()> {
+    if path.as_os_str().is_empty() {
         return Ok(());
-    }
-    if let Some(parent) = path.parent() {
-        ensure_directory(parent)?;
     }
     let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
@@ -54,9 +67,18 @@ fn ensure_directory(path: &Path) -> std::io::Result<()> {
         use std::os::unix::fs::DirBuilderExt;
         builder.mode(0o700);
     }
-    match builder.create(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && path.is_dir() => Ok(()),
+    let result = match builder.create(path) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            if let Some(parent) = path.parent() {
+                ensure_directory(parent)?;
+            }
+            builder.create(path)
+        }
         result => result,
+    };
+    match result {
+        Err(_) if path.is_dir() => Ok(()),
+        result => crate::source_io::at(path, result),
     }
 }
 
@@ -77,12 +99,21 @@ fn write(
     if destination.is_symlink() {
         return Err("Export destination must not be a symlink".into());
     }
-    ensure_directory(&directory)?;
-    let mut temporary = NamedTempFile::new_in(&directory)?;
+    ensure_directory(output)?;
+    let mut temporary = tempfile::Builder::new()
+        .prefix(&format!(
+            ".{}.",
+            output_path.file_name().unwrap().to_string_lossy()
+        ))
+        .suffix(".tmp")
+        .rand_bytes(8)
+        .tempfile_in(&directory)?;
     contents(temporary.as_file_mut())?;
     temporary.flush()?;
     temporary.as_file().sync_all()?;
-    temporary.persist(&destination)?;
+    temporary.persist(&destination).map_err(|error| {
+        crate::source_io::Error::rename(error.file.path(), &output_path, error.error)
+    })?;
     Ok(output_path)
 }
 

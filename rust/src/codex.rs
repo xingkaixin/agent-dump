@@ -74,7 +74,11 @@ impl Codex {
         };
         let payload = &header["payload"];
         if !payload.is_null() && !payload.is_object() {
-            return Err("Invalid Codex session header payload".into());
+            return Err(format!(
+                "'{}' object has no attribute 'get'",
+                crate::value::type_name(payload)
+            )
+            .into());
         }
         let mut id = text(&payload["id"]).to_owned();
         if id.is_empty() {

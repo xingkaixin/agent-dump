@@ -1,3 +1,6 @@
+mod diagnostic;
+pub use diagnostic::Error;
+
 use serde_json::{Number, Value};
 use std::io::{self, Write};
 
@@ -44,7 +47,9 @@ fn normalize(value: &mut Value) {
     }
 }
 
-pub fn from_slice(bytes: &[u8]) -> serde_json::Result<Value> {
+pub fn from_slice(bytes: &[u8]) -> crate::Result<Value> {
+    let text =
+        std::str::from_utf8(bytes).map_err(|error| diagnostic::invalid_utf8(bytes, error))?;
     let original = serde_json::from_slice::<Value>(bytes);
     if let Ok(mut value) = original {
         normalize(&mut value);
@@ -98,12 +103,13 @@ pub fn from_slice(bytes: &[u8]) -> serde_json::Result<Value> {
     }
     if changed {
         serde_json::from_slice(&encoded)
+            .map_err(|_| diagnostic::syntax(text, original.unwrap_err()).into())
     } else {
-        original
+        original.map_err(|error| diagnostic::syntax(text, error).into())
     }
 }
 
-pub fn from_str(text: &str) -> serde_json::Result<Value> {
+pub fn from_str(text: &str) -> crate::Result<Value> {
     from_slice(text.as_bytes())
 }
 
