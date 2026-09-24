@@ -2,7 +2,6 @@
 
 import json
 import threading
-import time
 
 from cli_fixture import header, message, write_jsonl
 import pytest
@@ -29,14 +28,18 @@ def test_reduction_and_partial_failures(cli, mode, scenario):
     prompts = []
     for candidate in ["python", "rust"]:
         lock = threading.Lock()
-        active = peak = 0
+        first_pair = threading.Barrier(2, timeout=10)
+        active = peak = arrivals = 0
 
-        def respond(body, _, lock=lock):
-            nonlocal active, peak
+        def respond(body, _, lock=lock, first_pair=first_pair):
+            nonlocal active, peak, arrivals
             with lock:
                 active += 1
                 peak = max(peak, active)
-            time.sleep(0.02)
+                arrivals += 1
+                synchronize = arrivals <= 2
+            if synchronize:
+                first_pair.wait()
             with lock:
                 active -= 1
             prompt = body["messages"][-1]["content"]
@@ -55,7 +58,11 @@ def test_reduction_and_partial_failures(cli, mode, scenario):
         with server(respond) as (url, requests):
             configure(cli, url)
             path = config_path(cli)
-            path.write_text(path.read_text().replace("summary_concurrency=1", "summary_concurrency=2"))
+            path.write_text(
+                path.read_text()
+                .replace("summary_concurrency=1", "summary_concurrency=2")
+                .replace("summary_timeout_seconds=2", "summary_timeout_seconds=15")
+            )
             result = cli.run(candidate, *ARGS, "--collect-mode", mode, "--save", "report.md", "--lang", "en")
             assert result.returncode == 0, result.stdout + result.stderr
             assert peak == 2
