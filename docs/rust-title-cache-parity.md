@@ -29,7 +29,7 @@ Python 的 Codex/Claude `_extract_title(lines)` 是没有生产调用方的历�
 
 - Codex/Claude/Pi 单条记录转换恢复与已验证的警告类型在后续补齐，见[转换恢复验收](rust-message-conversion-parity.md)；其他极端消息/数值字段仍待验证。
 - 全部 JSON、UTF-8、文件系统底层原因文本、异常类别及其他极端标题/消息字段。
-- 固定配置下六个 Provider 的[来源选择与重试](rust-source-selection-parity.md)在后续补齐；运行时路径变化、正文缓存、lease/LRU、并发读取合并与失效仍待验收。本批标题缓存仅验证相同路径下的刷新。
+- 固定配置下六个 Provider 的[来源选择与重试](rust-source-selection-parity.md)在后续补齐；运行时路径与 Codex 标题索引选择见[后续验收](rust-runtime-sources-parity.md)。正文缓存、lease/LRU、并发读取合并与失效仍待验收。本批标题缓存仅验证相同路径下的刷新。
 - 完整 CLI usage、全部参数组合及跨平台发布。搜索、配置、Collect、Ratatui 和 pip/npm Rust 发布切换仍在后续阶段。
 
 ## 本轮验证

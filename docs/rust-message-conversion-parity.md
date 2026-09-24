@@ -29,7 +29,7 @@ JSONL scanner 将已有诊断 sink 传给逐记录回调，Provider 决定哪些
 
 - 其他极端字段、超出 Rust 整数范围的累计 token/cost，以及全部 JSON、UTF-8、文件系统底层原因文字；本批不是任意畸形 JSON 的全量一致性证明。
 - Pi metadata 阶段的日期极值及其他来源的极端标题/时间字段，仍需单独验收。
-- 固定配置下六个 Provider 的[来源选择与重试](rust-source-selection-parity.md)在后续补齐；运行时配置路径变化、其他 Provider 刷新、正文缓存、lease/LRU、并发读取合并与失效仍待验收。
+- 固定配置下六个 Provider 的[来源选择与重试](rust-source-selection-parity.md)在后续补齐；运行时配置路径变化和其他 Provider 的选择规则见[后续验收](rust-runtime-sources-parity.md)。正文缓存、lease/LRU、并发读取合并与失效仍待验收。
 - 完整 CLI usage、全部参数组合和跨平台发布。搜索、配置、Collect、Ratatui 及 pip/npm Rust 发布保持在后续阶段。
 
 ## 本轮验证

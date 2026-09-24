@@ -11,14 +11,12 @@ use std::path::{Path, PathBuf};
 pub struct Codex {
     roots: SourceRoots,
     titles: Option<HashMap<String, String>>,
-    index: PathBuf,
 }
 
 impl Codex {
     pub fn open() -> crate::Result<Self> {
-        let root = file_sessions::environment_root("CODEX_HOME", ".codex")?;
         let roots = SourceRoots::new(
-            root.clone(),
+            || file_sessions::environment_root("CODEX_HOME", ".codex"),
             "sessions",
             "data/codex",
             "CODEX_HOME/sessions",
@@ -26,7 +24,6 @@ impl Codex {
         Ok(Self {
             roots,
             titles: None,
-            index: root.join("session_index.jsonl"),
         })
     }
 
@@ -37,8 +34,9 @@ impl Codex {
     ) -> crate::Result<Option<String>> {
         if self.titles.is_none() {
             let mut titles = HashMap::new();
-            if self.index.exists()
-                && let Err(error) = jsonl::scan(&self.index, &mut |_| Ok(()), |record, _| {
+            let index = self.roots.configured_root()?.join("session_index.jsonl");
+            if index.exists()
+                && let Err(error) = jsonl::scan(&index, &mut |_| Ok(()), |record, _| {
                     let id = text(&record["id"]);
                     if !id.trim().is_empty()
                         && let Some(title) = normalize_title(text(&record["thread_name"]))
@@ -209,7 +207,7 @@ impl Provider for Codex {
                 ["session source file is missing"; 2],
                 &session.source_path,
                 Vec::new(),
-                crate::provider::source_roots(self),
+                crate::provider::source_roots(self)?,
                 vec![
                     ["Confirm the Codex session file is still under `CODEX_HOME/sessions` or the local development data directory.", "确认 Codex 会话文件仍在 `CODEX_HOME/sessions` 或本地开发数据目录。"],
                     ["Re-run `agent-dump --list` to confirm the session id still exists.", "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。"],
@@ -223,7 +221,7 @@ impl Provider for Codex {
         serde_json::to_value(super::codex_enrichment::json_payload(data)).unwrap()
     }
 
-    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+    fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
         self.roots.search_roots()
     }
 
@@ -237,14 +235,74 @@ mod tests {
     use super::*;
 
     #[test]
+    fn title_index_follows_configuration_while_session_root_stays_selected() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = directory.path().join("first");
+        let second = directory.path().join("second");
+        for (root, title) in [(&first, "First"), (&second, "Second")] {
+            std::fs::create_dir_all(root.join("sessions")).unwrap();
+            std::fs::write(
+                root.join("session_index.jsonl"),
+                serde_json::json!({"id":"kept", "thread_name":title}).to_string(),
+            )
+            .unwrap();
+        }
+        let source = first.join("sessions/rollout-kept.jsonl");
+        std::fs::write(
+            &source,
+            r#"{"type":"session_meta","payload":{"id":"kept","timestamp":"2026-01-15T00:00:00Z"}}"#,
+        )
+        .unwrap();
+        let configured = std::rc::Rc::new(std::cell::RefCell::new(first.clone()));
+        let mut provider = Codex {
+            roots: SourceRoots::new(
+                {
+                    let configured = configured.clone();
+                    move || Ok(configured.borrow().clone())
+                },
+                "sessions",
+                directory.path().join("fallback"),
+                "Synthetic Codex",
+            ),
+            titles: None,
+        };
+        assert_eq!(
+            provider
+                .find("kept", &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .unwrap()
+                .title,
+            "First"
+        );
+        *configured.borrow_mut() = second.clone();
+        let session = provider
+            .find("kept", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap();
+        assert_eq!(session.title, "Second");
+        assert_eq!(session.source_path, source);
+        assert_eq!(provider.source_root(), first);
+        std::fs::remove_file(second.join("session_index.jsonl")).unwrap();
+        assert_ne!(
+            provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0].title,
+            "Second"
+        );
+        assert_eq!(
+            provider.search_roots().unwrap()[0].1,
+            second.join("sessions")
+        );
+    }
+
+    #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
         crate::source_tests::source_selection(
             "sessions",
             false,
-            |root, fallback| Codex {
-                roots: SourceRoots::new(root.clone(), "sessions", fallback, "Synthetic Codex"),
+            |roots| Codex {
+                roots,
                 titles: None,
-                index: root.join("session_index.jsonl"),
             },
             |base| {
                 let path = base.join("rollout-kept.jsonl");
@@ -268,14 +326,13 @@ mod tests {
         let index = directory.path().join("session_index.jsonl");
         std::fs::create_dir(&index).unwrap();
         let mut provider = Codex {
-            roots: SourceRoots::new(
+            roots: SourceRoots::fixed(
                 directory.path().into(),
                 "sessions",
                 "data/codex",
                 "CODEX_HOME/sessions",
             ),
             titles: None,
-            index: index.clone(),
         };
         let mut warnings = Vec::new();
         let discovery = provider
@@ -328,14 +385,13 @@ mod tests {
         std::fs::create_dir(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "{\"type\":\"session_meta\",\"payload\":{\"id\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\"}}\n").unwrap();
         let provider = Codex {
-            roots: SourceRoots::new(
+            roots: SourceRoots::fixed(
                 directory.path().into(),
                 "sessions",
                 "data/codex",
                 "CODEX_HOME/sessions",
             ),
             titles: None,
-            index: directory.path().join("session_index.jsonl"),
         };
         crate::source_tests::removed_file(provider, &path, "kept", "CODEX_HOME/sessions");
     }

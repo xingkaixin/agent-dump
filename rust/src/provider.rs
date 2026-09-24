@@ -3,6 +3,8 @@ use crate::session::{Session, SessionData};
 use std::path::{Path, PathBuf};
 
 pub type DiagnosticSink<'a> = dyn FnMut(RecoverableDiagnostic) -> crate::Result<()> + 'a;
+pub type SearchRoots = Vec<(&'static str, PathBuf)>;
+pub type SourceResolver = Box<dyn Fn() -> crate::Result<SearchRoots>>;
 
 pub enum RecoverableDiagnostic {
     JsonlRecordsSkipped {
@@ -90,7 +92,7 @@ pub trait Provider {
         diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<SessionData>;
     fn source_root(&self) -> &Path;
-    fn search_roots(&self) -> Vec<(&'static str, PathBuf)>;
+    fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>>;
 
     fn json_payload(&self, data: &SessionData) -> serde_json::Value {
         serde_json::to_value(data).unwrap()
@@ -107,7 +109,7 @@ pub trait Provider {
                 ["raw session source is missing"; 2],
                 path,
                 Vec::new(),
-                source_roots(self),
+                source_roots(self)?,
                 vec![
                     [
                         "Confirm the original session file is still on this machine.",
@@ -137,16 +139,17 @@ pub trait Provider {
     }
 }
 
-pub fn source_roots(provider: &(impl Provider + ?Sized)) -> Vec<String> {
-    provider
-        .search_roots()
+pub fn source_roots(provider: &(impl Provider + ?Sized)) -> crate::Result<Vec<String>> {
+    Ok(provider
+        .search_roots()?
         .into_iter()
         .map(|(label, path)| format!("{label}: {}", path.display()))
-        .collect()
+        .collect())
 }
 
 pub fn render_search_roots(info: &ProviderInfo, provider: &dyn Provider) -> Vec<String> {
     source_roots(provider)
+        .unwrap_or_default()
         .into_iter()
         .map(|root| format!("{}: {root}", info.display_name))
         .collect()

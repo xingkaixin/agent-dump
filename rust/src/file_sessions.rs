@@ -6,8 +6,9 @@ use walkdir::WalkDir;
 
 pub struct SourceRoots {
     pub base: Option<PathBuf>,
-    root: PathBuf,
-    primary: PathBuf,
+    root: Box<dyn Fn() -> crate::Result<PathBuf>>,
+    suffix: &'static str,
+    owned: PathBuf,
     fallback: PathBuf,
     label: &'static str,
 }
@@ -23,35 +24,46 @@ pub fn environment_root(variable: &str, default: &str) -> crate::Result<PathBuf>
 }
 
 impl SourceRoots {
-    pub fn new(
+    #[cfg(test)]
+    pub fn fixed(
         root: PathBuf,
-        suffix: &str,
+        suffix: &'static str,
         fallback: impl Into<PathBuf>,
         label: &'static str,
     ) -> Self {
-        let primary = root.join(suffix);
+        Self::new(move || Ok(root.clone()), suffix, fallback, label)
+    }
+
+    pub fn new(
+        root: impl Fn() -> crate::Result<PathBuf> + 'static,
+        suffix: &'static str,
+        fallback: impl Into<PathBuf>,
+        label: &'static str,
+    ) -> Self {
+        let fallback = fallback.into();
         Self {
             base: None,
-            root,
-            primary,
-            fallback: fallback.into(),
+            root: Box::new(root),
+            suffix,
+            owned: fallback.clone(),
+            fallback,
             label,
         }
     }
 
-    pub fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
-        vec![
-            (self.label, self.primary.clone()),
+    pub fn configured_root(&self) -> crate::Result<PathBuf> {
+        (self.root)()
+    }
+
+    pub fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
+        Ok(vec![
+            (self.label, self.configured_root()?.join(self.suffix)),
             ("local development fallback", self.fallback.clone()),
-        ]
+        ])
     }
 
     pub fn owned(&self) -> &Path {
-        if self.base.as_ref() == Some(&self.primary) {
-            &self.root
-        } else {
-            &self.fallback
-        }
+        &self.owned
     }
 
     pub fn files(
@@ -60,10 +72,15 @@ impl SourceRoots {
         accept: impl Fn(&Path, &Path) -> bool,
     ) -> crate::Result<Vec<PathBuf>> {
         if self.base.is_none() {
-            self.base = [&self.primary, &self.fallback]
+            let root = self.configured_root()?;
+            let primary = root.join(self.suffix);
+            self.base = [&primary, &self.fallback]
                 .into_iter()
                 .find(|path| path.exists())
                 .cloned();
+            if self.base.as_ref() == Some(&primary) {
+                self.owned = root;
+            }
         }
         let Some(base) = &self.base else {
             return Ok(Vec::new());

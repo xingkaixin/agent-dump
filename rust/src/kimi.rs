@@ -16,9 +16,13 @@ pub struct Kimi {
 
 impl Kimi {
     pub fn open() -> crate::Result<Self> {
-        let root = file_sessions::environment_root("KIMI_SHARE_DIR", ".kimi")?;
         Ok(Self {
-            roots: SourceRoots::new(root, "sessions", "data/kimi", "KIMI_SHARE_DIR/sessions"),
+            roots: SourceRoots::new(
+                || file_sessions::environment_root("KIMI_SHARE_DIR", ".kimi"),
+                "sessions",
+                "data/kimi",
+                "KIMI_SHARE_DIR/sessions",
+            ),
             work_dirs: None,
         })
     }
@@ -196,7 +200,7 @@ impl Provider for Kimi {
         Ok(session.payload(messages, stats))
     }
 
-    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+    fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
         self.roots.search_roots()
     }
 
@@ -260,8 +264,8 @@ mod tests {
         crate::source_tests::source_selection(
             "sessions",
             false,
-            |root, fallback| Kimi {
-                roots: SourceRoots::new(root, "sessions", fallback, "Synthetic Kimi"),
+            |roots| Kimi {
+                roots,
                 work_dirs: None,
             },
             |base| {
@@ -300,7 +304,7 @@ mod tests {
         }
         std::fs::write(directory.join("wire.jsonl"), "{\"timestamp\":1768478400,\"message\":{\"type\":\"TurnBegin\",\"payload\":{\"user_input\":[{\"text\":\"Wire\"}]}}}\n").unwrap();
         let mut provider = Kimi {
-            roots: SourceRoots::new(
+            roots: SourceRoots::fixed(
                 root.into(),
                 "sessions",
                 "data/kimi",

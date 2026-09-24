@@ -16,10 +16,9 @@ pub struct Claude {
 
 impl Claude {
     pub fn open() -> crate::Result<Self> {
-        let root = file_sessions::environment_root("CLAUDE_CONFIG_DIR", ".claude")?;
         Ok(Self {
             roots: SourceRoots::new(
-                root,
+                || file_sessions::environment_root("CLAUDE_CONFIG_DIR", ".claude"),
                 "projects",
                 "data/claudecode",
                 "CLAUDE_CONFIG_DIR/projects",
@@ -230,7 +229,7 @@ impl Provider for Claude {
                 ["session source file is missing"; 2],
                 &session.source_path,
                 Vec::new(),
-                crate::provider::source_roots(self),
+                crate::provider::source_roots(self)?,
                 vec![
                     ["Confirm the Claude Code session file is still under the projects directory.", "确认 Claude Code 会话文件仍位于 projects 目录下。"],
                     ["Re-run `agent-dump --list` to confirm the session still exists.", "重新运行 `agent-dump --list` 确认该会话是否仍存在。"],
@@ -240,7 +239,7 @@ impl Provider for Claude {
         crate::claude_transcript::read(session, diagnostics)
     }
 
-    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+    fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
         self.roots.search_roots()
     }
 
@@ -258,8 +257,8 @@ mod tests {
         crate::source_tests::source_selection(
             "projects",
             true,
-            |root, fallback| Claude {
-                roots: SourceRoots::new(root, "projects", fallback, "Synthetic Claude"),
+            |roots| Claude {
+                roots,
                 titles: HashMap::new(),
             },
             |base| {
@@ -292,7 +291,7 @@ mod tests {
         )
         .unwrap();
         let mut provider = Claude {
-            roots: SourceRoots::new(
+            roots: SourceRoots::fixed(
                 directory.path().into(),
                 "projects",
                 "data/claudecode",
@@ -347,7 +346,7 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "{\"type\":\"user\",\"sessionId\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\",\"message\":{\"role\":\"user\",\"content\":\"hello\"}}\n").unwrap();
         let provider = Claude {
-            roots: SourceRoots::new(
+            roots: SourceRoots::fixed(
                 directory.path().into(),
                 "projects",
                 "data/claudecode",

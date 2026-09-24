@@ -17,24 +17,22 @@ pub struct SqliteProvider {
     kind: Kind,
     database: Option<PathBuf>,
     root: PathBuf,
-    search_roots: Vec<(&'static str, PathBuf)>,
+    search_roots: crate::provider::SourceResolver,
 }
 
 impl SqliteProvider {
     pub fn open(kind: Kind) -> crate::Result<Self> {
-        let candidates = database_paths(kind)?;
         Ok(Self {
             kind,
             database: None,
             root: PathBuf::from("."),
-            search_roots: candidates,
+            search_roots: Box::new(move || database_paths(kind)),
         })
     }
 
-    fn ensure_database(&mut self) {
+    fn ensure_database(&mut self) -> crate::Result<()> {
         if self.database.is_none() {
-            self.database = self
-                .search_roots
+            self.database = (self.search_roots)()?
                 .iter()
                 .map(|(_, path)| path)
                 .find(|path| path.exists())
@@ -43,6 +41,7 @@ impl SqliteProvider {
                 self.root = path.parent().unwrap_or(Path::new(".")).to_owned();
             }
         }
+        Ok(())
     }
 
     fn select(
@@ -102,7 +101,7 @@ impl Provider for SqliteProvider {
         days: i64,
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Discovery> {
-        self.ensure_database();
+        self.ensure_database()?;
         let Some(path) = &self.database else {
             return Ok(crate::provider::Discovery::default());
         };
@@ -120,7 +119,7 @@ impl Provider for SqliteProvider {
         id: &str,
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Lookup> {
-        self.ensure_database();
+        self.ensure_database()?;
         let Some(path) = self.database.as_deref() else {
             return Ok(crate::provider::Lookup::default());
         };
@@ -174,7 +173,7 @@ impl Provider for SqliteProvider {
                 [summary; 2],
                 &session.source_path,
                 Vec::new(),
-                crate::provider::source_roots(self),
+                crate::provider::source_roots(self)?,
                 steps,
             )
             .into());
@@ -200,8 +199,8 @@ impl Provider for SqliteProvider {
         crate::sqlite_legacy::read(&connection, session, diagnostics)
     }
 
-    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
-        self.search_roots.clone()
+    fn search_roots(&self) -> crate::Result<crate::provider::SearchRoots> {
+        (self.search_roots)()
     }
 
     fn source_root(&self) -> &Path {
@@ -331,6 +330,69 @@ mod tests {
     use super::*;
 
     #[test]
+    fn configuration_changes_retry_missing_sources_without_replacing_selected_database() {
+        for kind in [Kind::OpenCode, Kind::ZCode] {
+            for find_first in [false, true] {
+                let directory = tempfile::tempdir().unwrap();
+                let first = directory.path().join("first.sqlite");
+                let second = directory.path().join("second.sqlite");
+                fixture(&first, kind, false);
+                fixture(&second, kind, false);
+                let roots = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+                let mut provider = SqliteProvider {
+                    kind,
+                    database: None,
+                    root: PathBuf::from("."),
+                    search_roots: Box::new({
+                        let roots = roots.clone();
+                        move || Ok(roots.borrow().clone())
+                    }),
+                };
+                if find_first {
+                    assert!(
+                        provider
+                            .find("kept", &mut |_| Ok(()))
+                            .unwrap()
+                            .session
+                            .is_none()
+                    );
+                } else {
+                    assert!(!provider.discover(36500, &mut |_| Ok(())).unwrap().available);
+                }
+                *roots.borrow_mut() = vec![("First", first.clone())];
+                assert_eq!(
+                    provider
+                        .find("kept", &mut |_| Ok(()))
+                        .unwrap()
+                        .session
+                        .unwrap()
+                        .source_path,
+                    first
+                );
+                *roots.borrow_mut() = vec![("Second", second.clone())];
+                assert_eq!(provider.search_roots().unwrap()[0].1, second);
+                assert_eq!(
+                    provider
+                        .find("kept", &mut |_| Ok(()))
+                        .unwrap()
+                        .session
+                        .unwrap()
+                        .source_path,
+                    first
+                );
+                assert_eq!(
+                    provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0].source_path,
+                    first
+                );
+                std::fs::remove_file(&first).unwrap();
+                assert!(provider.find("kept", &mut |_| Ok(())).is_err());
+                assert!(!first.exists());
+                assert_eq!(provider.source_root(), first.parent().unwrap());
+            }
+        }
+    }
+
+    #[test]
     fn database_selection_retries_absence_and_keeps_selected_database() {
         for kind in [Kind::OpenCode, Kind::ZCode] {
             for initial in ["absent", "primary", "fallback", "both"] {
@@ -342,10 +404,16 @@ mod tests {
                         kind,
                         database: None,
                         root: PathBuf::from("."),
-                        search_roots: vec![
-                            ("Primary", primary.clone()),
-                            ("Fallback", fallback.clone()),
-                        ],
+                        search_roots: Box::new({
+                            let primary = primary.clone();
+                            let fallback = fallback.clone();
+                            move || {
+                                Ok(vec![
+                                    ("Primary", primary.clone()),
+                                    ("Fallback", fallback.clone()),
+                                ])
+                            }
+                        }),
                     };
                     for (path, present) in [
                         (&primary, matches!(initial, "primary" | "both")),
@@ -437,7 +505,10 @@ mod tests {
             kind,
             database: Some(path.into()),
             root: path.parent().unwrap().into(),
-            search_roots: vec![("Synthetic database", path.into())],
+            search_roots: Box::new({
+                let path = path.to_owned();
+                move || Ok(vec![("Synthetic database", path.clone())])
+            }),
         }
     }
 
@@ -467,7 +538,7 @@ mod tests {
                 error.as_ref(),
                 summary,
                 &path,
-                &crate::provider::source_roots(&provider),
+                &crate::provider::source_roots(&provider).unwrap(),
                 "session database",
             );
             assert!(!path.exists());

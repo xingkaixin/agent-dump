@@ -50,37 +50,25 @@ impl Kind {
 pub struct Desktop {
     kind: Kind,
     database: PathBuf,
-    search_roots: Vec<(&'static str, PathBuf)>,
+    search_roots: crate::provider::SourceResolver,
 }
 
 impl Desktop {
     pub fn open(kind: Kind) -> crate::Result<Self> {
-        let search_roots = match kind {
-            Kind::DeepChat => {
-                let root =
-                    match std::env::var_os("DEEPCHAT_USER_DATA_DIR").filter(|v| !v.is_empty()) {
-                        Some(root) => PathBuf::from(root),
-                        None => app_data("DeepChat")?,
-                    };
-                vec![(
-                    "DeepChat userData/app_db/agent.db",
-                    root.join("app_db/agent.db"),
-                )]
-            }
-            Kind::Cherry => crate::cherry::search_roots()?,
-            Kind::MiniMax => crate::minimax::search_roots()?,
-        };
-        let database = search_roots
-            .iter()
-            .find(|(_, path)| path.exists())
-            .unwrap_or_else(|| search_roots.last().unwrap())
-            .1
-            .clone();
         Ok(Self {
             kind,
-            database,
-            search_roots,
+            database: PathBuf::from("."),
+            search_roots: Box::new(move || search_roots(kind)),
         })
+    }
+
+    fn select_database(&mut self) -> crate::Result<bool> {
+        let roots = (self.search_roots)()?;
+        if let Some((_, path)) = roots.into_iter().find(|(_, path)| path.exists()) {
+            self.database = path;
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     fn sessions(
@@ -106,7 +94,7 @@ impl Desktop {
             let roots = if matches!(self.kind, Kind::Cherry) {
                 Vec::new()
             } else {
-                self.search_roots
+                self.search_roots()?
                     .iter()
                     .map(|(label, path)| format!("{label}: {}", path.display()))
                     .collect()
@@ -136,7 +124,7 @@ impl Provider for Desktop {
         days: i64,
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Discovery> {
-        if !self.database.exists() {
+        if !self.select_database()? {
             return Ok(crate::provider::Discovery::default());
         }
         let cutoff = Timestamp::now()
@@ -154,7 +142,7 @@ impl Provider for Desktop {
         id: &str,
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Lookup> {
-        if !self.database.exists() {
+        if !self.select_database()? {
             return Ok(crate::provider::Lookup::default());
         }
         Ok(crate::provider::Lookup::new(
@@ -180,8 +168,8 @@ impl Provider for Desktop {
         })
     }
 
-    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
-        self.search_roots.clone()
+    fn search_roots(&self) -> crate::Result<crate::provider::SearchRoots> {
+        (self.search_roots)()
     }
 
     fn source_root(&self) -> &Path {
@@ -205,6 +193,23 @@ impl Provider for Desktop {
             );
         }
         payload
+    }
+}
+
+fn search_roots(kind: Kind) -> crate::Result<crate::provider::SearchRoots> {
+    match kind {
+        Kind::DeepChat => {
+            let root = match std::env::var_os("DEEPCHAT_USER_DATA_DIR").filter(|v| !v.is_empty()) {
+                Some(root) => PathBuf::from(root),
+                None => app_data("DeepChat")?,
+            };
+            Ok(vec![(
+                "DeepChat userData/app_db/agent.db",
+                root.join("app_db/agent.db"),
+            )])
+        }
+        Kind::Cherry => crate::cherry::search_roots(),
+        Kind::MiniMax => crate::minimax::search_roots(),
     }
 }
 

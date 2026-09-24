@@ -33,8 +33,7 @@ Claude 在目录扫描入口保留目录访问失败，其余文件 Provider 继
 
 ## 仍待完成
 
-- 运行期间修改环境变量后的候选路径和 Codex 全局标题索引选择；Rust 目前在 open 时读取配置路径，本批只验收配置固定时的来源出现、消失与恢复。
-- Cursor、DeepChat、Cherry、MiniMax 的长生命周期路径选择；本批不声明十个 Provider 的全部刷新行为完成。
+- 运行中候选配置、Codex 标题索引和其余四个 Provider 的来源选择已在后续补齐，见[运行中来源配置验收](rust-runtime-sources-parity.md)。上文实现边界描述本批固定配置阶段；当前实现持有路径解析函数并单独保存已选来源的保护根。
 - 全部底层文件/SQLite 错误原因和异常类别、权限变化、竞争时序、符号链接变化。
 - 正文缓存、lease/LRU、并发失效、极端消息/数值输入和跨平台验证。搜索、配置、Collect、Ratatui 与 pip/npm Rust 发布仍在后续阶段。
 

@@ -13,9 +13,13 @@ pub struct Pi {
 
 impl Pi {
     pub fn open() -> crate::Result<Self> {
-        let root = file_sessions::environment_root("PI_HOME", ".pi")?;
         Ok(Self {
-            roots: SourceRoots::new(root, "agent/sessions", "data/pi", "PI_HOME/agent/sessions"),
+            roots: SourceRoots::new(
+                || file_sessions::environment_root("PI_HOME", ".pi"),
+                "agent/sessions",
+                "data/pi",
+                "PI_HOME/agent/sessions",
+            ),
         })
     }
 
@@ -132,7 +136,7 @@ impl Provider for Pi {
                 ["session source file is missing"; 2],
                 &session.source_path,
                 Vec::new(),
-                crate::provider::source_roots(self),
+                crate::provider::source_roots(self)?,
                 vec![
                     ["Confirm the Pi session file is still under `PI_HOME/agent/sessions` or the local development data directory.", "确认 Pi 会话文件仍在 `PI_HOME/agent/sessions` 或本地开发数据目录。"],
                     ["Re-run `agent-dump --list` to confirm the session id still exists.", "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。"],
@@ -142,7 +146,7 @@ impl Provider for Pi {
         crate::pi_transcript::read(session, diagnostics)
     }
 
-    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+    fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
         self.roots.search_roots()
     }
 
@@ -197,9 +201,7 @@ mod tests {
         crate::source_tests::source_selection(
             "agent/sessions",
             false,
-            |root, fallback| Pi {
-                roots: SourceRoots::new(root, "agent/sessions", fallback, "Synthetic Pi"),
-            },
+            |roots| Pi { roots },
             |base| {
                 let path = base.join("kept.jsonl");
                 std::fs::create_dir_all(base).unwrap();
@@ -229,7 +231,7 @@ mod tests {
         )
         .unwrap();
         let provider = Pi {
-            roots: SourceRoots::new(
+            roots: SourceRoots::fixed(
                 directory.path().into(),
                 "agent/sessions",
                 "data/pi",

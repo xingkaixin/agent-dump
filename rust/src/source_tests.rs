@@ -4,18 +4,29 @@ use crate::provider_error::ProviderError;
 use std::path::{Path, PathBuf};
 
 pub fn source_selection<P: Provider>(
-    suffix: &str,
+    suffix: &'static str,
     missing_root_errors: bool,
-    create: impl Fn(PathBuf, PathBuf) -> P,
+    create: impl Fn(crate::file_sessions::SourceRoots) -> P,
     write_source: impl Fn(&Path) -> PathBuf,
 ) {
     for initial in ["absent", "primary", "fallback", "both"] {
         for find_first in [false, true] {
             let directory = tempfile::tempdir().unwrap();
-            let root = directory.path().join("configured");
-            let primary = root.join(suffix);
+            let configured =
+                std::rc::Rc::new(std::cell::RefCell::new(directory.path().join("initial")));
             let fallback = directory.path().join("fallback");
-            let mut provider = create(root.clone(), fallback.clone());
+            let mut provider = create(crate::file_sessions::SourceRoots::new(
+                {
+                    let configured = configured.clone();
+                    move || Ok(configured.borrow().clone())
+                },
+                suffix,
+                fallback.clone(),
+                "Synthetic source",
+            ));
+            let mut root = directory.path().join("configured");
+            *configured.borrow_mut() = root.clone();
+            let mut primary = root.join(suffix);
             if matches!(initial, "primary" | "both") {
                 std::fs::create_dir_all(&primary).unwrap();
             }
@@ -35,6 +46,12 @@ pub fn source_selection<P: Provider>(
                     .discover(36500, &mut |_| panic!("unexpected warning"))
                     .unwrap();
                 assert!(!found.available && found.sessions.is_empty() && found.failures.is_empty());
+            }
+            if initial == "absent" {
+                write_source(&primary);
+                root = directory.path().join("after_absence");
+                primary = root.join(suffix);
+                *configured.borrow_mut() = root.clone();
             }
             let primary_session = write_source(&primary);
             let fallback_session = write_source(&fallback);
@@ -84,6 +101,24 @@ pub fn source_selection<P: Provider>(
                     .messages
                     .is_empty()
             );
+            let changed = directory.path().join("after_selection");
+            write_source(&changed.join(suffix));
+            *configured.borrow_mut() = changed.clone();
+            assert_eq!(provider.search_roots().unwrap()[0].1, changed.join(suffix));
+            assert_eq!(provider.source_root(), owned);
+            assert_eq!(
+                provider
+                    .find("kept", &mut |_| Ok(()))
+                    .unwrap()
+                    .session
+                    .unwrap()
+                    .source_path,
+                *expected
+            );
+            assert_eq!(
+                provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0].source_path,
+                *expected
+            );
         }
     }
 }
@@ -131,7 +166,7 @@ pub fn removed_file(mut provider: impl Provider, path: &Path, id: &str, step_hin
     let session = provider.find(id, &mut |_| Ok(())).unwrap().session.unwrap();
     assert_eq!(session.source_path, path);
     std::fs::remove_file(path).unwrap();
-    let roots = source_roots(&provider);
+    let roots = source_roots(&provider).unwrap();
     let error = provider
         .read(&session, false, &mut |_| Ok(()))
         .err()

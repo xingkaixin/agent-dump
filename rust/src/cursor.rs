@@ -10,17 +10,14 @@ use std::path::{Path, PathBuf};
 
 pub struct Cursor {
     database: PathBuf,
+    resolve_database: Box<dyn Fn() -> crate::Result<PathBuf>>,
 }
 
 impl Cursor {
     pub fn open() -> crate::Result<Self> {
-        let root = if cfg!(target_os = "linux") {
-            crate::file_sessions::environment_root("HOME", "")?.join(".config/Cursor")
-        } else {
-            crate::desktop::app_data("Cursor")?
-        };
         Ok(Self {
-            database: root.join("User/globalStorage/state.vscdb"),
+            database: PathBuf::from("."),
+            resolve_database: Box::new(database_path),
         })
     }
 
@@ -63,6 +60,7 @@ impl Provider for Cursor {
         days: i64,
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Discovery> {
+        self.database = (self.resolve_database)()?;
         if !self.database.exists() {
             return Ok(crate::provider::Discovery::default());
         }
@@ -77,6 +75,7 @@ impl Provider for Cursor {
         id: &str,
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<crate::provider::Lookup> {
+        self.database = (self.resolve_database)()?;
         if !self.database.exists() {
             return Ok(crate::provider::Lookup::default());
         }
@@ -112,22 +111,26 @@ impl Provider for Cursor {
         _zh: bool,
         _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
     ) -> crate::Result<SessionData> {
-        if !session.source_path.exists() {
+        let path = (self.resolve_database)()?;
+        if !path.exists() {
             return Err(crate::provider_error::ProviderError::missing(
                 ["Cursor global database is missing"; 2],
-                &session.source_path,
+                &path,
                 Vec::new(),
-                crate::provider::source_roots(self),
+                crate::provider::source_roots(self)?,
                 vec![
                     ["Confirm `globalStorage/state.vscdb` still exists under the Cursor user directory.", "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。"],
                     ["Re-run `agent-dump --list --agent cursor` to check whether sessions are still visible.", "重新运行 `agent-dump --list --agent cursor` 检查会话是否仍可见。"],
                 ],
             ).into());
         }
-        crate::cursor_transcript::read(&crate::sqlite::connect(&session.source_path)?, session)
+        crate::cursor_transcript::read(&crate::sqlite::connect(&path)?, session)
     }
-    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
-        vec![("Cursor global state.vscdb", self.database.clone())]
+    fn search_roots(&self) -> crate::Result<crate::provider::SearchRoots> {
+        Ok(vec![(
+            "Cursor global state.vscdb",
+            (self.resolve_database)()?,
+        )])
     }
 
     fn source_root(&self) -> &Path {
@@ -136,6 +139,15 @@ impl Provider for Cursor {
     fn supports_format(&self, format: OutputFormat) -> bool {
         matches!(format, OutputFormat::Json | OutputFormat::Print)
     }
+}
+
+fn database_path() -> crate::Result<PathBuf> {
+    let root = if cfg!(target_os = "linux") {
+        crate::file_sessions::environment_root("HOME", "")?.join(".config/Cursor")
+    } else {
+        crate::desktop::app_data("Cursor")?
+    };
+    Ok(root.join("User/globalStorage/state.vscdb"))
 }
 
 pub fn records(
@@ -379,6 +391,114 @@ mod tests {
     use super::*;
 
     #[test]
+    fn reading_previous_session_uses_current_database_and_missing_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = directory.path().join("first.sqlite");
+        let second = directory.path().join("second.sqlite");
+        let missing = directory.path().join("missing.sqlite");
+        for (path, body) in [(&first, "First"), (&second, "Second")] {
+            let connection = Connection::open(path).unwrap();
+            connection.execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
+            connection
+                .execute(
+                    "INSERT INTO cursorDiskKV VALUES ('bubbleId:kept:message', ?)",
+                    [
+                        serde_json::json!({"type":1,"text":body,"createdAt":1768478400000_i64})
+                            .to_string(),
+                    ],
+                )
+                .unwrap();
+        }
+        let configured = std::rc::Rc::new(std::cell::RefCell::new(first.clone()));
+        let mut provider = Cursor {
+            database: PathBuf::from("."),
+            resolve_database: Box::new({
+                let configured = configured.clone();
+                move || Ok(configured.borrow().clone())
+            }),
+        };
+        let session = provider
+            .find("kept", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap();
+        let data = provider.read(&session, false, &mut |_| Ok(())).unwrap();
+        assert_eq!(
+            serde_json::to_value(data).unwrap()["messages"][0]["parts"][0]["text"],
+            "First"
+        );
+        *configured.borrow_mut() = second.clone();
+        std::fs::remove_file(&first).unwrap();
+        let before = std::fs::read(&second).unwrap();
+        let data = provider.read(&session, false, &mut |_| Ok(())).unwrap();
+        assert_eq!(
+            serde_json::to_value(data).unwrap()["messages"][0]["parts"][0]["text"],
+            "Second"
+        );
+        assert_eq!(session.source_path, first);
+        *configured.borrow_mut() = missing.clone();
+        let error = provider
+            .read(&session, false, &mut |_| Ok(()))
+            .err()
+            .unwrap();
+        crate::source_tests::assert_missing(
+            error.as_ref(),
+            "Cursor global database is missing",
+            &missing,
+            &crate::provider::source_roots(&provider).unwrap(),
+            "globalStorage/state.vscdb",
+        );
+        assert!(!missing.exists() && !first.exists());
+        assert_eq!(std::fs::read(second).unwrap(), before);
+    }
+
+    #[test]
+    fn discovery_and_lookup_follow_current_database_configuration() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = directory.path().join("first.sqlite");
+        let second = directory.path().join("second.sqlite");
+        for path in [&first, &second] {
+            Connection::open(path).unwrap().execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
+        }
+        let configured = std::rc::Rc::new(std::cell::RefCell::new(
+            directory.path().join("missing.sqlite"),
+        ));
+        let mut provider = Cursor {
+            database: PathBuf::from("."),
+            resolve_database: Box::new({
+                let configured = configured.clone();
+                move || Ok(configured.borrow().clone())
+            }),
+        };
+        assert!(!provider.discover(36500, &mut |_| Ok(())).unwrap().available);
+        assert!(
+            provider
+                .find("kept", &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .is_none()
+        );
+        for path in [&first, &second, &first] {
+            *configured.borrow_mut() = path.clone();
+            assert_eq!(provider.search_roots().unwrap()[0].1, *path);
+            assert_eq!(
+                provider
+                    .find("kept", &mut |_| Ok(()))
+                    .unwrap()
+                    .session
+                    .unwrap()
+                    .source_path,
+                *path
+            );
+            assert_eq!(
+                provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0].source_path,
+                *path
+            );
+            assert_eq!(provider.source_root(), path.parent().unwrap());
+        }
+    }
+
+    #[test]
     fn removed_database_keeps_provider_diagnostic() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("state.vscdb");
@@ -386,6 +506,10 @@ mod tests {
         connection.execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
         drop(connection);
         let mut provider = Cursor {
+            resolve_database: Box::new({
+                let path = path.clone();
+                move || Ok(path.clone())
+            }),
             database: path.clone(),
         };
         let session = provider
@@ -402,7 +526,7 @@ mod tests {
             error.as_ref(),
             "Cursor global database is missing",
             &path,
-            &crate::provider::source_roots(&provider),
+            &crate::provider::source_roots(&provider).unwrap(),
             "globalStorage/state.vscdb",
         );
         assert!(!path.exists());

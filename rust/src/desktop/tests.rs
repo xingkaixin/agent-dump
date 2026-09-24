@@ -1,6 +1,89 @@
 use super::*;
 use crate::diagnostics::Diagnostic;
 
+#[test]
+fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
+    for kind in [Kind::DeepChat, Kind::Cherry, Kind::MiniMax] {
+        for find_first in [false, true] {
+            let (directory, mut provider, old_session, _) = fixture(kind);
+            let fallback = old_session.source_path.clone();
+            let primary = directory.path().join("primary/source.sqlite");
+            let changed = directory.path().join("changed/source.sqlite");
+            std::fs::create_dir_all(primary.parent().unwrap()).unwrap();
+            std::fs::create_dir_all(changed.parent().unwrap()).unwrap();
+            let roots = std::rc::Rc::new(std::cell::RefCell::new(vec![
+                ("Primary", primary.clone()),
+                ("Fallback", fallback.clone()),
+            ]));
+            provider.search_roots = Box::new({
+                let roots = roots.clone();
+                move || Ok(roots.borrow().clone())
+            });
+            if find_first {
+                assert_eq!(
+                    provider
+                        .find(&old_session.id, &mut |_| Ok(()))
+                        .unwrap()
+                        .session
+                        .unwrap()
+                        .source_path,
+                    fallback
+                );
+            } else {
+                assert_eq!(
+                    provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0].source_path,
+                    fallback
+                );
+            }
+            std::fs::copy(&fallback, &primary).unwrap();
+            std::fs::copy(&fallback, &changed).unwrap();
+            for expected in [&primary, &fallback] {
+                assert_eq!(
+                    provider
+                        .find(&old_session.id, &mut |_| Ok(()))
+                        .unwrap()
+                        .session
+                        .unwrap()
+                        .source_path,
+                    *expected
+                );
+                assert_eq!(
+                    provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0].source_path,
+                    *expected
+                );
+                assert_eq!(provider.source_root(), expected.parent().unwrap());
+                std::fs::remove_file(expected).unwrap();
+            }
+            assert!(
+                provider
+                    .find(&old_session.id, &mut |_| Ok(()))
+                    .unwrap()
+                    .session
+                    .is_none()
+            );
+            assert!(!provider.discover(36500, &mut |_| Ok(())).unwrap().available);
+            *roots.borrow_mut() = vec![("Changed", changed.clone())];
+            assert_eq!(provider.search_roots().unwrap()[0].1, changed);
+            assert_eq!(
+                provider
+                    .find(&old_session.id, &mut |_| Ok(()))
+                    .unwrap()
+                    .session
+                    .unwrap()
+                    .source_path,
+                changed
+            );
+            assert_eq!(
+                provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0].source_path,
+                changed
+            );
+            assert_eq!(provider.source_root(), changed.parent().unwrap());
+            assert!(provider.read(&old_session, false, &mut |_| Ok(())).is_err());
+            assert!(!fallback.exists());
+        }
+    }
+}
+
 fn fixture(kind: Kind) -> (tempfile::TempDir, Desktop, Session, &'static str) {
     let directory = tempfile::tempdir().unwrap();
     let database = directory.path().join("source.sqlite");
@@ -38,7 +121,10 @@ fn fixture(kind: Kind) -> (tempfile::TempDir, Desktop, Session, &'static str) {
     drop(connection);
     let mut provider = Desktop {
         kind,
-        search_roots: vec![("Synthetic source", database.clone())],
+        search_roots: Box::new({
+            let database = database.clone();
+            move || Ok(vec![("Synthetic source", database.clone())])
+        }),
         database,
     };
     let session = provider.find(id, &mut |_| Ok(())).unwrap().session.unwrap();
