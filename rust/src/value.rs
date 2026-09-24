@@ -5,11 +5,15 @@ pub fn text(value: &Value) -> &str {
 }
 
 pub fn integer(value: &Value) -> i64 {
+    integer_or(value, 0)
+}
+
+pub fn integer_or(value: &Value, default: i64) -> i64 {
     value
         .as_i64()
         .or_else(|| value.as_str().and_then(|value| value.trim().parse().ok()))
         .or_else(|| value.as_f64().map(|value| value as i64))
-        .unwrap_or(0)
+        .unwrap_or(default)
 }
 
 pub fn float(value: &Value) -> f64 {
@@ -28,6 +32,20 @@ pub fn json_object(raw: &Value) -> Option<Value> {
     serde_json::from_str::<Value>(raw.as_str()?)
         .ok()
         .filter(Value::is_object)
+}
+
+pub fn parse_json(raw: &Value) -> Value {
+    raw.as_str()
+        .and_then(|text| serde_json::from_str(text).ok())
+        .unwrap_or_else(|| raw.clone())
+}
+
+pub fn objects(value: &Value) -> crate::Result<&[Value]> {
+    value
+        .as_array()
+        .filter(|items| items.iter().all(Value::is_object))
+        .map(Vec::as_slice)
+        .ok_or_else(|| "Expected an array of objects".into())
 }
 
 pub fn field(value: &Value, key: &str) -> String {

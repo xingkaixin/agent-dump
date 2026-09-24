@@ -165,6 +165,7 @@ pub fn json_payload(data: &SessionData) -> SessionData {
             continue;
         };
         let part = Part::Tool(Box::new(ToolPart {
+            subagent_type: None,
             tool: "skill".into(),
             call_id: format!("skill:{skill_index}"),
             title: "skill".into(),

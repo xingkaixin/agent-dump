@@ -25,6 +25,7 @@ pub fn arguments(raw: &Value) -> Value {
 
 pub fn tool_part(name: &str, id: String, arguments: Value, timestamp: i64) -> Part {
     Part::Tool(Box::new(ToolPart {
+        subagent_type: None,
         tool: name.into(),
         call_id: id,
         title: tool_title(name).into(),

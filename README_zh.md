@@ -631,7 +631,7 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 
 ## Development
 
-实验性 Rust 实现在 [`rust/`](rust/README.md) 中开发，目前支持 Codex、Claude Code、Kimi、Pi、OpenCode、ZCode 的发现、消息装配及 print/JSON/Markdown/raw 导出。pip/npm 仍发布 Python 实现。阶段范围与验收标准见[迁移计划](docs/rust-migration-plan.md)。
+实验性 Rust 实现在 [`rust/`](rust/README.md) 中开发，目前已接入十个 Provider 的发现、消息装配和单会话导出。Cursor 支持 JSON/print；DeepChat、Cherry Studio、MiniMax 支持 JSON/Markdown/print；其余六个还支持 raw。完整 Provider 契约和工作流尚未全部对齐。pip/npm 仍发布 Python 实现。阶段范围与验收标准见[迁移计划](docs/rust-migration-plan.md)。
 
 落地页构建、部署及 Cloudflare 免费性能配置见[开发指南](docs/development-guide.md#5-落地页性能与-cloudflare-pages)。
 

@@ -19,8 +19,12 @@ pub trait Provider {
     fn read(&self, session: &Session, zh: bool) -> crate::Result<SessionData>;
     fn source_root(&self) -> &Path;
 
-    fn json_payload(&self, data: &SessionData) -> SessionData {
-        data.clone()
+    fn json_payload(&self, data: &SessionData) -> serde_json::Value {
+        serde_json::to_value(data).unwrap()
+    }
+
+    fn supports_format(&self, _format: crate::output_formats::OutputFormat) -> bool {
+        true
     }
 
     fn raw_export(&self, session: &Session) -> RawExport {

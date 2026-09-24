@@ -159,8 +159,8 @@ impl Provider for Codex {
         super::codex_transcript::read(session, zh)
     }
 
-    fn json_payload(&self, data: &SessionData) -> SessionData {
-        super::codex_enrichment::json_payload(data)
+    fn json_payload(&self, data: &SessionData) -> serde_json::Value {
+        serde_json::to_value(super::codex_enrichment::json_payload(data)).unwrap()
     }
 
     fn source_root(&self) -> &Path {

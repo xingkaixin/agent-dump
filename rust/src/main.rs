@@ -1,9 +1,14 @@
+mod cherry;
 mod claude;
 mod claude_transcript;
 mod codex;
 mod codex_enrichment;
 mod codex_patch;
 mod codex_transcript;
+mod cursor;
+mod cursor_transcript;
+mod deepchat;
+mod desktop;
 mod export;
 mod file_sessions;
 mod jsonl;
@@ -11,6 +16,7 @@ mod kimi;
 mod kimi_transcript;
 mod kimi_wire;
 mod message_assembly;
+mod minimax;
 mod opencode_v2;
 mod output_formats;
 mod pi;
@@ -38,7 +44,7 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
     name = "agent-dump",
     version,
     about = "Experimental Rust: session discovery and export",
-    after_help = "Python remains the default CLI. Rust supports Codex, Claude Code, Kimi, Pi, OpenCode and ZCode. Other Providers, search, collect, configuration and TUI are not implemented yet.",
+    after_help = "Python remains the default CLI. Rust supports ten Providers for listing and single-session export. Search, collect, configuration, batch export and TUI are not implemented yet.",
     arg_required_else_help = true
 )]
 struct Args {

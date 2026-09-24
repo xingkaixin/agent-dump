@@ -49,7 +49,7 @@ fn content_parts(payload: &Value, timestamp: i64, reasoning: bool) -> Vec<Part> 
             {
                 return Part::Plan(PlanPart {
                     input: plan.into(),
-                    output: None,
+                    output: Value::Null,
                     approval_status: "fail".into(),
                     time_created: timestamp,
                 });
@@ -174,7 +174,7 @@ impl Decoder {
             && let Part::Plan(plan) = &mut self.messages[message].parts[part]
         {
             plan.approval_status = status.into();
-            plan.output = output;
+            plan.output = output.into();
         }
     }
 
@@ -213,6 +213,7 @@ impl Decoder {
             _ => normalized,
         };
         let part = Part::Tool(Box::new(ToolPart {
+            subagent_type: None,
             tool: normalized.into(),
             call_id: call_id.clone(),
             title: title.into(),

@@ -88,6 +88,7 @@ fn part(data: &Value, time: i64) -> Part {
             time_created: time,
         }),
         "tool" => Part::Tool(Box::new(ToolPart {
+            subagent_type: None,
             tool: text(&data["tool"]).into(),
             call_id: text(&data["callID"]).into(),
             title: text(&data["title"]).into(),
@@ -110,6 +111,7 @@ fn part(data: &Value, time: i64) -> Part {
             }
         }
         _ => Part::Unknown(UnknownPart {
+            data: None,
             kind: kind.into(),
             time_created: time,
         }),

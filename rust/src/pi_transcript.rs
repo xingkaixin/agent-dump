@@ -253,6 +253,7 @@ fn tool(name: String, call_id: String, arguments: Value, output: Value, time: i6
         arguments
     };
     Part::Tool(Box::new(ToolPart {
+        subagent_type: None,
         tool: name.clone(),
         call_id,
         title: name,

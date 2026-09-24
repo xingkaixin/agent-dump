@@ -14,6 +14,7 @@ pub fn read(connection: &Connection, session: &Session, row: Value) -> crate::Re
         total_output_tokens: integer(&row["tokens_output"]),
         message_count: messages.len(),
         total_tokens: None,
+        extra: Default::default(),
     };
     let mut payload = current.payload(messages, stats);
     payload.slug = row["slug"].clone();
@@ -102,6 +103,7 @@ fn build_message(row: &Value) -> crate::Result<Message> {
         "shell" => {
             let command = required_text(&data, "command")?;
             message.parts.push(Part::Tool(Box::new(ToolPart {
+                subagent_type: None,
                 tool: "shell".into(),
                 call_id: required_text(&data, "shellID")?.into(),
                 title: command.into(),
@@ -176,6 +178,7 @@ fn tool(content: &Value, timestamp: i64) -> crate::Result<Part> {
     }
     let name = required_text(content, "name")?;
     Ok(Part::Tool(Box::new(ToolPart {
+        subagent_type: None,
         tool: name.into(),
         call_id: required_text(content, "id")?.into(),
         title: name.into(),

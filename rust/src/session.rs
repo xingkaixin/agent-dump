@@ -19,6 +19,8 @@ pub struct Session {
 
 #[derive(Clone, Serialize)]
 pub struct SessionData {
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
     pub id: String,
     pub title: String,
     pub slug: serde_json::Value,
@@ -35,6 +37,8 @@ pub struct SessionData {
 
 #[derive(Clone, Serialize)]
 pub struct Stats {
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
     pub total_cost: serde_json::Number,
     pub total_input_tokens: i64,
     pub total_output_tokens: i64,
@@ -46,6 +50,7 @@ pub struct Stats {
 impl Default for Stats {
     fn default() -> Self {
         Self {
+            extra: Default::default(),
             total_cost: 0.into(),
             total_input_tokens: 0,
             total_output_tokens: 0,
@@ -75,6 +80,8 @@ impl Stats {
 
 #[derive(Clone, Serialize)]
 pub struct Message {
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
     pub id: String,
     pub role: String,
     pub agent: Option<String>,
@@ -110,6 +117,7 @@ impl Message {
             _ => "unknown",
         };
         Self {
+            extra: Default::default(),
             id,
             role: role.into(),
             agent: None,
@@ -160,6 +168,8 @@ pub struct StepPart {
 pub struct UnknownPart {
     #[serde(rename = "type")]
     pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
     pub time_created: i64,
 }
 
@@ -179,13 +189,15 @@ pub struct TextPart {
 #[derive(Clone, PartialEq, Serialize)]
 pub struct PlanPart {
     pub input: String,
-    pub output: Option<String>,
+    pub output: serde_json::Value,
     pub approval_status: String,
     pub time_created: i64,
 }
 
 #[derive(Clone, PartialEq, Serialize)]
 pub struct ToolPart {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagent_type: Option<String>,
     pub tool: String,
     #[serde(rename = "callID")]
     pub call_id: String,
@@ -199,6 +211,27 @@ pub struct ToolPart {
 }
 
 impl Part {
+    pub fn tool(name: &str, call_id: &str, state: serde_json::Value, timestamp: i64) -> Self {
+        Self::Tool(Box::new(ToolPart {
+            tool: name.into(),
+            call_id: call_id.into(),
+            title: name.into(),
+            state: state.as_object().cloned().unwrap_or_default(),
+            time_created: timestamp,
+            nickname: None,
+            subagent_id: None,
+            subagent_type: None,
+        }))
+    }
+
+    pub fn event(kind: String, data: serde_json::Value, timestamp: i64) -> Self {
+        Self::Unknown(UnknownPart {
+            kind,
+            data: Some(data),
+            time_created: timestamp,
+        })
+    }
+
     pub fn text(text: String, time_created: i64) -> Self {
         Self::Text(TextPart { text, time_created })
     }
@@ -237,8 +270,32 @@ pub fn epoch_seconds(seconds: f64) -> Option<Timestamp> {
 }
 
 impl Session {
+    pub fn new(
+        id: String,
+        title: String,
+        source_path: PathBuf,
+        created_at: Timestamp,
+        updated_at: Timestamp,
+    ) -> Self {
+        Self {
+            id,
+            title,
+            source_path,
+            created_at,
+            updated_at,
+            directory: String::new(),
+            model: String::new(),
+            version: serde_json::Value::Null,
+            project: None,
+            message_count: None,
+            subtargets: Vec::new(),
+            source_metadata: serde_json::Value::Null,
+        }
+    }
+
     pub fn payload(&self, messages: Vec<Message>, stats: Stats) -> SessionData {
         SessionData {
+            extra: Default::default(),
             id: self.id.clone(),
             title: self.title.clone(),
             slug: serde_json::Value::Null,

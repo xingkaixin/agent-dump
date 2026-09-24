@@ -36,6 +36,16 @@ pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Re
         )?;
         return Ok(true);
     }
+    for format in &operation.formats {
+        if !provider.supports_format(*format) {
+            return Err(format!(
+                "{} does not support {} export",
+                registration.info.display_name,
+                format.name()
+            )
+            .into());
+        }
+    }
     let raw = provider.raw_export(&session);
     let prepared = (operation
         .formats
@@ -69,13 +79,20 @@ pub fn run(operation: UriOperation, zh: bool, out: &mut impl Write) -> crate::Re
                     export::raw(&session.id, source, &output, provider.source_root())
                 }
                 RawExport::Session => match prepared.as_ref().unwrap() {
-                    Ok(data) => export::json(data, &output, provider.source_root(), ".raw.json"),
+                    Ok(data) => export::json(
+                        &session.id,
+                        data,
+                        &output,
+                        provider.source_root(),
+                        ".raw.json",
+                    ),
                     Err(error) => Err(error.to_string().into()),
                 },
             }
         } else {
             match prepared.as_ref().unwrap() {
                 Ok(data) if *format == OutputFormat::Json => export::json(
+                    &session.id,
                     &provider.json_payload(data),
                     &output,
                     provider.source_root(),

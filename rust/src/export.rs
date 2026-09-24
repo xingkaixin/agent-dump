@@ -1,4 +1,3 @@
-use crate::session::SessionData;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, Write};
@@ -88,12 +87,13 @@ fn write(
 }
 
 pub fn json(
-    data: &SessionData,
+    session_id: &str,
+    data: &impl serde::Serialize,
     output: &Path,
     source_root: &Path,
     suffix: &str,
 ) -> crate::Result<PathBuf> {
-    write(output, &data.id, suffix, source_root, |file| {
+    write(output, session_id, suffix, source_root, |file| {
         let mut writer = io::BufWriter::new(file);
         serde_json::to_writer_pretty(&mut writer, data)?;
         writer.flush()?;

@@ -133,6 +133,7 @@ impl Decoder {
                     }
                     let input = item.get("input").cloned().unwrap_or_else(|| json!({}));
                     let part = Part::Tool(Box::new(ToolPart {
+                        subagent_type: None,
                         tool: name.clone(),
                         call_id: raw_id,
                         title: format!("Tool: {name}"),

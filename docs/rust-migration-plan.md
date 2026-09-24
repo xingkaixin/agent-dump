@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0、P1 已完成；P2 进行中，已接入 Codex、Claude Code、Kimi、Pi、OpenCode、ZCode 的消息装配与单 URI 导出，下一批为桌面聊天 Provider。Python 仍是默认实现和发布来源。
+状态：P0、P1 已完成；P2 进行中，十个 Provider 均已接入消息装配与支持格式的单 URI 导出；接下来补齐共享 discovery、诊断和剩余 Provider 边界。Python 仍是默认实现和发布来源。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -84,7 +84,8 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 - [ ] Codex 发现刷新/缓存、完整诊断、极端输入和跨平台验收，见[剩余边界](rust-codex-parity.md)。
 - [x] Claude Code、Kimi（context / wire）、Pi 的发现、head、消息装配和 print/JSON/Markdown/raw 导出；共享 Provider 入口与只读文件发现，见[行为映射与剩余边界](rust-jsonl-parity.md)。
 - [x] OpenCode 旧表 / V2 与 ZCode 的发现、head 和单 URI 四种导出，见[SQLite 差分记录与剩余边界](rust-sqlite-parity.md)。
-- [ ] Cursor / DeepChat / Cherry Studio / MiniMax 等其余 Provider。
+- [x] Cursor / DeepChat / Cherry Studio / MiniMax 的发现、head、消息读取与支持格式导出，见[本批差分记录](rust-desktop-parity.md)。
+- [ ] 统一 discovery 的可用性/完整性、诊断、跨 Provider 隔离及所有 Provider 剩余边界；十个入口接通不代表 P2 完整验收。
 - 按 JSONL Provider、SQLite Provider、桌面聊天 Provider 分批迁移。
 - 每批增加合成 fixture 与差分验收，覆盖 malformed/缺字段/旧 schema/部分失败。
 - 对齐 metadata、消息装配、raw/JSON/Markdown 和数据源只读契约。
@@ -139,4 +140,4 @@ OpenCode / ZCode 实现：`aec8b47`，新增 79 个 SQLite 用例和 1 个 Pi �
 
 每次结束更新阶段状态和下一项工作，保留 Python 参考实现。提交 PR 前运行 `just isok`；引入 Rust 后增加 `cargo fmt --check`、Clippy 和 Rust 测试门禁。发布切换之前，不把部分完成的 Rust 二进制发布为正式 `agent-dump`。
 
-当前下一项：P2 的 Cursor / DeepChat / Cherry Studio / MiniMax Provider，复用现有会话模型、SQLite 读取、渲染和导出边界，逐个建立差分验收。已接入 Provider 的剩余边界持续保留在验收清单；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
+当前下一项：补齐 P2 共享 discovery 的可用性/完整性与诊断行为，验证跨 Provider 隔离，再逐项关闭 Provider contract 剩余边界。已接入 Provider 的剩余边界持续保留在验收清单；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
