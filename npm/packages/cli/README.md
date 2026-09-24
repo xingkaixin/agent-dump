@@ -157,6 +157,20 @@ These providers support list, query, search, stats, collect, and print / JSON / 
 They read source databases without modifying them, retain attachment references without opening
 attachment files, and do not support raw export.
 
+OpenCode supports both legacy SQLite sessions and OpenCode 2.x sessions through the existing
+`opencode://` workflows, including list, query, search, stats, collect, and export. When both
+schemas coexist, 2.x takes precedence for matching session IDs while legacy-only sessions remain
+readable. Set `OPENCODE_DB` to an absolute database path or a filename relative to
+`$XDG_DATA_HOME/opencode` (or `~/.local/share/opencode`) to select a custom or channel database;
+a missing explicit path never falls back. Reads are read-only, and raw export remains normalized
+`.raw.json`, not an OpenCode import file.
+
+```bash
+agent-dump --list -query "provider:opencode"
+agent-dump 'opencode://<session-id>' --format json,markdown --output ./sessions
+agent-dump --collect --emit-prompt -query "provider:opencode"
+```
+
 ## Key features
 
 - **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, Pi, DeepChat, Cherry Studio, and MiniMax Code
