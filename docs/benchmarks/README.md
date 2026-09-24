@@ -10,6 +10,8 @@
 
 [Rust P2 Codex 五场景比较](rust-p2-codex.md)增加 JSON＋Markdown 导出，保留缓冲优化前后的完整数据与同期 Python 测量。
 
+[JSONL Provider 接入后的 Codex 复测](rust-p2-jsonl.md)验证共享模块变化后的五场景表现；三个新 Provider 的性能仍待独立测量。
+
 ## 运行
 
 ```bash

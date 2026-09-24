@@ -1,6 +1,6 @@
 # P2：Claude Code、Kimi、Pi 差分验收
 
-本批在 `feat/rust-rewrite` 上接入三个 JSONL Provider，复用 Codex 批次的单 URI 工作流和导出模块。Python 参考实现、pip/npm 发布入口与 P0 benchmark evaluator 均保持不变。这里记录已验证的行为，不代表三个 Provider 的完整契约或 P2 已全部完成。
+本批在 `feat/rust-rewrite` 上接入三个 JSONL Provider，实现提交 `3669542`，复用 Codex 批次的单 URI 工作流和导出模块。Python 参考实现、pip/npm 发布入口与 P0 benchmark evaluator 均保持不变。这里记录已验证的行为，不代表三个 Provider 的完整契约或 P2 已全部完成。
 
 ## 验收方式
 
@@ -37,3 +37,5 @@
 - Windows 与全部发布平台的实际验证；本批本机结果仅代表 macOS arm64。
 
 原有五场景 benchmark 仍只覆盖 Codex 合成文本，不据此推断 Claude Code、Kimi、Pi 性能；新 Provider 的代表性性能 fixture 后续独立扩展，不修改 P0 的历史工作负载。
+
+本批[五场景复测](benchmarks/rust-p2-jsonl.md)全部通过，保留同期 Python/Rust 的原始样本、环境与二进制 hash。

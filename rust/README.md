@@ -61,6 +61,8 @@ just build-rust
 
 历史四场景对比见 [P1 性能复测](../docs/benchmarks/rust-p1.md)。[P2 Codex 复测](../docs/benchmarks/rust-p2-codex.md)增加现有的 JSON＋Markdown 导出场景，并保留缓冲优化前后的数据。
 
+接入 Claude Code / Kimi / Pi 后的[最新复测](../docs/benchmarks/rust-p2-jsonl.md)仍使用同五个 Codex 场景，检查共享模块变化后的表现；不代表新 Provider 的性能。
+
 使用原有 [CLI evaluator](../docs/benchmarks/README.md)，不为 Rust 改写 fixture 或验收摘要。本阶段只运行以下已实现子集：
 
 ```bash

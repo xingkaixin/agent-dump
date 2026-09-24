@@ -90,7 +90,7 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 
 Codex 本批实现：`ca4b1db`；benchmark 发现并修复 JSON 小写入瓶颈：`1c037d3`。优化后 `just isok` 通过，Rust 差分与边界用例现为 172 个。[五场景复测](benchmarks/rust-p2-codex.md)中，JSON＋Markdown 导出相对同期 Python 源码为 2.88×，峰值 RSS 中位数下降约 65%；原始慢路径数据同样保留。P2 整体仍未完成。
 
-Claude Code / Kimi / Pi 批次新增 141 个差分及边界用例，合计 313 个；本机完整 `just isok` 与 release 构建通过。已验证具体行为与未关闭边界见[JSONL Provider 验收记录](rust-jsonl-parity.md)，不将三个 Provider 的接入计作完整功能迁移完成。
+Claude Code / Kimi / Pi 实现：`3669542`，新增 141 个差分及边界用例，合计 313 个；本机完整 `just isok` 与 release 构建通过。已验证具体行为与未关闭边界见[JSONL Provider 验收记录](rust-jsonl-parity.md)。[原五场景复测](benchmarks/rust-p2-jsonl.md)全部通过，Codex JSON＋Markdown 导出为 Python 241.28 ms / Rust 74.89 ms（3.22×）；未测量三个新 Provider 的性能，不将接入或 benchmark 通过计作完整功能迁移完成。
 
 ### P3：查询、索引、维护命令
 
