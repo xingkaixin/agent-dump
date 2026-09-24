@@ -1,4 +1,4 @@
-use crate::session::{Session, SessionData};
+use crate::session::{Part, Session, SessionData};
 use jiff::tz::TimeZone;
 use std::fmt::Write;
 
@@ -76,32 +76,86 @@ pub fn head(uri: &str, session: &Session, zh: bool) -> String {
     output
 }
 
+fn append_section(output: &mut String, index: &mut usize, role: &str, texts: &[&str]) {
+    if texts.is_empty() {
+        return;
+    }
+    writeln!(output, "## {index}. {}\n", safe_line(role)).unwrap();
+    for text in texts {
+        if !text.is_empty() {
+            writeln!(output, "{}\n", safe_body(text)).unwrap();
+        }
+    }
+    *index += 1;
+}
+
 pub fn transcript(uri: &str, data: &SessionData) -> String {
     let mut output = format!("# Session Dump\n\n- URI: `{}`\n\n", safe_line(uri));
     let mut index = 1;
     for message in &data.messages {
-        if matches!(message.role.as_str(), "developer" | "tool") {
+        if message.role == "developer" {
             continue;
         }
-        let texts: Vec<_> = message
-            .parts
-            .iter()
-            .filter(|p| matches!(p.kind.as_str(), "text" | "reasoning"))
-            .map(|p| p.text.trim())
-            .filter(|v| !v.is_empty())
-            .collect();
-        if texts.is_empty() {
+        if message.role != "tool" {
+            let texts: Vec<_> = message
+                .parts
+                .iter()
+                .filter_map(Part::content)
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .collect();
+            let mut role = message.role.clone();
+            if let Some(first) = role.get_mut(..1) {
+                first.make_ascii_uppercase();
+            }
+            if message.role == "assistant"
+                && let Some(nickname) = &message.nickname
+            {
+                role = format!("Assistant ({nickname})");
+            }
+            append_section(&mut output, &mut index, &role, &texts);
+        }
+        if !matches!(message.role.as_str(), "assistant" | "tool") {
             continue;
         }
-        let mut role = message.role.clone();
-        if let Some(first) = role.get_mut(..1) {
-            first.make_ascii_uppercase();
+        for part in &message.parts {
+            let Part::Tool(tool) = part else {
+                continue;
+            };
+            if tool.tool != "subagent" {
+                continue;
+            }
+            let mut prompt = tool
+                .state
+                .get("prompt")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("")
+                .trim()
+                .to_owned();
+            if prompt.is_empty() {
+                match tool
+                    .state
+                    .get("arguments")
+                    .or_else(|| tool.state.get("input"))
+                {
+                    Some(arguments @ serde_json::Value::Object(_)) => {
+                        prompt = crate::value::field(arguments, "message").trim().into();
+                        if prompt.is_empty() {
+                            prompt = crate::value::pretty_json(arguments);
+                        }
+                    }
+                    Some(serde_json::Value::String(text)) => prompt = text.trim().into(),
+                    _ => (),
+                }
+            }
+            if !prompt.is_empty() {
+                let role = tool
+                    .nickname
+                    .as_ref()
+                    .map_or_else(|| "Assistant".into(), |name| format!("Assistant ({name})"));
+                append_section(&mut output, &mut index, &role, &[&prompt]);
+            }
         }
-        writeln!(output, "## {index}. {role}\n").unwrap();
-        for text in texts {
-            writeln!(output, "{}\n", safe_body(text)).unwrap();
-        }
-        index += 1;
     }
     // Python joins a trailing empty line; print adds the second newline.
     output.pop();

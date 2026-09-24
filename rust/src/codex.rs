@@ -8,6 +8,7 @@ use walkdir::WalkDir;
 
 pub struct Codex {
     base: PathBuf,
+    source_root: PathBuf,
     titles: HashMap<String, String>,
 }
 
@@ -49,10 +50,11 @@ impl Codex {
             None => home.join(".codex"),
         };
         let base = root.join("sessions");
-        let base = if base.exists() {
-            base
+        let (base, source_root) = if base.exists() {
+            (base, root.clone())
         } else {
-            PathBuf::from("data/codex")
+            let local = PathBuf::from("data/codex");
+            (local.clone(), local)
         };
         let mut titles = HashMap::new();
         let index = root.join("session_index.jsonl");
@@ -67,7 +69,11 @@ impl Codex {
                 Ok(())
             })?;
         }
-        Ok(Self { base, titles })
+        Ok(Self {
+            base,
+            source_root,
+            titles,
+        })
     }
 
     fn files(&self) -> impl Iterator<Item = crate::Result<PathBuf>> + '_ {
@@ -222,11 +228,15 @@ impl Codex {
         }))
     }
 
-    pub fn read(&self, session: &Session) -> crate::Result<SessionData> {
-        super::codex_transcript::read(session)
+    pub fn read(&self, session: &Session, zh: bool) -> crate::Result<SessionData> {
+        super::codex_transcript::read(session, zh)
+    }
+
+    pub fn json_payload(&self, data: &SessionData) -> SessionData {
+        super::codex_enrichment::json_payload(data)
     }
 
     pub fn source_root(&self) -> &Path {
-        &self.base
+        &self.source_root
     }
 }

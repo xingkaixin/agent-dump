@@ -9,7 +9,9 @@ publish = false
 jiff = "0.2"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# Tool output and subagent prompts contain JSON strings whose key order is observable.
+serde_json = { version = "1", features = ["preserve_order"] }
+regex = "1"
 sha2 = "0.10"
 tempfile = "3"
 walkdir = "2"

@@ -1,7 +1,7 @@
-use crate::session::SessionData;
+use crate::session::{Session, SessionData};
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
@@ -61,27 +61,54 @@ fn ensure_directory(path: &Path) -> std::io::Result<()> {
     }
 }
 
-pub fn json(data: &mut SessionData, output: &Path, source_root: &Path) -> crate::Result<PathBuf> {
-    let directory = std::path::absolute(output)?.join("codex");
+fn write(
+    output: &Path,
+    session_id: &str,
+    suffix: &str,
+    source_root: &Path,
+    contents: impl FnOnce(&mut fs::File) -> crate::Result<()>,
+) -> crate::Result<PathBuf> {
+    let directory = std::path::absolute(output)?;
     let resolved = absolute_existing_ancestor(&directory)?;
-    let source = source_root.canonicalize()?;
-    let provider_root = source.parent().unwrap_or(&source);
-    if resolved.starts_with(provider_root) {
+    if resolved.starts_with(source_root.canonicalize()?) {
         return Err("Export output must be outside the Provider source directory".into());
     }
-    let output_path = output
-        .join("codex")
-        .join(format!("{}.json", filename(&data.id)?));
+    let output_path = output.join(format!("{}{suffix}", filename(session_id)?));
     let destination = std::path::absolute(&output_path)?;
     if destination.is_symlink() {
         return Err("Export destination must not be a symlink".into());
     }
     ensure_directory(&directory)?;
-    data.messages.retain(|message| message.role != "developer");
     let mut temporary = NamedTempFile::new_in(&directory)?;
-    serde_json::to_writer_pretty(&mut temporary, data)?;
+    contents(temporary.as_file_mut())?;
     temporary.flush()?;
     temporary.as_file().sync_all()?;
     temporary.persist(&destination)?;
     Ok(output_path)
+}
+
+pub fn json(data: &SessionData, output: &Path, source_root: &Path) -> crate::Result<PathBuf> {
+    write(output, &data.id, ".json", source_root, |file| {
+        serde_json::to_writer_pretty(file, data)?;
+        Ok(())
+    })
+}
+
+pub fn markdown(
+    session_id: &str,
+    text: &str,
+    output: &Path,
+    source_root: &Path,
+) -> crate::Result<PathBuf> {
+    write(output, session_id, ".md", source_root, |file| {
+        file.write_all(text.as_bytes())?;
+        Ok(())
+    })
+}
+
+pub fn raw(session: &Session, output: &Path, source_root: &Path) -> crate::Result<PathBuf> {
+    write(output, &session.id, ".raw.jsonl", source_root, |file| {
+        io::copy(&mut fs::File::open(&session.source_path)?, file)?;
+        Ok(())
+    })
 }

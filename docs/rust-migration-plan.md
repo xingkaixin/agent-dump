@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0 已完成；P1 首条端到端路径已完成（Codex text/reasoning 子集）。下一阶段为 P2，先补齐 Codex 消息装配。Python 仍是默认实现和发布来源。
+状态：P0、P1 已完成；P2 进行中，已实现 Codex 消息装配与 Markdown/raw/混合导出，正在逐批扩展 Provider。Python 仍是默认实现和发布来源。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -23,7 +23,7 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 ## 2. 功能验收矩阵
 
-每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P1 只覆盖参数、Codex、Session facts 和 URI/导出中的子集，尚无一整行可标记为完整迁移；证据见 [P1 实现说明](../rust/README.md)与[复测报告](benchmarks/rust-p1.md)。
+每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P1 只覆盖参数、Codex、Session facts 和 URI/导出中的子集，尚无一整行可标记为完整迁移；当前实现见 [Rust README](../rust/README.md)，Codex 消息与导出证据见[差分验收记录](rust-codex-parity.md)，历史 P1 性能见[复测报告](benchmarks/rust-p1.md)。
 
 | 范围 | 必须对齐的契约 | 现有依据 |
 | --- | --- | --- |
@@ -79,7 +79,9 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 
 ### P2：Provider 与导出对齐
 
-- 先补齐 Codex 工具调用/输出、patch、计划审批、skill/subagent、注入上下文与多模态处理，移除 P1 的临时拒绝分支，并以既有 Codex 测试契约做差分验收。
+- [x] Codex 工具调用/输出、patch、计划审批、skill/subagent、注入上下文；非文本和未知事件按 Python 当前规则忽略，移除 P1 的临时拒绝分支。
+- [x] Codex Markdown/raw/混合导出、JSON 专用转换隔离、逐格式部分成功与源数据保护；使用实际 CLI 做差分验收。
+- [ ] Codex 发现刷新/缓存、完整诊断、极端输入和跨平台验收，见[剩余边界](rust-codex-parity.md)。
 - 按 JSONL Provider、SQLite Provider、桌面聊天 Provider 分批迁移。
 - 每批增加合成 fixture 与差分验收，覆盖 malformed/缺字段/旧 schema/部分失败。
 - 对齐 metadata、消息装配、raw/JSON/Markdown 和数据源只读契约。
@@ -128,4 +130,4 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 
 每次结束更新阶段状态和下一项工作，保留 Python 参考实现。提交 PR 前运行 `just isok`；引入 Rust 后增加 `cargo fmt --check`、Clippy 和 Rust 测试门禁。发布切换之前，不把部分完成的 Rust 二进制发布为正式 `agent-dump`。
 
-当前下一项：P2 的 Codex 完整消息装配与 Markdown/raw 导出。先关闭 P1 的明确缺口，再开始下一批 Provider；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
+当前下一项：P2 的 Claude Code / Kimi / Pi JSONL Provider，复用现有会话模型、渲染和导出边界，逐个建立差分验收。Codex 剩余边界持续保留在验收清单；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。

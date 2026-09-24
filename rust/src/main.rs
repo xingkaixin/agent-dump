@@ -1,9 +1,14 @@
 mod codex;
+mod codex_enrichment;
+mod codex_patch;
 mod codex_transcript;
 mod export;
 mod jsonl;
+mod output_formats;
 mod render;
 mod session;
+mod uri_workflow;
+mod value;
 
 use clap::Parser;
 use std::ffi::OsString;
@@ -16,8 +21,8 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[command(
     name = "agent-dump",
     version,
-    about = "Experimental Rust P1: Codex discovery and text session export",
-    after_help = "Python remains the default CLI. Search, collect, configuration, TUI and complex Codex messages are not implemented yet.",
+    about = "Experimental Rust: Codex session discovery and export",
+    after_help = "Python remains the default CLI. Other Providers, search, collect, configuration and TUI are not implemented yet.",
     arg_required_else_help = true
 )]
 struct Args {
@@ -83,7 +88,7 @@ fn arguments() -> Vec<OsString> {
         .collect()
 }
 
-fn run(args: Args, out: &mut impl Write) -> Result<()> {
+fn run(args: Args, out: &mut impl Write) -> Result<bool> {
     let zh = args.lang.as_deref().map_or_else(
         || {
             ["LC_ALL", "LC_MESSAGES", "LANG"]
@@ -95,7 +100,7 @@ fn run(args: Args, out: &mut impl Write) -> Result<()> {
     );
     if args.list {
         if args.query.as_deref() != Some("provider:codex") {
-            return Err("Rust P1 list requires -q provider:codex; other Providers and queries are not implemented yet".into());
+            return Err("Rust list requires -q provider:codex; other Providers and queries are not implemented yet".into());
         }
         let provider = codex::Codex::open()?;
         let sessions = provider.discover(args.days)?;
@@ -104,70 +109,31 @@ fn run(args: Args, out: &mut impl Write) -> Result<()> {
             "{}",
             render::list(&sessions, args.days, !args.no_metadata_summary, zh)
         )?;
-        return Ok(());
+        return Ok(true);
     }
     let uri = args.uri.ok_or("Provide a Codex URI or --list")?;
-    let id = uri
-        .strip_prefix("codex://")
-        .ok_or("Rust P1 only supports codex:// URIs")?;
-    let id = id.strip_prefix("threads/").unwrap_or(id);
-    if id.is_empty() {
-        return Err("Empty Codex session id".into());
-    }
-    let formats: Vec<_> = args
-        .format
-        .as_deref()
-        .unwrap_or("print")
-        .split(',')
-        .map(|v| v.trim().to_lowercase())
-        .collect();
-    if formats.iter().any(|v| v != "print" && v != "json") {
-        return Err("Rust P1 supports only print and json formats".into());
-    }
-    if formats.iter().any(|v| v == "json") && args.output.is_none() {
-        return Err(
-            "Rust P1 JSON export requires --output; configuration defaults are not implemented yet"
-                .into(),
-        );
-    }
-    let provider = codex::Codex::open()?;
-    let session = provider.find(id)?;
-    if args.head {
-        write!(out, "{}", render::head(&uri, &session, zh))?;
-        return Ok(());
-    }
-    let mut data = provider.read(&session)?;
-    if formats.iter().any(|v| v == "print") {
-        writeln!(out, "{}", render::transcript(&uri, &data))?;
-    }
-    if formats.iter().any(|v| v == "json") {
-        let path = export::json(
-            &mut data,
-            args.output.as_deref().unwrap(),
-            provider.source_root(),
-        )?;
-        let path = render::safe_line(&path.display().to_string());
-        writeln!(
-            out,
-            "{}",
-            if zh {
-                format!("✅ 已导出 [json] 到: {path}")
-            } else {
-                format!("✅ Exported session [json] to: {path}")
-            }
-        )?;
-    }
-    Ok(())
+    let formats = output_formats::parse(args.format.as_deref().unwrap_or("print"))?;
+    uri_workflow::run(
+        uri_workflow::UriOperation {
+            uri,
+            head: args.head,
+            formats,
+            output: args.output,
+        },
+        zh,
+        out,
+    )
 }
 
 fn main() -> std::process::ExitCode {
     let args = Args::parse_from(arguments());
     let mut out = io::BufWriter::new(io::stdout().lock());
-    match run(args, &mut out).and_then(|()| {
+    match run(args, &mut out).and_then(|success| {
         out.flush()?;
-        Ok(())
+        Ok(success)
     }) {
-        Ok(()) => std::process::ExitCode::SUCCESS,
+        Ok(true) => std::process::ExitCode::SUCCESS,
+        Ok(false) => std::process::ExitCode::FAILURE,
         Err(error) => {
             if error
                 .downcast_ref::<io::Error>()
