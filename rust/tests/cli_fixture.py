@@ -26,7 +26,13 @@ class CliFixture:
     def run(self, candidate: str, *args: str) -> subprocess.CompletedProcess[str]:
         command = [sys.executable, "-m", "agent_dump"] if candidate == "python" else [str(RUST)]
         return subprocess.run(  # noqa: S603
-            [*command, *args], cwd=self.root, env=self.environment, capture_output=True, text=True, timeout=30
+            [*command, *args],
+            cwd=self.root,
+            env=self.environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
         )
 
     def write(self, records: list[dict[str, Any]], *, suffix: bytes = b"") -> None:

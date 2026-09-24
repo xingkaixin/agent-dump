@@ -2,6 +2,7 @@
 
 import importlib
 import json
+import os
 import sqlite3
 
 from cli_fixture import ROOT
@@ -12,7 +13,7 @@ NOW = 1768478400000
 def create_v2(cli, monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "tests"))
     fixtures = importlib.import_module("opencode_fixtures")
-    path = cli.root / "sources/sqlite/session #?库.db"
+    path = cli.root / "sources/sqlite" / ("session #库.db" if os.name == "nt" else "session #?库.db")
     fixtures.create_opencode_v2_db(path, NOW)
     cli.environment["OPENCODE_DB"] = str(path)
     return path

@@ -109,10 +109,12 @@ jobs:
   rust:
     name: Rust CLI parity (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    env:
+      PYTHONUTF8: "1"
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -126,15 +128,24 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --dev --python ${{ env.QUALITY_PYTHON_VERSION }}
 
-      - name: Install just
-        uses: ./.github/actions/setup-just
-
       - name: Install pinned Rust toolchain
         working-directory: rust
         run: rustup show active-toolchain
 
-      - name: Check Rust and Python behavior parity
-        run: just check-rust
+      - name: Check Rust formatting and types
+        working-directory: rust
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test and build Rust
+        working-directory: rust
+        run: |
+          cargo test --locked
+          cargo build --locked
+
+      - name: Compare Rust and Python CLI behavior
+        run: uv run --locked pytest -q rust/tests
 
   web:
     name: Check landing page

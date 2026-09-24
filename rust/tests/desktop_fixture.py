@@ -2,6 +2,7 @@
 
 import importlib
 import json
+import os
 
 from cli_fixture import ROOT, make_cli
 
@@ -18,7 +19,7 @@ def desktop(tmp_path, monkeypatch, provider):
     monkeypatch.syspath_prepend(str(ROOT / "tests"))
     module = importlib.import_module(f"{provider}_fixtures")
     variable, suffix, identity = PROVIDERS[provider]
-    root = tmp_path / "sources" / f"{provider} #?库"
+    root = tmp_path / "sources" / (f"{provider} #库" if os.name == "nt" else f"{provider} #?库")
     cli.source = getattr(module, f"create_{provider}_db")(root / suffix, NOW)
     cli.environment[variable] = str(root)
     return cli, identity

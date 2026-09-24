@@ -1,6 +1,7 @@
 """Database selection, bound identifiers and failure isolation through the CLI."""
 
 import json
+import os
 from pathlib import Path
 import shutil
 import sqlite3
@@ -14,12 +15,16 @@ def test_opencode_database_selection(cli, location):
     source = create_legacy(cli)
     cli.environment.pop("OPENCODE_DB")
     if location == "absolute":
-        target = source.with_name("session #?库.db")
+        target = source.with_name("session #库.db" if os.name == "nt" else "session #?库.db")
         cli.environment["OPENCODE_DB"] = str(target)
     elif location in ("relative", "xdg"):
         root = cli.root / "sources/data-home"
         cli.environment["XDG_DATA_HOME"] = str(root)
-        target = root / "opencode" / ("channel #?.db" if location == "relative" else "opencode.db")
+        target = (
+            root
+            / "opencode"
+            / (("channel #.db" if os.name == "nt" else "channel #?.db") if location == "relative" else "opencode.db")
+        )
         if location == "relative":
             cli.environment["OPENCODE_DB"] = target.name
     elif location == "home":
