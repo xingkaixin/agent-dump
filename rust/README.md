@@ -77,17 +77,19 @@ just build-rust
 
 接入 Claude Code / Kimi / Pi 后的[复测](../docs/benchmarks/rust-p2-jsonl.md)仍使用同五个 Codex 场景，检查共享模块变化后的表现；不代表这三个 Provider 的性能。
 
-接入 OpenCode / ZCode 后的[最新六场景复测](../docs/benchmarks/rust-p2-sqlite.md)增加 OpenCode V2 列表，保留两轮数据、SQLite 引擎版本差异和二进制体积变化；尚未测量 SQLite 正文导出或 ZCode 的性能。
+接入 OpenCode / ZCode 后的[六场景复测](../docs/benchmarks/rust-p2-sqlite.md)增加 OpenCode V2 列表，保留两轮数据、SQLite 引擎版本差异和二进制体积变化；尚未测量 SQLite 正文导出或 ZCode 的性能。
+
+接入其余四个 Provider 后的[最新复测](../docs/benchmarks/rust-p2-desktop.md)仍使用这六个场景，记录共享消息/JSON 投影变化后的结果与历史差值；它不代表 Cursor、DeepChat、Cherry Studio、MiniMax 的性能。
 
 使用原有 [CLI evaluator](../docs/benchmarks/README.md)，不为 Rust 改写 fixture 或验收摘要。本阶段只运行以下已实现子集：
 
 ```bash
 just benchmark --command './rust/target/release/agent-dump' \
-  --label rust-p2-sqlite --profile standard \
+  --label rust-p2-desktop --profile standard \
   --case startup-version --case list-jsonl --case list-sqlite \
   --case head-large-jsonl --case print-large-jsonl \
   --case export-large-json-md \
-  --output dist/benchmarks/rust-p2-sqlite.json
+  --output dist/benchmarks/rust-p2-desktop.json
 ```
 
-Python 用同样的 `--case` 组合重测；Rust 再传入该报告的 `--baseline` 做严格比较。现在增加原有的 `list-sqlite`，共六个场景；不得解释为应用整体加速比。复杂工具消息由差分测试验证，benchmark 仍使用 P0 的固定文本工作负载。
+Python 用同样的 `--case` 组合重测；Rust 再传入该报告的 `--baseline` 做严格比较。本批沿用包含 `list-sqlite` 的六个场景；不得解释为应用整体加速比。复杂工具消息由差分测试验证，benchmark 仍使用 P0 的固定文本工作负载。

@@ -41,6 +41,8 @@ SQLite 数据库与 `-wal` 的持久字节在读取中保持不变。原生只�
 
 2026-09-24，macOS arm64，Rust 1.90.0：完整 `just isok` 通过，Python 2596 passed / 1 skipped，Rust CLI 差分与边界 554 passed，npm 74 passed，网页 E2E 13 passed；固定工具链 release 构建成功。Rust 比上一批增加 161 个用例，其中源目录拒写的 4 个用例只验证 Rust 约束。
 
+实现提交：`a884907`。[六场景复测](benchmarks/rust-p2-desktop.md)全部通过原比较器；Codex 大正文 JSON＋Markdown 导出为 Python 267.47 ms / Rust 79.13 ms（3.38×）。报告保留相对上批约 6.1% 的 Rust 导出耗时增加、样本范围及新增 Provider 尚未测量的边界。
+
 ## 仍需验收
 
 - 完整 discovery 的可用性/完整性、部分失败计数与诊断 i18n；当前只隔离 Cherry/MiniMax 单会话发现错误并告警。

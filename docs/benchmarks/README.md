@@ -14,6 +14,8 @@
 
 [SQLite Provider 接入后的六场景复测](rust-p2-sqlite.md)增加原有 OpenCode V2 列表场景，保留两轮配对测量、波动说明及 SQLite 引擎版本差异。
 
+[十个 Provider 接入后的六场景复测](rust-p2-desktop.md)记录共享消息与 JSON 投影调整后的表现；四个新增 Provider 的性能仍待独立测量。
+
 ## 运行
 
 ```bash

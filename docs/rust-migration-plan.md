@@ -96,6 +96,8 @@ Claude Code / Kimi / Pi 实现：`3669542`，新增 141 个差分及边界用例
 
 OpenCode / ZCode 实现：`aec8b47`，新增 79 个 SQLite 用例和 1 个 Pi 回归用例，合计 393 个；本机完整 `just isok` 与 release 构建通过。[六场景复测](benchmarks/rust-p2-sqlite.md)增加原有 OpenCode V2 列表，两轮均通过比较器；第二轮列表为 Python 148.94 ms / Rust 9.15 ms（16.28×）。两轮原始数据、引擎版本差异、体积增长及波动说明均已保留。具体范围与剩余边界见[SQLite 验收记录](rust-sqlite-parity.md)。
 
+Cursor / DeepChat / Cherry Studio / MiniMax 实现：`a884907`，新增 161 个差分及边界用例，合计 554 个；本机完整 `just isok` 与 release 构建通过。四个源目录拒写用例只验证 Rust 约束，与 Python 的差异单独记在[本批验收记录](rust-desktop-parity.md)。[原六场景复测](benchmarks/rust-p2-desktop.md)全部通过，Codex JSON＋Markdown 导出为 Python 267.47 ms / Rust 79.13 ms（3.38×）；相对上一批 Rust 导出耗时增加约 6.1%，保留这一历史变化，不将其归因于单一代码修改。十个 Provider 已接入不代表 P2 完整验收。
+
 ### P3：查询、索引、维护命令
 
 - 对齐 Query/Search 语义，然后实现 SQLite FTS5 与 fallback。
