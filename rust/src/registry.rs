@@ -8,54 +8,6 @@ pub struct Registration {
 static REGISTRATIONS: &[Registration] = &[
     Registration {
         info: ProviderInfo {
-            name: "cursor",
-            display_name: "Cursor",
-            scheme: "cursor",
-            uri_prefixes: &[],
-        },
-        open: || Ok(Box::new(crate::cursor::Cursor::open()?)),
-    },
-    Registration {
-        info: ProviderInfo {
-            name: "deepchat",
-            display_name: "DeepChat",
-            scheme: "deepchat",
-            uri_prefixes: &[],
-        },
-        open: || {
-            Ok(Box::new(crate::desktop::Desktop::open(
-                crate::desktop::Kind::DeepChat,
-            )?))
-        },
-    },
-    Registration {
-        info: ProviderInfo {
-            name: "cherry",
-            display_name: "Cherry Studio",
-            scheme: "cherry",
-            uri_prefixes: &[],
-        },
-        open: || {
-            Ok(Box::new(crate::desktop::Desktop::open(
-                crate::desktop::Kind::Cherry,
-            )?))
-        },
-    },
-    Registration {
-        info: ProviderInfo {
-            name: "minimax",
-            display_name: "MiniMax Code",
-            scheme: "minimax",
-            uri_prefixes: &[],
-        },
-        open: || {
-            Ok(Box::new(crate::desktop::Desktop::open(
-                crate::desktop::Kind::MiniMax,
-            )?))
-        },
-    },
-    Registration {
-        info: ProviderInfo {
             name: "opencode",
             display_name: "OpenCode",
             scheme: "opencode",
@@ -109,6 +61,15 @@ static REGISTRATIONS: &[Registration] = &[
     },
     Registration {
         info: ProviderInfo {
+            name: "cursor",
+            display_name: "Cursor",
+            scheme: "cursor",
+            uri_prefixes: &[],
+        },
+        open: || Ok(Box::new(crate::cursor::Cursor::open()?)),
+    },
+    Registration {
+        info: ProviderInfo {
             name: "pi",
             display_name: "Pi",
             scheme: "pi",
@@ -116,7 +77,50 @@ static REGISTRATIONS: &[Registration] = &[
         },
         open: || Ok(Box::new(crate::pi::Pi::open()?)),
     },
+    Registration {
+        info: ProviderInfo {
+            name: "deepchat",
+            display_name: "DeepChat",
+            scheme: "deepchat",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::desktop::Desktop::open(
+                crate::desktop::Kind::DeepChat,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "cherry",
+            display_name: "Cherry Studio",
+            scheme: "cherry",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::desktop::Desktop::open(
+                crate::desktop::Kind::Cherry,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "minimax",
+            display_name: "MiniMax Code",
+            scheme: "minimax",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::desktop::Desktop::open(
+                crate::desktop::Kind::MiniMax,
+            )?))
+        },
+    },
 ];
+
+pub fn all() -> &'static [Registration] {
+    REGISTRATIONS
+}
 
 pub fn for_name(name: &str) -> crate::Result<&'static Registration> {
     REGISTRATIONS

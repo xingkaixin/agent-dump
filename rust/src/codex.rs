@@ -11,26 +11,39 @@ use std::path::{Path, PathBuf};
 pub struct Codex {
     roots: SourceRoots,
     titles: HashMap<String, String>,
+    index: PathBuf,
 }
 
 impl Codex {
     pub fn open() -> crate::Result<Self> {
         let root = file_sessions::environment_root("CODEX_HOME", ".codex")?;
-        let roots = SourceRoots::resolve(root.clone(), "sessions", "data/codex");
-        let mut titles = HashMap::new();
-        let index = root.join("session_index.jsonl");
-        if index.exists() {
-            jsonl::scan(&index, |record| {
+        let roots = SourceRoots::resolve(
+            root.clone(),
+            "sessions",
+            "data/codex",
+            "CODEX_HOME/sessions",
+        );
+        Ok(Self {
+            roots,
+            titles: HashMap::new(),
+            index: root.join("session_index.jsonl"),
+        })
+    }
+
+    fn prepare(&mut self) -> crate::Result<()> {
+        self.titles.clear();
+        if self.index.exists() {
+            jsonl::scan(&self.index, |record| {
                 let id = text(&record["id"]);
                 if !id.trim().is_empty()
                     && let Some(title) = normalize_title(text(&record["thread_name"]))
                 {
-                    titles.insert(id.to_owned(), title);
+                    self.titles.insert(id.to_owned(), title);
                 }
                 Ok(())
             })?;
         }
-        Ok(Self { roots, titles })
+        Ok(())
     }
 
     fn files(&self) -> crate::Result<Vec<PathBuf>> {
@@ -134,14 +147,13 @@ impl Codex {
 }
 
 impl Provider for Codex {
-    fn discover(&mut self, days: i64) -> crate::Result<Vec<Session>> {
-        if !self.roots.base.exists() {
-            return Err("No Codex sessions found".into());
-        }
+    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
+        self.prepare()?;
         file_sessions::discover(&self.files()?, days, true, |path, _| self.parse(path))
     }
 
     fn find(&mut self, id: &str) -> crate::Result<Session> {
+        self.prepare()?;
         let suffix = format!("-{id}.jsonl");
         file_sessions::find(
             &self.roots.base,
@@ -161,6 +173,10 @@ impl Provider for Codex {
 
     fn json_payload(&self, data: &SessionData) -> serde_json::Value {
         serde_json::to_value(super::codex_enrichment::json_payload(data)).unwrap()
+    }
+
+    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+        self.roots.search_roots()
     }
 
     fn source_root(&self) -> &Path {

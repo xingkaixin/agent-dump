@@ -6,20 +6,24 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
-pub fn database_path() -> crate::Result<PathBuf> {
+pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
     let home = crate::file_sessions::environment_root("HOME", "")?;
     let selected = ["MINIMAX_DATA_DIR", "MAVIS_DATA_DIR"]
         .into_iter()
-        .filter_map(|name| std::env::var(name).ok())
-        .map(|v| v.trim().to_owned())
-        .find(|v| !v.is_empty());
-    let root = match selected.as_deref() {
+        .filter_map(|name| Some((name, std::env::var(name).ok()?.trim().to_owned())))
+        .find(|(_, value)| !value.is_empty());
+    let root = match selected.as_ref().map(|(_, value)| value.as_str()) {
         Some("~") => home,
         Some(value) if value.starts_with("~/") => home.join(&value[2..]),
         Some(value) => PathBuf::from(value),
         None => home.join(".minimax"),
     };
-    Ok(root.join("v2/sqlite/runtime-state.sqlite"))
+    let label = match selected.as_ref().map(|(name, _)| *name) {
+        Some("MINIMAX_DATA_DIR") => "MINIMAX_DATA_DIR/v2/sqlite/runtime-state.sqlite",
+        Some("MAVIS_DATA_DIR") => "MAVIS_DATA_DIR/v2/sqlite/runtime-state.sqlite",
+        _ => "MiniMax Code ~/.minimax/v2/sqlite/runtime-state.sqlite",
+    };
+    Ok(vec![(label, root.join("v2/sqlite/runtime-state.sqlite"))])
 }
 
 fn validate(connection: &Connection) -> crate::Result<()> {
@@ -51,19 +55,22 @@ pub fn sessions(
     path: &Path,
     id: Option<&str>,
     cutoff: Option<i64>,
-) -> crate::Result<Vec<Session>> {
+) -> crate::Result<crate::provider::Discovery> {
     validate(connection)?;
     let records = rows(
         connection,
         "SELECT s.*, (SELECT COUNT(*) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_count, (NOT EXISTS (SELECT 1 FROM local_runtime_message_row_migrations r WHERE r.session_id = s.session_id) AND EXISTS (SELECT 1 FROM local_runtime_messages l WHERE l.session_id = s.session_id AND trim(l.display_messages_json) <> '[]')) AS legacy_pending FROM local_runtime_sessions s WHERE (? IS NULL OR s.session_id = ?) AND (? IS NULL OR COALESCE(s.created_at_ms, s.updated_at_ms) >= ?) ORDER BY COALESCE(s.created_at_ms, s.updated_at_ms) DESC, s.session_id",
         &[&id, &id, &cutoff, &cutoff],
     )?;
-    let mut result = Vec::new();
+    let mut result = crate::provider::Discovery::available(Vec::new());
     for row in records {
         match session(path, &row) {
-            Ok(Some(session)) => result.push(session),
+            Ok(Some(session)) => result.sessions.push(session),
             Ok(None) => (),
-            Err(error) if id.is_none() => crate::desktop::warn(&row["session_id"], &error),
+            Err(error) if id.is_none() => result.failures.push(crate::provider::SessionFailure {
+                source: string(&row["session_id"]),
+                error: error.to_string(),
+            }),
             Err(error) => return Err(error),
         }
     }
@@ -109,6 +116,7 @@ fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
 
 pub fn read(connection: &Connection, session: &Session) -> crate::Result<SessionData> {
     let current = sessions(connection, &session.source_path, Some(&session.id), None)?
+        .sessions
         .into_iter()
         .next()
         .ok_or("MiniMax session source is missing")?;

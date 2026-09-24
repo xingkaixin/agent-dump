@@ -18,7 +18,12 @@ impl Claude {
     pub fn open() -> crate::Result<Self> {
         let root = file_sessions::environment_root("CLAUDE_CONFIG_DIR", ".claude")?;
         Ok(Self {
-            roots: SourceRoots::resolve(root, "projects", "data/claudecode"),
+            roots: SourceRoots::resolve(
+                root,
+                "projects",
+                "data/claudecode",
+                "CLAUDE_CONFIG_DIR/projects",
+            ),
             titles: HashMap::new(),
         })
     }
@@ -152,7 +157,7 @@ impl Claude {
 }
 
 impl Provider for Claude {
-    fn discover(&mut self, days: i64) -> crate::Result<Vec<Session>> {
+    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
         self.titles.clear();
         file_sessions::discover(&self.files()?, days, true, |path, _| self.parse(path))
     }
@@ -170,6 +175,10 @@ impl Provider for Claude {
 
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
         crate::claude_transcript::read(session)
+    }
+
+    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+        self.roots.search_roots()
     }
 
     fn source_root(&self) -> &Path {

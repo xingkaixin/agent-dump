@@ -16,23 +16,37 @@ pub enum Kind {
 pub struct Desktop {
     kind: Kind,
     database: PathBuf,
+    search_roots: Vec<(&'static str, PathBuf)>,
 }
 
 impl Desktop {
     pub fn open(kind: Kind) -> crate::Result<Self> {
-        let database = match kind {
+        let search_roots = match kind {
             Kind::DeepChat => {
                 let root =
                     match std::env::var_os("DEEPCHAT_USER_DATA_DIR").filter(|v| !v.is_empty()) {
                         Some(root) => PathBuf::from(root),
                         None => app_data("DeepChat")?,
                     };
-                root.join("app_db/agent.db")
+                vec![(
+                    "DeepChat userData/app_db/agent.db",
+                    root.join("app_db/agent.db"),
+                )]
             }
-            Kind::Cherry => crate::cherry::database_path()?,
-            Kind::MiniMax => crate::minimax::database_path()?,
+            Kind::Cherry => crate::cherry::search_roots()?,
+            Kind::MiniMax => crate::minimax::search_roots()?,
         };
-        Ok(Self { kind, database })
+        let database = search_roots
+            .iter()
+            .find(|(_, path)| path.exists())
+            .unwrap_or_else(|| search_roots.last().unwrap())
+            .1
+            .clone();
+        Ok(Self {
+            kind,
+            database,
+            search_roots,
+        })
     }
 
     fn sessions(
@@ -40,9 +54,10 @@ impl Desktop {
         connection: &Connection,
         id: Option<&str>,
         cutoff: Option<i64>,
-    ) -> crate::Result<Vec<Session>> {
+    ) -> crate::Result<crate::provider::Discovery> {
         match self.kind {
-            Kind::DeepChat => crate::deepchat::sessions(connection, &self.database, id, cutoff),
+            Kind::DeepChat => crate::deepchat::sessions(connection, &self.database, id, cutoff)
+                .map(crate::provider::Discovery::available),
             Kind::Cherry => crate::cherry::sessions(connection, &self.database, id, cutoff),
             Kind::MiniMax => crate::minimax::sessions(connection, &self.database, id, cutoff),
         }
@@ -50,9 +65,9 @@ impl Desktop {
 }
 
 impl Provider for Desktop {
-    fn discover(&mut self, days: i64) -> crate::Result<Vec<Session>> {
+    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
         if !self.database.exists() {
-            return Ok(Vec::new());
+            return Ok(crate::provider::Discovery::default());
         }
         let cutoff = Timestamp::now()
             .checked_sub(SignedDuration::from_secs(
@@ -64,6 +79,7 @@ impl Provider for Desktop {
 
     fn find(&mut self, id: &str) -> crate::Result<Session> {
         self.sessions(&crate::sqlite::connect(&self.database)?, Some(id), None)?
+            .sessions
             .into_iter()
             .next()
             .ok_or_else(|| format!("Session not found: {id}").into())
@@ -76,6 +92,10 @@ impl Provider for Desktop {
             Kind::Cherry => crate::cherry::read(&connection, session),
             Kind::MiniMax => crate::minimax::read(&connection, session),
         }
+    }
+
+    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+        self.search_roots.clone()
     }
 
     fn source_root(&self) -> &Path {
@@ -127,12 +147,4 @@ pub fn require_tables(connection: &Connection, tables: &[&str]) -> crate::Result
         }
     }
     Ok(())
-}
-
-pub fn warn(id: &Value, error: &dyn std::fmt::Display) {
-    eprintln!(
-        "Warning: could not read session {}: {}",
-        crate::render::safe_line(&crate::value::string(id)),
-        crate::render::safe_line(&error.to_string())
-    );
 }

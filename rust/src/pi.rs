@@ -15,7 +15,12 @@ impl Pi {
     pub fn open() -> crate::Result<Self> {
         let root = file_sessions::environment_root("PI_HOME", ".pi")?;
         Ok(Self {
-            roots: SourceRoots::resolve(root, "agent/sessions", "data/pi"),
+            roots: SourceRoots::resolve(
+                root,
+                "agent/sessions",
+                "data/pi",
+                "PI_HOME/agent/sessions",
+            ),
         })
     }
 
@@ -94,7 +99,7 @@ impl Pi {
 }
 
 impl Provider for Pi {
-    fn discover(&mut self, days: i64) -> crate::Result<Vec<Session>> {
+    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
         file_sessions::discover(&self.files()?, days, true, |path, _| Self::parse(path))
     }
 
@@ -114,6 +119,10 @@ impl Provider for Pi {
 
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
         crate::pi_transcript::read(session)
+    }
+
+    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+        self.roots.search_roots()
     }
 
     fn source_root(&self) -> &Path {

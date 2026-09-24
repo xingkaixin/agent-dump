@@ -17,12 +17,17 @@ pub struct SqliteProvider {
     kind: Kind,
     database: Option<PathBuf>,
     root: PathBuf,
+    search_roots: Vec<(&'static str, PathBuf)>,
 }
 
 impl SqliteProvider {
     pub fn open(kind: Kind) -> crate::Result<Self> {
         let candidates = database_paths(kind)?;
-        let database = candidates.into_iter().find(|path| path.exists());
+        let database = candidates
+            .iter()
+            .map(|(_, path)| path)
+            .find(|path| path.exists())
+            .cloned();
         let root = database
             .as_deref()
             .and_then(Path::parent)
@@ -32,6 +37,7 @@ impl SqliteProvider {
             kind,
             database,
             root,
+            search_roots: candidates,
         })
     }
 
@@ -87,9 +93,9 @@ impl SqliteProvider {
 }
 
 impl Provider for SqliteProvider {
-    fn discover(&mut self, days: i64) -> crate::Result<Vec<Session>> {
+    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
         let Some(path) = &self.database else {
-            return Ok(Vec::new());
+            return Ok(crate::provider::Discovery::default());
         };
         let cutoff = Timestamp::now()
             .checked_sub(SignedDuration::from_secs(
@@ -97,6 +103,7 @@ impl Provider for SqliteProvider {
             ))?
             .as_millisecond();
         self.select(&connect(path)?, path, "s.time_created >= ?", &[&cutoff])
+            .map(crate::provider::Discovery::available)
     }
 
     fn find(&mut self, id: &str) -> crate::Result<Session> {
@@ -131,6 +138,10 @@ impl Provider for SqliteProvider {
             return Err("OpenCode V2 session source is missing".into());
         }
         crate::sqlite_legacy::read(&connection, session)
+    }
+
+    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+        self.search_roots.clone()
     }
 
     fn source_root(&self) -> &Path {
@@ -212,12 +223,17 @@ fn summary_targets(raw: &Value) -> Vec<String> {
     }
 }
 
-fn database_paths(kind: Kind) -> crate::Result<Vec<PathBuf>> {
+fn database_paths(kind: Kind) -> crate::Result<Vec<(&'static str, PathBuf)>> {
     if kind == Kind::ZCode {
         return if cfg!(any(target_os = "macos", target_os = "windows")) {
-            Ok(vec![
+            Ok(vec![(
+                if cfg!(target_os = "macos") {
+                    "macOS ~/.zcode db.sqlite"
+                } else {
+                    "Windows %USERPROFILE%\\.zcode db.sqlite"
+                },
                 crate::file_sessions::environment_root("HOME", "")?.join(".zcode/cli/db/db.sqlite"),
-            ])
+            )])
         } else {
             Ok(Vec::new())
         };
@@ -228,18 +244,24 @@ fn database_paths(kind: Kind) -> crate::Result<Vec<PathBuf>> {
         return Ok(if explicit == ":memory:" {
             Vec::new()
         } else {
-            vec![root.join(explicit)]
+            vec![("OPENCODE_DB", root.join(explicit))]
         });
     }
-    let mut paths = vec![root.join("opencode.db")];
+    let mut paths = vec![("XDG/default opencode.db", root.join("opencode.db"))];
     if cfg!(target_os = "windows")
         && std::env::var_os("XDG_DATA_HOME").is_none_or(|value| value.is_empty())
         && let Some(base) = ["LOCALAPPDATA", "APPDATA"]
             .iter()
             .find_map(|name| std::env::var_os(name).filter(|value| !value.is_empty()))
     {
-        paths.push(PathBuf::from(base).join("opencode/opencode.db"));
+        paths.push((
+            "LOCALAPPDATA/APPDATA compatibility",
+            PathBuf::from(base).join("opencode/opencode.db"),
+        ));
     }
-    paths.push("data/opencode/opencode.db".into());
+    paths.push((
+        "local development fallback",
+        "data/opencode/opencode.db".into(),
+    ));
     Ok(paths)
 }

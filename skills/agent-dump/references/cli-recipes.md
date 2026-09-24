@@ -2,7 +2,7 @@
 
 完整上手流程见[将 Codex 会话导出为 Markdown](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/)。
 
-以下 recipes 面向当前 Python 发布版。实验性 Rust 的命令子集见 [`rust/README.md`](../../../rust/README.md)：支持十个 Provider 的显式单 Provider 列表和 URI 导出。Cursor 仅支持 JSON/print；DeepChat、Cherry Studio、MiniMax 支持 JSON/Markdown/print；其余六个还支持 raw。文件导出必须传 `--output`；配置、搜索、collect 与交互尚未迁移。
+以下 recipes 面向当前 Python 发布版。实验性 Rust 的命令子集见 [`rust/README.md`](../../../rust/README.md)：支持十个 Provider 的 `--list` 列表、`-q provider:codex,opencode` 来源范围和 URI 导出；单个 Provider 失败不阻止其他来源。Cursor 仅支持 JSON/print；DeepChat、Cherry Studio、MiniMax 支持 JSON/Markdown/print；其余六个还支持 raw。文件导出必须传 `--output`；配置、搜索、collect 与交互尚未迁移。
 
 ## 1) 常用命令模板
 

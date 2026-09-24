@@ -58,14 +58,15 @@ impl Cursor {
 }
 
 impl Provider for Cursor {
-    fn discover(&mut self, days: i64) -> crate::Result<Vec<Session>> {
+    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
         if !self.database.exists() {
-            return Ok(Vec::new());
+            return Ok(crate::provider::Discovery::default());
         }
         let cutoff = Timestamp::now().checked_sub(SignedDuration::from_secs(
             days.checked_mul(86400).ok_or("days is out of range")?,
         ))?;
         self.sessions(&crate::sqlite::connect(&self.database)?, Some(cutoff))
+            .map(crate::provider::Discovery::available)
     }
     fn find(&mut self, id: &str) -> crate::Result<Session> {
         let connection = crate::sqlite::connect(&self.database)?;
@@ -96,6 +97,10 @@ impl Provider for Cursor {
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
         crate::cursor_transcript::read(&crate::sqlite::connect(&session.source_path)?, session)
     }
+    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+        vec![("Cursor global state.vscdb", self.database.clone())]
+    }
+
     fn source_root(&self) -> &Path {
         self.database.parent().unwrap()
     }

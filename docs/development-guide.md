@@ -36,7 +36,7 @@ just isok
 
 实验性 Rust CLI 的构建、支持范围与明确未实现项见 [`rust/README.md`](../rust/README.md)。
 安装 rustup 后，`just check-rust` 会使用 `rust/rust-toolchain.toml` 固定的工具链运行
-fmt、Clippy、构建和跨语言 CLI 差分测试。测试位于 `rust/tests/`，缺少二进制会失败，不会静默跳过。
+fmt、Clippy、Rust 单元测试、构建和跨语言 CLI 差分测试。跨语言测试位于 `rust/tests/`，缺少二进制会失败，不会静默跳过。
 `just isok` 包含该门禁；`just build-rust` 生成性能评估用的 release 二进制。
 
 Rust 重写的阶段与功能验收见 [迁移计划](rust-migration-plan.md)。性能比较使用

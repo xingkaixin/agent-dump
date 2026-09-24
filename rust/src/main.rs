@@ -15,6 +15,7 @@ mod jsonl;
 mod kimi;
 mod kimi_transcript;
 mod kimi_wire;
+mod list_workflow;
 mod message_assembly;
 mod minimax;
 mod opencode_v2;
@@ -121,23 +122,14 @@ fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         |lang| lang == "zh",
     );
     if args.list {
-        let name = args.query.as_deref().and_then(|query| query.strip_prefix("provider:"))
-            .ok_or("Rust list requires an explicit -q provider:NAME; general queries are not implemented yet")?;
-        let registration = registry::for_name(name)?;
-        let mut provider = (registration.open)()?;
-        let sessions = provider.discover(args.days)?;
-        write!(
+        return list_workflow::run(
+            args.query.as_deref(),
+            args.days,
+            !args.no_metadata_summary,
+            zh,
             out,
-            "{}",
-            render::list(
-                &sessions,
-                &registration.info,
-                args.days,
-                !args.no_metadata_summary,
-                zh
-            )
-        )?;
-        return Ok(true);
+            &mut io::stderr().lock(),
+        );
     }
     let uri = args.uri.ok_or("Provide a session URI or --list")?;
     let formats = output_formats::parse(args.format.as_deref().unwrap_or("print"))?;

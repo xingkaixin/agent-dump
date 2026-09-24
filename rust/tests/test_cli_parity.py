@@ -122,7 +122,6 @@ def test_malformed_records_and_active_tail(cli):
     "args",
     [
         ["--search", "anything"],
-        ["--list"],
         ["--list", "-q", "provider:unimplemented"],
         ["--collect"],
         [f"codex://{IDENTITY}", "--format", "xml"],

@@ -8,9 +8,12 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-pub fn database_path() -> crate::Result<PathBuf> {
+pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
     if let Some(root) = std::env::var_os("CHERRY_STUDIO_USER_DATA_DIR").filter(|v| !v.is_empty()) {
-        return Ok(PathBuf::from(root).join("Data/cherrystudio.sqlite"));
+        return Ok(vec![(
+            "Cherry Studio userData",
+            PathBuf::from(root).join("Data/cherrystudio.sqlite"),
+        )]);
     }
     let boot =
         crate::file_sessions::environment_root("HOME", "")?.join(".cherrystudio/boot-config.json");
@@ -28,12 +31,17 @@ pub fn database_path() -> crate::Result<PathBuf> {
         }
     }
     let default = crate::desktop::app_data("CherryStudio")?.join("Data/cherrystudio.sqlite");
-    Ok(roots
+    let mut result = Vec::new();
+    for path in roots
         .into_iter()
         .map(|p| p.join("Data/cherrystudio.sqlite"))
-        .chain(std::iter::once(default.clone()))
-        .find(|p| p.exists())
-        .unwrap_or(default))
+        .chain(std::iter::once(default))
+    {
+        if !result.iter().any(|(_, existing)| existing == &path) {
+            result.push(("Cherry Studio userData", path));
+        }
+    }
+    Ok(result)
 }
 
 fn records(
@@ -73,12 +81,15 @@ pub fn sessions(
     path: &Path,
     id: Option<&str>,
     cutoff: Option<i64>,
-) -> crate::Result<Vec<Session>> {
-    let mut result = Vec::new();
+) -> crate::Result<crate::provider::Discovery> {
+    let mut result = crate::provider::Discovery::available(Vec::new());
     for row in records(connection, id, cutoff)? {
         match session(connection, path, &row) {
-            Ok(session) => result.push(session),
-            Err(error) if id.is_none() => crate::desktop::warn(&row["session_id"], &error),
+            Ok(session) => result.sessions.push(session),
+            Err(error) if id.is_none() => result.failures.push(crate::provider::SessionFailure {
+                source: string(&row["session_id"]),
+                error: error.to_string(),
+            }),
             Err(error) => return Err(error),
         }
     }

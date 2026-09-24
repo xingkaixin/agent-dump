@@ -49,6 +49,7 @@ benchmark *args:
 check-rust:
     cd rust && cargo fmt --check
     cd rust && cargo clippy --locked --all-targets -- -D warnings
+    cd rust && cargo test --locked
     cd rust && cargo build --locked
     uv run pytest -q rust/tests
 

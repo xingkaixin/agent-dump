@@ -18,7 +18,7 @@ impl Kimi {
     pub fn open() -> crate::Result<Self> {
         let root = file_sessions::environment_root("KIMI_SHARE_DIR", ".kimi")?;
         Ok(Self {
-            roots: SourceRoots::resolve(root, "sessions", "data/kimi"),
+            roots: SourceRoots::resolve(root, "sessions", "data/kimi", "KIMI_SHARE_DIR/sessions"),
             work_dirs: None,
         })
     }
@@ -118,7 +118,7 @@ impl Kimi {
 }
 
 impl Provider for Kimi {
-    fn discover(&mut self, days: i64) -> crate::Result<Vec<Session>> {
+    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
         self.work_dirs = None;
         file_sessions::discover(&self.files()?, days, false, |path, cutoff| {
             self.parse(path, Some(cutoff))
@@ -167,6 +167,10 @@ impl Provider for Kimi {
             Ok(())
         })?;
         Ok(session.payload(messages, stats))
+    }
+
+    fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
+        self.roots.search_roots()
     }
 
     fn source_root(&self) -> &Path {
