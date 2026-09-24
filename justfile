@@ -41,6 +41,10 @@ cov:
     uv run pytest -q --cov=src --cov-report=term-missing
     @echo "✅ Coverage check complete!"
 
+# Record validated synthetic CLI benchmarks (no real Provider data)
+benchmark *args:
+    uv run python scripts/benchmark_cli.py {{args}}
+
 # Run npm wrapper unit tests
 test-npm:
     @echo "🧪 Running npm wrapper tests..."

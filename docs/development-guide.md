@@ -34,6 +34,11 @@ just cov
 just isok
 ```
 
+Rust 重写的阶段与功能验收见 [迁移计划](rust-migration-plan.md)。性能比较使用
+[CLI benchmark](benchmarks/README.md)，例如
+`just benchmark --profile smoke --repeats 1 --warmups 0 --output dist/benchmarks/smoke.json`。
+它只生成并访问隔离的合成会话，不使用真实 Provider 目录。
+
 pytest 配置只位于 `pyproject.toml` 的 `[tool.pytest.ini_options]`。不要新增 `pytest.ini`、`setup.cfg` 或 `tox.ini` 覆盖它。覆盖率不进入默认 addopts，避免单测筛选产生误导性的全包覆盖率报告。
 
 `just check` 同时运行两个作用域不同的检查器：

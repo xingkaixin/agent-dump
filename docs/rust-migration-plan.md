@@ -42,7 +42,7 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 | 索引 | FTS5 等价加速、不可表达语义时 fallback、增量更新/删除、WAL 失效、旧请求竞态、重建 | `tests/test_search_index*.py`、`tests/test_bounded_concurrency.py` |
 | Collect 本地处理 | 日期、排除规则、可见 user/assistant、chunk、归并边界、PM/INSIGHT、缺口报告、dry-run、emit-prompt | `tests/test_collect*.py`、`tests/test_cli_collect*.py` |
 | LLM 请求与摘要 | OpenAI/Anthropic、结构校验、重试、并发上限、超时、输入上限、重定向凭据边界、URI summary | `tests/test_collect_llm.py`、`tests/test_collect_requests.py`、`tests/test_collect_reduction.py` |
-| 配置 / shortcut | TOML 保留注释与顺序、写入权限、API key 遮蔽、坏配置处理、默认导出目录、参数展开 | `tests/test_config.py`、`tests/test_config_command.py`、`tests/test_cli_shortcuts.py` |
+| 配置 / shortcut | TOML 保留注释与顺序、写入权限、API key 遮蔽、坏配置处理、默认导出目录、参数展开 | `tests/test_config.py`、`tests/test_cli.py`、`tests/test_cli_shortcuts.py` |
 | 交互 / i18n | Provider 单选、会话分组多选、q/Q/空格/回车/Ctrl+C、非 TTY stdin fallback、中英文、安全文本 | `tests/test_selector.py`、`tests/test_i18n.py`、`tests/test_text_safety.py` |
 | 诊断 / 维护 | 部分失败独立计数、stdout/stderr 路由、stats、providers/capabilities、reindex | `tests/test_recoverable_diagnostics.py`、`tests/test_maintenance_workflow.py` |
 | 分发 | pip/uv tool/uvx、npm/npx/bunx、版本一致性、校验和、安装隔离、发布顺序 | `packaging/`、`npm/`、`.github/workflows/release.yml` |
