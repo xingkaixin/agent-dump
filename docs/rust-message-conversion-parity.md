@@ -37,3 +37,5 @@ JSONL scanner 将已有诊断 sink 传给逐记录回调，Provider 决定哪些
 转换恢复专项 48 passed。2026-09-24，macOS arm64，固定 Rust 1.90.0：完整 `just isok` 通过，Python 2596 passed / 1 skipped、Rust 单元测试 17 passed、CLI 差分与边界 832 passed、npm 74 passed、Web E2E 13 passed。`just build-rust` release 构建通过。
 
 Python 生产源码与 `dca2d97` 相同，P0 evaluator 四个脚本相对 `9c1cf61` 无改动，没有新增依赖。
+
+实现提交：`fa39040`。[原七场景复测](benchmarks/rust-p2-message-conversion.md)在干净 checkout 上通过结果比较与源 hash 校验；健康 Codex/OpenCode V2 场景不测 Claude、Pi 或坏记录恢复性能。

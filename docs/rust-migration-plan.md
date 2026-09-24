@@ -117,7 +117,7 @@ JSONL 坏行与旧 SQLite 坏消息/part 警告实现：`dd95821`，通过显式
 
 Codex/Claude 标题缓存恢复实现：`768e4ba`。索引不可读不再中止 Codex 发现，Claude 缺少 `entries` 按空索引处理，坏条目汇总告警，非空非字符串 summary 保留对应会话解析失败。新增 52 个 CLI 用例及 2 个同实例刷新用例，完整 `just isok` 与 release 构建通过，CLI 套件共 784 个、Rust 单元测试 17 个。底层原因文本的部分比较范围见[本批验收](rust-title-cache-parity.md)。[原七场景复测](benchmarks/rust-p2-title-cache.md)全部通过：跨 Provider 列表为 Python 253.62 ms / Rust 51.02 ms（4.97×），JSON＋Markdown 导出为 248.25 / 81.68 ms（3.04×）；不测 Claude、损坏索引或缓存刷新性能。
 
-Codex/Claude/Pi 记录转换恢复：新增 48 个 CLI 完整差分用例，覆盖失败后继续读取、工具关联与统计、警告顺序和静默 metadata/raw 路径，并单独保留 Codex metadata 阶段的会话失败语义。完整 `just isok` 与 release 构建通过，CLI 套件共 832 个、Rust 单元测试 17 个。已验证的错误类型与剩余数值/日期边界见[本批验收](rust-message-conversion-parity.md)。
+Codex/Claude/Pi 记录转换恢复实现：`fa39040`。新增 48 个 CLI 完整差分用例，覆盖失败后继续读取、工具关联与统计、警告顺序和静默 metadata/raw 路径，并单独保留 Codex metadata 阶段的会话失败语义。完整 `just isok` 与 release 构建通过，CLI 套件共 832 个、Rust 单元测试 17 个。已验证的错误类型与剩余数值/日期边界见[本批验收](rust-message-conversion-parity.md)。[原七场景复测](benchmarks/rust-p2-message-conversion.md)全部通过：跨 Provider 列表为 Python 256.68 ms / Rust 51.71 ms（4.96×），JSON＋Markdown 导出为 252.59 / 82.58 ms（3.06×）；报告保留本轮 Python 前三个场景的明显波动，不测 Claude、Pi 或坏记录恢复性能。
 
 ### P3：查询、索引、维护命令
 
