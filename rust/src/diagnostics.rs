@@ -225,6 +225,7 @@ impl Diagnostic {
         roots: Vec<String>,
         zh: bool,
     ) -> Self {
+        let error = provider_error::original(error);
         if let Some(ProviderError::Diagnostic {
             summary,
             details,

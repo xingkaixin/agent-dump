@@ -203,6 +203,10 @@ impl Provider for SqliteProvider {
         (self.search_roots)()
     }
 
+    fn change_sources(&self, session: &Session) -> Vec<PathBuf> {
+        crate::sqlite::change_sources(&session.source_path)
+    }
+
     fn source_root(&self) -> &Path {
         &self.root
     }

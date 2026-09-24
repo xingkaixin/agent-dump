@@ -2,6 +2,7 @@ use jiff::{Timestamp, civil::DateTime, tz::TimeZone};
 use serde::Serialize;
 use std::path::PathBuf;
 
+#[derive(Clone)]
 pub struct Session {
     pub id: String,
     pub title: String,

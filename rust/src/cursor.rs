@@ -133,6 +133,10 @@ impl Provider for Cursor {
         )])
     }
 
+    fn change_sources(&self, session: &Session) -> Vec<PathBuf> {
+        crate::sqlite::change_sources(&session.source_path)
+    }
+
     fn source_root(&self) -> &Path {
         self.database.parent().unwrap()
     }
@@ -427,7 +431,15 @@ mod tests {
             serde_json::to_value(data).unwrap()["messages"][0]["parts"][0]["text"],
             "First"
         );
+        let cache = crate::session_data::SessionDataCache::default();
+        let cached = cache
+            .get("cursor", &provider, &session, false, &mut |_| Ok(()))
+            .unwrap();
         *configured.borrow_mut() = second.clone();
+        let unchanged = cache
+            .get("cursor", &provider, &session, false, &mut |_| Ok(()))
+            .unwrap();
+        assert!(std::sync::Arc::ptr_eq(&cached, &unchanged));
         std::fs::remove_file(&first).unwrap();
         let before = std::fs::read(&second).unwrap();
         let data = provider.read(&session, false, &mut |_| Ok(())).unwrap();
@@ -436,6 +448,13 @@ mod tests {
             "Second"
         );
         assert_eq!(session.source_path, first);
+        let refreshed = cache
+            .get("cursor", &provider, &session, false, &mut |_| Ok(()))
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(refreshed.as_ref()).unwrap()["messages"][0]["parts"][0]["text"],
+            "Second"
+        );
         *configured.borrow_mut() = missing.clone();
         let error = provider
             .read(&session, false, &mut |_| Ok(()))

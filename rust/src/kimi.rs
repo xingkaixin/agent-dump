@@ -204,6 +204,14 @@ impl Provider for Kimi {
         self.roots.search_roots()
     }
 
+    fn change_sources(&self, session: &Session) -> Vec<PathBuf> {
+        ["context.jsonl", "wire.jsonl"]
+            .into_iter()
+            .map(|name| session.source_path.join(name))
+            .filter(|path| path.exists())
+            .collect()
+    }
+
     fn source_root(&self) -> &Path {
         self.roots.owned()
     }

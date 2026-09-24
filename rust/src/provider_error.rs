@@ -64,12 +64,14 @@ impl fmt::Display for ProviderError {
 impl std::error::Error for ProviderError {}
 
 pub fn message(error: &(dyn std::error::Error + 'static), zh: bool) -> String {
+    let error = original(error);
     error
         .downcast_ref::<ProviderError>()
         .map_or_else(|| error.to_string(), |error| error.summary(zh).to_owned())
 }
 
 pub fn operation_message(error: &(dyn std::error::Error + 'static), zh: bool) -> String {
+    let error = original(error);
     let kind = match error.downcast_ref::<ProviderError>() {
         Some(ProviderError::Message(_)) => Some("ValueError"),
         Some(ProviderError::Diagnostic {
@@ -93,4 +95,13 @@ pub fn operation_message(error: &(dyn std::error::Error + 'static), zh: bool) ->
         Some(kind) => format!("{kind}: {summary}"),
         None => summary,
     }
+}
+
+pub fn original<'a>(
+    mut error: &'a (dyn std::error::Error + 'static),
+) -> &'a (dyn std::error::Error + 'static) {
+    while error.is::<crate::session_data::SharedReadError>() {
+        error = error.source().unwrap();
+    }
+    error
 }

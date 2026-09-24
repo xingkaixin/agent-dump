@@ -99,16 +99,23 @@ pub fn run(
         );
     }
     let raw = provider.raw_export(&session);
+    let cache = crate::session_data::SessionDataCache::default();
     let prepared = (operation
         .formats
         .iter()
         .any(|format| *format != OutputFormat::Raw)
         || matches!(raw, Ok(RawExport::Session)))
     .then(|| {
-        provider.read(&session, zh, &mut |diagnostic| {
-            writeln!(warnings, "{}", diagnostics::record_warning(&diagnostic, zh))?;
-            Ok(())
-        })
+        cache.get(
+            registration.info.name,
+            provider.as_ref(),
+            &session,
+            zh,
+            &mut |diagnostic| {
+                writeln!(warnings, "{}", diagnostics::record_warning(&diagnostic, zh))?;
+                Ok(())
+            },
+        )
     });
     let mut success = false;
     if operation.formats.contains(&OutputFormat::Print) {
@@ -153,7 +160,10 @@ pub fn run(
             )?;
             continue;
         }
-        let data = prepared.as_ref().and_then(|result| result.as_ref().ok());
+        let data = prepared
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .map(|data| data.as_ref());
         let output = operation
             .output
             .as_ref()

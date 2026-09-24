@@ -2,6 +2,12 @@ use rusqlite::{Connection, OpenFlags, types::ValueRef};
 use serde_json::{Map, Value};
 use std::path::Path;
 
+pub fn change_sources(path: &Path) -> Vec<std::path::PathBuf> {
+    let mut wal = path.as_os_str().to_owned();
+    wal.push("-wal");
+    vec![path.to_owned(), wal.into()]
+}
+
 pub fn connect(path: &Path) -> crate::Result<Connection> {
     let path = path.canonicalize()?;
     let connection = Connection::open_with_flags(

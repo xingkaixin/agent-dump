@@ -28,6 +28,7 @@ mod provider_error;
 mod registry;
 mod render;
 mod session;
+mod session_data;
 #[cfg(test)]
 mod source_tests;
 mod sqlite;
@@ -42,7 +43,8 @@ use std::ffi::OsString;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Parser)]
 #[command(

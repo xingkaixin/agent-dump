@@ -50,7 +50,7 @@ pub struct Discovery {
 
 pub struct SessionFailure {
     pub source: String,
-    pub error: Box<dyn std::error::Error>,
+    pub error: crate::Error,
 }
 
 #[derive(Default)]
@@ -93,6 +93,10 @@ pub trait Provider {
     ) -> crate::Result<SessionData>;
     fn source_root(&self) -> &Path;
     fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>>;
+
+    fn change_sources(&self, session: &Session) -> Vec<PathBuf> {
+        vec![session.source_path.clone()]
+    }
 
     fn json_payload(&self, data: &SessionData) -> serde_json::Value {
         serde_json::to_value(data).unwrap()
