@@ -1,6 +1,7 @@
 use crate::provider::{Discovery, Lookup, SessionFailure};
 use crate::session::Session;
-use jiff::{SignedDuration, Timestamp};
+use crate::timestamp::Timestamp;
+use jiff::SignedDuration;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 

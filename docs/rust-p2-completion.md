@@ -6,8 +6,9 @@ Python 参考仍为 `dca2d97`，P0 evaluator 为 `9c1cf61`。所有来源均为�
 
 ## 收尾清单
 
-- [ ] 正文缓存：LRU、lease、并发读取合并、消费隔离、失败重试、source/title/time/WAL 失效、Cursor 当前配置和旧 Session 的关系。
-- [ ] 极端输入：大整数与非标准 JSON 数值、Unicode 表示、日期边界、畸形 metadata、SQLite BLOB。
+- [x] 正文缓存：LRU、lease、并发读取合并、消费隔离、失败重试、source/title/time/WAL 失效、Cursor 当前配置和旧 Session 的关系。
+- [x] 大整数与非标准 JSON 数值、Unicode 表示、日期边界、非字符串 cwd/version，见 [极端值验收](rust-extreme-values-parity.md)。
+- [ ] 剩余结构/错误输入：SQLite BLOB 与 Provider 错误原因。
 - [ ] 诊断：支持的 Provider/URI/导出路径的底层原因、异常类别、非法导出 ID 和文件系统失败。
 - [ ] 来源生命周期：操作间变化、boot-config 编辑/损坏/恢复，读取事务与 WAL/checkpoint 行为。
 - [ ] 跨平台：macOS、Linux、Windows 上运行 P2 差分和边界用例，记录真实结果。

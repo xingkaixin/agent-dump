@@ -95,7 +95,10 @@ pub fn json(
 ) -> crate::Result<PathBuf> {
     write(output, session_id, suffix, source_root, |file| {
         let mut writer = io::BufWriter::new(file);
-        serde_json::to_writer_pretty(&mut writer, data)?;
+        data.serialize(&mut serde_json::Serializer::with_formatter(
+            &mut writer,
+            crate::python_json::Formatter::default(),
+        ))?;
         writer.flush()?;
         Ok(())
     })

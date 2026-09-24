@@ -2,9 +2,9 @@ use crate::file_sessions::{self, SourceRoots};
 use crate::jsonl;
 use crate::provider::{DiagnosticSink, Provider, RecoverableDiagnostic};
 use crate::session::{Session, SessionData, parse_timestamp};
+use crate::timestamp::Timestamp;
 use crate::title::{basename, normalize_title};
 use crate::value::text;
-use jiff::Timestamp;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -112,7 +112,7 @@ impl Codex {
         });
         let title = explicit_title
             .or(message_title)
-            .or_else(|| basename(text(&payload["cwd"])))
+            .or_else(|| crate::title::value_basename(&payload["cwd"]))
             .or_else(|| {
                 path.parent()
                     .and_then(|parent| basename(&parent.to_string_lossy()))
@@ -153,10 +153,13 @@ impl Codex {
             created_at,
             updated_at,
             subtargets: Vec::new(),
-            source_metadata: serde_json::Value::Null,
+            source_metadata: serde_json::json!({"cwd": payload.get("cwd").cloned().unwrap_or_else(|| "".into())}),
             source_path: path.to_owned(),
             directory: text(&payload["cwd"]).to_owned(),
-            version: text(&payload["cli_version"]).into(),
+            version: payload
+                .get("cli_version")
+                .cloned()
+                .unwrap_or_else(|| "".into()),
             model,
             project: None,
             message_count: scan.complete.then_some(count),

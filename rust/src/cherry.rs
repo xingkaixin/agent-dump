@@ -2,8 +2,8 @@ use crate::desktop::{Kind, has_tables, timestamp};
 use crate::provider_error::ProviderError;
 use crate::session::{Message, Part, Session, SessionData, Stats, TextPart};
 use crate::sqlite::rows;
+use crate::timestamp::Timestamp;
 use crate::value::{integer, objects, string, text, truthy};
-use jiff::Timestamp;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
@@ -20,7 +20,7 @@ pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
         crate::file_sessions::environment_root("HOME", "")?.join(".cherrystudio/boot-config.json");
     let mut roots = Vec::new();
     if boot.is_file() {
-        let config: Value = serde_json::from_slice(&std::fs::read(boot)?)?;
+        let config: Value = crate::python_json::from_slice(&std::fs::read(boot)?)?;
         if let Some(paths) = config["app.user_data_path"].as_object() {
             for value in paths.values().filter_map(Value::as_str) {
                 if Path::new(value).is_absolute() {
@@ -228,7 +228,7 @@ fn object(value: &Value) -> crate::Result<Value> {
         return Ok(json!({}));
     }
     let result = if let Some(text) = value.as_str() {
-        serde_json::from_str(text)?
+        crate::python_json::from_str(text)?
     } else {
         value.clone()
     };
@@ -267,7 +267,7 @@ fn decode(row: &Value) -> crate::Result<Message> {
     let mut message = Message::new(string(&row["id"]), text(&row["role"]), time, Vec::new());
     message.model = model.as_str().map(|v| v.into());
     message.provider = provider.as_str().map(str::to_owned);
-    message.tokens = json!({"input":integer(&stats["inputTokens"]), "output":integer(&stats["outputTokens"]), "cache":{"read":integer(&cache["cacheReadTokens"]),"write":integer(&cache["cacheWriteTokens"])}}).as_object().unwrap().clone();
+    message.tokens = json!({"input":crate::value::integer_number(&stats["inputTokens"]), "output":crate::value::integer_number(&stats["outputTokens"]), "cache":{"read":crate::value::integer_number(&cache["cacheReadTokens"]),"write":crate::value::integer_number(&cache["cacheWriteTokens"])}}).as_object().unwrap().clone();
     message.extra.insert("status".into(), row["status"].clone());
     message.extra.insert(
         "costs".into(),

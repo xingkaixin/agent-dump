@@ -15,7 +15,7 @@ pub struct Metadata {
 }
 
 fn object(bytes: &[u8]) -> Option<Value> {
-    serde_json::from_slice::<Value>(bytes)
+    crate::python_json::from_slice(bytes)
         .ok()
         .filter(Value::is_object)
 }

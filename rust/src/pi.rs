@@ -1,9 +1,9 @@
 use crate::file_sessions::{self, SourceRoots};
 use crate::provider::Provider;
 use crate::session::{Session, SessionData, epoch_seconds, parse_timestamp};
+use crate::timestamp::Timestamp;
 use crate::title::{basename, normalize_title};
 use crate::value::{field, text, truthy};
-use jiff::Timestamp;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -74,7 +74,7 @@ impl Pi {
                         .flatten()
                 })
             })
-            .or_else(|| basename(text(&header["cwd"])))
+            .or_else(|| crate::title::value_basename(&header["cwd"]))
             .or_else(|| {
                 path.parent()
                     .and_then(|path| basename(&path.to_string_lossy()))
@@ -86,7 +86,7 @@ impl Pi {
             created_at,
             updated_at,
             subtargets: Vec::new(),
-            source_metadata: serde_json::Value::Null,
+            source_metadata: serde_json::json!({"cwd": header.get("cwd").cloned().unwrap_or_else(|| "".into())}),
             source_path: path.to_owned(),
             directory: text(&header["cwd"]).into(),
             version: header["version"].clone(),

@@ -1,9 +1,9 @@
 use crate::file_sessions::{self, SourceRoots};
 use crate::provider::{Provider, RawExport};
 use crate::session::{Session, SessionData, Stats, epoch_seconds};
+use crate::timestamp::Timestamp;
 use crate::title::{basename, normalize_title};
-use crate::value::{integer, text};
-use jiff::Timestamp;
+use crate::value::text;
 use md5::{Digest, Md5};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -42,7 +42,7 @@ impl Kimi {
             let path = base.parent().unwrap_or(base).join("kimi.json");
             if let Some(raw) = std::fs::read(path)
                 .ok()
-                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                .and_then(|bytes| crate::python_json::from_slice(&bytes).ok())
                 && let Some(directories) = raw["work_dirs"].as_array()
             {
                 for entry in directories {
@@ -57,7 +57,7 @@ impl Kimi {
     }
 
     fn parse(&mut self, path: &Path, cutoff: Option<Timestamp>) -> crate::Result<Option<Session>> {
-        let metadata: Value = serde_json::from_slice(&std::fs::read(path)?)?;
+        let metadata: Value = crate::python_json::from_slice(&std::fs::read(path)?)?;
         if !metadata.is_object() {
             return Err("Kimi session metadata must be a JSON object".into());
         }
@@ -181,7 +181,7 @@ impl Provider for Kimi {
         };
         let mut stats = Stats {
             message_count: messages.len(),
-            total_tokens: Some(0),
+            total_tokens: Some(0.into()),
             ..Stats::default()
         };
         if wire.exists() {
@@ -193,7 +193,7 @@ impl Provider for Kimi {
         let raw = if context.exists() { &context } else { &wire };
         crate::jsonl::scan(raw, diagnostics, |record, _| {
             if record["role"] == "_usage" && record["token_count"].is_number() {
-                stats.total_tokens = Some(integer(&record["token_count"]));
+                stats.total_tokens = Some(crate::value::integer_number(&record["token_count"]));
             }
             Ok(())
         })?;

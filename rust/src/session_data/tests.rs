@@ -1,7 +1,7 @@
 use super::*;
 use crate::provider::{Discovery, Lookup};
 use crate::session::Stats;
-use jiff::Timestamp;
+use crate::timestamp::Timestamp;
 use std::path::Path;
 use std::sync::Barrier;
 use std::sync::atomic::{AtomicUsize, Ordering};

@@ -64,8 +64,12 @@ pub fn read(
         message.tokens = data["tokens"].as_object().cloned().unwrap_or_default();
         let cost = float(&data["cost"]);
         message.cost = serde_json::Number::from_f64(cost).unwrap();
-        stats.total_cost = serde_json::Number::from_f64(stats.total_cost.as_f64().unwrap() + cost)
-            .ok_or("cost total is out of range")?;
+        stats.total_cost = crate::python_json::float(
+            crate::python_json::nonfinite(&stats.total_cost)
+                .or_else(|| stats.total_cost.as_f64())
+                .unwrap()
+                + cost,
+        );
         stats.add_tokens(&data["tokens"]["input"], &data["tokens"]["output"])?;
         for row in parts_by_id.remove(&id).unwrap_or_default() {
             let Some(data) = json_object(&row["data"]) else {

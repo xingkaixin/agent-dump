@@ -199,14 +199,16 @@ fn decode(row: &Value) -> crate::Result<Message> {
         ("output_tokens", "output"),
         ("total_tokens", "total"),
     ] {
-        if let Some(value) = data["usage"][source].as_u64() {
-            message.tokens.insert(target.into(), value.into());
+        if nonnegative_integer(&data["usage"][source]) {
+            message
+                .tokens
+                .insert(target.into(), data["usage"][source].clone());
         }
     }
     let mut cache = serde_json::Map::new();
     for (source, target) in [("cache_read", "read"), ("cache_write", "write")] {
-        if let Some(value) = data["usage"][source].as_u64() {
-            cache.insert(target.into(), value.into());
+        if nonnegative_integer(&data["usage"][source]) {
+            cache.insert(target.into(), data["usage"][source].clone());
         }
     }
     if !cache.is_empty() {
@@ -261,4 +263,10 @@ fn attachment(item: &Value) -> Value {
             .clone()
     };
     json!({"name":first(&[&item["meta"]["fileName"], &item["file_name"], &item["fileName"]]), "path":first(&[&item["local"]["filePath"], &item["file_path"], &item["filePath"]]), "mime_type":first(&[&item["meta"]["mimeType"], &item["mime_type"], &item["mimeType"]]), "type":first(&[&item["meta"]["attachmentType"], &item["type"]]), "size":item["meta"]["sizeBytes"], "url":item["cloud"]["url"], "asset_id":first(&[&item["local"]["assetId"], &item["asset_id"], &item["assetId"]])})
+}
+
+fn nonnegative_integer(value: &Value) -> bool {
+    value
+        .as_number()
+        .is_some_and(|number| !number.as_str().contains(['-', '.', 'e', 'E']))
 }

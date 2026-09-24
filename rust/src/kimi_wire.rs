@@ -112,7 +112,7 @@ impl Decoder {
                 };
                 let buffer = self.buffers.entry(call_id.clone()).or_default();
                 buffer.push_str(&field(payload, "arguments_part"));
-                if let Ok(arguments) = serde_json::from_str::<Value>(buffer)
+                if let Ok(arguments) = crate::python_json::from_str(buffer)
                     && let Part::Tool(tool) = &mut self.messages[message].parts[part]
                 {
                     tool.state.insert("arguments".into(), arguments);

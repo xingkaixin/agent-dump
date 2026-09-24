@@ -1,8 +1,9 @@
 use crate::provider::{Provider, RawExport};
 use crate::session::{Session, SessionData, epoch_seconds};
 use crate::sqlite::{connect, has_table, rows};
+use crate::timestamp::Timestamp;
 use crate::value::{json_object, string, text};
-use jiff::{SignedDuration, Timestamp};
+use jiff::SignedDuration;
 use rusqlite::{Connection, ToSql};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -266,7 +267,7 @@ fn summary_targets(raw: &Value) -> Vec<String> {
         if text.trim().is_empty() {
             return Vec::new();
         }
-        parsed = serde_json::from_str::<Value>(text).unwrap_or(Value::Null);
+        parsed = crate::python_json::from_str(text).unwrap_or(Value::Null);
         if parsed.is_array() {
             &parsed
         } else {

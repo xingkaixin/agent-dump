@@ -2,9 +2,9 @@ use crate::file_sessions::{self, SourceRoots};
 use crate::jsonl;
 use crate::provider::{DiagnosticSink, Provider, RecoverableDiagnostic};
 use crate::session::{Session, SessionData, parse_timestamp};
+use crate::timestamp::Timestamp;
 use crate::title::{basename, normalize_title};
 use crate::value::{field, text, truthy};
-use jiff::Timestamp;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -58,7 +58,7 @@ impl Claude {
             return Ok(titles);
         }
         let result = (|| -> crate::Result<Value> {
-            let value: Value = serde_json::from_slice(&std::fs::read(path)?)?;
+            let value: Value = crate::python_json::from_slice(&std::fs::read(path)?)?;
             if !value.is_object() {
                 return Err("sessions index root must be an object".into());
             }
@@ -153,7 +153,7 @@ impl Claude {
             .flatten();
         let title = explicit
             .or(first_user)
-            .or_else(|| basename(text(&header["cwd"])))
+            .or_else(|| crate::title::value_basename(&header["cwd"]))
             .or_else(|| basename(&project.to_string_lossy()))
             .unwrap_or_else(|| "Untitled Session".into());
         let mut updated_at = created_at;
@@ -177,7 +177,7 @@ impl Claude {
             created_at,
             updated_at,
             subtargets: Vec::new(),
-            source_metadata: serde_json::Value::Null,
+            source_metadata: serde_json::json!({"cwd": header.get("cwd").cloned().unwrap_or_else(|| "".into())}),
             source_path: path.to_owned(),
             directory: text(&header["cwd"]).to_owned(),
             version: header.get("version").cloned().unwrap_or_else(|| "".into()),

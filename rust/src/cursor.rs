@@ -1,8 +1,9 @@
 use crate::output_formats::OutputFormat;
 use crate::provider::Provider;
 use crate::session::{Session, SessionData, epoch_seconds, parse_timestamp};
+use crate::timestamp::Timestamp;
 use crate::value::{string, text, truthy};
-use jiff::{SignedDuration, Timestamp};
+use jiff::SignedDuration;
 use rusqlite::{Connection, ToSql, types::ValueRef};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -164,7 +165,7 @@ pub fn records(
     let mut result = Vec::new();
     while let Some(row) = rows.next()? {
         let value = match row.get_ref(1)? {
-            ValueRef::Text(bytes) | ValueRef::Blob(bytes) => serde_json::from_slice::<Value>(bytes)
+            ValueRef::Text(bytes) | ValueRef::Blob(bytes) => crate::python_json::from_slice(bytes)
                 .ok()
                 .filter(Value::is_object),
             _ => None,

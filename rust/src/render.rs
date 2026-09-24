@@ -1,5 +1,4 @@
 use crate::session::{Part, Session, SessionData};
-use jiff::tz::TimeZone;
 use std::fmt::Write;
 
 fn unsafe_char(c: char) -> bool {
@@ -45,16 +44,14 @@ pub fn head(uri: &str, session: &Session, display_name: &str, zh: bool) -> Strin
             "Created",
             session
                 .created_at
-                .to_zoned(TimeZone::system())
-                .strftime("%Y-%m-%d %H:%M:%S %Z")
+                .format_local("%Y-%m-%d %H:%M:%S %Z")
                 .to_string(),
         ),
         (
             "Updated",
             session
                 .updated_at
-                .to_zoned(TimeZone::system())
-                .strftime("%Y-%m-%d %H:%M:%S %Z")
+                .format_local("%Y-%m-%d %H:%M:%S %Z")
                 .to_string(),
         ),
         ("CWD/Project", session.display_location()),
@@ -246,10 +243,7 @@ fn append_list_group(
         };
         let title = safe_line(&format!(
             "{title} ({})",
-            session
-                .created_at
-                .to_zoned(TimeZone::system())
-                .strftime("%Y-%m-%d %H:%M")
+            session.created_at.format_local("%Y-%m-%d %H:%M")
         ));
         if !summary {
             writeln!(
@@ -282,10 +276,7 @@ fn append_list_group(
         ));
         fields.push(format!(
             "updated={}",
-            session
-                .updated_at
-                .to_zoned(TimeZone::system())
-                .strftime("%Y-%m-%d %H:%M")
+            session.updated_at.format_local("%Y-%m-%d %H:%M")
         ));
         fields.push(format!("uri={scheme}://{}", session.id));
         writeln!(output, "     {}", safe_line(&fields.join(" | "))).unwrap();

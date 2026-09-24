@@ -74,7 +74,7 @@ pub fn subagent_notification(
         .trim()
         .strip_prefix("<subagent_notification>")?
         .strip_suffix("</subagent_notification>")?;
-    let payload: Value = serde_json::from_str(body.trim()).ok()?;
+    let payload: Value = crate::python_json::from_str(body.trim()).ok()?;
     if !payload.is_object() {
         return None;
     }

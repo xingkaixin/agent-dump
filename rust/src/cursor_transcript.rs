@@ -56,7 +56,7 @@ impl Decoder<'_> {
                 Some(model.to_owned())
             };
             let (input, output) = tokens(&bubble);
-            stats.add_tokens(&input.into(), &output.into())?;
+            stats.add_tokens(&input.clone().into(), &output.clone().into())?;
             let body = body(&bubble, role);
             let tool = &bubble["toolFormerData"];
             let plan = if tool["name"] == "create_plan" {
@@ -72,8 +72,8 @@ impl Decoder<'_> {
                     role,
                     model.clone(),
                     time,
-                    input,
-                    output,
+                    input.clone(),
+                    output.clone(),
                     vec![Part::text(body.clone(), time)],
                 );
                 if let Some(plan) = &plan {
@@ -91,8 +91,8 @@ impl Decoder<'_> {
                         "tool",
                         model.clone(),
                         time,
-                        0,
-                        0,
+                        0.into(),
+                        0.into(),
                         vec![part],
                     );
                     message.mode = Some("tool".into());
@@ -107,8 +107,8 @@ impl Decoder<'_> {
                     "assistant",
                     model,
                     time,
-                    input,
-                    output,
+                    input.clone(),
+                    output.clone(),
                     vec![plan],
                 ));
                 continue;
@@ -278,8 +278,8 @@ impl Decoder<'_> {
                 "assistant",
                 model,
                 latest,
-                0,
-                0,
+                0.into(),
+                0.into(),
                 parts,
             );
             message.subagent_id = Some(id.into());
@@ -299,8 +299,8 @@ fn message(
     role: &str,
     model: Option<String>,
     time: i64,
-    input: i64,
-    output: i64,
+    input: serde_json::Number,
+    output: serde_json::Number,
     parts: Vec<Part>,
 ) -> Message {
     let mut message = Message::new(id.into(), role, time, parts);
@@ -321,7 +321,7 @@ fn arguments(tool: &Value) -> Value {
     };
     input.as_str().map_or_else(
         || input.clone(),
-        |raw| serde_json::from_str(raw).unwrap_or_else(|_| json!({"_raw":raw})),
+        |raw| crate::python_json::from_str(raw).unwrap_or_else(|_| json!({"_raw":raw})),
     )
 }
 
@@ -415,21 +415,21 @@ fn parent(bubble: &Value) -> Option<&str> {
     .find(|v| !v.is_empty())
 }
 
-fn tokens(bubble: &Value) -> (i64, i64) {
+fn tokens(bubble: &Value) -> (serde_json::Number, serde_json::Number) {
     if bubble["tokenCount"].is_object() {
         (
-            integer(&bubble["tokenCount"]["inputTokens"]),
-            integer(&bubble["tokenCount"]["outputTokens"]),
+            crate::value::integer_number(&bubble["tokenCount"]["inputTokens"]),
+            crate::value::integer_number(&bubble["tokenCount"]["outputTokens"]),
         )
     } else if bubble["usage"].is_object() {
         (
-            integer(&bubble["usage"]["input_tokens"]),
-            integer(&bubble["usage"]["output_tokens"]),
+            crate::value::integer_number(&bubble["usage"]["input_tokens"]),
+            crate::value::integer_number(&bubble["usage"]["output_tokens"]),
         )
     } else {
         (
-            integer(&bubble["contextWindowStatusAtCreation"]["tokensUsed"]),
-            0,
+            crate::value::integer_number(&bubble["contextWindowStatusAtCreation"]["tokensUsed"]),
+            0.into(),
         )
     }
 }

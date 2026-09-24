@@ -1,4 +1,4 @@
-use jiff::{Timestamp, civil::DateTime, tz::TimeZone};
+use crate::timestamp::Timestamp;
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -41,11 +41,11 @@ pub struct Stats {
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
     pub total_cost: serde_json::Number,
-    pub total_input_tokens: i64,
-    pub total_output_tokens: i64,
+    pub total_input_tokens: serde_json::Number,
+    pub total_output_tokens: serde_json::Number,
     pub message_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub total_tokens: Option<i64>,
+    pub total_tokens: Option<serde_json::Number>,
 }
 
 impl Default for Stats {
@@ -53,8 +53,8 @@ impl Default for Stats {
         Self {
             extra: Default::default(),
             total_cost: 0.into(),
-            total_input_tokens: 0,
-            total_output_tokens: 0,
+            total_input_tokens: 0.into(),
+            total_output_tokens: 0.into(),
             message_count: 0,
             total_tokens: None,
         }
@@ -67,14 +67,8 @@ impl Stats {
         input: &serde_json::Value,
         output: &serde_json::Value,
     ) -> crate::Result<()> {
-        self.total_input_tokens = self
-            .total_input_tokens
-            .checked_add(crate::value::integer(input))
-            .ok_or("input token total is out of range")?;
-        self.total_output_tokens = self
-            .total_output_tokens
-            .checked_add(crate::value::integer(output))
-            .ok_or("output token total is out of range")?;
+        crate::value::add_integer(&mut self.total_input_tokens, input);
+        crate::value::add_integer(&mut self.total_output_tokens, output);
         Ok(())
     }
 }
@@ -251,14 +245,7 @@ impl Part {
 }
 
 pub fn parse_timestamp(value: &str) -> Option<Timestamp> {
-    value.parse().ok().or_else(|| {
-        value
-            .parse::<DateTime>()
-            .ok()?
-            .to_zoned(TimeZone::UTC)
-            .ok()
-            .map(|time| time.timestamp())
-    })
+    value.parse().ok()
 }
 
 pub fn epoch_seconds(seconds: f64) -> Option<Timestamp> {

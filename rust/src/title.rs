@@ -17,3 +17,11 @@ pub fn basename(text: &str) -> Option<String> {
         .and_then(|name| name.to_str())
         .and_then(normalize_title)
 }
+
+pub fn value_basename(value: &serde_json::Value) -> Option<String> {
+    if value.is_null() {
+        None
+    } else {
+        basename(&crate::value::string(value))
+    }
+}

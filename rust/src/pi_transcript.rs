@@ -1,7 +1,7 @@
 use crate::pi::{datetime, session_name};
 use crate::provider::RecoverableDiagnostic;
 use crate::session::{ImagePart, Message, Part, Session, SessionData, Stats, TextPart, ToolPart};
-use crate::value::{field, integer, text, truthy};
+use crate::value::{field, text, truthy};
 use serde_json::{Value, json};
 
 pub fn read(
@@ -10,13 +10,23 @@ pub fn read(
 ) -> crate::Result<SessionData> {
     let mut messages = Vec::new();
     let mut stats = Stats {
-        total_tokens: Some(0),
+        total_tokens: Some(0.into()),
         ..Stats::default()
     };
     let mut title = session.title.clone();
     let mut sequence = 0;
+    let mut directory = session.source_metadata["cwd"].clone();
+    let mut version = session.version.clone();
     crate::jsonl::scan(&session.source_path, diagnostics, |record, diagnostics| {
         sequence += 1;
+        if sequence == 1 {
+            if !truthy(&directory) {
+                directory = record.get("cwd").cloned().unwrap_or_else(|| "".into());
+            }
+            if !truthy(&version) {
+                version = record["version"].clone();
+            }
+        }
         if let Some(name) = session_name(&record) {
             title = name;
         }
@@ -36,6 +46,8 @@ pub fn read(
     stats.message_count = messages.len();
     let mut data = session.payload(messages, stats);
     data.title = title;
+    data.directory = directory;
+    data.version = version;
     Ok(data)
 }
 
@@ -45,13 +57,7 @@ fn accumulate(stats: &mut Stats, record: &Value) -> crate::Result<()> {
         return Ok(());
     }
     stats.add_tokens(&usage["input"], &usage["output"])?;
-    stats.total_tokens = Some(
-        stats
-            .total_tokens
-            .unwrap_or(0)
-            .checked_add(integer(&usage["totalTokens"]))
-            .ok_or("token total is out of range")?,
-    );
+    crate::value::add_integer(stats.total_tokens.as_mut().unwrap(), &usage["totalTokens"]);
     if usage["cost"].is_object() {
         let value = &usage["cost"]["total"];
         let cost = value
@@ -63,9 +69,12 @@ fn accumulate(stats: &mut Stats, record: &Value) -> crate::Result<()> {
             })
             .filter(|cost| cost.is_finite())
             .unwrap_or(0.0);
-        stats.total_cost =
-            serde_json::Number::from_f64(stats.total_cost.as_f64().unwrap_or(0.0) + cost)
-                .ok_or("cost total is out of range")?;
+        stats.total_cost = crate::python_json::float(
+            crate::python_json::nonfinite(&stats.total_cost)
+                .or_else(|| stats.total_cost.as_f64())
+                .unwrap_or(0.0)
+                + cost,
+        );
     }
     Ok(())
 }

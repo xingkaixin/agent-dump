@@ -19,7 +19,7 @@ pub fn tool_title(name: &str) -> &str {
 
 pub fn arguments(raw: &Value) -> Value {
     raw.as_str()
-        .and_then(|value| serde_json::from_str(value).ok())
+        .and_then(|value| crate::python_json::from_str(value).ok())
         .unwrap_or_else(|| raw.clone())
 }
 

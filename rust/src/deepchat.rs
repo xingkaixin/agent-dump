@@ -2,8 +2,8 @@ use crate::desktop::{Kind, has_tables, timestamp};
 use crate::provider_error::ProviderError;
 use crate::session::{ImagePart, Message, Part, PlanPart, Session, SessionData, Stats, TextPart};
 use crate::sqlite::rows;
+use crate::timestamp::Timestamp;
 use crate::value::{integer, objects, parse_json, string, text, truthy};
-use jiff::Timestamp;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -173,7 +173,7 @@ fn decode(
     );
     message.model = metadata.get("model").filter(|v| v.is_string()).cloned();
     message.provider = metadata["provider"].as_str().map(str::to_owned);
-    message.tokens = json!({"input": integer(&metadata["inputTokens"]), "output": integer(&metadata["outputTokens"]), "cache": {"read": integer(&metadata["cachedInputTokens"]), "write": integer(&metadata["cacheWriteInputTokens"])}}).as_object().unwrap().clone();
+    message.tokens = json!({"input": crate::value::integer_number(&metadata["inputTokens"]), "output": crate::value::integer_number(&metadata["outputTokens"]), "cache": {"read": crate::value::integer_number(&metadata["cachedInputTokens"]), "write": crate::value::integer_number(&metadata["cacheWriteInputTokens"])}}).as_object().unwrap().clone();
     message.metadata = metadata.as_object().cloned();
     message.extra.insert("status".into(), row["status"].clone());
     if role == "user" {

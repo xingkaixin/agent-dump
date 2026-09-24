@@ -4,7 +4,7 @@ pub fn type_name(value: &Value) -> &'static str {
     match value {
         Value::Null => "NoneType",
         Value::Bool(_) => "bool",
-        Value::Number(number) if number.is_f64() => "float",
+        Value::Number(number) if number.as_str().contains(['.', 'e', 'E']) => "float",
         Value::Number(_) => "int",
         Value::String(_) => "str",
         Value::Array(_) => "list",
@@ -41,14 +41,14 @@ pub fn float(value: &Value) -> f64 {
 }
 
 pub fn json_object(raw: &Value) -> Option<Value> {
-    serde_json::from_str::<Value>(raw.as_str()?)
+    crate::python_json::from_str(raw.as_str()?)
         .ok()
         .filter(Value::is_object)
 }
 
 pub fn parse_json(raw: &Value) -> Value {
     raw.as_str()
-        .and_then(|text| serde_json::from_str(text).ok())
+        .and_then(|text| crate::python_json::from_str(text).ok())
         .unwrap_or_else(|| raw.clone())
 }
 
@@ -87,6 +87,16 @@ pub fn string(value: &Value) -> String {
 }
 
 fn number_text(number: &serde_json::Number) -> String {
+    if let Some(value) = crate::python_json::nonfinite(number) {
+        return if value.is_nan() {
+            "nan"
+        } else if value.is_sign_negative() {
+            "-inf"
+        } else {
+            "inf"
+        }
+        .into();
+    }
     if !number.is_f64() {
         return number.to_string();
     }
@@ -110,7 +120,11 @@ pub fn pretty_json(value: &Value) -> String {
                 .collect(),
             Value::Array(values) => values.iter().map(|value| (None, value)).collect(),
             Value::Number(number) => {
-                out.push_str(&number_text(number));
+                out.push_str(&if crate::python_json::nonfinite(number).is_some() {
+                    crate::python_json::number_text(number)
+                } else {
+                    number_text(number)
+                });
                 return;
             }
             _ => {
@@ -147,6 +161,8 @@ fn repr(value: &Value) -> String {
 }
 
 fn quoted(text: &str) -> String {
+    static NONPRINTABLE: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"[\p{Other}\p{Separator}]").unwrap());
     let quote = if text.contains('\'') && !text.contains('"') {
         '"'
     } else {
@@ -163,8 +179,15 @@ fn quoted(text: &str) -> String {
                 result.push('\\');
                 result.push(c);
             }
-            c if c.is_control() && u32::from(c) <= 255 => {
-                result.push_str(&format!("\\x{:02x}", u32::from(c)))
+            c if c != ' ' && NONPRINTABLE.is_match(c.encode_utf8(&mut [0; 4])) => {
+                let code = u32::from(c);
+                result.push_str(&if code <= 255 {
+                    format!("\\x{code:02x}")
+                } else if code <= 65535 {
+                    format!("\\u{code:04x}")
+                } else {
+                    format!("\\U{code:08x}")
+                });
             }
             c => result.push(c),
         }
@@ -174,7 +197,7 @@ fn quoted(text: &str) -> String {
 }
 
 pub fn parsed_string(value: &Value) -> Option<Value> {
-    let parsed: Value = serde_json::from_str(value.as_str()?.trim()).ok()?;
+    let parsed: Value = crate::python_json::from_str(value.as_str()?.trim()).ok()?;
     (!parsed.is_null()).then_some(parsed)
 }
 
@@ -187,4 +210,63 @@ pub fn truthy(value: &Value) -> bool {
         Value::Array(value) => !value.is_empty(),
         Value::Object(value) => !value.is_empty(),
     }
+}
+
+pub fn integer_number(value: &Value) -> serde_json::Number {
+    let text = match value {
+        Value::Number(number) => {
+            let raw = number.to_string();
+            if !raw.contains(['.', 'e', 'E']) {
+                return number.clone();
+            }
+            let Some(number) = number.as_f64() else {
+                return 0.into();
+            };
+            format!("{:.0}", number.trunc())
+        }
+        Value::String(text) => text.trim().chars().map(decimal_digit).collect(),
+        _ => return 0.into(),
+    };
+    use std::sync::LazyLock;
+    static INTEGER: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"^[+-]?[0-9]+(?:_[0-9]+)*$").unwrap());
+    if !INTEGER.is_match(&text) {
+        return 0.into();
+    }
+    text.replace('_', "")
+        .parse::<num_bigint::BigInt>()
+        .ok()
+        .and_then(|number| number.to_string().parse().ok())
+        .unwrap_or_else(|| 0.into())
+}
+
+pub fn add_integer(total: &mut serde_json::Number, value: &Value) {
+    let value = integer_number(value);
+    if let Some(sum) = total
+        .as_i64()
+        .zip(value.as_i64())
+        .and_then(|(left, right)| left.checked_add(right))
+    {
+        *total = sum.into();
+        return;
+    }
+    let left: num_bigint::BigInt = total.to_string().parse().unwrap();
+    let right: num_bigint::BigInt = value.to_string().parse().unwrap();
+    *total = (left + right).to_string().parse().unwrap();
+}
+
+fn decimal_digit(character: char) -> char {
+    static DECIMAL: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"^\p{Nd}$").unwrap());
+    let is_decimal = |character: char| DECIMAL.is_match(character.encode_utf8(&mut [0; 4]));
+    if character.is_ascii() || !is_decimal(character) {
+        return character;
+    }
+    let code = u32::from(character);
+    let mut start = code;
+    // Unicode decimal digit blocks contain consecutive groups ordered zero to nine.
+    while char::from_u32(start - 1).is_some_and(is_decimal) {
+        start -= 1;
+    }
+    char::from_digit((code - start) % 10, 10).unwrap()
 }

@@ -309,5 +309,7 @@ pub fn read(
             message.tokens.get("output_tokens").unwrap_or(&Value::Null),
         )?;
     }
-    Ok(session.payload(decoder.messages, stats))
+    let mut data = session.payload(decoder.messages, stats);
+    data.directory = session.source_metadata["cwd"].clone();
+    Ok(data)
 }

@@ -10,8 +10,8 @@ pub fn read(connection: &Connection, session: &Session, row: Value) -> crate::Re
         .iter().map(decode).collect::<crate::Result<Vec<_>>>()?;
     let stats = Stats {
         total_cost: serde_json::Number::from_f64(float(&row["cost"])).unwrap(),
-        total_input_tokens: integer(&row["tokens_input"]),
-        total_output_tokens: integer(&row["tokens_output"]),
+        total_input_tokens: crate::value::integer_number(&row["tokens_input"]),
+        total_output_tokens: crate::value::integer_number(&row["tokens_output"]),
         message_count: messages.len(),
         total_tokens: None,
         extra: Default::default(),

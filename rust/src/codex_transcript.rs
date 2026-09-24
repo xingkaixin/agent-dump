@@ -308,5 +308,7 @@ pub fn read(
     })?;
     decoder.finish_plan("fail", None);
     stats.message_count = decoder.messages.len();
-    Ok(session.payload(decoder.messages, stats))
+    let mut data = session.payload(decoder.messages, stats);
+    data.directory = session.source_metadata["cwd"].clone();
+    Ok(data)
 }
