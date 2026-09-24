@@ -1,5 +1,6 @@
 """Synthetic databases shared by SQLite Provider CLI contracts."""
 
+from contextlib import closing
 import importlib
 import json
 import os
@@ -29,7 +30,7 @@ def create_legacy(cli, provider="opencode", *, path=None):
             path = cli.root / "sources/sqlite/legacy.db"
             cli.environment["OPENCODE_DB"] = str(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path) as connection:
+    with closing(sqlite3.connect(path)) as connection, connection:
         connection.executescript("""
             CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, time_created INTEGER,
                 time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT);
