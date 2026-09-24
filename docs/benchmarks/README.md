@@ -30,6 +30,8 @@
 
 [记录转换恢复后的七场景复测](rust-p2-message-conversion.md)记录逐记录恢复接入后的健康数据路径，保留本轮 Python 前三个场景的明显波动；不测 Claude、Pi 或损坏记录的恢复性能。
 
+[来源选择与缺失重试后的七场景复测](rust-p2-source-selection.md)继续使用健康 Codex/OpenCode V2 数据，记录每次独立进程的 CLI 表现；不测同实例刷新、来源消失或恢复性能。
+
 ## 运行
 
 ```bash

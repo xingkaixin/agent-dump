@@ -43,3 +43,5 @@ Claude 在目录扫描入口保留目录访问失败，其余文件 Provider 继
 相关 CLI 回归 210 passed；新增根路径异常用例 2 passed。最终完整 `just isok` 通过：Python 2596 passed / 1 skipped，Rust 单元测试 22 passed、CLI 差分与边界 834 passed，npm 74 passed、Web E2E 13 passed；格式、Clippy 和类型检查通过。
 
 固定 Rust 1.90.0 的 `cargo build --locked --release` 通过。Python 生产源码与 `dca2d97`、四个 evaluator 文件与 P0 `9c1cf61` 一致。测试和参考核验均使用临时合成来源。
+
+实现提交：`3e599a9`。[原七场景复测](benchmarks/rust-p2-source-selection.md)全部通过；测量时两轮均为同一干净 checkout，源码、evaluator、fixture 与上一批 hash 一致。跨 Provider 列表为 5.02×、JSON＋Markdown 导出为 3.25×，仅描述本轮健康数据上的独立 CLI 进程，不测同实例来源选择、刷新或失败恢复性能。

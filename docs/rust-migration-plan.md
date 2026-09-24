@@ -120,7 +120,7 @@ Codex/Claude 标题缓存恢复实现：`768e4ba`。索引不可读不再中止 
 
 Codex/Claude/Pi 记录转换恢复实现：`fa39040`。新增 48 个 CLI 完整差分用例，覆盖失败后继续读取、工具关联与统计、警告顺序和静默 metadata/raw 路径，并单独保留 Codex metadata 阶段的会话失败语义。完整 `just isok` 与 release 构建通过，CLI 套件共 832 个、Rust 单元测试 17 个。已验证的错误类型与剩余数值/日期边界见[本批验收](rust-message-conversion-parity.md)。[原七场景复测](benchmarks/rust-p2-message-conversion.md)全部通过：跨 Provider 列表为 Python 256.68 ms / Rust 51.71 ms（4.96×），JSON＋Markdown 导出为 252.59 / 82.58 ms（3.06×）；报告保留本轮 Python 前三个场景的明显波动，不测 Claude、Pi 或坏记录恢复性能。
 
-同实例来源选择与重试：新增 5 个 Rust 单元用例，覆盖六个 Provider 的 48 组状态序列，并独立核对 Python 参考行为。新增 2 个 Claude 根路径异常 CLI 边界用例。完整 `just isok` 与 release 构建通过，CLI 套件共 834 个、Rust 单元测试 22 个。固定配置范围、已选来源保持及运行时环境变量缺口见[本批验收](rust-source-selection-parity.md)。
+同实例来源选择与重试实现：`3e599a9`。新增 5 个 Rust 单元用例，覆盖六个 Provider 的 48 组状态序列，并独立核对 Python 参考行为。新增 2 个 Claude 根路径异常 CLI 边界用例。完整 `just isok` 与 release 构建通过，CLI 套件共 834 个、Rust 单元测试 22 个。固定配置范围、已选来源保持及运行时环境变量缺口见[本批验收](rust-source-selection-parity.md)。[原七场景复测](benchmarks/rust-p2-source-selection.md)全部通过：跨 Provider 列表为 Python 255.18 ms / Rust 50.79 ms（5.02×），JSON＋Markdown 导出为 253.58 / 78.13 ms（3.25×）；不测同实例刷新或来源消失、恢复性能。
 
 ### P3：查询、索引、维护命令
 
