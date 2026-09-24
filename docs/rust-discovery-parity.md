@@ -18,6 +18,8 @@ Rust 现在支持不带查询的 `--list`，以及 `-q provider:codex,opencode`�
 
 本批新增 44 个 CLI 用例，移除旧的“`--list` 尚不支持”拒绝用例；CLI 差分和边界套件现为 597 个。另有 1 个 Rust 单元用例保护不打印警告时的失败事实。`just check-rust` 已加入 `cargo test --locked`，本地与 Linux/macOS CI 使用同一入口。
 
+实现提交：`92bace3`。性能证据见[七场景复测](benchmarks/rust-p2-discovery.md)。
+
 本机 `just isok` 通过：Python 2596 passed / 1 skipped，Rust 单元测试 1 passed，CLI 差分与边界 597 passed，npm 74 passed，Web E2E 13 passed。固定工具链 release 构建通过。本批未运行远端 CI，也没有关闭 Windows 验收项。
 
 ## 实现边界

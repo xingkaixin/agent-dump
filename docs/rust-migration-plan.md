@@ -99,6 +99,8 @@ OpenCode / ZCode 实现：`aec8b47`，新增 79 个 SQLite 用例和 1 个 Pi �
 
 Cursor / DeepChat / Cherry Studio / MiniMax 实现：`a884907`，新增 161 个差分及边界用例，合计 554 个；本机完整 `just isok` 与 release 构建通过。四个源目录拒写用例只验证 Rust 约束，与 Python 的差异单独记在[本批验收记录](rust-desktop-parity.md)。[原六场景复测](benchmarks/rust-p2-desktop.md)全部通过，Codex JSON＋Markdown 导出为 Python 267.47 ms / Rust 79.13 ms（3.38×）；相对上一批 Rust 导出耗时增加约 6.1%，保留这一历史变化，不将其归因于单一代码修改。十个 Provider 已接入不代表 P2 完整验收。
 
+共享发现实现：`92bace3`，新增 44 个 CLI 用例、移除旧拒绝用例后，CLI 差分与边界套件为 597 个，另有 1 个 Rust 单元用例。完整 `just isok`、最终 Rust 门禁及 release 构建通过。[七场景复测](benchmarks/rust-p2-discovery.md)增加原有 `list-all`：1001 个会话的列表为 Python 246.17 ms / Rust 50.77 ms（4.85×），峰值 RSS 中位数为 43.98 / 9.41 MiB。剩余诊断、缓存/刷新和跨平台缺口见[验收记录](rust-discovery-parity.md)。
+
 ### P3：查询、索引、维护命令
 
 - 对齐 Query/Search 语义，然后实现 SQLite FTS5 与 fallback。

@@ -16,6 +16,8 @@
 
 [十个 Provider 接入后的六场景复测](rust-p2-desktop.md)记录共享消息与 JSON 投影调整后的表现；四个新增 Provider 的性能仍待独立测量。
 
+[共享发现后的七场景复测](rust-p2-discovery.md)增加原有 `list-all` 场景，验证跨 Provider 列表；fixture 仍只有 Codex 与 OpenCode 数据。
+
 ## 运行
 
 ```bash
