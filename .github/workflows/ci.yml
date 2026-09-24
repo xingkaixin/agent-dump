@@ -132,20 +132,24 @@ jobs:
         working-directory: rust
         run: rustup show active-toolchain
 
-      - name: Check Rust formatting and types
+      - name: Check Rust formatting
         working-directory: rust
-        run: |
-          cargo fmt --check
-          cargo clippy --locked --all-targets -- -D warnings
+        run: cargo fmt --check
 
-      - name: Test and build Rust
+      - name: Check Rust types
         working-directory: rust
-        run: |
-          cargo test --locked
-          cargo build --locked
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test Rust
+        working-directory: rust
+        run: cargo test --locked
+
+      - name: Build Rust
+        working-directory: rust
+        run: cargo build --locked
 
       - name: Compare Rust and Python CLI behavior
-        run: uv run --locked pytest -q rust/tests
+        run: uv run --locked pytest -q --maxfail=10 rust/tests
 
   web:
     name: Check landing page
