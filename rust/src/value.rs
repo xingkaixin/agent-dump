@@ -255,7 +255,7 @@ pub fn add_integer(total: &mut serde_json::Number, value: &Value) {
     *total = (left + right).to_string().parse().unwrap();
 }
 
-fn decimal_digit(character: char) -> char {
+pub fn decimal_digit(character: char) -> char {
     static DECIMAL: std::sync::LazyLock<regex::Regex> =
         std::sync::LazyLock::new(|| regex::Regex::new(r"^\p{Nd}$").unwrap());
     let is_decimal = |character: char| DECIMAL.is_match(character.encode_utf8(&mut [0; 4]));

@@ -175,16 +175,16 @@ pub fn transcript(uri: &str, data: &SessionData) -> String {
 
 pub fn list(
     groups: &[crate::provider::SessionGroup],
-    providers: Option<&str>,
+    query: Option<&str>,
     days: i64,
     summary: bool,
     zh: bool,
 ) -> String {
     let mut output = list_banner();
-    let header = match (zh, providers) {
-        (true, Some(names)) => format!("📋 列出最近 {days} 天且匹配「providers={names}」的会话:"),
+    let header = match (zh, query) {
+        (true, Some(names)) => format!("📋 列出最近 {days} 天且匹配「{names}」的会话:"),
         (false, Some(names)) => {
-            format!("📋 Listing sessions from last {days} days matching 'providers={names}':")
+            format!("📋 Listing sessions from last {days} days matching '{names}':")
         }
         (true, None) => format!("📋 列出最近 {days} 天的会话:"),
         (false, None) => format!("📋 Listing sessions from last {days} days:"),
@@ -236,15 +236,7 @@ fn append_list_group(
     )
     .unwrap();
     for session in sessions {
-        let title = if session.title.chars().count() > 60 {
-            format!("{}...", session.title.chars().take(60).collect::<String>())
-        } else {
-            session.title.clone()
-        };
-        let title = safe_line(&format!(
-            "{title} ({})",
-            session.created_at.format_local("%Y-%m-%d %H:%M")
-        ));
+        let title = formatted_title(session);
         if !summary {
             writeln!(
                 output,
@@ -304,4 +296,16 @@ fn append_list_group(
         )
         .unwrap();
     }
+}
+
+pub fn formatted_title(session: &Session) -> String {
+    let title = if session.title.chars().count() > 60 {
+        format!("{}...", session.title.chars().take(60).collect::<String>())
+    } else {
+        session.title.clone()
+    };
+    safe_line(&format!(
+        "{title} ({})",
+        session.created_at.format_local("%Y-%m-%d %H:%M")
+    ))
 }

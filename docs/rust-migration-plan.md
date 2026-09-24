@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0、P1 已完成；P2 实现与本地验收完成，最终交付受 macOS、Linux、Windows 完整 CI 门禁约束。十个 Provider 的发现、读取、支持格式的单 URI 导出、正文缓存和本阶段错误/生命周期边界均已有验收证据。完整证据与已知差异见 [P2 最终验收](rust-p2-completion.md)，性能见[最终七场景复测](benchmarks/rust-p2-final.md)。下一阶段为 P3 查询、索引与维护命令。Python 仍是默认实现和发布来源。
+状态：P0、P1、P2 已完成；P2 最终 macOS、Linux、Windows CI 的 22 项检查全部通过。十个 Provider 的发现、读取、支持格式的单 URI 导出、正文缓存和本阶段错误/生命周期边界均已有验收证据。完整证据与已知差异见 [P2 最终验收](rust-p2-completion.md)，性能见[最终七场景复测](benchmarks/rust-p2-final.md)。当前推进 P3～P5，分阶段验收记录见 [P3～P5 验收跟踪](rust-p3-p5-progress.md)。Python 仍是默认实现和发布来源。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`

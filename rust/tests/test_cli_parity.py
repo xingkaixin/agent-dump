@@ -106,8 +106,6 @@ def test_portable_export_identity(cli, identity):
 @pytest.mark.parametrize(
     "args",
     [
-        ["--search", "anything"],
-        ["--list", "-q", "provider:unimplemented"],
         ["--collect"],
         [f"codex://{IDENTITY}", "--format", "xml"],
         [f"codex://{IDENTITY}", "--format", "json"],

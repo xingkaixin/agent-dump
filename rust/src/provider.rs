@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 pub type DiagnosticSink<'a> = dyn FnMut(RecoverableDiagnostic) -> crate::Result<()> + 'a;
 pub type SearchRoots = Vec<(&'static str, PathBuf)>;
-pub type SourceResolver = Box<dyn Fn() -> crate::Result<SearchRoots>>;
+pub type SourceResolver = Box<dyn Fn() -> crate::Result<SearchRoots> + Send + Sync>;
 
 pub enum RecoverableDiagnostic {
     JsonlRecordsSkipped {
@@ -78,7 +78,7 @@ impl Discovery {
     }
 }
 
-pub trait Provider {
+pub trait Provider: Send + Sync {
     fn discover(
         &mut self,
         days: i64,

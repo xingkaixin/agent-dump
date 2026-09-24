@@ -23,6 +23,46 @@ pub struct SessionSignal {
 }
 
 impl SessionSignal {
+    pub fn signature(&self) -> String {
+        let paths: Vec<_> =
+            self.sources
+                .iter()
+                .map(|source| {
+                    let modified = source.modified.map(|time| {
+                        match time.duration_since(SystemTime::UNIX_EPOCH) {
+                            Ok(duration) => duration.as_nanos() as i128,
+                            Err(error) => -(error.duration().as_nanos() as i128),
+                        }
+                    });
+                    serde_json::json!([
+                        crate::source_io::path_text(&source.path),
+                        modified,
+                        source.changed,
+                        source.size
+                    ])
+                })
+                .collect();
+        let value = serde_json::json!([
+            crate::timestamp::Timestamp::from_microsecond(self.updated)
+                .unwrap()
+                .iso_utc(),
+            paths,
+            self.title
+        ]);
+        let mut encoded = String::new();
+        for c in value.to_string().chars() {
+            if c.is_ascii() {
+                encoded.push(c);
+            } else {
+                for unit in c.encode_utf16(&mut [0; 2]) {
+                    use std::fmt::Write;
+                    write!(encoded, "\\u{unit:04x}").unwrap();
+                }
+            }
+        }
+        encoded
+    }
+
     pub fn new(provider: &(impl Provider + ?Sized), session: &Session) -> Self {
         let mut sources = Vec::new();
         for path in provider.change_sources(session) {

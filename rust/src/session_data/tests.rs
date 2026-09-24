@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct Reader<F>(F);
 
-impl<F: Fn(&Session) -> crate::Result<SessionData>> Provider for Reader<F> {
+impl<F: Fn(&Session) -> crate::Result<SessionData> + Send + Sync> Provider for Reader<F> {
     fn discover(&mut self, _: i64, _: &mut DiagnosticSink<'_>) -> crate::Result<Discovery> {
         unreachable!()
     }

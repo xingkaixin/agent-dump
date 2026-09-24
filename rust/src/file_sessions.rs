@@ -7,7 +7,7 @@ use walkdir::WalkDir;
 
 pub struct SourceRoots {
     pub base: Option<PathBuf>,
-    root: Box<dyn Fn() -> crate::Result<PathBuf>>,
+    root: Box<dyn Fn() -> crate::Result<PathBuf> + Send + Sync>,
     suffix: &'static str,
     owned: PathBuf,
     fallback: PathBuf,
@@ -45,7 +45,7 @@ impl SourceRoots {
     }
 
     pub fn new(
-        root: impl Fn() -> crate::Result<PathBuf> + 'static,
+        root: impl Fn() -> crate::Result<PathBuf> + Send + Sync + 'static,
         suffix: &'static str,
         fallback: impl Into<PathBuf>,
         label: &'static str,

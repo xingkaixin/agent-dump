@@ -1,141 +1,152 @@
-use crate::diagnostics::session_warning;
+use crate::diagnostics::Diagnostic;
+use crate::i18n::t;
 use crate::provider::SessionGroup;
-use crate::registry::{self, Registration};
-use std::collections::BTreeSet;
+use crate::query::Query;
+use crate::query_text::Mode;
 use std::io::Write;
 
-fn scope(query: Option<&str>) -> crate::Result<Option<BTreeSet<String>>> {
-    let Some(query) = query else {
-        return Ok(None);
-    };
-    let (key, value) = query
-        .trim()
-        .split_once(':')
-        .ok_or("Rust list currently supports only provider:NAME queries")?;
-    if !key.eq_ignore_ascii_case("provider") || value.split_whitespace().count() > 1 {
-        return Err("Rust list currently supports only provider:NAME queries".into());
-    }
-    let mut names = BTreeSet::new();
-    for name in value
-        .split(',')
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-    {
-        let name = name.to_lowercase();
-        let name = if name == "claude" {
-            "claudecode"
-        } else {
-            &name
-        };
-        registry::for_name(name)?;
-        names.insert(name.to_owned());
-    }
-    if names.is_empty() {
-        return Err("Empty provider scope".into());
-    }
-    Ok(Some(names))
-}
-
-fn discover(
-    registration: &'static Registration,
-    days: i64,
-    zh: bool,
-    warnings: &mut impl Write,
-) -> crate::Result<Option<SessionGroup>> {
-    let result = (registration.open)().and_then(|mut provider| {
-        provider.discover(days, &mut |diagnostic| {
-            writeln!(
-                warnings,
-                "{}",
-                crate::diagnostics::record_warning(&diagnostic, zh)
-            )?;
-            Ok(())
-        })
-    });
-    match result {
-        Ok(discovery) => {
-            for failure in &discovery.failures {
-                writeln!(
-                    warnings,
-                    "{}",
-                    session_warning(&registration.info, failure, zh)
-                )?;
-            }
-            Ok(discovery.available.then_some(SessionGroup {
-                provider: &registration.info,
-                sessions: discovery.sessions,
-            }))
-        }
-        Err(error) => {
-            let name = registration.info.display_name;
-            let error = crate::render::safe_line(&crate::provider_error::operation_message(
-                error.as_ref(),
-                zh,
-            ));
-            writeln!(
-                warnings,
-                "{}",
-                if zh {
-                    format!("警告: {name} provider 操作失败: {error}")
-                } else {
-                    format!("⚠️  {name} provider operation failed: {error}")
-                }
-            )?;
-            Ok(None)
-        }
-    }
-}
-
 pub fn run(
-    query: Option<&str>,
+    query: Option<Query>,
     days: i64,
     summary: bool,
     zh: bool,
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
-    let scope = scope(query)?;
-    let mut groups = Vec::new();
-    for registration in registry::all() {
-        if scope
-            .as_ref()
-            .is_some_and(|names| !names.contains(registration.info.name))
-        {
-            continue;
-        }
-        if let Some(group) = discover(registration, days, zh, warnings)? {
-            groups.push(group);
-        }
-    }
-    let names = scope
-        .as_ref()
-        .map(|names| names.iter().cloned().collect::<Vec<_>>().join(","));
-    if groups.is_empty() {
-        let roots = match registry::search_roots() {
+    let scan = crate::scanner::discover(query.as_ref(), days, zh, warnings)?;
+    if scan.groups.is_empty() {
+        let roots = match crate::registry::search_roots() {
             Ok(roots) => roots,
             Err(error) => {
                 write!(
                     out,
                     "{}{}",
                     crate::render::list_banner(),
-                    crate::diagnostics::Diagnostic::unexpected(error.as_ref(), zh).render(zh)
+                    Diagnostic::unexpected(error.as_ref(), zh).render(zh)
                 )?;
                 return Ok(false);
             }
         };
+        let names = query
+            .as_ref()
+            .and_then(|q| q.providers.as_ref())
+            .map(|names| names.iter().cloned().collect::<Vec<_>>().join(","));
         write!(
             out,
-            "{}",
-            crate::render::list_banner()
-                + &crate::diagnostics::Diagnostic::empty_list(names.as_deref(), roots, zh)
-                    .render(zh)
+            "{}{}",
+            crate::render::list_banner(),
+            Diagnostic::empty_list(names.as_deref(), roots, zh).render(zh)
         )?;
-        return Ok(scope.is_some());
+        return Ok(names.is_some());
     }
+    let selection = query
+        .as_ref()
+        .map(|query| crate::query_filter::select(&scan.groups, query, zh, warnings))
+        .transpose()?;
+    if let Some(query) = &query
+        && query.mode == Mode::Terms
+    {
+        write!(out, "{}", crate::render::list_banner())?;
+        writeln!(
+            out,
+            "{}",
+            t(
+                "SEARCH_HEADER",
+                zh,
+                &[("days", days.to_string()), ("query", query.summary(zh))]
+            )
+        )?;
+        writeln!(out, "{}", "-".repeat(60))?;
+        let matches = &selection.as_ref().unwrap().matches;
+        if matches.is_empty() {
+            writeln!(out, "{}", t("SEARCH_NO_RESULTS", zh, &[]))?;
+        }
+        for (i, matched) in matches.iter().enumerate() {
+            let group = &scan.groups[matched.group];
+            let session = &group.sessions[matched.session];
+            writeln!(
+                out,
+                "\n{}. {}",
+                i + 1,
+                crate::render::formatted_title(session)
+            )?;
+            for (key, value) in [
+                ("SEARCH_RESULT_PROVIDER", group.info.display_name.to_owned()),
+                (
+                    "SEARCH_RESULT_UPDATED",
+                    session.updated_at.format_local("%Y-%m-%d %H:%M:%S %Z"),
+                ),
+                (
+                    "SEARCH_RESULT_URI",
+                    format!("{}://{}", group.info.scheme, session.id),
+                ),
+                ("SEARCH_RESULT_RANK", rank_text(matched.rank)),
+                ("SEARCH_RESULT_SNIPPET", matched.snippet.clone()),
+            ] {
+                writeln!(
+                    out,
+                    "   {}: {}",
+                    t(key, zh, &[]),
+                    crate::render::safe_line(&value)
+                )?;
+            }
+        }
+        writeln!(out, "\n{}", "=".repeat(60))?;
+        return Ok(true);
+    }
+    let groups: Vec<_> = scan
+        .groups
+        .iter()
+        .enumerate()
+        .map(|(g, group)| SessionGroup {
+            provider: group.info,
+            sessions: selection.as_ref().map_or_else(
+                || group.sessions.clone(),
+                |selection| {
+                    selection
+                        .matches
+                        .iter()
+                        .filter(|m| m.group == g)
+                        .map(|m| group.sessions[m.session].clone())
+                        .collect()
+                },
+            ),
+        })
+        .collect();
     write!(
         out,
         "{}",
-        crate::render::list(&groups, names.as_deref(), days, summary, zh)
+        crate::render::list(
+            &groups,
+            query.as_ref().map(|q| q.summary(zh)).as_deref(),
+            days,
+            summary,
+            zh
+        )
     )?;
     Ok(true)
+}
+
+fn rank_text(rank: f64) -> String {
+    if rank == 0.0 {
+        return "0".into();
+    }
+    let exponent = rank.abs().log10().floor() as i32;
+    if !(-4..6).contains(&exponent) {
+        let text = format!("{rank:.5e}");
+        let (mantissa, exp) = text.split_once('e').unwrap();
+        let exp: i32 = exp.parse().unwrap();
+        format!(
+            "{}e{exp:+03}",
+            mantissa.trim_end_matches('0').trim_end_matches('.')
+        )
+    } else {
+        let digits = (5 - exponent).max(0) as usize;
+        let text = format!("{rank:.digits$}");
+        if text.contains('.') {
+            text.trim_end_matches('0').trim_end_matches('.').into()
+        } else {
+            text
+        }
+    }
 }

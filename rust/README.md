@@ -69,11 +69,16 @@ just build-rust
 - 中英文成功输出，终端控制字符清理，导出文件名身份保留与原子私有写入；拒绝写入 Provider 根目录及覆盖符号链接。
 - `-days`、`-query`、`-format`、`-output`、`-v` 等本阶段参数别名。
 
+新增 Query/Search 支持字面短语和 distinct AND terms、Provider/角色/工作目录/全局 limit、agents:// URI、中英文片段与全局相关度。`--stats`、`--providers`、`--reindex` 已接入。索引使用与 Python 相同的 FTS5 schema、内容版本和失效签名，可以复用两种实现产生的缓存；正文每批最多并行读取 32 个会话，在短写事务之外解析。来源失败可以回退到逻辑 transcript；查询结果单独保留失败身份。索引路径落入已发现的 Provider 源目录时拒绝写入并退回扫描。
+
+`rust/locales/` 是从冻结的 Python 参考版本导出的文案，Rust 编译时嵌入，不引入 Python 运行时。`query.rs`、`query_text.rs`、`transcript.rs` 分别拥有查询结构、字面匹配、逻辑正文；`scanner.rs` 保留发现实例与失败事实，`query_filter.rs` 负责筛选，`search_index.rs` 负责派生缓存，`maintenance.rs` 负责维护命令。
+
 文件导出必须显式指定 `--output`。URI 默认 `print`，输出文件位于 `<output>/<provider>/`，Claude Code 的目录名为 `claudecode`。文件名与 JSON 内容对齐，JSON 空白排版不作为契约。
 
 ## 尚未实现的行为
 
-- 通用 Query/Search、统计与索引（P3）；Collect、摘要、配置和 shortcut（P4）；批量交互导出与 Ratatui（P5）。
+- Collect、摘要、配置和 shortcut（P4）；批量交互导出与 Ratatui（P5）。
+- P3 查询和维护命令已接入；阶段验收与待完成项见 [P3～P5 跟踪](../docs/rust-p3-p5-progress.md)。
 - 配置文件尚不读取；因此不应用保存的语言、默认目录等配置。帮助、错误文案、错误组合的退出码与全部工作流的部分失败策略未完成全量对齐；未支持的参数会报错。
 - Rust CI 包含 Linux、macOS、Windows 的构建、Clippy、单元与 CLI 差分门禁；三平台运行同一套契约，具体计数和平台跳过项见 [P2 最终验收](../docs/rust-p2-completion.md)。所有发布架构、libc、wheel/npm 安装与正式切换属于 P6。
 

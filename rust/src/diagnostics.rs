@@ -87,6 +87,38 @@ struct ParsedUri {
 }
 
 impl Diagnostic {
+    pub fn query_error(detail: &str, uri: Option<&str>, combination: bool, zh: bool) -> Self {
+        let (summary, steps) = if combination {
+            ("DIAG_QUERY_COMBINATION_INVALID", vec!["DIAG_STEP_DROP_Q"])
+        } else if uri.is_some() {
+            (
+                "DIAG_QUERY_URI_INVALID",
+                vec![
+                    "DIAG_STEP_CHECK_QUERY_URI_SHAPE",
+                    "DIAG_STEP_NO_QUERY_URI_WITH_Q",
+                ],
+            )
+        } else {
+            (
+                "DIAG_QUERY_SPEC_INVALID",
+                vec!["DIAG_STEP_QUERY_FORMAT", "DIAG_STEP_QUERY_URI_FOR_PATH"],
+            )
+        };
+        Self {
+            summary: crate::i18n::t(summary, zh, &[]),
+            uri: uri.map(|raw| ParsedUri {
+                raw: raw.into(),
+                scheme: None,
+                id: None,
+            }),
+            details: vec![detail.into()],
+            next_steps: steps
+                .into_iter()
+                .map(|key| crate::i18n::t(key, zh, &[]))
+                .collect(),
+            ..Self::default()
+        }
+    }
     pub fn unexpected(error: &(dyn std::error::Error + 'static), zh: bool) -> Self {
         Self {
             summary: if zh { "命令因未预期的错误中止。" } else { "Command aborted with an unexpected error." }.into(),

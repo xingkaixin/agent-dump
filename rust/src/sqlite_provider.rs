@@ -343,14 +343,14 @@ mod tests {
                 let second = directory.path().join("second.sqlite");
                 fixture(&first, kind, false);
                 fixture(&second, kind, false);
-                let roots = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+                let roots = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
                 let mut provider = SqliteProvider {
                     kind,
                     database: None,
                     root: PathBuf::from("."),
                     search_roots: Box::new({
                         let roots = roots.clone();
-                        move || Ok(roots.borrow().clone())
+                        move || Ok(roots.lock().unwrap().clone())
                     }),
                 };
                 if find_first {
@@ -364,7 +364,7 @@ mod tests {
                 } else {
                     assert!(!provider.discover(36500, &mut |_| Ok(())).unwrap().available);
                 }
-                *roots.borrow_mut() = vec![("First", first.clone())];
+                *roots.lock().unwrap() = vec![("First", first.clone())];
                 assert_eq!(
                     provider
                         .find("kept", &mut |_| Ok(()))
@@ -374,7 +374,7 @@ mod tests {
                         .source_path,
                     first
                 );
-                *roots.borrow_mut() = vec![("Second", second.clone())];
+                *roots.lock().unwrap() = vec![("Second", second.clone())];
                 assert_eq!(provider.search_roots().unwrap()[0].1, second);
                 assert_eq!(
                     provider

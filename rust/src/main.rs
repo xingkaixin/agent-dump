@@ -12,11 +12,13 @@ mod desktop;
 mod diagnostics;
 mod export;
 mod file_sessions;
+mod i18n;
 mod jsonl;
 mod kimi;
 mod kimi_transcript;
 mod kimi_wire;
 mod list_workflow;
+mod maintenance;
 mod message_assembly;
 mod minimax;
 mod opencode_v2;
@@ -26,8 +28,13 @@ mod pi_transcript;
 mod provider;
 mod provider_error;
 mod python_json;
+mod query;
+mod query_filter;
+mod query_text;
 mod registry;
 mod render;
+mod scanner;
+mod search_index;
 mod session;
 mod session_data;
 mod source_io;
@@ -38,6 +45,7 @@ mod sqlite_legacy;
 mod sqlite_provider;
 mod timestamp;
 mod title;
+mod transcript;
 mod uri_workflow;
 mod value;
 
@@ -53,21 +61,29 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[command(
     name = "agent-dump",
     version,
-    about = "Experimental Rust: session discovery and export",
-    after_help = "Python remains the default CLI. Rust supports ten Providers for listing and single-session export. Search, collect, configuration, batch export and TUI are not implemented yet.",
+    about = "Experimental Rust: session discovery, search and export",
+    after_help = "Python remains the default CLI. Rust supports ten Providers, Query/Search, statistics, index maintenance and single-session export. Collect, configuration, batch export and TUI are not implemented yet.",
     arg_required_else_help = true
 )]
 struct Args {
     uri: Option<String>,
-    #[arg(long, conflicts_with = "uri")]
+    #[arg(long)]
     list: bool,
+    #[arg(long)]
+    search: Option<String>,
+    #[arg(long)]
+    stats: bool,
+    #[arg(long)]
+    providers: bool,
+    #[arg(long)]
+    reindex: bool,
     #[arg(long, requires = "uri")]
     head: bool,
     #[arg(short = 'd', long = "days", default_value_t = 7, value_parser = clap::value_parser!(i64).range(1..))]
     days: i64,
-    #[arg(short = 'q', long = "query", requires = "list")]
+    #[arg(short = 'q', long = "query")]
     query: Option<String>,
-    #[arg(long, requires = "list")]
+    #[arg(long)]
     no_metadata_summary: bool,
     #[arg(long, requires = "uri")]
     format: Option<String>,
@@ -109,7 +125,13 @@ fn arguments() -> Vec<OsString> {
             expects_value = equals.is_none()
                 && matches!(
                     normalized,
-                    "-d" | "--days" | "-q" | "--query" | "--format" | "--output" | "--lang"
+                    "-d" | "--days"
+                        | "-q"
+                        | "--query"
+                        | "--format"
+                        | "--output"
+                        | "--lang"
+                        | "--search"
                 );
             if let Some(value) = equals {
                 format!("{normalized}={value}").into()
@@ -130,9 +152,69 @@ fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         },
         |lang| lang == "zh",
     );
-    if args.list {
+    if args.providers {
+        return maintenance::providers(zh, out);
+    }
+    let query_uri = args
+        .uri
+        .as_deref()
+        .filter(|uri| uri.starts_with("agents://"));
+    if query_uri.is_some() && args.query.is_some() {
+        write!(
+            out,
+            "{}",
+            diagnostics::Diagnostic::query_error(
+                &i18n::t("DIAG_QUERY_URI_WITH_Q_DETAIL", zh, &[]),
+                query_uri,
+                true,
+                zh
+            )
+            .render(zh)
+        )?;
+        return Ok(false);
+    }
+    let query = if let Some(uri) = query_uri {
+        query::Query::from_uri(uri, zh).map(Some)
+    } else {
+        args.query
+            .as_deref()
+            .map(|raw| query::Query::parse(raw, zh))
+            .transpose()
+    };
+    let mut query = match query {
+        Ok(query) => query,
+        Err(error) => {
+            write!(
+                out,
+                "{}",
+                diagnostics::Diagnostic::query_error(&error.to_string(), query_uri, false, zh)
+                    .render(zh)
+            )?;
+            return Ok(false);
+        }
+    };
+    if args.stats || args.reindex {
+        return maintenance::run(
+            query,
+            args.days,
+            args.reindex && !args.stats,
+            zh,
+            out,
+            &mut io::stderr().lock(),
+        );
+    }
+    if let Some(search) = &args.search {
+        let query = query.get_or_insert_with(query::Query::default);
+        query.keyword = Some(search.clone());
+        query.mode = query_text::Mode::Terms;
+    }
+    if args.list
+        || args.search.is_some()
+        || query_uri.is_some()
+        || (args.uri.is_none() && args.query.is_some())
+    {
         return list_workflow::run(
-            args.query.as_deref(),
+            query,
             args.days,
             !args.no_metadata_summary,
             zh,

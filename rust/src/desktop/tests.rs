@@ -11,13 +11,13 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
             let changed = directory.path().join("changed/source.sqlite");
             std::fs::create_dir_all(primary.parent().unwrap()).unwrap();
             std::fs::create_dir_all(changed.parent().unwrap()).unwrap();
-            let roots = std::rc::Rc::new(std::cell::RefCell::new(vec![
+            let roots = std::sync::Arc::new(std::sync::Mutex::new(vec![
                 ("Primary", primary.clone()),
                 ("Fallback", fallback.clone()),
             ]));
             provider.search_roots = Box::new({
                 let roots = roots.clone();
-                move || Ok(roots.borrow().clone())
+                move || Ok(roots.lock().unwrap().clone())
             });
             if find_first {
                 assert_eq!(
@@ -62,7 +62,7 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
                     .is_none()
             );
             assert!(!provider.discover(36500, &mut |_| Ok(())).unwrap().available);
-            *roots.borrow_mut() = vec![("Changed", changed.clone())];
+            *roots.lock().unwrap() = vec![("Changed", changed.clone())];
             assert_eq!(provider.search_roots().unwrap()[0].1, changed);
             assert_eq!(
                 provider

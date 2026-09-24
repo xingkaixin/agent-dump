@@ -260,12 +260,12 @@ mod tests {
             r#"{"type":"session_meta","payload":{"id":"kept","timestamp":"2026-01-15T00:00:00Z"}}"#,
         )
         .unwrap();
-        let configured = std::rc::Rc::new(std::cell::RefCell::new(first.clone()));
+        let configured = std::sync::Arc::new(std::sync::Mutex::new(first.clone()));
         let mut provider = Codex {
             roots: SourceRoots::new(
                 {
                     let configured = configured.clone();
-                    move || Ok(configured.borrow().clone())
+                    move || Ok(configured.lock().unwrap().clone())
                 },
                 "sessions",
                 directory.path().join("fallback"),
@@ -282,7 +282,7 @@ mod tests {
                 .title,
             "First"
         );
-        *configured.borrow_mut() = second.clone();
+        *configured.lock().unwrap() = second.clone();
         let session = provider
             .find("kept", &mut |_| Ok(()))
             .unwrap()

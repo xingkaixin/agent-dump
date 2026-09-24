@@ -39,6 +39,14 @@ impl Timestamp {
         self.0.duration_since(Self::UNIX_EPOCH.0).as_micros() as i64
     }
 
+    pub fn iso_utc(self) -> String {
+        format!(
+            "{}.{:06}+00:00",
+            self.0.strftime("%Y-%m-%dT%H:%M:%S"),
+            self.0.subsec_nanosecond() / 1_000
+        )
+    }
+
     pub fn as_millisecond(self) -> i64 {
         // Python exports int(datetime.timestamp() * 1000), including float rounding.
         (self.as_microsecond() as f64 / 1_000_000.0 * 1_000.0) as i64

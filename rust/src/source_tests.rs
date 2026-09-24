@@ -13,19 +13,19 @@ pub fn source_selection<P: Provider>(
         for find_first in [false, true] {
             let directory = tempfile::tempdir().unwrap();
             let configured =
-                std::rc::Rc::new(std::cell::RefCell::new(directory.path().join("initial")));
+                std::sync::Arc::new(std::sync::Mutex::new(directory.path().join("initial")));
             let fallback = directory.path().join("fallback");
             let mut provider = create(crate::file_sessions::SourceRoots::new(
                 {
                     let configured = configured.clone();
-                    move || Ok(configured.borrow().clone())
+                    move || Ok(configured.lock().unwrap().clone())
                 },
                 suffix,
                 fallback.clone(),
                 "Synthetic source",
             ));
             let mut root = directory.path().join("configured");
-            *configured.borrow_mut() = root.clone();
+            *configured.lock().unwrap() = root.clone();
             let mut primary = root.join(suffix);
             if matches!(initial, "primary" | "both") {
                 std::fs::create_dir_all(&primary).unwrap();
@@ -51,7 +51,7 @@ pub fn source_selection<P: Provider>(
                 write_source(&primary);
                 root = directory.path().join("after_absence");
                 primary = root.join(suffix);
-                *configured.borrow_mut() = root.clone();
+                *configured.lock().unwrap() = root.clone();
             }
             let primary_session = write_source(&primary);
             let fallback_session = write_source(&fallback);
@@ -103,7 +103,7 @@ pub fn source_selection<P: Provider>(
             );
             let changed = directory.path().join("after_selection");
             write_source(&changed.join(suffix));
-            *configured.borrow_mut() = changed.clone();
+            *configured.lock().unwrap() = changed.clone();
             assert_eq!(provider.search_roots().unwrap()[0].1, changed.join(suffix));
             assert_eq!(provider.source_root(), owned);
             assert_eq!(

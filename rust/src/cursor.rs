@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 pub struct Cursor {
     database: PathBuf,
-    resolve_database: Box<dyn Fn() -> crate::Result<PathBuf>>,
+    resolve_database: Box<dyn Fn() -> crate::Result<PathBuf> + Send + Sync>,
 }
 
 impl Cursor {
@@ -414,12 +414,12 @@ mod tests {
                 )
                 .unwrap();
         }
-        let configured = std::rc::Rc::new(std::cell::RefCell::new(first.clone()));
+        let configured = std::sync::Arc::new(std::sync::Mutex::new(first.clone()));
         let mut provider = Cursor {
             database: PathBuf::from("."),
             resolve_database: Box::new({
                 let configured = configured.clone();
-                move || Ok(configured.borrow().clone())
+                move || Ok(configured.lock().unwrap().clone())
             }),
         };
         let session = provider
@@ -436,7 +436,7 @@ mod tests {
         let cached = cache
             .get("cursor", &provider, &session, false, &mut |_| Ok(()))
             .unwrap();
-        *configured.borrow_mut() = second.clone();
+        *configured.lock().unwrap() = second.clone();
         let unchanged = cache
             .get("cursor", &provider, &session, false, &mut |_| Ok(()))
             .unwrap();
@@ -456,7 +456,7 @@ mod tests {
             serde_json::to_value(refreshed.as_ref()).unwrap()["messages"][0]["parts"][0]["text"],
             "Second"
         );
-        *configured.borrow_mut() = missing.clone();
+        *configured.lock().unwrap() = missing.clone();
         let error = provider
             .read(&session, false, &mut |_| Ok(()))
             .err()
@@ -480,14 +480,14 @@ mod tests {
         for path in [&first, &second] {
             Connection::open(path).unwrap().execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
         }
-        let configured = std::rc::Rc::new(std::cell::RefCell::new(
+        let configured = std::sync::Arc::new(std::sync::Mutex::new(
             directory.path().join("missing.sqlite"),
         ));
         let mut provider = Cursor {
             database: PathBuf::from("."),
             resolve_database: Box::new({
                 let configured = configured.clone();
-                move || Ok(configured.borrow().clone())
+                move || Ok(configured.lock().unwrap().clone())
             }),
         };
         assert!(!provider.discover(36500, &mut |_| Ok(())).unwrap().available);
@@ -499,7 +499,7 @@ mod tests {
                 .is_none()
         );
         for path in [&first, &second, &first] {
-            *configured.borrow_mut() = path.clone();
+            *configured.lock().unwrap() = path.clone();
             assert_eq!(provider.search_roots().unwrap()[0].1, *path);
             assert_eq!(
                 provider
