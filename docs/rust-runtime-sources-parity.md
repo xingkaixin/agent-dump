@@ -38,3 +38,5 @@ Rust 用例在路径解析边界注入可切换的临时路径，不在并行测
 相关 CLI 回归 133 passed；Python 参考核验 20 组通过。最终完整 `just isok` 通过：Python 2596 passed / 1 skipped，Rust 单元测试 27 passed、CLI 差分与边界 834 passed，npm 74 passed、Web E2E 13 passed；格式、Clippy 和类型检查通过。
 
 固定 Rust 1.90.0 的 `cargo build --locked --release` 通过。Python 生产源码与 `dca2d97`、四个 evaluator 文件与 P0 `9c1cf61` 一致。全部测试及参考核验使用临时合成来源。
+
+实现提交：`a42bbc6`。[原七场景复测](benchmarks/rust-p2-runtime-sources.md)全部通过，两轮测量均为同一干净 checkout，源码、evaluator、fixture 与上一批 hash 一致。跨 Provider 列表为 4.85×、JSON＋Markdown 导出为 3.17×；仅描述本轮健康数据上的独立进程，不测同实例配置切换和其余八个 Provider 的性能。

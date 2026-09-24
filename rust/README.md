@@ -106,17 +106,19 @@ Provider 专属错误接入后的[七场景复测](../docs/benchmarks/rust-p2-pr
 
 记录转换恢复后的[七场景复测](../docs/benchmarks/rust-p2-message-conversion.md)中，跨 Provider 列表为 4.96×，JSON＋Markdown 导出为 3.06×。报告保留本轮 Python 前三个场景的明显波动；不测 Claude、Pi 或坏记录恢复性能。
 
-来源选择与缺失重试后的[最新七场景复测](../docs/benchmarks/rust-p2-source-selection.md)中，跨 Provider 列表为 5.02×，JSON＋Markdown 导出为 3.25×；每个样本是独立进程，不测同实例刷新或来源消失、恢复性能。
+来源选择与缺失重试后的[七场景复测](../docs/benchmarks/rust-p2-source-selection.md)中，跨 Provider 列表为 5.02×，JSON＋Markdown 导出为 3.25×；每个样本是独立进程，不测同实例刷新或来源消失、恢复性能。
+
+运行中来源配置对齐后的[最新七场景复测](../docs/benchmarks/rust-p2-runtime-sources.md)中，跨 Provider 列表为 4.85×，JSON＋Markdown 导出为 3.17×。这些独立进程的健康数据场景不测配置切换或其余八个 Provider 的性能。
 
 使用原有 [CLI evaluator](../docs/benchmarks/README.md)，不为 Rust 改写 fixture 或验收摘要。本阶段只运行以下已实现子集：
 
 ```bash
 just benchmark --command './rust/target/release/agent-dump' \
-  --label rust-p2-source-selection --profile standard \
+  --label rust-p2-runtime-sources --profile standard \
   --case startup-version --case list-jsonl --case list-sqlite --case list-all \
   --case head-large-jsonl --case print-large-jsonl \
   --case export-large-json-md \
-  --output dist/benchmarks/rust-p2-source-selection.json
+  --output dist/benchmarks/rust-p2-runtime-sources.json
 ```
 
 Python 用同样的 `--case` 组合重测；Rust 再传入该报告的 `--baseline` 做严格比较。当前共七个场景；不得解释为应用整体加速比。复杂工具消息由差分测试验证，benchmark 仍使用 P0 的固定文本工作负载。

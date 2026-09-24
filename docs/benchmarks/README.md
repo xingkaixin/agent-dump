@@ -32,6 +32,8 @@
 
 [来源选择与缺失重试后的七场景复测](rust-p2-source-selection.md)继续使用健康 Codex/OpenCode V2 数据，记录每次独立进程的 CLI 表现；不测同实例刷新、来源消失或恢复性能。
 
+[运行中来源配置对齐后的七场景复测](rust-p2-runtime-sources.md)记录候选解析与 Provider 选择规则调整后的健康路径；不测同实例配置切换或其余八个 Provider 的性能。
+
 ## 运行
 
 ```bash
