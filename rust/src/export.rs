@@ -80,7 +80,7 @@ fn ensure_directory(path: &Path) -> crate::Result<()> {
     };
     match result {
         Err(_) if path.is_dir() => Ok(()),
-        result => crate::source_io::at(path, result),
+        result => result.map_err(|error| crate::source_io::Error::native(path, error).into()),
     }
 }
 

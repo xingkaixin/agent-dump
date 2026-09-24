@@ -15,6 +15,7 @@ pub fn path_text(path: &Path) -> String {
 pub struct Error {
     pub kind: &'static str,
     code: i32,
+    origin: &'static str,
     reason: String,
     path: PathBuf,
     destination: Option<PathBuf>,
@@ -22,8 +23,35 @@ pub struct Error {
 
 impl Error {
     pub fn rename(path: &Path, destination: &Path, error: io::Error) -> Self {
-        let mut error = Self::new(path, error);
+        let mut error = Self::native(path, error);
         error.destination = Some(destination.into());
+        error
+    }
+
+    pub fn native(path: &Path, error: io::Error) -> Self {
+        // Python's mkdir/replace report WinError; file reads report CRT errno.
+        let native = if cfg!(windows) {
+            error.raw_os_error().map(|code| {
+                let reason = error.to_string();
+                (
+                    code,
+                    reason
+                        .split(" (os error")
+                        .next()
+                        .unwrap()
+                        .trim_end_matches('.')
+                        .to_owned(),
+                )
+            })
+        } else {
+            None
+        };
+        let mut error = Self::new(path, error);
+        if let Some((code, reason)) = native {
+            error.code = code;
+            error.reason = reason;
+            error.origin = "WinError";
+        }
         error
     }
 
@@ -39,6 +67,7 @@ impl Error {
         Self {
             kind,
             code,
+            origin: "Errno",
             reason: if reason.is_empty() {
                 error.to_string().split(" (os error").next().unwrap().into()
             } else {
@@ -54,7 +83,8 @@ impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
-            "[Errno {}] {}: {}",
+            "[{} {}] {}: {}",
+            self.origin,
             self.code,
             self.reason,
             crate::value::repr(&path_text(&self.path).into())
