@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0～P5 已完成；P3～P5 实现提交 `b15f079` 的最终三平台 CI 为 22/22 通过。Provider 证据见 [P2 验收](rust-p2-completion.md)，查询、Collect 和 Ratatui 证据见 [P3～P5 验收](rust-p3-p5-completion.md)，性能见 [23 场景复测](benchmarks/rust-p3-p5.md)。Python 仍是默认实现和发布来源，P6 尚未开始。
+状态：P0～P5 实现与本地验收完成；`b15f079` 三平台 CI 为 22/22 通过，后续终端竞态修复的交付门禁见 [PR 当前检查](https://github.com/xingkaixin/agent-dump/pull/396/checks)。Provider 证据见 [P2 验收](rust-p2-completion.md)，查询、Collect 和 Ratatui 证据见 [P3～P5 验收](rust-p3-p5-completion.md)，性能见 [23 场景复测](benchmarks/rust-p3-p5.md)。Python 仍是默认实现和发布来源，P6 尚未开始。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`

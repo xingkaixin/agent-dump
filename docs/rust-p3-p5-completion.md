@@ -1,6 +1,6 @@
 # P3～P5 最终验收
 
-状态：P3～P5 完成。实现提交 `b15f079` 的 macOS、Linux、Windows CI 为 22/22 通过。实现位于 `feat/rust-rewrite`，审阅入口为 [Draft PR #396](https://github.com/xingkaixin/agent-dump/pull/396)。Python 参考版本仍为 `dca2d97`；原 P0 evaluator 仍为 `9c1cf61`。
+状态：P3～P5 实现与本地验收完成。阶段交付要求 [PR #396 当前检查](https://github.com/xingkaixin/agent-dump/pull/396/checks)全部通过；三平台通过记录与随后修复见下。实现位于 `feat/rust-rewrite`，审阅入口为 [Draft PR #396](https://github.com/xingkaixin/agent-dump/pull/396)。Python 参考版本仍为 `dca2d97`；原 P0 evaluator 仍为 `9c1cf61`。
 
 ## 阶段范围
 
@@ -40,7 +40,7 @@
 
 完整门禁对应 `88688ed`。随后 `b15f079` 修正 Windows 提示词 checkout 换行和 Collect 工作目录投影：资源文件固定 LF，提示词/manifest/归并统一使用 Session 的本机路径事实；相关 179 项 CLI 回归、44 个 Rust 单元测试、fmt/Clippy 和 release 构建通过。没有放宽差分断言；既有请求测试增加带空白、`.` 和重复分隔符的路径。
 
-最终实现 `b15f079` 的[三平台 CI](https://github.com/xingkaixin/agent-dump/actions/runs/36031269957)运行同一套完整契约。22 项检查全部成功。CLI 平台明细如下；44 项 Rust 单元测试、fmt 和 Clippy 均在三平台通过。
+实现提交 `b15f079` 的[三平台 CI](https://github.com/xingkaixin/agent-dump/actions/runs/36031269957)运行同一套完整契约。22 项检查全部成功。CLI 平台明细如下；44 项 Rust 单元测试、fmt 和 Clippy 均在三平台通过。
 
 | 平台 | 通过 | 条件跳过 | 套件总数 |
 | --- | ---: | ---: | ---: |
@@ -49,6 +49,8 @@
 | Windows | 1,523 | 16 | 1,539 |
 
 macOS/Linux 的 7 项真实 PTY 均执行，Windows 用 TestBackend 验证可移植绘制。
+
+随后的 CI 重跑发现首帧后立即 resize 可能早于 Crossterm 注册信号处理器。TTY 现在先初始化事件读取，再绘制首帧；不引入周期重绘。并发测试同时改用显式双请求栅栏，替代依赖 20 ms 调度窗口的睡眠，保留峰值并发必须为 2 的断言。7 项 PTY 和 6 项归并/并发用例连续执行 5 轮，共 65 项通过；44 项 Rust 单元测试、fmt/Clippy、Ruff、pyright/ty 和 release 构建通过。修复后的最终三平台门禁由上述当前 PR 检查提供。
 
 Windows 的条件跳过包括：7 项 POSIX PTY、2 项 POSIX 源权限、1 项私有目录权限、1 项需要授权的符号链接、2 项 Python 不应用 `TZ` 的用例、2 项非法控制字符文件名和 1 项纯空白目录。Linux 只排除 6 项 Python ZCode 默认路径不支持的条件；其余 Provider、查询、配置、Collect 与导出契约均执行。
 

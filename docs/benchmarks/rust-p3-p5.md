@@ -4,7 +4,7 @@
 
 ## 测量条件
 
-- 实现 checkout：`b15f079f2e5e777aaf81a2d36e313863c39e5681`；三份原始报告均记录干净工作树。后续验收文档不改变被测二进制。
+- 实现 checkout：`b15f079f2e5e777aaf81a2d36e313863c39e5681`；三份原始报告均记录干净工作树，二进制身份由下文 SHA-256 固定。后续只修复 TTY 事件初始化和测试同步，本轮非 TTY 工作负载没有重跑；P6 将再次测量最终 release。
 - Python 生产源码仍与 `dca2d97` 一致，P0 evaluator 仍与 `9c1cf61` 一致；Python、原 evaluator、`uv.lock` 和基础 fixture 的 hash 与 P2 最终报告相同。新增脚本为 `scripts/eval_rust_workflows.py`，单独记录 hash。
 - macOS arm64 / Apple M1 Pro / Darwin 27.0.0；Rust 1.90.0 release，Python 3.11.15。Python/fixture SQLite 3.50.4、Rust bundled SQLite 3.53.2，结果包含引擎和并发策略差异。
 - standard 基础输入：501 个 Codex、500 个 OpenCode V2 会话，503 个源文件、23,839,547 字节；普通会话 20 条消息、每条 256 字符，另含一条 8 Mi 字符大正文。
