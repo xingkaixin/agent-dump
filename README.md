@@ -43,7 +43,7 @@ Step-by-step guide: [Export a Codex session to Markdown](https://agent-dump.xing
 - **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
 - **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
-- **OpenCode**: `XDG_DATA_HOME/opencode` -> Windows data directory (`LOCALAPPDATA/opencode` or `APPDATA/opencode`) -> `~/.local/share/opencode` -> `data/opencode`
+- **OpenCode**: `OPENCODE_DB` selects one database (relative to `XDG_DATA_HOME/opencode` or `~/.local/share/opencode`). Otherwise use `opencode.db` there, then the legacy Windows `LOCALAPPDATA`/`APPDATA` location, then `data/opencode/opencode.db`.
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
 - **Cursor**: Cursor's default user `globalStorage/state.vscdb`
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
@@ -67,6 +67,8 @@ Text, reasoning, tool calls/results, code, and translations are normalized. JSON
 MiniMax Code supports listing, query, search, stats, collect, and print / JSON / Markdown exports from the current CLI's migrated display messages. Visible conversations, child tasks, and archived sessions are included; hidden and internal peek/channel/cron sessions are excluded. Messages follow database row order and preserve text, reasoning, tool state/results, and attachment references. Compaction, review, and system events do not enter collect or search. The model comes from session metadata and remains unknown when absent; JSON retains recorded per-message token usage without estimating billing cost.
 
 Set `MINIMAX_DATA_DIR` explicitly for custom profiles, earlier source builds using `~/.minimax-code`, or other directories. The reader does not read model-context JSONL or attachment files, run migrations, or recover rewound messages. Raw export, direct legacy storage reads, and desktop data are unsupported. Pending migrations and corrupt sessions produce diagnostics instead of appearing empty. See the [MiniMax Code design and acceptance scope](docs/minimax-provider-design.md).
+
+OpenCode supports legacy SQLite and 2.x `session_v2/session_message`. When both schemas coexist, V2 wins for the same session ID; legacy-only sessions remain readable. V2 messages follow `seq` order, and counts include system and status records. Synthetic input, system/skill messages, compaction and shell records are excluded from collect. `OPENCODE_DB` selects a custom or channel database; a missing explicit path never falls back, and `:memory:` is unavailable. Attachments stay in JSON metadata without fetching referenced files. Running and archived records remain readable; pending inbox items are excluded. Raw export remains normalized `.raw.json`, not an OpenCode import file. See the [design and acceptance scope](docs/opencode-v2-design.md).
 
 ## Installation
 
@@ -188,7 +190,7 @@ Diagnostic
 Summary: No usable local session data found.
 Searched roots:
   - Codex: CODEX_HOME/sessions: /Users/me/.codex/sessions
-  - OpenCode: XDG/LOCALAPPDATA opencode.db: /Users/me/.local/share/opencode/opencode.db
+  - OpenCode: XDG/default opencode.db: /Users/me/.local/share/opencode/opencode.db
 Next steps:
   - Confirm the agent has produced session data on this machine.
   - If you use a custom directory, check that the relevant environment variable points at it.

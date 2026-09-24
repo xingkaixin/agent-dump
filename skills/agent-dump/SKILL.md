@@ -50,6 +50,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - 用户要”交互式勾选后导出”：使用 `--interactive` 模式。
 - 用户只给 `-days` 或 `-query` 且未指定 `--interactive`：按列表模式处理（CLI 会自动启用 `--list`）。
 - Codex URI 允许 `codex://threads/<session_id>` 变体，等价于 `codex://<session_id>`。
+- OpenCode 支持旧版与 2.x SQLite；自定义或 channel 数据库通过 `OPENCODE_DB` 指定。详见 recipes 的 OpenCode 2.x 部分。
 
 2. 组装命令
 - 先确认命令前缀，使用以下等价入口之一：`agent-dump`、`bunx @agent-dump/cli`、`npx @agent-dump/cli`、必要时 `uv run agent-dump`。

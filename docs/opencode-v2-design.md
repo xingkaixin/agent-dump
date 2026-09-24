@@ -93,7 +93,7 @@ JSON 无效、正文类型错误、已知工具结构错误时，整条 Session 
 ## 6. 导出、搜索与 collect
 
 - JSON 输出继续使用现有标准格式；V2 特有字段通过 metadata 和 entry_type 保留。
-- Markdown/print 复用渲染器。工具输出、推理和可见正文通过现有 parts 展示。
+- Markdown/print 复用渲染器，展示可见正文和推理，沿用现有不展开普通工具轨迹的规则。工具参数、输出和错误保留在 JSON/raw 中并可搜索。
 - raw 沿用本项目 OpenCode 的 `.raw.json` 语义：内容与标准化 JSON 一致，不是数据库备份，也不是 OpenCode import 文件。
 - Search/Query 读取标准化正文、推理和工具状态；Provider 原始元数据不是检索语料。
 - 索引内容版本递增，避免已迁移会话在数据库未变化时继续命中旧缓存正文。

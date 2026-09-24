@@ -64,6 +64,8 @@ collect_workflow.py
 
 OpenCode/ZCode 的正文读取以 `session.source_path` 为数据库来源，不依赖实例此前发现的 `db_path`，也不在源缺失时回退到其他数据库。
 
+OpenCode 在 Provider 内按表结构兼容旧版与 V2。V2 使用 `session_v2/session_message`，新旧表共存时同 ID 以 V2 为准，旧版独有会话继续可读；消息按 `seq` 排序。`opencode_messages.py` 负责 V2 消息转换，ZCode 继续使用原共享 SQLite 读取器。列表计数包含全部投影消息，synthetic/system/skill/shell/compaction 和状态事件不进入 collect 的可见对话。设计、数据范围及验收见 [OpenCode V2 设计](opencode-v2-design.md)。
+
 SQLite head 与列表直接投影相同的发现 facts；手动构造的 Session 缺少计数或模型时保留未知，不在展示阶段补查数据库。
 
 Provider 私有 schema 只能在 `agent_dump.agents` 层解释。Provider 类可以复用 `FileSessionAgent`、`SQLiteSessionAgent`、transcript decoder、storage helper 和 message assembly helper；共享 workflow 不得自行解释 metadata key 或数据库字段。
