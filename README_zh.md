@@ -633,7 +633,7 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 
 实验性 Rust 实现在 [`rust/`](rust/README.md) 中开发，目前已接入十个 Provider 的发现、消息装配和单会话导出。Cursor 支持 JSON/print；DeepChat、Cherry Studio、MiniMax 支持 JSON/Markdown/print；其余六个还支持 raw。`--list` 可列出全部可用 Provider，`-q provider:codex,opencode` 在扫描前限制来源，单个 Provider 失败不阻止其他来源。
 
-URI 格式无效、会话不存在和格式能力拒绝已有中英文诊断；查找失败警告走 stderr，最终诊断走 stdout。DeepChat、Cherry Studio、MiniMax 已保留本地化的 schema、源缺失及存储迁移诊断。其余七个 Provider 已接入源缺失诊断，Kimi raw 使用定位时记录的文件。JSONL/旧 SQLite 坏记录警告已本地化到 stderr，健康内容继续导出。完整 Provider 契约和工作流尚未全部对齐。pip/npm 仍发布 Python 实现。阶段范围与验收标准见[迁移计划](docs/rust-migration-plan.md)。
+URI 格式无效、会话不存在和格式能力拒绝已有中英文诊断；查找失败警告走 stderr，最终诊断走 stdout。DeepChat、Cherry Studio、MiniMax 已保留本地化的 schema、源缺失及存储迁移诊断。其余七个 Provider 已接入源缺失诊断，Kimi raw 使用定位时记录的文件。JSONL/旧 SQLite 坏记录警告已本地化到 stderr，健康内容继续导出。Codex、Claude 标题索引不可读时使用回退标题并输出本地化警告。完整 Provider 契约和工作流尚未全部对齐。pip/npm 仍发布 Python 实现。阶段范围与验收标准见[迁移计划](docs/rust-migration-plan.md)。
 
 落地页构建、部署及 Cloudflare 免费性能配置见[开发指南](docs/development-guide.md#5-落地页性能与-cloudflare-pages)。
 

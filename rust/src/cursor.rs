@@ -58,7 +58,11 @@ impl Cursor {
 }
 
 impl Provider for Cursor {
-    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
+    fn discover(
+        &mut self,
+        days: i64,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Discovery> {
         if !self.database.exists() {
             return Ok(crate::provider::Discovery::default());
         }
@@ -68,7 +72,11 @@ impl Provider for Cursor {
         self.sessions(&crate::sqlite::connect(&self.database)?, Some(cutoff))
             .map(crate::provider::Discovery::available)
     }
-    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
+    fn find(
+        &mut self,
+        id: &str,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Lookup> {
         if !self.database.exists() {
             return Ok(crate::provider::Lookup::default());
         }
@@ -380,7 +388,11 @@ mod tests {
         let mut provider = Cursor {
             database: path.clone(),
         };
-        let session = provider.find("kept").unwrap().session.unwrap();
+        let session = provider
+            .find("kept", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap();
         std::fs::remove_file(&path).unwrap();
         let error = provider
             .read(&session, false, &mut |_| Ok(()))

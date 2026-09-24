@@ -93,7 +93,11 @@ impl SqliteProvider {
 }
 
 impl Provider for SqliteProvider {
-    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
+    fn discover(
+        &mut self,
+        days: i64,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Discovery> {
         let Some(path) = &self.database else {
             return Ok(crate::provider::Discovery::default());
         };
@@ -106,7 +110,11 @@ impl Provider for SqliteProvider {
             .map(crate::provider::Discovery::available)
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
+    fn find(
+        &mut self,
+        id: &str,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Lookup> {
         let Some(path) = self.database.as_deref() else {
             return Ok(crate::provider::Lookup::default());
         };
@@ -339,7 +347,11 @@ mod tests {
             let directory = tempfile::tempdir().unwrap();
             let path = directory.path().join("source.sqlite");
             let mut provider = fixture(&path, kind, false);
-            let session = provider.find("kept").unwrap().session.unwrap();
+            let session = provider
+                .find("kept", &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .unwrap();
             std::fs::remove_file(&path).unwrap();
             let alternative = directory.path().join("unrelated.sqlite");
             std::fs::write(&alternative, b"must not read or change").unwrap();
@@ -378,7 +390,11 @@ mod tests {
             let directory = tempfile::tempdir().unwrap();
             let path = directory.path().join("source.sqlite");
             let mut provider = fixture(&path, Kind::OpenCode, true);
-            let session = provider.find("kept").unwrap().session.unwrap();
+            let session = provider
+                .find("kept", &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .unwrap();
             assert_eq!(session.title, "V2");
             Connection::open(&path).unwrap().execute_batch(sql).unwrap();
             let before = std::fs::read(&path).unwrap();

@@ -131,7 +131,11 @@ impl Desktop {
 }
 
 impl Provider for Desktop {
-    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
+    fn discover(
+        &mut self,
+        days: i64,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Discovery> {
         if !self.database.exists() {
             return Ok(crate::provider::Discovery::default());
         }
@@ -145,7 +149,11 @@ impl Provider for Desktop {
         })
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
+    fn find(
+        &mut self,
+        id: &str,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Lookup> {
         if !self.database.exists() {
             return Ok(crate::provider::Lookup::default());
         }

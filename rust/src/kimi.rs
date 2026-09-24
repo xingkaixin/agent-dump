@@ -121,14 +121,22 @@ impl Kimi {
 }
 
 impl Provider for Kimi {
-    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
+    fn discover(
+        &mut self,
+        days: i64,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Discovery> {
         self.work_dirs = None;
         file_sessions::discover(&self.files()?, days, false, |path, cutoff| {
             self.parse(path, Some(cutoff))
         })
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
+    fn find(
+        &mut self,
+        id: &str,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Lookup> {
         self.work_dirs = None;
         file_sessions::find(
             &self.roots.base.clone(),
@@ -274,7 +282,11 @@ mod tests {
             ),
             work_dirs: None,
         };
-        let session = provider.find("kept").unwrap().session.unwrap();
+        let session = provider
+            .find("kept", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap();
         (provider, session)
     }
 
@@ -309,7 +321,11 @@ mod tests {
             &roots(&session),
             "original Kimi session",
         );
-        let current = provider.find("kept").unwrap().session.unwrap();
+        let current = provider
+            .find("kept", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap();
         assert!(
             matches!(provider.raw_export(&current).unwrap(), RawExport::File(path) if path == session.source_path.join("wire.jsonl"))
         );

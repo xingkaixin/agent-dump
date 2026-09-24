@@ -1,6 +1,6 @@
 use crate::file_sessions::{self, SourceRoots};
 use crate::jsonl;
-use crate::provider::Provider;
+use crate::provider::{DiagnosticSink, Provider, RecoverableDiagnostic};
 use crate::session::{Session, SessionData, parse_timestamp};
 use crate::title::{basename, normalize_title};
 use crate::value::text;
@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 pub struct Codex {
     roots: SourceRoots,
-    titles: HashMap<String, String>,
+    titles: Option<HashMap<String, String>>,
     index: PathBuf,
 }
 
@@ -25,25 +25,38 @@ impl Codex {
         );
         Ok(Self {
             roots,
-            titles: HashMap::new(),
+            titles: None,
             index: root.join("session_index.jsonl"),
         })
     }
 
-    fn prepare(&mut self) -> crate::Result<()> {
-        self.titles.clear();
-        if self.index.exists() {
-            jsonl::scan(&self.index, &mut |_| Ok(()), |record| {
-                let id = text(&record["id"]);
-                if !id.trim().is_empty()
-                    && let Some(title) = normalize_title(text(&record["thread_name"]))
-                {
-                    self.titles.insert(id.to_owned(), title);
-                }
-                Ok(())
-            })?;
+    fn title(
+        &mut self,
+        id: &str,
+        diagnostics: &mut DiagnosticSink<'_>,
+    ) -> crate::Result<Option<String>> {
+        if self.titles.is_none() {
+            let mut titles = HashMap::new();
+            if self.index.exists()
+                && let Err(error) = jsonl::scan(&self.index, &mut |_| Ok(()), |record| {
+                    let id = text(&record["id"]);
+                    if !id.trim().is_empty()
+                        && let Some(title) = normalize_title(text(&record["thread_name"]))
+                    {
+                        titles.insert(id.to_owned(), title);
+                    }
+                    Ok(())
+                })
+            {
+                diagnostics(RecoverableDiagnostic::TitleCacheFailed(error.to_string()))?;
+            }
+            self.titles = Some(titles);
         }
-        Ok(())
+        Ok(self
+            .titles
+            .as_ref()
+            .and_then(|titles| titles.get(id))
+            .cloned())
     }
 
     fn files(&self) -> crate::Result<Vec<PathBuf>> {
@@ -52,7 +65,11 @@ impl Codex {
         })
     }
 
-    fn parse(&self, path: &Path) -> crate::Result<Option<Session>> {
+    fn parse(
+        &mut self,
+        path: &Path,
+        diagnostics: &mut DiagnosticSink<'_>,
+    ) -> crate::Result<Option<Session>> {
         let scan = jsonl::metadata(path, 10)?;
         let Some(header) = scan.header else {
             return Ok(None);
@@ -69,6 +86,7 @@ impl Codex {
         }
         let created_at = parse_timestamp(text(&payload["timestamp"]))
             .unwrap_or(Timestamp::try_from(path.metadata()?.modified()?)?);
+        let explicit_title = self.title(&id, diagnostics)?;
         let mut user_count = 0;
         let message_title = scan.records.iter().take(10).find_map(|record| {
             let p = &record["payload"];
@@ -94,10 +112,7 @@ impl Codex {
                     .join(" "),
             )
         });
-        let title = self
-            .titles
-            .get(&id)
-            .cloned()
+        let title = explicit_title
             .or(message_title)
             .or_else(|| basename(text(&payload["cwd"])))
             .or_else(|| {
@@ -147,23 +162,33 @@ impl Codex {
 }
 
 impl Provider for Codex {
-    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
-        self.prepare()?;
-        file_sessions::discover(&self.files()?, days, true, |path, _| self.parse(path))
+    fn discover(
+        &mut self,
+        days: i64,
+        diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Discovery> {
+        self.titles = None;
+        file_sessions::discover(&self.files()?, days, true, |path, _| {
+            self.parse(path, diagnostics)
+        })
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
-        self.prepare()?;
+    fn find(
+        &mut self,
+        id: &str,
+        diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Lookup> {
+        self.titles = None;
         let suffix = format!("-{id}.jsonl");
         file_sessions::find(
-            &self.roots.base,
+            &self.roots.base.clone(),
             &self.files()?,
             id,
             |path| {
                 path.file_name()
                     .is_some_and(|name| name.to_string_lossy().ends_with(&suffix))
             },
-            |path| self.parse(path),
+            |path| self.parse(path, diagnostics),
         )
     }
 
@@ -206,6 +231,72 @@ mod tests {
     use super::*;
 
     #[test]
+    fn title_cache_failure_is_recoverable_once_per_operation_and_refreshes() {
+        let directory = tempfile::tempdir().unwrap();
+        let sessions = directory.path().join("sessions");
+        std::fs::create_dir(&sessions).unwrap();
+        for id in ["kept", "other"] {
+            std::fs::write(sessions.join(format!("rollout-{id}.jsonl")), serde_json::json!({
+                "type": "session_meta", "payload": {"id": id, "timestamp": "2026-01-15T00:00:00Z", "cwd": "/fallback"}
+            }).to_string()).unwrap();
+        }
+        let index = directory.path().join("session_index.jsonl");
+        std::fs::create_dir(&index).unwrap();
+        let mut provider = Codex {
+            roots: SourceRoots::resolve(
+                directory.path().into(),
+                "sessions",
+                "data/codex",
+                "CODEX_HOME/sessions",
+            ),
+            titles: None,
+            index: index.clone(),
+        };
+        let mut warnings = Vec::new();
+        let discovery = provider
+            .discover(36500, &mut |warning| {
+                warnings.push(warning);
+                Ok(())
+            })
+            .unwrap();
+        assert!(discovery.available && discovery.failures.is_empty());
+        assert_eq!(discovery.sessions.len(), 2);
+        assert!(
+            discovery
+                .sessions
+                .iter()
+                .all(|session| session.title == "fallback")
+        );
+        assert!(matches!(
+            warnings.as_slice(),
+            [RecoverableDiagnostic::TitleCacheFailed(_)]
+        ));
+
+        std::fs::remove_dir(&index).unwrap();
+        let updated = b"{\"id\":\"kept\",\"thread_name\":\"Updated\"}\n";
+        std::fs::write(&index, updated).unwrap();
+        let session = provider
+            .find("kept", &mut |_| panic!("healthy index must not warn"))
+            .unwrap()
+            .session
+            .unwrap();
+        assert_eq!(session.title, "Updated");
+        assert_eq!(std::fs::read(&index).unwrap(), updated);
+
+        std::fs::remove_file(&index).unwrap();
+        let discovery = provider
+            .discover(36500, &mut |_| panic!("absent index must not warn"))
+            .unwrap();
+        assert!(
+            discovery
+                .sessions
+                .iter()
+                .all(|session| session.title == "fallback")
+        );
+        assert!(!index.exists());
+    }
+
+    #[test]
     fn removed_source_keeps_provider_diagnostic() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("sessions/rollout-kept.jsonl");
@@ -218,7 +309,7 @@ mod tests {
                 "data/codex",
                 "CODEX_HOME/sessions",
             ),
-            titles: HashMap::new(),
+            titles: None,
             index: directory.path().join("session_index.jsonl"),
         };
         crate::source_tests::removed_file(provider, &path, "kept", "CODEX_HOME/sessions");

@@ -29,7 +29,10 @@ pub fn run(
         return Ok(false);
     };
     let found = (registration.open)().and_then(|mut provider| {
-        let lookup = provider.find(id)?;
+        let lookup = provider.find(id, &mut |diagnostic| {
+            writeln!(warnings, "{}", diagnostics::record_warning(&diagnostic, zh))?;
+            Ok(())
+        })?;
         Ok((provider, lookup))
     });
     let found = match found {

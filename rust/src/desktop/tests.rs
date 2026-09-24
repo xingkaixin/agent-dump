@@ -41,7 +41,7 @@ fn fixture(kind: Kind) -> (tempfile::TempDir, Desktop, Session, &'static str) {
         search_roots: vec![("Synthetic source", database.clone())],
         database,
     };
-    let session = provider.find(id).unwrap().session.unwrap();
+    let session = provider.find(id, &mut |_| Ok(())).unwrap().session.unwrap();
     (directory, provider, session, table)
 }
 

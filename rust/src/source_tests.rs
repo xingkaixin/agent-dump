@@ -43,7 +43,7 @@ pub fn assert_missing(
 }
 
 pub fn removed_file(mut provider: impl Provider, path: &Path, id: &str, step_hint: &str) {
-    let session = provider.find(id).unwrap().session.unwrap();
+    let session = provider.find(id, &mut |_| Ok(())).unwrap().session.unwrap();
     assert_eq!(session.source_path, path);
     std::fs::remove_file(path).unwrap();
     let roots = source_roots(&provider);

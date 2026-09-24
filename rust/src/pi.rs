@@ -99,11 +99,19 @@ impl Pi {
 }
 
 impl Provider for Pi {
-    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
+    fn discover(
+        &mut self,
+        days: i64,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Discovery> {
         file_sessions::discover(&self.files()?, days, true, |path, _| Self::parse(path))
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
+    fn find(
+        &mut self,
+        id: &str,
+        _diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Lookup> {
         let suffix = format!("{id}.jsonl");
         file_sessions::find(
             &self.roots.base,

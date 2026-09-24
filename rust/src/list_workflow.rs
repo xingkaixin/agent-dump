@@ -42,7 +42,16 @@ fn discover(
     zh: bool,
     warnings: &mut impl Write,
 ) -> crate::Result<Option<SessionGroup>> {
-    let result = (registration.open)().and_then(|mut provider| provider.discover(days));
+    let result = (registration.open)().and_then(|mut provider| {
+        provider.discover(days, &mut |diagnostic| {
+            writeln!(
+                warnings,
+                "{}",
+                crate::diagnostics::record_warning(&diagnostic, zh)
+            )?;
+            Ok(())
+        })
+    });
     match result {
         Ok(discovery) => {
             for failure in &discovery.failures {

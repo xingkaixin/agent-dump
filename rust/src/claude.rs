@@ -1,9 +1,9 @@
 use crate::file_sessions::{self, SourceRoots};
 use crate::jsonl;
-use crate::provider::Provider;
+use crate::provider::{DiagnosticSink, Provider, RecoverableDiagnostic};
 use crate::session::{Session, SessionData, parse_timestamp};
 use crate::title::{basename, normalize_title};
-use crate::value::{field, text};
+use crate::value::{field, text, truthy};
 use jiff::Timestamp;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 pub struct Claude {
     roots: SourceRoots,
-    titles: HashMap<PathBuf, HashMap<String, String>>,
+    titles: HashMap<PathBuf, HashMap<String, Value>>,
 }
 
 impl Claude {
@@ -35,45 +35,69 @@ impl Claude {
         })
     }
 
-    fn titles(&mut self, directory: &Path) -> &HashMap<String, String> {
-        self.titles.entry(directory.to_owned()).or_insert_with(|| {
-            let mut titles = HashMap::new();
-            let path = directory.join("sessions-index.json");
-            if !path.exists() {
-                return titles;
-            }
-            let result = std::fs::read(&path)
-                .map_err(|error| error.to_string())
-                .and_then(|bytes| {
-                    serde_json::from_slice::<Value>(&bytes).map_err(|error| error.to_string())
-                });
-            match result {
-                Ok(value) => {
-                    if let Some(entries) = value["entries"].as_array() {
-                        for entry in entries {
-                            let id = text(&entry["sessionId"]);
-                            if id.trim().is_empty() {
-                                continue;
-                            }
-                            titles.insert(id.to_owned(), text(&entry["summary"]).to_owned());
-                        }
-                    } else {
-                        eprintln!(
-                            "Warning: invalid Claude sessions index: {}",
-                            crate::render::safe_line(&path.display().to_string())
-                        );
-                    }
-                }
-                Err(error) => eprintln!(
-                    "Warning: invalid Claude sessions index: {}",
-                    crate::render::safe_line(&error)
-                ),
-            }
-            titles
-        })
+    fn titles(
+        &mut self,
+        directory: &Path,
+        diagnostics: &mut DiagnosticSink<'_>,
+    ) -> crate::Result<&HashMap<String, Value>> {
+        if !self.titles.contains_key(directory) {
+            let titles = Self::load_titles(&directory.join("sessions-index.json"), diagnostics)?;
+            self.titles.insert(directory.to_owned(), titles);
+        }
+        Ok(&self.titles[directory])
     }
 
-    fn parse(&mut self, path: &Path) -> crate::Result<Option<Session>> {
+    fn load_titles(
+        path: &Path,
+        diagnostics: &mut DiagnosticSink<'_>,
+    ) -> crate::Result<HashMap<String, Value>> {
+        let mut titles = HashMap::new();
+        if !path.exists() {
+            return Ok(titles);
+        }
+        let result = (|| -> crate::Result<Value> {
+            let value: Value = serde_json::from_slice(&std::fs::read(path)?)?;
+            if !value.is_object() {
+                return Err("sessions index root must be an object".into());
+            }
+            if value
+                .get("entries")
+                .is_some_and(|entries| !entries.is_array())
+            {
+                return Err("sessions index entries must be an array".into());
+            }
+            Ok(value)
+        })();
+        let value = match result {
+            Ok(value) => value,
+            Err(error) => {
+                diagnostics(RecoverableDiagnostic::TitleCacheFailed(error.to_string()))?;
+                return Ok(titles);
+            }
+        };
+        let mut skipped = 0;
+        for entry in value["entries"].as_array().into_iter().flatten() {
+            let id = text(&entry["sessionId"]);
+            if id.trim().is_empty() {
+                skipped += 1;
+                continue;
+            }
+            titles.insert(id.to_owned(), entry["summary"].clone());
+        }
+        if skipped > 0 {
+            diagnostics(RecoverableDiagnostic::TitleCacheEntriesSkipped {
+                path: path.to_owned(),
+                count: skipped,
+            })?;
+        }
+        Ok(titles)
+    }
+
+    fn parse(
+        &mut self,
+        path: &Path,
+        diagnostics: &mut DiagnosticSink<'_>,
+    ) -> crate::Result<Option<Session>> {
         let scan = jsonl::metadata(path, 20)?;
         let Some(header) = scan.header else {
             return Ok(None);
@@ -86,10 +110,25 @@ impl Claude {
             .into_owned();
         let created_at = parse_timestamp(text(&header["timestamp"]))
             .unwrap_or(Timestamp::try_from(path.metadata()?.modified()?)?);
-        let explicit = self
-            .titles(project)
+        let explicit = match self
+            .titles(project, diagnostics)?
             .get(&id)
-            .and_then(|title| normalize_title(title));
+            .filter(|value| truthy(value))
+        {
+            Some(Value::String(title)) => normalize_title(title),
+            Some(value) => {
+                let kind = match value {
+                    Value::Bool(_) => "bool",
+                    Value::Number(number) if number.is_f64() => "float",
+                    Value::Number(_) => "int",
+                    Value::Array(_) => "list",
+                    Value::Object(_) => "dict",
+                    _ => unreachable!(),
+                };
+                return Err(format!("expected string or bytes-like object, got '{kind}'").into());
+            }
+            None => None,
+        };
         let first_user = scan
             .records
             .iter()
@@ -157,19 +196,29 @@ impl Claude {
 }
 
 impl Provider for Claude {
-    fn discover(&mut self, days: i64) -> crate::Result<crate::provider::Discovery> {
+    fn discover(
+        &mut self,
+        days: i64,
+        diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Discovery> {
         self.titles.clear();
-        file_sessions::discover(&self.files()?, days, true, |path, _| self.parse(path))
+        file_sessions::discover(&self.files()?, days, true, |path, _| {
+            self.parse(path, diagnostics)
+        })
     }
 
-    fn find(&mut self, id: &str) -> crate::Result<crate::provider::Lookup> {
+    fn find(
+        &mut self,
+        id: &str,
+        diagnostics: &mut crate::provider::DiagnosticSink<'_>,
+    ) -> crate::Result<crate::provider::Lookup> {
         self.titles.clear();
         file_sessions::find(
             &self.roots.base.clone(),
             &self.files()?,
             id,
             |path| path.file_stem().is_some_and(|name| name == id),
-            |path| self.parse(path),
+            |path| self.parse(path, diagnostics),
         )
     }
 
@@ -206,6 +255,75 @@ impl Provider for Claude {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn title_cache_is_per_project_and_refreshes_after_recovery() {
+        let directory = tempfile::tempdir().unwrap();
+        let projects = directory.path().join("projects");
+        for (project, id) in [
+            ("first", "kept"),
+            ("first", "other"),
+            ("second", "separate"),
+        ] {
+            let path = projects.join(project).join(format!("{id}.jsonl"));
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, serde_json::json!({"type": "user", "timestamp": "2026-01-15T00:00:00Z", "message": {"role": "user", "content": "Fallback"}}).to_string()).unwrap();
+        }
+        let index = projects.join("first/sessions-index.json");
+        std::fs::write(&index, "[]").unwrap();
+        std::fs::write(
+            projects.join("second/sessions-index.json"),
+            r#"{"entries":[{"sessionId":"separate","summary":"Separate"}]}"#,
+        )
+        .unwrap();
+        let mut provider = Claude {
+            roots: SourceRoots::resolve(
+                directory.path().into(),
+                "projects",
+                "data/claudecode",
+                "CLAUDE_CONFIG_DIR/projects",
+            ),
+            titles: HashMap::new(),
+        };
+        let mut warnings = Vec::new();
+        let discovery = provider
+            .discover(36500, &mut |warning| {
+                warnings.push(warning);
+                Ok(())
+            })
+            .unwrap();
+        assert!(discovery.available && discovery.failures.is_empty());
+        assert_eq!(discovery.sessions.len(), 3);
+        assert!(
+            discovery
+                .sessions
+                .iter()
+                .any(|session| session.title == "Separate")
+        );
+        assert!(matches!(
+            warnings.as_slice(),
+            [RecoverableDiagnostic::TitleCacheFailed(_)]
+        ));
+
+        let updated = r#"{"entries":[{"sessionId":"kept","summary":"Updated"}]}"#;
+        std::fs::write(&index, updated).unwrap();
+        let session = provider
+            .find("kept", &mut |_| panic!("healthy index must not warn"))
+            .unwrap()
+            .session
+            .unwrap();
+        assert_eq!(session.title, "Updated");
+        assert_eq!(std::fs::read_to_string(&index).unwrap(), updated);
+
+        std::fs::remove_file(&index).unwrap();
+        let session = provider
+            .find("kept", &mut |_| panic!("absent index must not warn"))
+            .unwrap()
+            .session
+            .unwrap();
+        assert_eq!(session.title, "Fallback");
+        assert!(!index.exists());
+    }
 
     #[test]
     fn removed_source_keeps_provider_diagnostic() {

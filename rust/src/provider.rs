@@ -12,6 +12,11 @@ pub enum RecoverableDiagnostic {
     },
     MessageDataParseFailed(String),
     PartDataParseFailed(String),
+    TitleCacheFailed(String),
+    TitleCacheEntriesSkipped {
+        path: PathBuf,
+        count: usize,
+    },
 }
 
 pub struct ProviderInfo {
@@ -70,8 +75,12 @@ impl Discovery {
 }
 
 pub trait Provider {
-    fn discover(&mut self, days: i64) -> crate::Result<Discovery>;
-    fn find(&mut self, id: &str) -> crate::Result<Lookup>;
+    fn discover(
+        &mut self,
+        days: i64,
+        diagnostics: &mut DiagnosticSink<'_>,
+    ) -> crate::Result<Discovery>;
+    fn find(&mut self, id: &str, diagnostics: &mut DiagnosticSink<'_>) -> crate::Result<Lookup>;
     fn read(
         &self,
         session: &Session,

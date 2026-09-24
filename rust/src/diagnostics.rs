@@ -6,6 +6,22 @@ use std::fmt::Write;
 
 pub fn record_warning(diagnostic: &RecoverableDiagnostic, zh: bool) -> String {
     match diagnostic {
+        RecoverableDiagnostic::TitleCacheFailed(error) => {
+            let error = safe_line(error);
+            if zh {
+                format!("警告: 加载标题缓存失败: {error}")
+            } else {
+                format!("⚠️  Failed to load title cache: {error}")
+            }
+        }
+        RecoverableDiagnostic::TitleCacheEntriesSkipped { path, count } => {
+            let path = safe_line(&path.display().to_string());
+            if zh {
+                format!("警告: {path} 跳过了 {count} 条格式错误的标题缓存记录")
+            } else {
+                format!("⚠️  {path}: skipped {count} malformed title cache entries")
+            }
+        }
         RecoverableDiagnostic::JsonlRecordsSkipped { path, count, lines } => {
             let path = safe_line(&path.display().to_string());
             let lines = lines
