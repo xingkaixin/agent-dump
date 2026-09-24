@@ -69,7 +69,10 @@ pub fn json(data: &mut SessionData, output: &Path, source_root: &Path) -> crate:
     if resolved.starts_with(provider_root) {
         return Err("Export output must be outside the Provider source directory".into());
     }
-    let destination = directory.join(format!("{}.json", filename(&data.id)?));
+    let output_path = output
+        .join("codex")
+        .join(format!("{}.json", filename(&data.id)?));
+    let destination = std::path::absolute(&output_path)?;
     if destination.is_symlink() {
         return Err("Export destination must not be a symlink".into());
     }
@@ -80,5 +83,5 @@ pub fn json(data: &mut SessionData, output: &Path, source_root: &Path) -> crate:
     temporary.flush()?;
     temporary.as_file().sync_all()?;
     temporary.persist(&destination)?;
-    Ok(destination)
+    Ok(output_path)
 }

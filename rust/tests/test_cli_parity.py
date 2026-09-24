@@ -301,3 +301,7 @@ def test_private_export_preserves_existing_directory_permissions(cli):
     before = cli.fixtures.source_manifest(cli.root)
     assert cli.run("rust", *args).returncode == 1
     assert cli.fixtures.source_manifest(cli.root) == before
+
+
+def test_relative_export_path_matches_python(cli):
+    cli.parity(f"codex://{IDENTITY}", "--format", "json", "--output", "exports", "--lang", "en", json_export=True)
