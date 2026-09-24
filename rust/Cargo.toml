@@ -1,0 +1,15 @@
+[package]
+name = "agent-dump"
+version = "0.15.9"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+
+[dependencies]
+jiff = "0.2"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"
+walkdir = "2"

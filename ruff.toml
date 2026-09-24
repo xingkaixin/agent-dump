@@ -48,4 +48,5 @@ line-ending = "lf"
     "S608",
     "SIM117",
 ]
+"rust/tests/*.py" = ["S101"]
 "scripts/*" = ["SIM"]  # 脚本可以更随意

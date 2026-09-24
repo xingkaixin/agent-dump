@@ -1,0 +1,84 @@
+use crate::session::SessionData;
+use sha2::{Digest, Sha256};
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use tempfile::NamedTempFile;
+
+fn filename(id: &str) -> crate::Result<String> {
+    let normalized = id.replace('\\', "/");
+    let name = normalized
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or("");
+    if matches!(name, "" | "." | "..")
+        || (crate::render::safe_body(name) != name || name.contains(['\t', '\n']))
+    {
+        return Err("Session id cannot be used as an export filename".into());
+    }
+    let edge = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-';
+    let stem = name.split('.').next().unwrap_or("");
+    let reserved = matches!(stem, "aux" | "con" | "nul" | "prn")
+        || (1..=9).any(|i| stem == format!("com{i}") || stem == format!("lpt{i}"));
+    if id == name
+        && id.len() <= 120
+        && id.starts_with(edge)
+        && id.ends_with(edge)
+        && id.chars().all(|c| edge(c) || c == '.')
+        && !reserved
+    {
+        Ok(id.to_owned())
+    } else {
+        Ok(format!("~{:x}", Sha256::digest(id.as_bytes())))
+    }
+}
+
+fn absolute_existing_ancestor(path: &Path) -> crate::Result<PathBuf> {
+    if path.exists() {
+        return Ok(path.canonicalize()?);
+    }
+    let parent = path.parent().ok_or("Cannot resolve output path")?;
+    Ok(absolute_existing_ancestor(parent)?.join(path.file_name().ok_or("Invalid output path")?))
+}
+
+fn ensure_directory(path: &Path) -> std::io::Result<()> {
+    if path.is_dir() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        ensure_directory(parent)?;
+    }
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    match builder.create(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && path.is_dir() => Ok(()),
+        result => result,
+    }
+}
+
+pub fn json(data: &mut SessionData, output: &Path, source_root: &Path) -> crate::Result<PathBuf> {
+    let directory = std::path::absolute(output)?.join("codex");
+    let resolved = absolute_existing_ancestor(&directory)?;
+    let source = source_root.canonicalize()?;
+    let provider_root = source.parent().unwrap_or(&source);
+    if resolved.starts_with(provider_root) {
+        return Err("Export output must be outside the Provider source directory".into());
+    }
+    let destination = directory.join(format!("{}.json", filename(&data.id)?));
+    if destination.is_symlink() {
+        return Err("Export destination must not be a symlink".into());
+    }
+    ensure_directory(&directory)?;
+    data.messages.retain(|message| message.role != "developer");
+    let mut temporary = NamedTempFile::new_in(&directory)?;
+    serde_json::to_writer_pretty(&mut temporary, data)?;
+    temporary.flush()?;
+    temporary.as_file().sync_all()?;
+    temporary.persist(&destination)?;
+    Ok(destination)
+}

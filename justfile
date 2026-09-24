@@ -45,6 +45,17 @@ cov:
 benchmark *args:
     uv run python scripts/benchmark_cli.py {{args}}
 
+# Check the experimental Rust CLI and compare it with Python on synthetic data
+check-rust:
+    cd rust && cargo fmt --check
+    cd rust && cargo clippy --locked --all-targets -- -D warnings
+    cd rust && cargo build --locked
+    uv run pytest -q rust/tests
+
+# Build the experimental Rust binary for performance evaluation
+build-rust:
+    cd rust && cargo build --locked --release
+
 # Run npm wrapper unit tests
 test-npm:
     @echo "🧪 Running npm wrapper tests..."
@@ -71,7 +82,7 @@ lock-check:
     @echo "✅ uv.lock matches pyproject.toml!"
 
 # Run local CI checks with the current Python; include npm tests when Node.js is available
-isok: lock-check lint check test
+isok: lock-check lint check test check-rust
     @if command -v node >/dev/null 2>&1; then \
         just test-npm; \
     else \

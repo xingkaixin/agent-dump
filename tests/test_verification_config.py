@@ -545,7 +545,7 @@ class TestCiDoesNotRepeatVersionIndependentWork:
         assert job.count("run: just cov") == 1
 
     def test_npm_and_web_are_their_own_jobs(self):
-        assert set(self._job_names()) == {"uv-windows", "quality", "python-tests", "web", "npm-wrapper"}
+        assert set(self._job_names()) == {"uv-windows", "quality", "python-tests", "rust", "web", "npm-wrapper"}
         assert "matrix:" not in self._job("web"), "Web 只需构建一次"
         assert '"22"' in self._job("npm-wrapper")
         assert '"24"' in self._job("npm-wrapper")

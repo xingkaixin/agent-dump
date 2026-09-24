@@ -106,6 +106,36 @@ jobs:
         if: matrix.python-version == env.COVERAGE_PYTHON_VERSION
         run: just cov
 
+  rust:
+    name: Rust CLI parity (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: ./.github/actions/setup-uv
+
+      - name: Set up Python
+        run: uv python install ${{ env.QUALITY_PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --locked --dev --python ${{ env.QUALITY_PYTHON_VERSION }}
+
+      - name: Install just
+        uses: ./.github/actions/setup-just
+
+      - name: Install pinned Rust toolchain
+        working-directory: rust
+        run: rustup show active-toolchain
+
+      - name: Check Rust and Python behavior parity
+        run: just check-rust
+
   web:
     name: Check landing page
     runs-on: ubuntu-latest

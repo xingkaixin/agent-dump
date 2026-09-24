@@ -81,3 +81,7 @@ skills-lock.json
 
 # Issue tracker generated files
 .issues
+
+# Rust migration
+/rust/target/
+!rust/Cargo.lock

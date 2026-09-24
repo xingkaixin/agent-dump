@@ -647,10 +647,12 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 
 ## Development
 
+An experimental Rust implementation is being developed in [`rust/`](rust/README.md). It currently supports a limited Codex path; pip/npm still install the Python implementation. See the [migration plan](docs/rust-migration-plan.md) for scope and acceptance criteria.
+
 Landing page build, deployment, and free Cloudflare performance settings are documented in the [development guide](docs/development-guide.md#5-落地页性能与-cloudflare-pages).
 
 ```bash
-# Run local CI checks with the current Python
+# Run local CI checks with Python and the pinned Rust toolchain
 # (includes npm tests when Node.js is available, and the landing page check when pnpm is)
 just isok
 
