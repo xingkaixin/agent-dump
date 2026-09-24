@@ -1,6 +1,6 @@
 # P2 最终验收
 
-状态：进行中。本文集中跟踪 P2 收尾，不把历史分批报告中的开放项自动视为完成。
+状态：P2 实现与本地验收完成。三平台最终门禁以 [PR #396 checks](https://github.com/xingkaixin/agent-dump/pull/396/checks) 为准；只有对应提交的全部检查通过，才能交付本阶段。本文集中保存 P2 收尾证据，历史分批报告中的开放项已逐项复核。
 
 Python 参考仍为 `dca2d97`，P0 evaluator 为 `9c1cf61`。所有来源均为临时合成数据，Python 生产入口保持不变。
 
@@ -11,10 +11,10 @@ Python 参考仍为 `dca2d97`，P0 evaluator 为 `9c1cf61`。所有来源均为�
 - [x] 剩余结构/错误输入：SQLite BLOB 与 Provider 错误原因，见[存储验收](rust-storage-lifecycle-parity.md)。
 - [x] 诊断：支持的 Provider/URI/导出路径的底层原因、异常类别、非法导出 ID 和文件系统失败，见[错误原因验收](rust-error-reasons-parity.md)。
 - [x] 来源生命周期：操作间变化、boot-config 编辑/损坏/恢复，读取事务与 WAL/checkpoint 行为。
-- [ ] 跨平台：macOS、Linux、Windows 上运行 P2 差分和边界用例，记录真实结果。
-- [ ] 行为映射与历史开放项复核；明确 P3–P6 的原定范围。
-- [ ] 完整 `just isok`、release 构建、干净版本原七场景配对 benchmark。
-- [ ] 更新迁移计划和 Rust README，合理拆分提交并提交最终状态报告。
+- [x] 跨平台：macOS、Linux、Windows 的构建、Clippy、单元与完整差分套件进入 CI；已发现的日期、路径、换行、WinError 和 Cursor 长链问题已修复，最终结果由上述门禁验证。
+- [x] 行为映射与历史开放项复核；明确 P3–P6 的原定范围。
+- [x] 完整 `just isok`、release 构建、干净版本原七场景配对 benchmark。
+- [x] 更新迁移计划和 Rust README，按功能、修复、测试、CI 与验收证据拆分提交。
 
 P3 查询/索引/维护，P4 配置/shortcut/Collect/summary，P5 Ratatui，P6 完整安装/分发/发布切换，保持原计划边界。P2 的跨平台运行验证不代替 P6 的各平台安装与制品验收。
 
@@ -54,3 +54,21 @@ P3 查询/索引/维护，P4 配置/shortcut/Collect/summary，P5 Ratatui，P6 �
 | Windows/Linux 执行与平台安装制品 | 本次三平台 Rust CI 验证执行；wheel/npm、libc 与全部发布架构仍按原计划 P6 |
 
 “完成”按上述功能与证据矩阵判定，不等同穷举任意畸形字节、任意版本 schema 和所有线程调度。既有差异仍明确保留：Rust 拒绝导出到四个桌面 Provider 的源目录，满足仓库源只读约束；SQLite SHM 可能作为原生协调文件变化，数据库/WAL 持久数据必须不变。
+
+## 验证证据
+
+本机 `just isok` 完整通过：Python 2,596 passed / 1 skipped，Rust 39 个单元测试与 1,065 个 CLI 差分/边界用例，npm 74 个测试，Web E2E 13 个测试。随后 Windows 原生错误与测试资源清理修复通过 fmt、Clippy、39 个单元测试、238 个诊断/发现/URI/Pi 回归及 14 个 SQLite 路径回归。最终三平台 CI 对同一套完整差分再次验收，按四组独立 runner 执行。
+
+| 平台 | CLI 用例总数 | 有条件跳过 | 跳过原因 |
+| --- | ---: | ---: | --- |
+| macOS | 1,065 | 0 | 全部运行 |
+| Linux | 1,065 | 6 | ZCode 参考实现只支持 macOS/Windows 默认来源 |
+| Windows | 1,065 | 9 | 2 个 POSIX 源权限、1 个私有目录权限、1 个需要授权的符号链接、2 个 Python 不应用 `TZ` 的用例、2 个非法控制字符文件名、1 个纯空白目录 |
+
+平台排除只针对操作系统不支持的条件；不跳过普通来源、schema、正文、错误原因或导出内容差分。Windows 路径使用原生分隔符，列表短路径与 Python 一致；Markdown 文件采用平台文本换行。Linux 保留 glibc 小年份 `%Y` 行为。SQLite 测试连接在移动数据库前关闭；冻结的 benchmark fixture 在 Windows 测试装配后回收不可达连接，原 evaluator 未修改。
+
+Rust release 使用固定 1.90.0 工具链构建，性能测量 checkout 为 `d074c63`，后续只有验收文档和原始报告。Python 生产源码、P0 evaluator、`uv.lock` 与合成 fixture 的 hash 均保持不变。性能比较、全部原始样本、体积及历史波动见[P2 最终复测](benchmarks/rust-p2-final.md)。这些场景仅覆盖健康 Codex/OpenCode V2 路径，不外推为十个 Provider 的统一加速比。
+
+## 交付状态
+
+代码位于 `feat/rust-rewrite`，由 [Draft PR #396](https://github.com/xingkaixin/agent-dump/pull/396) 提供审阅。保留 draft 是因为整个 Rust 重写尚未完成；没有切换默认实现、合并或发布。pip/npm 继续使用 Python。下一阶段是 P3 查询、索引和维护命令。

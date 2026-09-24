@@ -75,7 +75,7 @@ just build-rust
 
 - 通用 Query/Search、统计与索引（P3）；Collect、摘要、配置和 shortcut（P4）；批量交互导出与 Ratatui（P5）。
 - 配置文件尚不读取；因此不应用保存的语言、默认目录等配置。帮助、错误文案、错误组合的退出码与全部工作流的部分失败策略未完成全量对齐；未支持的参数会报错。
-- Rust CI 包含 Linux、macOS、Windows 的构建、Clippy、单元与 CLI 差分门禁；当前实际结果见 P2 最终验收。所有发布架构、libc、wheel/npm 安装与正式切换属于 P6。
+- Rust CI 包含 Linux、macOS、Windows 的构建、Clippy、单元与 CLI 差分门禁；三平台运行同一套契约，具体计数和平台跳过项见 [P2 最终验收](../docs/rust-p2-completion.md)。所有发布架构、libc、wheel/npm 安装与正式切换属于 P6。
 
 行为映射和待验收边界见 [Codex](../docs/rust-codex-parity.md)、[Claude Code / Kimi / Pi](../docs/rust-jsonl-parity.md)、[OpenCode / ZCode](../docs/rust-sqlite-parity.md)及 [Cursor / DeepChat / Cherry Studio / MiniMax](../docs/rust-desktop-parity.md) 差分验收记录。共享发现与跨 Provider 隔离见[验收记录](../docs/rust-discovery-parity.md)。URI 共用诊断见[验收记录](../docs/rust-uri-parity.md)。DeepChat / Cherry / MiniMax 的 schema、源缺失与迁移错误见[专属错误验收](../docs/rust-provider-errors-parity.md)。其余七个 Provider 的源缺失与 Kimi raw 文件身份见[源缺失验收](../docs/rust-source-parity.md)。JSONL/旧 SQLite 坏记录警告见[验收记录](../docs/rust-record-diagnostics-parity.md)。Codex/Claude 标题缓存恢复与刷新见[验收记录](../docs/rust-title-cache-parity.md)。Codex/Claude/Pi 消息转换恢复见[验收记录](../docs/rust-message-conversion-parity.md)。固定配置下六个 Provider 的来源选择与重试见[验收记录](../docs/rust-source-selection-parity.md)。运行中来源配置与其余 Provider 选择见[验收记录](../docs/rust-runtime-sources-parity.md)。这些文件保留各批次当时的状态；开放项的最终归属、功能矩阵和验证证据以 [P2 最终验收](../docs/rust-p2-completion.md)为准。
 
@@ -86,6 +86,8 @@ just build-rust
 直接依赖各有明确用途：Clap 解析参数，Serde/serde_json 处理契约与源记录，regex 识别完整上下文块，Jiff 处理时间与本地时区名称，WalkDir 递归发现，SHA-256 保持特殊 ID 的文件身份，MD5 对齐 Kimi 既有工作目录映射，rusqlite 的 bundled SQLite 负责只读数据库查询，tempfile 保证导出原子替换和异常清理，num-bigint 处理超出 i64 的 token 累加。不调用 Python 作为 Rust 的运行时依赖。
 
 ## 性能评估
+
+当前结果见 [P2 最终七场景复测](../docs/benchmarks/rust-p2-final.md)：沿用原 evaluator，在干净的最终实现上配对运行 Python 与 Rust，保留耗时、RSS、二进制大小和原始样本。以下为各批次历史结果。
 
 历史四场景对比见 [P1 性能复测](../docs/benchmarks/rust-p1.md)。[P2 Codex 复测](../docs/benchmarks/rust-p2-codex.md)增加现有的 JSON＋Markdown 导出场景，并保留缓冲优化前后的数据。
 
@@ -111,7 +113,7 @@ Provider 专属错误接入后的[七场景复测](../docs/benchmarks/rust-p2-pr
 
 来源选择与缺失重试后的[七场景复测](../docs/benchmarks/rust-p2-source-selection.md)中，跨 Provider 列表为 5.02×，JSON＋Markdown 导出为 3.25×；每个样本是独立进程，不测同实例刷新或来源消失、恢复性能。
 
-运行中来源配置对齐后的[最新七场景复测](../docs/benchmarks/rust-p2-runtime-sources.md)中，跨 Provider 列表为 4.85×，JSON＋Markdown 导出为 3.17×。这些独立进程的健康数据场景不测配置切换或其余八个 Provider 的性能。
+运行中来源配置对齐后的[七场景复测](../docs/benchmarks/rust-p2-runtime-sources.md)中，跨 Provider 列表为 4.85×，JSON＋Markdown 导出为 3.17×。这些独立进程的健康数据场景不测配置切换或其余八个 Provider 的性能。
 
 使用原有 [CLI evaluator](../docs/benchmarks/README.md)，不为 Rust 改写 fixture 或验收摘要。本阶段只运行以下已实现子集：
 

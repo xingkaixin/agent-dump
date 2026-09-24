@@ -633,7 +633,7 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 
 实验性 Rust 实现在 [`rust/`](rust/README.md) 中开发，目前已接入十个 Provider 的发现、消息装配和单会话导出。Cursor 支持 JSON/print；DeepChat、Cherry Studio、MiniMax 支持 JSON/Markdown/print；其余六个还支持 raw。`--list` 可列出全部可用 Provider，`-q provider:codex,opencode` 在扫描前限制来源，单个 Provider 失败不阻止其他来源。
 
-URI 格式无效、会话不存在和格式能力拒绝已有中英文诊断；查找失败警告走 stderr，最终诊断走 stdout。DeepChat、Cherry Studio、MiniMax 已保留本地化的 schema、源缺失及存储迁移诊断。其余七个 Provider 已接入源缺失诊断，Kimi raw 使用定位时记录的文件。JSONL/旧 SQLite 坏记录警告已本地化到 stderr，健康内容继续导出。Codex、Claude 标题索引不可读时使用回退标题并输出本地化警告。Codex、Claude、Pi 的单条记录转换失败会告警，健康消息继续导出。四个文件 Provider 与 OpenCode/ZCode 在未选中来源时读取当前配置并重试，选中后保持来源路径。Codex 标题索引跟随当前配置；DeepChat、Cherry、MiniMax 每次发现或查找重新选择来源，Cursor 的正文读取也使用当前数据库配置。完整 Provider 契约和工作流尚未全部对齐。pip/npm 仍发布 Python 实现。阶段范围与验收标准见[迁移计划](docs/rust-migration-plan.md)。
+P2 Provider 与单会话导出验收已完成，包含有界正文缓存、来源变化、坏记录恢复、本地化诊断、极端值与 SQLite 输入兼容。差分套件已在 macOS、Linux、Windows 运行。证据和已知差异见 [P2 最终验收](docs/rust-p2-completion.md)，性能见[配对复测报告](docs/benchmarks/rust-p2-final.md)。Query/Search、Collect、配置、Ratatui 和发布切换仍按[迁移计划](docs/rust-migration-plan.md)推进。pip/npm 继续安装 Python 实现。
 
 落地页构建、部署及 Cloudflare 免费性能配置见[开发指南](docs/development-guide.md#5-落地页性能与-cloudflare-pages)。
 

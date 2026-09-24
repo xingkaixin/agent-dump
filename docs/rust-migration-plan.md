@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0、P1 已完成；P2 进行中，十个 Provider 均已接入消息装配与支持格式的单 URI 导出；共享发现、URI 诊断、源缺失、JSONL/旧 SQLite 坏记录警告、Codex/Claude 标题缓存及 Codex/Claude/Pi 记录转换恢复已接入。十个 Provider 的运行中候选配置与来源选择规则已接入，包含 Codex 标题索引及 Cursor 当前配置下的旧 Session 读取。接下来验收正文缓存与剩余极端输入边界。Python 仍是默认实现和发布来源。
+状态：P0、P1 已完成；P2 实现与本地验收完成，最终交付受 macOS、Linux、Windows 完整 CI 门禁约束。十个 Provider 的发现、读取、支持格式的单 URI 导出、正文缓存和本阶段错误/生命周期边界均已有验收证据。完整证据与已知差异见 [P2 最终验收](rust-p2-completion.md)，性能见[最终七场景复测](benchmarks/rust-p2-final.md)。下一阶段为 P3 查询、索引与维护命令。Python 仍是默认实现和发布来源。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -23,7 +23,7 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 ## 2. 功能验收矩阵
 
-每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P1 只覆盖参数、Codex、Session facts 和 URI/导出中的子集，尚无一整行可标记为完整迁移；当前实现见 [Rust README](../rust/README.md)，Codex 消息与导出证据见[差分验收记录](rust-codex-parity.md)，历史 P1 性能见[复测报告](benchmarks/rust-p1.md)。
+每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P2 已关闭 Provider 读取与单 URI 导出范围，完整证据见 [P2 最终验收](rust-p2-completion.md)；跨阶段的参数、查询、配置、交互与分发条目仍需后续验收。当前实现见 [Rust README](../rust/README.md)，Codex 消息与导出证据见[差分验收记录](rust-codex-parity.md)，历史 P1 性能见[复测报告](benchmarks/rust-p1.md)。
 
 | 范围 | 必须对齐的契约 | 现有依据 |
 | --- | --- | --- |
@@ -81,7 +81,7 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 
 - [x] Codex 工具调用/输出、patch、计划审批、skill/subagent、注入上下文；非文本和未知事件按 Python 当前规则忽略，移除 P1 的临时拒绝分支。
 - [x] Codex Markdown/raw/混合导出、JSON 专用转换隔离、逐格式部分成功与源数据保护；使用实际 CLI 做差分验收。
-- [ ] Codex 发现刷新/缓存、完整诊断、极端输入和跨平台验收，见[剩余边界](rust-codex-parity.md)。
+- [x] Codex 发现刷新/缓存、本阶段诊断、极端输入和跨平台验收，见[P2 最终验收](rust-p2-completion.md)。
 - [x] Claude Code、Kimi（context / wire）、Pi 的发现、head、消息装配和 print/JSON/Markdown/raw 导出；共享 Provider 入口与只读文件发现，见[行为映射与剩余边界](rust-jsonl-parity.md)。
 - [x] OpenCode 旧表 / V2 与 ZCode 的发现、head 和单 URI 四种导出，见[SQLite 差分记录与剩余边界](rust-sqlite-parity.md)。
 - [x] Cursor / DeepChat / Cherry Studio / MiniMax 的发现、head、消息读取与支持格式导出，见[本批差分记录](rust-desktop-parity.md)。
@@ -94,10 +94,12 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 - [x] Codex/Claude/Pi 记录转换失败的恢复与本地化警告，覆盖消息类型、Claude 非对象 message、Pi UTC 日期溢出和状态保留，见[转换恢复验收](rust-message-conversion-parity.md)。
 - [x] 固定配置下四个文件 Provider 与 OpenCode/ZCode 的来源缺失重试、已选路径保持、恢复及导出保护根，见[来源选择验收](rust-source-selection-parity.md)。
 - [x] 运行中候选配置、其余四个 Provider 的来源重选、Codex 标题索引和 Cursor 旧 Session 读取的来源规则，见[运行中配置验收](rust-runtime-sources-parity.md)。
-- [ ] Provider 专属错误、底层错误文案、复用实例的发现刷新/缓存与所有 Provider 剩余边界；十个入口接通不代表 P2 完整验收。
+- [x] Provider 专属错误与底层原因、复用实例的发现刷新/缓存、BLOB/极端输入、来源生命周期和三平台验证；历史开放项的证据与阶段归属见[P2 最终验收](rust-p2-completion.md)。
 - 按 JSONL Provider、SQLite Provider、桌面聊天 Provider 分批迁移。
 - 每批增加合成 fixture 与差分验收，覆盖 malformed/缺字段/旧 schema/部分失败。
 - 对齐 metadata、消息装配、raw/JSON/Markdown 和数据源只读契约。
+
+以下是各批次的历史记录，测试数量和“未完成”状态仅代表对应提交当时的范围；P2 当前状态以最终验收为准。
 
 Codex 本批实现：`ca4b1db`；benchmark 发现并修复 JSON 小写入瓶颈：`1c037d3`。优化后 `just isok` 通过，Rust 差分与边界用例现为 172 个。[五场景复测](benchmarks/rust-p2-codex.md)中，JSON＋Markdown 导出相对同期 Python 源码为 2.88×，峰值 RSS 中位数下降约 65%；原始慢路径数据同样保留。P2 整体仍未完成。
 
@@ -124,6 +126,8 @@ Codex/Claude/Pi 记录转换恢复实现：`fa39040`。新增 48 个 CLI 完整�
 同实例来源选择与重试实现：`3e599a9`。新增 5 个 Rust 单元用例，覆盖六个 Provider 的 48 组状态序列，并独立核对 Python 参考行为。新增 2 个 Claude 根路径异常 CLI 边界用例。完整 `just isok` 与 release 构建通过，CLI 套件共 834 个、Rust 单元测试 22 个。固定配置范围、已选来源保持及运行时环境变量缺口见[本批验收](rust-source-selection-parity.md)。[原七场景复测](benchmarks/rust-p2-source-selection.md)全部通过：跨 Provider 列表为 Python 255.18 ms / Rust 50.79 ms（5.02×），JSON＋Markdown 导出为 253.58 / 78.13 ms（3.25×）；不测同实例刷新或来源消失、恢复性能。
 
 运行中来源配置实现：`a42bbc6`。新增 5 个 Rust 单元用例并扩展四个已有用例，覆盖 45 组状态序列，单元测试共 27 个；CLI 套件保持 834 个。另用隔离 Python 进程切换真实环境变量核对 20 组参考序列。完整 `just isok` 与 release 构建通过。十个 Provider 的不同选择规则、Cursor 读取行为及未验收范围见[本批验收](rust-runtime-sources-parity.md)。[原七场景复测](benchmarks/rust-p2-runtime-sources.md)全部通过：跨 Provider 列表为 Python 247.15 ms / Rust 50.94 ms（4.85×），JSON＋Markdown 导出为 246.52 / 77.79 ms（3.17×）；不测同实例配置切换或其余八个 Provider 的性能。
+
+P2 收尾补齐正文缓存、lease/LRU、并发失效、极端数值与日期、SQLite BLOB、底层错误原因、配置恢复、锁竞争和三平台行为。Windows 长 Cursor 引用链改为显式栈展开。完整门禁、平台结果、已知差异和最终配对性能数据集中在[P2 最终验收](rust-p2-completion.md)。
 
 ### P3：查询、索引、维护命令
 
@@ -169,4 +173,4 @@ Codex/Claude/Pi 记录转换恢复实现：`fa39040`。新增 48 个 CLI 完整�
 
 每次结束更新阶段状态和下一项工作，保留 Python 参考实现。提交 PR 前运行 `just isok`；引入 Rust 后增加 `cargo fmt --check`、Clippy 和 Rust 测试门禁。发布切换之前，不把部分完成的 Rust 二进制发布为正式 `agent-dump`。
 
-当前下一项：验收正文缓存、lease/LRU 与失效规则，再关闭极端标题/消息/数值输入边界。十个 Provider 的运行中来源选择规则已接入；Cursor 使用当前配置读取旧 Session，其缓存来源关系需要单独验证。单次操作期间的配置竞争和跨平台组合仍未完成。记录转换恢复与已验证的警告类型已接入，不代表任意畸形输入全部对齐。Codex/Claude 标题索引的同实例刷新已验证，未进入生产 CLI 的私有标题提取包装不作为新增迁移入口。已接入 Provider 的剩余边界持续保留在验收清单；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
+当前下一项：P3 Query/Search 语义、索引增量更新与并发边界、stats/providers/reindex，并扩展代表性性能场景。P2 已完成，不再保留无归属的历史待办。Collect/配置/shortcut 保持在 P4，Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
