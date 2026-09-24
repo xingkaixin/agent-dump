@@ -56,17 +56,21 @@ pub fn run(
         }
     };
     let Some((provider, session)) = found else {
+        let roots = match registry::search_roots() {
+            Ok(roots) => roots,
+            Err(error) => {
+                write!(
+                    out,
+                    "{}",
+                    Diagnostic::unexpected(error.as_ref(), zh).render(zh)
+                )?;
+                return Ok(false);
+            }
+        };
         write!(
             out,
             "{}",
-            Diagnostic::missing_session(
-                uri,
-                registration.info.scheme,
-                id,
-                registry::search_roots(),
-                zh
-            )
-            .render(zh)
+            Diagnostic::missing_session(uri, registration.info.scheme, id, roots, zh).render(zh)
         )?;
         return Ok(false);
     };

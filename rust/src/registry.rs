@@ -158,18 +158,17 @@ pub fn for_uri(uri: &str) -> Option<(&'static Registration, &str)> {
     (!id.is_empty()).then_some((registration, id))
 }
 
-pub fn search_roots() -> Vec<String> {
-    all()
-        .iter()
-        .filter_map(|registration| {
-            let provider = (registration.open)().ok()?;
-            Some(crate::provider::render_search_roots(
-                &registration.info,
-                provider.as_ref(),
-            ))
-        })
-        .flatten()
-        .collect()
+pub fn search_roots() -> crate::Result<Vec<String>> {
+    let mut roots = Vec::new();
+    for registration in all() {
+        let provider = (registration.open)()?;
+        roots.extend(
+            crate::provider::source_roots(provider.as_ref())?
+                .into_iter()
+                .map(|root| format!("{}: {root}", registration.info.display_name)),
+        );
+    }
+    Ok(roots)
 }
 
 pub fn uri_examples() -> Vec<String> {

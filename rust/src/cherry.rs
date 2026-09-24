@@ -18,20 +18,31 @@ pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
     }
     let boot =
         crate::file_sessions::environment_root("HOME", "")?.join(".cherrystudio/boot-config.json");
+    let default = crate::desktop::app_data("CherryStudio")?.join("Data/cherrystudio.sqlite");
+    storage_roots(&boot, default)
+}
+
+pub(crate) fn storage_roots(
+    boot: &Path,
+    default: PathBuf,
+) -> crate::Result<Vec<(&'static str, PathBuf)>> {
     let mut roots = Vec::new();
     if boot.is_file() {
-        let config: Value = crate::python_json::from_slice(&crate::source_io::read(&boot)?)?;
-        if let Some(paths) = config["app.user_data_path"].as_object() {
+        let config = crate::python_json::from_slice(&crate::source_io::read(boot)?)?;
+        let object = config
+            .as_object()
+            .ok_or_else(|| attribute_error(&config, "get"))?;
+        if let Some(paths) = object.get("app.user_data_path") {
+            let paths = paths
+                .as_object()
+                .ok_or_else(|| attribute_error(paths, "values"))?;
             for value in paths.values().filter_map(Value::as_str) {
                 if Path::new(value).is_absolute() {
                     roots.push(PathBuf::from(value));
                 }
             }
-        } else if !config["app.user_data_path"].is_null() {
-            return Err("Invalid Cherry Studio boot config".into());
         }
     }
-    let default = crate::desktop::app_data("CherryStudio")?.join("Data/cherrystudio.sqlite");
     let mut result = Vec::new();
     for path in roots
         .into_iter()
@@ -43,6 +54,16 @@ pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
         }
     }
     Ok(result)
+}
+
+fn attribute_error(value: &Value, attribute: &str) -> ProviderError {
+    ProviderError::Cause {
+        kind: "AttributeError",
+        message: format!(
+            "'{}' object has no attribute '{attribute}'",
+            crate::value::type_name(value)
+        ),
+    }
 }
 
 fn records(

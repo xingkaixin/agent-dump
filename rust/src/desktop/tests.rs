@@ -132,6 +132,89 @@ fn fixture(kind: Kind) -> (tempfile::TempDir, Desktop, Session, &'static str) {
 }
 
 #[test]
+fn cherry_boot_config_edits_failures_and_recovery_keep_existing_sessions_readable() {
+    let (directory, mut provider, fallback_session, _) = fixture(Kind::Cherry);
+    let fallback = fallback_session.source_path.clone();
+    let boot = directory.path().join("boot-config.json");
+    let roots = [
+        directory.path().join("first"),
+        directory.path().join("second"),
+    ];
+    for root in &roots {
+        std::fs::create_dir_all(root.join("Data")).unwrap();
+        std::fs::copy(&fallback, root.join("Data/cherrystudio.sqlite")).unwrap();
+    }
+    provider.search_roots = Box::new({
+        let boot = boot.clone();
+        let fallback = fallback.clone();
+        move || crate::cherry::storage_roots(&boot, fallback.clone())
+    });
+    let mut selected = Vec::new();
+    for root in &roots {
+        std::fs::write(
+            &boot,
+            serde_json::json!({"app.user_data_path": {"current": root}}).to_string(),
+        )
+        .unwrap();
+        let session = provider
+            .find("session-kept", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap();
+        assert_eq!(session.source_path, root.join("Data/cherrystudio.sqlite"));
+        assert_eq!(
+            provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0].source_path,
+            session.source_path
+        );
+        selected.push(session);
+    }
+    for bad in [
+        b"{".as_slice(),
+        b"[]",
+        b"{\"app.user_data_path\":null}",
+        b"\xff",
+    ] {
+        std::fs::write(&boot, bad).unwrap();
+        assert!(provider.find("session-kept", &mut |_| Ok(())).is_err());
+        assert!(provider.discover(36500, &mut |_| Ok(())).is_err());
+        for session in &selected {
+            let before = std::fs::read(&session.source_path).unwrap();
+            assert_eq!(
+                provider.read(session, false, &mut |_| Ok(())).unwrap().id,
+                session.id
+            );
+            assert_eq!(std::fs::read(&session.source_path).unwrap(), before);
+        }
+        assert_eq!(std::fs::read(&boot).unwrap(), bad);
+    }
+    std::fs::write(
+        &boot,
+        serde_json::json!({"app.user_data_path": {"restored": roots[0]}}).to_string(),
+    )
+    .unwrap();
+    assert_eq!(
+        provider
+            .find("session-kept", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap()
+            .source_path,
+        selected[0].source_path
+    );
+    std::fs::remove_file(&boot).unwrap();
+    assert_eq!(
+        provider
+            .find("session-kept", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap()
+            .source_path,
+        fallback
+    );
+    assert!(!boot.exists());
+}
+
+#[test]
 fn source_removed_after_lookup_keeps_missing_path_and_provider_roots() {
     for (kind, name) in [
         (Kind::DeepChat, "DeepChat"),

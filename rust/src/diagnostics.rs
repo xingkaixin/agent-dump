@@ -87,6 +87,18 @@ struct ParsedUri {
 }
 
 impl Diagnostic {
+    pub fn unexpected(error: &(dyn std::error::Error + 'static), zh: bool) -> Self {
+        Self {
+            summary: if zh { "命令因未预期的错误中止。" } else { "Command aborted with an unexpected error." }.into(),
+            details: vec![provider_error::operation_message(error, zh)],
+            next_steps: if zh {
+                ["重试一次以确认是否为瞬时故障。", "若可稳定复现，请带上上面的错误类型与命令参数提交 issue。"]
+            } else {
+                ["Retry once to check whether the failure is transient.", "If it reproduces consistently, open an issue with the error type above and your command arguments."]
+            }.into_iter().map(str::to_owned).collect(),
+            ..Self::default()
+        }
+    }
     pub fn invalid_uri(uri: &str, examples: Vec<String>, zh: bool) -> Self {
         let mut next_steps = vec![
             if zh {

@@ -85,6 +85,33 @@ def test_cherry_boot_config_relocation(tmp_path, monkeypatch):
     exports(cli, "cherry", identity)
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"{",
+        b"[]",
+        b"null",
+        b'{"app.user_data_path":null}',
+        b'{"app.user_data_path":[]}',
+        b'{"app.user_data_path":1}',
+        b"\xff",
+    ],
+)
+@pytest.mark.parametrize("language", ["en", "zh"])
+def test_cherry_boot_config_failures_and_recovery(tmp_path, monkeypatch, raw, language):
+    cli, identity = desktop(tmp_path, monkeypatch, "cherry")
+    home = tmp_path / "sources/home"
+    boot = home / ".cherrystudio/boot-config.json"
+    boot.parent.mkdir(parents=True)
+    boot.write_bytes(raw)
+    cli.environment.update(HOME=str(home), USERPROFILE=str(home))
+    cli.environment.pop("CHERRY_STUDIO_USER_DATA_DIR")
+    cli.parity("--list", "-q", "provider:cherry", "-d", "36500", "--lang", language, exit_code=1)
+    cli.parity(f"cherry://{identity}", "--head", "--lang", language, exit_code=1)
+    boot.write_text(json.dumps({"app.user_data_path": {"current": str(cli.source.parent.parent)}}))
+    exports(cli, "cherry", identity, language)
+
+
 @pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax", "cursor"])
 def test_provider_source_directory_cannot_be_export_destination(tmp_path, monkeypatch, provider):
     cli, identity = (

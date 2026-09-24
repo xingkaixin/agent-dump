@@ -111,7 +111,18 @@ pub fn run(
         .as_ref()
         .map(|names| names.iter().cloned().collect::<Vec<_>>().join(","));
     if groups.is_empty() {
-        let roots = registry::search_roots();
+        let roots = match registry::search_roots() {
+            Ok(roots) => roots,
+            Err(error) => {
+                write!(
+                    out,
+                    "{}{}",
+                    crate::render::list_banner(),
+                    crate::diagnostics::Diagnostic::unexpected(error.as_ref(), zh).render(zh)
+                )?;
+                return Ok(false);
+            }
+        };
         write!(
             out,
             "{}",
