@@ -37,3 +37,5 @@ Python 的 Codex/Claude `_extract_title(lines)` 是没有生产调用方的历�
 标题缓存专项 52 passed。2026-09-24，macOS arm64，固定 Rust 1.90.0：完整 `just isok` 通过，Python 2596 passed / 1 skipped、Rust 单元测试 17 passed、CLI 差分与边界 784 passed、npm 74 passed、Web E2E 13 passed。`just build-rust` release 构建通过。
 
 Python 生产源码与 `dca2d97` 相同，P0 evaluator 四个脚本相对 `9c1cf61` 无改动；没有新增依赖。
+
+实现提交：`768e4ba`。[原七场景复测](benchmarks/rust-p2-title-cache.md)在干净 checkout 上通过结果比较和源 hash 校验；这些健康 Codex/OpenCode V2 场景不测 Claude、损坏索引或缓存刷新性能。

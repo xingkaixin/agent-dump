@@ -114,7 +114,7 @@ URI 共用诊断实现：`f3af42a`，新增 84 个 CLI 用例，合计 681 个�
 
 JSONL 坏行与旧 SQLite 坏消息/part 警告实现：`dd95821`，通过显式诊断 sink 接入 URI 工作流，并修正 BLOB 坏记录使旧表导出整体中止的问题。新增 30 个完整 CLI 差分用例，替代 4 个旧用例，净增 26 个至 732 个；完整 `just isok` 与 release 构建通过。中英文文案、次数、静默扫描与源数据验证见[坏记录警告验收](rust-record-diagnostics-parity.md)。[原七场景复测](benchmarks/rust-p2-record-warnings.md)全部通过：跨 Provider 列表为 Python 246.92 ms / Rust 53.69 ms（4.60×），JSON＋Markdown 导出为 276.68 / 79.03 ms（3.50×）；不测坏记录警告或旧 SQLite 性能。
 
-Codex/Claude 标题缓存恢复：索引不可读不再中止 Codex 发现，Claude 缺少 `entries` 按空索引处理，坏条目汇总告警，非空非字符串 summary 保留对应会话解析失败。新增 52 个 CLI 用例及 2 个同实例刷新用例，完整 `just isok` 与 release 构建通过，CLI 套件共 784 个、Rust 单元测试 17 个。底层原因文本的部分比较范围见[本批验收](rust-title-cache-parity.md)。
+Codex/Claude 标题缓存恢复实现：`768e4ba`。索引不可读不再中止 Codex 发现，Claude 缺少 `entries` 按空索引处理，坏条目汇总告警，非空非字符串 summary 保留对应会话解析失败。新增 52 个 CLI 用例及 2 个同实例刷新用例，完整 `just isok` 与 release 构建通过，CLI 套件共 784 个、Rust 单元测试 17 个。底层原因文本的部分比较范围见[本批验收](rust-title-cache-parity.md)。[原七场景复测](benchmarks/rust-p2-title-cache.md)全部通过：跨 Provider 列表为 Python 253.62 ms / Rust 51.02 ms（4.97×），JSON＋Markdown 导出为 248.25 / 81.68 ms（3.04×）；不测 Claude、损坏索引或缓存刷新性能。
 
 ### P3：查询、索引、维护命令
 

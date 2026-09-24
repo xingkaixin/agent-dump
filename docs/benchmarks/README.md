@@ -26,6 +26,8 @@
 
 [坏记录警告接入后的七场景复测](rust-p2-record-warnings.md)记录显式诊断 sink 接入后的健康数据路径，保留同轮基线和历史波动；不测警告或旧 SQLite 读取性能。
 
+[标题缓存恢复后的七场景复测](rust-p2-title-cache.md)保留 Codex/Claude 标题索引恢复接入后的同轮 Python/Rust 数据；仅测健康 Codex/OpenCode V2 场景，不测损坏索引或缓存刷新性能。
+
 ## 运行
 
 ```bash
