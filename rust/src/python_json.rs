@@ -1,5 +1,7 @@
 mod diagnostic;
+mod encoding;
 pub use diagnostic::Error;
+pub use encoding::from_bytes;
 
 use serde_json::{Number, Value};
 use std::io::{self, Write};

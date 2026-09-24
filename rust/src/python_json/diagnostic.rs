@@ -3,7 +3,7 @@ use std::fmt;
 #[derive(Debug)]
 pub struct Error {
     pub kind: &'static str,
-    message: String,
+    pub(super) message: String,
 }
 
 impl fmt::Display for Error {

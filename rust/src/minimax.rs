@@ -99,8 +99,12 @@ fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
         return Ok(None);
     }
     let id = string(&row["session_id"]);
-    let extra = crate::value::json_object(&row["extra_data_json"])
-        .ok_or_else(|| format!("Invalid MiniMax Code session metadata: {id}"))?;
+    let extra = crate::sqlite::json_cell(&row["extra_data_json"])?;
+    if !extra.is_object() {
+        return Err(
+            ProviderError::invalid(format!("Invalid MiniMax Code session metadata: {id}")).into(),
+        );
+    }
     let created = if row["created_at_ms"].is_null() {
         &row["updated_at_ms"]
     } else {
@@ -151,11 +155,7 @@ pub fn read(connection: &Connection, session: &Session) -> crate::Result<Session
 
 fn decode(row: &Value) -> crate::Result<Message> {
     let id = string(&row["msg_id"]);
-    let data = crate::python_json::from_str(
-        row["data_json"]
-            .as_str()
-            .ok_or("the JSON object must be str, bytes or bytearray, not NoneType")?,
-    )?;
+    let data = crate::sqlite::json_cell(&row["data_json"])?;
     if !data.is_object() || data["msg_id"] != row["msg_id"] {
         return Err(
             ProviderError::invalid(format!("Invalid MiniMax Code display message: {id}")).into(),

@@ -43,11 +43,7 @@ fn decode(row: &Value) -> crate::Result<Message> {
 }
 
 fn build_message(row: &Value) -> crate::Result<Message> {
-    let data = crate::python_json::from_str(
-        row["data"]
-            .as_str()
-            .ok_or("the JSON object must be str, bytes or bytearray, not NoneType")?,
-    )?;
+    let data = crate::sqlite::json_cell(&row["data"])?;
     if !data.is_object() {
         return Err("message data must be an object".into());
     }

@@ -46,17 +46,72 @@ pub fn rows(
             let value = match row.get_ref(index)? {
                 ValueRef::Null => Value::Null,
                 ValueRef::Integer(value) => value.into(),
-                ValueRef::Real(value) => {
-                    serde_json::Number::from_f64(value).map_or(Value::Null, Value::Number)
-                }
+                ValueRef::Real(value) => crate::python_json::float(value).into(),
                 ValueRef::Text(value) => std::str::from_utf8(value)?.into(),
-                ValueRef::Blob(_) => {
-                    return Err(format!("Unexpected SQLite blob in column {name}").into());
-                }
+                ValueRef::Blob(bytes) => bytes.iter().copied().map(Value::from).collect(),
             };
             record.insert(name.clone(), value);
         }
         result.push(record.into());
     }
     Ok(result)
+}
+
+pub fn json_cell(value: &Value) -> crate::Result<Value> {
+    match value {
+        Value::String(text) => crate::python_json::from_str(text),
+        // A raw SQLite cell cannot contain an array; rows uses it only for BLOB bytes.
+        Value::Array(bytes) => crate::python_json::from_bytes(
+            &bytes
+                .iter()
+                .map(|byte| byte.as_u64().unwrap() as u8)
+                .collect::<Vec<_>>(),
+        ),
+        _ => Err(crate::provider_error::ProviderError::Cause {
+            kind: "TypeError",
+            message: format!(
+                "the JSON object must be str, bytes or bytearray, not {}",
+                crate::value::type_name(value)
+            ),
+        }
+        .into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn readonly_transaction_keeps_one_snapshot_during_committed_changes() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("source.sqlite");
+        let writer = Connection::open(&path).unwrap();
+        writer.execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE messages (body TEXT); INSERT INTO messages VALUES ('before')").unwrap();
+        let reader = connect(&path).unwrap();
+        let read =
+            |connection: &Connection| rows(connection, "SELECT body FROM messages", &[]).unwrap();
+        assert_eq!(read(&reader)[0]["body"], "before");
+        writer
+            .execute("UPDATE messages SET body = 'after'", [])
+            .unwrap();
+        let persistent = change_sources(&path);
+        let before: Vec<_> = persistent
+            .iter()
+            .map(std::fs::read)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(read(&reader)[0]["body"], "before");
+        assert!(reader.execute("DELETE FROM messages", []).is_err());
+        drop(reader);
+        assert_eq!(read(&connect(&path).unwrap())[0]["body"], "after");
+        assert_eq!(
+            persistent
+                .iter()
+                .map(std::fs::read)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
+            before
+        );
+    }
 }
