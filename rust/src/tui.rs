@@ -26,6 +26,14 @@ impl Drop for Restore {
     }
 }
 
+fn init() -> crate::Result<ratatui::DefaultTerminal> {
+    let terminal = ratatui::try_init()?;
+    // Register SIGWINCH before the first frame can prompt an immediate resize.
+    event::poll(std::time::Duration::ZERO)?;
+    execute!(io::stdout(), EnableBracketedPaste)?;
+    Ok(terminal)
+}
+
 pub struct Row {
     pub title: String,
     pub detail: String,
@@ -80,8 +88,7 @@ fn select_mode(
         return Ok(Some(Vec::new()));
     }
     let _restore = Restore;
-    let mut terminal = ratatui::try_init()?;
-    execute!(io::stdout(), EnableBracketedPaste)?;
+    let mut terminal = init()?;
     let mut cursor = initial.min(rows.len() - 1);
     let mut selected = vec![false; rows.len()];
     let mut state = ListState::default().with_selected(Some(cursor));
@@ -210,8 +217,7 @@ fn draw_selection(
 pub fn input(prompt: &str, default: &str, secret: bool, zh: bool) -> crate::Result<Option<String>> {
     use unicode_width::UnicodeWidthChar;
     let _restore = Restore;
-    let mut terminal = ratatui::try_init()?;
-    execute!(io::stdout(), EnableBracketedPaste)?;
+    let mut terminal = init()?;
     let mut text: Vec<char> = default.chars().collect();
     let mut cursor = text.len();
     loop {
