@@ -50,6 +50,8 @@ JSON 导出必须显式指定 `--output`。URI 默认 `print`，输出文件位�
 
 ## 性能评估
 
+已归档的四场景对比见 [P1 性能复测](../docs/benchmarks/rust-p1.md)。
+
 使用原有 [CLI evaluator](../docs/benchmarks/README.md)，不为 Rust 改写 fixture 或验收摘要。本阶段只运行以下已实现子集：
 
 ```bash

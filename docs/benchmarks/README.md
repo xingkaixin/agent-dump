@@ -6,6 +6,8 @@
 
 首份已归档结果：[2026-09-24 Python 基线](python-baseline.md)，包含源码运行与 PyInstaller 原生制品。
 
+阶段复测：[Rust P1 四场景比较](rust-p1.md)，保留同期 Python 源码、PyInstaller 与 Rust 的原始样本；仅代表已实现子集。
+
 ## 运行
 
 ```bash

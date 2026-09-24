@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0（Python 基线与验收准备）已完成；下一阶段为 P1。Rust 生产实现尚未开始。
+状态：P0 已完成；P1 首条端到端路径已完成（Codex text/reasoning 子集）。下一阶段为 P2，先补齐 Codex 消息装配。Python 仍是默认实现和发布来源。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -23,7 +23,7 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 ## 2. 功能验收矩阵
 
-每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。以下初始状态均为待迁移；已有 Python 测试是行为依据。
+每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P1 只覆盖参数、Codex、Session facts 和 URI/导出中的子集，尚无一整行可标记为完整迁移；证据见 [P1 实现说明](../rust/README.md)与[复测报告](benchmarks/rust-p1.md)。
 
 | 范围 | 必须对齐的契约 | 现有依据 |
 | --- | --- | --- |
@@ -64,13 +64,22 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 ### P1：第一条 Rust 端到端路径
 
-- 新建独立 Rust crate 与锁文件；Python 暂时仍是默认实现。
-- 先实现参数入口、Session facts、Codex 发现/URI/head/print/JSON 导出。
-- 同一 eval 命令测两种实现；只报告已实现子集，不使用部分结果声称迁移完成。
-- 优先一个 crate 内的清晰模块；不预建插件系统、FFI、服务端或通用任务框架。
+- [x] 新建独立 Rust crate、固定工具链与锁文件；Python 仍是默认实现。
+- [x] 实现参数入口、轻量 Session 字段、Codex 发现/URI/head/print/JSON 导出的首条路径。
+- [x] 对齐普通 text/reasoning 分组与 JSON 字段；尚未迁移的工具、计划、上下文等消息明确报错，不产出遗漏内容的导出。
+- [x] 通过同一 evaluator 验证四个已实现性能场景，保存 Python 源码、PyInstaller 与 Rust release 的原始报告。
+- [x] 保持单 crate 和明确模块归属，不引入插件系统、FFI、服务端或通用任务框架。
+- [x] 增加 `just check-rust`、接入 `just isok` 和 Linux/macOS CI job。
+
+实现提交：`b473f37`；相对导出路径修复：`c5053fd`。本机 `just isok` 通过：Python 2596 passed / 1 skipped，Rust/Python 差分及边界用例 53 passed，npm 74 passed，Web E2E 13 passed。路径修复新增 1 个差分用例后，`just check-rust` 再次通过，现为 54 个。未运行远端 CI，Windows 仍待验证。
+
+[复测报告](benchmarks/rust-p1.md)：相对本次 Python 源码复测，version、Codex 列表、head、print 的耗时中位数分别改善为 33.66×、5.40×、21.98×、2.63×。这不代表全量应用或最终发布制品的性能。JSON 已做功能差分；现有导出 benchmark 同时要求 Markdown，因此未列为本阶段通过项。
+
+P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入 `--output`；配置不读取。复杂 Codex 消息、其他 Provider、完整参数组合/错误文案/部分成功行为尚待实现，详见 [Rust README](../rust/README.md)。
 
 ### P2：Provider 与导出对齐
 
+- 先补齐 Codex 工具调用/输出、patch、计划审批、skill/subagent、注入上下文与多模态处理，移除 P1 的临时拒绝分支，并以既有 Codex 测试契约做差分验收。
 - 按 JSONL Provider、SQLite Provider、桌面聊天 Provider 分批迁移。
 - 每批增加合成 fixture 与差分验收，覆盖 malformed/缺字段/旧 schema/部分失败。
 - 对齐 metadata、消息装配、raw/JSON/Markdown 和数据源只读契约。
@@ -119,4 +128,4 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 每次结束更新阶段状态和下一项工作，保留 Python 参考实现。提交 PR 前运行 `just isok`；引入 Rust 后增加 `cargo fmt --check`、Clippy 和 Rust 测试门禁。发布切换之前，不把部分完成的 Rust 二进制发布为正式 `agent-dump`。
 
-当前下一项：P1。先建立 Rust crate，再实现 Codex 发现、URI/head/print/JSON 导出的端到端路径；使用同一 evaluator 验证已完成子集，完整迁移验收继续以功能矩阵为准。
+当前下一项：P2 的 Codex 完整消息装配与 Markdown/raw 导出。先关闭 P1 的明确缺口，再开始下一批 Provider；Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
