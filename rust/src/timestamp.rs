@@ -47,7 +47,14 @@ impl Timestamp {
     pub fn format_local(self, format: &str) -> String {
         let zone = TimeZone::system();
         if let Ok(timestamp) = jiff::Timestamp::from_microsecond(self.as_microsecond()) {
-            return timestamp.to_zoned(zone).strftime(format).to_string();
+            let local = timestamp.to_zoned(zone);
+            // CPython delegates %Y padding to libc; glibc does not pad small years.
+            if cfg!(all(target_os = "linux", target_env = "gnu")) {
+                return local
+                    .strftime(&format.replace("%Y", &local.year().to_string()))
+                    .to_string();
+            }
+            return local.strftime(format).to_string();
         }
         // Jiff reserves 26 hours at each timestamp boundary for zone conversion.
         // Far-future IANA rules repeat with the 400-year Gregorian calendar cycle.
