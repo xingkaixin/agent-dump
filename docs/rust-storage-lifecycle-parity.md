@@ -29,4 +29,6 @@ SQLite 的只读事务新增真实 WAL 并发提交验证：第一次查询建�
 
 本轮针对性 CLI 回归 219 passed，包含既有 URI/共享发现路径；Rust 单元测试新增 boot-config 与事务两个用例。最终平台和完整门禁结果集中记入 [P2 最终验收](rust-p2-completion.md)。
 
-另外 5 个来源边界用例验证：OpenCode/DeepChat 的真实独占锁超时与解锁后恢复；Codex/Claude 标题索引失去读取权限后的完整警告和权限恢复；Cursor 128 层子会话引用链的导出。锁测试持锁期间不在当前进程读取 manifest，避免 POSIX 关闭同 inode 文件描述符意外释放 SQLite 锁；源 hash 在锁前后核对。权限用例仅在 POSIX 运行，Windows 不模拟 chmod 权限语义。
+另外 6 个来源边界用例验证：平台默认 home 的环境变量优先级；OpenCode/DeepChat 的真实独占锁超时与解锁后恢复；Codex/Claude 标题索引失去读取权限后的完整警告和权限恢复；Cursor 128 层子会话引用链的导出。锁测试持锁期间不在当前进程读取 manifest，避免 POSIX 关闭同 inode 文件描述符意外释放 SQLite 锁；源 hash 在锁前后核对。权限用例仅在 POSIX 运行，Windows 不模拟 chmod 权限语义。
+
+Windows 实际运行暴露了 Cursor 128 层递归展开的线程栈溢出。Rust 改用显式 frame 栈，按原 bubble 顺序深度优先处理子会话；当前展开集合防止循环，已完成结果在本次读取内复用。既有自引用、互引用、重复引用和长链 CLI 差分共同约束输出内容与排序。
