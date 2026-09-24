@@ -126,7 +126,7 @@ pub fn discover(
         match result {
             Ok(Some(session)) if session.created_at >= cutoff => discovery.sessions.push(session),
             Err(error) => discovery.failures.push(SessionFailure {
-                source: path.display().to_string(),
+                source: crate::source_io::path_text(path),
                 error,
             }),
             _ => {}
@@ -173,7 +173,7 @@ pub fn find(
                         }
                     }
                     Err(error) => lookup.failures.push(SessionFailure {
-                        source: path.display().to_string(),
+                        source: crate::source_io::path_text(path),
                         error,
                     }),
                     _ => {}

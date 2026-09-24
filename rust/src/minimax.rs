@@ -48,7 +48,7 @@ fn validate(connection: &Connection, path: &Path) -> crate::Result<()> {
             return Err(ProviderError::capability(
                 ["This database does not contain the supported MiniMax Code session tables and columns.", "数据库不包含受支持的 MiniMax Code 会话表和字段。"],
                 ["Use the current CLI v2/sqlite/runtime-state.sqlite database. Legacy history recovery and desktop data are not supported.", "请使用当前 CLI 的 v2/sqlite/runtime-state.sqlite 数据库，暂不支持旧版历史恢复和桌面端数据。"],
-                vec![path.display().to_string(), table.into()],
+                vec![crate::source_io::path_text(path), table.into()],
             ).into());
         }
     }

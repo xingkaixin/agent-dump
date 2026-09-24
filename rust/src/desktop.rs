@@ -97,7 +97,7 @@ impl Desktop {
             } else {
                 self.search_roots()?
                     .iter()
-                    .map(|(label, path)| format!("{label}: {}", path.display()))
+                    .map(|(label, path)| format!("{label}: {}", crate::source_io::path_text(path)))
                     .collect()
             };
             return Err(self.kind.missing_source(path, None, roots).into());
@@ -112,7 +112,7 @@ impl Desktop {
             return Err(ProviderError::capability(
                 ["DeepChat database is encrypted or is not a readable SQLite database.", "DeepChat 数据库已加密，或不是可读取的 SQLite 数据库。"],
                 ["Only unencrypted DeepChat databases are supported; SQLCipher decryption is unavailable.", "仅支持未加密的 DeepChat 数据库，暂不支持 SQLCipher 解密。"],
-                vec![path.display().to_string()],
+                vec![crate::source_io::path_text(path)],
             ).into());
         }
         result

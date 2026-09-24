@@ -50,9 +50,12 @@ impl ProviderError {
     ) -> Self {
         Self::Diagnostic {
             summary,
-            details: std::iter::once(format!("missing path: {}", path.display()))
-                .chain(details)
-                .collect(),
+            details: std::iter::once(format!(
+                "missing path: {}",
+                crate::source_io::path_text(path)
+            ))
+            .chain(details)
+            .collect(),
             roots,
             capability: None,
             next_steps,

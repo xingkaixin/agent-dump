@@ -31,7 +31,7 @@ pub fn record_warning(diagnostic: &RecoverableDiagnostic, zh: bool) -> String {
             }
         }
         RecoverableDiagnostic::TitleCacheEntriesSkipped { path, count } => {
-            let path = safe_line(&path.display().to_string());
+            let path = safe_line(&crate::source_io::path_text(path));
             if zh {
                 format!("警告: {path} 跳过了 {count} 条格式错误的标题缓存记录")
             } else {
@@ -39,7 +39,7 @@ pub fn record_warning(diagnostic: &RecoverableDiagnostic, zh: bool) -> String {
             }
         }
         RecoverableDiagnostic::JsonlRecordsSkipped { path, count, lines } => {
-            let path = safe_line(&path.display().to_string());
+            let path = safe_line(&crate::source_io::path_text(path));
             let lines = lines
                 .iter()
                 .map(usize::to_string)

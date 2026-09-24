@@ -28,7 +28,7 @@ pub fn sessions(
                 "Use the current app_db/agent.db database. Legacy chat.db is not supported.",
                 "请使用当前版本的 app_db/agent.db 数据库，暂不支持旧版 chat.db。",
             ],
-            vec![path.display().to_string()],
+            vec![crate::source_io::path_text(path)],
         )
         .into());
     }

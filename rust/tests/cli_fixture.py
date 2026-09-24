@@ -67,8 +67,8 @@ class CliFixture:
             if os.name != "nt":
                 assert all(path.stat().st_mode & 0o777 == 0o600 for path in files)
             assert self.fixtures.source_manifest(self.root) == before
-        assert results[0] == results[1]
-        assert outputs[0] == outputs[1]
+        assert results[0] == results[1], results
+        assert outputs[0] == outputs[1], outputs
 
 
 def make_cli(tmp_path, monkeypatch):

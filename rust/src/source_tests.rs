@@ -144,7 +144,13 @@ pub fn assert_missing(
         panic!("expected a source diagnostic");
     };
     assert_eq!(error.summary(false), summary);
-    assert_eq!(details, &[format!("missing path: {}", path.display())]);
+    assert_eq!(
+        details,
+        &[format!(
+            "missing path: {}",
+            crate::source_io::path_text(path)
+        )]
+    );
     assert_eq!(actual_roots, roots);
     assert!(capability.is_none());
     assert!(next_steps.iter().any(|step| step[0].contains(step_hint)));
@@ -193,6 +199,9 @@ pub fn removed_file(mut provider: impl Provider, path: &Path, id: &str, step_hin
     let rendered = Diagnostic::read_failed(error.as_ref(), Vec::new(), false).render(false);
     assert!(rendered.contains("raw export is not supported for this session source"));
     assert!(rendered.contains("session source is a directory, not a single raw file"));
-    assert!(rendered.contains(&format!("source path: {}", path.display())));
+    assert!(rendered.contains(&format!(
+        "source path: {}",
+        crate::source_io::path_text(path)
+    )));
     assert!(path.is_dir());
 }

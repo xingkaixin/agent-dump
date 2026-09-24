@@ -144,7 +144,11 @@ pub fn markdown(
     source_root: &Path,
 ) -> crate::Result<PathBuf> {
     write(output, session_id, ".md", source_root, |file| {
-        file.write_all(text.as_bytes())?;
+        if cfg!(windows) {
+            file.write_all(text.replace('\n', "\r\n").as_bytes())?;
+        } else {
+            file.write_all(text.as_bytes())?;
+        }
         Ok(())
     })
 }

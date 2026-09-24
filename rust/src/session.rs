@@ -310,12 +310,8 @@ impl Session {
             return project.clone();
         }
         if self.source_path.is_dir() {
-            return self.source_path.display().to_string();
+            return crate::source_io::path_text(&self.source_path);
         }
-        self.source_path
-            .parent()
-            .unwrap_or(&self.source_path)
-            .display()
-            .to_string()
+        crate::source_io::path_text(self.source_path.parent().unwrap_or(&self.source_path))
     }
 }

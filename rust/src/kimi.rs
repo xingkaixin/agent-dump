@@ -170,7 +170,7 @@ impl Provider for Kimi {
                     ["wire.jsonl is missing for this Kimi session"; 2],
                     &wire,
                     Vec::new(),
-                    vec![context.display().to_string(), wire.display().to_string()],
+                    vec![crate::source_io::path_text(&context), crate::source_io::path_text(&wire)],
                     vec![
                         ["Confirm `wire.jsonl` in the session directory has not been cleaned up.", "确认会话目录中的 `wire.jsonl` 未被清理。"],
                         ["If only `context.jsonl` exists, use the context export path.", "如果只有 `context.jsonl`，请改走 context 导出路径。"],
@@ -218,7 +218,7 @@ impl Provider for Kimi {
 
     fn raw_export(&self, session: &Session) -> crate::Result<RawExport> {
         let roots = ["context.jsonl", "wire.jsonl"]
-            .map(|name| session.source_path.join(name).display().to_string())
+            .map(|name| crate::source_io::path_text(&session.source_path.join(name)))
             .to_vec();
         let source = ["context_file", "wire_file"]
             .into_iter()
@@ -330,7 +330,7 @@ mod tests {
 
     fn roots(session: &Session) -> Vec<String> {
         ["context.jsonl", "wire.jsonl"]
-            .map(|name| session.source_path.join(name).display().to_string())
+            .map(|name| crate::source_io::path_text(&session.source_path.join(name)))
             .to_vec()
     }
 

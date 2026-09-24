@@ -3,6 +3,14 @@ use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
+pub fn path_text(path: &Path) -> String {
+    if cfg!(windows) {
+        path.to_string_lossy().replace('/', "\\")
+    } else {
+        path.to_string_lossy().into_owned()
+    }
+}
+
 #[derive(Debug)]
 pub struct Error {
     pub kind: &'static str,
@@ -49,13 +57,13 @@ impl fmt::Display for Error {
             "[Errno {}] {}: {}",
             self.code,
             self.reason,
-            crate::value::repr(&self.path.to_string_lossy().as_ref().into())
+            crate::value::repr(&path_text(&self.path).into())
         )?;
         if let Some(destination) = &self.destination {
             write!(
                 formatter,
                 " -> {}",
-                crate::value::repr(&destination.to_string_lossy().as_ref().into())
+                crate::value::repr(&path_text(destination).into())
             )?;
         }
         Ok(())

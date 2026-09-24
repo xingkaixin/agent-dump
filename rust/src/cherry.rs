@@ -85,7 +85,7 @@ fn records(
         return Err(ProviderError::capability(
             ["This database does not contain the supported Cherry Studio session tables.", "数据库不包含受支持的 Cherry Studio 会话表。"],
             ["Use the Cherry Studio 2.x Data/cherrystudio.sqlite database. Legacy IndexedDB data is not supported.", "请使用 Cherry Studio 2.x 的 Data/cherrystudio.sqlite 数据库，暂不支持旧版 IndexedDB 数据。"],
-            vec![path.display().to_string()],
+            vec![crate::source_io::path_text(path)],
         ).into());
     }
     let deleted = rows(connection, "PRAGMA table_info(agent_session)", &[])?

@@ -204,7 +204,7 @@ pub fn run(
         };
         match result {
             Ok(path) => {
-                let path = render::safe_line(&path.display().to_string());
+                let path = render::safe_line(&crate::source_io::path_text(&path));
                 let format = format.name();
                 writeln!(
                     out,

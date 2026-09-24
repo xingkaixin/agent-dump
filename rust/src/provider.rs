@@ -130,7 +130,7 @@ pub trait Provider {
         if !path.is_file() {
             return Err(ProviderError::Diagnostic {
                 summary: ["raw export is not supported for this session source"; 2],
-                details: vec![format!("source path: {}", path.display())],
+                details: vec![format!("source path: {}", crate::source_io::path_text(path))],
                 roots: Vec::new(),
                 capability: Some(["session source is a directory, not a single raw file"; 2]),
                 next_steps: vec![
@@ -147,7 +147,7 @@ pub fn source_roots(provider: &(impl Provider + ?Sized)) -> crate::Result<Vec<St
     Ok(provider
         .search_roots()?
         .into_iter()
-        .map(|(label, path)| format!("{label}: {}", path.display()))
+        .map(|(label, path)| format!("{label}: {}", crate::source_io::path_text(&path)))
         .collect())
 }
 
