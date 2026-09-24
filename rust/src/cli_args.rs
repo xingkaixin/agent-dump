@@ -7,8 +7,8 @@ use std::path::PathBuf;
 #[command(
     name = "agent-dump",
     version,
-    about = "Experimental Rust: session discovery, search and export",
-    after_help = "Python remains the default CLI. Rust supports ten Providers, Query/Search, statistics, index maintenance and single-session export. Collect, configuration and shortcuts are also available. Python remains the default installation.",
+    about = "Experimental Rust CLI for agent sessions",
+    after_help = "Python remains the default installation. Rust supports ten Providers, Query/Search, index maintenance, Collect, configuration, shortcuts, URI export and Ratatui selection.",
     arg_required_else_help = true
 )]
 pub struct Args {

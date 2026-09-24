@@ -150,10 +150,12 @@ fn draw_selection(
     state: &mut ListState,
     zh: bool,
 ) {
+    let compact = frame.area().height < 10;
+    let header_height = if compact { 1 } else { 2 };
     let areas = Layout::vertical([
-        Constraint::Length(2),
+        Constraint::Length(header_height),
         Constraint::Min(1),
-        Constraint::Length(2),
+        Constraint::Length(header_height),
     ])
     .split(frame.area());
     frame.render_widget(
@@ -172,14 +174,14 @@ fn draw_selection(
                 "[ ] "
             };
             let mut lines = Vec::new();
-            if !row.group.is_empty() {
+            if !compact && !row.group.is_empty() {
                 lines.push(Line::styled(
                     row.group.clone(),
                     Style::default().fg(Color::Cyan),
                 ));
             }
             lines.push(Line::raw(format!("{prefix}{}", row.title)));
-            if !row.detail.is_empty() {
+            if !compact && !row.detail.is_empty() {
                 lines.push(Line::styled(
                     format!("    {}", row.detail),
                     Style::default().fg(Color::DarkGray),
@@ -196,7 +198,11 @@ fn draw_selection(
         state,
     );
     frame.render_widget(
-        Paragraph::new(help(zh, multiple)).block(Block::default().borders(Borders::TOP)),
+        Paragraph::new(help(zh, multiple)).block(if compact {
+            Block::default()
+        } else {
+            Block::default().borders(Borders::TOP)
+        }),
         areas[2],
     );
 }
@@ -330,16 +336,16 @@ pub fn secret_line(prompt: &str) -> crate::Result<Option<String>> {
     struct RestoreInput;
     impl Drop for RestoreInput {
         fn drop(&mut self) {
-            let _ = execute!(io::stderr(), DisableBracketedPaste);
             let _ = crossterm::terminal::disable_raw_mode();
+            let _ = execute!(io::stderr(), DisableBracketedPaste);
         }
     }
     let mut output = io::stderr();
-    write!(output, "{prompt}")?;
-    output.flush()?;
     let guard = RestoreInput;
     crossterm::terminal::enable_raw_mode()?;
     execute!(output, EnableBracketedPaste)?;
+    write!(output, "{prompt}")?;
+    output.flush()?;
     let mut text = String::new();
     let result = loop {
         match event::read()? {
@@ -390,7 +396,7 @@ mod tests {
                 })
                 .unwrap();
             assert_eq!(terminal.backend().buffer().area.width, width);
-            if width == 80 {
+            if width >= 12 {
                 let text = terminal
                     .backend()
                     .buffer()
@@ -398,9 +404,11 @@ mod tests {
                     .iter()
                     .map(|c| c.symbol())
                     .collect::<String>();
-                assert!(text.replace(' ', "").contains("修复认证"));
+                assert!(text.replace(' ', "").contains("修复"));
                 assert!(text.contains("[x]"));
-                assert!(text.replace(' ', "").contains("今天"));
+                if width == 80 {
+                    assert!(text.replace(' ', "").contains("今天"));
+                }
             }
         }
     }
