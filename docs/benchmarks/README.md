@@ -8,6 +8,8 @@
 
 阶段复测：[Rust P1 四场景比较](rust-p1.md)，保留同期 Python 源码、PyInstaller 与 Rust 的原始样本；仅代表已实现子集。
 
+[Rust P2 Codex 五场景比较](rust-p2-codex.md)增加 JSON＋Markdown 导出，保留缓冲优化前后的完整数据与同期 Python 测量。
+
 ## 运行
 
 ```bash

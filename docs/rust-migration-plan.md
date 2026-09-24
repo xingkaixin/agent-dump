@@ -86,6 +86,8 @@ P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入
 - 每批增加合成 fixture 与差分验收，覆盖 malformed/缺字段/旧 schema/部分失败。
 - 对齐 metadata、消息装配、raw/JSON/Markdown 和数据源只读契约。
 
+Codex 本批实现：`ca4b1db`；benchmark 发现并修复 JSON 小写入瓶颈：`1c037d3`。优化后 `just isok` 通过，Rust 差分与边界用例现为 172 个。[五场景复测](benchmarks/rust-p2-codex.md)中，JSON＋Markdown 导出相对同期 Python 源码为 2.88×，峰值 RSS 中位数下降约 65%；原始慢路径数据同样保留。P2 整体仍未完成。
+
 ### P3：查询、索引、维护命令
 
 - 对齐 Query/Search 语义，然后实现 SQLite FTS5 与 fallback。
