@@ -1,5 +1,7 @@
 # P2：损坏记录可恢复警告验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 本批对齐完整正文读取中的 JSONL 坏行和旧 SQLite 消息/part 坏记录警告，覆盖文案、语言、输出通道、次数和继续读取行为。Python 生产源码、P0 evaluator 及 pip/npm 默认入口保持不变；本批之后的标题缓存恢复见[标题缓存验收](rust-title-cache-parity.md)，后续的记录转换恢复见[验收记录](rust-message-conversion-parity.md)，其他极端输入仍未全部验收。
 
 ## 行为与证据

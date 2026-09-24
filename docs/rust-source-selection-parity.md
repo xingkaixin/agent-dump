@@ -1,5 +1,7 @@
 # P2：同实例来源选择与重试验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 本批对齐固定配置路径下，Codex、Claude Code、Kimi、Pi、OpenCode、ZCode 在同一 Provider 实例内的来源选择行为。Python 生产源码、P0 evaluator 和 pip/npm 默认入口保持不变；P2 尚未完成。
 
 Python 的规则不是每次操作都重新选择最优来源：尚未找到任何来源时，下次发现或查找重试；一旦选中路径，即使它没有会话，也保持该选择。后来出现的高优先级来源不会取代已选 fallback。

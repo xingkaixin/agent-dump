@@ -1,5 +1,7 @@
 # P2：共享发现与跨 Provider 列表验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 Rust 现在支持不带查询的 `--list`，以及 `-q provider:codex,opencode`。Provider 过滤先于发现执行；分组按 Python 注册顺序展示。Python 源码和 P0 evaluator 保持不变，pip/npm 仍使用 Python。
 
 ## 行为映射

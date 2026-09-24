@@ -1,5 +1,7 @@
 # P2：桌面 Provider 专属错误验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 本批补齐 DeepChat、Cherry Studio、MiniMax Code 的 schema、不可读来源与存储迁移诊断。Python 生产源码、默认 pip/npm 入口和 P0 evaluator 保持不变；不将三个 Provider 的错误路径完成计作 P2 全部完成。
 
 ## 行为与证据

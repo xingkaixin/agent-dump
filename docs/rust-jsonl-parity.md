@@ -1,5 +1,7 @@
 # P2：Claude Code、Kimi、Pi 差分验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 本批在 `feat/rust-rewrite` 上接入三个 JSONL Provider，实现提交 `3669542`，复用 Codex 批次的单 URI 工作流和导出模块。Python 参考实现、pip/npm 发布入口与 P0 benchmark evaluator 均保持不变。这里记录已验证的行为，不代表三个 Provider 的完整契约或 P2 已全部完成。
 
 ## 验收方式

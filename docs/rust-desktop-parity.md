@@ -1,5 +1,7 @@
 # P2：Cursor / DeepChat / Cherry Studio / MiniMax 差分验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 本批补上四个 Provider 的显式单 Provider 列表、URI/head、正文读取和支持格式的单会话导出。十个 Provider 均已有 Rust 入口；共享 discovery 的完整性、缓存、诊断与全部工作流尚未迁移，因此 P2 仍未完成。Python 生产源码、pip/npm 默认入口与 P0 evaluator 保持不变。
 
 ## 行为映射

@@ -1,5 +1,7 @@
 # P2：运行中来源配置变化验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 本批延续[固定配置下的来源选择验收](rust-source-selection-parity.md)，对齐同一 Provider 实例在候选配置变化后的发现、查找和诊断路径。Python 生产源码、P0 evaluator 和 pip/npm 默认入口保持不变；P2 尚未完成。
 
 ## 行为与证据

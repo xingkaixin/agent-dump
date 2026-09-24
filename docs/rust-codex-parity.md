@@ -1,5 +1,7 @@
 # P2：Codex 消息与导出验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 本批迁移 Codex 正文消息装配与单 URI 的 Markdown/raw/混合导出。Python 参考实现保持不变；本记录不代表所有 Provider 或整个 Codex 契约已经完成。
 
 ## 差分方式

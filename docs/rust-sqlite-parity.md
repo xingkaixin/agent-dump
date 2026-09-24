@@ -1,5 +1,7 @@
 # P2：OpenCode / ZCode 差分验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 本批在 `feat/rust-rewrite` 接入 OpenCode 旧表、V2 及 ZCode 旧表，继续保持 Python 发布实现和 P0 evaluator 不变。范围为显式单 Provider 列表、URI/head/print/JSON/Markdown/raw；不代表查询、索引、缓存及全部 Provider contract 已完成。
 
 ## 行为映射

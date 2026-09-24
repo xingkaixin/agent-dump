@@ -1,5 +1,7 @@
 # P2：源缺失诊断与 Kimi raw 文件身份验收
 
+> 历史分批记录：下文状态与计数描述该批提交。开放项的收尾证据与后续阶段归属统一见 [P2 最终验收](rust-p2-completion.md)。
+
 本批补齐 Codex、Claude Code、Pi、Kimi、Cursor、OpenCode、ZCode 在定位后源消失时的读取诊断，并修正 Kimi raw 文件选择和 OpenCode V2 消失后的错误原因。Python 生产源码、P0 evaluator 和 pip/npm 默认入口保持不变；P2 仍在进行中。
 
 ## 行为与证据
