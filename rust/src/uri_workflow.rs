@@ -100,7 +100,7 @@ pub fn run(
         .formats
         .iter()
         .any(|format| *format != OutputFormat::Raw)
-        || matches!(raw, RawExport::Session))
+        || matches!(raw, Ok(RawExport::Session)))
     .then(|| provider.read(&session, zh));
     let mut success = false;
     if operation.formats.contains(&OutputFormat::Print) {
@@ -126,9 +126,13 @@ pub fn run(
         .iter()
         .filter(|format| **format != OutputFormat::Print)
     {
-        if (*format != OutputFormat::Raw || matches!(raw, RawExport::Session))
-            && let Some(Err(error)) = &prepared
-        {
+        let needs_data = *format != OutputFormat::Raw || matches!(raw, Ok(RawExport::Session));
+        let error = match (&raw, &prepared) {
+            (Err(error), _) if *format == OutputFormat::Raw => Some(error),
+            (_, Some(Err(error))) if needs_data => Some(error),
+            _ => None,
+        };
+        if let Some(error) = error {
             write!(
                 out,
                 "{}",
@@ -148,7 +152,7 @@ pub fn run(
             .unwrap()
             .join(registration.info.name);
         let result = if *format == OutputFormat::Raw {
-            match &raw {
+            match raw.as_ref().unwrap() {
                 RawExport::File(source) => {
                     export::raw(&session.id, source, &output, provider.source_root())
                 }

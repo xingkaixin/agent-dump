@@ -42,6 +42,7 @@ impl Kind {
                 .into_iter()
                 .collect(),
             roots,
+            Vec::new(),
         )
     }
 }

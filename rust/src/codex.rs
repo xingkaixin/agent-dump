@@ -168,6 +168,18 @@ impl Provider for Codex {
     }
 
     fn read(&self, session: &Session, zh: bool) -> crate::Result<SessionData> {
+        if !session.source_path.exists() {
+            return Err(crate::provider_error::ProviderError::missing(
+                ["session source file is missing"; 2],
+                &session.source_path,
+                Vec::new(),
+                crate::provider::source_roots(self),
+                vec![
+                    ["Confirm the Codex session file is still under `CODEX_HOME/sessions` or the local development data directory.", "确认 Codex 会话文件仍在 `CODEX_HOME/sessions` 或本地开发数据目录。"],
+                    ["Re-run `agent-dump --list` to confirm the session id still exists.", "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。"],
+                ],
+            ).into());
+        }
         super::codex_transcript::read(session, zh)
     }
 
@@ -181,5 +193,29 @@ impl Provider for Codex {
 
     fn source_root(&self) -> &Path {
         &self.roots.owned
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn removed_source_keeps_provider_diagnostic() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("sessions/rollout-kept.jsonl");
+        std::fs::create_dir(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "{\"type\":\"session_meta\",\"payload\":{\"id\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\"}}\n").unwrap();
+        let provider = Codex {
+            roots: SourceRoots::resolve(
+                directory.path().into(),
+                "sessions",
+                "data/codex",
+                "CODEX_HOME/sessions",
+            ),
+            titles: HashMap::new(),
+            index: directory.path().join("session_index.jsonl"),
+        };
+        crate::source_tests::removed_file(provider, &path, "kept", "CODEX_HOME/sessions");
     }
 }

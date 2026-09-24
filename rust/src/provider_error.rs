@@ -11,6 +11,7 @@ pub enum ProviderError {
         details: Vec<String>,
         roots: Vec<String>,
         capability: Option<LocalizedText>,
+        next_steps: Vec<LocalizedText>,
     },
 }
 
@@ -25,6 +26,7 @@ impl ProviderError {
             details,
             roots: Vec::new(),
             capability: Some(capability),
+            next_steps: Vec::new(),
         }
     }
 
@@ -33,6 +35,7 @@ impl ProviderError {
         path: &Path,
         details: Vec<String>,
         roots: Vec<String>,
+        next_steps: Vec<LocalizedText>,
     ) -> Self {
         Self::Diagnostic {
             summary,
@@ -41,6 +44,7 @@ impl ProviderError {
                 .collect(),
             roots,
             capability: None,
+            next_steps,
         }
     }
 

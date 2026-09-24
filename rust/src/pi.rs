@@ -118,6 +118,18 @@ impl Provider for Pi {
     }
 
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
+        if !session.source_path.exists() {
+            return Err(crate::provider_error::ProviderError::missing(
+                ["session source file is missing"; 2],
+                &session.source_path,
+                Vec::new(),
+                crate::provider::source_roots(self),
+                vec![
+                    ["Confirm the Pi session file is still under `PI_HOME/agent/sessions` or the local development data directory.", "确认 Pi 会话文件仍在 `PI_HOME/agent/sessions` 或本地开发数据目录。"],
+                    ["Re-run `agent-dump --list` to confirm the session id still exists.", "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。"],
+                ],
+            ).into());
+        }
         crate::pi_transcript::read(session)
     }
 
@@ -165,4 +177,30 @@ fn content_text(content: &Value) -> String {
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn removed_source_keeps_provider_diagnostic() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("agent/sessions/kept.jsonl");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "{\"type\":\"session\",\"id\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\"}\n",
+        )
+        .unwrap();
+        let provider = Pi {
+            roots: SourceRoots::resolve(
+                directory.path().into(),
+                "agent/sessions",
+                "data/pi",
+                "PI_HOME/agent/sessions",
+            ),
+        };
+        crate::source_tests::removed_file(provider, &path, "kept", "PI_HOME/agent/sessions");
+    }
 }

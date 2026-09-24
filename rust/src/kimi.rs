@@ -106,7 +106,10 @@ impl Kimi {
             created_at,
             updated_at: created_at,
             subtargets: Vec::new(),
-            source_metadata: serde_json::Value::Null,
+            source_metadata: serde_json::json!({
+                "context_file": context.exists().then_some(&context),
+                "wire_file": directory.join("wire.jsonl").exists().then(|| directory.join("wire.jsonl")),
+            }),
             source_path: directory.to_owned(),
             directory: cwd,
             version: Value::Null,
@@ -146,6 +149,18 @@ impl Provider for Kimi {
         let messages = if context.exists() {
             crate::kimi_transcript::read(&context, true)?
         } else {
+            if !wire.exists() {
+                return Err(crate::provider_error::ProviderError::missing(
+                    ["wire.jsonl is missing for this Kimi session"; 2],
+                    &wire,
+                    Vec::new(),
+                    vec![context.display().to_string(), wire.display().to_string()],
+                    vec![
+                        ["Confirm `wire.jsonl` in the session directory has not been cleaned up.", "确认会话目录中的 `wire.jsonl` 未被清理。"],
+                        ["If only `context.jsonl` exists, use the context export path.", "如果只有 `context.jsonl`，请改走 context 导出路径。"],
+                    ],
+                ).into());
+            }
             crate::kimi_wire::read(&wire)?
         };
         let mut stats = Stats {
@@ -177,12 +192,181 @@ impl Provider for Kimi {
         &self.roots.owned
     }
 
-    fn raw_export(&self, session: &Session) -> RawExport {
+    fn raw_export(&self, session: &Session) -> crate::Result<RawExport> {
+        let roots = ["context.jsonl", "wire.jsonl"]
+            .map(|name| session.source_path.join(name).display().to_string())
+            .to_vec();
+        let source = ["context_file", "wire_file"]
+            .into_iter()
+            .find_map(|key| {
+                session.source_metadata[key]
+                    .as_str()
+                    .filter(|path| !path.is_empty())
+            })
+            .map(PathBuf::from);
+        let Some(source) = source else {
+            return Err(crate::provider_error::ProviderError::missing(
+                ["no raw session file is available for this Kimi session"; 2],
+                &session.source_path,
+                Vec::new(),
+                roots,
+                vec![
+                    ["Confirm the session directory holds at least `context.jsonl` or `wire.jsonl`.", "确认该会话目录下至少存在 `context.jsonl` 或 `wire.jsonl`。"],
+                    ["For a readable export, use `--format json` or `--format markdown`.", "若只需要可读导出，改用 `--format json` 或 `--format markdown`。"],
+                ],
+            ).into());
+        };
+        if !source.exists() {
+            return Err(crate::provider_error::ProviderError::missing(
+                ["raw session file is missing"; 2],
+                &source,
+                Vec::new(),
+                roots,
+                vec![
+                    [
+                        "Confirm the original Kimi session file has not been moved or cleaned up.",
+                        "确认原始 Kimi 会话文件没有被移动或清理。",
+                    ],
+                    [
+                        "Re-run `agent-dump --list` to check whether the session is still visible.",
+                        "重新运行 `agent-dump --list` 检查该会话是否仍可见。",
+                    ],
+                ],
+            )
+            .into());
+        }
+        Ok(RawExport::File(source))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source_tests::assert_missing;
+
+    fn fixture(root: &Path, context: bool) -> (Kimi, Session) {
+        let directory = root.join("sessions/project/kept");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("metadata.json"),
+            r#"{"session_id":"kept","title":"Kept","wire_mtime":1768478400}"#,
+        )
+        .unwrap();
+        if context {
+            std::fs::write(
+                directory.join("context.jsonl"),
+                "{\"role\":\"user\",\"content\":\"Context\"}\n",
+            )
+            .unwrap();
+        }
+        std::fs::write(directory.join("wire.jsonl"), "{\"timestamp\":1768478400,\"message\":{\"type\":\"TurnBegin\",\"payload\":{\"user_input\":[{\"text\":\"Wire\"}]}}}\n").unwrap();
+        let mut provider = Kimi {
+            roots: SourceRoots::resolve(
+                root.into(),
+                "sessions",
+                "data/kimi",
+                "KIMI_SHARE_DIR/sessions",
+            ),
+            work_dirs: None,
+        };
+        let session = provider.find("kept").unwrap().session.unwrap();
+        (provider, session)
+    }
+
+    fn roots(session: &Session) -> Vec<String> {
+        ["context.jsonl", "wire.jsonl"]
+            .map(|name| session.source_path.join(name).display().to_string())
+            .to_vec()
+    }
+
+    fn text(provider: &Kimi, session: &Session) -> String {
+        let data = serde_json::to_value(provider.read(session, false).unwrap()).unwrap();
+        data["messages"][0]["parts"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[test]
+    fn context_removed_keeps_raw_identity_while_body_can_use_wire() {
+        let directory = tempfile::tempdir().unwrap();
+        let (mut provider, session) = fixture(directory.path(), true);
         let context = session.source_path.join("context.jsonl");
-        RawExport::File(if context.exists() {
-            context
-        } else {
-            session.source_path.join("wire.jsonl")
-        })
+        assert_eq!(text(&provider, &session), "Context");
+        std::fs::remove_file(&context).unwrap();
+        assert_eq!(text(&provider, &session), "Wire");
+        let error = provider.raw_export(&session).err().unwrap();
+        assert_missing(
+            error.as_ref(),
+            "raw session file is missing",
+            &context,
+            &roots(&session),
+            "original Kimi session",
+        );
+        let current = provider.find("kept").unwrap().session.unwrap();
+        assert!(
+            matches!(provider.raw_export(&current).unwrap(), RawExport::File(path) if path == session.source_path.join("wire.jsonl"))
+        );
+        assert!(!context.exists());
+    }
+
+    #[test]
+    fn new_context_does_not_replace_snapshot_raw_wire() {
+        let directory = tempfile::tempdir().unwrap();
+        let (provider, session) = fixture(directory.path(), false);
+        let wire = session.source_path.join("wire.jsonl");
+        let before = std::fs::read(&wire).unwrap();
+        std::fs::write(
+            session.source_path.join("context.jsonl"),
+            "{\"role\":\"user\",\"content\":\"New context\"}\n",
+        )
+        .unwrap();
+        assert_eq!(text(&provider, &session), "New context");
+        assert!(
+            matches!(provider.raw_export(&session).unwrap(), RawExport::File(path) if path == wire)
+        );
+        assert_eq!(std::fs::read(wire).unwrap(), before);
+    }
+
+    #[test]
+    fn missing_body_and_raw_keep_distinct_evidence() {
+        let directory = tempfile::tempdir().unwrap();
+        let (provider, session) = fixture(directory.path(), true);
+        let context = session.source_path.join("context.jsonl");
+        let wire = session.source_path.join("wire.jsonl");
+        std::fs::remove_file(&context).unwrap();
+        std::fs::remove_file(&wire).unwrap();
+        let error = provider.read(&session, false).err().unwrap();
+        assert_missing(
+            error.as_ref(),
+            "wire.jsonl is missing for this Kimi session",
+            &wire,
+            &roots(&session),
+            "wire.jsonl",
+        );
+        let error = provider.raw_export(&session).err().unwrap();
+        assert_missing(
+            error.as_ref(),
+            "raw session file is missing",
+            &context,
+            &roots(&session),
+            "original Kimi session",
+        );
+        assert!(!context.exists() && !wire.exists());
+    }
+
+    #[test]
+    fn raw_without_snapshot_file_evidence_does_not_guess_a_source() {
+        let directory = tempfile::tempdir().unwrap();
+        let (provider, mut session) = fixture(directory.path(), true);
+        session.source_metadata = Value::Null;
+        let error = provider.raw_export(&session).err().unwrap();
+        assert_missing(
+            error.as_ref(),
+            "no raw session file is available for this Kimi session",
+            &session.source_path,
+            &roots(&session),
+            "at least",
+        );
     }
 }

@@ -164,6 +164,7 @@ impl Diagnostic {
             details,
             roots,
             capability,
+            next_steps,
         }) = error.downcast_ref::<ProviderError>()
         {
             return Self {
@@ -171,6 +172,10 @@ impl Diagnostic {
                 details: details.clone(),
                 roots: roots.clone(),
                 capability: capability.map(|text| text[usize::from(zh)].into()),
+                next_steps: next_steps
+                    .iter()
+                    .map(|text| text[usize::from(zh)].into())
+                    .collect(),
                 ..Self::default()
             };
         }

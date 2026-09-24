@@ -118,6 +118,48 @@ impl Provider for SqliteProvider {
     }
 
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
+        if !session.source_path.exists() {
+            let (summary, steps) = match self.kind {
+                Kind::OpenCode => (
+                    "OpenCode database is missing",
+                    vec![
+                        [
+                            "Confirm OpenCode has produced a session database on this machine.",
+                            "确认 OpenCode 已在本机生成会话数据库。",
+                        ],
+                        [
+                            "In a test or development environment, check whether `data/opencode/opencode.db` exists.",
+                            "若在测试或开发环境，检查 `data/opencode/opencode.db` 是否存在。",
+                        ],
+                    ],
+                ),
+                Kind::ZCode => (
+                    "ZCode database is missing",
+                    vec![
+                        [
+                            "Confirm ZCode has produced a session database on this macOS or Windows machine.",
+                            "确认 ZCode 已在 macOS 或 Windows 本机生成会话数据库。",
+                        ],
+                        [
+                            "On macOS check `~/.zcode/cli/db/db.sqlite`; on Windows check `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`.",
+                            "macOS 检查 `~/.zcode/cli/db/db.sqlite`；Windows 检查 `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`。",
+                        ],
+                        [
+                            "Linux has no default ZCode session path.",
+                            "Linux 暂无 ZCode 默认会话路径。",
+                        ],
+                    ],
+                ),
+            };
+            return Err(crate::provider_error::ProviderError::missing(
+                [summary; 2],
+                &session.source_path,
+                Vec::new(),
+                crate::provider::source_roots(self),
+                steps,
+            )
+            .into());
+        }
         let connection = connect(&session.source_path)?;
         if self.kind == Kind::OpenCode && has_table(&connection, "session_v2")? {
             if let Some(row) = rows(
@@ -130,12 +172,11 @@ impl Provider for SqliteProvider {
             {
                 return crate::opencode_v2::read(&connection, session, row);
             }
-            if !has_table(&connection, "session")? {
-                return Err("OpenCode session is missing".into());
+            if session.source_metadata["schema"] == "v2" || !has_table(&connection, "session")? {
+                return Err(format!("OpenCode session is missing: {}", session.id).into());
             }
-        }
-        if session.source_metadata["schema"] == "v2" {
-            return Err("OpenCode V2 session source is missing".into());
+        } else if session.source_metadata["schema"] == "v2" {
+            return Err(format!("OpenCode V2 session source is missing: {}", session.id).into());
         }
         crate::sqlite_legacy::read(&connection, session)
     }
@@ -148,8 +189,8 @@ impl Provider for SqliteProvider {
         &self.root
     }
 
-    fn raw_export(&self, _session: &Session) -> RawExport {
-        RawExport::Session
+    fn raw_export(&self, _session: &Session) -> crate::Result<RawExport> {
+        Ok(RawExport::Session)
     }
 }
 
@@ -264,4 +305,78 @@ fn database_paths(kind: Kind) -> crate::Result<Vec<(&'static str, PathBuf)>> {
         "data/opencode/opencode.db".into(),
     ));
     Ok(paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(path: &Path, kind: Kind, v2: bool) -> SqliteProvider {
+        let connection = Connection::open(path).unwrap();
+        connection.execute_batch("CREATE TABLE session (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT); INSERT INTO session VALUES ('kept', 'Kept', 1768478400000, 1768478400000, NULL, '/project', NULL, NULL);").unwrap();
+        if v2 {
+            connection.execute_batch("CREATE TABLE session_v2 (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT, model TEXT, project_id TEXT, parent_id TEXT); INSERT INTO session_v2 VALUES ('kept', 'V2', 1768478400000, 1768478400000, NULL, '/project', NULL, NULL, NULL, NULL, NULL);").unwrap();
+        }
+        SqliteProvider {
+            kind,
+            database: Some(path.into()),
+            root: path.parent().unwrap().into(),
+            search_roots: vec![("Synthetic database", path.into())],
+        }
+    }
+
+    #[test]
+    fn missing_snapshot_database_does_not_use_new_provider_database() {
+        for (kind, summary) in [
+            (Kind::OpenCode, "OpenCode database is missing"),
+            (Kind::ZCode, "ZCode database is missing"),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("source.sqlite");
+            let mut provider = fixture(&path, kind, false);
+            let session = provider.find("kept").unwrap().session.unwrap();
+            std::fs::remove_file(&path).unwrap();
+            let alternative = directory.path().join("unrelated.sqlite");
+            std::fs::write(&alternative, b"must not read or change").unwrap();
+            provider.database = Some(alternative.clone());
+            let error = provider.read(&session, false).err().unwrap();
+            crate::source_tests::assert_missing(
+                error.as_ref(),
+                summary,
+                &path,
+                &crate::provider::source_roots(&provider),
+                "session database",
+            );
+            assert!(!path.exists());
+            assert_eq!(
+                std::fs::read(alternative).unwrap(),
+                b"must not read or change"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_v2_snapshot_never_reads_legacy_duplicate() {
+        for (sql, expected) in [
+            (
+                "DELETE FROM session_v2",
+                "OpenCode session is missing: kept",
+            ),
+            (
+                "DROP TABLE session_v2",
+                "OpenCode V2 session source is missing: kept",
+            ),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("source.sqlite");
+            let mut provider = fixture(&path, Kind::OpenCode, true);
+            let session = provider.find("kept").unwrap().session.unwrap();
+            assert_eq!(session.title, "V2");
+            Connection::open(&path).unwrap().execute_batch(sql).unwrap();
+            let before = std::fs::read(&path).unwrap();
+            let error = provider.read(&session, false).err().unwrap();
+            assert_eq!(error.to_string(), expected);
+            assert_eq!(std::fs::read(path).unwrap(), before);
+        }
+    }
 }

@@ -99,6 +99,18 @@ impl Provider for Cursor {
         ))
     }
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
+        if !session.source_path.exists() {
+            return Err(crate::provider_error::ProviderError::missing(
+                ["Cursor global database is missing"; 2],
+                &session.source_path,
+                Vec::new(),
+                crate::provider::source_roots(self),
+                vec![
+                    ["Confirm `globalStorage/state.vscdb` still exists under the Cursor user directory.", "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。"],
+                    ["Re-run `agent-dump --list --agent cursor` to check whether sessions are still visible.", "重新运行 `agent-dump --list --agent cursor` 检查会话是否仍可见。"],
+                ],
+            ).into());
+        }
         crate::cursor_transcript::read(&crate::sqlite::connect(&session.source_path)?, session)
     }
     fn search_roots(&self) -> Vec<(&'static str, PathBuf)> {
@@ -347,4 +359,32 @@ fn cursor_time(value: &Value) -> Option<Timestamp> {
     } else {
         number
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn removed_database_keeps_provider_diagnostic() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("state.vscdb");
+        let connection = Connection::open(&path).unwrap();
+        connection.execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
+        drop(connection);
+        let mut provider = Cursor {
+            database: path.clone(),
+        };
+        let session = provider.find("kept").unwrap().session.unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let error = provider.read(&session, false).err().unwrap();
+        crate::source_tests::assert_missing(
+            error.as_ref(),
+            "Cursor global database is missing",
+            &path,
+            &crate::provider::source_roots(&provider),
+            "globalStorage/state.vscdb",
+        );
+        assert!(!path.exists());
+    }
 }

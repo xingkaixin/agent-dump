@@ -28,6 +28,8 @@ mod provider_error;
 mod registry;
 mod render;
 mod session;
+#[cfg(test)]
+mod source_tests;
 mod sqlite;
 mod sqlite_legacy;
 mod sqlite_provider;

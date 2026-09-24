@@ -174,6 +174,18 @@ impl Provider for Claude {
     }
 
     fn read(&self, session: &Session, _zh: bool) -> crate::Result<SessionData> {
+        if !session.source_path.exists() {
+            return Err(crate::provider_error::ProviderError::missing(
+                ["session source file is missing"; 2],
+                &session.source_path,
+                Vec::new(),
+                crate::provider::source_roots(self),
+                vec![
+                    ["Confirm the Claude Code session file is still under the projects directory.", "确认 Claude Code 会话文件仍位于 projects 目录下。"],
+                    ["Re-run `agent-dump --list` to confirm the session still exists.", "重新运行 `agent-dump --list` 确认该会话是否仍存在。"],
+                ],
+            ).into());
+        }
         crate::claude_transcript::read(session)
     }
 
@@ -183,5 +195,28 @@ impl Provider for Claude {
 
     fn source_root(&self) -> &Path {
         &self.roots.owned
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn removed_source_keeps_provider_diagnostic() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("projects/project/kept.jsonl");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "{\"type\":\"user\",\"sessionId\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\",\"message\":{\"role\":\"user\",\"content\":\"hello\"}}\n").unwrap();
+        let provider = Claude {
+            roots: SourceRoots::resolve(
+                directory.path().into(),
+                "projects",
+                "data/claudecode",
+                "CLAUDE_CONFIG_DIR/projects",
+            ),
+            titles: HashMap::new(),
+        };
+        crate::source_tests::removed_file(provider, &path, "kept", "projects directory");
     }
 }

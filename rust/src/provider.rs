@@ -1,3 +1,4 @@
+use crate::provider_error::ProviderError;
 use crate::session::{Session, SessionData};
 use std::path::{Path, PathBuf};
 
@@ -71,15 +72,54 @@ pub trait Provider {
         true
     }
 
-    fn raw_export(&self, session: &Session) -> RawExport {
-        RawExport::File(session.source_path.clone())
+    fn raw_export(&self, session: &Session) -> crate::Result<RawExport> {
+        let path = &session.source_path;
+        if !path.exists() {
+            return Err(ProviderError::missing(
+                ["raw session source is missing"; 2],
+                path,
+                Vec::new(),
+                source_roots(self),
+                vec![
+                    [
+                        "Confirm the original session file is still on this machine.",
+                        "确认原始会话文件仍在本地。",
+                    ],
+                    [
+                        "Re-run `agent-dump --list` to check whether the session is still visible.",
+                        "重新运行 `agent-dump --list` 检查该会话是否仍可见。",
+                    ],
+                ],
+            )
+            .into());
+        }
+        if !path.is_file() {
+            return Err(ProviderError::Diagnostic {
+                summary: ["raw export is not supported for this session source"; 2],
+                details: vec![format!("source path: {}", path.display())],
+                roots: Vec::new(),
+                capability: Some(["session source is a directory, not a single raw file"; 2]),
+                next_steps: vec![
+                    ["Use `--format json` or `--format markdown` instead.", "改用 `--format json` 或 `--format markdown`。"],
+                    ["If you need the original file, check whether this provider keeps a standalone raw file.", "若需要原始文件，请检查该 provider 是否有独立 raw 文件。"],
+                ],
+            }.into());
+        }
+        Ok(RawExport::File(path.clone()))
     }
 }
 
-pub fn render_search_roots(info: &ProviderInfo, provider: &dyn Provider) -> Vec<String> {
+pub fn source_roots(provider: &(impl Provider + ?Sized)) -> Vec<String> {
     provider
         .search_roots()
         .into_iter()
-        .map(|(label, path)| format!("{}: {label}: {}", info.display_name, path.display()))
+        .map(|(label, path)| format!("{label}: {}", path.display()))
+        .collect()
+}
+
+pub fn render_search_roots(info: &ProviderInfo, provider: &dyn Provider) -> Vec<String> {
+    source_roots(provider)
+        .into_iter()
+        .map(|root| format!("{}: {root}", info.display_name))
         .collect()
 }

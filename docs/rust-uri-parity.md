@@ -37,7 +37,7 @@ URI 诊断的每个动态字段分别清理终端控制字符并限制展示长�
 
 ## 仍待验收
 
-- Provider 专属的源缺失、加密/不支持 schema、待迁移存储等诊断尚未全部关闭；后续已补齐 DeepChat / Cherry / MiniMax 的对应路径，见[专属错误验收](rust-provider-errors-parity.md)。
+- Provider 专属诊断的后续验证见 DeepChat / Cherry / MiniMax [专属错误验收](rust-provider-errors-parity.md)及其余七个 Provider [源缺失验收](rust-source-parity.md)；尚不涵盖所有底层错误。
 - JSON、SQLite、文件系统的底层原因文本和异常类型并不全部相同。新的失败测试明确区分逐字差分和结构/行为检查，不将后者算作完整文本一致。
 - JSONL 坏行、标题缓存、正文转换等旧警告路径仍需统一；不能因为文件查找已返回失败事实，就认定所有 Provider 输出均已可关闭。
 - 非法导出 ID 的能力诊断、文件系统故障详情、完整 CLI usage、查询/列表参数组合仍待验收。文件导出仍要求显式 `--output`，配置默认值留在 P4。
