@@ -4,6 +4,8 @@
 
 完整迁移验收见 [Rust 迁移计划](../rust-migration-plan.md)。这里的结果校验只保护 benchmark 工作负载，不能代替完整功能矩阵。
 
+首份已归档结果：[2026-09-24 Python 基线](python-baseline.md)，包含源码运行与 PyInstaller 原生制品。
+
 ## 运行
 
 ```bash
@@ -27,6 +29,8 @@ uv run python scripts/benchmark_cli.py --profile smoke --case startup-version --
 `--command` 使用参数解析，不通过 shell 执行；可执行文件会在隔离前定位。命令中的脚本或制品路径应使用绝对路径。上例的 `$(pwd)` 由用户的 shell 展开。
 
 默认每场景 1 次预热、7 次测量。每次为新进程；预热用于减少一次性加载噪声，不意味着复用应用内缓存。JSON 保存原始样本，旁边的 Markdown 展示 median/min/max 与峰值 RSS。
+
+源码入口不计入 `uv`/`uvx` 启动器时间，原生入口不计入 Node/npm wrapper 时间。下载和安装也不在这些计时范围内；后续分发体验另行测量。
 
 ## 数据与场景
 

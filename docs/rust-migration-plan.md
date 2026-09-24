@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：进行中，当前为 P0（Python 基线与验收准备）。
+状态：P0（Python 基线与验收准备）已完成；下一阶段为 P1。Rust 生产实现尚未开始。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -52,11 +52,13 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 ### P0：固定 Python 参考与评估工具
 
 - [x] 创建迁移分支并固定参考 commit。
-- [ ] 建立可直接接受 CLI 命令的 benchmark，不 import 业务模块。
-- [ ] 生成确定性的 JSONL 与 SQLite 数据；在临时目录隔离所有 Provider、配置、缓存与导出。
-- [ ] 测量启动、列表、head/print、单会话与批量导出、冷/热索引查询、collect 本地流程。
-- [ ] 保存 Python 源码运行与 PyInstaller 原生制品基线及说明。
-- [ ] 验证评估工具确实拒绝错误结果，并运行项目门禁。
+- [x] 建立可直接接受 CLI 命令的 benchmark，不 import 业务模块。
+- [x] 生成确定性的 JSONL 与 SQLite 数据；在临时目录隔离所有 Provider、配置、缓存与导出。
+- [x] 测量启动、列表、head/print、单会话与批量导出、冷/热索引查询、collect 本地流程。
+- [x] 保存 Python 源码运行与 PyInstaller 原生制品基线及说明。
+- [x] 验证评估工具确实拒绝错误结果，并运行项目门禁。
+
+完成记录：[2026-09-24 Python 基线](benchmarks/python-baseline.md)。17 个场景，每场景 1 次预热、7 次测量；源码与 PyInstaller 制品的校验摘要一致。`just isok` 通过。
 
 本阶段的性能数据只代表已列出的合成工作负载，不宣称覆盖所有 Provider、真实使用分布或完整功能一致性。
 
@@ -117,4 +119,4 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 每次结束更新阶段状态和下一项工作，保留 Python 参考实现。提交 PR 前运行 `just isok`；引入 Rust 后增加 `cargo fmt --check`、Clippy 和 Rust 测试门禁。发布切换之前，不把部分完成的 Rust 二进制发布为正式 `agent-dump`。
 
-当前下一项：完成 P0，运行并归档可复现的 Python 基线。
+当前下一项：P1。先建立 Rust crate，再实现 Codex 发现、URI/head/print/JSON 导出的端到端路径；使用同一 evaluator 验证已完成子集，完整迁移验收继续以功能矩阵为准。
