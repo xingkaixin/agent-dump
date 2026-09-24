@@ -227,9 +227,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v0.15.9",
+        date: "2026-09-24",
+        isLatest: true,
+        title: "Export and Search OpenCode 2.x Sessions",
+        description:
+          "Keep using AI session export, full-text search, and AI collect after upgrading to OpenCode 2.x. Save conversations as Markdown or JSON, access legacy-only sessions alongside newer ones, and select a custom or channel database with OPENCODE_DB. Session data stays unchanged.",
+        command: 'agent-dump --list -days 30 -query "provider:opencode"',
+        tags: ["OpenCode 2.x", "Session Export", "Full-Text Search"],
+      },
+      {
         version: "v0.15.8",
         date: "2026-09-21",
-        isLatest: true,
         title: "Export and Search MiniMax Code Sessions",
         description:
           "Bring your MiniMax Code CLI conversations, child tasks, and archived sessions into AI session export, full-text search, and AI collect workflows. Save Markdown or JSON without changing source data. Long installation commands now wrap on narrow screens for easier reading and copying.",
@@ -372,9 +381,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v0.15.9",
+        date: "2026-09-24",
+        isLatest: true,
+        title: "导出与搜索 OpenCode 2.x 会话",
+        description:
+          "升级到 OpenCode 2.x 后，继续使用 AI 会话导出、全文搜索和 AI collect。可将对话保存为 Markdown 或 JSON，同时读取新版会话与旧版独有会话，并通过 OPENCODE_DB 选择自定义或 channel 数据库。源会话数据保持不变。",
+        command: 'agent-dump --list -days 30 -query "provider:opencode"',
+        tags: ["OpenCode 2.x", "会话导出", "全文搜索"],
+      },
+      {
         version: "v0.15.8",
         date: "2026-09-21",
-        isLatest: true,
         title: "导出与搜索 MiniMax Code 会话",
         description:
           "MiniMax Code CLI 的可见对话、子任务与归档会话现已支持统一导出、全文搜索和 AI collect。可保存为 Markdown 或 JSON，源数据保持不变。落地页的长安装命令在窄屏下自动换行，方便阅读与复制。",
@@ -517,9 +535,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v0.15.9",
+        date: "2026-09-24",
+        isLatest: true,
+        title: "OpenCode 2.x のセッションをエクスポート・検索",
+        description:
+          "OpenCode 2.x へのアップグレード後も、AIセッションのエクスポート、全文検索、AI collect を利用できます。対話を Markdown や JSON に保存し、新しいセッションと旧形式にのみ残るセッションをまとめて参照。OPENCODE_DB でカスタム・チャネル別データベースを選択でき、元のセッションデータは変更しません。",
+        command: 'agent-dump --list -days 30 -query "provider:opencode"',
+        tags: ["OpenCode 2.x", "セッションエクスポート", "全文検索"],
+      },
+      {
         version: "v0.15.8",
         date: "2026-09-21",
-        isLatest: true,
         title: "MiniMax Code のセッションをエクスポート・検索",
         description:
           "MiniMax Code CLI の表示可能な対話、子タスク、アーカイブ済みセッションで、AIセッションのエクスポート、全文検索、AI collect が利用可能に。元データを変更せず Markdown や JSON に保存できます。長いインストールコマンドは狭い画面でも折り返され、読み取りやコピーがしやすくなりました。",

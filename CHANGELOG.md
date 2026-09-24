@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [0.15.9] - 2026-09-24
+
+### Added
+
+- Support OpenCode 2.x `session_v2` / `session_message` storage across existing list, query, search, stats, collect, and `opencode://` export workflows; prefer V2 for duplicate session IDs while retaining legacy-only sessions, decode messages in sequence order, and preserve reasoning, tool states, and attachment metadata (#394)
+- Support `OPENCODE_DB` for custom or channel databases, with explicit missing paths reported without fallback (#394)
+
+### Changed
+
+- Align default OpenCode database discovery with its XDG data location on all platforms while preserving legacy Windows and local development fallbacks; invalidate older search indexes for the updated message decoder (#394)
+- Document OpenCode 2.x compatibility, database selection, collect boundaries, and normalized raw exports in the README files and agent recipes (#394); add matching npm usage examples
+
 ## [0.15.8] - 2026-09-21
 
 ### Added
@@ -1103,6 +1115,7 @@
 - Full session data export including messages, tool calls, and metadata
 - Support for `uv tool install` and `uvx` execution
 
+[0.15.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.9
 [0.15.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.8
 [0.15.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.7
 [0.15.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.6
