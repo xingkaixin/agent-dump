@@ -22,6 +22,8 @@
 
 [Provider 专属错误接入后的七场景复测](rust-p2-provider-errors.md)验证共享错误传播调整后的成功路径，保留相同 fixture、evaluator 和原始样本。
 
+[源缺失诊断接入后的七场景复测](rust-p2-source-errors.md)记录共享 raw 错误传播调整后的成功路径；Kimi 文件身份和源缺失行为由功能测试验证，不纳入本轮性能结论。
+
 ## 运行
 
 ```bash

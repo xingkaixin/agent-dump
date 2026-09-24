@@ -108,7 +108,7 @@ URI 共用诊断实现：`f3af42a`，新增 84 个 CLI 用例，合计 681 个�
 
 桌面 Provider 专属错误实现：`99575b9`，CLI 套件净增 25 个用例至 706 个，新增 4 个读取边界单元用例至 5 个；完整 `just isok` 与 release 构建通过。源消失/schema 变化的读取验证与 CLI 差分分别记录在[验收清单](rust-provider-errors-parity.md)。[原七场景复测](benchmarks/rust-p2-provider-errors.md)全部通过：跨 Provider 列表为 Python 249.61 ms / Rust 51.37 ms（4.86×），JSON＋Markdown 导出为 247.53 / 78.95 ms（3.14×）；未测量三个桌面 Provider 或错误路径的性能。
 
-其余七个 Provider 的源缺失与 Kimi raw 文件身份已接入，新增 10 个 Rust 单元用例至 15 个，CLI 套件保持 706 个；完整 `just isok` 与 release 构建通过。OpenCode V2 行/表消失时保留不同原因且不读取旧表副本；具体读取边界和 Python 参考核验见[验收记录](rust-source-parity.md)。
+其余七个 Provider 的源缺失与 Kimi raw 文件身份实现：`0d2fc2a`，新增 10 个 Rust 单元用例至 15 个，CLI 套件保持 706 个；完整 `just isok` 与 release 构建通过。OpenCode V2 行/表消失时保留不同原因且不读取旧表副本；具体读取边界和 Python 参考核验见[验收记录](rust-source-parity.md)。[原七场景复测](benchmarks/rust-p2-source-errors.md)全部通过：跨 Provider 列表为 Python 239.77 ms / Rust 51.39 ms（4.67×），JSON＋Markdown 导出为 231.07 / 77.26 ms（2.99×）；未测量 Kimi 或失败路径性能。
 
 ### P3：查询、索引、维护命令
 
