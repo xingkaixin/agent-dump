@@ -18,6 +18,7 @@ def isolated_desktop_chat_data_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("DEEPCHAT_USER_DATA_DIR", str(tmp_path / "deepchat-data"))
     monkeypatch.setenv("CHERRY_STUDIO_USER_DATA_DIR", str(tmp_path / "cherry-data"))
     monkeypatch.setenv("MINIMAX_DATA_DIR", str(tmp_path / "minimax-data"))
+    monkeypatch.delenv("OPENCODE_DB", raising=False)
 
 
 @pytest.fixture(autouse=True)

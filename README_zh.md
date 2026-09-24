@@ -43,7 +43,7 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 - **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
 - **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
-- **OpenCode**: `XDG_DATA_HOME/opencode` -> Windows 数据目录 (`LOCALAPPDATA/opencode` 或 `APPDATA/opencode`) -> `~/.local/share/opencode` -> `data/opencode`
+- **OpenCode**: `OPENCODE_DB` 指定唯一数据库（相对路径以 `XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 为基准）；未指定时读取该目录的 `opencode.db`，再回退到旧 Windows `LOCALAPPDATA`/`APPDATA` 路径和 `data/opencode/opencode.db`。
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
 - **Cursor**: Cursor 默认用户目录下的 `globalStorage/state.vscdb`
 - **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
@@ -67,6 +67,8 @@ Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含
 MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。包含可见的普通会话、子任务和归档会话，排除隐藏及 peek/channel/cron 内部会话。正文按数据库消息行顺序读取，保留文字、思考、工具状态/结果和附件引用；压缩、审查和系统事件不进入 collect 或搜索。模型来自会话元数据，缺失时显示未知；JSON 保留消息中已记录的 token 用量，不推算费用。
 
 自定义 profile、早期源码版 `~/.minimax-code` 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/minimax-provider-design.md)。
+
+OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读；新版消息按 `seq` 排序，消息数包含系统和状态记录。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。附件保留在 JSON 元数据中，不打开引用文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/opencode-v2-design.md)。
 
 ## 安装
 
@@ -188,7 +190,7 @@ uv run agent-dump opencode://session-id-abc123
 结论: 未找到任何可用的本地会话数据。
 已检查路径:
   - Codex: CODEX_HOME/sessions: /Users/me/.codex/sessions
-  - OpenCode: XDG/LOCALAPPDATA opencode.db: /Users/me/.local/share/opencode/opencode.db
+  - OpenCode: XDG/default opencode.db: /Users/me/.local/share/opencode/opencode.db
 下一步:
   - 确认对应 agent 已在本机生成过会话数据。
   - 若使用自定义目录，检查相关环境变量是否指向正确位置。
