@@ -89,7 +89,9 @@ fn write(
 
 pub fn json(data: &SessionData, output: &Path, source_root: &Path) -> crate::Result<PathBuf> {
     write(output, &data.id, ".json", source_root, |file| {
-        serde_json::to_writer_pretty(file, data)?;
+        let mut writer = io::BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut writer, data)?;
+        writer.flush()?;
         Ok(())
     })
 }
