@@ -126,6 +126,7 @@ class NormalizedMessage(_NormalizedMessageRequired, total=False):
     nickname: str
     entry_type: Any
     parent_id: str | None
+    metadata: dict[str, Any]
 
 
 class _NormalizedSessionStatsRequired(TypedDict):

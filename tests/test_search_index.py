@@ -101,7 +101,8 @@ class TestHasFts5:
         assert "trigram" in conn.execute.call_args.args[0]
 
 
-def test_content_version_refreshes_unchanged_legacy_tool_sessions(tmp_path):
+@pytest.mark.parametrize("previous_version", [0, 2])
+def test_content_version_refreshes_unchanged_legacy_tool_sessions(tmp_path, previous_version):
     session = make_session("tool-session", "Tool session", tmp_path / "source.json")
     payload = {
         "messages": [
@@ -118,7 +119,7 @@ def test_content_version_refreshes_unchanged_legacy_tool_sessions(tmp_path):
         assert index.update(agent, [session]) == (1, 0)
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute("PRAGMA user_version = 0")
+        conn.execute(f"PRAGMA user_version = {previous_version}")
         conn.commit()
     finally:
         conn.close()

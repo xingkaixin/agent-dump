@@ -14,6 +14,7 @@ from typing import Any
 from cherry_fixtures import create_cherry_db
 from deepchat_fixtures import create_deepchat_db
 from minimax_fixtures import create_minimax_db
+from opencode_fixtures import create_opencode_v2_db
 import pytest
 
 from agent_dump.agent_registry import AGENT_REGISTRATIONS
@@ -708,6 +709,23 @@ def _build_minimax_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     )
 
 
+def _build_opencode_v2_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ProviderContractFixture:
+    path = create_opencode_v2_db(tmp_path / "v2.db", _now_ms())
+    monkeypatch.setenv("OPENCODE_DB", str(path))
+    return ProviderContractFixture(
+        agent=OpenCodeAgent(),
+        session_id="ses_v2",
+        uri="opencode://ses_v2",
+        title="OpenCode V2 Contract",
+        location="/workspace/opencode-v2",
+        model="gpt-5",
+        head_message_count=2,
+        data_message_count=2,
+        texts=("OpenCode V2 prompt", "OpenCode V2 answer"),
+        remove_source=lambda: path.unlink(),
+    )
+
+
 CONTRACT_BUILDERS: dict[str, ProviderBuilder] = {
     "opencode": _build_opencode_contract,
     "zcode": _build_zcode_contract,
@@ -720,6 +738,8 @@ CONTRACT_BUILDERS: dict[str, ProviderBuilder] = {
     "cherry": _build_cherry_contract,
     "minimax": _build_minimax_contract,
 }
+
+SCHEMA_CONTRACT_BUILDERS = {**CONTRACT_BUILDERS, "opencode-v2": _build_opencode_v2_contract}
 
 
 def test_contract_builders_cover_registered_providers() -> None:
@@ -744,7 +764,7 @@ def _find_contract_session(fixture: ProviderContractFixture) -> Session:
     return session
 
 
-@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
+@pytest.mark.parametrize("build_fixture", SCHEMA_CONTRACT_BUILDERS.values(), ids=SCHEMA_CONTRACT_BUILDERS)
 def test_provider_contract_get_sessions_without_availability_probe(
     build_fixture: ProviderBuilder,
     monkeypatch: pytest.MonkeyPatch,
@@ -755,7 +775,7 @@ def test_provider_contract_get_sessions_without_availability_probe(
     assert fixture.session_id in {session.id for session in fixture.agent.get_sessions(days=None)}
 
 
-@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
+@pytest.mark.parametrize("build_fixture", SCHEMA_CONTRACT_BUILDERS.values(), ids=SCHEMA_CONTRACT_BUILDERS)
 def test_provider_contract_find_without_availability_probe(
     build_fixture: ProviderBuilder,
     monkeypatch: pytest.MonkeyPatch,
@@ -822,7 +842,7 @@ def test_provider_contract_scan_get_sessions_and_head(
     assert f"uri={fixture.uri}" in summary
 
 
-@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
+@pytest.mark.parametrize("build_fixture", SCHEMA_CONTRACT_BUILDERS.values(), ids=SCHEMA_CONTRACT_BUILDERS)
 def test_provider_contract_session_data_and_export_formats(
     build_fixture: ProviderBuilder,
     monkeypatch: pytest.MonkeyPatch,
@@ -863,7 +883,7 @@ def test_provider_contract_session_data_and_export_formats(
     assert fixture.texts[0] in markdown
 
 
-@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
+@pytest.mark.parametrize("build_fixture", SCHEMA_CONTRACT_BUILDERS.values(), ids=SCHEMA_CONTRACT_BUILDERS)
 def test_provider_contract_export_paths_contain_untrusted_session_ids(
     build_fixture: ProviderBuilder,
     monkeypatch: pytest.MonkeyPatch,
@@ -893,7 +913,7 @@ def test_provider_contract_export_paths_contain_untrusted_session_ids(
     assert not (tmp_path / "escaped.md").exists()
 
 
-@pytest.mark.parametrize("build_fixture", CONTRACT_BUILDERS.values(), ids=CONTRACT_BUILDERS)
+@pytest.mark.parametrize("build_fixture", SCHEMA_CONTRACT_BUILDERS.values(), ids=SCHEMA_CONTRACT_BUILDERS)
 def test_provider_contract_missing_source_diagnostic(
     build_fixture: ProviderBuilder,
     monkeypatch: pytest.MonkeyPatch,

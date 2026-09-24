@@ -168,7 +168,7 @@ def _select_query_fts_table(query: TextQuery) -> str | None:
 
 
 _FTS_TABLES = ("sessions_fts", "sessions_fts_trigram")
-_INDEX_CONTENT_VERSION = 2
+_INDEX_CONTENT_VERSION = 3
 
 # 待索引会话数达到该阈值时向 stderr 提示进度（关键词过滤会隐式建索引，首次运行可能较慢）
 _INDEX_PROGRESS_THRESHOLD = 10

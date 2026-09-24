@@ -33,7 +33,7 @@ class TestMain:
             assert "CODEX_HOME/sessions" in captured.out
             assert "KIMI_SHARE_DIR/sessions" in captured.out
             assert "CLAUDE_CONFIG_DIR/projects" in captured.out
-            assert "XDG/LOCALAPPDATA opencode.db" in captured.out
+            assert "XDG/default opencode.db" in captured.out
             if sys.platform.startswith(("darwin", "win")):
                 assert ".zcode/cli/db/db.sqlite" in captured.out
             else:
