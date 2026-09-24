@@ -633,7 +633,7 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 
 实验性 Rust 实现在 [`rust/`](rust/README.md) 中开发，目前已接入十个 Provider 的发现、消息装配和单会话导出。Cursor 支持 JSON/print；DeepChat、Cherry Studio、MiniMax 支持 JSON/Markdown/print；其余六个还支持 raw。`--list` 可列出全部可用 Provider，`-q provider:codex,opencode` 在扫描前限制来源，单个 Provider 失败不阻止其他来源。
 
-P2 Provider 与单会话导出验收已完成，包含有界正文缓存、来源变化、坏记录恢复、本地化诊断、极端值与 SQLite 输入兼容。差分套件已在 macOS、Linux、Windows 运行。证据和已知差异见 [P2 最终验收](docs/rust-p2-completion.md)，性能见[配对复测报告](docs/benchmarks/rust-p2-final.md)。实验二进制现已接入 Query/Search、Collect、配置、shortcut、批量导出与 Ratatui，P3～P5 最终验收见[阶段跟踪](docs/rust-p3-p5-progress.md)。发布切换仍属于[迁移计划](docs/rust-migration-plan.md)的 P6。pip/npm 继续安装 Python 实现。
+P2 Provider 与单会话导出验收已完成，包含有界正文缓存、来源变化、坏记录恢复、本地化诊断、极端值与 SQLite 输入兼容。差分套件已在 macOS、Linux、Windows 运行。证据和已知差异见 [P2 最终验收](docs/rust-p2-completion.md)，性能见[配对复测报告](docs/benchmarks/rust-p2-final.md)。实验二进制已实现 Query/Search、Collect、配置、shortcut、批量导出与 Ratatui，见 [P3～P5 验收报告](docs/rust-p3-p5-completion.md)及 [23 场景性能结果](docs/benchmarks/rust-p3-p5.md)，其中包含批量导出的性能回退。发布切换仍属于[迁移计划](docs/rust-migration-plan.md)的 P6。pip/npm 继续安装 Python 实现。
 
 落地页构建、部署及 Cloudflare 免费性能配置见[开发指南](docs/development-guide.md#5-落地页性能与-cloudflare-pages)。
 

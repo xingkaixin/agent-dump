@@ -1,6 +1,6 @@
 # Rust CLI（P3～P5：查询、Collect 与终端交互）
 
-此目录是 Rust 重写的实验实现，已接入全部十个 Provider 的发现、消息装配、支持格式的单 URI 导出和正文缓存。ZCode 路径沿用 macOS/Windows 限制。Python 仍是默认实现和发布来源；Rust 二进制继续作为实验入口，完整验收与发布切换属于 P6。P2 完成证据集中在[最终验收](../docs/rust-p2-completion.md)，后续阶段见[迁移计划](../docs/rust-migration-plan.md)。
+此目录是 Rust 重写的实验实现，已接入全部十个 Provider 的发现、消息装配、支持格式的单 URI 导出和正文缓存。ZCode 路径沿用 macOS/Windows 限制。Python 仍是默认实现和发布来源；Rust 二进制继续作为实验入口，完整验收与发布切换属于 P6。Provider 证据见 [P2 验收](../docs/rust-p2-completion.md)，查询、Collect 与终端交互见 [P3～P5 验收](../docs/rust-p3-p5-completion.md)。后续发布工作见[迁移计划](../docs/rust-migration-plan.md)。
 
 ## 构建与验证
 
@@ -73,14 +73,13 @@ just build-rust
 
 `rust/locales/` 是从冻结的 Python 参考版本导出的文案，Rust 编译时嵌入，不引入 Python 运行时。`query.rs`、`query_text.rs`、`transcript.rs` 分别拥有查询结构、字面匹配、逻辑正文；`scanner.rs` 保留发现实例与失败事实，`query_filter.rs` 负责筛选，`search_index.rs` 负责派生缓存，`maintenance.rs` 负责维护命令。
 
-文件导出必须显式指定 `--output`。URI 默认 `print`，输出文件位于 `<output>/<provider>/`，Claude Code 的目录名为 `claudecode`。文件名与 JSON 内容对齐，JSON 空白排版不作为契约。
+URI 默认 `print`。文件导出使用 `--output`、配置中的 JSON/raw 默认目录或 `sessions`；Markdown 沿用现有默认目录规则。文件位于 `<output>/<provider>/`，Claude Code 的目录名为 `claudecode`。文件名与 JSON 内容对齐，JSON 空白排版不作为契约。
 
-## 尚未实现的行为
+## 验收边界与后续工作
 
-- P4 的配置、shortcut、Collect、URI summary、emit-prompt，以及 P5 的批量导出和 Ratatui 已接入；最终验收与性能复测进行中。
-- P3 查询和维护命令已接入；阶段验收与待完成项见 [P3～P5 跟踪](../docs/rust-p3-p5-progress.md)。
+- P3 查询与索引，P4 配置、shortcut、Collect、URI summary、emit-prompt，P5 批量导出和 Ratatui 的范围与验证见 [P3～P5 最终验收](../docs/rust-p3-p5-completion.md)。
 - argparse/Clap 的帮助布局和参数解析器 usage 文案保持既有实验实现差异，P6 做最终兼容性审查。常用模式优先级、冲突、忽略参数、输出路径和业务诊断已纳入差分测试。
-- Rust CI 包含 Linux、macOS、Windows 的构建、Clippy、单元与 CLI 差分门禁；三平台运行同一套契约，具体计数和平台跳过项见 [P2 最终验收](../docs/rust-p2-completion.md)。所有发布架构、libc、wheel/npm 安装与正式切换属于 P6。
+- Rust CI 包含 Linux、macOS、Windows 的构建、Clippy、单元与 CLI 差分门禁；三平台运行同一套契约，具体计数和平台跳过项见 [P3～P5 最终验收](../docs/rust-p3-p5-completion.md)。所有发布架构、libc、wheel/npm 安装与正式切换属于 P6。
 
 行为映射和待验收边界见 [Codex](../docs/rust-codex-parity.md)、[Claude Code / Kimi / Pi](../docs/rust-jsonl-parity.md)、[OpenCode / ZCode](../docs/rust-sqlite-parity.md)及 [Cursor / DeepChat / Cherry Studio / MiniMax](../docs/rust-desktop-parity.md) 差分验收记录。共享发现与跨 Provider 隔离见[验收记录](../docs/rust-discovery-parity.md)。URI 共用诊断见[验收记录](../docs/rust-uri-parity.md)。DeepChat / Cherry / MiniMax 的 schema、源缺失与迁移错误见[专属错误验收](../docs/rust-provider-errors-parity.md)。其余七个 Provider 的源缺失与 Kimi raw 文件身份见[源缺失验收](../docs/rust-source-parity.md)。JSONL/旧 SQLite 坏记录警告见[验收记录](../docs/rust-record-diagnostics-parity.md)。Codex/Claude 标题缓存恢复与刷新见[验收记录](../docs/rust-title-cache-parity.md)。Codex/Claude/Pi 消息转换恢复见[验收记录](../docs/rust-message-conversion-parity.md)。固定配置下六个 Provider 的来源选择与重试见[验收记录](../docs/rust-source-selection-parity.md)。运行中来源配置与其余 Provider 选择见[验收记录](../docs/rust-runtime-sources-parity.md)。这些文件保留各批次当时的状态；开放项的最终归属、功能矩阵和验证证据以 [P2 最终验收](../docs/rust-p2-completion.md)为准。
 
@@ -92,7 +91,7 @@ just build-rust
 
 ## 性能评估
 
-当前结果见 [P2 最终七场景复测](../docs/benchmarks/rust-p2-final.md)：沿用原 evaluator，在干净的最终实现上配对运行 Python 与 Rust，保留耗时、RSS、二进制大小和原始样本。以下为各批次历史结果。
+当前结果见 [P3～P5 的 23 场景复测](../docs/benchmarks/rust-p3-p5.md)：原 17 场景与新增 6 场景均验证等价性，保留耗时、RSS、体积与原始样本。22 个场景更快，批量 JSON 导出更慢（0.81 → 3.64 秒），该回退列入 P6。以下为各批次历史结果。
 
 历史四场景对比见 [P1 性能复测](../docs/benchmarks/rust-p1.md)。[P2 Codex 复测](../docs/benchmarks/rust-p2-codex.md)增加现有的 JSON＋Markdown 导出场景，并保留缓冲优化前后的数据。
 
@@ -120,18 +119,7 @@ Provider 专属错误接入后的[七场景复测](../docs/benchmarks/rust-p2-pr
 
 运行中来源配置对齐后的[七场景复测](../docs/benchmarks/rust-p2-runtime-sources.md)中，跨 Provider 列表为 4.85×，JSON＋Markdown 导出为 3.17×。这些独立进程的健康数据场景不测配置切换或其余八个 Provider 的性能。
 
-使用原有 [CLI evaluator](../docs/benchmarks/README.md)，不为 Rust 改写 fixture 或验收摘要。本阶段只运行以下已实现子集：
-
-```bash
-just benchmark --command './rust/target/release/agent-dump' \
-  --label rust-p2-runtime-sources --profile standard \
-  --case startup-version --case list-jsonl --case list-sqlite --case list-all \
-  --case head-large-jsonl --case print-large-jsonl \
-  --case export-large-json-md \
-  --output dist/benchmarks/rust-p2-runtime-sources.json
-```
-
-Python 用同样的 `--case` 组合重测；Rust 再传入该报告的 `--baseline` 做严格比较。当前共七个场景；不得解释为应用整体加速比。复杂工具消息由差分测试验证，benchmark 仍使用 P0 的固定文本工作负载。
+原 [CLI evaluator](../docs/benchmarks/README.md) 和 Python 参考实现未修改。当前运行全部 17 个场景；单独的 `scripts/eval_rust_workflows.py` 扩展增量、删除、WAL、四 Provider 和确定性 HTTP。复现命令见[本轮性能报告](../docs/benchmarks/rust-p3-p5.md)。复杂工具消息和终端行为由功能差分与 PTY 测试验证，不混入固定文本性能工作负载。
 
 ## Collect、配置和交互
 

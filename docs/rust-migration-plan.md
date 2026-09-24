@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0、P1、P2 已完成；P2 最终 macOS、Linux、Windows CI 的 22 项检查全部通过。十个 Provider 的发现、读取、支持格式的单 URI 导出、正文缓存和本阶段错误/生命周期边界均已有验收证据。完整证据与已知差异见 [P2 最终验收](rust-p2-completion.md)，性能见[最终七场景复测](benchmarks/rust-p2-final.md)。当前推进 P3～P5，分阶段验收记录见 [P3～P5 验收跟踪](rust-p3-p5-progress.md)。Python 仍是默认实现和发布来源。
+状态：P0～P5 已完成；P3～P5 实现提交 `b15f079` 的最终三平台 CI 为 22/22 通过。Provider 证据见 [P2 验收](rust-p2-completion.md)，查询、Collect 和 Ratatui 证据见 [P3～P5 验收](rust-p3-p5-completion.md)，性能见 [23 场景复测](benchmarks/rust-p3-p5.md)。Python 仍是默认实现和发布来源，P6 尚未开始。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -23,7 +23,7 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 ## 2. 功能验收矩阵
 
-每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P2 已关闭 Provider 读取与单 URI 导出范围，完整证据见 [P2 最终验收](rust-p2-completion.md)；跨阶段的参数、查询、配置、交互与分发条目仍需后续验收。当前实现见 [Rust README](../rust/README.md)，Codex 消息与导出证据见[差分验收记录](rust-codex-parity.md)，历史 P1 性能见[复测报告](benchmarks/rust-p1.md)。
+每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P2 已关闭 Provider 读取与单 URI 导出范围，完整证据见 [P2 最终验收](rust-p2-completion.md)；P3～P5 的参数/查询/配置/Collect/交互条目见[最终验收](rust-p3-p5-completion.md)，帮助/usage 的已知差异和发布分发在 P6 关闭。当前实现见 [Rust README](../rust/README.md)，Codex 消息与导出证据见[差分验收记录](rust-codex-parity.md)，历史 P1 性能见[复测报告](benchmarks/rust-p1.md)。
 
 | 范围 | 必须对齐的契约 | 现有依据 |
 | --- | --- | --- |
@@ -131,27 +131,29 @@ P2 收尾补齐正文缓存、lease/LRU、并发失效、极端数值与日期�
 
 ### P3：查询、索引、维护命令
 
-- 对齐 Query/Search 语义，然后实现 SQLite FTS5 与 fallback。
-- 对齐缓存边界、增量索引、并发与旧请求竞态、stats/providers/reindex。
-- benchmark 增加增量更新、删除、WAL 和更多 Provider 的代表性工作负载。
+- [x] Query/Search 语义、SQLite FTS5 与 fallback；角色、路径、Provider、limit、Unicode 与全局排序。
+- [x] 缓存互用、增量索引、删除、WAL、并发/旧请求竞态、stats/providers/reindex。
+- [x] 增量更新、删除、WAL 和四 Provider 的 CLI 性能工作负载，全部结果等价；见[本轮复测](benchmarks/rust-p3-p5.md)。
 
 ### P4：Collect、配置与完整自动化入口
 
-- 对齐配置、shortcut、collect planning/reduction、URI summary、emit-prompt。
-- 用本地确定性 HTTP 服务验收请求/重试/部分失败，不访问真实模型。
-- 分开报告本地处理与模拟网络延迟；真实模型响应时间不计入语言加速结论。
+- [x] TOML 配置、shortcut、Collect planning/reduction、PM/Insight、URI summary、emit-prompt。
+- [x] 确定性 HTTP 请求、重试、结构校验、部分失败、日志、响应上限与跨源重定向；不访问真实模型。
+- [x] 分开测量本地处理和模拟网络延迟，保留全部原始样本，不把真实模型响应时间计入语言加速结论。
 
 ### P5：Ratatui 交互
 
-- 实现现有交互契约、输入与取消，保持非交互 CLI 独立。
-- UI 接收 workflow 投影，不解释 Provider schema，不在绘制阶段发现或读取正文。
-- 验收窄窗口、resize、中英文、粘贴、密码遮蔽与退出恢复；使用少量真实 PTY 测试覆盖终端边界。
-- 首版不加无需求的动画、后台常驻服务或全屏配置中心。
+- [x] Provider/会话选择、配置输入、密码遮蔽、取消、非 TTY 与批量导出。
+- [x] UI 只接收 workflow 投影，不解释 Provider schema，不在绘制阶段发现或读取正文。
+- [x] 小尺寸 TestBackend、中英文、粘贴、resize、stdout 重定向和终端恢复；少量真实 PTY 验证边界。
+- 首版保持既有功能，不加入动画、后台常驻服务或全屏配置中心。
+
+P3～P5 的验证数量、平台结果、实现提交与已知差异统一见[最终验收](rust-p3-p5-completion.md)。
 
 ### P6：完整验收、性能复测与发布切换
 
 - 功能矩阵全部关闭后，使用 release 二进制重跑全部差分 eval 和性能场景。
-- 同机交错运行 Python 与 Rust，检查差异和噪声；首份历史基线只作为参考。
+- 同机交错运行 Python 与 Rust，检查差异和噪声；首份历史基线只作为参考。P3～P5 发现的批量 JSON 导出回退（0.81 → 3.64 秒）需剖析、优化并复测；不预设所有工作负载都会提速。
 - 使用 Maturin `bin` wheel 与现有 npm 平台包模式分发 Rust；不为 CLI 引入 PyO3。
 - 验证所有当前发布平台、Linux libc 基线、wheel 与 npm 安装体验，记录制品大小。
 - 更新 README、recipes、架构文档、版本来源和 CI；同步清理退场的 Python 构建路径。
@@ -173,4 +175,4 @@ P2 收尾补齐正文缓存、lease/LRU、并发失效、极端数值与日期�
 
 每次结束更新阶段状态和下一项工作，保留 Python 参考实现。提交 PR 前运行 `just isok`；引入 Rust 后增加 `cargo fmt --check`、Clippy 和 Rust 测试门禁。发布切换之前，不把部分完成的 Rust 二进制发布为正式 `agent-dump`。
 
-当前下一项：P3 Query/Search 语义、索引增量更新与并发边界、stats/providers/reindex，并扩展代表性性能场景。P2 已完成，不再保留无归属的历史待办。Collect/配置/shortcut 保持在 P4，Ratatui 保持在 P5，pip/npm 发布切换保持在 P6。
+当前下一项：P6 的最终兼容性审查、批量导出性能回退、release 二进制完整复测与 pip/npm 安装制品矩阵。P3～P5 不执行默认切换、合并或发版。
