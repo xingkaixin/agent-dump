@@ -4,8 +4,9 @@ import json
 import os
 import shutil
 
-from cli_fixture import IDENTITY, STAMP, header, message
+from cli_fixture import IDENTITY, ROOT, STAMP, header, message
 import pytest
+import tomli
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
@@ -137,7 +138,6 @@ def test_export_symlink_cannot_modify_provider(cli):
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("args", [[], ["--help"], ["-h"]])
 def test_help_covers_all_operations_in_selected_language(cli, lang, args):
-    cli.parity("--version")
     result = cli.run("rust", f"--lang={lang}", *args)
     assert result.returncode == 0
     assert not result.stderr
@@ -204,3 +204,13 @@ def test_private_export_preserves_existing_directory_permissions(cli):
 
 def test_relative_export_path_matches_python(cli):
     cli.parity(f"codex://{IDENTITY}", "--format", "json", "--output", "exports", "--lang", "en", json_export=True)
+
+
+@pytest.mark.parametrize("flag", ["--version", "-v"])
+def test_version_comes_from_rust_manifest(cli, flag):
+    manifest = tomli.loads((ROOT / "rust/Cargo.toml").read_text(encoding="utf-8"))
+    result = cli.run("rust", flag)
+    assert result.returncode == 0
+    assert not result.stderr
+    assert result.stdout == f"agent-dump {manifest['package']['version']}\n"
+    assert cli.run("python", flag).stdout == "agent-dump 0.15.9\n"
