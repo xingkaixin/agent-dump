@@ -29,7 +29,7 @@ serde = { version = "1", features = ["derive"] }
 # Tool output and subagent prompts contain JSON strings whose key order is observable.
 serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
 regex = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 tempfile = "3"
 walkdir = "2"
 rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
