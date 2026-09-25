@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+from importlib.metadata import distribution
 import json
 import os
 from pathlib import Path
@@ -49,6 +50,9 @@ def build(output: Path) -> None:
         command += ["--config-setting", "build-args=--zig --compatibility manylinux_2_17 --auditwheel check"]
     environment = dict(os.environ)
     environment["CARGO_TARGET_DIR"] = str(ROOT / "rust" / "target")
+    if sys.platform == "linux":
+        zig_directory = distribution("ziglang").locate_file("ziglang")
+        environment["PATH"] = str(zig_directory) + os.pathsep + environment.get("PATH", "")
     subprocess.run(command, cwd=ROOT / "rust", env=environment, check=True)  # noqa: S603
     wheels = list(output.glob("*.whl"))
     if len(wheels) != 1 or target["wheelPlatform"] not in wheels[0].name:
