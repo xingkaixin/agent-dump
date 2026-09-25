@@ -1,4 +1,5 @@
 use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -50,7 +51,11 @@ fn filename(id: &str) -> crate::Result<String> {
     {
         Ok(id.to_owned())
     } else {
-        Ok(format!("~{:x}", Sha256::digest(id.as_bytes())))
+        let mut name = String::from("~");
+        for byte in Sha256::digest(id.as_bytes()) {
+            write!(name, "{byte:02x}")?;
+        }
+        Ok(name)
     }
 }
 
@@ -260,4 +265,22 @@ pub fn target(
         OutputFormat::Print => unreachable!(),
     };
     Ok(output.join(format!("{}{suffix}", filename(id)?)))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn hashed_export_filename_preserves_leading_zeroes() {
+        let path = super::target(
+            "Session 15",
+            std::path::Path::new("exports"),
+            crate::output::formats::OutputFormat::Json,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            path.file_name().unwrap(),
+            "~09403fa71a22ed1e412acb86c50a190593c690e6e3db74eb83cd4fbdaa5dac3f.json"
+        );
+    }
 }
