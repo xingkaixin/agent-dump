@@ -11,12 +11,16 @@ import { NATIVE_TARGETS } from "./native-targets.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const npmRoot = path.resolve(__dirname, "..");
 const require = createRequire(import.meta.url);
-const { getBinarySpec } = require("../packages/cli/lib/targets.cjs");
+const { getBinarySpec, getVendorBinaryPath } = require("../packages/cli/lib/targets.cjs");
 const { extractBinaryFromTarball } = require("../packages/cli/lib/install-binary.cjs");
 
 function run(command, args, options = {}) {
   const { env: extraEnv, ...restOptions } = options;
   const cacheDir = path.resolve(npmRoot, ".npm-cache");
+  if (command === "npm" && process.env.npm_execpath) {
+    args = [process.env.npm_execpath, ...args];
+    command = process.execPath;
+  }
   const result = spawnSync(command, args, {
     stdio: restOptions.stdio || "inherit",
     encoding: "utf8",
@@ -169,7 +173,26 @@ export async function main(args = process.argv.slice(2)) {
         AGENT_DUMP_CLI_TARBALL_PATH: platformTarballPath
       }
     });
-    run("node", ["./node_modules/@agent-dump/cli/bin/agent-dump.cjs", "--help"], { cwd: installRoot });
+    const installedRoot = path.resolve(installRoot, "node_modules/@agent-dump/cli");
+    const installedBinary = await readFile(getVendorBinaryPath(installedRoot, currentSpec));
+    const stagedBinary = await readFile(selectedSpecs.find((spec) => spec.target === currentSpec.target).binaryPath);
+    if (!installedBinary.equals(stagedBinary)) {
+      throw new Error("Installed npm executable differs from the staged Rust artifact");
+    }
+    const repoRoot = path.resolve(npmRoot, "..");
+    const python = path.resolve(repoRoot, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+    const verifier = path.resolve(repoRoot, "packaging/verify_native.py");
+    const wrapper = path.resolve(installRoot, "node_modules/@agent-dump/cli/bin/agent-dump.cjs");
+    const commands = [[process.execPath, wrapper]];
+    if (process.env.npm_execpath) {
+      commands.push([process.execPath, process.env.npm_execpath, "--prefix", installRoot, "exec", "--offline", "--", "agent-dump"]);
+    }
+    if (spawnSync("bun", ["--version"], { encoding: "utf8" }).status === 0) {
+      commands.push(["bun", "x", "--no-install", "agent-dump"]);
+    }
+    for (const command of commands) {
+      run(python, [verifier, "--expected-version", mainPackageJson.version, "--command", JSON.stringify(command), "--command-cwd", installRoot], { cwd: installRoot });
+    }
   } finally {
     await writeFile(checksumFile, originalChecksumFile, "utf8");
     if (installRoot) {

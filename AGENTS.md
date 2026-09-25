@@ -13,22 +13,22 @@
 
 ### 1.2 兼容性
 
-- `src/agent_dump/__init__.py` 的 `__all__` 是公开 Python API 的单一来源。不得删除或重命名已导出的符号；需要演进时保留兼容入口并明确弃用策略。
+- Rust 发布只提供 CLI，pip wheel 不包含 Python API 或 `python -m agent_dump`。旧 Python 实现只保留在 Git 历史和固定的 v0.15.9 外部对照环境中；不得为迁就 Rust 改动对照版本或放宽结果校验。
 - CLI 参数、输出格式、退出码和默认路径属于可观察行为。修改时同步更新对应测试和用户文档。
 - 未经明确要求不得改变既有默认行为；新增能力应保持现有调用路径兼容。
 
 ### 1.3 架构边界
 
-- `cli.py` 只负责参数解析、依赖装配和工作流分发。业务逻辑下沉到 operation、workflow 或职责模块。
-- 会话发现、读取和导出统一通过 `BaseAgent` 契约进入。实现可以位于 Provider 类、共享基类或 `agent_dump.agents` 包内 helper。
-- Provider 私有 schema 只能由 `agent_dump.agents` Provider 层解释。CLI、workflow 和 selector 只依赖稳定的 Session、facts 与 Provider 契约。
+- `main.rs`、`cli_args.rs` 负责参数入口，`command.rs` 负责工作流分发。业务逻辑进入对应 workflow 或职责模块。
+- 会话发现、读取和导出统一通过 `crates/agent-dump-core/src/providers/contract.rs` 的 `Provider` 契约进入。实现位于 Provider 模块或共享读取/转换模块。
+- Provider 私有 schema 只能由 Rust Provider 层解释。CLI、workflow 和 selector 只依赖稳定的 Session、facts 与 Provider 契约。
 - selector 不得触发 Provider 发现、扫描或完整内容读取。会话计数由调用方传入；允许调用不执行 I/O 的展示投影方法。
-- 共享逻辑保持单一归属：URI、输出格式、渲染、导出和跨工作流 CLI 能力分别进入 `uri_support.py`、`output_formats.py`、`rendering.py`、`exporting.py` 和 `cli_shared.py`。
-- 不得引入循环导入。依赖方向应从装配层指向工作流和领域实现。
+- 共享逻辑保持单一归属：URI、输出格式、渲染、导出和跨工作流 CLI 能力分别进入 CLI 的 `workflows/uri.rs`、core 的 `output/{formats,render,export}.rs` 和 CLI 的 `command.rs`。
+- workspace 只允许 CLI → core 的依赖方向。core 不依赖终端或 LLM 客户端，具体 Provider 模块不对 CLI 暴露；不得引入循环依赖。
 
 ### 1.4 代码与测试
 
-- 生产函数的参数和返回值必须有完整类型注解；现有门禁由 `tests/test_type_annotations.py` 执行。
+- Rust 所有 workspace 成员继承统一 lint；通过 80 列 stable Rustfmt、严格 Clippy 和单元测试；辅助 Python 脚本保持类型注解，由 Ruff 与 ty 检查。
 - 只在新增或变更可观察行为、修复回归或保护高风险边界时补测试。测试覆盖行为契约，不要求按函数一一对应。
 - CLI 变更至少覆盖参数归一化、工作流分发及相关输出或退出码。仅在 Provider、终端交互或外部系统等边界需要隔离时使用 mock。
 - 不随意新增第三方依赖。必要但未被代码直接 import 的依赖应在声明处说明原因。
@@ -45,22 +45,19 @@
 - 面向用户的 CLI 行为：`README.md`、`README_zh.md`
 - Agent 使用 recipes：`skills/agent-dump/SKILL.md`、`skills/agent-dump/references/cli-recipes.md`
 
-以下入口用于快速定位，不构成完整模块清单：
+快速定位：
 
-- CLI operation 归一化：`command_plan.py`
-- list / interactive / query：`session_workflow.py`
-- 单 URI 工作流：`uri_workflow.py`
-- collect：`collect_workflow.py` 与 `collect_*.py`
-- Provider 注册：`agent_registry.py`
-- Provider 实现：`agents/`
-- 搜索索引：`search_index.py`
-- 配置：`config.py`、`config_command.py`
-- 诊断：`diagnostics.py`
+- CLI 参数与分发：`src/cli_args.rs`、`src/command.rs`
+- 工作流、Collect 与终端：`src/workflows/`、`src/collect/`、`src/terminal/`
+- core 根：`crates/agent-dump-core/src/`
+- core Provider 注册与契约：`providers/registry.rs`、`providers/contract.rs`
+- core Query、缓存与输出：`query/`、`session/cache.rs`、`output/`
+- core 配置与文件边界：`config.rs`、`storage/`
 
 ## 3. 验证与文档
 
 - 开发时先运行与改动直接相关的测试。
-- 提交 PR 前运行 `just isok`。覆盖率需要单独检查时运行 `just cov`。
+- 提交 PR 前运行 `just isok`。CLI 差分测试位于 `tests/cli`，固定参考由 `just reference` 安装；不得读取真实用户数据。
 - 修改公开 API、CLI 或用户可见能力时，同步更新 README 和相关 skill recipes。
 - 只在稳定约束、职责边界或任务路由变化时更新本文件。模块增删和实现细节记录到对应按需文档或由代码、配置和测试作为来源。
 - 修改架构术语或事实边界时同步更新 `CONTEXT.md`。

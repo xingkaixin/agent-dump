@@ -4,6 +4,7 @@ dynamic = ["version"]
 description = "AI Coding Assistant Session Export Tool"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [
     { name = "XingKaiXin", email = "xingkaixin@gmail.com" },
@@ -12,6 +13,7 @@ keywords = ["ai", "chat", "export", "opencode", "cli"]
 classifiers = [
     "Environment :: Console",
     "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -20,93 +22,53 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Utilities",
 ]
-dependencies = [
-    # 代码不直接 import prompt-toolkit，但 selector.py 依赖它经 questionary 暴露的
-    # `q.application.key_bindings`（见 docs/development-guide.md §3）。questionary 自身只要求
-    # >=2.0,<4.0，这条更紧的下界用来阻止解析到 3.0 以下、该键绑定 API 不同的版本。
-    "prompt-toolkit>=3.0.0",
-    "questionary>=2.0.0",
-    # tomllib 在 Python 3.11 才进入标准库；3.10 需要 tomli 才能正确解析 config.toml
-    "tomli>=2.0.0; python_version < '3.11'",
-    # 标准库 TOML 解析器只读；配置编辑必须保留用户的注释、空白与字段顺序
-    "tomlkit>=0.15.1",
-    # 标准库只能直接取到当前偏移；历史会话的本地日期需要系统区域时区的夏令时规则
-    "tzlocal>=5.4.4",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/xingkaixin/agent-dump"
 Repository = "https://github.com/xingkaixin/agent-dump"
 Issues = "https://github.com/xingkaixin/agent-dump/issues"
 
-[project.scripts]
-agent-dump = "agent_dump.cli:main"
-
 [dependency-groups]
 dev = [
-    "pyright>=1.1.408",
     "pytest>=8.0.0",
-    "pytest-cov>=5.0.0",
     "ruff>=0.15.2",
-    # pyright 以 pythonVersion=3.10 分析，需要 tomli 可解析
     "tomli>=2.0.0",
-    # ty 仍是 0.0.x：一个带新默认规则的发布会在代码毫无变化时让 CI 与 release 变红，
-    # 所以像 packaging 组的 pyinstaller 一样固定，升级走 Dependabot/人工。
     "ty==0.0.81",
 ]
 packaging = [
-    # Native release artifacts require a pinned builder for reproducibility.
-    "pyinstaller==6.22.3",
+    "maturin==1.15.0",
+    "ziglang==0.13.0; sys_platform == 'linux'",
 ]
 
 [build-system]
-# The exact version and hashes live in packaging/build-constraints.txt. Keep the
-# backend API on the current major while letting that reviewed file select one build.
-requires = ["hatchling>=1.31,<2"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.15,<1.16"]
+build-backend = "maturin"
 
-[tool.hatch.version]
-path = "src/agent_dump/__about__.py"
+[tool.maturin]
+manifest-path = "Cargo.toml"
+bindings = "bin"
+locked = true
+strip = true
+include = [{ path = "rust-toolchain.toml", format = "sdist" }]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/agent_dump"]
-
-[tool.pyright]
-pythonVersion = "3.10"
-include = ["src"]
-exclude = [
-    "**/node_modules",
-    "**/__pycache__",
-    ".git",
-    ".venv",
-]
-defineConstant = { DEBUG = true }
-venvPath = "."
-venv = ".venv"
-typeCheckingMode = "standard"
-reportMissingImports = true
-reportMissingTypeStubs = false
+[tool.uv]
+# Python is used only for CLI verification and wheel build tooling.
+package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["scripts", "tests/cli"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-# 覆盖率刻意不进默认 addopts：`pytest -k one_test` 会打印一份接近 0% 的全包报告，
-# 读起来像失败。用 `just cov` 单独测量。
 addopts = "--tb=short"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
 
-[tool.coverage.run]
-omit = [
-    "*/__main__.py",
-]
+[tool.ty.src]
+exclude = [".venv-reference"]
 
-[tool.coverage.report]
-fail_under = 85
-exclude_lines = [
-    "pragma: no cover",
-    "if __name__ == .__main__.:",
-]
+[tool.ty.environment]
+extra-paths = ["scripts", "tests/cli"]

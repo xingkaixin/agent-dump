@@ -6,7 +6,9 @@
     "packageName": "@agent-dump/cli-darwin-x64",
     "executableName": "agent-dump",
     "binaryFormat": "Mach-O",
-    "runner": "macos-15-intel"
+    "runner": "macos-15-intel",
+    "rustTarget": "x86_64-apple-darwin",
+    "wheelPlatform": "macosx_10_12_x86_64"
   },
   {
     "platform": "darwin",
@@ -15,7 +17,9 @@
     "packageName": "@agent-dump/cli-darwin-arm64",
     "executableName": "agent-dump",
     "binaryFormat": "Mach-O",
-    "runner": "macos-14"
+    "runner": "macos-14",
+    "rustTarget": "aarch64-apple-darwin",
+    "wheelPlatform": "macosx_11_0_arm64"
   },
   {
     "platform": "linux",
@@ -24,7 +28,10 @@
     "packageName": "@agent-dump/cli-linux-x64",
     "executableName": "agent-dump",
     "binaryFormat": "ELF",
-    "runner": "ubuntu-latest"
+    "runner": "ubuntu-latest",
+    "rustTarget": "x86_64-unknown-linux-gnu",
+    "wheelPlatform": "manylinux_2_17_x86_64",
+    "libc": "glibc >= 2.17"
   },
   {
     "platform": "win32",
@@ -33,6 +40,8 @@
     "packageName": "@agent-dump/cli-win32-x64",
     "executableName": "agent-dump.exe",
     "binaryFormat": "PE",
-    "runner": "windows-latest"
+    "runner": "windows-latest",
+    "rustTarget": "x86_64-pc-windows-msvc",
+    "wheelPlatform": "win_amd64"
   }
 ]

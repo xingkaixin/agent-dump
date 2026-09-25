@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "fixture_version": 1,
+  "label": "rust-p6-fsync",
+  "recorded_at": "2026-09-25T00:11:19.686788+00:00",
+  "git_commit": "350efedbeee6b73f9ba172971dbfdd1a1676e5d8",
+  "git_dirty": true,
+  "python_source_sha256": "a5f4b5feb6fd525688a6fda930087f4446eaccbe016457524369620aa5f58237",
+  "evaluator_sha256": "0c7c5965f49551e0fa43030827251857acd098fd6f897a0664e822c1c8be5a46",
+  "uv_lock_sha256": "7f349c4dffec540ba474787fb1ed93d1474a2ad44d2a35060f305cda24d7d66e",
+  "command": [
+    "<REPO>/rust/target/release/agent-dump"
+  ],
+  "executable_sha256": "f5fe404309a35e870c4bb0b73e254553b8cb2da84580b12916aca1962dffec6a",
+  "executable_bytes": 10989568,
+  "environment": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "cpu": "Apple M1 Pro",
+    "logical_cpus": 10,
+    "collector_python": "3.11.15",
+    "fixture_sqlite": "3.50.4",
+    "timezone": "UTC",
+    "locale": "en",
+    "filesystem_cache": "uncontrolled; fixture creation and warmups populate OS page cache",
+    "rss_method": "fresh collector RUSAGE_CHILDREN; maximum child RSS, not simultaneous process-tree sum"
+  },
+  "profile": "standard",
+  "profile_settings": {
+    "sessions_per_provider": 500,
+    "messages_per_session": 20,
+    "text_chars": 256,
+    "large_text_chars": 8388608
+  },
+  "repeats": 5,
+  "warmups": 1,
+  "cases": [
+    {
+      "name": "export-batch-jsonl",
+      "args": [
+        "--interactive",
+        "-d",
+        "36500",
+        "-q",
+        "provider:codex",
+        "--format",
+        "json",
+        "--output",
+        "exports",
+        "--lang",
+        "en"
+      ],
+      "stdin": "all\n",
+      "index": "empty",
+      "validation": {
+        "files": 501,
+        "json_sha256": "ddb612a44050ce046bc4c32c791b4ef3149c68631d66a8cf63a7d69fee96dcfa",
+        "md_sha256": null
+      },
+      "samples": [
+        {
+          "wall_seconds": 0.32900804199744016,
+          "exit_code": 0,
+          "user_seconds": 0.112564,
+          "system_seconds": 0.205816,
+          "peak_rss_bytes": 51068928,
+          "stdout_bytes": 130280,
+          "stderr_bytes": 0
+        },
+        {
+          "wall_seconds": 0.32846579200122505,
+          "exit_code": 0,
+          "user_seconds": 0.111187,
+          "system_seconds": 0.206425,
+          "peak_rss_bytes": 49905664,
+          "stdout_bytes": 130280,
+          "stderr_bytes": 0
+        },
+        {
+          "wall_seconds": 0.3347847910190467,
+          "exit_code": 0,
+          "user_seconds": 0.112283,
+          "system_seconds": 0.210872,
+          "peak_rss_bytes": 49889280,
+          "stdout_bytes": 130280,
+          "stderr_bytes": 0
+        },
+        {
+          "wall_seconds": 0.3438229159801267,
+          "exit_code": 0,
+          "user_seconds": 0.113899,
+          "system_seconds": 0.21806699999999998,
+          "peak_rss_bytes": 49954816,
+          "stdout_bytes": 130280,
+          "stderr_bytes": 0
+        },
+        {
+          "wall_seconds": 0.32999766600551084,
+          "exit_code": 0,
+          "user_seconds": 0.11189099999999999,
+          "system_seconds": 0.204846,
+          "peak_rss_bytes": 49840128,
+          "stdout_bytes": 130280,
+          "stderr_bytes": 0
+        }
+      ],
+      "summary": {
+        "wall_seconds": {
+          "median": 0.32999766600551084,
+          "min": 0.32846579200122505,
+          "max": 0.3438229159801267,
+          "stdev": 0.006434221631793499
+        },
+        "user_seconds": {
+          "median": 0.112283,
+          "min": 0.111187,
+          "max": 0.113899,
+          "stdev": 0.0010014790062702293
+        },
+        "system_seconds": {
+          "median": 0.206425,
+          "min": 0.204846,
+          "max": 0.21806699999999998,
+          "stdev": 0.005466455314003759
+        },
+        "peak_rss_bytes": {
+          "median": 49905664,
+          "min": 49840128,
+          "max": 51068928,
+          "stdev": 525489.8225343665
+        }
+      }
+    }
+  ],
+  "source_manifest": {
+    "sha256": "d7bfc75558f7516386e81fd3bb18baf219a0fb3559a6db0f76cd22d3dd913d38",
+    "bytes": 23839547,
+    "files": 503
+  },
+  "cli_version": "agent-dump 0.15.9",
+  "comparison": [
+    {
+      "name": "export-batch-jsonl",
+      "wall_speedup": 11.083784580289034,
+      "wall_change_percent": -90.97781093852761,
+      "rss_change_percent": -0.2619515389652882
+    }
+  ]
+}

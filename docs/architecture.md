@@ -1,154 +1,81 @@
 # 架构与扩展指南
 
-本文档面向修改架构、Provider、查询、导出或 collect 的贡献者和 Agent。根目录 `AGENTS.md` 保存常驻约束；本文件保存只在相关任务中需要的实现契约。
+根目录是 Cargo workspace 和 CLI package：`src/` 负责命令与交互，`crates/agent-dump-core/src/` 负责可独立于终端调用的读取、查询和导出。依赖只从 CLI 指向 core；core 的具体 Provider 模块为 crate 内可见。`resources/` 保存编译时嵌入的文案与提示词；`tests/cli/` 用固定的外部 Python v0.15.9 验证兼容性。旧 Python 应用不再保存在主树中。稳定约束见 `AGENTS.md`，领域术语见 `CONTEXT.md`。
 
-## 1. 公共接口
+## 1. 公开契约与分发
 
-`src/agent_dump/__init__.py` 的 `__all__` 是公开 Python API 的单一机器可读来源。公开符号的行为由 `tests/test_version.py` 和对应模块测试保护，用户示例位于 README。
+公开契约是 `agent-dump` 命令的参数、默认路径、输出格式和退出码。pip、uv tool、uvx 安装 Maturin `bin` wheel；npm 平台包包含同一 wheel 中的原生可执行文件。没有 PyO3、Python 导入 API 或 Python 模块入口。旧 API 使用方可固定最后的 Python 版本 0.15.9。
 
-变更公开 API 时保持旧导入路径可用。确需演进时保留兼容入口，增加弃用说明，并同步更新 README 与测试。不要在本文复制完整符号表。
+根 `Cargo.toml` 的 `[package].version` 是发布版本来源，npm 版本由脚本同步。内部 `agent-dump-core` 固定为 `0.0.0` 且 `publish = false`，通过 path 依赖随制品构建，不独立发版。目标平台闭集由 `npm/packages/cli/lib/native-targets.json` 拥有。安装、最低 libc 和发布控制见[发布指南](release-guide.md)。
 
 ## 2. 数据流与职责
 
-### 2.1 列表、查询与交互导出
-
 ```text
-cli.py
-  → CommandRequest
-  → command_plan.py 生成闭集 operation
-  → session_workflow.py
-  → AgentScanner
-  → BaseAgent Provider contract
-  → selector / query / search
-  → rendering.py / exporting.py
+agent-dump (root CLI package)
+  src/main.rs → cli_args.rs / shortcut.rs → command.rs
+    ├─ workflows/{list,interactive,uri,maintenance,config,collect}.rs
+    ├─ terminal/{selector,tui}.rs
+    └─ collect/{sessions,events,reduction,prompts,llm,...}.rs
+              ↓
+agent-dump-core (internal library)
+  providers/  → contract, registry, provider families
+  session/    → facts, message assembly, cache, timestamp
+  query/      → parser, scanner, filter, text, index, transcript
+  output/     → formats, rendering, export, diagnostics, i18n
+  storage/    → source I/O and private output files
+  compat/     → frozen Python JSON/value semantics
+  config.rs
 ```
 
-跨工作流的 `discover_query_sessions()` 在调用 Scanner 前按显式 Provider 条件筛选实例；无 Provider 条件时保持全来源发现。
+`main.rs` 处理终端输出边界和错误退出；参数解析不读取 Provider 内容。`command.rs` 确定模式优先级、默认值和冲突，再交给工作流。Provider 条件在扫描前生效。`selector.rs` 和 `tui.rs` 只展示调用方传入的数据，不触发 discovery 或完整读取。Ratatui 用于真实终端；管道输入保留简单行交互。
 
-`cli.py` 是装配根。它解析参数并注入真实变化的依赖，不读取 Provider 数据，也不重复执行 operation 已完成的 Query 或 URI 解析。
+`--collect --emit-prompt` 使用相同的会话筛选，由 `collect/handoff.rs` 生成任务说明，不进入内部 LLM 请求。生成的读取命令指向正在运行的原生可执行文件。
 
-### 2.2 URI
+下面的 Provider、Session、Query 和输出路径均相对 `crates/agent-dump-core/src/`；CLI 路径相对根 `src/`。
 
-```text
-uri_workflow.py
-  → uri_support.parse_uri()
-  → AgentScanner.locate / Provider.find_session_by_id()
-  → head / print / summary / export
-```
+## 3. Provider 与 Session
 
-URI scheme、路径前缀和 identifier label 由 `agent_registry.AGENT_REGISTRATIONS` 声明。共享 URI 代码不得按 Provider 名称增加分支。
+`providers/contract.rs` 的 `Provider` 是共享访问边界。`providers/registry.rs` 拥有 Provider 顺序、名称、URI scheme、路径前缀及实例装配；Provider 模块拥有来源选择和私有 schema。
 
-### 2.3 Collect
+- `discover` 同时返回可用性、会话窗口和部分失败；`find` 是自包含直接定位入口。
+- `read` 读取标准化正文。`session/mod.rs` 的 Session facts 供列表、head、统计和筛选共用，未知计数始终保持未知。
+- `source_root`、`search_roots`、`change_sources` 声明来源与失效范围。
+- `json_payload`、`raw_export`、`supports_format` 投影 Provider 特有输出能力；共享工作流不解释 schema。
+- 可恢复诊断经显式 `DiagnosticSink` 传递，Provider 不直接打印。部分失败保留健康会话，并向 Collect 传播遗漏事实。
 
-```text
-collect_workflow.py
-  → 发现并筛选 Session
-  → collect_sessions.py 读取
-  → collect_events.py 投影可见对话并规划 chunk
-  → collect_reduction.py 总结与归并
-  → collect_output.py 写入 Markdown
-```
+OpenCode 在同一数据库中兼容旧表与 V2，同 ID 优先 V2，旧版独有会话保留；ZCode 使用旧 SQLite 读取器。正文按定位时记录的来源读取，不在来源消失时静默切换数据库。每次 SQLite 正文读取使用只读事务。
 
-`--collect --emit-prompt` 在共享会话筛选后分支，由 `collect_handoff.py` 生成自包含提示词，不进入内部事件提取、chunk 规划和 LLM 请求。
+`session/cache.rs` 统一拥有正文缓存。`get` 复用有界 LRU；批量 Search/Collect 用 `lease`，完成投影即释放。并发读取合并，消费者得到隔离数据。数据库与 WAL 都属于 change sources，SHM 协调文件不作为持久内容失效依据。缓存不得恢复已经过期或删除的正文。
 
-## 3. Provider contract
+## 4. 导出与文件边界
 
-`src/agent_dump/agents/base.py` 定义 `Session`、`ProviderDiscovery` 和 `BaseAgent`。共享工作流通过以下入口访问 Provider：
+格式闭集和 `md` 别名在 `output/formats.rs`。`output/export.rs` 负责文件名、来源拒写、私有权限、临时文件、同步及原子替换。`storage/private_files.rs` 共享目录和落盘语义。macOS 使用与 Python `os.fsync` 相同的同步级别；不会对每个导出文件额外执行 `F_FULLFSYNC`。
 
-- `discover_sessions(days)`：一次返回可用性、完整性和会话窗口。
-- `get_sessions(days)`、`find_session_by_id(id)`：自包含读取入口，不依赖预先调用 `is_available()`。
-- `get_session_data(session)`：读取标准化完整 payload。
-- `get_session_facts(session)`：读取 Working Directory、Provider Project、Model、Session Source、change sources 和 Message Count Fact。
-- `get_session_head(session)`、`get_session_summary_fields(session)`、`get_formatted_title(session)`、`get_session_uri(session)`：不读取完整 payload 的投影。
-- `export_session()`、`export_raw_session()`：统一导出入口。
-
-OpenCode/ZCode 的正文读取以 `session.source_path` 为数据库来源，不依赖实例此前发现的 `db_path`，也不在源缺失时回退到其他数据库。
-
-OpenCode 在 Provider 内按表结构兼容旧版与 V2。V2 使用 `session_v2/session_message`，新旧表共存时同 ID 以 V2 为准，旧版独有会话继续可读；消息按 `seq` 排序。`opencode_messages.py` 负责 V2 消息转换，ZCode 继续使用原共享 SQLite 读取器。列表计数包含全部投影消息，synthetic/system/skill/shell/compaction 和状态事件不进入 collect 的可见对话。设计、数据范围及验收见 [OpenCode V2 设计](opencode-v2-design.md)。
-
-SQLite head 与列表直接投影相同的发现 facts；手动构造的 Session 缺少计数或模型时保留未知，不在展示阶段补查数据库。
-
-Provider 私有 schema 只能在 `agent_dump.agents` 层解释。Provider 类可以复用 `FileSessionAgent`、`SQLiteSessionAgent`、transcript decoder、storage helper 和 message assembly helper；共享 workflow 不得自行解释 metadata key 或数据库字段。
-
-完整 payload 有两种所有权入口：
-
-- `get_cached_session_data(session)` 用于同一短工作流中的多投影复用，完成项受 LRU 上限约束。
-- `lease_cached_session_data(session)` 用于 Search、Collect 等批量投影，退出 context 后释放完整 payload。
-
-二者按 Provider 声明的 change sources 失效，合并同一 Session 的并发读取，并向消费者返回隔离副本。批量调用方不得使用普通缓存恢复全量驻留。
-
-SQLite Provider 声明 Session 源数据库及其 `-wal` 文件作为 change sources，兼容普通提交及未 checkpoint 的 WAL 提交。数据库级变化会保守地使该数据库中已缓存的 Session 正文失效；不跟踪读取也可能改变的 `-shm` 文件。
-
-诊断通过 `AgentScanner.diagnostic_context()` 或显式 `diagnostic_sink` 传播。Provider 不直接打印，诊断 context 退出后不得影响其他调用方。
-
-`ProviderDiscovery.complete` 默认为 `True`。文件候选检查或解析异常时返回 `complete=False`，保留成功会话；Scanner 对整体失败或部分失败的 Provider 调用一次 `on_provider_failure`。失败事实独立于诊断输出，collect 复用现有的不完整报告、日志及 handoff 计数。
-
-## 4. 导出格式
-
-格式闭集和别名由 `output_formats.VALID_FORMATS`、`FORMAT_ALIASES` 定义；模式和 Provider 能力分别由 `validate_formats_for_mode()`、`validate_agent_formats()` 校验；`rendering.export_session_in_format()` 负责分发。
-
-同一次导出的 summary、print、JSON 和 Markdown 复用同一份已读取内容。raw 独立复制 Provider 源；标准化读取失败不得阻止 raw 导出。URI print 的读取和渲染失败单独隔离，继续执行文件导出；已读取的 snapshot 仍供 JSON/Markdown 复用。
+summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标准化正文读取；print 失败不阻止文件导出。批量导出先规划目标冲突，保留部分成功结果。源目录和目标符号链接拒写，异常清理临时文件。已存在的用户导出目录不会被擅自 chmod。
 
 ## 5. Query 与 Search
 
-- `-query` 和 `agents://...?q=` 把归一化输入视为一个字面短语。
-- `--search` 按空白解析 distinct 字面 term，全部 term 必须命中，且可跨标题和逻辑 transcript 字段。
-- FTS5 只作为等价加速层；tokenizer 无法表达当前语义或索引失败时，整组回退到进程内 matcher。
-- 跨 Provider 搜索先更新所有参与 Provider 的索引，再进行一次全局检索，避免混用不同快照的相关度。
-- 索引正文解析在写事务外完成，批次通过短事务更新。旧请求的成功或失败不得覆盖更新的观察结果，慢读取不得恢复已删除行。
-- 查询内部保留 `QuerySessionMatch` 证据。带 `role:` 的查询直接从允许角色的消息生成 snippet。
+- `query/mod.rs` 拥有旧查询语法、结构化字段、`agents://`、路径规范化和 home 展开。
+- `-query` 与 URI 的 `q` 是一个字面短语；`--search` 是按空白拆分且必须全部命中的 distinct terms。
+- `query/filter.rs` 保留匹配证据和读取失败事实；角色过滤直接从允许角色生成 snippet。
+- `query/index.rs` 使用 SQLite FTS5，加速语义必须等价。tokenizer 不适用或索引失败时回退到进程内 matcher。
+- 跨 Provider 先更新所有参与索引，再全局检索。正文解析在事务外进行；旧请求不能覆盖新观察，也不能恢复已删除行。
 
-搜索语义或正文提取规则变化时同步更新索引内容版本，使旧缓存自动重建。
+搜索语义变化时同步索引内容版本。Provider Project 不充当 Working Directory；路径查询只使用后者。
 
-## 6. Collect 契约
+## 6. Collect
 
-- execute、dry-run 和 emit-prompt 在发现会话前调用 `ConfigurationDocument.validate_collect_safety()`。
-- `CollectOperation.action` 使用 `CollectAction` 表示互斥动作，不增加可矛盾的平行布尔状态。
-- collect 只读取 user/assistant 的可见文本，排除 system/developer/tool、reasoning、plan、工具调用和工具结果。
-- 没有真实对话的 Session 在 chunk 规划前忽略。
-- PM 摘要字段固定为 requests、decisions、outcomes；outcomes 只记录 Agent 明确报告的结果，不从工具轨迹或文件推断完成状态。
-- 跨会话归并只在 PM 的同一日期和明确相同的工作目录内执行；工作目录未知时保留单会话归属；INSIGHT 保留单会话归属。
-- 发现、查询和索引读取通过显式失败回调保留失败事实，不从诊断文案推算；索引回退成功时丢弃该次索引失败证据。Collect 汇总查询读取失败，单列发现失败的 Provider 数（遗漏会话数未知），并同步到报告、完成日志和外部汇总提示词。
-- 读取阶段返回失败数量，摘要失败数由计划与成功摘要数之差派生；部分失败时 Markdown 固定标明遗漏，完成日志记录实际成功数。兼容 `collect_entries()` 保持列表返回值。
-- 最终输入超过 64,000 字符时拒绝请求并提示缩小范围。
-- 模型响应先校验字段和字符串数组类型，再规范化。空对象、未知字段和错误类型进入现有纠正重试。
+execute、dry-run、emit-prompt 共用配置安全校验和会话筛选。Collect 仅提取 user/assistant 可见文本，排除 tool、reasoning、system、plan 与 Provider 私有事件。没有可见对话的会话在 chunk 规划前忽略。
+
+PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹推断成功。PM 仅在日期相同且明确的 Working Directory 相同时归并；未知目录和 INSIGHT 保持单会话归属。读取失败、摘要失败和 Provider 发现不完整分别记录，部分成功报告明确注明遗漏；索引回退成功不计作读取失败。
+
+最终输入限制、结构校验、纠正重试、并发上限、超时和跨源重定向凭据边界由 Collect/LLM 模块持有，验证使用本地 HTTP fixture，不访问真实模型。
 
 ## 7. 扩展步骤
 
-### 7.1 新增 Provider
+1. 新 Provider 实现 `Provider`，优先复用文件、SQLite、transcript 和 message assembly 模块。在 registry 声明身份和 URI。
+2. 新格式修改 `output/formats.rs`、`output/export.rs` 及 Provider 能力；覆盖可观察输出和失败路径。
+3. 新模式在 `cli_args.rs` 声明参数，在 `command.rs` 归一化和分发，再实现对应 workflow。
+4. 增补隔离行为测试，并同步 README、recipes；领域事实边界变化时同步 `CONTEXT.md`。
 
-1. 文件型 Provider 优先继承 `FileSessionAgent`；SQLite Provider 先评估 `SQLiteSessionAgent` 是否适用。
-2. 实现 Provider 的 discovery、session data、search roots 和必要的直接定位能力。读取入口必须自包含。
-3. 在 Provider 类声明 `provider_name`、`provider_display_name`，并在 `AGENT_REGISTRATIONS` 注册 factory、URI scheme 及可选路径前缀。
-4. 从 `agents/__init__.py` 导出。只有稳定库 API 才加入顶层 `__init__.py`。
-5. 增加 Provider 实现测试和 `tests/test_agents/test_contracts.py` 合约用例。
-6. 更新 README、skill recipes 和 Provider 能力说明。
-
-### 7.2 新增导出格式
-
-1. 更新 `VALID_FORMATS` 和必要的 `FORMAT_ALIASES`。
-2. 在 `export_session_in_format()` 增加分发。
-3. 更新模式限制和 Provider 能力声明。
-4. 覆盖解析、分发、成功导出和错误路径。
-5. 更新 README 与 skill recipes。
-
-### 7.3 新增 CLI 模式
-
-1. 在 `cli.py` 增加参数，并只在 Namespace → `CommandRequest` 的投影处记录原始事实。
-2. 在 `command_plan.py` 增加闭集 operation、默认值和组合校验。
-3. 新建或复用 workflow。workflow 只接收对应 operation；稳定协作者直接 import，只注入真实变化的依赖。
-4. 共享逻辑进入其职责模块，不把业务逻辑放回 `cli.py`。
-5. 增加 command plan 归一化、CLI 分发和 workflow 行为测试。
-6. 更新 README 与 skill recipes。
-
-## 8. Provider 数据源
-
-准确路径和 schema 由各 Provider 的 `get_search_roots()` 与实现代码拥有；URI 形状由 registry 拥有。诊断和文档展示必须从这些来源派生，不在共享模块复制 Provider 分支。
-
-当前支持 OpenCode、ZCode、Codex、Kimi、Claude Code、Cursor、Pi、DeepChat、Cherry Studio 和 MiniMax Code。新增或移除 Provider 时以 registry、公开 API 和用户文档为同步边界，不在根 `AGENTS.md` 维护重复清单。
-
-DeepChat 使用独立 `DeepChatAgent` 读取当前未加密 `agent.db`；不复用 OpenCode schema 的 `SQLiteSessionAgent`。正文优先读取结构化 user/assistant 表，缺失时回退到 `deepchat_messages.content`，消息按 `order_seq` 排序。每次正文读取使用一个只读事务，change sources 包含数据库和 WAL。草稿不参与发现；compaction 消息映射为独立角色，避免进入 collect。附件实体、外置工具输出、旧版 `chat.db`、SQLCipher 和 Tape 恢复不在当前支持范围，raw 导出明确拒绝。
-
-Cherry Studio 使用 `CherryStudioAgent` 只读访问 2.x `Data/cherrystudio.sqlite`，共享 parts 转换位于 `cherry_messages.py`，路径与查询位于 `cherry_storage.py`。`topic-` 与 `session-` 区分普通聊天和 Agent 会话。普通聊天沿当前叶节点追溯父链，排除虚拟根、空的待输入叶节点和旁支，发现计数与正文使用同一选取逻辑。Agent 会话按 `created_at, id` 排序，workspace 路径映射为 Working Directory。`agent_session.deleted_at` 由上游迁移 0023 引入，读取时检查字段是否存在：有字段时过滤软删除记录，早期 2.x 数据库则读取现存记录，不执行迁移。head 只读取消息身份、模型快照及分支结构，不解码正文；每次读取使用只读事务，数据库及 WAL 参与缓存失效。损坏的聊天分支保留其他会话并标记发现不完整，直接读取则报错。内部事件保留为 Provider 私有 part，不投影成 collect 对话。
-
-MiniMax Code 使用独立 `MiniMaxAgent` 读取 CLI 的 `v2/sqlite/runtime-state.sqlite`，消息转换由 `minimax_messages.py` 负责。发现只读取 Session 元数据、模型及消息行计数，正文按消息行 ID 排序；每次读取使用只读事务，数据库与 WAL 参与缓存失效。首版仅支持 columnar version 3 和已迁移展示行，待迁移旧 blob 不自动恢复。内部事件保留为独立角色和 Provider 私有 part，排除 collect/search。具体路径、范围与验收见 [MiniMax Code 功能设计](minimax-provider-design.md)。
+现有 Provider 的数据范围见 README 与历史设计文档。DeepChat 不支持 SQLCipher/附件读取/Tape 恢复；Cherry 只读取当前分支及未删除会话；MiniMax 只读取支持的已迁移展示行。重写不会扩大 Provider 源写入权限，也不执行上游迁移。

@@ -9,6 +9,8 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 
 ## 安装与运行入口
 
+Rust wheel 仅提供 CLI；不使用 Python 导入 API 或 `python -m agent_dump`。pip、uv tool、uvx 与 npm/bunx/npx 的 CLI 参数一致。Linux 预构建包需要 glibc ≥ 2.17。
+
 按“尽量不改环境”的顺序选择入口：
 
 1. 已存在本地命令时直接使用
@@ -53,7 +55,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - OpenCode 支持旧版与 2.x SQLite；自定义或 channel 数据库通过 `OPENCODE_DB` 指定。详见 recipes 的 OpenCode 2.x 部分。
 
 2. 组装命令
-- 先确认命令前缀，使用以下等价入口之一：`agent-dump`、`bunx @agent-dump/cli`、`npx @agent-dump/cli`、必要时 `uv run agent-dump`。
+- 先确认命令前缀，使用以下等价入口之一：`agent-dump`、`bunx @agent-dump/cli`、`npx @agent-dump/cli`、必要时 `uvx agent-dump`。
 - 优先复用 [references/cli-recipes.md](references/cli-recipes.md) 的模板命令。
 - `references/cli-recipes.md` 负责详细命令模板、行为矩阵和错误处理；本 skill 只负责入口选择与环境判断规则。
 - 保留用户显式给出的 `--output`、`--format`、`--lang`、`-days`、`-query`、`--summary`、`--collect`、`-since/-until`、`--config` 参数。
@@ -65,7 +67,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 3. 执行并检查退出状态
 - 退出码 `0`：命令完成了被要求的事（包括时间窗/关键词本就无命中，以及交互式导出部分成功）。
 - 退出码 `1`：命令做不到被要求的事（本机无 provider 数据、URI 未命中、交互式导出全部失败、参数组合非法等）。
-- 退出码 `2`：`argparse` 用法错误（未知参数、非法 `--format` 等）。
+- 退出码 `2`：CLI 用法错误（未知参数、非法 `--format` 等）。
 - 非 `0` 视为失败时，提炼关键报错并给出下一步修复建议；不要把「合法空结果」当成失败。
 
 4. 输出结果摘要

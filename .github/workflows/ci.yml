@@ -19,10 +19,11 @@ env:
   UV_LOCKED: "1"
   # lint/typecheck 与运行时 Python 无关，固定一个版本即可
   QUALITY_PYTHON_VERSION: "3.12"
-  # 唯一测量并门禁覆盖率的 leg
-  COVERAGE_PYTHON_VERSION: "3.12"
 
 jobs:
+  artifacts:
+    uses: ./.github/workflows/build-artifacts.yml
+
   uv-windows:
     name: Verify pinned uv installer on Windows
     runs-on: windows-latest
@@ -45,8 +46,6 @@ jobs:
       - name: Install uv
         uses: ./.github/actions/setup-uv
 
-      # ruff 与 pyright 的结论都不随运行时 Python 变化——pyright 的分析版本由
-      # pyproject 固定，ruff 读的是 target-version。跑五遍只是重复付钱。
       - name: Set up Python ${{ env.QUALITY_PYTHON_VERSION }}
         run: uv python install ${{ env.QUALITY_PYTHON_VERSION }}
 
@@ -57,30 +56,21 @@ jobs:
         run: uv sync --locked --dev --python ${{ env.QUALITY_PYTHON_VERSION }}
 
       - name: Lint
-        run: just lint
+        run: just lint-tools
 
       - name: Check
-        run: just check
+        run: just check-tools
 
-      - name: Build distributions
-        run: just build
-
-      - name: Verify wheel
-        run: just verify-wheel
-
-  python-tests:
-    name: Test Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+  rust:
+    name: Rust CLI parity (${{ matrix.os }}, shard ${{ matrix.shard }})
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONUTF8: "1"
     strategy:
-      matrix:
-        python-version:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
       fail-fast: false
-
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        shard: [0, 1, 2, 3]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -88,23 +78,43 @@ jobs:
       - name: Install uv
         uses: ./.github/actions/setup-uv
 
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install just
-        uses: ./.github/actions/setup-just
+      - name: Set up Python
+        run: uv python install ${{ env.QUALITY_PYTHON_VERSION }}
 
       - name: Install dependencies
-        run: uv sync --locked --dev --python ${{ matrix.python-version }}
+        run: uv sync --locked --dev --python ${{ env.QUALITY_PYTHON_VERSION }}
 
-      # coverage leg 跑的就是完整测试集，再跑一次 just test 是同一批用例跑两遍
-      - name: Test
-        if: matrix.python-version != env.COVERAGE_PYTHON_VERSION
-        run: just test
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
 
-      - name: Test with coverage
-        if: matrix.python-version == env.COVERAGE_PYTHON_VERSION
-        run: just cov
+      - name: Check Rust formatting
+        if: matrix.shard == 0
+        run: cargo fmt --all --check
+
+      - name: Check Rust types
+        if: matrix.shard == 0
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Test Rust
+        if: matrix.shard == 0
+        run: cargo test --locked --workspace
+
+      - name: Build Rust
+        run: cargo build --locked --release
+
+      - name: Install frozen Python reference
+        run: uv run python scripts/python_reference.py --install
+
+      - name: Verify build and evaluation tooling
+        if: matrix.shard == 0
+        run: uv run pytest -q tests/tooling
+
+      - name: Compare Rust and Python CLI behavior
+        run: >-
+          uv run --locked python -c
+          "import pathlib, subprocess, sys; files = sorted(pathlib.Path('tests/cli').glob('test_*.py'));
+          sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q', '--maxfail=10', *map(str, files[int(sys.argv[1])::4])]))"
+          ${{ matrix.shard }}
 
   web:
     name: Check landing page

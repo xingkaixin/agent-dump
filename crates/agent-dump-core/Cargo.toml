@@ -1,0 +1,29 @@
+[package]
+name = "agent-dump-core"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+license = "MIT"
+include = ["/src/**", "/Cargo.toml"]
+description = "Provider, session, query and export engine for agent-dump"
+
+[lints]
+workspace = true
+
+[dependencies]
+jiff.workspace = true
+md-5.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+walkdir.workspace = true
+rusqlite.workspace = true
+num-bigint.workspace = true
+toml_edit.workspace = true
+url.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix.workspace = true

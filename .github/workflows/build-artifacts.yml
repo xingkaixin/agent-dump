@@ -1,0 +1,86 @@
+name: Build Rust artifacts
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  UV_LOCKED: "1"
+  PYTHONUTF8: "1"
+
+jobs:
+  targets:
+    name: Resolve release targets
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - id: targets
+        run: echo "matrix=$(node npm/scripts/native-targets.mjs)" >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Install artifacts (${{ matrix.target }})
+    needs: targets
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-uv
+      - name: Install Python
+        run: uv python install 3.10 3.12 3.14
+      - name: Install build tools
+        run: uv sync --locked --dev --group packaging --python 3.12
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - name: Build wheel from sdist and stage identical npm binary
+        run: uv run --group packaging python packaging/build_release.py
+      - name: Verify pip, uv tool and uvx on Python 3.10
+        run: uv run python packaging/verify_wheel.py --python 3.10
+      - name: Verify pip, uv tool and uvx on Python 3.14
+        run: uv run python packaging/verify_wheel.py --python 3.14
+      - name: Verify native executable
+        run: uv run python packaging/verify_native.py --binary dist/native/${{ matrix.target }}/${{ matrix.binary_name }}
+      - name: Stage npm executable
+        run: node npm/scripts/stage-binaries.mjs ${{ matrix.target }} dist/native/${{ matrix.target }}/${{ matrix.binary_name }}
+      - name: Verify npm, npx and bunx installation
+        run: npm --prefix npm run smoke -- --keep-pack
+      - name: Verify glibc 2.17 runtime
+        if: runner.os == 'Linux'
+        run: >-
+          docker run --rm -v "$PWD:/work:ro" -w /tmp
+          quay.io/pypa/manylinux2014_x86_64@sha256:2fa5f99f660f115f547d96b4edcadfc19f77a6de8807734bf0fc4924f81be01a
+          /opt/python/cp310-cp310/bin/python /work/packaging/verify_native.py
+          --binary /work/dist/native/${{ matrix.target }}/${{ matrix.binary_name }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-${{ matrix.target }}
+          path: dist/native/${{ matrix.target }}/${{ matrix.binary_name }}
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: artifact-report-${{ matrix.target }}
+          path: dist/artifact-report.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: runner.os == 'Linux'
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error

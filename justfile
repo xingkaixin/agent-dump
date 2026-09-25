@@ -3,8 +3,12 @@
 default:
     @just --list --unsorted
 
-# Run code linting and formatting checks with Ruff
-lint:
+# Check Rust formatting, Clippy and Python tooling style
+lint: lint-tools
+    cargo fmt --all --check
+    cargo clippy --locked --workspace --all-targets -- -D warnings
+
+lint-tools:
     @echo "🔍 Running code linting..."
     uv run ruff check .
     uv run ruff format --check .
@@ -16,30 +20,52 @@ lint-fix:
     uv run ruff check . --fix
     @echo "✅ Lint fixes applied!"
 
-# Format code with Ruff
-lint-format:
+# Format Rust and Python verification tools
+fmt:
     @echo "🎨 Formatting code..."
+    cargo fmt --all
     uv run ruff format .
     @echo "✅ Code formatting complete!"
 
-# Run type checking with pyright and ty
-check:
+lint-format: fmt
+
+fmt-check:
+    cargo fmt --all --check
+    uv run ruff format --check .
+
+# Run type checking for Rust and verification tools
+check: check-tools
+    cargo check --locked --workspace --all-targets
+
+check-tools:
     @echo "🔍 Running type checks..."
-    uv run pyright
     uv run ty check .
     @echo "✅ Type checking complete!"
 
-# Run all tests with pytest
-test:
-    @echo "🧪 Running tests..."
+# Verify Rust units and the isolated CLI/tooling contracts
+test: reference build-rust
+    cargo test --locked --workspace
     uv run pytest -q
-    @echo "✅ Tests complete!"
 
-# Run tests with coverage measurement and enforce the floor
-cov:
-    @echo "🧪 Running tests with coverage..."
-    uv run pytest -q --cov=src --cov-report=term-missing
-    @echo "✅ Coverage check complete!"
+# Install the frozen external Python CLI for differential verification
+reference:
+    uv run python scripts/python_reference.py --install
+
+# Record validated synthetic CLI benchmarks (no real Provider data)
+benchmark *args: build-rust
+    uv run python scripts/benchmark_cli.py {{args}}
+
+# Check the Rust CLI and compare it with Python on synthetic data
+check-rust: reference
+    cargo fmt --all --check
+    cargo clippy --locked --workspace --all-targets -- -D warnings
+    cargo test --locked --workspace
+    cargo build --locked --release
+    uv run pytest -q tests/cli
+
+# Build the Rust binary for performance evaluation
+build-rust:
+    cargo build --locked --release
 
 # Run npm wrapper unit tests
 test-npm:
@@ -66,7 +92,7 @@ lock-check:
     uv lock --check
     @echo "✅ uv.lock matches pyproject.toml!"
 
-# Run local CI checks with the current Python; include npm tests when Node.js is available
+# Run local CI checks; include npm and website checks when their tools are available
 isok: lock-check lint check test
     @if command -v node >/dev/null 2>&1; then \
         just test-npm; \
@@ -82,15 +108,15 @@ isok: lock-check lint check test
 # Run the agent-dump CLI
 run:
     @echo "🚀 Starting agent-dump..."
-    uv run agent-dump
+    cargo run --locked --release --
 
 # Build a native binary for the current platform
 build-native:
     @echo "📦 Building native binary..."
-    PYINSTALLER_CONFIG_DIR=.pyinstaller UV_CACHE_DIR=.uv-cache uv run --locked --group packaging pyinstaller packaging/pyinstaller.spec --clean --noconfirm
+    cargo build --locked --release
     @echo "✅ Native binary build complete!"
 
-# Sync npm package versions from Python version metadata
+# Sync npm package versions from Cargo.toml
 build-npm:
     @echo "📦 Syncing npm workspace versions..."
     npm --prefix npm run sync-version
@@ -126,12 +152,12 @@ verify-artifacts: verify-wheel test-npm-smoke
 
 # Refresh the reviewed PEP 517 dependency closure and distribution hashes
 update-build-constraints:
-    uv pip compile packaging/build-constraints.in --universal --generate-hashes --custom-compile-command "just update-build-constraints" --output-file packaging/build-constraints.txt
+    uv pip compile packaging/build-constraints.in --universal --python-version 3.10 --generate-hashes --custom-compile-command "just update-build-constraints" --output-file packaging/build-constraints.txt
 
 # Build package wheel file
 build: clean-build
     @echo "📦 Building package..."
-    uv build --no-sources --build-constraint packaging/build-constraints.txt --require-hashes
+    uv run --group packaging python packaging/build_release.py
     @echo "✅ Build complete!"
 
 # Publish package to PyPI
