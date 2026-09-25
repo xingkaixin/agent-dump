@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-25
+
+### Breaking Changes
+
+- Replace the Python distribution with a native Rust CLI. Wheels no longer include a Python import API or `python -m agent_dump`; existing API consumers must migrate to CLI subprocesses and JSON exports or pin `agent-dump==0.15.9` (#396).
+
+### Changed
+
+- Preserve session export, query, full-text search, stats, collect, and prompt handoff workflows across all ten providers; use Ratatui for interactive selection (#396).
+- Share native binaries between pip wheels and npm platform packages, with installation verification on macOS arm64/x64, Linux x64 (glibc 2.17+), and Windows x64 (#396).
+- Split the Rust workspace into CLI and core crates, freeze Python 0.15.9 as an isolated differential reference, and verify behavior with synthetic session data (#396).
+- Improve startup and workflow performance: paired synthetic benchmarks measured version startup at 141.53 → 5.09 ms and batch JSON export at 905.94 → 367.69 ms; see [the benchmark report](docs/benchmarks/rust-p6.md) for methodology and limits (#396).
+- Update Rust dependencies, Python development tools, React, and Wrangler (#397–#403).
+
 ## [0.15.9] - 2026-09-24
 
 ### Added
@@ -1159,3 +1173,5 @@
 [0.3.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.3.0
 [0.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.2.0
 [0.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.1.0
+
+[1.0.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.0.0

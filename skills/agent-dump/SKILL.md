@@ -9,7 +9,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 
 ## 安装与运行入口
 
-Rust wheel 仅提供 CLI；不使用 Python 导入 API 或 `python -m agent_dump`。pip、uv tool、uvx 与 npm/bunx/npx 的 CLI 参数一致。Linux 预构建包需要 glibc ≥ 2.17。
+从 v1.0.0 起，Rust wheel 仅提供 CLI；不使用 Python 导入 API 或 `python -m agent_dump`。pip、uv tool、uvx 与 npm/bunx/npx 的 CLI 参数一致。Linux 预构建包需要 glibc ≥ 2.17。
 
 按“尽量不改环境”的顺序选择入口：
 
