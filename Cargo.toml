@@ -34,7 +34,7 @@ tempfile = "3"
 walkdir = "2"
 rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
 num-bigint = "0.4"
-toml_edit = "0.23"
+toml_edit = "0.25"
 ureq = { version = "3", features = ["json"] }
 url = "2"
 caseless = "0.2"

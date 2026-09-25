@@ -34,11 +34,11 @@ dev = [
     "pytest>=8.0.0",
     "ruff>=0.15.2",
     "tomli>=2.0.0",
-    "ty==0.0.81",
+    "ty==0.0.83",
 ]
 packaging = [
     "maturin==1.15.0",
-    "ziglang==0.13.0; sys_platform == 'linux'",
+    "ziglang==0.16.0; sys_platform == 'linux'",
 ]
 
 [build-system]
