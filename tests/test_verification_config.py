@@ -93,21 +93,22 @@ class TestDependencyPinning:
     def test_type_checkers_are_pinned(self):
         """ty 是 0.0.x；未固定时一个新默认规则就能在代码不变的情况下让发布卡住。"""
         dev_deps = _read_toml("pyproject.toml")["dependency-groups"]["dev"]
-        ty_specs = [d for d in dev_deps if d.startswith("ty")]
+        ty_specs = [d for d in dev_deps if isinstance(d, str) and d.startswith("ty")]
 
         assert ty_specs, "ty 应在 dev 依赖里"
         assert all("==" in spec or "~=" in spec for spec in ty_specs), f"ty 必须固定版本（当前 {ty_specs}）"
 
     def test_packaging_toolchain_stays_pinned(self):
-        """AD-114 固定 PyInstaller 是为了二进制可复现，别被无意放开。"""
+        """Rust wheel 构建器和 Linux 交叉链接器保持固定版本。"""
         packaging = _read_toml("pyproject.toml")["dependency-groups"]["packaging"]
 
-        assert any("pyinstaller==" in spec for spec in packaging)
+        assert any("maturin==" in spec for spec in packaging)
+        assert any("ziglang==" in spec for spec in packaging)
 
     def test_prompt_toolkit_is_justified_in_place(self):
         """代码不直接 import 它，保留的理由必须写在旁边（AGENTS.md §1.4）。"""
         content = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        block = content[content.index("dependencies = [") : content.index("[project.urls]")]
+        block = content[content.index("legacy-python = [") : content.index("dev = [")]
 
         assert "prompt-toolkit" in block
         assert "key_bindings" in block, "保留未直接 import 的依赖需注明必要性"
@@ -153,12 +154,12 @@ class TestBuildBackendIsReproducible:
 
     def test_build_backend_requirement_has_a_version_policy(self):
         requirements = _read_toml("pyproject.toml")["build-system"]["requires"]
-        hatchling = [requirement for requirement in requirements if requirement.startswith("hatchling")]
+        maturin = [requirement for requirement in requirements if requirement.startswith("maturin")]
 
-        assert len(hatchling) == 1
-        assert hatchling[0] != "hatchling"
-        assert ">=" in hatchling[0]
-        assert "<2" in hatchling[0]
+        assert len(maturin) == 1
+        assert maturin[0] != "maturin"
+        assert ">=" in maturin[0]
+        assert "<" in maturin[0]
 
     def test_every_build_requirement_is_exact_and_hashed(self):
         records = self._constraint_records()
@@ -169,26 +170,29 @@ class TestBuildBackendIsReproducible:
             assert "==" in requirement, f"构建约束未固定版本: {record}"
             assert "--hash=sha256:" in record, f"构建约束缺少可信 hash: {record}"
 
-    def test_constraint_input_and_generated_hatchling_pin_match(self):
+    def test_constraint_input_and_generated_maturin_pin_match(self):
         source_pin = (REPO_ROOT / "packaging" / "build-constraints.in").read_text(encoding="utf-8").strip()
 
-        assert source_pin.startswith("hatchling==")
+        assert source_pin.startswith("maturin==")
         assert any(record.startswith(source_pin) for record in self._constraint_records())
 
     def test_local_and_release_builds_use_the_same_hash_gate(self):
-        expected = "uv build --no-sources --build-constraint packaging/build-constraints.txt --require-hashes"
         justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
-        release = (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-
-        assert expected in justfile
-        assert expected in release
+        artifacts = (REPO_ROOT / ".github/workflows/build-artifacts.yml").read_text(encoding="utf-8")
+        builder = (REPO_ROOT / "packaging/build_release.py").read_text(encoding="utf-8")
+        assert "uv run --group packaging python packaging/build_release.py" in justfile
+        assert "uv run --group packaging python packaging/build_release.py" in artifacts
+        for flag in ("--no-sources", "--build-constraint", "--require-hashes"):
+            assert flag in builder
+        for workflow in ("ci.yml", "release.yml"):
+            content = (REPO_ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
+            assert "uses: ./.github/workflows/build-artifacts.yml" in content
 
     def test_ci_builds_and_smokes_the_constrained_wheel(self):
-        ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        quality = ci.split("\n  quality:\n", 1)[1].split("\n  python-tests:\n", 1)[0]
-
-        assert "run: just build" in quality
-        assert "run: just verify-wheel" in quality
+        artifacts = (REPO_ROOT / ".github/workflows/build-artifacts.yml").read_text(encoding="utf-8")
+        assert "packaging/verify_wheel.py --python 3.10" in artifacts
+        assert "packaging/verify_wheel.py --python 3.14" in artifacts
+        assert "manylinux2014_x86_64@sha256:" in artifacts
 
     def test_constraint_refresh_has_a_dependabot_path(self):
         justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
@@ -316,7 +320,10 @@ class TestReleaseRetries:
 
         assert "node npm/scripts/native-targets.mjs" in release
         assert "native-matrix: ${{ steps.native-targets.outputs.matrix }}" in release
-        assert release.count("matrix: ${{ fromJSON(needs.validate.outputs.native-matrix) }}") == 2
+        assert release.count("matrix: ${{ fromJSON(needs.validate.outputs.native-matrix) }}") == 1
+        artifacts = (REPO_ROOT / ".github/workflows/build-artifacts.yml").read_text(encoding="utf-8")
+        assert "node npm/scripts/native-targets.mjs" in artifacts
+        assert "matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}" in artifacts
         assert "pattern: native-*" in release
         assert "node npm/scripts/stage-binaries.mjs --artifacts dist/native" in release
 
@@ -324,11 +331,9 @@ class TestReleaseRetries:
         release = self._release()
         build_native = release.split("\n  build-native:\n", 1)[1].split("\n  publish:\n", 1)[0]
 
-        assert "uv run python packaging/verify_native.py" in build_native
-        assert '--binary "${binary}"' in build_native
-        assert '--expected-version "${GITHUB_REF_NAME#v}"' in build_native
-        assert '"${binary}" --version' not in build_native
-        assert '"${binary}" --help' not in build_native
+        assert "uses: ./.github/workflows/build-artifacts.yml" in build_native
+        artifacts = (REPO_ROOT / ".github/workflows/build-artifacts.yml").read_text(encoding="utf-8")
+        assert "uv run python packaging/verify_native.py --binary dist/native/" in artifacts
 
     def test_same_tag_release_runs_are_serialized_without_cancellation(self):
         preamble = self._release().split("\njobs:\n", 1)[0]
@@ -384,7 +389,7 @@ class TestVerificationConsumesTheCommittedLock:
     def _workflow(name: str) -> str:
         return (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
 
-    @pytest.mark.parametrize("workflow", ["ci.yml", "release.yml"])
+    @pytest.mark.parametrize("workflow", ["ci.yml", "release.yml", "build-artifacts.yml"])
     def test_every_uv_sync_is_locked(self, workflow):
         content = self._workflow(workflow)
         sync_lines = [
@@ -397,7 +402,7 @@ class TestVerificationConsumesTheCommittedLock:
         for line in sync_lines:
             assert "--locked" in line, f"{workflow} 的 `{line}` 会在需要时静默重锁"
 
-    @pytest.mark.parametrize("workflow", ["ci.yml", "release.yml"])
+    @pytest.mark.parametrize("workflow", ["ci.yml", "release.yml", "build-artifacts.yml"])
     def test_uv_locked_is_set_for_the_whole_workflow(self, workflow):
         """--locked 只管 uv sync；后续的 uv run 需要 UV_LOCKED 才受同一约束。"""
         content = self._workflow(workflow)
@@ -545,7 +550,15 @@ class TestCiDoesNotRepeatVersionIndependentWork:
         assert job.count("run: just cov") == 1
 
     def test_npm_and_web_are_their_own_jobs(self):
-        assert set(self._job_names()) == {"uv-windows", "quality", "python-tests", "rust", "web", "npm-wrapper"}
+        assert set(self._job_names()) == {
+            "artifacts",
+            "uv-windows",
+            "quality",
+            "python-tests",
+            "rust",
+            "web",
+            "npm-wrapper",
+        }
         assert "matrix:" not in self._job("web"), "Web 只需构建一次"
         assert '"22"' in self._job("npm-wrapper")
         assert '"24"' in self._job("npm-wrapper")

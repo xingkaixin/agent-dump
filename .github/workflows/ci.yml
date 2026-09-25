@@ -19,10 +19,14 @@ env:
   UV_LOCKED: "1"
   # lint/typecheck 与运行时 Python 无关，固定一个版本即可
   QUALITY_PYTHON_VERSION: "3.12"
+  PYTHONPATH: ${{ github.workspace }}/src
   # 唯一测量并门禁覆盖率的 leg
   COVERAGE_PYTHON_VERSION: "3.12"
 
 jobs:
+  artifacts:
+    uses: ./.github/workflows/build-artifacts.yml
+
   uv-windows:
     name: Verify pinned uv installer on Windows
     runs-on: windows-latest
@@ -61,12 +65,6 @@ jobs:
 
       - name: Check
         run: just check
-
-      - name: Build distributions
-        run: just build
-
-      - name: Verify wheel
-        run: just verify-wheel
 
   python-tests:
     name: Test Python ${{ matrix.python-version }}
@@ -150,7 +148,7 @@ jobs:
 
       - name: Build Rust
         working-directory: rust
-        run: cargo build --locked
+        run: cargo build --locked --release
 
       - name: Compare Rust and Python CLI behavior
         run: >-

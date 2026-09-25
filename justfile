@@ -1,3 +1,5 @@
+export PYTHONPATH := justfile_directory() / "src"
+
 # Show all available recipes
 [no-cd]
 default:
@@ -45,15 +47,15 @@ cov:
 benchmark *args:
     uv run python scripts/benchmark_cli.py {{args}}
 
-# Check the experimental Rust CLI and compare it with Python on synthetic data
+# Check the Rust CLI and compare it with Python on synthetic data
 check-rust:
     cd rust && cargo fmt --check
     cd rust && cargo clippy --locked --all-targets -- -D warnings
     cd rust && cargo test --locked
-    cd rust && cargo build --locked
+    cd rust && cargo build --locked --release
     uv run pytest -q rust/tests
 
-# Build the experimental Rust binary for performance evaluation
+# Build the Rust binary for performance evaluation
 build-rust:
     cd rust && cargo build --locked --release
 
@@ -98,15 +100,15 @@ isok: lock-check lint check test check-rust
 # Run the agent-dump CLI
 run:
     @echo "🚀 Starting agent-dump..."
-    uv run agent-dump
+    cd rust && cargo run --locked --release --
 
 # Build a native binary for the current platform
 build-native:
     @echo "📦 Building native binary..."
-    PYINSTALLER_CONFIG_DIR=.pyinstaller UV_CACHE_DIR=.uv-cache uv run --locked --group packaging pyinstaller packaging/pyinstaller.spec --clean --noconfirm
+    cd rust && cargo build --locked --release
     @echo "✅ Native binary build complete!"
 
-# Sync npm package versions from Python version metadata
+# Sync npm package versions from rust/Cargo.toml
 build-npm:
     @echo "📦 Syncing npm workspace versions..."
     npm --prefix npm run sync-version
@@ -142,12 +144,12 @@ verify-artifacts: verify-wheel test-npm-smoke
 
 # Refresh the reviewed PEP 517 dependency closure and distribution hashes
 update-build-constraints:
-    uv pip compile packaging/build-constraints.in --universal --generate-hashes --custom-compile-command "just update-build-constraints" --output-file packaging/build-constraints.txt
+    uv pip compile packaging/build-constraints.in --universal --python-version 3.10 --generate-hashes --custom-compile-command "just update-build-constraints" --output-file packaging/build-constraints.txt
 
 # Build package wheel file
 build: clean-build
     @echo "📦 Building package..."
-    uv build --no-sources --build-constraint packaging/build-constraints.txt --require-hashes
+    uv run --group packaging python packaging/build_release.py
     @echo "✅ Build complete!"
 
 # Publish package to PyPI

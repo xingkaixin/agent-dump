@@ -40,7 +40,9 @@ test("release matrix is derived from the native target manifest", () => {
     include: NATIVE_TARGETS.map((target) => ({
       os: target.runner,
       target: target.target,
-      binary_name: target.executableName
+      binary_name: target.executableName,
+      rust_target: target.rustTarget,
+      wheel_platform: target.wheelPlatform
     }))
   });
 });

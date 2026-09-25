@@ -150,44 +150,65 @@ def verify_native(
     if not resolved_binary.is_file():
         raise RuntimeError(f"native binary does not exist: {resolved_binary}")
 
+    verify_command([str(resolved_binary)], expected_version, runner=runner)
+
+
+def verify_command(
+    command: list[str],
+    expected_version: str | None = None,
+    *,
+    runner: CommandRunner = run_command,
+    command_cwd: Path | None = None,
+) -> None:
     with tempfile.TemporaryDirectory(prefix="agent-dump-native-") as workdir:
         root = Path(workdir)
         codex_home = root / "codex"
         session_id = write_codex_fixture(codex_home)
+        before = {path.relative_to(codex_home): path.read_bytes() for path in codex_home.rglob("*") if path.is_file()}
         environment = build_isolated_environment(root, codex_home)
-        executable = str(resolved_binary)
 
-        version_output = runner([executable, "--version"], cwd=root, env=environment).strip()
-        if expected_version and expected_version not in version_output:
+        version_output = runner([*command, "--version"], cwd=command_cwd or root, env=environment).strip()
+        if expected_version and version_output != f"agent-dump {expected_version}":
             raise RuntimeError(f"native CLI reports {version_output!r}, expected version {expected_version!r}")
 
-        help_output = runner([executable, "--lang", "en", "--help"], cwd=root, env=environment)
-        if "usage:" not in help_output:
+        help_output = runner([*command, "--lang", "en", "--help"], cwd=command_cwd or root, env=environment)
+        if "usage:" not in help_output.lower():
             raise RuntimeError("native CLI help does not contain a usage line")
 
         uri = f"codex://{session_id}"
-        rendered = runner([executable, uri, "--format", "print", "--lang", "en"], cwd=root, env=environment)
+        rendered = runner(
+            [*command, uri, "--format", "print", "--lang", "en"], cwd=command_cwd or root, env=environment
+        )
         missing_markers = [marker for marker in (USER_MARKER, ASSISTANT_MARKER) if marker not in rendered]
         if missing_markers:
             raise RuntimeError(f"native CLI print output is missing fixture content: {missing_markers}")
 
         output_dir = root / "exports"
         runner(
-            [executable, uri, "--format", "json", "--output", str(output_dir), "--lang", "en"],
+            [*command, uri, "--format", "json", "--output", str(output_dir), "--lang", "en"],
             cwd=root,
             env=environment,
         )
         validate_export(output_dir, session_id)
+        after = {path.relative_to(codex_home): path.read_bytes() for path in codex_home.rglob("*") if path.is_file()}
+        if before != after:
+            raise RuntimeError("CLI modified the Provider source")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, required=True)
+    entry = parser.add_mutually_exclusive_group(required=True)
+    entry.add_argument("--binary", type=Path)
+    entry.add_argument("--command", type=json.loads, help="JSON array of command arguments")
     parser.add_argument("--expected-version", default=None)
+    parser.add_argument("--command-cwd", type=Path)
     args = parser.parse_args()
 
     try:
-        verify_native(args.binary, args.expected_version)
+        if args.binary:
+            verify_native(args.binary, args.expected_version)
+        else:
+            verify_command(args.command, args.expected_version, command_cwd=args.command_cwd)
     except RuntimeError as error:
         raise SystemExit(str(error)) from None
     print("native CLI completed an isolated session workflow")

@@ -7,7 +7,7 @@ import { NATIVE_TARGETS } from "./native-targets.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
 const npmRoot = path.resolve(repoRoot, "npm");
-const versionFile = path.resolve(repoRoot, "src", "agent_dump", "__about__.py");
+const versionFile = path.resolve(repoRoot, "rust", "Cargo.toml");
 
 const packageFiles = [
   path.resolve(npmRoot, "package.json"),
@@ -16,9 +16,9 @@ const packageFiles = [
 ];
 
 function parseVersion(source) {
-  const match = source.match(/__version__\s*=\s*"([^"]+)"/);
+  const match = source.match(/^version\s*=\s*"([^"]+)"/m);
   if (!match) {
-    throw new Error("Could not read Python version from src/agent_dump/__about__.py");
+    throw new Error("Could not read Rust version from rust/Cargo.toml");
   }
   return match[1];
 }
