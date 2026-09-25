@@ -1,6 +1,8 @@
 # Rust 迁移计划
 
-状态：P0～P6 实现与验收完成，最终提交须通过 PR 检查。当前分支的运行与 wheel/npm 构建已切换为 Rust，Python v0.15.9 保留为冻结参考；四目标安装及 23 场景交错性能验证通过。详见 [P6 最终验收](rust-p6-completion.md)。尚未合并或正式发布。
+状态：P0～P6 实现与验收完成，最终提交须通过 PR 检查。当前分支的运行与 wheel/npm 构建已切换为 Rust，Python v0.15.9 固定为外部参考；四目标安装及 23 场景交错性能验证通过。详见 [P6 最终验收](rust-p6-completion.md)。尚未合并或正式发布。
+
+P6 之后已按用户要求删除主树中的旧 Python 应用及专属单元测试，将 Cargo、源码和资源移至根目录。1,549 项 CLI 契约继续对照固定 wheel；历史阶段的路径、测试数量和命令以记录的提交为准。当前结构见[开发指南](development-guide.md)。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -23,7 +25,7 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 ## 2. 功能验收矩阵
 
-每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P2 已关闭 Provider 读取与单 URI 导出范围，完整证据见 [P2 最终验收](rust-p2-completion.md)；P3～P5 的参数/查询/配置/Collect/交互条目见[最终验收](rust-p3-p5-completion.md)，帮助/usage 的明确差异和发布分发见 [P6 最终验收](rust-p6-completion.md)。当前实现见 [Rust README](../rust/README.md)，Codex 消息与导出证据见[差分验收记录](rust-codex-parity.md)，历史 P1 性能见[复测报告](benchmarks/rust-p1.md)。
+每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P2 已关闭 Provider 读取与单 URI 导出范围，完整证据见 [P2 最终验收](rust-p2-completion.md)；P3～P5 的参数/查询/配置/Collect/交互条目见[最终验收](rust-p3-p5-completion.md)，帮助/usage 的明确差异和发布分发见 [P6 最终验收](rust-p6-completion.md)。当前实现见 [Rust README](rust-implementation.md)，Codex 消息与导出证据见[差分验收记录](rust-codex-parity.md)，历史 P1 性能见[复测报告](benchmarks/rust-p1.md)。
 
 | 范围 | 必须对齐的契约 | 现有依据 |
 | --- | --- | --- |
@@ -75,7 +77,7 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 [复测报告](benchmarks/rust-p1.md)：相对本次 Python 源码复测，version、Codex 列表、head、print 的耗时中位数分别改善为 33.66×、5.40×、21.98×、2.63×。这不代表全量应用或最终发布制品的性能。JSON 已做功能差分；现有导出 benchmark 同时要求 Markdown，因此未列为本阶段通过项。
 
-P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入 `--output`；配置不读取。复杂 Codex 消息、其他 Provider、完整参数组合/错误文案/部分成功行为尚待实现，详见 [Rust README](../rust/README.md)。
+P1 的明确限制：只支持显式 `provider:codex` 列表；JSON 必须传入 `--output`；配置不读取。复杂 Codex 消息、其他 Provider、完整参数组合/错误文案/部分成功行为尚待实现，详见 [Rust README](rust-implementation.md)。
 
 ### P2：Provider 与导出对齐
 

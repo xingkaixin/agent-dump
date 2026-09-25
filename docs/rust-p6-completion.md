@@ -2,6 +2,8 @@
 
 P6 的实现、性能复测和四目标制品安装验收完成。当前分支的运行与构建实现已切换为 Rust，Python v0.15.9 作为冻结参考保留。审阅入口为 [Draft PR #396](https://github.com/xingkaixin/agent-dump/pull/396)，交付要求该 PR 的[最终提交检查](https://github.com/xingkaixin/agent-dump/pull/396/checks)全部通过。没有合并、打 tag 或发布。
 
+本报告记录 P6 完成时的状态。随后目录清理移除了主树中的旧 Python 应用与单元测试，对照改为独立安装固定的 0.15.9 wheel；Cargo 与源码位于根目录。历史验证数据保持不变，当前入口见[开发指南](development-guide.md)。
+
 ## 交付范围
 
 | P6 项目 | 结果与证据 |
@@ -65,4 +67,14 @@ Linux 使用 Zig 构建并执行 auditwheel 检查，运行验证使用固定 di
 
 当前 Cargo/npm 仍为 0.15.9，用于迁移验证；release workflow 明确拒绝以该已发布 Python 版本号发布 Rust 制品。下一步由用户审阅 PR 并确定新版本。届时按[发布指南](release-guide.md)更新 Cargo/Cargo.lock 与 npm 版本、CHANGELOG 和网站更新记录，再执行合并和受控发布。
 
-Python 生产源码与原 benchmark 文件保持冻结，未删除其行为依据。P6 不自动推进 merge、tag、PyPI/npm 上传或网站部署。
+P6 验收时的 Python 生产源码与 benchmark 保存在对应历史提交中。P6 不自动推进 merge、tag、PyPI/npm 上传或网站部署。
+
+## P6 后的目录清理
+
+按用户要求，删除主树中的旧 Python 应用、专属单元测试、旧入口和内部扫描 benchmark。根目录现在是单个 Rust crate：`Cargo.toml`、`Cargo.lock`、`rust-toolchain.toml`、`src/` 与 `resources/`。构建、CI、npm 校验和网站版本都读取根目录的 Cargo 元数据。
+
+保留全部 1,549 项 CLI 契约，移至 `tests/cli/`；103 项构建、文档和评估检查位于 `tests/tooling/`。对照环境由 `just reference` 安装固定的 PyPI 0.15.9 wheel，依赖及分发文件 hash 锁定在 `tests/reference/requirements.txt`。安装后逐文件核对旧应用源码 hash，仍为 `a5f4b5feb6fd525688a6fda930087f4446eaccbe016457524369620aa5f58237`。Python 仅用于验证和打包工具，不进入产品运行路径。
+
+本次清理的本地 `just isok` 完整通过：44 项 Rust 单元测试、1,652 项 CLI/工具验证、74 项 npm 测试、13 项 Web E2E。macOS arm64 制品通过 Python 3.10/3.14 下的 pip、uv tool、uvx，以及 npm、npx、bunx 安装与读取/导出验证。sdist 从根目录构建且仅包含 99 个必要文件，不含旧 Python 应用、开发环境或网站依赖。
+
+17＋6 场景重新执行 smoke 校验全部通过；此轮用于验证评估工具的目录迁移，不产生新的性能结论。原始 fixture、结果断言、计时器和历史原始报告保持不变；入口及编排路径有调整，未来正式测量须重新配对，不能绕过 evaluator hash 比较。三平台 CLI 与四目标安装的最新状态见 [PR 检查](https://github.com/xingkaixin/agent-dump/pull/396/checks)。
