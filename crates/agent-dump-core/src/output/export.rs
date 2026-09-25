@@ -1,4 +1,5 @@
 use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -50,7 +51,11 @@ fn filename(id: &str) -> crate::Result<String> {
     {
         Ok(id.to_owned())
     } else {
-        Ok(format!("~{:x}", Sha256::digest(id.as_bytes())))
+        let mut name = String::from("~");
+        for byte in Sha256::digest(id.as_bytes()) {
+            write!(name, "{byte:02x}")?;
+        }
+        Ok(name)
     }
 }
 
