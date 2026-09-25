@@ -38,6 +38,16 @@ Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 h
 
 `just fmt` 格式化整个 Rust workspace 和 Python 验证工具，`just fmt-check` 只检查格式；`just lint-format` 保留为 `fmt` 的别名。`just lint` 执行 Rustfmt、Clippy 和 Ruff；`just check` 执行 Cargo check 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 执行同一套 CLI 契约；第 0 组同时执行 Rust 单元测试和工具验证。四目标安装 CI 另行检查 pip/uv tool/uvx 与 npm/npx/bunx。
 
+### CI 构建缓存与耗时报告
+
+Rust 依赖缓存按 OS、架构和构建用途隔离。CLI 分片共享 parity 缓存，由 main 的第 0 组写入；四目标打包使用独立 packaging 缓存，由 main 写入。PR 只恢复已有缓存，首次运行或工具链/依赖变化时仍可能冷编译。
+
+CLI 分片输出最慢 30 项测试及 `dist/ci/parity.xml`，CI 将报告上传为 `parity-<os>-<shard>` artifact，保留 14 天。JUnit 时间包含 setup、call 和 teardown，可用于重新分配分片；固定 Python 对照与三平台测试覆盖保持不变。
+
+CLI 文件按 `.github/cli-test-timings.json` 中的平台耗时分配到四组，优先安排最重的文件，并给第 0 组预留 Rust lint、单测及 tooling 的耗时。新增文件按当前已知文件的平均耗时分配；删除文件的历史记录不参与分配。`uv run python scripts/ci_shard.py --shard 0 --dry-run` 可查看当前平台的分配而不执行测试。
+
+更新基线时，下载同一次成功 CI 的全部 12 份 parity artifact，按平台和测试模块汇总 JUnit `testcase` 的 `time`；将第 0 组的格式检查、Clippy、Rust 单测和 tooling 步骤总耗时写入 `shard_zero_overhead`，同时更新 `source` 链接。分片基线只影响分配，不影响收集范围；每轮仍通过 glob 收集所有 `tests/cli/test_*.py`。
+
 ### Rust 格式与 lint
 
 `rustfmt.toml` 使用 edition 2024、80 列、字段初始化和 `?` 简写，只启用 stable 选项。Rustfmt 无法重排的宏内文本与长字符串不强行拆分。
