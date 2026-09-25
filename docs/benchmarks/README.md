@@ -40,14 +40,18 @@
 
 ## 运行
 
+P6 后已清理旧 Python 应用。默认入口是根目录 `target/release/agent-dump`；配对工具使用 `just reference` 安装的固定 0.15.9 wheel。fixture、结果断言和计时器未改变，编排路径及 evaluator hash 已更新，因此新测量应重新配对，不与历史报告绕过 hash 校验比较。历史 evaluator 可从原报告 commit 复现。
+
 ```bash
 # 快速检查工具和结果断言
-uv run python scripts/benchmark_cli.py --profile smoke --repeats 1 --warmups 0 --output dist/benchmarks/smoke.json
+just benchmark --profile smoke --repeats 1 --warmups 0 --output dist/benchmarks/smoke.json
 
-# Python 源码运行基线：默认使用当前解释器 -m agent_dump
-uv run python scripts/benchmark_cli.py --profile standard --output dist/benchmarks/python-source.json
+# Rust release 单独测量
+just build-rust
+uv run python scripts/benchmark_cli.py --profile standard --output dist/benchmarks/rust-release.json
 
 # 当前 Rust 制品；构建结束后同机交错比较，macOS arm64 示例
+just reference
 just build
 uv run python scripts/eval_rust_release.py --rust-command "$PWD/dist/native/darwin-arm64/agent-dump" --profile standard --repeats 5 --warmups 1 --output dist/benchmarks/rust-release.json
 

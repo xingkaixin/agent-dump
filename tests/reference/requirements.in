@@ -1,0 +1,9 @@
+# Match the Python runtime used by the P6 acceptance and benchmarks.
+agent-dump==0.15.9
+prompt-toolkit==3.0.53
+questionary==2.1.1
+tomli==2.4.1; python_version < '3.11'
+tomlkit==0.15.1
+tzdata==2026.3; sys_platform == 'win32'
+tzlocal==5.4.4
+wcwidth==0.7.0

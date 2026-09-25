@@ -11,7 +11,6 @@ from pathlib import Path
 import re
 import shlex
 import sqlite3
-import sys
 import tempfile
 import threading
 import time
@@ -19,6 +18,7 @@ import time
 from benchmark_cases import Case, content_digest, expected_uris, require
 from benchmark_cli import environment_metadata, files_digest, git_output, run_sample, summarize
 from benchmark_fixtures import PROFILES, codex_id, create_fixture
+from python_reference import command as reference_command, source_digest as reference_source_digest
 
 ROOT = Path(__file__).resolve().parents[1]
 NAMES = (
@@ -130,7 +130,7 @@ def local_model(delay: float):
 def evaluate(command: list[str], name: str, profile_name: str, root: Path) -> tuple[dict, dict]:
     profile = PROFILES[profile_name]
     environment = create_fixture(root, profile)
-    environment["PYTHONPATH"] = str(ROOT / "src")
+    environment.pop("PYTHONPATH", None)
     all_dates = ("-d", "36500")
     expected = expected_uris(profile, provider="codex", matching=True)
     mutation_count = min(32, profile.sessions_per_provider)
@@ -254,7 +254,7 @@ def evaluate(command: list[str], name: str, profile_name: str, root: Path) -> tu
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rust-command", required=True)
-    parser.add_argument("--python-command", default=f"{shlex.quote(sys.executable)} -m agent_dump")
+    parser.add_argument("--python-command")
     parser.add_argument("--profile", choices=PROFILES, default="standard")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--warmups", type=int, default=1)
@@ -262,7 +262,10 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     require(args.repeats > 0 and args.warmups >= 0, "Invalid repetition count")
-    commands = {"python": shlex.split(args.python_command), "rust": shlex.split(args.rust_command)}
+    commands = {
+        "python": shlex.split(args.python_command) if args.python_command else reference_command(),
+        "rust": shlex.split(args.rust_command),
+    }
     report = {
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "git_commit": git_output("rev-parse", "HEAD"),
@@ -271,7 +274,7 @@ def main() -> None:
         "warmups": args.warmups,
         "profile": args.profile,
         "environment": environment_metadata(),
-        "python_source_sha256": files_digest(list((ROOT / "src" / "agent_dump").rglob("*.py"))),
+        "python_source_sha256": reference_source_digest(),
         "frozen_evaluator_sha256": files_digest(list((ROOT / "scripts").glob("benchmark_*.py"))),
         "extension_sha256": files_digest([Path(__file__)]),
         "commands": commands,

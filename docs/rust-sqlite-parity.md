@@ -6,7 +6,7 @@
 
 ## 行为映射
 
-| Python 契约 | Rust 实现 | 差分入口（`rust/tests/`） |
+| Python 契约 | Rust 实现 | 差分入口（`tests/cli/`） |
 | --- | --- | --- |
 | OpenCode 显式数据库、相对路径、XDG/default/fallback，显式缺失不回退，`:memory:` 不可用 | `sqlite_provider.rs` | `test_sqlite_paths.py`：绝对/相对/特殊字符、缺失源、不创建数据库、绑定标识符 |
 | ZCode macOS/Windows 路径和旧表契约 | `sqlite_provider.rs`、`sqlite_legacy.rs` | `test_sqlite_legacy.py`：中英文列表/head/四种输出；不支持的平台显式跳过 ZCode 用例 |

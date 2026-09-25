@@ -1,0 +1,36 @@
+[package]
+name = "agent-dump"
+version = "0.15.9"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+include = ["/src/**", "/resources/**", "/Cargo.toml", "/Cargo.lock", "/rust-toolchain.toml", "/README.md", "/LICENSE"]
+description = "AI Coding Assistant Session Export Tool"
+license = "MIT"
+repository = "https://github.com/xingkaixin/agent-dump"
+
+[dependencies]
+jiff = "0.2"
+md-5 = "0.10"
+clap = { version = "4", features = ["derive", "string"] }
+serde = { version = "1", features = ["derive"] }
+# Tool output and subagent prompts contain JSON strings whose key order is observable.
+serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
+regex = "1"
+sha2 = "0.10"
+tempfile = "3"
+walkdir = "2"
+rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
+num-bigint = "0.4"
+toml_edit = "0.23"
+ureq = { version = "3", features = ["json"] }
+url = "2"
+caseless = "0.2"
+uuid = { version = "1", features = ["v4"] }
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+crossterm = "0.29"
+unicode-width = "0.2"
+unicode-normalization = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", default-features = false, features = ["fs", "user"] }

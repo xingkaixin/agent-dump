@@ -1,36 +1,17 @@
-# python
-.venv
-.ruff_cache
+# Rust
+/target/
+
+# Python verification and wheel tooling
+.venv/
+.venv-reference/
+.ruff_cache/
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
+.pytest_cache/
+.uv-cache/
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-# Python 构建产物只出现在仓库根；不加 / 的话这条会吞掉任何层级的 lib/，
-# web/src/lib 与 npm/packages/cli/lib 都是源码目录
-/lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-.pytest_cache
-.uv-cache
-
-# pytest
-.coverage
-
-# pyright
-.pyright/
 
 # IDE
 .vscode/
@@ -45,10 +26,6 @@ wheels/
 /data
 /sessions
 
-# uv
-*.lock
-!uv.lock
-
 # native packaging
 /npm/packages/cli-*/bin/agent-dump
 /npm/packages/cli-*/bin/agent-dump.exe
@@ -57,7 +34,6 @@ wheels/
 /npm/node_modules
 /npm/package-lock.json
 /npm/.npm-cache
-/.pyinstaller
 
 
 # web landing page (Astro)
@@ -81,7 +57,3 @@ skills-lock.json
 
 # Issue tracker generated files
 .issues
-
-# Rust migration
-/rust/target/
-!rust/Cargo.lock

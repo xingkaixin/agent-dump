@@ -6,15 +6,13 @@ import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 
-// Version single source of truth is the Python package metadata. Resolved from this
-// config's fixed location and inlined at build time (see src/lib/version.ts).
-const aboutSource = readFileSync(
-  new URL("../src/agent_dump/__about__.py", import.meta.url),
+const cargoSource = readFileSync(
+  new URL("../Cargo.toml", import.meta.url),
   "utf8",
 );
-const versionMatch = aboutSource.match(/__version__\s*=\s*"([^"]+)"/);
+const versionMatch = cargoSource.match(/^version\s*=\s*"([^"]+)"/m);
 if (!versionMatch) {
-  throw new Error("Could not read __version__ from src/agent_dump/__about__.py");
+  throw new Error("Could not read package version from Cargo.toml");
 }
 const version = versionMatch[1];
 

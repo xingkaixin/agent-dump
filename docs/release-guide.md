@@ -35,7 +35,7 @@ git log $(git describe --tags --abbrev=0)..HEAD --oneline
 - 提炼面向用户的核心能力、体验改进与产品演进方向（用于落地页 Updates）。
 
 ### 步骤 2：更新项目版本号
-1. 修改 Rust 单一版本源 `rust/Cargo.toml`：
+1. 修改 Rust 单一版本源 `Cargo.toml`：
    ```toml
    [package]
    version = "X.Y.Z"
@@ -79,8 +79,8 @@ just isok
 必须确认以下全部通过：
 - `uv lock --check`：依赖锁定文件一致
 - `ruff check` & `ruff format`：代码风格与格式化检查
-- `pyright` & `ty`：类型检查 0 错误 0 告警
-- `pytest`：Python 测试与覆盖率底线达标
+- Clippy 与 `ty`：Rust 和辅助工具类型检查通过
+- `cargo test` 与 `pytest`：Rust 单元、CLI 差分和工具验证通过
 - `npm test`：npm 包装器单元测试全部通过
 - `check-web`：Astro 静态构建与 Playwright E2E 测试全部通过
 
@@ -132,10 +132,10 @@ just isok
 
 ## Rust 制品与验收
 
-本分支准备 Rust 切换，尚未发布。当前 0.15.9 用于与冻结参考比较，不得用于发布新的 Rust 制品。用户确定新版本后，先改 `rust/Cargo.toml`，从 `rust/` 更新 Cargo.lock，再运行 `just build-npm` 同步所有 npm 包；冻结的 Python `__about__.py` 继续保持 0.15.9。
+本分支准备 Rust 切换，尚未发布。当前 0.15.9 用于与冻结参考比较，不得用于发布新的 Rust 制品。用户确定新版本后，先改 `Cargo.toml`，在仓库根更新 Cargo.lock，再运行 `just build-npm` 同步所有 npm 包；外部 Python 参考继续固定为 0.15.9。
 
 - `pyproject.toml` 使用 Maturin `bin`，版本取自 Cargo；wheel 只安装原生 `agent-dump`，没有 Python API、模块入口或 Python runtime dependencies。
-- `src/agent_dump` 和其 dev 依赖仅用于验证。旧 API 使用方可固定 Python 0.15.9。PyInstaller/Hatchling 构建路径已移除。
+- 旧 Python 应用已移出主树，差分参考由 `tests/reference/requirements.txt` 固定并独立安装。旧 API 使用方可固定 Python 0.15.9。
 - `.github/workflows/build-artifacts.yml` 同时被 PR CI 和 tag release 调用。四目标由 `npm/packages/cli/lib/native-targets.json` 派生，不在 workflow 复制平台列表。
 - `packaging/build_release.py` 在固定 Rust 工具链下使用 PEP 517 隔离构建，Maturin 由完整 hash constraints 约束；先构建 sdist，再从 sdist 构建 wheel。npm 原生文件直接提取自 wheel，字节一致。
 - Linux 使用固定 Zig 0.13.0 链接，Maturin 检查 `manylinux_2_17`；另在固定镜像 digest 的 manylinux2014 容器运行隔离会话验证。最低 glibc 为 2.17；不发布 musllinux/Alpine wheel。

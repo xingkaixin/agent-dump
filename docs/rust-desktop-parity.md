@@ -6,7 +6,7 @@
 
 ## 行为映射
 
-| Python 契约 | Rust 归属 | 差分入口（`rust/tests/`） |
+| Python 契约 | Rust 归属 | 差分入口（`tests/cli/`） |
 | --- | --- | --- |
 | Cursor global SQLite、requestId 主锚点/非主锚点、无 requestId 时 composer 回退 | `cursor.rs` | `test_cursor.py`：列表/head、字面标识符、含分隔符 composer、缺失/损坏 composer |
 | Cursor 批量计数、前 20 个 bubble 的 metadata、坏 JSON 回退 | `cursor.rs` | 同上：103 个新增 composer 跨批次、晚到 requestId、损坏记录、UTF-8 BLOB 和非 UTF-8 BLOB |

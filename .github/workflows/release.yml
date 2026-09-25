@@ -16,7 +16,6 @@ env:
   PYTHON_VERSION: "3.12"
   # Project 依赖来自 uv.lock；PEP 517 依赖在 build step 由已提交的 hash constraints 约束。
   UV_LOCKED: "1"
-  PYTHONPATH: ${{ github.workspace }}/src
 
 jobs:
   validate:

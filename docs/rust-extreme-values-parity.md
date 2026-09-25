@@ -2,7 +2,7 @@
 
 本轮使用同一组合成来源，通过两份 CLI 比较 stdout/stderr、退出码、JSON 值、Markdown/raw 字节与源数据 manifest。
 
-新增 `rust/tests/test_extreme_values.py` 覆盖以下契约：
+新增 `tests/cli/test_extreme_values.py` 覆盖以下契约：
 
 - Codex、Claude、Kimi、Pi 的 token 超过 i64、负大整数、数字字符串、有限大浮点、下划线及 Unicode 十进制数字；累加不截断、不溢出中止。
 - OpenCode 旧表/V2、Cursor、DeepChat、Cherry、MiniMax 的大 token 与非有限输入；MiniMax 继续只接受非负整数，不扩大接受类型。

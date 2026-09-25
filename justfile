@@ -1,12 +1,13 @@
-export PYTHONPATH := justfile_directory() / "src"
-
 # Show all available recipes
 [no-cd]
 default:
     @just --list --unsorted
 
-# Run code linting and formatting checks with Ruff
-lint:
+# Check Rust formatting and Python tooling style
+lint: lint-tools
+    cargo fmt --check
+
+lint-tools:
     @echo "🔍 Running code linting..."
     uv run ruff check .
     uv run ruff format --check .
@@ -18,46 +19,46 @@ lint-fix:
     uv run ruff check . --fix
     @echo "✅ Lint fixes applied!"
 
-# Format code with Ruff
+# Format Rust and Python verification tools
 lint-format:
     @echo "🎨 Formatting code..."
+    cargo fmt
     uv run ruff format .
     @echo "✅ Code formatting complete!"
 
-# Run type checking with pyright and ty
-check:
+# Run type checking for Rust and verification tools
+check: check-tools
+    cargo clippy --locked --all-targets -- -D warnings
+
+check-tools:
     @echo "🔍 Running type checks..."
-    uv run pyright
     uv run ty check .
     @echo "✅ Type checking complete!"
 
-# Run all tests with pytest
-test:
-    @echo "🧪 Running tests..."
+# Verify Rust units and the isolated CLI/tooling contracts
+test: reference build-rust
+    cargo test --locked
     uv run pytest -q
-    @echo "✅ Tests complete!"
 
-# Run tests with coverage measurement and enforce the floor
-cov:
-    @echo "🧪 Running tests with coverage..."
-    uv run pytest -q --cov=src --cov-report=term-missing
-    @echo "✅ Coverage check complete!"
+# Install the frozen external Python CLI for differential verification
+reference:
+    uv run python scripts/python_reference.py --install
 
 # Record validated synthetic CLI benchmarks (no real Provider data)
-benchmark *args:
+benchmark *args: build-rust
     uv run python scripts/benchmark_cli.py {{args}}
 
 # Check the Rust CLI and compare it with Python on synthetic data
-check-rust:
-    cd rust && cargo fmt --check
-    cd rust && cargo clippy --locked --all-targets -- -D warnings
-    cd rust && cargo test --locked
-    cd rust && cargo build --locked --release
-    uv run pytest -q rust/tests
+check-rust: reference
+    cargo fmt --check
+    cargo clippy --locked --all-targets -- -D warnings
+    cargo test --locked
+    cargo build --locked --release
+    uv run pytest -q tests/cli
 
 # Build the Rust binary for performance evaluation
 build-rust:
-    cd rust && cargo build --locked --release
+    cargo build --locked --release
 
 # Run npm wrapper unit tests
 test-npm:
@@ -84,8 +85,8 @@ lock-check:
     uv lock --check
     @echo "✅ uv.lock matches pyproject.toml!"
 
-# Run local CI checks with the current Python; include npm tests when Node.js is available
-isok: lock-check lint check test check-rust
+# Run local CI checks; include npm and website checks when their tools are available
+isok: lock-check lint check test
     @if command -v node >/dev/null 2>&1; then \
         just test-npm; \
     else \
@@ -100,15 +101,15 @@ isok: lock-check lint check test check-rust
 # Run the agent-dump CLI
 run:
     @echo "🚀 Starting agent-dump..."
-    cd rust && cargo run --locked --release --
+    cargo run --locked --release --
 
 # Build a native binary for the current platform
 build-native:
     @echo "📦 Building native binary..."
-    cd rust && cargo build --locked --release
+    cargo build --locked --release
     @echo "✅ Native binary build complete!"
 
-# Sync npm package versions from rust/Cargo.toml
+# Sync npm package versions from Cargo.toml
 build-npm:
     @echo "📦 Syncing npm workspace versions..."
     npm --prefix npm run sync-version

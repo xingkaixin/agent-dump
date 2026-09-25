@@ -17,7 +17,7 @@
 | 转换警告立即输出，JSONL 坏行在扫描结束后汇总；多格式复用一次读取 | JSONL 回调与 Provider 正文读取 | Codex 转换错误与坏 JSON 同一 fixture，检查完整 stderr 顺序、次数及产物 |
 | head/list/JSONL raw 不执行正文转换，原本静默忽略的字段不新增警告 | 工作流与各 decoder | 三个 Provider × 中英文，完整 stdout/stderr、退出码及 raw 字节差分 |
 
-新增 `rust/tests/test_message_conversion.py` 的 48 个 CLI 用例，全部使用完整输出差分、JSON 结构和 Markdown/raw 字节比较，并检查源 hash 与产物权限。使用临时合成目录，不读取真实会话；没有新增 mock。
+新增 `tests/cli/test_message_conversion.py` 的 48 个 CLI 用例，全部使用完整输出差分、JSON 结构和 Markdown/raw 字节比较，并检查源 hash 与产物权限。使用临时合成目录，不读取真实会话；没有新增 mock。
 
 Codex 的正文恢复 fixture 超过 metadata 全扫阈值，将坏 payload 放在首部窗口外，并用健康尾记录结束。Pi 的 record timestamp 溢出 fixture 同理，message 内部 timestamp 不影响 metadata。另有小文件用例验证 Codex 的 metadata 失败，不把正文恢复规则套到发现阶段。
 

@@ -1,12 +1,12 @@
 # 架构与扩展指南
 
-Rust CLI 位于 `rust/src/`。`src/agent_dump/` 保留冻结的 Python v0.15.9 参考，供差分与性能验证；不参与 wheel 或 npm 构建。稳定约束见 `AGENTS.md`，领域术语见 `CONTEXT.md`。
+Rust CLI 位于根目录 `src/`，Cargo manifest 与工具链位于仓库根。`resources/` 保存编译时嵌入的文案与提示词；`tests/cli/` 用固定的外部 Python v0.15.9 验证兼容性。旧 Python 应用不再保存在主树中。稳定约束见 `AGENTS.md`，领域术语见 `CONTEXT.md`。
 
 ## 1. 公开契约与分发
 
 公开契约是 `agent-dump` 命令的参数、默认路径、输出格式和退出码。pip、uv tool、uvx 安装 Maturin `bin` wheel；npm 平台包包含同一 wheel 中的原生可执行文件。没有 PyO3、Python 导入 API 或 Python 模块入口。旧 API 使用方可固定最后的 Python 版本 0.15.9。
 
-`rust/Cargo.toml` 是发布版本来源，npm 版本由脚本同步。目标平台闭集由 `npm/packages/cli/lib/native-targets.json` 拥有。安装、最低 libc 和发布控制见[发布指南](release-guide.md)。
+`Cargo.toml` 是发布版本来源，npm 版本由脚本同步。目标平台闭集由 `npm/packages/cli/lib/native-targets.json` 拥有。安装、最低 libc 和发布控制见[发布指南](release-guide.md)。
 
 ## 2. 数据流与职责
 

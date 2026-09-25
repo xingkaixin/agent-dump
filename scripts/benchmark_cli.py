@@ -19,6 +19,7 @@ from typing import Any
 
 from benchmark_cases import Case, cases, require, validate
 from benchmark_fixtures import FIXTURE_VERSION, PROFILES, Profile, create_fixture, source_manifest
+from python_reference import source_digest as reference_source_digest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_VERSION = 1
@@ -239,7 +240,7 @@ def markdown_report(report: dict[str, Any]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--command", help="command prefix, parsed with shlex; never executed through a shell")
-    parser.add_argument("--label", default="python-source")
+    parser.add_argument("--label", default="rust-release")
     parser.add_argument("--profile", choices=PROFILES, default="standard")
     parser.add_argument("--repeats", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=1)
@@ -252,7 +253,11 @@ def main() -> None:
         parser.error("repeats must be positive, warmups nonnegative, and timeout positive")
     if args.output.suffix != ".json":
         parser.error("--output must end in .json; a Markdown sidecar is written alongside it")
-    command = shlex.split(args.command) if args.command else [sys.executable, "-m", "agent_dump"]
+    command = (
+        shlex.split(args.command)
+        if args.command
+        else [str(ROOT / "target/release" / ("agent-dump.exe" if os.name == "nt" else "agent-dump"))]
+    )
     if not command:
         parser.error("command cannot be empty")
     executable = shutil.which(command[0])
@@ -273,7 +278,7 @@ def main() -> None:
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "git_commit": git_output("rev-parse", "HEAD"),
         "git_dirty": bool(git_output("status", "--porcelain")),
-        "python_source_sha256": files_digest(list((ROOT / "src" / "agent_dump").rglob("*.py"))),
+        "python_source_sha256": reference_source_digest(),
         "evaluator_sha256": files_digest(sorted((ROOT / "scripts").glob("benchmark_*.py"))),
         "uv_lock_sha256": hashlib.sha256((ROOT / "uv.lock").read_bytes()).hexdigest(),
         "command": [argument.replace(str(ROOT), "<REPO>") for argument in command],
@@ -289,7 +294,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="agent-dump-benchmark-") as temporary:
         root = Path(temporary).resolve()
         environment = create_fixture(root, profile)
-        environment["PYTHONPATH"] = str(ROOT / "src")
+        environment.pop("PYTHONPATH", None)
         report["source_manifest"] = source_manifest(root)
         _, version = run_sample(
             command, Case("version", ("--version",), "version"), root, environment, timeout=args.timeout

@@ -4,6 +4,7 @@ target-version = "py310"
 exclude = [
     ".git",
     ".venv",
+    ".venv-reference",
     "__pycache__",
 ]
 
@@ -48,5 +49,4 @@ line-ending = "lf"
     "S608",
     "SIM117",
 ]
-"rust/tests/*.py" = ["S101"]
 "scripts/*" = ["SIM"]  # 脚本可以更随意

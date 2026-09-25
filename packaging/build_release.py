@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def version() -> str:
-    return tomllib.loads((ROOT / "rust" / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
+    return tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
 
 
 def build(output: Path) -> None:
@@ -38,10 +38,10 @@ def build(output: Path) -> None:
     command = [
         "uv",
         "build",
-        "..",
+        ".",
         "--no-sources",
         "--build-constraint",
-        "../packaging/build-constraints.txt",
+        "packaging/build-constraints.txt",
         "--require-hashes",
         "--out-dir",
         str(output),
@@ -49,11 +49,11 @@ def build(output: Path) -> None:
     if sys.platform == "linux":
         command += ["--config-setting", "build-args=--zig --compatibility manylinux_2_17 --auditwheel check"]
     environment = dict(os.environ)
-    environment["CARGO_TARGET_DIR"] = str(ROOT / "rust" / "target")
+    environment["CARGO_TARGET_DIR"] = str(ROOT / "target")
     if sys.platform == "linux":
         zig_directory = distribution("ziglang").locate_file("ziglang")
         environment["PATH"] = str(zig_directory) + os.pathsep + environment.get("PATH", "")
-    subprocess.run(command, cwd=ROOT / "rust", env=environment, check=True)  # noqa: S603
+    subprocess.run(command, cwd=ROOT, env=environment, check=True)  # noqa: S603
     wheels = list(output.glob("*.whl"))
     if len(wheels) != 1 or target["wheelPlatform"] not in wheels[0].name:
         raise ValueError(f"Unexpected wheel for {target['target']}: {wheels}")

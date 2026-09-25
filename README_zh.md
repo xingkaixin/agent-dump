@@ -132,9 +132,8 @@ npx @agent-dump/cli --help
 git clone https://github.com/xingkaixin/agent-dump.git
 cd agent-dump
 
-# 使用 uv 安装依赖
-uv sync --locked --dev
-just build-rust
+# 构建原生命令行程序
+cargo build --locked --release
 
 # 本地安装测试
 uv tool install . --force
@@ -155,7 +154,7 @@ npx skills add xingkaixin/agent-dump
 agent-dump --interactive
 
 # 或使用源码构建的原生程序
-./rust/target/release/agent-dump --interactive
+./target/release/agent-dump --interactive
 ```
 
 运行后会显示最近 7 天的会话列表，按时间分组显示（今天、昨天、本周、本月、更早）。使用空格选择/取消，回车确认导出。
@@ -414,7 +413,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 |------|------|--------|
 | `uri` | 用于直接查看的 Agent Session URI（如 `opencode://session-id`），或作用域查询 URI，如 `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive` | 进入交互式模式选择和导出会话 | - |
-| `-d`, `-days` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `-since/-until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
+| `-d`, `-days`, `--days` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `-since/-until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
 | `-q`, `-query` | 查询过滤。关键词在归一化空白后作为一个不区分大小写的字面短语，在 Session 标题或逻辑 transcript 内匹配。支持 legacy `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`），也支持结构化条件如 `bug provider:codex role:user path:. limit:20`。`cwd:` 是 `path:` 的别名。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印有界发现阶段已有的元数据，不重新读取完整正文；发现阶段完整扫描时消息数为精确值，否则明确显示“未知”。不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
 | `--collect` | 按日期范围采集会话，可选通过 `-query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
@@ -436,13 +435,13 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `-days` 或 `-query` 且未指定 `--interactive` 则自动启用） | - |
 | `-format`, `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`，兼容 `md` 别名。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略；`--head` 不能与此选项组合。Cursor URI 仅支持 `json` 和 `print`（不支持 `raw/markdown`）。 | - |
 | `-summary`, `--summary` | 仅 URI 模式生效。开启后仅在 `--format` 包含 `json` 且 AI 配置完整时生成 summary；否则仅 warning 并继续导出（不启用 summary）。AI 请求期间会在 stderr 显示 loading 提示。不能与 `--head` 组合。 | - |
-| `-p`, `-page-size` | 为兼容保留，当前不生效 | 20 |
+| `-p`, `-page-size`, `--page-size` | 为兼容保留，当前不生效 | 20 |
 | `-output`, `--output` | 输出目录。`json/raw` 优先级：`--output` > `config.toml` `[export].output` > `./sessions`。相对路径从 agent-dump 执行目录解析。Markdown 仍使用 `./sessions`，除非显式传入 `--output`。`--list` 下会警告并忽略。 | `config export.output` 或 `./sessions` |
 | `-h, --help` | 显示帮助信息 | - |
 
 ### Python API 迁移
 
-Rust 版本只发布 CLI。通过子进程调用 `agent-dump`，使用 JSON 导出交换结构化数据。旧 Python API 留在冻结参考源码中，仅用于差分验证；现有 API 使用方升级前应迁移到 CLI，或固定 `agent-dump==0.15.9`。
+Rust 版本只发布 CLI。通过子进程调用 `agent-dump`，使用 JSON 导出交换结构化数据。旧 Python API 保留在 Git 历史和已发布的 0.15.9 中；现有 API 使用方升级前应迁移到 CLI，或固定 `agent-dump==0.15.9`。
 
 ### collect 配置文件
 
@@ -503,10 +502,12 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 ## 项目结构
 
 ```text
-rust/           # Rust CLI, pinned toolchain, locales and parity tests
-src/agent_dump/ # Frozen Python v0.15.9 reference; excluded from distributions
-tests/          # Python reference and packaging contracts
-scripts/        # Frozen P0 evaluator and paired release eval
+Cargo.toml      # Rust package and release version
+src/            # Rust CLI and module tests
+resources/      # Embedded locales and prompts
+tests/cli/      # CLI contracts and external Python reference comparison
+tests/tooling/  # Packaging, benchmark and documentation checks
+scripts/        # Validated CLI benchmarks and paired release eval
 packaging/      # Maturin builds and installation verification
 npm/            # Node launcher and platform packages
 docs/           # Architecture, migration and acceptance evidence
@@ -515,10 +516,14 @@ web/            # Landing page
 
 ## Development
 
-Rust 是本分支的构建和运行实现，交互界面使用 Ratatui。`src/agent_dump` 保持冻结，只用于差分和性能基准；不进入 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
+Rust 是本分支的构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树，差分验证在独立环境安装固定的 0.15.9 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
 
 ```bash
-# 使用冻结 Python 参考与固定 Rust 工具链运行本地 CI 检查
+# 从仓库根直接运行 Cargo
+cargo build --locked --release
+cargo test --locked
+
+# 完整本地 CI，包含独立的历史 Python 对照
 # （Node.js 可用时包含 npm 测试，pnpm 可用时包含 landing page 检查）
 just isok
 
@@ -551,7 +556,7 @@ just test-npm-smoke
 
 ```bash
 # 1. 在单一位置更新版本号
-$EDITOR rust/Cargo.toml
+$EDITOR Cargo.toml
 
 # 2. 提交并合并到 main
 

@@ -6,13 +6,13 @@
 
 ## 验收方式
 
-`rust/tests/` 在临时目录生成合成会话，分别调用 Python 和 Rust CLI。成功路径比较退出码、完整 stdout/stderr、JSON 结构和 Markdown/raw 文件字节；检查源文件 hash 不变及导出权限。损坏行和单文件读取失败单独检查恢复后的内容、警告与源数据，本批不宣称诊断文案已对齐；后续 JSONL 坏行的完整中英文差分见[坏记录警告验收](rust-record-diagnostics-parity.md)。
+`tests/cli/` 在临时目录生成合成会话，分别调用 Python 和 Rust CLI。成功路径比较退出码、完整 stdout/stderr、JSON 结构和 Markdown/raw 文件字节；检查源文件 hash 不变及导出权限。损坏行和单文件读取失败单独检查恢复后的内容、警告与源数据，本批不宣称诊断文案已对齐；后续 JSONL 坏行的完整中英文差分见[坏记录警告验收](rust-record-diagnostics-parity.md)。
 
 2026-09-24，macOS arm64 本机完整 `just isok` 通过：Python 2596 passed / 1 skipped，Rust/Python 差分及边界用例 313 passed（本批新增 141 个），npm 74 passed，网页 E2E 13 passed；Ruff、类型检查、Rust fmt 与 Clippy 通过。固定 Rust 1.90.0 的 `just build-rust` release 构建通过。未运行远端 CI 或 Windows 验证。
 
 ## 行为映射
 
-| Python 契约 | Rust 实现 | 差分入口（`rust/tests/`） |
+| Python 契约 | Rust 实现 | 差分入口（`tests/cli/`） |
 | --- | --- | --- |
 | Claude 项目文件、sessions-index 标题、mtime 回退、最后记录时间、bounded head | `claude.rs`、`file_sessions.rs`、`jsonl.rs` | `test_claude.py`：标题优先级、缺失字段、扫描层级、fallback、大文件 head、日期窗口 |
 | Claude assistant 分组、thinking/text、工具结果回填、TodoWrite/meta 过滤、UUID 关联、usage | `claude_transcript.rs`、`message_assembly.rs` | 同上：交错/重复/孤立输出、工具状态、首条 usage、消息边界、两种语言与四种输出 |

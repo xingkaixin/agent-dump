@@ -132,9 +132,8 @@ If your platform is unsupported, the wrapper prints the detected platform/arch p
 git clone https://github.com/xingkaixin/agent-dump.git
 cd agent-dump
 
-# Use uv to install dependencies
-uv sync --locked --dev
-just build-rust
+# Build the native CLI
+cargo build --locked --release
 
 # Local installation test
 uv tool install . --force
@@ -155,7 +154,7 @@ npx skills add xingkaixin/agent-dump
 agent-dump --interactive
 
 # Or use the source build
-./rust/target/release/agent-dump --interactive
+./target/release/agent-dump --interactive
 ```
 
 After running, it will display the list of sessions from the last 7 days grouped by time (Today, Yesterday, This Week, This Month, Earlier). Use the spacebar to select/deselect, and press Enter to confirm the export.
@@ -428,7 +427,7 @@ Generating a prompt does not mean that a report has been created, and does not a
 |-----------|-------------|---------|
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive` | Run in interactive mode to select and export sessions | - |
-| `-d`, `-days` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `-since/-until` are omitted. | 7 outside collect; today only in collect |
+| `-d`, `-days`, `--days` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `-since/-until` are omitted. | 7 outside collect; today only in collect |
 | `-q`, `-query` | Query filter. The keyword is one case-insensitive literal phrase after whitespace normalization, matched within a session title or logical transcript. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print bounded discovery metadata without rereading the transcript; message count is exact when discovery scanned the complete source and explicitly `unknown` otherwise. Does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect sessions by date range, optionally constrained by `-query` or an `agents://...` query URI (mutually exclusive). Only visible user/assistant text is summarized; system/developer/tool messages, reasoning, plans, tool calls, and tool results are excluded, and empty projected sessions are ignored. PM mode extracts requests, decisions, and agent-reported outcomes before deterministic session merge and tree reduction. Multi-stage progress is shown on stderr. | - |
@@ -450,7 +449,7 @@ Generating a prompt does not mean that a report has been created, and does not a
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
 | `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor supports only `json` and `print` (no `raw/markdown`). | - |
 | `-summary`, `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. Cannot be combined with `--head`. | - |
-| `-p`, `-page-size` | Accepted for compatibility; currently ignored | 20 |
+| `-p`, `-page-size`, `--page-size` | Accepted for compatibility; currently ignored | 20 |
 | `-output`, `--output` | Output directory. For `json/raw`, priority is `--output` > `config.toml` `[export].output` > `./sessions`. Relative paths are resolved from the current working directory. Markdown keeps using `./sessions` unless `--output` is explicitly passed. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
 | `-h, --help` | Show help message | - |
 
@@ -458,7 +457,7 @@ When URI mode combines `print` with file formats, a print read/render failure is
 
 ### Python API migration
 
-Rust releases distribute a CLI only. Call `agent-dump` as a subprocess and use JSON exports for structured data. The frozen Python implementation remains in the repository for differential verification. Existing API consumers should migrate to the CLI or pin `agent-dump==0.15.9`.
+Rust releases distribute a CLI only. Call `agent-dump` as a subprocess and use JSON exports for structured data. The frozen Python implementation is retained in Git history and installed separately for differential verification. Existing API consumers should migrate to the CLI or pin `agent-dump==0.15.9`.
 
 ### collect configuration file
 
@@ -521,10 +520,12 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 ## Project Structure
 
 ```text
-rust/           # Rust CLI, pinned toolchain, locales and parity tests
-src/agent_dump/ # Frozen Python v0.15.9 reference; excluded from distributions
-tests/          # Python reference and packaging contracts
-scripts/        # Frozen P0 evaluator and paired release eval
+Cargo.toml      # Rust package and release version
+src/            # Rust CLI and module tests
+resources/      # Embedded locales and prompts
+tests/cli/      # CLI contracts and external Python reference comparison
+tests/tooling/  # Packaging, benchmark and documentation checks
+scripts/        # Validated CLI benchmarks and paired release eval
 packaging/      # Maturin builds and installation verification
 npm/            # Node launcher and platform packages
 docs/           # Architecture, migration and acceptance evidence
@@ -533,10 +534,14 @@ web/            # Landing page
 
 ## Development
 
-Rust is the build and runtime implementation on this branch, with Ratatui for terminal interaction. `src/agent_dump` is a frozen oracle for differential and performance tests and is excluded from wheels. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), [P6 acceptance](docs/rust-p6-completion.md), and the [final performance report](docs/benchmarks/rust-p6.md).
+Rust is the build and runtime implementation on this branch, with Ratatui for terminal interaction. The old Python application has been removed from the working tree. Differential tests install the immutable 0.15.9 wheel in an isolated reference environment. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), [P6 acceptance](docs/rust-p6-completion.md), and the [final performance report](docs/benchmarks/rust-p6.md).
 
 ```bash
-# Run local CI checks with the frozen Python oracle and pinned Rust toolchain
+# Run Cargo directly from the repository root
+cargo build --locked --release
+cargo test --locked
+
+# Run full CI checks, including the isolated historical Python reference
 # (includes npm tests when Node.js is available, and the landing page check when pnpm is)
 just isok
 
@@ -569,7 +574,7 @@ just test-npm-smoke
 
 ```bash
 # 1. Update the package version in a single place
-$EDITOR rust/Cargo.toml
+$EDITOR Cargo.toml
 
 # 2. Commit and merge to main
 

@@ -6,7 +6,7 @@
 
 ## 差分方式
 
-`just check-rust` 构建 Rust 后运行 `rust/tests/`。每个行为用例在隔离的临时目录创建合成 Provider 源，分别调用 Python 和 Rust 的真实命令行入口。成功路径比较退出码、完整 stdout/stderr、JSON 对象和 Markdown/raw 字节，并验证所有源文件 hash 不变。文件权限和符号链接边界使用独立断言。
+`just check-rust` 构建 Rust 后运行 `tests/cli/`。每个行为用例在隔离的临时目录创建合成 Provider 源，分别调用 Python 和 Rust 的真实命令行入口。成功路径比较退出码、完整 stdout/stderr、JSON 对象和 Markdown/raw 字节，并验证所有源文件 hash 不变。文件权限和符号链接边界使用独立断言。
 
 异常诊断尚未统一。损坏行用例比较恢复后的内容和警告存在性；文件导出失败用例比较退出码、成功文件内容、清理结果和源数据不变性，本批不把诊断文案或输出通道算作已对齐；后续 JSONL 坏行的完整中英文差分见[坏记录警告验收](rust-record-diagnostics-parity.md)。
 
@@ -14,7 +14,7 @@
 
 ## 行为映射
 
-| 现有 Python 契约 | Rust 实现 | 差分入口（`rust/tests/`） |
+| 现有 Python 契约 | Rust 实现 | 差分入口（`tests/cli/`） |
 | --- | --- | --- |
 | `test_codex.py` 的 message/reasoning 分组、工具调用回填、事件去重 | `codex_transcript.rs` | `test_codex_transcript.py`：正常/孤立/交错/重复输出、user 边界、独立时间戳、未知与非文本事件 |
 | 工具参数与 function/custom 输出归一化 | `codex_transcript.rs`、`value.rs` | 同上：JSON 字符串、非 JSON 字符串、null、标量、嵌套对象、key 顺序、浮点指数格式 |

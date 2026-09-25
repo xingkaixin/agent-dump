@@ -15,7 +15,7 @@
 | Claude 非空非字符串 summary 导致对应会话解析失败；空值回退消息标题 | `Claude::parse` | bool、int、float、list、dict 及五种空值，列表隔离坏会话，URI 返回对应退出码 |
 | 下次发现/查找重新加载标题；已修复索引更新标题，删除索引恢复回退标题 | 各 Provider 的 `discover`、`find` | 两个 Rust 单元用例复用同一实例，检查修复/删除后的结果和不创建源文件 |
 
-新增 `rust/tests/test_title_cache.py` 的 52 个 CLI 用例：44 个使用完整退出码、stdout/stderr 与产物差分；8 个覆盖目录替代索引、非法 JSON/UTF-8，比较完整 stdout、产物、退出码、警告次数和本地化前缀。后 8 个保留底层依赖错误原因差异，不计作完整 stderr 一致。测试均检查源数据 hash，使用临时合成数据，不读取真实用户目录。
+新增 `tests/cli/test_title_cache.py` 的 52 个 CLI 用例：44 个使用完整退出码、stdout/stderr 与产物差分；8 个覆盖目录替代索引、非法 JSON/UTF-8，比较完整 stdout、产物、退出码、警告次数和本地化前缀。后 8 个保留底层依赖错误原因差异，不计作完整 stderr 一致。测试均检查源数据 hash，使用临时合成数据，不读取真实用户目录。
 
 列表 fixture 使用不同创建时间，避免 Python 并行发现中同时间戳会话的完成顺序影响比较；没有归一化输出顺序来掩盖差异。
 

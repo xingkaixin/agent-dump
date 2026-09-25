@@ -6,7 +6,7 @@
 
 ## 行为与证据
 
-`rust/tests/test_record_diagnostics.py` 通过真实 CLI 子进程比较 Python 与 Rust 的完整退出码、stdout/stderr、JSON 结构和 Markdown/raw 字节，并核对源数据 hash 与输出文件权限。不对警告内容做归一化后再比较。
+`tests/cli/test_record_diagnostics.py` 通过真实 CLI 子进程比较 Python 与 Rust 的完整退出码、stdout/stderr、JSON 结构和 Markdown/raw 字节，并核对源数据 hash 与输出文件权限。不对警告内容做归一化后再比较。
 
 | Python 契约 | Rust 归属 | 验证 |
 | --- | --- | --- |

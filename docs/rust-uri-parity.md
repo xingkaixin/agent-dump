@@ -6,7 +6,7 @@
 
 ## 行为映射
 
-| Python 契约 | Rust 归属 | 验证方式（`rust/tests/`） |
+| Python 契约 | Rust 归属 | 验证方式（`tests/cli/`） |
 | --- | --- | --- |
 | URI 格式、scheme 大小写、非空 ID、Codex `threads/` 与末尾换行 | `registry.rs` | `test_uri_diagnostics.py`：中英文完整退出码/stdout/stderr 差分；多行和终端控制字符输入 |
 | 未找到会话是正常定位结果，不伪装成异常 | `provider.rs` 的 `Lookup`；各 Provider `find` | 十个 scheme 在来源存在/不存在时的诊断，包含原始 URI、解析结果、候选路径和下一步 |

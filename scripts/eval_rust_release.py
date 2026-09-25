@@ -8,7 +8,6 @@ import hashlib
 import json
 from pathlib import Path
 import shlex
-import sys
 import tempfile
 from typing import Any
 
@@ -25,6 +24,7 @@ from benchmark_cli import (
     summarize,
 )
 from benchmark_fixtures import FIXTURE_VERSION, PROFILES, create_fixture, source_manifest
+from python_reference import command as reference_command, source_digest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,14 +39,14 @@ def main() -> None:
     args = parser.parse_args()
     require(args.repeats > 0 and args.warmups >= 0, "Invalid repetition count")
     profile = PROFILES[args.profile]
-    commands = {"python": [sys.executable, "-m", "agent_dump"], "rust": shlex.split(args.rust_command)}
+    commands = {"python": reference_command(), "rust": shlex.split(args.rust_command)}
     reports: dict[str, Any] = {}
     with ExitStack() as stack:
         contexts = {}
         for candidate, command in commands.items():
             root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="agent-dump-paired-"))).resolve()
             environment = create_fixture(root, profile)
-            environment["PYTHONPATH"] = str(ROOT / "src")
+            environment.pop("PYTHONPATH", None)
             contexts[candidate] = (root, environment)
             _, version = run_sample(command, Case("version", ("--version",), "version"), root, environment, timeout=180)
             executable = Path(command[0])
@@ -57,7 +57,7 @@ def main() -> None:
                 "recorded_at": datetime.now(timezone.utc).isoformat(),
                 "git_commit": git_output("rev-parse", "HEAD"),
                 "git_dirty": bool(git_output("status", "--porcelain")),
-                "python_source_sha256": files_digest(list((ROOT / "src/agent_dump").rglob("*.py"))),
+                "python_source_sha256": source_digest(),
                 "evaluator_sha256": files_digest(list((ROOT / "scripts").glob("benchmark_*.py"))),
                 "orchestrator_sha256": files_digest([Path(__file__)]),
                 "uv_lock_sha256": hashlib.sha256((ROOT / "uv.lock").read_bytes()).hexdigest(),

@@ -13,14 +13,14 @@
 
 ### 1.2 兼容性
 
-- Rust 发布只提供 CLI，pip wheel 不包含 Python API 或 `python -m agent_dump`。`src/agent_dump` 是冻结的 v0.15.9 差分参考，保留其 `__all__` 和源码；不要为迁就 Rust 而改动参考实现或原 `scripts/benchmark_*.py` evaluator。
+- Rust 发布只提供 CLI，pip wheel 不包含 Python API 或 `python -m agent_dump`。旧 Python 实现只保留在 Git 历史和固定的 v0.15.9 外部对照环境中；不得为迁就 Rust 改动对照版本或放宽结果校验。
 - CLI 参数、输出格式、退出码和默认路径属于可观察行为。修改时同步更新对应测试和用户文档。
 - 未经明确要求不得改变既有默认行为；新增能力应保持现有调用路径兼容。
 
 ### 1.3 架构边界
 
 - `main.rs`、`cli_args.rs` 负责参数入口，`command.rs` 负责工作流分发。业务逻辑进入对应 workflow 或职责模块。
-- 会话发现、读取和导出统一通过 `rust/src/provider.rs` 的 `Provider` 契约进入。实现位于 Provider 模块或共享读取/转换模块。
+- 会话发现、读取和导出统一通过 `src/provider.rs` 的 `Provider` 契约进入。实现位于 Provider 模块或共享读取/转换模块。
 - Provider 私有 schema 只能由 Rust Provider 层解释。CLI、workflow 和 selector 只依赖稳定的 Session、facts 与 Provider 契约。
 - selector 不得触发 Provider 发现、扫描或完整内容读取。会话计数由调用方传入；允许调用不执行 I/O 的展示投影方法。
 - 共享逻辑保持单一归属：URI、输出格式、渲染、导出和跨工作流 CLI 能力分别进入 `uri_workflow.rs`、`output_formats.rs`、`render.rs`、`export.rs` 和 `command.rs`。
@@ -28,7 +28,7 @@
 
 ### 1.4 代码与测试
 
-- 生产函数的参数和返回值必须有完整类型注解；现有门禁由 `tests/test_type_annotations.py` 执行。
+- Rust 通过 fmt、Clippy 和单元测试；辅助 Python 脚本保持类型注解，由 Ruff 与 ty 检查。
 - 只在新增或变更可观察行为、修复回归或保护高风险边界时补测试。测试覆盖行为契约，不要求按函数一一对应。
 - CLI 变更至少覆盖参数归一化、工作流分发及相关输出或退出码。仅在 Provider、终端交互或外部系统等边界需要隔离时使用 mock。
 - 不随意新增第三方依赖。必要但未被代码直接 import 的依赖应在声明处说明原因。
@@ -45,7 +45,7 @@
 - 面向用户的 CLI 行为：`README.md`、`README_zh.md`
 - Agent 使用 recipes：`skills/agent-dump/SKILL.md`、`skills/agent-dump/references/cli-recipes.md`
 
-以下入口位于 `rust/src/`，用于快速定位：
+以下入口位于 `src/`，用于快速定位：
 
 - 参数与分发：`cli_args.rs`、`command.rs`
 - list / interactive / query：`list_workflow.rs`、`interactive_workflow.rs`、`query.rs`
@@ -58,7 +58,7 @@
 ## 3. 验证与文档
 
 - 开发时先运行与改动直接相关的测试。
-- 提交 PR 前运行 `just isok`。覆盖率需要单独检查时运行 `just cov`。
+- 提交 PR 前运行 `just isok`。CLI 差分测试位于 `tests/cli`，固定参考由 `just reference` 安装；不得读取真实用户数据。
 - 修改公开 API、CLI 或用户可见能力时，同步更新 README 和相关 skill recipes。
 - 只在稳定约束、职责边界或任务路由变化时更新本文件。模块增删和实现细节记录到对应按需文档或由代码、配置和测试作为来源。
 - 修改架构术语或事实边界时同步更新 `CONTEXT.md`。
