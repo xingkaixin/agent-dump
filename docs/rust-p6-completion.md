@@ -71,10 +71,18 @@ P6 验收时的 Python 生产源码与 benchmark 保存在对应历史提交中�
 
 ## P6 后的目录清理
 
-按用户要求，删除主树中的旧 Python 应用、专属单元测试、旧入口和内部扫描 benchmark。根目录现在是单个 Rust crate：`Cargo.toml`、`Cargo.lock`、`rust-toolchain.toml`、`src/` 与 `resources/`。构建、CI、npm 校验和网站版本都读取根目录的 Cargo 元数据。
+按用户要求，删除主树中的旧 Python 应用、专属单元测试、旧入口和内部扫描 benchmark。该步将根目录整理为单个 Rust crate：`Cargo.toml`、`Cargo.lock`、`rust-toolchain.toml`、`src/` 与 `resources/`。构建、CI、npm 校验和网站版本都读取根目录的 Cargo 元数据。
 
 保留全部 1,549 项 CLI 契约，移至 `tests/cli/`；103 项构建、文档和评估检查位于 `tests/tooling/`。对照环境由 `just reference` 安装固定的 PyPI 0.15.9 wheel，依赖及分发文件 hash 锁定在 `tests/reference/requirements.txt`。安装后逐文件核对旧应用源码 hash，仍为 `a5f4b5feb6fd525688a6fda930087f4446eaccbe016457524369620aa5f58237`。Python 仅用于验证和打包工具，不进入产品运行路径。
 
 本次清理的本地 `just isok` 完整通过：44 项 Rust 单元测试、1,652 项 CLI/工具验证、74 项 npm 测试、13 项 Web E2E。macOS arm64 制品通过 Python 3.10/3.14 下的 pip、uv tool、uvx，以及 npm、npx、bunx 安装与读取/导出验证。sdist 从根目录构建且仅包含 99 个必要文件，不含旧 Python 应用、开发环境或网站依赖。
 
 17＋6 场景重新执行 smoke 校验全部通过；此轮用于验证评估工具的目录迁移，不产生新的性能结论。Windows 工具检查发现旧 fixture 的 SQLite 句柄会阻止临时目录清理；编排入口现在于计时前回收这些句柄。原始 fixture、结果断言、计时器和历史原始报告保持不变；入口及编排路径有调整，未来正式测量须重新配对，不能绕过 evaluator hash 比较。三平台 CLI 与四目标安装的最新状态见 [PR 检查](https://github.com/xingkaixin/agent-dump/pull/396/checks)。
+
+## 后续 workspace 与质量门禁
+
+根目录现为两个成员的 Cargo workspace，并保留 CLI package；内部 `crates/agent-dump-core/` 拥有 Provider、Session、Query/Search、输出和存储。CLI 的 `src/` 按 `workflows/`、`collect/`、`terminal/` 分组。具体 Provider 模块仅 core 可见，依赖方向为 CLI → core。根 Cargo package 继续拥有产品版本；内部 core 不单独发布。
+
+本轮按用户决定保持 `tests/` 原样，没有移动、删除或修改其中的文件；固定 Python 参考、benchmark fixtures 和历史报告也未改变。统一采用 edition 2024、80 列 stable Rustfmt；两个 crate 继承 workspace 的 unsafe/all/pedantic/nursery 策略，Clippy 对全部成员和 target 以 `-D warnings` 执行。逐项例外及原因见[开发指南](development-guide.md#rust-格式与-lint)。
+
+本地 `just isok` 全部通过：44 项 Rust 单元测试、1,652 项 CLI/工具测试、74 项 npm 测试、13 项 Web E2E，以及 fmt、Clippy、Ruff、ty 和锁文件检查。workspace sdist 包含 109 个必要文件，成功从源码包构建 wheel；macOS arm64 下 Python 3.10/3.14 的 pip、uv tool、uvx，以及 npm、npx、bunx 安装和读取/导出验证全部通过。跨平台结果见 [PR 检查](https://github.com/xingkaixin/agent-dump/pull/396/checks)。本轮不产生新的性能结论。

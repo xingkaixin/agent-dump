@@ -520,8 +520,10 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 ## Project Structure
 
 ```text
-Cargo.toml      # Rust package and release version
-src/            # Rust CLI and module tests
+Cargo.toml      # Workspace, shared dependencies/lints and CLI release version
+rustfmt.toml    # Stable Rustfmt, edition 2024, 80 columns
+src/            # CLI workflows, Collect and terminal interaction
+crates/agent-dump-core/ # Providers, sessions, queries and export engine
 resources/      # Embedded locales and prompts
 tests/cli/      # CLI contracts and external Python reference comparison
 tests/tooling/  # Packaging, benchmark and documentation checks
@@ -539,20 +541,20 @@ Rust is the build and runtime implementation on this branch, with Ratatui for te
 ```bash
 # Run Cargo directly from the repository root
 cargo build --locked --release
-cargo test --locked
+cargo test --locked --workspace
 
 # Run full CI checks, including the isolated historical Python reference
 # (includes npm tests when Node.js is available, and the landing page check when pnpm is)
 just isok
 
-# Lint code
+# Check Rustfmt, strict Clippy and Ruff
 just lint
 
 # Auto-fix linting issues
 just lint-fix
 
 # Format code
-just lint-format
+just fmt
 
 # Type checking
 just check
@@ -569,6 +571,8 @@ just build-npm
 # Run npm wrapper tests and smoke checks
 just test-npm-smoke
 ```
+
+Both crates inherit workspace lints: unsafe code is denied, Clippy all/pedantic are denied, and nursery warnings fail the gate through `-D warnings`. Explicit exceptions and their reasons are documented in the [development guide](docs/development-guide.md#rust-格式与-lint). Existing CLI differential and tooling tests remain in `tests/`.
 
 ## Release
 

@@ -20,15 +20,15 @@
 ### 1.3 架构边界
 
 - `main.rs`、`cli_args.rs` 负责参数入口，`command.rs` 负责工作流分发。业务逻辑进入对应 workflow 或职责模块。
-- 会话发现、读取和导出统一通过 `src/provider.rs` 的 `Provider` 契约进入。实现位于 Provider 模块或共享读取/转换模块。
+- 会话发现、读取和导出统一通过 `crates/agent-dump-core/src/providers/contract.rs` 的 `Provider` 契约进入。实现位于 Provider 模块或共享读取/转换模块。
 - Provider 私有 schema 只能由 Rust Provider 层解释。CLI、workflow 和 selector 只依赖稳定的 Session、facts 与 Provider 契约。
 - selector 不得触发 Provider 发现、扫描或完整内容读取。会话计数由调用方传入；允许调用不执行 I/O 的展示投影方法。
-- 共享逻辑保持单一归属：URI、输出格式、渲染、导出和跨工作流 CLI 能力分别进入 `uri_workflow.rs`、`output_formats.rs`、`render.rs`、`export.rs` 和 `command.rs`。
-- 不得引入循环导入。依赖方向应从装配层指向工作流和领域实现。
+- 共享逻辑保持单一归属：URI、输出格式、渲染、导出和跨工作流 CLI 能力分别进入 CLI 的 `workflows/uri.rs`、core 的 `output/{formats,render,export}.rs` 和 CLI 的 `command.rs`。
+- workspace 只允许 CLI → core 的依赖方向。core 不依赖终端或 LLM 客户端，具体 Provider 模块不对 CLI 暴露；不得引入循环依赖。
 
 ### 1.4 代码与测试
 
-- Rust 通过 fmt、Clippy 和单元测试；辅助 Python 脚本保持类型注解，由 Ruff 与 ty 检查。
+- Rust 所有 workspace 成员继承统一 lint；通过 80 列 stable Rustfmt、严格 Clippy 和单元测试；辅助 Python 脚本保持类型注解，由 Ruff 与 ty 检查。
 - 只在新增或变更可观察行为、修复回归或保护高风险边界时补测试。测试覆盖行为契约，不要求按函数一一对应。
 - CLI 变更至少覆盖参数归一化、工作流分发及相关输出或退出码。仅在 Provider、终端交互或外部系统等边界需要隔离时使用 mock。
 - 不随意新增第三方依赖。必要但未被代码直接 import 的依赖应在声明处说明原因。
@@ -45,15 +45,14 @@
 - 面向用户的 CLI 行为：`README.md`、`README_zh.md`
 - Agent 使用 recipes：`skills/agent-dump/SKILL.md`、`skills/agent-dump/references/cli-recipes.md`
 
-以下入口位于 `src/`，用于快速定位：
+快速定位：
 
-- 参数与分发：`cli_args.rs`、`command.rs`
-- list / interactive / query：`list_workflow.rs`、`interactive_workflow.rs`、`query.rs`
-- 单 URI：`uri_workflow.rs`
-- collect：`collect_workflow.rs` 与 `collect_*.rs`
-- Provider 注册与契约：`registry.rs`、`provider.rs`
-- 搜索索引：`search_index.rs`
-- 配置与诊断：`config.rs`、`config_command.rs`、`diagnostics.rs`
+- CLI 参数与分发：`src/cli_args.rs`、`src/command.rs`
+- 工作流、Collect 与终端：`src/workflows/`、`src/collect/`、`src/terminal/`
+- core 根：`crates/agent-dump-core/src/`
+- core Provider 注册与契约：`providers/registry.rs`、`providers/contract.rs`
+- core Query、缓存与输出：`query/`、`session/cache.rs`、`output/`
+- core 配置与文件边界：`config.rs`、`storage/`
 
 ## 3. 验证与文档
 

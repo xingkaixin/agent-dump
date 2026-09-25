@@ -502,8 +502,10 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 ## 项目结构
 
 ```text
-Cargo.toml      # Rust package and release version
-src/            # Rust CLI and module tests
+Cargo.toml      # Workspace, shared dependencies/lints and CLI release version
+rustfmt.toml    # Stable Rustfmt, edition 2024, 80 columns
+src/            # CLI workflows, Collect and terminal interaction
+crates/agent-dump-core/ # Providers, sessions, queries and export engine
 resources/      # Embedded locales and prompts
 tests/cli/      # CLI contracts and external Python reference comparison
 tests/tooling/  # Packaging, benchmark and documentation checks
@@ -521,20 +523,20 @@ Rust 是本分支的构建和运行实现，交互界面使用 Ratatui。旧 Pyt
 ```bash
 # 从仓库根直接运行 Cargo
 cargo build --locked --release
-cargo test --locked
+cargo test --locked --workspace
 
 # 完整本地 CI，包含独立的历史 Python 对照
 # （Node.js 可用时包含 npm 测试，pnpm 可用时包含 landing page 检查）
 just isok
 
-# Lint code
+# Check Rustfmt, strict Clippy and Ruff
 just lint
 
 # Auto-fix linting issues
 just lint-fix
 
 # Format code
-just lint-format
+just fmt
 
 # Type checking
 just check
@@ -551,6 +553,8 @@ just build-npm
 # 运行 npm wrapper 测试和 smoke 检查
 just test-npm-smoke
 ```
+
+两个 crate 统一继承 workspace lint：禁止 unsafe，Clippy all/pedantic 为 deny、nursery 为 warn；门禁以 `-D warnings` 执行。逐项例外及原因见[开发指南](docs/development-guide.md#rust-格式与-lint)。`tests/` 保留现有 CLI 差分和工具验收测试。
 
 ## 发布
 

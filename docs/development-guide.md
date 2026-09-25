@@ -1,10 +1,11 @@
 # 开发与验证指南
 
-仓库根是单个 Rust crate。`Cargo.toml`、`Cargo.lock` 与 `rust-toolchain.toml` 共同定义构建，直接运行 Cargo，无需切换目录。工具链固定为 Rust 1.90.0。
+仓库根是包含两个成员的 Cargo workspace，同时也是 CLI package。`Cargo.toml` 统一管理依赖、lint 和产品版本，`Cargo.lock` 与 `target/` 共享，工具链固定为 Rust 1.90.0。直接从根目录运行 Cargo。
 
 ## 1. 目录与测试
 
-- `src/`：生产 Rust 代码及模块内单元测试。
+- `src/`：CLI 参数、分发、`workflows/`、`collect/` 与 `terminal/`。
+- `crates/agent-dump-core/src/`：Provider、Session、Query/Search、输出与存储；模块内保留 Rust 单元测试。
 - `resources/locales/`、`resources/prompts/`：编译时嵌入的文案与提示词。
 - `tests/cli/`：通过真实子进程执行的 CLI 契约、差分和终端测试。
 - `tests/tooling/`：构建、发布、文档和 benchmark 的行为验证。
@@ -19,7 +20,7 @@ CLI 文案位于 `resources/locales/`。测试按中英文参数运行；需要�
 
 ```bash
 cargo build --locked --release
-cargo test --locked
+cargo test --locked --workspace
 
 # 首次差分验证：从固定 wheel 安装独立对照环境，并核对源码 hash
 just reference
@@ -35,17 +36,33 @@ Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 h
 
 `uv sync --locked --dev` 安装 pytest、Ruff、ty 等辅助工具；`pyproject.toml` 同时保留 pip/Maturin 所需元数据。pytest 配置只位于该文件，禁止额外配置覆盖。Python 应用的旧单元测试和覆盖率门禁已随源码退场；历史结果保留在 [P6 验收](rust-p6-completion.md)。
 
-`just lint` 执行 Rust fmt 与 Ruff；`just check` 执行 Clippy 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 执行同一套 CLI 契约；第 0 组同时执行 Rust 单元测试和工具验证。四目标安装 CI 另行检查 pip/uv tool/uvx 与 npm/npx/bunx。
+`just fmt` 格式化整个 Rust workspace 和 Python 验证工具，`just fmt-check` 只检查格式；`just lint-format` 保留为 `fmt` 的别名。`just lint` 执行 Rustfmt、Clippy 和 Ruff；`just check` 执行 Cargo check 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 执行同一套 CLI 契约；第 0 组同时执行 Rust 单元测试和工具验证。四目标安装 CI 另行检查 pip/uv tool/uvx 与 npm/npx/bunx。
+
+### Rust 格式与 lint
+
+`rustfmt.toml` 使用 edition 2024、80 列、字段初始化和 `?` 简写，只启用 stable 选项。Rustfmt 无法重排的宏内文本与长字符串不强行拆分。
+
+两个 crate 均显式继承 `[workspace.lints]`：`unsafe_code = deny`，Clippy `all`、`pedantic = deny`，`nursery = warn`。本地和 CI 使用 `cargo clippy --locked --workspace --all-targets -- -D warnings`，因此 nursery 警告也阻断门禁。
+
+全局逐项允许以下规则，不关闭任何规则组：
+
+- `module_name_repetitions`：允许领域类型沿用模块术语。
+- `missing_errors_doc`、`missing_panics_doc`、`must_use_candidate`：内部 crate 不要求逐函数重复文档或候选属性。
+- `too_many_lines`：80 列格式会增加物理行数，不为行数拆散完整 schema 解码或分发流程。
+- `option_if_let_else`：保留清晰的显式分支，避免嵌套闭包。
+- `similar_names`：允许 Provider 中 created/updated、input/output 等成对字段名称。
+
+Python 数值兼容、统一 Provider 工厂、平台差异和并发锁等例外仅放在对应函数上，每处注明 `reason`。新例外需要具体原因；能够消除的多余复制、未检查转换和不必要所有权应直接修正。
 
 ## 3. 交互式 CLI
 
 selector 只展示工作流传入的会话与计数，不发现来源或读取正文。Ratatui/Crossterm 处理终端；stdin 管道保留行输入。RAII 恢复终端模式；真实 PTY 验证位于 `tests/cli/test_tui.py`，Windows 用 TestBackend 验证绘制。
 
-第三方文本经 `render.rs` 净化。UI 布局不逐帧复刻旧 questionary；选择、取消、导出和终端恢复属于契约。
+第三方文本经 core 的 `output/render.rs` 净化。UI 布局不逐帧复刻旧 questionary；选择、取消、导出和终端恢复属于契约。
 
 ## 4. 构建与性能
 
-`cargo build --locked --release` 产物为 `target/release/agent-dump`（Windows 为 `.exe`）。资源通过 `include_str!` 嵌入，无需运行时查找仓库。新增依赖必须有实际用途，不为目录整理拆分多 crate 或新增抽象层。
+`cargo build --locked --release` 产物为 `target/release/agent-dump`（Windows 为 `.exe`）。资源通过 `include_str!` 嵌入，无需运行时查找仓库。CLI 依赖内部 core，core 不依赖 Clap、Ratatui 或 LLM HTTP 客户端；具体 Provider 模块不对 CLI 可见。新增依赖必须有实际用途，不为目录整理继续拆分 crate 或新增抽象层。
 
 `just build` 使用 Maturin 从 sdist 构建 wheel，并提取完全相同的 npm 原生文件；`just verify-wheel` 验证隔离安装。PEP 517 版本及完整 hash 约束位于 `packaging/build-constraints.*`，由 `just update-build-constraints` 更新。四目标与发布控制见[发布指南](release-guide.md)。
 

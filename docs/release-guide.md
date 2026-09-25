@@ -80,7 +80,7 @@ just isok
 - `uv lock --check`：依赖锁定文件一致
 - `ruff check` & `ruff format`：代码风格与格式化检查
 - Clippy 与 `ty`：Rust 和辅助工具类型检查通过
-- `cargo test` 与 `pytest`：Rust 单元、CLI 差分和工具验证通过
+- `cargo test --locked --workspace` 与 `pytest`：Rust 单元、CLI 差分和工具验证通过
 - `npm test`：npm 包装器单元测试全部通过
 - `check-web`：Astro 静态构建与 Playwright E2E 测试全部通过
 
