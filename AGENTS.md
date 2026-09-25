@@ -13,17 +13,17 @@
 
 ### 1.2 兼容性
 
-- `src/agent_dump/__init__.py` 的 `__all__` 是公开 Python API 的单一来源。不得删除或重命名已导出的符号；需要演进时保留兼容入口并明确弃用策略。
+- Rust 发布只提供 CLI，pip wheel 不包含 Python API 或 `python -m agent_dump`。`src/agent_dump` 是冻结的 v0.15.9 差分参考，保留其 `__all__` 和源码；不要为迁就 Rust 而改动参考实现或原 `scripts/benchmark_*.py` evaluator。
 - CLI 参数、输出格式、退出码和默认路径属于可观察行为。修改时同步更新对应测试和用户文档。
 - 未经明确要求不得改变既有默认行为；新增能力应保持现有调用路径兼容。
 
 ### 1.3 架构边界
 
-- `cli.py` 只负责参数解析、依赖装配和工作流分发。业务逻辑下沉到 operation、workflow 或职责模块。
-- 会话发现、读取和导出统一通过 `BaseAgent` 契约进入。实现可以位于 Provider 类、共享基类或 `agent_dump.agents` 包内 helper。
-- Provider 私有 schema 只能由 `agent_dump.agents` Provider 层解释。CLI、workflow 和 selector 只依赖稳定的 Session、facts 与 Provider 契约。
+- `main.rs`、`cli_args.rs` 负责参数入口，`command.rs` 负责工作流分发。业务逻辑进入对应 workflow 或职责模块。
+- 会话发现、读取和导出统一通过 `rust/src/provider.rs` 的 `Provider` 契约进入。实现位于 Provider 模块或共享读取/转换模块。
+- Provider 私有 schema 只能由 Rust Provider 层解释。CLI、workflow 和 selector 只依赖稳定的 Session、facts 与 Provider 契约。
 - selector 不得触发 Provider 发现、扫描或完整内容读取。会话计数由调用方传入；允许调用不执行 I/O 的展示投影方法。
-- 共享逻辑保持单一归属：URI、输出格式、渲染、导出和跨工作流 CLI 能力分别进入 `uri_support.py`、`output_formats.py`、`rendering.py`、`exporting.py` 和 `cli_shared.py`。
+- 共享逻辑保持单一归属：URI、输出格式、渲染、导出和跨工作流 CLI 能力分别进入 `uri_workflow.rs`、`output_formats.rs`、`render.rs`、`export.rs` 和 `command.rs`。
 - 不得引入循环导入。依赖方向应从装配层指向工作流和领域实现。
 
 ### 1.4 代码与测试
@@ -45,17 +45,15 @@
 - 面向用户的 CLI 行为：`README.md`、`README_zh.md`
 - Agent 使用 recipes：`skills/agent-dump/SKILL.md`、`skills/agent-dump/references/cli-recipes.md`
 
-以下入口用于快速定位，不构成完整模块清单：
+以下入口位于 `rust/src/`，用于快速定位：
 
-- CLI operation 归一化：`command_plan.py`
-- list / interactive / query：`session_workflow.py`
-- 单 URI 工作流：`uri_workflow.py`
-- collect：`collect_workflow.py` 与 `collect_*.py`
-- Provider 注册：`agent_registry.py`
-- Provider 实现：`agents/`
-- 搜索索引：`search_index.py`
-- 配置：`config.py`、`config_command.py`
-- 诊断：`diagnostics.py`
+- 参数与分发：`cli_args.rs`、`command.rs`
+- list / interactive / query：`list_workflow.rs`、`interactive_workflow.rs`、`query.rs`
+- 单 URI：`uri_workflow.rs`
+- collect：`collect_workflow.rs` 与 `collect_*.rs`
+- Provider 注册与契约：`registry.rs`、`provider.rs`
+- 搜索索引：`search_index.rs`
+- 配置与诊断：`config.rs`、`config_command.rs`、`diagnostics.rs`
 
 ## 3. 验证与文档
 

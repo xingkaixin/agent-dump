@@ -34,11 +34,11 @@ just cov
 just isok
 ```
 
-实验性 Rust CLI 的构建、支持范围与明确未实现项见 [`rust/README.md`](../rust/README.md)。
-安装 rustup 后，`just check-rust` 会使用 `rust/rust-toolchain.toml` 固定的工具链运行
-fmt、Clippy、Rust 单元测试、构建和跨语言 CLI 差分测试。跨语言测试位于 `rust/tests/`，缺少二进制会失败，不会静默跳过。
-`just isok` 包含该门禁；`just build-rust` 生成性能评估用的 release 二进制。
-CI 在 Linux、macOS、Windows 分别运行同一 Rust 门禁；每条 Cargo 命令独立作为步骤，避免 PowerShell 后续成功命令掩盖前一条失败。CLI 差分按排序后的测试文件分成四组并行运行，每组独立 runner，全部用例恰好运行一次；每个平台第 0 组同时执行 fmt、Clippy 和单元测试。CLI 差分使用 UTF-8 子进程输出，平台特有行为在 fixture 或明确标注的用例中处理。
+Rust CLI 的构建与模块归属见 [`rust/README.md`](../rust/README.md)。工具链固定为 Rust 1.90.0。`just check-rust` 执行 fmt、Clippy、单元测试、release 构建及 `rust/tests/` 完整差分。`AGENT_DUMP_TEST_BINARY` 可指定已安装的 release 制品；缺少二进制会失败。
+
+CI 在 Linux、macOS、Windows 运行 release 差分，按文件分成四组；每个平台第 0 组同时执行 fmt、Clippy、单元测试。独立的四目标制品流水线从 sdist 构建 wheel，通过 Python 3.10/3.14 的 pip、uv tool、uvx 和 npm/npx/bunx 验证真实读取与导出，Linux 额外在 glibc 2.17 容器运行。
+
+`uv sync --locked --dev` 只安装开发与冻结 Python 参考依赖，不安装本项目的 Python 模块。pytest 的 `pythonpath`、just 和 CI 提供 `src` 路径。手动运行参考 CLI 时使用 `PYTHONPATH=src uv run python -m agent_dump`；发布 CLI 使用 `./rust/target/release/agent-dump`。冻结参考与原 `scripts/benchmark_*.py` 不随重写修改。
 
 Rust 重写的阶段与功能验收见 [迁移计划](rust-migration-plan.md)。性能比较使用
 [CLI benchmark](benchmarks/README.md)，例如
@@ -56,28 +56,15 @@ pytest 配置只位于 `pyproject.toml` 的 `[tool.pytest.ini_options]`。不要
 
 ## 3. 交互式 CLI
 
-selector 负责展示和选择，不负责 Provider discovery 或完整内容读取：
+selector 只展示传入的会话与计数，不发现来源、不读取完整正文。Ratatui/crossterm 处理真实终端，空格勾选、回车提交、q/Q 和 Ctrl+C 取消；管道使用简单行输入。终端退出通过 RAII 恢复模式，支持 resize、bracketed paste、密码输入和 stdout 重定向。真实 PTY 验证在 `rust/tests/test_tui.py`。
 
-- `select_agent_interactive(agents, session_counts)` 的计数由调用方提供。
-- Session 标题、摘要和 URI 可以通过无 I/O 的 Provider 投影生成。
-- questionary 的 `q`/`Q` 退出、空格选择、回车确认属于用户可见行为；修改时同步更新 selector 测试。
-- `Ctrl+C` 返回取消结果。
-- 非 TTY 环境回退到简单 stdin 模式。
-- 第三方 Session 文本进入终端前必须经过现有安全净化入口。
+第三方会话文本经 `render.rs` 安全净化后进入终端。UI 排版不与 questionary 的 ANSI 帧逐字节比较；选择、取消、导出结果与终端恢复属于契约。
 
-实现以 `src/agent_dump/selector.py` 为准，行为测试以 `tests/test_selector.py` 为准。不要从文档复制 questionary 代码骨架。
+## 4. 依赖与构建
 
-## 4. 依赖
+Rust 依赖在 `rust/Cargo.toml`，锁定在 `rust/Cargo.lock`。Cargo 命令从 `rust/` 执行，以应用固定工具链。新增依赖必须有实际代码用途。
 
-```bash
-# 生产依赖
-uv add package-name
-
-# 开发依赖
-uv add --dev package-name
-```
-
-不新增无法证明必要的第三方依赖。必要但不被代码直接 import 的依赖，应在 `pyproject.toml` 声明附近说明运行时关系；不要用泛化注释解释显而易见的依赖。
+开发辅助依赖由 `uv.lock` 固定；生产 wheel 没有 Python runtime dependencies。PEP 517 使用 Maturin，精确版本与完整 hash 约束在 `packaging/build-constraints.*`，更新使用 `just update-build-constraints`。`just build` 从 sdist 构建当前平台 wheel，并从 wheel 提取 npm 可执行文件；`just verify-wheel` 检查隔离安装。完整发布矩阵见[发布指南](release-guide.md)。
 
 ## 5. 落地页性能与 Cloudflare Pages
 

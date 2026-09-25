@@ -2,35 +2,35 @@
 
 完整上手流程见[将 Codex 会话导出为 Markdown](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/)。
 
-以下 recipes 面向当前 Python 发布版。实验性 Rust 的命令与边界见 [`rust/README.md`](../../../rust/README.md)：已接入十个 Provider、Query/Search、维护命令、Collect、配置、shortcut、URI summary 与 Ratatui/管道批量导出；P3～P5 的范围与证据见[验收报告](../../../docs/rust-p3-p5-completion.md)。`-q provider:codex,opencode` 可在扫描前限定来源；单个 Provider 失败不阻止其他来源。Cursor 仅支持 JSON/print；DeepChat、Cherry Studio、MiniMax 支持 JSON/Markdown/print；其余六个还支持 raw。
+以下 recipes 适用于 Rust CLI 和冻结的 Python 0.15.9 CLI；安装后的 Rust 版本只提供命令行。全部 Provider、Query/Search、Collect、配置、shortcut、URI summary 与 Ratatui/管道批量导出已迁移。模块与验收入口见 [`rust/README.md`](../../../rust/README.md)。
 
-文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余七个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。Codex、Claude、Pi 的单条记录转换失败走本地化 stderr 警告并继续读取；head/list/raw 不执行正文转换。四个文件 Provider 与 OpenCode/ZCode 在未选中来源时读取当前配置并重试，选中后保持路径；Codex 标题索引跟随当前配置。DeepChat/Cherry/MiniMax 每次发现或查找重新选择来源；Cursor 正文读取也使用当前数据库配置。配置、搜索、collect 与交互尚未迁移。
+文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余七个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。Codex、Claude、Pi 的单条记录转换失败走本地化 stderr 警告并继续读取；head/list/raw 不执行正文转换。四个文件 Provider 与 OpenCode/ZCode 在未选中来源时读取当前配置并重试，选中后保持路径；Codex 标题索引跟随当前配置。DeepChat/Cherry/MiniMax 每次发现或查找重新选择来源；Cursor 正文读取也使用当前数据库配置。
 
 ## 1) 常用命令模板
 
 ### 交互式导出（interactive）
 
 ```bash
-uv run agent-dump --interactive
-uv run agent-dump --interactive -days 3
-uv run agent-dump --interactive -query "修复"
-uv run agent-dump --interactive -format json -output ./sessions
-uv run agent-dump --interactive -format md -output ./my-sessions
-uv run agent-dump --interactive --format json,markdown,raw -output ./my-sessions
-uv run agent-dump --interactive --lang zh
+uvx agent-dump --interactive
+uvx agent-dump --interactive -days 3
+uvx agent-dump --interactive -query "修复"
+uvx agent-dump --interactive -format json -output ./sessions
+uvx agent-dump --interactive -format md -output ./my-sessions
+uvx agent-dump --interactive --format json,markdown,raw -output ./my-sessions
+uvx agent-dump --interactive --lang zh
 ```
 
 ### 列表查询（list）
 
 ```bash
-uv run agent-dump --list
-uv run agent-dump --list -days 7
-uv run agent-dump --list -query "error"
-uv run agent-dump --list -query "codex,kimi:error"
-uv run agent-dump --list -query "bug provider:codex role:user path:. limit:20"
-uv run agent-dump --list -query 'bug path:"/Users/me/My Project"'
-uv run agent-dump --list "agents://.?q=refactor&providers=codex,claude&roles=user&limit=20"
-uv run agent-dump --list --lang en
+uvx agent-dump --list
+uvx agent-dump --list -days 7
+uvx agent-dump --list -query "error"
+uvx agent-dump --list -query "codex,kimi:error"
+uvx agent-dump --list -query "bug provider:codex role:user path:. limit:20"
+uvx agent-dump --list -query 'bug path:"/Users/me/My Project"'
+uvx agent-dump --list "agents://.?q=refactor&providers=codex,claude&roles=user&limit=20"
+uvx agent-dump --list --lang en
 ```
 
 说明：仅使用 `-days` 或 `-query` 且未指定 `--interactive` 时，CLI 会自动按 `--list` 处理。
@@ -45,24 +45,24 @@ OpenCode/ZCode 的正文缓存与搜索索引会跟踪数据库及 WAL 的变化
 
 ```bash
 # 默认 print 到终端
-uv run agent-dump opencode://<session_id>
-uv run agent-dump zcode://<session_id>
-uv run agent-dump codex://<session_id>
-uv run agent-dump codex://threads/<session_id>
-uv run agent-dump kimi://<session_id>
-uv run agent-dump claude://<session_id>
-uv run agent-dump cursor://<request_id>
-uv run agent-dump pi://<session_id>
-uv run agent-dump minimax://<session_id>
+uvx agent-dump opencode://<session_id>
+uvx agent-dump zcode://<session_id>
+uvx agent-dump codex://<session_id>
+uvx agent-dump codex://threads/<session_id>
+uvx agent-dump kimi://<session_id>
+uvx agent-dump claude://<session_id>
+uvx agent-dump cursor://<request_id>
+uvx agent-dump pi://<session_id>
+uvx agent-dump minimax://<session_id>
 
 # 导出单会话
-uv run agent-dump codex://<session_id> --format json --output ./my-sessions
-uv run agent-dump codex://<session_id> --format md --output ./my-sessions
-uv run agent-dump codex://<session_id> --format print,json --output ./my-sessions
-uv run agent-dump codex://<session_id> --format print,json --summary --output ./my-sessions
-uv run agent-dump codex://<session_id> --format json,markdown,raw --output ./my-sessions
-uv run agent-dump cursor://<request_id> --format print,json --output ./my-sessions
-uv run agent-dump codex://<session_id> --head
+uvx agent-dump codex://<session_id> --format json --output ./my-sessions
+uvx agent-dump codex://<session_id> --format md --output ./my-sessions
+uvx agent-dump codex://<session_id> --format print,json --output ./my-sessions
+uvx agent-dump codex://<session_id> --format print,json --summary --output ./my-sessions
+uvx agent-dump codex://<session_id> --format json,markdown,raw --output ./my-sessions
+uvx agent-dump cursor://<request_id> --format print,json --output ./my-sessions
+uvx agent-dump codex://<session_id> --head
 ```
 
 URI 混合输出中 print 读取或渲染失败不会阻断文件导出；raw 可以在标准化解析失败时成功。任一输出成功则退出 `0`，全部失败则退出 `1`。
@@ -70,14 +70,14 @@ URI 混合输出中 print 读取或渲染失败不会阻断文件导出；raw �
 ### 汇总分析（collect）
 
 ```bash
-uv run agent-dump --collect
-uv run agent-dump --collect -days 7
-uv run agent-dump --collect -query "provider:codex path:. limit:20"
-uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
-uv run agent-dump --collect -since 20260301 -until 20260305
-uv run agent-dump --collect --collect-mode insight
-uv run agent-dump --collect "agents://.?q=refactor&providers=codex,claude"
-uv run agent-dump --collect --dry-run --save ./reports
+uvx agent-dump --collect
+uvx agent-dump --collect -days 7
+uvx agent-dump --collect -query "provider:codex path:. limit:20"
+uvx agent-dump --collect -since 2026-03-01 -until 2026-03-05
+uvx agent-dump --collect -since 20260301 -until 20260305
+uvx agent-dump --collect --collect-mode insight
+uvx agent-dump --collect "agents://.?q=refactor&providers=codex,claude"
+uvx agent-dump --collect --dry-run --save ./reports
 ```
 
 collect 的执行、dry-run 和 emit-prompt 均支持 `-query`；不能与 `agents://` 查询 URI 同用，无效查询在扫描前报错。
@@ -88,11 +88,11 @@ collect 只分析 user/assistant 可见文本，排除 system/developer/tool、r
 ### 外部 agent 汇总（collect --emit-prompt）
 
 ```bash
-uv run agent-dump --collect --emit-prompt --save ./reports/daily.md
-uv run agent-dump --collect --emit-prompt -since 20260824 -until 20260830 \
+uvx agent-dump --collect --emit-prompt --save ./reports/daily.md
+uvx agent-dump --collect --emit-prompt -since 20260824 -until 20260830 \
   --collect-mode insight --save ./reports/weekly.md
-uv run agent-dump --collect --emit-prompt 'agents://.?providers=codex,claude&limit=20'
-uv run agent-dump --shortcut ob 20260831 --emit-prompt
+uvx agent-dump --collect --emit-prompt 'agents://.?providers=codex,claude&limit=20'
+uvx agent-dump --shortcut ob 20260831 --emit-prompt
 ```
 
 上述命令直接打印提示词。用户要求实际执行时，首次生成就将 stdout、stderr 分别落盘，不依赖终端回传完整内容。
@@ -102,7 +102,7 @@ macOS/Linux 示例；在其他平台使用同等的私有临时目录和输出�
 (
   umask 077
   collect_task_dir=$(mktemp -d) || exit 1
-  uv run agent-dump --shortcut ob 20260831 --emit-prompt \
+  uvx agent-dump --shortcut ob 20260831 --emit-prompt \
     > "$collect_task_dir/prompt.md" 2> "$collect_task_dir/diagnostics.txt"
   collect_exit_code=$?
   printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
@@ -117,7 +117,7 @@ macOS/Linux 示例；在其他平台使用同等的私有临时目录和输出�
 - 无需 skill 或 AI 配置。stdout 是可交付的提示词，诊断走 stderr；`--save` 指定最终报告，不保存提示词。
 - shortcut 的 `args` 可以直接包含 `"--emit-prompt"`，也可以像上例临时追加；不重建或修改其他 shortcut 参数。
 - 提示词提供固定候选清单、每条 URI 的 argv/命令、原工作目录、时区、报告格式和绝对输出路径。
-  读取命令复用生成时的解释器或打包程序；外部 agent 需要原环境和相同的 provider 路径设置。
+  读取命令复用生成时的原生程序；外部 agent 需要原环境和相同的 provider 路径设置。
 - 清单最后一个非空行是 `<!-- agent-dump:collect-manifest-end -->`；标记和可解析 JSON 都不能单独证明完整性。
   按提示词核对总数、唯一 URI、两层 JSON 重复键、content 长度及 source/uri/读取命令的一致性，再读取任何正文。
   清单损坏时优先读取保存的完整文件；没有完整文件时，只能在原命令和筛选条件可确认的情况下重生成一次，
@@ -139,15 +139,15 @@ macOS/Linux 示例；在其他平台使用同等的私有临时目录和输出�
 ### 统计（stats）
 
 ```bash
-uv run agent-dump --stats
-uv run agent-dump --stats -days 30
+uvx agent-dump --stats
+uvx agent-dump --stats -days 30
 ```
 
 ### Provider 能力发现
 
 ```bash
-uv run agent-dump --providers
-uv run agent-dump --capabilities
+uvx agent-dump --providers
+uvx agent-dump --capabilities
 ```
 
 输出包含 URI scheme、支持及不支持的导出格式、存储级关键词快路径，以及逐项本地搜索路径状态；不会扫描会话内容。
@@ -156,21 +156,21 @@ uv run agent-dump --capabilities
 
 ```bash
 # Full-text search across all sessions
-uv run agent-dump --search "auth timeout"
-uv run agent-dump --search "认证"
+uvx agent-dump --search "auth timeout"
+uvx agent-dump --search "认证"
 
 # Combine with list + days
-uv run agent-dump --search "auth" --list -days 30
+uvx agent-dump --search "auth" --list -days 30
 
 # Rebuild index
-uv run agent-dump --reindex
+uvx agent-dump --reindex
 ```
 
 ### 配置管理（config）
 
 ```bash
-uv run agent-dump --config view
-uv run agent-dump --config edit
+uvx agent-dump --config view
+uvx agent-dump --config edit
 ```
 
 若旧配置不是合法 TOML，读取仍会兼容，但编辑会被拒绝；请先手动修正无效转义或替换配置文件。
@@ -199,10 +199,10 @@ uv run agent-dump --config edit
 示例：
 
 ```bash
-uv run agent-dump --list -query "timeout"
-uv run agent-dump --list -query "codex,kimi:timeout"
-uv run agent-dump --list -query "bug provider:codex role:user path:. limit:20"
-uv run agent-dump "agents://.?q=timeout&providers=codex,claude&roles=user&limit=20"
+uvx agent-dump --list -query "timeout"
+uvx agent-dump --list -query "codex,kimi:timeout"
+uvx agent-dump --list -query "bug provider:codex role:user path:. limit:20"
+uvx agent-dump "agents://.?q=timeout&providers=codex,claude&roles=user&limit=20"
 ```
 
 结构化查询字段：
@@ -222,9 +222,9 @@ uv run agent-dump "agents://.?q=timeout&providers=codex,claude&roles=user&limit=
 示例：
 
 ```bash
-uv run agent-dump --search "auth timeout"
-uv run agent-dump --search "认证"
-uv run agent-dump --search "auth" --list -days 30
+uvx agent-dump --search "auth timeout"
+uvx agent-dump --search "认证"
+uvx agent-dump --search "auth" --list -days 30
 ```
 
 ## 3) 行为矩阵（避免误用）
@@ -302,7 +302,7 @@ uv run agent-dump --search "auth" --list -days 30
 
 处理：
 1. 确认本地对应工具已有会话数据目录。
-2. 重试 `uv run agent-dump --list` 进行快速探测。
+2. 重试 `uvx agent-dump --list` 进行快速探测。
 3. 不要把该退出码 `1` 与「时间窗内无会话」的退出码 `0` 混为一谈。
 
 ### 无匹配会话
@@ -339,8 +339,8 @@ uv run agent-dump --search "auth" --list -days 30
 - URI 命令携带 `--summary`，但 AI 配置文件缺失或字段不完整。
 
 处理：
-1. 先执行 `uv run agent-dump --config view` 检查状态。
-2. 再执行 `uv run agent-dump --config edit` 补齐 `provider/base_url/model/api_key`。
+1. 先执行 `uvx agent-dump --config view` 检查状态。
+2. 再执行 `uvx agent-dump --config edit` 补齐 `provider/base_url/model/api_key`。
 3. 若当前只需导出，可去掉 `--summary`，CLI 会继续完成导出。
 
 ### format 语法非法
@@ -355,9 +355,9 @@ uv run agent-dump --search "auth" --list -days 30
 ## DeepChat
 
 ```bash
-uv run agent-dump --list -query "provider:deepchat"
-uv run agent-dump 'deepchat://<session_id>' --head
-uv run agent-dump 'deepchat://<session_id>' --format json,markdown --output ./sessions
+uvx agent-dump --list -query "provider:deepchat"
+uvx agent-dump 'deepchat://<session_id>' --head
+uvx agent-dump 'deepchat://<session_id>' --format json,markdown --output ./sessions
 ```
 
 读取当前未加密的 `app_db/agent.db`，可用 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。草稿不列出，已迁移历史可直接读取。暂不支持 raw、SQLCipher 和旧版 `chat.db` 直读；附件仅保留引用，不读取外置工具输出或执行 Tape 恢复。遇到加密或 schema 诊断时应保留报错，不把它当成没有会话。
@@ -365,9 +365,9 @@ uv run agent-dump 'deepchat://<session_id>' --format json,markdown --output ./se
 ## Cherry Studio
 
 ```bash
-uv run agent-dump --list -query "provider:cherry"
-uv run agent-dump 'cherry://topic-<id>' --head
-uv run agent-dump 'cherry://session-<id>' --format json,markdown --output ./sessions
+uvx agent-dump --list -query "provider:cherry"
+uvx agent-dump 'cherry://topic-<id>' --head
+uvx agent-dump 'cherry://session-<id>' --format json,markdown --output ./sessions
 ```
 
 读取当前 2.x 的 `Data/cherrystudio.sqlite`，可用 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录；未指定时先查启动配置中的目录，再查平台默认目录。使用第一个存在的数据库，便携版、开发版或多个安装应显式指定目录。普通聊天只导出当前选中的路径，其他分支和并列回复不参与搜索与计数；Agent 会话按时间排序，可按 workspace 工作目录筛选。普通聊天没有工作目录，不能用路径筛选找到。
@@ -377,11 +377,11 @@ uv run agent-dump 'cherry://session-<id>' --format json,markdown --output ./sess
 ## OpenCode 2.x
 
 ```bash
-uv run agent-dump --list -query 'provider:opencode'
-uv run agent-dump 'opencode://<session_id>' --head
-uv run agent-dump 'opencode://<session_id>' --format json,markdown --output ./sessions
-OPENCODE_DB=opencode-custom.db uv run agent-dump --search 'timeout' -query 'provider:opencode'
-uv run agent-dump --collect --emit-prompt -query 'provider:opencode'
+uvx agent-dump --list -query 'provider:opencode'
+uvx agent-dump 'opencode://<session_id>' --head
+uvx agent-dump 'opencode://<session_id>' --format json,markdown --output ./sessions
+OPENCODE_DB=opencode-custom.db uvx agent-dump --search 'timeout' -query 'provider:opencode'
+uvx agent-dump --collect --emit-prompt -query 'provider:opencode'
 ```
 
 支持旧版 `session/message/part` 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读。新版消息按 `seq` 排序，消息数包含系统和状态事件；collect 只读取 user/assistant 可见文本。
@@ -393,10 +393,10 @@ uv run agent-dump --collect --emit-prompt -query 'provider:opencode'
 ## MiniMax Code
 
 ```bash
-uv run agent-dump --list -query "provider:minimax"
-uv run agent-dump 'minimax://<session_id>' --head
-uv run agent-dump 'minimax://<session_id>' --format json,markdown --output ./sessions
-uv run agent-dump --search "timeout" -query "provider:minimax"
+uvx agent-dump --list -query "provider:minimax"
+uvx agent-dump 'minimax://<session_id>' --head
+uvx agent-dump 'minimax://<session_id>' --format json,markdown --output ./sessions
+uvx agent-dump --search "timeout" -query "provider:minimax"
 ```
 
 读取当前 CLI 已迁移的 SQLite 展示消息。数据目录按非空 `MINIMAX_DATA_DIR`、非空 `MAVIS_DATA_DIR`、`~/.minimax` 选择，数据库为其下的 `v2/sqlite/runtime-state.sqlite`。显式目录缺失时不回退；profile、早期源码版或其他安装使用 `MINIMAX_DATA_DIR` 指定。

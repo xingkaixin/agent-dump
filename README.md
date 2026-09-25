@@ -22,7 +22,7 @@ Step-by-step guide: [Export a Codex session to Markdown](https://agent-dump.xing
 
 ## Features
 
-- **Interactive Selection**: Provides a friendly command-line interactive interface using questionary
+- **Interactive Selection**: Provides a friendly command-line interactive interface using Ratatui
 - **Multi-Agent Support**: Automatically scan session data from multiple AI tools
 - **Batch Export**: Supports exporting all sessions from the last N days
 - **Specific Export**: Export specific sessions by URI
@@ -71,6 +71,14 @@ Set `MINIMAX_DATA_DIR` explicitly for custom profiles, earlier source builds usi
 OpenCode supports legacy SQLite and 2.x `session_v2/session_message`. When both schemas coexist, V2 wins for the same session ID; legacy-only sessions remain readable. V2 messages follow `seq` order, and counts include system and status records. Synthetic input, system/skill messages, compaction and shell records are excluded from collect. `OPENCODE_DB` selects a custom or channel database; a missing explicit path never falls back, and `:memory:` is unavailable. Attachments stay in JSON metadata without fetching referenced files. Running and archived records remain readable; pending inbox items are excluded. Raw export remains normalized `.raw.json`, not an OpenCode import file. See the [design and acceptance scope](docs/opencode-v2-design.md).
 
 ## Installation
+
+This branch switches distribution artifacts to Rust. Published 0.15.9 remains Python until a new Rust release is published. Rust wheels provide only the `agent-dump` command: Python imports and `python -m agent_dump` are no longer included. Applications using the old API can pin `agent-dump==0.15.9`.
+
+Prebuilt artifacts support macOS x64/arm64, Linux x64 (glibc ≥ 2.17), and Windows x64. Linux musl/Alpine has no prebuilt wheel. Wheel installation needs no Rust compiler; building from Git/sdist requires Rust 1.90.0 and a C toolchain.
+
+```bash
+pip install agent-dump
+```
 
 ### Method 1: Install using uv tool (Recommended)
 
@@ -125,7 +133,8 @@ git clone https://github.com/xingkaixin/agent-dump.git
 cd agent-dump
 
 # Use uv to install dependencies
-uv sync
+uv sync --locked --dev
+just build-rust
 
 # Local installation test
 uv tool install . --force
@@ -143,10 +152,10 @@ npx skills add xingkaixin/agent-dump
 
 ```bash
 # Enter interactive mode to select and export sessions
-uv run agent-dump --interactive
+agent-dump --interactive
 
-# Or run as a module
-uv run python -m agent_dump --interactive
+# Or use the source build
+./rust/target/release/agent-dump --interactive
 ```
 
 After running, it will display the list of sessions from the last 7 days grouped by time (Today, Yesterday, This Week, This Month, Earlier). Use the spacebar to select/deselect, and press Enter to confirm the export.
@@ -161,7 +170,7 @@ Quickly view session content directly in the terminal without exporting to a fil
 
 ```bash
 # View a specific session by URI
-uv run agent-dump opencode://session-id-abc123
+agent-dump opencode://session-id-abc123
 
 # The URI format is shown in list mode and interactive selector
 #   • Session Title (opencode://session-id-abc123)
@@ -235,28 +244,28 @@ listed and fails when there is nothing to list because no provider has data.
 
 ```bash
 # Display help
-uv run agent-dump                             # Show help message
-uv run agent-dump --help                      # Show detailed help
+agent-dump                             # Show help message
+agent-dump --help                      # Show detailed help
 
 # List mode (prints all matches, no pagination)
-uv run agent-dump --list                      # List sessions from last 7 days
-uv run agent-dump --list -days 3              # List sessions from last 3 days
-uv run agent-dump --list -query error         # List sessions matching keyword "error"
-uv run agent-dump --list -query codex,kimi:error  # Query only within Codex/Kimi
-uv run agent-dump --list -query 'bug provider:codex path:.'  # Structured query: keyword + provider + path
-uv run agent-dump --list -query 'bug path:"/Users/me/My Project"'  # Quote structured values containing spaces
-uv run agent-dump --interactive -query 'role:user limit:20 refactor'  # Structured query with role and global limit
-uv run agent-dump 'agents://.?q=refactor&providers=codex,claude'  # Query recent sessions for current repo
-uv run agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # Structured query URI
-uv run agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # Query by absolute path
-uv run agent-dump --interactive 'agents://~/work/repo?q=bug'  # Path-scoped interactive selection
-uv run agent-dump --list -page-size 10        # Accepted for compatibility but currently ignored
+agent-dump --list                      # List sessions from last 7 days
+agent-dump --list -days 3              # List sessions from last 3 days
+agent-dump --list -query error         # List sessions matching keyword "error"
+agent-dump --list -query codex,kimi:error  # Query only within Codex/Kimi
+agent-dump --list -query 'bug provider:codex path:.'  # Structured query: keyword + provider + path
+agent-dump --list -query 'bug path:"/Users/me/My Project"'  # Quote structured values containing spaces
+agent-dump --interactive -query 'role:user limit:20 refactor'  # Structured query with role and global limit
+agent-dump 'agents://.?q=refactor&providers=codex,claude'  # Query recent sessions for current repo
+agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # Structured query URI
+agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # Query by absolute path
+agent-dump --interactive 'agents://~/work/repo?q=bug'  # Path-scoped interactive selection
+agent-dump --list -page-size 10        # Accepted for compatibility but currently ignored
 
 # Interactive export mode
-uv run agent-dump --interactive               # Interactive mode (default 7 days)
-uv run agent-dump --interactive -days 3       # Interactive mode (3 days)
-uv run agent-dump -days 3                     # Auto-activates list mode
-uv run agent-dump -query error                # Auto-activates list mode
+agent-dump --interactive               # Interactive mode (default 7 days)
+agent-dump --interactive -days 3       # Interactive mode (3 days)
+agent-dump -days 3                     # Auto-activates list mode
+agent-dump -query error                # Auto-activates list mode
 
 # Note: in interactive mode with --query, only agents with keyword matches are shown,
 #       and the count shown for each agent is the post-filter matched count.
@@ -270,53 +279,53 @@ uv run agent-dump -query error                # Auto-activates list mode
 # - `limit:...` truncates the final global matched result set.
 
 # URI mode - Direct text dump
-uv run agent-dump opencode://<session-id>     # View OpenCode session content
-uv run agent-dump zcode://<session-id>        # View ZCode session content
-uv run agent-dump codex://<session-id>        # View Codex session content
-uv run agent-dump kimi://<session-id>         # View Kimi session content
-uv run agent-dump claude://<session-id>       # View Claude Code session content
-uv run agent-dump cursor://<request-id>       # View Cursor session content
-uv run agent-dump pi://<session-id>           # View Pi session content
-uv run agent-dump deepchat://<session-id>     # View DeepChat session content
-uv run agent-dump minimax://<session-id>      # View MiniMax Code session content
-uv run agent-dump codex://<session-id> --head # View lightweight session metadata before exporting
-uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
-uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file
-uv run agent-dump codex://<session-id> --format print,json --output ./my-sessions # Print and export JSON
-uv run agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # Export multiple formats
-uv run agent-dump cursor://<request-id> --format json --output ./my-sessions  # Cursor supports JSON export
-uv run agent-dump cursor://<request-id> --format print,json --output ./my-sessions # Cursor print + JSON
-uv run agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # Export JSON with AI summary
-uv run agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # Print, export JSON, and include summary
+agent-dump opencode://<session-id>     # View OpenCode session content
+agent-dump zcode://<session-id>        # View ZCode session content
+agent-dump codex://<session-id>        # View Codex session content
+agent-dump kimi://<session-id>         # View Kimi session content
+agent-dump claude://<session-id>       # View Claude Code session content
+agent-dump cursor://<request-id>       # View Cursor session content
+agent-dump pi://<session-id>           # View Pi session content
+agent-dump deepchat://<session-id>     # View DeepChat session content
+agent-dump minimax://<session-id>      # View MiniMax Code session content
+agent-dump codex://<session-id> --head # View lightweight session metadata before exporting
+agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
+agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file
+agent-dump codex://<session-id> --format print,json --output ./my-sessions # Print and export JSON
+agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # Export multiple formats
+agent-dump cursor://<request-id> --format json --output ./my-sessions  # Cursor supports JSON export
+agent-dump cursor://<request-id> --format print,json --output ./my-sessions # Cursor print + JSON
+agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # Export JSON with AI summary
+agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # Print, export JSON, and include summary
 
 # Search mode (full-text)
-uv run agent-dump --search "auth timeout"          # Search sessions matching keyword
-uv run agent-dump --search "认证"                   # CJK keyword search works
-uv run agent-dump --search "auth" --list -days 30  # Combine with list + days
-uv run agent-dump --reindex                        # Force rebuild search index
+agent-dump --search "auth timeout"          # Search sessions matching keyword
+agent-dump --search "认证"                   # CJK keyword search works
+agent-dump --search "auth" --list -days 30  # Combine with list + days
+agent-dump --reindex                        # Force rebuild search index
 
 # Note: search results include provider, updated time, URI, rank, and highlighted snippets.
 
 # Statistics mode
-uv run agent-dump --stats                    # Show session stats for last 7 days
-uv run agent-dump --stats -days 30           # Show session stats for last 30 days
+agent-dump --stats                    # Show session stats for last 7 days
+agent-dump --stats -days 30           # Show session stats for last 30 days
 
 # Provider capabilities (read-only; --capabilities is an alias)
-uv run agent-dump --providers
+agent-dump --providers
 
 # collect mode (time-range summary with AI)
-uv run agent-dump --collect
-uv run agent-dump --collect -days 7
-uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
-uv run agent-dump --collect -since 20260301 -until 20260305
-uv run agent-dump --collect --collect-mode insight
-uv run agent-dump --collect --save ./reports
-uv run agent-dump --collect --save ./reports/weekly.md
-uv run agent-dump --collect --save /tmp/agent-dump-reports
-uv run agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
-uv run agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
-uv run agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
-uv run agent-dump --shortcut ob 20260408
+agent-dump --collect
+agent-dump --collect -days 7
+agent-dump --collect -since 2026-03-01 -until 2026-03-05
+agent-dump --collect -since 20260301 -until 20260305
+agent-dump --collect --collect-mode insight
+agent-dump --collect --save ./reports
+agent-dump --collect --save ./reports/weekly.md
+agent-dump --collect --save /tmp/agent-dump-reports
+agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
+agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
+agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
+agent-dump --shortcut ob 20260408
 
 # Note: --collect keeps only visible user/assistant text, excluding system/developer/tool messages,
 #       reasoning, plans, tool calls, and tool results. Sessions empty after this projection are ignored.
@@ -333,14 +342,14 @@ uv run agent-dump --shortcut ob 20260408
 # Note: --save accepts either a directory or a .md file path. Missing non-.md paths are treated as directories.
 
 # config mode
-uv run agent-dump --config view
-uv run agent-dump --config edit
+agent-dump --config view
+agent-dump --config edit
 
 # Other options
-uv run agent-dump --interactive --format json # Interactive export as JSON (default)
-uv run agent-dump --interactive --format markdown   # Interactive export as Markdown
-uv run agent-dump --interactive --format json,markdown,raw # Interactive multi-format export
-uv run agent-dump --interactive -output ./my-sessions  # Specify output directory
+agent-dump --interactive --format json # Interactive export as JSON (default)
+agent-dump --interactive --format markdown   # Interactive export as Markdown
+agent-dump --interactive --format json,markdown,raw # Interactive multi-format export
+agent-dump --interactive -output ./my-sessions  # Specify output directory
 
 # Compatibility note
 # md remains available as an alias for markdown, e.g. --format md,raw
@@ -352,12 +361,12 @@ uv run agent-dump --interactive -output ./my-sessions  # Specify output director
 Generate a self-contained task prompt instead of configuring an AI endpoint. No skill is required:
 
 ```bash
-uv run agent-dump --collect --emit-prompt \
+agent-dump --collect --emit-prompt \
   -since 20260824 -until 20260830 \
   --collect-mode pm --save ./reports/weekly.md
 
 # Keep an existing collect shortcut and opt in for this invocation
-uv run agent-dump --shortcut ob 20260831 --emit-prompt
+agent-dump --shortcut ob 20260831 --emit-prompt
 ```
 
 These commands print the prompt directly. For agent execution, **save stdout and stderr to separate private files
@@ -368,7 +377,7 @@ on the first invocation** so a command tool's output limit cannot discard candid
 (
   umask 077
   collect_task_dir=$(mktemp -d) || exit 1
-  uv run agent-dump --shortcut ob 20260831 --emit-prompt \
+  agent-dump --shortcut ob 20260831 --emit-prompt \
     > "$collect_task_dir/prompt.md" 2> "$collect_task_dir/diagnostics.txt"
   collect_exit_code=$?
   printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
@@ -384,7 +393,7 @@ private temporary directory, capture both streams separately, and check the exit
 Give the prompt to an agent that can run commands and read/write files in the same local environment.
 It includes a fixed candidate manifest, per-session read commands, the working directory and timezone,
 the existing `pm`/`insight` report requirements, and the absolute final report path.
-Commands use the generating Python interpreter or packaged executable; they do not require another global install.
+Commands use the running native executable; they do not require another global install.
 Keep the same provider-path environment variables. If the original runtime is no longer available,
 confirm a replacement entry point before proceeding.
 
@@ -447,46 +456,9 @@ Generating a prompt does not mean that a report has been created, and does not a
 
 When URI mode combines `print` with file formats, a print read/render failure is reported without blocking file exports. Raw source copying can still succeed when normalized parsing fails. Exit status remains `0` if any requested output succeeds, otherwise `1`.
 
-### Library Usage
+### Python API migration
 
-OpenCode, ZCode, DeepChat, and Cherry Studio read and export an existing `Session` from its `source_path`, including on a fresh provider instance. No prior availability check or scan is required; a missing source raises an error rather than falling back to another database.
-
-Their head and list projections use the same discovery facts without querying messages again. A manually constructed Session without model or message-count facts keeps those fields unknown; discover the Session to populate them.
-
-SQLite payload caches and search indexes also track the source database and its WAL file. Committed content changes invalidate cached text even when the same Session object is reused; metadata projections still reflect discovery-time facts.
-
-The top-level public API matches `agent_dump.__all__`:
-
-| Symbol | Description |
-|--------|-------------|
-| `__version__` | Package version |
-| `AgentScanner` | Scans every provider in the current registry |
-| `BaseAgent` | Provider abstract base class |
-| `Session` | Unified session data model |
-| `OpenCodeAgent` | OpenCode provider |
-| `ZCodeAgent` | ZCode provider |
-| `CodexAgent` | Codex provider |
-| `KimiAgent` | Kimi provider |
-| `ClaudeCodeAgent` | Claude Code provider |
-| `CursorAgent` | Cursor provider |
-| `PiAgent` | Pi provider |
-
-```python
-from pathlib import Path
-
-from agent_dump import AgentScanner
-
-scanner = AgentScanner()
-
-for agent in scanner.get_available_agents():
-    sessions = agent.get_sessions(days=7)
-    if not sessions:
-        continue
-
-    output_dir = Path("./sessions") / agent.name
-    exported_path = agent.export_session(sessions[0], output_dir)
-    print(f"{agent.display_name}: {exported_path}")
-```
+Rust releases distribute a CLI only. Call `agent-dump` as a subprocess and use JSON exports for structured data. The frozen Python implementation remains in the repository for differential verification. Existing API consumers should migrate to the CLI or pin `agent-dump==0.15.9`.
 
 ### collect configuration file
 
@@ -549,112 +521,22 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 ## Project Structure
 
 ```text
-.
-├── src/
-│   └── agent_dump/             # Main package directory
-│       ├── __init__.py         # Top-level public API
-│       ├── __about__.py        # Single version source
-│       ├── __main__.py         # python -m agent_dump entry point
-│       ├── agent_registry.py   # Provider registry
-│       ├── bounded_concurrency.py # Bounded Future scheduling
-│       ├── cli.py              # Argument parsing and mode dispatch
-│       ├── cli_shared.py       # Shared CLI helpers
-│       ├── command_plan.py     # Normalizes CLI arguments into one command plan
-│       ├── shortcut.py         # Expands configured shortcuts into regular arguments
-│       ├── session_workflow.py # list / interactive / query workflow
-│       ├── uri_workflow.py     # URI workflow
-│       ├── collect_workflow.py # collect workflow
-│       ├── maintenance_workflow.py # providers / stats / reindex workflows
-│       ├── collect.py          # Collect compatibility imports
-│       ├── collect_dates.py    # Collect date-range parsing
-│       ├── collect_events.py   # Collect event extraction, rendering and chunking
-│       ├── collect_llm.py      # Collect LLM requests
-│       ├── collect_models.py   # Collect output models
-│       ├── collect_output.py   # Collect Markdown output
-│       ├── collect_logging.py  # Collect private diagnostics logging
-│       ├── collect_prompts.py  # Collect prompt construction
-│       ├── collect_handoff.py  # External-agent instructions and candidate manifest
-│       ├── collect_progress.py # Collect progress and run stats
-│       ├── collect_reduction.py # Collect concurrent summaries and reduction
-│       ├── collect_requests.py # Collect retries and structured responses
-│       ├── collect_sessions.py # Collect session filtering, reading, and chunk planning
-│       ├── collect_summary.py  # Collect summary schema, payload merge, and JSON extraction
-│       ├── coercion.py         # Fault-tolerant conversion of untrusted provider scalars
-│       ├── config.py           # TOML configuration models and persistence
-│       ├── config_command.py   # Interactive configuration command workflow
-│       ├── date_input.py       # Shared user date input parsing
-│       ├── diagnostics.py      # Structured fatal and recoverable diagnostics
-│       ├── export_paths.py     # Safe export path construction
-│       ├── i18n.py             # Language selection and translation runtime
-│       ├── i18n_en.py          # English translation catalog
-│       ├── i18n_keys.py        # Translation key definitions
-│       ├── i18n_zh.py          # Chinese translation catalog
-│       ├── message_filter.py   # Shared message filtering
-│       ├── paths.py            # Search roots and generic path resolution
-│       ├── private_files.py     # Owner-only permissions for tool-created files
-│       ├── prompt_safety.py    # Safe summary request composition and typed data envelopes
-│       ├── rendering.py        # print/head/markdown/json/raw rendering dispatch
-│       ├── exporting.py        # Unified export execution and structured outcome
-│       ├── output_formats.py   # Output format definitions and capability validation
-│       ├── query_filter.py     # Query parsing and filtering
-│       ├── query_semantics.py  # Literal Query/Search semantics and corpus
-│       ├── search_index.py     # FTS5 search index
-│       ├── scanner.py          # Agent scanner
-│       ├── selector.py         # Interactive selection
-│       ├── session_data.py     # Bounded request cache and bulk-read leases
-│       ├── session_exports.py  # Default JSON and raw session file writes
-│       ├── session_projection.py # Default title, head, and summary projections
-│       ├── session_time_groups.py # Session age groups and local-day boundaries
-│       ├── terminal_output.py  # Safe interpolation of dynamic terminal fields
-│       ├── text_safety.py      # Output sanitizing for third-party session text
-│       ├── time_utils.py       # Time and timezone helpers
-│       ├── transcript.py       # Read-only view over normalized messages
-│       ├── uri_support.py      # URI parsing and session lookup
-│       └── agents/             # Provider modules directory
-│           ├── __init__.py     # Provider exports
-│           ├── base.py         # BaseAgent and Session
-│           ├── opencode.py     # OpenCode Agent
-│           ├── zcode.py        # ZCode Agent
-│           ├── sqlite_sessions.py # Shared OpenCode/ZCode SQLite reader
-│           ├── claudecode.py   # Claude Code Agent
-│           ├── claude_transcript.py # Claude JSONL transcript decoder
-│           ├── codex.py        # Codex Agent
-│           ├── codex_transcript.py # Codex response stream decoder
-│           ├── codex_enrichment.py # Codex subagent and skill enrichment
-│           ├── codex_patch.py  # Codex apply_patch parser
-│           ├── cursor.py       # Cursor Agent
-│           ├── cursor_storage.py # Cursor read-only SQLite access
-│           ├── cursor_transcript.py # Cursor transcript decoder
-│           ├── kimi.py         # Kimi Agent
-│           ├── kimi_wire.py    # Kimi wire event stream parser
-│           ├── pi.py           # Pi Agent
-│           ├── file_sessions.py # Shared file-backed provider base
-│           ├── jsonl_scan.py   # Bounded JSONL object scan and diagnostics
-│           ├── message_assembly.py # Normalized message builders
-│           ├── message_types.py # Internal normalized message/session types
-│           └── title_fallback.py # Shared title fallback rules
-├── tests/                      # Test directory
-├── skills/agent-dump/          # Codex skill docs
-├── npm/                        # npm wrapper and platform packages
-├── web/                        # Astro landing page (en + zh + ja)
-├── pyproject.toml              # Project configuration
-├── justfile                    # Automated commands
-├── ruff.toml                   # Code style configuration
-└── sessions/                   # Default export directory
-    └── {agent-name}/           # Exported files categorized by tool
-        └── ses_xxx.json
+rust/           # Rust CLI, pinned toolchain, locales and parity tests
+src/agent_dump/ # Frozen Python v0.15.9 reference; excluded from distributions
+tests/          # Python reference and packaging contracts
+scripts/        # Frozen P0 evaluator and paired release eval
+packaging/      # Maturin builds and installation verification
+npm/            # Node launcher and platform packages
+docs/           # Architecture, migration and acceptance evidence
+web/            # Landing page
 ```
 
 ## Development
 
-An experimental Rust implementation is being developed in [`rust/`](rust/README.md). It currently supports discovery, transcript assembly, and single-session export for all ten Providers. Cursor supports JSON/print; DeepChat, Cherry Studio, and MiniMax support JSON/Markdown/print; the other six also support raw. `--list` now lists all available Providers; `-q provider:codex,opencode` narrows discovery before scanning, and one failed Provider does not block the others.
-
-P2 Provider and single-session export acceptance is complete, including bounded transcript caching, source changes, recoverable records, localized diagnostics, extreme values, and SQLite input compatibility. The parity suite runs on macOS, Linux, and Windows. See the [P2 completion report](docs/rust-p2-completion.md) and [paired performance results](docs/benchmarks/rust-p2-final.md) for evidence and known differences. Query/Search, Collect, configuration, shortcuts, batch export, and Ratatui selection are implemented in the experimental binary. See the [P3–P5 acceptance report](docs/rust-p3-p5-completion.md) and [23-workload performance results](docs/benchmarks/rust-p3-p5.md), including the batch-export regression. Release switching remains in P6 of the [migration plan](docs/rust-migration-plan.md). pip/npm continue to install the Python implementation.
-
-Landing page build, deployment, and free Cloudflare performance settings are documented in the [development guide](docs/development-guide.md#5-落地页性能与-cloudflare-pages).
+Rust is the build and runtime implementation on this branch, with Ratatui for terminal interaction. `src/agent_dump` is a frozen oracle for differential and performance tests and is excluded from wheels. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), and the [migration acceptance plan](docs/rust-migration-plan.md).
 
 ```bash
-# Run local CI checks with Python and the pinned Rust toolchain
+# Run local CI checks with the frozen Python oracle and pinned Rust toolchain
 # (includes npm tests when Node.js is available, and the landing page check when pnpm is)
 just isok
 
@@ -687,7 +569,7 @@ just test-npm-smoke
 
 ```bash
 # 1. Update the package version in a single place
-$EDITOR src/agent_dump/__about__.py
+$EDITOR rust/Cargo.toml
 
 # 2. Commit and merge to main
 

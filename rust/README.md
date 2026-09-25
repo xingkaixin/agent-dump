@@ -1,6 +1,6 @@
-# Rust CLI（P3～P5：查询、Collect 与终端交互）
+# Rust CLI
 
-此目录是 Rust 重写的实验实现，已接入全部十个 Provider 的发现、消息装配、支持格式的单 URI 导出和正文缓存。ZCode 路径沿用 macOS/Windows 限制。Python 仍是默认实现和发布来源；Rust 二进制继续作为实验入口，完整验收与发布切换属于 P6。Provider 证据见 [P2 验收](../docs/rust-p2-completion.md)，查询、Collect 与终端交互见 [P3～P5 验收](../docs/rust-p3-p5-completion.md)。后续发布工作见[迁移计划](../docs/rust-migration-plan.md)。
+本目录是当前分支的运行与发布实现。全部十个 Provider、Query/Search、Collect、配置、shortcut、批量导出和 Ratatui 交互均已实现。Python v0.15.9 保留为冻结参考，不进入 wheel。发布状态及验收见[迁移计划](../docs/rust-migration-plan.md)。
 
 ## 构建与验证
 
@@ -12,7 +12,7 @@ just build-rust
 ./rust/target/release/agent-dump --help
 ```
 
-`check-rust` 运行 fmt、Clippy、Rust 单元测试、debug 构建与 `rust/tests/`。差分套件通过子进程调用两种 CLI，只使用隔离的合成会话目录；比较完整 stdout/stderr、JSON 结构、Markdown 与 JSONL raw 字节、源数据 hash。SQLite raw 比较 JSON 结构；WAL 用例单独校验数据库与 WAL 持久数据，区分 SQLite 的 `-shm` 协调文件。同实例来源选择、缓存与并发读取使用临时来源单元测试；底层错误、极端数值、日期、BLOB 与配置恢复的具体验证范围见 P2 最终验收。
+`check-rust` 运行 fmt、Clippy、Rust 单元测试、release 构建与 `rust/tests/`。差分套件通过子进程调用两种 CLI，只使用隔离的合成会话目录；比较完整 stdout/stderr、JSON 结构、Markdown 与 JSONL raw 字节、源数据 hash。SQLite raw 比较 JSON 结构；WAL 用例单独校验数据库与 WAL 持久数据，区分 SQLite 的 `-shm` 协调文件。同实例来源选择、缓存与并发读取使用临时来源单元测试；底层错误、极端数值、日期、BLOB 与配置恢复的具体验证范围见 P2 最终验收。
 
 ## 已实现范围
 
@@ -78,7 +78,7 @@ URI 默认 `print`。文件导出使用 `--output`、配置中的 JSON/raw 默�
 ## 验收边界与后续工作
 
 - P3 查询与索引，P4 配置、shortcut、Collect、URI summary、emit-prompt，P5 批量导出和 Ratatui 的范围与验证见 [P3～P5 最终验收](../docs/rust-p3-p5-completion.md)。
-- argparse/Clap 的帮助布局和参数解析器 usage 文案保持既有实验实现差异，P6 做最终兼容性审查。常用模式优先级、冲突、忽略参数、输出路径和业务诊断已纳入差分测试。
+- 帮助与参数错误使用 Clap 布局，保留全部参数说明、兼容别名、中英文和退出码；不复刻 argparse 的换行、usage 排版与错误措辞。常用模式优先级、冲突、忽略参数、输出路径和业务诊断已纳入差分测试。
 - Rust CI 包含 Linux、macOS、Windows 的构建、Clippy、单元与 CLI 差分门禁；三平台运行同一套契约，具体计数和平台跳过项见 [P3～P5 最终验收](../docs/rust-p3-p5-completion.md)。所有发布架构、libc、wheel/npm 安装与正式切换属于 P6。
 
 行为映射和待验收边界见 [Codex](../docs/rust-codex-parity.md)、[Claude Code / Kimi / Pi](../docs/rust-jsonl-parity.md)、[OpenCode / ZCode](../docs/rust-sqlite-parity.md)及 [Cursor / DeepChat / Cherry Studio / MiniMax](../docs/rust-desktop-parity.md) 差分验收记录。共享发现与跨 Provider 隔离见[验收记录](../docs/rust-discovery-parity.md)。URI 共用诊断见[验收记录](../docs/rust-uri-parity.md)。DeepChat / Cherry / MiniMax 的 schema、源缺失与迁移错误见[专属错误验收](../docs/rust-provider-errors-parity.md)。其余七个 Provider 的源缺失与 Kimi raw 文件身份见[源缺失验收](../docs/rust-source-parity.md)。JSONL/旧 SQLite 坏记录警告见[验收记录](../docs/rust-record-diagnostics-parity.md)。Codex/Claude 标题缓存恢复与刷新见[验收记录](../docs/rust-title-cache-parity.md)。Codex/Claude/Pi 消息转换恢复见[验收记录](../docs/rust-message-conversion-parity.md)。固定配置下六个 Provider 的来源选择与重试见[验收记录](../docs/rust-source-selection-parity.md)。运行中来源配置与其余 Provider 选择见[验收记录](../docs/rust-runtime-sources-parity.md)。这些文件保留各批次当时的状态；开放项的最终归属、功能矩阵和验证证据以 [P2 最终验收](../docs/rust-p2-completion.md)为准。

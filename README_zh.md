@@ -22,7 +22,7 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 
 ## 功能特性
 
-- **交互式选择**: 使用 questionary 提供友好的命令行交互界面
+- **交互式选择**: 使用 Ratatui 提供友好的命令行交互界面
 - **多 Agent 支持**: 自动扫描多种 AI 工具的会话数据
 - **批量导出**: 支持导出最近 N 天的所有会话
 - **指定导出**: 通过会话 URI 导出特定会话
@@ -71,6 +71,14 @@ MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索�
 OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读；新版消息按 `seq` 排序，消息数包含系统和状态记录。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。附件保留在 JSON 元数据中，不打开引用文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/opencode-v2-design.md)。
 
 ## 安装
+
+本分支将安装制品切换为 Rust；已发布的 0.15.9 仍为 Python，直到新的 Rust 版本正式发布。Rust wheel 仅提供 `agent-dump` 命令，不包含 Python 导入 API，也不提供 `python -m agent_dump`。依赖旧 API 的程序可固定 `agent-dump==0.15.9`。
+
+支持 macOS x64/arm64、Linux x64（glibc ≥ 2.17）和 Windows x64。Linux musl/Alpine 没有预构建 wheel。wheel 安装无需 Rust 编译器；从 Git/sdist 构建需要 Rust 1.90.0 和 C 工具链。
+
+```bash
+pip install agent-dump
+```
 
 ### 方式一：使用 uv tool 安装（推荐）
 
@@ -125,7 +133,8 @@ git clone https://github.com/xingkaixin/agent-dump.git
 cd agent-dump
 
 # 使用 uv 安装依赖
-uv sync
+uv sync --locked --dev
+just build-rust
 
 # 本地安装测试
 uv tool install . --force
@@ -143,10 +152,10 @@ npx skills add xingkaixin/agent-dump
 
 ```bash
 # 进入交互模式选择和导出会话
-uv run agent-dump --interactive
+agent-dump --interactive
 
-# 或使用模块运行
-uv run python -m agent_dump --interactive
+# 或使用源码构建的原生程序
+./rust/target/release/agent-dump --interactive
 ```
 
 运行后会显示最近 7 天的会话列表，按时间分组显示（今天、昨天、本周、本月、更早）。使用空格选择/取消，回车确认导出。
@@ -161,7 +170,7 @@ uv run python -m agent_dump --interactive
 
 ```bash
 # 通过 URI 查看指定会话
-uv run agent-dump opencode://session-id-abc123
+agent-dump opencode://session-id-abc123
 
 # URI 格式在列表模式和交互选择器中显示
 #   • 会话标题 (opencode://session-id-abc123)
@@ -235,27 +244,27 @@ uv run agent-dump opencode://session-id-abc123
 
 ```bash
 # 显示帮助
-uv run agent-dump                             # 显示帮助信息
-uv run agent-dump --help                      # 显示详细帮助
+agent-dump                             # 显示帮助信息
+agent-dump --help                      # 显示详细帮助
 
 # 列表模式（输出全部匹配内容，不分页）
-uv run agent-dump --list                      # 列出最近 7 天的会话
-uv run agent-dump --list -days 3              # 列出最近 3 天的会话
-uv run agent-dump --list -query 报错          # 列出匹配关键词“报错”的会话
-uv run agent-dump --list -query codex,kimi:报错  # 仅在 Codex/Kimi 范围内查询
-uv run agent-dump --list -query 'bug provider:codex path:. limit:20'  # 结构化查询：关键词 + provider + path
-uv run agent-dump --interactive -query 'role:user limit:20 refactor'  # 结构化查询带 role 和全局 limit
-uv run agent-dump 'agents://.?q=refactor&providers=codex,claude'  # 查询当前仓库最近的相关会话
-uv run agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # 结构化查询 URI
-uv run agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # 按绝对路径查询
-uv run agent-dump --interactive 'agents://~/work/repo?q=bug'  # 按路径作用域进入交互式选择
-uv run agent-dump --list -page-size 10        # 参数保留兼容，当前不生效
+agent-dump --list                      # 列出最近 7 天的会话
+agent-dump --list -days 3              # 列出最近 3 天的会话
+agent-dump --list -query 报错          # 列出匹配关键词“报错”的会话
+agent-dump --list -query codex,kimi:报错  # 仅在 Codex/Kimi 范围内查询
+agent-dump --list -query 'bug provider:codex path:. limit:20'  # 结构化查询：关键词 + provider + path
+agent-dump --interactive -query 'role:user limit:20 refactor'  # 结构化查询带 role 和全局 limit
+agent-dump 'agents://.?q=refactor&providers=codex,claude'  # 查询当前仓库最近的相关会话
+agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # 结构化查询 URI
+agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # 按绝对路径查询
+agent-dump --interactive 'agents://~/work/repo?q=bug'  # 按路径作用域进入交互式选择
+agent-dump --list -page-size 10        # 参数保留兼容，当前不生效
 
 # 交互式导出模式
-uv run agent-dump --interactive               # 交互模式（默认 7 天）
-uv run agent-dump --interactive -days 3       # 交互模式（3 天）
-uv run agent-dump -days 3                     # 自动启用列表模式
-uv run agent-dump -query 报错                 # 自动启用列表模式
+agent-dump --interactive               # 交互模式（默认 7 天）
+agent-dump --interactive -days 3       # 交互模式（3 天）
+agent-dump -days 3                     # 自动启用列表模式
+agent-dump -query 报错                 # 自动启用列表模式
 
 # 说明：interactive + --query 时，Agent 列表仅显示命中关键词的工具，
 #       且括号内会话数量为过滤后的命中数量。
@@ -268,53 +277,53 @@ uv run agent-dump -query 报错                 # 自动启用列表模式
 # - `limit:...` 截断最终全局匹配结果集。
 
 # URI 模式 - 直接查看会话内容
-uv run agent-dump opencode://<session-id>     # 查看 OpenCode 会话内容
-uv run agent-dump zcode://<session-id>        # 查看 ZCode 会话内容
-uv run agent-dump codex://<session-id>        # 查看 Codex 会话内容
-uv run agent-dump kimi://<session-id>         # 查看 Kimi 会话内容
-uv run agent-dump claude://<session-id>       # 查看 Claude Code 会话内容
-uv run agent-dump cursor://<request-id>       # 查看 Cursor 会话内容
-uv run agent-dump pi://<session-id>           # 查看 Pi 会话内容
-uv run agent-dump deepchat://<session-id>     # 查看 DeepChat 会话内容
-uv run agent-dump minimax://<session-id>      # 查看 MiniMax Code 会话
-uv run agent-dump codex://<session-id> --head # 查看轻量会话元数据，不导出也不打印正文
-uv run agent-dump codex://<session-id> --format json --output ./my-sessions  # 导出 JSON 文件
-uv run agent-dump codex://<session-id> --format markdown --output ./my-sessions  # 导出 Markdown 文件
-uv run agent-dump codex://<session-id> --format print,json --output ./my-sessions # 打印并导出 JSON
-uv run agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # 同时导出多种格式
-uv run agent-dump cursor://<request-id> --format json --output ./my-sessions  # Cursor 支持 JSON 导出
-uv run agent-dump cursor://<request-id> --format print,json --output ./my-sessions # Cursor 打印 + JSON
-uv run agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # 导出包含 AI summary 的 JSON
-uv run agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # 打印并导出带 summary 的 JSON
+agent-dump opencode://<session-id>     # 查看 OpenCode 会话内容
+agent-dump zcode://<session-id>        # 查看 ZCode 会话内容
+agent-dump codex://<session-id>        # 查看 Codex 会话内容
+agent-dump kimi://<session-id>         # 查看 Kimi 会话内容
+agent-dump claude://<session-id>       # 查看 Claude Code 会话内容
+agent-dump cursor://<request-id>       # 查看 Cursor 会话内容
+agent-dump pi://<session-id>           # 查看 Pi 会话内容
+agent-dump deepchat://<session-id>     # 查看 DeepChat 会话内容
+agent-dump minimax://<session-id>      # 查看 MiniMax Code 会话
+agent-dump codex://<session-id> --head # 查看轻量会话元数据，不导出也不打印正文
+agent-dump codex://<session-id> --format json --output ./my-sessions  # 导出 JSON 文件
+agent-dump codex://<session-id> --format markdown --output ./my-sessions  # 导出 Markdown 文件
+agent-dump codex://<session-id> --format print,json --output ./my-sessions # 打印并导出 JSON
+agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # 同时导出多种格式
+agent-dump cursor://<request-id> --format json --output ./my-sessions  # Cursor 支持 JSON 导出
+agent-dump cursor://<request-id> --format print,json --output ./my-sessions # Cursor 打印 + JSON
+agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # 导出包含 AI summary 的 JSON
+agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # 打印并导出带 summary 的 JSON
 
 # 搜索模式（全文搜索）
-uv run agent-dump --search "auth timeout"           # 搜索匹配关键词的会话
-uv run agent-dump --search "认证"                    # 支持 CJK 关键词搜索
-uv run agent-dump --search "auth" --list -days 30   # 与 list + days 组合
-uv run agent-dump --reindex                         # 强制重建搜索索引
+agent-dump --search "auth timeout"           # 搜索匹配关键词的会话
+agent-dump --search "认证"                    # 支持 CJK 关键词搜索
+agent-dump --search "auth" --list -days 30   # 与 list + days 组合
+agent-dump --reindex                         # 强制重建搜索索引
 
 # 说明：搜索结果会展示来源、更新时间、URI、匹配度和高亮命中片段。
 
 # 统计模式
-uv run agent-dump --stats                     # 显示最近 7 天会话统计
-uv run agent-dump --stats -days 30            # 显示最近 30 天会话统计
+agent-dump --stats                     # 显示最近 7 天会话统计
+agent-dump --stats -days 30            # 显示最近 30 天会话统计
 
 # Provider 能力矩阵（只读；--capabilities 是别名）
-uv run agent-dump --providers
+agent-dump --providers
 
 # collect 模式（按时间段汇总并调用 AI 总结）
-uv run agent-dump --collect
-uv run agent-dump --collect -days 7
-uv run agent-dump --collect -since 2026-03-01 -until 2026-03-05
-uv run agent-dump --collect -since 20260301 -until 20260305
-uv run agent-dump --collect --collect-mode insight
-uv run agent-dump --collect --save ./reports
-uv run agent-dump --collect --save ./reports/weekly.md
-uv run agent-dump --collect --save /tmp/agent-dump-reports
-uv run agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
-uv run agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
-uv run agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
-uv run agent-dump --shortcut ob 20260408
+agent-dump --collect
+agent-dump --collect -days 7
+agent-dump --collect -since 2026-03-01 -until 2026-03-05
+agent-dump --collect -since 20260301 -until 20260305
+agent-dump --collect --collect-mode insight
+agent-dump --collect --save ./reports
+agent-dump --collect --save ./reports/weekly.md
+agent-dump --collect --save /tmp/agent-dump-reports
+agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
+agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
+agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
+agent-dump --shortcut ob 20260408
 
 # 说明：--collect 只保留 user/assistant 的可见文本，排除 system/developer/tool 消息、
 #       reasoning、plan、工具调用和工具结果；投影后为空的 session 直接忽略。
@@ -331,14 +340,14 @@ uv run agent-dump --shortcut ob 20260408
 # 说明：--save 接受目录或 .md 文件路径。缺失的非 .md 路径会被当作目录处理。
 
 # 配置模式
-uv run agent-dump --config view
-uv run agent-dump --config edit
+agent-dump --config view
+agent-dump --config edit
 
 # 其他选项
-uv run agent-dump --interactive --format json # 交互式导出 JSON（默认）
-uv run agent-dump --interactive --format markdown   # 交互式导出 Markdown
-uv run agent-dump --interactive --format json,markdown,raw # 交互式多格式导出
-uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
+agent-dump --interactive --format json # 交互式导出 JSON（默认）
+agent-dump --interactive --format markdown   # 交互式导出 Markdown
+agent-dump --interactive --format json,markdown,raw # 交互式多格式导出
+agent-dump --interactive -output ./my-sessions  # 指定输出目录
 
 # 兼容说明
 # md 仍可作为 markdown 的别名使用，例如：--format md,raw
@@ -350,12 +359,12 @@ uv run agent-dump --interactive -output ./my-sessions  # 指定输出目录
 不配置大模型 API，也不依赖 skill，可以直接生成一份外部 agent 能执行的汇总提示词：
 
 ```bash
-uv run agent-dump --collect --emit-prompt \
+agent-dump --collect --emit-prompt \
   -since 20260824 -until 20260830 \
   --collect-mode pm --save ./reports/weekly.md
 
 # 已有 collect shortcut 也可以临时启用
-uv run agent-dump --shortcut ob 20260831 --emit-prompt
+agent-dump --shortcut ob 20260831 --emit-prompt
 ```
 
 上面的命令直接输出提示词。交给 agent 执行时，推荐**首次运行就把 stdout 和 stderr 分别保存到私有文件**，
@@ -365,7 +374,7 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
 (
   umask 077
   collect_task_dir=$(mktemp -d) || exit 1
-  uv run agent-dump --shortcut ob 20260831 --emit-prompt \
+  agent-dump --shortcut ob 20260831 --emit-prompt \
     > "$collect_task_dir/prompt.md" 2> "$collect_task_dir/diagnostics.txt"
   collect_exit_code=$?
   printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
@@ -379,7 +388,7 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
 
 把提示词交给能在原本地环境中执行命令、读取会话和写文件的 agent。
 它包含固定候选清单、逐会话读取命令、工作目录、时区、现有 `pm`/`insight` 报告要求和最终绝对路径。
-读取命令使用生成时的解释器或打包程序，无需另外全局安装 `agent-dump`；需要保留原来的 provider 路径环境变量。
+读取命令使用生成时的原生程序，无需另外全局安装 `agent-dump`；需要保留原来的 provider 路径环境变量。
 如果原运行程序已不可用，应先确认新的可用入口。
 
 - stdout 只输出提示词，诊断走 stderr；`--save` 仍是**最终报告路径**，不是提示词文件路径。
@@ -431,48 +440,9 @@ uv run agent-dump --shortcut ob 20260831 --emit-prompt
 | `-output`, `--output` | 输出目录。`json/raw` 优先级：`--output` > `config.toml` `[export].output` > `./sessions`。相对路径从 agent-dump 执行目录解析。Markdown 仍使用 `./sessions`，除非显式传入 `--output`。`--list` 下会警告并忽略。 | `config export.output` 或 `./sessions` |
 | `-h, --help` | 显示帮助信息 | - |
 
-### 作为库使用
+### Python API 迁移
 
-URI 模式混用 `print` 和文件格式时，print 读取或渲染失败会报告诊断并继续文件导出；标准化解析失败不阻止 raw 复制。任一请求输出成功时退出码为 `0`，全部失败时为 `1`。
-
-OpenCode、ZCode、DeepChat 和 Cherry Studio 按已有 `Session.source_path` 读取和导出，新的 Provider 实例也无需先检查可用性或扫描；源数据库缺失时直接报错，不回退到其他数据库。
-
-这些 Provider 的 head 和列表投影使用同一份发现阶段的 facts，不再补查消息。手动构造的 Session 缺少模型或消息计数时保持未知；需要这些事实时应通过发现入口获取 Session。
-
-SQLite 正文缓存和搜索索引同时跟踪源数据库及其 WAL 文件；即使复用同一个 Session 对象，已提交的正文变化也会使缓存失效。元数据投影仍保留发现时的 facts。
-
-顶层公开 API 与 `agent_dump.__all__` 保持一致：
-
-| 符号 | 说明 |
-|------|------|
-| `__version__` | 包版本号 |
-| `AgentScanner` | 扫描当前 registry 中的全部 provider |
-| `BaseAgent` | Provider 抽象基类 |
-| `Session` | 统一会话数据模型 |
-| `OpenCodeAgent` | OpenCode provider |
-| `ZCodeAgent` | ZCode provider |
-| `CodexAgent` | Codex provider |
-| `KimiAgent` | Kimi provider |
-| `ClaudeCodeAgent` | Claude Code provider |
-| `CursorAgent` | Cursor provider |
-| `PiAgent` | Pi provider |
-
-```python
-from pathlib import Path
-
-from agent_dump import AgentScanner
-
-scanner = AgentScanner()
-
-for agent in scanner.get_available_agents():
-    sessions = agent.get_sessions(days=7)
-    if not sessions:
-        continue
-
-    output_dir = Path("./sessions") / agent.name
-    exported_path = agent.export_session(sessions[0], output_dir)
-    print(f"{agent.display_name}: {exported_path}")
-```
+Rust 版本只发布 CLI。通过子进程调用 `agent-dump`，使用 JSON 导出交换结构化数据。旧 Python API 留在冻结参考源码中，仅用于差分验证；现有 API 使用方升级前应迁移到 CLI，或固定 `agent-dump==0.15.9`。
 
 ### collect 配置文件
 
@@ -532,113 +502,23 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 
 ## 项目结构
 
-```
-.
-├── src/
-│   └── agent_dump/             # 主包目录
-│       ├── __init__.py         # 顶层公开 API
-│       ├── __about__.py        # 单一版本源
-│       ├── __main__.py         # python -m agent_dump 入口
-│       ├── agent_registry.py   # provider 注册表
-│       ├── bounded_concurrency.py # 有界 Future 调度机制
-│       ├── cli.py              # 参数解析与模式分发
-│       ├── cli_shared.py       # CLI 共享工具
-│       ├── command_plan.py     # 将 CLI 参数归一化为单一命令计划
-│       ├── shortcut.py         # 将配置化 shortcut 展开为普通参数
-│       ├── session_workflow.py # list / interactive / query 工作流
-│       ├── uri_workflow.py     # URI 工作流
-│       ├── collect_workflow.py # collect 工作流
-│       ├── maintenance_workflow.py # providers / stats / reindex 工作流
-│       ├── collect.py          # collect 兼容导入入口
-│       ├── collect_dates.py    # collect 日期范围解析
-│       ├── collect_events.py   # collect 事件提取、渲染与 chunk 规划
-│       ├── collect_llm.py      # collect LLM 请求
-│       ├── collect_models.py   # collect 输出模型
-│       ├── collect_output.py   # collect Markdown 输出
-│       ├── collect_logging.py  # collect 私有诊断日志
-│       ├── collect_prompts.py  # collect prompt 构造
-│       ├── collect_handoff.py  # 外部 agent 执行说明与候选会话清单
-│       ├── collect_progress.py # collect 进度上报与 run stats
-│       ├── collect_reduction.py # collect 并发总结与归并
-│       ├── collect_requests.py # collect 重试与结构化响应处理
-│       ├── collect_sessions.py # collect session 过滤、读取与 chunk 规划
-│       ├── collect_summary.py  # collect 摘要 payload 合并与 JSON 提取
-│       ├── coercion.py         # 不可信 provider 标量的容错转换
-│       ├── config.py           # TOML 配置模型与持久化
-│       ├── config_command.py   # 交互式配置命令工作流
-│       ├── date_input.py       # 用户日期输入的共享解析
-│       ├── diagnostics.py      # 失败与可恢复告警的统一结构化诊断
-│       ├── export_paths.py     # 安全导出路径构造
-│       ├── i18n.py             # 语言选择与翻译运行时
-│       ├── i18n_en.py          # 英文翻译目录
-│       ├── i18n_keys.py        # 翻译键定义
-│       ├── i18n_zh.py          # 中文翻译目录
-│       ├── message_filter.py   # 共享消息过滤
-│       ├── paths.py            # 搜索根路径模型
-│       ├── private_files.py     # 本工具创建文件的私有权限
-│       ├── prompt_safety.py    # 摘要 request composition 与 typed data envelope
-│       ├── rendering.py        # print/head/markdown/json/raw 渲染调度
-│       ├── exporting.py        # 统一导出执行与结构化 outcome
-│       ├── output_formats.py   # 输出格式定义与能力校验
-│       ├── query_filter.py     # 查询解析与过滤
-│       ├── query_semantics.py  # Query/Search 字面语义与可搜索语料
-│       ├── search_index.py     # FTS5 搜索索引
-│       ├── scanner.py          # Agent 扫描器
-│       ├── selector.py         # 交互式选择
-│       ├── session_data.py     # 有界请求缓存与批量读取 lease
-│       ├── session_exports.py  # 默认 JSON 与 raw 会话文件写入
-│       ├── session_projection.py # 默认标题、head 与摘要字段投影
-│       ├── session_time_groups.py # 会话年龄区间与本地日界线分组
-│       ├── terminal_output.py  # 终端动态字段安全插值
-│       ├── text_safety.py      # 第三方会话文本的输出净化
-│       ├── time_utils.py       # 时间与时区工具
-│       ├── transcript.py       # 标准化消息的只读读取
-│       ├── uri_support.py      # URI 解析与会话查找
-│       └── agents/             # Provider 模块目录
-│           ├── __init__.py     # Provider 导出
-│           ├── base.py         # BaseAgent 与 Session
-│           ├── opencode.py     # OpenCode Agent
-│           ├── zcode.py        # ZCode Agent
-│           ├── sqlite_sessions.py # OpenCode/ZCode 共享 SQLite 读取机制
-│           ├── claudecode.py   # Claude Code Agent
-│           ├── claude_transcript.py # Claude JSONL 转录解析
-│           ├── codex.py        # Codex Agent
-│           ├── codex_transcript.py # Codex response stream 解析
-│           ├── codex_enrichment.py # Codex subagent 与 skill 增强
-│           ├── codex_patch.py  # Codex apply_patch 解析
-│           ├── cursor.py       # Cursor Agent
-│           ├── cursor_storage.py # Cursor SQLite 只读存储访问
-│           ├── cursor_transcript.py # Cursor 转录解析
-│           ├── kimi.py         # Kimi Agent
-│           ├── kimi_wire.py    # Kimi wire 事件流解析
-│           ├── pi.py           # Pi Agent
-│           ├── file_sessions.py # file-backed provider 共享基类
-│           ├── jsonl_scan.py   # 有界 JSONL 对象扫描与诊断
-│           ├── message_assembly.py # 标准化消息构建器
-│           ├── message_types.py # 标准化消息/会话内部类型
-│           └── title_fallback.py # 共享标题回退规则
-├── tests/                      # 测试目录
-├── skills/agent-dump/          # Codex skill 文档
-├── npm/                        # npm wrapper 与平台包
-├── web/                        # 静态站点
-├── pyproject.toml              # 项目配置
-├── justfile                    # 自动化命令
-├── ruff.toml                   # 代码风格配置
-└── sessions/                   # 默认导出目录
-    └── {agent-name}/           # 按工具分类的导出文件
-        └── ses_xxx.json
+```text
+rust/           # Rust CLI, pinned toolchain, locales and parity tests
+src/agent_dump/ # Frozen Python v0.15.9 reference; excluded from distributions
+tests/          # Python reference and packaging contracts
+scripts/        # Frozen P0 evaluator and paired release eval
+packaging/      # Maturin builds and installation verification
+npm/            # Node launcher and platform packages
+docs/           # Architecture, migration and acceptance evidence
+web/            # Landing page
 ```
 
 ## Development
 
-实验性 Rust 实现在 [`rust/`](rust/README.md) 中开发，目前已接入十个 Provider 的发现、消息装配和单会话导出。Cursor 支持 JSON/print；DeepChat、Cherry Studio、MiniMax 支持 JSON/Markdown/print；其余六个还支持 raw。`--list` 可列出全部可用 Provider，`-q provider:codex,opencode` 在扫描前限制来源，单个 Provider 失败不阻止其他来源。
-
-P2 Provider 与单会话导出验收已完成，包含有界正文缓存、来源变化、坏记录恢复、本地化诊断、极端值与 SQLite 输入兼容。差分套件已在 macOS、Linux、Windows 运行。证据和已知差异见 [P2 最终验收](docs/rust-p2-completion.md)，性能见[配对复测报告](docs/benchmarks/rust-p2-final.md)。实验二进制已实现 Query/Search、Collect、配置、shortcut、批量导出与 Ratatui，见 [P3～P5 验收报告](docs/rust-p3-p5-completion.md)及 [23 场景性能结果](docs/benchmarks/rust-p3-p5.md)，其中包含批量导出的性能回退。发布切换仍属于[迁移计划](docs/rust-migration-plan.md)的 P6。pip/npm 继续安装 Python 实现。
-
-落地页构建、部署及 Cloudflare 免费性能配置见[开发指南](docs/development-guide.md#5-落地页性能与-cloudflare-pages)。
+Rust 是本分支的构建和运行实现，交互界面使用 Ratatui。`src/agent_dump` 保持冻结，只用于差分和性能基准；不进入 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；P6 验收记录见[迁移计划](docs/rust-migration-plan.md)。
 
 ```bash
-# 使用当前 Python 与固定 Rust 工具链运行本地 CI 检查
+# 使用当前 冻结 Python 参考与固定 Rust 工具链运行本地 CI 检查
 # （Node.js 可用时包含 npm 测试，pnpm 可用时包含 landing page 检查）
 just isok
 
@@ -671,7 +551,7 @@ just test-npm-smoke
 
 ```bash
 # 1. 在单一位置更新版本号
-$EDITOR src/agent_dump/__about__.py
+$EDITOR rust/Cargo.toml
 
 # 2. 提交并合并到 main
 
