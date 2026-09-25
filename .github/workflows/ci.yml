@@ -87,6 +87,12 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
 
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: parity-${{ runner.os }}-${{ runner.arch }}
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 0 }}
+
       - name: Check Rust formatting
         if: matrix.shard == 0
         run: cargo fmt --all --check
@@ -113,8 +119,17 @@ jobs:
         run: >-
           uv run --locked python -c
           "import pathlib, subprocess, sys; files = sorted(pathlib.Path('tests/cli').glob('test_*.py'));
-          sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q', '--maxfail=10', *map(str, files[int(sys.argv[1])::4])]))"
+          sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q', '--maxfail=10', '--durations=30', '--junitxml=dist/ci/parity.xml', *map(str, files[int(sys.argv[1])::4])]))"
           ${{ matrix.shard }}
+
+      - name: Upload CLI test timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: parity-${{ matrix.os }}-${{ matrix.shard }}
+          path: dist/ci/parity.xml
+          retention-days: 14
+          if-no-files-found: ignore
 
   web:
     name: Check landing page

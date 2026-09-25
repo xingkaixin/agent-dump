@@ -38,6 +38,12 @@ Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 h
 
 `just fmt` 格式化整个 Rust workspace 和 Python 验证工具，`just fmt-check` 只检查格式；`just lint-format` 保留为 `fmt` 的别名。`just lint` 执行 Rustfmt、Clippy 和 Ruff；`just check` 执行 Cargo check 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 执行同一套 CLI 契约；第 0 组同时执行 Rust 单元测试和工具验证。四目标安装 CI 另行检查 pip/uv tool/uvx 与 npm/npx/bunx。
 
+### CI 构建缓存与耗时报告
+
+Rust 依赖缓存按 OS、架构和构建用途隔离。CLI 分片共享 parity 缓存，由 main 的第 0 组写入；四目标打包使用独立 packaging 缓存，由 main 写入。PR 只恢复已有缓存，首次运行或工具链/依赖变化时仍可能冷编译。
+
+CLI 分片输出最慢 30 项测试及 `dist/ci/parity.xml`，CI 将报告上传为 `parity-<os>-<shard>` artifact，保留 14 天。JUnit 时间包含 setup、call 和 teardown，可用于重新分配分片；固定 Python 对照与三平台测试覆盖保持不变。
+
 ### Rust 格式与 lint
 
 `rustfmt.toml` 使用 edition 2024、80 列、字段初始化和 `?` 简写，只启用 stable 选项。Rustfmt 无法重排的宏内文本与长字符串不强行拆分。
