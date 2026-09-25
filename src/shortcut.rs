@@ -1,4 +1,4 @@
-use crate::i18n::terminal;
+use agent_dump_core::output::i18n::terminal;
 use std::collections::HashMap;
 use std::ffi::OsString;
 
@@ -17,10 +17,17 @@ pub fn expand(args: Vec<OsString>, zh: bool) -> crate::Result<Vec<OsString>> {
     let end = (index + 2..args.len())
         .find(|&i| args[i].to_string_lossy().starts_with('-'))
         .unwrap_or(args.len());
-    let config = crate::config::Config::load()?;
+    let config = agent_dump_core::config::Config::load()?;
     config.require_valid(zh)?;
-    let Some((_, shortcut)) = config.shortcuts().into_iter().find(|(n, _)| n == name) else {
-        return Err(terminal("SHORTCUT_NOT_FOUND", zh, &[("name", name.into())]).into());
+    let Some((_, shortcut)) =
+        config.shortcuts().into_iter().find(|(n, _)| n == name)
+    else {
+        return Err(terminal(
+            "SHORTCUT_NOT_FOUND",
+            zh,
+            &[("name", name.into())],
+        )
+        .into());
     };
     let count = end - index - 2;
     if count != shortcut.params.len() {
@@ -64,7 +71,11 @@ pub fn expand(args: Vec<OsString>, zh: bool) -> crate::Result<Vec<OsString>> {
     Ok(expanded)
 }
 
-fn render(template: &str, variables: &HashMap<String, String>, zh: bool) -> crate::Result<String> {
+fn render(
+    template: &str,
+    variables: &HashMap<String, String>,
+    zh: bool,
+) -> crate::Result<String> {
     let invalid = || terminal("SHORTCUT_TEMPLATE_INVALID", zh, &[]);
     let mut chars = template.chars().peekable();
     let mut output = String::new();
@@ -80,13 +91,15 @@ fn render(template: &str, variables: &HashMap<String, String>, zh: bool) -> crat
                     match chars.next() {
                         Some('}') => break,
                         Some(':') if chars.next() == Some('}') => break,
-                        Some('{' | ':' | '!') | None => return Err(invalid().into()),
+                        Some('{' | ':' | '!') | None => {
+                            return Err(invalid().into());
+                        }
                         Some(c) => key.push(c),
                     }
                 }
-                let value = variables
-                    .get(&key)
-                    .ok_or_else(|| terminal("SHORTCUT_UNKNOWN_VARIABLE", zh, &[("name", key)]))?;
+                let value = variables.get(&key).ok_or_else(|| {
+                    terminal("SHORTCUT_UNKNOWN_VARIABLE", zh, &[("name", key)])
+                })?;
                 output.push_str(value);
             }
             '}' => return Err(invalid().into()),
@@ -94,7 +107,9 @@ fn render(template: &str, variables: &HashMap<String, String>, zh: bool) -> crat
         }
     }
     if output.starts_with('~') {
-        output = crate::source_io::path_text(&crate::config::expand_home(&output)?);
+        output = agent_dump_core::storage::source_io::path_text(
+            &agent_dump_core::config::expand_home(&output)?,
+        );
     }
     Ok(output)
 }

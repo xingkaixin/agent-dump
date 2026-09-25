@@ -89,15 +89,15 @@ jobs:
 
       - name: Check Rust formatting
         if: matrix.shard == 0
-        run: cargo fmt --check
+        run: cargo fmt --all --check
 
       - name: Check Rust types
         if: matrix.shard == 0
-        run: cargo clippy --locked --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Test Rust
         if: matrix.shard == 0
-        run: cargo test --locked
+        run: cargo test --locked --workspace
 
       - name: Build Rust
         run: cargo build --locked --release

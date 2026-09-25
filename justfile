@@ -3,9 +3,10 @@
 default:
     @just --list --unsorted
 
-# Check Rust formatting and Python tooling style
+# Check Rust formatting, Clippy and Python tooling style
 lint: lint-tools
-    cargo fmt --check
+    cargo fmt --all --check
+    cargo clippy --locked --workspace --all-targets -- -D warnings
 
 lint-tools:
     @echo "🔍 Running code linting..."
@@ -20,15 +21,21 @@ lint-fix:
     @echo "✅ Lint fixes applied!"
 
 # Format Rust and Python verification tools
-lint-format:
+fmt:
     @echo "🎨 Formatting code..."
-    cargo fmt
+    cargo fmt --all
     uv run ruff format .
     @echo "✅ Code formatting complete!"
 
+lint-format: fmt
+
+fmt-check:
+    cargo fmt --all --check
+    uv run ruff format --check .
+
 # Run type checking for Rust and verification tools
 check: check-tools
-    cargo clippy --locked --all-targets -- -D warnings
+    cargo check --locked --workspace --all-targets
 
 check-tools:
     @echo "🔍 Running type checks..."
@@ -37,7 +44,7 @@ check-tools:
 
 # Verify Rust units and the isolated CLI/tooling contracts
 test: reference build-rust
-    cargo test --locked
+    cargo test --locked --workspace
     uv run pytest -q
 
 # Install the frozen external Python CLI for differential verification
@@ -50,9 +57,9 @@ benchmark *args: build-rust
 
 # Check the Rust CLI and compare it with Python on synthetic data
 check-rust: reference
-    cargo fmt --check
-    cargo clippy --locked --all-targets -- -D warnings
-    cargo test --locked
+    cargo fmt --all --check
+    cargo clippy --locked --workspace --all-targets -- -D warnings
+    cargo test --locked --workspace
     cargo build --locked --release
     uv run pytest -q tests/cli
 

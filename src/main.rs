@@ -1,80 +1,16 @@
-mod cherry;
-mod claude;
-mod claude_transcript;
 mod cli_args;
-mod codex;
-mod codex_enrichment;
-mod codex_patch;
-mod codex_transcript;
-mod collect_events;
-mod collect_handoff;
-mod collect_log;
-mod collect_model;
-mod collect_progress;
-mod collect_prompts;
-mod collect_reduction;
-mod collect_sessions;
-mod collect_summary;
-mod collect_workflow;
+mod collect;
 mod command;
-mod config;
-mod config_command;
-mod cursor;
-mod cursor_transcript;
 mod date_input;
-mod deepchat;
-mod desktop;
-mod diagnostics;
-mod export;
-mod file_sessions;
-mod i18n;
-mod interactive_workflow;
-mod jsonl;
-mod kimi;
-mod kimi_transcript;
-mod kimi_wire;
-mod list_workflow;
-mod llm;
-mod maintenance;
-mod message_assembly;
-mod minimax;
-mod opencode_v2;
-mod output_formats;
-mod pi;
-mod pi_transcript;
-mod private_files;
-mod provider;
-mod provider_error;
-mod python_json;
-mod query;
-mod query_filter;
-mod query_text;
-mod registry;
-mod render;
-mod scanner;
-mod search_index;
-mod selector;
-mod session;
-mod session_data;
 mod shortcut;
-mod source_io;
-#[cfg(test)]
-mod source_tests;
-mod sqlite;
-mod sqlite_legacy;
-mod sqlite_provider;
-mod timestamp;
-mod title;
-mod transcript;
-mod tui;
-mod uri_workflow;
-mod value;
+mod terminal;
+mod workflows;
 
 use cli_args::normalize_arguments;
 use std::io::{self, Write};
 
-pub type Error = Box<dyn std::error::Error + Send + Sync>;
-pub type Result<T> = std::result::Result<T, Error>;
+use agent_dump_core::output::diagnostics;
+pub use agent_dump_core::{Error, Result};
 
 fn main() -> std::process::ExitCode {
     let arguments = normalize_arguments(std::env::args_os().collect());
@@ -96,7 +32,10 @@ fn main() -> std::process::ExitCode {
         Ok(args) => args,
         Err(error) => {
             let _ = error.print();
-            return std::process::ExitCode::from(error.exit_code() as u8);
+            return std::process::ExitCode::from(
+                u8::try_from(error.exit_code())
+                    .expect("Clap exit codes are 0 or 2"),
+            );
         }
     };
     let emit = args.emit_prompt;
@@ -111,7 +50,10 @@ fn main() -> std::process::ExitCode {
         Err(error) => {
             if let Some(error) = error.downcast_ref::<clap::Error>() {
                 let _ = error.print();
-                return std::process::ExitCode::from(error.exit_code() as u8);
+                return std::process::ExitCode::from(
+                    u8::try_from(error.exit_code())
+                        .expect("Clap exit codes are 0 or 2"),
+                );
             }
             if error
                 .downcast_ref::<io::Error>()
@@ -119,7 +61,9 @@ fn main() -> std::process::ExitCode {
             {
                 return std::process::ExitCode::SUCCESS;
             }
-            let diagnostic = diagnostics::Diagnostic::unexpected(error.as_ref(), zh).render(zh);
+            let diagnostic =
+                diagnostics::Diagnostic::unexpected(error.as_ref(), zh)
+                    .render(zh);
             if emit {
                 eprint!("{diagnostic}");
             } else {

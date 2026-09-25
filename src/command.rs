@@ -1,8 +1,17 @@
+use crate::Result;
 use crate::cli_args::Args;
-use crate::{
-    Result, collect_model, collect_workflow, config_command, diagnostics, i18n, list_workflow,
-    maintenance, output_formats, query, query_text, render, uri_workflow,
-};
+use crate::collect::model as collect_model;
+use crate::workflows::collect as collect_workflow;
+use crate::workflows::config as config_command;
+use crate::workflows::list as list_workflow;
+use crate::workflows::maintenance;
+use crate::workflows::uri as uri_workflow;
+use agent_dump_core::output::diagnostics;
+use agent_dump_core::output::formats as output_formats;
+use agent_dump_core::output::i18n;
+use agent_dump_core::output::render;
+use agent_dump_core::query;
+use agent_dump_core::query::text as query_text;
 use std::io::{self, Write};
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -51,7 +60,8 @@ fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
         }
     }
     if (!query_uri || args.collect)
-        && (args.days.is_some() || args.query.as_ref().is_some_and(|s| !s.is_empty()))
+        && (args.days.is_some()
+            || args.query.as_ref().is_some_and(|s| !s.is_empty()))
     {
         result.push((Mode::List, ""));
     }
@@ -69,7 +79,9 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         || {
             ["LC_ALL", "LC_MESSAGES", "LANG"]
                 .iter()
-                .find_map(|key| std::env::var(key).ok().filter(|v| !v.is_empty()))
+                .find_map(|key| {
+                    std::env::var(key).ok().filter(|v| !v.is_empty())
+                })
                 .is_some_and(|v| v.starts_with("zh"))
         },
         |lang| lang == "zh",
@@ -90,10 +102,16 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
     } else if args.emit_prompt && args.dry_run {
         Some("COLLECT_ACTION_CONFLICT")
     } else if mode == Mode::Collect
-        && (args.list || args.interactive || (args.uri.is_some() && !query_uri_requested))
+        && (args.list
+            || args.interactive
+            || (args.uri.is_some() && !query_uri_requested))
     {
         Some("COLLECT_MODE_CONFLICT")
-    } else if mode == Mode::Uri && args.head && args.summary && args.format.is_none() {
+    } else if mode == Mode::Uri
+        && args.head
+        && args.summary
+        && args.format.is_none()
+    {
         Some("URI_HEAD_WITH_SUMMARY_ERROR")
     } else {
         None
@@ -141,14 +159,19 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
     }
     if matches!(
         mode,
-        Mode::Collect | Mode::Stats | Mode::Reindex | Mode::List | Mode::Interactive
+        Mode::Collect
+            | Mode::Stats
+            | Mode::Reindex
+            | Mode::List
+            | Mode::Interactive
     ) && let Some(days) = args.days
     {
-        let maximum = jiff::Zoned::now()
-            .date()
-            .since((jiff::Unit::Day, jiff::civil::date(1, 1, 1)))?
-            .get_days() as i64
-            + 1;
+        let maximum = i64::from(
+            jiff::Zoned::now()
+                .date()
+                .since((jiff::Unit::Day, jiff::civil::date(1, 1, 1)))?
+                .get_days(),
+        ) + 1;
         if days <= 0 || days >= maximum {
             return Err(clap::Error::raw(
                 clap::error::ErrorKind::ValueValidation,
@@ -181,7 +204,8 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         args.query
             .as_deref()
             .filter(|q| {
-                !matches!(mode, Mode::Uri | Mode::Reindex) && (mode != Mode::Stats || !q.is_empty())
+                !matches!(mode, Mode::Uri | Mode::Reindex)
+                    && (mode != Mode::Stats || !q.is_empty())
             })
             .map(|raw| query::Query::parse(raw, zh))
             .transpose()
@@ -192,15 +216,20 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             write!(
                 plan_out,
                 "{}",
-                diagnostics::Diagnostic::query_error(&error.to_string(), query_uri, false, zh)
-                    .render(zh)
+                diagnostics::Diagnostic::query_error(
+                    &error.to_string(),
+                    query_uri,
+                    false,
+                    zh
+                )
+                .render(zh)
             )?;
             return Ok(false);
         }
     };
     if mode == Mode::Collect {
         return collect_workflow::run(
-            collect_model::Operation {
+            &collect_model::Operation {
                 days: args.days,
                 since: args.since,
                 until: args.until,
@@ -222,7 +251,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
     }
     if matches!(mode, Mode::Stats | Mode::Reindex) {
         return maintenance::run(
-            query,
+            query.as_ref(),
             args.days.unwrap_or(7),
             mode == Mode::Reindex,
             zh,
@@ -244,12 +273,16 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             output_formats::parse(spec).map_err(|_| {
                 clap::Error::raw(
                     clap::error::ErrorKind::ValueValidation,
-                    i18n::t("CLI_FORMAT_INVALID", zh, &[("value", spec.clone())]),
+                    i18n::t(
+                        "CLI_FORMAT_INVALID",
+                        zh,
+                        &[("value", spec.clone())],
+                    ),
                 )
             })?;
         }
         return list_workflow::run(
-            query,
+            query.as_ref(),
             args.days.unwrap_or(7),
             !args.no_metadata_summary,
             (args.format.is_some(), args.output.is_some()),
@@ -259,7 +292,8 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         );
     }
     if mode == Mode::Interactive {
-        let formats = output_formats::parse(args.format.as_deref().unwrap_or("json"))?;
+        let formats =
+            output_formats::parse(args.format.as_deref().unwrap_or("json"))?;
         if formats.contains(&output_formats::OutputFormat::Print) {
             write!(
                 out,
@@ -268,8 +302,8 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             )?;
             return Ok(false);
         }
-        return crate::interactive_workflow::run(
-            crate::interactive_workflow::Operation {
+        return crate::workflows::interactive::run(
+            &crate::workflows::interactive::Operation {
                 query,
                 days: args.days.unwrap_or(7),
                 formats,
@@ -317,7 +351,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         })?
     };
     uri_workflow::run(
-        uri_workflow::UriOperation {
+        &uri_workflow::UriOperation {
             uri,
             head: args.head,
             summary: args.summary,

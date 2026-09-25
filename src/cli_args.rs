@@ -1,4 +1,4 @@
-use crate::collect_model;
+use crate::collect::model as collect_model;
 use clap::{CommandFactory, FromArgMatches, Parser};
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -9,6 +9,10 @@ use std::path::PathBuf;
     version,
     args_override_self = true,
     infer_long_args = true
+)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Independent CLI flags are validated together by command planning"
 )]
 pub struct Args {
     pub uri: Option<String>,
@@ -80,7 +84,7 @@ pub fn normalize_arguments(args: Vec<OsString>) -> Vec<OsString> {
             let value = arg.to_string_lossy();
             let (name, equals) = value
                 .split_once('=')
-                .map_or((value.as_ref(), None), |(k, v)| (k, Some(v)));
+                .map_or_else(|| (value.as_ref(), None), |(k, v)| (k, Some(v)));
             let normalized = match name {
                 "-days" => "--days",
                 "-query" => "--query",
@@ -123,7 +127,7 @@ pub fn normalize_arguments(args: Vec<OsString>) -> Vec<OsString> {
 
 pub fn command(zh: bool) -> clap::Command {
     let mut command = Args::command()
-        .about(crate::i18n::t("CLI_DESC", zh, &[]))
+        .about(agent_dump_core::output::i18n::t("CLI_DESC", zh, &[]))
         .disable_version_flag(true)
         .arg(
             clap::Arg::new("version")
@@ -164,7 +168,11 @@ pub fn command(zh: bool) -> clap::Command {
         ("version", "VERSION"),
     ] {
         command = command.mut_arg(id, |arg| {
-            arg.help(crate::i18n::t(&format!("CLI_{key}_HELP"), zh, &[]))
+            arg.help(agent_dump_core::output::i18n::t(
+                &format!("CLI_{key}_HELP"),
+                zh,
+                &[],
+            ))
         });
     }
     command.after_help(if zh {
@@ -174,7 +182,10 @@ pub fn command(zh: bool) -> clap::Command {
     })
 }
 
-pub fn parse(arguments: Vec<OsString>, zh: bool) -> std::result::Result<Args, clap::Error> {
+pub fn parse(
+    arguments: Vec<OsString>,
+    zh: bool,
+) -> std::result::Result<Args, clap::Error> {
     let matches = command(zh).try_get_matches_from(arguments)?;
     Args::from_arg_matches(&matches)
 }
@@ -200,7 +211,9 @@ pub fn language(arguments: &[OsString]) -> bool {
         || {
             ["LC_ALL", "LC_MESSAGES", "LANG"]
                 .iter()
-                .find_map(|key| std::env::var(key).ok().filter(|value| !value.is_empty()))
+                .find_map(|key| {
+                    std::env::var(key).ok().filter(|value| !value.is_empty())
+                })
                 .is_some_and(|value| value.to_lowercase().starts_with("zh"))
         },
         |value| value == "zh",

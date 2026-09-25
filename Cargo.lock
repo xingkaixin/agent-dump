@@ -12,14 +12,30 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 name = "agent-dump"
 version = "0.15.9"
 dependencies = [
+ "agent-dump-core",
  "caseless",
  "clap",
  "crossterm",
  "jiff",
+ "ratatui",
+ "regex",
+ "serde",
+ "serde_json",
+ "unicode-normalization",
+ "unicode-width",
+ "ureq",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "agent-dump-core"
+version = "0.0.0"
+dependencies = [
+ "jiff",
  "md-5",
  "nix",
  "num-bigint",
- "ratatui",
  "regex",
  "rusqlite",
  "serde",
@@ -27,11 +43,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml_edit",
- "unicode-normalization",
- "unicode-width",
- "ureq",
  "url",
- "uuid",
  "walkdir",
 ]
 

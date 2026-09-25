@@ -1,15 +1,27 @@
-[package]
-name = "agent-dump"
-version = "0.15.9"
-edition = "2024"
-rust-version = "1.90"
-publish = false
-include = ["/src/**", "/resources/**", "/Cargo.toml", "/Cargo.lock", "/rust-toolchain.toml", "/README.md", "/LICENSE"]
-description = "AI Coding Assistant Session Export Tool"
-license = "MIT"
-repository = "https://github.com/xingkaixin/agent-dump"
+[workspace]
+members = [".", "crates/agent-dump-core"]
+default-members = [".", "crates/agent-dump-core"]
+resolver = "3"
 
-[dependencies]
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+# Line counts grow with 80-column formatting; keep cohesive schema/dispatch flows together.
+too_many_lines = "allow"
+# Explicit branches are clearer than nested map_or_else closures in schema decoding.
+option_if_let_else = "allow"
+# Similar names often reflect paired provider fields (created/updated, input/output).
+similar_names = "allow"
+
+[workspace.dependencies]
 jiff = "0.2"
 md-5 = "0.10"
 clap = { version = "4", features = ["derive", "string"] }
@@ -31,6 +43,34 @@ ratatui = { version = "0.30.2", default-features = false, features = ["crossterm
 crossterm = "0.29"
 unicode-width = "0.2"
 unicode-normalization = "0.1"
-
-[target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", default-features = false, features = ["fs", "user"] }
+
+[package]
+name = "agent-dump"
+version = "0.15.9"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+include = ["/src/**", "/resources/**", "/Cargo.toml", "/Cargo.lock", "/rust-toolchain.toml", "/rustfmt.toml", "/README.md", "/LICENSE"]
+description = "AI Coding Assistant Session Export Tool"
+license = "MIT"
+repository = "https://github.com/xingkaixin/agent-dump"
+
+[lints]
+workspace = true
+
+[dependencies]
+agent-dump-core = { path = "crates/agent-dump-core" }
+jiff.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+ureq.workspace = true
+url.workspace = true
+caseless.workspace = true
+uuid.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+unicode-width.workspace = true
+unicode-normalization.workspace = true

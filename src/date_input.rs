@@ -19,7 +19,7 @@ pub fn parse(raw: &str) -> Option<Date> {
             .as_str()
             .trim()
             .chars()
-            .map(crate::value::decimal_digit)
+            .map(agent_dump_core::compat::value::decimal_digit)
             .collect::<String>()
     };
     let date = Date::new(
@@ -38,8 +38,15 @@ pub fn collect_range(
     zh: bool,
 ) -> crate::Result<(Date, Date)> {
     let today = jiff::Zoned::now().date();
-    let parse =
-        |raw| parse(raw).ok_or_else(|| crate::i18n::t("COLLECT_DATE_FORMAT_INVALID", zh, &[]));
+    let parse = |raw| {
+        parse(raw).ok_or_else(|| {
+            agent_dump_core::output::i18n::t(
+                "COLLECT_DATE_FORMAT_INVALID",
+                zh,
+                &[],
+            )
+        })
+    };
     let since = since.filter(|s| !s.is_empty());
     let until = until.filter(|s| !s.is_empty());
     let (start, end) = match (since, until) {
@@ -55,7 +62,12 @@ pub fn collect_range(
         }
     };
     if start > end {
-        return Err(crate::i18n::t("COLLECT_DATE_RANGE_INVALID", zh, &[]).into());
+        return Err(agent_dump_core::output::i18n::t(
+            "COLLECT_DATE_RANGE_INVALID",
+            zh,
+            &[],
+        )
+        .into());
     }
     Ok((start, end))
 }
