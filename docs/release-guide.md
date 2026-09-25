@@ -40,7 +40,8 @@ git log $(git describe --tags --abbrev=0)..HEAD --oneline
    [package]
    version = "X.Y.Z"
    ```
-2. 运行 npm workspace 版本同步命令：
+2. 在仓库根运行 `cargo check --workspace`，同步 `Cargo.lock` 中的产品版本。
+3. 运行 npm workspace 版本同步命令：
    ```bash
    just build-npm
    ```
@@ -132,7 +133,7 @@ just isok
 
 ## Rust 制品与验收
 
-本分支准备 Rust 切换，尚未发布。当前 0.15.9 用于与冻结参考比较，不得用于发布新的 Rust 制品。用户确定新版本后，先改 `Cargo.toml`，在仓库根更新 Cargo.lock，再运行 `just build-npm` 同步所有 npm 包；外部 Python 参考继续固定为 0.15.9。
+v1.0.0 是首个 Rust 发布目标。Cargo 与 npm 产品版本同步为 1.0.0；外部 Python 差分参考继续固定为 0.15.9，不随产品发版升级。不得以已发布的 0.15.9 发布 Rust 制品。版本准备不代表已发布；合并与 tag 仍由用户控制。
 
 - `pyproject.toml` 使用 Maturin `bin`，版本取自 Cargo；wheel 只安装原生 `agent-dump`，没有 Python API、模块入口或 Python runtime dependencies。
 - 旧 Python 应用已移出主树，差分参考由 `tests/reference/requirements.txt` 固定并独立安装。旧 API 使用方可固定 Python 0.15.9。

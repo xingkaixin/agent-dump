@@ -227,9 +227,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.0.0",
+        date: "2026-09-25",
+        isLatest: true,
+        title: "Native Rust CLI for AI Session Workflows",
+        description:
+          "v1.0.0 brings a native Rust CLI to AI session export, full-text search, AI collect, and prompt handoff for Codex, Claude Code, Cursor, and other supported tools. Keep your CLI workflows with improved startup and export performance. Python imports and python -m agent_dump are removed; API users can pin 0.15.9.",
+        command: "npx @agent-dump/cli@1.0.0 --help",
+        tags: ["Rust CLI", "Session Export", "Full-Text Search"],
+      },
+      {
         version: "v0.15.9",
         date: "2026-09-24",
-        isLatest: true,
         title: "Export and Search OpenCode 2.x Sessions",
         description:
           "Keep using AI session export, full-text search, and AI collect after upgrading to OpenCode 2.x. Save conversations as Markdown or JSON, access legacy-only sessions alongside newer ones, and select a custom or channel database with OPENCODE_DB. Session data stays unchanged.",
@@ -381,9 +390,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.0.0",
+        date: "2026-09-25",
+        isLatest: true,
+        title: "原生 Rust CLI：会话工作流迈入 v1.0.0",
+        description:
+          "v1.0.0 使用原生 Rust CLI，保留 Codex、Claude Code、Cursor 等工具的 AI 会话导出、全文搜索、AI collect 和提示词交接，改善启动与导出性能。Python 导入 API 和 python -m agent_dump 已移除；旧 API 使用方可固定 0.15.9。",
+        command: "npx @agent-dump/cli@1.0.0 --help",
+        tags: ["Rust CLI", "会话导出", "全文搜索"],
+      },
+      {
         version: "v0.15.9",
         date: "2026-09-24",
-        isLatest: true,
         title: "导出与搜索 OpenCode 2.x 会话",
         description:
           "升级到 OpenCode 2.x 后，继续使用 AI 会话导出、全文搜索和 AI collect。可将对话保存为 Markdown 或 JSON，同时读取新版会话与旧版独有会话，并通过 OPENCODE_DB 选择自定义或 channel 数据库。源会话数据保持不变。",
@@ -535,9 +553,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.0.0",
+        date: "2026-09-25",
+        isLatest: true,
+        title: "AI セッションのワークフローをネイティブ Rust CLI で",
+        description:
+          "v1.0.0 はネイティブ Rust CLI に移行。Codex、Claude Code、Cursor などの AI セッションエクスポート、全文検索、AI collect、プロンプト引き継ぎを維持し、起動とエクスポートの性能を改善します。Python API と python -m agent_dump は削除されるため、旧 API が必要な場合は 0.15.9 に固定できます。",
+        command: "npx @agent-dump/cli@1.0.0 --help",
+        tags: ["Rust CLI", "セッションエクスポート", "全文検索"],
+      },
+      {
         version: "v0.15.9",
         date: "2026-09-24",
-        isLatest: true,
         title: "OpenCode 2.x のセッションをエクスポート・検索",
         description:
           "OpenCode 2.x へのアップグレード後も、AIセッションのエクスポート、全文検索、AI collect を利用できます。対話を Markdown や JSON に保存し、新しいセッションと旧形式にのみ残るセッションをまとめて参照。OPENCODE_DB でカスタム・チャネル別データベースを選択でき、元のセッションデータは変更しません。",

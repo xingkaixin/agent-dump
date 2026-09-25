@@ -72,7 +72,7 @@ OpenCode supports legacy SQLite and 2.x `session_v2/session_message`. When both 
 
 ## Installation
 
-This branch switches distribution artifacts to Rust. Published 0.15.9 remains Python until a new Rust release is published. Rust wheels provide only the `agent-dump` command: Python imports and `python -m agent_dump` are no longer included. Applications using the old API can pin `agent-dump==0.15.9`.
+Starting with v1.0.0, distribution artifacts use Rust. Version 0.15.9 is the last Python release. Rust wheels provide only the `agent-dump` command: Python imports and `python -m agent_dump` are no longer included. Applications using the old API can pin `agent-dump==0.15.9`.
 
 Prebuilt artifacts support macOS x64/arm64, Linux x64 (glibc ≥ 2.17), and Windows x64. Linux musl/Alpine has no prebuilt wheel. Wheel installation needs no Rust compiler; building from Git/sdist requires Rust 1.90.0 and a C toolchain.
 
@@ -536,7 +536,7 @@ web/            # Landing page
 
 ## Development
 
-Rust is the build and runtime implementation on this branch, with Ratatui for terminal interaction. The old Python application has been removed from the working tree. Differential tests install the immutable 0.15.9 wheel in an isolated reference environment. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), [P6 acceptance](docs/rust-p6-completion.md), and the [final performance report](docs/benchmarks/rust-p6.md).
+Rust is the build and runtime implementation starting with v1.0.0, with Ratatui for terminal interaction. The old Python application has been removed from the working tree. Differential tests install the immutable 0.15.9 wheel in an isolated reference environment. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), [P6 acceptance](docs/rust-p6-completion.md), and the [final performance report](docs/benchmarks/rust-p6.md).
 
 ```bash
 # Run Cargo directly from the repository root

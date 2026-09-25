@@ -72,7 +72,7 @@ OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共
 
 ## 安装
 
-本分支将安装制品切换为 Rust；已发布的 0.15.9 仍为 Python，直到新的 Rust 版本正式发布。Rust wheel 仅提供 `agent-dump` 命令，不包含 Python 导入 API，也不提供 `python -m agent_dump`。依赖旧 API 的程序可固定 `agent-dump==0.15.9`。
+从 v1.0.0 起，安装制品切换为 Rust；0.15.9 是最后一个 Python 版本。Rust wheel 仅提供 `agent-dump` 命令，不包含 Python 导入 API，也不提供 `python -m agent_dump`。依赖旧 API 的程序可固定 `agent-dump==0.15.9`。
 
 支持 macOS x64/arm64、Linux x64（glibc ≥ 2.17）和 Windows x64。Linux musl/Alpine 没有预构建 wheel。wheel 安装无需 Rust 编译器；从 Git/sdist 构建需要 Rust 1.90.0 和 C 工具链。
 
@@ -518,7 +518,7 @@ web/            # Landing page
 
 ## Development
 
-Rust 是本分支的构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树，差分验证在独立环境安装固定的 0.15.9 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
+从 v1.0.0 起，Rust 是构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树，差分验证在独立环境安装固定的 0.15.9 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
 
 ```bash
 # 从仓库根直接运行 Cargo

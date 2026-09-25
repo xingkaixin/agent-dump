@@ -47,7 +47,7 @@ nix = { version = "0.31", default-features = false, features = ["fs", "user"] }
 
 [package]
 name = "agent-dump"
-version = "0.15.9"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.90"
 publish = false
