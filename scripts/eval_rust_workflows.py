@@ -3,6 +3,7 @@
 import argparse
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
+import gc
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -130,6 +131,8 @@ def local_model(delay: float):
 def evaluate(command: list[str], name: str, profile_name: str, root: Path) -> tuple[dict, dict]:
     profile = PROFILES[profile_name]
     environment = create_fixture(root, profile)
+    # Release the frozen fixture's SQLite handles before timing and temporary-directory cleanup.
+    gc.collect()
     environment.pop("PYTHONPATH", None)
     all_dates = ("-d", "36500")
     expected = expected_uris(profile, provider="codex", matching=True)

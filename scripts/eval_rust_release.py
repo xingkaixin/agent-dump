@@ -4,6 +4,7 @@ import argparse
 from contextlib import ExitStack
 from dataclasses import asdict
 from datetime import datetime, timezone
+import gc
 import hashlib
 import json
 from pathlib import Path
@@ -46,6 +47,8 @@ def main() -> None:
         for candidate, command in commands.items():
             root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="agent-dump-paired-"))).resolve()
             environment = create_fixture(root, profile)
+            # Release the frozen fixture's SQLite handles before timing and temporary-directory cleanup.
+            gc.collect()
             environment.pop("PYTHONPATH", None)
             contexts[candidate] = (root, environment)
             _, version = run_sample(command, Case("version", ("--version",), "version"), root, environment, timeout=180)

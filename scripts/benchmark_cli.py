@@ -3,6 +3,7 @@
 import argparse
 from dataclasses import asdict
 from datetime import datetime, timezone
+import gc
 import hashlib
 import json
 import os
@@ -294,6 +295,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="agent-dump-benchmark-") as temporary:
         root = Path(temporary).resolve()
         environment = create_fixture(root, profile)
+        # The frozen fixture leaves SQLite handles for cyclic GC; release them before timing and cleanup.
+        gc.collect()
         environment.pop("PYTHONPATH", None)
         report["source_manifest"] = source_manifest(root)
         _, version = run_sample(

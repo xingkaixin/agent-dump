@@ -77,4 +77,4 @@ P6 验收时的 Python 生产源码与 benchmark 保存在对应历史提交中�
 
 本次清理的本地 `just isok` 完整通过：44 项 Rust 单元测试、1,652 项 CLI/工具验证、74 项 npm 测试、13 项 Web E2E。macOS arm64 制品通过 Python 3.10/3.14 下的 pip、uv tool、uvx，以及 npm、npx、bunx 安装与读取/导出验证。sdist 从根目录构建且仅包含 99 个必要文件，不含旧 Python 应用、开发环境或网站依赖。
 
-17＋6 场景重新执行 smoke 校验全部通过；此轮用于验证评估工具的目录迁移，不产生新的性能结论。原始 fixture、结果断言、计时器和历史原始报告保持不变；入口及编排路径有调整，未来正式测量须重新配对，不能绕过 evaluator hash 比较。三平台 CLI 与四目标安装的最新状态见 [PR 检查](https://github.com/xingkaixin/agent-dump/pull/396/checks)。
+17＋6 场景重新执行 smoke 校验全部通过；此轮用于验证评估工具的目录迁移，不产生新的性能结论。Windows 工具检查发现旧 fixture 的 SQLite 句柄会阻止临时目录清理；编排入口现在于计时前回收这些句柄。原始 fixture、结果断言、计时器和历史原始报告保持不变；入口及编排路径有调整，未来正式测量须重新配对，不能绕过 evaluator hash 比较。三平台 CLI 与四目标安装的最新状态见 [PR 检查](https://github.com/xingkaixin/agent-dump/pull/396/checks)。
