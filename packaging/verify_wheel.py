@@ -3,6 +3,7 @@
 import argparse
 from collections.abc import Mapping
 from email.parser import BytesParser
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -44,6 +45,7 @@ def validate_wheel(wheel: Path, expected_version: str | None) -> str:
 def verify_wheel(wheel: Path, expected_version: str | None = None, python: str = sys.executable) -> None:
     wheel = wheel.resolve()
     expected_version = validate_wheel(wheel, expected_version)
+    python = run_command(["uv", "python", "find", python], cwd=REPO_ROOT, env=os.environ).strip()
     with tempfile.TemporaryDirectory(prefix="agent-dump-wheel-") as directory:
         root = Path(directory)
         environment = build_isolated_environment(root, root / "codex")
