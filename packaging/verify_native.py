@@ -186,7 +186,7 @@ def verify_command(
         output_dir = root / "exports"
         runner(
             [*command, uri, "--format", "json", "--output", str(output_dir), "--lang", "en"],
-            cwd=root,
+            cwd=command_cwd or root,
             env=environment,
         )
         validate_export(output_dir, session_id)

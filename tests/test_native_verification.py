@@ -90,3 +90,14 @@ def test_run_command_preserves_failure_output(tmp_path):
         )
 
     assert "native smoke failed" in str(error.value)
+
+
+def test_package_launcher_keeps_install_directory_for_every_command(tmp_path):
+    runner = FakeRunner()
+
+    def from_install(command, *, cwd, env):
+        assert cwd == tmp_path
+        return runner(command, cwd=Path(env["HOME"]).parent, env=env)
+
+    native_verification.verify_command(["launcher", "exec"], "1.2.3", runner=from_install, command_cwd=tmp_path)
+    assert len(runner.commands) == 4
