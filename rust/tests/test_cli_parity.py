@@ -134,11 +134,30 @@ def test_export_symlink_cannot_modify_provider(cli):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-def test_version_and_help_identify_experimental_scope(cli):
+@pytest.mark.parametrize("lang", ["en", "zh"])
+@pytest.mark.parametrize("args", [[], ["--help"], ["-h"]])
+def test_help_covers_all_operations_in_selected_language(cli, lang, args):
     cli.parity("--version")
-    result = cli.run("rust", "--help")
+    result = cli.run("rust", f"--lang={lang}", *args)
     assert result.returncode == 0
-    assert "Experimental Rust" in result.stdout
+    assert not result.stderr
+    for option in [
+        "--shortcut",
+        "--collect",
+        "--interactive",
+        "--search",
+        "--config",
+        "--providers",
+        "-days",
+        "-format",
+    ]:
+        assert option in result.stdout
+    assert ("导出 Agent 会话" if lang == "zh" else "Export agent sessions") in result.stdout
+    assert "Experimental" not in result.stdout
+
+
+def test_repeated_options_keep_last_value(cli):
+    cli.parity("--list", "-d", "1", "-d", "36500", "-q", "provider:codex", "--lang", "en")
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Python does not apply TZ on Windows")

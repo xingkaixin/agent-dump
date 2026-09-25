@@ -347,12 +347,39 @@ fn positive(value: &Value, default: u64, maximum: Option<u64>) -> u64 {
 }
 
 pub fn expand_home(raw: &str) -> crate::Result<PathBuf> {
-    if raw == "~" || raw.starts_with("~/") || (cfg!(windows) && raw.starts_with("~\\")) {
-        return Ok(
-            crate::file_sessions::environment_root("HOME", "")?.join(raw.get(2..).unwrap_or(""))
-        );
-    }
-    Ok(raw.into())
+    let Some(rest) = raw.strip_prefix('~') else {
+        return Ok(raw.into());
+    };
+    let end = rest
+        .find(|c| c == '/' || (cfg!(windows) && c == '\\'))
+        .unwrap_or(rest.len());
+    let name = &rest[..end];
+    let home = if name.is_empty() {
+        std::env::home_dir().ok_or("Could not determine home directory")?
+    } else {
+        #[cfg(unix)]
+        {
+            nix::unistd::User::from_name(name)?
+                .ok_or("Could not determine home directory.")?
+                .dir
+        }
+        #[cfg(windows)]
+        {
+            let home = std::env::home_dir().ok_or("Could not determine home directory.")?;
+            let current = std::env::var("USERNAME").unwrap_or_default();
+            if name == current {
+                home
+            } else if home
+                .file_name()
+                .is_some_and(|last| last == current.as_str())
+            {
+                home.with_file_name(name)
+            } else {
+                return Err("Could not determine home directory.".into());
+            }
+        }
+    };
+    Ok(home.join(rest.get(end + 1..).unwrap_or("")))
 }
 
 pub fn validate_ai(config: Option<&AiConfig>, exists: bool) -> Vec<&'static str> {

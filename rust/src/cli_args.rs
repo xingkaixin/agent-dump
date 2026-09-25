@@ -1,5 +1,5 @@
 use crate::collect_model;
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches, Parser};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -7,9 +7,8 @@ use std::path::PathBuf;
 #[command(
     name = "agent-dump",
     version,
-    about = "Experimental Rust CLI for agent sessions",
-    after_help = "Python remains the default installation. Rust supports ten Providers, Query/Search, index maintenance, Collect, configuration, shortcuts, URI export and Ratatui selection.",
-    arg_required_else_help = true
+    args_override_self = true,
+    infer_long_args = true
 )]
 pub struct Args {
     pub uri: Option<String>,
@@ -120,4 +119,90 @@ pub fn normalize_arguments(args: Vec<OsString>) -> Vec<OsString> {
             }
         })
         .collect()
+}
+
+pub fn command(zh: bool) -> clap::Command {
+    let mut command = Args::command()
+        .about(crate::i18n::t("CLI_DESC", zh, &[]))
+        .disable_version_flag(true)
+        .arg(
+            clap::Arg::new("version")
+                .long("version")
+                .action(clap::ArgAction::Version),
+        );
+    command = command.arg(
+        clap::Arg::new("shortcut")
+            .long("shortcut")
+            .value_name("SHORTCUT"),
+    );
+    for (id, key) in [
+        ("uri", "URI"),
+        ("days", "DAYS"),
+        ("output", "OUTPUT"),
+        ("format", "FORMAT"),
+        ("head", "HEAD"),
+        ("summary", "SUMMARY"),
+        ("collect", "COLLECT"),
+        ("collect_mode", "COLLECT_MODE"),
+        ("dry_run", "DRY_RUN"),
+        ("emit_prompt", "EMIT_PROMPT"),
+        ("stats", "STATS"),
+        ("providers", "PROVIDERS"),
+        ("shortcut", "SHORTCUT"),
+        ("since", "SINCE"),
+        ("until", "UNTIL"),
+        ("save", "SAVE"),
+        ("config", "CONFIG"),
+        ("list", "LIST"),
+        ("interactive", "INTERACTIVE"),
+        ("no_metadata_summary", "NO_METADATA_SUMMARY"),
+        ("page_size", "PAGE_SIZE"),
+        ("query", "QUERY"),
+        ("search", "SEARCH"),
+        ("reindex", "REINDEX"),
+        ("lang", "LANG"),
+        ("version", "VERSION"),
+    ] {
+        command = command.mut_arg(id, |arg| {
+            arg.help(crate::i18n::t(&format!("CLI_{key}_HELP"), zh, &[]))
+        });
+    }
+    command.after_help(if zh {
+        "兼容别名：-days、-output、-format、-summary、-since、-until、-config、-page-size、-query、-v；--capabilities 等同于 --providers。"
+    } else {
+        "Compatibility aliases: -days, -output, -format, -summary, -since, -until, -config, -page-size, -query, -v; --capabilities is an alias for --providers."
+    })
+}
+
+pub fn parse(arguments: Vec<OsString>, zh: bool) -> std::result::Result<Args, clap::Error> {
+    let matches = command(zh).try_get_matches_from(arguments)?;
+    Args::from_arg_matches(&matches)
+}
+
+pub fn language(arguments: &[OsString]) -> bool {
+    let explicit = arguments
+        .iter()
+        .enumerate()
+        .filter_map(|(index, argument)| {
+            if argument == "--lang" {
+                arguments
+                    .get(index + 1)
+                    .map(|value| value.to_string_lossy().into_owned())
+            } else {
+                argument
+                    .to_str()
+                    .and_then(|value| value.strip_prefix("--lang="))
+                    .map(str::to_owned)
+            }
+        })
+        .next_back();
+    explicit.map_or_else(
+        || {
+            ["LC_ALL", "LC_MESSAGES", "LANG"]
+                .iter()
+                .find_map(|key| std::env::var(key).ok().filter(|value| !value.is_empty()))
+                .is_some_and(|value| value.to_lowercase().starts_with("zh"))
+        },
+        |value| value == "zh",
+    )
 }

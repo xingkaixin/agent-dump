@@ -70,8 +70,7 @@ mod tui;
 mod uri_workflow;
 mod value;
 
-use clap::Parser;
-use cli_args::{Args, normalize_arguments};
+use cli_args::normalize_arguments;
 use std::io::{self, Write};
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -80,19 +79,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 fn main() -> std::process::ExitCode {
     let arguments = normalize_arguments(std::env::args_os().collect());
     let emit = arguments.iter().any(|arg| arg == "--emit-prompt");
-    let zh = arguments
-        .windows(2)
-        .rev()
-        .find(|pair| pair[0] == "--lang")
-        .map_or_else(
-            || {
-                ["LC_ALL", "LC_MESSAGES", "LANG"]
-                    .iter()
-                    .find_map(|key| std::env::var(key).ok().filter(|s| !s.is_empty()))
-                    .is_some_and(|s| s.to_lowercase().contains("zh"))
-            },
-            |pair| pair[1] == "zh",
-        );
+    let zh = cli_args::language(&arguments);
     let arguments = match shortcut::expand(arguments, zh) {
         Ok(args) => args,
         Err(error) => {
@@ -104,7 +91,14 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
-    let args = Args::parse_from(normalize_arguments(arguments));
+    let zh = cli_args::language(&arguments);
+    let args = match cli_args::parse(normalize_arguments(arguments), zh) {
+        Ok(args) => args,
+        Err(error) => {
+            let _ = error.print();
+            return std::process::ExitCode::from(error.exit_code() as u8);
+        }
+    };
     let emit = args.emit_prompt;
     let zh = args.lang.as_deref().map_or(zh, |lang| lang == "zh");
     let mut out = io::BufWriter::new(io::stdout().lock());

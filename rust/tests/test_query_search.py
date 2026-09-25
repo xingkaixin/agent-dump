@@ -244,3 +244,22 @@ def test_index_reuses_unchanged_content_and_refreshes_changed_text(cli):
     assert outputs[0] == outputs[1]
     cli.source.write_bytes(original)
     assert cli.fixtures.source_manifest(cli.root) == before
+
+
+@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_named_home_query_path(cli, lang):
+    import os
+    from pathlib import Path
+
+    if os.name == "nt":
+        cli.environment["USERNAME"] = "home"
+        name = "fixture-user"
+        project = Path(cli.environment["USERPROFILE"]).with_name(name) / "synthetic-project"
+    else:
+        import pwd
+
+        account = pwd.getpwuid(0)
+        name = account.pw_name
+        project = Path(account.pw_dir) / "synthetic-project"
+    cli.write([header(cwd=str(project)), message("user", "named home marker")])
+    cli.parity("--list", "-q", f"provider:codex path:~{name}/synthetic-project", "-d", "36500", "--lang", lang)

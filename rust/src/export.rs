@@ -85,7 +85,7 @@ fn write(
         .tempfile_in(&directory)?;
     contents(temporary.as_file_mut())?;
     temporary.flush()?;
-    temporary.as_file().sync_all()?;
+    crate::private_files::sync(temporary.as_file())?;
     temporary.persist(&destination).map_err(|error| {
         crate::source_io::Error::rename(error.file.path(), &output_path, error.error)
     })?;

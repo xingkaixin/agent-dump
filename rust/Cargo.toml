@@ -4,11 +4,14 @@ version = "0.15.9"
 edition = "2024"
 rust-version = "1.90"
 publish = false
+description = "AI Coding Assistant Session Export Tool"
+license = "MIT"
+repository = "https://github.com/xingkaixin/agent-dump"
 
 [dependencies]
 jiff = "0.2"
 md-5 = "0.10"
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "string"] }
 serde = { version = "1", features = ["derive"] }
 # Tool output and subagent prompts contain JSON strings whose key order is observable.
 serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
@@ -27,3 +30,6 @@ ratatui = { version = "0.30.2", default-features = false, features = ["crossterm
 crossterm = "0.29"
 unicode-width = "0.2"
 unicode-normalization = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", default-features = false, features = ["fs", "user"] }

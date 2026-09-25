@@ -12,7 +12,12 @@ import sys
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-RUST = ROOT / "rust" / "target" / "debug" / ("agent-dump.exe" if os.name == "nt" else "agent-dump")
+RUST = Path(
+    os.environ.get(
+        "AGENT_DUMP_TEST_BINARY",
+        ROOT / "rust" / "target" / "release" / ("agent-dump.exe" if os.name == "nt" else "agent-dump"),
+    )
+).resolve()
 IDENTITY = "019c213e-c251-73a3-af66-000000000000"
 STAMP = "2026-01-15T12:00:00+00:00"
 
@@ -74,7 +79,7 @@ class CliFixture:
 
 
 def make_cli(tmp_path, monkeypatch):
-    assert RUST.is_file(), "Run cargo build --locked --manifest-path rust/Cargo.toml before this suite"
+    assert RUST.is_file(), "Run cargo build --locked --release from rust/ before this suite"
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     fixtures = importlib.import_module("benchmark_fixtures")
     environment = fixtures.create_fixture(tmp_path, fixtures.PROFILES["smoke"])

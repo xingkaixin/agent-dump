@@ -283,8 +283,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         );
     }
     if mode == Mode::Help {
-        use clap::CommandFactory;
-        Args::command().print_help()?;
+        crate::cli_args::command(zh).print_help()?;
         writeln!(out)?;
         return Ok(true);
     }

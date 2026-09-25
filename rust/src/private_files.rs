@@ -2,6 +2,14 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+pub fn sync(file: &fs::File) -> std::io::Result<()> {
+    // Match Python's os.fsync; Apple's std::fs::File::sync_all uses F_FULLFSYNC.
+    #[cfg(target_vendor = "apple")]
+    return nix::unistd::fsync(file).map_err(Into::into);
+    #[cfg(not(target_vendor = "apple"))]
+    file.sync_all()
+}
+
 pub fn ensure_directory(path: &Path) -> crate::Result<()> {
     if path.as_os_str().is_empty() {
         return Ok(());
@@ -47,7 +55,7 @@ pub fn write_text(path: &Path, text: &str) -> crate::Result<()> {
     #[cfg(windows)]
     let text = &text.replace('\n', "\r\n");
     temporary.write_all(text.as_bytes())?;
-    temporary.as_file().sync_all()?;
+    sync(temporary.as_file())?;
     temporary
         .persist(path)
         .map_err(|error| crate::source_io::Error::rename(error.file.path(), path, error.error))?;

@@ -98,13 +98,7 @@ fn limit(raw: &str, zh: bool) -> crate::Result<usize> {
 
 pub fn project_path(raw: &str) -> crate::Result<PathBuf> {
     let raw = raw.trim();
-    let path = if raw == "~" || raw.starts_with("~/") || raw.starts_with("~\\") {
-        std::env::home_dir()
-            .ok_or("Could not determine home directory")?
-            .join(raw.get(2..).unwrap_or(""))
-    } else {
-        PathBuf::from(raw)
-    };
+    let path = crate::config::expand_home(raw)?;
     let absolute = std::path::absolute(path)?;
     let mut resolved = PathBuf::new();
     for component in absolute.components() {
