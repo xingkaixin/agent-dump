@@ -55,7 +55,12 @@ impl Kimi {
                 for entry in directories {
                     if let Some(path) = entry["path"].as_str() {
                         mapping.insert(
-                            format!("{:x}", Md5::digest(path.as_bytes())),
+                            format!(
+                                "{:032x}",
+                                u128::from_be_bytes(
+                                    Md5::digest(path.as_bytes()).into()
+                                )
+                            ),
                             path.into(),
                         );
                     }

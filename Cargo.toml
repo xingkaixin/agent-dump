@@ -23,7 +23,7 @@ similar_names = "allow"
 
 [workspace.dependencies]
 jiff = "0.2"
-md-5 = "0.10"
+md-5 = "0.11"
 clap = { version = "4", features = ["derive", "string"] }
 serde = { version = "1", features = ["derive"] }
 # Tool output and subagent prompts contain JSON strings whose key order is observable.
