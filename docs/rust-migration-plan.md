@@ -1,6 +1,6 @@
 # Rust 迁移计划
 
-状态：P0～P5 已验收，P6 正在进行。当前分支已将 wheel/npm 构建切换为 Rust，保留 Python v0.15.9 冻结参考；本地安装验证已通过，完整 release 差分、四目标 CI 和最终交错性能测量正在验收。正式发布尚未发生。
+状态：P0～P6 实现与验收完成，最终提交须通过 PR 检查。当前分支的运行与 wheel/npm 构建已切换为 Rust，Python v0.15.9 保留为冻结参考；四目标安装及 23 场景交错性能验证通过。详见 [P6 最终验收](rust-p6-completion.md)。尚未合并或正式发布。
 
 - 工作分支：`feat/rust-rewrite`
 - Python 参考版本：`v0.15.9`，commit `dca2d97`
@@ -23,7 +23,7 @@ Python 库 API 的退场是已经选定的产品边界变化。迁移期间保�
 
 ## 2. 功能验收矩阵
 
-每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P2 已关闭 Provider 读取与单 URI 导出范围，完整证据见 [P2 最终验收](rust-p2-completion.md)；P3～P5 的参数/查询/配置/Collect/交互条目见[最终验收](rust-p3-p5-completion.md)，帮助/usage 的已知差异和发布分发在 P6 关闭。当前实现见 [Rust README](../rust/README.md)，Codex 消息与导出证据见[差分验收记录](rust-codex-parity.md)，历史 P1 性能见[复测报告](benchmarks/rust-p1.md)。
+每一行在实施阶段补充 Rust 代码、eval/测试入口及通过记录。已有 Python 测试是行为依据。P2 已关闭 Provider 读取与单 URI 导出范围，完整证据见 [P2 最终验收](rust-p2-completion.md)；P3～P5 的参数/查询/配置/Collect/交互条目见[最终验收](rust-p3-p5-completion.md)，帮助/usage 的明确差异和发布分发见 [P6 最终验收](rust-p6-completion.md)。当前实现见 [Rust README](../rust/README.md)，Codex 消息与导出证据见[差分验收记录](rust-codex-parity.md)，历史 P1 性能见[复测报告](benchmarks/rust-p1.md)。
 
 | 范围 | 必须对齐的契约 | 现有依据 |
 | --- | --- | --- |
@@ -152,12 +152,14 @@ P3～P5 的验证数量、平台结果、实现提交与已知差异统一见[�
 
 ### P6：完整验收、性能复测与发布切换
 
-- 功能矩阵全部关闭后，使用 release 二进制重跑全部差分 eval 和性能场景。
-- 同机交错运行 Python 与 Rust，检查差异和噪声；首份历史基线只作为参考。P3～P5 发现的批量 JSON 导出回退（0.81 → 3.64 秒）需剖析、优化并复测；不预设所有工作负载都会提速。
-- 使用 Maturin `bin` wheel 与现有 npm 平台包模式分发 Rust；不为 CLI 引入 PyO3。
-- 验证所有当前发布平台、Linux libc 基线、wheel 与 npm 安装体验，记录制品大小。
-- 更新 README、recipes、架构文档、版本来源和 CI；同步清理退场的 Python 构建路径。
-- 用户审查后决定合并和发版；本计划不自动触发发布。
+- [x] 使用 release 二进制运行全部 CLI 差分与边界套件，完成帮助/usage、版本和路径兼容性审查。
+- [x] 同机交错运行全部 23 个性能场景，保留原始样本和校验结果；批量 JSON 导出回退已修复，最终为 Python 905.94 / Rust 367.69 ms。
+- [x] 使用 Maturin `bin` wheel 与现有 npm 平台包模式分发 Rust，不引入 PyO3；两个渠道的可执行文件逐字节一致。
+- [x] 验证四个现有发布目标、glibc 2.17、pip/uv tool/uvx/npm/npx/bunx，记录制品大小。
+- [x] 更新 README、recipes、架构文档、版本来源和 CI；移除 Python 的 PyInstaller/Hatchling 构建路径，保留冻结源码及评估工具。
+- 用户审查后决定新版本、合并和发版；本阶段未触发发布。
+
+完整功能、安装和兼容性边界见 [P6 最终验收](rust-p6-completion.md)，最终性能与原始数据见 [P6 性能报告](benchmarks/rust-p6.md)。
 
 ## 4. 评估规则
 
@@ -175,4 +177,4 @@ P3～P5 的验证数量、平台结果、实现提交与已知差异统一见[�
 
 每次结束更新阶段状态和下一项工作，保留 Python 参考实现。提交 PR 前运行 `just isok`；引入 Rust 后增加 `cargo fmt --check`、Clippy 和 Rust 测试门禁。发布切换之前，不把部分完成的 Rust 二进制发布为正式 `agent-dump`。
 
-当前下一项：P6 的最终兼容性审查、批量导出性能回退、release 二进制完整复测与 pip/npm 安装制品矩阵。P3～P5 不执行默认切换、合并或发版。
+当前下一项：用户审阅 PR #396 并确定 Rust 首个发布版本；按发布指南完成版本、CHANGELOG 与网站更新记录后，再执行经授权的合并和发布。当前 0.15.9 仅作迁移验证，发布 workflow 禁止复用该版本发布 Rust。

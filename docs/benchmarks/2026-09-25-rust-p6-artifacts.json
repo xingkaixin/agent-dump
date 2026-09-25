@@ -1,0 +1,196 @@
+{
+  "ci_run": "https://github.com/xingkaixin/agent-dump/actions/runs/36078392209",
+  "git_commit": "a4fee7ba755762aaf6fc7719dc4b181646f145c0",
+  "published_python": {
+    "assets": [
+      {
+        "name": "agent-dump-binary-checksums.json",
+        "size": 365
+      },
+      {
+        "name": "agent-dump-darwin-arm64",
+        "size": 14017184
+      },
+      {
+        "name": "agent-dump-darwin-x64",
+        "size": 13965232
+      },
+      {
+        "name": "agent-dump-linux-x64",
+        "size": 16541376
+      },
+      {
+        "name": "agent-dump-win32-x64.exe",
+        "size": 15068768
+      },
+      {
+        "name": "agent_dump-0.15.9-py3-none-any.whl",
+        "size": 238984
+      },
+      {
+        "name": "agent_dump-0.15.9.tar.gz",
+        "size": 5862758
+      }
+    ],
+    "html_url": "https://github.com/xingkaixin/agent-dump/releases/tag/v0.15.9",
+    "tag_name": "v0.15.9"
+  },
+  "rust_ci": [
+    {
+      "target": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "target": "darwin-arm64",
+        "packageName": "@agent-dump/cli-darwin-arm64",
+        "executableName": "agent-dump",
+        "binaryFormat": "Mach-O",
+        "runner": "macos-14",
+        "rustTarget": "aarch64-apple-darwin",
+        "wheelPlatform": "macosx_11_0_arm64"
+      },
+      "version": "0.15.9",
+      "artifacts": [
+        {
+          "file": "agent_dump-0.15.9-py3-none-macosx_11_0_arm64.whl",
+          "bytes": 4412534,
+          "sha256": "4555c42c0e9312eca7353c11638f45ba5f5be0eefb1e544fddb931d0ac99d745"
+        },
+        {
+          "file": "agent_dump-0.15.9.tar.gz",
+          "bytes": 262734,
+          "sha256": "4dc69da698357a60de677e5c2bf02544004a4fe8a90ae0e1441b3bbfcdfa9f3c"
+        },
+        {
+          "file": "native/darwin-arm64/agent-dump",
+          "bytes": 9131984,
+          "sha256": "b452e5e028f99b846bcd3b04c9856a2bb0e13ba5e4a496069cb5d6a66ce1452f"
+        }
+      ]
+    },
+    {
+      "target": {
+        "platform": "darwin",
+        "arch": "x64",
+        "target": "darwin-x64",
+        "packageName": "@agent-dump/cli-darwin-x64",
+        "executableName": "agent-dump",
+        "binaryFormat": "Mach-O",
+        "runner": "macos-15-intel",
+        "rustTarget": "x86_64-apple-darwin",
+        "wheelPlatform": "macosx_10_12_x86_64"
+      },
+      "version": "0.15.9",
+      "artifacts": [
+        {
+          "file": "agent_dump-0.15.9-py3-none-macosx_10_12_x86_64.whl",
+          "bytes": 4605704,
+          "sha256": "da2424b717beda365ba407b226e29d4bc6a156e7dbfbf2eea45fc8a359fd2944"
+        },
+        {
+          "file": "agent_dump-0.15.9.tar.gz",
+          "bytes": 262734,
+          "sha256": "4dc69da698357a60de677e5c2bf02544004a4fe8a90ae0e1441b3bbfcdfa9f3c"
+        },
+        {
+          "file": "native/darwin-x64/agent-dump",
+          "bytes": 9541240,
+          "sha256": "37e09f9fcf0d3a40d0f45f99ad77bb43185902376d82fd277b7862bdd8a3665b"
+        }
+      ]
+    },
+    {
+      "target": {
+        "platform": "linux",
+        "arch": "x64",
+        "target": "linux-x64",
+        "packageName": "@agent-dump/cli-linux-x64",
+        "executableName": "agent-dump",
+        "binaryFormat": "ELF",
+        "runner": "ubuntu-latest",
+        "rustTarget": "x86_64-unknown-linux-gnu",
+        "wheelPlatform": "manylinux_2_17_x86_64",
+        "libc": "glibc >= 2.17"
+      },
+      "version": "0.15.9",
+      "artifacts": [
+        {
+          "file": "agent_dump-0.15.9-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "bytes": 4729398,
+          "sha256": "f3bc05d5eb91b97c88b785f35d6b4d5957a55b9ddb35874324abf596375e135f"
+        },
+        {
+          "file": "agent_dump-0.15.9.tar.gz",
+          "bytes": 262734,
+          "sha256": "4dc69da698357a60de677e5c2bf02544004a4fe8a90ae0e1441b3bbfcdfa9f3c"
+        },
+        {
+          "file": "native/linux-x64/agent-dump",
+          "bytes": 10375696,
+          "sha256": "1c592d3cdcb9dee067587c54b7b57f7ad49a02dcc375df5efbc038d0f4489fff"
+        }
+      ]
+    },
+    {
+      "target": {
+        "platform": "win32",
+        "arch": "x64",
+        "target": "win32-x64",
+        "packageName": "@agent-dump/cli-win32-x64",
+        "executableName": "agent-dump.exe",
+        "binaryFormat": "PE",
+        "runner": "windows-latest",
+        "rustTarget": "x86_64-pc-windows-msvc",
+        "wheelPlatform": "win_amd64"
+      },
+      "version": "0.15.9",
+      "artifacts": [
+        {
+          "file": "agent_dump-0.15.9-py3-none-win_amd64.whl",
+          "bytes": 4682098,
+          "sha256": "46c5b9e7adc286b345546b30296ce9aeeb4aca99c20ceb4072a65fa1ddeb570a"
+        },
+        {
+          "file": "agent_dump-0.15.9.tar.gz",
+          "bytes": 264873,
+          "sha256": "eef065cd48ca6c5b1d82a4c241362cd32a8e1123e7671ce7d259e3495f7373e8"
+        },
+        {
+          "file": "native/win32-x64/agent-dump.exe",
+          "bytes": 10604032,
+          "sha256": "3030ba2b0ce4c444602cb475d77bde2aa78b67e05921368ab7a72973a0d322f3"
+        }
+      ]
+    }
+  ],
+  "rust_measured_local": {
+    "target": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "target": "darwin-arm64",
+      "packageName": "@agent-dump/cli-darwin-arm64",
+      "executableName": "agent-dump",
+      "binaryFormat": "Mach-O",
+      "runner": "macos-14",
+      "rustTarget": "aarch64-apple-darwin",
+      "wheelPlatform": "macosx_11_0_arm64"
+    },
+    "version": "0.15.9",
+    "artifacts": [
+      {
+        "file": "agent_dump-0.15.9-py3-none-macosx_11_0_arm64.whl",
+        "bytes": 4555479,
+        "sha256": "52912417cbe3233ad81e7133034813b77ac6f3c66836b5b458710c33af7a36e6"
+      },
+      {
+        "file": "agent_dump-0.15.9.tar.gz",
+        "bytes": 262734,
+        "sha256": "4dc69da698357a60de677e5c2bf02544004a4fe8a90ae0e1441b3bbfcdfa9f3c"
+      },
+      {
+        "file": "native/darwin-arm64/agent-dump",
+        "bytes": 9456112,
+        "sha256": "2ac96ad6e4492b3d4ff48154f8c44c4f049193f37d41277a1bad15432c5faf8b"
+      }
+    ]
+  }
+}

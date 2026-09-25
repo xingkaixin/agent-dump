@@ -1,6 +1,6 @@
 # @agent-dump/cli
 
-Native `agent-dump` binaries for `bunx` and `npx`.
+Native Rust `agent-dump` binaries for `bunx` and `npx`.
 
 The package downloads the matching native binary for the current platform during installation
 and verifies it against the published checksum manifest before exposing `agent-dump`.
@@ -26,6 +26,9 @@ Supported targets:
 - `linux-x64`
 - `win32-x64`
 <!-- native-targets:end -->
+
+Linux x64 requires glibc 2.17 or newer; Alpine/musl is not supported by this prebuilt target.
+macOS wheel baselines are 10.12 (x64) and 11.0 (arm64). No Python runtime is needed.
 
 ## Installation
 

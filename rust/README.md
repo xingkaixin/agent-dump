@@ -79,7 +79,7 @@ URI 默认 `print`。文件导出使用 `--output`、配置中的 JSON/raw 默�
 
 - P3 查询与索引，P4 配置、shortcut、Collect、URI summary、emit-prompt，P5 批量导出和 Ratatui 的范围与验证见 [P3～P5 最终验收](../docs/rust-p3-p5-completion.md)。
 - 帮助与参数错误使用 Clap 布局，保留全部参数说明、兼容别名、中英文和退出码；不复刻 argparse 的换行、usage 排版与错误措辞。常用模式优先级、冲突、忽略参数、输出路径和业务诊断已纳入差分测试。
-- Rust CI 包含 Linux、macOS、Windows 的构建、Clippy、单元与 CLI 差分门禁；三平台运行同一套契约，具体计数和平台跳过项见 [P3～P5 最终验收](../docs/rust-p3-p5-completion.md)。所有发布架构、libc、wheel/npm 安装与正式切换属于 P6。
+- Rust CI 包含 Linux、macOS、Windows 的构建、Clippy、单元与 CLI 差分门禁；三平台运行同一套契约，四目标制品安装、glibc 2.17 和发布切换证据见 [P6 最终验收](../docs/rust-p6-completion.md)。当前分支已切换，正式发布仍由用户决定。
 
 行为映射和待验收边界见 [Codex](../docs/rust-codex-parity.md)、[Claude Code / Kimi / Pi](../docs/rust-jsonl-parity.md)、[OpenCode / ZCode](../docs/rust-sqlite-parity.md)及 [Cursor / DeepChat / Cherry Studio / MiniMax](../docs/rust-desktop-parity.md) 差分验收记录。共享发现与跨 Provider 隔离见[验收记录](../docs/rust-discovery-parity.md)。URI 共用诊断见[验收记录](../docs/rust-uri-parity.md)。DeepChat / Cherry / MiniMax 的 schema、源缺失与迁移错误见[专属错误验收](../docs/rust-provider-errors-parity.md)。其余七个 Provider 的源缺失与 Kimi raw 文件身份见[源缺失验收](../docs/rust-source-parity.md)。JSONL/旧 SQLite 坏记录警告见[验收记录](../docs/rust-record-diagnostics-parity.md)。Codex/Claude 标题缓存恢复与刷新见[验收记录](../docs/rust-title-cache-parity.md)。Codex/Claude/Pi 消息转换恢复见[验收记录](../docs/rust-message-conversion-parity.md)。固定配置下六个 Provider 的来源选择与重试见[验收记录](../docs/rust-source-selection-parity.md)。运行中来源配置与其余 Provider 选择见[验收记录](../docs/rust-runtime-sources-parity.md)。这些文件保留各批次当时的状态；开放项的最终归属、功能矩阵和验证证据以 [P2 最终验收](../docs/rust-p2-completion.md)为准。
 
@@ -91,7 +91,7 @@ URI 默认 `print`。文件导出使用 `--output`、配置中的 JSON/raw 默�
 
 ## 性能评估
 
-当前结果见 [P3～P5 的 23 场景复测](../docs/benchmarks/rust-p3-p5.md)：原 17 场景与新增 6 场景均验证等价性，保留耗时、RSS、体积与原始样本。22 个场景更快，批量 JSON 导出更慢（0.81 → 3.64 秒），该回退列入 P6。以下为各批次历史结果。
+当前结果见 [P6 最终 23 场景复测](../docs/benchmarks/rust-p6.md)：全部交错测量、结果等价，23 个场景均更快。批量导出回退已修复，最终为 Python 905.94 / Rust 367.69 ms；完整耗时、RSS、制品体积和原始样本均已归档。[P3～P5](../docs/benchmarks/rust-p3-p5.md)及下文保留历史结果。
 
 历史四场景对比见 [P1 性能复测](../docs/benchmarks/rust-p1.md)。[P2 Codex 复测](../docs/benchmarks/rust-p2-codex.md)增加现有的 JSON＋Markdown 导出场景，并保留缓冲优化前后的数据。
 
@@ -119,7 +119,7 @@ Provider 专属错误接入后的[七场景复测](../docs/benchmarks/rust-p2-pr
 
 运行中来源配置对齐后的[七场景复测](../docs/benchmarks/rust-p2-runtime-sources.md)中，跨 Provider 列表为 4.85×，JSON＋Markdown 导出为 3.17×。这些独立进程的健康数据场景不测配置切换或其余八个 Provider 的性能。
 
-原 [CLI evaluator](../docs/benchmarks/README.md) 和 Python 参考实现未修改。当前运行全部 17 个场景；单独的 `scripts/eval_rust_workflows.py` 扩展增量、删除、WAL、四 Provider 和确定性 HTTP。复现命令见[本轮性能报告](../docs/benchmarks/rust-p3-p5.md)。复杂工具消息和终端行为由功能差分与 PTY 测试验证，不混入固定文本性能工作负载。
+原 [CLI evaluator](../docs/benchmarks/README.md) 和 Python 参考实现未修改。当前运行全部 17 个场景；单独的 `scripts/eval_rust_workflows.py` 扩展增量、删除、WAL、四 Provider 和确定性 HTTP。原场景由 `scripts/eval_rust_release.py` 编排交错运行，复现命令见[最终性能报告](../docs/benchmarks/rust-p6.md)。复杂工具消息和终端行为由功能差分与 PTY 测试验证，不混入固定文本性能工作负载。
 
 ## Collect、配置和交互
 

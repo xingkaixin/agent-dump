@@ -1,10 +1,12 @@
 # CLI 性能基线
 
-这套评估用于比较当前 Python、PyInstaller 制品与未来 Rust release 二进制。它通过 CLI 子进程执行，不 import `agent_dump`，无需为 Rust 改写计时入口。
+这套评估用于比较冻结 Python 参考、历史 PyInstaller 制品与当前 Rust release 二进制。它通过 CLI 子进程执行，不 import `agent_dump`，无需为 Rust 改写计时入口。
 
 完整迁移验收见 [Rust 迁移计划](../rust-migration-plan.md)。这里的结果校验只保护 benchmark 工作负载，不能代替完整功能矩阵。
 
-当前 P3～P5 结果：[原 17＋新增 6 场景复测](rust-p3-p5.md)，功能与平台证据见[最终验收](../rust-p3-p5-completion.md)。报告保留全部原始样本及批量 JSON 导出回退。P2 历史结果见[七场景复测](rust-p2-final.md)。
+当前结果：[P6 最终 23 场景交错复测](rust-p6.md)，包括已修复的批量导出回退、四目标体积和全部原始样本；功能及安装证据见 [P6 最终验收](../rust-p6-completion.md)。
+
+历史 P3～P5 结果：[原 17＋新增 6 场景复测](rust-p3-p5.md)，功能与平台证据见[最终验收](../rust-p3-p5-completion.md)。报告保留全部原始样本及批量 JSON 导出回退。P2 历史结果见[七场景复测](rust-p2-final.md)。
 
 首份已归档结果：[2026-09-24 Python 基线](python-baseline.md)，包含源码运行与 PyInstaller 原生制品。
 
@@ -45,12 +47,12 @@ uv run python scripts/benchmark_cli.py --profile smoke --repeats 1 --warmups 0 -
 # Python 源码运行基线：默认使用当前解释器 -m agent_dump
 uv run python scripts/benchmark_cli.py --profile standard --output dist/benchmarks/python-source.json
 
-# 当前 npm 实际分发的 PyInstaller 路径；构建结束后再测量
-just build-native
-uv run python scripts/benchmark_cli.py --command "$(pwd)/dist/agent-dump" --label python-native --output dist/benchmarks/python-native.json
+# 当前 Rust 制品；构建结束后同机交错比较，macOS arm64 示例
+just build
+uv run python scripts/eval_rust_release.py --rust-command "$PWD/dist/native/darwin-arm64/agent-dump" --profile standard --repeats 5 --warmups 1 --output dist/benchmarks/rust-release.json
 
-# Rust 完成后：先保持相同 evaluator 与 fixture，在同机重新测一次 Python
-uv run python scripts/benchmark_cli.py --command "/absolute/path/to/agent-dump" --label rust-release --baseline dist/benchmarks/python-source.json --output dist/benchmarks/rust-release.json
+# 扩展索引与本机 HTTP 工作负载
+uv run python scripts/eval_rust_workflows.py --rust-command "$PWD/dist/native/darwin-arm64/agent-dump" --profile standard --repeats 5 --warmups 1 --output dist/benchmarks/rust-workflows.json
 
 # 实施中只验证已完成路径，不形成全量性能结论
 uv run python scripts/benchmark_cli.py --profile smoke --case startup-version --case head-large-jsonl --output dist/benchmarks/partial.json
@@ -58,7 +60,7 @@ uv run python scripts/benchmark_cli.py --profile smoke --case startup-version --
 
 `--command` 使用参数解析，不通过 shell 执行；可执行文件会在隔离前定位。命令中的脚本或制品路径应使用绝对路径。上例的 `$(pwd)` 由用户的 shell 展开。
 
-默认每场景 1 次预热、7 次测量。每次为新进程；预热用于减少一次性加载噪声，不意味着复用应用内缓存。JSON 保存原始样本，旁边的 Markdown 展示 median/min/max 与峰值 RSS。
+原 evaluator 默认每场景 1 次预热、7 次测量；P6 交错编排脚本默认 1 次预热、5 次测量。每次为新进程；预热用于减少一次性加载噪声，不意味着复用应用内缓存。JSON 保存原始样本，旁边的 Markdown 展示 median/min/max 与峰值 RSS。
 
 源码入口不计入 `uv`/`uvx` 启动器时间，原生入口不计入 Node/npm wrapper 时间。下载和安装也不在这些计时范围内；后续分发体验另行测量。
 
@@ -106,12 +108,12 @@ handoff 验证 envelope 长度、会话身份、失败数量及读命令后，�
 
 严格比较拒绝不同场景子集。需要比较实施中的子集时，两边都用相同的 `--case` 重新运行。修改 evaluator 或 fixture 后，两边都重新生成报告，不绕过兼容检查。
 
-正式结论应在同机、接近的时间内交错运行 Python 与 Rust；避免同时构建、运行测试或执行其他重任务。历史报告用于保存迁移起点，不能消除机器负载和系统升级的影响。7 次样本只报告描述统计，不声称统计显著性。
+正式结论应在同机、接近的时间内交错运行 Python 与 Rust；避免同时构建、运行测试或执行其他重任务。历史报告用于保存迁移起点，不能消除机器负载和系统升级的影响。有限重复样本只报告描述统计，不声称统计显著性。
 
 ## 当前覆盖缺口
 
-- 两种代表性存储，不代表全部十个 Provider；没有复现 WAL、索引增量更新/删除、损坏文件和所有 schema 版本。
-- 没有真实 LLM 请求、完整 collect execute、终端交互延迟、下载/安装耗时或压缩包大小。
+- 原 17 场景只有 Codex/OpenCode V2。扩展 6 场景补充 WAL、增量更新/删除、四 Provider 与完整 Collect 本机 HTTP；仍不代表十个 Provider 各自的性能，也不覆盖损坏文件或所有 schema 版本。
+- 没有真实 LLM 请求、终端交互延迟或下载/安装耗时。完整 Collect 使用确定性本机 HTTP；压缩包与原生文件大小另见 P6 制品报告。
 - 大正文具有重复性，FTS 压缩与分词表现不代表所有真实会话；后续增加不同内容分布时升级 fixture 版本并重测两边。
 - 子进程环境隔离是针对仓库当前 Provider 发现实现，不是操作系统沙箱。未来新增发现入口时必须同步更新隔离契约。
 

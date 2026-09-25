@@ -515,10 +515,10 @@ web/            # Landing page
 
 ## Development
 
-Rust 是本分支的构建和运行实现，交互界面使用 Ratatui。`src/agent_dump` 保持冻结，只用于差分和性能基准；不进入 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；P6 验收记录见[迁移计划](docs/rust-migration-plan.md)。
+Rust 是本分支的构建和运行实现，交互界面使用 Ratatui。`src/agent_dump` 保持冻结，只用于差分和性能基准；不进入 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
 
 ```bash
-# 使用当前 冻结 Python 参考与固定 Rust 工具链运行本地 CI 检查
+# 使用冻结 Python 参考与固定 Rust 工具链运行本地 CI 检查
 # （Node.js 可用时包含 npm 测试，pnpm 可用时包含 landing page 检查）
 just isok
 

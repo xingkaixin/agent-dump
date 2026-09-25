@@ -533,7 +533,7 @@ web/            # Landing page
 
 ## Development
 
-Rust is the build and runtime implementation on this branch, with Ratatui for terminal interaction. `src/agent_dump` is a frozen oracle for differential and performance tests and is excluded from wheels. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), and the [migration acceptance plan](docs/rust-migration-plan.md).
+Rust is the build and runtime implementation on this branch, with Ratatui for terminal interaction. `src/agent_dump` is a frozen oracle for differential and performance tests and is excluded from wheels. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), [P6 acceptance](docs/rust-p6-completion.md), and the [final performance report](docs/benchmarks/rust-p6.md).
 
 ```bash
 # Run local CI checks with the frozen Python oracle and pinned Rust toolchain

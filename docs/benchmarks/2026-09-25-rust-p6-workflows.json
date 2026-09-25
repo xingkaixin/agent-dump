@@ -1,0 +1,992 @@
+{
+  "recorded_at": "2026-09-25T00:40:25.478738+00:00",
+  "git_commit": "a4fee7ba755762aaf6fc7719dc4b181646f145c0",
+  "git_dirty": false,
+  "repeats": 5,
+  "warmups": 1,
+  "profile": "standard",
+  "environment": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "cpu": "Apple M1 Pro",
+    "logical_cpus": 10,
+    "collector_python": "3.11.15",
+    "fixture_sqlite": "3.50.4",
+    "timezone": "UTC",
+    "locale": "en",
+    "filesystem_cache": "uncontrolled; fixture creation and warmups populate OS page cache",
+    "rss_method": "fresh collector RUSAGE_CHILDREN; maximum child RSS, not simultaneous process-tree sum"
+  },
+  "python_source_sha256": "a5f4b5feb6fd525688a6fda930087f4446eaccbe016457524369620aa5f58237",
+  "frozen_evaluator_sha256": "0c7c5965f49551e0fa43030827251857acd098fd6f897a0664e822c1c8be5a46",
+  "extension_sha256": "6661912ce343618dbe493174de992bf0fd1fdeffa0a544fe3dc0afde1ede8e89",
+  "commands": {
+    "python": [
+      "/Users/Kevin/workspace/projects/personal/agent-dump/.venv/bin/python",
+      "-m",
+      "agent_dump"
+    ],
+    "rust": [
+      "/Users/Kevin/workspace/projects/personal/agent-dump/dist/p6-final/native/darwin-arm64/agent-dump"
+    ]
+  },
+  "cases": [
+    {
+      "name": "search-incremental-jsonl",
+      "validation": {
+        "sources": "19dbefc8bb962ff2f0260e2d2e1b1fec44e497c0897c7a9b26cf2f4f1dc41dcc",
+        "uris_sha256": "258976a9eb146239899f08a1c68fe0274c70469d0eec1c75eec14e85d6e71e25",
+        "sessions": 32
+      },
+      "samples": {
+        "python": [
+          {
+            "wall_seconds": 0.46016245801001787,
+            "exit_code": 0,
+            "user_seconds": 0.362684,
+            "system_seconds": 0.14568699999999998,
+            "peak_rss_bytes": 197705728,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          },
+          {
+            "wall_seconds": 0.45977087499340996,
+            "exit_code": 0,
+            "user_seconds": 0.362573,
+            "system_seconds": 0.15203,
+            "peak_rss_bytes": 195461120,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          },
+          {
+            "wall_seconds": 0.45299483300186694,
+            "exit_code": 0,
+            "user_seconds": 0.36086599999999996,
+            "system_seconds": 0.138717,
+            "peak_rss_bytes": 195379200,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          },
+          {
+            "wall_seconds": 0.45183033400098793,
+            "exit_code": 0,
+            "user_seconds": 0.36100899999999997,
+            "system_seconds": 0.13805399999999998,
+            "peak_rss_bytes": 195379200,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          },
+          {
+            "wall_seconds": 0.5251285409904085,
+            "exit_code": 0,
+            "user_seconds": 0.38181299999999996,
+            "system_seconds": 0.16841799999999998,
+            "peak_rss_bytes": 195608576,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          }
+        ],
+        "rust": [
+          {
+            "wall_seconds": 0.14625699998578057,
+            "exit_code": 0,
+            "user_seconds": 0.09992899999999999,
+            "system_seconds": 0.049862,
+            "peak_rss_bytes": 84918272,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          },
+          {
+            "wall_seconds": 0.14231220798683353,
+            "exit_code": 0,
+            "user_seconds": 0.101112,
+            "system_seconds": 0.046024999999999996,
+            "peak_rss_bytes": 84754432,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          },
+          {
+            "wall_seconds": 0.1406354999926407,
+            "exit_code": 0,
+            "user_seconds": 0.099619,
+            "system_seconds": 0.04448,
+            "peak_rss_bytes": 84475904,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          },
+          {
+            "wall_seconds": 0.14109199997619726,
+            "exit_code": 0,
+            "user_seconds": 0.099955,
+            "system_seconds": 0.045875,
+            "peak_rss_bytes": 84770816,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          },
+          {
+            "wall_seconds": 0.1392327499925159,
+            "exit_code": 0,
+            "user_seconds": 0.098828,
+            "system_seconds": 0.043394999999999996,
+            "peak_rss_bytes": 84639744,
+            "stdout_bytes": 8638,
+            "stderr_bytes": 76
+          }
+        ]
+      },
+      "summary": {
+        "python": {
+          "wall_seconds": {
+            "median": 0.45977087499340996,
+            "min": 0.45183033400098793,
+            "max": 0.5251285409904085,
+            "stdev": 0.031063958930483335
+          },
+          "user_seconds": {
+            "median": 0.362573,
+            "min": 0.36086599999999996,
+            "max": 0.38181299999999996,
+            "stdev": 0.008997730074857761
+          },
+          "system_seconds": {
+            "median": 0.14568699999999998,
+            "min": 0.13805399999999998,
+            "max": 0.16841799999999998,
+            "stdev": 0.012468897613662561
+          },
+          "peak_rss_bytes": {
+            "median": 195461120,
+            "min": 195379200,
+            "max": 197705728,
+            "stdev": 1010004.1682543692
+          }
+        },
+        "rust": {
+          "wall_seconds": {
+            "median": 0.14109199997619726,
+            "min": 0.1392327499925159,
+            "max": 0.14625699998578057,
+            "stdev": 0.002670170296817573
+          },
+          "user_seconds": {
+            "median": 0.09992899999999999,
+            "min": 0.098828,
+            "max": 0.101112,
+            "stdev": 0.000821630269646875
+          },
+          "system_seconds": {
+            "median": 0.045875,
+            "min": 0.043394999999999996,
+            "max": 0.049862,
+            "stdev": 0.002449559409363243
+          },
+          "peak_rss_bytes": {
+            "median": 84754432,
+            "min": 84475904,
+            "max": 84918272,
+            "stdev": 164901.52119613695
+          }
+        }
+      },
+      "wall_speedup": 3.2586601300638947
+    },
+    {
+      "name": "search-deleted-jsonl",
+      "validation": {
+        "sources": "c8a4c8f89fdb8a84f99546a5326c22040ac106490ff25400497f2a8241fe879c",
+        "uris_sha256": "255c7ceff3a9dca53f35f4de4a7ea175e51dd470ffd1af94f73d72673c6ee9da",
+        "sessions": 19
+      },
+      "samples": {
+        "python": [
+          {
+            "wall_seconds": 0.5189047500025481,
+            "exit_code": 0,
+            "user_seconds": 0.411026,
+            "system_seconds": 0.152803,
+            "peak_rss_bytes": 230735872,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.5155180419969838,
+            "exit_code": 0,
+            "user_seconds": 0.409672,
+            "system_seconds": 0.14819,
+            "peak_rss_bytes": 228179968,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.5258875419967808,
+            "exit_code": 0,
+            "user_seconds": 0.413342,
+            "system_seconds": 0.156275,
+            "peak_rss_bytes": 229425152,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.55546470801346,
+            "exit_code": 0,
+            "user_seconds": 0.426849,
+            "system_seconds": 0.171879,
+            "peak_rss_bytes": 228851712,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.5100437500223052,
+            "exit_code": 0,
+            "user_seconds": 0.40656899999999996,
+            "system_seconds": 0.15087499999999998,
+            "peak_rss_bytes": 228720640,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          }
+        ],
+        "rust": [
+          {
+            "wall_seconds": 0.29789358301786706,
+            "exit_code": 0,
+            "user_seconds": 0.236172,
+            "system_seconds": 0.053433999999999995,
+            "peak_rss_bytes": 116539392,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.29352550001931377,
+            "exit_code": 0,
+            "user_seconds": 0.234289,
+            "system_seconds": 0.05216,
+            "peak_rss_bytes": 116457472,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.2989552920043934,
+            "exit_code": 0,
+            "user_seconds": 0.235447,
+            "system_seconds": 0.054519,
+            "peak_rss_bytes": 116457472,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.2989231660030782,
+            "exit_code": 0,
+            "user_seconds": 0.23507299999999998,
+            "system_seconds": 0.052648,
+            "peak_rss_bytes": 117096448,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.314700165996328,
+            "exit_code": 0,
+            "user_seconds": 0.239563,
+            "system_seconds": 0.054853,
+            "peak_rss_bytes": 116555776,
+            "stdout_bytes": 4283,
+            "stderr_bytes": 0
+          }
+        ]
+      },
+      "summary": {
+        "python": {
+          "wall_seconds": {
+            "median": 0.5189047500025481,
+            "min": 0.5100437500223052,
+            "max": 0.55546470801346,
+            "stdev": 0.01788505727248842
+          },
+          "user_seconds": {
+            "median": 0.411026,
+            "min": 0.40656899999999996,
+            "max": 0.426849,
+            "stdev": 0.007858648630648913
+          },
+          "system_seconds": {
+            "median": 0.152803,
+            "min": 0.14819,
+            "max": 0.171879,
+            "stdev": 0.009350143089814194
+          },
+          "peak_rss_bytes": {
+            "median": 228851712,
+            "min": 228179968,
+            "max": 230735872,
+            "stdev": 974634.5715945028
+          }
+        },
+        "rust": {
+          "wall_seconds": {
+            "median": 0.2989231660030782,
+            "min": 0.29352550001931377,
+            "max": 0.314700165996328,
+            "stdev": 0.008085568575524418
+          },
+          "user_seconds": {
+            "median": 0.235447,
+            "min": 0.234289,
+            "max": 0.239563,
+            "stdev": 0.002046828326948798
+          },
+          "system_seconds": {
+            "median": 0.053433999999999995,
+            "min": 0.05216,
+            "max": 0.054853,
+            "stdev": 0.0011610588701698118
+          },
+          "peak_rss_bytes": {
+            "median": 116539392,
+            "min": 116457472,
+            "max": 117096448,
+            "stdev": 269465.75078848144
+          }
+        }
+      },
+      "wall_speedup": 1.7359134688049054
+    },
+    {
+      "name": "search-wal-sqlite",
+      "validation": {
+        "sources": "0adc8ce6f8e03791b029117a43191cba44525d8c834bffd51fd267b0d236557f",
+        "uris_sha256": "b90cb846cbca0aec8ef854ef7f58c59589213adff05ae7ac850c079448e7683d",
+        "sessions": 32
+      },
+      "samples": {
+        "python": [
+          {
+            "wall_seconds": 1.4919414579926524,
+            "exit_code": 0,
+            "user_seconds": 1.022687,
+            "system_seconds": 1.970662,
+            "peak_rss_bytes": 57507840,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          },
+          {
+            "wall_seconds": 1.531289457983803,
+            "exit_code": 0,
+            "user_seconds": 1.037311,
+            "system_seconds": 2.045088,
+            "peak_rss_bytes": 57966592,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          },
+          {
+            "wall_seconds": 1.5036557500134222,
+            "exit_code": 0,
+            "user_seconds": 1.032424,
+            "system_seconds": 1.988386,
+            "peak_rss_bytes": 57933824,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          },
+          {
+            "wall_seconds": 1.524067374994047,
+            "exit_code": 0,
+            "user_seconds": 1.041993,
+            "system_seconds": 2.026766,
+            "peak_rss_bytes": 57933824,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          },
+          {
+            "wall_seconds": 1.5523402919934597,
+            "exit_code": 0,
+            "user_seconds": 1.05145,
+            "system_seconds": 2.075901,
+            "peak_rss_bytes": 58654720,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          }
+        ],
+        "rust": [
+          {
+            "wall_seconds": 0.4806700000190176,
+            "exit_code": 0,
+            "user_seconds": 0.42818,
+            "system_seconds": 0.688624,
+            "peak_rss_bytes": 21757952,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          },
+          {
+            "wall_seconds": 0.48362849999102764,
+            "exit_code": 0,
+            "user_seconds": 0.43721099999999996,
+            "system_seconds": 0.655647,
+            "peak_rss_bytes": 22298624,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          },
+          {
+            "wall_seconds": 0.4819657079933677,
+            "exit_code": 0,
+            "user_seconds": 0.433652,
+            "system_seconds": 0.63235,
+            "peak_rss_bytes": 21921792,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          },
+          {
+            "wall_seconds": 0.47879795799963176,
+            "exit_code": 0,
+            "user_seconds": 0.438701,
+            "system_seconds": 0.641053,
+            "peak_rss_bytes": 22347776,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          },
+          {
+            "wall_seconds": 0.4838583329983521,
+            "exit_code": 0,
+            "user_seconds": 0.433121,
+            "system_seconds": 0.606067,
+            "peak_rss_bytes": 22380544,
+            "stdout_bytes": 6387,
+            "stderr_bytes": 80
+          }
+        ]
+      },
+      "summary": {
+        "python": {
+          "wall_seconds": {
+            "median": 1.524067374994047,
+            "min": 1.4919414579926524,
+            "max": 1.5523402919934597,
+            "stdev": 0.02367559739679838
+          },
+          "user_seconds": {
+            "median": 1.037311,
+            "min": 1.022687,
+            "max": 1.05145,
+            "stdev": 0.010717758277737025
+          },
+          "system_seconds": {
+            "median": 2.026766,
+            "min": 1.970662,
+            "max": 2.075901,
+            "stdev": 0.04249863344626506
+          },
+          "peak_rss_bytes": {
+            "median": 57933824,
+            "min": 57507840,
+            "max": 58654720,
+            "stdev": 412538.5789280804
+          }
+        },
+        "rust": {
+          "wall_seconds": {
+            "median": 0.4819657079933677,
+            "min": 0.47879795799963176,
+            "max": 0.4838583329983521,
+            "stdev": 0.0021151535485395986
+          },
+          "user_seconds": {
+            "median": 0.433652,
+            "min": 0.42818,
+            "max": 0.438701,
+            "stdev": 0.00409348329665579
+          },
+          "system_seconds": {
+            "median": 0.641053,
+            "min": 0.606067,
+            "max": 0.688624,
+            "stdev": 0.030444518253702094
+          },
+          "peak_rss_bytes": {
+            "median": 22298624,
+            "min": 21757952,
+            "max": 22380544,
+            "stdev": 282736.765909211
+          }
+        }
+      },
+      "wall_speedup": 3.1621904830934975
+    },
+    {
+      "name": "search-four-providers",
+      "validation": {
+        "sources": "ade5937ef6503378e3bebc62940fe19c63a4b50602e6166b63025c672a255035",
+        "uris_sha256": "0c1294feffe19a73322264905124f18bf37b33ebae5943826a7534a33c8c7339",
+        "sessions": 1101
+      },
+      "samples": {
+        "python": [
+          {
+            "wall_seconds": 0.7341750839841552,
+            "exit_code": 0,
+            "user_seconds": 0.5624199999999999,
+            "system_seconds": 0.37060099999999996,
+            "peak_rss_bytes": 234012672,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.7359704170085024,
+            "exit_code": 0,
+            "user_seconds": 0.565935,
+            "system_seconds": 0.349968,
+            "peak_rss_bytes": 236044288,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.7520286250219215,
+            "exit_code": 0,
+            "user_seconds": 0.5700069999999999,
+            "system_seconds": 0.396387,
+            "peak_rss_bytes": 234160128,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.7426090830122121,
+            "exit_code": 0,
+            "user_seconds": 0.566479,
+            "system_seconds": 0.3871,
+            "peak_rss_bytes": 233963520,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.7552397500257939,
+            "exit_code": 0,
+            "user_seconds": 0.5690189999999999,
+            "system_seconds": 0.355389,
+            "peak_rss_bytes": 236077056,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          }
+        ],
+        "rust": [
+          {
+            "wall_seconds": 0.3785581669944804,
+            "exit_code": 0,
+            "user_seconds": 0.27405999999999997,
+            "system_seconds": 0.095298,
+            "peak_rss_bytes": 123518976,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.3804201250022743,
+            "exit_code": 0,
+            "user_seconds": 0.277517,
+            "system_seconds": 0.093152,
+            "peak_rss_bytes": 123781120,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.3813096670201048,
+            "exit_code": 0,
+            "user_seconds": 0.27849599999999997,
+            "system_seconds": 0.092887,
+            "peak_rss_bytes": 122552320,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.4035102920024656,
+            "exit_code": 0,
+            "user_seconds": 0.275964,
+            "system_seconds": 0.118868,
+            "peak_rss_bytes": 123666432,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          },
+          {
+            "wall_seconds": 0.3945513750077225,
+            "exit_code": 0,
+            "user_seconds": 0.27836099999999997,
+            "system_seconds": 0.106004,
+            "peak_rss_bytes": 122617856,
+            "stdout_bytes": 288102,
+            "stderr_bytes": 0
+          }
+        ]
+      },
+      "summary": {
+        "python": {
+          "wall_seconds": {
+            "median": 0.7426090830122121,
+            "min": 0.7341750839841552,
+            "max": 0.7552397500257939,
+            "stdev": 0.009403835956193709
+          },
+          "user_seconds": {
+            "median": 0.566479,
+            "min": 0.5624199999999999,
+            "max": 0.5700069999999999,
+            "stdev": 0.00296818783098375
+          },
+          "system_seconds": {
+            "median": 0.37060099999999996,
+            "min": 0.349968,
+            "max": 0.396387,
+            "stdev": 0.019912092494260864
+          },
+          "peak_rss_bytes": {
+            "median": 234160128,
+            "min": 233963520,
+            "max": 236077056,
+            "stdev": 1106217.2992984697
+          }
+        },
+        "rust": {
+          "wall_seconds": {
+            "median": 0.3813096670201048,
+            "min": 0.3785581669944804,
+            "max": 0.4035102920024656,
+            "stdev": 0.010889308937101778
+          },
+          "user_seconds": {
+            "median": 0.277517,
+            "min": 0.27405999999999997,
+            "max": 0.27849599999999997,
+            "stdev": 0.001870965071827906
+          },
+          "system_seconds": {
+            "median": 0.095298,
+            "min": 0.092887,
+            "max": 0.118868,
+            "stdev": 0.011224279273075847
+          },
+          "peak_rss_bytes": {
+            "median": 123518976,
+            "min": 122552320,
+            "max": 123781120,
+            "stdev": 594064.0487381811
+          }
+        }
+      },
+      "wall_speedup": 1.9475223086150015
+    },
+    {
+      "name": "collect-http-local",
+      "validation": {
+        "sources": "406290649b018aabf6e708cfce4a5bd588f1eade364e0cf1a18de0dc826b4e01",
+        "requests": 33,
+        "prompt_sha256": "a51896ba69874f0d5ed0ef446c65b9a2c9500b84e17016ffa255ba6d4049b6ac",
+        "report_sha256": "112d32039648b4c27edb874ba04fb60df3c09c4215b590c45eac545825fb2234"
+      },
+      "samples": {
+        "python": [
+          {
+            "wall_seconds": 0.2845954999793321,
+            "exit_code": 0,
+            "user_seconds": 0.217417,
+            "system_seconds": 0.121516,
+            "peak_rss_bytes": 45989888,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.2848505000001751,
+            "exit_code": 0,
+            "user_seconds": 0.217879,
+            "system_seconds": 0.11998199999999999,
+            "peak_rss_bytes": 45940736,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.28302087500924245,
+            "exit_code": 0,
+            "user_seconds": 0.217742,
+            "system_seconds": 0.12878599999999998,
+            "peak_rss_bytes": 45776896,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.28384312498383224,
+            "exit_code": 0,
+            "user_seconds": 0.217016,
+            "system_seconds": 0.116991,
+            "peak_rss_bytes": 45907968,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.28470849999575876,
+            "exit_code": 0,
+            "user_seconds": 0.216336,
+            "system_seconds": 0.120097,
+            "peak_rss_bytes": 45694976,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          }
+        ],
+        "rust": [
+          {
+            "wall_seconds": 0.06703233299776912,
+            "exit_code": 0,
+            "user_seconds": 0.049618999999999996,
+            "system_seconds": 0.027791999999999997,
+            "peak_rss_bytes": 13811712,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.06980237498646602,
+            "exit_code": 0,
+            "user_seconds": 0.045537999999999995,
+            "system_seconds": 0.027292,
+            "peak_rss_bytes": 13959168,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.06643808301305398,
+            "exit_code": 0,
+            "user_seconds": 0.045859,
+            "system_seconds": 0.027888999999999997,
+            "peak_rss_bytes": 13582336,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.06871891699847765,
+            "exit_code": 0,
+            "user_seconds": 0.047133999999999995,
+            "system_seconds": 0.029327,
+            "peak_rss_bytes": 13778944,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.07071162498323247,
+            "exit_code": 0,
+            "user_seconds": 0.045627,
+            "system_seconds": 0.028149,
+            "peak_rss_bytes": 13697024,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          }
+        ]
+      },
+      "summary": {
+        "python": {
+          "wall_seconds": {
+            "median": 0.2845954999793321,
+            "min": 0.28302087500924245,
+            "max": 0.2848505000001751,
+            "stdev": 0.0007674258597405601
+          },
+          "user_seconds": {
+            "median": 0.217417,
+            "min": 0.216336,
+            "max": 0.217879,
+            "stdev": 0.0006228615415965222
+          },
+          "system_seconds": {
+            "median": 0.120097,
+            "min": 0.116991,
+            "max": 0.12878599999999998,
+            "stdev": 0.004406999807125019
+          },
+          "peak_rss_bytes": {
+            "median": 45907968,
+            "min": 45694976,
+            "max": 45989888,
+            "stdev": 122277.77761801201
+          }
+        },
+        "rust": {
+          "wall_seconds": {
+            "median": 0.06871891699847765,
+            "min": 0.06643808301305398,
+            "max": 0.07071162498323247,
+            "stdev": 0.0018050394423998768
+          },
+          "user_seconds": {
+            "median": 0.045859,
+            "min": 0.045537999999999995,
+            "max": 0.049618999999999996,
+            "stdev": 0.0017249945797016284
+          },
+          "system_seconds": {
+            "median": 0.027888999999999997,
+            "min": 0.027292,
+            "max": 0.029327,
+            "stdev": 0.0007582312971646581
+          },
+          "peak_rss_bytes": {
+            "median": 13778944,
+            "min": 13582336,
+            "max": 13959168,
+            "stdev": 139697.0209102542
+          }
+        }
+      },
+      "wall_speedup": 4.141443323177471
+    },
+    {
+      "name": "collect-http-20ms",
+      "validation": {
+        "sources": "406290649b018aabf6e708cfce4a5bd588f1eade364e0cf1a18de0dc826b4e01",
+        "requests": 33,
+        "prompt_sha256": "a51896ba69874f0d5ed0ef446c65b9a2c9500b84e17016ffa255ba6d4049b6ac",
+        "report_sha256": "112d32039648b4c27edb874ba04fb60df3c09c4215b590c45eac545825fb2234"
+      },
+      "samples": {
+        "python": [
+          {
+            "wall_seconds": 0.5088980000000447,
+            "exit_code": 0,
+            "user_seconds": 0.230175,
+            "system_seconds": 0.11473399999999999,
+            "peak_rss_bytes": 45662208,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.5157840409956407,
+            "exit_code": 0,
+            "user_seconds": 0.231906,
+            "system_seconds": 0.12592599999999998,
+            "peak_rss_bytes": 45957120,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.514946291979868,
+            "exit_code": 0,
+            "user_seconds": 0.234236,
+            "system_seconds": 0.116752,
+            "peak_rss_bytes": 45727744,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.5127712909888942,
+            "exit_code": 0,
+            "user_seconds": 0.227706,
+            "system_seconds": 0.12175799999999999,
+            "peak_rss_bytes": 45809664,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.5169310419878457,
+            "exit_code": 0,
+            "user_seconds": 0.23138499999999998,
+            "system_seconds": 0.125714,
+            "peak_rss_bytes": 45776896,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          }
+        ],
+        "rust": [
+          {
+            "wall_seconds": 0.2849979579914361,
+            "exit_code": 0,
+            "user_seconds": 0.048473999999999996,
+            "system_seconds": 0.030109999999999998,
+            "peak_rss_bytes": 13991936,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.28919524999218993,
+            "exit_code": 0,
+            "user_seconds": 0.04947,
+            "system_seconds": 0.030708,
+            "peak_rss_bytes": 13860864,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.2875492919993121,
+            "exit_code": 0,
+            "user_seconds": 0.047612999999999996,
+            "system_seconds": 0.030348,
+            "peak_rss_bytes": 13778944,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.2941958750016056,
+            "exit_code": 0,
+            "user_seconds": 0.049295,
+            "system_seconds": 0.034477,
+            "peak_rss_bytes": 13139968,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          },
+          {
+            "wall_seconds": 0.2963153339806013,
+            "exit_code": 0,
+            "user_seconds": 0.049551,
+            "system_seconds": 0.036897,
+            "peak_rss_bytes": 14417920,
+            "stdout_bytes": 79,
+            "stderr_bytes": 3623
+          }
+        ]
+      },
+      "summary": {
+        "python": {
+          "wall_seconds": {
+            "median": 0.514946291979868,
+            "min": 0.5088980000000447,
+            "max": 0.5169310419878457,
+            "stdev": 0.00316700987288625
+          },
+          "user_seconds": {
+            "median": 0.23138499999999998,
+            "min": 0.227706,
+            "max": 0.234236,
+            "stdev": 0.00239470902198994
+          },
+          "system_seconds": {
+            "median": 0.12175799999999999,
+            "min": 0.11473399999999999,
+            "max": 0.12592599999999998,
+            "stdev": 0.0051080183241644685
+          },
+          "peak_rss_bytes": {
+            "median": 45776896,
+            "min": 45662208,
+            "max": 45957120,
+            "stdev": 110272.96203875182
+          }
+        },
+        "rust": {
+          "wall_seconds": {
+            "median": 0.28919524999218993,
+            "min": 0.2849979579914361,
+            "max": 0.2963153339806013,
+            "stdev": 0.00469433131635552
+          },
+          "user_seconds": {
+            "median": 0.049295,
+            "min": 0.047612999999999996,
+            "max": 0.049551,
+            "stdev": 0.0008277513515543195
+          },
+          "system_seconds": {
+            "median": 0.030708,
+            "min": 0.030109999999999998,
+            "max": 0.036897,
+            "stdev": 0.0030329971150662182
+          },
+          "peak_rss_bytes": {
+            "median": 13860864,
+            "min": 13139968,
+            "max": 14417920,
+            "stdev": 461319.44411307876
+          }
+        }
+      },
+      "wall_speedup": 1.7806180841275046
+    }
+  ]
+}
