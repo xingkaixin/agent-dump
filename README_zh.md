@@ -125,6 +125,43 @@ npx @agent-dump/cli --help
 
 若平台暂不支持，wrapper 会输出当前检测到的 `platform/arch`，并提示前往 GitHub Releases 页面。
 
+### 原生安装：curl、Homebrew 与 Scoop
+
+以下渠道支持当前 v1.0.0，直接安装原生 CLI，无需 Python、Node.js 或 Rust。
+
+**macOS / Linux 安装脚本**（macOS x64/arm64；Linux x64、glibc ≥ 2.17）：
+
+```bash
+curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | sh
+```
+
+安装器校验 SHA-256 和可执行文件版本，成功后才替换旧版本。默认安装到 `~/.local/bin`，不使用 sudo、不修改 shell 配置；需要时会提示配置 PATH。再次运行即可更新。指定版本或目录时，将变量传给 `sh`：
+
+```bash
+curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | AGENT_DUMP_VERSION=1.0.0 AGENT_DUMP_INSTALL_DIR="$HOME/.local/bin" sh
+```
+
+默认位置的脚本安装可通过 `rm "$HOME/.local/bin/agent-dump"` 卸载。安装器不会覆盖包管理器的符号链接，这类安装请通过原包管理器更新。
+
+**Homebrew**（macOS x64/arm64 和 Linux x64）：
+
+```bash
+brew install xingkaixin/tap/agent-dump
+brew upgrade agent-dump
+# 卸载：brew uninstall agent-dump
+```
+
+**Scoop**（Windows x64，需要已安装 Scoop）：
+
+```powershell
+scoop bucket add xingkaixin https://github.com/xingkaixin/scoop-bucket
+scoop install xingkaixin/agent-dump
+scoop update agent-dump
+# 卸载：scoop uninstall agent-dump
+```
+
+目前没有 Linux ARM64、musl/Alpine 或 Windows ARM64 原生产物。切换安装渠道时，先卸载旧安装，或确认 PATH 当前选中的可执行文件。
+
 ### 方式四：本地开发
 
 ```bash
@@ -572,6 +609,7 @@ git push origin v{version}
 - 标签发布工作流为 [`release.yml`](./.github/workflows/release.yml)
 - 仅匹配 `vX.Y.Z` 的标签会触发统一发布流水线
 - 发布包含 PyPI 制品、GitHub Release 资产和 `@agent-dump/cli` npm 包
+- 原生安装附件复用同一批已验证二进制。发布成功后，`distribution.yml` 使用仓库 secret `DISTRIBUTION_TOKEN` 同步 Homebrew 与 Scoop；可针对最新稳定版单独重试。
 - 同一版本的发布可以安全重试：字节一致的 registry 制品会跳过，已存在但内容不同则失败
 - npm 发布会确认每个包已可下载且完整性校验一致后再继续，所有原生平台包就绪后才发布 CLI 主包
 - npm CLI 包在 `npm`/`npx` 安装阶段会下载并校验匹配的原生二进制

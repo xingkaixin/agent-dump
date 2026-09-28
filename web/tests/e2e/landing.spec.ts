@@ -125,6 +125,26 @@ for (const locale of locales) {
       );
     }
 
+    for (const [label, command] of [
+      ["curl", "curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | sh"],
+      ["Homebrew", "brew install xingkaixin/tap/agent-dump"],
+      ["Scoop", "scoop bucket add xingkaixin https://github.com/xingkaixin/scoop-bucket\nscoop install xingkaixin/agent-dump"],
+    ]) {
+      const tab = install.getByRole("tab", { name: label, exact: true });
+      if (label === "Scoop") {
+        await install.getByRole("tab", { name: "Homebrew", exact: true }).focus();
+        await page.keyboard.press("ArrowRight");
+        await expect(tab).toBeFocused();
+        await tab.press("Enter");
+      } else {
+        await tab.click();
+      }
+      await expect(tab).toHaveAttribute("aria-selected", "true");
+      const panel = install.getByRole("tabpanel", { name: label, exact: true });
+      await panel.getByRole("button").click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+    }
+
     const faq = page.locator("#faq");
     const firstQuestion = faq.getByRole("button").first();
     await firstQuestion.scrollIntoViewIfNeeded();

@@ -259,3 +259,12 @@ jobs:
             sleep 15
           done
           exit 1
+
+  distribution:
+    name: Sync Homebrew and Scoop
+    needs: publish
+    uses: ./.github/workflows/distribution.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      DISTRIBUTION_TOKEN: ${{ secrets.DISTRIBUTION_TOKEN }}

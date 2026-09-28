@@ -9,6 +9,7 @@ const { locale } = Astro.props;
 const t = ui[locale];
 
 const groups = [
+  { label: install.nativeLabel[locale], tabs: install.native.map(({ note, ...tab }) => ({ ...tab, note: note[locale] })) },
   { label: install.globalLabel[locale], tabs: install.global },
   { label: install.runLabel[locale], tabs: install.run },
 ];

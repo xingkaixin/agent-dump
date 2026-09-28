@@ -6,6 +6,11 @@
 
 ## [1.0.0] - 2026-09-25
 
+### Distribution update — 2026-09-28
+
+- Add a checksummed shell installer, Homebrew formula, and Scoop manifest for the existing v1.0.0 binaries. No new product version or rebuilt artifacts.
+- Add native installation commands and platform requirements to the English, Chinese, and Japanese landing pages.
+
 ### Breaking Changes
 
 - Replace the Python distribution with a native Rust CLI. Wheels no longer include a Python import API or `python -m agent_dump`; existing API consumers must migrate to CLI subprocesses and JSON exports or pin `agent-dump==0.15.9` (#396).
