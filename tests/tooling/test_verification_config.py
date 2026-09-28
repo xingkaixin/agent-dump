@@ -526,6 +526,7 @@ class TestCiDoesNotRepeatVersionIndependentWork:
             "rust",
             "web",
             "npm-wrapper",
+            "installer",
         }
         assert "matrix:" not in self._job("web"), "Web 只需构建一次"
         assert '"22"' in self._job("npm-wrapper")

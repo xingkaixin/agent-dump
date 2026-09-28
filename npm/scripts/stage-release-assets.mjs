@@ -1,8 +1,9 @@
-import { chmod, copyFile, mkdir } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { NATIVE_TARGETS } from "./native-targets.mjs";
+import { generateDistribution } from "./distribution.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const npmRoot = path.resolve(__dirname, "..");
@@ -21,6 +22,9 @@ export async function stageReleaseAssets(outputDirectory) {
   }
 
   await copyFile(checksumPath, path.join(outputDir, "agent-dump-binary-checksums.json"));
+  const { version } = JSON.parse(await readFile(path.join(npmRoot, "packages/cli/package.json"), "utf8"));
+  await generateDistribution(outputDir, outputDir, version);
+  await copyFile(path.resolve(npmRoot, "../scripts/install.sh"), path.join(outputDir, "install.sh"));
 }
 
 async function main(args = process.argv.slice(2)) {

@@ -125,6 +125,43 @@ Supported native targets:
 
 If your platform is unsupported, the wrapper prints the detected platform/arch pair and points to the GitHub releases page.
 
+### Native installation: curl, Homebrew and Scoop
+
+These channels support v1.0.0 and install the native CLI without Python, Node.js or Rust.
+
+**macOS / Linux shell installer** (macOS x64/arm64; Linux x64 with glibc ≥ 2.17):
+
+```bash
+curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | sh
+```
+
+The installer verifies SHA-256 and the executable version before replacing an existing installation. It defaults to `~/.local/bin`, does not use sudo or edit shell configuration, and prints a PATH hint when needed. Run it again to update. To choose a version or directory, pass variables to `sh`:
+
+```bash
+curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | AGENT_DUMP_VERSION=1.0.0 AGENT_DUMP_INSTALL_DIR="$HOME/.local/bin" sh
+```
+
+Uninstall the default shell installation with `rm "$HOME/.local/bin/agent-dump"`. Package-manager symlinks are not overwritten; update those installations through their original manager.
+
+**Homebrew** (macOS x64/arm64 and Linux x64):
+
+```bash
+brew install xingkaixin/tap/agent-dump
+brew upgrade agent-dump
+# Uninstall: brew uninstall agent-dump
+```
+
+**Scoop** (Windows x64, with Scoop already installed):
+
+```powershell
+scoop bucket add xingkaixin https://github.com/xingkaixin/scoop-bucket
+scoop install xingkaixin/agent-dump
+scoop update agent-dump
+# Uninstall: scoop uninstall agent-dump
+```
+
+Linux ARM64, musl/Alpine, and Windows ARM64 do not have native builds. When changing installation channels, remove the old installation or check which executable your PATH selects.
+
 ### Method 4: Local Development
 
 ```bash
@@ -590,6 +627,7 @@ git push origin v{version}
 - The tag release workflow is [`release.yml`](./.github/workflows/release.yml)
 - Only tags matching `vX.Y.Z` trigger the unified release pipeline
 - Release publishes PyPI artifacts, GitHub release assets, and npm packages for `@agent-dump/cli`
+- Native installer assets share the same verified binaries. After publication, `distribution.yml` syncs Homebrew and Scoop using the repository secret `DISTRIBUTION_TOKEN`; it can be retried separately for the latest stable release.
 - Retrying the same release skips byte-identical registry artifacts and fails if an existing version or asset differs
 - npm publishing waits until each package is downloadable with the expected integrity before proceeding to the next package; native packages precede the CLI wrapper
 - The npm CLI package installs the matching native binary during `npm`/`npx` installation and verifies its checksum

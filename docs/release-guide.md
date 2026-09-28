@@ -145,3 +145,14 @@ v1.0.0 是首个 Rust 发布目标。Cargo 与 npm 产品版本同步为 1.0.0�
 - 每个目标输出 `artifact-report.json`，记录 wheel、sdist、native 的大小与 SHA-256。发布 job 下载已验证的四个 wheel 和 Linux 生成的 sdist，不重新构建。
 
 本地：`just build`、`just verify-wheel`；使用 `node npm/scripts/stage-binaries.mjs <manifest target> dist/native/<target>/<executable>` 暂存后运行 `just test-npm-smoke`。发布前仍需 `just isok`、PR 全部 CI 通过及无冲突。用户控制 merge 和 tag；构建制品不等于授权发布。
+
+## 原生安装渠道（curl / Homebrew / Scoop）
+
+- `scripts/install.sh` 随 GitHub Release 发布为 `install.sh`；公开入口使用 Release URL，不依赖网站部署。默认安装到 `~/.local/bin`，支持 `AGENT_DUMP_VERSION` 与绝对路径 `AGENT_DUMP_INSTALL_DIR`。
+- `npm/scripts/distribution.mjs` 校验所有原生文件与 `agent-dump-binary-checksums.json` 一致后，生成 `SHA256SUMS`、`agent-dump.rb` 和 `agent-dump.json`。三份文件随 Release 发布，不重新编译。
+- `.github/workflows/distribution.yml` 在 Release 发布成功后下载并重新校验产物，更新共享的 `xingkaixin/homebrew-tap` 的 `Formula/agent-dump.rb` 和 `xingkaixin/scoop-bucket` 的 `bucket/agent-dump.json`。只提交本项目的清单，不修改其他项目。
+- 仓库 Actions Secret `DISTRIBUTION_TOKEN` 需要上述两个仓库的 Contents read/write 权限。共享仓库有并发更新时，同步通过 rebase 后重试 push；凭证失效时修复 Secret，再手动重试同步。
+- 同步失败不回滚已经发布的 PyPI/npm/Release。通过 Actions 的 `Sync installation channels` 手动运行，传入最新稳定版本 tag。旧 tag 会被拒绝，避免渠道回退。已发布的 `SHA256SUMS` 必须与重新计算结果完全一致；缺失或不一致时停止同步。渠道同步对当前仓库仅有读取权限，不补发或覆盖 Release 附件。
+- v1.0.0 已补发 `install.sh`、`SHA256SUMS` 和两份渠道清单，并同步共享 tap/bucket。仅增加附件，没有重新编译、替换原有制品或更改版本/tag。后续版本由统一发布流程生成和同步；无需为新增安装渠道单独升级版本。
+- Homebrew 覆盖 macOS x64/arm64、Linux x64；Scoop 覆盖 Windows x64。平台能力仍取自 `native-targets.json`。不承诺 Linux ARM64 或 musl 支持。
+- 安装回归测试位于 `npm/tests/shell-install.test.mjs` 和 `npm/tests/distribution.test.mjs`；只操作临时目录与合成可执行文件。PR CI 在 macOS/Linux 验证 shell 安装器。

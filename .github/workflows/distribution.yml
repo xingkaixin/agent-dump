@@ -1,0 +1,85 @@
+name: Sync installation channels
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+    secrets:
+      DISTRIBUTION_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable release tag (for example v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installation-channels
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Verify published release and generate manifests
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          latest=$(gh release view --repo xingkaixin/agent-dump --json tagName --jq .tagName)
+          test "$RELEASE_TAG" = "$latest"
+          gh release download "$RELEASE_TAG" --repo xingkaixin/agent-dump --pattern 'agent-dump-*' --dir artifacts/distribution-source
+          node npm/scripts/distribution.mjs artifacts/distribution-source artifacts/distribution "${RELEASE_TAG#v}"
+      - name: Verify published checksums
+        run: |
+          gh release download "$RELEASE_TAG" --repo xingkaixin/agent-dump --pattern SHA256SUMS --dir artifacts/distribution-source
+          cmp artifacts/distribution-source/SHA256SUMS artifacts/distribution/SHA256SUMS
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: xingkaixin/homebrew-tap
+          token: ${{ secrets.DISTRIBUTION_TOKEN }}
+          path: distribution/homebrew-tap
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: xingkaixin/scoop-bucket
+          token: ${{ secrets.DISTRIBUTION_TOKEN }}
+          path: distribution/scoop-bucket
+      - name: Update channel repositories
+        run: |
+          latest=$(gh release view --repo xingkaixin/agent-dump --json tagName --jq .tagName)
+          test "$RELEASE_TAG" = "$latest"
+          mkdir -p distribution/homebrew-tap/Formula distribution/scoop-bucket/bucket
+          cp artifacts/distribution/agent-dump.rb distribution/homebrew-tap/Formula/agent-dump.rb
+          cp artifacts/distribution/agent-dump.json distribution/scoop-bucket/bucket/agent-dump.json
+          for channel in homebrew-tap scoop-bucket; do
+            (
+              cd "distribution/$channel"
+              git config user.name 'github-actions[bot]'
+              git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+              git add Formula/agent-dump.rb 2>/dev/null || git add bucket/agent-dump.json
+              if ! git diff --cached --quiet; then
+                git commit -m "chore: Update agent-dump to $RELEASE_TAG"
+                for attempt in 1 2 3; do
+                  git pull --rebase
+                  if git push; then break; fi
+                  test "$attempt" -lt 3
+                done
+              fi
+            )
+          done

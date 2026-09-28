@@ -9,7 +9,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 
 ## 安装与运行入口
 
-从 v1.0.0 起，Rust wheel 仅提供 CLI；不使用 Python 导入 API 或 `python -m agent_dump`。pip、uv tool、uvx 与 npm/bunx/npx 的 CLI 参数一致。Linux 预构建包需要 glibc ≥ 2.17。
+从 v1.0.0 起，Rust wheel 仅提供 CLI；不使用 Python 导入 API 或 `python -m agent_dump`。pip、uv tool、uvx、npm/bunx/npx、curl、Homebrew 与 Scoop 的 CLI 参数一致。Linux 预构建包需要 glibc ≥ 2.17。
 
 按“尽量不改环境”的顺序选择入口：
 
@@ -27,6 +27,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 
 3. 持久安装
 - 适用于用户明确要长期直接运行 `agent-dump`。
+- curl、Homebrew 与 Scoop 可直接安装原生 CLI，无需 Python 或 Node.js；支持范围与发布状态见 README。
 - 只在 skill 中说明支持全局安装；具体安装命令优先参考仓库 README，或在用户明确要求安装时再给出。
 
 ## 环境不确定时的处理规则
