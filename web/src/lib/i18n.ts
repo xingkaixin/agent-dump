@@ -143,6 +143,36 @@ type UiStrings = {
 };
 
 export const install = {
+  nativeLabel: { en: "Native installation", zh: "原生安装", ja: "ネイティブインストール" },
+  native: [
+    {
+      label: "curl",
+      code: "curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | sh",
+      note: {
+        en: "macOS Intel / Apple Silicon · Linux x64 (glibc 2.17+). Installs to ~/.local/bin; run again to update.",
+        zh: "macOS Intel / Apple Silicon · Linux x64（glibc 2.17+）。安装到 ~/.local/bin，再次运行即可更新。",
+        ja: "macOS Intel / Apple Silicon・Linux x64（glibc 2.17以降）。~/.local/bin にインストール。再実行で更新できます。",
+      },
+    },
+    {
+      label: "Homebrew",
+      code: "brew install xingkaixin/tap/agent-dump",
+      note: {
+        en: "macOS Intel / Apple Silicon · Linux x64. Update with brew upgrade agent-dump.",
+        zh: "macOS Intel / Apple Silicon · Linux x64。通过 brew upgrade agent-dump 更新。",
+        ja: "macOS Intel / Apple Silicon・Linux x64。brew upgrade agent-dump で更新できます。",
+      },
+    },
+    {
+      label: "Scoop",
+      code: "scoop bucket add xingkaixin https://github.com/xingkaixin/scoop-bucket\nscoop install xingkaixin/agent-dump",
+      note: {
+        en: "Windows x64 with Scoop installed. Run in PowerShell; update with scoop update agent-dump.",
+        zh: "Windows x64，需要已安装 Scoop。在 PowerShell 中运行，通过 scoop update agent-dump 更新。",
+        ja: "Scoop を導入済みの Windows x64。PowerShell で実行し、scoop update agent-dump で更新できます。",
+      },
+    },
+  ],
   globalLabel: { en: "Install globally", zh: "全局安装", ja: "グローバルにインストール" } as Record<
     Locale,
     string
@@ -232,7 +262,7 @@ export const ui: Record<Locale, UiStrings> = {
         isLatest: true,
         title: "Native Rust CLI for AI Session Workflows",
         description:
-          "v1.0.0 brings a native Rust CLI to AI session export, full-text search, AI collect, and prompt handoff for Codex, Claude Code, Cursor, and other supported tools. Keep your CLI workflows with improved startup and export performance. Python imports and python -m agent_dump are removed; API users can pin 0.15.9.",
+          "v1.0.0 brings a native Rust CLI to AI session export, full-text search, AI collect, and prompt handoff for Codex, Claude Code, Cursor, and other supported tools. Keep your CLI workflows with improved startup and export performance. Install the same v1.0.0 with curl, Homebrew, or Scoop, without Python or Node.js. Python imports and python -m agent_dump are removed; API users can pin 0.15.9.",
         command: "npx @agent-dump/cli@1.0.0 --help",
         tags: ["Rust CLI", "Session Export", "Full-Text Search"],
       },
@@ -301,7 +331,7 @@ export const ui: Record<Locale, UiStrings> = {
       },
     ],
     installHeading: "Install",
-    installNote: "Works with uv, npm, pnpm, and bun. JavaScript package wrappers require Node.js 22+.",
+    installNote: "Install with curl, Homebrew, or Scoop without Python or Node.js. uv and JavaScript packages remain available; JavaScript wrappers require Node.js 22+.",
     skillNote: "Or add it as an agent skill",
     copy: "Copy",
     copied: "Copied",
@@ -320,7 +350,7 @@ export const ui: Record<Locale, UiStrings> = {
       {
         question: "How do you install Agent Dump?",
         answer:
-          "Install Agent Dump globally with uv tool install agent-dump or npm install -g @agent-dump/cli. You can also run it directly with uvx agent-dump --help, npx @agent-dump/cli --help, or bunx @agent-dump/cli --help.",
+          "Use the curl installer or Homebrew on macOS and Linux x64, or Scoop on Windows x64. These install the native CLI without Python or Node.js. You can also install with uv or npm, or run directly with uvx, npx, or bunx. See the installation section for commands and platform requirements.",
       },
     ],
     versionLabel: "Version",
@@ -395,7 +425,7 @@ export const ui: Record<Locale, UiStrings> = {
         isLatest: true,
         title: "原生 Rust CLI：会话工作流迈入 v1.0.0",
         description:
-          "v1.0.0 使用原生 Rust CLI，保留 Codex、Claude Code、Cursor 等工具的 AI 会话导出、全文搜索、AI collect 和提示词交接，改善启动与导出性能。Python 导入 API 和 python -m agent_dump 已移除；旧 API 使用方可固定 0.15.9。",
+          "v1.0.0 使用原生 Rust CLI，保留 Codex、Claude Code、Cursor 等工具的 AI 会话导出、全文搜索、AI collect 和提示词交接，改善启动与导出性能。现有 v1.0.0 也可通过 curl、Homebrew 或 Scoop 安装，无需 Python 或 Node.js。Python 导入 API 和 python -m agent_dump 已移除；旧 API 使用方可固定 0.15.9。",
         command: "npx @agent-dump/cli@1.0.0 --help",
         tags: ["Rust CLI", "会话导出", "全文搜索"],
       },
@@ -464,7 +494,7 @@ export const ui: Record<Locale, UiStrings> = {
       },
     ],
     installHeading: "安装",
-    installNote: "支持 uv、npm、pnpm 和 bun；JavaScript 包装器需要 Node.js 22+。",
+    installNote: "curl、Homebrew 和 Scoop 安装无需 Python 或 Node.js。也可继续使用 uv 或 JavaScript 包；JavaScript 包装器需要 Node.js 22+。",
     skillNote: "或作为 agent skill 添加",
     copy: "复制",
     copied: "已复制",
@@ -483,7 +513,7 @@ export const ui: Record<Locale, UiStrings> = {
       {
         question: "如何安装 Agent Dump？",
         answer:
-          "可以用 uv tool install agent-dump 或 npm install -g @agent-dump/cli 全局安装 Agent Dump。也可以直接运行 uvx agent-dump --help、npx @agent-dump/cli --help 或 bunx @agent-dump/cli --help。",
+          "macOS 和 Linux x64 可通过 curl 或 Homebrew 安装，Windows x64 可通过 Scoop 安装，均无需 Python 或 Node.js。也可继续使用 uv 或 npm 安装，或通过 uvx、npx、bunx 直接运行。具体命令和平台要求见安装区域。",
       },
     ],
     versionLabel: "版本",
@@ -558,7 +588,7 @@ export const ui: Record<Locale, UiStrings> = {
         isLatest: true,
         title: "AI セッションのワークフローをネイティブ Rust CLI で",
         description:
-          "v1.0.0 はネイティブ Rust CLI に移行。Codex、Claude Code、Cursor などの AI セッションエクスポート、全文検索、AI collect、プロンプト引き継ぎを維持し、起動とエクスポートの性能を改善します。Python API と python -m agent_dump は削除されるため、旧 API が必要な場合は 0.15.9 に固定できます。",
+          "v1.0.0 はネイティブ Rust CLI に移行。Codex、Claude Code、Cursor などの AI セッションエクスポート、全文検索、AI collect、プロンプト引き継ぎを維持し、起動とエクスポートの性能を改善します。同じ v1.0.0 を curl・Homebrew・Scoop で導入でき、Python や Node.js は不要です。Python API と python -m agent_dump は削除されるため、旧 API が必要な場合は 0.15.9 に固定できます。",
         command: "npx @agent-dump/cli@1.0.0 --help",
         tags: ["Rust CLI", "セッションエクスポート", "全文検索"],
       },
@@ -628,7 +658,7 @@ export const ui: Record<Locale, UiStrings> = {
     ],
     installHeading: "インストール",
     installNote:
-      "uv、npm、pnpm、bunに対応しています。JavaScriptパッケージのラッパーにはNode.js 22以降が必要です。",
+      "curl、Homebrew、Scoop なら Python や Node.js は不要です。uv と JavaScript パッケージも利用できます。JavaScript ラッパーには Node.js 22 以降が必要です。",
     skillNote: "またはagent skillとして追加",
     copy: "コピー",
     copied: "コピーしました",
@@ -647,7 +677,7 @@ export const ui: Record<Locale, UiStrings> = {
       {
         question: "Agent Dumpをインストールするには？",
         answer:
-          "uv tool install agent-dumpまたはnpm install -g @agent-dump/cliでグローバルにインストールできます。uvx agent-dump --help、npx @agent-dump/cli --help、bunx @agent-dump/cli --helpで直接実行することもできます。",
+          "macOS と Linux x64 では curl または Homebrew、Windows x64 では Scoop でインストールできます。Python や Node.js は不要です。uv や npm によるインストール、uvx・npx・bunx による直接実行も利用できます。コマンドと対応環境はインストール欄をご覧ください。",
       },
     ],
     versionLabel: "バージョン",

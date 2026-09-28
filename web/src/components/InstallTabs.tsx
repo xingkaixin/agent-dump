@@ -3,7 +3,7 @@ import { CopyButton } from "./CopyButton";
 
 interface Group {
   label: string;
-  tabs: { label: string; code: string }[];
+  tabs: { label: string; code: string; note?: string }[];
 }
 
 interface Props {
@@ -39,7 +39,7 @@ export function InstallTabs({ groups, skill, copy, copied }: Props) {
             {group.label}
           </p>
           <Tabs.Root defaultValue={0}>
-            <Tabs.List className="relative mb-4 flex gap-1 border-b border-line">
+            <Tabs.List aria-label={group.label} className="relative mb-4 flex gap-1 border-b border-line">
               {group.tabs.map((tab, i) => (
                 <Tabs.Tab
                   key={tab.label}
@@ -53,6 +53,7 @@ export function InstallTabs({ groups, skill, copy, copied }: Props) {
             </Tabs.List>
             {group.tabs.map((tab, i) => (
               <Tabs.Panel key={tab.label} value={i}>
+                {tab.note && <p className="mb-3 text-[13px] leading-6 text-muted">{tab.note}</p>}
                 <CommandLine code={tab.code} copy={copy} copied={copied} />
               </Tabs.Panel>
             ))}

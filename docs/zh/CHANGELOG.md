@@ -4,6 +4,11 @@
 
 ## [1.0.0] - 2026-09-25
 
+### 分发更新 — 2026-09-28
+
+- 为现有 v1.0.0 二进制增加带校验的 shell 安装器、Homebrew Formula 和 Scoop 清单，不发布新版本、不重新构建制品。
+- 在英、中、日三语落地页增加原生安装命令和平台要求。
+
 ### 破坏性变更
 
 - 使用原生 Rust CLI 替换 Python 分发。wheel 不再包含 Python 导入 API 或 `python -m agent_dump`；现有 API 使用方需要迁移到 CLI 子进程和 JSON 导出，或固定 `agent-dump==0.15.9` (#396)。
