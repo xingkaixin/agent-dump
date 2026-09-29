@@ -33,8 +33,7 @@ def test_reader_search_copy_export_resize_and_restore(cli, lang):
     with terminal(
         cli,
         "--browse",
-        "-q",
-        "provider:codex reader-first",
+        "agents:///project?providers=codex&q=reader-first",
         "-d",
         "36500",
         "--lang",
@@ -57,6 +56,7 @@ def test_reader_search_copy_export_resize_and_restore(cli, lang):
         send("q")
         code, transcript = finish()
         assert code == 0, transcript
+        assert "ignored" not in transcript and "忽略" not in transcript
     files = list((cli.root / "exports" / "codex").glob("*.json"))
     assert len(files) == 1
     assert json.loads(files[0].read_text())["id"] == IDENTITY

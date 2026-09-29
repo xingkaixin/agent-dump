@@ -52,7 +52,7 @@ fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
         (args.interactive, Mode::Interactive, "--interactive"),
         (args.browse, Mode::Browse, "--browse"),
         (
-            query_uri && !args.collect,
+            query_uri && !args.collect && !args.browse,
             Mode::List,
             "agents:// query URI",
         ),
