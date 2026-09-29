@@ -18,7 +18,7 @@ pub fn available() -> bool {
     io::stdin().is_terminal() && io::stdout().is_terminal()
 }
 
-struct Restore;
+pub(super) struct Restore;
 impl Drop for Restore {
     fn drop(&mut self) {
         let _ = execute!(io::stdout(), DisableBracketedPaste);
@@ -26,7 +26,7 @@ impl Drop for Restore {
     }
 }
 
-fn init() -> crate::Result<ratatui::DefaultTerminal> {
+pub(super) fn init() -> crate::Result<ratatui::DefaultTerminal> {
     let terminal = ratatui::try_init()?;
     // Register SIGWINCH before the first frame can prompt an immediate resize.
     event::poll(std::time::Duration::ZERO)?;

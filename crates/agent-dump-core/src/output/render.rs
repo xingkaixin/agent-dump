@@ -101,6 +101,34 @@ fn append_section(
     *index += 1;
 }
 
+pub fn reader_message(
+    message: &crate::session::Message,
+    expanded: bool,
+) -> String {
+    let mut body =
+        crate::query::transcript::message_texts(message).join("\n\n");
+    for part in &message.parts {
+        if let Part::Tool(tool) = part {
+            write!(
+                body,
+                "\n\n[{}{}]",
+                tool.tool,
+                if expanded { "" } else { " …" }
+            )
+            .unwrap();
+            if expanded {
+                write!(
+                    body,
+                    "\n{}",
+                    serde_json::to_string_pretty(&tool.state).unwrap()
+                )
+                .unwrap();
+            }
+        }
+    }
+    safe_body(&body)
+}
+
 pub fn context(
     uri: &str,
     data: &SessionData,

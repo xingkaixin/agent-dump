@@ -119,6 +119,16 @@ impl TextQuery {
         }
         None
     }
+    pub fn first_literal_span(
+        &self,
+        text: &str,
+    ) -> Option<std::ops::Range<usize>> {
+        self.patterns
+            .iter()
+            .filter_map(|pattern| pattern.find(text))
+            .min_by_key(regex::Match::start)
+            .map(|matched| matched.range())
+    }
     pub fn has_evidence(&self, snippet: &str) -> bool {
         let normalized = normalize(&snippet.replace("**", ""));
         self.patterns
