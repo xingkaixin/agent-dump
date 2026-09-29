@@ -638,3 +638,17 @@ git push origin v{version}
 ## License
 
 MIT
+
+### Machine-readable output
+
+Add `--json` to list, search or statistics mode to write one JSON object to stdout. Diagnostics go to stderr. Existing `--format json` file exports are unchanged.
+
+```bash
+agent-dump --list --json
+agent-dump --search 'timeout' --json -query 'provider:codex'
+agent-dump --stats --json
+```
+
+The envelope contains `schema_version: 1`, `kind` (list/search/stats), `status` (ok/partial/error), `data`, `failed_providers`, `failed_sessions`, and `error`. Incomplete discovery or failed query reads produce partial results. List/search data is an array; statistics data contains total/by_provider/by_time. Unknown directories, models and message counts are null; timestamps use UTC ISO 8601. Statistics expose known_messages and unknown_message_count_sessions separately. Time buckets use creation dates in the local timezone.
+
+No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Other modes reject `--json`.

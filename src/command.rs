@@ -87,12 +87,16 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         |lang| lang == "zh",
     );
     let mut plan_stderr = io::stderr();
-    let plan_out: &mut dyn Write = if args.emit_prompt {
+    let plan_out: &mut dyn Write = if args.emit_prompt || args.json {
         &mut plan_stderr
     } else {
         out
     };
     let mode = mode(&args);
+    if args.json && !matches!(mode, Mode::List | Mode::Stats) {
+        eprintln!("{}", i18n::t("JSON_MODE_ERROR", zh, &[]));
+        return Ok(false);
+    }
     let query_uri_requested = args
         .uri
         .as_deref()
@@ -117,7 +121,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         None
     };
     if let Some(key) = error_key {
-        if args.emit_prompt {
+        if args.emit_prompt || args.json {
             eprintln!("{}", i18n::t(key, zh, &[]));
         } else {
             writeln!(plan_out, "{}", i18n::t(key, zh, &[]))?;
@@ -254,6 +258,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             query.as_ref(),
             args.days.unwrap_or(7),
             mode == Mode::Reindex,
+            args.json,
             zh,
             out,
             &mut io::stderr(),
@@ -284,8 +289,11 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         return list_workflow::run(
             query.as_ref(),
             args.days.unwrap_or(7),
-            !args.no_metadata_summary,
-            (args.format.is_some(), args.output.is_some()),
+            &list_workflow::Options {
+                summary: !args.no_metadata_summary,
+                ignored: (args.format.is_some(), args.output.is_some()),
+                json: args.json,
+            },
             zh,
             out,
             &mut io::stderr(),

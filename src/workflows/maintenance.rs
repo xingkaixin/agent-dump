@@ -102,13 +102,14 @@ pub fn run(
     query: Option<&Query>,
     days: i64,
     reindex: bool,
+    json: bool,
     zh: bool,
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
     let scan =
         agent_dump_core::query::scanner::discover(query, days, zh, warnings)?;
-    if scan.groups.is_empty() {
+    if scan.groups.is_empty() && !json {
         let names = query
             .as_ref()
             .and_then(|q| q.providers.as_ref())
@@ -196,7 +197,11 @@ pub fn run(
                 continue;
             }
             stats
-                .entry(group.info.display_name)
+                .entry(if json {
+                    group.info.name
+                } else {
+                    group.info.display_name
+                })
                 .or_default()
                 .add(session.message_count);
             total.add(session.message_count);
@@ -215,6 +220,25 @@ pub fn run(
                 4
             }] += 1;
         }
+    }
+    if json {
+        let data = serde_json::json!({
+            "total": total,
+            "by_provider": stats,
+            "by_time": {
+                "today": ages[0], "yesterday": ages[1],
+                "previous_2_to_7_days": ages[2],
+                "previous_8_to_30_days": ages[3], "older": ages[4]
+            }
+        });
+        return super::machine::write(
+            "stats",
+            &scan,
+            selection.as_ref(),
+            query,
+            &data,
+            out,
+        );
     }
     if total.sessions == 0 {
         writeln!(
@@ -301,10 +325,12 @@ pub fn run(
     Ok(true)
 }
 
-#[derive(Default)]
+#[derive(Default, serde::Serialize)]
 struct MessageStats {
     sessions: usize,
+    #[serde(rename = "known_messages")]
     messages: usize,
+    #[serde(rename = "unknown_message_count_sessions")]
     unknown: usize,
 }
 

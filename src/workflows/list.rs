@@ -5,18 +5,23 @@ use agent_dump_core::query::Query;
 use agent_dump_core::query::text::Mode;
 use std::io::Write;
 
+pub struct Options {
+    pub summary: bool,
+    pub ignored: (bool, bool),
+    pub json: bool,
+}
+
 pub fn run(
     query: Option<&Query>,
     days: i64,
-    summary: bool,
-    ignored: (bool, bool),
+    options: &Options,
     zh: bool,
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
     let scan =
         agent_dump_core::query::scanner::discover(query, days, zh, warnings)?;
-    if scan.groups.is_empty() {
+    if scan.groups.is_empty() && !options.json {
         let roots = match agent_dump_core::providers::registry::search_roots() {
             Ok(roots) => roots,
             Err(error) => {
@@ -52,10 +57,21 @@ pub fn run(
             )
         })
         .transpose()?;
+    if options.json {
+        for (present, key) in [
+            (options.ignored.0, "LIST_IGNORE_FORMAT"),
+            (options.ignored.1, "LIST_IGNORE_OUTPUT"),
+        ] {
+            if present {
+                writeln!(warnings, "{}", t(key, zh, &[]))?;
+            }
+        }
+        return super::machine::list(&scan, selection.as_ref(), query, out);
+    }
     let mut ignored_text = String::new();
     for (present, key) in [
-        (ignored.0, "LIST_IGNORE_FORMAT"),
-        (ignored.1, "LIST_IGNORE_OUTPUT"),
+        (options.ignored.0, "LIST_IGNORE_FORMAT"),
+        (options.ignored.1, "LIST_IGNORE_OUTPUT"),
     ] {
         if present {
             ignored_text += &(t(key, zh, &[]) + "\n");
@@ -143,7 +159,7 @@ pub fn run(
             &groups,
             query.map(|q| q.summary(zh)).as_deref(),
             days,
-            summary,
+            options.summary,
             zh
         )
         .replacen(
