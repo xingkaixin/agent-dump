@@ -312,5 +312,13 @@
   "MESSAGE_COUNT_UNKNOWN": "unknown",
   "SESSION_COUNT_SUFFIX": "sessions",
   "CLI_JSON_HELP": "Write list, search or statistics as JSON to stdout",
-  "JSON_MODE_ERROR": "--json requires list, search or statistics mode."
+  "JSON_MODE_ERROR": "--json requires list, search, statistics or --message context mode.",
+  "CLI_LOCATE_HELP": "Include message locators in search results",
+  "CLI_MESSAGE_HELP": "Read context around a search message locator",
+  "CLI_BEFORE_HELP": "Messages before the target (default: 3)",
+  "CLI_AFTER_HELP": "Messages after the target (default: 3)",
+  "MESSAGE_MODE_ERROR": "--locate requires --search; --message requires a session URI and cannot combine with --head, --summary, --format or --output.",
+  "MESSAGE_LOCATOR_INVALID": "Invalid message locator. Run --search with --locate again.",
+  "MESSAGE_LOCATOR_STALE": "Message locator no longer matches this transcript. Run --search with --locate again.",
+  "MESSAGE_CONTEXT_RANGE": "Messages {start}–{end} of {total}"
 }

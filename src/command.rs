@@ -93,8 +93,24 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         out
     };
     let mode = mode(&args);
-    if args.json && !matches!(mode, Mode::List | Mode::Stats) {
+    if args.json
+        && !matches!(mode, Mode::List | Mode::Stats)
+        && !(mode == Mode::Uri && args.message.is_some())
+    {
         eprintln!("{}", i18n::t("JSON_MODE_ERROR", zh, &[]));
+        return Ok(false);
+    }
+    if (args.locate
+        && (mode != Mode::List
+            || args.search.as_deref().is_none_or(str::is_empty)))
+        || (args.message.is_some()
+            && (mode != Mode::Uri
+                || args.head
+                || args.summary
+                || args.format.is_some()
+                || args.output.is_some()))
+    {
+        eprintln!("{}", i18n::t("MESSAGE_MODE_ERROR", zh, &[]));
         return Ok(false);
     }
     let query_uri_requested = args
@@ -293,6 +309,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
                 summary: !args.no_metadata_summary,
                 ignored: (args.format.is_some(), args.output.is_some()),
                 json: args.json,
+                locate: args.locate,
             },
             zh,
             out,
@@ -363,6 +380,10 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             uri,
             head: args.head,
             summary: args.summary,
+            message: args.message,
+            before: args.before.unwrap_or(3) as usize,
+            after: args.after.unwrap_or(3) as usize,
+            json: args.json,
             formats,
             output: args.output,
         },

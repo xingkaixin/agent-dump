@@ -11,11 +11,34 @@ pub struct UriOperation {
     pub uri: String,
     pub head: bool,
     pub summary: bool,
+    pub message: Option<String>,
+    pub before: usize,
+    pub after: usize,
+    pub json: bool,
     pub formats: Vec<OutputFormat>,
     pub output: Option<PathBuf>,
 }
 
 pub fn run(
+    operation: &UriOperation,
+    zh: bool,
+    out: &mut impl Write,
+    warnings: &mut impl Write,
+) -> crate::Result<bool> {
+    if !operation.json {
+        return run_inner(operation, zh, out, warnings);
+    }
+    let mut buffer = Vec::new();
+    let success = run_inner(operation, zh, &mut buffer, warnings)?;
+    if success {
+        out.write_all(&buffer)?;
+    } else {
+        warnings.write_all(&buffer)?;
+    }
+    Ok(success)
+}
+
+fn run_inner(
     operation: &UriOperation,
     zh: bool,
     out: &mut impl Write,
@@ -111,6 +134,57 @@ pub fn run(
             "{}",
             render::head(uri, &session, registration.info.display_name, zh)
         )?;
+        return Ok(true);
+    }
+    if let Some(locator) = &operation.message {
+        let data = provider.read(&session, zh, &mut |diagnostic| {
+            writeln!(
+                warnings,
+                "{}",
+                diagnostics::record_warning(&diagnostic, zh)
+            )?;
+            Ok(())
+        })?;
+        let range = agent_dump_core::query::context::window(
+            &data,
+            locator,
+            operation.before,
+            operation.after,
+            zh,
+        )?;
+        if operation.json {
+            let messages: Vec<_> = range
+                .clone()
+                .map(|index| {
+                    serde_json::json!({
+                        "position": index + 1, "message": data.messages[index]
+                    })
+                })
+                .collect();
+            serde_json::to_writer(
+                &mut *out,
+                &serde_json::json!({
+                    "schema_version": 1, "kind": "context", "status": "ok",
+                    "data": {"uri": uri, "locator": locator, "total_messages": data.messages.len(), "start": range.start + 1, "end": range.end, "messages": messages}
+                }),
+            )?;
+            writeln!(out)?;
+        } else {
+            writeln!(
+                out,
+                "{}",
+                agent_dump_core::output::i18n::t(
+                    "MESSAGE_CONTEXT_RANGE",
+                    zh,
+                    &[
+                        ("start", (range.start + 1).to_string()),
+                        ("end", range.end.to_string()),
+                        ("total", data.messages.len().to_string())
+                    ]
+                )
+            )?;
+            writeln!(out, "{}", render::context(uri, &data, range))?;
+        }
         return Ok(true);
     }
     let default_output = if operation.output.is_none()

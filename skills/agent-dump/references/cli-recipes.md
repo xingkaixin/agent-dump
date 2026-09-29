@@ -419,4 +419,18 @@ agent-dump --stats --json
 
 The envelope contains `schema_version: 1`, `kind` (list/search/stats), `status` (ok/partial/error), `data`, `failed_providers`, `failed_sessions`, and `error`. Incomplete discovery or failed query reads produce partial results. List/search data is an array; statistics data contains total/by_provider/by_time. Unknown directories, models and message counts are null; timestamps use UTC ISO 8601. Statistics expose known_messages and unknown_message_count_sessions separately. Time buckets use creation dates in the local timezone.
 
-No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Other modes reject `--json`.
+No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context also accepts `--json`; other modes reject it.
+
+### Message locations and context
+
+```bash
+agent-dump --search 'database locked' --locate --json -query 'provider:codex'
+agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
+agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --json
+```
+
+Pass `locations[].locator` from search unchanged to `--message`. Positions are one-based normalized message ordinals. Locators bind to the transcript snapshot; rerun search after content changes. Context defaults to three messages on either side; zero selects only the target, and ranges clamp at transcript boundaries. Reading a range still parses the source transcript; this is not partial disk I/O.
+
+`--locate` requires `--search`. It returns messages containing any search term, respecting role filters, while all terms must still match the session. Title-only matches have empty locations; failed location reads have null locations and partial status. Search without --locate is unchanged.
+
+`--message` cannot combine with --head, --summary, --format or --output. JSON context has kind=context and data containing uri, locator, total_messages, start/end and messages (position plus normalized message). Invalid or stale locators exit nonzero; JSON diagnostics go only to stderr.

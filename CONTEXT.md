@@ -103,3 +103,8 @@ _Avoid_: Export
   not turn the sum of known counts into an apparently complete total.
 - Collect may merge Sessions only when their date and known Working Directory
   match. An unknown Working Directory does not establish shared project identity.
+
+**Message Locator**:
+A transcript revision plus a one-based normalized message position, obtained from an explicit Search location request. It is valid only for the same Session transcript snapshot; changed content requires a new Search.
+
+- Context windows select normalized Messages through the Provider read contract. They do not interpret Provider-private offsets or promise partial source I/O.

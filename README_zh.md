@@ -633,4 +633,18 @@ agent-dump --stats --json
 
 结果包含 `schema_version: 1`、`kind`（list/search/stats）、`status`（ok/partial/error）、`data`、`failed_providers`、`failed_sessions` 和 `error`。发现不完整或筛选读取失败时为 partial，健康结果仍可使用。列表和搜索的 data 为数组；统计为 total/by_provider/by_time 对象。未知目录、模型和消息数为 null；时间使用 UTC ISO 8601。统计中的 known_messages 只统计已知计数，unknown_message_count_sessions 单独记录未知会话数；时间桶按创建日期及本地日期计算。
 
-无匹配返回空数组和退出码 0；没有可用来源且未指定 Provider 范围时返回 error 和退出码 1。参数或执行错误可能只在 stderr 输出诊断，调用方必须检查退出码。`--json` 仅支持列表、搜索和统计。
+无匹配返回空数组和退出码 0；没有可用来源且未指定 Provider 范围时返回 error 和退出码 1。参数或执行错误可能只在 stderr 输出诊断，调用方必须检查退出码。`--json` 也支持消息上下文模式，其他模式不支持。
+
+### 消息定位与上下文
+
+```bash
+agent-dump --search 'database locked' --locate --json -query 'provider:codex'
+agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
+agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --json
+```
+
+将搜索结果 `locations[].locator` 原样传给 `--message`。`position` 是标准化会话中的一基消息序号；定位符绑定会话正文快照，正文变化后需重新搜索。范围默认前后各 3 条，可用 0 只读目标；超出首尾自动截到边界。范围读取仍需解析源会话，不承诺局部磁盘读取。
+
+`--locate` 仅用于 `--search`，返回包含任一搜索词的消息位置（各搜索词仍须在会话中全部命中），并遵守角色筛选。仅标题命中时 locations 为空；定位读取失败时为 null，结果标记 partial。未加 --locate 的搜索行为不变。
+
+`--message` 不能与 --head、--summary、--format 或 --output 组合。JSON 上下文包含 kind=context、data.uri、locator、total_messages、start/end 和 messages；每项包含 position 与标准化 message。定位符过期或无效返回非零退出码，JSON 模式诊断仅进入 stderr。
