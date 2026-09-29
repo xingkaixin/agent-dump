@@ -101,3 +101,7 @@ Cloudflare 统计由 Pages 项目的 Web Analytics 注入。自定义域名额�
 ```
 
 规则属于 Cloudflare 域名配置，Pages 部署不会创建或覆盖它。首次配置后确认浏览器只加载一份 CF beacon、Pages 统计端点正常接收数据；回滚时禁用这一条规则即可。使用现有 Web Analytics 按地区、设备比较 LCP、INP、CLS，不新增计费产品。
+
+### 阅读器验证
+
+`tests/cli/test_reader.py` 使用隔离来源与 POSIX PTY 验证搜索、复制请求、导出、resize 和退出恢复。`terminal/reader.rs` 的 TestBackend 测试覆盖宽窄布局、中文和工具搜索，Windows 同样执行。复制测试只检查 PTY 中的 OSC 52 序列，不访问系统剪贴板。

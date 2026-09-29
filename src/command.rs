@@ -23,6 +23,7 @@ enum Mode {
     Uri,
     List,
     Interactive,
+    Browse,
     Help,
 }
 fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
@@ -49,8 +50,9 @@ fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
         ),
         (args.list, Mode::List, "--list"),
         (args.interactive, Mode::Interactive, "--interactive"),
+        (args.browse, Mode::Browse, "--browse"),
         (
-            query_uri && !args.collect,
+            query_uri && !args.collect && !args.browse,
             Mode::List,
             "agents:// query URI",
         ),
@@ -124,6 +126,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
     } else if mode == Mode::Collect
         && (args.list
             || args.interactive
+            || args.browse
             || (args.uri.is_some() && !query_uri_requested))
     {
         Some("COLLECT_MODE_CONFLICT")
@@ -184,6 +187,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             | Mode::Reindex
             | Mode::List
             | Mode::Interactive
+            | Mode::Browse
     ) && let Some(days) = args.days
     {
         let maximum = i64::from(
@@ -202,7 +206,10 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
     }
     let query_uri = args.uri.as_deref().filter(|uri| {
         uri.starts_with("agents://")
-            && matches!(mode, Mode::Collect | Mode::List | Mode::Interactive)
+            && matches!(
+                mode,
+                Mode::Collect | Mode::List | Mode::Interactive | Mode::Browse
+            )
     });
     if query_uri.is_some() && args.query.is_some() {
         write!(
@@ -310,6 +317,30 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
                 ignored: (args.format.is_some(), args.output.is_some()),
                 json: args.json,
                 locate: args.locate,
+            },
+            zh,
+            out,
+            &mut io::stderr(),
+        );
+    }
+    if mode == Mode::Browse {
+        let formats =
+            output_formats::parse(args.format.as_deref().unwrap_or("json"))?;
+        if formats.contains(&output_formats::OutputFormat::Print) {
+            writeln!(
+                out,
+                "{}",
+                diagnostics::Diagnostic::interactive_print(zh).render(zh)
+            )?;
+            return Ok(false);
+        }
+        return crate::workflows::reader::run(
+            &crate::workflows::interactive::Operation {
+                query,
+                days: args.days.unwrap_or(7),
+                formats,
+                output: args.output,
+                metadata: !args.no_metadata_summary,
             },
             zh,
             out,

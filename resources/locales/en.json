@@ -320,5 +320,18 @@
   "MESSAGE_MODE_ERROR": "--locate requires --search; --message requires a session URI and cannot combine with --head, --summary, --format or --output.",
   "MESSAGE_LOCATOR_INVALID": "Invalid message locator. Run --search with --locate again.",
   "MESSAGE_LOCATOR_STALE": "Message locator no longer matches this transcript. Run --search with --locate again.",
-  "MESSAGE_CONTEXT_RANGE": "Messages {start}–{end} of {total}"
+  "MESSAGE_CONTEXT_RANGE": "Messages {start}–{end} of {total}",
+  "CLI_BROWSE_HELP": "Browse sessions and read transcripts in a terminal",
+  "READER_REQUIRES_TTY": "--browse requires an interactive terminal. Use a session URI or --list --json for pipes.",
+  "READER_EMPTY": "No sessions to browse.",
+  "READER_EMPTY_BODY": "No readable messages.",
+  "READER_READY": "Tab switches panes; / searches this session.",
+  "READER_MATCHES": "{count} matching messages · n/N next/previous",
+  "READER_COPY_REQUEST": "Copy request sent to terminal (OSC 52 support required).",
+  "READER_SMALL": "Resize terminal; q exits.",
+  "READER_SESSIONS": "Sessions",
+  "READER_BODY": "Transcript",
+  "READER_HELP": "↑↓ move/scroll · Tab panes · / search · n/N matches\nt tools · y copy URI · e export · q quit",
+  "READER_HELP_COMPACT": "Tab panes · / find · q quit\n↑↓ scroll · t tools · y URI · e save",
+  "READER_HELP_TINY": "Tab / q:quit\n↑↓ t y e"
 }

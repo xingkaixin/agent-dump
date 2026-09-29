@@ -57,6 +57,8 @@ pub struct Args {
     #[arg(short = 'i', long)]
     pub interactive: bool,
     #[arg(long)]
+    pub browse: bool,
+    #[arg(long)]
     pub head: bool,
     #[arg(short = 'd', long = "days", allow_hyphen_values = true)]
     pub days: Option<i64>,
@@ -177,6 +179,7 @@ pub fn command(zh: bool) -> clap::Command {
         ("before", "BEFORE"),
         ("after", "AFTER"),
         ("interactive", "INTERACTIVE"),
+        ("browse", "BROWSE"),
         ("no_metadata_summary", "NO_METADATA_SUMMARY"),
         ("page_size", "PAGE_SIZE"),
         ("query", "QUERY"),

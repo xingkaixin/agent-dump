@@ -648,3 +648,23 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --json
 `--locate` 仅用于 `--search`，返回包含任一搜索词的消息位置（各搜索词仍须在会话中全部命中），并遵守角色筛选。仅标题命中时 locations 为空；定位读取失败时为 null，结果标记 partial。未加 --locate 的搜索行为不变。
 
 `--message` 不能与 --head、--summary、--format 或 --output 组合。JSON 上下文包含 kind=context、data.uri、locator、total_messages、start/end 和 messages；每项包含 position 与标准化 message。定位符过期或无效返回非零退出码，JSON 模式诊断仅进入 stderr。
+
+### TUI 会话阅读器
+
+```bash
+agent-dump --browse
+agent-dump --browse -query 'provider:codex path:.' -days 30
+agent-dump --browse 'agents://.?providers=codex,claude'
+agent-dump --browse --format json,markdown --output ./exports
+```
+
+`--browse` 需要真实交互式终端，默认显示最近 7 天会话，按更新时间排序。支持现有查询条件和 agents:// 查询 URI；只读取当前选择的会话正文（内容筛选本身仍可能读取多个会话）。宽终端显示列表和正文两栏；窄于 90 列时通过 Tab 切换单栏。阅读器只读 Provider 来源，不自动刷新活动会话；重新打开可获取新列表。
+
+- ↑/↓ 或 j/k：在当前区域移动或滚动；Enter/→ 进入正文，← 返回列表。
+- Tab：切换区域；PageUp/PageDown 翻页；Home/End 跳到首尾。
+- `/` 输入当前会话的字面搜索词，Enter 搜索，Esc 取消输入；n/N 跳到下一个/上一个命中消息。搜索自动展开工具详情。
+- `t`：展开或折叠工具详情；`y`：发送 URI 复制请求，需要终端支持 OSC 52。
+- `e`：导出当前会话，遵守 --format、--output 和现有 Provider 格式能力，默认 JSON；不支持 print 格式。
+- q/Esc/Ctrl-C：关闭阅读器并恢复终端，正常关闭返回 0。
+
+没有匹配会话时退出；不可用来源或非终端输入返回失败。单个会话读取失败会显示诊断，仍可切换其他会话。原有 --interactive 批量选择导出保持不变。

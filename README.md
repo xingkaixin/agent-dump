@@ -666,3 +666,23 @@ Pass `locations[].locator` from search unchanged to `--message`. Positions are o
 `--locate` requires `--search`. It returns messages containing any search term, respecting role filters, while all terms must still match the session. Title-only matches have empty locations; failed location reads have null locations and partial status. Search without --locate is unchanged.
 
 `--message` cannot combine with --head, --summary, --format or --output. JSON context has kind=context and data containing uri, locator, total_messages, start/end and messages (position plus normalized message). Invalid or stale locators exit nonzero; JSON diagnostics go only to stderr.
+
+### TUI session reader
+
+```bash
+agent-dump --browse
+agent-dump --browse -query 'provider:codex path:.' -days 30
+agent-dump --browse 'agents://.?providers=codex,claude'
+agent-dump --browse --format json,markdown --output ./exports
+```
+
+`--browse` requires an interactive terminal. It lists the last seven days by update time, supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
+
+- Up/Down or j/k move or scroll in the focused pane; Enter/Right opens the transcript, Left returns to the list.
+- Tab switches panes; PageUp/PageDown scroll pages; Home/End jump to either end.
+- `/` starts literal search within the current session; Enter searches, Esc cancels input, n/N jumps to the next/previous matching message. Search expands tool details.
+- `t` toggles tool details; `y` sends a URI clipboard request (requires terminal OSC 52 support).
+- `e` exports the selected session using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
+- q/Esc/Ctrl-C close the reader and restore the terminal, exiting 0.
+
+Empty selections exit without opening the reader. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. Existing --interactive batch export is unchanged.

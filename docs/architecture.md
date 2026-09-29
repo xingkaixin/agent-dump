@@ -83,3 +83,7 @@ PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹
 ## 消息定位
 
 `query/context.rs` 基于标准化 SessionData 生成消息定位符并校验上下文范围。`--search --locate` 按现有搜索语义定位命中消息；`workflows/uri.rs` 通过 Provider read 读取并校验正文快照，输出所需消息范围。定位读取失败保留筛选失败事实；正文变化拒绝旧定位符。无 --locate 时保持原搜索输出。
+
+## 会话阅读器
+
+`workflows/reader.rs` 拥有 --browse 的发现、筛选、按需读取和导出；`terminal/reader.rs` 只接收行数据和已读取的 SessionData，处理键盘与展示，不调用 Provider。正文使用 core render 的标准化投影，当前会话读取失败不阻止切换。导出复用 URI 工作流；Crossterm osc52 feature 提供复制请求，不依赖平台剪贴板进程。
