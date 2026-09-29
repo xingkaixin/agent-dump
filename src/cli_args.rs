@@ -21,6 +21,14 @@ pub struct Args {
     #[arg(long)]
     pub json: bool,
     #[arg(long)]
+    pub locate: bool,
+    #[arg(long)]
+    pub message: Option<String>,
+    #[arg(long, requires = "message")]
+    pub before: Option<u32>,
+    #[arg(long, requires = "message")]
+    pub after: Option<u32>,
+    #[arg(long)]
     pub search: Option<String>,
     #[arg(long)]
     pub stats: bool,
@@ -110,6 +118,9 @@ pub fn normalize_arguments(args: Vec<OsString>) -> Vec<OsString> {
                         | "--output"
                         | "--lang"
                         | "--search"
+                        | "--message"
+                        | "--before"
+                        | "--after"
                         | "--config"
                         | "--collect-mode"
                         | "--since"
@@ -161,6 +172,10 @@ pub fn command(zh: bool) -> clap::Command {
         ("config", "CONFIG"),
         ("list", "LIST"),
         ("json", "JSON"),
+        ("locate", "LOCATE"),
+        ("message", "MESSAGE"),
+        ("before", "BEFORE"),
+        ("after", "AFTER"),
         ("interactive", "INTERACTIVE"),
         ("no_metadata_summary", "NO_METADATA_SUMMARY"),
         ("page_size", "PAGE_SIZE"),

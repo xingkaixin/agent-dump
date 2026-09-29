@@ -2,10 +2,16 @@ use agent_dump_core::query::{Query, filter::Selection, scanner::Scan};
 use serde_json::{Value, json};
 use std::io::Write;
 
+pub type Locations = std::collections::BTreeMap<
+    (usize, usize),
+    Vec<agent_dump_core::query::context::Location>,
+>;
+
 pub fn list(
     scan: &Scan,
     selection: Option<&Selection>,
     query: Option<&Query>,
+    locations: Option<&Locations>,
     out: &mut impl Write,
 ) -> crate::Result<bool> {
     let record = |g: usize, s: usize| {
@@ -35,6 +41,11 @@ pub fn list(
                 if search {
                     value["rank"] = json!(matched.rank);
                     value["snippet"] = json!(matched.snippet);
+                    if let Some(locations) = locations {
+                        value["locations"] = json!(
+                            locations.get(&(matched.group, matched.session))
+                        );
+                    }
                 }
                 value
             })

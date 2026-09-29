@@ -312,5 +312,13 @@
   "MESSAGE_COUNT_UNKNOWN": "未知",
   "SESSION_COUNT_SUFFIX": "个会话",
   "CLI_JSON_HELP": "将列表、搜索或统计以 JSON 输出到标准输出",
-  "JSON_MODE_ERROR": "--json 仅支持列表、搜索或统计模式。"
+  "JSON_MODE_ERROR": "--json 需要列表、搜索、统计或 --message 上下文模式。",
+  "CLI_LOCATE_HELP": "在搜索结果中包含消息定位符",
+  "CLI_MESSAGE_HELP": "读取搜索消息定位符附近的上下文",
+  "CLI_BEFORE_HELP": "目标消息之前的条数（默认 3）",
+  "CLI_AFTER_HELP": "目标消息之后的条数（默认 3）",
+  "MESSAGE_MODE_ERROR": "--locate 需要 --search；--message 需要会话 URI，且不能与 --head、--summary、--format 或 --output 组合。",
+  "MESSAGE_LOCATOR_INVALID": "消息定位符无效。请重新运行 --search --locate。",
+  "MESSAGE_LOCATOR_STALE": "消息定位符与当前会话内容不符。请重新运行 --search --locate。",
+  "MESSAGE_CONTEXT_RANGE": "消息 {start}–{end}，共 {total} 条"
 }

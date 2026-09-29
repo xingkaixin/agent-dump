@@ -9,6 +9,7 @@ pub struct Options {
     pub summary: bool,
     pub ignored: (bool, bool),
     pub json: bool,
+    pub locate: bool,
 }
 
 pub fn run(
@@ -46,7 +47,7 @@ pub fn run(
         )?;
         return Ok(names.is_some());
     }
-    let selection = query
+    let mut selection = query
         .as_ref()
         .map(|query| {
             agent_dump_core::query::filter::select(
@@ -57,6 +58,44 @@ pub fn run(
             )
         })
         .transpose()?;
+    let mut locations = std::collections::BTreeMap::new();
+    if options.locate
+        && let (Some(selection), Some(query)) = (&mut selection, query)
+    {
+        let cache =
+            agent_dump_core::session::cache::SessionDataCache::default();
+        for matched in &selection.matches {
+            let group = &scan.groups[matched.group];
+            let session = &group.sessions[matched.session];
+            let result = cache
+                .get(
+                    group.info.name,
+                    group.provider.as_ref(),
+                    session,
+                    zh,
+                    &mut |diagnostic| {
+                        writeln!(warnings, "{}", agent_dump_core::output::diagnostics::record_warning(&diagnostic, zh))?;
+                        Ok(())
+                    },
+                )
+                .and_then(|data| agent_dump_core::query::context::locate(&data, query));
+            match result {
+                Ok(found) => {
+                    locations.insert((matched.group, matched.session), found);
+                }
+                Err(error) => {
+                    selection
+                        .failures
+                        .insert((group.info.name.into(), session.id.clone()));
+                    writeln!(
+                        warnings,
+                        "{}",
+                        Diagnostic::unexpected(error.as_ref(), zh).render(zh)
+                    )?;
+                }
+            }
+        }
+    }
     if options.json {
         for (present, key) in [
             (options.ignored.0, "LIST_IGNORE_FORMAT"),
@@ -66,7 +105,13 @@ pub fn run(
                 writeln!(warnings, "{}", t(key, zh, &[]))?;
             }
         }
-        return super::machine::list(&scan, selection.as_ref(), query, out);
+        return super::machine::list(
+            &scan,
+            selection.as_ref(),
+            query,
+            options.locate.then_some(&locations),
+            out,
+        );
     }
     let mut ignored_text = String::new();
     for (present, key) in [
@@ -128,6 +173,22 @@ pub fn run(
                     t(key, zh, &[]),
                     agent_dump_core::output::render::safe_line(&value)
                 )?;
+            }
+            if let Some(found) =
+                locations.get(&(matched.group, matched.session))
+            {
+                for location in found {
+                    writeln!(
+                        out,
+                        "   #{} [{}] {}\n      {}",
+                        location.position,
+                        location.role,
+                        location.locator,
+                        agent_dump_core::output::render::safe_line(
+                            &location.snippet
+                        )
+                    )?;
+                }
             }
         }
         writeln!(out, "\n{}", "=".repeat(60))?;

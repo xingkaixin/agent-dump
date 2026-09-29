@@ -101,6 +101,27 @@ fn append_section(
     *index += 1;
 }
 
+pub fn context(
+    uri: &str,
+    data: &SessionData,
+    range: std::ops::Range<usize>,
+) -> String {
+    let mut output =
+        format!("# Session Context\n\n- URI: `{}`\n\n", safe_line(uri));
+    for index in range {
+        let message = &data.messages[index];
+        writeln!(output, "## {}. {}\n", index + 1, safe_line(&message.role))
+            .unwrap();
+        writeln!(
+            output,
+            "{}\n",
+            safe_body(&crate::query::transcript::searchable_message(message))
+        )
+        .unwrap();
+    }
+    output
+}
+
 pub fn transcript(uri: &str, data: &SessionData) -> String {
     let mut output =
         format!("# Session Dump\n\n- URI: `{}`\n\n", safe_line(uri));

@@ -92,29 +92,26 @@ fn json_value(value: &Value) -> String {
         search_value(value)
     }
 }
-pub fn searchable(data: &SessionData) -> String {
-    let mut texts = Vec::new();
-    for message in &data.messages {
-        texts.extend(message_texts(message));
-        for part in &message.parts {
-            if let Part::Tool(tool) = part {
-                for value in [
-                    tool.state
-                        .get("arguments")
-                        .or_else(|| tool.state.get("input")),
-                    tool.state.get("output"),
-                ]
-                .into_iter()
-                .flatten()
-                .filter(|v| !v.is_null())
-                {
-                    texts.push(search_value(value));
-                }
-                if let Some(prompt) = tool.state.get("prompt") {
-                    let prompt = clean(prompt);
-                    if !prompt.is_empty() {
-                        texts.push(prompt);
-                    }
+pub fn searchable_message(message: &Message) -> String {
+    let mut texts = message_texts(message);
+    for part in &message.parts {
+        if let Part::Tool(tool) = part {
+            for value in [
+                tool.state
+                    .get("arguments")
+                    .or_else(|| tool.state.get("input")),
+                tool.state.get("output"),
+            ]
+            .into_iter()
+            .flatten()
+            .filter(|v| !v.is_null())
+            {
+                texts.push(search_value(value));
+            }
+            if let Some(prompt) = tool.state.get("prompt") {
+                let prompt = clean(prompt);
+                if !prompt.is_empty() {
+                    texts.push(prompt);
                 }
             }
         }
@@ -122,6 +119,15 @@ pub fn searchable(data: &SessionData) -> String {
     texts
         .iter()
         .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+pub fn searchable(data: &SessionData) -> String {
+    data.messages
+        .iter()
+        .map(searchable_message)
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")

@@ -79,3 +79,7 @@ PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹
 4. 增补隔离行为测试，并同步 README、recipes；领域事实边界变化时同步 `CONTEXT.md`。
 
 现有 Provider 的数据范围见 README 与历史设计文档。DeepChat 不支持 SQLCipher/附件读取/Tape 恢复；Cherry 只读取当前分支及未删除会话；MiniMax 只读取支持的已迁移展示行。重写不会扩大 Provider 源写入权限，也不执行上游迁移。
+
+## 消息定位
+
+`query/context.rs` 基于标准化 SessionData 生成消息定位符并校验上下文范围。`--search --locate` 按现有搜索语义定位命中消息；`workflows/uri.rs` 通过 Provider read 读取并校验正文快照，输出所需消息范围。定位读取失败保留筛选失败事实；正文变化拒绝旧定位符。无 --locate 时保持原搜索输出。
