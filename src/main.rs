@@ -14,7 +14,9 @@ pub use agent_dump_core::{Error, Result};
 
 fn main() -> std::process::ExitCode {
     let arguments = normalize_arguments(std::env::args_os().collect());
-    let emit = arguments.iter().any(|arg| arg == "--emit-prompt");
+    let emit = arguments
+        .iter()
+        .any(|arg| arg == "--emit-prompt" || arg == "--json");
     let zh = cli_args::language(&arguments);
     let arguments = match shortcut::expand(arguments, zh) {
         Ok(args) => args,
@@ -38,7 +40,7 @@ fn main() -> std::process::ExitCode {
             );
         }
     };
-    let emit = args.emit_prompt;
+    let emit = args.emit_prompt || args.json;
     let zh = args.lang.as_deref().map_or(zh, |lang| lang == "zh");
     let mut out = io::BufWriter::new(io::stdout().lock());
     match command::run(args, &mut out).and_then(|success| {

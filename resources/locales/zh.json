@@ -310,5 +310,7 @@
   "STATS_AGENT_ROW_WITH_UNKNOWN": "  {name}: {sessions} 个会话, {messages} 条已知消息, {unknown_sessions} 个会话的消息数未知",
   "STATS_TIME_ROW": "  {label}: {count} 个会话",
   "MESSAGE_COUNT_UNKNOWN": "未知",
-  "SESSION_COUNT_SUFFIX": "个会话"
+  "SESSION_COUNT_SUFFIX": "个会话",
+  "CLI_JSON_HELP": "将列表、搜索或统计以 JSON 输出到标准输出",
+  "JSON_MODE_ERROR": "--json 仅支持列表、搜索或统计模式。"
 }

@@ -19,6 +19,8 @@ pub struct Args {
     #[arg(long)]
     pub list: bool,
     #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
     pub search: Option<String>,
     #[arg(long)]
     pub stats: bool,
@@ -158,6 +160,7 @@ pub fn command(zh: bool) -> clap::Command {
         ("save", "SAVE"),
         ("config", "CONFIG"),
         ("list", "LIST"),
+        ("json", "JSON"),
         ("interactive", "INTERACTIVE"),
         ("no_metadata_summary", "NO_METADATA_SUMMARY"),
         ("page_size", "PAGE_SIZE"),
