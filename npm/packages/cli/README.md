@@ -174,10 +174,36 @@ agent-dump 'opencode://<session-id>' --format json,markdown --output ./sessions
 agent-dump --collect --emit-prompt -query "provider:opencode"
 ```
 
+## Browse sessions and consume query results
+
+```bash
+agent-dump --browse -query 'provider:codex path:.' -days 30
+agent-dump --list --json
+agent-dump --search 'database locked' --locate --json -query 'provider:codex'
+agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3 --json
+```
+
+`--browse` requires an interactive terminal and defaults to the last seven days. It supports
+session search (`/`, then n/N), tool details (`t`), URI clipboard requests (`y`, requires OSC 52),
+and export (`e`, using `--format` and `--output`). Tab switches panes on narrow terminals;
+q/Esc/Ctrl-C closes the reader. Source sessions remain read-only; reopen to refresh the list.
+
+`--json` writes one versioned JSON envelope to stdout for list, search, statistics, or message
+context; diagnostics go to stderr. Check `status` for partial results and always check the exit
+code. Existing `--format json` exports still write files.
+
+Pass a search result's `locations[].locator` unchanged to `--message`. Locators bind to the
+transcript snapshot; rerun search if content changes. Context defaults to three messages before
+and after the target. `--message` cannot combine with `--head`, `--summary`, `--format`, or
+`--output`. See the full README for the JSON schema and query restrictions.
+
 ## Key features
 
 - **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, Pi, DeepChat, Cherry Studio, and MiniMax Code
 - **Interactive selection**: Friendly CLI selector with time-based grouping
+- **Session reader**: `--browse` for terminal reading, in-session search, tool details, and export
+- **Machine-readable queries**: `--json` for list, search, statistics, and message context
+- **Message context**: `--search --locate` and URI `--message` to read search hits with nearby messages
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` reuses bounded discovery metadata without rereading the transcript and marks incomplete message counts as unknown
 - **Statistics**: `--stats` shows session and message counts grouped by agent and time, reporting known subtotals separately from sessions with unknown counts
@@ -196,5 +222,5 @@ agent-dump --collect --emit-prompt -query "provider:opencode"
 
 ## Documentation
 
-Full documentation and Python source: [xingkaixin/agent-dump](https://github.com/xingkaixin/agent-dump).
+Full documentation and Rust source: [xingkaixin/agent-dump](https://github.com/xingkaixin/agent-dump).
 Changelog: [CHANGELOG.md](https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md).

@@ -257,9 +257,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.1.0",
+        date: "2026-09-30",
+        isLatest: true,
+        title: "Browse Sessions and Read Search Results in Context",
+        description:
+          "Browse Codex, Claude Code, Cursor, Kimi, OpenCode, ZCode, Pi, and other supported AI sessions in your terminal. Search within a conversation, inspect tool details, and export the selected session. Full-text search can now return message locators for reading nearby context, while JSON query output lets scripts and agents use results directly. Source sessions remain read-only.",
+        command: "npx @agent-dump/cli@1.1.0 --browse",
+        tags: ["Session Reader", "Full-Text Search", "JSON Output"],
+      },
+      {
         version: "v1.0.0",
         date: "2026-09-25",
-        isLatest: true,
         title: "Native Rust CLI for AI Session Workflows",
         description:
           "v1.0.0 brings a native Rust CLI to AI session export, full-text search, AI collect, and prompt handoff for Codex, Claude Code, Cursor, and other supported tools. Keep your CLI workflows with improved startup and export performance. Install the same v1.0.0 with curl, Homebrew, or Scoop, without Python or Node.js. Python imports and python -m agent_dump are removed; API users can pin 0.15.9.",
@@ -420,9 +429,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.1.0",
+        date: "2026-09-30",
+        isLatest: true,
+        title: "终端浏览会话，定位搜索结果的上下文",
+        description:
+          "在终端浏览 Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi 等工具的 AI 会话，搜索对话正文、查看工具详情并导出选中的会话。全文搜索可返回消息定位符，直接读取命中位置附近的上下文；JSON 查询输出让脚本和 Agent 直接使用结果。源会话保持只读。",
+        command: "npx @agent-dump/cli@1.1.0 --browse",
+        tags: ["会话阅读器", "全文搜索", "JSON 输出"],
+      },
+      {
         version: "v1.0.0",
         date: "2026-09-25",
-        isLatest: true,
         title: "原生 Rust CLI：会话工作流迈入 v1.0.0",
         description:
           "v1.0.0 使用原生 Rust CLI，保留 Codex、Claude Code、Cursor 等工具的 AI 会话导出、全文搜索、AI collect 和提示词交接，改善启动与导出性能。现有 v1.0.0 也可通过 curl、Homebrew 或 Scoop 安装，无需 Python 或 Node.js。Python 导入 API 和 python -m agent_dump 已移除；旧 API 使用方可固定 0.15.9。",
@@ -583,9 +601,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.1.0",
+        date: "2026-09-30",
+        isLatest: true,
+        title: "ターミナルでセッションを閲覧し、検索結果の文脈を読む",
+        description:
+          "Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi などの AI セッションをターミナルで閲覧。会話内を検索し、ツールの詳細を確認して、選択したセッションをエクスポートできます。全文検索で得たメッセージの位置から前後の文脈を読み、JSON クエリ出力をスクリプトやエージェントで直接利用できます。元のセッションは読み取り専用です。",
+        command: "npx @agent-dump/cli@1.1.0 --browse",
+        tags: ["セッション閲覧", "全文検索", "JSON 出力"],
+      },
+      {
         version: "v1.0.0",
         date: "2026-09-25",
-        isLatest: true,
         title: "AI セッションのワークフローをネイティブ Rust CLI で",
         description:
           "v1.0.0 はネイティブ Rust CLI に移行。Codex、Claude Code、Cursor などの AI セッションエクスポート、全文検索、AI collect、プロンプト引き継ぎを維持し、起動とエクスポートの性能を改善します。同じ v1.0.0 を curl・Homebrew・Scoop で導入でき、Python や Node.js は不要です。Python API と python -m agent_dump は削除されるため、旧 API が必要な場合は 0.15.9 に固定できます。",

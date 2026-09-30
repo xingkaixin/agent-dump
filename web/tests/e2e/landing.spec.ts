@@ -162,8 +162,8 @@ for (const locale of locales) {
 
     const updates = page.locator("#updates");
     await expect(updates).toBeVisible();
-    await expect(updates.locator("article")).toHaveCount(8);
-    await expect(updates.locator("article").first().getByText("v1.0.0", { exact: true })).toBeVisible();
+    await expect(updates.locator("article")).toHaveCount(9);
+    await expect(updates.locator("article").first().getByText("v1.1.0", { exact: true })).toBeVisible();
 
     const themeToggle = page.locator("[data-theme-toggle]");
     await themeToggle.click();
