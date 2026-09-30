@@ -127,7 +127,7 @@ If your platform is unsupported, the wrapper prints the detected platform/arch p
 
 ### Native installation: curl, Homebrew and Scoop
 
-These channels support v1.0.0 and install the native CLI without Python, Node.js or Rust.
+These channels are available starting with v1.0.0 and install the native CLI without Python, Node.js or Rust.
 
 **macOS / Linux shell installer** (macOS x64/arm64; Linux x64 with glibc ≥ 2.17):
 
@@ -138,7 +138,7 @@ curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/ins
 The installer verifies SHA-256 and the executable version before replacing an existing installation. It defaults to `~/.local/bin`, does not use sudo or edit shell configuration, and prints a PATH hint when needed. Run it again to update. To choose a version or directory, pass variables to `sh`:
 
 ```bash
-curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | AGENT_DUMP_VERSION=1.0.0 AGENT_DUMP_INSTALL_DIR="$HOME/.local/bin" sh
+curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | AGENT_DUMP_VERSION=1.1.0 AGENT_DUMP_INSTALL_DIR="$HOME/.local/bin" sh
 ```
 
 Uninstall the default shell installation with `rm "$HOME/.local/bin/agent-dump"`. Package-manager symlinks are not overwritten; update those installations through their original manager.

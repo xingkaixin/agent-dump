@@ -2,6 +2,20 @@
 
 ## [未发布]
 
+## [1.1.0] - 2026-09-30
+
+### 新增功能
+
+- 新增只读终端会话阅读器 `--browse`，支持查询筛选、自适应列表与正文面板、会话内搜索、工具详情、通过 OSC 52 请求复制 URI，以及会话导出 (#412)。
+- 为列表、搜索、统计和消息上下文新增 `--json` 输出，使用带版本的统一结构，保留部分结果诊断，并以 null 表示未知元数据 (#410, #411)。
+- 新增 `--search --locate` 消息定位符，以及 URI `--message` 上下文窗口；通过 `--before` / `--after` 设置范围，会话正文变化后拒绝过期定位符 (#411)。
+
+### 变更
+
+- 从已验证的发布二进制生成带校验的 shell 安装器、Homebrew 和 Scoop 附件，并在发布后同步安装渠道；同一批渠道也已补充到现有 v1.0.0 Release (#409)。
+- 通过构建缓存、按实测耗时分配 CLI 测试和耗时报告缩短 Rust CI 运行时间，保持固定的 Python 0.15.9 差分参考不变 (#405)。
+- 更新 Astro、其 React 集成和 Wrangler (#406–#408)。
+
 ## [1.0.0] - 2026-09-25
 
 ### 分发更新 — 2026-09-28
@@ -1183,3 +1197,4 @@
 [0.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.1.0
 
 [1.0.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.0.0
+[1.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.0

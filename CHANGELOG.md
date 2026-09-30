@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-30
+
+### Added
+
+- Add a read-only terminal session reader with `--browse`, query filters, responsive list/transcript panes, in-session search, tool details, URI clipboard requests via OSC 52, and session export (#412).
+- Add `--json` output for list, search, statistics, and message context, with a versioned envelope, partial-result diagnostics, and unknown metadata represented as null (#410, #411).
+- Add `--search --locate` message locators and URI `--message` context windows with `--before` / `--after`; reject stale locators when the transcript changes (#411).
+
+### Changed
+
+- Generate checksummed shell installer, Homebrew, and Scoop assets from verified release binaries and synchronize installation channels after publication; the same channels were also added to the existing v1.0.0 release (#409).
+- Reduce Rust CI runtime with build caches, measured CLI test sharding, and timing reports while preserving the fixed Python 0.15.9 differential reference (#405).
+- Update Astro, its React integration, and Wrangler (#406–#408).
+
 ## [1.0.0] - 2026-09-25
 
 ### Distribution update — 2026-09-28
@@ -1180,3 +1194,4 @@
 [0.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v0.1.0
 
 [1.0.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.0.0
+[1.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.0
