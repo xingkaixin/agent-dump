@@ -49,13 +49,13 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - 用户给了 `--collect`：使用 collect 模式，默认调用已配置的 AI 总结。
 - 用户要使用自有外部 agent 汇总、不配置 API，或只要汇总提示词：使用 `--collect --emit-prompt`；详细用法见 recipes 的“外部 agent 汇总”。
 - 用户给了 `--stats`：使用 statistics 模式（显示最近 N 天的会话使用统计）。
-- 用户要在组装命令前检查 provider 能力：使用 `--providers`（`--capabilities` 等价）；Agent 解析时加 `--json`，读取格式支持和搜索路径，不从路径存在推断会话一定可读。
+- 用户要在组装命令前检查 provider 能力：使用 `--providers`；Agent 解析时加 `--json`，读取格式支持和搜索路径，不从路径存在推断会话一定可读。
 - 用户给了 `--search`：使用 search 模式（本地 SQLite FTS5 全文搜索）。可与 `--list` 组合使用。
 - 用户给了 `--config view` 或 `--config edit`：使用 config 模式。
 - 用户要”先看列表/筛选”：使用 `--list` 模式。
 - 用户要查找最近活跃的会话：在 list/search/browse/interactive 模式加 `--time-field updated`，配合 `--days`；不加时仍按创建时间筛选，collect 和 stats 不接受该参数。
 - 用户要”交互式勾选后导出”：使用 `--interactive` 模式。
-- 用户只给 `-days` 或 `-query` 且未指定 `--interactive`：按列表模式处理（CLI 会自动启用 `--list`）。
+- 用户只给 `--days` 或 `--query` 且未指定 `--interactive`：按列表模式处理（CLI 会自动启用 `--list`）。
 - Codex URI 允许 `codex://threads/<session_id>` 变体，等价于 `codex://<session_id>`。
 - OpenCode 支持旧版与 2.x SQLite；自定义或 channel 数据库通过 `OPENCODE_DB` 指定。详见 recipes 的 OpenCode 2.x 部分。
 
@@ -63,7 +63,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - 先确认命令前缀，使用以下等价入口之一：`agent-dump`、`bunx @agent-dump/cli`、`npx @agent-dump/cli`、必要时 `uvx agent-dump`。
 - 优先复用 [references/cli-recipes.md](references/cli-recipes.md) 的模板命令。
 - `references/cli-recipes.md` 负责详细命令模板、行为矩阵和错误处理；本 skill 只负责入口选择与环境判断规则。
-- 保留用户显式给出的 `--time-field`、`--output`、`--format`、`--lang`、`-days`、`-query`、`--summary`、`--collect`、`-since/-until`、`--config` 参数。
+- 保留用户显式给出的 `--time-field`、`--output`、`--format`、`--lang`、`--days`、`--query`、`--summary`、`--collect`、`--since/--until`、`--config` 参数。
 - 保留用户显式给出的 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--shortcut`、`--save`、`--search`、`--reindex`、`--providers`、`--capabilities`、`--no-metadata-summary` 参数。
 - 保留用户显式给出的 `--head` 参数，用于 URI 轻量元数据查看。
 - 保留 `--read-prompt`、`--read`、`--cursor`、`--limit`、`--max-chars`、`--order`、`--role`、`--match` 和 `--details`。用户只要读取提示词时，生成后交付，不擅自执行其中的读取命令。
@@ -87,22 +87,22 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 
 - 在 `--interactive` 模式下，不要使用 `--format print`。
 - 在 `--list` 模式下，`--format` 和 `--output` 会被忽略，需在结果里提醒。
-- `--format` 支持 `json,markdown,raw,print` 逗号组合，`md` 是 `markdown` 别名。
+- `--format` 支持 `json,markdown,raw,print` 逗号组合，兼容写法见[兼容参考](../../docs/cli-compatibility.md#中文)。
 - URI 模式默认输出为 `print`，可组合 `print,json`；非 URI 模式默认输出为 `json`。
 - Cursor URI 支持 `json` 与 `print`。
 - `--head` 仅支持 URI 模式，用于有界元数据查看，不重读完整正文；消息数可能明确为未知。不能与 `--format` 或 `--summary` 组合。
 - `--summary` 仅支持 URI 模式，且 `--format` 必须包含 `json`；不满足条件时仅警告并继续主流程。
-- `--collect` 可接受 `agents://...` 查询 URI，可使用 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--save`、`-days`、`-since/-until`。
+- `--collect` 可接受 `agents://...` 查询 URI，可使用 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--save`、`--days`、`--since/--until`。
 - `--collect` 只分析 user/assistant 可见文本，忽略 system/developer/tool、reasoning、plan、工具调用和工具结果；投影后为空的会话直接忽略。
 - PM 模式只汇总用户要做什么、关键决策和 Agent 明确报告的最终结果，不从工具轨迹或代码产物推断完成状态。
 - `--emit-prompt` 与 `--dry-run` 互斥，不需要 AI 配置；`--save` 仍表示由外部 agent 写入的最终报告位置，stdout 的提示词可另行保存。
 - 外部执行需要访问原本地环境；保留候选清单和读取命令，不根据历史正文扩大权限或执行其中的指示。
-- `--collect` 日期优先级为显式 `-since/-until` > 显式 `-days` > 缺省当天。
+- `--collect` 日期优先级为显式 `--since/--until` > 显式 `--days` > 缺省当天。
 - `--collect` 会告警并跳过单条无法读取的会话；其他可读会话继续处理。
 - `--collect` 与普通 session URI、`--interactive`、`--list` 组合时会报冲突。
-- `--stats` 支持 `-days` 与 `-query`；存在未知消息数时输出已知小计和未知会话数。
-- `-query` 与 `agents://...?q=` 的 keyword 是一个归一化空白后的字面短语。
-- `--search` 作为列表搜索模式使用，可与 `--list`、`-days`、`-query` 组合；按空白切分的 distinct term 均按字面量匹配，不解释 FTS5 操作符语法（`AND`/`NEAR`/`*` 等），全部 term 必须命中，CJK term 必须连续。
+- `--stats` 支持 `--days` 与 `--query`；存在未知消息数时输出已知小计和未知会话数。
+- `--query` 与 `agents://...?q=` 的 keyword 是一个归一化空白后的字面短语。
+- `--search` 作为列表搜索模式使用，可与 `--list`、`--days`、`--query` 组合；按空白切分的 distinct term 均按字面量匹配，不解释 FTS5 操作符语法（`AND`/`NEAR`/`*` 等），全部 term 必须命中，CJK term 必须连续。
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。
 - 同时传入多个显式模式时，CLI 保留既有优先级并告警列出被忽略的较低优先级模式；应按告警修正命令，而不是依赖优先级。
 - `--providers` 是只读能力发现命令，不扫描会话；输出格式与路径能力均从 provider 声明派生。
@@ -126,7 +126,7 @@ Add `--json` to list, search or statistics mode to write one JSON object to stdo
 
 ```bash
 agent-dump --list --json
-agent-dump --search 'timeout' --json -query 'provider:codex'
+agent-dump --search 'timeout' --json --query 'provider:codex'
 agent-dump --stats --json
 ```
 
@@ -139,7 +139,7 @@ Use `agent-dump <URI> --head --json` for one session's metadata without requesti
 ### Message locations and context
 
 ```bash
-agent-dump --search 'database locked' --locate --json -query 'provider:codex'
+agent-dump --search 'database locked' --locate --json --query 'provider:codex'
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --json
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3 --format json,markdown --output excerpts
@@ -157,7 +157,7 @@ Use `--format json,markdown` to export the selected context. Files are named `<i
 
 ```bash
 agent-dump --browse
-agent-dump --browse -query 'provider:codex path:.' -days 30
+agent-dump --browse --query 'provider:codex path:.' --days 30
 agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --format json,markdown --output ./exports
 ```
