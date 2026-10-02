@@ -34,6 +34,7 @@ struct State {
     starts: Vec<usize>,
     hits: Vec<usize>,
     hit: usize,
+    active_hit_line: Option<usize>,
 }
 
 pub struct Reader {
@@ -68,7 +69,7 @@ impl Reader {
         error: Option<&str>,
     ) -> crate::Result<Action> {
         let mut dirty = true;
-        let mut jump = None;
+        let mut jump = false;
         loop {
             let size = self.terminal.size()?;
             let width = if size.width >= 90 {
@@ -85,8 +86,9 @@ impl Reader {
                 );
                 dirty = false;
             }
-            if let Some(message) = jump.take() {
-                self.state.offset = self.state.hit_offset(message);
+            if jump {
+                self.state.offset = self.state.active_hit_line.unwrap_or(0);
+                jump = false;
             }
             self.state.offset = self
                 .state
@@ -126,7 +128,7 @@ impl Reader {
                                 self.state.expanded = true;
                                 self.state.body_focus = true;
                                 dirty = true;
-                                jump = self.state.hits.first().copied();
+                                jump = !self.state.hits.is_empty();
                                 self.status = t(
                                     "READER_MATCHES",
                                     self.zh,
@@ -178,7 +180,8 @@ impl Reader {
                             } else {
                                 (self.state.hit + 1) % count
                             };
-                            jump = Some(self.state.hits[self.state.hit]);
+                            self.state.refresh_hit();
+                            jump = true;
                             self.state.body_focus = true;
                         }
                         KeyCode::Up | KeyCode::Char('k')
@@ -268,6 +271,11 @@ impl State {
         start
     }
 
+    fn refresh_hit(&mut self) {
+        self.active_hit_line =
+            self.hits.get(self.hit).map(|&hit| self.hit_offset(hit));
+    }
+
     fn search(&mut self, data: Option<&SessionData>) {
         let query = agent_dump_core::query::text::TextQuery::new(
             &self.query,
@@ -287,6 +295,7 @@ impl State {
             })
             .collect();
         self.hit = 0;
+        self.active_hit_line = None;
     }
 
     fn reflow(
@@ -317,6 +326,7 @@ impl State {
         if self.lines.is_empty() {
             self.lines.push(t("READER_EMPTY_BODY", zh, &[]));
         }
+        self.refresh_hit();
     }
 }
 
@@ -412,9 +422,9 @@ fn draw_list(
         .iter()
         .map(|row| {
             ListItem::new(vec![
-                Line::raw(row.title.clone()),
+                Line::raw(row.title.as_str()),
                 Line::styled(
-                    row.detail.clone(),
+                    row.detail.as_str(),
                     Style::default().fg(Color::DarkGray),
                 ),
             ])
@@ -432,7 +442,7 @@ fn draw_list(
 
 fn draw_body(frame: &mut Frame<'_>, area: Rect, state: &State, zh: bool) {
     let height = usize::from(area.height.saturating_sub(2));
-    let active = state.hits.get(state.hit).map(|&hit| state.hit_offset(hit));
+    let active = state.active_hit_line;
     let lines = state
         .lines
         .iter()
@@ -601,6 +611,8 @@ mod tests {
         state.query = "hidden-needle".into();
         state.search(Some(&data));
         assert_eq!(state.hits, vec![1]);
+        state.reflow(Some(&data), None, 60, true);
+        assert_eq!(state.active_hit_line, Some(state.starts[1]));
         state.expanded = true;
         for (width, height, body_focus) in
             [(100, 20, false), (40, 12, true), (20, 7, true)]
@@ -616,6 +628,10 @@ mod tests {
                 },
                 true,
             );
+            let expected =
+                state.lines.iter().position(|line| line.contains("hidden"));
+            assert!(expected.is_some());
+            assert_eq!(state.active_hit_line, expected);
             let mut terminal =
                 Terminal::new(TestBackend::new(width, height)).unwrap();
             terminal
@@ -651,5 +667,13 @@ mod tests {
                 .concat()
                 .contains("hidden-needle")
         );
+        state.expanded = false;
+        state.reflow(Some(&data), None, 18, true);
+        assert_eq!(state.active_hit_line, Some(state.starts[1]));
+        state.query.clear();
+        state.search(Some(&data));
+        assert_eq!(state.active_hit_line, None);
+        state.reflow(Some(&data), None, 18, true);
+        assert_eq!(state.active_hit_line, None);
     }
 }
