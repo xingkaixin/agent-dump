@@ -40,19 +40,7 @@ pub fn handoff(
             "--format".into(),
             "print".into(),
         ];
-        let command = if cfg!(windows) {
-            "& ".to_owned()
-                + &argv
-                    .iter()
-                    .map(|s| format!("'{}'", s.replace('\'', "''")))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-        } else {
-            argv.iter()
-                .map(|s| shell_quote(s))
-                .collect::<Vec<_>>()
-                .join(" ")
-        };
+        let command = crate::command::shell_command(&argv);
         let record = json!({"uri":uri, "date":session.created_at.format_local("%Y-%m-%d"), "created_at":session.created_at.iso_local(), "updated_at":session.updated_at.iso_local(), "title":session.title, "project_directory":session.working_directory(), "read_argv":argv, "read_command":command});
         prompt += "\n";
         prompt += &crate::collect::prompts::envelope(
@@ -62,16 +50,4 @@ pub fn handoff(
         );
     }
     Ok(prompt + "\n" + crate::collect::prompts::MANIFEST_END)
-}
-
-fn shell_quote(value: &str) -> String {
-    if !value.is_empty()
-        && value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "_@%+=:,./-".contains(c))
-    {
-        value.into()
-    } else {
-        format!("'{}'", value.replace('\'', "'\"'\"'"))
-    }
 }

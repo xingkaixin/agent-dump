@@ -101,6 +101,7 @@ pub fn run(
                 let mut notices = Vec::new();
                 let exported = super::uri::run(
                     &super::uri::UriOperation {
+                        read: None,
                         uri: format!("{}://{}", group.info.scheme, session.id),
                         head: false,
                         summary: false,

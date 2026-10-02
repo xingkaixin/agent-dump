@@ -20,6 +20,24 @@ pub struct Args {
     pub list: bool,
     #[arg(long)]
     pub json: bool,
+    #[arg(long, conflicts_with = "read_prompt")]
+    pub read: bool,
+    #[arg(long)]
+    pub read_prompt: bool,
+    #[arg(long, requires = "read", value_parser = clap::value_parser!(u32).range(1..=100))]
+    pub limit: Option<u32>,
+    #[arg(long, requires = "read")]
+    pub cursor: Option<String>,
+    #[arg(long, requires = "read", value_parser = ["asc", "desc"])]
+    pub order: Option<String>,
+    #[arg(long, requires = "read")]
+    pub role: Option<String>,
+    #[arg(long = "match", requires = "read")]
+    pub read_match: Option<String>,
+    #[arg(long, requires = "read", value_parser = clap::value_parser!(u32).range(1..=100_000))]
+    pub max_chars: Option<u32>,
+    #[arg(long, requires = "read")]
+    pub details: bool,
     #[arg(long)]
     pub locate: bool,
     #[arg(long)]
@@ -123,6 +141,12 @@ pub fn normalize_arguments(args: Vec<OsString>) -> Vec<OsString> {
                         | "--message"
                         | "--before"
                         | "--after"
+                        | "--limit"
+                        | "--cursor"
+                        | "--order"
+                        | "--role"
+                        | "--match"
+                        | "--max-chars"
                         | "--config"
                         | "--collect-mode"
                         | "--since"
@@ -174,6 +198,15 @@ pub fn command(zh: bool) -> clap::Command {
         ("config", "CONFIG"),
         ("list", "LIST"),
         ("json", "JSON"),
+        ("read", "READ"),
+        ("read_prompt", "READ_PROMPT"),
+        ("limit", "READ_LIMIT"),
+        ("cursor", "READ_CURSOR"),
+        ("order", "READ_ORDER"),
+        ("role", "READ_ROLE"),
+        ("read_match", "READ_MATCH"),
+        ("max_chars", "READ_MAX_CHARS"),
+        ("details", "READ_DETAILS"),
         ("locate", "LOCATE"),
         ("message", "MESSAGE"),
         ("before", "BEFORE"),
