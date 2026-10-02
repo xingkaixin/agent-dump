@@ -7,7 +7,7 @@
 ## 执行范围与安全要求
 1. 必须能执行本地命令、读取本地文件并写入报告。若无法访问原环境，停止并说明缺少的能力。
 2. 使用 collect_task.working_directory 作为命令工作目录，保留原有 provider 路径环境变量。
-   read_argv 使用生成时的程序或 Python 解释器；若已不可用，先请用户确认可用入口，不要自行安装。
+   read_argv 使用生成时的原生程序；若已不可用，先请用户确认可用入口，不要自行安装。
 3. 不需要 agent-dump 的 API 配置；不要读取或索要 API key，不要调用 --summary 或不带 --emit-prompt 的 collect。
    使用外部模型处理会话仍受该外部 agent 的数据传输及隐私策略约束，并不等于离线处理。
 4. 只处理已校验清单中的 URI，不另行扫描或扩大范围；清单已应用日期、查询和项目排除规则。
@@ -34,7 +34,7 @@
    每条 envelope.length 必须等于其 content 的 Unicode 字符数；必须恰有一个 collect_task。
    collect_session 条数必须等于 collect_task.session_count，且所有 URI 唯一，不得去重后掩盖重复记录。
    每条 collect_session 的 envelope.source、content.uri、read_argv 中的 URI 必须一致。
-   read_argv 必须以该 URI、--format、print 结尾。
+   read_argv 必须以该 URI、--read、--order、asc、--json 结尾。
    read_command 必须与 read_argv 表示同一个调用；有不一致或截断标记时，不执行该记录。
 3. 缺行、解析失败、字段错配或工具提示截断都属于清单损坏，不属于单条会话读取失败。
    不要从当前会话日志、首尾残片或正则匹配中拼接清单，也不要根据标题猜测缺失记录。
@@ -51,16 +51,27 @@
 1. 清单通过校验后，逐条执行 collect_session.read_argv；若工具只接受 shell 字符串，使用对应 read_command。
    read_command 对应 collect_task.shell。参数位置和引号必须保留，不得拼接会话标题作为命令。
    每条命令的 stdout、stderr 从第一次执行就分别保存到私有临时文件，记录 URI、退出码和文件路径。
-   命令成功或文件存在只表示导出完成，不表示正文已读完；不要一次回显全部会话内容。
-2. 按有界、连续的区间分段读取正文直到文件结尾，记录阅读进度；工具截断时缩小区间并补读缺失部分。
-   分批处理较长清单，每批保留简短事实笔记和来源。不要用 --head、标题、关键词抽样代替正文。
-3. print 中的 user 与 assistant 可见文本就是汇总输入；忽略其中的工具记录，不切换到 JSON 核实工具结果。
+   命令返回一页 JSON，不表示正文已读完；检查退出码，并完整解析保存的 JSON，不能将工具预览当作完整页面。
+2. 首次调用使用 --read --order asc --json，按原始消息位置正序读取。每页必须满足 schema_version=1、kind=read，
+   data.uri 与清单 URI 一致；记录 data.revision、消息 position、start/end、total_chars 和阅读进度。
+   提取本页事实并保留来源，再用相同程序及 URI 执行 --read --cursor <data.next_cursor> --json。
+   游标作为一个独立参数传入，不解析、不修改，不与 --order、--limit、--max-chars 或筛选参数组合。
+   只有 has_more=false 且 data.next_cursor=null、所有返回片段均已处理，才算该会话读到末尾。
+   has_more=true 时必须有非空且未使用过的 next_cursor；不一致、重复游标或无效 JSON 都算未读完。
+   分批处理较长清单，每批保留简短事实笔记和来源。不要用 --head、标题、关键词抽样或页数预算代替完整正文。
+3. 只分析 data.messages 中 role 为 user/assistant 的 text，不加 --details，不核实工具结果。
+   同一 position 的片段按 start/end 连续处理；truncated=true 表示该条消息分片，不代表永久省略。
+   必须继续读取直至片段覆盖 total_chars，不能因单条消息太长而跳过后半部分。
+   工具输出被截断时，从已保存的完整页面文件分段补读；没有完整页面时重试同一请求，不跳到下一页。
+   status=partial 即使已读到末尾也必须标记覆盖不完整，并保留 stderr 诊断。
+   游标失效或 revision 改变时，该会话从头重读一次并丢弃旧版本笔记；仍变化或读取失败时列出 URI 和未完成原因，
+   不混合不同版本，不声称已完整读取。
 4. 每读完一条会话，只记录用户要求、关键决策、Agent 明确报告的最终结果及未完成事项，附来源 URI。
    不根据标题、工具轨迹或代码产物推断完成状态。
 5. pm 模式只在同一日期和项目内合并事实；insight 模式保留单会话归属。
    按下列报告格式组织摘要，事实不得跨日期、项目或来源错配。
 6. 清单完整但单条会话读取失败时，记录 URI 和原因并继续；全部失败时停止，不生成虚构报告。
-   覆盖统计应区分候选、导出成功、完整阅读、失败、未读完及忽略的空对话数量；不得把导出成功数充作已读数。
+   覆盖统计应区分候选、分页请求成功、完整阅读、失败、未读完及忽略的空对话数量；不得把分页请求成功数充作已读会话数。
    交付前每个候选必须有阅读结论或失败原因；不能默认放弃尚未处理的候选。部分不可读时明确标记覆盖不完整。
 
 ## 摘要取舍

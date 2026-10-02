@@ -64,6 +64,8 @@ uv run python scripts/benchmark_cli.py --profile smoke --case startup-version --
 
 `--command` 使用参数解析，不通过 shell 执行；可执行文件会在隔离前定位。命令中的脚本或制品路径应使用绝对路径。上例的 `$(pwd)` 由用户的 shell 展开。
 
+当前 `collect-emit-prompt` 场景严格要求 `--read --order asc --json` 分页命令；旧版 `--format print` 交接不满足该契约。新版 collect 也处理全部符合规则的正文，分块数可能高于旧版截断实现。不同契约的结果不能直接比较加速比；比较仍要求 evaluator 摘要与完整 validation 一致，历史测量记录保持原样。
+
 原 evaluator 默认每场景 1 次预热、7 次测量；P6 交错编排脚本默认 1 次预热、5 次测量。每次为新进程；预热用于减少一次性加载噪声，不意味着复用应用内缓存。JSON 保存原始样本，旁边的 Markdown 展示 median/min/max 与峰值 RSS。
 
 源码入口不计入 `uv`/`uvx` 启动器时间，原生入口不计入 Node/npm wrapper 时间。下载和安装也不在这些计时范围内；后续分发体验另行测量。

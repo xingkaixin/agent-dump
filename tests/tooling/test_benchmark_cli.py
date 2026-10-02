@@ -156,3 +156,20 @@ def test_success_exit_cannot_hide_missing_sessions_or_truncated_exports(tmp_path
     )
     with pytest.raises(ValueError, match="exported messages differ"):
         checks.check_exports(checks.Case("export", (), "export-large"), profile, tmp_path)
+
+
+def test_handoff_benchmark_rejects_legacy_unbounded_read_commands(tmp_path, benchmark):
+    fixtures = importlib.import_module("benchmark_fixtures")
+    checks = importlib.import_module("benchmark_cases")
+    profile = fixtures.PROFILES["smoke"]
+    uris = sorted(checks.expected_uris(profile))
+    records = [
+        {"session_count": len(uris), "discovery_failed_count": 0, "query_read_failed_count": 0, "generated_at": "now"},
+        *[
+            {"uri": uri, "read_argv": ["agent-dump", uri, "--format", "print"], "read_command": "unused"}
+            for uri in uris
+        ],
+    ]
+    envelopes = [json.dumps({"length": len(content), "content": content}) for content in map(json.dumps, records)]
+    with pytest.raises(ValueError, match="invalid paginated handoff"):
+        checks.check_handoff("\n".join(envelopes), profile, tmp_path)

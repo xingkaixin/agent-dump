@@ -156,19 +156,29 @@ def test_handoff_manifest(cli, mode):
         normalized = []
         for line in result.stdout.splitlines():
             if not line.startswith('{"untrusted_data"'):
-                normalized.append(line)
                 continue
             envelope = json.loads(line)
             content = json.loads(envelope["content"])
             content.pop("generated_at", None)
             if "read_argv" in content:
-                assert content["read_argv"][-3:] == [content["uri"], "--format", "print"]
+                suffix = (
+                    [content["uri"], "--format", "print"]
+                    if candidate == "python"
+                    else [content["uri"], "--read", "--order", "asc", "--json"]
+                )
+                assert content["read_argv"][-len(suffix) :] == suffix
                 content.pop("read_argv")
                 content.pop("read_command")
             envelope.pop("length")
             envelope["content"] = content
             normalized.append(envelope)
-        results.append((normalized, result.stderr))
+        preamble = result.stdout.split("## 读取与汇总流程\n", 1)[0]
+        if candidate == "rust":
+            preamble = preamble.replace("生成时的原生程序", "生成时的程序或 Python 解释器").replace(
+                "该 URI、--read、--order、asc、--json 结尾", "该 URI、--format、print 结尾"
+            )
+        report_format = result.stdout.split("## 摘要取舍\n", 1)[1].split('{"untrusted_data"', 1)[0]
+        results.append((normalized, preamble, report_format, result.stderr))
         assert source_before == cli.fixtures.source_manifest(cli.root)
     assert results[0] == results[1]
 
