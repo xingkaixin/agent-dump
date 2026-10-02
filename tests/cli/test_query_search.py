@@ -215,6 +215,42 @@ def test_cold_path_search_retains_global_scores_and_evidence(cli, keyword):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
+@pytest.mark.parametrize("journal", ["DELETE", "WAL"])
+def test_database_message_changes_refresh_search_without_session_timestamp_changes(cli, journal):
+    database = cli.root / "sources/opencode.db"
+    args = ["--query", "provider:opencode", "--days", "36500", "--json"]
+    with closing(sqlite3.connect(database)) as writer:
+        writer.execute(f"PRAGMA journal_mode={journal}")
+        writer.execute("PRAGMA wal_autocheckpoint=0")
+        writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        initial = cli.run("rust", "--search", "delta-wal", *args)
+        assert initial.returncode == 0, initial.stderr
+        assert json.loads(initial.stdout)["data"] == []
+        times = writer.execute("SELECT id, time_created, time_updated FROM session_v2 ORDER BY id").fetchall()
+        before_database = database.read_bytes()
+        writer.execute(
+            "UPDATE session_message SET data = ? WHERE id = ?",
+            (json.dumps({"text": "delta-wal 新增正文"}), "ses_bench_000000_0"),
+        )
+        writer.commit()
+        assert writer.execute("SELECT id, time_created, time_updated FROM session_v2 ORDER BY id").fetchall() == times
+        if journal == "WAL":
+            assert database.read_bytes() == before_database
+        durable = {
+            path: path.read_bytes()
+            for path in database.parent.rglob("*")
+            if path.is_file() and not path.name.endswith("-shm")
+        }
+
+        for keyword in ["delta-wal", "新增正文"]:
+            result = cli.run("rust", "--search", keyword, *args)
+            assert result.returncode == 0, result.stderr
+            payload = json.loads(result.stdout)
+            assert payload["status"] == "ok"
+            assert [item["uri"] for item in payload["data"]] == ["opencode://ses_bench_000000"]
+        assert all(path.read_bytes() == contents for path, contents in durable.items())
+
+
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("kind", ["database", "directory"])
 def test_index_failures_fall_back_to_logical_transcript(cli, lang, kind):

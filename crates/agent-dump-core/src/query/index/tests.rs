@@ -116,6 +116,53 @@ fn search_scope_keeps_provider_qualified_ids_and_global_scores() {
 }
 
 #[test]
+fn source_refresh_preserves_text_and_repairs_missing_fts_rows() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut index =
+        SearchIndex::at(&directory.path().join("index.db")).unwrap();
+    let original = Reader(|_: &Session| Ok("beforebody 中文".into()));
+    let mut current = session(directory.path(), "same", 0);
+    assert_eq!(update(&mut index, &original, &[current.clone()]).0, 1);
+    let rank = search(&index, "beforebody", "same")[0].rank.to_bits();
+
+    current.updated_at = Timestamp::from_microsecond(1).unwrap();
+    assert_eq!(update(&mut index, &original, &[current.clone()]).0, 1);
+    assert_eq!(search(&index, "beforebody", "same")[0].rank.to_bits(), rank);
+    assert_eq!(
+        update(
+            &mut index,
+            &Reader(|_: &Session| panic!("refreshed source read again")),
+            &[current.clone()]
+        )
+        .0,
+        0
+    );
+
+    current.title = "renamed".into();
+    current.updated_at = Timestamp::from_microsecond(2).unwrap();
+    assert_eq!(update(&mut index, &original, &[current.clone()]).0, 1);
+    assert_eq!(search(&index, "renamed", "same").len(), 1);
+    assert!(search(&index, "task", "same").is_empty());
+
+    let changed = Reader(|_: &Session| Ok("changed 中文".into()));
+    current.updated_at = Timestamp::from_microsecond(3).unwrap();
+    assert_eq!(update(&mut index, &changed, &[current.clone()]).0, 1);
+    assert!(search(&index, "beforebody", "same").is_empty());
+    for (revision, table) in [(4, "sessions_fts"), (5, "sessions_fts_trigram")]
+    {
+        index
+            .connection
+            .execute(&format!("DELETE FROM {table}"), [])
+            .unwrap();
+        current.updated_at = Timestamp::from_microsecond(revision).unwrap();
+        assert_eq!(update(&mut index, &changed, &[current.clone()]).0, 1);
+        for keyword in ["changed", "中文"] {
+            assert_eq!(search(&index, keyword, "same").len(), 1);
+        }
+    }
+}
+
+#[test]
 fn slow_success_or_failure_cannot_overwrite_a_later_refresh() {
     for seeded in [false, true] {
         for fail in [false, true] {
