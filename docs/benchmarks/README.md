@@ -14,6 +14,8 @@
 
 [连续 assistant 片段合并](assistant-folding.md)：Codex 与 Claude 的完整 JSON 导出比较，验证 16,000 / 32,000 片段下的增长趋势和完整输出一致性。
 
+[读取批量并发验证](read-batches.md)：4 / 8 / 16 / 32 的 JSONL、SQLite 建索引与 collect 比较。保留 32，并记录耗时与内存的取舍。
+
 当前结果：[P6 最终 23 场景交错复测](rust-p6.md)，包括已修复的批量导出回退、四目标体积和全部原始样本；功能及安装证据见 [P6 最终验收](../rust-p6-completion.md)。
 
 历史 P3～P5 结果：[原 17＋新增 6 场景复测](rust-p3-p5.md)，功能与平台证据见[最终验收](../rust-p3-p5-completion.md)。报告保留全部原始样本及批量 JSON 导出回退。P2 历史结果见[七场景复测](rust-p2-final.md)。
