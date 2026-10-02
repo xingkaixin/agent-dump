@@ -10,7 +10,7 @@ _Avoid_: Agent, when referring to the data source
 
 **Provider Discovery**:
 The Provider-owned operation that resolves its read-only source roots and returns
-explicit availability, discovery completeness, and a requested window of Session records in one pass.
+explicit availability, discovery completeness, and a requested creation-time window of Session records in one pass. An unrestricted discovery returns all Session metadata for activity-time filtering.
 _Avoid_: Availability probe, when referring to the complete lookup process
 
 **Session**:
@@ -49,7 +49,7 @@ A Session metadata view projected from bounded Provider Discovery facts without 
 _Avoid_: Summary, transcript preview
 
 **Query**:
-A set of criteria that selects Sessions by Provider, Working Directory, message role, keyword, or result limit.
+A set of criteria that selects Sessions by Provider, Working Directory, message role, keyword, time basis, or result limit. Creation time is the default basis for the day window; explicit activity filtering uses the Provider-reported Updated time and can include much older Sessions.
 _Avoid_: Search, when referring to the full selection criteria
 
 **Query Keyword**:

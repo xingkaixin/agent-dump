@@ -13,6 +13,12 @@ impl Timestamp {
         Self(jiff::Timestamp::now().to_zoned(TimeZone::UTC).datetime())
     }
 
+    pub fn days_ago(days: i64) -> crate::Result<Self> {
+        Self::now().checked_sub(SignedDuration::from_secs(
+            days.checked_mul(86400).ok_or("days is out of range")?,
+        ))
+    }
+
     pub fn from_microsecond(micros: i64) -> crate::Result<Self> {
         Self::checked(
             Self::UNIX_EPOCH

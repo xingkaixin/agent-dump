@@ -452,6 +452,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | `uri` | 用于直接查看的 Agent Session URI（如 `opencode://session-id`），或作用域查询 URI，如 `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive` | 进入交互式模式选择和导出会话 | - |
 | `-d`, `-days`, `--days` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `-since/-until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
+| `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 的时间依据：`created` 或 `updated`。 | `created` |
 | `-q`, `-query` | 查询过滤。关键词在归一化空白后作为一个不区分大小写的字面短语，在 Session 标题或逻辑 transcript 内匹配。支持 legacy `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`），也支持结构化条件如 `bug provider:codex role:user path:. limit:20`。`cwd:` 是 `path:` 的别名。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印有界发现阶段已有的元数据，不重新读取完整正文；发现阶段完整扫描时消息数为精确值，否则明确显示“未知”。不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
 | `--collect` | 按日期范围采集会话，可选通过 `-query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
@@ -621,6 +622,19 @@ git push origin v{version}
 ## 许可证
 
 MIT
+
+### 按最近活动查找会话
+
+```bash
+agent-dump --list --time-field updated -d 7 --json
+agent-dump --search '数据库锁定' --time-field updated -d 7
+agent-dump --browse --time-field updated -d 7
+agent-dump --interactive --time-field updated -d 7
+```
+
+`--days` 默认按创建时间筛选。加 `--time-field updated` 可查找 Provider 记录的 `updated_at` 位于最近 N 天内的会话，包括很早创建、最近仍有活动的会话。`--time-field created` 显式选择既有默认行为。该参数只用于列表、搜索、浏览和交互模式；collect 日期和统计含义不变。
+
+活动列表先按更新时间排序，再应用结果数量限制。文本列表和交互选择保留 Provider 分组；显示日期和“今天／昨天”等分组使用所选时间字段。全文搜索仍优先按相关性排序。JSON 保留原有创建时间和更新时间。为发现旧会话的新活动，可能需要扫描创建时间窗口之外的元数据；筛选沿用各 Provider 的 `updated_at` 事实，不额外按文件修改时间推断活动。各 Provider 的覆盖范围和发现不完整时的诊断规则不变。
 
 ### 机器可读输出
 

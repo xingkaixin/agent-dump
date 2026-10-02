@@ -7,7 +7,6 @@ use crate::providers::contract::Provider;
 use crate::providers::error::ProviderError;
 use crate::session::timestamp::Timestamp;
 use crate::session::{Session, SessionData};
-use jiff::SignedDuration;
 use rusqlite::Connection;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -153,19 +152,18 @@ impl Desktop {
 impl Provider for Desktop {
     fn discover(
         &mut self,
-        days: i64,
+        days: Option<i64>,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         if !self.select_database()? {
             return Ok(crate::providers::contract::Discovery::default());
         }
-        let cutoff = Timestamp::now()
-            .checked_sub(SignedDuration::from_secs(
-                days.checked_mul(86400).ok_or("days is out of range")?,
-            ))?
-            .as_millisecond();
+        let cutoff = days
+            .map(Timestamp::days_ago)
+            .transpose()?
+            .map(Timestamp::as_millisecond);
         self.with_database(&self.database, |connection| {
-            self.sessions(connection, None, Some(cutoff))
+            self.sessions(connection, None, cutoff)
         })
     }
 

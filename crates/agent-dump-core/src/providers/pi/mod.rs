@@ -115,7 +115,7 @@ impl Pi {
 impl Provider for Pi {
     fn discover(
         &mut self,
-        days: i64,
+        days: Option<i64>,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         file_sessions::discover(&self.files()?, days, true, |path, _| {

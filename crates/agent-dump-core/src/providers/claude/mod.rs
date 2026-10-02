@@ -224,7 +224,7 @@ impl Claude {
 impl Provider for Claude {
     fn discover(
         &mut self,
-        days: i64,
+        days: Option<i64>,
         diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.titles.clear();
@@ -332,7 +332,7 @@ mod tests {
         };
         let mut warnings = Vec::new();
         let discovery = provider
-            .discover(36500, &mut |warning| {
+            .discover(Some(36500), &mut |warning| {
                 warnings.push(warning);
                 Ok(())
             })

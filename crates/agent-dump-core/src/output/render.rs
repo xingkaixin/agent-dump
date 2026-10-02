@@ -314,6 +314,7 @@ pub fn list(
     query: Option<&str>,
     days: i64,
     summary: bool,
+    time_field: crate::query::TimeField,
     zh: bool,
 ) -> String {
     let mut output = list_banner();
@@ -337,6 +338,7 @@ pub fn list(
             group.provider,
             days,
             summary,
+            time_field,
             zh,
         );
     }
@@ -363,6 +365,7 @@ fn append_list_group(
     provider: &crate::providers::contract::ProviderInfo,
     days: i64,
     summary: bool,
+    time_field: crate::query::TimeField,
     zh: bool,
 ) {
     let display_name = provider.display_name;
@@ -375,7 +378,7 @@ fn append_list_group(
     )
     .unwrap();
     for session in sessions {
-        let title = formatted_title(session);
+        let title = formatted_title(session, time_field);
         if !summary {
             writeln!(
                 output,
@@ -402,7 +405,10 @@ fn append_list_group(
         .unwrap();
     }
 }
-pub fn formatted_title(session: &Session) -> String {
+pub fn formatted_title(
+    session: &Session,
+    time_field: crate::query::TimeField,
+) -> String {
     let title = if session.title.chars().count() > 60 {
         format!("{}...", session.title.chars().take(60).collect::<String>())
     } else {
@@ -410,7 +416,7 @@ pub fn formatted_title(session: &Session) -> String {
     };
     safe_line(&format!(
         "{title} ({})",
-        session.created_at.format_local("%Y-%m-%d %H:%M")
+        time_field.timestamp(session).format_local("%Y-%m-%d %H:%M")
     ))
 }
 pub fn metadata_summary(session: &Session, scheme: &str, zh: bool) -> String {

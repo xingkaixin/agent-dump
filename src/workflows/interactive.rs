@@ -194,6 +194,11 @@ pub fn run(
         &group.sessions,
         group.info.scheme,
         operation.metadata,
+        operation
+            .query
+            .as_ref()
+            .map(|query| query.time_field)
+            .unwrap_or_default(),
         zh,
         out,
         input,

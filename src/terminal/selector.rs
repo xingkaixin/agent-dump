@@ -90,6 +90,7 @@ pub fn sessions(
     sessions: &[Session],
     scheme: &str,
     summary: bool,
+    time_field: agent_dump_core::query::TimeField,
     zh: bool,
     out: &mut impl Write,
     reader: &mut impl BufRead,
@@ -105,7 +106,10 @@ pub fn sessions(
     let mut groups: [Vec<usize>; 5] = Default::default();
     for (index, session) in sessions.iter().enumerate() {
         let days = today
-            .since((jiff::Unit::Day, session.created_at.local_date()))?
+            .since((
+                jiff::Unit::Day,
+                time_field.timestamp(session).local_date(),
+            ))?
             .get_days();
         let group = match days {
             ..=0 => 0,
@@ -124,8 +128,9 @@ pub fn sessions(
         let group_title = t(keys[group], zh, &[]);
         for (position, &index) in indices.iter().enumerate() {
             let session = &sessions[index];
-            let mut title =
-                agent_dump_core::output::render::formatted_title(session);
+            let mut title = agent_dump_core::output::render::formatted_title(
+                session, time_field,
+            );
             let detail = if summary {
                 agent_dump_core::output::render::metadata_summary(
                     session, scheme, zh,

@@ -83,7 +83,7 @@ impl Discovery {
 pub trait Provider: Send + Sync {
     fn discover(
         &mut self,
-        days: i64,
+        days: Option<i64>,
         diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Discovery>;
     fn find(

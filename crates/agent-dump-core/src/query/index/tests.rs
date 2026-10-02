@@ -11,7 +11,7 @@ impl<F: Fn(&Session) -> crate::Result<String> + Send + Sync> Provider
 {
     fn discover(
         &mut self,
-        _: i64,
+        _: Option<i64>,
         _: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Discovery> {
         unreachable!()

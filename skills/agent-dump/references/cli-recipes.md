@@ -39,6 +39,19 @@ uvx agent-dump --list --lang en
 
 说明：仅使用 `-days` 或 `-query` 且未指定 `--interactive` 时，CLI 会自动按 `--list` 处理。
 
+### 按最近活动查找会话
+
+```bash
+agent-dump --list --time-field updated -d 7 --json
+agent-dump --search '数据库锁定' --time-field updated -d 7
+agent-dump --browse --time-field updated -d 7
+agent-dump --interactive --time-field updated -d 7
+```
+
+`--days` 默认按创建时间筛选。加 `--time-field updated` 可查找 Provider 记录的 `updated_at` 位于最近 N 天内的会话，包括很早创建、最近仍有活动的会话。`--time-field created` 显式选择既有默认行为。该参数只用于列表、搜索、浏览和交互模式；collect 日期和统计含义不变。
+
+活动列表先按更新时间排序，再应用结果数量限制。文本列表和交互选择保留 Provider 分组；显示日期和“今天／昨天”等分组使用所选时间字段。全文搜索仍优先按相关性排序。JSON 保留原有创建时间和更新时间。为发现旧会话的新活动，可能需要扫描创建时间窗口之外的元数据；筛选沿用各 Provider 的 `updated_at` 事实，不额外按文件修改时间推断活动。各 Provider 的覆盖范围和发现不完整时的诊断规则不变。
+
 ### URI 直读 / 单会话导出（uri）
 
 库调用中，OpenCode/ZCode 可以用新的 Provider 实例直接读取或导出已有 `Session`；数据库由 `Session.source_path` 指定，源缺失时不回退。

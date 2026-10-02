@@ -77,7 +77,9 @@ pub fn select(
         };
         if query.mode == Mode::Terms {
             b.rank.total_cmp(&a.rank).then_with(time)
-        } else if query.limit.is_some() {
+        } else if query.limit.is_some()
+            || query.time_field == crate::query::TimeField::Updated
+        {
             time()
         } else if indexed {
             a.group

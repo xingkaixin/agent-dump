@@ -11,6 +11,25 @@ use crate::query::text::{Mode, whitespace};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, PathBuf};
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum TimeField {
+    #[default]
+    Created,
+    Updated,
+}
+
+impl TimeField {
+    pub const fn timestamp(
+        self,
+        session: &crate::session::Session,
+    ) -> crate::session::timestamp::Timestamp {
+        match self {
+            Self::Created => session.created_at,
+            Self::Updated => session.updated_at,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Query {
     pub providers: Option<BTreeSet<String>>,
@@ -19,6 +38,7 @@ pub struct Query {
     pub roles: Option<BTreeSet<String>>,
     pub limit: Option<usize>,
     pub mode: Mode,
+    pub time_field: TimeField,
 }
 
 fn error(key: &str, zh: bool) -> crate::Error {
@@ -330,7 +350,8 @@ impl Query {
                 .is_ok_and(|p| p.starts_with(scope) || scope.starts_with(p))
     }
     pub fn summary(&self, zh: bool) -> String {
-        if self.path.is_none()
+        if self.time_field == TimeField::Created
+            && self.path.is_none()
             && self.providers.is_none()
             && self.roles.is_none()
             && self.limit.is_none()
@@ -339,6 +360,9 @@ impl Query {
             return crate::output::render::safe_line(keyword);
         }
         let mut parts = Vec::new();
+        if self.time_field == TimeField::Updated {
+            parts.push(t("QUERY_SUMMARY_UPDATED_TIME", zh, &[]));
+        }
         if let Some(path) = &self.path {
             parts.push(t(
                 "QUERY_SUMMARY_PATH",

@@ -32,9 +32,11 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
                 );
             } else {
                 assert_eq!(
-                    provider.discover(36500, &mut |_| Ok(())).unwrap().sessions
-                        [0]
-                    .source_path,
+                    provider
+                        .discover(Some(36500), &mut |_| Ok(()))
+                        .unwrap()
+                        .sessions[0]
+                        .source_path,
                     fallback
                 );
             }
@@ -51,9 +53,11 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
                     *expected
                 );
                 assert_eq!(
-                    provider.discover(36500, &mut |_| Ok(())).unwrap().sessions
-                        [0]
-                    .source_path,
+                    provider
+                        .discover(Some(36500), &mut |_| Ok(()))
+                        .unwrap()
+                        .sessions[0]
+                        .source_path,
                     *expected
                 );
                 assert_eq!(provider.source_root(), expected.parent().unwrap());
@@ -67,7 +71,10 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
                     .is_none()
             );
             assert!(
-                !provider.discover(36500, &mut |_| Ok(())).unwrap().available
+                !provider
+                    .discover(Some(36500), &mut |_| Ok(()))
+                    .unwrap()
+                    .available
             );
             *roots.lock().unwrap() = vec![("Changed", changed.clone())];
             assert_eq!(provider.search_roots().unwrap()[0].1, changed);
@@ -81,7 +88,10 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
                 changed
             );
             assert_eq!(
-                provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0]
+                provider
+                    .discover(Some(36500), &mut |_| Ok(()))
+                    .unwrap()
+                    .sessions[0]
                     .source_path,
                 changed
             );
@@ -181,7 +191,10 @@ fn cherry_boot_config_edits_failures_and_recovery_keep_existing_sessions_readabl
             .unwrap();
         assert_eq!(session.source_path, root.join("Data/cherrystudio.sqlite"));
         assert_eq!(
-            provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0]
+            provider
+                .discover(Some(36500), &mut |_| Ok(()))
+                .unwrap()
+                .sessions[0]
                 .source_path,
             session.source_path
         );
@@ -195,7 +208,7 @@ fn cherry_boot_config_edits_failures_and_recovery_keep_existing_sessions_readabl
     ] {
         std::fs::write(&boot, bad).unwrap();
         assert!(provider.find("session-kept", &mut |_| Ok(())).is_err());
-        assert!(provider.discover(36500, &mut |_| Ok(())).is_err());
+        assert!(provider.discover(Some(36500), &mut |_| Ok(())).is_err());
         for session in &selected {
             let before = std::fs::read(&session.source_path).unwrap();
             assert_eq!(

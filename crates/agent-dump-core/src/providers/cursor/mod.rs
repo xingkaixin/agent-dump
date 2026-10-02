@@ -5,7 +5,6 @@ use crate::output::formats::OutputFormat;
 use crate::providers::contract::Provider;
 use crate::session::timestamp::Timestamp;
 use crate::session::{Session, SessionData, epoch_seconds, parse_timestamp};
-use jiff::SignedDuration;
 use rusqlite::{Connection, ToSql, types::ValueRef};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -65,20 +64,17 @@ impl Cursor {
 impl Provider for Cursor {
     fn discover(
         &mut self,
-        days: i64,
+        days: Option<i64>,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.database = (self.resolve_database)()?;
         if !self.database.exists() {
             return Ok(crate::providers::contract::Discovery::default());
         }
-        let cutoff =
-            Timestamp::now().checked_sub(SignedDuration::from_secs(
-                days.checked_mul(86400).ok_or("days is out of range")?,
-            ))?;
+        let cutoff = days.map(Timestamp::days_ago).transpose()?;
         self.sessions(
             &crate::providers::sqlite::connection::connect(&self.database)?,
-            Some(cutoff),
+            cutoff,
         )
         .map(crate::providers::contract::Discovery::available)
     }
@@ -544,7 +540,12 @@ mod tests {
                 move || Ok(configured.lock().unwrap().clone())
             }),
         };
-        assert!(!provider.discover(36500, &mut |_| Ok(())).unwrap().available);
+        assert!(
+            !provider
+                .discover(Some(36500), &mut |_| Ok(()))
+                .unwrap()
+                .available
+        );
         assert!(
             provider
                 .find("kept", &mut |_| Ok(()))
@@ -565,7 +566,10 @@ mod tests {
                 *path
             );
             assert_eq!(
-                provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0]
+                provider
+                    .discover(Some(36500), &mut |_| Ok(()))
+                    .unwrap()
+                    .sessions[0]
                     .source_path,
                 *path
             );

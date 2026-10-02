@@ -353,5 +353,8 @@
   "READ_NEXT": "继续读取：--read --cursor {cursor}",
   "READ_END": "已读完所选视图中符合条件的内容。",
   "MESSAGE_EXPORT_FORMAT_ERROR": "上下文导出仅支持 --format json,markdown。",
-  "MESSAGE_CONTEXT_EXPORTED": "✅ 已导出上下文 [{format}] 到: {path}"
+  "MESSAGE_CONTEXT_EXPORTED": "✅ 已导出上下文 [{format}] 到: {path}",
+  "CLI_TIME_FIELD_HELP": "列表、搜索、浏览和交互模式中 --days 的时间依据：created（默认）或 updated",
+  "TIME_FIELD_MODE_ERROR": "--time-field 仅用于列表、搜索、浏览或交互模式。",
+  "QUERY_SUMMARY_UPDATED_TIME": "按更新时间"
 }
