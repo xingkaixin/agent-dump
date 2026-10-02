@@ -17,7 +17,7 @@
     "packageName": "@agent-dump/cli-darwin-arm64",
     "executableName": "agent-dump",
     "binaryFormat": "Mach-O",
-    "runner": "macos-14",
+    "runner": "macos-15",
     "rustTarget": "aarch64-apple-darwin",
     "wheelPlatform": "macosx_11_0_arm64"
   },
