@@ -352,6 +352,9 @@ impl SearchIndex {
         query: &TextQuery,
         keys: &HashSet<(String, String)>,
     ) -> crate::Result<Vec<SearchResult>> {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         let Some(table) = fts_table(query) else {
             return self.literal_search(query, keys);
         };
@@ -365,8 +368,10 @@ impl SearchIndex {
         } else {
             "f.title, f.content"
         };
+        // Unary + keeps MATCH as the FTS scan instead of repeating it per key.
+        // Filtering returned rows retains the global BM25 corpus.
         let sql = format!(
-            "SELECT f.agent_name, f.session_id, {fields}, snippet({table}, 3, '**', '**', '...', 10), bm25({table}) FROM {table} f {raw} JOIN index_state s ON s.fts_rowid = f.rowid WHERE {table} MATCH ? ORDER BY bm25({table}), s.session_updated_at DESC, s.session_created_at DESC, f.agent_name, f.session_id"
+            "SELECT f.agent_name, f.session_id, {fields}, snippet({table}, 3, '**', '**', '...', 10), bm25({table}) FROM {table} f {raw} JOIN index_state s ON s.fts_rowid = f.rowid WHERE {table} MATCH ? AND +f.rowid IN (SELECT scoped.fts_rowid FROM json_each(?) scope JOIN index_state scoped ON scoped.agent = json_extract(scope.value, '$[0]') AND scoped.session_id = json_extract(scope.value, '$[1]')) ORDER BY bm25({table}), s.session_updated_at DESC, s.session_created_at DESC, f.agent_name, f.session_id"
         );
         let expression = query
             .literals
@@ -382,14 +387,12 @@ impl SearchIndex {
             .collect::<Vec<_>>()
             .join(" ");
         let mut statement = self.connection.prepare(&sql)?;
-        let mut rows = statement.query([expression])?;
+        let mut rows = statement
+            .query(params![expression, serde_json::to_string(keys)?])?;
         let mut results = Vec::new();
         while let Some(row) = rows.next()? {
             let provider: String = row.get(0)?;
             let id: String = row.get(1)?;
-            if !keys.contains(&(provider.clone(), id.clone())) {
-                continue;
-            }
             let title: String = row.get(2)?;
             let content: String = row.get(3)?;
             let Some(evidence) = query.find(&[&title, &content]) else {

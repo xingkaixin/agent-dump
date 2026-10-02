@@ -105,10 +105,6 @@ fn indexed(
     zh: bool,
     warnings: &mut impl Write,
 ) -> crate::Result<Selection> {
-    let mut index = crate::query::index::SearchIndex::open(
-        groups.iter().map(|g| g.provider.source_root().to_owned()),
-    )?;
-    let mut selection = Selection::default();
     let mut positions = HashMap::new();
     for (g, group) in groups.iter().enumerate() {
         for (s, session) in group.sessions.iter().enumerate() {
@@ -119,6 +115,15 @@ fn indexed(
                 );
             }
         }
+    }
+    if positions.is_empty() {
+        return Ok(Selection::default());
+    }
+    let mut index = crate::query::index::SearchIndex::open(
+        groups.iter().map(|g| g.provider.source_root().to_owned()),
+    )?;
+    let mut selection = Selection::default();
+    for group in groups {
         let (_, failed) = index.update(
             group.info,
             group.provider.as_ref(),
