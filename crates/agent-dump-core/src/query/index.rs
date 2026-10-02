@@ -307,16 +307,21 @@ impl SearchIndex {
                     failed.push(session.id.clone());
                     continue;
                 };
-                let rowid = if let Some(row) = latest {
-                    delete_text(&transaction, row.rowid)?;
+                let (rowid, changed) = if let Some(row) = latest {
+                    let unchanged: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM sessions_fts_trigram raw JOIN sessions_fts normalized ON normalized.rowid = raw.rowid WHERE raw.rowid = ? AND raw.title = ? AND raw.content = ?)", params![row.rowid, session.title, text], |row| row.get(0))?;
+                    if !unchanged {
+                        delete_text(&transaction, row.rowid)?;
+                    }
                     transaction.execute("UPDATE index_state SET source_path = ?, updated_signature = ?, indexed_at = ?, last_seen_at = MAX(last_seen_at, ?), session_updated_at = ?, session_created_at = ? WHERE fts_rowid = ?", params![crate::storage::source_io::path_text(&session.source_path), signature, observed, observed, session.updated_at.as_microsecond() as f64 / 1e6, session.created_at.as_microsecond() as f64 / 1e6, row.rowid])?;
-                    row.rowid
+                    (row.rowid, !unchanged)
                 } else {
                     transaction.execute("INSERT INTO index_state (agent, session_id, source_path, updated_signature, indexed_at, last_seen_at, session_updated_at, session_created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", params![info.name, session.id, crate::storage::source_io::path_text(&session.source_path), signature, observed, observed, session.updated_at.as_microsecond() as f64 / 1e6, session.created_at.as_microsecond() as f64 / 1e6])?;
-                    transaction.last_insert_rowid()
+                    (transaction.last_insert_rowid(), true)
                 };
-                transaction.execute("INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, separate_cjk(&session.title), separate_cjk(&text)])?;
-                transaction.execute("INSERT INTO sessions_fts_trigram (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, session.title, text])?;
+                if changed {
+                    transaction.execute("INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, separate_cjk(&session.title), separate_cjk(&text)])?;
+                    transaction.execute("INSERT INTO sessions_fts_trigram (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, session.title, text])?;
+                }
                 added += 1;
             }
             transaction.commit()?;

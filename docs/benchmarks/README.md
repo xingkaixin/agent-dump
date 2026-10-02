@@ -8,6 +8,8 @@
 
 [分段读取的 revision 内存优化](bounded-read.md)：8 Mi / 32 Mi 字符消息的分页、续读和详情读取，验证旧游标兼容及峰值 RSS 变化。
 
+[SQLite 来源变化后的索引刷新](index-refresh.md)：500 / 2,000 条会话的前后比较，保留数据库/WAL 检测并跳过未变正文的 FTS 重写。
+
 当前结果：[P6 最终 23 场景交错复测](rust-p6.md)，包括已修复的批量导出回退、四目标体积和全部原始样本；功能及安装证据见 [P6 最终验收](../rust-p6-completion.md)。
 
 历史 P3～P5 结果：[原 17＋新增 6 场景复测](rust-p3-p5.md)，功能与平台证据见[最终验收](../rust-p3-p5-completion.md)。报告保留全部原始样本及批量 JSON 导出回退。P2 历史结果见[七场景复测](rust-p2-final.md)。
