@@ -1,10 +1,11 @@
 """Query/Search and maintenance contracts over isolated, synthetic sources."""
 
 from contextlib import closing
+import json
 import shutil
 import sqlite3
 
-from cli_fixture import call, header, message, output, reasoning
+from cli_fixture import IDENTITY, call, header, message, output, reasoning
 import pytest
 
 
@@ -175,6 +176,43 @@ def test_cross_provider_ranking_uses_global_index_snapshot(cli, lang, keyword, l
     if limit:
         args += ["-q", f"limit:{limit}"]
     cli.parity(*args)
+
+
+@pytest.mark.parametrize("mode", ["query", "search"])
+@pytest.mark.parametrize("keyword", ["payload", "中文", "q"])
+def test_empty_path_scope_does_not_create_a_search_index(cli, mode, keyword):
+    before = cli.fixtures.source_manifest(cli.root)
+    scope = "path:/no-matching-project"
+    args = ["--days", "36500", "--json"]
+    args += ["--search", keyword, "--query", scope] if mode == "search" else ["--list", "--query", f"{keyword} {scope}"]
+
+    result = cli.run("rust", *args)
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["data"] == []
+    assert not (cli.root / "cache" / "agent-dump" / "search-index.db").exists()
+    assert cli.fixtures.source_manifest(cli.root) == before
+
+
+@pytest.mark.parametrize("keyword", ["payload", "中文", "q"])
+def test_cold_path_search_retains_global_scores_and_evidence(cli, keyword):
+    cli.write([header(), message("user", "payload 中文 quartz")])
+    before = cli.fixtures.source_manifest(cli.root)
+    args = ["--search", keyword, "--days", "36500", "--json"]
+
+    scoped = cli.run("rust", *args, "--query", "path:/project")
+    full = cli.run("rust", *args)
+
+    assert scoped.returncode == full.returncode == 0, (scoped.stderr, full.stderr)
+    selected = json.loads(scoped.stdout)
+    all_matches = json.loads(full.stdout)
+    assert selected["status"] == all_matches["status"] == "ok"
+    assert len(all_matches["data"]) > 1
+    assert selected["data"] == [item for item in all_matches["data"] if item["uri"] == f"codex://{IDENTITY}"]
+    assert len(selected["data"]) == 1
+    assert cli.fixtures.source_manifest(cli.root) == before
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])

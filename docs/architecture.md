@@ -59,7 +59,7 @@ summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标
 - `-query` 与 URI 的 `q` 是一个字面短语；`--search` 是按空白拆分且必须全部命中的 distinct terms。
 - `query/filter.rs` 保留匹配证据和读取失败事实；角色过滤直接从允许角色生成 snippet。
 - `query/index.rs` 使用 SQLite FTS5，加速语义必须等价。tokenizer 不适用或索引失败时回退到进程内 matcher。
-- 跨 Provider 先更新所有参与索引，再全局检索。正文解析在事务外进行；旧请求不能覆盖新观察，也不能恢复已删除行。
+- 路径范围内没有候选时，直接返回空结果，不打开或更新索引。非空查询先更新所有参与索引，保留全局 BM25 评分依据；SQL 按 Provider 与 Session ID 限制返回行，避免为范围外命中生成 snippet。正文解析在事务外进行；旧请求不能覆盖新观察，也不能恢复已删除行。
 
 搜索语义变化时同步索引内容版本。Provider Project 不充当 Working Directory；路径查询只使用后者。
 

@@ -80,6 +80,42 @@ fn search(index: &SearchIndex, text: &str, id: &str) -> Vec<SearchResult> {
 }
 
 #[test]
+fn search_scope_keeps_provider_qualified_ids_and_global_scores() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut index =
+        SearchIndex::at(&directory.path().join("index.db")).unwrap();
+    let reader = Reader(|_: &Session| Ok("payload 中文 quartz".into()));
+    for name in ["codex", "opencode"] {
+        index
+            .update(
+                &crate::providers::registry::for_name(name).unwrap().info,
+                &reader,
+                &[session(directory.path(), "same", 0)],
+                false,
+                &mut Vec::new(),
+            )
+            .unwrap();
+    }
+    let all = HashSet::from([
+        ("codex".into(), "same".into()),
+        ("opencode".into(), "same".into()),
+    ]);
+    for text in ["payload", "中文", "q"] {
+        let query = TextQuery::new(text, Mode::Terms);
+        let full = index.search(&query, &all).unwrap();
+        assert_eq!(full.len(), 2);
+        let scoped = search(&index, text, "same");
+        assert_eq!(scoped.len(), 1);
+        assert_eq!(scoped[0].provider, "codex");
+        let expected = full.iter().find(|r| r.provider == "codex").unwrap();
+        assert_eq!(scoped[0].id, expected.id);
+        assert_eq!(scoped[0].rank.to_bits(), expected.rank.to_bits());
+        assert_eq!(scoped[0].snippet, expected.snippet);
+        assert!(index.search(&query, &HashSet::new()).unwrap().is_empty());
+    }
+}
+
+#[test]
 fn slow_success_or_failure_cannot_overwrite_a_later_refresh() {
     for seeded in [false, true] {
         for fail in [false, true] {
