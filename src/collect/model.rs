@@ -63,7 +63,6 @@ pub struct Entry {
     pub session: Session,
     pub provider: &'static agent_dump_core::providers::contract::ProviderInfo,
     pub chunks: Vec<Vec<Event>>,
-    pub truncated: bool,
 }
 impl Entry {
     pub fn uri(&self) -> String {

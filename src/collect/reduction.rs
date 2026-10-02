@@ -47,9 +47,35 @@ fn summarize(
         )?);
         let _ = sender.send(Event::Chunk);
     }
-    let mut merged = collect_summary::merge(&payloads, mode);
+    while payloads.len() > 8 {
+        payloads = payloads
+            .chunks(8)
+            .map(|batch| merge_session(entry, batch, ai, timeout, mode, logger))
+            .collect::<crate::Result<_>>()?;
+    }
+    merge_session(entry, &payloads, ai, timeout, mode, logger)
+}
+
+fn merge_session(
+    entry: &Entry,
+    payloads: &[Summary],
+    ai: &AiConfig,
+    timeout: u64,
+    mode: Mode,
+    logger: &Logger,
+) -> crate::Result<Summary> {
+    let uri = entry.uri();
+    let mut merged = collect_summary::merge(payloads, mode);
     if payloads.len() > 1 && collect_summary::needs_compression(&merged) {
-        match collect_summary::request(ai, &crate::collect::prompts::merge(&uri, &payloads, "session", mode), timeout, mode, &Context {
+        let prompt =
+            crate::collect::prompts::merge(&uri, payloads, "session", mode);
+        if prompt.chars().count() > 64_000 {
+            return Err(format!(
+                "{uri}: session merge input exceeds 64000 characters"
+            )
+            .into());
+        }
+        match collect_summary::request(ai, &prompt, timeout, mode, &Context {
             label: format!("{uri} session merge"), phase: "session_merge", uri: Some(&uri), chunk: None, chunks: Some(entry.chunks.len()),
         }, logger) {
             Ok(summary) => merged = summary,
@@ -67,7 +93,7 @@ pub fn run(
     logger: &Logger,
     zh: bool,
     warnings: &mut impl Write,
-) -> crate::Result<(Vec<Group>, usize, usize)> {
+) -> crate::Result<(Vec<Group>, usize, Vec<String>)> {
     let total_chunks: usize = entries.iter().map(|e| e.chunks.len()).sum();
     let chunk_values = |count: usize| {
         [
@@ -97,7 +123,7 @@ pub fn run(
     let (sender, receiver) = mpsc::channel();
     let next = AtomicUsize::new(0);
     let mut results = vec![None; entries.len()];
-    let mut failed = 0;
+    let mut failed = Vec::new();
     let mut last_error = None;
     std::thread::scope(|scope| -> crate::Result<()> {
         for _ in 0..config.concurrency.min(entries.len()) {
@@ -148,8 +174,8 @@ pub fn run(
                     )?;
                 }
                 Event::Complete(index, Err(error)) => {
-                    failed += 1;
                     let uri = entries[index].uri();
+                    failed.push(uri.clone());
                     writeln!(
                         warnings,
                         "{}",
@@ -172,20 +198,20 @@ pub fn run(
         }
         Ok(())
     })?;
-    let included = entries.len() - failed;
+    let included = entries.len() - failed.len();
     if included == 0
         && let Some(error) = last_error
     {
         return Err(error);
     }
-    if failed > 0 {
+    if !failed.is_empty() {
         writeln!(
             warnings,
             "{}",
             agent_dump_core::output::i18n::t(
                 "WARN_SESSION_SUMMARY_FAILURES",
                 zh,
-                &[("count", failed.to_string())]
+                &[("count", failed.len().to_string())]
             )
         )?;
     }
@@ -281,5 +307,5 @@ pub fn run(
         zh,
         warnings,
     )?;
-    Ok((working, depth, included))
+    Ok((working, depth, failed))
 }

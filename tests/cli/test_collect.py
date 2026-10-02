@@ -53,6 +53,7 @@ def configure(cli, url, provider="openai", extra=""):
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("extra", [[], ["--save", "reports"], ["--save", "report.MD"], ["--collect-mode", "insight"]])
 def test_dry_run(cli, lang, extra):
+    only_session(cli)
     cli.parity(*ARGS, "--dry-run", "--lang", lang, *extra)
 
 
@@ -69,6 +70,7 @@ def test_dry_run(cli, lang, extra):
     ],
 )
 def test_date_ranges(cli, lang, dates):
+    only_session(cli)
     args = ["--collect", "--dry-run", "-q", "provider:codex", "--lang", lang, *dates]
     result = cli.run("python", *args)
     cli.parity(*args, exit_code=result.returncode)
@@ -136,6 +138,7 @@ def only_session(cli):
     ],
 )
 def test_collect_config_validation(cli, lang, config):
+    only_session(cli)
     if config is not None:
         config_path(cli).write_text(config)
     args = [*ARGS, "--dry-run", "--lang", lang]
@@ -269,6 +272,7 @@ def test_collect_requires_ai_configuration(cli, lang):
     "date", ["2026-+1-15", "+026-1-15", "２０２６-1-15", "2026-1- 5", "2026115", "2026131", "20260230", "0001-1-1"]
 )
 def test_date_parser_contract(cli, date):
+    only_session(cli)
     args = ["--collect", "--dry-run", "--since", date, "--until", "2026-01-15", "-q", "provider:codex", "--lang", "en"]
     cli.parity(*args, exit_code=cli.run("python", *args).returncode)
 

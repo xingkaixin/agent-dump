@@ -161,6 +161,7 @@
   "COLLECT_API_FAILED": "❌ AI 总结请求失败: {error}",
   "COLLECT_FINAL_INPUT_TOO_LARGE": "保留来源的报告输入超过 {limit} 字符；请缩小日期范围或查询条件后重试。",
   "COLLECT_DISCOVERY_INCOMPLETE_REPORT": "注意：本报告不完整。发现失败 {count} 个 Provider，遗漏会话数量未知。",
+  "COLLECT_OMITTED_SESSIONS": "未纳入报告的会话：",
   "COLLECT_INCOMPLETE_REPORT": "注意：本报告不完整。读取失败 {read_failed} 个会话，摘要失败 {summary_failed} 个会话；实际包含 {included} 个会话。",
   "COLLECT_OUTPUT_SAVED": "✅ collect 总结已保存: {path}",
   "COLLECT_DRY_RUN_HEADER": "Collect dry-run 预览",

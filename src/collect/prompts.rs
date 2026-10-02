@@ -150,7 +150,6 @@ pub fn final_prompt(
     until: Date,
     groups: &[Group],
     depth: usize,
-    truncated: bool,
     mode: Mode,
     zh: bool,
 ) -> crate::Result<String> {
@@ -162,9 +161,6 @@ pub fn final_prompt(
         "\n\n- session_count: {}\n- reduction_depth: {depth}",
         groups.iter().map(|g| g.session_uris.len()).sum::<usize>()
     )?;
-    if truncated {
-        result += "\n注意：部分 session 在事件提取阶段达到预算上限，最终结论可能遗漏低优先级细节。";
-    }
     result += "\n按各组的日期、项目和会话来源归纳，不得把一组事实归到另一组。";
     if !groups.is_empty() {
         result += DATA_BOUNDARY;
@@ -192,6 +188,28 @@ pub fn final_prompt(
         .into());
     }
     Ok(result)
+}
+
+pub fn final_prompts(
+    since: Date,
+    until: Date,
+    groups: &[Group],
+    depth: usize,
+    mode: Mode,
+    zh: bool,
+) -> crate::Result<Vec<String>> {
+    match final_prompt(since, until, groups, depth, mode, zh) {
+        Ok(prompt) => Ok(vec![prompt]),
+        Err(_) if groups.len() > 1 => {
+            let (left, right) = groups.split_at(groups.len() / 2);
+            let mut prompts =
+                final_prompts(since, until, left, depth, mode, zh)?;
+            prompts
+                .extend(final_prompts(since, until, right, depth, mode, zh)?);
+            Ok(prompts)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub fn uri_summary(uri: &str, transcript: &str) -> String {

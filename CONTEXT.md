@@ -69,7 +69,7 @@ A portable representation derived from a Session in a requested format.
 _Avoid_: Session Source
 
 **Collect Report**:
-A derived summary that combines selected Sessions over a time range.
+A derived summary that combines selected Sessions over a time range. All eligible visible user/assistant text is processed in bounded chunks without a per-Session truncation budget. Failed Sessions remain explicit omissions; complete input coverage does not imply verbatim preservation in the summary.
 _Avoid_: Export
 
 ## Fact boundaries
