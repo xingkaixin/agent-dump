@@ -150,6 +150,28 @@ pub fn context(
     output
 }
 
+pub fn read_page(page: &crate::query::read::Page) -> String {
+    let mut output = format!(
+        "# Session Read\n\n- URI: `{}`\n- Revision: {}\n\n",
+        safe_line(&page.uri),
+        page.revision
+    );
+    for message in &page.messages {
+        writeln!(
+            output,
+            "## {}. {} [{}..{}/{}]\n",
+            message.position,
+            safe_line(&message.role),
+            message.start,
+            message.end,
+            message.total_chars
+        )
+        .unwrap();
+        writeln!(output, "{}\n", message.text).unwrap();
+    }
+    output
+}
+
 pub fn transcript(uri: &str, data: &SessionData) -> String {
     let mut output =
         format!("# Session Dump\n\n- URI: `{}`\n\n", safe_line(uri));

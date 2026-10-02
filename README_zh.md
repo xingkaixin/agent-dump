@@ -633,7 +633,7 @@ agent-dump --stats --json
 
 结果包含 `schema_version: 1`、`kind`（list/search/stats）、`status`（ok/partial/error）、`data`、`failed_providers`、`failed_sessions` 和 `error`。发现不完整或筛选读取失败时为 partial，健康结果仍可使用。列表和搜索的 data 为数组；统计为 total/by_provider/by_time 对象。未知目录、模型和消息数为 null；时间使用 UTC ISO 8601。统计中的 known_messages 只统计已知计数，unknown_message_count_sessions 单独记录未知会话数；时间桶按创建日期及本地日期计算。
 
-无匹配返回空数组和退出码 0；没有可用来源且未指定 Provider 范围时返回 error 和退出码 1。参数或执行错误可能只在 stderr 输出诊断，调用方必须检查退出码。`--json` 也支持消息上下文模式，其他模式不支持。
+无匹配返回空数组和退出码 0；没有可用来源且未指定 Provider 范围时返回 error 和退出码 1。参数或执行错误可能只在 stderr 输出诊断，调用方必须检查退出码。`--json` 也支持消息上下文和 `--read` 分段读取模式，其他模式不支持。
 
 ### 消息定位与上下文
 
@@ -648,6 +648,45 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --json
 `--locate` 仅用于 `--search`，返回包含任一搜索词的消息位置（各搜索词仍须在会话中全部命中），并遵守角色筛选。仅标题命中时 locations 为空；定位读取失败时为 null，结果标记 partial。未加 --locate 的搜索行为不变。
 
 `--message` 不能与 --head、--summary、--format 或 --output 组合。JSON 上下文包含 kind=context、data.uri、locator、total_messages、start/end 和 messages；每项包含 position 与标准化 message。定位符过期或无效返回非零退出码，JSON 模式诊断仅进入 stderr。
+
+### 按需读取与 Agent 读取提示词
+
+把下面这一条命令交给 Agent，它就能获得分段读取该会话的说明和可执行命令，无需安装 skill 或配置 MCP：
+
+```bash
+agent-dump codex://SESSION_ID --read-prompt
+```
+
+`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、OpenCode、ZCode、Kimi、Cursor、Pi、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
+
+也可以直接读取：
+
+```bash
+agent-dump codex://SESSION_ID --read --json
+agent-dump codex://SESSION_ID --read --cursor '上一页的 data.next_cursor' --json
+agent-dump claude://SESSION_ID --read --role user --match '数据库迁移' --limit 10 --json
+agent-dump opencode://SESSION_ID --read --order asc --max-chars 4000 --details --json
+```
+
+| 参数 | 行为 |
+| --- | --- |
+| `--read` | 分页读取指定会话；默认文本输出，`--json` 输出结构化结果 |
+| `--read-prompt` | 生成自包含的 Agent 读取说明，与 `--read`、`--json` 互斥 |
+| `--limit` | 每页最多 1～100 条消息，默认 20；分页单位不是对话轮次 |
+| `--max-chars` | 每页正文最多 1～100000 个 Unicode 字符，默认 12000；不计 JSON 包装与游标 |
+| `--order` | `desc`（默认）按原始消息位置从后往前，`asc` 从前往后 |
+| `--cursor` | 原样传入续读游标；游标保存原筛选、排序和预算，不能同时重设这些选项 |
+| `--role` | 筛选一种标准化角色，忽略参数首尾空白及大小写 |
+| `--match` | 对所选文本视图逐消息匹配字面短语，不区分大小写并归一化空白；先筛选再分页 |
+| `--details` | 加入 reasoning、plan 和结构化工具状态的可读投影；默认只取文本部分 |
+
+这些读取参数仅用于 `--read`，不能与列表、搜索、collect、导出、`--head`、`--summary` 或 `--message` 混用。原有 URI 全文打印、`--search` 和 `-query` 的语义不变；兼容参数 `--page-size` 仍不生效。匹配不是正则、语义搜索或跨消息检索；搜索工具详情需显式加 `--details`。两种视图均跳过无可读文本的消息，不读取附件实体，也不承诺包含全部 Provider 原始字段。`--role` / `--match` 必须非空，分别最多 100 / 4096 个 UTF-8 字节；读取 URI 最多 4096 字节。
+
+JSON 包含 `schema_version: 1`、`kind: read`、`status`、`has_more` 和 `data`。data 中有 URI、revision、筛选前的 total_messages、options、messages 和 next_cursor。每个片段保留原会话一基 position、可用于 `--message` 的 locator、role、text、total_chars，以及从零开始的 Unicode 字符区间 start/end（左闭右开）。`truncated` 表示这一项只是消息的一部分；长消息通过游标从下一字符继续，消息内始终正序读取。
+
+`has_more=false` 表示已读完所选视图中符合条件的内容；预算分段不会把 status 标为 partial。源读取存在可恢复诊断时为 partial，详情进入 stderr。无匹配成功返回空数组；无效、跨会话或过期游标非零退出且 stdout 为空。正文变化后需重新开始，不能把不同 revision 拼成一个快照；游标不保存历史快照。
+
+分段输出减少返回给 Agent 的内容，内部仍可能解析完整源会话，不承诺局部磁盘读取。只读 Provider 来源，遵守各来源既有支持范围和平台限制。
 
 ### TUI 会话阅读器
 

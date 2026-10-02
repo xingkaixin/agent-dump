@@ -651,7 +651,7 @@ agent-dump --stats --json
 
 The envelope contains `schema_version: 1`, `kind` (list/search/stats), `status` (ok/partial/error), `data`, `failed_providers`, `failed_sessions`, and `error`. Incomplete discovery or failed query reads produce partial results. List/search data is an array; statistics data contains total/by_provider/by_time. Unknown directories, models and message counts are null; timestamps use UTC ISO 8601. Statistics expose known_messages and unknown_message_count_sessions separately. Time buckets use creation dates in the local timezone.
 
-No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context also accepts `--json`; other modes reject it.
+No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context and `--read` also accept `--json`; other modes reject it.
 
 ### Message locations and context
 
@@ -666,6 +666,45 @@ Pass `locations[].locator` from search unchanged to `--message`. Positions are o
 `--locate` requires `--search`. It returns messages containing any search term, respecting role filters, while all terms must still match the session. Title-only matches have empty locations; failed location reads have null locations and partial status. Search without --locate is unchanged.
 
 `--message` cannot combine with --head, --summary, --format or --output. JSON context has kind=context and data containing uri, locator, total_messages, start/end and messages (position plus normalized message). Invalid or stale locators exit nonzero; JSON diagnostics go only to stderr.
+
+### On-demand reading and Agent read prompts
+
+Give an Agent this single command to obtain instructions and executable commands for reading a session in bounded pages, without installing a skill or configuring MCP:
+
+```bash
+agent-dump codex://SESSION_ID --read-prompt
+```
+
+`--read-prompt` works with every registered Provider, including Claude Code, OpenCode, ZCode, Kimi, Cursor, Pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
+
+Direct reading is also available:
+
+```bash
+agent-dump codex://SESSION_ID --read --json
+agent-dump codex://SESSION_ID --read --cursor 'data.next_cursor from the previous page' --json
+agent-dump claude://SESSION_ID --read --role user --match 'database migration' --limit 10 --json
+agent-dump opencode://SESSION_ID --read --order asc --max-chars 4000 --details --json
+```
+
+| Option | Behavior |
+| --- | --- |
+| `--read` | Page one session; text by default, structured stdout with `--json` |
+| `--read-prompt` | Generate self-contained reading instructions; conflicts with `--read` and `--json` |
+| `--limit` | At most 1–100 messages per page, default 20; these are messages, not conversation turns |
+| `--max-chars` | At most 1–100000 Unicode characters of message text per page, default 12000; excludes JSON framing and cursor metadata |
+| `--order` | `desc` (default) traverses original message positions backwards; `asc` traverses forwards |
+| `--cursor` | Continue using an unchanged cursor; selection, order and budgets are retained and cannot be overridden |
+| `--role` | Select one normalized role; surrounding whitespace and argument case are ignored |
+| `--match` | Case-insensitive literal phrase in each message's selected text view, with whitespace normalized; filtering precedes pagination |
+| `--details` | Include the readable projection of reasoning, plans and structured tool state; default is text parts only |
+
+Read options require `--read` and cannot mix with list, search, collect, export, `--head`, `--summary` or `--message`. Existing full URI printing, `--search` and `-query` keep their semantics; the legacy `--page-size` remains a no-op. Matching is not regex, semantic or cross-message search. Add `--details` to search tool details. Both views skip messages with no readable text, do not read attachments, and do not represent every raw Provider field. Nonempty role/match values are limited to 100/4096 UTF-8 bytes; read URIs to 4096 bytes.
+
+JSON contains `schema_version: 1`, `kind: read`, `status`, `has_more` and `data`. Data includes uri, revision, total_messages before filtering, options, messages and next_cursor. Each fragment contains its original one-based position, a locator usable with `--message`, role, text, total_chars, and zero-based Unicode start/end offsets [start,end). `truncated` marks a partial message. Long messages resume at the next character through the cursor; characters within a message always traverse forwards.
+
+`has_more=false` means the selected view has no more matching content. Budget pagination does not make status partial. Recoverable source diagnostics produce partial status with details on stderr. No matches succeed with an empty array. Invalid, cross-session or stale cursors exit nonzero with empty stdout. Restart when the transcript changes; never combine revisions as one snapshot. Cursors do not preserve historical snapshots.
+
+Bounded output reduces content returned to the Agent, but reading may still parse the full source transcript; it does not promise partial disk I/O. Sources remain read-only and retain each Provider's existing data and platform support limits.
 
 ### TUI session reader
 

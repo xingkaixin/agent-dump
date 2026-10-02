@@ -7,6 +7,11 @@ use agent_dump_core::providers::registry;
 use std::io::Write;
 use std::path::PathBuf;
 
+pub enum ReadOperation {
+    Prompt,
+    Page(agent_dump_core::query::read::Request),
+}
+
 pub struct UriOperation {
     pub uri: String,
     pub head: bool,
@@ -15,6 +20,7 @@ pub struct UriOperation {
     pub before: usize,
     pub after: usize,
     pub json: bool,
+    pub read: Option<ReadOperation>,
     pub formats: Vec<OutputFormat>,
     pub output: Option<PathBuf>,
 }
@@ -25,7 +31,7 @@ pub fn run(
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
-    if !operation.json {
+    if !operation.json && operation.read.is_none() {
         return run_inner(operation, zh, out, warnings);
     }
     let mut buffer = Vec::new();
@@ -54,8 +60,14 @@ fn run_inner(
         )?;
         return Ok(false);
     };
+    if matches!(&operation.read, Some(ReadOperation::Prompt)) {
+        write!(out, "{}", super::read::prompt(uri, zh)?)?;
+        return Ok(true);
+    }
+    let mut incomplete = false;
     let found = (registration.open)().and_then(|mut provider| {
         let lookup = provider.find(id, &mut |diagnostic| {
+            incomplete = true;
             writeln!(
                 warnings,
                 "{}",
@@ -68,6 +80,7 @@ fn run_inner(
     let found = match found {
         Ok((provider, lookup)) => {
             for failure in &lookup.failures {
+                incomplete = true;
                 writeln!(
                     warnings,
                     "{}",
@@ -134,6 +147,22 @@ fn run_inner(
             "{}",
             render::head(uri, &session, registration.info.display_name, zh)
         )?;
+        return Ok(true);
+    }
+    if let Some(ReadOperation::Page(request)) = &operation.read {
+        let data = provider.read(&session, zh, &mut |diagnostic| {
+            incomplete = true;
+            writeln!(
+                warnings,
+                "{}",
+                diagnostics::record_warning(&diagnostic, zh)
+            )?;
+            Ok(())
+        })?;
+        let uri = format!("{}://{id}", registration.info.scheme);
+        let page =
+            agent_dump_core::query::read::page(&uri, &data, request, zh)?;
+        super::read::write_page(&page, operation.json, incomplete, zh, out)?;
         return Ok(true);
     }
     if let Some(locator) = &operation.message {

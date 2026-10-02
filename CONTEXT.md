@@ -105,6 +105,15 @@ _Avoid_: Export
   match. An unknown Working Directory does not establish shared project identity.
 
 **Message Locator**:
-A transcript revision plus a one-based normalized message position, obtained from an explicit Search location request. It is valid only for the same Session transcript snapshot; changed content requires a new Search.
+A transcript revision plus a one-based normalized message position, obtained from an explicit Search location request or a Read Page. It is valid only for the same Session transcript snapshot; changed content requires a new Search or Read.
 
 - Context windows select normalized Messages through the Provider read contract. They do not interpret Provider-private offsets or promise partial source I/O.
+
+**Read Page**:
+A bounded text projection of one Session's normalized Messages, selected by role and literal phrase before pagination. Original message positions remain unchanged. A page can contain a fragment of a long Message, with Unicode character offsets relative to the selected text projection.
+
+**Read Cursor**:
+A continuation bound to one Session URI, transcript revision, selection, order and output budget. It can resume within a Message. It validates the current transcript but does not retain a historical snapshot; changed content requires restarting the read.
+
+- Read pagination and text projection do not establish cross-Provider conversation-turn boundaries or partial disk I/O. Exhausting a selected view does not imply that every raw Source field was returned.
+- A Read Prompt is executable guidance derived from a Session URI and the current CLI entrypoint, not Session content or evidence of source availability. Generating it does not perform Provider Discovery or read a transcript.

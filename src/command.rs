@@ -13,6 +13,31 @@ use agent_dump_core::output::render;
 use agent_dump_core::query;
 use agent_dump_core::query::text as query_text;
 use std::io::{self, Write};
+
+pub fn shell_command(argv: &[String]) -> String {
+    if cfg!(windows) {
+        return "& ".to_owned()
+            + &argv
+                .iter()
+                .map(|s| format!("'{}'", s.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(" ");
+    }
+    argv.iter()
+        .map(|s| {
+            if !s.is_empty()
+                && s.chars().all(|c| {
+                    c.is_ascii_alphanumeric() || "_@%+=:,./-".contains(c)
+                })
+            {
+                s.clone()
+            } else {
+                format!("'{}'", s.replace('\'', "'\"'\"'"))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
     Providers,
@@ -89,15 +114,48 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         |lang| lang == "zh",
     );
     let mut plan_stderr = io::stderr();
-    let plan_out: &mut dyn Write = if args.emit_prompt || args.json {
-        &mut plan_stderr
-    } else {
-        out
-    };
+    let plan_out: &mut dyn Write =
+        if args.emit_prompt || args.json || args.read || args.read_prompt {
+            &mut plan_stderr
+        } else {
+            out
+        };
     let mode = mode(&args);
+    if (args.read || args.read_prompt)
+        && (mode != Mode::Uri
+            || candidates(&args)
+                .iter()
+                .any(|(candidate, _)| *candidate != Mode::Uri)
+            || args.head
+            || args.message.is_some()
+            || args.locate
+            || args.summary
+            || args.format.is_some()
+            || args.output.is_some()
+            || args.emit_prompt
+            || args.dry_run
+            || args.since.is_some()
+            || args.until.is_some()
+            || args.save.is_some()
+            || (args.read_prompt && args.json))
+    {
+        eprintln!("{}", i18n::t("READ_MODE_ERROR", zh, &[]));
+        return Ok(false);
+    }
+    if args.cursor.is_some()
+        && (args.limit.is_some()
+            || args.max_chars.is_some()
+            || args.order.is_some()
+            || args.role.is_some()
+            || args.read_match.is_some()
+            || args.details)
+    {
+        eprintln!("{}", i18n::t("READ_CURSOR_OPTIONS_ERROR", zh, &[]));
+        return Ok(false);
+    }
     if args.json
         && !matches!(mode, Mode::List | Mode::Stats)
-        && !(mode == Mode::Uri && args.message.is_some())
+        && !(mode == Mode::Uri && (args.message.is_some() || args.read))
     {
         eprintln!("{}", i18n::t("JSON_MODE_ERROR", zh, &[]));
         return Ok(false);
@@ -390,7 +448,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         )?;
         return Ok(false);
     }
-    let formats = if args.head {
+    let formats = if args.head || args.read || args.read_prompt {
         Vec::new()
     } else {
         let spec = args.format.as_deref().unwrap_or("print");
@@ -415,6 +473,38 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             before: args.before.unwrap_or(3) as usize,
             after: args.after.unwrap_or(3) as usize,
             json: args.json,
+            read: if args.read_prompt {
+                Some(uri_workflow::ReadOperation::Prompt)
+            } else {
+                args.read.then(|| {
+                    use agent_dump_core::query::read::{
+                        Options, Order, Request,
+                    };
+                    uri_workflow::ReadOperation::Page(
+                        if let Some(cursor) = args.cursor {
+                            Request::Continue(cursor)
+                        } else {
+                            let defaults = Options::default();
+                            Request::Start(Options {
+                                limit: args.limit.unwrap_or(defaults.limit),
+                                max_chars: args
+                                    .max_chars
+                                    .unwrap_or(defaults.max_chars),
+                                order: if args.order.as_deref() == Some("asc") {
+                                    Order::Asc
+                                } else {
+                                    Order::Desc
+                                },
+                                role: args
+                                    .role
+                                    .map(|s| s.trim().to_lowercase()),
+                                keyword: args.read_match,
+                                details: args.details,
+                            })
+                        },
+                    )
+                })
+            },
             formats,
             output: args.output,
         },

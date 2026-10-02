@@ -1,6 +1,7 @@
 pub mod context;
 pub mod filter;
 pub mod index;
+pub mod read;
 pub mod scanner;
 pub mod text;
 pub mod transcript;

@@ -87,3 +87,11 @@ PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹
 ## 会话阅读器
 
 `workflows/reader.rs` 拥有 --browse 的发现、筛选、按需读取和导出；`terminal/reader.rs` 只接收行数据和已读取的 SessionData，处理键盘与展示，不调用 Provider。正文使用 core render 的标准化投影，当前会话读取失败不阻止切换。导出复用 URI 工作流；Crossterm osc52 feature 提供复制请求，不依赖平台剪贴板进程。
+
+## 分段读取与读取提示词
+
+`--read` 继续由 `workflows/uri.rs` 通过 Provider find/read 定位和读取单个会话。core 的 `query/read.rs` 拥有文本视图、角色和字面短语筛选、消息分页及长消息字符续读；它只使用标准化 SessionData，不解释 Provider schema。`output/render.rs` 拥有文本展示，CLI 的 `workflows/read.rs` 输出机器信封和读取提示词。
+
+游标以版本化的编码保存 URI、正文 revision、筛选、顺序、预算、原始消息位置及字符偏移；续读只接受游标，不另行覆盖选择条件。复用 `query/context.rs` 的 revision 与消息 locator。正文变化会拒绝旧游标，不持久化历史正文或新增索引；每次调用仍通过完整 Provider read，暂无局部来源读取承诺。可恢复来源诊断标记 partial；分页、视图省略和字符分段不代表源读取失败。
+
+`--read-prompt` 只经 registry 校验 URI 语法后输出本地化静态说明与命令清单，不打开 Provider、发现会话或读取正文。清单使用当前原生程序路径，shell 参数引用与 collect handoff 共用 `command.rs` 的命令构造。提示词说明预算、游标、筛选、版本变化和来源边界；无需 MCP 或运行时 skill。
