@@ -1,11 +1,13 @@
 ---
 name: agent-dump
-description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直读 AI coding 会话，执行 collect 汇总或生成外部 agent 汇总提示词，并支持 config/summary。Use this skill when users ask to export or query AI sessions, run collect reports, prepare external-agent collect prompts, or manage config.
+description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和复用本地 AI coding 会话，支持浏览、分页读取、带来源片段导出、collect 汇总及外部 Agent 交接。Use this skill when users ask to find, read, export or summarize local AI sessions, prepare Agent handoffs, or manage config.
 ---
 
 # Agent Dump
 
-使用本技能时，始终通过 `agent-dump` CLI 完成会话查询与导出，不改动业务源码。
+使用本技能时，始终通过 `agent-dump` CLI 查找、读取和复用本地会话，不改动业务源码或 Provider 会话源。
+
+个人开发者可用 `--browse` 阅读、`--interactive` 批量导出。Agent 先用 `--providers --json` 检查能力，通过 `--list --json` 或 `--search --locate --json` 选择会话，再用 `--head --json` 查看元数据、`--read-prompt` 获取分页读取说明。需要复用证据时，用 `--message` 和 `--format json,markdown` 导出带来源的上下文；需要跨会话报告时，使用 collect。
 
 ## 安装与运行入口
 
@@ -104,7 +106,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。
 - 同时传入多个显式模式时，CLI 保留既有优先级并告警列出被忽略的较低优先级模式；应按告警修正命令，而不是依赖优先级。
 - `--providers` 是只读能力发现命令，不扫描会话；输出格式与路径能力均从 provider 声明派生。
-- 仅使用当前 CLI 已支持的 URI 协议：`opencode`、`zcode`、`codex`、`kimi`、`claude`、`cursor`、`pi`、`deepchat`、`cherry`（其中 `claude` 对应 Claude Code）。
+- 仅使用当前 CLI 已支持的 URI 协议：`opencode`、`zcode`、`codex`、`kimi`、`claude`、`cursor`、`pi`、`deepchat`、`cherry`、`minimax`（其中 `claude` 对应 Claude Code）。
 - 路径作用域查询 URI 使用 `agents://<path>?q=<keyword>&providers=<names>&roles=<roles>&limit=<n>`；`limit` 必须为有符号 64 位范围内的正整数。
 - `--list` 在本机完全没有 provider 数据时退出 `1`；时间窗或关键词无命中仍为 `0`。
 
@@ -160,7 +162,7 @@ agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --format json,markdown --output ./exports
 ```
 
-`--browse` requires an interactive terminal. It lists the last seven days by update time, supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
+`--browse` requires an interactive terminal. By default, it selects sessions created in the last seven days and sorts them by update time. Add `--time-field updated` to filter by recent activity. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
 
 - Up/Down or j/k move or scroll in the focused pane; Enter/Right opens the transcript, Left returns to the list.
 - Tab switches panes; PageUp/PageDown scroll pages; Home/End jump to either end.

@@ -2,9 +2,45 @@
 
 # Agent Dump
 
-AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON、Markdown、raw，并通过 URI 直接打印会话内容。
+面向个人开发者与 AI Agent 的本地 AI 会话工具。查找、读取、导出和复用已支持编码工具的历史对话，不修改会话源数据。
 
 操作教程：[将 Codex 会话导出为 Markdown](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/)。
+
+## 快速开始
+
+[安装 CLI](#安装) 后，按任务选择入口。需要本机已有[支持工具](#支持的-ai-工具)保存的会话历史。自定义目录与内容覆盖限制见[路径发现](#路径发现)。
+
+### 个人开发者
+
+```bash
+# 浏览最近一周活跃的会话
+agent-dump --browse --time-field updated --days 7
+
+# 查找当前项目讨论过的问题
+agent-dump --search 'auth timeout' --query 'path:.' --days 30
+
+# 使用结果中的 URI 导出会话
+agent-dump codex://SESSION_ID --format markdown --output ./sessions
+```
+
+将 `codex://SESSION_ID` 替换为列表或搜索结果中的真实 URI。搜索默认按创建时间筛选；查找最近活动时加 `--time-field updated`。需要勾选多个会话导出时，使用 `--interactive`。
+
+### AI Agent
+
+```bash
+# 检查支持格式与来源路径，再查找候选会话
+agent-dump --providers --json
+agent-dump --list --time-field updated --days 7 --json
+
+# 检查单条会话的元数据，再获取分页读取说明
+agent-dump codex://SESSION_ID --head --json
+agent-dump codex://SESSION_ID --read-prompt
+
+# 将报告任务交给外部 Agent，无需配置 API
+agent-dump --collect --days 7 --emit-prompt --save ./reports/weekly.md
+```
+
+按生成的命令和游标继续读取，直到 `has_more=false` 才完成所选内容的覆盖。检查退出码与 `status`，不能将 partial 结果当成完整读取。`--emit-prompt` 只生成任务说明，不会生成报告。详见[机器可读输出](#机器可读输出)、[带来源的上下文导出](#消息定位与上下文)和 [Agent recipes](skills/agent-dump/references/cli-recipes.md)。
 
 ## 支持的 AI 工具
 
@@ -22,53 +58,13 @@ AI 编码助手会话导出工具 - 支持从多种 AI 编码工具导出 JSON�
 
 ## 功能特性
 
-- **交互式选择**: 使用 Ratatui 提供友好的命令行交互界面
-- **多 Agent 支持**: 自动扫描多种 AI 工具的会话数据
-- **批量导出**: 支持导出最近 N 天的所有会话
-- **指定导出**: 通过会话 URI 导出特定会话
-- **会话列表**: 仅列出会话而不导出
-- **直接文本查看**: 通过 URI 直接在终端查看会话内容（如 `agent-dump opencode://session-id`）
-- **统计数据**: 导出包含 tokens 使用量、成本等统计信息
-- **消息详情**: 完整保留会话消息、工具调用等详细信息
-- **智能标题提取**: 从各 Agent 元数据中自动提取会话标题
-- **会话统计**: `--stats` 查看按 Agent 和时间分组的会话使用统计
-- **全文搜索**: 基于 SQLite FTS5 的本地全文搜索，覆盖标题、消息、reasoning 和 tool state (`--search`)；检索词按字面量匹配
-- **带证据的搜索结果**: 搜索结果包含匹配度、URI、更新时间与高亮命中片段
-- **可执行诊断**: CLI 错误会展示已检查路径、URI 解析字段、能力缺口和下一步建议（文案随 `--lang en|zh` 本地化）
+- **查找历史工作**：搜索标题、消息、思考和工具状态，按 Provider、项目路径、角色或最近活动筛选。
+- **读取上下文**：在终端浏览，通过 Session URI 打开，或让 Agent 使用有界 JSON 分页和游标读取。
+- **带来源复用**：将会话或选定上下文导出为支持的格式，上下文导出保留 URI 和消息定位信息。
+- **汇总对话**：将所有符合规则的 user/assistant 正文分块处理，或交给外部 Agent 汇总；失败时明确标记不完整。
+- **接入自动化**：通过 JSON 查询元数据、能力、搜索证据和统计，明确表示未知事实。
 
-## 路径发现
-
-`agent-dump` 大多数 provider 按以下顺序解析会话数据根目录：官方环境变量 → 工具默认目录 → 本地开发回退路径 `data/<agent>`。ZCode 当前只使用 macOS/Windows 默认数据库路径。
-
-- **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
-- **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
-- **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
-- **OpenCode**: `OPENCODE_DB` 指定唯一数据库（相对路径以 `XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 为基准）；未指定时读取该目录的 `opencode.db`，再回退到旧 Windows `LOCALAPPDATA`/`APPDATA` 路径和 `data/opencode/opencode.db`。
-- **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
-- **Cursor**: Cursor 默认用户目录下的 `globalStorage/state.vscdb`
-- **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
-- **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
-- **Cherry Studio**: `CHERRY_STUDIO_USER_DATA_DIR/Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。该覆盖变量由 agent-dump 提供，可用于便携版、开发版或选择多个安装中的一个。
-- **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`；数据库位于所选目录的 `v2/sqlite/runtime-state.sqlite`。只选择一个目录，显式路径不存在时不回退。
-
-注意：
-
-- Windows 上建议优先配置工具官方环境变量。
-- `data/<agent>` 回退路径保留用于本地开发和测试。
-
-DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`；保留正文、思考和工具记录，压缩提示不进入 collect。JSON 还保留附件引用、链接及其他消息块，不读取附件实体或外置工具输出文件。Token 来自消息记录，不提供计费金额。
-
-暂不支持 SQLCipher 加密库、旧版 `chat.db` 直读和 raw 导出；不会执行 DeepChat 的迁移或 Tape 恢复。`DEEPCHAT_USER_DATA_DIR` 可用于指定自定义用户数据目录。
-
-Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含已迁移历史），可用于列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。普通聊天仅包含当前选中的根到叶路径，其他分支和多模型并列回复不进入导出、搜索或计数；虚拟根和空的待输入叶节点不计入消息。Agent 会话按时间排序，并从 workspace 获取工作目录；普通聊天不推断工作目录。已删除会话和聊天消息不会导出。
-
-正文、思考、工具调用及结果、代码和翻译会转换为统一格式。JSON 保留附件引用和控制事件，压缩摘要与内部事件不进入 collect 或搜索。Token 来自消息统计；各币种费用仅在 JSON 中保留，不换算或汇总计费金额。不读取附件实体、SDK 日志，也不执行应用迁移。暂不支持 1.x IndexedDB/Redux 原始数据和 raw 导出。
-
-MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。包含可见的普通会话、子任务和归档会话，排除隐藏及 peek/channel/cron 内部会话。正文按数据库消息行顺序读取，保留文字、思考、工具状态/结果和附件引用；压缩、审查和系统事件不进入 collect 或搜索。模型来自会话元数据，缺失时显示未知；JSON 保留消息中已记录的 token 用量，不推算费用。
-
-自定义 profile、早期源码版 `~/.minimax-code` 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/minimax-provider-design.md)。
-
-OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读；新版消息按 `seq` 排序，消息数包含系统和状态记录。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。附件保留在 JSON 元数据中，不打开引用文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/opencode-v2-design.md)。
+可用格式和消息细节取决于来源工具。标准化输出不包含每个私有字段或附件实体。可运行 `agent-dump --providers --json` 检查能力。
 
 ## 安装
 
@@ -275,6 +271,40 @@ agent-dump opencode://session-id-abc123
 
 这样 `agent-dump --list && ...` 才有意义：列出了会话就成功，因为没有任何 provider
 数据而无从列出则失败。
+
+## 路径发现
+
+`agent-dump` 大多数 provider 按以下顺序解析会话数据根目录：官方环境变量 → 工具默认目录 → 本地开发回退路径 `data/<agent>`。ZCode 当前只使用 macOS/Windows 默认数据库路径。
+
+- **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
+- **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
+- **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
+- **OpenCode**: `OPENCODE_DB` 指定唯一数据库（相对路径以 `XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 为基准）；未指定时读取该目录的 `opencode.db`，再回退到旧 Windows `LOCALAPPDATA`/`APPDATA` 路径和 `data/opencode/opencode.db`。
+- **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
+- **Cursor**: Cursor 默认用户目录下的 `globalStorage/state.vscdb`
+- **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
+- **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
+- **Cherry Studio**: `CHERRY_STUDIO_USER_DATA_DIR/Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。该覆盖变量由 agent-dump 提供，可用于便携版、开发版或选择多个安装中的一个。
+- **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`；数据库位于所选目录的 `v2/sqlite/runtime-state.sqlite`。只选择一个目录，显式路径不存在时不回退。
+
+注意：
+
+- Windows 上建议优先配置工具官方环境变量。
+- `data/<agent>` 回退路径保留用于本地开发和测试。
+
+DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`；保留正文、思考和工具记录，压缩提示不进入 collect。JSON 还保留附件引用、链接及其他消息块，不读取附件实体或外置工具输出文件。Token 来自消息记录，不提供计费金额。
+
+暂不支持 SQLCipher 加密库、旧版 `chat.db` 直读和 raw 导出；不会执行 DeepChat 的迁移或 Tape 恢复。`DEEPCHAT_USER_DATA_DIR` 可用于指定自定义用户数据目录。
+
+Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含已迁移历史），可用于列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。普通聊天仅包含当前选中的根到叶路径，其他分支和多模型并列回复不进入导出、搜索或计数；虚拟根和空的待输入叶节点不计入消息。Agent 会话按时间排序，并从 workspace 获取工作目录；普通聊天不推断工作目录。已删除会话和聊天消息不会导出。
+
+正文、思考、工具调用及结果、代码和翻译会转换为统一格式。JSON 保留附件引用和控制事件，压缩摘要与内部事件不进入 collect 或搜索。Token 来自消息统计；各币种费用仅在 JSON 中保留，不换算或汇总计费金额。不读取附件实体、SDK 日志，也不执行应用迁移。暂不支持 1.x IndexedDB/Redux 原始数据和 raw 导出。
+
+MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。包含可见的普通会话、子任务和归档会话，排除隐藏及 peek/channel/cron 内部会话。正文按数据库消息行顺序读取，保留文字、思考、工具状态/结果和附件引用；压缩、审查和系统事件不进入 collect 或搜索。模型来自会话元数据，缺失时显示未知；JSON 保留消息中已记录的 token 用量，不推算费用。
+
+自定义 profile、早期源码版 `~/.minimax-code` 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/minimax-provider-design.md)。
+
+OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读；新版消息按 `seq` 排序，消息数包含系统和状态记录。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。附件保留在 JSON 元数据中，不打开引用文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/opencode-v2-design.md)。
 
 ## 命令行参数
 
@@ -538,91 +568,6 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 `agent-dump` 写入 `config.toml` 时会转义 TOML 特殊字符，并将文件权限限制为仅所有者可读写（`0600`），因为其中可能包含 API key。
 为兼容旧版本，程序仍可读取不合法的 TOML；但由于无法保证未知字段无损往返，`--config edit` 会拒绝改写。请先手动修正无效转义或替换配置文件。
 
-## 项目结构
-
-```text
-Cargo.toml      # Workspace, shared dependencies/lints and CLI release version
-rustfmt.toml    # Stable Rustfmt, edition 2024, 80 columns
-src/            # CLI workflows, Collect and terminal interaction
-crates/agent-dump-core/ # Providers, sessions, queries and export engine
-resources/      # Embedded locales and prompts
-tests/cli/      # CLI contracts and external Python reference comparison
-tests/tooling/  # Packaging, benchmark and documentation checks
-scripts/        # Validated CLI benchmarks and paired release eval
-packaging/      # Maturin builds and installation verification
-npm/            # Node launcher and platform packages
-docs/           # Architecture, migration and acceptance evidence
-web/            # Landing page
-```
-
-## Development
-
-从 v1.0.0 起，Rust 是构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树，差分验证在独立环境安装固定的 0.15.9 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
-
-```bash
-# 从仓库根直接运行 Cargo
-cargo build --locked --release
-cargo test --locked --workspace
-
-# 完整本地 CI，包含独立的历史 Python 对照
-# （Node.js 可用时包含 npm 测试，pnpm 可用时包含 landing page 检查）
-just isok
-
-# Check Rustfmt, strict Clippy and Ruff
-just lint
-
-# Auto-fix linting issues
-just lint-fix
-
-# Format code
-just fmt
-
-# Type checking
-just check
-
-# Testing
-just test
-
-# 构建当前平台原生二进制
-just build-native
-
-# 同步 npm 包版本
-just build-npm
-
-# 运行 npm wrapper 测试和 smoke 检查
-just test-npm-smoke
-```
-
-两个 crate 统一继承 workspace lint：禁止 unsafe，Clippy all/pedantic 为 deny、nursery 为 warn；门禁以 `-D warnings` 执行。逐项例外及原因见[开发指南](docs/development-guide.md#rust-格式与-lint)。`tests/` 保留现有 CLI 差分和工具验收测试。
-
-## 发布
-
-```bash
-# 1. 在单一位置更新版本号
-$EDITOR Cargo.toml
-
-# 2. 提交并合并到 main
-
-# 3. 创建并推送发布标签
-git tag v{version}
-git push origin v{version}
-```
-
-- 标签发布工作流为 [`release.yml`](./.github/workflows/release.yml)
-- 仅匹配 `vX.Y.Z` 的标签会触发统一发布流水线
-- 发布包含 PyPI 制品、GitHub Release 资产和 `@agent-dump/cli` npm 包
-- 原生安装附件复用同一批已验证二进制。发布成功后，`distribution.yml` 使用仓库 secret `DISTRIBUTION_TOKEN` 同步 Homebrew 与 Scoop；可针对最新稳定版单独重试。
-- 同一版本的发布可以安全重试：字节一致的 registry 制品会跳过，已存在但内容不同则失败
-- npm 发布会确认每个包已可下载且完整性校验一致后再继续，所有原生平台包就绪后才发布 CLI 主包
-- npm CLI 包在 `npm`/`npx` 安装阶段会下载并校验匹配的原生二进制
-- PyPI 发布使用 GitHub `release` 环境中的环境级 secret `UV_PUBLISH_TOKEN`
-- 每个 `@agent-dump/*` npm 包均使用绑定到本仓库、`release.yml` 与 GitHub `release` 环境的
-  Trusted Publisher/OIDC 发布，不使用 `NPM_TOKEN` secret
-
-## 许可证
-
-MIT
-
 ### 按最近活动查找会话
 
 ```bash
@@ -722,7 +667,7 @@ agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --format json,markdown --output ./exports
 ```
 
-`--browse` 需要真实交互式终端，默认显示最近 7 天会话，按更新时间排序。支持现有查询条件和 agents:// 查询 URI；只读取当前选择的会话正文（内容筛选本身仍可能读取多个会话）。宽终端显示列表和正文两栏；窄于 90 列时通过 Tab 切换单栏。阅读器只读 Provider 来源，不自动刷新活动会话；重新打开可获取新列表。
+`--browse` 需要真实交互式终端，默认选择最近 7 天创建的会话，按更新时间排序；加 `--time-field updated` 改为按最近活动筛选。支持现有查询条件和 agents:// 查询 URI；只读取当前选择的会话正文（内容筛选本身仍可能读取多个会话）。宽终端显示列表和正文两栏；窄于 90 列时通过 Tab 切换单栏。阅读器只读 Provider 来源，不自动刷新活动会话；重新打开可获取新列表。
 
 - ↑/↓ 或 j/k：在当前区域移动或滚动；Enter/→ 进入正文，← 返回列表。
 - Tab：切换区域；PageUp/PageDown 翻页；Home/End 跳到首尾。
@@ -732,3 +677,88 @@ agent-dump --browse --format json,markdown --output ./exports
 - q/Esc/Ctrl-C：关闭阅读器并恢复终端，正常关闭返回 0。
 
 没有匹配会话时退出；不可用来源或非终端输入返回失败。单个会话读取失败会显示诊断，仍可切换其他会话。原有 --interactive 批量选择导出保持不变。
+
+## 项目结构
+
+```text
+Cargo.toml      # Workspace, shared dependencies/lints and CLI release version
+rustfmt.toml    # Stable Rustfmt, edition 2024, 80 columns
+src/            # CLI workflows, Collect and terminal interaction
+crates/agent-dump-core/ # Providers, sessions, queries and export engine
+resources/      # Embedded locales and prompts
+tests/cli/      # CLI contracts and external Python reference comparison
+tests/tooling/  # Packaging, benchmark and documentation checks
+scripts/        # Validated CLI benchmarks and paired release eval
+packaging/      # Maturin builds and installation verification
+npm/            # Node launcher and platform packages
+docs/           # Architecture, migration and acceptance evidence
+web/            # Landing page
+```
+
+## Development
+
+从 v1.0.0 起，Rust 是构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树，差分验证在独立环境安装固定的 0.15.9 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
+
+```bash
+# 从仓库根直接运行 Cargo
+cargo build --locked --release
+cargo test --locked --workspace
+
+# 完整本地 CI，包含独立的历史 Python 对照
+# （Node.js 可用时包含 npm 测试，pnpm 可用时包含 landing page 检查）
+just isok
+
+# Check Rustfmt, strict Clippy and Ruff
+just lint
+
+# Auto-fix linting issues
+just lint-fix
+
+# Format code
+just fmt
+
+# Type checking
+just check
+
+# Testing
+just test
+
+# 构建当前平台原生二进制
+just build-native
+
+# 同步 npm 包版本
+just build-npm
+
+# 运行 npm wrapper 测试和 smoke 检查
+just test-npm-smoke
+```
+
+两个 crate 统一继承 workspace lint：禁止 unsafe，Clippy all/pedantic 为 deny、nursery 为 warn；门禁以 `-D warnings` 执行。逐项例外及原因见[开发指南](docs/development-guide.md#rust-格式与-lint)。`tests/` 保留现有 CLI 差分和工具验收测试。
+
+## 发布
+
+```bash
+# 1. 在单一位置更新版本号
+$EDITOR Cargo.toml
+
+# 2. 提交并合并到 main
+
+# 3. 创建并推送发布标签
+git tag v{version}
+git push origin v{version}
+```
+
+- 标签发布工作流为 [`release.yml`](./.github/workflows/release.yml)
+- 仅匹配 `vX.Y.Z` 的标签会触发统一发布流水线
+- 发布包含 PyPI 制品、GitHub Release 资产和 `@agent-dump/cli` npm 包
+- 原生安装附件复用同一批已验证二进制。发布成功后，`distribution.yml` 使用仓库 secret `DISTRIBUTION_TOKEN` 同步 Homebrew 与 Scoop；可针对最新稳定版单独重试。
+- 同一版本的发布可以安全重试：字节一致的 registry 制品会跳过，已存在但内容不同则失败
+- npm 发布会确认每个包已可下载且完整性校验一致后再继续，所有原生平台包就绪后才发布 CLI 主包
+- npm CLI 包在 `npm`/`npx` 安装阶段会下载并校验匹配的原生二进制
+- PyPI 发布使用 GitHub `release` 环境中的环境级 secret `UV_PUBLISH_TOKEN`
+- 每个 `@agent-dump/*` npm 包均使用绑定到本仓库、`release.yml` 与 GitHub `release` 环境的
+  Trusted Publisher/OIDC 发布，不使用 `NPM_TOKEN` secret
+
+## 许可证
+
+MIT
