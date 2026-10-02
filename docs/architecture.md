@@ -82,7 +82,7 @@ PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹
 
 ## 消息定位
 
-`query/context.rs` 基于标准化 SessionData 生成消息定位符并校验上下文范围。`--search --locate` 按现有搜索语义定位命中消息；`workflows/uri.rs` 通过 Provider read 读取并校验正文快照，输出所需消息范围。定位读取失败保留筛选失败事实；正文变化拒绝旧定位符。无 --locate 时保持原搜索输出。
+`query/context.rs` 基于标准化 SessionData 生成消息定位符并校验上下文范围。`--search --locate` 按现有搜索语义定位命中消息；`workflows/uri.rs` 通过 Provider read 读取并校验正文快照，输出所需消息范围。定位读取失败保留筛选失败事实；正文变化拒绝旧定位符。无 --locate 时保持原搜索输出。`--message --format json,markdown` 在定位校验后复用 core output 的片段渲染与安全导出，保留 URI、定位符和原始消息范围；可恢复来源诊断在片段文件中标记 partial。
 
 ## 会话阅读器
 

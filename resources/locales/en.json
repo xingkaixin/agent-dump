@@ -315,10 +315,10 @@
   "CLI_JSON_HELP": "Write list, search, statistics, Provider capabilities, --head, --read or --message context as JSON to stdout",
   "JSON_MODE_ERROR": "--json requires list, search, statistics, --providers, --head, --read or --message context mode.",
   "CLI_LOCATE_HELP": "Include message locators in search results",
-  "CLI_MESSAGE_HELP": "Read context around a search message locator",
+  "CLI_MESSAGE_HELP": "Read or export context around a message locator",
   "CLI_BEFORE_HELP": "Messages before the target (default: 3)",
   "CLI_AFTER_HELP": "Messages after the target (default: 3)",
-  "MESSAGE_MODE_ERROR": "--locate requires --search; --message requires a session URI and cannot combine with --head, --summary, --format or --output.",
+  "MESSAGE_MODE_ERROR": "--locate requires --search; --message requires a session URI, excludes --head/--summary, and requires --format for --output. --json cannot combine with context file export.",
   "MESSAGE_LOCATOR_INVALID": "Invalid message locator. Run --search with --locate again.",
   "MESSAGE_LOCATOR_STALE": "Message locator no longer matches this transcript. Run --search with --locate again.",
   "MESSAGE_CONTEXT_RANGE": "Messages {start}–{end} of {total}",
@@ -351,5 +351,7 @@
   "READ_CURSOR_STALE": "Read cursor belongs to another session or transcript revision. Start a fresh --read; do not combine different revisions as one snapshot.",
   "READ_PARTIAL": "Some source records could not be read; see stderr diagnostics.",
   "READ_NEXT": "Continue with --read --cursor {cursor}",
-  "READ_END": "End of matching content in the selected view."
+  "READ_END": "End of matching content in the selected view.",
+  "MESSAGE_EXPORT_FORMAT_ERROR": "Context exports support only --format json,markdown.",
+  "MESSAGE_CONTEXT_EXPORTED": "✅ Exported context [{format}] to: {path}"
 }

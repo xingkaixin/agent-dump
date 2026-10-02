@@ -649,13 +649,16 @@ agent-dump --providers --json
 agent-dump --search 'database locked' --locate --json -query 'provider:codex'
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --json
+agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3 --format json,markdown --output excerpts
 ```
 
 将搜索结果 `locations[].locator` 原样传给 `--message`。`position` 是标准化会话中的一基消息序号；定位符绑定会话正文快照，正文变化后需重新搜索。范围默认前后各 3 条，可用 0 只读目标；超出首尾自动截到边界。范围读取仍需解析源会话，不承诺局部磁盘读取。
 
 `--locate` 仅用于 `--search`，返回包含任一搜索词的消息位置（各搜索词仍须在会话中全部命中），并遵守角色筛选。仅标题命中时 locations 为空；定位读取失败时为 null，结果标记 partial。未加 --locate 的搜索行为不变。
 
-`--message` 不能与 --head、--summary、--format 或 --output 组合。JSON 上下文包含 kind=context、data.uri、locator、total_messages、start/end 和 messages；每项包含 position 与标准化 message。定位符过期或无效返回非零退出码，JSON 模式诊断仅进入 stderr。
+`--message` 不能与 `--head` 或 `--summary` 组合。不加 `--format` 时打印上下文；`--json` 将上下文对象写入 stdout，包含 kind=context、data.uri、locator、total_messages、start/end 和 messages；每项包含 position 与标准化 message。定位符过期或无效返回非零退出码，JSON 模式诊断仅进入 stderr。
+
+加 `--format json,markdown` 可导出选定片段。文件位于输出目录的 Provider 子目录，名称为 `<id>.messages-<start>-<end>.json` / `.md`，不会覆盖整条会话导出。两种格式均保留规范化会话 URI、定位符（正文 revision 和目标位置）、原始消息范围及状态。JSON 保留标准化消息记录；Markdown 展示消息的可搜索文本。可恢复的来源诊断会把文件标记为 `partial`，具体诊断进入 stderr。定位符过期时不会创建文件。各 Provider 的格式限制仍生效；不接受 raw/print 文件格式，也不能同时使用 `--json` 与文件导出参数。`--output` 需要显式指定 `--format`，默认目录与整条会话导出规则一致。
 
 ### 按需读取与 Agent 读取提示词
 

@@ -168,8 +168,9 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             && (mode != Mode::Uri
                 || args.head
                 || args.summary
-                || args.format.is_some()
-                || args.output.is_some()))
+                || (args.json
+                    && (args.format.is_some() || args.output.is_some()))
+                || (args.output.is_some() && args.format.is_none())))
     {
         eprintln!("{}", i18n::t("MESSAGE_MODE_ERROR", zh, &[]));
         return Ok(false);
@@ -465,6 +466,19 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             )
         })?
     };
+    if args.message.is_some()
+        && args.format.is_some()
+        && formats.iter().any(|format| {
+            !matches!(
+                format,
+                output_formats::OutputFormat::Json
+                    | output_formats::OutputFormat::Markdown
+            )
+        })
+    {
+        eprintln!("{}", i18n::t("MESSAGE_EXPORT_FORMAT_ERROR", zh, &[]));
+        return Ok(false);
+    }
     uri_workflow::run(
         &uri_workflow::UriOperation {
             uri,

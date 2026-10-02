@@ -134,7 +134,17 @@ pub fn markdown(
     output: &Path,
     source_root: &Path,
 ) -> crate::Result<PathBuf> {
-    write(output, session_id, ".md", source_root, |file| {
+    markdown_with_suffix(session_id, text, output, source_root, ".md")
+}
+
+fn markdown_with_suffix(
+    session_id: &str,
+    text: &str,
+    output: &Path,
+    source_root: &Path,
+    suffix: &str,
+) -> crate::Result<PathBuf> {
+    write(output, session_id, suffix, source_root, |file| {
         if cfg!(windows) {
             file.write_all(text.replace('\n', "\r\n").as_bytes())?;
         } else {
@@ -154,6 +164,61 @@ pub fn raw(
         io::copy(&mut fs::File::open(source)?, file)?;
         Ok(())
     })
+}
+
+pub struct Excerpt<'a> {
+    pub uri: &'a str,
+    pub locator: &'a str,
+    pub data: &'a crate::session::SessionData,
+    pub range: std::ops::Range<usize>,
+    pub incomplete: bool,
+}
+
+impl Excerpt<'_> {
+    pub fn write(
+        &self,
+        format: crate::output::formats::OutputFormat,
+        output: &Path,
+        source_root: &Path,
+    ) -> crate::Result<PathBuf> {
+        use crate::output::formats::OutputFormat;
+        let suffix =
+            format!(".messages-{}-{}", self.range.start + 1, self.range.end);
+        match format {
+            OutputFormat::Json => {
+                let document = crate::output::render::context_json(
+                    self.uri,
+                    self.locator,
+                    self.data,
+                    self.range.clone(),
+                    self.incomplete,
+                );
+                json(
+                    &self.data.id,
+                    &document,
+                    output,
+                    source_root,
+                    &format!("{suffix}.json"),
+                )
+            }
+            OutputFormat::Markdown => markdown_with_suffix(
+                &self.data.id,
+                &crate::output::render::excerpt(
+                    self.uri,
+                    self.locator,
+                    self.data,
+                    self.range.clone(),
+                    self.incomplete,
+                ),
+                output,
+                source_root,
+                &format!("{suffix}.md"),
+            ),
+            OutputFormat::Raw | OutputFormat::Print => {
+                Err("Context exports support only JSON and Markdown".into())
+            }
+        }
+    }
 }
 
 pub struct SessionExport<'a> {
