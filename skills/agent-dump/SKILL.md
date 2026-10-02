@@ -41,6 +41,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 ## 执行工作流
 
 1. 识别任务模式
+- 用户给出会话 URI 并希望 Agent 按需读取：优先执行 `agent-dump <URI> --read-prompt`，按返回说明使用 `--read --json` 分页。此能力适用于所有已支持 Provider，无需 MCP；详细规则见 recipes 的“按需读取”。
 - 用户给了 `opencode://...`、`zcode://...`、`codex://...`、`kimi://...`、`claude://...`、`cursor://...`、`pi://...`、`deepchat://...`、`cherry://...`、`minimax://...` 这类 URI：使用 URI 模式。
 - 用户给了 `agents://<path>?q=...&providers=...`：使用路径作用域查询，可配合 list、interactive 或 collect。
 - 用户给了 `--collect`：使用 collect 模式，默认调用已配置的 AI 总结。
@@ -62,6 +63,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - 保留用户显式给出的 `--output`、`--format`、`--lang`、`-days`、`-query`、`--summary`、`--collect`、`-since/-until`、`--config` 参数。
 - 保留用户显式给出的 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--shortcut`、`--save`、`--search`、`--reindex`、`--providers`、`--capabilities`、`--no-metadata-summary` 参数。
 - 保留用户显式给出的 `--head` 参数，用于 URI 轻量元数据查看。
+- 保留 `--read-prompt`、`--read`、`--cursor`、`--limit`、`--max-chars`、`--order`、`--role`、`--match` 和 `--details`。用户只要读取提示词时，生成后交付，不擅自执行其中的读取命令。
 - 用户要实际执行外部汇总时，首次生成就将 stdout/stderr 分别保存到私有文件，只回传路径和退出码；
   按 recipes 的“外部 agent 汇总”先校验清单再读取正文，避免大清单在工具回传中丢失。
 
@@ -127,7 +129,7 @@ agent-dump --stats --json
 
 The envelope contains `schema_version: 1`, `kind` (list/search/stats), `status` (ok/partial/error), `data`, `failed_providers`, `failed_sessions`, and `error`. Incomplete discovery or failed query reads produce partial results. List/search data is an array; statistics data contains total/by_provider/by_time. Unknown directories, models and message counts are null; timestamps use UTC ISO 8601. Statistics expose known_messages and unknown_message_count_sessions separately. Time buckets use creation dates in the local timezone.
 
-No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context also accepts `--json`; other modes reject it.
+No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context and `--read` also accept `--json`; other modes reject it.
 
 ### Message locations and context
 
