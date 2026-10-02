@@ -1,6 +1,6 @@
 use crate::compat::value::{field, string, text, truthy};
 use crate::providers::contract::RecoverableDiagnostic;
-use crate::session::assembly::{backfill, fold_assistant};
+use crate::session::assembly::{AssistantFold, backfill};
 use crate::session::{
     Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
     parse_timestamp,
@@ -15,6 +15,7 @@ struct Decoder {
     ignored: HashSet<String>,
     assistant_calls: HashMap<String, Vec<String>>,
     current: Option<usize>,
+    assistant_fold: AssistantFold,
     latest_text: Option<usize>,
 }
 
@@ -91,19 +92,16 @@ impl Decoder {
         reasoning: bool,
     ) {
         let mut parts = vec![part];
-        let index = fold_assistant(
-            &mut self.messages,
-            self.current,
-            &mut parts,
-            reasoning,
-        )
-        .unwrap_or_else(|| {
-            let mut message =
-                Message::new(id.to_owned(), "assistant", timestamp, parts);
-            message.agent = Some("claude".into());
-            self.messages.push(message);
-            self.messages.len() - 1
-        });
+        let index = self
+            .assistant_fold
+            .fold(&mut self.messages, self.current, &mut parts, reasoning)
+            .unwrap_or_else(|| {
+                let mut message =
+                    Message::new(id.to_owned(), "assistant", timestamp, parts);
+                message.agent = Some("claude".into());
+                self.messages.push(message);
+                self.messages.len() - 1
+            });
         apply_metadata(&mut self.messages[index], source);
         self.current = Some(index);
         if !reasoning {

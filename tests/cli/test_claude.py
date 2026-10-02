@@ -97,6 +97,20 @@ def test_transcript_streams(cli, records):
     provider_export(cli, f"claude://{IDENTITY}", "claudecode")
 
 
+def test_accumulated_parts_keep_reasoning_and_tool_boundaries(cli):
+    create(
+        cli,
+        [
+            event("assistant", [{"type": "text", "text": "A"}, {"type": "text", "text": "B"}]),
+            event("assistant", [{"type": "thinking", "thinking": "Think"}]),
+            event("assistant", [tool(), {"type": "text", "text": "C"}, {"type": "text", "text": "C"}]),
+            event("user", [result()]),
+            event("assistant", [{"type": "thinking", "thinking": "Next"}, {"type": "text", "text": "D"}]),
+        ],
+    )
+    provider_export(cli, f"claude://{IDENTITY}", "claudecode")
+
+
 @pytest.mark.parametrize(
     "content", [None, "", "  text  ", False, 1e-6, {"z": 2, "a": 1}, ["one", {"text": "two"}, {"content": 3}, None]]
 )
