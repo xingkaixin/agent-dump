@@ -94,6 +94,8 @@ PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹
 
 游标以版本化的编码保存 URI、正文 revision、筛选、顺序、预算、原始消息位置及字符偏移；续读只接受游标，不另行覆盖选择条件。复用 `query/context.rs` 的 revision 与消息 locator。正文变化会拒绝旧游标，不持久化历史正文或新增索引；每次调用仍通过完整 Provider read，暂无局部来源读取承诺。可恢复来源诊断标记 partial；分页、视图省略和字符分段不代表源读取失败。
 
+revision 将同一份 JSON 序列化流经固定大小缓冲区直接送入 SHA-256，不再额外保存整个序列化正文；哈希输入、定位符和游标格式保持不变。这只减少哈希阶段的内存复制，Provider 解析和正文展示仍处理完整消息。
+
 `--read-prompt` 只经 registry 校验 URI 语法后输出本地化静态说明与命令清单，不打开 Provider、发现会话或读取正文。清单使用当前原生程序路径，shell 参数引用与 collect handoff 共用 `command.rs` 的命令构造。提示词说明预算、游标、筛选、版本变化和来源边界；无需 MCP 或运行时 skill。
 
 ## 活动时间筛选
