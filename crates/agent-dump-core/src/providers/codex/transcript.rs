@@ -6,6 +6,7 @@ use crate::providers::codex::enrichment::{
 };
 use crate::providers::contract::RecoverableDiagnostic;
 use crate::providers::jsonl;
+use crate::session::assembly::AssistantFold;
 use crate::session::{
     Message, Part, PlanPart, Session, SessionData, Stats, TextPart, ToolPart,
     parse_timestamp,
@@ -19,6 +20,7 @@ struct Decoder {
     pending_calls: HashMap<String, (usize, usize)>,
     nicknames: HashMap<String, String>,
     current_assistant: Option<usize>,
+    assistant_fold: AssistantFold,
     latest_assistant_text: Option<usize>,
     pending_plan: Option<(usize, usize)>,
 }
@@ -134,10 +136,7 @@ impl Decoder {
             self.assistant(id, timestamp, parts, false);
             self.latest_assistant_text = self.current_assistant;
             if let Some(index) = self.current_assistant
-                && self.messages[index]
-                    .parts
-                    .iter()
-                    .any(|part| matches!(part, Part::Plan(_)))
+                && self.assistant_fold.has_plan(&self.messages, index)
             {
                 self.pending_plan =
                     Some((index, self.messages[index].parts.len() - 1));
@@ -199,13 +198,15 @@ impl Decoder {
         if parts.is_empty() {
             return;
         }
-        if crate::session::assembly::fold_assistant(
-            &mut self.messages,
-            self.current_assistant,
-            &mut parts,
-            reasoning,
-        )
-        .is_some()
+        if self
+            .assistant_fold
+            .fold(
+                &mut self.messages,
+                self.current_assistant,
+                &mut parts,
+                reasoning,
+            )
+            .is_some()
         {
             return;
         }

@@ -297,6 +297,23 @@ def test_multipart_plan_uses_the_reference_approval_boundary(cli):
     export_parity(cli, [event, message("user", "PLEASE IMPLEMENT THIS PLAN")])
 
 
+def test_plan_after_accumulated_text_keeps_approval_and_tool_boundaries(cli):
+    export_parity(
+        cli,
+        [
+            message("assistant", "First"),
+            message("assistant", "Second"),
+            message("assistant", "<proposed_plan>Plan</proposed_plan>"),
+            message("assistant", "Additional text"),
+            call(),
+            output(),
+            message("user", "PLEASE IMPLEMENT THIS PLAN"),
+            reasoning(),
+            message("assistant", "Next"),
+        ],
+    )
+
+
 def test_tool_output_keeps_its_own_timestamp(cli):
     event = output()
     event["timestamp"] = "2026-01-15T12:00:02.123Z"

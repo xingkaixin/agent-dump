@@ -2,26 +2,58 @@ use crate::session::{Message, Part, ToolPart};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
-pub fn fold_assistant(
-    messages: &mut [Message],
+#[derive(Default)]
+pub struct AssistantFold {
     current: Option<usize>,
-    parts: &mut Vec<Part>,
-    reasoning: bool,
-) -> Option<usize> {
-    let index = current?;
-    let message = &mut messages[index];
-    if message.parts.iter().any(|part| {
-        matches!(part, Part::Tool(_))
-            || (reasoning && matches!(part, Part::Text(_)))
-    }) {
-        return None;
-    }
-    for part in parts.drain(..) {
-        if message.parts.last() != Some(&part) {
-            message.parts.push(part);
+    scanned: usize,
+    has_tool: bool,
+    has_text: bool,
+    has_plan: bool,
+}
+
+impl AssistantFold {
+    fn refresh(&mut self, messages: &[Message], index: usize) {
+        if self.current != Some(index) {
+            *self = Self {
+                current: Some(index),
+                ..Self::default()
+            };
         }
+        let parts = &messages[index].parts;
+        // Decoders append parts; tool and plan backfills keep their variants.
+        for part in &parts[self.scanned..] {
+            self.has_tool |= matches!(part, Part::Tool(_));
+            self.has_text |= matches!(part, Part::Text(_));
+            self.has_plan |= matches!(part, Part::Plan(_));
+        }
+        self.scanned = parts.len();
     }
-    Some(index)
+
+    pub fn fold(
+        &mut self,
+        messages: &mut [Message],
+        current: Option<usize>,
+        parts: &mut Vec<Part>,
+        reasoning: bool,
+    ) -> Option<usize> {
+        let index = current?;
+        self.refresh(messages, index);
+        if self.has_tool || (reasoning && self.has_text) {
+            return None;
+        }
+        let message = &mut messages[index];
+        for part in parts.drain(..) {
+            if message.parts.last() != Some(&part) {
+                message.parts.push(part);
+            }
+        }
+        Some(index)
+    }
+
+    pub fn has_plan(&mut self, messages: &[Message], index: usize) -> bool {
+        self.refresh(messages, index);
+        self.has_plan
+    }
 }
 
 pub fn backfill<'a>(

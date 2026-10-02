@@ -47,6 +47,8 @@ OpenCode 在同一数据库中兼容旧表与 V2，同 ID 优先 V2，旧版独�
 
 `session/cache.rs` 统一拥有正文缓存。`get` 复用有界 LRU；批量 Search/Collect 用 `lease`，完成投影即释放。并发读取合并，消费者得到隔离数据。数据库与 WAL 都属于 change sources，SHM 协调文件不作为持久内容失效依据。缓存不得恢复已经过期或删除的正文。
 
+Codex 与 Claude 的连续 assistant 片段由 `session/assembly.rs` 合并。每个 decoder 只记录当前消息已扫描到的位置及 text/tool/plan 类型，后续只检查新追加的片段；切换消息时重新扫描。工具输出和计划审批回填不改变片段类型。合并边界、相邻重复片段消除及 Codex 计划审批位置保持原有语义。
+
 ## 4. 导出与文件边界
 
 格式闭集和 `md` 别名在 `output/formats.rs`。`output/export.rs` 负责文件名、来源拒写、私有权限、临时文件、同步及原子替换。`storage/private_files.rs` 共享目录和落盘语义。macOS 使用与 Python `os.fsync` 相同的同步级别；不会对每个导出文件额外执行 `F_FULLFSYNC`。
