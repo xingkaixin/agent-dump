@@ -154,8 +154,9 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         return Ok(false);
     }
     if args.json
-        && !matches!(mode, Mode::List | Mode::Stats)
-        && !(mode == Mode::Uri && (args.message.is_some() || args.read))
+        && !matches!(mode, Mode::List | Mode::Stats | Mode::Providers)
+        && !(mode == Mode::Uri
+            && (args.message.is_some() || args.read || args.head))
     {
         eprintln!("{}", i18n::t("JSON_MODE_ERROR", zh, &[]));
         return Ok(false);
@@ -233,7 +234,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         )?;
     }
     if mode == Mode::Providers {
-        return maintenance::providers(zh, out);
+        return maintenance::providers(args.json, zh, out);
     }
     if let Some(action) = &args.config {
         return config_command::run(action, zh, out, &mut io::stdin().lock());
@@ -438,7 +439,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
     let uri = args.uri.ok_or("Provide a session URI or --list")?;
     if args.head && args.format.is_some() {
         writeln!(
-            out,
+            plan_out,
             "{}",
             if zh {
                 "❌ --head 不能与 -format/--format 同时使用。"

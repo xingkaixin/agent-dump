@@ -142,6 +142,24 @@ fn run_inner(
         return Ok(false);
     }
     if operation.head {
+        if operation.json {
+            let mut record =
+                super::machine::session_record(&registration.info, &session);
+            record["project"] = serde_json::json!(session.project);
+            record["version"] = session.version;
+            record["subtargets"] = serde_json::json!(session.subtargets);
+            serde_json::to_writer(
+                &mut *out,
+                &serde_json::json!({
+                    "schema_version": 1,
+                    "kind": "head",
+                    "status": if incomplete { "partial" } else { "ok" },
+                    "data": record
+                }),
+            )?;
+            writeln!(out)?;
+            return Ok(true);
+        }
         write!(
             out,
             "{}",

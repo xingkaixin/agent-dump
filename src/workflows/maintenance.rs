@@ -3,14 +3,21 @@ use agent_dump_core::query::Query;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-pub fn providers(zh: bool, out: &mut impl Write) -> crate::Result<bool> {
-    writeln!(out, "{}\n", t("PROVIDERS_HEADER", zh, &[]))?;
-    writeln!(
-        out,
-        "{}\n--- | --- | --- | --- | ---",
-        t("PROVIDERS_TABLE_HEADER", zh, &[])
-    )?;
+pub fn providers(
+    json: bool,
+    zh: bool,
+    out: &mut impl Write,
+) -> crate::Result<bool> {
+    if !json {
+        writeln!(out, "{}\n", t("PROVIDERS_HEADER", zh, &[]))?;
+        writeln!(
+            out,
+            "{}\n--- | --- | --- | --- | ---",
+            t("PROVIDERS_TABLE_HEADER", zh, &[])
+        )?;
+    }
     let mut roots = Vec::new();
+    let mut records = Vec::new();
     for registration in agent_dump_core::providers::registry::all() {
         let provider = (registration.open)()?;
         let search_roots = provider.search_roots()?;
@@ -31,8 +38,26 @@ pub fn providers(zh: bool, out: &mut impl Write) -> crate::Result<bool> {
             .iter()
             .filter(|f| provider.supports_format(**f))
             .map(|f| f.name())
-            .collect::<Vec<_>>()
-            .join(", ");
+            .collect::<Vec<_>>();
+        if json {
+            let search_roots: Vec<_> = states.iter().map(|(label, path, exists)| {
+                serde_json::json!({
+                    "label": label,
+                    "path": agent_dump_core::storage::source_io::path_text(path),
+                    "exists": exists
+                })
+            }).collect();
+            records.push(serde_json::json!({
+                "provider": registration.info.name,
+                "display_name": registration.info.display_name,
+                "scheme": registration.info.scheme,
+                "identifier_label": registration.info.identifier_label,
+                "uri_prefixes": registration.info.uri_prefixes,
+                "formats": supported,
+                "search_roots": search_roots
+            }));
+            continue;
+        }
         let unsupported = formats
             .iter()
             .filter(|f| !provider.supports_format(**f))
@@ -59,7 +84,7 @@ pub fn providers(zh: bool, out: &mut impl Write) -> crate::Result<bool> {
             "{} | {}:// | {} | {} | {}",
             registration.info.display_name,
             registration.info.scheme,
-            supported,
+            supported.join(", "),
             counts,
             if unsupported.is_empty() {
                 t("PROVIDERS_NONE", zh, &[])
@@ -68,6 +93,19 @@ pub fn providers(zh: bool, out: &mut impl Write) -> crate::Result<bool> {
             }
         )?;
         roots.push((&registration.info, states));
+    }
+    if json {
+        serde_json::to_writer(
+            &mut *out,
+            &serde_json::json!({
+                "schema_version": 1,
+                "kind": "providers",
+                "status": "ok",
+                "data": records
+            }),
+        )?;
+        writeln!(out)?;
+        return Ok(true);
     }
     writeln!(out, "\n{}", t("PROVIDERS_SEARCH_ROOTS", zh, &[]))?;
     for (info, roots) in roots {
