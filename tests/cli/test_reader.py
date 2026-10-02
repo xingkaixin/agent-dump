@@ -64,6 +64,39 @@ def test_reader_search_copy_export_resize_and_restore(cli, lang):
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Real PTY; portable rendering is covered by Rust tests")
+def test_reader_next_match_after_resize(cli):
+    cli.write(
+        [
+            header(),
+            message("user", "navigation-start"),
+            message("assistant", "intro\n" * 40 + "needle FIRST_UNSEEN"),
+            message("user", "gap\n" * 40 + "needle SECOND_UNSEEN"),
+        ]
+    )
+    before = cli.fixtures.source_manifest(cli.root)
+    with terminal(
+        cli,
+        "--browse",
+        "agents:///project?providers=codex&q=navigation-start",
+        "--days",
+        "36500",
+        "--lang",
+        "en",
+        width=100,
+    ) as (expect, send, resize, finish):
+        expect("navigation-start")
+        send("/needle\r")
+        expect("FIRST_UNSEEN")
+        resize(40, 12)
+        send("n")
+        expect("SECOND_UNSEEN")
+        send("q")
+        code, transcript = finish()
+        assert code == 0, transcript
+    assert cli.fixtures.source_manifest(cli.root) == before
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Real PTY; portable rendering is covered by Rust tests")
 def test_reader_switch_session_and_ctrl_c(cli):
     with terminal(cli, "--browse", "-q", "provider:codex", "-d", "36500", "--lang", "en", width=100) as (
         expect,

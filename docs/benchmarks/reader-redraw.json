@@ -1,0 +1,155 @@
+{
+  "environment": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "cpu": "Apple M1 Pro",
+    "logical_cpus": 10,
+    "collector_python": "3.11.15",
+    "fixture_sqlite": "3.50.4",
+    "timezone": "UTC",
+    "locale": "en",
+    "filesystem_cache": "uncontrolled; fixture creation and warmups populate OS page cache",
+    "rss_method": "fresh collector RUSAGE_CHILDREN; maximum child RSS, not simultaneous process-tree sum"
+  },
+  "repeats": 7,
+  "warmups_per_binary": 1,
+  "executables": {
+    "baseline": {
+      "path": "<baseline-release-test-binary>",
+      "sha256": "06585ad747c7a33e343f903047e215f6574f792950af4e94ef988332a0b4c977"
+    },
+    "candidate": {
+      "path": "<candidate-release-test-binary>",
+      "sha256": "5843699b970dc7817b93a4449079a5fbabc5dffbe390f0d864ebaf15fa6c16af"
+    }
+  },
+  "cases": [
+    {
+      "name": "small",
+      "chars": 128,
+      "rows": 1,
+      "iterations": 200,
+      "screen_hash": "3aa0e555a543abe5",
+      "draw_seconds_samples": {
+        "baseline": [
+          0.000201571875,
+          0.00018745207999999999,
+          0.00019179687500000002,
+          0.000192865835,
+          0.000192163955,
+          0.00019554979,
+          0.000193561875
+        ],
+        "candidate": [
+          0.00013380207999999998,
+          0.000135045415,
+          0.000135022085,
+          0.00013177708,
+          0.00013561020999999999,
+          0.000130755,
+          0.000139393335
+        ]
+      },
+      "draw_seconds_summary": {
+        "baseline": {
+          "median": 0.000192865835,
+          "min": 0.00018745207999999999,
+          "max": 0.000201571875,
+          "stdev": 4.3010707295785e-06
+        },
+        "candidate": {
+          "median": 0.000135022085,
+          "min": 0.000130755,
+          "max": 0.000139393335,
+          "stdev": 2.8187606869314837e-06
+        }
+      }
+    },
+    {
+      "name": "many-sessions",
+      "chars": 128,
+      "rows": 1000,
+      "iterations": 200,
+      "screen_hash": "271145797fb8277a",
+      "draw_seconds_samples": {
+        "baseline": [
+          0.000361335415,
+          0.00036576895499999996,
+          0.000367951875,
+          0.00035335625,
+          0.00035483,
+          0.00035052729,
+          0.00035976374999999996
+        ],
+        "candidate": [
+          0.000225382705,
+          0.00023196708,
+          0.00023353979000000002,
+          0.00022538124999999998,
+          0.00023640520500000002,
+          0.000223737915,
+          0.000233280415
+        ]
+      },
+      "draw_seconds_summary": {
+        "baseline": {
+          "median": 0.00035976374999999996,
+          "min": 0.00035052729,
+          "max": 0.000367951875,
+          "stdev": 6.493320391530199e-06
+        },
+        "candidate": {
+          "median": 0.00023196708,
+          "min": 0.000223737915,
+          "max": 0.00023640520500000002,
+          "stdev": 5.000665268172551e-06
+        }
+      }
+    },
+    {
+      "name": "large-message",
+      "chars": 8388608,
+      "rows": 1,
+      "iterations": 200,
+      "screen_hash": "b8f05bcfbb285d2e",
+      "draw_seconds_samples": {
+        "baseline": [
+          0.002348928335,
+          0.00234710375,
+          0.002289081665,
+          0.0022438854150000002,
+          0.002260631665,
+          0.00219110625,
+          0.0023405729149999998
+        ],
+        "candidate": [
+          0.000129824375,
+          0.00013245562500000001,
+          0.00013408978999999998,
+          0.00028835146,
+          0.00013192687499999998,
+          0.00013252125,
+          0.000138074585
+        ]
+      },
+      "draw_seconds_summary": {
+        "baseline": {
+          "median": 0.002289081665,
+          "min": 0.00219110625,
+          "max": 0.002348928335,
+          "stdev": 6.0621901726275396e-05
+        },
+        "candidate": {
+          "median": 0.00013252125,
+          "min": 0.000129824375,
+          "max": 0.00028835146,
+          "stdev": 5.87158742586805e-05
+        }
+      }
+    }
+  ],
+  "baseline_commit": "4ed3e8e55fbd6a353ec97e75261cd0a296c109a8",
+  "baseline_production_commit": "eaf026d67ff6b2db3afcd40d7b800ca931d241d1",
+  "artifact_note": "Executable paths normalized for publication; measurements and hashes unchanged."
+}

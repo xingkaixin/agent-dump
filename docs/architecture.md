@@ -89,6 +89,8 @@ PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹
 
 `workflows/reader.rs` 拥有 --browse 的发现、筛选、按需读取和导出；`terminal/reader.rs` 只接收行数据和已读取的 SessionData，处理键盘与展示，不调用 Provider。正文使用 core render 的标准化投影，当前会话读取失败不阻止切换。导出复用 URI 工作流；Crossterm osc52 feature 提供复制请求，不依赖平台剪贴板进程。
 
+阅读器只缓存当前搜索命中的展示行。重新搜索、换行布局或工具详情变化后刷新该位置，切换命中时重新计算；普通重绘直接读取该位置，不重复拼接整条消息或编译查询。会话切换重置全部阅读状态，列表渲染借用既有行文本。
+
 ## 分段读取与读取提示词
 
 `--read` 继续由 `workflows/uri.rs` 通过 Provider find/read 定位和读取单个会话。core 的 `query/read.rs` 拥有文本视图、角色和字面短语筛选、消息分页及长消息字符续读；它只使用标准化 SessionData，不解释 Provider schema。`output/render.rs` 拥有文本展示，CLI 的 `workflows/read.rs` 输出机器信封和读取提示词。
