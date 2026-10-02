@@ -7,7 +7,6 @@ use crate::providers::contract::{Provider, RawExport};
 use crate::providers::sqlite::connection::{connect, has_table, rows};
 use crate::session::timestamp::Timestamp;
 use crate::session::{Session, SessionData, epoch_seconds};
-use jiff::SignedDuration;
 use rusqlite::{Connection, ToSql};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -109,20 +108,24 @@ impl SqliteProvider {
 impl Provider for SqliteProvider {
     fn discover(
         &mut self,
-        days: i64,
+        days: Option<i64>,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.ensure_database()?;
         let Some(path) = &self.database else {
             return Ok(crate::providers::contract::Discovery::default());
         };
-        let cutoff = Timestamp::now()
-            .checked_sub(SignedDuration::from_secs(
-                days.checked_mul(86400).ok_or("days is out of range")?,
-            ))?
-            .as_millisecond();
-        self.select(&connect(path)?, path, "s.time_created >= ?", &[&cutoff])
-            .map(crate::providers::contract::Discovery::available)
+        let cutoff = days
+            .map(Timestamp::days_ago)
+            .transpose()?
+            .map(Timestamp::as_millisecond);
+        let connection = connect(path)?;
+        if let Some(cutoff) = cutoff {
+            self.select(&connection, path, "s.time_created >= ?", &[&cutoff])
+        } else {
+            self.select(&connection, path, "1", &[])
+        }
+        .map(crate::providers::contract::Discovery::available)
     }
 
     fn find(
@@ -407,7 +410,7 @@ mod tests {
                 } else {
                     assert!(
                         !provider
-                            .discover(36500, &mut |_| Ok(()))
+                            .discover(Some(36500), &mut |_| Ok(()))
                             .unwrap()
                             .available
                     );
@@ -434,9 +437,11 @@ mod tests {
                     first
                 );
                 assert_eq!(
-                    provider.discover(36500, &mut |_| Ok(())).unwrap().sessions
-                        [0]
-                    .source_path,
+                    provider
+                        .discover(Some(36500), &mut |_| Ok(()))
+                        .unwrap()
+                        .sessions[0]
+                        .source_path,
                     first
                 );
                 std::fs::remove_file(&first).unwrap();
@@ -498,7 +503,7 @@ mod tests {
                         );
                     } else {
                         let found = provider
-                            .discover(36500, &mut |_| {
+                            .discover(Some(36500), &mut |_| {
                                 panic!("unexpected warning")
                             })
                             .unwrap();
@@ -531,7 +536,9 @@ mod tests {
                         expected.parent().unwrap()
                     );
                     let found = provider
-                        .discover(36500, &mut |_| panic!("unexpected warning"))
+                        .discover(Some(36500), &mut |_| {
+                            panic!("unexpected warning")
+                        })
                         .unwrap();
                     assert!(found.available && found.failures.is_empty());
                     assert_eq!(found.sessions.len(), 1);
@@ -546,7 +553,7 @@ mod tests {
                     );
                     assert!(
                         provider
-                            .discover(36500, &mut |_| panic!(
+                            .discover(Some(36500), &mut |_| panic!(
                                 "unexpected warning"
                             ))
                             .is_err()

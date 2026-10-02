@@ -88,6 +88,7 @@ fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
     }
     if (!query_uri || args.collect)
         && (args.days.is_some()
+            || args.time_field.is_some()
             || args.query.as_ref().is_some_and(|s| !s.is_empty()))
     {
         result.push((Mode::List, ""));
@@ -121,6 +122,12 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             out
         };
     let mode = mode(&args);
+    if args.time_field.is_some()
+        && !matches!(mode, Mode::List | Mode::Interactive | Mode::Browse)
+    {
+        eprintln!("{}", i18n::t("TIME_FIELD_MODE_ERROR", zh, &[]));
+        return Ok(false);
+    }
     if (args.read || args.read_prompt)
         && (mode != Mode::Uri
             || candidates(&args)
@@ -314,6 +321,10 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             return Ok(false);
         }
     };
+    if args.time_field.as_deref() == Some("updated") {
+        query.get_or_insert_with(query::Query::default).time_field =
+            query::TimeField::Updated;
+    }
     if mode == Mode::Collect {
         return collect_workflow::run(
             &collect_model::Operation {

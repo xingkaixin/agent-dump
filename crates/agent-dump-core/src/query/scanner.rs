@@ -1,5 +1,5 @@
 use crate::providers::contract::{Provider, ProviderInfo};
-use crate::query::Query;
+use crate::query::{Query, TimeField};
 use crate::session::Session;
 use std::io::Write;
 
@@ -21,6 +21,10 @@ pub fn discover(
     zh: bool,
     warnings: &mut impl Write,
 ) -> crate::Result<Scan> {
+    let updated_since = query
+        .is_some_and(|query| query.time_field == TimeField::Updated)
+        .then(|| crate::session::timestamp::Timestamp::days_ago(days))
+        .transpose()?;
     let mut scan = Scan::default();
     for registration in crate::providers::registry::all() {
         let info = &registration.info;
@@ -31,18 +35,29 @@ pub fn discover(
             continue;
         }
         let result = (registration.open)().and_then(|mut provider| {
-            let discovery = provider.discover(days, &mut |diagnostic| {
-                writeln!(
-                    warnings,
-                    "{}",
-                    crate::output::diagnostics::record_warning(&diagnostic, zh)
-                )?;
-                Ok(())
-            })?;
+            let discovery = provider.discover(
+                updated_since.is_none().then_some(days),
+                &mut |diagnostic| {
+                    writeln!(
+                        warnings,
+                        "{}",
+                        crate::output::diagnostics::record_warning(
+                            &diagnostic,
+                            zh
+                        )
+                    )?;
+                    Ok(())
+                },
+            )?;
             Ok((provider, discovery))
         });
         match result {
-            Ok((provider, discovery)) => {
+            Ok((provider, mut discovery)) => {
+                if let Some(cutoff) = updated_since {
+                    discovery
+                        .sessions
+                        .retain(|session| session.updated_at >= cutoff);
+                }
                 if !discovery.failures.is_empty() {
                     scan.failed_providers.push(info.name.into());
                 }

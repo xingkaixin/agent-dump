@@ -195,7 +195,7 @@ impl Codex {
 impl Provider for Codex {
     fn discover(
         &mut self,
-        days: i64,
+        days: Option<i64>,
         diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.titles = None;
@@ -317,7 +317,10 @@ mod tests {
         assert_eq!(provider.source_root(), first);
         std::fs::remove_file(second.join("session_index.jsonl")).unwrap();
         assert_ne!(
-            provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0]
+            provider
+                .discover(Some(36500), &mut |_| Ok(()))
+                .unwrap()
+                .sessions[0]
                 .title,
             "Second"
         );
@@ -368,7 +371,7 @@ mod tests {
         };
         let mut warnings = Vec::new();
         let discovery = provider
-            .discover(36500, &mut |warning| {
+            .discover(Some(36500), &mut |warning| {
                 warnings.push(warning);
                 Ok(())
             })
@@ -399,7 +402,9 @@ mod tests {
 
         std::fs::remove_file(&index).unwrap();
         let discovery = provider
-            .discover(36500, &mut |_| panic!("absent index must not warn"))
+            .discover(Some(36500), &mut |_| {
+                panic!("absent index must not warn")
+            })
             .unwrap();
         assert!(
             discovery

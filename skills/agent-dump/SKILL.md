@@ -51,6 +51,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - 用户给了 `--search`：使用 search 模式（本地 SQLite FTS5 全文搜索）。可与 `--list` 组合使用。
 - 用户给了 `--config view` 或 `--config edit`：使用 config 模式。
 - 用户要”先看列表/筛选”：使用 `--list` 模式。
+- 用户要查找最近活跃的会话：在 list/search/browse/interactive 模式加 `--time-field updated`，配合 `--days`；不加时仍按创建时间筛选，collect 和 stats 不接受该参数。
 - 用户要”交互式勾选后导出”：使用 `--interactive` 模式。
 - 用户只给 `-days` 或 `-query` 且未指定 `--interactive`：按列表模式处理（CLI 会自动启用 `--list`）。
 - Codex URI 允许 `codex://threads/<session_id>` 变体，等价于 `codex://<session_id>`。
@@ -60,7 +61,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - 先确认命令前缀，使用以下等价入口之一：`agent-dump`、`bunx @agent-dump/cli`、`npx @agent-dump/cli`、必要时 `uvx agent-dump`。
 - 优先复用 [references/cli-recipes.md](references/cli-recipes.md) 的模板命令。
 - `references/cli-recipes.md` 负责详细命令模板、行为矩阵和错误处理；本 skill 只负责入口选择与环境判断规则。
-- 保留用户显式给出的 `--output`、`--format`、`--lang`、`-days`、`-query`、`--summary`、`--collect`、`-since/-until`、`--config` 参数。
+- 保留用户显式给出的 `--time-field`、`--output`、`--format`、`--lang`、`-days`、`-query`、`--summary`、`--collect`、`-since/-until`、`--config` 参数。
 - 保留用户显式给出的 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--shortcut`、`--save`、`--search`、`--reindex`、`--providers`、`--capabilities`、`--no-metadata-summary` 参数。
 - 保留用户显式给出的 `--head` 参数，用于 URI 轻量元数据查看。
 - 保留 `--read-prompt`、`--read`、`--cursor`、`--limit`、`--max-chars`、`--order`、`--role`、`--match` 和 `--details`。用户只要读取提示词时，生成后交付，不擅自执行其中的读取命令。

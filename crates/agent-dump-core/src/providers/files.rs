@@ -1,7 +1,6 @@
 use crate::providers::contract::{Discovery, Lookup, SessionFailure};
 use crate::session::Session;
 use crate::session::timestamp::Timestamp;
-use jiff::SignedDuration;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -119,13 +118,14 @@ impl SourceRoots {
 
 pub fn discover(
     paths: &[PathBuf],
-    days: i64,
+    days: Option<i64>,
     prune_mtime: bool,
-    mut parse: impl FnMut(&Path, Timestamp) -> crate::Result<Option<Session>>,
+    mut parse: impl FnMut(
+        &Path,
+        Option<Timestamp>,
+    ) -> crate::Result<Option<Session>>,
 ) -> crate::Result<Discovery> {
-    let seconds = days.checked_mul(86400).ok_or("days is out of range")?;
-    let cutoff =
-        Timestamp::now().checked_sub(SignedDuration::from_secs(seconds))?;
+    let cutoff = days.map(Timestamp::days_ago).transpose()?;
     let mut discovery = Discovery {
         available: !paths.is_empty(),
         ..Discovery::default()
@@ -133,6 +133,7 @@ pub fn discover(
     for path in paths {
         let result = (|| {
             if prune_mtime
+                && let Some(cutoff) = cutoff
                 && Timestamp::try_from(path.metadata()?.modified()?)? < cutoff
             {
                 return Ok(None);
@@ -140,7 +141,9 @@ pub fn discover(
             parse(path, cutoff)
         })();
         match result {
-            Ok(Some(session)) if session.created_at >= cutoff => {
+            Ok(Some(session))
+                if cutoff.is_none_or(|cutoff| session.created_at >= cutoff) =>
+            {
                 discovery.sessions.push(session);
             }
             Err(error) => discovery.failures.push(SessionFailure {
@@ -210,7 +213,7 @@ mod tests {
         let readable = directory.path().join("readable.jsonl");
         std::fs::write(&readable, b"").unwrap();
         let missing = directory.path().join("removed.jsonl");
-        let parse = |path: &Path, _: Timestamp| {
+        let parse = |path: &Path, _: Option<Timestamp>| {
             Ok(Some(Session::new(
                 "kept".into(),
                 "Kept".into(),
@@ -220,19 +223,20 @@ mod tests {
             )))
         };
         let discovery =
-            discover(&[missing.clone(), readable], 7, true, parse).unwrap();
+            discover(&[missing.clone(), readable], Some(7), true, parse)
+                .unwrap();
         assert!(discovery.available);
         assert_eq!(discovery.sessions.len(), 1);
         assert_eq!(discovery.sessions[0].id, "kept");
         assert_eq!(discovery.failures.len(), 1);
         assert_eq!(discovery.failures[0].source, missing.display().to_string());
 
-        let failed = discover(&[missing], 7, true, parse).unwrap();
+        let failed = discover(&[missing], Some(7), true, parse).unwrap();
         assert!(failed.available);
         assert!(failed.sessions.is_empty());
         assert_eq!(failed.failures.len(), 1);
 
-        let absent = discover(&[], 7, true, parse).unwrap();
+        let absent = discover(&[], Some(7), true, parse).unwrap();
         assert!(!absent.available);
         assert!(absent.failures.is_empty());
     }

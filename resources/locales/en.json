@@ -353,5 +353,8 @@
   "READ_NEXT": "Continue with --read --cursor {cursor}",
   "READ_END": "End of matching content in the selected view.",
   "MESSAGE_EXPORT_FORMAT_ERROR": "Context exports support only --format json,markdown.",
-  "MESSAGE_CONTEXT_EXPORTED": "✅ Exported context [{format}] to: {path}"
+  "MESSAGE_CONTEXT_EXPORTED": "✅ Exported context [{format}] to: {path}",
+  "CLI_TIME_FIELD_HELP": "Time basis for --days in list/search/browse/interactive: created (default) or updated",
+  "TIME_FIELD_MODE_ERROR": "--time-field requires list, search, browse or interactive mode.",
+  "QUERY_SUMMARY_UPDATED_TIME": "updated time"
 }

@@ -80,6 +80,8 @@ pub struct Args {
     pub head: bool,
     #[arg(short = 'd', long = "days", allow_hyphen_values = true)]
     pub days: Option<i64>,
+    #[arg(long, value_parser = ["created", "updated"])]
+    pub time_field: Option<String>,
     #[arg(short = 'q', long = "query")]
     pub query: Option<String>,
     #[arg(long)]
@@ -132,6 +134,7 @@ pub fn normalize_arguments(args: Vec<OsString>) -> Vec<OsString> {
                 && matches!(
                     normalized,
                     "-d" | "--days"
+                        | "--time-field"
                         | "-q"
                         | "--query"
                         | "--format"
@@ -181,6 +184,7 @@ pub fn command(zh: bool) -> clap::Command {
     for (id, key) in [
         ("uri", "URI"),
         ("days", "DAYS"),
+        ("time_field", "TIME_FIELD"),
         ("output", "OUTPUT"),
         ("format", "FORMAT"),
         ("head", "HEAD"),

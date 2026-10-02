@@ -20,6 +20,7 @@ pub fn run(
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
+    let time_field = query.map(|query| query.time_field).unwrap_or_default();
     let scan =
         agent_dump_core::query::scanner::discover(query, days, zh, warnings)?;
     if scan.groups.is_empty() && !options.json {
@@ -152,7 +153,9 @@ pub fn run(
                 out,
                 "\n{}. {}",
                 i + 1,
-                agent_dump_core::output::render::formatted_title(session)
+                agent_dump_core::output::render::formatted_title(
+                    session, time_field
+                )
             )?;
             for (key, value) in [
                 ("SEARCH_RESULT_PROVIDER", group.info.display_name.to_owned()),
@@ -221,6 +224,7 @@ pub fn run(
             query.map(|q| q.summary(zh)).as_deref(),
             days,
             options.summary,
+            time_field,
             zh
         )
         .replacen(

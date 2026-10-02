@@ -466,6 +466,7 @@ Generating a prompt does not mean that a report has been created, and does not a
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive` | Run in interactive mode to select and export sessions | - |
 | `-d`, `-days`, `--days` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `-since/-until` are omitted. | 7 outside collect; today only in collect |
+| `--time-field` | Use `created` or `updated` time for the `--days` window in list/search/browse/interactive modes. | `created` |
 | `-q`, `-query` | Query filter. The keyword is one case-insensitive literal phrase after whitespace normalization, matched within a session title or logical transcript. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print bounded discovery metadata without rereading the transcript; message count is exact when discovery scanned the complete source and explicitly `unknown` otherwise. Does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect sessions by date range, optionally constrained by `-query` or an `agents://...` query URI (mutually exclusive). Only visible user/assistant text is summarized; system/developer/tool messages, reasoning, plans, tool calls, and tool results are excluded, and empty projected sessions are ignored. PM mode extracts requests, decisions, and agent-reported outcomes before deterministic session merge and tree reduction. Multi-stage progress is shown on stderr. | - |
@@ -639,6 +640,19 @@ git push origin v{version}
 ## License
 
 MIT
+
+### Recently active sessions
+
+```bash
+agent-dump --list --time-field updated -d 7 --json
+agent-dump --search 'database locked' --time-field updated -d 7
+agent-dump --browse --time-field updated -d 7
+agent-dump --interactive --time-field updated -d 7
+```
+
+`--days` uses creation time by default. Add `--time-field updated` to find sessions whose Provider-reported `updated_at` falls within the last N days, including sessions created much earlier. `--time-field created` explicitly selects the existing default. This option is available only for list, search, browse and interactive modes; collect dates and statistics retain their existing meaning.
+
+Activity lists order by updated time before applying a result limit. Human lists and interactive selection retain Provider groups; dates and Today/Yesterday groups use the selected time field. Search still orders primarily by relevance. JSON records retain both original timestamps. Discovery may scan metadata outside the creation-time window to find old active sessions; filtering uses the existing Provider-projected `updated_at` fact without adding a separate file-modification-time filter. Provider coverage and partial-discovery diagnostics remain unchanged.
 
 ### Machine-readable output
 

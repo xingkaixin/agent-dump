@@ -49,7 +49,9 @@ pub fn source_selection<P: Provider>(
                 );
             } else {
                 let found = provider
-                    .discover(36500, &mut |_| panic!("unexpected warning"))
+                    .discover(Some(36500), &mut |_| {
+                        panic!("unexpected warning")
+                    })
                     .unwrap();
                 assert!(
                     !found.available
@@ -78,7 +80,7 @@ pub fn source_selection<P: Provider>(
             assert_eq!(&session.source_path, expected);
             assert_eq!(provider.source_root(), owned);
             let found = provider
-                .discover(36500, &mut |_| panic!("unexpected warning"))
+                .discover(Some(36500), &mut |_| panic!("unexpected warning"))
                 .unwrap();
             assert!(found.available && found.failures.is_empty());
             assert_eq!(found.sessions.len(), 1);
@@ -88,8 +90,8 @@ pub fn source_selection<P: Provider>(
             std::fs::rename(selected, &saved).unwrap();
             let lookup =
                 provider.find("kept", &mut |_| panic!("unexpected warning"));
-            let discovery =
-                provider.discover(36500, &mut |_| panic!("unexpected warning"));
+            let discovery = provider
+                .discover(Some(36500), &mut |_| panic!("unexpected warning"));
             if missing_root_errors {
                 assert!(lookup.is_err() && discovery.is_err());
             } else {
@@ -133,7 +135,10 @@ pub fn source_selection<P: Provider>(
                 *expected
             );
             assert_eq!(
-                provider.discover(36500, &mut |_| Ok(())).unwrap().sessions[0]
+                provider
+                    .discover(Some(36500), &mut |_| Ok(()))
+                    .unwrap()
+                    .sessions[0]
                     .source_path,
                 *expected
             );

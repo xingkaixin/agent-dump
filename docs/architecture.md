@@ -37,7 +37,7 @@ agent-dump-core (internal library)
 
 `providers/contract.rs` 的 `Provider` 是共享访问边界。`providers/registry.rs` 拥有 Provider 顺序、名称、URI scheme、路径前缀及实例装配；Provider 模块拥有来源选择和私有 schema。
 
-- `discover` 同时返回可用性、会话窗口和部分失败；`find` 是自包含直接定位入口。
+- `discover` 同时返回可用性、会话窗口和部分失败；`Some(days)` 按创建时间裁剪，`None` 发现全部会话元数据。`find` 是自包含直接定位入口。
 - `read` 读取标准化正文。`session/mod.rs` 的 Session facts 供列表、head、统计和筛选共用，未知计数始终保持未知。
 - `source_root`、`search_roots`、`change_sources` 声明来源与失效范围。
 - `json_payload`、`raw_export`、`supports_format` 投影 Provider 特有输出能力；共享工作流不解释 schema。
@@ -95,3 +95,7 @@ PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹
 游标以版本化的编码保存 URI、正文 revision、筛选、顺序、预算、原始消息位置及字符偏移；续读只接受游标，不另行覆盖选择条件。复用 `query/context.rs` 的 revision 与消息 locator。正文变化会拒绝旧游标，不持久化历史正文或新增索引；每次调用仍通过完整 Provider read，暂无局部来源读取承诺。可恢复来源诊断标记 partial；分页、视图省略和字符分段不代表源读取失败。
 
 `--read-prompt` 只经 registry 校验 URI 语法后输出本地化静态说明与命令清单，不打开 Provider、发现会话或读取正文。清单使用当前原生程序路径，shell 参数引用与 collect handoff 共用 `command.rs` 的命令构造。提示词说明预算、游标、筛选、版本变化和来源边界；无需 MCP 或运行时 skill。
+
+## 活动时间筛选
+
+`Query.time_field` 默认 Created；显式 Updated 时，scanner 请求不按创建时间裁剪的 Provider 发现，再按稳定的 Session.updated_at 应用日期窗口。共享层不解释 Provider 私有日期字段，不用扩大天数的近似值冒充完整发现。普通活动列表先按更新时间排序再截断；Terms 搜索保留相关性优先。渲染和 selector 使用同一 TimeField 投影日期与时间分组，不改写 Session facts。collect、stats 和 reindex 不接受该 CLI 选项。

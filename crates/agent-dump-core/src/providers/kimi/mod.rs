@@ -148,12 +148,12 @@ impl Kimi {
 impl Provider for Kimi {
     fn discover(
         &mut self,
-        days: i64,
+        days: Option<i64>,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.work_dirs = None;
         file_sessions::discover(&self.files()?, days, false, |path, cutoff| {
-            self.parse(path, Some(cutoff))
+            self.parse(path, cutoff)
         })
     }
 
