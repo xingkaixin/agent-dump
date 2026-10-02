@@ -1,7 +1,3 @@
-// Single source of truth for landing-page content, typed and shared across locales.
-// SEO-critical strings (title / description / keywords / FAQ) are kept stable to
-// preserve existing search ranking.
-
 export const LOCALES = ["en", "zh", "ja"] as const;
 export type Locale = (typeof LOCALES)[number];
 
@@ -33,8 +29,7 @@ export const site = {
   skillCommand: "npx skills add xingkaixin/agent-dump",
 };
 
-// Every supported provider shown with its real URI scheme (see agent_registry.py).
-// The scheme prefixes are accurate; session ids are illustrative placeholders.
+// Session IDs are illustrative; schemes match the Provider registry.
 export const providers = [
   { name: "Codex", example: "codex://threads/a1b2c3" },
   { name: "Claude Code", example: "claude://a1b2c3d4" },
@@ -43,6 +38,9 @@ export const providers = [
   { name: "OpenCode", example: "opencode://5c4b3a" },
   { name: "Cursor", example: "cursor://req-8821" },
   { name: "Pi", example: "pi://019e7978-b2ec" },
+  { name: "DeepChat", example: "deepchat://session-123" },
+  { name: "Cherry Studio", example: "cherry://topic-123" },
+  { name: "MiniMax Code", example: "minimax://session-123" },
 ] as const;
 
 export type OutputTone = "dim" | "text" | "ok" | "scheme";
@@ -199,13 +197,12 @@ export const ui: Record<Locale, UiStrings> = {
     htmlLang: "en",
     ogLocale: "en_US",
     dir: "ltr",
-    title: "Agent Dump | Export AI Coding Sessions from CLI",
+    title: "Agent Dump | Find, Read and Export AI Coding Sessions",
     description:
-      "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi.",
+      "A local AI session CLI for individual developers and AI Agents. Search coding history, read conversations, export context with sources, and prepare reports.",
     softwareDescription:
-      "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions from Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi.",
-    websiteDescription:
-      "Agent Dump is a CLI for listing, exporting, searching, and summarizing AI coding sessions.",
+      "A local AI session CLI for individual developers and AI Agents. Search coding history, read conversations, export context with sources, and prepare reports.",
+    websiteDescription: "Find, read, export, and reuse local AI coding sessions with Agent Dump.",
     keywords:
       "agent-dump, AI session export, Claude Code sessions, Codex sessions, ZCode sessions, Cursor sessions, Pi sessions, AI coding tool, session dump, CLI export, collect prompt, agent handoff, full-text search, developer tool",
     ogImageAlt: "Agent Dump CLI exporting AI coding sessions to readable files",
@@ -214,46 +211,45 @@ export const ui: Record<Locale, UiStrings> = {
     themeLabel: "Toggle theme",
     themeLight: "Light",
     themeDark: "Dark",
-    eyebrow: "CLI · AI session export",
-    heroTitle: "Export your AI coding",
-    heroTitleAccent: "sessions.",
+    eyebrow: "CLI · Local AI session history",
+    heroTitle: "Find your AI coding",
+    heroTitleAccent: "history.",
     heroDescription:
-      "Export local conversations from Codex, Claude Code, and other AI coding tools to Markdown or JSON. Search your session history from one CLI.",
+      "Find past work across Codex, Claude Code, and other supported tools. Read it in your terminal, export it, or pass the context to an AI Agent. Source sessions stay read-only.",
     terminalLabel: "Terminal demo running agent-dump commands",
     answerSummary:
-      "Agent Dump gives developers one command-line interface for local AI coding session history across seven tools. It turns provider-specific session stores into readable exports, direct URI views, search results, stats, and collection reports.",
+      "Agent Dump helps individual developers and AI Agents reuse locally saved conversations. Browse recent work, search decisions, read in bounded pages, and export sessions or cited context from one CLI.",
     ctaInstall: "Install",
     ctaSource: "GitHub",
-    providersHeading: "Seven tools, one URI grammar",
+    providersHeading: `${providers.length} tools, one URI grammar`,
     providersNote:
-      "Every session is addressable by its provider scheme. Point agent-dump at a URI and read it anywhere.",
+      "Use a session URI to read history saved on this machine. Available formats and content depend on the source tool.",
     moreTools: { title: "More tools", note: "PRs welcome" },
     capabilitiesHeading: "What it does",
     capabilities: [
       {
-        title: "Reads every local session",
-        body: "Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi, from their native stores.",
-        command: "agent-dump --interactive",
-      },
-      {
-        title: "Exports in your format",
-        body: "JSON, Markdown, raw files, or straight to the terminal for piping.",
-        command: "agent-dump <uri> --format markdown",
-      },
-      {
-        title: "Searches and filters",
-        body: "Full-text search across titles, messages, and reasoning; filter by provider, role, or path.",
+        title: "Find past work",
+        body: "Search conversations and filter by project, Provider, role, or recent activity.",
         command: 'agent-dump --search "auth timeout"',
       },
       {
-        title: "Collects summaries",
-        body: "High-signal session digests for project management and insight reports.",
+        title: "Read and hand off context",
+        body: "Browse in the terminal, or give an Agent JSON pages with continuation cursors.",
+        command: "agent-dump --browse",
+      },
+      {
+        title: "Export with sources",
+        body: "Export a session, or selected context with its URI and message locator. Supported formats vary by tool.",
+        command: "agent-dump <uri> --format markdown",
+      },
+      {
+        title: "Collect complete input",
+        body: "Process all eligible user/assistant text in chunks. Failed reads or summaries are marked incomplete.",
         command: "agent-dump --collect",
       },
     ],
     updatesHeading: "What's New",
-    updatesSubheading:
-      "Continuous evolution towards seamless multi-agent coding workflows, deep search, and high-signal session memory.",
+    updatesSubheading: "Release notes for session reading, search, export, and collect.",
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
@@ -349,12 +345,12 @@ export const ui: Record<Locale, UiStrings> = {
       {
         question: "What is Agent Dump?",
         answer:
-          "Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions. It supports Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi so developers can inspect session history from one CLI.",
+          "Agent Dump is a local session tool for individual developers and AI Agents. Use it to find previous work, browse or page through conversations, export context with sources, and summarize eligible user/assistant text. It reads saved sessions without modifying their source data.",
       },
       {
         question: "Which AI coding tools does Agent Dump support?",
         answer:
-          "Agent Dump supports Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi. It reads local session sources for each provider and exposes a shared CLI for listing sessions, direct URI viewing, exporting, search, stats, and collection workflows.",
+          `Agent Dump supports ${providers.map((provider) => provider.name).join(", ")}. Formats, storage versions, and readable content vary by tool. Run agent-dump --providers --json to inspect capabilities and source paths.`,
       },
       {
         question: "How do you install Agent Dump?",
@@ -364,20 +360,17 @@ export const ui: Record<Locale, UiStrings> = {
     ],
     versionLabel: "Version",
     changelogLabel: "Changelog",
-    footerTagline: "Export AI coding sessions from the CLI.",
+    footerTagline: "Find, read, and reuse local AI coding sessions.",
     footerGithub: "GitHub",
   },
   zh: {
     htmlLang: "zh-Hans",
     ogLocale: "zh_CN",
     dir: "ltr",
-    title: "Agent Dump | AI 编码会话导出工具",
-    description:
-      "Agent Dump 是一个命令行工具，用于列出、导出、搜索和汇总 Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor 和 Pi 的 AI 编码会话。",
-    softwareDescription:
-      "Agent Dump 是一个命令行工具，用于列出、导出、搜索和汇总 Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor 和 Pi 的 AI 编码会话。",
-    websiteDescription:
-      "Agent Dump 是一个用于列出、导出、搜索和汇总 AI 编码会话的命令行工具。",
+    title: "Agent Dump | 查找、读取与导出 AI 编码会话",
+    description: "面向个人开发者与 AI Agent 的本地会话 CLI。查找编码历史、读取对话、导出带来源的上下文并生成汇总报告。",
+    softwareDescription: "面向个人开发者与 AI Agent 的本地会话 CLI。查找编码历史、读取对话、导出带来源的上下文并生成汇总报告。",
+    websiteDescription: "使用 Agent Dump 查找、读取、导出和复用本地 AI 编码会话。",
     keywords:
       "agent-dump, AI 会话导出, Claude Code 会话, Codex 会话, ZCode 会话, Cursor 会话, Pi 会话, AI 编码工具, 会话导出, CLI 工具, 会话收集, 外部 Agent 交接, 全文搜索, 开发者工具",
     ogImageAlt: "Agent Dump CLI 将 AI 编码会话导出为可读文件",
@@ -386,46 +379,42 @@ export const ui: Record<Locale, UiStrings> = {
     themeLabel: "切换主题",
     themeLight: "浅色",
     themeDark: "深色",
-    eyebrow: "CLI · AI 会话导出",
-    heroTitle: "导出你的 AI 编码",
-    heroTitleAccent: "会话。",
-    heroDescription:
-      "将 Codex、Claude Code 等 AI 编码工具的本地对话导出为 Markdown 或 JSON，用一个 CLI 搜索会话历史。",
+    eyebrow: "CLI · 本地 AI 会话历史",
+    heroTitle: "复用你的",
+    heroTitleAccent: "AI 会话。",
+    heroDescription: "查找 Codex、Claude Code 等支持工具中的历史工作。在终端阅读、导出，或将上下文交给 AI Agent。会话源始终只读。",
     terminalLabel: "运行 agent-dump 命令的终端演示",
-    answerSummary:
-      "Agent Dump 为开发者提供一个统一的命令行入口，读取七类 AI 编码工具的本地会话历史，并输出可读导出、URI 直读、搜索结果、统计和汇总报告。",
+    answerSummary: "Agent Dump 帮助个人开发者与 AI Agent 复用本机保存的对话。通过一个 CLI 浏览最近工作、搜索决策、分页读取，并导出完整会话或带来源的上下文。",
     ctaInstall: "安装",
     ctaSource: "GitHub",
-    providersHeading: "七款工具，一套 URI 语法",
-    providersNote:
-      "每个会话都能用它的 provider scheme 寻址。把 agent-dump 指向一个 URI，就能在任何地方读取它。",
+    providersHeading: `${providers.length} 款工具，一套 URI 语法`,
+    providersNote: "通过会话 URI 读取本机保存的历史。可用格式和内容范围取决于来源工具。",
     moreTools: { title: "更多工具", note: "欢迎 PR" },
     capabilitiesHeading: "它能做什么",
     capabilities: [
       {
-        title: "读取每一个本地会话",
-        body: "从 Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor 和 Pi 的原生存储中读取。",
-        command: "agent-dump --interactive",
-      },
-      {
-        title: "按你的格式导出",
-        body: "JSON、Markdown、raw 文件，或直接打印到终端以便管道处理。",
-        command: "agent-dump <uri> --format markdown",
-      },
-      {
-        title: "搜索与过滤",
-        body: "对标题、消息与推理做全文搜索；按 provider、role 或 path 过滤。",
+        title: "查找历史工作",
+        body: "搜索对话，按项目、Provider、角色或最近活动筛选。",
         command: 'agent-dump --search "auth timeout"',
       },
       {
-        title: "汇总摘要",
-        body: "高信号会话摘要，用于项目管理和洞察报告。",
+        title: "阅读与交接上下文",
+        body: "在终端浏览，或让 Agent 使用 JSON 分页和游标读取。",
+        command: "agent-dump --browse",
+      },
+      {
+        title: "带来源导出",
+        body: "导出会话，或保留 URI 与消息定位信息的上下文片段。可用格式取决于来源工具。",
+        command: "agent-dump <uri> --format markdown",
+      },
+      {
+        title: "完整覆盖汇总输入",
+        body: "分块处理所有符合规则的 user/assistant 正文，读取或摘要失败时明确标记不完整。",
         command: "agent-dump --collect",
       },
     ],
     updatesHeading: "最新动态",
-    updatesSubheading:
-      "持续演进，打通多 AI 编程助手的会话连接、本地深度检索与自主摘要工作流。",
+    updatesSubheading: "会话读取、搜索、导出与 collect 的版本更新。",
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
@@ -521,12 +510,12 @@ export const ui: Record<Locale, UiStrings> = {
       {
         question: "Agent Dump 是什么？",
         answer:
-          "Agent Dump 是一个用于列出、导出、搜索和汇总本地 AI 编码会话的命令行工具。它支持 Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor 和 Pi，让开发者用一个 CLI 查看会话历史。",
+          "Agent Dump 是面向个人开发者与 AI Agent 的本地会话工具。可查找历史工作、浏览或分页读取对话、导出带来源的上下文，以及汇总符合规则的 user/assistant 正文。读取已保存的会话，不修改源数据。",
       },
       {
         question: "Agent Dump 支持哪些 AI 编码工具？",
         answer:
-          "Agent Dump 支持 Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor 和 Pi。它读取每个 provider 的本地会话源，并提供列表、URI 直读、导出、搜索、统计和 collect 工作流。",
+          `Agent Dump 支持 ${providers.map((provider) => provider.name).join("、")}。各工具支持的格式、存储版本和内容范围有所不同。运行 agent-dump --providers --json 可检查能力与来源路径。`,
       },
       {
         question: "如何安装 Agent Dump？",
@@ -536,20 +525,17 @@ export const ui: Record<Locale, UiStrings> = {
     ],
     versionLabel: "版本",
     changelogLabel: "更新日志",
-    footerTagline: "在命令行里导出 AI 编码会话。",
+    footerTagline: "查找、读取和复用本地 AI 编码会话。",
     footerGithub: "GitHub",
   },
   ja: {
     htmlLang: "ja",
     ogLocale: "ja_JP",
     dir: "ltr",
-    title: "Agent Dump | AIコーディングセッションをCLIからエクスポート",
-    description:
-      "Agent Dumpは、Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、PiのAIコーディングセッションを一覧表示、エクスポート、検索、要約するCLIです。",
-    softwareDescription:
-      "Agent Dumpは、Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、PiのAIコーディングセッションを一覧表示、エクスポート、検索、要約するCLIです。",
-    websiteDescription:
-      "Agent Dumpは、AIコーディングセッションを一覧表示、エクスポート、検索、要約するCLIです。",
+    title: "Agent Dump | AIコーディング履歴を検索・閲覧・エクスポート",
+    description: "個人開発者と AI Agent のためのローカルセッション CLI。履歴の検索、対話の閲覧、出典付きの文脈のエクスポート、レポート作成に対応します。",
+    softwareDescription: "個人開発者と AI Agent のためのローカルセッション CLI。履歴の検索、対話の閲覧、出典付きの文脈のエクスポート、レポート作成に対応します。",
+    websiteDescription: "Agent Dump でローカルの AI コーディング履歴を検索・閲覧・エクスポートして再利用。",
     keywords:
       "agent-dump, AIセッションのエクスポート, Claude Codeセッション, Codexセッション, ZCodeセッション, Cursorセッション, Piセッション, AIコーディングツール, セッション出力, CLIツール, プロンプト生成, 全文検索, 開発者ツール",
     ogImageAlt: "AIコーディングセッションを読みやすいファイルに出力するAgent Dump CLI",
@@ -558,46 +544,44 @@ export const ui: Record<Locale, UiStrings> = {
     themeLabel: "テーマを切り替える",
     themeLight: "ライト",
     themeDark: "ダーク",
-    eyebrow: "CLI · AIセッションのエクスポート",
-    heroTitle: "AIコーディングの",
-    heroTitleAccent: "セッションを書き出す。",
+    eyebrow: "CLI · ローカルの AI セッション履歴",
+    heroTitle: "AI 対話を",
+    heroTitleAccent: "再利用。",
     heroDescription:
-      "Codex、Claude CodeなどのAIコーディングツールのローカル会話をMarkdownやJSONにエクスポート。1つのCLIでセッション履歴を検索できます。",
+      "Codex、Claude Code などの対応ツールから過去の作業を検索。ターミナルで読む、エクスポートする、AI Agent に文脈を渡す。元のセッションは読み取り専用です。",
     terminalLabel: "agent-dumpコマンドを実行するターミナルのデモ",
     answerSummary:
-      "Agent Dumpは、7つのAIコーディングツールに保存されたローカルセッション履歴を、1つのコマンドラインインターフェースから扱えるようにします。各ツール固有の保存形式を、読みやすいエクスポート、URIによる直接表示、検索結果、統計、収集レポートへ変換します。",
+      "Agent Dump は、個人開発者と AI Agent がローカルに保存した対話を再利用するための CLI です。最近の作業の閲覧、過去の判断の検索、ページ単位の読み取り、セッションや出典付きの文脈のエクスポートに対応します。",
     ctaInstall: "インストール",
     ctaSource: "GitHub",
-    providersHeading: "7つのツール、1つのURI構文",
-    providersNote:
-      "各セッションはツールごとのスキームで指定できます。agent-dumpにURIを渡せば、どこからでも内容を確認できます。",
+    providersHeading: `${providers.length} のツール、1 つの URI 構文`,
+    providersNote: "セッション URI で、このマシンに保存された履歴を読み取ります。利用できる形式と内容はツールによって異なります。",
     moreTools: { title: "その他のツール", note: "PRを歓迎します" },
     capabilitiesHeading: "できること",
     capabilities: [
       {
-        title: "すべてのローカルセッションを読み込む",
-        body: "Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、Piのネイティブストレージから読み込みます。",
-        command: "agent-dump --interactive",
-      },
-      {
-        title: "必要な形式でエクスポートする",
-        body: "JSON、Markdown、rawファイルに出力でき、パイプ処理のためにターミナルへ直接表示することもできます。",
-        command: "agent-dump <uri> --format markdown",
-      },
-      {
-        title: "検索して絞り込む",
-        body: "タイトル、メッセージ、推論を全文検索し、provider、role、pathで絞り込めます。",
+        title: "過去の作業を探す",
+        body: "対話を検索し、プロジェクト、Provider、ロール、最近の更新で絞り込みます。",
         command: 'agent-dump --search "auth timeout"',
       },
       {
-        title: "セッションを要約する",
-        body: "プロジェクト管理やインサイトレポートに使える、重要度の高いセッション要約を生成します。",
+        title: "文脈を読んで引き継ぐ",
+        body: "ターミナルで閲覧。Agent は JSON ページとカーソルで順に読み取れます。",
+        command: "agent-dump --browse",
+      },
+      {
+        title: "出典とともに書き出す",
+        body: "セッション全体、または URI とメッセージ位置を含む文脈をエクスポート。形式はツールによって異なります。",
+        command: "agent-dump <uri> --format markdown",
+      },
+      {
+        title: "対象本文をすべて要約に渡す",
+        body: "対象の user/assistant 本文を分割して処理。読み取りや要約の失敗は不完全として明示します。",
         command: "agent-dump --collect",
       },
     ],
     updatesHeading: "更新履歴とロードマップ",
-    updatesSubheading:
-      "複数のAIコーディングツールのセッション統合、高速検索、自動要約に向けて進化し続けています。",
+    updatesSubheading: "セッションの閲覧、検索、エクスポート、collect の更新履歴。",
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
@@ -694,12 +678,12 @@ export const ui: Record<Locale, UiStrings> = {
       {
         question: "Agent Dumpとは何ですか？",
         answer:
-          "Agent Dumpは、ローカルのAIコーディングセッションを一覧表示、エクスポート、検索、要約するコマンドラインツールです。Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、Piに対応し、1つのCLIからセッション履歴を確認できます。",
+          "Agent Dump は、個人開発者と AI Agent のためのローカルセッションツールです。過去の作業を検索し、対話を閲覧またはページ単位で読み取り、出典付きの文脈をエクスポートし、対象の user/assistant 本文を要約できます。保存済みのセッションを読み取り、元データは変更しません。",
       },
       {
         question: "Agent DumpはどのAIコーディングツールに対応していますか？",
         answer:
-          "Agent Dumpは、Codex、Claude Code、ZCode、Kimi、OpenCode、Cursor、Piに対応しています。各ツールのローカルセッションを読み込み、一覧表示、URIによる直接表示、エクスポート、検索、統計、収集ワークフローを共通のCLIで提供します。",
+          `Agent Dump は ${providers.map((provider) => provider.name).join("、")} に対応しています。形式、ストレージのバージョン、読み取れる内容はツールによって異なります。agent-dump --providers --json で機能と読み取り元のパスを確認できます。`,
       },
       {
         question: "Agent Dumpをインストールするには？",
@@ -709,7 +693,7 @@ export const ui: Record<Locale, UiStrings> = {
     ],
     versionLabel: "バージョン",
     changelogLabel: "変更履歴",
-    footerTagline: "AIコーディングセッションをCLIからエクスポート。",
+    footerTagline: "ローカルの AI コーディング履歴を検索・閲覧・再利用。",
     footerGithub: "GitHub",
   },
 };

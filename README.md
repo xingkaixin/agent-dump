@@ -2,9 +2,45 @@
 
 # Agent Dump
 
-AI Coding Assistant Session Export Tool - Exports JSON, Markdown, and raw session data from multiple AI coding tools, with direct URI printing.
+A local AI session tool for individual developers and AI Agents. Find, read, export, and reuse conversations from supported coding tools without modifying their source data.
 
 Step-by-step guide: [Export a Codex session to Markdown](https://agent-dump.xingkaixin.me/guides/export-codex-session/).
+
+## Get started
+
+[Install the CLI](#installation), then choose a workflow. You need session history already saved on this machine by a [supported tool](#supported-ai-tools). Custom directories and content limits are described under [Path Discovery](#path-discovery).
+
+### For developers
+
+```bash
+# Browse conversations active in the last week
+agent-dump --browse --time-field updated --days 7
+
+# Find a past discussion in this project
+agent-dump --search 'auth timeout' --query 'path:.' --days 30
+
+# Export a result using its URI
+agent-dump codex://SESSION_ID --format markdown --output ./sessions
+```
+
+Copy a real URI from the list or search results in place of `codex://SESSION_ID`. Search defaults to sessions created in the time window; add `--time-field updated` for recent activity. Use `--interactive` to select several sessions for export.
+
+### For AI Agents
+
+```bash
+# Inspect supported formats and source paths, then find candidates
+agent-dump --providers --json
+agent-dump --list --time-field updated --days 7 --json
+
+# Inspect one session, then obtain instructions for paginated reading
+agent-dump codex://SESSION_ID --head --json
+agent-dump codex://SESSION_ID --read-prompt
+
+# Prepare a report task for an external Agent; no API configuration needed
+agent-dump --collect --days 7 --emit-prompt --save ./reports/weekly.md
+```
+
+Follow the generated read commands and cursors until `has_more=false` to cover the selected content. Check exit codes and `status`; a partial result is not a complete reading. `--emit-prompt` creates instructions, not the report itself. See [machine-readable output](#machine-readable-output), [cited context exports](#message-locations-and-context), and the [Agent recipes](skills/agent-dump/references/cli-recipes.md).
 
 ## Supported AI Tools
 
@@ -22,53 +58,13 @@ Step-by-step guide: [Export a Codex session to Markdown](https://agent-dump.xing
 
 ## Features
 
-- **Interactive Selection**: Provides a friendly command-line interactive interface using Ratatui
-- **Multi-Agent Support**: Automatically scan session data from multiple AI tools
-- **Batch Export**: Supports exporting all sessions from the last N days
-- **Specific Export**: Export specific sessions by URI
-- **Session List**: Only list sessions without exporting them
-- **Direct Text Dump**: View session content directly in terminal via URI (e.g., `agent-dump opencode://session-id`)
-- **Statistics**: Exports include statistics such as token usage and cost
-- **Message Details**: Fully retains session messages, tool calls, and other details
-- **Smart Title Extraction**: Automatically extract session titles from agent metadata
-- **Session Statistics**: View usage statistics grouped by agent and time (`--stats`)
-- **Full-Text Search**: Local SQLite FTS5 search across session titles, messages, reasoning, and tool state (`--search`); terms are matched literally
-- **Ranked Search Evidence**: Search results include rank, URI, updated time, and highlighted snippets
-- **Actionable Diagnostics**: CLI errors show checked roots, parsed URI fields, capability gaps, and next steps (localized via `--lang en|zh`)
+- **Find past work**: Search titles, messages, reasoning, and tool state; filter by Provider, project path, role, or recent activity.
+- **Read in context**: Browse in the terminal, open a Session URI, or give an Agent bounded JSON pages with continuation cursors.
+- **Reuse with sources**: Export sessions or selected context to supported formats, retaining URI and message locators in context exports.
+- **Summarize conversations**: Collect all eligible user/assistant text through bounded chunks, or hand the task to an external Agent. Failures are marked as incomplete.
+- **Automate**: Query metadata, capabilities, search evidence, and statistics as JSON; unknown facts remain explicit.
 
-## Path Discovery
-
-`agent-dump` resolves most session roots in this order: official environment variable, tool default directory, then local development fallback under `data/<agent>`. ZCode currently uses only its macOS/Windows default database path.
-
-- **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
-- **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
-- **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
-- **OpenCode**: `OPENCODE_DB` selects one database (relative to `XDG_DATA_HOME/opencode` or `~/.local/share/opencode`). Otherwise use `opencode.db` there, then the legacy Windows `LOCALAPPDATA`/`APPDATA` location, then `data/opencode/opencode.db`.
-- **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
-- **Cursor**: Cursor's default user `globalStorage/state.vscdb`
-- **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
-- **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
-- **Cherry Studio**: `CHERRY_STUDIO_USER_DATA_DIR/Data/cherrystudio.sqlite`; otherwise the first existing database in the user data directories configured by `~/.cherrystudio/boot-config.json`, then the platform default: macOS `~/Library/Application Support/CherryStudio`, Windows `%APPDATA%\CherryStudio`, or Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio` (each with `Data/cherrystudio.sqlite`). The override is provided by agent-dump; use it for portable/dev installations or to select among multiple installations.
-- **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`; the database is `v2/sqlite/runtime-state.sqlite` under the selected root. Only one root is selected; a missing explicit path never falls back to another installation.
-
-Notes:
-
-- On Windows, prefer configuring the tool's official environment variable when available.
-- The `data/<agent>` fallback is kept for local development and tests.
-
-DeepChat reads saved sessions in the current `agent.db`, including migrated history, ACP sessions, and subagent sessions; drafts are excluded. It supports listing, query, search, stats, collect, and print / JSON / Markdown exports. Structured messages take precedence over the `content` fallback. Text, reasoning, and tool records are normalized; compaction markers do not enter collect. JSON also retains attachment references, links, and other message blocks. Attachment files and offloaded tool output are not read. Token totals come from message records; billing cost is unavailable.
-
-SQLCipher databases, direct reads of legacy `chat.db`, and raw export are unsupported. The reader does not run DeepChat migrations or Tape recovery. Set `DEEPCHAT_USER_DATA_DIR` to read a custom user data directory.
-
-Cherry Studio supports listing, query, search, stats, collect, and print / JSON / Markdown exports from its current 2.x database, including migrated history. Ordinary chats expose only the active root-to-leaf path; other branches and parallel model replies are excluded from exports, search, and counts. Structural roots and empty reserved user leaves are excluded. Agent sessions are read chronologically and use their workspace as the working directory; ordinary chats have no working directory. Deleted sessions and chat messages are excluded.
-
-Text, reasoning, tool calls/results, code, and translations are normalized. JSON retains file references and control events; compaction summaries and internal events do not enter collect or search. Token totals come from message stats. Per-currency costs are preserved in JSON without conversion or an aggregate billing total. The reader never opens attachment files, scans SDK logs, or runs application migrations. Direct reads of 1.x IndexedDB/Redux data and raw export are unsupported.
-
-MiniMax Code supports listing, query, search, stats, collect, and print / JSON / Markdown exports from the current CLI's migrated display messages. Visible conversations, child tasks, and archived sessions are included; hidden and internal peek/channel/cron sessions are excluded. Messages follow database row order and preserve text, reasoning, tool state/results, and attachment references. Compaction, review, and system events do not enter collect or search. The model comes from session metadata and remains unknown when absent; JSON retains recorded per-message token usage without estimating billing cost.
-
-Set `MINIMAX_DATA_DIR` explicitly for custom profiles, earlier source builds using `~/.minimax-code`, or other directories. The reader does not read model-context JSONL or attachment files, run migrations, or recover rewound messages. Raw export, direct legacy storage reads, and desktop data are unsupported. Pending migrations and corrupt sessions produce diagnostics instead of appearing empty. See the [MiniMax Code design and acceptance scope](docs/minimax-provider-design.md).
-
-OpenCode supports legacy SQLite and 2.x `session_v2/session_message`. When both schemas coexist, V2 wins for the same session ID; legacy-only sessions remain readable. V2 messages follow `seq` order, and counts include system and status records. Synthetic input, system/skill messages, compaction and shell records are excluded from collect. `OPENCODE_DB` selects a custom or channel database; a missing explicit path never falls back, and `:memory:` is unavailable. Attachments stay in JSON metadata without fetching referenced files. Running and archived records remain readable; pending inbox items are excluded. Raw export remains normalized `.raw.json`, not an OpenCode import file. See the [design and acceptance scope](docs/opencode-v2-design.md).
+Available formats and message details depend on the source tool. Normalized output does not reproduce every private field or attachment file. Run `agent-dump --providers --json` to inspect capabilities.
 
 ## Installation
 
@@ -275,6 +271,40 @@ Explicit provider scopes (`provider:`, legacy provider prefixes, or `providers=`
 
 This makes `agent-dump --list && ...` meaningful: it succeeds when sessions were
 listed and fails when there is nothing to list because no provider has data.
+
+## Path Discovery
+
+`agent-dump` resolves most session roots in this order: official environment variable, tool default directory, then local development fallback under `data/<agent>`. ZCode currently uses only its macOS/Windows default database path.
+
+- **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
+- **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
+- **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
+- **OpenCode**: `OPENCODE_DB` selects one database (relative to `XDG_DATA_HOME/opencode` or `~/.local/share/opencode`). Otherwise use `opencode.db` there, then the legacy Windows `LOCALAPPDATA`/`APPDATA` location, then `data/opencode/opencode.db`.
+- **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
+- **Cursor**: Cursor's default user `globalStorage/state.vscdb`
+- **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
+- **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
+- **Cherry Studio**: `CHERRY_STUDIO_USER_DATA_DIR/Data/cherrystudio.sqlite`; otherwise the first existing database in the user data directories configured by `~/.cherrystudio/boot-config.json`, then the platform default: macOS `~/Library/Application Support/CherryStudio`, Windows `%APPDATA%\CherryStudio`, or Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio` (each with `Data/cherrystudio.sqlite`). The override is provided by agent-dump; use it for portable/dev installations or to select among multiple installations.
+- **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`; the database is `v2/sqlite/runtime-state.sqlite` under the selected root. Only one root is selected; a missing explicit path never falls back to another installation.
+
+Notes:
+
+- On Windows, prefer configuring the tool's official environment variable when available.
+- The `data/<agent>` fallback is kept for local development and tests.
+
+DeepChat reads saved sessions in the current `agent.db`, including migrated history, ACP sessions, and subagent sessions; drafts are excluded. It supports listing, query, search, stats, collect, and print / JSON / Markdown exports. Structured messages take precedence over the `content` fallback. Text, reasoning, and tool records are normalized; compaction markers do not enter collect. JSON also retains attachment references, links, and other message blocks. Attachment files and offloaded tool output are not read. Token totals come from message records; billing cost is unavailable.
+
+SQLCipher databases, direct reads of legacy `chat.db`, and raw export are unsupported. The reader does not run DeepChat migrations or Tape recovery. Set `DEEPCHAT_USER_DATA_DIR` to read a custom user data directory.
+
+Cherry Studio supports listing, query, search, stats, collect, and print / JSON / Markdown exports from its current 2.x database, including migrated history. Ordinary chats expose only the active root-to-leaf path; other branches and parallel model replies are excluded from exports, search, and counts. Structural roots and empty reserved user leaves are excluded. Agent sessions are read chronologically and use their workspace as the working directory; ordinary chats have no working directory. Deleted sessions and chat messages are excluded.
+
+Text, reasoning, tool calls/results, code, and translations are normalized. JSON retains file references and control events; compaction summaries and internal events do not enter collect or search. Token totals come from message stats. Per-currency costs are preserved in JSON without conversion or an aggregate billing total. The reader never opens attachment files, scans SDK logs, or runs application migrations. Direct reads of 1.x IndexedDB/Redux data and raw export are unsupported.
+
+MiniMax Code supports listing, query, search, stats, collect, and print / JSON / Markdown exports from the current CLI's migrated display messages. Visible conversations, child tasks, and archived sessions are included; hidden and internal peek/channel/cron sessions are excluded. Messages follow database row order and preserve text, reasoning, tool state/results, and attachment references. Compaction, review, and system events do not enter collect or search. The model comes from session metadata and remains unknown when absent; JSON retains recorded per-message token usage without estimating billing cost.
+
+Set `MINIMAX_DATA_DIR` explicitly for custom profiles, earlier source builds using `~/.minimax-code`, or other directories. The reader does not read model-context JSONL or attachment files, run migrations, or recover rewound messages. Raw export, direct legacy storage reads, and desktop data are unsupported. Pending migrations and corrupt sessions produce diagnostics instead of appearing empty. See the [MiniMax Code design and acceptance scope](docs/minimax-provider-design.md).
+
+OpenCode supports legacy SQLite and 2.x `session_v2/session_message`. When both schemas coexist, V2 wins for the same session ID; legacy-only sessions remain readable. V2 messages follow `seq` order, and counts include system and status records. Synthetic input, system/skill messages, compaction and shell records are excluded from collect. `OPENCODE_DB` selects a custom or channel database; a missing explicit path never falls back, and `:memory:` is unavailable. Attachments stay in JSON metadata without fetching referenced files. Running and archived records remain readable; pending inbox items are excluded. Raw export remains normalized `.raw.json`, not an OpenCode import file. See the [design and acceptance scope](docs/opencode-v2-design.md).
 
 ## Command-line Arguments
 
@@ -556,91 +586,6 @@ Collect, `--collect --dry-run`, and `--collect --emit-prompt` require valid TOML
 When `agent-dump` writes `config.toml`, it preserves comments, whitespace, and field order, escapes TOML-sensitive characters, and restricts the file to owner-only permissions (`0600`) because it may contain an API key.
 Legacy invalid TOML can still be read for compatibility, but `--config edit` refuses to rewrite it because a safe round trip cannot preserve unknown values. Fix the invalid escaping manually or replace the file before editing.
 
-## Project Structure
-
-```text
-Cargo.toml      # Workspace, shared dependencies/lints and CLI release version
-rustfmt.toml    # Stable Rustfmt, edition 2024, 80 columns
-src/            # CLI workflows, Collect and terminal interaction
-crates/agent-dump-core/ # Providers, sessions, queries and export engine
-resources/      # Embedded locales and prompts
-tests/cli/      # CLI contracts and external Python reference comparison
-tests/tooling/  # Packaging, benchmark and documentation checks
-scripts/        # Validated CLI benchmarks and paired release eval
-packaging/      # Maturin builds and installation verification
-npm/            # Node launcher and platform packages
-docs/           # Architecture, migration and acceptance evidence
-web/            # Landing page
-```
-
-## Development
-
-Rust is the build and runtime implementation starting with v1.0.0, with Ratatui for terminal interaction. The old Python application has been removed from the working tree. Differential tests install the immutable 0.15.9 wheel in an isolated reference environment. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), [P6 acceptance](docs/rust-p6-completion.md), and the [final performance report](docs/benchmarks/rust-p6.md).
-
-```bash
-# Run Cargo directly from the repository root
-cargo build --locked --release
-cargo test --locked --workspace
-
-# Run full CI checks, including the isolated historical Python reference
-# (includes npm tests when Node.js is available, and the landing page check when pnpm is)
-just isok
-
-# Check Rustfmt, strict Clippy and Ruff
-just lint
-
-# Auto-fix linting issues
-just lint-fix
-
-# Format code
-just fmt
-
-# Type checking
-just check
-
-# Testing
-just test
-
-# Build a standalone binary for the current platform
-just build-native
-
-# Sync npm package metadata
-just build-npm
-
-# Run npm wrapper tests and smoke checks
-just test-npm-smoke
-```
-
-Both crates inherit workspace lints: unsafe code is denied, Clippy all/pedantic are denied, and nursery warnings fail the gate through `-D warnings`. Explicit exceptions and their reasons are documented in the [development guide](docs/development-guide.md#rust-格式与-lint). Existing CLI differential and tooling tests remain in `tests/`.
-
-## Release
-
-```bash
-# 1. Update the package version in a single place
-$EDITOR Cargo.toml
-
-# 2. Commit and merge to main
-
-# 3. Create and push a release tag
-git tag v{version}
-git push origin v{version}
-```
-
-- The tag release workflow is [`release.yml`](./.github/workflows/release.yml)
-- Only tags matching `vX.Y.Z` trigger the unified release pipeline
-- Release publishes PyPI artifacts, GitHub release assets, and npm packages for `@agent-dump/cli`
-- Native installer assets share the same verified binaries. After publication, `distribution.yml` syncs Homebrew and Scoop using the repository secret `DISTRIBUTION_TOKEN`; it can be retried separately for the latest stable release.
-- Retrying the same release skips byte-identical registry artifacts and fails if an existing version or asset differs
-- npm publishing waits until each package is downloadable with the expected integrity before proceeding to the next package; native packages precede the CLI wrapper
-- The npm CLI package installs the matching native binary during `npm`/`npx` installation and verifies its checksum
-- PyPI publishing uses `UV_PUBLISH_TOKEN`, stored as an environment secret in the GitHub `release` environment
-- npm publishing uses Trusted Publisher/OIDC for every `@agent-dump/*` package, bound to this repository,
-  `release.yml`, and the GitHub `release` environment; it does not use an `NPM_TOKEN` secret
-
-## License
-
-MIT
-
 ### Recently active sessions
 
 ```bash
@@ -740,7 +685,7 @@ agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --format json,markdown --output ./exports
 ```
 
-`--browse` requires an interactive terminal. It lists the last seven days by update time, supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
+`--browse` requires an interactive terminal. By default, it selects sessions created in the last seven days and sorts them by update time. Add `--time-field updated` to filter by recent activity. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
 
 - Up/Down or j/k move or scroll in the focused pane; Enter/Right opens the transcript, Left returns to the list.
 - Tab switches panes; PageUp/PageDown scroll pages; Home/End jump to either end.
@@ -750,3 +695,88 @@ agent-dump --browse --format json,markdown --output ./exports
 - q/Esc/Ctrl-C close the reader and restore the terminal, exiting 0.
 
 Empty selections exit without opening the reader. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. Existing --interactive batch export is unchanged.
+
+## Project Structure
+
+```text
+Cargo.toml      # Workspace, shared dependencies/lints and CLI release version
+rustfmt.toml    # Stable Rustfmt, edition 2024, 80 columns
+src/            # CLI workflows, Collect and terminal interaction
+crates/agent-dump-core/ # Providers, sessions, queries and export engine
+resources/      # Embedded locales and prompts
+tests/cli/      # CLI contracts and external Python reference comparison
+tests/tooling/  # Packaging, benchmark and documentation checks
+scripts/        # Validated CLI benchmarks and paired release eval
+packaging/      # Maturin builds and installation verification
+npm/            # Node launcher and platform packages
+docs/           # Architecture, migration and acceptance evidence
+web/            # Landing page
+```
+
+## Development
+
+Rust is the build and runtime implementation starting with v1.0.0, with Ratatui for terminal interaction. The old Python application has been removed from the working tree. Differential tests install the immutable 0.15.9 wheel in an isolated reference environment. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), [P6 acceptance](docs/rust-p6-completion.md), and the [final performance report](docs/benchmarks/rust-p6.md).
+
+```bash
+# Run Cargo directly from the repository root
+cargo build --locked --release
+cargo test --locked --workspace
+
+# Run full CI checks, including the isolated historical Python reference
+# (includes npm tests when Node.js is available, and the landing page check when pnpm is)
+just isok
+
+# Check Rustfmt, strict Clippy and Ruff
+just lint
+
+# Auto-fix linting issues
+just lint-fix
+
+# Format code
+just fmt
+
+# Type checking
+just check
+
+# Testing
+just test
+
+# Build a standalone binary for the current platform
+just build-native
+
+# Sync npm package metadata
+just build-npm
+
+# Run npm wrapper tests and smoke checks
+just test-npm-smoke
+```
+
+Both crates inherit workspace lints: unsafe code is denied, Clippy all/pedantic are denied, and nursery warnings fail the gate through `-D warnings`. Explicit exceptions and their reasons are documented in the [development guide](docs/development-guide.md#rust-格式与-lint). Existing CLI differential and tooling tests remain in `tests/`.
+
+## Release
+
+```bash
+# 1. Update the package version in a single place
+$EDITOR Cargo.toml
+
+# 2. Commit and merge to main
+
+# 3. Create and push a release tag
+git tag v{version}
+git push origin v{version}
+```
+
+- The tag release workflow is [`release.yml`](./.github/workflows/release.yml)
+- Only tags matching `vX.Y.Z` trigger the unified release pipeline
+- Release publishes PyPI artifacts, GitHub release assets, and npm packages for `@agent-dump/cli`
+- Native installer assets share the same verified binaries. After publication, `distribution.yml` syncs Homebrew and Scoop using the repository secret `DISTRIBUTION_TOKEN`; it can be retried separately for the latest stable release.
+- Retrying the same release skips byte-identical registry artifacts and fails if an existing version or asset differs
+- npm publishing waits until each package is downloadable with the expected integrity before proceeding to the next package; native packages precede the CLI wrapper
+- The npm CLI package installs the matching native binary during `npm`/`npx` installation and verifies its checksum
+- PyPI publishing uses `UV_PUBLISH_TOKEN`, stored as an environment secret in the GitHub `release` environment
+- npm publishing uses Trusted Publisher/OIDC for every `@agent-dump/*` package, bound to this repository,
+  `release.yml`, and the GitHub `release` environment; it does not use an `NPM_TOKEN` secret
+
+## License
+
+MIT
