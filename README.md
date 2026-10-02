@@ -667,13 +667,16 @@ No matches produce an empty array and exit 0. No available source without an exp
 agent-dump --search 'database locked' --locate --json -query 'provider:codex'
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --json
+agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3 --format json,markdown --output excerpts
 ```
 
 Pass `locations[].locator` from search unchanged to `--message`. Positions are one-based normalized message ordinals. Locators bind to the transcript snapshot; rerun search after content changes. Context defaults to three messages on either side; zero selects only the target, and ranges clamp at transcript boundaries. Reading a range still parses the source transcript; this is not partial disk I/O.
 
 `--locate` requires `--search`. It returns messages containing any search term, respecting role filters, while all terms must still match the session. Title-only matches have empty locations; failed location reads have null locations and partial status. Search without --locate is unchanged.
 
-`--message` cannot combine with --head, --summary, --format or --output. JSON context has kind=context and data containing uri, locator, total_messages, start/end and messages (position plus normalized message). Invalid or stale locators exit nonzero; JSON diagnostics go only to stderr.
+`--message` cannot combine with `--head` or `--summary`. Without `--format`, it prints context; `--json` writes a context envelope to stdout with kind=context and data containing uri, locator, total_messages, start/end and messages (position plus normalized message). Invalid or stale locators exit nonzero; JSON diagnostics go only to stderr.
+
+Use `--format json,markdown` to export the selected context. Files are named `<id>.messages-<start>-<end>.json` / `.md` under the Provider's output directory, separate from full-session exports. Both formats retain the canonical Session URI, the locator (revision plus target position), the absolute message range, and status. JSON retains normalized message records; Markdown renders their searchable text. Recoverable source diagnostics mark the file `partial` and are reported on stderr. Stale locators are rejected before file creation. Provider format restrictions still apply; raw/print file formats and `--json` with file-export options are rejected. `--output` requires an explicit `--format`; output-directory defaults follow full-session export rules.
 
 ### On-demand reading and Agent read prompts
 

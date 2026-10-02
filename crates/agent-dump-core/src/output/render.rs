@@ -136,6 +136,65 @@ pub fn context(
 ) -> String {
     let mut output =
         format!("# Session Context\n\n- URI: `{}`\n\n", safe_line(uri));
+    context_messages(&mut output, data, range);
+    output
+}
+
+pub fn context_json(
+    uri: &str,
+    locator: &str,
+    data: &SessionData,
+    range: std::ops::Range<usize>,
+    incomplete: bool,
+) -> serde_json::Value {
+    let messages: Vec<_> = range
+        .clone()
+        .map(|index| {
+            serde_json::json!({
+                "position": index + 1, "message": data.messages[index]
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "schema_version": 1,
+        "kind": "context",
+        "status": if incomplete { "partial" } else { "ok" },
+        "data": {
+            "uri": uri,
+            "locator": locator,
+            "total_messages": data.messages.len(),
+            "start": range.start + 1,
+            "end": range.end,
+            "messages": messages
+        }
+    })
+}
+
+pub fn excerpt(
+    uri: &str,
+    locator: &str,
+    data: &SessionData,
+    range: std::ops::Range<usize>,
+    incomplete: bool,
+) -> String {
+    let mut output = format!(
+        "# Session Context\n\n- URI: `{}`\n- Locator: `{}`\n- Messages: {}–{} of {}\n- Status: {}\n\n",
+        safe_line(uri),
+        safe_line(locator),
+        range.start + 1,
+        range.end,
+        data.messages.len(),
+        if incomplete { "partial" } else { "ok" }
+    );
+    context_messages(&mut output, data, range);
+    output
+}
+
+fn context_messages(
+    output: &mut String,
+    data: &SessionData,
+    range: std::ops::Range<usize>,
+) {
     for index in range {
         let message = &data.messages[index];
         writeln!(output, "## {}. {}\n", index + 1, safe_line(&message.role))
@@ -147,7 +206,6 @@ pub fn context(
         )
         .unwrap();
     }
-    output
 }
 
 pub fn read_page(page: &crate::query::read::Page) -> String {

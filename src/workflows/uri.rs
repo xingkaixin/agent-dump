@@ -183,8 +183,24 @@ fn run_inner(
         super::read::write_page(&page, operation.json, incomplete, zh, out)?;
         return Ok(true);
     }
+    let default_output = if operation.output.is_none()
+        && operation
+            .formats
+            .iter()
+            .any(|f| matches!(f, OutputFormat::Json | OutputFormat::Raw))
+    {
+        let config = agent_dump_core::config::Config::load()?;
+        if let Err(error) = config.require_valid(zh) {
+            writeln!(out, "{error}")?;
+            return Ok(false);
+        }
+        config.output()
+    } else {
+        String::new()
+    };
     if let Some(locator) = &operation.message {
         let data = provider.read(&session, zh, &mut |diagnostic| {
+            incomplete = true;
             writeln!(
                 warnings,
                 "{}",
@@ -199,21 +215,49 @@ fn run_inner(
             operation.after,
             zh,
         )?;
+        if !operation.formats.contains(&OutputFormat::Print) {
+            let canonical_uri =
+                format!("{}://{}", registration.info.scheme, session.id);
+            let excerpt = export::Excerpt {
+                uri: &canonical_uri,
+                locator,
+                data: &data,
+                range,
+                incomplete,
+            };
+            for format in &operation.formats {
+                let output = export::output_base(
+                    operation.output.as_deref(),
+                    &default_output,
+                    *format,
+                )
+                .join(registration.info.name);
+                let path =
+                    excerpt.write(*format, &output, provider.source_root())?;
+                writeln!(
+                    out,
+                    "{}",
+                    agent_dump_core::output::i18n::terminal(
+                        "MESSAGE_CONTEXT_EXPORTED",
+                        zh,
+                        &[
+                            ("format", format.name().into()),
+                            (
+                                "path",
+                                agent_dump_core::storage::source_io::path_text(
+                                    &path
+                                )
+                            )
+                        ]
+                    )
+                )?;
+            }
+            return Ok(true);
+        }
         if operation.json {
-            let messages: Vec<_> = range
-                .clone()
-                .map(|index| {
-                    serde_json::json!({
-                        "position": index + 1, "message": data.messages[index]
-                    })
-                })
-                .collect();
             serde_json::to_writer(
                 &mut *out,
-                &serde_json::json!({
-                    "schema_version": 1, "kind": "context", "status": "ok",
-                    "data": {"uri": uri, "locator": locator, "total_messages": data.messages.len(), "start": range.start + 1, "end": range.end, "messages": messages}
-                }),
+                &render::context_json(uri, locator, &data, range, false),
             )?;
             writeln!(out)?;
         } else {
@@ -234,21 +278,6 @@ fn run_inner(
         }
         return Ok(true);
     }
-    let default_output = if operation.output.is_none()
-        && operation
-            .formats
-            .iter()
-            .any(|f| matches!(f, OutputFormat::Json | OutputFormat::Raw))
-    {
-        let config = agent_dump_core::config::Config::load()?;
-        if let Err(error) = config.require_valid(zh) {
-            writeln!(out, "{error}")?;
-            return Ok(false);
-        }
-        config.output()
-    } else {
-        String::new()
-    };
     let raw = provider.raw_export(&session);
     let cache = agent_dump_core::session::cache::SessionDataCache::default();
     let prepared = (operation
