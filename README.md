@@ -68,49 +68,28 @@ Available formats and message details depend on the source tool. Normalized outp
 
 ## Installation
 
-Starting with v1.0.0, distribution artifacts use Rust. Version 0.15.9 is the last Python release. Rust wheels provide only the `agent-dump` command: Python imports and `python -m agent_dump` are no longer included. Applications using the old API can pin `agent-dump==0.15.9`.
-
-Prebuilt artifacts support macOS x64/arm64, Linux x64 (glibc ≥ 2.17), and Windows x64. Linux musl/Alpine has no prebuilt wheel. Wheel installation needs no Rust compiler; building from Git/sdist requires Rust 1.90.0 and a C toolchain.
+The Rust release provides the `agent-dump` CLI. Install with uv:
 
 ```bash
-pip install agent-dump
-```
-
-### Method 1: Install using uv tool (Recommended)
-
-```bash
-# Install from PyPI (Available after release)
 uv tool install agent-dump
-
-# Install directly from GitHub
-uv tool install git+https://github.com/xingkaixin/agent-dump
 ```
 
-### Method 2: Run directly using uvx (No installation required)
+Prebuilt artifacts support macOS x64/arm64, Linux x64 (glibc ≥ 2.17), and Windows x64. Wheel installation needs no Rust compiler. See [source builds and Python API migration](docs/cli-compatibility.md#source-builds-and-python-api-migration) for other requirements and older integrations.
 
-```bash
-# Run from PyPI (Available after release)
-uvx agent-dump --help
+### Other command entry points
 
-# Run directly from GitHub
-uvx --from git+https://github.com/xingkaixin/agent-dump agent-dump --help
-```
+| Purpose | Command |
+| --- | --- |
+| Install with pip | `pip install agent-dump` |
+| Run with uvx | `uvx agent-dump --help` |
+| Run with npx | `npx @agent-dump/cli --help` |
+| Run with bunx | `bunx @agent-dump/cli --help` |
 
-### Method 3: Run directly using bunx / npx (No Python required)
+All usage examples below use `agent-dump`. When using uvx, npx, or bunx, replace only that command prefix. The arguments are the same.
 
-```bash
-# Run from npm
-bunx @agent-dump/cli --help
-npx @agent-dump/cli --help
-```
+The `bunx`, `npx`, and global npm/pnpm/Bun installation paths require Node.js 22 or newer. The npm wrapper preserves registry, authentication, proxy, and CA settings, then verifies the platform-package checksum. Unsupported platforms receive a diagnostic and a link to GitHub releases.
 
-The `bunx`, `npx`, and global npm/pnpm/Bun installation paths all require Node.js 22 or newer.
-They execute the same Node.js package wrapper before launching the native binary.
-
-`@agent-dump/cli` delegates the platform-package download to npm, preserving scoped registries,
-authentication, proxy, and CA settings, then verifies the published checksum before installation.
-
-Supported native targets:
+Supported npm native targets:
 
 <!-- native-targets:start -->
 - `darwin-x64`
@@ -118,8 +97,6 @@ Supported native targets:
 - `linux-x64`
 - `win32-x64`
 <!-- native-targets:end -->
-
-If your platform is unsupported, the wrapper prints the detected platform/arch pair and points to the GitHub releases page.
 
 ### Native installation: curl, Homebrew and Scoop
 
@@ -158,21 +135,7 @@ scoop update agent-dump
 
 Linux ARM64, musl/Alpine, and Windows ARM64 do not have native builds. When changing installation channels, remove the old installation or check which executable your PATH selects.
 
-### Method 4: Local Development
-
-```bash
-# Clone the repository
-git clone https://github.com/xingkaixin/agent-dump.git
-cd agent-dump
-
-# Build the native CLI
-cargo build --locked --release
-
-# Local installation test
-uv tool install . --force
-```
-
-### Method 5: Install as a Skill
+### Install as an Agent skill
 
 ```bash
 npx skills add xingkaixin/agent-dump
@@ -185,16 +148,11 @@ npx skills add xingkaixin/agent-dump
 ```bash
 # Enter interactive mode to select and export sessions
 agent-dump --interactive
-
-# Or use the source build
-./target/release/agent-dump --interactive
 ```
 
 After running, it will display the list of sessions from the last 7 days grouped by time (Today, Yesterday, This Week, This Month, Earlier). Use the spacebar to select/deselect, and press Enter to confirm the export.
 
-> **Note:** Starting from v0.3.0, the default behavior has changed. Running `agent-dump` without arguments now shows the help message. Use `--interactive` to enter interactive mode.
->
-> If multiple explicit modes are supplied, agent-dump preserves the existing mode priority and prints a warning listing the lower-priority options it ignored.
+Running `agent-dump` without arguments shows help. If multiple explicit modes are supplied, agent-dump preserves the existing mode priority and prints a warning listing the lower-priority options it ignored.
 
 ### URI Mode (Direct Text Dump)
 
@@ -265,7 +223,7 @@ Explicit provider scopes (`provider:`, legacy provider prefixes, or `providers=`
 
 | Code | Meaning |
 |------|---------|
-| `0` | The command did what was asked — including when the result set is legitimately empty (no sessions in the `-days` window, a keyword or `--search` that matched nothing), and when interactive export partially succeeds. |
+| `0` | The command did what was asked — including when the result set is legitimately empty (no sessions in the `--days` window, a keyword or `--search` that matched nothing), and when interactive export partially succeeds. |
 | `1` | The command could not do what was asked: no provider data exists on this machine, a URI did not resolve to a session, every requested interactive export failed, or an argument combination is invalid. |
 | `2` | Argument usage error, raised by `argparse` (unknown flag, invalid `--format` value). |
 
@@ -308,119 +266,39 @@ OpenCode supports legacy SQLite and 2.x `session_v2/session_message`. When both 
 
 ## Command-line Arguments
 
+Use `agent-dump --help` for the current option list. These examples extend the [getting-started workflows](#get-started).
+
 ```bash
-# Display help
-agent-dump                             # Show help message
-agent-dump --help                      # Show detailed help
+# Filter by Provider, project path, or message role
+agent-dump --list --query 'error provider:codex,kimi' --days 30
+agent-dump --list --query 'bug path:"/Users/me/My Project"'
+agent-dump --interactive --query 'role:user limit:20 refactor'
+agent-dump --list 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'
 
-# List mode (prints all matches, no pagination)
-agent-dump --list                      # List sessions from last 7 days
-agent-dump --list -days 3              # List sessions from last 3 days
-agent-dump --list -query error         # List sessions matching keyword "error"
-agent-dump --list -query codex,kimi:error  # Query only within Codex/Kimi
-agent-dump --list -query 'bug provider:codex path:.'  # Structured query: keyword + provider + path
-agent-dump --list -query 'bug path:"/Users/me/My Project"'  # Quote structured values containing spaces
-agent-dump --interactive -query 'role:user limit:20 refactor'  # Structured query with role and global limit
-agent-dump 'agents://.?q=refactor&providers=codex,claude'  # Query recent sessions for current repo
-agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # Structured query URI
-agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # Query by absolute path
-agent-dump --interactive 'agents://~/work/repo?q=bug'  # Path-scoped interactive selection
-agent-dump --list -page-size 10        # Accepted for compatibility but currently ignored
+# Export several formats, or add an AI summary to JSON
+agent-dump --interactive --format json,markdown --output ./sessions
+agent-dump codex://SESSION_ID --format print,json --output ./sessions
+agent-dump codex://SESSION_ID --format json --summary --output ./sessions
 
-# Interactive export mode
-agent-dump --interactive               # Interactive mode (default 7 days)
-agent-dump --interactive -days 3       # Interactive mode (3 days)
-agent-dump -days 3                     # Auto-activates list mode
-agent-dump -query error                # Auto-activates list mode
+# Search, inspect statistics, or rebuild the index
+agent-dump --search 'auth timeout' --days 30
+agent-dump --stats --days 30
+agent-dump --reindex
 
-# Note: in interactive mode with --query, only agents with keyword matches are shown,
-#       and the count shown for each agent is the post-filter matched count.
-#
-# Query ambiguity rules:
-# - `error:timeout` remains a plain keyword query.
-# - `codex,kimi:error` remains the legacy agent-scoped query syntax.
-# - Structured mode is activated only when a known key appears: provider / role / path / cwd / limit.
-# - Quote or escape structured values containing spaces, for example `path:"/Users/me/My Project"`.
-# - `role:...` constrains keyword matching to messages of those roles.
-# - `limit:...` truncates the final global matched result set.
-
-# URI mode - Direct text dump
-agent-dump opencode://<session-id>     # View OpenCode session content
-agent-dump zcode://<session-id>        # View ZCode session content
-agent-dump codex://<session-id>        # View Codex session content
-agent-dump kimi://<session-id>         # View Kimi session content
-agent-dump claude://<session-id>       # View Claude Code session content
-agent-dump cursor://<request-id>       # View Cursor session content
-agent-dump pi://<session-id>           # View Pi session content
-agent-dump deepchat://<session-id>     # View DeepChat session content
-agent-dump minimax://<session-id>      # View MiniMax Code session content
-agent-dump codex://<session-id> --head # View lightweight session metadata before exporting
-agent-dump codex://<session-id> --format json --output ./my-sessions  # Export JSON file
-agent-dump codex://<session-id> --format markdown --output ./my-sessions  # Export Markdown file
-agent-dump codex://<session-id> --format print,json --output ./my-sessions # Print and export JSON
-agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # Export multiple formats
-agent-dump cursor://<request-id> --format json --output ./my-sessions  # Cursor supports JSON export
-agent-dump cursor://<request-id> --format print,json --output ./my-sessions # Cursor print + JSON
-agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # Export JSON with AI summary
-agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # Print, export JSON, and include summary
-
-# Search mode (full-text)
-agent-dump --search "auth timeout"          # Search sessions matching keyword
-agent-dump --search "认证"                   # CJK keyword search works
-agent-dump --search "auth" --list -days 30  # Combine with list + days
-agent-dump --reindex                        # Force rebuild search index
-
-# Note: search results include provider, updated time, URI, rank, and highlighted snippets.
-
-# Statistics mode
-agent-dump --stats                    # Show session stats for last 7 days
-agent-dump --stats -days 30           # Show session stats for last 30 days
-
-# Provider capabilities (read-only; --capabilities is an alias)
-agent-dump --providers
-
-# collect mode (time-range summary with AI)
-agent-dump --collect
-agent-dump --collect -days 7
-agent-dump --collect -since 2026-03-01 -until 2026-03-05
-agent-dump --collect -since 20260301 -until 20260305
-agent-dump --collect --collect-mode insight
-agent-dump --collect --save ./reports
-agent-dump --collect --save ./reports/weekly.md
-agent-dump --collect --save /tmp/agent-dump-reports
-agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
-agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
-agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
+# Collect a report or preview its workload
+agent-dump --collect --days 7 --save ./reports
+agent-dump --collect --since 2026-03-01 --until 2026-03-05 --save ./reports/weekly.md
+agent-dump --collect --collect-mode insight --dry-run
 agent-dump --shortcut ob 20260408
 
-# Note: --collect keeps only visible user/assistant text, excluding system/developer/tool messages,
-#       reasoning, plans, tool calls, and tool results. Sessions empty after this projection are ignored.
-#       PM chunks summarize requests, decisions, and agent-reported outcomes, then merge per session
-#       and reduce within each date/project group (or each session in insight mode).
-#       Final Markdown retains source attribution; large reports use multiple bounded requests.
-# Note: collect date precedence is explicit -since/-until, then explicit -days, then today only.
-# Note: --collect --dry-run completes scanning, query filtering, and chunk planning, then
-#       prints provider breakdown, session/chunk counts, concurrency, dates, and save path preview.
-# Note: during --collect, stderr shows multi-stage progress such as scan_sessions,
-#       plan_chunks, summarize_chunks, merge_sessions, tree_reduction, render_final, and write_output.
-# Note: unreadable sessions are reported on stderr; readable sessions without visible dialogue are silently ignored.
-# Note: collect writes files like agent-dump-collect-20260301-20260305.md.
-# Note: --save accepts either a directory or a .md file path. Missing non-.md paths are treated as directories.
-
-# config mode
+# Inspect or edit configuration
 agent-dump --config view
 agent-dump --config edit
-
-# Other options
-agent-dump --interactive --format json # Interactive export as JSON (default)
-agent-dump --interactive --format markdown   # Interactive export as Markdown
-agent-dump --interactive --format json,markdown,raw # Interactive multi-format export
-agent-dump --interactive -output ./my-sessions  # Specify output directory
-
-# Compatibility note
-# md remains available as an alias for markdown, e.g. --format md,raw
-# --head is a URI discovery mode. It does not replace --format print and cannot be combined with --format/--summary.
 ```
+
+`--query` matches one literal phrase. Structured keys (`provider`, `role`, `path`, `limit`) activate structured parsing; quote values containing spaces. `role` restricts matching to those messages, and `limit` applies to the final global results. `error:timeout` remains a plain phrase. Lists print all matches; interactive Provider counts reflect the filtered results.
+
+Collect uses explicit `--since`/`--until` first, then explicit `--days`, otherwise today. `--save` accepts a directory or a `.md` file, with absolute or relative paths. The [collect section](#collect-configuration-file) describes full input coverage, exclusions, progress, and incomplete reports.
 
 ### Summarize with an external agent
 
@@ -428,7 +306,7 @@ Generate a self-contained task prompt instead of configuring an AI endpoint. No 
 
 ```bash
 agent-dump --collect --emit-prompt \
-  -since 20260824 -until 20260830 \
+  --since 20260824 --until 20260830 \
   --collect-mode pm --save ./reports/weekly.md
 
 # Keep an existing collect shortcut and opt in for this invocation
@@ -489,44 +367,51 @@ Like the built-in collect prompts, the generated model instructions and report h
 External processing is subject to the chosen agent's data-transfer policy, not necessarily offline.
 Generating a prompt does not mean that a report has been created, and does not automatically launch an external agent.
 
+<details>
+<summary>Compatibility aliases</summary>
+
+Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`, `-config`, `-since`, `-until`, `-page-size`, and `-v`. `--capabilities`, `md`, `cwd:`, and the legacy Provider query prefix also remain available. See the [compatibility reference](docs/cli-compatibility.md) for their standard equivalents.
+
+</details>
+
 ### Full Parameter Reference
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
-| `--interactive` | Run in interactive mode to select and export sessions | - |
-| `-d`, `-days`, `--days` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `-since/-until` are omitted. | 7 outside collect; today only in collect |
+| `--interactive`, `-i` | Run in interactive mode to select and export sessions | - |
+| `--days`, `-d` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `--since/--until` are omitted. | 7 outside collect; today only in collect |
 | `--time-field` | Use `created` or `updated` time for the `--days` window in list/search/browse/interactive modes. | `created` |
-| `-q`, `-query` | Query filter. The keyword is one case-insensitive literal phrase after whitespace normalization, matched within a session title or logical transcript. Supports legacy `keyword` or `agent1,agent2:keyword` (e.g. `codex,kimi:error`), and structured terms like `bug provider:codex role:user path:. limit:20`. `cwd:` is an alias of `path:`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
+| `--query`, `-q` | Query filter. The keyword is one case-insensitive literal phrase after whitespace normalization, matched within a session title or logical transcript. Supports a plain keyword or structured terms like `bug provider:codex role:user path:. limit:20`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print bounded discovery metadata without rereading the transcript; message count is exact when discovery scanned the complete source and explicitly `unknown` otherwise. Does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
-| `--collect` | Collect sessions by date range, optionally constrained by `-query` or an `agents://...` query URI (mutually exclusive). Only visible user/assistant text is summarized; system/developer/tool messages, reasoning, plans, tool calls, and tool results are excluded, and empty projected sessions are ignored. PM mode extracts requests, decisions, and agent-reported outcomes before deterministic session merge and tree reduction. Multi-stage progress is shown on stderr. | - |
+| `--collect` | Collect sessions by date range, optionally constrained by `--query` or an `agents://...` query URI (mutually exclusive). Only visible user/assistant text is summarized; system/developer/tool messages, reasoning, plans, tool calls, and tool results are excluded, and empty projected sessions are ignored. PM mode extracts requests, decisions, and agent-reported outcomes before deterministic session merge and tree reduction. Multi-stage progress is shown on stderr. | - |
 | `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
 | `--emit-prompt` | Use with `--collect` to print a self-contained task for an external agent, without AI configuration or report writes. Incompatible with `--dry-run`; `--save` specifies the eventual report path. | - |
-| `--stats` | Show session usage statistics for the last N days, grouped by agent and time. If any message count is unknown, reports the known subtotal and number of unknown Sessions instead of presenting a partial sum as a total. Supports `-days` and `-query`; use it as a standalone mode. | - |
-| `--providers`, `--capabilities` | Show the registered provider capability matrix, including URI schemes, supported and unsupported export formats, and whether local search roots exist. Does not scan sessions. | - |
+| `--stats` | Show session usage statistics for the last N days, grouped by agent and time. If any message count is unknown, reports the known subtotal and number of unknown Sessions instead of presenting a partial sum as a total. Supports `--days` and `--query`; use it as a standalone mode. | - |
+| `--providers` | Show the registered provider capability matrix, including URI schemes, supported and unsupported export formats, and whether local search roots exist. Does not scan sessions. | - |
 | `--search` | Full-text search across provider-normalized session titles, messages, reasoning, and tool state using local SQLite FTS5; raw provider metadata is not searched. Whitespace-delimited terms are matched literally (FTS5 operator syntax such as `AND`/`NEAR`/`*` is not interpreted), all distinct terms are required, and terms may occur in different corpus fields. CJK terms require literal adjacency. FTS5-unavailable and unsupported-tokenizer cases use the same in-process logical-text matcher; unreadable sessions and index errors are reported on stderr. Cached session text not seen for 30 days is removed automatically. Can be combined with `--list`. | - |
 | `--reindex` | Force rebuild of the full-text search index. Use when index is corrupted or after manual session data changes. | - |
 | `--lang` | Force the CLI message locale (`en` or `zh`). Overrides locale detection from `LANG`/`LC_ALL`. | auto-detected |
 | `--no-metadata-summary` | Hide the per-session metadata summary line in list and interactive views. | off |
 | `-v`, `--version` | Print the version and exit. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
-| `-since`, `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
-| `-until`, `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
+| `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
+| `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
 | `--save` | collect report path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. With `--emit-prompt`, the path is included as an instruction for the external agent; no report is written. | - |
-| `-config`, `--config` | Config management: `view` or `edit` | - |
-| `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `-days` or `-query` is specified without `--interactive`) | - |
-| `-format`, `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`, with `md` kept as an alias. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor supports only `json` and `print` (no `raw/markdown`). | - |
-| `-summary`, `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. Cannot be combined with `--head`. | - |
-| `-p`, `-page-size`, `--page-size` | Accepted for compatibility; currently ignored | 20 |
-| `-output`, `--output` | Output directory. For `json/raw`, priority is `--output` > `config.toml` `[export].output` > `./sessions`. Relative paths are resolved from the current working directory. Markdown keeps using `./sessions` unless `--output` is explicitly passed. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
+| `--config` | Config management: `view` or `edit` | - |
+| `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `--days` or `--query` is specified without `--interactive`) | - |
+| `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor supports only `json` and `print` (no `raw/markdown`). | - |
+| `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. Cannot be combined with `--head`. | - |
+| `--page-size`, `-p` | Compatibility only; ignored. For reading pages, use `--read` with `--limit` / `--max-chars`. | 20 |
+| `--output` | Output directory. For `json/raw`, priority is `--output` > `config.toml` `[export].output` > `./sessions`. Relative paths are resolved from the current working directory. Markdown keeps using `./sessions` unless `--output` is explicitly passed. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
 | `-h, --help` | Show help message | - |
 
 When URI mode combines `print` with file formats, a print read/render failure is reported without blocking file exports. Raw source copying can still succeed when normalized parsing fails. Exit status remains `0` if any requested output succeeds, otherwise `1`.
 
 ### Python API migration
 
-Rust releases distribute a CLI only. Call `agent-dump` as a subprocess and use JSON exports for structured data. The frozen Python implementation is retained in Git history and installed separately for differential verification. Existing API consumers should migrate to the CLI or pin `agent-dump==0.15.9`.
+See [CLI migration and the frozen Python release](docs/cli-compatibility.md#source-builds-and-python-api-migration).
 
 ### collect configuration file
 
@@ -605,7 +490,7 @@ Add `--json` to list, search or statistics mode to write one JSON object to stdo
 
 ```bash
 agent-dump --list --json
-agent-dump --search 'timeout' --json -query 'provider:codex'
+agent-dump --search 'timeout' --json --query 'provider:codex'
 agent-dump --stats --json
 agent-dump codex://SESSION_ID --head --json
 agent-dump --providers --json
@@ -617,13 +502,13 @@ No matches produce an empty array and exit 0. No available source without an exp
 
 `agent-dump <URI> --head --json` returns `kind: "head"` and one session record in `data`, with the same facts as list output plus `project`, `version`, and `subtargets`. It does not request a full transcript. The URI is canonical, unknown directories/models/message counts remain null, and recoverable lookup diagnostics produce `status: "partial"` with details on stderr.
 
-`agent-dump --providers --json` (also `--capabilities --json`) returns `kind: "providers"` and a `data` array containing each Provider's name, display name, scheme, identifier label, optional ID prefixes, supported `formats`, and `search_roots` with label/path/exists. This inspects capabilities and path existence without reading session contents. An existing root does not guarantee a readable session. Both envelopes use `schema_version: 1`; failures return a nonzero exit code and may leave stdout empty.
+`agent-dump --providers --json` returns `kind: "providers"` and a `data` array containing each Provider's name, display name, scheme, identifier label, optional ID prefixes, supported `formats`, and `search_roots` with label/path/exists. This inspects capabilities and path existence without reading session contents. An existing root does not guarantee a readable session. Both envelopes use `schema_version: 1`; failures return a nonzero exit code and may leave stdout empty.
 
 
 ### Message locations and context
 
 ```bash
-agent-dump --search 'database locked' --locate --json -query 'provider:codex'
+agent-dump --search 'database locked' --locate --json --query 'provider:codex'
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --json
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3 --format json,markdown --output excerpts
@@ -668,7 +553,7 @@ agent-dump opencode://SESSION_ID --read --order asc --max-chars 4000 --details -
 | `--match` | Case-insensitive literal phrase in each message's selected text view, with whitespace normalized; filtering precedes pagination |
 | `--details` | Include the readable projection of reasoning, plans and structured tool state; default is text parts only |
 
-Read options require `--read` and cannot mix with list, search, collect, export, `--head`, `--summary` or `--message`. Existing full URI printing, `--search` and `-query` keep their semantics; the legacy `--page-size` remains a no-op. Matching is not regex, semantic or cross-message search. Add `--details` to search tool details. Both views skip messages with no readable text, do not read attachments, and do not represent every raw Provider field. Nonempty role/match values are limited to 100/4096 UTF-8 bytes; read URIs to 4096 bytes.
+Read options require `--read` and cannot mix with list, search, collect, export, `--head`, `--summary` or `--message`. Existing full URI printing, `--search` and `--query` keep their semantics. Matching is not regex, semantic or cross-message search. Add `--details` to search tool details. Both views skip messages with no readable text, do not read attachments, and do not represent every raw Provider field. Nonempty role/match values are limited to 100/4096 UTF-8 bytes; read URIs to 4096 bytes.
 
 JSON contains `schema_version: 1`, `kind: read`, `status`, `has_more` and `data`. Data includes uri, revision, total_messages before filtering, options, messages and next_cursor. Each fragment contains its original one-based position, a locator usable with `--message`, role, text, total_chars, and zero-based Unicode start/end offsets [start,end). `truncated` marks a partial message. Long messages resume at the next character through the cursor; characters within a message always traverse forwards.
 
@@ -680,7 +565,7 @@ Bounded output reduces content returned to the Agent, but reading may still pars
 
 ```bash
 agent-dump --browse
-agent-dump --browse -query 'provider:codex path:.' -days 30
+agent-dump --browse --query 'provider:codex path:.' --days 30
 agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --format json,markdown --output ./exports
 ```

@@ -68,49 +68,28 @@ agent-dump --collect --days 7 --emit-prompt --save ./reports/weekly.md
 
 ## 安装
 
-从 v1.0.0 起，安装制品切换为 Rust；0.15.9 是最后一个 Python 版本。Rust wheel 仅提供 `agent-dump` 命令，不包含 Python 导入 API，也不提供 `python -m agent_dump`。依赖旧 API 的程序可固定 `agent-dump==0.15.9`。
-
-支持 macOS x64/arm64、Linux x64（glibc ≥ 2.17）和 Windows x64。Linux musl/Alpine 没有预构建 wheel。wheel 安装无需 Rust 编译器；从 Git/sdist 构建需要 Rust 1.90.0 和 C 工具链。
+Rust 版本提供 `agent-dump` CLI。使用 uv 安装：
 
 ```bash
-pip install agent-dump
-```
-
-### 方式一：使用 uv tool 安装（推荐）
-
-```bash
-# 从 PyPI 安装（发布后可使用）
 uv tool install agent-dump
-
-# 从 GitHub 直接安装
-uv tool install git+https://github.com/xingkaixin/agent-dump
 ```
 
-### 方式二：使用 uvx 直接运行（无需安装）
+预构建包支持 macOS x64/arm64、Linux x64（glibc ≥ 2.17）和 Windows x64。wheel 安装无需 Rust 编译器。其他构建要求及旧接口迁移见[源码构建与 Python API 迁移](docs/cli-compatibility.md#源码构建与-python-api-迁移)。
 
-```bash
-# 从 PyPI 运行（发布后可使用）
-uvx agent-dump --help
+### 其他命令入口
 
-# 从 GitHub 直接运行
-uvx --from git+https://github.com/xingkaixin/agent-dump agent-dump --help
-```
+| 用途 | 命令 |
+| --- | --- |
+| 使用 pip 安装 | `pip install agent-dump` |
+| 使用 uvx 运行 | `uvx agent-dump --help` |
+| 使用 npx 运行 | `npx @agent-dump/cli --help` |
+| 使用 bunx 运行 | `bunx @agent-dump/cli --help` |
 
-### 方式三：使用 bunx / npx 直接运行（无需 Python）
+后续示例统一使用 `agent-dump`。选择 uvx、npx 或 bunx 时，只替换命令前缀，参数保持一致。
 
-```bash
-# 从 npm 直接运行
-bunx @agent-dump/cli --help
-npx @agent-dump/cli --help
-```
+`bunx`、`npx` 和 npm/pnpm/Bun 全局安装入口均需要 Node.js 22 或更高版本。npm 包装器沿用 registry、认证、代理和 CA 配置，并校验平台包 checksum。不支持的平台会收到诊断与 GitHub Releases 链接。
 
-`bunx`、`npx` 以及 npm/pnpm/Bun 全局安装路径都需要 Node.js 22 或更高版本。
-这些入口会先执行同一个 Node.js 包装器，再启动原生二进制文件。
-
-`@agent-dump/cli` 通过 npm 下载当前平台包，因此会沿用 scoped registry、认证、代理与 CA 配置，
-并在落盘前校验发布时生成的 checksum。
-
-当前支持的平台：
+npm 当前支持的平台：
 
 <!-- native-targets:start -->
 - `darwin-x64`
@@ -118,8 +97,6 @@ npx @agent-dump/cli --help
 - `linux-x64`
 - `win32-x64`
 <!-- native-targets:end -->
-
-若平台暂不支持，wrapper 会输出当前检测到的 `platform/arch`，并提示前往 GitHub Releases 页面。
 
 ### 原生安装：curl、Homebrew 与 Scoop
 
@@ -158,21 +135,7 @@ scoop update agent-dump
 
 目前没有 Linux ARM64、musl/Alpine 或 Windows ARM64 原生产物。切换安装渠道时，先卸载旧安装，或确认 PATH 当前选中的可执行文件。
 
-### 方式四：本地开发
-
-```bash
-# 克隆仓库
-git clone https://github.com/xingkaixin/agent-dump.git
-cd agent-dump
-
-# 构建原生命令行程序
-cargo build --locked --release
-
-# 本地安装测试
-uv tool install . --force
-```
-
-### 方式五：安装为 Skill 使用
+### 安装为 Agent skill
 
 ```bash
 npx skills add xingkaixin/agent-dump
@@ -185,16 +148,11 @@ npx skills add xingkaixin/agent-dump
 ```bash
 # 进入交互模式选择和导出会话
 agent-dump --interactive
-
-# 或使用源码构建的原生程序
-./target/release/agent-dump --interactive
 ```
 
 运行后会显示最近 7 天的会话列表，按时间分组显示（今天、昨天、本周、本月、更早）。使用空格选择/取消，回车确认导出。
 
-> **注意：** 从 v0.3.0 开始，默认行为已更改。直接运行 `agent-dump` 将显示帮助信息，需要使用 `--interactive` 进入交互模式。
->
-> 如果同时传入多个显式模式，agent-dump 会保留既有模式优先级，并告警列出被忽略的较低优先级参数。
+不带参数运行 `agent-dump` 显示帮助。如果同时传入多个显式模式，agent-dump 会保留既有模式优先级，并告警列出被忽略的较低优先级参数。
 
 ### URI 模式（直接文本查看）
 
@@ -265,7 +223,7 @@ agent-dump opencode://session-id-abc123
 
 | 退出码 | 含义 |
 |------|------|
-| `0` | 命令做到了被要求的事——包括结果集本就为空（`-days` 窗口内没有会话、关键词或 `--search` 没有命中），以及交互式导出部分成功。 |
+| `0` | 命令做到了被要求的事——包括结果集本就为空（`--days` 窗口内没有会话、关键词或 `--search` 没有命中），以及交互式导出部分成功。 |
 | `1` | 命令做不到被要求的事：本机不存在任何 provider 数据、URI 未能解析到会话、交互式导出全部失败、或参数组合非法。 |
 | `2` | 参数用法错误，由 `argparse` 抛出（未知参数、非法的 `--format` 值）。 |
 
@@ -308,117 +266,39 @@ OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共
 
 ## 命令行参数
 
+用 `agent-dump --help` 查看当前选项。以下示例补充[快速开始](#快速开始)中的常用流程。
+
 ```bash
-# 显示帮助
-agent-dump                             # 显示帮助信息
-agent-dump --help                      # 显示详细帮助
+# 按 Provider、项目路径或消息角色筛选
+agent-dump --list --query 'error provider:codex,kimi' --days 30
+agent-dump --list --query 'bug path:"/Users/me/My Project"'
+agent-dump --interactive --query 'role:user limit:20 refactor'
+agent-dump --list 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'
 
-# 列表模式（输出全部匹配内容，不分页）
-agent-dump --list                      # 列出最近 7 天的会话
-agent-dump --list -days 3              # 列出最近 3 天的会话
-agent-dump --list -query 报错          # 列出匹配关键词“报错”的会话
-agent-dump --list -query codex,kimi:报错  # 仅在 Codex/Kimi 范围内查询
-agent-dump --list -query 'bug provider:codex path:. limit:20'  # 结构化查询：关键词 + provider + path
-agent-dump --interactive -query 'role:user limit:20 refactor'  # 结构化查询带 role 和全局 limit
-agent-dump 'agents://.?q=refactor&providers=codex,claude'  # 查询当前仓库最近的相关会话
-agent-dump 'agents://.?q=refactor&providers=codex,claude&roles=user&limit=20'  # 结构化查询 URI
-agent-dump --list 'agents:///Users/me/work/repo?providers=codex,opencode'  # 按绝对路径查询
-agent-dump --interactive 'agents://~/work/repo?q=bug'  # 按路径作用域进入交互式选择
-agent-dump --list -page-size 10        # 参数保留兼容，当前不生效
+# 导出多种格式，或为 JSON 添加 AI 摘要
+agent-dump --interactive --format json,markdown --output ./sessions
+agent-dump codex://SESSION_ID --format print,json --output ./sessions
+agent-dump codex://SESSION_ID --format json --summary --output ./sessions
 
-# 交互式导出模式
-agent-dump --interactive               # 交互模式（默认 7 天）
-agent-dump --interactive -days 3       # 交互模式（3 天）
-agent-dump -days 3                     # 自动启用列表模式
-agent-dump -query 报错                 # 自动启用列表模式
+# 搜索、查看统计或重建索引
+agent-dump --search 'auth timeout' --days 30
+agent-dump --stats --days 30
+agent-dump --reindex
 
-# 说明：interactive + --query 时，Agent 列表仅显示命中关键词的工具，
-#       且括号内会话数量为过滤后的命中数量。
-#
-# 查询歧义规则：
-# - `error:timeout` 仍是纯关键词查询。
-# - `codex,kimi:报错` 仍是旧版 agent 限定查询语法。
-# - 仅当已知 key 出现时才激活结构化模式：provider / role / path / cwd / limit。
-# - `role:...` 将关键词匹配限制在指定角色的消息中。
-# - `limit:...` 截断最终全局匹配结果集。
-
-# URI 模式 - 直接查看会话内容
-agent-dump opencode://<session-id>     # 查看 OpenCode 会话内容
-agent-dump zcode://<session-id>        # 查看 ZCode 会话内容
-agent-dump codex://<session-id>        # 查看 Codex 会话内容
-agent-dump kimi://<session-id>         # 查看 Kimi 会话内容
-agent-dump claude://<session-id>       # 查看 Claude Code 会话内容
-agent-dump cursor://<request-id>       # 查看 Cursor 会话内容
-agent-dump pi://<session-id>           # 查看 Pi 会话内容
-agent-dump deepchat://<session-id>     # 查看 DeepChat 会话内容
-agent-dump minimax://<session-id>      # 查看 MiniMax Code 会话
-agent-dump codex://<session-id> --head # 查看轻量会话元数据，不导出也不打印正文
-agent-dump codex://<session-id> --format json --output ./my-sessions  # 导出 JSON 文件
-agent-dump codex://<session-id> --format markdown --output ./my-sessions  # 导出 Markdown 文件
-agent-dump codex://<session-id> --format print,json --output ./my-sessions # 打印并导出 JSON
-agent-dump codex://<session-id> --format json,markdown,raw --output ./my-sessions  # 同时导出多种格式
-agent-dump cursor://<request-id> --format json --output ./my-sessions  # Cursor 支持 JSON 导出
-agent-dump cursor://<request-id> --format print,json --output ./my-sessions # Cursor 打印 + JSON
-agent-dump codex://<session-id> --format json --summary --output ./my-sessions  # 导出包含 AI summary 的 JSON
-agent-dump codex://<session-id> --format print,json --summary --output ./my-sessions # 打印并导出带 summary 的 JSON
-
-# 搜索模式（全文搜索）
-agent-dump --search "auth timeout"           # 搜索匹配关键词的会话
-agent-dump --search "认证"                    # 支持 CJK 关键词搜索
-agent-dump --search "auth" --list -days 30   # 与 list + days 组合
-agent-dump --reindex                         # 强制重建搜索索引
-
-# 说明：搜索结果会展示来源、更新时间、URI、匹配度和高亮命中片段。
-
-# 统计模式
-agent-dump --stats                     # 显示最近 7 天会话统计
-agent-dump --stats -days 30            # 显示最近 30 天会话统计
-
-# Provider 能力矩阵（只读；--capabilities 是别名）
-agent-dump --providers
-
-# collect 模式（按时间段汇总并调用 AI 总结）
-agent-dump --collect
-agent-dump --collect -days 7
-agent-dump --collect -since 2026-03-01 -until 2026-03-05
-agent-dump --collect -since 20260301 -until 20260305
-agent-dump --collect --collect-mode insight
-agent-dump --collect --save ./reports
-agent-dump --collect --save ./reports/weekly.md
-agent-dump --collect --save /tmp/agent-dump-reports
-agent-dump --collect --save /tmp/agent-dump-reports/weekly.md
-agent-dump --collect 'agents://.?q=refactor&providers=codex,claude'
-agent-dump --collect --dry-run -since 20260301 -until 20260305 --save ./reports
+# 汇总报告或预览工作量
+agent-dump --collect --days 7 --save ./reports
+agent-dump --collect --since 2026-03-01 --until 2026-03-05 --save ./reports/weekly.md
+agent-dump --collect --collect-mode insight --dry-run
 agent-dump --shortcut ob 20260408
 
-# 说明：--collect 只保留 user/assistant 的可见文本，排除 system/developer/tool 消息、
-#       reasoning、plan、工具调用和工具结果；投影后为空的 session 直接忽略。
-#       PM chunk 只提取 requests、decisions、Agent 明确报告的 outcomes，再做 session 级归并，
-#       最后在同一日期/项目内归并（insight 按 session），保留归属后生成 Markdown。
-#       较大的最终报告按来源分组分次生成，每次请求保持有界，不会静默丢弃来源。
-# 说明：collect 日期优先级为显式 -since/-until，其次显式 -days，最后缺省为当天。
-# 说明：--collect --dry-run 会完成扫描、查询过滤和 chunk planning，并输出 provider 分布、
-#       session 数、chunk 数、并发配置、日期范围和保存路径预览。
-# 说明：--collect 会在 stderr 输出多阶段进度，包括 scan_sessions、plan_chunks、
-#       summarize_chunks、merge_sessions、tree_reduction、render_final、write_output。
-# 说明：无法读取的会话会在 stderr 告警；可读取但没有可见对话的会话会直接忽略。
-# 说明：collect 输出文件名示例：agent-dump-collect-20260301-20260305.md。
-# 说明：--save 接受目录或 .md 文件路径。缺失的非 .md 路径会被当作目录处理。
-
-# 配置模式
+# 查看或编辑配置
 agent-dump --config view
 agent-dump --config edit
-
-# 其他选项
-agent-dump --interactive --format json # 交互式导出 JSON（默认）
-agent-dump --interactive --format markdown   # 交互式导出 Markdown
-agent-dump --interactive --format json,markdown,raw # 交互式多格式导出
-agent-dump --interactive -output ./my-sessions  # 指定输出目录
-
-# 兼容说明
-# md 仍可作为 markdown 的别名使用，例如：--format md,raw
-# --head 是 URI 发现模式，不能替代 --format print，也不能与 --format/--summary 组合。
 ```
+
+`--query` 按一个字面短语匹配。出现结构化字段（`provider`、`role`、`path`、`limit`）时启用结构化解析，带空格的值需要引号。`role` 限定参与匹配的消息，`limit` 限制最终全局结果数。`error:timeout` 仍是普通短语。列表输出全部匹配项，交互模式中的 Provider 计数反映筛选后的结果。
+
+Collect 的日期优先级为显式 `--since`/`--until`、显式 `--days`，最后是当天。`--save` 接受目录或 `.md` 文件，可用绝对或相对路径。完整输入覆盖、排除规则、进度和不完整报告见 [collect 说明](#collect-配置文件)。
 
 ### 交给外部 agent 汇总
 
@@ -426,7 +306,7 @@ agent-dump --interactive -output ./my-sessions  # 指定输出目录
 
 ```bash
 agent-dump --collect --emit-prompt \
-  -since 20260824 -until 20260830 \
+  --since 20260824 --until 20260830 \
   --collect-mode pm --save ./reports/weekly.md
 
 # 已有 collect shortcut 也可以临时启用
@@ -475,42 +355,49 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 提示词包含本地标题和路径，分享时应按私有数据处理；外部处理受对应 agent 的数据传输策略约束，不等于离线处理。
 提示词生成成功不代表报告已生成，也不会自动启动外部 agent。
 
+<details>
+<summary>兼容参数</summary>
+
+已有调用仍支持 `-days`、`-query`、`-format`、`-output`、`-summary`、`-config`、`-since`、`-until`、`-page-size` 和 `-v`。`--capabilities`、`md`、`cwd:` 及旧 Provider 查询前缀也继续保留。标准写法见[兼容参考](docs/cli-compatibility.md#中文)。
+
+</details>
+
 ### 完整参数说明
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `uri` | 用于直接查看的 Agent Session URI（如 `opencode://session-id`），或作用域查询 URI，如 `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
-| `--interactive` | 进入交互式模式选择和导出会话 | - |
-| `-d`, `-days`, `--days` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `-since/-until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
+| `--interactive`, `-i` | 进入交互式模式选择和导出会话 | - |
+| `--days`, `-d` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `--since/--until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
 | `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 的时间依据：`created` 或 `updated`。 | `created` |
-| `-q`, `-query` | 查询过滤。关键词在归一化空白后作为一个不区分大小写的字面短语，在 Session 标题或逻辑 transcript 内匹配。支持 legacy `keyword` 或 `agent1,agent2:keyword`（如 `codex,kimi:报错`），也支持结构化条件如 `bug provider:codex role:user path:. limit:20`。`cwd:` 是 `path:` 的别名。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
+| `--query`, `-q` | 查询过滤。关键词在归一化空白后作为一个不区分大小写的字面短语，在 Session 标题或逻辑 transcript 内匹配。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印有界发现阶段已有的元数据，不重新读取完整正文；发现阶段完整扫描时消息数为精确值，否则明确显示“未知”。不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
-| `--collect` | 按日期范围采集会话，可选通过 `-query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
+| `--collect` | 按日期范围采集会话，可选通过 `--query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |
 | `--dry-run` | 与 `--collect` 搭配使用，预览 provider 分布、session 数、chunk 数、并发配置、日期范围和保存路径，跳过 AI 请求和文件写入。 | - |
 | `--emit-prompt` | 与 `--collect` 搭配使用，输出交给外部 agent 的自包含任务提示词，不需要 AI 配置，不写报告。与 `--dry-run` 互斥；`--save` 指定最终报告位置。 | - |
-| `--stats` | 显示最近 N 天会话使用统计，按 Agent 和时间分组。存在未知消息数时显示已知小计与未知会话数，不把部分和冒充总数。支持 `-days` 与 `-query`，推荐独立使用。 | - |
-| `--providers`, `--capabilities` | 显示已注册 provider 的能力矩阵，包括 URI scheme、支持及不支持的导出格式、持久索引不可用时采用的存储级关键词回退，以及本地搜索路径是否存在。不扫描会话。 | - |
+| `--stats` | 显示最近 N 天会话使用统计，按 Agent 和时间分组。存在未知消息数时显示已知小计与未知会话数，不把部分和冒充总数。支持 `--days` 与 `--query`，推荐独立使用。 | - |
+| `--providers` | 显示已注册 provider 的能力矩阵，包括 URI scheme、支持及不支持的导出格式、持久索引不可用时采用的存储级关键词回退，以及本地搜索路径是否存在。不扫描会话。 | - |
 | `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。按空白切分的 distinct term 均按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），所有 term 都必须存在，但可以分别落在不同 corpus 字段；CJK term 必须连续。FTS5 不可用或 tokenizer 无法等价表达时使用同一套进程内逻辑文本 matcher；索引错误会在 stderr 提示并给出 `--reindex` 建议。可与 `--list` 组合。 | - |
 | `--reindex` | 强制重建全文搜索索引。索引损坏或手动修改会话数据后使用。 | - |
 | `--lang` | 强制 CLI 文案语言（`en` 或 `zh`），覆盖基于 `LANG`/`LC_ALL` 的自动检测。 | 自动检测 |
 | `--no-metadata-summary` | 在列表与交互视图中隐藏每个会话的元数据摘要行。 | 关闭 |
 | `-v`, `--version` | 打印版本号后退出。 | - |
 | `--shortcut` | 运行已配置的快捷预设。示例：`agent-dump --shortcut ob 20260408` | - |
-| `-since`, `--since` | collect 开始日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
-| `-until`, `--until` | collect 结束日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
+| `--since` | collect 开始日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
+| `--until` | collect 结束日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
 | `--save` | collect 报告路径。支持绝对/相对目录或 `.md` 文件路径。未提供文件名时使用默认 collect 文件名。配合 `--emit-prompt` 时只把路径写入提示词，由外部 agent 生成报告。 | - |
-| `-config`, `--config` | 配置管理：`view` 或 `edit` | - |
-| `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `-days` 或 `-query` 且未指定 `--interactive` 则自动启用） | - |
-| `-format`, `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`，兼容 `md` 别名。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略；`--head` 不能与此选项组合。Cursor URI 仅支持 `json` 和 `print`（不支持 `raw/markdown`）。 | - |
-| `-summary`, `--summary` | 仅 URI 模式生效。开启后仅在 `--format` 包含 `json` 且 AI 配置完整时生成 summary；否则仅 warning 并继续导出（不启用 summary）。AI 请求期间会在 stderr 显示 loading 提示。不能与 `--head` 组合。 | - |
-| `-p`, `-page-size`, `--page-size` | 为兼容保留，当前不生效 | 20 |
-| `-output`, `--output` | 输出目录。`json/raw` 优先级：`--output` > `config.toml` `[export].output` > `./sessions`。相对路径从 agent-dump 执行目录解析。Markdown 仍使用 `./sessions`，除非显式传入 `--output`。`--list` 下会警告并忽略。 | `config export.output` 或 `./sessions` |
+| `--config` | 配置管理：`view` 或 `edit` | - |
+| `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `--days` 或 `--query` 且未指定 `--interactive` 则自动启用） | - |
+| `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略；`--head` 不能与此选项组合。Cursor URI 仅支持 `json` 和 `print`（不支持 `raw/markdown`）。 | - |
+| `--summary` | 仅 URI 模式生效。开启后仅在 `--format` 包含 `json` 且 AI 配置完整时生成 summary；否则仅 warning 并继续导出（不启用 summary）。AI 请求期间会在 stderr 显示 loading 提示。不能与 `--head` 组合。 | - |
+| `--page-size`, `-p` | 仅兼容保留，不生效。读取分页使用 `--read` 与 `--limit` / `--max-chars`。 | 20 |
+| `--output` | 输出目录。`json/raw` 优先级：`--output` > `config.toml` `[export].output` > `./sessions`。相对路径从 agent-dump 执行目录解析。Markdown 仍使用 `./sessions`，除非显式传入 `--output`。`--list` 下会警告并忽略。 | `config export.output` 或 `./sessions` |
 | `-h, --help` | 显示帮助信息 | - |
 
 ### Python API 迁移
 
-Rust 版本只发布 CLI。通过子进程调用 `agent-dump`，使用 JSON 导出交换结构化数据。旧 Python API 保留在 Git 历史和已发布的 0.15.9 中；现有 API 使用方升级前应迁移到 CLI，或固定 `agent-dump==0.15.9`。
+详见 [CLI 迁移与固定 Python 版本](docs/cli-compatibility.md#源码构建与-python-api-迁移)。
 
 ### collect 配置文件
 
@@ -587,7 +474,7 @@ agent-dump --interactive --time-field updated -d 7
 
 ```bash
 agent-dump --list --json
-agent-dump --search 'timeout' --json -query 'provider:codex'
+agent-dump --search 'timeout' --json --query 'provider:codex'
 agent-dump --stats --json
 agent-dump codex://SESSION_ID --head --json
 agent-dump --providers --json
@@ -599,13 +486,13 @@ agent-dump --providers --json
 
 `agent-dump <URI> --head --json` 返回 `kind: "head"`，`data` 为单条会话元数据。字段与列表一致，并包含 `project`、`version`、`subtargets`。不请求完整正文；URI 使用规范形式，未知目录、模型和消息数保留为 null，可恢复的查找诊断产生 `status: "partial"`，详情在 stderr。
 
-`agent-dump --providers --json`（也可用 `--capabilities --json`）返回 `kind: "providers"`，`data` 为 Provider 数组。每项包含名称、显示名、scheme、标识符提示、可选 ID 前缀、支持的 `formats`，以及带 label/path/exists 的 `search_roots`。只检查能力和路径是否存在，不读取会话正文；路径存在不代表会话一定可读。两种结果均使用 `schema_version: 1`；失败时退出码非零，stdout 可能为空。
+`agent-dump --providers --json`返回 `kind: "providers"`，`data` 为 Provider 数组。每项包含名称、显示名、scheme、标识符提示、可选 ID 前缀、支持的 `formats`，以及带 label/path/exists 的 `search_roots`。只检查能力和路径是否存在，不读取会话正文；路径存在不代表会话一定可读。两种结果均使用 `schema_version: 1`；失败时退出码非零，stdout 可能为空。
 
 
 ### 消息定位与上下文
 
 ```bash
-agent-dump --search 'database locked' --locate --json -query 'provider:codex'
+agent-dump --search 'database locked' --locate --json --query 'provider:codex'
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --json
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3 --format json,markdown --output excerpts
@@ -650,7 +537,7 @@ agent-dump opencode://SESSION_ID --read --order asc --max-chars 4000 --details -
 | `--match` | 对所选文本视图逐消息匹配字面短语，不区分大小写并归一化空白；先筛选再分页 |
 | `--details` | 加入 reasoning、plan 和结构化工具状态的可读投影；默认只取文本部分 |
 
-这些读取参数仅用于 `--read`，不能与列表、搜索、collect、导出、`--head`、`--summary` 或 `--message` 混用。原有 URI 全文打印、`--search` 和 `-query` 的语义不变；兼容参数 `--page-size` 仍不生效。匹配不是正则、语义搜索或跨消息检索；搜索工具详情需显式加 `--details`。两种视图均跳过无可读文本的消息，不读取附件实体，也不承诺包含全部 Provider 原始字段。`--role` / `--match` 必须非空，分别最多 100 / 4096 个 UTF-8 字节；读取 URI 最多 4096 字节。
+这些读取参数仅用于 `--read`，不能与列表、搜索、collect、导出、`--head`、`--summary` 或 `--message` 混用。原有 URI 全文打印、`--search` 和 `--query` 的语义不变。匹配不是正则、语义搜索或跨消息检索；搜索工具详情需显式加 `--details`。两种视图均跳过无可读文本的消息，不读取附件实体，也不承诺包含全部 Provider 原始字段。`--role` / `--match` 必须非空，分别最多 100 / 4096 个 UTF-8 字节；读取 URI 最多 4096 字节。
 
 JSON 包含 `schema_version: 1`、`kind: read`、`status`、`has_more` 和 `data`。data 中有 URI、revision、筛选前的 total_messages、options、messages 和 next_cursor。每个片段保留原会话一基 position、可用于 `--message` 的 locator、role、text、total_chars，以及从零开始的 Unicode 字符区间 start/end（左闭右开）。`truncated` 表示这一项只是消息的一部分；长消息通过游标从下一字符继续，消息内始终正序读取。
 
@@ -662,7 +549,7 @@ JSON 包含 `schema_version: 1`、`kind: read`、`status`、`has_more` 和 `data
 
 ```bash
 agent-dump --browse
-agent-dump --browse -query 'provider:codex path:.' -days 30
+agent-dump --browse --query 'provider:codex path:.' --days 30
 agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --format json,markdown --output ./exports
 ```
