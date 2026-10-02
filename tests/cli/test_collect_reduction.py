@@ -75,4 +75,9 @@ def test_reduction_and_partial_failures(cli, mode, scenario):
             if scenario == "chunks":
                 assert "chunk-4" in final_prompt
     assert prompts[0] == prompts[1]
-    assert outputs[0] == outputs[1]
+    if scenario == "partial":
+        suffix = "\n\n> Omitted sessions:\n> - codex://019c213e-c251-73a3-af66-000000000001\n"
+        old_stdout, old_report = outputs[0]
+        assert outputs[1] == (old_stdout.replace(old_report, old_report + suffix, 1), old_report + suffix)
+    else:
+        assert outputs[0] == outputs[1]

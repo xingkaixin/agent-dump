@@ -367,7 +367,7 @@ agent-dump --shortcut ob 20260408
 #       reasoning, plans, tool calls, and tool results. Sessions empty after this projection are ignored.
 #       PM chunks summarize requests, decisions, and agent-reported outcomes, then merge per session
 #       and reduce within each date/project group (or each session in insight mode).
-#       Final Markdown input retains these sources; inputs over 64,000 characters require a narrower range/query.
+#       Final Markdown retains source attribution; large reports use multiple bounded requests.
 # Note: collect date precedence is explicit -since/-until, then explicit -days, then today only.
 # Note: --collect --dry-run completes scanning, query filtering, and chunk planning, then
 #       prints provider breakdown, session/chunk counts, concurrency, dates, and save path preview.
@@ -504,7 +504,7 @@ File discovery failures include partially unreadable providers. Valid sessions r
 
 When some session reads or summaries fail, collection continues with successful sessions. The saved Markdown includes a fixed incomplete-report notice with failure and included-session counts; an entirely failed run still fails.
 
-Collect preserves visible message text within a 12,000-character per-session extraction budget (including event labels). Text beyond that budget is omitted and marked as truncated for the final summary.
+Collect processes all eligible user/assistant visible text. Events, including long individual messages, are split into chunks of at most 3,200 Unicode characters including labels. Chunk summaries are merged in groups of at most eight; large final reports are rendered in separate source-preserving groups. Model inputs are limited to 64,000 characters per request. Oversized metadata or derived summaries fail explicitly; source text is never silently truncated. Partial reports list omitted session URIs. Full input coverage does not mean a summary preserves every detail.
 
 PM summaries merge sessions only within the same date and known working directory. Sessions without a working directory retain separate attribution.
 

@@ -65,7 +65,7 @@ summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标
 
 ## 6. Collect
 
-execute、dry-run、emit-prompt 共用配置安全校验和会话筛选。Collect 仅提取 user/assistant 可见文本，排除 tool、reasoning、system、plan 与 Provider 私有事件。没有可见对话的会话在 chunk 规划前忽略。
+execute、dry-run、emit-prompt 共用配置安全校验和会话筛选。Collect 仅提取 user/assistant 可见文本，排除 tool、reasoning、system、plan 与 Provider 私有事件。没有可见对话的会话在 chunk 规划前忽略。全部符合筛选规则的正文进入有界事件块，超长消息按 Unicode 字符拆分，不设置会话总字符截断。会话摘要最多八份一组逐层归并；最终报告超过单次输入限制时按来源组拆分请求，单个过大归属组明确失败。部分报告列出遗漏会话 URI。
 
 PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹推断成功。PM 仅在日期相同且明确的 Working Directory 相同时归并；未知目录和 INSIGHT 保持单会话归属。读取失败、摘要失败和 Provider 发现不完整分别记录，部分成功报告明确注明遗漏；索引回退成功不计作读取失败。
 

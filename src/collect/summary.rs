@@ -163,6 +163,13 @@ pub fn request(
     let mut parse_attempt = 0;
     let mut transport_attempt = 0;
     loop {
+        if current.chars().count() > 64_000 {
+            return Err(format!(
+                "{}: summary input exceeds 64000 characters",
+                context.label
+            )
+            .into());
+        }
         let id = uuid::Uuid::new_v4().to_string();
         let mut fields = json!({"request_id":id, "provider":config.provider, "model":config.model, "phase":context.phase, "context":context.label,
             "session_uri":context.uri, "chunk_index":context.chunk, "chunk_total":context.chunks,

@@ -5,6 +5,7 @@ use agent_dump_core::query::scanner::Scan;
 use jiff::civil::Date;
 use serde_json::json;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -196,7 +197,20 @@ pub fn run(
             )
         })
         .transpose()?;
-    let query_failures = selected.as_ref().map_or(0, |s| s.failures.len());
+    let mut omissions: Vec<String> = selected
+        .as_ref()
+        .into_iter()
+        .flat_map(|selection| &selection.failures)
+        .map(|(provider, id)| {
+            let group = scan
+                .groups
+                .iter()
+                .find(|group| group.info.name == provider)
+                .unwrap();
+            format!("{}://{id}", group.info.scheme)
+        })
+        .collect();
+    let query_failures = omissions.len();
     let positions: Vec<_> = selected.map_or_else(
         || {
             scan.groups
@@ -399,7 +413,7 @@ pub fn run(
     }
     let logger = logger.as_ref().unwrap();
     let ai = ai.as_ref().unwrap();
-    let (groups, depth, included) = match crate::collect::reduction::run(
+    let (groups, depth, summary_failures) = match crate::collect::reduction::run(
         &entries,
         ai,
         &collect,
@@ -426,17 +440,22 @@ pub fn run(
             return Ok(false);
         }
     };
-    let rendered = crate::collect::prompts::final_prompt(
+    let rendered = crate::collect::prompts::final_prompts(
         since,
         until,
         &groups,
         depth,
-        entries.iter().any(|e| e.truncated),
         operation.mode,
         zh,
     )
-    .and_then(|prompt| {
-        crate::collect::llm::summary(ai, &prompt, collect.timeout)
+    .and_then(|prompts| {
+        prompts
+            .iter()
+            .map(|prompt| {
+                crate::collect::llm::summary(ai, prompt, collect.timeout)
+            })
+            .collect::<crate::Result<Vec<_>>>()
+            .map(|parts| parts.join("\n\n"))
     });
     let mut markdown = match rendered {
         Ok(markdown) => markdown,
@@ -463,8 +482,11 @@ pub fn run(
         zh,
         warnings,
     )?;
-    let failed = read_failed + query_failures;
-    let summary_failed = entries.len() - included;
+    let failed = read_failed.len() + query_failures;
+    let summary_failed = summary_failures.len();
+    let included = entries.len() - summary_failed;
+    omissions.extend(read_failed);
+    omissions.extend(summary_failures);
     if failed + summary_failed > 0 {
         markdown = format!(
             "> {}\n\n{markdown}",
@@ -488,6 +510,18 @@ pub fn run(
                 &[("count", scan.failed_providers.len().to_string())]
             )
         );
+    }
+    if !omissions.is_empty() {
+        omissions.sort();
+        omissions.dedup();
+        writeln!(markdown, "\n\n> {}", t("COLLECT_OMITTED_SESSIONS", zh, &[]))?;
+        for uri in omissions {
+            writeln!(
+                markdown,
+                "> - {}",
+                agent_dump_core::output::render::safe_line(&uri)
+            )?;
+        }
     }
     progress(
         "COLLECT_PROGRESS_WRITE_OUTPUT",

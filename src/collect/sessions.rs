@@ -15,7 +15,7 @@ pub fn read_entries(
     zh: bool,
     warnings: &mut impl Write,
     logger: Option<&crate::collect::log::Logger>,
-) -> crate::Result<(Vec<Entry>, usize)> {
+) -> crate::Result<(Vec<Entry>, Vec<String>)> {
     progress(
         "COLLECT_PROGRESS_SCAN_SESSIONS",
         &[
@@ -26,7 +26,7 @@ pub fn read_entries(
         warnings,
     )?;
     let mut entries = Vec::new();
-    let mut failed = 0;
+    let mut failed = Vec::new();
     let mut last_error = None;
     let mut completed = 0;
     for batch in positions.chunks(32) {
@@ -65,7 +65,7 @@ pub fn read_entries(
                 )?;
             }
             match result {
-                Ok((chunks, truncated)) => {
+                Ok(chunks) => {
                     if !chunks.is_empty() {
                         entries.push(Entry {
                             date: crate::date_input::parse(
@@ -75,13 +75,12 @@ pub fn read_entries(
                             session: session.clone(),
                             provider: group.info,
                             chunks,
-                            truncated,
                         });
                     }
                 }
                 Err(error) => {
-                    failed += 1;
                     let uri = format!("{}://{}", group.info.scheme, session.id);
+                    failed.push(uri.clone());
                     writeln!(
                         warnings,
                         "{}",
@@ -123,14 +122,14 @@ pub fn read_entries(
     {
         return Err(error);
     }
-    if failed > 0 {
+    if !failed.is_empty() {
         writeln!(
             warnings,
             "{}",
             t(
                 "WARN_SESSION_READ_FAILURES",
                 zh,
-                &[("count", failed.to_string())]
+                &[("count", failed.len().to_string())]
             )
         )?;
     }
