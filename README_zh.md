@@ -630,11 +630,18 @@ MIT
 agent-dump --list --json
 agent-dump --search 'timeout' --json -query 'provider:codex'
 agent-dump --stats --json
+agent-dump codex://SESSION_ID --head --json
+agent-dump --providers --json
 ```
 
 结果包含 `schema_version: 1`、`kind`（list/search/stats）、`status`（ok/partial/error）、`data`、`failed_providers`、`failed_sessions` 和 `error`。发现不完整或筛选读取失败时为 partial，健康结果仍可使用。列表和搜索的 data 为数组；统计为 total/by_provider/by_time 对象。未知目录、模型和消息数为 null；时间使用 UTC ISO 8601。统计中的 known_messages 只统计已知计数，unknown_message_count_sessions 单独记录未知会话数；时间桶按创建日期及本地日期计算。
 
-无匹配返回空数组和退出码 0；没有可用来源且未指定 Provider 范围时返回 error 和退出码 1。参数或执行错误可能只在 stderr 输出诊断，调用方必须检查退出码。`--json` 也支持消息上下文和 `--read` 分段读取模式，其他模式不支持。
+无匹配返回空数组和退出码 0；没有可用来源且未指定 Provider 范围时返回 error 和退出码 1。参数或执行错误可能只在 stderr 输出诊断，调用方必须检查退出码。`--json` 也支持消息上下文、`--read` 分段读取、`--head` 和 `--providers`，其他模式不支持。
+
+`agent-dump <URI> --head --json` 返回 `kind: "head"`，`data` 为单条会话元数据。字段与列表一致，并包含 `project`、`version`、`subtargets`。不请求完整正文；URI 使用规范形式，未知目录、模型和消息数保留为 null，可恢复的查找诊断产生 `status: "partial"`，详情在 stderr。
+
+`agent-dump --providers --json`（也可用 `--capabilities --json`）返回 `kind: "providers"`，`data` 为 Provider 数组。每项包含名称、显示名、scheme、标识符提示、可选 ID 前缀、支持的 `formats`，以及带 label/path/exists 的 `search_roots`。只检查能力和路径是否存在，不读取会话正文；路径存在不代表会话一定可读。两种结果均使用 `schema_version: 1`；失败时退出码非零，stdout 可能为空。
+
 
 ### 消息定位与上下文
 

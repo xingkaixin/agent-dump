@@ -1,4 +1,5 @@
 use agent_dump_core::query::{Query, filter::Selection, scanner::Scan};
+use agent_dump_core::{providers::contract::ProviderInfo, session::Session};
 use serde_json::{Value, json};
 use std::io::Write;
 
@@ -6,6 +7,21 @@ pub type Locations = std::collections::BTreeMap<
     (usize, usize),
     Vec<agent_dump_core::query::context::Location>,
 >;
+
+pub fn session_record(info: &ProviderInfo, session: &Session) -> Value {
+    json!({
+        "uri": format!("{}://{}", info.scheme, session.id),
+        "provider": info.name,
+        "id": session.id,
+        "title": session.title,
+        "created_at": session.created_at.iso_utc(),
+        "updated_at": session.updated_at.iso_utc(),
+        "working_directory": optional(&session.directory),
+        "model": optional(&session.model),
+        "message_count": session.message_count,
+        "message_count_completeness": if session.message_count.is_some() { "exact" } else { "unknown" }
+    })
+}
 
 pub fn list(
     scan: &Scan,
@@ -16,19 +32,7 @@ pub fn list(
 ) -> crate::Result<bool> {
     let record = |g: usize, s: usize| {
         let group = &scan.groups[g];
-        let session = &group.sessions[s];
-        json!({
-            "uri": format!("{}://{}", group.info.scheme, session.id),
-            "provider": group.info.name,
-            "id": session.id,
-            "title": session.title,
-            "created_at": session.created_at.iso_utc(),
-            "updated_at": session.updated_at.iso_utc(),
-            "working_directory": optional(&session.directory),
-            "model": optional(&session.model),
-            "message_count": session.message_count,
-            "message_count_completeness": if session.message_count.is_some() { "exact" } else { "unknown" }
-        })
+        session_record(group.info, &group.sessions[s])
     };
     let search = query
         .is_some_and(|q| q.mode == agent_dump_core::query::text::Mode::Terms);

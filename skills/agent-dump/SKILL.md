@@ -47,7 +47,7 @@ description: 使用 agent-dump 命令行导出、列出、筛选、按 URI 直�
 - 用户给了 `--collect`：使用 collect 模式，默认调用已配置的 AI 总结。
 - 用户要使用自有外部 agent 汇总、不配置 API，或只要汇总提示词：使用 `--collect --emit-prompt`；详细用法见 recipes 的“外部 agent 汇总”。
 - 用户给了 `--stats`：使用 statistics 模式（显示最近 N 天的会话使用统计）。
-- 用户要在组装命令前检查 provider 能力：使用 `--providers`（`--capabilities` 等价）。
+- 用户要在组装命令前检查 provider 能力：使用 `--providers`（`--capabilities` 等价）；Agent 解析时加 `--json`，读取格式支持和搜索路径，不从路径存在推断会话一定可读。
 - 用户给了 `--search`：使用 search 模式（本地 SQLite FTS5 全文搜索）。可与 `--list` 组合使用。
 - 用户给了 `--config view` 或 `--config edit`：使用 config 模式。
 - 用户要”先看列表/筛选”：使用 `--list` 模式。
@@ -129,7 +129,9 @@ agent-dump --stats --json
 
 The envelope contains `schema_version: 1`, `kind` (list/search/stats), `status` (ok/partial/error), `data`, `failed_providers`, `failed_sessions`, and `error`. Incomplete discovery or failed query reads produce partial results. List/search data is an array; statistics data contains total/by_provider/by_time. Unknown directories, models and message counts are null; timestamps use UTC ISO 8601. Statistics expose known_messages and unknown_message_count_sessions separately. Time buckets use creation dates in the local timezone.
 
-No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context and `--read` also accept `--json`; other modes reject it.
+No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context, `--read`, `--head`, and `--providers` also accept `--json`; other modes reject it.
+
+Use `agent-dump <URI> --head --json` for one session's metadata without requesting the full transcript (`kind=head`). Use `agent-dump --providers --json` for Provider identities, formats, and search-root existence (`kind=providers`). Both use `schema_version=1` and `data`; unknown directories/models/message counts stay null, and partial lookup diagnostics go to stderr. See the machine-output recipe for field definitions.
 
 ### Message locations and context
 
