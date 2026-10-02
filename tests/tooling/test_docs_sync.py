@@ -151,6 +151,16 @@ class TestLandingPageMatchesTheRealCli:
         previewed = set(re.findall(r"([a-z][a-z0-9]*)://", self._scene_block()))
         assert not previewed - registered
 
+    def test_supported_tools_cover_the_provider_registry(self, cli):
+        result = cli.run("rust", "--providers", "--json")
+        assert result.returncode == 0, result.stderr
+        registered = {provider["scheme"] for provider in json.loads(result.stdout)["data"]}
+        start = self.SCENES.index("export const providers")
+        block = self.SCENES[start : self.SCENES.index("] as const;", start)]
+        listed = set(re.findall(r"example: \"([a-z][a-z0-9]*)://", block))
+
+        assert listed == registered
+
     def test_interactive_scene_shows_the_two_stage_selection(self):
         """真实流程是先选 Provider 再选该 Provider 的会话，不是跨 Provider 的单一列表。"""
         catalog = json.loads((REPO_ROOT / "resources/locales/en.json").read_text(encoding="utf-8"))
