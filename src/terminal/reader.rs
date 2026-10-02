@@ -486,6 +486,93 @@ mod tests {
     use ratatui::{Terminal, backend::TestBackend};
 
     #[test]
+    #[ignore = "Manual release benchmark; see docs/benchmarks/reader-redraw.md"]
+    fn benchmark_reader_redraw() {
+        use std::hash::{DefaultHasher, Hash, Hasher};
+        use std::time::Instant;
+
+        for (name, chars, row_count) in [
+            ("small", 128, 1),
+            ("many-sessions", 128, 1000),
+            ("large-message", 8 * 1024 * 1024, 1),
+        ] {
+            let session = Session::new(
+                "benchmark".into(),
+                "Reader benchmark".into(),
+                std::path::PathBuf::new(),
+                Timestamp::UNIX_EPOCH,
+                Timestamp::UNIX_EPOCH,
+            );
+            let data = session.payload(
+                vec![Message::new(
+                    "message".into(),
+                    "assistant",
+                    0,
+                    vec![Part::text(
+                        format!("{}\nneedle", "x".repeat(chars)),
+                        0,
+                    )],
+                )],
+                Stats::default(),
+            );
+            let rows = (0..row_count)
+                .map(|i| Row {
+                    title: format!("Reader benchmark session {i}"),
+                    detail: "Codex · 2026-10-02 12:00".into(),
+                    group: format!("codex://benchmark-{i}"),
+                })
+                .collect::<Vec<_>>();
+            let mut state = State {
+                body_focus: true,
+                expanded: true,
+                query: "needle".into(),
+                ..State::default()
+            };
+            state.search(Some(&data));
+            assert_eq!(state.hits, vec![0]);
+            state.reflow(Some(&data), None, 65, false);
+            state.offset = state.hit_offset(0);
+            let mut terminal =
+                Terminal::new(TestBackend::new(100, 24)).unwrap();
+            for _ in 0..5 {
+                terminal
+                    .draw(|frame| {
+                        draw(frame, &rows, &state, "benchmark", false);
+                    })
+                    .unwrap();
+            }
+            let iterations = 200;
+            let start = Instant::now();
+            for _ in 0..iterations {
+                terminal
+                    .draw(|frame| {
+                        draw(frame, &rows, &state, "benchmark", false);
+                    })
+                    .unwrap();
+            }
+            let elapsed = start.elapsed().as_secs_f64();
+            let screen = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(ratatui::buffer::Cell::symbol)
+                .collect::<String>();
+            assert!(screen.contains("needle"));
+            let mut digest = DefaultHasher::new();
+            format!("{:?}", terminal.backend().buffer()).hash(&mut digest);
+            println!(
+                "REDRAW_BENCH {}",
+                serde_json::json!({
+                    "name": name, "chars": chars, "rows": row_count,
+                    "iterations": iterations, "elapsed_seconds": elapsed,
+                    "screen_hash": format!("{:016x}", digest.finish())
+                })
+            );
+        }
+    }
+
+    #[test]
     fn reader_renders_wide_narrow_and_searches_tool_content() {
         let session = Session::new(
             "fixture".into(),
