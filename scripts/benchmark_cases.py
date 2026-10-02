@@ -119,8 +119,11 @@ def check_handoff(output: str, profile: Profile, root: Path) -> dict[str, Any]:
     require(context["discovery_failed_count"] == context["query_read_failed_count"] == 0, "handoff reports failures")
     context.pop("generated_at")
     for entry in entries:
-        require(entry["read_argv"][-3:] == [entry["uri"], "--format", "print"], "invalid handoff read command")
-        entry["read_argv"] = ["<CLI>", *entry["read_argv"][-3:]]
+        require(
+            entry["read_argv"][-5:] == [entry["uri"], "--read", "--order", "asc", "--json"],
+            "invalid paginated handoff read command",
+        )
+        entry["read_argv"] = ["<CLI>", *entry["read_argv"][-5:]]
         entry.pop("read_command")
     normalized = json.dumps([context, *entries], ensure_ascii=False, sort_keys=True).replace(str(root), "<ROOT>")
     require(not (root / "report.md").exists(), "emit-prompt unexpectedly wrote a report")

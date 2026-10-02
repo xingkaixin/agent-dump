@@ -37,8 +37,10 @@ pub fn handoff(
                 &std::env::current_exe()?,
             ),
             uri.clone(),
-            "--format".into(),
-            "print".into(),
+            "--read".into(),
+            "--order".into(),
+            "asc".into(),
+            "--json".into(),
         ];
         let command = crate::command::shell_command(&argv);
         let record = json!({"uri":uri, "date":session.created_at.format_local("%Y-%m-%d"), "created_at":session.created_at.iso_local(), "updated_at":session.updated_at.iso_local(), "title":session.title, "project_directory":session.working_directory(), "read_argv":argv, "read_command":command});

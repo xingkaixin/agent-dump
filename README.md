@@ -443,9 +443,10 @@ confirm a replacement entry point before proceeding.
   otherwise regenerate the prompt at most once with the original selection conditions and capture output directly.
   Regeneration creates a new candidate manifest, not the old snapshot. If the conditions are unknown or recovery fails,
   ask the user before delivering a partial report from a damaged manifest.
-- Save each session's stdout/stderr separately and read the transcript in bounded chunks through EOF; successful export
-  does not mean complete reading. Analyze only visible user/assistant text and do not switch to JSON to inspect tool results.
-  A complete manifest with individual unreadable sources may produce a report disclosing those gaps.
+- Read each session with `--read --order asc --json`, then continue with `--read --cursor <next_cursor> --json` until
+  `has_more=false`. Save each page and its diagnostics separately. Process every fragment of long messages; a successful
+  page request does not mean complete reading. Analyze only visible user/assistant text without `--details`. Partial reads,
+  missing pages, and changing revisions must be disclosed; never combine notes from different revisions.
 - Ignore sessions without substantive visible dialogue. Keep approvals or duplicate transcripts only when they change a
   request, decision, or outcome, and keep the current reporting process out of the work being summarized. Replacing an existing
   report requires explicit user permission; prepare and verify the new content before replacing the old report.
