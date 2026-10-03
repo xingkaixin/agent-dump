@@ -111,7 +111,7 @@ curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/ins
 安装器校验 SHA-256 和可执行文件版本，成功后才替换旧版本。默认安装到 `~/.local/bin`，不使用 sudo、不修改 shell 配置；需要时会提示配置 PATH。再次运行即可更新。指定版本或目录时，将变量传给 `sh`：
 
 ```bash
-curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | AGENT_DUMP_VERSION=1.1.0 AGENT_DUMP_INSTALL_DIR="$HOME/.local/bin" sh
+curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | AGENT_DUMP_VERSION=1.1.1 AGENT_DUMP_INSTALL_DIR="$HOME/.local/bin" sh
 ```
 
 默认位置的脚本安装可通过 `rm "$HOME/.local/bin/agent-dump"` 卸载。安装器不会覆盖包管理器的符号链接，这类安装请通过原包管理器更新。
