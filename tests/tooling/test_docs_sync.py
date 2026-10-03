@@ -107,77 +107,53 @@ class TestChangelogLinksResolve:
         assert (REPO_ROOT / "docs" / "zh" / "CHANGELOG.md").is_file()
 
 
-class TestLandingPageMatchesTheRealCli:
-    """AD-177：landing page 自称是 truthful preview，那它的行为声明就得是真的。
+class TestWebsiteMatchesTheRealCli:
+    GUIDES = REPO_ROOT / "web" / "src" / "pages"
+    PROVIDERS = (REPO_ROOT / "web" / "src" / "lib" / "i18n.ts").read_text(encoding="utf-8")
 
-    只锁真实 CLI 的不变量——命令、字段标签、默认输出根、Provider URI scheme。
-    颜色、时间戳、排名数值这些会随环境变化，不进断言。
-    """
-
-    SCENES = (REPO_ROOT / "web" / "src" / "lib" / "i18n.ts").read_text(encoding="utf-8")
-
-    @staticmethod
-    def _scene_block() -> str:
-        content = TestLandingPageMatchesTheRealCli.SCENES
-        start = content.index("export const terminalScenes")
-        return content[start : content.index("];", start)]
-
-    def test_every_previewed_flag_exists_in_the_cli(self, cli):
+    def test_every_guide_flag_exists_in_the_cli(self, cli):
         declared = TestReadmeDocumentsEveryCliFlag._declared_option_strings(cli)
-
-        block = self._scene_block()
-        commands = re.findall(r"command: [\"'](agent-dump [^\"']+)[\"']", block)
-        assert commands, "至少要有一个终端场景"
-
+        commands = []
+        for guide in self.GUIDES.rglob("*.md"):
+            for block in re.findall(r"```sh\n(.*?)```", guide.read_text(encoding="utf-8"), re.S):
+                commands.extend(line for line in block.splitlines() if line.startswith("agent-dump "))
+        assert commands
         for command in commands:
             for token in shlex.split(command)[1:]:
                 if token.startswith("-"):
-                    assert token in declared, f"{command!r} 用了 CLI 没有的参数 {token}"
+                    assert token in declared, f"{command!r} uses unknown option {token}"
 
-    def test_the_markdown_scene_uses_the_real_default_output_root(self, cli):
+    def test_export_guides_use_the_real_output_directory(self, cli):
         from cli_fixture import IDENTITY
 
-        result = cli.run("rust", f"codex://{IDENTITY}", "--format", "md", "--lang", "en")
+        result = cli.run(
+            "rust",
+            f"codex://{IDENTITY}",
+            "--format",
+            "markdown",
+            "--output",
+            "./exports",
+            "--lang",
+            "en",
+        )
         assert result.returncode == 0, result.stderr
-        exports = list(cli.root.glob("sessions/codex/*.md"))
-        assert len(exports) == 1
-        assert "sessions/codex/" in self._scene_block()
-        assert "./exports/" not in self._scene_block()
+        assert len(list(cli.root.glob("exports/codex/*.md"))) == 1
+        for guide in self.GUIDES.rglob("export-codex-session.md"):
+            assert "./exports/codex/" in guide.read_text(encoding="utf-8")
 
-    def test_previewed_uris_use_registered_schemes(self, cli):
-        result = cli.run("rust", "--providers", "--lang", "en")
+    def test_guide_uris_use_registered_schemes(self, cli):
+        result = cli.run("rust", "--providers", "--json")
         assert result.returncode == 0, result.stderr
-        registered = set(re.findall(r"([a-z][a-z0-9]*)://", result.stdout))
-        previewed = set(re.findall(r"([a-z][a-z0-9]*)://", self._scene_block()))
-        assert not previewed - registered
+        registered = {provider["scheme"] for provider in json.loads(result.stdout)["data"]}
+        for guide in self.GUIDES.rglob("*.md"):
+            schemes = set(re.findall(r"([a-z][a-z0-9]*)://", guide.read_text(encoding="utf-8")))
+            assert not (schemes - {"https"} - registered)
 
     def test_supported_tools_cover_the_provider_registry(self, cli):
         result = cli.run("rust", "--providers", "--json")
         assert result.returncode == 0, result.stderr
         registered = {provider["scheme"] for provider in json.loads(result.stdout)["data"]}
-        start = self.SCENES.index("export const providers")
-        block = self.SCENES[start : self.SCENES.index("] as const;", start)]
-        listed = set(re.findall(r"example: \"([a-z][a-z0-9]*)://", block))
-
+        start = self.PROVIDERS.index("export const providers")
+        block = self.PROVIDERS[start : self.PROVIDERS.index("] as const;", start)]
+        listed = set(re.findall(r'example: "([a-z][a-z0-9]*)://', block))
         assert listed == registered
-
-    def test_interactive_scene_shows_the_two_stage_selection(self):
-        """真实流程是先选 Provider 再选该 Provider 的会话，不是跨 Provider 的单一列表。"""
-        catalog = json.loads((REPO_ROOT / "resources/locales/en.json").read_text(encoding="utf-8"))
-        agent_prompt = catalog["SELECT_AGENT_PROMPT"]
-        sessions_header = catalog["AVAILABLE_SESSIONS"]
-
-        block = self._scene_block()
-        assert agent_prompt in block, "缺少选择 Provider 这一步"
-        assert sessions_header in block
-        assert block.index(agent_prompt) < block.index(sessions_header), "Provider 选择在会话列表之前"
-
-    def test_search_scene_uses_the_real_header_and_labels(self):
-        catalog = json.loads((REPO_ROOT / "resources/locales/en.json").read_text(encoding="utf-8"))
-        header = catalog["SEARCH_HEADER"].format(days=7, query="auth timeout").strip().lstrip("🔎 ")
-
-        block = self._scene_block()
-        assert header in block, f"search header 与 CLI 不一致，实际是: {header!r}"
-        assert "ranked by relevance" not in block, "renderer 不打印这一行"
-        for label in ("Provider:", "URI:", "Snippet:"):
-            assert label in block, f"search 结果缺少真实字段标签 {label}"

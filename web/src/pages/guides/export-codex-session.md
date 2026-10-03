@@ -1,5 +1,9 @@
 ---
 layout: ../../layouts/Guide.astro
+slug: export-codex-session
+category: export
+order: 1
+updated: "2026-10-03"
 locale: en
 title: Export a Codex session to Markdown
 description: Find a local Codex session, copy its URI, and export it to Markdown or JSON with Agent Dump. Includes installation, output paths, and missing-session checks.

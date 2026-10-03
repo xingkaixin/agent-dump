@@ -19,6 +19,9 @@ const version = versionMatch[1];
 // https://astro.build/config
 export default defineConfig({
   site: "https://agent-dump.xingkaixin.me",
+  markdown: {
+    shikiConfig: { themes: { light: "github-light", dark: "github-dark" } },
+  },
   // `en` serves from `/`; translated locales use stable, prefixed paths.
   i18n: {
     defaultLocale: "en",

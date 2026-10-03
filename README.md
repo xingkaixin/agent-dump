@@ -4,7 +4,7 @@
 
 A local AI session tool for individual developers and AI Agents. Find, read, export, and reuse conversations from supported coding tools without modifying their source data.
 
-Step-by-step guide: [Export a Codex session to Markdown](https://agent-dump.xingkaixin.me/guides/export-codex-session/).
+[Usage guides](https://agent-dump.xingkaixin.me/guides/): export Codex or Claude Code sessions, search past decisions, hand context to an agent, create work reports, and save conversations to Obsidian.
 
 ## Get started
 

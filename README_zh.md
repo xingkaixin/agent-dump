@@ -4,7 +4,7 @@
 
 面向个人开发者与 AI Agent 的本地 AI 会话工具。查找、读取、导出和复用已支持编码工具的历史对话，不修改会话源数据。
 
-操作教程：[将 Codex 会话导出为 Markdown](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/)。
+[使用说明](https://agent-dump.xingkaixin.me/zh/guides/)：导出 Codex 或 Claude Code 会话、搜索历史决策、交接 Agent 上下文、生成工作报告，以及保存到 Obsidian。
 
 ## 快速开始
 

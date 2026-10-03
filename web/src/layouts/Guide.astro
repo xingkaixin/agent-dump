@@ -2,38 +2,151 @@
 import Base from "./Base.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import { codexGuidePaths } from "../lib/guides";
-import { site } from "../lib/i18n";
+import {
+  getGuides,
+  guidePaths,
+  guideIndexPaths,
+  guideUi,
+  type Guide,
+} from "../lib/guides";
+import { site, ui } from "../lib/i18n";
+import "../styles/guides.css";
 
 interface Props {
-  frontmatter: { locale: "en" | "zh"; title: string; description: string };
+  frontmatter: Guide;
+  headings: { depth: number; slug: string; text: string }[];
 }
-
-const { locale, title, description } = Astro.props.frontmatter;
+const { frontmatter: guide, headings } = Astro.props;
+const { locale, title, description, slug, updated } = guide;
+const t = guideUi[locale];
+const titleWords = locale === "zh"
+  ? [...new Intl.Segmenter("zh", { granularity: "word" }).segment(title)]
+  : null;
+const paths = await guidePaths(slug);
+const related = (await getGuides(locale))
+  .filter((entry) => entry.slug !== slug)
+  .sort(
+    (a, b) =>
+      Number(b.category === guide.category) -
+      Number(a.category === guide.category),
+  )
+  .slice(0, 2);
+const breadcrumbs = [
+  { name: t.home, path: site.paths[locale] },
+  { name: t.label, path: guideIndexPaths[locale] },
+  { name: title, path: paths[locale]! },
+];
 ---
 
-<Base locale={locale} page={{ title: `${title} | Agent Dump`, description, paths: codexGuidePaths }}>
-  <Header locale={locale} paths={codexGuidePaths} homeLinks />
-  <main id="main" tabindex="-1" class="shell">
-    <article class="guide">
-      <a class="guide-back" href={site.paths[locale]}>{locale === "zh" ? "Agent Dump 首页" : "Agent Dump home"}</a>
-      <h1>{title}</h1>
-      <div class="guide-content"><slot /></div>
+<Base
+  locale={locale}
+  page={{
+    title: `${title} | Agent Dump`,
+    description,
+    paths,
+    article: { updated },
+    breadcrumbs,
+  }}
+>
+  <Header locale={locale} paths={paths} homeLinks />
+  <main id="main" tabindex="-1" class="shell guide-page">
+    <nav
+      class="breadcrumbs"
+      aria-label={locale === "zh" ? "面包屑导航" : "Breadcrumb"}
+    >
+      <a href={site.paths[locale]}>{t.home}</a>
+      <span aria-hidden="true">/</span>
+      <a href={guideIndexPaths[locale]}>{t.label}</a>
+    </nav>
+    <article class="guide-layout">
+      <header class="guide-header">
+        <p class="guide-category">{t.categories[guide.category]}</p>
+        <h1>{titleWords ? titleWords.map(({ segment, isWordLike }) => isWordLike ? <span class="title-word">{segment}</span> : segment) : title}</h1>
+        <p class="guide-deck">{description}</p>
+        <p class="guide-meta">
+          <a href={site.author.url}>{site.author.name}</a>
+          <span>
+            {t.updated} <time datetime={updated}>{updated}</time>
+          </span>
+        </p>
+      </header>
+      <div class="guide-body">
+        <div
+          class="guide-content"
+          data-copy={ui[locale].copy}
+          data-copied={ui[locale].copied}
+          data-copy-error={
+            locale === "zh"
+              ? "复制失败，请手动选择命令"
+              : "Copy failed. Select the command manually."
+          }
+        >
+          <slot />
+        </div>
+        <div class="guide-related">
+          <h2>{t.related}</h2>
+          {related.map((entry) => (
+            <a href={entry.href}>
+              {entry.title}
+              <span aria-hidden="true">↗</span>
+            </a>
+          ))}
+        </div>
+      </div>
+      <aside class="guide-aside">
+        <nav aria-label={t.contents} class="guide-toc">
+          <p>{t.contents}</p>
+          {headings
+            .filter((heading) => heading.depth === 2)
+            .map((heading) => (
+              <a href={`#${heading.slug}`}>{heading.text}</a>
+            ))}
+        </nav>
+        <a class="text-link" href={guideIndexPaths[locale]}>
+          {t.all}
+          <span aria-hidden="true">↗</span>
+        </a>
+      </aside>
     </article>
   </main>
   <Footer locale={locale} />
 </Base>
 
-<style is:global>
-  .guide { max-width: 48rem; margin-inline: auto; padding-block: 3rem 5rem; }
-  .guide-back { display: inline-block; margin-bottom: 1.5rem; }
-  .guide h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.2; letter-spacing: -0.035em; }
-  .guide-content { line-height: 1.85; overflow-wrap: anywhere; }
-  .guide-content h2 { margin-top: 2.5rem; margin-bottom: 0.75rem; font-size: 1.4rem; line-height: 1.4; }
-  .guide-content p, .guide-content ul, .guide-content pre { margin-block: 1rem; }
-  .guide-content ul { padding-left: 1.5rem; list-style: disc; }
-  .guide-content li + li { margin-top: 0.5rem; }
-  .guide a, .guide-link { text-decoration: underline; text-underline-offset: 0.2em; }
-  .guide-content pre { padding: 1rem; border: 1px solid var(--color-line); border-radius: var(--radius-xs); overflow-x: auto; font-size: 0.875rem; }
-  .guide-content :not(pre) > code { font-size: 0.9em; }
-</style>
+<script>
+  import { copyText } from "../lib/clipboard";
+  const content = document.querySelector<HTMLElement>(".guide-content");
+  if (content) {
+    for (const pre of content.querySelectorAll("pre")) {
+      const command = pre.querySelector("code")?.textContent;
+      if (!command) continue;
+      const wrapper = document.createElement("div");
+      wrapper.className = "guide-code";
+      pre.before(wrapper);
+      wrapper.append(pre);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = content.dataset.copy!;
+      button.className = "guide-copy";
+      wrapper.prepend(button);
+      const status = document.createElement("span");
+      status.className = "sr-only";
+      status.setAttribute("role", "status");
+      wrapper.append(status);
+      let reset: ReturnType<typeof setTimeout>;
+      button.addEventListener("click", async () => {
+        try {
+          if (!(await copyText(command))) throw new Error("Copy rejected");
+          status.textContent = content.dataset.copied!;
+          button.textContent = content.dataset.copied!;
+          clearTimeout(reset);
+          reset = setTimeout(() => {
+            button.textContent = content.dataset.copy!;
+            status.textContent = "";
+          }, 2000);
+        } catch {
+          status.textContent = content.dataset.copyError!;
+        }
+      });
+    }
+  }
+</script>

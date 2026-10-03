@@ -1,0 +1,111 @@
+---
+import Base from "../layouts/Base.astro";
+import Header from "./Header.astro";
+import Footer from "./Footer.astro";
+import { MagnifyingGlassIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
+import { getGuides, guideIndexPaths, guideUi } from "../lib/guides";
+import { site, type Locale } from "../lib/i18n";
+import "../styles/guides.css";
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const t = guideUi[locale];
+const guides = await getGuides(locale);
+---
+
+<Base
+  locale={locale}
+  page={{
+    title: `${t.label} | Agent Dump`,
+    description: t.description,
+    paths: guideIndexPaths,
+    breadcrumbs: [
+      { name: t.home, path: site.paths[locale] },
+      { name: t.label, path: guideIndexPaths[locale] },
+    ],
+  }}
+>
+  <Header locale={locale} paths={guideIndexPaths} homeLinks />
+  <main id="main" tabindex="-1" class="shell guide-index">
+    <header class="guide-index__header">
+      <p class="eyebrow">{t.label}</p>
+      <h1>{t.title}</h1>
+      <p>{t.description}</p>
+    </header>
+    <div class="guide-filters" data-guide-filters hidden>
+      <div role="group" aria-label={t.filter} class="guide-filter-buttons">
+        <button type="button" data-category="all" aria-pressed="true">
+          {t.all}
+        </button>
+        {Object.entries(t.categories).map(([key, label]) => (
+          <button type="button" data-category={key} aria-pressed="false">
+            {label}
+          </button>
+        ))}
+      </div>
+      <label class="guide-search">
+        <MagnifyingGlassIcon size={18} aria-hidden="true" />
+        <span class="sr-only">{t.search}</span>
+        <input type="search" placeholder={t.search} />
+      </label>
+    </div>
+    <div class="guide-list">
+      {guides.map((guide) => (
+        <article
+          class="guide-card"
+          data-guide-card
+          data-category={guide.category}
+        >
+          <a href={guide.href}>
+            <span class="guide-category">{t.categories[guide.category]}</span>
+            <h2>{guide.title}</h2>
+            <p>{guide.description}</p>
+            <span class="guide-card__footer">
+              {t.read}
+              <ArrowUpRightIcon size={22} aria-hidden="true" />
+            </span>
+          </a>
+        </article>
+      ))}
+    </div>
+    <p class="guide-no-results" role="status" hidden>
+      {t.empty}
+    </p>
+  </main>
+  <Footer locale={locale} />
+</Base>
+
+<script>
+  const filters = document.querySelector<HTMLElement>("[data-guide-filters]");
+  if (filters) {
+    filters.hidden = false;
+    const input = filters.querySelector<HTMLInputElement>("input")!;
+    const buttons = [
+      ...filters.querySelectorAll<HTMLButtonElement>("button[data-category]"),
+    ];
+    const cards = [
+      ...document.querySelectorAll<HTMLElement>("[data-guide-card]"),
+    ];
+    const empty = document.querySelector<HTMLElement>(".guide-no-results")!;
+    let category = "all";
+    function update() {
+      const query = input.value.trim().toLocaleLowerCase();
+      for (const card of cards) {
+        card.hidden =
+          (category !== "all" && card.dataset.category !== category) ||
+          !card.textContent?.toLocaleLowerCase().includes(query);
+      }
+      empty.hidden = cards.some((card) => !card.hidden);
+    }
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        category = button.dataset.category!;
+        for (const item of buttons)
+          item.setAttribute("aria-pressed", String(item === button));
+        update();
+      });
+    }
+    input.addEventListener("input", update);
+  }
+</script>
