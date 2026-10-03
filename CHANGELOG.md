@@ -4,6 +4,27 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-03
+
+### Added
+
+- Add bounded session reads with `--read`, message and character budgets, role/text filters, revision-bound continuation cursors, and `--read-prompt` instructions for external Agents (#414).
+- Add `--head --json` session metadata and `--providers --json` capability output without requesting full transcripts (#417).
+- Export selected message context as JSON or Markdown while retaining the Session URI, revision-bound locator, original message range, and partial-source diagnostics (#418).
+- Add `--time-field updated` to list, search, browse, and interactive selection to find recently active sessions; creation time remains the default (#419).
+
+### Fixed
+
+- Process all eligible collect conversation text through bounded chunks instead of truncating each session; disclose omitted sessions in partial reports and reject oversized model inputs explicitly (#415).
+- Generate paginated collect handoff reads and require continuation through `has_more=false`, including long-message fragments and revision checks (#416).
+
+### Changed
+
+- Filter search scope before rendering and skip unchanged full-text index writes; stream revision hashing to avoid an extra serialized transcript buffer (#422–#424).
+- Reuse terminal reader layout/search work and incrementally fold Claude Code and Codex assistant messages (#425, #426).
+- Record synthetic performance measurements, including read-batch concurrency comparisons that retain the existing batch size (#422–#427).
+- Clarify developer and Agent onboarding, CLI compatibility, and landing page workflows; migrate the macOS ARM64 artifact runner to macOS 15 (#420, #421, #428).
+
 ## [1.1.0] - 2026-09-30
 
 ### Added
@@ -1195,3 +1216,4 @@
 
 [1.0.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.0.0
 [1.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.0
+[1.1.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.1

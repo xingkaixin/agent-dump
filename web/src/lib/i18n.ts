@@ -253,9 +253,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.1.1",
+        date: "2026-10-03",
+        isLatest: true,
+        title: "Find Recent Work and Reuse Conversations with Sources",
+        description:
+          "Find recently active sessions from Codex, Claude Code, Cursor, Kimi, OpenCode, ZCode, Pi, and other supported tools. Give agents bounded reading pages and prompt handoff instructions, or export selected context with source locators. AI collect now processes all eligible conversation text through chunks and marks incomplete reports. Full-text search and terminal reading also avoid repeated work.",
+        command: "npx @agent-dump/cli@1.1.1 --list --time-field updated --days 7 --json",
+        tags: ["Recent Activity", "Agent Reading", "Cited Context"],
+      },
+      {
         version: "v1.1.0",
         date: "2026-09-30",
-        isLatest: true,
         title: "Browse Sessions and Read Search Results in Context",
         description:
           "Browse Codex, Claude Code, Cursor, Kimi, OpenCode, ZCode, Pi, and other supported AI sessions in your terminal. Search within a conversation, inspect tool details, and export the selected session. Full-text search can now return message locators for reading nearby context, while JSON query output lets scripts and agents use results directly. Source sessions remain read-only.",
@@ -418,9 +427,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.1.1",
+        date: "2026-10-03",
+        isLatest: true,
+        title: "查找最近活跃会话，保留来源复用对话",
+        description:
+          "查找 Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi 等工具最近活跃的会话，让 Agent 按页读取并接收提示词交接说明，或导出带来源定位符的上下文片段。AI collect 通过分块处理全部符合条件的对话正文，并标记不完整报告。全文搜索与终端阅读也减少了重复处理。",
+        command: "npx @agent-dump/cli@1.1.1 --list --time-field updated --days 7 --json",
+        tags: ["最近活动", "Agent 读取", "来源引用"],
+      },
+      {
         version: "v1.1.0",
         date: "2026-09-30",
-        isLatest: true,
         title: "终端浏览会话，定位搜索结果的上下文",
         description:
           "在终端浏览 Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi 等工具的 AI 会话，搜索对话正文、查看工具详情并导出选中的会话。全文搜索可返回消息定位符，直接读取命中位置附近的上下文；JSON 查询输出让脚本和 Agent 直接使用结果。源会话保持只读。",
@@ -585,9 +603,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.1.1",
+        date: "2026-10-03",
+        isLatest: true,
+        title: "最近の作業を見つけ、出典付きで会話を再利用",
+        description:
+          "Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi などで最近更新されたセッションを検索。エージェントにはページ単位の読み取りと引き継ぎ手順を渡し、必要な文脈は出典の位置情報付きでエクスポートできます。AI collect は対象となる会話本文を分割してすべて処理し、不完全なレポートを明示します。全文検索とターミナル閲覧の重複処理も削減しました。",
+        command: "npx @agent-dump/cli@1.1.1 --list --time-field updated --days 7 --json",
+        tags: ["最近の活動", "エージェントの読み取り", "出典付きの文脈"],
+      },
+      {
         version: "v1.1.0",
         date: "2026-09-30",
-        isLatest: true,
         title: "ターミナルでセッションを閲覧し、検索結果の文脈を読む",
         description:
           "Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi などの AI セッションをターミナルで閲覧。会話内を検索し、ツールの詳細を確認して、選択したセッションをエクスポートできます。全文検索で得たメッセージの位置から前後の文脈を読み、JSON クエリ出力をスクリプトやエージェントで直接利用できます。元のセッションは読み取り専用です。",
