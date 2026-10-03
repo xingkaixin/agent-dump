@@ -50,6 +50,7 @@ export async function getGuides(locale: Locale) {
 export const guideUi = {
   en: {
     label: "Guides",
+    seoTitle: "AI Session Export, Search & Handoff Guides",
     title: "Make your history useful.",
     description:
       "Practical guides to finding, exporting, and reusing your AI coding conversations. Real commands, from the first search to the next project.",
@@ -72,6 +73,7 @@ export const guideUi = {
   },
   zh: {
     label: "使用说明",
+    seoTitle: "AI 会话导出、搜索与上下文交接指南",
     title: "让历史对话，继续有用。",
     description:
       "从找回一次讨论，到导出记录、交接上下文和整理周报。每篇指南都从具体场景出发，提供可以照着操作的命令。",
@@ -94,6 +96,7 @@ export const guideUi = {
   },
   ja: {
     label: "使い方",
+    seoTitle: "AIセッションのエクスポート・検索・引き継ぎガイド",
     title: "対話の履歴を、次の仕事へ。",
     description:
       "AIとの対話の検索、エクスポート、引き継ぎを実際のコマンドで解説します。記事は英語で提供しています。",

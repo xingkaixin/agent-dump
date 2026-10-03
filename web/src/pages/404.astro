@@ -1,0 +1,27 @@
+---
+import Base from "../layouts/Base.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import "../styles/guides.css";
+---
+
+<Base
+  locale="en"
+  noindex
+  page={{
+    title: "Page not found | Agent Dump",
+    description: "This page could not be found. Find Agent Dump installation options and guides.",
+    paths: { en: "/404/" },
+  }}
+>
+  <Header locale="en" homeLinks />
+  <main id="main" tabindex="-1" class="shell guide-index">
+    <header class="guide-index__header">
+      <p class="eyebrow">404</p>
+      <h1>Page not found</h1>
+      <p>The page may have moved, or the address may be incorrect.</p>
+      <a class="text-link" href="/guides/">Browse the guides</a>
+    </header>
+  </main>
+  <Footer locale="en" />
+</Base>

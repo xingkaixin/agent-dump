@@ -9,6 +9,7 @@ import { version } from "../lib/version";
 
 interface Props {
   locale: Locale;
+  noindex?: boolean;
   page?: {
     title: string;
     description: string;
@@ -18,7 +19,7 @@ interface Props {
   };
 }
 
-const { locale, page } = Astro.props;
+const { locale, page, noindex = false } = Astro.props;
 const t = ui[locale];
 const paths = page?.paths ?? site.paths;
 const canonical = new URL(paths[locale]!, site.origin).href;
@@ -149,10 +150,10 @@ const jsonLd = {
     <meta name="theme-color" content="#f1f3ef" />
     <meta name="description" content={description} />
     <meta name="author" content={site.author.name} />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content={noindex ? "noindex, follow" : "index, follow, max-image-preview:large"} />
     <title>{title}</title>
-    <link rel="canonical" href={canonical} />
-    {alternates.map((alt) => (
+    {!noindex && <link rel="canonical" href={canonical} />}
+    {!noindex && alternates.map((alt) => (
       <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
     ))}
     <link rel="icon" type="image/png" href={site.logo} />
@@ -180,17 +181,20 @@ const jsonLd = {
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:image:alt" content={t.ogImageAlt} />
 
-    <script
+    {!noindex && <script
       is:inline
       type="application/ld+json"
       set:html={JSON.stringify(jsonLd, null, 2)}
-    />
-    <script
+    />}
+    {!noindex && <script
       is:inline
       defer
       src="https://umami.xingkaixin.me/script.js"
       data-website-id="7141781d-b011-454b-a16b-8c1e524140c6"
-    ></script>
+      data-domains="agent-dump.xingkaixin.me"
+      data-exclude-hash="true"
+      data-performance="true"
+    ></script>}
     <script is:inline>
       (function () {
         var root = document.documentElement;

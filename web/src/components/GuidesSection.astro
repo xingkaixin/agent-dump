@@ -8,7 +8,7 @@ interface Props {
 const { locale } = Astro.props;
 const t = guideUi[locale];
 const guides = (await getGuides(locale)).filter((guide) =>
-  [1, 3, 4].includes(guide.order),
+  [1, 2, 3].includes(guide.order),
 );
 ---
 

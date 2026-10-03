@@ -1,4 +1,19 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+
+test("missing pages have a noindex 404 and legacy sitemap redirects to the index", async ({ page, request }) => {
+  const response = await page.goto("/missing-seo-page/");
+  expect(response?.status()).toBe(404);
+  await expect(page.locator("h1")).toHaveText("Page not found");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, follow");
+  await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+  await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
+  const sitemap = await (await request.get("/sitemap-0.xml")).text();
+  expect(sitemap).not.toContain("/404");
+  expect(sitemap.match(/<loc>/g)).toHaveLength(18);
+  expect(await readFile(new URL("../../dist/_redirects", import.meta.url), "utf8"))
+    .toContain("/sitemap.xml /sitemap-index.xml 301");
+});
 
 const guides = [
   {

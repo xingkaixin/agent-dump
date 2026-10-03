@@ -6,7 +6,7 @@ order: 1
 updated: "2026-10-03"
 locale: en
 title: Export a Codex session to Markdown
-description: Find a local Codex session, copy its URI, and export it to Markdown or JSON with Agent Dump. Includes installation, output paths, and missing-session checks.
+description: Export a Codex session to Markdown or JSON with Agent Dump. Find local conversations, copy the transcript into notes, and troubleshoot missing sessions.
 ---
 
 Use Agent Dump to find a saved local Codex conversation and export it as a Markdown file. Install the CLI, list your sessions, then pass a real session URI to the export command. The source session stays unchanged; the exported file can be opened in your editor or notes app.
@@ -58,6 +58,12 @@ agent-dump "codex://YOUR_SESSION_ID" --format json,markdown --output ./exports
 
 These list and export commands operate locally and do not require an AI API key. Exporting creates a readable record; it does not restore a running agent, its environment, or its execution state.
 
+## Can I copy a Codex conversation as Markdown?
+
+Yes. Export the session with `--format markdown`, open the printed `.md` file in a text editor, and copy its contents. Paste that text into an issue, a document, or a new agent conversation. Copying a command from this guide only copies the example command; run it with your real session URI to obtain your transcript.
+
+For a notes workflow, see [save AI conversations to Obsidian](/guides/save-ai-conversations-to-obsidian/). To reuse only part of a long conversation with source references, see [search AI coding history and export cited context](/guides/search-ai-coding-history/).
+
 ## If the session is missing
 
 - Widen the date window, for example `-days 90`, if the session is older.
@@ -66,4 +72,4 @@ These list and export commands operate locally and do not require an AI API key.
 - Copy the complete URI from a fresh listing. Do not run the example placeholder unchanged.
 - If the source records exist only on another machine, run the export there. Agent Dump cannot recover deleted or unavailable source records.
 
-For more formats and filtering options, see the [CLI parameter reference](https://github.com/xingkaixin/agent-dump#full-parameter-reference). To export conversations from other supported tools, start with the [Agent Dump overview](/#capabilities).
+For more formats and filtering options, see the [CLI parameter reference](https://github.com/xingkaixin/agent-dump#full-parameter-reference). For another local coding tool, see [export Claude Code conversations](/guides/export-claude-code-conversations/).
