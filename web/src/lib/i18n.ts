@@ -154,9 +154,9 @@ export const ui: Record<Locale, UiStrings> = {
     htmlLang: "en",
     ogLocale: "en_US",
     dir: "ltr",
-    title: "Agent Dump | Find, Read and Export AI Coding Sessions",
+    title: "Export Codex & Claude Code Sessions | Agent Dump",
     description:
-      "A local AI session CLI for individual developers and AI Agents. Search coding history, read conversations, export context with sources, and prepare reports.",
+      "Export Codex and Claude Code conversations to Markdown or JSON. Search local AI coding history and reuse context with a free, open-source CLI for 10 tools.",
     softwareDescription:
       "A local AI session CLI for individual developers and AI Agents. Search coding history, read conversations, export context with sources, and prepare reports.",
     websiteDescription: "Find, read, export, and reuse local AI coding sessions with Agent Dump.",
@@ -172,7 +172,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitle: "Your sessions.",
     heroTitleAccent: "Still useful.",
     heroDescription:
-      "Find, read, and export your AI coding conversations. Keep the context for whatever comes next.",
+      "Search local conversations from Codex, Claude Code, and more. Export to Markdown or JSON and reuse the context with a free, open-source CLI.",
     answerSummary:
       "Find the decision. Read the conversation. Take the useful context with you. One CLI, from search to handoff.",
     ctaInstall: "Install",
@@ -332,8 +332,8 @@ export const ui: Record<Locale, UiStrings> = {
     htmlLang: "zh-Hans",
     ogLocale: "zh_CN",
     dir: "ltr",
-    title: "Agent Dump | 查找、读取与导出 AI 编码会话",
-    description: "面向个人开发者与 AI Agent 的本地会话 CLI。查找编码历史、读取对话、导出带来源的上下文并生成汇总报告。",
+    title: "Codex、Claude Code 会话导出与搜索 | Agent Dump",
+    description: "将 Codex、Claude Code 对话导出为 Markdown 或 JSON，搜索本地 AI 编码历史并复用上下文。Agent Dump 是免费开源 CLI，支持 10 款工具，源会话保持不变。",
     softwareDescription: "面向个人开发者与 AI Agent 的本地会话 CLI。查找编码历史、读取对话、导出带来源的上下文并生成汇总报告。",
     websiteDescription: "使用 Agent Dump 查找、读取、导出和复用本地 AI 编码会话。",
     keywords:
@@ -347,7 +347,7 @@ export const ui: Record<Locale, UiStrings> = {
     eyebrow: "CLI · 本地 AI 会话历史",
     heroTitle: "写过的对话，",
     heroTitleAccent: "继续派上用场。",
-    heroDescription: "用一个 CLI 搜索、阅读和导出 AI 编码对话。找回过去的决策，接着完成下一件事。",
+    heroDescription: "搜索 Codex、Claude Code 等工具的本地对话，导出 Markdown 或 JSON，复用已有上下文。免费、开源的 CLI，源会话保持不变。",
     answerSummary: "找回当时的决策，读懂完整的讨论，再把有用的上下文带到下一次工作。先用下面的示例试一试。",
     ctaInstall: "安装",
     ctaSource: "GitHub",
@@ -505,8 +505,8 @@ export const ui: Record<Locale, UiStrings> = {
     htmlLang: "ja",
     ogLocale: "ja_JP",
     dir: "ltr",
-    title: "Agent Dump | AIコーディング履歴を検索・閲覧・エクスポート",
-    description: "個人開発者と AI Agent のためのローカルセッション CLI。履歴の検索、対話の閲覧、出典付きの文脈のエクスポート、レポート作成に対応します。",
+    title: "Codex・Claude Codeの会話をエクスポート | Agent Dump",
+    description: "CodexやClaude Codeの対話をMarkdown・JSONにエクスポート。ローカルのAI履歴を検索し、文脈を再利用できる無料のオープンソースCLI。10種類のツールに対応し、元の記録は変更しません。",
     softwareDescription: "個人開発者と AI Agent のためのローカルセッション CLI。履歴の検索、対話の閲覧、出典付きの文脈のエクスポート、レポート作成に対応します。",
     websiteDescription: "Agent Dump でローカルの AI コーディング履歴を検索・閲覧・エクスポートして再利用。",
     keywords:
@@ -521,7 +521,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitle: "AI 対話を",
     heroTitleAccent: "再利用。",
     heroDescription:
-      "AIコーディングの対話を検索・閲覧・エクスポート。過去の判断を、次の作業に役立てる CLI。",
+      "CodexやClaude Codeなどのローカル対話を検索し、Markdown・JSONにエクスポート。文脈を再利用できる無料のオープンソースCLIです。",
     answerSummary:
       "過去の判断を探し、対話を読み、必要な文脈を次の作業へ。下のサンプルで検索と出力形式を試せます。",
     ctaInstall: "インストール",

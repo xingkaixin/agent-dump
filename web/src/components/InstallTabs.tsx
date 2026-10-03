@@ -13,7 +13,7 @@ interface Props {
   copied: string;
 }
 
-function CommandLine({ code, copy, copied }: { code: string; copy: string; copied: string }) {
+function CommandLine({ code, copy, copied, method }: { code: string; copy: string; copied: string; method?: string }) {
   return (
     <div className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-line bg-bg px-3.5 py-2.5">
       <span aria-hidden="true" className="shrink-0 select-none py-1 leading-6 text-subtle">
@@ -22,7 +22,7 @@ function CommandLine({ code, copy, copied }: { code: string; copy: string; copie
       <code className="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere py-1 font-mono text-[13.5px] leading-6 text-fg">
         {code}
       </code>
-      <CopyButton text={code} copyLabel={copy} copiedLabel={copied} />
+      <CopyButton text={code} copyLabel={copy} copiedLabel={copied} installMethod={method} />
     </div>
   );
 }
@@ -54,7 +54,7 @@ export function InstallTabs({ groups, skill, copy, copied }: Props) {
             {group.tabs.map((tab, i) => (
               <Tabs.Panel key={tab.label} value={i}>
                 {tab.note && <p className="mb-3 text-[13px] leading-6 text-muted">{tab.note}</p>}
-                <CommandLine code={tab.code} copy={copy} copied={copied} />
+                <CommandLine code={tab.code} copy={copy} copied={copied} method={tab.label} />
               </Tabs.Panel>
             ))}
           </Tabs.Root>

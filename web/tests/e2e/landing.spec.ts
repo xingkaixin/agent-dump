@@ -5,7 +5,7 @@ const locales = [
     name: "English",
     path: "/",
     htmlLang: "en",
-    title: "Agent Dump | Find, Read and Export AI Coding Sessions",
+    title: "Export Codex & Claude Code Sessions | Agent Dump",
     copy: "Copy",
     copied: "Copied",
   },
@@ -13,7 +13,7 @@ const locales = [
     name: "Chinese",
     path: "/zh/",
     htmlLang: "zh-Hans",
-    title: "Agent Dump | 查找、读取与导出 AI 编码会话",
+    title: "Codex、Claude Code 会话导出与搜索 | Agent Dump",
     copy: "复制",
     copied: "已复制",
   },
@@ -21,7 +21,7 @@ const locales = [
     name: "Japanese",
     path: "/ja/",
     htmlLang: "ja",
-    title: "Agent Dump | AIコーディング履歴を検索・閲覧・エクスポート",
+    title: "Codex・Claude Codeの会話をエクスポート | Agent Dump",
     copy: "コピー",
     copied: "コピーしました",
   },
@@ -113,6 +113,11 @@ for (const locale of locales) {
     );
     await expect(analyticsScript).toHaveCount(1);
     await expect(analyticsScript).toHaveAttribute("defer", "");
+    await expect(analyticsScript).toHaveAttribute(
+      "data-domains", "agent-dump.xingkaixin.me",
+    );
+    await expect(analyticsScript).toHaveAttribute("data-exclude-hash", "true");
+    await expect(analyticsScript).toHaveAttribute("data-performance", "true");
     await expect(analyticsScript).toHaveAttribute(
       "data-website-id",
       "7141781d-b011-454b-a16b-8c1e524140c6",

@@ -21,7 +21,7 @@ const t = ui[locale];
       </h1>
       <p class="hero-description">{t.heroDescription}</p>
       <div class="hero-actions">
-        <a href="#install" class="button button--primary">
+        <a href="#install" class="button button--primary" data-umami-event="install-cta" data-umami-event-location="hero" data-umami-event-locale={t.htmlLang}>
           {t.ctaInstall}
           <ArrowDownIcon size={18} aria-hidden="true" />
         </a>

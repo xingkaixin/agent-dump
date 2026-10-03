@@ -58,6 +58,12 @@ agent-dump "codex://YOUR_SESSION_ID" --format json,markdown --output ./exports
 
 这些列表和导出命令在本地执行，不需要 AI API key。导出得到的是可阅读的记录，不会恢复正在运行的 Agent、运行环境或执行状态。
 
+## 能把 Codex 对话复制为 Markdown 吗？
+
+可以。使用 `--format markdown` 导出会话后，在文本编辑器中打开命令打印的 `.md` 文件，复制文件内容，再粘贴到 issue、文档或新的 Agent 对话中。指南中的复制按钮只会复制示例命令；需要替换为真实会话 URI 并运行，才能得到自己的对话记录。
+
+如果要保存到笔记库，见[将 AI 对话保存到 Obsidian](/zh/guides/save-ai-conversations-to-obsidian/)。如果只需要长对话中的部分内容及其来源，见[搜索 AI 编码历史并导出带引用的上下文](/zh/guides/search-ai-coding-history/)。
+
 ## 找不到会话时
 
 - 如果会话较早，将日期范围扩大，例如改为 `-days 90`。
@@ -66,4 +72,4 @@ agent-dump "codex://YOUR_SESSION_ID" --format json,markdown --output ./exports
 - 从最新列表复制完整 URI，不要原样执行示例占位符。
 - 如果源记录只在另一台机器上，请在那台机器导出。Agent Dump 无法恢复已删除或不可访问的源记录。
 
-更多格式和筛选方式见 [CLI 参数说明](https://github.com/xingkaixin/agent-dump/blob/main/README_zh.md)。其他工具的会话导出能力见 [Agent Dump 功能介绍](/zh/#capabilities)。
+更多格式和筛选方式见 [CLI 参数说明](https://github.com/xingkaixin/agent-dump/blob/main/README_zh.md)。另一款编码工具的导出步骤见[导出 Claude Code 对话](/zh/guides/export-claude-code-conversations/)。

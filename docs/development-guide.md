@@ -90,6 +90,10 @@ selector 只展示工作流传入的会话与计数，不发现来源或读取�
 - 使用说明保存在 `web/src/pages/guides/` 和 `web/src/pages/zh/guides/` 的 Markdown 文件中。frontmatter 的 `slug`、`locale`、`category`、`order`、`updated`、`title`、`description` 驱动目录、语言切换和文章元数据；相同内容的翻译共用 slug。保留既有文章 URL。
 - 新文章同步英文和中文，更新日期必须反映实际内容修改。日文目录明确标记英文文章。正文要包含适用场景、有效命令、输出与限制，并同步 `public/llms.txt`。文章渲染为静态 HTML；筛选仅作渐进增强。
 - `web/tests/e2e` 覆盖目录筛选、示例交互、移动导航、无 JavaScript 内容、文章结构化数据与内链。`tests/tooling/test_docs_sync.py` 对照真实 CLI 校验指南参数、URI scheme 和导出目录。
+- `404.astro` 生成顶层 `404.html`，避免 Pages 把未知路径按 SPA 回退为首页 200。错误页使用 `noindex`，不输出 canonical 或结构化数据。`public/_redirects` 将旧 `/sitemap.xml` 永久重定向到 `/sitemap-index.xml`；在 GSC 提交后者，部署时核对完整的 18 个可索引页面。
+- Umami 仅采集正式域名 `agent-dump.xingkaixin.me`，忽略 hash 并启用 Core Web Vitals。保留 query 以支持 UTM 来源分析。本地、CI 和 Pages 预览不计入正式流量。
+- 转化事件：`install-cta` 表示点击安装入口；`install-copy` 表示成功复制 CLI 安装或免安装命令（`method` 区分工具）；`guide-copy` 表示成功复制指南示例；`outbound-click` 表示点击页脚外链。事件仅记录语言、入口或安装方式，不发送命令正文、会话内容。复制命令只是使用意向，不代表安装或执行成功；skill 命令不算 CLI 安装转化。
+- Umami 历史数据按 Hostname = `agent-dump.xingkaixin.me` 筛选后再比较。观察 GSC 的非品牌查询曝光、指南点击及 Umami 的安装命令复制率，避免用含测试流量的总浏览量判断 SEO 效果。
 
 Cloudflare 统计由 Pages 项目的 Web Analytics 注入。自定义域名额外注入的 RUM 脚本通过以下 Configuration Rule 关闭，避免两份 CF 脚本竞争采集。该规则仅匹配落地页；Umami 保留。
 
