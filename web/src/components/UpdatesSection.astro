@@ -1,87 +1,49 @@
 ---
 import { ArrowUpRightIcon } from "@phosphor-icons/react";
 import { site, ui, type Locale } from "../lib/i18n";
-
+import ReleaseEntry from "./ReleaseEntry.astro";
 interface Props {
   locale: Locale;
 }
 const { locale } = Astro.props;
 const t = ui[locale];
+const older = {
+  en: "Earlier releases",
+  zh: "更早的版本",
+  ja: "以前のリリース",
+};
 ---
 
 <section id="updates" aria-labelledby="updates-heading" class="updates-section">
   <div class="shell">
-    <div data-reveal class="section-heading section-heading--wide">
-      <h2 id="updates-heading">
-        {t.updatesHeading}
-      </h2>
+    <div data-reveal class="section-heading">
+      <h2 id="updates-heading">{t.updatesHeading}</h2>
       <p>{t.updatesSubheading}</p>
     </div>
-
-    <div class="updates-grid">
-      {
-        t.updates.map((update, i) => (
-          <article
-            data-reveal
-            style={`--reveal-delay: ${i * 60}ms`}
-            class:list={["update-entry", i === 0 && "update-entry--featured"]}
-          >
-            <header class="update-entry__meta">
-              <div class="update-entry__version">
-                <span>
-                  {update.version}
-                </span>
-                {update.isLatest && (
-                  <span class="update-entry__latest">
-                    Latest
-                  </span>
-                )}
-                <time datetime={update.date}>
-                  {update.date}
-                </time>
-              </div>
-              <div class="update-entry__tags">
-                {update.tags.map((tag) => (
-                  <span>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </header>
-
-            <h3>
-              {update.title}
-            </h3>
-            <p class="update-entry__description">
-              {update.description}
-            </p>
-
-            {update.command && (
-              <div class="command-line">
-                <span aria-hidden="true">$</span>
-                <code>
-                  {update.command}
-                </code>
-              </div>
-            )}
-          </article>
-        ))
-      }
+    <div class="updates-grid" data-reveal>
+      {t.updates.slice(0, 3).map((update, index) => (
+        <ReleaseEntry update={update} featured={index === 0} />
+      ))}
     </div>
-
-    <div data-reveal class="updates-link">
+    <details class="release-archive">
+      <summary>
+        {older[locale]} ({t.updates.length - 3})
+      </summary>
+      <div class="updates-grid">
+        {t.updates.slice(3).map((update) => (
+          <ReleaseEntry update={update} />
+        ))}
+      </div>
+    </details>
+    <div class="updates-link">
       <a
         href={site.changelogUrl[locale]}
         target="_blank"
         rel="noopener noreferrer"
-        class="group inline-flex items-center gap-1.5 font-mono text-[13px] text-muted no-underline transition-colors duration-150 ease-out hover:text-accent"
+        class="text-link"
       >
-        <span>{t.viewFullChangelog}</span>
-        <ArrowUpRightIcon
-          weight="bold"
-          aria-hidden="true"
-          className="size-3.5 transition-transform duration-150 ease-out group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-        />
+        {t.viewFullChangelog}
+        <ArrowUpRightIcon size={18} aria-hidden="true" />
       </a>
     </div>
   </div>

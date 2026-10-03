@@ -1,62 +1,45 @@
 ---
-import { codexGuideLinks } from "../lib/guides";
-import { Image } from "astro:assets";
-import sessionConvergence from "../assets/editorial/session-convergence.png";
-import { terminalScenes, ui, type Locale } from "../lib/i18n";
-import Terminal from "./Terminal.astro";
-
+import { ArrowRightIcon } from "@phosphor-icons/react";
+import { ui, type Locale } from "../lib/i18n";
+import { getGuides } from "../lib/guides";
+import { SessionExplorer } from "./SessionExplorer";
 interface Props {
   locale: Locale;
 }
 const { locale } = Astro.props;
 const t = ui[locale];
-const guide = codexGuideLinks[locale];
+const guides = await getGuides(locale);
+const slugs = [
+  "search-ai-coding-history",
+  "handoff-context-to-ai-agent",
+  "export-codex-session",
+  "weekly-report-from-ai-sessions",
+];
 ---
 
 <section id="capabilities" class="capabilities-section">
   <div class="shell">
     <div data-reveal class="section-heading section-heading--wide">
-      <h2>
-        {t.capabilitiesHeading}
-      </h2>
+      <h2>{t.capabilitiesHeading}</h2>
       <p>{t.answerSummary}</p>
     </div>
-
-    <div class="convergence-stage" data-reveal>
-      <Image
-        src={sessionConvergence}
-        alt=""
-        aria-hidden="true"
-        widths={[640, 960, 1440]}
-        sizes="(max-width: 767px) 100vw, 72rem"
-        format="webp"
-        quality={78}
-        loading="lazy"
-        class="convergence-image"
-      />
-      <div class="convergence-terminal">
-        <Terminal scene={terminalScenes[1]} label={t.terminalLabel} />
-      </div>
+    <div data-reveal>
+      <SessionExplorer locale={locale} client:load />
     </div>
-
     <div class="capability-grid">
-      {
-        t.capabilities.map((capability, index) => (
-          <article
-            data-reveal
-            style={`--reveal-delay: ${index * 60}ms`}
-            class:list={["capability-block", `capability-block--${index + 1}`]}
+      {t.capabilities.map((capability, index) => (
+        <article data-reveal class="capability-block">
+          <h3>{capability.title}</h3>
+          <p>{capability.body}</p>
+          <code>{capability.command}</code>
+          <a
+            href={guides.find((guide) => guide.slug === slugs[index])?.href}
+            aria-label={`${capability.title}: ${locale === "zh" ? "使用说明" : locale === "ja" ? "ガイド（英語）" : "guide"}`}
           >
-            <h3>{capability.title}</h3>
-            <p>{capability.body}</p>
-            <div class="command-line">
-              <span aria-hidden="true">$</span>
-              <code>{capability.command}</code>
-            </div>
-            {index === 2 && <p><a class="underline underline-offset-4" href={guide.href}>{guide.label}</a></p>}
-          </article>
-        ))
-      }
+            <ArrowRightIcon size={22} aria-hidden="true" />
+          </a>
+        </article>
+      ))}
     </div>
   </div>
 </section>

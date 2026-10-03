@@ -43,48 +43,6 @@ export const providers = [
   { name: "MiniMax Code", example: "minimax://session-123" },
 ] as const;
 
-export type OutputTone = "dim" | "text" | "ok" | "scheme";
-export type TerminalScene = {
-  command: string;
-  output: { text: string; tone: OutputTone }[];
-};
-
-// Representative CLI sessions rendered under each typed command. This is a truthful
-// preview of what agent-dump prints, not a fabricated dashboard: the prompts, field
-// labels and default output path below are the ones the CLI actually produces.
-// tests/test_docs_sync.py checks the invariants that would silently rot here.
-export const terminalScenes: TerminalScene[] = [
-  {
-    command: "agent-dump --interactive",
-    output: [
-      // 交互导出是两阶段的：先选 Provider，再选那个 Provider 的会话
-      { text: "Select Agent Tool to export:", tone: "dim" },
-      { text: "> Codex         24 sessions", tone: "text" },
-      { text: "  Claude Code   12 sessions", tone: "text" },
-      { text: "", tone: "dim" },
-      { text: "Available sessions:", tone: "dim" },
-      { text: "1. api (2026-07-28 13:04)", tone: "text" },
-      { text: "   cwd=work/api | msgs=2 | uri=codex://019c213e", tone: "dim" },
-    ],
-  },
-  {
-    command: "agent-dump codex://019c213e --format markdown",
-    output: [
-      { text: "Exported session [markdown] to:", tone: "dim" },
-      { text: "sessions/codex/019c213e.md", tone: "ok" },
-    ],
-  },
-  {
-    command: 'agent-dump --search "auth timeout"',
-    output: [
-      { text: "Search results from last 7 days matching 'auth timeout':", tone: "dim" },
-      { text: "1. api (2026-07-28 13:04)", tone: "text" },
-      { text: "   Provider: Codex", tone: "dim" },
-      { text: "   URI: codex://019c213e", tone: "scheme" },
-      { text: "   Snippet: ...the **auth** **timeout** in the retry guard...", tone: "text" },
-    ],
-  },
-];
 export type UpdateItem = {
   version: string;
   date: string;
@@ -114,7 +72,6 @@ type UiStrings = {
   heroTitle: string;
   heroTitleAccent: string;
   heroDescription: string;
-  terminalLabel: string;
   answerSummary: string;
   ctaInstall: string;
   ctaSource: string;
@@ -205,20 +162,19 @@ export const ui: Record<Locale, UiStrings> = {
     websiteDescription: "Find, read, export, and reuse local AI coding sessions with Agent Dump.",
     keywords:
       "agent-dump, AI session export, Claude Code sessions, Codex sessions, ZCode sessions, Cursor sessions, Pi sessions, AI coding tool, session dump, CLI export, collect prompt, agent handoff, full-text search, developer tool",
-    ogImageAlt: "Agent Dump CLI exporting AI coding sessions to readable files",
+    ogImageAlt: "Agent Dump: find, read, and export your AI coding conversations",
     skipLink: "Skip to content",
     langLabel: "Language",
     themeLabel: "Toggle theme",
     themeLight: "Light",
     themeDark: "Dark",
     eyebrow: "CLI · Local AI session history",
-    heroTitle: "Find your AI coding",
-    heroTitleAccent: "history.",
+    heroTitle: "Your sessions.",
+    heroTitleAccent: "Still useful.",
     heroDescription:
-      "Find past work across Codex, Claude Code, and other supported tools. Read it in your terminal, export it, or pass the context to an AI Agent. Source sessions stay read-only.",
-    terminalLabel: "Terminal demo running agent-dump commands",
+      "Find, read, and export your AI coding conversations. Keep the context for whatever comes next.",
     answerSummary:
-      "Agent Dump helps individual developers and AI Agents reuse locally saved conversations. Browse recent work, search decisions, read in bounded pages, and export sessions or cited context from one CLI.",
+      "Find the decision. Read the conversation. Take the useful context with you. One CLI, from search to handoff.",
     ctaInstall: "Install",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} tools, one URI grammar`,
@@ -382,18 +338,17 @@ export const ui: Record<Locale, UiStrings> = {
     websiteDescription: "使用 Agent Dump 查找、读取、导出和复用本地 AI 编码会话。",
     keywords:
       "agent-dump, AI 会话导出, Claude Code 会话, Codex 会话, ZCode 会话, Cursor 会话, Pi 会话, AI 编码工具, 会话导出, CLI 工具, 会话收集, 外部 Agent 交接, 全文搜索, 开发者工具",
-    ogImageAlt: "Agent Dump CLI 将 AI 编码会话导出为可读文件",
+    ogImageAlt: "Agent Dump：搜索、阅读和导出 AI 编码对话",
     skipLink: "跳到正文",
     langLabel: "语言",
     themeLabel: "切换主题",
     themeLight: "浅色",
     themeDark: "深色",
     eyebrow: "CLI · 本地 AI 会话历史",
-    heroTitle: "复用你的",
-    heroTitleAccent: "AI 会话。",
-    heroDescription: "查找 Codex、Claude Code 等支持工具中的历史工作。在终端阅读、导出，或将上下文交给 AI Agent。会话源始终只读。",
-    terminalLabel: "运行 agent-dump 命令的终端演示",
-    answerSummary: "Agent Dump 帮助个人开发者与 AI Agent 复用本机保存的对话。通过一个 CLI 浏览最近工作、搜索决策、分页读取，并导出完整会话或带来源的上下文。",
+    heroTitle: "写过的对话，",
+    heroTitleAccent: "继续派上用场。",
+    heroDescription: "用一个 CLI 搜索、阅读和导出 AI 编码对话。找回过去的决策，接着完成下一件事。",
+    answerSummary: "找回当时的决策，读懂完整的讨论，再把有用的上下文带到下一次工作。先用下面的示例试一试。",
     ctaInstall: "安装",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} 款工具，一套 URI 语法`,
@@ -556,7 +511,7 @@ export const ui: Record<Locale, UiStrings> = {
     websiteDescription: "Agent Dump でローカルの AI コーディング履歴を検索・閲覧・エクスポートして再利用。",
     keywords:
       "agent-dump, AIセッションのエクスポート, Claude Codeセッション, Codexセッション, ZCodeセッション, Cursorセッション, Piセッション, AIコーディングツール, セッション出力, CLIツール, プロンプト生成, 全文検索, 開発者ツール",
-    ogImageAlt: "AIコーディングセッションを読みやすいファイルに出力するAgent Dump CLI",
+    ogImageAlt: "Agent Dump：AIコーディングの対話を検索・閲覧・エクスポート",
     skipLink: "本文へ移動",
     langLabel: "言語",
     themeLabel: "テーマを切り替える",
@@ -566,10 +521,9 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitle: "AI 対話を",
     heroTitleAccent: "再利用。",
     heroDescription:
-      "Codex、Claude Code などの対応ツールから過去の作業を検索。ターミナルで読む、エクスポートする、AI Agent に文脈を渡す。元のセッションは読み取り専用です。",
-    terminalLabel: "agent-dumpコマンドを実行するターミナルのデモ",
+      "AIコーディングの対話を検索・閲覧・エクスポート。過去の判断を、次の作業に役立てる CLI。",
     answerSummary:
-      "Agent Dump は、個人開発者と AI Agent がローカルに保存した対話を再利用するための CLI です。最近の作業の閲覧、過去の判断の検索、ページ単位の読み取り、セッションや出典付きの文脈のエクスポートに対応します。",
+      "過去の判断を探し、対話を読み、必要な文脈を次の作業へ。下のサンプルで検索と出力形式を試せます。",
     ctaInstall: "インストール",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} のツール、1 つの URI 構文`,

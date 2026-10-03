@@ -1,5 +1,6 @@
 ---
-import { MoonIcon, SunIcon } from "@phosphor-icons/react";
+import { ListIcon, MoonIcon, SunIcon } from "@phosphor-icons/react";
+import { guideIndexPaths, guideUi } from "../lib/guides";
 import { LOCALES, localeLabels, site, ui, type Locale } from "../lib/i18n";
 
 interface Props {
@@ -14,7 +15,7 @@ const t = ui[locale];
 
 <header class="site-header">
   <div class="shell site-header__inner">
-    <a href={site.paths[locale]} class="site-brand">
+    <a href={site.paths[locale]} class="site-brand" aria-label="agent-dump">
       <img
         src={site.logo}
         alt=""
@@ -25,34 +26,69 @@ const t = ui[locale];
       <span>agent-dump</span>
     </a>
 
-    <nav class="site-nav" aria-label="Primary">
+    <nav
+      class="site-nav"
+      aria-label={
+        locale === "zh"
+          ? "主导航"
+          : locale === "ja"
+            ? "メインナビゲーション"
+            : "Primary"
+      }
+    >
+      <a href={guideIndexPaths[locale]}>{guideUi[locale].label}</a>
       <a href={`${home}#capabilities`}>{t.capabilitiesHeading}</a>
       <a href={`${home}#updates`}>{t.updatesHeading}</a>
       <a href={`${home}#install`}>{t.installHeading}</a>
     </nav>
 
     <div class="site-tools">
+      <details class="mobile-menu">
+        <summary
+          aria-label={
+            locale === "zh"
+              ? "导航菜单"
+              : locale === "ja"
+                ? "メニュー"
+                : "Navigation menu"
+          }
+        >
+          <ListIcon size={20} aria-hidden="true" />
+        </summary>
+        <nav
+          aria-label={
+            locale === "zh"
+              ? "移动导航"
+              : locale === "ja"
+                ? "モバイルメニュー"
+                : "Mobile navigation"
+          }
+        >
+          <a href={guideIndexPaths[locale]}>{guideUi[locale].label}</a>
+          <a href={`${home}#capabilities`}>{t.capabilitiesHeading}</a>
+          <a href={`${home}#updates`}>{t.updatesHeading}</a>
+          <a href={`${home}#install`}>{t.installHeading}</a>
+        </nav>
+      </details>
       <div role="group" aria-label={t.langLabel} class="language-switcher">
-        {
-          LOCALES.filter((code) => paths[code]).map((code) => {
-            const current = code === locale;
-            return (
-              <a
-                href={paths[code]}
-                lang={ui[code].htmlLang}
-                aria-current={current ? "page" : undefined}
-                class:list={[
-                  "language-switcher__link",
-                  current
-                    ? "language-switcher__link--active"
-                    : "language-switcher__link--idle",
-                ]}
-              >
-                {localeLabels[code]}
-              </a>
-            );
-          })
-        }
+        {LOCALES.filter((code) => paths[code]).map((code) => {
+          const current = code === locale;
+          return (
+            <a
+              href={paths[code]}
+              lang={ui[code].htmlLang}
+              aria-current={current ? "page" : undefined}
+              class:list={[
+                "language-switcher__link",
+                current
+                  ? "language-switcher__link--active"
+                  : "language-switcher__link--idle",
+              ]}
+            >
+              {localeLabels[code]}
+            </a>
+          );
+        })}
       </div>
 
       <div class="size-9 shrink-0">
@@ -82,19 +118,25 @@ const t = ui[locale];
 </header>
 
 <script is:inline>
+  document.querySelectorAll(".mobile-menu").forEach(function (menu) {
+    menu.addEventListener("click", function (event) {
+      if (event.target.closest("a")) menu.open = false;
+    });
+    menu.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        menu.open = false;
+        menu.querySelector("summary").focus();
+      }
+    });
+  });
   document.querySelectorAll("[data-theme-toggle]").forEach(function (button) {
     button.addEventListener("click", function () {
       var root = document.documentElement;
       var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        root.classList.add("theme-transition");
-        window.setTimeout(function () {
-          root.classList.remove("theme-transition");
-        }, 260);
-      }
       root.setAttribute("data-theme", next);
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", next === "dark" ? "#0c1011" : "#f1f3ef");
+      if (meta)
+        meta.setAttribute("content", next === "dark" ? "#0c1011" : "#f1f3ef");
       try {
         localStorage.setItem("agent-dump-theme", next);
       } catch (e) {}

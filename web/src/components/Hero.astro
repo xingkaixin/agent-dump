@@ -1,53 +1,48 @@
 ---
-import { codexGuideLinks } from "../lib/guides";
-import { ArrowDownIcon, GithubLogoIcon } from "@phosphor-icons/react";
-import { site, ui, type Locale } from "../lib/i18n";
-import FocusScene from "./FocusScene.astro";
+import { Image } from "astro:assets";
+import { ArrowDownIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
+import { ui, type Locale } from "../lib/i18n";
+import { guideIndexPaths, guideUi } from "../lib/guides";
+import paper from "../assets/editorial/session-paper.png";
 
 interface Props {
   locale: Locale;
 }
 const { locale } = Astro.props;
 const t = ui[locale];
-const guide = codexGuideLinks[locale];
 ---
 
 <section id="hero" class="shell hero-section">
   <div class="hero-grid">
     <div class="hero-copy">
-      <p class="hero-eyebrow">
-        {t.eyebrow}
-      </p>
+      <p class="hero-eyebrow">{t.eyebrow}</p>
       <h1 class="hero-title">
-        {t.heroTitle}{" "}
-        <span>{t.heroTitleAccent}</span>
+        {t.heroTitle} <span>{t.heroTitleAccent}</span>
       </h1>
-      <p class="hero-description">
-        {t.heroDescription}
-      </p>
+      <p class="hero-description">{t.heroDescription}</p>
       <div class="hero-actions">
-        <a
-          href="#install"
-          class="button button--primary"
-        >
+        <a href="#install" class="button button--primary">
           {t.ctaInstall}
-          <ArrowDownIcon className="size-4" aria-hidden="true" />
+          <ArrowDownIcon size={18} aria-hidden="true" />
         </a>
-        <a
-          href={site.repo}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="button button--secondary"
-        >
-          <GithubLogoIcon className="size-4" aria-hidden="true" />
-          {t.ctaSource}
+        <a href={guideIndexPaths[locale]} class="button button--text">
+          {guideUi[locale].label}
+          <ArrowUpRightIcon size={18} aria-hidden="true" />
         </a>
       </div>
-      <p class="mt-5"><a class="text-sm underline underline-offset-4" href={guide.href}>{guide.label}</a></p>
     </div>
-
     <div class="hero-visual">
-      <FocusScene caption={t.eyebrow} />
+      <Image
+        src={paper}
+        alt=""
+        widths={[480, 800, 1200]}
+        sizes="(max-width: 767px) 100vw, 50vw"
+        format="webp"
+        quality={82}
+        loading="eager"
+        fetchpriority="high"
+        class="hero-art"
+      />
     </div>
   </div>
 </section>

@@ -24,7 +24,7 @@ for (const guide of guides) {
       route.abort(),
     );
     await page.goto(guide.home);
-    await page.locator(`#hero a[href="${guide.path}"]`).click();
+    await page.locator(`#guides a[href="${guide.path}"]`).click();
     await expect(page).toHaveURL(guide.path);
     await expect(page).toHaveTitle(`${guide.title} | Agent Dump`);
     await expect(page.locator("h1")).toHaveText(guide.title);

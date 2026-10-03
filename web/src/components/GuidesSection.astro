@@ -1,0 +1,40 @@
+---
+import { ArrowRightIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
+import { getGuides, guideIndexPaths, guideUi } from "../lib/guides";
+import type { Locale } from "../lib/i18n";
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const t = guideUi[locale];
+const guides = (await getGuides(locale)).filter((guide) =>
+  [1, 3, 4].includes(guide.order),
+);
+---
+
+<section id="guides" class="guides-section">
+  <div class="shell guides-intro" data-reveal>
+    <p class="eyebrow">{t.label}</p>
+    <div class="section-heading">
+      <h2>{t.title}</h2>
+      <p>{t.note}</p>
+    </div>
+    <div class="guide-features">
+      {guides.map((guide) => (
+        <a href={guide.href} class="guide-feature">
+          <span class="guide-category">{t.categories[guide.category]}</span>
+          <h3>{guide.title}</h3>
+          <p>{guide.description}</p>
+          <span class="guide-feature__link">
+            {t.read}
+            <ArrowUpRightIcon size={20} aria-hidden="true" />
+          </span>
+        </a>
+      ))}
+    </div>
+    <a href={guideIndexPaths[locale]} class="text-link">
+      {t.all}
+      <ArrowRightIcon size={20} aria-hidden="true" />
+    </a>
+  </div>
+</section>
