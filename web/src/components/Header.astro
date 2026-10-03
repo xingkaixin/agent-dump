@@ -39,7 +39,7 @@ const t = ui[locale];
       <a href={guideIndexPaths[locale]}>{guideUi[locale].label}</a>
       <a href={`${home}#capabilities`}>{t.capabilitiesHeading}</a>
       <a href={`${home}#updates`}>{t.updatesHeading}</a>
-      <a href={`${home}#install`}>{t.installHeading}</a>
+      <a href={`${home}#install`} data-umami-event="install-cta" data-umami-event-location="header" data-umami-event-locale={t.htmlLang}>{t.installHeading}</a>
     </nav>
 
     <div class="site-tools">
@@ -67,7 +67,7 @@ const t = ui[locale];
           <a href={guideIndexPaths[locale]}>{guideUi[locale].label}</a>
           <a href={`${home}#capabilities`}>{t.capabilitiesHeading}</a>
           <a href={`${home}#updates`}>{t.updatesHeading}</a>
-          <a href={`${home}#install`}>{t.installHeading}</a>
+          <a href={`${home}#install`} data-umami-event="install-cta" data-umami-event-location="mobile-nav" data-umami-event-locale={t.htmlLang}>{t.installHeading}</a>
         </nav>
       </details>
       <div role="group" aria-label={t.langLabel} class="language-switcher">

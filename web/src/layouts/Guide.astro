@@ -114,6 +114,7 @@ const breadcrumbs = [
 
 <script>
   import { copyText } from "../lib/clipboard";
+  import { trackEvent } from "../lib/analytics";
   const content = document.querySelector<HTMLElement>(".guide-content");
   if (content) {
     for (const pre of content.querySelectorAll("pre")) {
@@ -143,6 +144,7 @@ const breadcrumbs = [
             button.textContent = content.dataset.copy!;
             status.textContent = "";
           }, 2000);
+          trackEvent("guide-copy");
         } catch {
           status.textContent = content.dataset.copyError!;
         }

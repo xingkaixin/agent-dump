@@ -1,4 +1,5 @@
 import { copyText } from "../lib/clipboard";
+import { trackEvent } from "../lib/analytics";
 import { useRef, useState } from "react";
 import { CheckIcon, CopyIcon } from "@phosphor-icons/react";
 
@@ -6,9 +7,10 @@ interface Props {
   text: string;
   copyLabel: string;
   copiedLabel: string;
+  installMethod?: string;
 }
 
-export function CopyButton({ text, copyLabel, copiedLabel }: Props) {
+export function CopyButton({ text, copyLabel, copiedLabel, installMethod }: Props) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -18,6 +20,9 @@ export function CopyButton({ text, copyLabel, copiedLabel }: Props) {
       setCopied(true);
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 2000);
+      if (installMethod) {
+        trackEvent("install-copy", { method: installMethod });
+      }
     } catch {
       /* clipboard denied — leave state untouched */
     }

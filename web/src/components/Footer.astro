@@ -32,6 +32,9 @@ const links = [
           target="_blank"
           rel="noopener noreferrer"
           class="site-footer__link"
+          data-umami-event="outbound-click"
+          data-umami-event-destination={link.label}
+          data-umami-event-locale={t.htmlLang}
         >
           {link.label}
         </a>
