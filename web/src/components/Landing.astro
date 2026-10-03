@@ -7,6 +7,7 @@ import Capabilities from "./Capabilities.astro";
 import UpdatesSection from "./UpdatesSection.astro";
 import InstallSection from "./InstallSection.astro";
 import FaqSection from "./FaqSection.astro";
+import GuidesSection from "./GuidesSection.astro";
 import Footer from "./Footer.astro";
 
 interface Props {
@@ -20,6 +21,7 @@ const { locale } = Astro.props;
   <Hero locale={locale} />
   <Providers locale={locale} />
   <Capabilities locale={locale} />
+  <GuidesSection locale={locale} />
   <InstallSection locale={locale} />
   <UpdatesSection locale={locale} />
   <FaqSection locale={locale} />
@@ -40,7 +42,7 @@ const { locale } = Astro.props;
       function (entries) {
         entries.forEach(function (entry) {
           if (entry.isIntersecting) {
-            entry.target.classList.add("is-in");
+            entry.target.classList.remove("reveal-pending");
             io.unobserve(entry.target);
           }
         });
@@ -48,6 +50,8 @@ const { locale } = Astro.props;
       { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
     );
     els.forEach(function (el) {
+      if (el.getBoundingClientRect().top > window.innerHeight)
+        el.classList.add("reveal-pending");
       io.observe(el);
     });
   })();

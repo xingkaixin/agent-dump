@@ -9,7 +9,13 @@ import { version } from "../lib/version";
 
 interface Props {
   locale: Locale;
-  page?: { title: string; description: string; paths: Partial<Record<Locale, string>> };
+  page?: {
+    title: string;
+    description: string;
+    paths: Partial<Record<Locale, string>>;
+    article?: { updated: string };
+    breadcrumbs?: { name: string; path: string }[];
+  };
 }
 
 const { locale, page } = Astro.props;
@@ -47,42 +53,76 @@ const jsonLd = {
       description: t.websiteDescription,
       publisher: { "@id": `${site.origin}/#author` },
     },
-    ...(page ? [{
-      "@type": "WebPage",
-      "@id": canonical,
-      url: canonical,
-      name: title,
-      description,
-      inLanguage: t.htmlLang,
-      isPartOf: { "@id": `${site.origin}/#website` },
-      author: { "@id": `${site.origin}/#author` },
-    }] : [{
-      "@type": "SoftwareApplication",
-      "@id": `${site.origin}/#software`,
-      name: "Agent Dump",
-      applicationCategory: "DeveloperApplication",
-      applicationSubCategory: "Command-line developer tool",
-      operatingSystem: "macOS, Linux, Windows",
-      description: t.softwareDescription,
-      inLanguage: t.htmlLang,
-      url: canonical,
-      downloadUrl: site.downloadUrls,
-      softwareVersion: version,
-      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-      author: { "@id": `${site.origin}/#author` },
-      codeRepository: site.repo,
-      license: site.license,
-    },
-    {
-      "@type": "FAQPage",
-      "@id": `${canonical}#faq`,
-      inLanguage: t.htmlLang,
-      mainEntity: t.faq.map((item) => ({
-        "@type": "Question",
-        name: item.question,
-        acceptedAnswer: { "@type": "Answer", text: item.answer },
-      })),
-    }]),
+    ...(page?.article
+      ? [
+          {
+            "@type": "Article",
+            "@id": `${canonical}#article`,
+            headline: page.title.replace(/ \| Agent Dump$/, ""),
+            description,
+            inLanguage: t.htmlLang,
+            dateModified: page.article.updated,
+            mainEntityOfPage: { "@id": canonical },
+            author: { "@id": `${site.origin}/#author` },
+            publisher: { "@id": `${site.origin}/#author` },
+          },
+        ]
+      : []),
+    ...(page?.breadcrumbs
+      ? [
+          {
+            "@type": "BreadcrumbList",
+            itemListElement: page.breadcrumbs.map((crumb, index) => ({
+              "@type": "ListItem",
+              position: index + 1,
+              name: crumb.name,
+              item: new URL(crumb.path, site.origin).href,
+            })),
+          },
+        ]
+      : []),
+    ...(page
+      ? [
+          {
+            "@type": "WebPage",
+            "@id": canonical,
+            url: canonical,
+            name: title,
+            description,
+            inLanguage: t.htmlLang,
+            isPartOf: { "@id": `${site.origin}/#website` },
+            author: { "@id": `${site.origin}/#author` },
+          },
+        ]
+      : [
+          {
+            "@type": "SoftwareApplication",
+            "@id": `${site.origin}/#software`,
+            name: "Agent Dump",
+            applicationCategory: "DeveloperApplication",
+            applicationSubCategory: "Command-line developer tool",
+            operatingSystem: "macOS, Linux, Windows",
+            description: t.softwareDescription,
+            inLanguage: t.htmlLang,
+            url: canonical,
+            downloadUrl: site.downloadUrls,
+            softwareVersion: version,
+            offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+            author: { "@id": `${site.origin}/#author` },
+            codeRepository: site.repo,
+            license: site.license,
+          },
+          {
+            "@type": "FAQPage",
+            "@id": `${canonical}#faq`,
+            inLanguage: t.htmlLang,
+            mainEntity: t.faq.map((item) => ({
+              "@type": "Question",
+              name: item.question,
+              acceptedAnswer: { "@type": "Answer", text: item.answer },
+            })),
+          },
+        ]),
   ],
 };
 ---
@@ -92,21 +132,37 @@ const jsonLd = {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="preload" href={geistLatin} as="font" type="font/woff2" crossorigin="anonymous" />
-    <link rel="preload" href={monoLatin} as="font" type="font/woff2" crossorigin="anonymous" />
+    <link
+      rel="preload"
+      href={geistLatin}
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href={monoLatin}
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
     <meta name="theme-color" content="#f1f3ef" />
     <meta name="description" content={description} />
-    <meta name="keywords" content={t.keywords} />
     <meta name="author" content={site.author.name} />
     <meta name="robots" content="index, follow" />
     <title>{title}</title>
     <link rel="canonical" href={canonical} />
-    {alternates.map((alt) => <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />)}
+    {alternates.map((alt) => (
+      <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
+    ))}
     <link rel="icon" type="image/png" href={site.logo} />
     <link rel="apple-touch-icon" href={site.logo} />
 
     <!-- Open Graph -->
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={page?.article ? "article" : "website"} />
+    {page?.article && (
+      <meta property="article:modified_time" content={page.article.updated} />
+    )}
     <meta property="og:url" content={canonical} />
     <meta property="og:site_name" content="Agent Dump" />
     <meta property="og:title" content={title} />
@@ -124,14 +180,17 @@ const jsonLd = {
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:image:alt" content={t.ogImageAlt} />
 
-    <script is:inline type="application/ld+json" set:html={JSON.stringify(jsonLd, null, 2)} />
-
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={JSON.stringify(jsonLd, null, 2)}
+    />
     <script
       is:inline
       defer
       src="https://umami.xingkaixin.me/script.js"
-      data-website-id="7141781d-b011-454b-a16b-8c1e524140c6"></script>
-
+      data-website-id="7141781d-b011-454b-a16b-8c1e524140c6"
+    ></script>
     <script is:inline>
       (function () {
         var root = document.documentElement;
@@ -148,15 +207,21 @@ const jsonLd = {
         } catch (e) {}
         root.setAttribute("data-theme", theme);
         var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute("content", theme === "dark" ? "#0c1011" : "#f1f3ef");
+        if (meta)
+          meta.setAttribute(
+            "content",
+            theme === "dark" ? "#0c1011" : "#f1f3ef",
+          );
       })();
     </script>
   </head>
   <body>
     <a
       class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-sm focus:border focus:border-line-strong focus:bg-bg focus:px-4 focus:py-2"
-      href="#main">{t.skipLink}</a
+      href="#main"
     >
+      {t.skipLink}
+    </a>
     <slot />
   </body>
 </html>

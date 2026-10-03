@@ -1,22 +1,29 @@
 # Agent Dump
 
-> Agent Dump is a command-line tool for listing, exporting, searching, and summarizing local AI coding sessions across Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, and Pi.
+> Agent Dump is a local command-line tool for finding, reading, exporting, and reusing AI coding conversations. Sources remain read-only. Supported tools include Codex, Claude Code, ZCode, Kimi, OpenCode, Cursor, Pi, DeepChat, Cherry Studio, and MiniMax Code. Formats vary by provider.
 
-## Documentation
+## Guides
 
-- [Export a Codex session to Markdown](https://agent-dump.xingkaixin.me/guides/export-codex-session/): Find a local session, export Markdown or JSON, and locate the output file.
-- [Codex 导出教程](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/): 安装、会话 URI、导出路径和排查步骤。
+- [All guides](https://agent-dump.xingkaixin.me/guides/): Practical workflows and commands.
+- [中文使用说明](https://agent-dump.xingkaixin.me/zh/guides/): 六个场景的操作步骤、输出说明和限制。
+- [Export Codex sessions](https://agent-dump.xingkaixin.me/guides/export-codex-session/): Find a URI and export Markdown or JSON.
+- [Export Claude Code conversations](https://agent-dump.xingkaixin.me/guides/export-claude-code-conversations/): Save one or several local conversations.
+- [Search coding history](https://agent-dump.xingkaixin.me/guides/search-ai-coding-history/): Full-text search, project filters, message locations, and cited excerpts.
+- [Hand off context to an agent](https://agent-dump.xingkaixin.me/guides/handoff-context-to-ai-agent/): Reading prompts, bounded JSON pages, cursors, and revision handling.
+- [Create work reports](https://agent-dump.xingkaixin.me/guides/weekly-report-from-ai-sessions/): Preview scope, configure AI collect, or generate a prompt for another agent.
+- [Save to Obsidian](https://agent-dump.xingkaixin.me/guides/save-ai-conversations-to-obsidian/): Export Markdown into a vault with a dedicated output directory.
 
-- [Project README](https://github.com/xingkaixin/agent-dump#readme): Installation, supported providers, URI formats, search, export, and collection workflows.
-- [Chinese landing page](https://agent-dump.xingkaixin.me/zh/): Simplified Chinese product overview and installation commands.
-- [Changelog](https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md): Release history and behavior changes.
+## Behavior boundaries
 
-## Packages
+- Search and direct export operate locally without a model API key. AI collect sends selected conversation content to the configured model provider.
+- --read-prompt and --collect --emit-prompt produce instructions; they do not launch another agent.
+- Exported transcripts do not restore a running agent, its environment, or its execution state.
+- Cursor supports JSON and print, not Markdown or raw export.
 
-- [PyPI package](https://pypi.org/project/agent-dump/): Install Agent Dump with uv or pip.
-- [npm package](https://www.npmjs.com/package/@agent-dump/cli): Install the cross-platform CLI wrapper with npm, pnpm, or bun.
+## Reference
 
-## Source
-
-- [GitHub repository](https://github.com/xingkaixin/agent-dump): Source code, issues, and contribution history.
-- [License](https://github.com/xingkaixin/agent-dump/blob/main/LICENSE): Project license.
+- [Project README](https://github.com/xingkaixin/agent-dump#readme): Installation, CLI parameters, provider capabilities, and configuration.
+- [Changelog](https://github.com/xingkaixin/agent-dump/blob/main/CHANGELOG.md): Release history.
+- [npm](https://www.npmjs.com/package/@agent-dump/cli): Cross-platform CLI wrapper.
+- [PyPI](https://pypi.org/project/agent-dump/): CLI installation with uv or pip.
+- [Source and license](https://github.com/xingkaixin/agent-dump): Repository and contribution information.

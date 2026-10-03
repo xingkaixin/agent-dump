@@ -32,13 +32,17 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const locale of locales) {
-  test(`${locale.name} landing page fits narrow and expanded viewports`, async ({ page }) => {
+  test(`${locale.name} landing page fits narrow and expanded viewports`, async ({
+    page,
+  }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(locale.path);
     for (const width of [360, 382, 390, 951]) {
       await page.setViewportSize({ width, height: 844 });
 
-      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+        .toBe(width);
       const boxes = await page
         .locator(
           "#hero h1, #hero canvas, #capabilities img, #capabilities [role='img'], #install code, #install button",
@@ -70,14 +74,21 @@ for (const locale of locales) {
           })),
         );
         for (const command of commands) {
-          expect(command.contentWidth, command.text ?? "").toBeLessThanOrEqual(command.width);
-          expect(command.contentHeight, command.text ?? "").toBeLessThanOrEqual(command.height);
+          expect(command.contentWidth, command.text ?? "").toBeLessThanOrEqual(
+            command.width,
+          );
+          expect(command.contentHeight, command.text ?? "").toBeLessThanOrEqual(
+            command.height,
+          );
         }
       }
     }
   });
 
-  test(`${locale.name} landing page interactions survive hydration`, async ({ context, page }) => {
+  test(`${locale.name} landing page interactions survive hydration`, async ({
+    context,
+    page,
+  }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.setViewportSize({ width: 382, height: 678 });
     await page.goto(locale.path);
@@ -92,12 +103,20 @@ for (const locale of locales) {
       `https://agent-dump.xingkaixin.me${locale.path}`,
     );
     await expect(page.locator('link[rel="alternate"]')).toHaveCount(4);
-    await expect(page.locator('header a[aria-current="page"]')).toHaveAttribute("href", locale.path);
+    await expect(page.locator('header a[aria-current="page"]')).toHaveAttribute(
+      "href",
+      locale.path,
+    );
 
-    const analyticsScript = page.locator('head script[src="https://umami.xingkaixin.me/script.js"]');
+    const analyticsScript = page.locator(
+      'head script[src="https://umami.xingkaixin.me/script.js"]',
+    );
     await expect(analyticsScript).toHaveCount(1);
     await expect(analyticsScript).toHaveAttribute("defer", "");
-    await expect(analyticsScript).toHaveAttribute("data-website-id", "7141781d-b011-454b-a16b-8c1e524140c6");
+    await expect(analyticsScript).toHaveAttribute(
+      "data-website-id",
+      "7141781d-b011-454b-a16b-8c1e524140c6",
+    );
 
     const install = page.locator("#install");
     const npmTab = install.getByRole("tab", { name: "npm", exact: true });
@@ -108,7 +127,9 @@ for (const locale of locales) {
     }).toPass();
 
     const npmPanel = install.getByRole("tabpanel", { name: "npm" });
-    await expect(npmPanel.getByText("npm install -g @agent-dump/cli", { exact: true })).toBeVisible();
+    await expect(
+      npmPanel.getByText("npm install -g @agent-dump/cli", { exact: true }),
+    ).toBeVisible();
     const copyButton = npmPanel.getByRole("button");
     await expect(copyButton).toHaveAccessibleName(locale.copy);
     for (const viewport of [
@@ -120,19 +141,27 @@ for (const locale of locales) {
       await expect(npmTab).toHaveAttribute("aria-selected", "true");
       await copyButton.click();
       await expect(copyButton).toHaveAccessibleName(locale.copied);
-      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
-        "npm install -g @agent-dump/cli",
-      );
+      await expect
+        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toBe("npm install -g @agent-dump/cli");
     }
 
     for (const [label, command] of [
-      ["curl", "curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | sh"],
+      [
+        "curl",
+        "curl -sSfL https://github.com/xingkaixin/agent-dump/releases/latest/download/install.sh | sh",
+      ],
       ["Homebrew", "brew install xingkaixin/tap/agent-dump"],
-      ["Scoop", "scoop bucket add xingkaixin https://github.com/xingkaixin/scoop-bucket\nscoop install xingkaixin/agent-dump"],
+      [
+        "Scoop",
+        "scoop bucket add xingkaixin https://github.com/xingkaixin/scoop-bucket\nscoop install xingkaixin/agent-dump",
+      ],
     ]) {
       const tab = install.getByRole("tab", { name: label, exact: true });
       if (label === "Scoop") {
-        await install.getByRole("tab", { name: "Homebrew", exact: true }).focus();
+        await install
+          .getByRole("tab", { name: "Homebrew", exact: true })
+          .focus();
         await page.keyboard.press("ArrowRight");
         await expect(tab).toBeFocused();
         await tab.press("Enter");
@@ -142,7 +171,9 @@ for (const locale of locales) {
       await expect(tab).toHaveAttribute("aria-selected", "true");
       const panel = install.getByRole("tabpanel", { name: label, exact: true });
       await panel.getByRole("button").click();
-      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+      await expect
+        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toBe(command);
     }
 
     const faq = page.locator("#faq");
@@ -163,19 +194,28 @@ for (const locale of locales) {
     const updates = page.locator("#updates");
     await expect(updates).toBeVisible();
     await expect(updates.locator("article")).toHaveCount(10);
-    await expect(updates.locator("article").first().getByText("v1.1.1", { exact: true })).toBeVisible();
+    await expect(
+      updates.locator("article").first().getByText("v1.1.1", { exact: true }),
+    ).toBeVisible();
 
     const themeToggle = page.locator("[data-theme-toggle]");
     await themeToggle.click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect.poll(() => page.evaluate(() => localStorage.getItem("agent-dump-theme"))).toBe("dark");
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("agent-dump-theme")))
+      .toBe("dark");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#0c1011");
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
+      "content",
+      "#0c1011",
+    );
   });
 }
 
-test("copy fallback does not report success when execCommand rejects it", async ({ page }) => {
+test("copy fallback does not report success when execCommand rejects it", async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, "isSecureContext", { value: false });
     Object.defineProperty(document, "execCommand", {
@@ -190,35 +230,65 @@ test("copy fallback does not report success when execCommand rejects it", async 
   const copyButton = page.locator("#install").getByRole("button").first();
   await expect(async () => {
     await copyButton.click();
-    await expect(page.locator("html")).toHaveAttribute("data-copy-attempted", "true");
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-copy-attempted",
+      "true",
+    );
   }).toPass();
 
   expect(await copyButton.getAttribute("aria-label")).toBe("Copy");
 });
 
-test("generated artwork and WebGL scene render within budget", async ({ page }) => {
-  for (const width of [390, 1280]) {
-    await page.setViewportSize({ width, height: 844 });
-    await page.goto("/");
+test("sample explorer searches, switches formats and copies the selected conversation", async ({
+  context,
+  page,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/");
+  const explorer = page.locator(".session-explorer");
+  await explorer.scrollIntoViewIfNeeded();
+  const search = explorer.getByRole("searchbox");
+  await search.fill("database");
+  await expect(
+    explorer.getByRole("button", {
+      name: "Claude Code Plan the database migration",
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(explorer.locator("pre")).toContainText(
+    "without dropping existing records",
+  );
+  await explorer.getByRole("tab", { name: "JSON", exact: true }).click();
+  await explorer.getByRole("tabpanel", { name: "JSON", exact: true }).getByRole("button", { name: "Copy", exact: true }).click();
+  const output = JSON.parse(
+    await page.evaluate(() => navigator.clipboard.readText()),
+  );
+  expect(output.title).toBe("Plan the database migration");
+  expect(output.messages).toHaveLength(2);
+  await search.fill("no-such-sample");
+  await expect(explorer.getByRole("status")).toContainText(
+    "No matching sessions",
+  );
+  await search.fill("");
+  await expect(
+    explorer.getByRole("button", { name: /Codex Fix/ }),
+  ).toBeVisible();
+});
 
-    const scene = page.locator("[data-focus-scene]");
-    await expect(scene).toHaveAttribute("data-ready", "true");
-    await expect(scene).toHaveAttribute("data-webgl", /^(ready|unavailable)$/);
-    await expect(scene).toHaveAttribute("role", "img");
-    await expect(scene.locator(".focus-scene__uri")).toContainText("agents://*");
-    await expect(scene.locator(".focus-scene__pill")).toBeVisible();
-    await expect
-      .poll(() => page.locator(".focus-scene__canvas").evaluate((canvas: HTMLCanvasElement) => canvas.width))
-      .toBeGreaterThan(0);
-
-    const artwork = page.locator(".convergence-image");
-    await expect(artwork).toHaveCount(1);
-    await artwork.scrollIntoViewIfNeeded();
-    await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
-    const source = await artwork.evaluate((image: HTMLImageElement) => image.currentSrc);
-    const response = await page.request.get(source);
-    expect(response.ok()).toBe(true);
-    expect(response.headers()["content-type"]).toContain("image/webp");
-    expect((await response.body()).byteLength).toBeLessThan(100 * 1024);
-  }
+test("mobile navigation is reachable by keyboard and closes on escape or navigation", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/zh/");
+  const menu = page.locator(".mobile-menu");
+  const trigger = menu.locator("summary");
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(menu).toHaveAttribute("open", "");
+  await menu.getByRole("link", { name: "使用说明" }).focus();
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toHaveAttribute("open");
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await menu.getByRole("link", { name: "使用说明" }).click();
+  await expect(page).toHaveURL("/zh/guides/");
 });

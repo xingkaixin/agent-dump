@@ -504,3 +504,7 @@ agent-dump --browse --format json,markdown --output ./exports
 - q/Esc/Ctrl-C close the reader and restore the terminal, exiting 0.
 
 Empty selections exit without opening the reader. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. Existing --interactive batch export is unchanged.
+
+## 使用场景指南
+
+面向用户的完整步骤见[使用说明](https://agent-dump.xingkaixin.me/zh/guides/)，涵盖 Codex / Claude Code 导出、历史搜索、Agent 上下文交接、工作报告和 Obsidian 归档。英文入口为 [Usage guides](https://agent-dump.xingkaixin.me/guides/)。命令参数与读写边界仍以本 recipes 和 CLI 契约为准。

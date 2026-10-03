@@ -1,5 +1,9 @@
 ---
 layout: ../../../layouts/Guide.astro
+slug: export-codex-session
+category: export
+order: 1
+updated: "2026-10-03"
 locale: zh
 title: 将 Codex 会话导出为 Markdown
 description: 使用 Agent Dump 找到本地 Codex 会话，复制真实 URI，并导出 Markdown 或 JSON。包含安装步骤、输出路径和找不到会话时的排查方法。
