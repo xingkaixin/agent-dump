@@ -179,8 +179,12 @@ agent-dump --collect --emit-prompt -query "provider:opencode"
 ```bash
 agent-dump --browse -query 'provider:codex path:.' -days 30
 agent-dump --list --json
+agent-dump --list --time-field updated --days 7 --json
+agent-dump --providers --json
+agent-dump codex://SESSION_ID --head --json
 agent-dump --search 'database locked' --locate --json -query 'provider:codex'
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3 --json
+agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --format json,markdown --output excerpts
 ```
 
 `--browse` requires an interactive terminal and defaults to the last seven days. It supports
@@ -188,22 +192,50 @@ session search (`/`, then n/N), tool details (`t`), URI clipboard requests (`y`,
 and export (`e`, using `--format` and `--output`). Tab switches panes on narrow terminals;
 q/Esc/Ctrl-C closes the reader. Source sessions remain read-only; reopen to refresh the list.
 
-`--json` writes one versioned JSON envelope to stdout for list, search, statistics, or message
-context; diagnostics go to stderr. Check `status` for partial results and always check the exit
-code. Existing `--format json` exports still write files.
+Add `--time-field updated` to list, search, browse, or interactive selection to find sessions
+active within the `--days` window, including older conversations. Creation time remains the
+default; collect dates and statistics retain their existing meaning.
+
+`--json` writes one versioned JSON envelope to stdout for list, search, statistics, message
+context, bounded reads, head metadata, or Provider capabilities; diagnostics go to stderr.
+Check `status` for partial results and always check the exit code. Existing `--format json`
+exports still write files.
 
 Pass a search result's `locations[].locator` unchanged to `--message`. Locators bind to the
 transcript snapshot; rerun search if content changes. Context defaults to three messages before
-and after the target. `--message` cannot combine with `--head`, `--summary`, `--format`, or
-`--output`. See the full README for the JSON schema and query restrictions.
+and after the target. Use `--format json,markdown` to export the selected context with its URI,
+locator, original message range, and partial-source status. Provider format restrictions still
+apply. `--message` cannot combine with `--head` or `--summary`; `--json` cannot combine with
+file-export options, and `--output` requires `--format`.
+
+## Read sessions in bounded pages
+
+```bash
+agent-dump codex://SESSION_ID --read-prompt
+agent-dump codex://SESSION_ID --read --order asc --limit 20 --max-chars 12000 --json
+agent-dump codex://SESSION_ID --read --cursor 'NEXT_CURSOR' --json
+```
+
+Replace `NEXT_CURSOR` with `data.next_cursor` from the previous page. Continue until
+`has_more=false`, including every fragment of long messages. Cursors preserve the selection,
+order, and budgets; do not override them on continuation. A changed transcript invalidates the
+cursor, so restart reading instead of combining revisions. Output is bounded, but each request
+may still parse the full source transcript. `--read-prompt` generates reading instructions
+without opening the source or confirming that the session exists.
+
+Collect processes all eligible user/assistant text through bounded chunks and marks incomplete
+reports. `--collect --emit-prompt` generates a paginated reading task for an external Agent;
+it does not create the report. See the full README for schemas, filters, and source limits.
 
 ## Key features
 
 - **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, Pi, DeepChat, Cherry Studio, and MiniMax Code
 - **Interactive selection**: Friendly CLI selector with time-based grouping
 - **Session reader**: `--browse` for terminal reading, in-session search, tool details, and export
-- **Machine-readable queries**: `--json` for list, search, statistics, and message context
-- **Message context**: `--search --locate` and URI `--message` to read search hits with nearby messages
+- **Machine-readable queries**: `--json` for list, search, statistics, message context, bounded reads, metadata, and capabilities
+- **Message context**: `--search --locate` and URI `--message` to read or export search hits with nearby messages and source locators
+- **Bounded Agent reading**: `--read` pages with continuation cursors and `--read-prompt` instructions
+- **Recent activity**: `--time-field updated` finds recently active sessions in list, search, browse, and interactive modes
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` reuses bounded discovery metadata without rereading the transcript and marks incomplete message counts as unknown
 - **Statistics**: `--stats` shows session and message counts grouped by agent and time, reporting known subtotals separately from sessions with unknown counts
