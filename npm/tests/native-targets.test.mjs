@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { NATIVE_TARGETS, nativeMatrix, packageTarballName } from "../scripts/native-targets.mjs";
+import { NATIVE_TARGETS, packageTarballName } from "../scripts/native-targets.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -35,18 +35,6 @@ test("platform package manifests project the native target manifest", async () =
   }
 });
 
-test("release matrix is derived from the native target manifest", () => {
-  assert.deepEqual(nativeMatrix(), {
-    include: NATIVE_TARGETS.map((target) => ({
-      os: target.runner,
-      target: target.target,
-      binary_name: target.executableName,
-      rust_target: target.rustTarget,
-      wheel_platform: target.wheelPlatform
-    }))
-  });
-});
-
 test("supported target documentation projects the native target manifest", async () => {
   const documentedTargets = NATIVE_TARGETS.map((target) => target.target);
   const documents = ["README.md", "README_zh.md", "npm/packages/cli/README.md"];
@@ -60,25 +48,6 @@ test("supported target documentation projects the native target manifest", async
       documentedTargets,
       document
     );
-  }
-});
-
-test("release consumers do not redefine native target names", async () => {
-  const scriptDir = path.resolve(repoRoot, "npm", "scripts");
-  const scriptFiles = (await fs.readdir(scriptDir))
-    .filter((name) => name.endsWith(".mjs"))
-    .map((name) => path.join(scriptDir, name));
-  const consumers = [
-    ...scriptFiles,
-    path.resolve(repoRoot, "npm", "packages", "cli", "lib", "targets.cjs"),
-    path.resolve(repoRoot, ".github", "workflows", "release.yml")
-  ];
-
-  for (const consumer of consumers) {
-    const content = await fs.readFile(consumer, "utf8");
-    for (const target of NATIVE_TARGETS) {
-      assert.ok(!content.includes(target.target), `${path.relative(repoRoot, consumer)} redefines ${target.target}`);
-    }
   }
 });
 

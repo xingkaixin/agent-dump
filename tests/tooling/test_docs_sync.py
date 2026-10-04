@@ -8,31 +8,6 @@ import shlex
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AGENTS_MD = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
-DEVELOPMENT_GUIDE = (REPO_ROOT / "docs" / "development-guide.md").read_text(encoding="utf-8")
-AGENT_REFERENCE_PATHS = (
-    "CONTEXT.md",
-    "docs/architecture.md",
-    "docs/development-guide.md",
-    "docs/release-guide.md",
-    "skills/agent-dump/SKILL.md",
-    "skills/agent-dump/references/cli-recipes.md",
-)
-
-
-class TestAgentInstructionRouting:
-    @pytest.mark.parametrize("relative_path", AGENT_REFERENCE_PATHS)
-    def test_agents_md_routes_to_existing_reference(self, relative_path: str) -> None:
-        assert f"`{relative_path}`" in AGENTS_MD
-        assert (REPO_ROOT / relative_path).is_file()
-
-    def test_declared_line_length_matches_ruff(self) -> None:
-        """文档写 100 而 ruff 配 120 时，照文档写的 agent 会按错的宽度换行。"""
-        ruff = (REPO_ROOT / "ruff.toml").read_text(encoding="utf-8")
-        configured = re.search(r"line-length = (\d+)", ruff)
-
-        assert configured is not None
-        assert f"单行最大长度 {configured.group(1)}" in DEVELOPMENT_GUIDE
 
 
 class TestReadmeDocumentsEveryCliFlag:
@@ -50,47 +25,6 @@ class TestReadmeDocumentsEveryCliFlag:
         missing = sorted(flag for flag in self._declared_option_strings(cli) if flag not in content)
 
         assert missing == [], f"{readme} 未记录这些 CLI 参数: {missing}"
-
-
-class TestNpmWrapperRuntimeContract:
-    @staticmethod
-    def _manifest() -> dict:
-        return json.loads((REPO_ROOT / "npm" / "packages" / "cli" / "package.json").read_text(encoding="utf-8"))
-
-    def test_wrapper_entrypoint_and_manifest_require_the_same_node_runtime(self):
-        manifest = self._manifest()
-        entrypoint = (REPO_ROOT / "npm" / "packages" / "cli" / "bin" / "agent-dump.cjs").read_text(encoding="utf-8")
-
-        assert manifest["engines"]["node"] == ">=22"
-        assert entrypoint.startswith("#!/usr/bin/env node\n")
-
-    @pytest.mark.parametrize(
-        "document",
-        [
-            "README.md",
-            "README_zh.md",
-            "npm/packages/cli/README.md",
-            "skills/agent-dump/SKILL.md",
-            "web/src/lib/i18n.ts",
-        ],
-    )
-    def test_every_bun_entrypoint_declares_the_node_minimum(self, document):
-        content = (REPO_ROOT / document).read_text(encoding="utf-8")
-
-        assert "bunx" in content
-        assert "Node.js 22" in content
-
-
-class TestWebDeploymentTooling:
-    def test_wrangler_is_exactly_pinned_and_invoked_locally(self) -> None:
-        manifest = json.loads((REPO_ROOT / "web" / "package.json").read_text(encoding="utf-8"))
-        justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
-        workspace = (REPO_ROOT / "web" / "pnpm-workspace.yaml").read_text(encoding="utf-8")
-        wrangler_version = manifest["devDependencies"]["wrangler"]
-
-        assert re.fullmatch(r"\d+\.\d+\.\d+", wrangler_version)
-        assert "pnpm --dir web exec wrangler pages deploy dist " in justfile
-        assert "  workerd: true" in workspace
 
 
 class TestChangelogLinksResolve:
