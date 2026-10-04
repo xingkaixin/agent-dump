@@ -18,6 +18,7 @@ PROVIDERS = [
 ]
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("provider", PROVIDERS)
 @pytest.mark.parametrize("lang", ["en", "zh"])
 def test_legacy_list_head_and_all_formats(cli, provider, lang):
@@ -29,6 +30,7 @@ def test_legacy_list_head_and_all_formats(cli, provider, lang):
     assert raw["messages"][-1]["role"] == "developer"
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "part",
     [
@@ -55,6 +57,7 @@ def test_part_shapes_and_unknown_types(cli, part):
     export(cli, identity="ses_old")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "fields",
     [
@@ -81,6 +84,7 @@ def test_message_scalar_coercion(cli, fields):
     export(cli, identity="ses_old")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "summary",
     [
@@ -103,6 +107,7 @@ def test_head_summary_targets_and_nullable_metadata(cli, summary):
     export(cli, identity="ses_old")
 
 
+@pytest.mark.differential
 def test_missing_message_table_keeps_head_count_unknown(cli):
     path = create_legacy(cli)
     with sqlite3.connect(path) as connection:
@@ -114,6 +119,7 @@ def test_missing_message_table_keeps_head_count_unknown(cli):
     assert not any(path.is_file() for path in (cli.root / "exports").rglob("*"))
 
 
+@pytest.mark.differential
 def test_parts_are_batched_without_losing_messages_or_order(cli):
     path = create_legacy(cli)
     with sqlite3.connect(path) as connection:
@@ -129,6 +135,7 @@ def test_parts_are_batched_without_losing_messages_or_order(cli):
     export(cli, identity="ses_old")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("journal", ["DELETE", "WAL"])
 def test_database_and_wal_remain_unchanged_and_new_commits_are_visible(cli, journal):
     path = create_legacy(cli)

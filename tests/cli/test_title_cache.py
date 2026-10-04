@@ -8,6 +8,8 @@ from cli_fixture import IDENTITY, ROOT, header, message, write_jsonl
 import pytest
 from test_claude import create as create_claude, event
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.fixture(params=["en", "zh"])
 def language(request):

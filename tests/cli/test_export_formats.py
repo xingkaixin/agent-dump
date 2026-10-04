@@ -6,12 +6,14 @@ from cli_fixture import IDENTITY, header, message
 import pytest
 
 
+@pytest.mark.differential
 def test_raw_export_preserves_invalid_records_and_partial_tail(cli):
     cli.write([header(), message("user", "Keep")], suffix=b'not-json\n\xff\n{"partial":')
     cli.parity(f"codex://{IDENTITY}", "--format", "raw", "--output", "exports", "--lang", "en", formats=("raw",))
     assert (cli.root / "exports" / "codex" / f"{IDENTITY}.raw.jsonl").read_bytes() == cli.source.read_bytes()
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("blocked", [(".json",), (".json", ".md", ".raw.jsonl")])
 def test_file_export_failures_do_not_stop_other_formats(cli, blocked):
     before = cli.fixtures.source_manifest(cli.root)

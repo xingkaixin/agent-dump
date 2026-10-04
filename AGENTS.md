@@ -57,7 +57,7 @@
 ## 3. 验证与文档
 
 - 开发时先运行与改动直接相关的测试。
-- 提交 PR 前运行 `just isok`。CLI 差分测试位于 `tests/cli`，固定参考由 `just reference` 安装；不得读取真实用户数据。
+- 提交 PR 前运行 `just isok`。默认验证运行 Rust 单元测试和独立行为契约。`tests/cli` 中标记为 `differential` 的历史差分测试仅通过 `just test-differential` 手动运行；不得读取真实用户数据。
 - 修改公开 API、CLI 或用户可见能力时，同步更新 README 和相关 skill recipes。
 - 只在稳定约束、职责边界或任务路由变化时更新本文件。模块增删和实现细节记录到对应按需文档或由代码、配置和测试作为来源。
 - 修改架构术语或事实边界时同步更新 `CONTEXT.md`。

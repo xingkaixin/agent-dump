@@ -10,6 +10,8 @@ import pytest
 from sqlite_fixture import create_v2
 from test_cursor import cursor
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(

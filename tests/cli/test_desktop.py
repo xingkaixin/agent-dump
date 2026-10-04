@@ -3,6 +3,8 @@ import sqlite3
 from desktop_fixture import desktop, exports, fails
 import pytest
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax"])
 @pytest.mark.parametrize("lang", ["en", "zh"])

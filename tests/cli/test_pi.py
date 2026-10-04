@@ -75,6 +75,7 @@ STREAM = [
 ]
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 def test_tree_messages_titles_stats_list_head_and_exports(cli, lang):
     create(cli, STREAM)
@@ -83,6 +84,7 @@ def test_tree_messages_titles_stats_list_head_and_exports(cli, lang):
     provider_export(cli, f"pi://{IDENTITY}", "pi", lang=lang)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "content",
     [
@@ -101,6 +103,7 @@ def test_content_shapes_images_and_tools(cli, content):
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "role,fields",
     [
@@ -122,6 +125,7 @@ def test_special_roles(cli, role, fields):
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("identity,parent", [(None, None), (7, False), ("", "previous"), ("  id  ", {}), ([], [])])
 def test_entry_identifiers_parents_and_valid_record_numbering(cli, identity, parent):
     source = create(cli, [message("user", "Keep", identity=identity, parent=parent)])
@@ -129,6 +133,7 @@ def test_entry_identifiers_parents_and_valid_record_numbering(cli, identity, par
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "timestamp",
     [None, True, "bad", 0, -0.9, 1768478400123.456, 1e30, "2026-01-15T12:00:00", "2026-01-15T20:00:00+08:00"],
@@ -139,6 +144,7 @@ def test_message_and_header_timestamps(cli, timestamp):
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "usage",
     [
@@ -153,6 +159,7 @@ def test_usage_accumulates_even_without_visible_parts(cli, usage):
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "header,records",
     [
@@ -168,6 +175,7 @@ def test_metadata_fallback_and_raw_message_count(cli, header, records):
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
+@pytest.mark.differential
 def test_large_scan_and_full_read_resolve_different_titles(cli):
     create(
         cli, [message("user", "x" * 300_000), {"type": "session_info", "name": "Full read title"}, {"type": "unknown"}]
@@ -176,17 +184,20 @@ def test_large_scan_and_full_read_resolve_different_titles(cli):
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
+@pytest.mark.differential
 def test_header_identity_fallback_lookup_and_incomplete_tail(cli):
     create(cli, [message("user", "Keep")], filename="mismatched-name.jsonl", suffix=b'{"type":')
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
+@pytest.mark.differential
 def test_local_fallback(cli):
     create(cli, STREAM)
     shutil.move(str(cli.root / "sources/pi/agent/sessions"), cli.root / "data/pi")
     cli.parity(f"pi://{IDENTITY}", "--head", "--lang", "en")
 
 
+@pytest.mark.differential
 def test_invalid_header_is_not_a_pi_session(cli):
     create(cli, [message("user", "Keep")], header={"type": "message"})
     cli.parity("--list", "-d", "36500", "-q", "provider:pi", "--lang", "en")
@@ -200,6 +211,7 @@ def test_exports_cannot_write_into_pi_sources(cli):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "root",
     [

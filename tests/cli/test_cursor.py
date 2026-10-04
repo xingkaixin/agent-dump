@@ -7,6 +7,8 @@ from cli_fixture import make_cli
 from desktop_fixture import NOW, fails
 import pytest
 
+pytestmark = pytest.mark.differential
+
 
 def put(cli, key, value):
     with sqlite3.connect(cli.source) as conn:

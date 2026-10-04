@@ -8,6 +8,8 @@ import pytest
 from sqlite_fixture import create_v2, export as sqlite_export
 from test_cursor import cursor, export as cursor_export
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize(
     "encoding", ["utf-8", "utf-8-sig", "utf-16", "utf-32", "utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"]

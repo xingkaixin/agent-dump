@@ -9,6 +9,8 @@ import sqlite3
 import pytest
 from sqlite_fixture import create_legacy
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize("location", ["absolute", "relative", "xdg", "home", "fallback"])
 def test_opencode_database_selection(cli, location):

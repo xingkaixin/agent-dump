@@ -5,6 +5,8 @@ from copy import deepcopy
 from cli_fixture import call, export_parity, message, output, reasoning, record
 import pytest
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize(
     "records",

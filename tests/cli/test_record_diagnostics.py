@@ -11,6 +11,8 @@ from test_kimi import create as create_kimi, wire_event
 from test_pi import create as create_pi, message as pi_message
 from test_sqlite_legacy import PROVIDERS
 
+pytestmark = pytest.mark.differential
+
 JSONL_PROVIDERS = ("codex", "claude", "kimi-context", "kimi-wire", "pi")
 
 

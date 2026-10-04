@@ -4,6 +4,8 @@ from cli_fixture import IDENTITY
 import pytest
 from test_title_cache import sessions
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize("language", ["en", "zh"])
 @pytest.mark.parametrize(

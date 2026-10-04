@@ -6,6 +6,8 @@ import shutil
 import pytest
 from test_config_shortcuts import config_path
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(

@@ -9,6 +9,7 @@ import pytest
 from test_cursor import cursor
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax"])
 @pytest.mark.parametrize("mode", ["default", "relative", "missing"])
 def test_paths_and_explicit_missing_source(tmp_path, monkeypatch, provider, mode):
@@ -46,6 +47,7 @@ def test_paths_and_explicit_missing_source(tmp_path, monkeypatch, provider, mode
     exports(cli, provider, identity)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "primary,legacy,root_name", [("  ", " ~/old ", "old"), (" ~/selected ", "~/old", "selected"), ("~", None, "")]
 )
@@ -62,6 +64,7 @@ def test_minimax_override_priority_and_home_expansion(tmp_path, monkeypatch, pri
     exports(cli, "minimax", identity)
 
 
+@pytest.mark.differential
 def test_cherry_boot_config_relocation(tmp_path, monkeypatch):
     cli, identity = desktop(tmp_path, monkeypatch, "cherry")
     root = cli.source.parent.parent
@@ -85,6 +88,7 @@ def test_cherry_boot_config_relocation(tmp_path, monkeypatch):
     exports(cli, "cherry", identity)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "raw",
     [
@@ -127,6 +131,7 @@ def test_provider_source_directory_cannot_be_export_destination(tmp_path, monkey
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax", "cursor"])
 def test_wal_changes_are_visible_without_changing_persistent_data(tmp_path, monkeypatch, provider):
     cli, identity = (

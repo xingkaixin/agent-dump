@@ -1,6 +1,6 @@
 # 架构与扩展指南
 
-根目录是 Cargo workspace 和 CLI package：`src/` 负责命令与交互，`crates/agent-dump-core/src/` 负责可独立于终端调用的读取、查询和导出。依赖只从 CLI 指向 core；core 的具体 Provider 模块为 crate 内可见。`resources/` 保存编译时嵌入的文案与提示词；`tests/cli/` 用固定的外部 Python v0.15.9 验证兼容性。旧 Python 应用不再保存在主树中。稳定约束见 `AGENTS.md`，领域术语见 `CONTEXT.md`。
+根目录是 Cargo workspace 和 CLI package：`src/` 负责命令与交互，`crates/agent-dump-core/src/` 负责可独立于终端调用的读取、查询和导出。依赖只从 CLI 指向 core；core 的具体 Provider 模块为 crate 内可见。`resources/` 保存编译时嵌入的文案与提示词；`tests/cli/` 默认验证 Rust 行为契约，带 `differential` 标记的测试可手动与固定的外部 Python v0.15.9 比较。旧 Python 应用不再保存在主树中。稳定约束见 `AGENTS.md`，领域术语见 `CONTEXT.md`。
 
 ## 1. 公开契约与分发
 

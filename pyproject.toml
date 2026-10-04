@@ -62,8 +62,9 @@ pythonpath = ["scripts", "tests/cli"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "--tb=short"
+addopts = "--tb=short -m 'not differential'"
 markers = [
+    "differential: optional comparison against the frozen Python v0.15.9 CLI",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
 

@@ -50,6 +50,7 @@ CONTEXT_STREAM = [
 ]
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("with_wire", [True, False])
 def test_context_precedence_usage_head_list_and_exports(cli, lang, with_wire):
@@ -67,6 +68,7 @@ def test_context_precedence_usage_head_list_and_exports(cli, lang, with_wire):
     provider_export(cli, f"kimi://{IDENTITY}", "kimi", lang=lang)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("arguments", ['{"z":1,"a":2}', "invalid", "null", "[]", None, 4, {"z": "中文"}])
 def test_context_tool_arguments(cli, arguments):
     create(
@@ -79,6 +81,7 @@ def test_context_tool_arguments(cli, arguments):
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "content",
     [None, "", False, 1e-6, {"z": 1, "a": "中文"}, ["one", {"type": "text", "text": "two"}, {"type": "image"}, None]],
@@ -94,6 +97,7 @@ def test_context_output_shapes_and_orphans(cli, content):
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
+@pytest.mark.differential
 def test_context_todo_filtering_and_title_mapping(cli):
     names = ["SetTodoList", "ReadFile", "Glob", "StrReplaceFile", "Grep", "WriteFile", "Shell", "Unknown"]
     create(
@@ -106,6 +110,7 @@ def test_context_todo_filtering_and_title_mapping(cli):
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
+@pytest.mark.differential
 def test_context_user_coercion_empty_and_unknown_records(cli):
     create(
         cli,
@@ -128,6 +133,7 @@ WIRE_STREAM = [
 ]
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 def test_wire_assembly_streaming_arguments_and_unknown_head_count(cli, lang):
     create(cli, wire=WIRE_STREAM)
@@ -136,6 +142,7 @@ def test_wire_assembly_streaming_arguments_and_unknown_head_count(cli, lang):
     provider_export(cli, f"kimi://{IDENTITY}", "kimi", lang=lang)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "records",
     [
@@ -178,6 +185,7 @@ def test_wire_boundaries(cli, records):
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("timestamp", [None, "1768478400", True, 1e30, -1e30, 0, 1768478400.123])
 def test_wire_timestamps_and_usage_coercion(cli, timestamp):
     record = wire_event("TurnBegin", user_input=[{"text": "Keep"}])
@@ -195,6 +203,7 @@ def test_wire_timestamps_and_usage_coercion(cli, timestamp):
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "metadata,cwd",
     [
@@ -211,6 +220,7 @@ def test_metadata_identity_title_time_and_working_directory_fallback(cli, metada
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
+@pytest.mark.differential
 def test_metadata_mtime_does_not_hide_a_current_wire_mtime(cli):
     directory = create(cli, context=CONTEXT_STREAM)
     os.utime(directory / "metadata.json", (0, 0))
@@ -218,12 +228,14 @@ def test_metadata_mtime_does_not_hide_a_current_wire_mtime(cli):
     cli.parity("--list", "-d", "1", "-q", "provider:kimi", "--lang", "en")
 
 
+@pytest.mark.differential
 def test_large_context_head_keeps_count_unknown(cli):
     create(cli, context=[{"role": "user", "content": "x" * 300_000}])
     cli.parity(f"kimi://{IDENTITY}", "--head", "--lang", "en")
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
+@pytest.mark.differential
 def test_local_fallback_and_project_hash_map(cli):
     create(cli, context=CONTEXT_STREAM)
     shutil.move(str(cli.root / "sources/kimi/sessions"), cli.root / "data/kimi")
@@ -241,6 +253,7 @@ def test_exports_cannot_write_into_kimi_sources(cli):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("metadata", ["{broken", "[]"])
 def test_bad_metadata_does_not_hide_healthy_sessions(cli, metadata):
     directory = create(cli, context=CONTEXT_STREAM)

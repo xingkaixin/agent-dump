@@ -4,6 +4,8 @@ import sqlite3
 from desktop_fixture import desktop, exports
 import pytest
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize("drop", [False, True])
 def test_fallback_compaction_and_block_types(tmp_path, monkeypatch, drop):
