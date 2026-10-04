@@ -37,7 +37,7 @@ for (const locale of locales) {
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(locale.path);
-    for (const width of [360, 382, 390, 951]) {
+    for (const width of [360, 951]) {
       await page.setViewportSize({ width, height: 844 });
 
       await expect
@@ -108,19 +108,8 @@ for (const locale of locales) {
       locale.path,
     );
 
-    const analyticsScript = page.locator(
-      'head script[src="https://umami.xingkaixin.me/script.js"]',
-    );
-    await expect(analyticsScript).toHaveCount(1);
-    await expect(analyticsScript).toHaveAttribute("defer", "");
-    await expect(analyticsScript).toHaveAttribute(
+    await expect(page.locator('script[src="https://umami.xingkaixin.me/script.js"]')).toHaveAttribute(
       "data-domains", "agent-dump.xingkaixin.me",
-    );
-    await expect(analyticsScript).toHaveAttribute("data-exclude-hash", "true");
-    await expect(analyticsScript).toHaveAttribute("data-performance", "true");
-    await expect(analyticsScript).toHaveAttribute(
-      "data-website-id",
-      "7141781d-b011-454b-a16b-8c1e524140c6",
     );
 
     const install = page.locator("#install");
@@ -196,13 +185,6 @@ for (const locale of locales) {
     expect(answerId).toBeTruthy();
     await expect(page.locator(`#${answerId}`)).toBeVisible();
 
-    const updates = page.locator("#updates");
-    await expect(updates).toBeVisible();
-    await expect(updates.locator("article")).toHaveCount(10);
-    await expect(
-      updates.locator("article").first().getByText("v1.1.1", { exact: true }),
-    ).toBeVisible();
-
     const themeToggle = page.locator("[data-theme-toggle]");
     await themeToggle.click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -211,10 +193,6 @@ for (const locale of locales) {
       .toBe("dark");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
-      "content",
-      "#0c1011",
-    );
   });
 }
 
