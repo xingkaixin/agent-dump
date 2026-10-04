@@ -9,6 +9,8 @@ from cli_fixture import IDENTITY
 import pytest
 import tomli as tomllib
 
+pytestmark = pytest.mark.differential
+
 
 def config_path(cli):
     base = Path(cli.environment["APPDATA"]) if os.name == "nt" else Path(cli.environment["HOME"]) / ".config"

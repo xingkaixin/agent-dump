@@ -7,6 +7,8 @@ import pytest
 from test_claude import create as create_claude, event, result, tool
 from test_pi import create as create_pi, message as pi_message
 
+pytestmark = pytest.mark.differential
+
 
 def codex_stream(cli, bad):
     bad["payload"]["info"] = {"total_token_usage": {"input_tokens": 100, "output_tokens": 200}}

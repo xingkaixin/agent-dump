@@ -31,6 +31,7 @@ def create(cli, records, *, identity=IDENTITY, project="-workspace-claude"):
     return write_jsonl(cli.root / "sources" / "claude" / "projects" / project / f"{identity}.jsonl", records)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "records",
     [
@@ -97,6 +98,7 @@ def test_transcript_streams(cli, records):
     provider_export(cli, f"claude://{IDENTITY}", "claudecode")
 
 
+@pytest.mark.differential
 def test_accumulated_parts_keep_reasoning_and_tool_boundaries(cli):
     create(
         cli,
@@ -111,6 +113,7 @@ def test_accumulated_parts_keep_reasoning_and_tool_boundaries(cli):
     provider_export(cli, f"claude://{IDENTITY}", "claudecode")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "content", [None, "", "  text  ", False, 1e-6, {"z": 2, "a": 1}, ["one", {"text": "two"}, {"content": 3}, None]]
 )
@@ -126,6 +129,7 @@ def test_tool_output_shapes(cli, content):
     provider_export(cli, f"claude://{IDENTITY}", "claudecode")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize(
     "usage", [{"input_tokens": "17", "output_tokens": 4}, {"input_tokens": True, "output_tokens": "bad"}, [], None]
 )
@@ -140,6 +144,7 @@ def test_grouped_usage_and_first_metadata(cli, usage):
     provider_export(cli, f"claude://{IDENTITY}", "claudecode")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("title_source", ["index", "message", "directory", "project"])
 def test_discovery_titles_head_list_and_export(cli, lang, title_source):
@@ -168,6 +173,7 @@ def test_discovery_titles_head_list_and_export(cli, lang, title_source):
     provider_export(cli, f"claude://{IDENTITY}", "claudecode", lang=lang)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("layout", ["default-home", "local-fallback"])
 def test_discovery_root_resolution(cli, layout):
     create(cli, [event("user", "Start")])
@@ -179,6 +185,7 @@ def test_discovery_root_resolution(cli, layout):
     cli.parity(f"claude://{IDENTITY}", "--head", "--lang", "en")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("oversized_header", [False, True])
 def test_large_file_bounded_head(cli, oversized_header):
     records = [event("user", "Start"), event("assistant", [{"type": "text", "text": "文" * 350_000}])]
@@ -189,6 +196,7 @@ def test_large_file_bounded_head(cli, oversized_header):
     provider_export(cli, f"claude://{IDENTITY}", "claudecode")
 
 
+@pytest.mark.differential
 def test_discovery_date_order_and_project_depth(cli):
     create(cli, [event("user", "Older", timestamp="2026-01-14T12:00:00+00:00")], identity="older")
     create(cli, [event("user", "Current")])

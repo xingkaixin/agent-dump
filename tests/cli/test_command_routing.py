@@ -3,6 +3,8 @@
 from cli_fixture import IDENTITY
 import pytest
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(

@@ -4,6 +4,8 @@ import sqlite3
 from desktop_fixture import desktop, exports, fails
 import pytest
 
+pytestmark = pytest.mark.differential
+
 
 def add_message(cli, data):
     with sqlite3.connect(cli.source) as conn:

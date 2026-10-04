@@ -9,6 +9,7 @@ import pytest
 import tomli
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("summary", [True, False])
 def test_list_order_titles_facts_and_date_window(cli, lang, summary):
@@ -19,12 +20,14 @@ def test_list_order_titles_facts_and_date_window(cli, lang, summary):
     cli.parity("--list", "-d", "1", "-q", "provider:codex", "--lang", lang)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("uri_prefix", ["codex://", "codex://threads/"])
 def test_head_and_uri_prefix(cli, lang, uri_prefix):
     cli.parity(f"{uri_prefix}{IDENTITY}", "--head", "--lang", lang)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("size", [0, 120_000, 300_000, 2_000_000])
 def test_large_text_and_bounded_metadata(cli, size):
     cli.write(
@@ -36,6 +39,7 @@ def test_large_text_and_bounded_metadata(cli, size):
     cli.parity(uri, "--format", "json", "--output", str(cli.root / "exports"), "--lang", "en", json_export=True)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("kind", ["ordinary", "reasoning", "developer", "missing-time", "unicode-controls"])
 def test_message_assembly_and_json_schema(cli, kind):
     records = [header(cli_version="0.1", model_provider="openai"), message("user", "one")]
@@ -69,6 +73,7 @@ def test_message_assembly_and_json_schema(cli, kind):
     )
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("title_source", ["second-message", "directory", "filename", "oversized-header", "index-last"])
 def test_metadata_fallbacks(cli, title_source):
     index = cli.root / "sources" / "codex" / "session_index.jsonl"
@@ -89,6 +94,7 @@ def test_metadata_fallbacks(cli, title_source):
     cli.parity(f"codex://{IDENTITY}", "--head", "--lang", "en")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("identity", ["UPPER", "folder/id", "con", "中文", "white space", "a" * 121])
 def test_portable_export_identity(cli, identity):
     cli.write([header(identity), message("user", "ok")])
@@ -156,10 +162,12 @@ def test_help_covers_all_operations_in_selected_language(cli, lang, args):
     assert "Experimental" not in result.stdout
 
 
+@pytest.mark.differential
 def test_repeated_options_keep_last_value(cli):
     cli.parity("--list", "-d", "1", "-d", "36500", "-q", "provider:codex", "--lang", "en")
 
 
+@pytest.mark.differential
 @pytest.mark.skipif(os.name == "nt", reason="Python does not apply TZ on Windows")
 @pytest.mark.parametrize("zone", ["Asia/Shanghai", "America/New_York"])
 def test_local_timezone_names(cli, zone):
@@ -167,6 +175,7 @@ def test_local_timezone_names(cli, zone):
     cli.parity(f"codex://{IDENTITY}", "--head", "--lang", "en")
 
 
+@pytest.mark.differential
 def test_local_fallback_root(cli):
     local = cli.root / "data" / "codex"
     local.parent.mkdir(exist_ok=True)
@@ -174,6 +183,7 @@ def test_local_fallback_root(cli):
     cli.parity(f"codex://{IDENTITY}", "--head", "--lang", "en")
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("days", ["0", "-1", "9999999999999999999999"])
 def test_invalid_date_windows_are_argument_errors(cli, days):
     for candidate in ("python", "rust"):
@@ -202,10 +212,12 @@ def test_private_export_preserves_existing_directory_permissions(cli):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
+@pytest.mark.differential
 def test_relative_export_path_matches_python(cli):
     cli.parity(f"codex://{IDENTITY}", "--format", "json", "--output", "exports", "--lang", "en", json_export=True)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("flag", ["--version", "-v"])
 def test_version_comes_from_rust_manifest(cli, flag):
     manifest = tomli.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))

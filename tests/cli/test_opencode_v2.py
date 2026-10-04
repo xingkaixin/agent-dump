@@ -7,6 +7,8 @@ import time
 import pytest
 from sqlite_fixture import create_legacy, create_v2, export
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.fixture
 def database(cli, monkeypatch):

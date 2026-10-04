@@ -6,6 +6,8 @@ from test_claude import create as claude_create, event
 from test_kimi import create as kimi_create
 from test_pi import create as pi_create, message as pi_message
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize("provider", ["codex", "claude", "kimi", "pi"])
 @pytest.mark.parametrize("value", [2**63 - 1, 2**80, -(2**80), str(2**100), 1e100, "  +1_234  ", "١٢٣", "１２３"])

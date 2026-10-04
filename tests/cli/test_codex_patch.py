@@ -1,6 +1,8 @@
 from cli_fixture import call, export_parity, output
 import pytest
 
+pytestmark = pytest.mark.differential
+
 PATCH = """*** Begin Patch
 *** Add File: 新文件.py
 +print("new")

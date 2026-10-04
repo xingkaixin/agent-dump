@@ -16,6 +16,8 @@ from test_cursor import cursor
 from test_kimi import create as create_kimi
 from test_pi import create as create_pi, message
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("summary", [True, False])

@@ -43,9 +43,13 @@ check-tools:
     @echo "✅ Type checking complete!"
 
 # Verify Rust units and the isolated CLI/tooling contracts
-test: reference build-rust
+test: build-rust
     cargo test --locked --workspace
     uv run pytest -q
+
+# Compare with the frozen Python CLI only when explicitly requested
+test-differential: reference build-rust
+    uv run pytest -q -m differential tests/cli
 
 # Install the frozen external Python CLI for differential verification
 reference:
@@ -55,8 +59,8 @@ reference:
 benchmark *args: build-rust
     uv run python scripts/benchmark_cli.py {{args}}
 
-# Check the Rust CLI and compare it with Python on synthetic data
-check-rust: reference
+# Check the Rust CLI on synthetic data
+check-rust:
     cargo fmt --all --check
     cargo clippy --locked --workspace --all-targets -- -D warnings
     cargo test --locked --workspace

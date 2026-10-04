@@ -4,6 +4,8 @@ import sqlite3
 from desktop_fixture import desktop, exports, fails
 import pytest
 
+pytestmark = pytest.mark.differential
+
 
 @pytest.mark.parametrize(
     "active,ids", [("empty", ["user", "answer"]), ("alternative", ["user", "alternative"]), ("root", []), (None, [])]

@@ -589,7 +589,7 @@ rustfmt.toml    # Stable Rustfmt, edition 2024, 80 columns
 src/            # CLI workflows, Collect and terminal interaction
 crates/agent-dump-core/ # Providers, sessions, queries and export engine
 resources/      # Embedded locales and prompts
-tests/cli/      # CLI contracts and external Python reference comparison
+tests/cli/      # Rust CLI contracts and optional historical comparisons
 tests/tooling/  # Packaging, benchmark and documentation checks
 scripts/        # Validated CLI benchmarks and paired release eval
 packaging/      # Maturin builds and installation verification
@@ -600,14 +600,14 @@ web/            # Landing page
 
 ## Development
 
-Rust is the build and runtime implementation starting with v1.0.0, with Ratatui for terminal interaction. The old Python application has been removed from the working tree. Differential tests install the immutable 0.15.9 wheel in an isolated reference environment. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), [P6 acceptance](docs/rust-p6-completion.md), and the [final performance report](docs/benchmarks/rust-p6.md).
+Rust is the build and runtime implementation starting with v1.0.0, with Ratatui for terminal interaction. The old Python application has been removed from the working tree. CI and `just isok` run Rust behavior contracts without the historical Python CLI. Optional differential tests install the immutable 0.15.9 wheel in an isolated reference environment through `just test-differential`. See [P2](docs/rust-p2-completion.md), [P3–P5](docs/rust-p3-p5-completion.md), [P6 acceptance](docs/rust-p6-completion.md), and the [final performance report](docs/benchmarks/rust-p6.md).
 
 ```bash
 # Run Cargo directly from the repository root
 cargo build --locked --release
 cargo test --locked --workspace
 
-# Run full CI checks, including the isolated historical Python reference
+# Run full CI checks without the historical Python reference
 # (includes npm tests when Node.js is available, and the landing page check when pnpm is)
 just isok
 

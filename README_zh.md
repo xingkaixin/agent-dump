@@ -573,7 +573,7 @@ rustfmt.toml    # Stable Rustfmt, edition 2024, 80 columns
 src/            # CLI workflows, Collect and terminal interaction
 crates/agent-dump-core/ # Providers, sessions, queries and export engine
 resources/      # Embedded locales and prompts
-tests/cli/      # CLI contracts and external Python reference comparison
+tests/cli/      # Rust CLI contracts and optional historical comparisons
 tests/tooling/  # Packaging, benchmark and documentation checks
 scripts/        # Validated CLI benchmarks and paired release eval
 packaging/      # Maturin builds and installation verification
@@ -584,14 +584,14 @@ web/            # Landing page
 
 ## Development
 
-从 v1.0.0 起，Rust 是构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树，差分验证在独立环境安装固定的 0.15.9 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
+从 v1.0.0 起，Rust 是构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树。CI 和 `just isok` 验证 Rust 行为契约，不依赖历史 Python CLI；需要历史差分验证时，`just test-differential` 在独立环境安装固定的 0.15.9 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
 
 ```bash
 # 从仓库根直接运行 Cargo
 cargo build --locked --release
 cargo test --locked --workspace
 
-# 完整本地 CI，包含独立的历史 Python 对照
+# 完整本地 CI，不依赖历史 Python 对照
 # （Node.js 可用时包含 npm 测试，pnpm 可用时包含 landing page 检查）
 just isok
 

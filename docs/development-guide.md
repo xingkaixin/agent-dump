@@ -22,31 +22,28 @@ CLI 文案位于 `resources/locales/`。测试按中英文参数运行；需要�
 cargo build --locked --release
 cargo test --locked --workspace
 
-# 首次差分验证：从固定 wheel 安装独立对照环境，并核对源码 hash
-just reference
-uv run pytest -q tests/cli/test_cli_parity.py
+# 可选的历史差分验证：安装固定参考、核对 hash，再比较两套 CLI
+just test-differential
 
 # 完整本地门禁：Rust、CLI、工具、npm、网站
 just isok
 ```
 
-`just test` 先准备固定参考与 release 二进制，再运行 Rust 单元测试和全部 pytest 契约。`just check-rust` 只运行 Rust 与 CLI 验证。`AGENT_DUMP_TEST_BINARY` 可指定实际安装的制品；缺少二进制会失败，不回退到其他命令。
+`just test` 先构建 release 二进制，再运行 Rust 单元测试和不依赖历史 Python 的 pytest 契约。`just check-rust` 只运行 Rust 与 CLI 验证。`AGENT_DUMP_TEST_BINARY` 可指定实际安装的制品；缺少二进制会失败，不回退到其他命令。
+
+`pytest` 默认排除带 `differential` 标记的测试；CI 和 `just isok` 不安装或执行历史 Python 对照。需要比较时运行 `just test-differential`，或先 `just reference`，再用 `uv run pytest -q -m differential tests/cli` 选择差分测试。混合模块按测试函数标记，纯差分模块使用模块标记；新增差分测试必须显式标记。HTTP 凭据、响应边界和 Collect 合并测试直接断言 Rust 行为，仍进入默认验证。
 
 Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 hash 来自 `tests/reference/requirements.txt`。安装器核对包内全部 Python 文件的源码 hash，与 P6 冻结参考一致。对照只用于差分和配对性能测量，不进入主开发环境、Cargo 构建、wheel 或 npm。不要随依赖升级改变此历史参考。
 
 `uv sync --locked --dev` 安装 pytest、Ruff、ty 等辅助工具；`pyproject.toml` 同时保留 pip/Maturin 所需元数据。pytest 配置只位于该文件，禁止额外配置覆盖。Python 应用的旧单元测试和覆盖率门禁已随源码退场；历史结果保留在 [P6 验收](rust-p6-completion.md)。
 
-`just fmt` 格式化整个 Rust workspace 和 Python 验证工具，`just fmt-check` 只检查格式；`just lint-format` 保留为 `fmt` 的别名。`just lint` 执行 Rustfmt、Clippy 和 Ruff；`just check` 执行 Cargo check 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 执行同一套 CLI 契约；第 0 组同时执行 Rust 单元测试和工具验证。四目标安装 CI 另行检查 pip/uv tool/uvx 与 npm/npx/bunx。
+`just fmt` 格式化整个 Rust workspace 和 Python 验证工具，`just fmt-check` 只检查格式；`just lint-format` 保留为 `fmt` 的别名。`just lint` 执行 Rustfmt、Clippy 和 Ruff；`just check` 执行 Cargo check 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 各执行一组 Rust 单元测试、CLI 契约和工具验证。四目标安装 CI 另行检查 pip/uv tool/uvx 与 npm/npx/bunx。
 
 ### CI 构建缓存与耗时报告
 
-Rust 依赖缓存按 OS、架构和构建用途隔离。CLI 分片共享 parity 缓存，由 main 的第 0 组写入；四目标打包使用独立 packaging 缓存，由 main 写入。PR 只恢复已有缓存，首次运行或工具链/依赖变化时仍可能冷编译。
+Rust 依赖缓存按 OS、架构和构建用途隔离。CLI 验证沿用 parity 缓存键以复用现有缓存，由 main 写入；四目标打包使用独立 packaging 缓存，由 main 写入。PR 只恢复已有缓存，首次运行或工具链/依赖变化时仍可能冷编译。
 
-CLI 分片输出最慢 30 项测试及 `dist/ci/parity.xml`，CI 将报告上传为 `parity-<os>-<shard>` artifact，保留 14 天。JUnit 时间包含 setup、call 和 teardown，可用于重新分配分片；固定 Python 对照与三平台测试覆盖保持不变。
-
-CLI 文件按 `.github/cli-test-timings.json` 中的平台耗时分配到四组，优先安排最重的文件，并给第 0 组预留 Rust lint、单测及 tooling 的耗时。新增文件按当前已知文件的平均耗时分配；删除文件的历史记录不参与分配。`uv run python scripts/ci_shard.py --shard 0 --dry-run` 可查看当前平台的分配而不执行测试。
-
-更新基线时，下载同一次成功 CI 的全部 12 份 parity artifact，按平台和测试模块汇总 JUnit `testcase` 的 `time`；将第 0 组的格式检查、Clippy、Rust 单测和 tooling 步骤总耗时写入 `shard_zero_overhead`，同时更新 `source` 链接。分片基线只影响分配，不影响收集范围；每轮仍通过 glob 收集所有 `tests/cli/test_*.py`。
+CLI 验证输出最慢 30 项测试及 `dist/ci/contracts.xml`，CI 将报告上传为 `contracts-<os>` artifact，保留 14 天。JUnit 时间包含 setup、call 和 teardown。移除常规差分验证后不再分片，也不再维护历史分片耗时基线。
 
 ### Rust 格式与 lint
 

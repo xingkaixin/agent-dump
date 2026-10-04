@@ -11,6 +11,8 @@ from sqlite_fixture import create_v2
 from test_cursor import cursor, export as cursor_export, put
 from test_title_cache import sessions
 
+pytestmark = pytest.mark.differential
+
 
 def test_default_home_uses_the_platform_environment(cli):
     selected = cli.root / "sources/platform-home"

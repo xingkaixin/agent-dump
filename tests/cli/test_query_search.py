@@ -9,6 +9,7 @@ from cli_fixture import IDENTITY, call, header, message, output, reasoning
 import pytest
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("mode", ["query", "search"])
 @pytest.mark.parametrize(
@@ -60,6 +61,7 @@ def test_literal_matching_rank_and_snippets(cli, lang, mode, keyword):
     cli.parity(*args)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(
     "query",
@@ -91,6 +93,7 @@ def test_structured_query_scope_roles_and_global_limit(cli, lang, query):
     cli.parity("--list", "-q", query, "-d", "36500", "--lang", lang)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(
     "query",
@@ -118,6 +121,7 @@ def test_query_diagnostics(cli, lang, query):
     cli.parity("--list", "-query", query, "--lang", lang, exit_code=1)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(
     "uri",
@@ -135,6 +139,7 @@ def test_query_uri(cli, lang, uri):
     cli.parity(uri, "-days", "36500", "--lang", lang)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(
     "args",
@@ -150,6 +155,7 @@ def test_query_uri_diagnostics(cli, lang, args):
     cli.parity(*args, "--lang", lang, exit_code=1)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(
     "args",
@@ -166,6 +172,7 @@ def test_maintenance(cli, lang, args):
     cli.parity(*args, "-days", "36500", "--lang", lang)
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(
     "keyword", ["authentication", "needle", "benchmark", "认证", "auth timeout", "x", "never-matches"]
@@ -251,6 +258,7 @@ def test_database_message_changes_refresh_search_without_session_timestamp_chang
         assert all(path.read_bytes() == contents for path, contents in durable.items())
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("kind", ["database", "directory"])
 def test_index_failures_fall_back_to_logical_transcript(cli, lang, kind):
@@ -264,6 +272,7 @@ def test_index_failures_fall_back_to_logical_transcript(cli, lang, kind):
     cli.parity("--search", "auth", "-q", "provider:codex", "-days", "36500", "--lang", lang)
 
 
+@pytest.mark.differential
 def test_rust_reuses_python_index_signatures_and_private_permissions(cli):
     cli.write([header(), message("user", "Unicode 😺 认证")])
     args = ["--search", "认证", "-q", "provider:codex", "-days", "36500", "--lang", "en"]
@@ -297,6 +306,7 @@ def test_index_location_cannot_write_inside_provider_source(cli):
     assert not (cli.root / "sources" / "codex" / "agent-dump").exists()
 
 
+@pytest.mark.differential
 def test_index_reuses_unchanged_content_and_refreshes_changed_text(cli):
     original = cli.source.read_bytes()
     before = cli.fixtures.source_manifest(cli.root)
@@ -320,6 +330,7 @@ def test_index_reuses_unchanged_content_and_refreshes_changed_text(cli):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
+@pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 def test_named_home_query_path(cli, lang):
     import os

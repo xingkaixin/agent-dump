@@ -24,60 +24,59 @@ def test_reduction_and_partial_failures(cli, mode, scenario):
             [header(identity, timestamp=stamp), *[message("user", text, stamp=stamp) for text in texts]],
         )
     fields = ["requests", "decisions", "outcomes"] if mode == "pm" else ["scene", "stuck", "turning"]
-    outputs = []
-    prompts = []
-    for candidate in ["python", "rust"]:
-        lock = threading.Lock()
-        first_pair = threading.Barrier(2, timeout=10)
-        active = peak = arrivals = 0
+    lock = threading.Lock()
+    first_pair = threading.Barrier(2, timeout=10)
+    active = peak = arrivals = 0
 
-        def respond(body, _, lock=lock, first_pair=first_pair):
-            nonlocal active, peak, arrivals
-            with lock:
-                active += 1
-                peak = max(peak, active)
-                arrivals += 1
-                synchronize = arrivals <= 2
-            if synchronize:
-                first_pair.wait()
-            with lock:
-                active -= 1
-            prompt = body["messages"][-1]["content"]
-            if "response_format" not in body:
-                return 200, {"choices": [{"message": {"content": "# Report"}}]}
-            envelopes = [json.loads(line) for line in prompt.splitlines() if line.startswith('{"untrusted_data"')]
-            if envelopes[0]["untrusted_data"] == "untrusted_derived_summary":
-                return 400, {"error": {"message": "merge unavailable"}}
-            source = envelopes[0]["source"]
-            if scenario == "partial" and "000000000001#" in source:
-                return 401, {}
-            facts = [f"{source} fact {i}" for i in range(12)]
-            text = json.dumps({fields[0]: facts})
-            return 200, {"choices": [{"message": {"content": text}}]}
+    def respond(body, _):
+        nonlocal active, peak, arrivals
+        with lock:
+            active += 1
+            peak = max(peak, active)
+            arrivals += 1
+            synchronize = arrivals <= 2
+        if synchronize:
+            first_pair.wait()
+        with lock:
+            active -= 1
+        prompt = body["messages"][-1]["content"]
+        if "response_format" not in body:
+            return 200, {"choices": [{"message": {"content": "# Report"}}]}
+        envelopes = [json.loads(line) for line in prompt.splitlines() if line.startswith('{"untrusted_data"')]
+        if envelopes[0]["untrusted_data"] == "untrusted_derived_summary":
+            return 400, {"error": {"message": "merge unavailable"}}
+        source = envelopes[0]["source"]
+        if scenario == "partial" and "000000000001#" in source:
+            return 401, {}
+        facts = [f"{source} fact {i}" for i in range(12)]
+        text = json.dumps({fields[0]: facts})
+        return 200, {"choices": [{"message": {"content": text}}]}
 
-        with server(respond) as (url, requests):
-            configure(cli, url)
-            path = config_path(cli)
-            path.write_text(
-                path.read_text()
-                .replace("summary_concurrency=1", "summary_concurrency=2")
-                .replace("summary_timeout_seconds=2", "summary_timeout_seconds=15")
-            )
-            result = cli.run(candidate, *ARGS, "--collect-mode", mode, "--save", "report.md", "--lang", "en")
-            assert result.returncode == 0, result.stdout + result.stderr
-            assert peak == 2
-            outputs.append((result.stdout, (cli.root / "report.md").read_text()))
-            prompts.append(sorted(body["messages"][-1]["content"] for _, _, body in requests))
-            final_prompt = requests[-1][2]["messages"][-1]["content"]
-            if scenario == "partial":
-                assert "1 session" in result.stderr
-                assert "000000000001" not in final_prompt
-            if scenario == "chunks":
-                assert "chunk-4" in final_prompt
-    assert prompts[0] == prompts[1]
+    with server(respond) as (url, requests):
+        configure(cli, url)
+        path = config_path(cli)
+        path.write_text(
+            path.read_text()
+            .replace("summary_concurrency=1", "summary_concurrency=2")
+            .replace("summary_timeout_seconds=2", "summary_timeout_seconds=15")
+        )
+        result = cli.run("rust", *ARGS, "--collect-mode", mode, "--save", "report.md", "--lang", "en")
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert peak == 2
+        final_prompt = requests[-1][2]["messages"][-1]["content"]
+        for index in range(count):
+            if scenario == "partial" and index == 1:
+                continue
+            assert f"codex://019c213e-c251-73a3-af66-{index:012}" in final_prompt
+        if scenario == "partial":
+            assert "1 session" in result.stderr
+            assert "000000000001" not in final_prompt
+        if scenario == "chunks":
+            assert "chunk-4" in final_prompt
+    report = (cli.root / "report.md").read_text()
     if scenario == "partial":
-        suffix = "\n\n> Omitted sessions:\n> - codex://019c213e-c251-73a3-af66-000000000001\n"
-        old_stdout, old_report = outputs[0]
-        assert outputs[1] == (old_stdout.replace(old_report, old_report + suffix, 1), old_report + suffix)
+        assert "summary failures: 1; sessions included: 2" in report
+        assert report.endswith("# Report\n\n> Omitted sessions:\n> - codex://019c213e-c251-73a3-af66-000000000001\n")
     else:
-        assert outputs[0] == outputs[1]
+        assert report == "# Report"
+    assert report in result.stdout

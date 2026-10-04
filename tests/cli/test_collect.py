@@ -9,6 +9,8 @@ from cli_fixture import header, message
 import pytest
 from test_config_shortcuts import config_path
 
+pytestmark = pytest.mark.differential
+
 ARGS = ["--collect", "--since", "2026-01-15", "--until", "2026-01-15", "-q", "provider:codex"]
 
 
