@@ -64,6 +64,10 @@ def test_reduction_and_partial_failures(cli, mode, scenario):
         assert result.returncode == 0, result.stdout + result.stderr
         assert peak == 2
         final_prompt = requests[-1][2]["messages"][-1]["content"]
+        for index in range(count):
+            if scenario == "partial" and index == 1:
+                continue
+            assert f"codex://019c213e-c251-73a3-af66-{index:012}" in final_prompt
         if scenario == "partial":
             assert "1 session" in result.stderr
             assert "000000000001" not in final_prompt
