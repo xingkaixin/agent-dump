@@ -69,7 +69,7 @@ A portable representation derived from a Session in a requested format.
 _Avoid_: Session Source
 
 **Collect Report**:
-A derived summary that combines visible user/assistant text whose recorded local dates fall within the requested range. Candidate discovery has no creation-time cutoff. Each Session is split into daily units using text-part times before bounded chunking; session counts still count unique URIs. Undated or inferred-time text is excluded with explicit incomplete date coverage, never assigned the Session creation/update date. Query criteria and limits select candidates before text-date filtering. Failed Sessions remain explicit omissions; complete input coverage does not imply verbatim preservation in the summary.
+A derived summary that combines visible user/assistant text whose recorded local dates fall within the requested range. Candidate discovery has no creation-time cutoff. Each Session is split into daily units using text-part times before bounded chunking; session counts still count unique URIs. Undated or inferred-time text is excluded with explicit incomplete date coverage, never assigned the Session creation/update date. Query criteria select candidates, and limits apply to unique sessions after text-date filtering. Collect handoff generation also reads candidate text for date eligibility without planning summary chunks; its manifest includes only sessions with in-range activity and explicitly carries undated/read-failed source gaps. Failed Sessions remain explicit omissions; complete input coverage does not imply verbatim preservation in the summary.
 _Avoid_: Export
 
 ## Fact boundaries

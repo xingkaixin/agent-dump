@@ -6,8 +6,8 @@ use std::sync::LazyLock;
 
 pub fn extract(
     data: &SessionData,
-    since: Date,
-    until: Date,
+    range: &std::ops::RangeInclusive<Date>,
+    plan_chunks: bool,
 ) -> (BTreeMap<Date, Vec<Vec<Event>>>, bool) {
     static IGNORE: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(r"(?i)^(?:hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok|okay)[!！,.，。?？\s]*$").unwrap()
@@ -38,10 +38,13 @@ pub fn extract(
                 undated = true;
                 continue;
             };
-            if date < since || date > until {
+            if !range.contains(&date) {
                 continue;
             }
             let chunks = dates.entry(date).or_default();
+            if !plan_chunks {
+                continue;
+            }
             if chunks.is_empty() {
                 chunks.push(Vec::new());
             }

@@ -178,9 +178,12 @@ pub fn run(
         .query
         .as_ref()
         .map(|q| {
+            let mut unbounded = q.clone();
+            // Keep limit ordering, but truncate after text-date eligibility.
+            unbounded.limit = q.limit.map(|_| usize::MAX);
             agent_dump_core::query::filter::select(
                 &scan.groups,
-                q,
+                &unbounded,
                 zh,
                 warnings,
             )
@@ -200,7 +203,7 @@ pub fn run(
         })
         .collect();
     let query_failures = omissions.len();
-    let positions: Vec<_> = selected.map_or_else(
+    let mut positions: Vec<_> = selected.map_or_else(
         || {
             scan.groups
                 .iter()
@@ -213,38 +216,6 @@ pub fn run(
         |s| s.matches.iter().map(|m| (m.group, m.session)).collect(),
     );
     let output_path = save_path(operation.save.as_deref(), since, until)?;
-    if emit {
-        if positions.is_empty() {
-            report(
-                &t(
-                    "COLLECT_NO_SESSIONS",
-                    zh,
-                    &[
-                        ("since", since.to_string()),
-                        ("until", until.to_string()),
-                    ],
-                ),
-                true,
-                out,
-                warnings,
-            )?;
-            return Ok(scan.failed_providers.is_empty() && query_failures == 0);
-        }
-        writeln!(
-            out,
-            "{}",
-            crate::collect::handoff::handoff(
-                operation,
-                &scan,
-                &positions,
-                since,
-                until,
-                &output_path,
-                query_failures
-            )?
-        )?;
-        return Ok(true);
-    }
     let logger = if ai.is_some() {
         let logging = config.logging()?;
         if logging.enabled {
@@ -254,12 +225,12 @@ pub fn run(
     } else {
         None
     };
-    let (entries, read_failed, undated) =
+    let (mut entries, read_failed, undated) =
         match crate::collect::sessions::read_entries(
             &scan,
             &positions,
-            since,
-            until,
+            &(since..=until),
+            !emit,
             zh,
             warnings,
             logger.as_ref(),
@@ -272,14 +243,15 @@ pub fn run(
                         json!({"phase":"read", "error":error.to_string()}),
                     );
                 }
-                writeln!(
-                    out,
-                    "{}",
-                    terminal(
+                report(
+                    &terminal(
                         "COLLECT_READ_FAILED",
                         zh,
-                        &[("error", error.to_string())]
-                    )
+                        &[("error", error.to_string())],
+                    ),
+                    emit,
+                    out,
+                    warnings,
                 )?;
                 return Ok(false);
             }
@@ -299,19 +271,55 @@ pub fn run(
         }
     }
     if entries.is_empty() {
-        writeln!(
-            out,
-            "{}",
-            t(
+        report(
+            &t(
                 "COLLECT_NO_SESSIONS",
                 zh,
-                &[("since", since.to_string()), ("until", until.to_string())]
-            )
+                &[("since", since.to_string()), ("until", until.to_string())],
+            ),
+            emit,
+            out,
+            warnings,
         )?;
         return Ok(undated.is_empty()
             && read_failed.is_empty()
             && query_failures == 0
             && scan.failed_providers.is_empty());
+    }
+    let eligible: HashSet<_> = entries
+        .iter()
+        .map(crate::collect::model::Entry::uri)
+        .collect();
+    let uri_at = |&(g, s): &(usize, usize)| {
+        let group = &scan.groups[g];
+        format!("{}://{}", group.info.scheme, group.sessions[s].id)
+    };
+    positions.retain(|position| eligible.contains(&uri_at(position)));
+    if let Some(limit) = operation.query.as_ref().and_then(|query| query.limit)
+    {
+        positions.truncate(limit);
+        let selected: HashSet<_> = positions.iter().map(uri_at).collect();
+        entries.retain(|entry| selected.contains(&entry.uri()));
+    }
+    if emit {
+        writeln!(
+            out,
+            "{}",
+            crate::collect::handoff::handoff(
+                operation,
+                &scan,
+                &positions,
+                since,
+                until,
+                &output_path,
+                &crate::collect::handoff::Gaps {
+                    query_failures,
+                    read_failed: &read_failed,
+                    undated: &undated
+                },
+            )?
+        )?;
+        return Ok(true);
     }
     let session_count = entries
         .iter()

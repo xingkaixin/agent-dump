@@ -12,8 +12,8 @@ use std::io::Write;
 pub fn read_entries(
     scan: &Scan,
     positions: &[(usize, usize)],
-    since: jiff::civil::Date,
-    until: jiff::civil::Date,
+    range: &std::ops::RangeInclusive<jiff::civil::Date>,
+    plan_chunks: bool,
     zh: bool,
     warnings: &mut impl Write,
     logger: Option<&crate::collect::log::Logger>,
@@ -49,7 +49,9 @@ pub fn read_entries(
                             })
                             .map(|data| {
                                 crate::collect::events::extract(
-                                    &data, since, until,
+                                    &data,
+                                    range,
+                                    plan_chunks,
                                 )
                             });
                         (group, session, result, diagnostics)

@@ -4,6 +4,12 @@ use jiff::civil::Date;
 use serde_json::json;
 use std::path::Path;
 
+pub struct Gaps<'a> {
+    pub query_failures: usize,
+    pub read_failed: &'a [String],
+    pub undated: &'a [String],
+}
+
 pub fn handoff(
     operation: &Operation,
     scan: &Scan,
@@ -11,10 +17,10 @@ pub fn handoff(
     since: Date,
     until: Date,
     output: &Path,
-    query_failures: usize,
+    gaps: &Gaps<'_>,
 ) -> crate::Result<String> {
     let now = agent_dump_core::session::timestamp::Timestamp::now();
-    let context = json!({"generated_at":now.iso_local(), "timezone":now.format_local("%Z"), "since":since.to_string(), "until":until.to_string(), "mode":operation.mode.name(), "working_directory":agent_dump_core::storage::source_io::path_text(&std::env::current_dir()?), "report_path":agent_dump_core::storage::source_io::path_text(&agent_dump_core::query::project_path(&agent_dump_core::storage::source_io::path_text(output))?), "shell":if cfg!(windows) {"PowerShell"} else {"POSIX"}, "session_count":positions.len(), "date_basis":"text_span_local_date", "discovery_failed_count":scan.failed_providers.len(), "query_read_failed_count":query_failures});
+    let context = json!({"generated_at":now.iso_local(), "timezone":now.format_local("%Z"), "since":since.to_string(), "until":until.to_string(), "mode":operation.mode.name(), "working_directory":agent_dump_core::storage::source_io::path_text(&std::env::current_dir()?), "report_path":agent_dump_core::storage::source_io::path_text(&agent_dump_core::query::project_path(&agent_dump_core::storage::source_io::path_text(output))?), "shell":if cfg!(windows) {"PowerShell"} else {"POSIX"}, "session_count":positions.len(), "date_basis":"text_span_local_date", "discovery_failed_count":scan.failed_providers.len(), "query_read_failed_count":gaps.query_failures, "date_read_failed_count":gaps.read_failed.len(), "date_read_failed_sessions":gaps.read_failed, "undated_session_count":gaps.undated.len(), "undated_sessions":gaps.undated});
     let mut prompt =
         crate::collect::prompts::handoff_header(operation.mode, since, until);
     prompt += &crate::collect::prompts::envelope(
