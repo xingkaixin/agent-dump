@@ -493,19 +493,21 @@ Read pages without `--details` include `messages[].text_spans`: local `date` (nu
 agent-dump --browse
 agent-dump --browse --query 'provider:codex path:.' --days 30
 agent-dump --browse 'agents://.?providers=codex,claude'
-agent-dump --browse --format json,markdown --output ./exports
+agent-dump --browse --search "database lock" --format json,markdown --output ./exports
 ```
 
 `--browse` requires an interactive terminal. By default, it selects sessions created in the last seven days and sorts them by update time. Add `--time-field updated` to filter by recent activity. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
 
 - Up/Down or j/k move or scroll in the focused pane; Enter/Right opens the transcript, Left returns to the list.
 - Tab switches panes; PageUp/PageDown scroll pages; Home/End jump to either end.
+- `s` searches sessions using all words, within the current Provider/path/date/role/limit scope. `--browse --search "database lock"` starts with the same search and relevance order. With a role filter, all words must occur in one message of that role. Hit navigation visits messages containing any search word. The header shows scope and search mode; `?` shows full scope and help. `c` clears search text while keeping scope.
 - `/` starts literal search within the current session; Enter searches, Esc cancels input, n/N jumps to the next/previous matching message. Search expands tool details.
 - `t` toggles tool details; `y` sends a URI clipboard request (requires terminal OSC 52 support).
-- `e` exports the selected session using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
+- `x` previews the current matching message with three surrounding messages on each side. `+`/`-` changes that radius; n/N changes the hit. `e` exports exactly this range as JSON and/or Markdown with source URI and message positions. If the source changed since preview, export is rejected. `x` or Esc returns to the full session.
+- Outside excerpt preview, `e` exports the selected session using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
 - q/Esc/Ctrl-C close the reader and restore the terminal, exiting 0.
 
-Empty selections exit without opening the reader. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. Existing --interactive batch export is unchanged.
+Empty search results stay open so `s` can change the search and `c` can clear it. Provider/path/date/role/limit filters stay fixed during a reader session; change CLI arguments and reopen to widen them. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. Existing --interactive batch export is unchanged.
 
 ## 使用场景指南
 
