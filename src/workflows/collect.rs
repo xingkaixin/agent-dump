@@ -4,7 +4,7 @@ use agent_dump_core::output::i18n::{t, terminal};
 use agent_dump_core::query::scanner::Scan;
 use jiff::civil::Date;
 use serde_json::json;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write as _;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -139,15 +139,8 @@ pub fn run(
         zh,
         warnings,
     )?;
-    let scan_days = (jiff::Zoned::now()
-        .date()
-        .since((jiff::Unit::Day, since))?
-        .get_days()
-        + 1)
-    .max(1);
-    let mut scan = agent_dump_core::query::scanner::discover(
+    let mut scan = agent_dump_core::query::scanner::discover_all(
         operation.query.as_ref(),
-        i64::from(scan_days),
         zh,
         warnings,
     )?;
@@ -169,10 +162,6 @@ pub fn run(
             .map(|path| agent_dump_core::query::project_path(path))
             .collect::<crate::Result<_>>()?;
         group.sessions.retain(|session| {
-            let date = Some(session.created_at.local_date());
-            if date.is_none_or(|date| date < since || date > until) {
-                return false;
-            }
             let path = (!session.directory.trim().is_empty())
                 .then(|| {
                     agent_dump_core::query::project_path(&session.directory)
@@ -265,33 +254,50 @@ pub fn run(
     } else {
         None
     };
-    let (entries, read_failed) = match crate::collect::sessions::read_entries(
-        &scan,
-        &positions,
-        zh,
-        warnings,
-        logger.as_ref(),
-    ) {
-        Ok(result) => result,
-        Err(error) => {
-            if let Some(logger) = &logger {
-                logger.log(
-                    "collect_run_fail",
-                    json!({"phase":"read", "error":error.to_string()}),
-                );
+    let (entries, read_failed, undated) =
+        match crate::collect::sessions::read_entries(
+            &scan,
+            &positions,
+            since,
+            until,
+            zh,
+            warnings,
+            logger.as_ref(),
+        ) {
+            Ok(result) => result,
+            Err(error) => {
+                if let Some(logger) = &logger {
+                    logger.log(
+                        "collect_run_fail",
+                        json!({"phase":"read", "error":error.to_string()}),
+                    );
+                }
+                writeln!(
+                    out,
+                    "{}",
+                    terminal(
+                        "COLLECT_READ_FAILED",
+                        zh,
+                        &[("error", error.to_string())]
+                    )
+                )?;
+                return Ok(false);
             }
-            writeln!(
-                out,
-                "{}",
-                terminal(
-                    "COLLECT_READ_FAILED",
-                    zh,
-                    &[("error", error.to_string())]
-                )
-            )?;
-            return Ok(false);
+        };
+    if !undated.is_empty() {
+        writeln!(
+            warnings,
+            "{}",
+            t(
+                "COLLECT_UNDATED",
+                zh,
+                &[("count", undated.len().to_string())]
+            )
+        )?;
+        for uri in &undated {
+            writeln!(warnings, "{uri}")?;
         }
-    };
+    }
     if entries.is_empty() {
         writeln!(
             out,
@@ -302,10 +308,18 @@ pub fn run(
                 &[("since", since.to_string()), ("until", until.to_string())]
             )
         )?;
-        return Ok(false);
+        return Ok(undated.is_empty()
+            && read_failed.is_empty()
+            && query_failures == 0
+            && scan.failed_providers.is_empty());
     }
+    let session_count = entries
+        .iter()
+        .map(crate::collect::model::Entry::uri)
+        .collect::<HashSet<_>>()
+        .len();
     if let Some(logger) = &logger {
-        logger.log("collect_run_start", json!({"since":since.to_string(), "until":until.to_string(), "summary_concurrency":collect.concurrency, "agent_count":scan.groups.len(), "session_count":entries.len()}));
+        logger.log("collect_run_start", json!({"since":since.to_string(), "until":until.to_string(), "summary_concurrency":collect.concurrency, "agent_count":scan.groups.len(), "session_count":session_count, "session_day_count":entries.len()}));
     }
     let mut count = 0;
     progress(
@@ -319,15 +333,18 @@ pub fn run(
     )?;
     let mut breakdown: serde_json::Map<String, serde_json::Value> =
         serde_json::Map::default();
+    let mut counted = HashSet::new();
     for (i, entry) in entries.iter().enumerate() {
         count += entry.chunks.len();
         let total = breakdown
             .entry(entry.provider.display_name)
             .or_insert(0.into());
-        *total = (total.as_u64().unwrap() + 1).into();
+        if counted.insert(entry.uri()) {
+            *total = (total.as_u64().unwrap() + 1).into();
+        }
         let values = [
             ("current", (i + 1).to_string()),
-            ("session_count", (i + 1).to_string()),
+            ("session_count", counted.len().to_string()),
             ("total", entries.len().to_string()),
             ("chunk_count", count.to_string()),
         ];
@@ -343,7 +360,7 @@ pub fn run(
         )?;
     }
     let values = [
-        ("session_count", entries.len().to_string()),
+        ("session_count", session_count.to_string()),
         ("chunk_count", count.to_string()),
         ("concurrency", collect.concurrency.to_string()),
     ];
@@ -387,7 +404,7 @@ pub fn run(
             ),
             (
                 "COLLECT_DRY_RUN_SESSION_COUNT",
-                vec![("count", entries.len().to_string())],
+                vec![("count", session_count.to_string())],
             ),
             (
                 "COLLECT_DRY_RUN_CHUNK_COUNT",
@@ -484,7 +501,11 @@ pub fn run(
     )?;
     let failed = read_failed.len() + query_failures;
     let summary_failed = summary_failures.len();
-    let included = entries.len() - summary_failed;
+    let included = groups
+        .iter()
+        .flat_map(|group| &group.session_uris)
+        .collect::<HashSet<_>>()
+        .len();
     omissions.extend(read_failed);
     omissions.extend(summary_failures);
     if failed + summary_failed > 0 {
@@ -500,6 +521,18 @@ pub fn run(
                 ]
             )
         );
+    }
+    let undated_count = undated.len();
+    if !undated.is_empty() {
+        markdown = format!(
+            "> {}\n\n{markdown}",
+            t(
+                "COLLECT_UNDATED",
+                zh,
+                &[("count", undated.len().to_string())]
+            )
+        );
+        omissions.extend(undated);
     }
     if !scan.failed_providers.is_empty() {
         markdown = format!(
@@ -557,7 +590,7 @@ pub fn run(
         zh,
         warnings,
     )?;
-    logger.log("collect_run_finish", json!({"output_path":agent_dump_core::storage::source_io::path_text(&output_path), "session_count":included, "read_failed_count":failed, "discovery_failed_count":scan.failed_providers.len(), "summary_failed_count":summary_failed}));
+    logger.log("collect_run_finish", json!({"output_path":agent_dump_core::storage::source_io::path_text(&output_path), "session_count":included, "read_failed_count":failed, "discovery_failed_count":scan.failed_providers.len(), "summary_failed_count":summary_failed, "undated_session_count":undated_count}));
     writeln!(
         out,
         "{}",

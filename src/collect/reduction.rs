@@ -204,6 +204,8 @@ pub fn run(
     {
         return Err(error);
     }
+    failed.sort();
+    failed.dedup();
     if !failed.is_empty() {
         writeln!(
             warnings,

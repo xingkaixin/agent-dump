@@ -21,9 +21,28 @@ pub fn discover(
     zh: bool,
     warnings: &mut impl Write,
 ) -> crate::Result<Scan> {
+    discover_window(query, Some(days), zh, warnings)
+}
+
+pub fn discover_all(
+    query: Option<&Query>,
+    zh: bool,
+    warnings: &mut impl Write,
+) -> crate::Result<Scan> {
+    discover_window(query, None, zh, warnings)
+}
+
+fn discover_window(
+    query: Option<&Query>,
+    days: Option<i64>,
+    zh: bool,
+    warnings: &mut impl Write,
+) -> crate::Result<Scan> {
     let updated_since = query
         .is_some_and(|query| query.time_field == TimeField::Updated)
-        .then(|| crate::session::timestamp::Timestamp::days_ago(days))
+        .then_some(days)
+        .flatten()
+        .map(crate::session::timestamp::Timestamp::days_ago)
         .transpose()?;
     let mut scan = Scan::default();
     for registration in crate::providers::registry::all() {
@@ -36,7 +55,7 @@ pub fn discover(
         }
         let result = (registration.open)().and_then(|mut provider| {
             let discovery = provider.discover(
-                updated_since.is_none().then_some(days),
+                if updated_since.is_none() { days } else { None },
                 &mut |diagnostic| {
                     writeln!(
                         warnings,

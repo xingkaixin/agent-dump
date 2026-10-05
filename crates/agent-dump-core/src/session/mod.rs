@@ -82,6 +82,8 @@ impl Stats {
 
 #[derive(Clone, Serialize)]
 pub struct Message {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub inferred_time: bool,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
     pub id: String,
@@ -124,6 +126,7 @@ impl Message {
             _ => "unknown",
         };
         Self {
+            inferred_time: false,
             extra: serde_json::Map::default(),
             id,
             role: role.into(),

@@ -109,6 +109,7 @@ impl Frame {
                     self.session.created_at.as_millisecond(),
                 )],
             );
+            message.inferred_time = true;
             message.agent = Some("cursor".into());
             self.messages.push(message);
             return Ok(());
@@ -151,6 +152,7 @@ impl Frame {
                 output.clone(),
                 vec![Part::text(body.clone(), time)],
             );
+            message.inferred_time = bubble_time(&bubble, 0) == 0;
             if let Some(plan) = &plan {
                 message.parts.push(plan.clone());
             }
@@ -327,7 +329,14 @@ fn completion(
                 {
                     continue;
                 }
-                parts.push(Part::text(body.into(), part.time_created));
+                parts.push(Part::text(
+                    body.into(),
+                    if message.inferred_time {
+                        0
+                    } else {
+                        part.time_created
+                    },
+                ));
                 latest = latest.max(part.time_created);
             }
         }
