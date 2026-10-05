@@ -2,6 +2,15 @@
 
 仓库根是包含两个成员的 Cargo workspace，同时也是 CLI package。`Cargo.toml` 统一管理依赖、lint 和产品版本，`Cargo.lock` 与 `target/` 共享，工具链固定为 Rust 1.90.0。直接从根目录运行 Cargo。
 
+本地开发工具统一在根目录的 `mise.toml` 声明，安装 mise 后运行：
+
+```bash
+mise install
+mise exec -- uv sync --locked --dev
+```
+
+Node、Python、uv 和 just 的版本与 CI 对齐，pnpm 与 `web/package.json` 的 `packageManager` 保持一致；Bun 与安装验证一样使用最新版。Rust 保留 mr-boxington 配置，并与供 rustup 和源码构建使用的 `rust-toolchain.toml` 保持一致。更新这些版本时同步相应声明。已启用 mise shell 激活时可直接运行下文命令，否则使用 `mise exec --` 前缀，例如 `mise exec -- just isok`。
+
 ## 1. 目录与测试
 
 - `src/`：CLI 参数、分发、`workflows/`、`collect/` 与 `terminal/`。
