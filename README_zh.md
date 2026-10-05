@@ -553,19 +553,21 @@ JSON 包含 `schema_version: 1`、`kind: read`、`status`、`has_more` 和 `data
 agent-dump --browse
 agent-dump --browse --query 'provider:codex path:.' --days 30
 agent-dump --browse 'agents://.?providers=codex,claude'
-agent-dump --browse --format json,markdown --output ./exports
+agent-dump --browse --search "database lock" --format json,markdown --output ./exports
 ```
 
 `--browse` 需要真实交互式终端，默认选择最近 7 天创建的会话，按更新时间排序；加 `--time-field updated` 改为按最近活动筛选。支持现有查询条件和 agents:// 查询 URI；只读取当前选择的会话正文（内容筛选本身仍可能读取多个会话）。宽终端显示列表和正文两栏；窄于 90 列时通过 Tab 切换单栏。阅读器只读 Provider 来源，不自动刷新活动会话；重新打开可获取新列表。
 
 - ↑/↓ 或 j/k：在当前区域移动或滚动；Enter/→ 进入正文，← 返回列表。
 - Tab：切换区域；PageUp/PageDown 翻页；Home/End 跳到首尾。
+- `s`：在当前来源、目录、日期、角色和数量上限内搜索会话，要求所有词都匹配；指定角色时，要求所有词出现在该角色的同一消息中。命中导航会遍历包含任一搜索词的消息。`--browse --search "database lock"` 可直接进入该搜索，按相关性排序。顶部显示范围和搜索模式；`?` 查看完整范围与帮助；`c` 清空搜索词，保留范围。
 - `/` 输入当前会话的字面搜索词，Enter 搜索，Esc 取消输入；n/N 跳到下一个/上一个命中消息。搜索自动展开工具详情。
 - `t`：展开或折叠工具详情；`y`：发送 URI 复制请求，需要终端支持 OSC 52。
-- `e`：导出当前会话，遵守 --format、--output 和现有 Provider 格式能力，默认 JSON；不支持 print 格式。
+- `x`：预览当前命中消息及其前后各 3 条消息；`+`/`-` 调整上下文条数，n/N 切换命中。预览时 `e` 仅导出该范围，支持 JSON、Markdown，保留来源 URI 和消息位置。来源在预览后变化时拒绝导出。`x` 或 Esc 返回完整会话。
+- 完整会话视图中 `e`：导出当前会话，遵守 --format、--output 和现有 Provider 格式能力，默认 JSON；不支持 print 格式。
 - q/Esc/Ctrl-C：关闭阅读器并恢复终端，正常关闭返回 0。
 
-没有匹配会话时退出；不可用来源或非终端输入返回失败。单个会话读取失败会显示诊断，仍可切换其他会话。原有 --interactive 批量选择导出保持不变。
+搜索为空时仍可用 `s` 修改搜索、`c` 清空词。来源、目录、日期、角色和数量上限在阅读期间固定，需修改 CLI 参数后重新打开来扩大范围；不可用来源或非终端输入返回失败。单个会话读取失败会显示诊断，仍可切换其他会话。原有 --interactive 批量选择导出保持不变。
 
 ## 项目结构
 
