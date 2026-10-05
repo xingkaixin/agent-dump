@@ -185,8 +185,8 @@ dev-web:
     @echo "🚀 Starting landing page dev server..."
     pnpm --dir web dev
 
-# Deploy the built static site to Cloudflare Pages
+# Deploy the built static site to Cloudflare Workers
 deploy-web: build-web
-    @echo "🌐 Deploying web/dist to Cloudflare Pages..."
-    pnpm --dir web exec wrangler pages deploy dist --project-name=agent-dump --commit-dirty=true
+    @echo "🌐 Deploying web/dist to Cloudflare Workers..."
+    cd web && node scripts/prepare-worker.mjs && cf deploy --prebuilt
     @echo "✅ Web deployment complete!"

@@ -37,7 +37,7 @@ export default defineConfig({
       },
     }),
     {
-      name: "pages-early-hints",
+      name: "static-asset-hints",
       hooks: {
         "astro:build:done": async ({ dir, assets }) => {
           const headers = [];

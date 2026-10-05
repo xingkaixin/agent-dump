@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => {
   await page.route("https://umami.xingkaixin.me/**", (route) => route.abort());
 });
 
-test("Pages hints reference the CSS and fonts used by each locale", async ({
+test("Static asset hints reference the CSS and fonts used by each locale", async ({
   page,
 }) => {
   const headers = await readFile(
