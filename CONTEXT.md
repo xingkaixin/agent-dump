@@ -69,7 +69,7 @@ A portable representation derived from a Session in a requested format.
 _Avoid_: Session Source
 
 **Collect Report**:
-A derived summary that combines selected Sessions over a time range. All eligible visible user/assistant text is processed in bounded chunks without a per-Session truncation budget. Failed Sessions remain explicit omissions; complete input coverage does not imply verbatim preservation in the summary.
+A derived summary that combines visible user/assistant text whose recorded local dates fall within the requested range. Candidate discovery has no creation-time cutoff. Each Session is split into daily units using text-part times before bounded chunking; session counts still count unique URIs. Undated or inferred-time text is excluded with explicit incomplete date coverage, never assigned the Session creation/update date. Query criteria and limits select candidates before text-date filtering. Failed Sessions remain explicit omissions; complete input coverage does not imply verbatim preservation in the summary.
 _Avoid_: Export
 
 ## Fact boundaries
@@ -101,7 +101,7 @@ _Avoid_: Export
   Provider metadata independently.
 - An unknown Message Count Fact remains visible as unknown. Shared workflows do
   not turn the sum of known counts into an apparently complete total.
-- Collect may merge Sessions only when their date and known Working Directory
+- Collect may merge daily Session units only when their activity date and known Working Directory
   match. An unknown Working Directory does not establish shared project identity.
 
 **Message Locator**:
@@ -117,3 +117,5 @@ A continuation bound to one Session URI, transcript revision, selection, order a
 
 - Read pagination and text projection do not establish cross-Provider conversation-turn boundaries or partial disk I/O. Exhausting a selected view does not imply that every raw Source field was returned.
 - A Read Prompt is executable guidance derived from a Session URI and the current CLI entrypoint, not Session content or evidence of source availability. Generating it does not perform Provider Discovery or read a transcript.
+
+- Visible text segments retain their own recorded times even when assistant messages are folded. Missing/invalid times are unknown. Cursor marks inferred message times explicitly; date-aware projections must not treat those as activity facts. Read pages expose clipped `text_spans` with local dates and absolute Unicode offsets; undated spans have null dates.

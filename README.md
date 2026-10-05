@@ -344,8 +344,7 @@ confirm a replacement entry point before proceeding.
 - stdout contains the prompt; diagnostics go to stderr. `--save` still names the **final report**, not the prompt file.
 - Generation does not validate AI settings, call a model, plan summary chunks, write collect logs, or create the report.
   Content queries may still read transcripts and update the local search index while selecting candidates.
-- All collect exclusions and query filters still apply. Dates include both endpoints and select sessions by their local
-  **creation date**, not individual message timestamps. The manifest is not a content snapshot.
+- All collect exclusions and query filters still apply. Dates include both endpoints and select visible text by its **actual local date**, splitting long sessions across days. Candidate discovery does not exclude old sessions; the external Agent applies dates using read-page `text_spans`. The manifest is not a content snapshot.
 - Before reading transcripts, validate the manifest end marker, candidate count, unique URIs, JSON lengths, and command
   identities. Parseable JSON alone does not prove completeness. Recover a damaged manifest from the full saved file first;
   otherwise regenerate the prompt at most once with the original selection conditions and capture output directly.
@@ -421,7 +420,7 @@ File discovery failures include partially unreadable providers. Valid sessions r
 
 When some session reads or summaries fail, collection continues with successful sessions. The saved Markdown includes a fixed incomplete-report notice with failure and included-session counts; an entirely failed run still fails.
 
-Collect processes all eligible user/assistant visible text. Events, including long individual messages, are split into chunks of at most 3,200 Unicode characters including labels. Chunk summaries are merged in groups of at most eight; large final reports are rendered in separate source-preserving groups. Model inputs are limited to 64,000 characters per request. Oversized metadata or derived summaries fail explicitly; source text is never silently truncated. Partial reports list omitted session URIs. Full input coverage does not mean a summary preserves every detail.
+Collect discovers candidate sessions without a creation-time cutoff and processes user/assistant visible text only within the requested local dates. A session spanning several days is split into separate daily units before summarization; session counts remain unique URI counts. Text without a reliable timestamp is excluded and reported as an incomplete date-coverage gap (including undated Kimi context and inferred Cursor times). No session creation/update time is substituted. Query filters and limits select candidate sessions before text-date filtering. Events, including long individual messages, are split into chunks of at most 3,200 Unicode characters including labels. Chunk summaries are merged in groups of at most eight; large final reports are rendered in separate source-preserving groups. Model inputs are limited to 64,000 characters per request. Oversized metadata or derived summaries fail explicitly; source text is never silently truncated. Partial reports list omitted session URIs. Full input coverage does not mean a summary preserves every detail.
 
 PM summaries merge sessions only within the same date and known working directory. Sessions without a working directory retain separate attribution.
 
@@ -560,6 +559,8 @@ JSON contains `schema_version: 1`, `kind: read`, `status`, `has_more` and `data`
 `has_more=false` means the selected view has no more matching content. Budget pagination does not make status partial. Recoverable source diagnostics produce partial status with details on stderr. No matches succeed with an empty array. Invalid, cross-session or stale cursors exit nonzero with empty stdout. Restart when the transcript changes; never combine revisions as one snapshot. Cursors do not preserve historical snapshots.
 
 Bounded output reduces content returned to the Agent, but reading may still parse the full source transcript; it does not promise partial disk I/O. Sources remain read-only and retain each Provider's existing data and platform support limits.
+
+Read pages without `--details` include `messages[].text_spans`: local `date` (null when unknown or inferred) and absolute Unicode `start`/`end` offsets within the message text. Spans are clipped to each returned fragment; subtract the fragment start when slicing its text. Separators between text parts are not dated. Collect handoffs use these spans to split and filter actual activity dates.
 
 ### TUI session reader
 
