@@ -12,10 +12,12 @@ use std::io::Write;
 pub fn read_entries(
     scan: &Scan,
     positions: &[(usize, usize)],
+    range: &std::ops::RangeInclusive<jiff::civil::Date>,
+    plan_chunks: bool,
     zh: bool,
     warnings: &mut impl Write,
     logger: Option<&crate::collect::log::Logger>,
-) -> crate::Result<(Vec<Entry>, Vec<String>)> {
+) -> crate::Result<(Vec<Entry>, Vec<String>, Vec<String>)> {
     progress(
         "COLLECT_PROGRESS_SCAN_SESSIONS",
         &[
@@ -27,6 +29,7 @@ pub fn read_entries(
     )?;
     let mut entries = Vec::new();
     let mut failed = Vec::new();
+    let mut undated = Vec::new();
     let mut last_error = None;
     let mut completed = 0;
     for batch in positions.chunks(32) {
@@ -44,7 +47,13 @@ pub fn read_entries(
                                 diagnostics.push(d);
                                 Ok(())
                             })
-                            .map(|data| crate::collect::events::extract(&data));
+                            .map(|data| {
+                                crate::collect::events::extract(
+                                    &data,
+                                    range,
+                                    plan_chunks,
+                                )
+                            });
                         (group, session, result, diagnostics)
                     })
                 })
@@ -65,13 +74,16 @@ pub fn read_entries(
                 )?;
             }
             match result {
-                Ok(chunks) => {
-                    if !chunks.is_empty() {
+                Ok((dates, missing_time)) => {
+                    if missing_time {
+                        undated.push(format!(
+                            "{}://{}",
+                            group.info.scheme, session.id
+                        ));
+                    }
+                    for (date, chunks) in dates {
                         entries.push(Entry {
-                            date: crate::date_input::parse(
-                                &session.created_at.format_local("%Y-%m-%d"),
-                            )
-                            .unwrap(),
+                            date,
                             session: session.clone(),
                             provider: group.info,
                             chunks,
@@ -133,6 +145,6 @@ pub fn read_entries(
             )
         )?;
     }
-    entries.sort_by_key(|entry| entry.session.created_at);
-    Ok((entries, failed))
+    entries.sort_by_key(|entry| entry.date);
+    Ok((entries, failed, undated))
 }

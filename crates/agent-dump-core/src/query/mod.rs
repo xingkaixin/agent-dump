@@ -30,7 +30,7 @@ impl TimeField {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Query {
     pub providers: Option<BTreeSet<String>>,
     pub keyword: Option<String>,

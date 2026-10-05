@@ -102,6 +102,13 @@ impl Cursor {
 }
 
 #[derive(Serialize)]
+pub struct TextSpan {
+    pub start: usize,
+    pub end: usize,
+    pub date: Option<String>,
+}
+
+#[derive(Serialize)]
 pub struct Fragment {
     pub position: usize,
     pub locator: String,
@@ -111,6 +118,8 @@ pub struct Fragment {
     pub end: usize,
     pub total_chars: usize,
     pub truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_spans: Option<Vec<TextSpan>>,
 }
 
 #[derive(Serialize)]
@@ -178,10 +187,28 @@ pub fn page(
             cursor.advance();
             continue;
         }
-        let body = if cursor.options.details {
-            render::reader_message(message, true)
+        let (body, spans) = if cursor.options.details {
+            (render::reader_message(message, true), None)
         } else {
-            render::safe_body(&transcript::visible_texts(message).join("\n\n"))
+            let mut body = String::new();
+            let mut spans = Vec::new();
+            let mut offset = 0;
+            for (text, time) in transcript::visible_segments(message) {
+                if !spans.is_empty() {
+                    body.push_str("\n\n");
+                    offset += 2;
+                }
+                let text = render::safe_body(&text);
+                let end = offset + text.chars().count();
+                spans.push(TextSpan {
+                    start: offset,
+                    end,
+                    date: time.map(|time| time.local_date().to_string()),
+                });
+                body.push_str(&text);
+                offset = end;
+            }
+            (body, Some(spans))
         };
         if body.is_empty()
             || matcher.as_ref().is_some_and(|m| m.find(&[&body]).is_none())
@@ -213,6 +240,20 @@ pub fn page(
             end,
             total_chars,
             truncated: cursor.offset != 0 || end < total_chars,
+            text_spans: spans.map(|spans| {
+                spans
+                    .into_iter()
+                    .filter_map(|span| {
+                        let start = span.start.max(cursor.offset);
+                        let stop = span.end.min(end);
+                        (start < stop).then_some(TextSpan {
+                            start,
+                            end: stop,
+                            date: span.date,
+                        })
+                    })
+                    .collect()
+            }),
         });
         remaining -= length;
         if end < total_chars {

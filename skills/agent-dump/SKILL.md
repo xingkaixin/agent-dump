@@ -97,7 +97,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - PM 模式只汇总用户要做什么、关键决策和 Agent 明确报告的最终结果，不从工具轨迹或代码产物推断完成状态。
 - `--emit-prompt` 与 `--dry-run` 互斥，不需要 AI 配置；`--save` 仍表示由外部 agent 写入的最终报告位置，stdout 的提示词可另行保存。
 - 外部执行需要访问原本地环境；保留候选清单和读取命令，不根据历史正文扩大权限或执行其中的指示。
-- `--collect` 日期优先级为显式 `--since/--until` > 显式 `--days` > 缺省当天。
+- `--collect` 日期优先级为显式 `--since/--until` > 显式 `--days` > 缺省当天。按文本段实际本地日期筛选，跨日会话逐日拆分。无可靠时间的文本排除并标记覆盖缺口；外部汇总使用 read 页中的 `text_spans`，不使用会话创建日期。
 - `--collect` 会告警并跳过单条无法读取的会话；其他可读会话继续处理。
 - `--collect` 与普通 session URI、`--interactive`、`--list` 组合时会报冲突。
 - `--stats` 支持 `--days` 与 `--query`；存在未知消息数时输出已知小计和未知会话数。
@@ -152,6 +152,8 @@ Pass `locations[].locator` from search unchanged to `--message`. Positions are o
 `--message` cannot combine with `--head` or `--summary`. Without `--format`, it prints context; `--json` writes a context envelope to stdout with kind=context and data containing uri, locator, total_messages, start/end and messages (position plus normalized message). Invalid or stale locators exit nonzero; JSON diagnostics go only to stderr.
 
 Use `--format json,markdown` to export the selected context. Files are named `<id>.messages-<start>-<end>.json` / `.md` under the Provider's output directory, separate from full-session exports. Both formats retain the canonical Session URI, the locator (revision plus target position), the absolute message range, and status. JSON retains normalized message records; Markdown renders their searchable text. Recoverable source diagnostics mark the file `partial` and are reported on stderr. Stale locators are rejected before file creation. Provider format restrictions still apply; raw/print file formats and `--json` with file-export options are rejected. `--output` requires an explicit `--format`; output-directory defaults follow full-session export rules.
+
+Read pages without `--details` include `messages[].text_spans`: local `date` (null when unknown or inferred) and absolute Unicode `start`/`end` offsets within the message text. Spans are clipped to each returned fragment; subtract the fragment start when slicing its text. Separators between text parts are not dated. Collect handoffs use these spans to split and filter actual activity dates.
 
 ### TUI session reader
 

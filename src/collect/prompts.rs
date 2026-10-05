@@ -63,14 +63,14 @@ pub fn chunk(
     let uri = entry.uri();
     let directory = entry.session.working_directory();
     let metadata = format!(
-        "title: {}\nproject_directory: {}\ncreated_at: {}\nchunk: {}/{}",
+        "title: {}\nproject_directory: {}\nactivity_date: {}\nchunk: {}/{}",
         entry.session.title,
         if directory.is_empty() {
             "(unknown)"
         } else {
             &directory
         },
-        entry.session.created_at.iso_local(),
+        entry.date,
         index + 1,
         entry.chunks.len()
     );
@@ -84,12 +84,12 @@ pub fn chunk(
         text(mode, "chunk"),
         envelope(
             "session_metadata",
-            &format!("{uri}#chunk-{}/metadata", index + 1),
+            &format!("{uri}#chunk-{}/metadata/{}", index + 1, entry.date),
             &metadata
         ),
         envelope(
             "session_events",
-            &format!("{uri}#chunk-{}/events", index + 1),
+            &format!("{uri}#chunk-{}/events/{}", index + 1, entry.date),
             &body
         )
     )
@@ -159,7 +159,11 @@ pub fn final_prompt(
     write!(
         result,
         "\n\n- session_count: {}\n- reduction_depth: {depth}",
-        groups.iter().map(|g| g.session_uris.len()).sum::<usize>()
+        groups
+            .iter()
+            .flat_map(|g| &g.session_uris)
+            .collect::<std::collections::HashSet<_>>()
+            .len()
     )?;
     result += "\n按各组的日期、项目和会话来源归纳，不得把一组事实归到另一组。";
     if !groups.is_empty() {

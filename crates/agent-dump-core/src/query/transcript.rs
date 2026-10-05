@@ -22,20 +22,42 @@ pub fn message_texts(message: &Message) -> Vec<String> {
     texts
 }
 pub fn visible_texts(message: &Message) -> Vec<String> {
-    let mut texts: Vec<_> = message
+    visible_segments(message)
+        .into_iter()
+        .map(|(text, _)| text)
+        .collect()
+}
+
+pub fn visible_segments(
+    message: &Message,
+) -> Vec<(String, Option<crate::session::timestamp::Timestamp>)> {
+    let time = |millis: i64| {
+        if message.inferred_time || millis == 0 {
+            return None;
+        }
+        millis.checked_mul(1000).and_then(|micros| {
+            crate::session::timestamp::Timestamp::from_microsecond(micros).ok()
+        })
+    };
+    let mut segments: Vec<_> = message
         .parts
         .iter()
         .filter_map(|part| {
             if let Part::Text(part) = part {
-                Some(part.text.trim().to_owned())
+                let text = part.text.trim();
+                (!text.is_empty())
+                    .then(|| (text.to_owned(), time(part.time_created)))
             } else {
                 None
             }
         })
-        .filter(|s| !s.is_empty())
         .collect();
-    texts.extend(legacy_texts(message));
-    texts
+    segments.extend(
+        legacy_texts(message)
+            .into_iter()
+            .map(|text| (text, time(message.time_created))),
+    );
+    segments
 }
 
 fn legacy_texts(message: &Message) -> Vec<String> {

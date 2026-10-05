@@ -175,10 +175,10 @@
   "COLLECT_PROGRESS_OVERVIEW": "本次将处理 {session_count} 个 session，拆分为 {chunk_count} 个总结单元；并发 {concurrency}",
   "COLLECT_PROGRESS_AGENT_BREAKDOWN": "Agent 分布：{breakdown}",
   "COLLECT_PROGRESS_SCAN_SESSIONS": "正在扫描会话：{current}/{total}",
-  "COLLECT_PROGRESS_PLAN_CHUNKS": "正在预处理会话：{current}/{total}",
+  "COLLECT_PROGRESS_PLAN_CHUNKS": "正在准备会话每日单元: {current}/{total}",
   "COLLECT_PROGRESS_PLAN_CHUNKS_DONE": "已完成预处理：{session_count} 个 session，拆分为 {chunk_count} 个总结单元",
   "COLLECT_PROGRESS_SUMMARIZE_CHUNKS": "正在总结内容：已完成 {current}/{total} 个单元，并发 {concurrency}",
-  "COLLECT_PROGRESS_MERGE_SESSIONS": "正在合并 session 结果：{current}/{total}",
+  "COLLECT_PROGRESS_MERGE_SESSIONS": "正在合并会话每日结果: {current}/{total}",
   "COLLECT_PROGRESS_TREE_REDUCTION": "正在归并全局结果：第 {level} 轮，{current}/{total} 组",
   "COLLECT_PROGRESS_RENDER_FINAL": "正在生成最终总结：{current}/{total}",
   "COLLECT_PROGRESS_WRITE_OUTPUT": "正在写入结果文件：{current}/{total}",
@@ -356,5 +356,6 @@
   "MESSAGE_CONTEXT_EXPORTED": "✅ 已导出上下文 [{format}] 到: {path}",
   "CLI_TIME_FIELD_HELP": "列表、搜索、浏览和交互模式中 --days 的时间依据：created（默认）或 updated",
   "TIME_FIELD_MODE_ERROR": "--time-field 仅用于列表、搜索、浏览或交互模式。",
-  "QUERY_SUMMARY_UPDATED_TIME": "按更新时间"
+  "QUERY_SUMMARY_UPDATED_TIME": "按更新时间",
+  "COLLECT_UNDATED": "日期覆盖不完整：{count} 个会话中的部分可见文本没有可靠时间，已排除这些文本。"
 }
