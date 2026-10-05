@@ -69,7 +69,7 @@ fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
             "session URI",
         ),
         (
-            args.search.as_ref().is_some_and(|s| !s.is_empty()),
+            args.search.as_ref().is_some_and(|s| !s.is_empty()) && !args.browse,
             Mode::List,
             "--search",
         ),
@@ -361,7 +361,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
     if let Some(search) = args
         .search
         .as_ref()
-        .filter(|s| !s.is_empty() && mode == Mode::List)
+        .filter(|s| !s.is_empty() && matches!(mode, Mode::List | Mode::Browse))
     {
         let query = query.get_or_insert_with(query::Query::default);
         query.keyword = Some(search.clone());
