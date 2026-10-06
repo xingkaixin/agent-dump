@@ -5,10 +5,6 @@ use agent_dump_core::query::scanner::Scan;
 use serde_json::json;
 use std::io::Write;
 
-#[allow(
-    clippy::needless_collect,
-    reason = "Spawn the entire batch before joining any worker to preserve concurrency"
-)]
 pub fn read_entries(
     scan: &Scan,
     positions: &[(usize, usize)],
@@ -32,37 +28,24 @@ pub fn read_entries(
     let mut undated = Vec::new();
     let mut last_error = None;
     let mut completed = 0;
-    for batch in positions.chunks(32) {
-        let results = std::thread::scope(|scope| {
-            let jobs: Vec<_> = batch
-                .iter()
-                .map(|&(g, s)| {
-                    let group = &scan.groups[g];
-                    let session = &group.sessions[s];
-                    scope.spawn(move || {
-                        let mut diagnostics = Vec::new();
-                        let result = group
-                            .provider
-                            .read(session, zh, &mut |d| {
-                                diagnostics.push(d);
-                                Ok(())
-                            })
-                            .map(|data| {
-                                crate::collect::events::extract(
-                                    &data,
-                                    range,
-                                    plan_chunks,
-                                )
-                            });
-                        (group, session, result, diagnostics)
-                    })
+    agent_dump_core::parallel::ordered(
+        positions,
+        |&(g, s)| {
+            let group = &scan.groups[g];
+            let session = &group.sessions[s];
+            let mut diagnostics = Vec::new();
+            let result = group
+                .provider
+                .read(session, zh, &mut |d| {
+                    diagnostics.push(d);
+                    Ok(())
                 })
-                .collect();
-            jobs.into_iter()
-                .map(|job| job.join().unwrap())
-                .collect::<Vec<_>>()
-        });
-        for (group, session, result, diagnostics) in results {
+                .map(|data| {
+                    crate::collect::events::extract(&data, range, plan_chunks)
+                });
+            (group, session, result, diagnostics)
+        },
+        |(group, session, result, diagnostics)| {
             for diagnostic in diagnostics {
                 writeln!(
                     warnings,
@@ -127,8 +110,9 @@ pub fn read_entries(
                 zh,
                 warnings,
             )?;
-        }
-    }
+            Ok(())
+        },
+    )?;
     if entries.is_empty()
         && let Some(error) = last_error
     {
