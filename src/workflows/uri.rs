@@ -184,10 +184,7 @@ fn run_inner(
         return Ok(true);
     }
     let default_output = if operation.output.is_none()
-        && operation
-            .formats
-            .iter()
-            .any(|f| matches!(f, OutputFormat::Json | OutputFormat::Raw))
+        && operation.formats.iter().any(|f| *f != OutputFormat::Print)
     {
         let config = agent_dump_core::config::Config::load()?;
         if let Err(error) = config.require_valid(zh) {
@@ -229,7 +226,6 @@ fn run_inner(
                 let output = export::output_base(
                     operation.output.as_deref(),
                     &default_output,
-                    *format,
                 )
                 .join(registration.info.name);
                 let path =
@@ -361,12 +357,9 @@ fn run_inner(
             .as_ref()
             .and_then(|result| result.as_ref().ok())
             .map(std::convert::AsRef::as_ref);
-        let output = export::output_base(
-            operation.output.as_deref(),
-            &default_output,
-            *format,
-        )
-        .join(registration.info.name);
+        let output =
+            export::output_base(operation.output.as_deref(), &default_output)
+                .join(registration.info.name);
         let result = export::SessionExport {
             provider: provider.as_ref(),
             session: &session,
