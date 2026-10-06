@@ -23,7 +23,7 @@ agent-dump search 'auth timeout' --query 'path:.' --days 30
 agent-dump export codex://SESSION_ID --format markdown --output ./sessions
 ```
 
-将 `codex://SESSION_ID` 替换为列表或搜索结果中的真实 URI。搜索默认按创建时间筛选；查找最近活动时加 `--time-field updated`。需要勾选多个会话导出时，使用 `--interactive`。
+将 `codex://SESSION_ID` 替换为列表或搜索结果中的真实 URI。搜索默认按更新时间筛选；需要按创建时间筛选时加 `--time-field created`。需要勾选多个会话导出时，使用 `--interactive`。
 
 ### AI Agent
 
@@ -387,7 +387,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | `uri` | 用于直接查看的 Agent Session URI（如 `opencode://session-id`），或作用域查询 URI，如 `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive`, `-i` | 打开会话阅读器选择和导出会话（终端中等同 `--browse`） | - |
 | `--days`, `-d` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `--since/--until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
-| `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 的时间依据：`created` 或 `updated`。 | `created` |
+| `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 的时间依据：`created` 或 `updated`。 | `updated` |
 | `--query`, `-q` | 查询过滤。关键词与 `--search` 一样按空白拆分、不区分大小写，所有 term 都必须出现在 Session 标题或逻辑 transcript 中。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印有界发现阶段已有的元数据，不重新读取完整正文；发现阶段完整扫描时消息数为精确值，否则明确显示“未知”。不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
 | `--collect` | 按日期范围采集会话，可选通过 `--query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
@@ -410,7 +410,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略；`--head` 不能与此选项组合。Cursor URI 仅支持 `json` 和 `print`（不支持 `raw/markdown`）。 | - |
 | `--summary` | 仅 URI 模式生效。开启后仅在 `--format` 包含 `json` 且 AI 配置完整时生成 summary；否则仅 warning 并继续导出（不启用 summary）。AI 请求期间会在 stderr 显示 loading 提示。不能与 `--head` 组合。 | - |
 | `--page-size`, `-p` | 仅兼容保留，不生效。读取分页使用 `--read` 与 `--limit` / `--max-chars`。 | 20 |
-| `--output` | 输出目录。`json/raw` 优先级：`--output` > `config.toml` `[export].output` > `./sessions`。相对路径从 agent-dump 执行目录解析。Markdown 仍使用 `./sessions`，除非显式传入 `--output`。`--list` 下会警告并忽略。 | `config export.output` 或 `./sessions` |
+| `--output` | 输出目录。所有文件格式的优先级均为：`--output` > `config.toml` `[export].output` > `./sessions`。相对路径从 agent-dump 执行目录解析。`--list` 下会警告并忽略。 | `config export.output` 或 `./sessions` |
 | `-h, --help` | 显示帮助信息 | - |
 
 ### Python API 迁移
@@ -466,7 +466,7 @@ deny = [
 
 collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TOML，且排除路径必须是非空路径字符串组成的数组。配置不可靠时，命令会在发现会话和发送 AI 请求前停止；collect 不会通过兼容解析静默取消排除规则。
 
-`[export].output` 定义 `json/raw` 导出的全局默认输出根目录。接受绝对或相对路径。相对路径从 `agent-dump` 执行目录解析，而非配置文件所在目录。
+`[export].output` 定义 `json`、`markdown` 和 `raw` 导出的全局默认输出根目录。接受绝对或相对路径。相对路径从 `agent-dump` 执行目录解析，而非配置文件所在目录。
 
 `[shortcut.<name>]` 定义可复用的快捷预设。`params` 声明位置输入名称。`args` 声明展开的 CLI argv 模板。提供 `date` 时，`{year}` / `{month}` / `{year_month}` 会自动派生。
 
@@ -482,7 +482,7 @@ agent-dump --browse --time-field updated -d 7
 agent-dump --interactive --time-field updated -d 7
 ```
 
-`--days` 默认按创建时间筛选。加 `--time-field updated` 可查找 Provider 记录的 `updated_at` 位于最近 N 天内的会话，包括很早创建、最近仍有活动的会话。`--time-field created` 显式选择既有默认行为。该参数只用于列表、搜索、浏览和交互模式；collect 日期和统计含义不变。
+`--days` 默认按 Provider 记录的 `updated_at` 筛选，可找到最近 N 天内有活动的会话，包括很早创建的会话。加 `--time-field created` 改为按创建时间筛选。该参数只用于列表、搜索、浏览和交互模式；collect 日期和统计含义不变。
 
 活动列表先按更新时间排序，再应用结果数量限制。文本列表和交互选择保留 Provider 分组；显示日期和“今天／昨天”等分组使用所选时间字段。全文搜索仍优先按相关性排序。JSON 保留原有创建时间和更新时间。为发现旧会话的新活动，可能需要扫描创建时间窗口之外的元数据；筛选沿用各 Provider 的 `updated_at` 事实，不额外按文件修改时间推断活动。各 Provider 的覆盖范围和发现不完整时的诊断规则不变。
 
@@ -574,7 +574,7 @@ agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --search "database lock" --format json,markdown --output ./exports
 ```
 
-`--browse` 需要真实交互式终端，默认选择最近 7 天创建的会话，按更新时间排序；加 `--time-field updated` 改为按最近活动筛选。支持现有查询条件和 agents:// 查询 URI；只读取当前选择的会话正文（内容筛选本身仍可能读取多个会话）。宽终端显示列表和正文两栏；窄于 90 列时通过 Tab 切换单栏。阅读器只读 Provider 来源，不自动刷新活动会话；重新打开可获取新列表。
+`--browse` 需要真实交互式终端，默认选择最近 7 天有更新的会话，按更新时间排序；加 `--time-field created` 改为按创建时间筛选。支持现有查询条件和 agents:// 查询 URI；只读取当前选择的会话正文（内容筛选本身仍可能读取多个会话）。宽终端显示列表和正文两栏；窄于 90 列时通过 Tab 切换单栏。阅读器只读 Provider 来源，不自动刷新活动会话；重新打开可获取新列表。
 
 - ↑/↓ 或 j/k：在当前区域移动或滚动；Enter/→ 进入正文，← 返回列表。
 - Tab：切换区域；PageUp/PageDown 翻页；Home/End 跳到首尾。
