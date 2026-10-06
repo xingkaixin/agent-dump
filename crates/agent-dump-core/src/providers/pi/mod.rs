@@ -35,8 +35,14 @@ impl Pi {
         })
     }
 
-    fn parse(path: &Path) -> crate::Result<Option<Session>> {
-        let scan = crate::providers::jsonl::metadata(path, 20)?;
+    fn scan(path: &Path) -> crate::Result<crate::providers::jsonl::Metadata> {
+        crate::providers::jsonl::metadata(path, 20)
+    }
+
+    fn parse(
+        path: &Path,
+        scan: crate::providers::jsonl::Metadata,
+    ) -> crate::Result<Option<Session>> {
         let Some(header) =
             scan.header.filter(|header| header["type"] == "session")
         else {
@@ -118,9 +124,13 @@ impl Provider for Pi {
         days: Option<i64>,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
-        file_sessions::discover(&self.files()?, days, true, |path, _| {
-            Self::parse(path)
-        })
+        file_sessions::discover(
+            &self.files()?,
+            days,
+            true,
+            Self::scan,
+            |path, scan, _| Self::parse(path, scan),
+        )
     }
 
     fn find(
@@ -139,7 +149,7 @@ impl Provider for Pi {
                     name.to_string_lossy().ends_with(&suffix)
                 })
             },
-            Self::parse,
+            |path| Self::parse(path, Self::scan(path)?),
         )
     }
 

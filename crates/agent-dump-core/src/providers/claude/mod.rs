@@ -116,12 +116,16 @@ impl Claude {
         Ok(titles)
     }
 
+    fn scan(path: &Path) -> crate::Result<jsonl::Metadata> {
+        jsonl::metadata(path, 20)
+    }
+
     fn parse(
         &mut self,
         path: &Path,
+        scan: jsonl::Metadata,
         diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Option<Session>> {
-        let scan = jsonl::metadata(path, 20)?;
         let Some(header) = scan.header else {
             return Ok(None);
         };
@@ -228,9 +232,13 @@ impl Provider for Claude {
         diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.titles.clear();
-        file_sessions::discover(&self.files()?, days, true, |path, _| {
-            self.parse(path, diagnostics)
-        })
+        file_sessions::discover(
+            &self.files()?,
+            days,
+            true,
+            Self::scan,
+            |path, scan, _| self.parse(path, scan, diagnostics),
+        )
     }
 
     fn find(
@@ -245,7 +253,7 @@ impl Provider for Claude {
             &files,
             id,
             |path| path.file_stem().is_some_and(|name| name == id),
-            |path| self.parse(path, diagnostics),
+            |path| self.parse(path, Self::scan(path)?, diagnostics),
         )
     }
 

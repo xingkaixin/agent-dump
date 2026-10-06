@@ -71,14 +71,16 @@ impl Kimi {
         mapping.get(hash).cloned().unwrap_or_default()
     }
 
+    fn scan(path: &Path) -> crate::Result<Value> {
+        crate::compat::json::from_slice(&crate::storage::source_io::read(path)?)
+    }
+
     fn parse(
         &mut self,
         path: &Path,
+        metadata: &Value,
         cutoff: Option<Timestamp>,
     ) -> crate::Result<Option<Session>> {
-        let metadata: Value = crate::compat::json::from_slice(
-            &crate::storage::source_io::read(path)?,
-        )?;
         if !metadata.is_object() {
             return Err("session metadata must be a JSON object".into());
         }
@@ -152,9 +154,13 @@ impl Provider for Kimi {
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.work_dirs = None;
-        file_sessions::discover(&self.files()?, days, false, |path, cutoff| {
-            self.parse(path, cutoff)
-        })
+        file_sessions::discover(
+            &self.files()?,
+            days,
+            false,
+            Self::scan,
+            |path, metadata, cutoff| self.parse(path, &metadata, cutoff),
+        )
     }
 
     fn find(
@@ -173,7 +179,7 @@ impl Provider for Kimi {
                     .and_then(Path::file_name)
                     .is_some_and(|name| name == id)
             },
-            |path| self.parse(path, None),
+            |path| self.parse(path, &Self::scan(path)?, None),
         )
     }
 
