@@ -1,6 +1,7 @@
 use rusqlite::{Connection, OpenFlags, types::ValueRef};
 use serde_json::{Map, Value};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 pub fn change_sources(path: &Path) -> Vec<std::path::PathBuf> {
     let mut wal = path.as_os_str().to_owned();
@@ -17,6 +18,59 @@ pub fn connect(path: &Path) -> crate::Result<Connection> {
     connection.busy_timeout(std::time::Duration::from_secs(5))?;
     connection.execute_batch("PRAGMA query_only = ON; BEGIN")?;
     Ok(connection)
+}
+
+type Identity = Option<(u64, u64)>;
+
+#[cfg(unix)]
+fn identity(path: &Path) -> Identity {
+    use std::os::unix::fs::MetadataExt;
+    path.metadata()
+        .ok()
+        .map(|metadata| (metadata.dev(), metadata.ino()))
+}
+
+#[cfg(not(unix))]
+const fn identity(_: &Path) -> Identity {
+    Some((0, 0))
+}
+
+#[derive(Default)]
+pub struct Readers(Mutex<Vec<(PathBuf, Identity, Connection)>>);
+
+impl Readers {
+    pub fn read<T>(
+        &self,
+        path: &Path,
+        read: impl FnOnce(&Connection) -> crate::Result<T>,
+    ) -> crate::Result<T> {
+        let current = identity(path);
+        let idle = {
+            let mut idle = self.0.lock().unwrap();
+            idle.retain(|(source, opened, _)| {
+                source != path || (current.is_some() && *opened == current)
+            });
+            idle.iter()
+                .position(|(source, _, _)| source == path)
+                .map(|index| idle.swap_remove(index).2)
+        };
+        let connection = if let Some(connection) = idle {
+            connection.execute_batch("BEGIN")?;
+            connection
+        } else {
+            connect(path)?
+        };
+        let result = read(&connection);
+        if connection.execute_batch("ROLLBACK").is_ok()
+            && connection.release_memory().is_ok()
+        {
+            self.0
+                .lock()
+                .unwrap()
+                .push((path.to_owned(), current, connection));
+        }
+        result
+    }
 }
 
 pub fn has_table(connection: &Connection, name: &str) -> crate::Result<bool> {
@@ -121,5 +175,41 @@ mod tests {
                 .unwrap(),
             before
         );
+    }
+
+    #[test]
+    fn reused_readers_see_new_commits_and_replaced_databases() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("source.sqlite");
+        let create = |path: &Path, body: &str| {
+            let writer = Connection::open(path).unwrap();
+            writer
+                .execute_batch("CREATE TABLE messages (body TEXT)")
+                .unwrap();
+            writer
+                .execute("INSERT INTO messages VALUES (?)", [body])
+                .unwrap();
+            writer
+        };
+        let writer = create(&path, "before");
+        let readers = Readers::default();
+        let read = || {
+            readers
+                .read(&path, |connection| {
+                    rows(connection, "SELECT body FROM messages", &[])
+                })
+                .unwrap()[0]["body"]
+                .clone()
+        };
+        assert_eq!(read(), "before");
+        writer
+            .execute("UPDATE messages SET body = 'after'", [])
+            .unwrap();
+        assert_eq!(read(), "after");
+        drop(writer);
+        let replacement = directory.path().join("replacement.sqlite");
+        drop(create(&replacement, "replaced"));
+        std::fs::rename(&replacement, &path).unwrap();
+        assert_eq!(read(), "replaced");
     }
 }
