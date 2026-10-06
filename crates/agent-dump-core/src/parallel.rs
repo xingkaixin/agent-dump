@@ -8,8 +8,15 @@ struct Window {
 }
 
 impl Window {
-    fn advance(&self, consumed: Option<usize>) {
-        *self.consumed.lock().unwrap() = consumed;
+    fn advance(&self, count: usize) {
+        if let Some(consumed) = self.consumed.lock().unwrap().as_mut() {
+            *consumed = count;
+        }
+        self.advanced.notify_all();
+    }
+
+    fn stop(&self) {
+        *self.consumed.lock().unwrap() = None;
         self.advanced.notify_all();
     }
 }
@@ -18,7 +25,7 @@ struct Stop<'a>(&'a Window);
 
 impl Drop for Stop<'_> {
     fn drop(&mut self) {
-        self.0.advance(None);
+        self.0.stop();
     }
 }
 
@@ -78,7 +85,7 @@ pub fn ordered<'a, T: Sync, R: Send>(
             while let Some(result) = ready.remove(&expected) {
                 expected += 1;
                 consume(result)?;
-                window.advance(Some(expected));
+                window.advance(expected);
             }
         }
         Ok(())
