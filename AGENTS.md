@@ -38,9 +38,12 @@
 
 开始修改前，只读取与任务相关的参考：
 
+- 项目目标、非目标和设计原则（新增能力或改变方向前）：`docs/product.md`
 - 领域术语、Session facts 和读写边界：`CONTEXT.md`
 - 架构、Provider contract、Query/Search、Collect 和扩展步骤：`docs/architecture.md`
+- 特定 Provider 的读取规则：`docs/providers/`
 - 测试、i18n、交互式 CLI、依赖和本地验证：`docs/development-guide.md`
+- 性能评估与基准脚本：`docs/benchmarking.md`
 - 发版、构建约束和发布控制边界：`docs/release-guide.md`
 - 面向用户的 CLI 行为：`README.md`、`README_zh.md`
 - Agent 使用 recipes：`skills/agent-dump/SKILL.md`、`skills/agent-dump/references/cli-recipes.md`
@@ -59,7 +62,7 @@
 - 开发时先运行与改动直接相关的测试。
 - 提交 PR 前运行 `just isok`。默认验证运行 Rust 单元测试和独立行为契约。`tests/cli` 中标记为 `differential` 的历史差分测试仅通过 `just test-differential` 手动运行；不得读取真实用户数据。
 - 修改公开 API、CLI 或用户可见能力时，同步更新 README 和相关 skill recipes。
-- 只在稳定约束、职责边界或任务路由变化时更新本文件。模块增删和实现细节记录到对应按需文档或由代码、配置和测试作为来源。
+- 目标、非目标或设计原则变化时更新 `docs/product.md`；只在稳定约束、职责边界或任务路由变化时更新本文件。模块增删和实现细节记录到对应按需文档或由代码、配置和测试作为来源。
 - 修改架构术语或事实边界时同步更新 `CONTEXT.md`。
 
 ## 4. 提交前检查

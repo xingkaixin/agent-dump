@@ -44,7 +44,7 @@ just isok
 
 Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 hash 来自 `tests/reference/requirements.txt`。安装器核对包内全部 Python 文件的源码 hash，与 P6 冻结参考一致。对照只用于差分和配对性能测量，不进入主开发环境、Cargo 构建、wheel 或 npm。不要随依赖升级改变此历史参考。
 
-`uv sync --locked --dev` 安装 pytest、Ruff、ty 等辅助工具；`pyproject.toml` 同时保留 pip/Maturin 所需元数据。pytest 配置只位于该文件，禁止额外配置覆盖。Python 应用的旧单元测试和覆盖率门禁已随源码退场；历史结果保留在 [P6 验收](rust-p6-completion.md)。
+`uv sync --locked --dev` 安装 pytest、Ruff、ty 等辅助工具；`pyproject.toml` 同时保留 pip/Maturin 所需元数据。pytest 配置只位于该文件，禁止额外配置覆盖。Python 应用的旧单元测试和覆盖率门禁已随源码退场，历史结果保留在 Git 历史中。
 
 `just fmt` 格式化整个 Rust workspace 和 Python 验证工具，`just fmt-check` 只检查格式；`just lint-format` 保留为 `fmt` 的别名。`just lint` 执行 Rustfmt、Clippy 和 Ruff；`just check` 执行 Cargo check 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 各执行一组 Rust 单元测试、CLI 契约和工具验证。四目标安装 CI 另行检查 pip/uv tool/uvx 与 npm/npx/bunx。
 
@@ -82,7 +82,7 @@ selector 只展示工作流传入的会话与计数，不发现来源或读取�
 
 `just build` 使用 Maturin 从 sdist 构建 wheel，并提取完全相同的 npm 原生文件；`just verify-wheel` 验证隔离安装。PEP 517 版本及完整 hash 约束位于 `packaging/build-constraints.*`，由 `just update-build-constraints` 更新。四目标与发布控制见[发布指南](release-guide.md)。
 
-`just benchmark --profile smoke --repeats 1 --warmups 0 --output dist/benchmarks/smoke.json` 默认测量 Rust release。两种实现的交错比较先运行 `just reference`，再使用 `scripts/eval_rust_release.py` 或 `scripts/eval_rust_workflows.py`。全部输入为隔离合成数据，结果校验不进入计时。历史原始报告保持原样；旧目录与 evaluator 可从报告记录的 commit 复现，当前路径见[基准说明](benchmarks/README.md)。
+`just benchmark --profile smoke --repeats 1 --warmups 0 --output dist/benchmarks/smoke.json` 默认测量 Rust release。两种实现的交错比较先运行 `just reference`，再使用 `scripts/eval_rust_release.py` 或 `scripts/eval_rust_workflows.py`。全部输入为隔离合成数据，结果校验不进入计时。场景、测量边界和专用基准脚本见[性能评估](benchmarking.md)。
 
 ## 5. 落地页性能与 Cloudflare Workers
 

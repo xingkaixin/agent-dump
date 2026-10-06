@@ -1,58 +1,12 @@
-# CLI 性能基线
+# CLI 性能评估
 
-这套评估用于比较冻结 Python 参考、历史 PyInstaller 制品与当前 Rust release 二进制。它通过 CLI 子进程执行，不 import `agent_dump`，无需为 Rust 改写计时入口。
+这套评估通过 CLI 子进程测量当前 Rust release 二进制，可与固定的 Python v0.15.9 参考或另一份 Rust 制品交错比较。结果校验只保护 benchmark 工作负载，不能代替功能测试。
 
-完整迁移验收见 [Rust 迁移计划](../rust-migration-plan.md)。这里的结果校验只保护 benchmark 工作负载，不能代替完整功能矩阵。
-
-[搜索范围过滤优化](scoped-search.md)：1,001 / 4,001 条合成会话的 Rust 前后交错比较，验证完整输出一致，并保留一次被拒绝的查询计划回退。
-
-[分段读取的 revision 内存优化](bounded-read.md)：8 Mi / 32 Mi 字符消息的分页、续读和详情读取，验证旧游标兼容及峰值 RSS 变化。
-
-[SQLite 来源变化后的索引刷新](index-refresh.md)：500 / 2,000 条会话的前后比较，保留数据库/WAL 检测并跳过未变正文的 FTS 重写。
-
-[阅读器重绘优化](reader-redraw.md)：相同终端缓冲区下比较小消息、千会话列表和大消息的重绘，区分重绘收益与完整阅读流程。
-
-[连续 assistant 片段合并](assistant-folding.md)：Codex 与 Claude 的完整 JSON 导出比较，验证 16,000 / 32,000 片段下的增长趋势和完整输出一致性。
-
-[读取批量并发验证](read-batches.md)：4 / 8 / 16 / 32 的 JSONL、SQLite 建索引与 collect 比较。保留 32，并记录耗时与内存的取舍。
-
-当前结果：[P6 最终 23 场景交错复测](rust-p6.md)，包括已修复的批量导出回退、四目标体积和全部原始样本；功能及安装证据见 [P6 最终验收](../rust-p6-completion.md)。
-
-历史 P3～P5 结果：[原 17＋新增 6 场景复测](rust-p3-p5.md)，功能与平台证据见[最终验收](../rust-p3-p5-completion.md)。报告保留全部原始样本及批量 JSON 导出回退。P2 历史结果见[七场景复测](rust-p2-final.md)。
-
-首份已归档结果：[2026-09-24 Python 基线](python-baseline.md)，包含源码运行与 PyInstaller 原生制品。
-
-阶段复测：[Rust P1 四场景比较](rust-p1.md)，保留同期 Python 源码、PyInstaller 与 Rust 的原始样本；仅代表已实现子集。
-
-[Rust P2 Codex 五场景比较](rust-p2-codex.md)增加 JSON＋Markdown 导出，保留缓冲优化前后的完整数据与同期 Python 测量。
-
-[JSONL Provider 接入后的 Codex 复测](rust-p2-jsonl.md)验证共享模块变化后的五场景表现；三个新 Provider 的性能仍待独立测量。
-
-[SQLite Provider 接入后的六场景复测](rust-p2-sqlite.md)增加原有 OpenCode V2 列表场景，保留两轮配对测量、波动说明及 SQLite 引擎版本差异。
-
-[十个 Provider 接入后的六场景复测](rust-p2-desktop.md)记录共享消息与 JSON 投影调整后的表现；四个新增 Provider 的性能仍待独立测量。
-
-[共享发现后的七场景复测](rust-p2-discovery.md)增加原有 `list-all` 场景，验证跨 Provider 列表；fixture 仍只有 Codex 与 OpenCode 数据。
-
-[URI 诊断对齐后的七场景复测](rust-p2-uri.md)记录共享工作流调整后的成功路径表现；不把这些测量当作错误路径性能证据。
-
-[Provider 专属错误接入后的七场景复测](rust-p2-provider-errors.md)验证共享错误传播调整后的成功路径，保留相同 fixture、evaluator 和原始样本。
-
-[源缺失诊断接入后的七场景复测](rust-p2-source-errors.md)记录共享 raw 错误传播调整后的成功路径；Kimi 文件身份和源缺失行为由功能测试验证，不纳入本轮性能结论。
-
-[坏记录警告接入后的七场景复测](rust-p2-record-warnings.md)记录显式诊断 sink 接入后的健康数据路径，保留同轮基线和历史波动；不测警告或旧 SQLite 读取性能。
-
-[标题缓存恢复后的七场景复测](rust-p2-title-cache.md)保留 Codex/Claude 标题索引恢复接入后的同轮 Python/Rust 数据；仅测健康 Codex/OpenCode V2 场景，不测损坏索引或缓存刷新性能。
-
-[记录转换恢复后的七场景复测](rust-p2-message-conversion.md)记录逐记录恢复接入后的健康数据路径，保留本轮 Python 前三个场景的明显波动；不测 Claude、Pi 或损坏记录的恢复性能。
-
-[来源选择与缺失重试后的七场景复测](rust-p2-source-selection.md)继续使用健康 Codex/OpenCode V2 数据，记录每次独立进程的 CLI 表现；不测同实例刷新、来源消失或恢复性能。
-
-[运行中来源配置对齐后的七场景复测](rust-p2-runtime-sources.md)记录候选解析与 Provider 选择规则调整后的健康路径；不测同实例配置切换或其余八个 Provider 的性能。
+单项优化另有专用脚本：`scripts/benchmark_{scoped_search,bounded_read,index_refresh,reader_redraw,assistant_folding,read_batches}.py`，它们比较基线与候选二进制并校验输出一致。历史测量报告已从主树移除，可在 Git 历史中查阅；新结论应在同机重新配对测量，结果写入 `dist/benchmarks/`，需要留档时放进对应 PR 描述。
 
 ## 运行
 
-P6 后已清理旧 Python 应用。默认入口是根目录 `target/release/agent-dump`；配对工具使用 `just reference` 安装的固定 0.15.9 wheel。fixture、结果断言和计时器未改变，编排路径及 evaluator hash 已更新，因此新测量应重新配对，不与历史报告绕过 hash 校验比较。历史 evaluator 可从原报告 commit 复现。
+默认入口是根目录 `target/release/agent-dump`；配对工具使用 `just reference` 安装的固定 0.15.9 wheel。fixture、结果断言和计时器未改变，新测量应重新配对，不绕过 evaluator hash 校验与历史报告比较。
 
 ```bash
 # 快速检查工具和结果断言
@@ -78,7 +32,7 @@ uv run python scripts/benchmark_cli.py --profile smoke --case startup-version --
 
 当前 `collect-emit-prompt` 场景严格要求 `--read --order asc --json` 分页命令；旧版 `--format print` 交接不满足该契约。新版 collect 也处理全部符合规则的正文，分块数可能高于旧版截断实现。不同契约的结果不能直接比较加速比；比较仍要求 evaluator 摘要与完整 validation 一致，历史测量记录保持原样。
 
-原 evaluator 默认每场景 1 次预热、7 次测量；P6 交错编排脚本默认 1 次预热、5 次测量。每次为新进程；预热用于减少一次性加载噪声，不意味着复用应用内缓存。JSON 保存原始样本，旁边的 Markdown 展示 median/min/max 与峰值 RSS。
+`benchmark_cli.py` 默认每场景 1 次预热、7 次测量；`eval_rust_release.py` 交错编排默认 1 次预热、5 次测量。每次为新进程；预热用于减少一次性加载噪声，不意味着复用应用内缓存。JSON 保存原始样本，旁边的 Markdown 展示 median/min/max 与峰值 RSS。
 
 源码入口不计入 `uv`/`uvx` 启动器时间，原生入口不计入 Node/npm wrapper 时间。下载和安装也不在这些计时范围内；后续分发体验另行测量。
 
@@ -126,13 +80,13 @@ handoff 验证 envelope 长度、会话身份、失败数量及读命令后，�
 
 严格比较拒绝不同场景子集。需要比较实施中的子集时，两边都用相同的 `--case` 重新运行。修改 evaluator 或 fixture 后，两边都重新生成报告，不绕过兼容检查。
 
-正式结论应在同机、接近的时间内交错运行 Python 与 Rust；避免同时构建、运行测试或执行其他重任务。历史报告用于保存迁移起点，不能消除机器负载和系统升级的影响。有限重复样本只报告描述统计，不声称统计显著性。
+正式结论应在同机、接近的时间内交错运行基线与候选；避免同时构建、运行测试或执行其他重任务。有限重复样本只报告描述统计，不声称统计显著性。
 
 ## 当前覆盖缺口
 
 - 原 17 场景只有 Codex/OpenCode V2。扩展 6 场景补充 WAL、增量更新/删除、四 Provider 与完整 Collect 本机 HTTP；仍不代表十个 Provider 各自的性能，也不覆盖损坏文件或所有 schema 版本。
-- 没有真实 LLM 请求、终端交互延迟或下载/安装耗时。完整 Collect 使用确定性本机 HTTP；压缩包与原生文件大小另见 P6 制品报告。
+- 没有真实 LLM 请求、终端交互延迟或下载/安装耗时。完整 Collect 使用确定性本机 HTTP。
 - 大正文具有重复性，FTS 压缩与分词表现不代表所有真实会话；后续增加不同内容分布时升级 fixture 版本并重测两边。
 - 子进程环境隔离是针对仓库当前 Provider 发现实现，不是操作系统沙箱。未来新增发现入口时必须同步更新隔离契约。
 
-上述缺口在迁移阶段按需补齐，不影响当前基线作为明确范围内的比较依据。
+上述缺口按需补齐，不影响当前基线作为明确范围内的比较依据。

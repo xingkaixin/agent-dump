@@ -260,9 +260,9 @@ Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含
 
 MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。包含可见的普通会话、子任务和归档会话，排除隐藏及 peek/channel/cron 内部会话。正文按数据库消息行顺序读取，保留文字、思考、工具状态/结果和附件引用；压缩、审查和系统事件不进入 collect 或搜索。模型来自会话元数据，缺失时显示未知；JSON 保留消息中已记录的 token 用量，不推算费用。
 
-自定义 profile、早期源码版 `~/.minimax-code` 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/minimax-provider-design.md)。
+自定义 profile、早期源码版 `~/.minimax-code` 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/providers/minimax.md)。
 
-OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读；新版消息按 `seq` 排序，消息数包含系统和状态记录。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。附件保留在 JSON 元数据中，不打开引用文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/opencode-v2-design.md)。
+OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读；新版消息按 `seq` 排序，消息数包含系统和状态记录。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。附件保留在 JSON 元数据中，不打开引用文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/providers/opencode-v2.md)。
 
 ## 命令行参数
 
@@ -600,13 +600,13 @@ tests/tooling/  # Packaging, benchmark and documentation checks
 scripts/        # Validated CLI benchmarks and paired release eval
 packaging/      # Maturin builds and installation verification
 npm/            # Node launcher and platform packages
-docs/           # Architecture, migration and acceptance evidence
+docs/           # Goals, architecture and maintainer guides
 web/            # Landing page
 ```
 
 ## Development
 
-从 v1.0.0 起，Rust 是构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树。CI 和 `just isok` 验证 Rust 行为契约，不依赖历史 Python CLI；需要历史差分验证时，`just test-differential` 在独立环境安装固定的 0.15.9 wheel。功能证据见 [P2](docs/rust-p2-completion.md)、[P3～P5](docs/rust-p3-p5-completion.md)；发布切换见 [P6 最终验收](docs/rust-p6-completion.md)，性能数据见[最终复测](docs/benchmarks/rust-p6.md)。
+从 v1.0.0 起，Rust 是构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树。CI 和 `just isok` 验证 Rust 行为契约，不依赖历史 Python CLI；需要历史差分验证时，`just test-differential` 在独立环境安装固定的 0.15.9 wheel。迁移计划与验收记录保留在 Git 历史中；当前设计见[项目定位](docs/product.md)和[架构](docs/architecture.md)。
 
 ```bash
 # 从仓库根直接运行 Cargo
