@@ -1,6 +1,7 @@
 pub mod compat;
 pub mod config;
 pub mod output;
+pub mod parallel;
 pub mod providers;
 pub mod query;
 pub mod session;

@@ -19,16 +19,18 @@ pub fn extract(
             continue;
         }
         let mut seen = HashSet::new();
-        for (text, time) in
-            agent_dump_core::query::transcript::visible_segments(message)
-        {
+        let segments =
+            agent_dump_core::query::transcript::visible_segments(message);
+        let repeated = segments.len() > 1;
+        for (text, time) in segments {
             let text = agent_dump_core::query::text::normalize(&text);
             if text.is_empty()
                 || IGNORE.is_match(&text)
-                || !seen.insert((
-                    time.map(agent_dump_core::session::timestamp::Timestamp::as_microsecond),
-                    caseless::default_case_fold_str(&text),
-                ))
+                || (repeated
+                    && !seen.insert((
+                        time.map(agent_dump_core::session::timestamp::Timestamp::as_microsecond),
+                        caseless::default_case_fold_str(&text),
+                    )))
             {
                 continue;
             }
