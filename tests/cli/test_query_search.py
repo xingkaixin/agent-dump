@@ -4,6 +4,7 @@ from contextlib import closing
 import json
 import shutil
 import sqlite3
+from urllib.parse import quote
 
 from cli_fixture import IDENTITY, call, header, message, output, reasoning
 import pytest
@@ -348,3 +349,19 @@ def test_named_home_query_path(cli, lang):
         project = Path(account.pw_dir) / "synthetic-project"
     cli.write([header(cwd=str(project)), message("user", "named home marker")])
     cli.parity("--list", "-q", f"provider:codex path:~{name}/synthetic-project", "-d", "36500", "--lang", lang)
+
+
+@pytest.mark.parametrize("keyword", ["timeout auth", "Auth   认证", "auth missing"])
+def test_query_keyword_uses_search_terms(cli, keyword):
+    cli.write([header(), message("user", "Auth retry timeout 认证")])
+    uris = []
+    for args in (
+        ["--list", "-q", f"{keyword} provider:codex"],
+        [f"agents:///project?q={quote(keyword)}&providers=codex"],
+        ["--search", keyword, "-q", "provider:codex"],
+    ):
+        result = cli.run("rust", *args, "--days", "36500", "--json")
+        assert result.returncode == 0, result.stderr
+        uris.append([session["uri"] for session in json.loads(result.stdout)["data"]])
+    expected = [] if "missing" in keyword else [f"codex://{IDENTITY}"]
+    assert uris == [expected] * 3

@@ -45,8 +45,10 @@ pub fn locate(
     query: &Query,
 ) -> crate::Result<Vec<Location>> {
     let revision = revision(data)?;
-    let text =
-        TextQuery::new(query.keyword.as_deref().unwrap_or(""), query.mode);
+    let text = TextQuery::new(
+        query.keyword.as_deref().unwrap_or(""),
+        crate::query::text::Mode::Terms,
+    );
     let terms: Vec<_> = text
         .literals
         .iter()

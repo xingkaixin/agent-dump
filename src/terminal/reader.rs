@@ -439,7 +439,7 @@ impl State {
             .unwrap_or(self.lines.len());
         let query = TextQuery::new(
             self.query.keyword.as_deref().unwrap_or(""),
-            self.query.mode,
+            Mode::Terms,
         );
         let joined = self.lines[start..end].concat();
         let Some(span) = query.first_literal_span(&joined) else {
