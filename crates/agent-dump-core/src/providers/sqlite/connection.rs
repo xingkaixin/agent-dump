@@ -30,6 +30,10 @@ fn identity(path: &Path) -> Identity {
         .map(|metadata| (metadata.dev(), metadata.ino()))
 }
 
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "Unix identities can be unavailable for removed databases"
+)]
 #[cfg(not(unix))]
 const fn identity(_: &Path) -> Identity {
     Some((0, 0))
