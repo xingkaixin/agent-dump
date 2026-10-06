@@ -159,7 +159,7 @@ impl SearchIndex {
                 .map(|(name, _)| name.as_str())
                 .collect::<Vec<_>>()
                 == ["fts_rowid"];
-        if !columns.is_empty() && (version != 3 || !valid) {
+        if !columns.is_empty() && (version != 4 || !valid) {
             transaction.execute_batch("DROP TABLE IF EXISTS sessions_fts; DROP TABLE IF EXISTS sessions_fts_trigram; DROP TABLE IF EXISTS index_state;")?;
         }
         transaction.execute_batch("CREATE TABLE IF NOT EXISTS index_state (
@@ -168,9 +168,9 @@ impl SearchIndex {
             last_seen_at REAL NOT NULL, session_updated_at REAL NOT NULL, session_created_at REAL NOT NULL,
             UNIQUE (agent, session_id));
             CREATE INDEX IF NOT EXISTS index_state_last_seen_idx ON index_state(last_seen_at);
-            CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, content, tokenize='unicode61 remove_diacritics 1');
+            CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, content, content='', contentless_delete=1, tokenize='unicode61 remove_diacritics 1');
             CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts_trigram USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, content, tokenize='trigram');
-            PRAGMA user_version = 3;")?;
+            PRAGMA user_version = 4;")?;
         let expired: Vec<i64> = transaction
             .prepare(
                 "SELECT fts_rowid FROM index_state WHERE last_seen_at < ?",
@@ -266,7 +266,15 @@ impl SearchIndex {
                                     },
                                 )
                                 .map(|data| {
-                                    crate::query::transcript::searchable(&data)
+                                    let text =
+                                        crate::query::transcript::searchable(
+                                            &data,
+                                        );
+                                    let separated = (
+                                        separate_cjk(&session.title),
+                                        separate_cjk(&text),
+                                    );
+                                    (text, separated)
                                 });
                             (text, diagnostics)
                         })
@@ -300,7 +308,7 @@ impl SearchIndex {
                 {
                     continue;
                 }
-                let Ok(text) = text else {
+                let Ok((text, (title, separated))) = text else {
                     if let Some(row) = latest {
                         delete(&transaction, row.rowid)?;
                     }
@@ -319,7 +327,7 @@ impl SearchIndex {
                     (transaction.last_insert_rowid(), true)
                 };
                 if changed {
-                    transaction.execute("INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, separate_cjk(&session.title), separate_cjk(&text)])?;
+                    transaction.execute("INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, title, separated])?;
                     transaction.execute("INSERT INTO sessions_fts_trigram (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, session.title, text])?;
                 }
                 added += 1;
@@ -363,20 +371,23 @@ impl SearchIndex {
         let Some(table) = fts_table(query) else {
             return self.literal_search(query, keys);
         };
-        let raw = if table == "sessions_fts" {
-            "JOIN sessions_fts_trigram raw ON raw.rowid = f.rowid"
+        // The contentless normalized table stores no text; its matches read
+        // the raw trigram row and keep the Rust evidence snippet.
+        let (raw, fields) = if table == "sessions_fts" {
+            (
+                "JOIN sessions_fts_trigram raw ON raw.rowid = f.rowid",
+                "raw.title, raw.content, NULL",
+            )
         } else {
-            ""
-        };
-        let fields = if table == "sessions_fts" {
-            "raw.title, raw.content"
-        } else {
-            "f.title, f.content"
+            (
+                "",
+                "f.title, f.content, snippet(sessions_fts_trigram, 3, '**', '**', '...', 10)",
+            )
         };
         // Unary + keeps MATCH as the FTS scan instead of repeating it per key.
         // Filtering returned rows retains the global BM25 corpus.
         let sql = format!(
-            "SELECT f.agent_name, f.session_id, {fields}, snippet({table}, 3, '**', '**', '...', 10), bm25({table}) FROM {table} f {raw} JOIN index_state s ON s.fts_rowid = f.rowid WHERE {table} MATCH ? AND +f.rowid IN (SELECT scoped.fts_rowid FROM json_each(?) scope JOIN index_state scoped ON scoped.agent = json_extract(scope.value, '$[0]') AND scoped.session_id = json_extract(scope.value, '$[1]')) ORDER BY bm25({table}), s.session_updated_at DESC, s.session_created_at DESC, f.agent_name, f.session_id"
+            "SELECT s.agent, s.session_id, {fields}, bm25({table}) FROM {table} f {raw} JOIN index_state s ON s.fts_rowid = f.rowid WHERE {table} MATCH ? AND +f.rowid IN (SELECT scoped.fts_rowid FROM json_each(?) scope JOIN index_state scoped ON scoped.agent = json_extract(scope.value, '$[0]') AND scoped.session_id = json_extract(scope.value, '$[1]')) ORDER BY bm25({table}), s.session_updated_at DESC, s.session_created_at DESC, s.agent, s.session_id"
         );
         let expression = query
             .literals
@@ -403,10 +414,10 @@ impl SearchIndex {
             let Some(evidence) = query.find(&[&title, &content]) else {
                 continue;
             };
-            let mut snippet: String = row.get(4)?;
-            if table == "sessions_fts" || !query.has_evidence(&snippet) {
-                snippet = evidence.snippet;
-            }
+            let snippet = match row.get::<_, Option<String>>(4)? {
+                Some(snippet) if query.has_evidence(&snippet) => snippet,
+                _ => evidence.snippet,
+            };
             results.push(SearchResult {
                 provider,
                 id,
