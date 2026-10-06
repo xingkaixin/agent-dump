@@ -337,31 +337,22 @@ fn incremental_reads_retry_failure_keep_scoped_absences_and_expire_unseen_rows()
 }
 
 #[test]
-fn version_three_index_is_rebuilt_without_normalized_text_copies() {
+fn existing_normalized_text_copies_remain_usable() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("index.db");
-    Connection::open(&path).unwrap().execute_batch("CREATE TABLE index_state (
-        fts_rowid INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT NOT NULL, session_id TEXT NOT NULL,
-        source_path TEXT NOT NULL, updated_signature TEXT NOT NULL, indexed_at REAL NOT NULL,
-        last_seen_at REAL NOT NULL, session_updated_at REAL NOT NULL, session_created_at REAL NOT NULL,
-        UNIQUE (agent, session_id));
-        CREATE VIRTUAL TABLE sessions_fts USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, content, tokenize='unicode61 remove_diacritics 1');
-        INSERT INTO index_state VALUES (1, 'codex', 'same', '', 'old', 0, 1e12, 0, 0);
-        INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (1, 'codex', 'same', 'task', 'stalebody');
-        PRAGMA user_version = 3;").unwrap();
+    Connection::open(&path).unwrap().execute_batch("CREATE VIRTUAL TABLE sessions_fts USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, content, tokenize='unicode61 remove_diacritics 1');").unwrap();
     let mut index = SearchIndex::at(&path).unwrap();
-    assert!(search(&index, "stalebody", "same").is_empty());
-    update(
-        &mut index,
-        &Reader(|_: &Session| Ok("freshbody 中文".into())),
-        &[session(directory.path(), "same", 0)],
-    );
-    for keyword in ["freshbody", "中文"] {
-        assert_eq!(search(&index, keyword, "same").len(), 1);
-    }
-    let stored: Option<String> = index
+    let mut current = session(directory.path(), "same", 0);
+    let reader =
+        |body: &'static str| Reader(move |_: &Session| Ok(body.into()));
+    update(&mut index, &reader("before 中文"), &[current.clone()]);
+    current.updated_at = Timestamp::from_microsecond(1).unwrap();
+    update(&mut index, &reader("after 认证"), &[current]);
+    assert!(search(&index, "中文", "same").is_empty());
+    assert_eq!(search(&index, "认证", "same").len(), 1);
+    let stored: String = index
         .connection
         .query_row("SELECT content FROM sessions_fts", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(stored, None);
+    assert_eq!(stored, "after 认 证");
 }
