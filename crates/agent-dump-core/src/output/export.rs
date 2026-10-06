@@ -283,21 +283,10 @@ impl SessionExport<'_> {
     }
 }
 
-pub fn output_base(
-    explicit: Option<&Path>,
-    configured: &str,
-    format: crate::output::formats::OutputFormat,
-) -> PathBuf {
+pub fn output_base(explicit: Option<&Path>, configured: &str) -> PathBuf {
     explicit.filter(|p| !p.as_os_str().is_empty()).map_or_else(
         || {
-            if explicit.is_none()
-                && matches!(
-                    format,
-                    crate::output::formats::OutputFormat::Json
-                        | crate::output::formats::OutputFormat::Raw
-                )
-                && !configured.is_empty()
-            {
+            if explicit.is_none() && !configured.is_empty() {
                 configured.into()
             } else {
                 "sessions".into()

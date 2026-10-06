@@ -236,10 +236,7 @@ pub fn configured_output(
     zh: bool,
 ) -> crate::Result<Result<String, String>> {
     if operation.output.is_some()
-        || !operation
-            .formats
-            .iter()
-            .any(|f| matches!(f, OutputFormat::Json | OutputFormat::Raw))
+        || !operation.formats.iter().any(|f| *f != OutputFormat::Print)
     {
         return Ok(Ok(String::new()));
     }
@@ -269,7 +266,6 @@ pub fn export(
             let base = agent_dump_core::output::export::output_base(
                 operation.output.as_deref(),
                 configured,
-                format,
             )
             .join(group.info.name);
             if let Ok(path) = agent_dump_core::output::export::target(
@@ -328,7 +324,6 @@ pub fn export(
                 let base = agent_dump_core::output::export::output_base(
                     operation.output.as_deref(),
                     configured,
-                    format,
                 )
                 .join(group.info.name);
                 let path = agent_dump_core::output::export::target(
@@ -388,7 +383,6 @@ pub fn export(
             let base = agent_dump_core::output::export::output_base(
                 operation.output.as_deref(),
                 configured,
-                format,
             )
             .join(group.info.name);
             let prepared = data
@@ -451,7 +445,6 @@ pub fn export(
             &agent_dump_core::output::export::output_base(
                 operation.output.as_deref(),
                 configured,
-                operation.formats[0],
             )
             .join(groups[picks[0].0].info.name),
         )

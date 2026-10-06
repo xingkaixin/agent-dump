@@ -51,7 +51,7 @@ agent-dump --browse --time-field updated -d 7
 agent-dump --interactive --time-field updated -d 7
 ```
 
-`--days` 默认按创建时间筛选。加 `--time-field updated` 可查找 Provider 记录的 `updated_at` 位于最近 N 天内的会话，包括很早创建、最近仍有活动的会话。`--time-field created` 显式选择既有默认行为。该参数只用于列表、搜索、浏览和交互模式；collect 日期和统计含义不变。
+`--days` 默认按 Provider 记录的 `updated_at` 筛选，可找到最近 N 天内有活动的会话，包括很早创建的会话。加 `--time-field created` 改为按创建时间筛选。该参数只用于列表、搜索、浏览和交互模式；collect 日期和统计含义不变。
 
 活动列表先按更新时间排序，再应用结果数量限制。文本列表和交互选择保留 Provider 分组；显示日期和“今天／昨天”等分组使用所选时间字段。全文搜索仍优先按相关性排序。JSON 保留原有创建时间和更新时间。为发现旧会话的新活动，可能需要扫描创建时间窗口之外的元数据；筛选沿用各 Provider 的 `updated_at` 事实，不额外按文件修改时间推断活动。各 Provider 的覆盖范围和发现不完整时的诊断规则不变。
 
@@ -500,7 +500,7 @@ agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --search "database lock" --format json,markdown --output ./exports
 ```
 
-`--browse` requires an interactive terminal. By default, it selects sessions created in the last seven days and sorts them by update time. Add `--time-field updated` to filter by recent activity. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
+`--browse` requires an interactive terminal. By default, it selects sessions updated in the last seven days and sorts them by update time. Add `--time-field created` to filter by creation time. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
 
 - Up/Down or j/k move or scroll in the focused pane; Enter/Right opens the transcript, Left returns to the list.
 - Tab switches panes; PageUp/PageDown scroll pages; Home/End jump to either end.

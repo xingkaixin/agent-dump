@@ -13,8 +13,8 @@ use std::path::{Component, PathBuf};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum TimeField {
-    #[default]
     Created,
+    #[default]
     Updated,
 }
 
@@ -350,7 +350,7 @@ impl Query {
                 .is_ok_and(|p| p.starts_with(scope) || scope.starts_with(p))
     }
     pub fn summary(&self, zh: bool) -> String {
-        if self.time_field == TimeField::Created
+        if self.time_field == TimeField::Updated
             && self.path.is_none()
             && self.providers.is_none()
             && self.roles.is_none()
@@ -360,8 +360,8 @@ impl Query {
             return crate::output::render::safe_line(keyword);
         }
         let mut parts = Vec::new();
-        if self.time_field == TimeField::Updated {
-            parts.push(t("QUERY_SUMMARY_UPDATED_TIME", zh, &[]));
+        if self.time_field == TimeField::Created {
+            parts.push(t("QUERY_SUMMARY_CREATED_TIME", zh, &[]));
         }
         if let Some(path) = &self.path {
             parts.push(t(

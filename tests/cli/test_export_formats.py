@@ -4,6 +4,7 @@ import shutil
 
 from cli_fixture import IDENTITY, header, message
 import pytest
+from test_config_shortcuts import config_path
 
 
 @pytest.mark.differential
@@ -44,3 +45,13 @@ def test_new_export_formats_cannot_write_into_source(cli, output_format):
     )
     assert result.returncode == 1
     assert cli.fixtures.source_manifest(cli.root) == before
+
+
+def test_configured_output_applies_to_every_file_format(cli):
+    cli.write([header(), message("user", "Keep")])
+    config_path(cli).write_text('[export]\noutput = "configured"\n')
+    result = cli.run("rust", f"codex://{IDENTITY}", "--format", "json,md,raw", "--lang", "en")
+    assert result.returncode == 0, result.stderr
+    exported = sorted(p.name for p in (cli.root / "configured" / "codex").iterdir())
+    assert exported == sorted(f"{IDENTITY}{suffix}" for suffix in (".json", ".md", ".raw.jsonl"))
+    assert not (cli.root / "sessions").exists()

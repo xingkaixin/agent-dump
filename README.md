@@ -23,7 +23,7 @@ agent-dump search 'auth timeout' --query 'path:.' --days 30
 agent-dump export codex://SESSION_ID --format markdown --output ./sessions
 ```
 
-Copy a real URI from the list or search results in place of `codex://SESSION_ID`. Search defaults to sessions created in the time window; add `--time-field updated` for recent activity. Use `--interactive` to select several sessions for export.
+Copy a real URI from the list or search results in place of `codex://SESSION_ID`. Search defaults to sessions updated in the time window; add `--time-field created` to filter by creation time. Use `--interactive` to select several sessions for export.
 
 ### For AI Agents
 
@@ -398,7 +398,7 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive`, `-i` | Open the session reader to select and export sessions (same as `--browse` in a terminal) | - |
 | `--days`, `-d` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `--since/--until` are omitted. | 7 outside collect; today only in collect |
-| `--time-field` | Use `created` or `updated` time for the `--days` window in list/search/browse/interactive modes. | `created` |
+| `--time-field` | Use `created` or `updated` time for the `--days` window in list/search/browse/interactive modes. | `updated` |
 | `--query`, `-q` | Query filter. Keyword terms are split on whitespace and matched case-insensitively like `--search`; every term must occur in the session title or logical transcript. Supports a plain keyword or structured terms like `bug provider:codex role:user path:. limit:20`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print bounded discovery metadata without rereading the transcript; message count is exact when discovery scanned the complete source and explicitly `unknown` otherwise. Does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect sessions by date range, optionally constrained by `--query` or an `agents://...` query URI (mutually exclusive). Only visible user/assistant text is summarized; system/developer/tool messages, reasoning, plans, tool calls, and tool results are excluded, and empty projected sessions are ignored. PM mode extracts requests, decisions, and agent-reported outcomes before deterministic session merge and tree reduction. Multi-stage progress is shown on stderr. | - |
@@ -421,7 +421,7 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor supports only `json` and `print` (no `raw/markdown`). | - |
 | `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. Cannot be combined with `--head`. | - |
 | `--page-size`, `-p` | Compatibility only; ignored. For reading pages, use `--read` with `--limit` / `--max-chars`. | 20 |
-| `--output` | Output directory. For `json/raw`, priority is `--output` > `config.toml` `[export].output` > `./sessions`. Relative paths are resolved from the current working directory. Markdown keeps using `./sessions` unless `--output` is explicitly passed. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
+| `--output` | Output directory. Priority is `--output` > `config.toml` `[export].output` > `./sessions` for all file formats. Relative paths are resolved from the current working directory. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
 | `-h, --help` | Show help message | - |
 
 When URI mode combines `print` with file formats, a print read/render failure is reported without blocking file exports. Raw source copying can still succeed when normalized parsing fails. Exit status remains `0` if any requested output succeeds, otherwise `1`.
@@ -481,7 +481,7 @@ deny = [
 
 Collect, `--collect --dry-run`, and `--collect --emit-prompt` require valid TOML and exclusion arrays containing only nonempty path strings. Invalid configuration stops the command before session discovery or AI requests; compatibility parsing never disables exclusions for collect.
 
-`[export].output` defines the global default output root for `json/raw` exports. It accepts absolute or relative paths. Relative paths are resolved from the directory where `agent-dump` is executed, not from the config file location.
+`[export].output` defines the global default output root for `json`, `markdown` and `raw` exports. It accepts absolute or relative paths. Relative paths are resolved from the directory where `agent-dump` is executed, not from the config file location.
 
 `[shortcut.<name>]` defines a reusable shortcut preset. `params` declares positional input names. `args` declares the expanded CLI argv template. When `date` is provided, `{year}` / `{month}` / `{year_month}` are derived automatically.
 
@@ -497,7 +497,7 @@ agent-dump --browse --time-field updated -d 7
 agent-dump --interactive --time-field updated -d 7
 ```
 
-`--days` uses creation time by default. Add `--time-field updated` to find sessions whose Provider-reported `updated_at` falls within the last N days, including sessions created much earlier. `--time-field created` explicitly selects the existing default. This option is available only for list, search, browse and interactive modes; collect dates and statistics retain their existing meaning.
+`--days` uses the Provider-reported `updated_at` by default, so it finds sessions with activity in the last N days, including sessions created much earlier. Add `--time-field created` to filter by creation time instead. This option is available only for list, search, browse and interactive modes; collect dates and statistics retain their existing meaning.
 
 Activity lists order by updated time before applying a result limit. Human lists and interactive selection retain Provider groups; dates and Today/Yesterday groups use the selected time field. Search still orders primarily by relevance. JSON records retain both original timestamps. Discovery may scan metadata outside the creation-time window to find old active sessions; filtering uses the existing Provider-projected `updated_at` fact without adding a separate file-modification-time filter. Provider coverage and partial-discovery diagnostics remain unchanged.
 
@@ -589,7 +589,7 @@ agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --search "database lock" --format json,markdown --output ./exports
 ```
 
-`--browse` requires an interactive terminal. By default, it selects sessions created in the last seven days and sorts them by update time. Add `--time-field updated` to filter by recent activity. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
+`--browse` requires an interactive terminal. By default, it selects sessions updated in the last seven days and sorts them by update time. Add `--time-field created` to filter by creation time. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
 
 - Up/Down or j/k move or scroll in the focused pane; Enter/Right opens the transcript, Left returns to the list.
 - Tab switches panes; PageUp/PageDown scroll pages; Home/End jump to either end.

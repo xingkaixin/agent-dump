@@ -39,7 +39,7 @@ fn discover_window(
     warnings: &mut impl Write,
 ) -> crate::Result<Scan> {
     let updated_since = query
-        .is_some_and(|query| query.time_field == TimeField::Updated)
+        .is_none_or(|query| query.time_field == TimeField::Updated)
         .then_some(days)
         .flatten()
         .map(crate::session::timestamp::Timestamp::days_ago)

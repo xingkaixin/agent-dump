@@ -53,7 +53,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - 用户给了 `--search`：使用 search 模式（本地 SQLite FTS5 全文搜索）。可与 `--list` 组合使用。
 - 用户给了 `--config view` 或 `--config edit`：使用 config 模式。
 - 用户要”先看列表/筛选”：使用 `--list` 模式。
-- 用户要查找最近活跃的会话：在 list/search/browse/interactive 模式加 `--time-field updated`，配合 `--days`；不加时仍按创建时间筛选，collect 和 stats 不接受该参数。
+- `--days` 在 list/search/browse/interactive 模式默认按更新时间筛选；用户要按创建时间筛选时加 `--time-field created`。collect 和 stats 不接受该参数。
 - 用户要”交互式勾选后导出”：使用 `--browse`（或兼容入口 `--interactive`），空格标记会话，`e` 批量导出。
 - 用户只给 `--days` 或 `--query` 且未指定 `--interactive`：按列表模式处理（CLI 会自动启用 `--list`）。
 - Codex URI 允许 `codex://threads/<session_id>` 变体，等价于 `codex://<session_id>`。
@@ -164,7 +164,7 @@ agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --search "database lock" --format json,markdown --output ./exports
 ```
 
-`--browse` requires an interactive terminal. By default, it selects sessions created in the last seven days and sorts them by update time. Add `--time-field updated` to filter by recent activity. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
+`--browse` requires an interactive terminal. By default, it selects sessions updated in the last seven days and sorts them by update time. Add `--time-field created` to filter by creation time. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
 
 - Up/Down or j/k move or scroll in the focused pane; Enter/Right opens the transcript, Left returns to the list.
 - Tab switches panes; PageUp/PageDown scroll pages; Home/End jump to either end.
