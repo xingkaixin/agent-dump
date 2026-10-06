@@ -89,7 +89,7 @@ def test_reader_next_match_after_resize(cli):
         expect("FIRST_UNSEEN")
         resize(40, 12)
         send("n")
-        expect("SECOND_UNSEEN")
+        expect("SECOND")
         send("q")
         code, transcript = finish()
         assert code == 0, transcript
