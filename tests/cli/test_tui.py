@@ -56,6 +56,8 @@ def terminal(cli, *args, width=80, height=24, stdout_pipe=False):
 
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", lines, columns, 0, 0))
         process.send_signal(signal.SIGWINCH)
+        # crossterm drops tty readiness that arrives in the same poll as SIGWINCH.
+        expect("\x1b[2J")
 
     def finish():
         deadline = time.monotonic() + 12
