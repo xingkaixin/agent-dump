@@ -22,10 +22,14 @@ pub fn whitespace(c: char) -> bool {
 }
 
 pub fn normalize(text: &str) -> String {
-    text.split(whitespace)
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+    let mut normalized = String::with_capacity(text.len());
+    for word in text.split(whitespace).filter(|s| !s.is_empty()) {
+        if !normalized.is_empty() {
+            normalized.push(' ');
+        }
+        normalized.push_str(word);
+    }
+    normalized
 }
 
 impl TextQuery {
