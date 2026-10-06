@@ -157,8 +157,8 @@ def test_search_preview_export_and_recover_empty_results(cli):
         "en",
         width=120,
     ) as (expect, send, resize, finish):
-        expect("needle-hit")
         expect("words):")
+        expect("needle-hit")
         send("x---e")
         expect("context [json]")
         send("sno-such-evidence\r")
@@ -166,9 +166,9 @@ def test_search_preview_export_and_recover_empty_results(cli):
         send("?")
         expect("Provider: codex")
         send("?c")
-        expect("search · x")
+        expect("2 sessions")
         send("ssecond-session-target\r")
-        expect("second-session-target")
+        expect("**second-session-target**")
         resize(40, 16)
         send("\ry")
         expect("\x1b]52;c;" + base64.b64encode(f"codex://{other}".encode()).decode())

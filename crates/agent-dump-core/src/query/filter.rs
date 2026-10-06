@@ -25,7 +25,7 @@ pub fn select(
     warnings: &mut impl Write,
 ) -> crate::Result<Selection> {
     let text =
-        TextQuery::new(query.keyword.as_deref().unwrap_or(""), query.mode);
+        TextQuery::new(query.keyword.as_deref().unwrap_or(""), Mode::Terms);
     let mut selection = None;
     if query.roles.is_none() && !text.literals.is_empty() && !groups.is_empty()
     {

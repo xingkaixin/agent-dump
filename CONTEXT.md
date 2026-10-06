@@ -52,13 +52,9 @@ _Avoid_: Summary, transcript preview
 A set of criteria that selects Sessions by Provider, Working Directory, message role, keyword, time basis, or result limit. Creation time is the default basis for the day window; explicit activity filtering uses the Provider-reported Updated time and can include much older Sessions.
 _Avoid_: Search, when referring to the full selection criteria
 
-**Query Keyword**:
-One case-insensitive literal phrase used by `-query` and `agents://`; whitespace is normalized before matching.
-_Avoid_: Search Terms
-
 **Search Terms**:
-The distinct whitespace-delimited literals supplied to `--search`; every term must occur, but terms may occur in different Searchable Corpus fields.
-_Avoid_: Query Keyword
+The distinct whitespace-delimited, case-insensitive literals supplied to `--search`, `-query` or the `agents://` `q` parameter; every term must occur, but terms may occur in different Searchable Corpus fields. `--search` additionally ranks results and reports evidence.
+_Avoid_: Query Keyword, phrase
 
 **Searchable Corpus**:
 A Session title plus the logical text exposed by its normalized transcript: message text, reasoning, and tool state.

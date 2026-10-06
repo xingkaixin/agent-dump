@@ -58,7 +58,7 @@ summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标
 ## 5. Query 与 Search
 
 - `query/mod.rs` 拥有旧查询语法、结构化字段、`agents://`、路径规范化和 home 展开。
-- `-query` 与 URI 的 `q` 是一个字面短语；`--search` 是按空白拆分且必须全部命中的 distinct terms。
+- `-query`、URI 的 `q` 与 `--search` 使用同一匹配语义：按空白拆分且必须全部命中的 distinct terms。`--search` 额外按相关度排序并输出证据；`--read --match` 仍是单消息字面短语。
 - `query/filter.rs` 保留匹配证据和读取失败事实；角色过滤直接从允许角色生成 snippet。
 - `query/index.rs` 使用 SQLite FTS5，加速语义必须等价。tokenizer 不适用或索引失败时回退到进程内 matcher。
 - 路径范围内没有候选时，直接返回空结果，不打开或更新索引。非空查询先更新所有参与索引，保留全局 BM25 评分依据；SQL 按 Provider 与 Session ID 限制返回行，避免为范围外命中生成 snippet。正文解析在事务外进行；旧请求不能覆盖新观察，也不能恢复已删除行。

@@ -4,7 +4,7 @@ locale: "zh"
 slug: "search-ai-coding-history"
 category: "search"
 order: 3
-updated: "2026-10-03"
+updated: "2026-10-06"
 title: "搜索 AI 编码历史，找回过去的决策"
 description: "跨 Codex、Claude Code 等本地工具搜索过去的修复方案和技术决策。按项目筛选，定位匹配消息，再阅读前后上下文。"
 ---
@@ -35,7 +35,7 @@ agent-dump --search 'auth timeout' --time-field updated --days 7
 agent-dump --search 'database migration' --days 90 --query 'provider:codex,claude path:.'
 ```
 
-`--query` 用于追加筛选条件。它的关键词部分按一个完整的字面短语匹配，而 `--search` 将空白分隔的词分别匹配。将搜索词放在 `--search`，将范围放在 `--query`，可以避免混淆。
+`--query` 用于追加筛选条件。它的关键词部分与 `--search` 匹配方式相同，空白分隔的每个词都必须出现。`--search` 还会按相关度排序并显示证据，因此搜索词放在 `--search`，范围放在 `--query`。
 
 ## 定位原始依据
 
