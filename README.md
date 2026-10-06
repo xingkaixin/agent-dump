@@ -14,13 +14,13 @@ A local AI session tool for individual developers and AI Agents. Find, read, exp
 
 ```bash
 # Browse conversations active in the last week
-agent-dump --browse --time-field updated --days 7
+agent-dump browse --time-field updated --days 7
 
 # Find a past discussion in this project
-agent-dump --search 'auth timeout' --query 'path:.' --days 30
+agent-dump search 'auth timeout' --query 'path:.' --days 30
 
 # Export a result using its URI
-agent-dump codex://SESSION_ID --format markdown --output ./sessions
+agent-dump export codex://SESSION_ID --format markdown --output ./sessions
 ```
 
 Copy a real URI from the list or search results in place of `codex://SESSION_ID`. Search defaults to sessions created in the time window; add `--time-field updated` for recent activity. Use `--interactive` to select several sessions for export.
@@ -29,15 +29,15 @@ Copy a real URI from the list or search results in place of `codex://SESSION_ID`
 
 ```bash
 # Inspect supported formats and source paths, then find candidates
-agent-dump --providers --json
-agent-dump --list --time-field updated --days 7 --json
+agent-dump providers --json
+agent-dump list --time-field updated --days 7 --json
 
 # Inspect one session, then obtain instructions for paginated reading
-agent-dump codex://SESSION_ID --head --json
-agent-dump codex://SESSION_ID --read-prompt
+agent-dump head codex://SESSION_ID --json
+agent-dump read-prompt codex://SESSION_ID
 
 # Prepare a report task for an external Agent; no API configuration needed
-agent-dump --collect --days 7 --emit-prompt --save ./reports/weekly.md
+agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 ```
 
 Follow the generated read commands and cursors until `has_more=false` to cover the selected content. Check exit codes and `status`; a partial result is not a complete reading. `--emit-prompt` creates instructions, not the report itself. See [machine-readable output](#machine-readable-output), [cited context exports](#message-locations-and-context), and the [Agent recipes](skills/agent-dump/references/cli-recipes.md).
@@ -267,6 +267,24 @@ OpenCode supports legacy SQLite and 2.x `session_v2/session_message`. When both 
 ## Command-line Arguments
 
 Use `agent-dump --help` for the current option list. These examples extend the [getting-started workflows](#get-started).
+
+### Commands
+
+A leading command is shorthand for the matching option; option-based invocations keep working unchanged.
+
+| Command | Equivalent |
+| --- | --- |
+| `list` | `--list` |
+| `search <TERMS>` | `--search <TERMS>` |
+| `browse` | `--browse` |
+| `export <URI>` | `<URI> --format json` unless `--format` is given |
+| `export` (no URI) | `--interactive` |
+| `head <URI>` / `read <URI>` / `read-prompt <URI>` | `<URI> --head` / `--read` / `--read-prompt` |
+| `collect` / `stats` / `providers` / `reindex` | `--collect` / `--stats` / `--providers` / `--reindex` |
+| `config <view\|edit>` | `--config <view\|edit>` |
+| `shortcut <NAME> [ARGS]` | `--shortcut <NAME> [ARGS]` |
+
+A bare URI still prints the session to the terminal.
 
 ```bash
 # Filter by Provider, project path, or message role

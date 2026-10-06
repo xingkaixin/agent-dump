@@ -14,13 +14,13 @@
 
 ```bash
 # 浏览最近一周活跃的会话
-agent-dump --browse --time-field updated --days 7
+agent-dump browse --time-field updated --days 7
 
 # 查找当前项目讨论过的问题
-agent-dump --search 'auth timeout' --query 'path:.' --days 30
+agent-dump search 'auth timeout' --query 'path:.' --days 30
 
 # 使用结果中的 URI 导出会话
-agent-dump codex://SESSION_ID --format markdown --output ./sessions
+agent-dump export codex://SESSION_ID --format markdown --output ./sessions
 ```
 
 将 `codex://SESSION_ID` 替换为列表或搜索结果中的真实 URI。搜索默认按创建时间筛选；查找最近活动时加 `--time-field updated`。需要勾选多个会话导出时，使用 `--interactive`。
@@ -29,15 +29,15 @@ agent-dump codex://SESSION_ID --format markdown --output ./sessions
 
 ```bash
 # 检查支持格式与来源路径，再查找候选会话
-agent-dump --providers --json
-agent-dump --list --time-field updated --days 7 --json
+agent-dump providers --json
+agent-dump list --time-field updated --days 7 --json
 
 # 检查单条会话的元数据，再获取分页读取说明
-agent-dump codex://SESSION_ID --head --json
-agent-dump codex://SESSION_ID --read-prompt
+agent-dump head codex://SESSION_ID --json
+agent-dump read-prompt codex://SESSION_ID
 
 # 将报告任务交给外部 Agent，无需配置 API
-agent-dump --collect --days 7 --emit-prompt --save ./reports/weekly.md
+agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 ```
 
 按生成的命令和游标继续读取，直到 `has_more=false` 才完成所选内容的覆盖。检查退出码与 `status`，不能将 partial 结果当成完整读取。`--emit-prompt` 只生成任务说明，不会生成报告。详见[机器可读输出](#机器可读输出)、[带来源的上下文导出](#消息定位与上下文)和 [Agent recipes](skills/agent-dump/references/cli-recipes.md)。
@@ -267,6 +267,24 @@ OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共
 ## 命令行参数
 
 用 `agent-dump --help` 查看当前选项。以下示例补充[快速开始](#快速开始)中的常用流程。
+
+### 命令
+
+开头的命令是对应参数的简写，原有参数写法保持不变。
+
+| 命令 | 等同于 |
+| --- | --- |
+| `list` | `--list` |
+| `search <TERMS>` | `--search <TERMS>` |
+| `browse` | `--browse` |
+| `export <URI>` | 未指定 `--format` 时为 `<URI> --format json` |
+| `export`（无 URI） | `--interactive` |
+| `head <URI>` / `read <URI>` / `read-prompt <URI>` | `<URI> --head` / `--read` / `--read-prompt` |
+| `collect` / `stats` / `providers` / `reindex` | `--collect` / `--stats` / `--providers` / `--reindex` |
+| `config <view\|edit>` | `--config <view\|edit>` |
+| `shortcut <NAME> [ARGS]` | `--shortcut <NAME> [ARGS]` |
+
+直接传入 URI 仍在终端打印会话。
 
 ```bash
 # 按 Provider、项目路径或消息角色筛选
