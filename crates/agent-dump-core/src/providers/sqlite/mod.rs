@@ -4,7 +4,7 @@ pub mod v2;
 
 use crate::compat::value::{json_object, string, text};
 use crate::providers::contract::{Provider, RawExport};
-use crate::providers::sqlite::connection::{connect, has_table, rows};
+use crate::providers::sqlite::connection::{Readers, connect, has_table, rows};
 use crate::session::timestamp::Timestamp;
 use crate::session::{Session, SessionData, epoch_seconds};
 use rusqlite::{Connection, ToSql};
@@ -22,6 +22,7 @@ pub struct SqliteProvider {
     database: Option<PathBuf>,
     root: PathBuf,
     search_roots: crate::providers::contract::SourceResolver,
+    readers: Readers,
 }
 
 impl SqliteProvider {
@@ -35,6 +36,7 @@ impl SqliteProvider {
             database: None,
             root: PathBuf::from("."),
             search_roots: Box::new(move || database_paths(kind)),
+            readers: Readers::default(),
         })
     }
 
@@ -102,6 +104,44 @@ impl SqliteProvider {
             sessions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         }
         Ok(sessions)
+    }
+
+    fn read_session(
+        &self,
+        connection: &Connection,
+        session: &Session,
+        diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
+    ) -> crate::Result<SessionData> {
+        if self.kind == Kind::OpenCode && has_table(connection, "session_v2")? {
+            if let Some(row) = rows(
+                connection,
+                "SELECT * FROM session_v2 WHERE id = ?",
+                &[&session.id],
+            )?
+            .into_iter()
+            .next()
+            {
+                return crate::providers::sqlite::v2::read(
+                    connection, session, &row,
+                );
+            }
+            if session.source_metadata["schema"] == "v2"
+                || !has_table(connection, "session")?
+            {
+                return Err(format!(
+                    "OpenCode session is missing: {}",
+                    session.id
+                )
+                .into());
+            }
+        } else if session.source_metadata["schema"] == "v2" {
+            return Err(format!(
+                "OpenCode V2 session source is missing: {}",
+                session.id
+            )
+            .into());
+        }
+        crate::providers::sqlite::legacy::read(connection, session, diagnostics)
     }
 }
 
@@ -192,44 +232,9 @@ impl Provider for SqliteProvider {
             )
             .into());
         }
-        let connection = connect(&session.source_path)?;
-        if self.kind == Kind::OpenCode && has_table(&connection, "session_v2")?
-        {
-            if let Some(row) = rows(
-                &connection,
-                "SELECT * FROM session_v2 WHERE id = ?",
-                &[&session.id],
-            )?
-            .into_iter()
-            .next()
-            {
-                return crate::providers::sqlite::v2::read(
-                    &connection,
-                    session,
-                    &row,
-                );
-            }
-            if session.source_metadata["schema"] == "v2"
-                || !has_table(&connection, "session")?
-            {
-                return Err(format!(
-                    "OpenCode session is missing: {}",
-                    session.id
-                )
-                .into());
-            }
-        } else if session.source_metadata["schema"] == "v2" {
-            return Err(format!(
-                "OpenCode V2 session source is missing: {}",
-                session.id
-            )
-            .into());
-        }
-        crate::providers::sqlite::legacy::read(
-            &connection,
-            session,
-            diagnostics,
-        )
+        self.readers.read(&session.source_path, |connection| {
+            self.read_session(connection, session, diagnostics)
+        })
     }
 
     fn search_roots(
@@ -398,6 +403,7 @@ mod tests {
                         let roots = roots.clone();
                         move || Ok(roots.lock().unwrap().clone())
                     }),
+                    readers: Readers::default(),
                 };
                 if find_first {
                     assert!(
@@ -476,6 +482,7 @@ mod tests {
                                 ])
                             }
                         }),
+                        readers: Readers::default(),
                     };
                     for (path, present) in [
                         (&primary, matches!(initial, "primary" | "both")),
@@ -589,6 +596,7 @@ mod tests {
                 let path = path.to_owned();
                 move || Ok(vec![("Synthetic database", path.clone())])
             }),
+            readers: Readers::default(),
         }
     }
 
