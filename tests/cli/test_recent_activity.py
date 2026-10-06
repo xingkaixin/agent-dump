@@ -48,19 +48,17 @@ def activity_sessions(cli: CliFixture, provider: str) -> tuple[list[str], dateti
 
 @pytest.mark.parametrize("provider", ["codex", "opencode"])
 @pytest.mark.parametrize("lang", ["en", "zh"])
-def test_activity_window_finds_old_sessions_and_preserves_created_default(
-    cli: CliFixture, provider: str, lang: str
-) -> None:
+def test_activity_window_defaults_to_updated_time(cli: CliFixture, provider: str, lang: str) -> None:
     ids, _ = activity_sessions(cli, provider)
     before = cli.fixtures.source_manifest(cli.root)
     args = ("--list", "-d", "7", "-q", f"provider:{provider}", "--json", "--lang", lang)
-    default = cli.run("rust", *args)
-    explicit = cli.run("rust", *args, "--time-field", "created")
-    assert default.returncode == explicit.returncode == 0
-    assert (default.stdout, default.stderr) == (explicit.stdout, explicit.stderr)
-    assert [item["id"] for item in json.loads(default.stdout)["data"]] == [ids[2]]
-    recent = cli.run("rust", *args, "--time-field=updated")
-    assert recent.returncode == 0 and not recent.stderr
+    created = cli.run("rust", *args, "--time-field", "created")
+    assert created.returncode == 0, created.stderr
+    assert [item["id"] for item in json.loads(created.stdout)["data"]] == [ids[2]]
+    recent = cli.run("rust", *args)
+    explicit = cli.run("rust", *args, "--time-field=updated")
+    assert recent.returncode == explicit.returncode == 0 and not recent.stderr
+    assert recent.stdout == explicit.stdout
     records = json.loads(recent.stdout)["data"]
     assert [item["id"] for item in records] == [ids[1], ids[0]]
     assert all(item["created_at"] < item["updated_at"] for item in records)
@@ -86,7 +84,7 @@ def test_activity_window_finds_old_sessions_and_preserves_created_default(
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize("lang,today,basis", [("en", "Today", "updated time"), ("zh", "今天", "按更新时间")])
+@pytest.mark.parametrize("lang,today,basis", [("en", "Today", "created time"), ("zh", "今天", "按创建时间")])
 def test_activity_dates_and_selector_groups_follow_updated_time(
     cli: CliFixture, lang: str, today: str, basis: str
 ) -> None:
@@ -94,7 +92,8 @@ def test_activity_dates_and_selector_groups_follow_updated_time(
     args = ("--time-field", "updated", "-d", "7", "-q", "provider:codex", "--no-metadata-summary", "--lang", lang)
     listed = cli.run("rust", "--list", *args)
     assert listed.returncode == 0, listed.stderr
-    assert basis in listed.stdout
+    assert basis not in listed.stdout
+    assert basis in cli.run("rust", "--list", *args, "--time-field", "created").stdout
     assert now.strftime("%Y-%m-%d %H:%M") in listed.stdout
     assert listed.stdout.index(ids[1]) < listed.stdout.index(ids[0])
     selected = cli.run("rust", "--interactive", *args, stdin="q\n")

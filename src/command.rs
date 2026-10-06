@@ -321,9 +321,9 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             return Ok(false);
         }
     };
-    if args.time_field.as_deref() == Some("updated") {
+    if args.time_field.as_deref() == Some("created") {
         query.get_or_insert_with(query::Query::default).time_field =
-            query::TimeField::Updated;
+            query::TimeField::Created;
     }
     if mode == Mode::Collect {
         return collect_workflow::run(
