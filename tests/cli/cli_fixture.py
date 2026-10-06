@@ -1,5 +1,6 @@
 """Isolated subprocess fixtures shared by Rust/Python CLI differential tests."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import gc
 import importlib
@@ -49,7 +50,14 @@ class CliFixture:
         )
         os.utime(self.source, (1768478400, 1768478400))
 
-    def parity(self, *args: str, json_export: bool = False, formats: tuple[str, ...] = (), exit_code: int = 0) -> None:
+    def parity(
+        self,
+        *args: str,
+        json_export: bool = False,
+        formats: tuple[str, ...] = (),
+        exit_code: int = 0,
+        mask: Callable[[str], str] = str,
+    ) -> None:
         before = self.fixtures.source_manifest(self.root)
         results = []
         outputs = []
@@ -58,7 +66,7 @@ class CliFixture:
             shutil.rmtree(output, ignore_errors=True)
             result = self.run(candidate, *args)
             assert result.returncode == exit_code, result.stdout + result.stderr
-            results.append((result.stdout, result.stderr))
+            results.append((mask(result.stdout), result.stderr))
             files = sorted(path for path in output.rglob("*") if path.is_file())
             expected = formats or (("json",) if json_export else ())
             if expected:
