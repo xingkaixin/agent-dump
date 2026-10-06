@@ -1,6 +1,6 @@
 # 架构与扩展指南
 
-根目录是 Cargo workspace 和 CLI package：`src/` 负责命令与交互，`crates/agent-dump-core/src/` 负责可独立于终端调用的读取、查询和导出。依赖只从 CLI 指向 core；core 的具体 Provider 模块为 crate 内可见。`resources/` 保存编译时嵌入的文案与提示词；`tests/cli/` 默认验证 Rust 行为契约，带 `differential` 标记的测试可手动与固定的外部 Python v0.15.9 比较。旧 Python 应用不再保存在主树中。稳定约束见 `AGENTS.md`，领域术语见 `CONTEXT.md`。
+根目录是 Cargo workspace 和 CLI package：`src/` 负责命令与交互，`crates/agent-dump-core/src/` 负责可独立于终端调用的读取、查询和导出。依赖只从 CLI 指向 core；core 的具体 Provider 模块为 crate 内可见。`resources/` 保存编译时嵌入的文案与提示词；`tests/cli/` 默认验证 Rust 行为契约，带 `differential` 标记的测试可手动与固定的外部 Python v0.15.9 比较。旧 Python 应用不再保存在主树中。项目目标、非目标和设计原则见[项目定位](product.md)，稳定约束见 `AGENTS.md`，领域术语见 `CONTEXT.md`。
 
 ## 1. 公开契约与分发
 
@@ -13,8 +13,8 @@
 ```text
 agent-dump (root CLI package)
   src/main.rs → cli_args.rs / shortcut.rs → command.rs
-    ├─ workflows/{list,interactive,uri,maintenance,config,collect}.rs
-    ├─ terminal/{selector,tui}.rs
+    ├─ workflows/{list,interactive,uri,read,reader,machine,maintenance,config,collect}.rs
+    ├─ terminal/{selector,tui,reader}.rs
     └─ collect/{sessions,events,reduction,prompts,llm,...}.rs
               ↓
 agent-dump-core (internal library)
@@ -49,13 +49,7 @@ OpenCode 在同一数据库中兼容旧表与 V2，同 ID 优先 V2，旧版独�
 
 Codex 与 Claude 的连续 assistant 片段由 `session/assembly.rs` 合并。每个 decoder 只记录当前消息已扫描到的位置及 text/tool/plan 类型，后续只检查新追加的片段；切换消息时重新扫描。工具输出和计划审批回填不改变片段类型。合并边界、相邻重复片段消除及 Codex 计划审批位置保持原有语义。
 
-## 4. 导出与文件边界
-
-格式闭集和 `md` 别名在 `output/formats.rs`。`output/export.rs` 负责文件名、来源拒写、私有权限、临时文件、同步及原子替换。`storage/private_files.rs` 共享目录和落盘语义。macOS 使用与 Python `os.fsync` 相同的同步级别；不会对每个导出文件额外执行 `F_FULLFSYNC`。
-
-summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标准化正文读取；print 失败不阻止文件导出。批量导出先规划目标冲突，保留部分成功结果。源目录和目标符号链接拒写，异常清理临时文件。已存在的用户导出目录不会被擅自 chmod。
-
-## 5. Query 与 Search
+## 4. Query 与 Search
 
 - `query/mod.rs` 拥有旧查询语法、结构化字段、`agents://`、路径规范化和 home 展开。
 - `-query`、URI 的 `q` 与 `--search` 使用同一匹配语义：按空白拆分且必须全部命中的 distinct terms。`--search` 额外按相关度排序并输出证据；`--read --match` 仍是单消息字面短语。
@@ -66,34 +60,13 @@ summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标
 
 搜索语义变化时同步索引内容版本。Provider Project 不充当 Working Directory；路径查询只使用后者。
 
-## 6. Collect
+### 活动时间筛选
 
-execute、dry-run、emit-prompt 共用配置安全校验和候选会话筛选，候选发现不按创建日期截断。core transcript 的 visible_segments 投影标准化文本段及可靠时间；内部 Collect 按文本段的本地日期筛选并逐日分块。无时间或 Provider 标记为推测时间的内容排除并记录日期覆盖缺口。生成外部汇总清单前读取候选正文，按相同日期投影筛选，但不规划 chunk；只交接含本期活动的唯一会话，并携带读取失败和无日期来源。外部汇总通过 read 的 text_spans 使用同一日期事实。会话计数保持唯一 URI 数，跨日单元分别摘要；查询先选候选，按文本日期过滤后再对唯一会话应用 limit。Collect 仅提取 user/assistant 可见文本，排除 tool、reasoning、system、plan 与 Provider 私有事件。没有可见对话的会话在 chunk 规划前忽略。全部符合筛选规则的正文进入有界事件块，超长消息按 Unicode 字符拆分，不设置会话总字符截断。会话摘要最多八份一组逐层归并；最终报告超过单次输入限制时按来源组拆分请求，单个过大归属组明确失败。部分报告列出遗漏会话 URI。
+`Query.time_field` 默认 Created；显式 Updated 时，scanner 请求不按创建时间裁剪的 Provider 发现，再按稳定的 Session.updated_at 应用日期窗口。共享层不解释 Provider 私有日期字段，不用扩大天数的近似值冒充完整发现。普通活动列表先按更新时间排序再截断；Terms 搜索保留相关性优先。渲染和 selector 使用同一 TimeField 投影日期与时间分组，不改写 Session facts。collect、stats 和 reindex 不接受该 CLI 选项。
 
-PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹推断成功。PM 仅在日期相同且明确的 Working Directory 相同时归并；未知目录和 INSIGHT 保持单会话归属。读取失败、摘要失败和 Provider 发现不完整分别记录，部分成功报告明确注明遗漏；索引回退成功不计作读取失败。
+## 5. 读取与消息定位
 
-最终输入限制、结构校验、纠正重试、并发上限、超时和跨源重定向凭据边界由 Collect/LLM 模块持有，验证使用本地 HTTP fixture，不访问真实模型。
-
-## 7. 扩展步骤
-
-1. 新 Provider 实现 `Provider`，优先复用文件、SQLite、transcript 和 message assembly 模块。在 registry 声明身份和 URI。
-2. 新格式修改 `output/formats.rs`、`output/export.rs` 及 Provider 能力；覆盖可观察输出和失败路径。
-3. 新模式在 `cli_args.rs` 声明参数，在 `command.rs` 归一化和分发，再实现对应 workflow。
-4. 增补隔离行为测试，并同步 README、recipes；领域事实边界变化时同步 `CONTEXT.md`。
-
-现有 Provider 的数据范围见 README 与历史设计文档。DeepChat 不支持 SQLCipher/附件读取/Tape 恢复；Cherry 只读取当前分支及未删除会话；MiniMax 只读取支持的已迁移展示行。重写不会扩大 Provider 源写入权限，也不执行上游迁移。
-
-## 消息定位
-
-`query/context.rs` 基于标准化 SessionData 生成消息定位符并校验上下文范围。`--search --locate` 按现有搜索语义定位命中消息；`workflows/uri.rs` 通过 Provider read 读取并校验正文快照，输出所需消息范围。定位读取失败保留筛选失败事实；正文变化拒绝旧定位符。无 --locate 时保持原搜索输出。`--message --format json,markdown` 在定位校验后复用 core output 的片段渲染与安全导出，保留 URI、定位符和原始消息范围；可恢复来源诊断在片段文件中标记 partial。
-
-## 会话阅读器
-
-`workflows/reader.rs` 拥有 --browse 的发现、筛选、按需读取和导出；`terminal/reader.rs` 只接收行数据和已读取的 SessionData，处理键盘与展示，不调用 Provider。正文使用 core render 的标准化投影，当前会话读取失败不阻止切换。跨会话搜索复用 core Query/filter，保留启动时的范围，重建结果列表；命中位置复用 context::locate，摘录预览只投影选中范围。导出复用 URI 工作流及 revision/message locator 校验，避免预览与导出来源不一致；Crossterm osc52 feature 提供复制请求，不依赖平台剪贴板进程。
-
-阅读器只缓存当前搜索命中的展示行。重新搜索、换行布局或工具详情变化后刷新该位置，切换命中时重新计算；普通重绘直接读取该位置，不重复拼接整条消息或编译查询。会话切换重置全部阅读状态，列表渲染借用既有行文本。
-
-## 分段读取与读取提示词
+### 分段读取与读取提示词
 
 `--read` 继续由 `workflows/uri.rs` 通过 Provider find/read 定位和读取单个会话。core 的 `query/read.rs` 拥有文本视图、角色和字面短语筛选、消息分页及长消息字符续读；它只使用标准化 SessionData，不解释 Provider schema。`output/render.rs` 拥有文本展示，CLI 的 `workflows/read.rs` 输出机器信封和读取提示词。
 
@@ -103,6 +76,35 @@ revision 将同一份 JSON 序列化流经固定大小缓冲区直接送入 SHA-
 
 `--read-prompt` 只经 registry 校验 URI 语法后输出本地化静态说明与命令清单，不打开 Provider、发现会话或读取正文。清单使用当前原生程序路径，shell 参数引用与 collect handoff 共用 `command.rs` 的命令构造。提示词说明预算、游标、筛选、版本变化和来源边界；无需 MCP 或运行时 skill。
 
-## 活动时间筛选
+### 消息定位
 
-`Query.time_field` 默认 Created；显式 Updated 时，scanner 请求不按创建时间裁剪的 Provider 发现，再按稳定的 Session.updated_at 应用日期窗口。共享层不解释 Provider 私有日期字段，不用扩大天数的近似值冒充完整发现。普通活动列表先按更新时间排序再截断；Terms 搜索保留相关性优先。渲染和 selector 使用同一 TimeField 投影日期与时间分组，不改写 Session facts。collect、stats 和 reindex 不接受该 CLI 选项。
+`query/context.rs` 基于标准化 SessionData 生成消息定位符并校验上下文范围。`--search --locate` 按现有搜索语义定位命中消息；`workflows/uri.rs` 通过 Provider read 读取并校验正文快照，输出所需消息范围。定位读取失败保留筛选失败事实；正文变化拒绝旧定位符。无 --locate 时保持原搜索输出。`--message --format json,markdown` 在定位校验后复用 core output 的片段渲染与安全导出，保留 URI、定位符和原始消息范围；可恢复来源诊断在片段文件中标记 partial。
+
+## 6. 导出与文件边界
+
+格式闭集和 `md` 别名在 `output/formats.rs`。`output/export.rs` 负责文件名、来源拒写、私有权限、临时文件、同步及原子替换。`storage/private_files.rs` 共享目录和落盘语义。macOS 使用与 Python `os.fsync` 相同的同步级别；不会对每个导出文件额外执行 `F_FULLFSYNC`。
+
+summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标准化正文读取；print 失败不阻止文件导出。批量导出先规划目标冲突，保留部分成功结果。源目录和目标符号链接拒写，异常清理临时文件。已存在的用户导出目录不会被擅自 chmod。
+
+## 7. Collect
+
+execute、dry-run、emit-prompt 共用配置安全校验和候选会话筛选，候选发现不按创建日期截断。core transcript 的 visible_segments 投影标准化文本段及可靠时间；内部 Collect 按文本段的本地日期筛选并逐日分块。无时间或 Provider 标记为推测时间的内容排除并记录日期覆盖缺口。生成外部汇总清单前读取候选正文，按相同日期投影筛选，但不规划 chunk；只交接含本期活动的唯一会话，并携带读取失败和无日期来源。外部汇总通过 read 的 text_spans 使用同一日期事实。会话计数保持唯一 URI 数，跨日单元分别摘要；查询先选候选，按文本日期过滤后再对唯一会话应用 limit。Collect 仅提取 user/assistant 可见文本，排除 tool、reasoning、system、plan 与 Provider 私有事件。没有可见对话的会话在 chunk 规划前忽略。全部符合筛选规则的正文进入有界事件块，超长消息按 Unicode 字符拆分，不设置会话总字符截断。会话摘要最多八份一组逐层归并；最终报告超过单次输入限制时按来源组拆分请求，单个过大归属组明确失败。部分报告列出遗漏会话 URI。
+
+PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹推断成功。PM 仅在日期相同且明确的 Working Directory 相同时归并；未知目录和 INSIGHT 保持单会话归属。读取失败、摘要失败和 Provider 发现不完整分别记录，部分成功报告明确注明遗漏；索引回退成功不计作读取失败。
+
+最终输入限制、结构校验、纠正重试、并发上限、超时和跨源重定向凭据边界由 Collect/LLM 模块持有，验证使用本地 HTTP fixture，不访问真实模型。
+
+## 8. 会话阅读器
+
+`workflows/reader.rs` 拥有 --browse 的发现、筛选、按需读取和导出；`terminal/reader.rs` 只接收行数据和已读取的 SessionData，处理键盘与展示，不调用 Provider。正文使用 core render 的标准化投影，当前会话读取失败不阻止切换。跨会话搜索复用 core Query/filter，保留启动时的范围，重建结果列表；命中位置复用 context::locate，摘录预览只投影选中范围。导出复用 URI 工作流及 revision/message locator 校验，避免预览与导出来源不一致；Crossterm osc52 feature 提供复制请求，不依赖平台剪贴板进程。
+
+阅读器只缓存当前搜索命中的展示行。重新搜索、换行布局或工具详情变化后刷新该位置，切换命中时重新计算；普通重绘直接读取该位置，不重复拼接整条消息或编译查询。会话切换重置全部阅读状态，列表渲染借用既有行文本。
+
+## 9. 扩展步骤
+
+1. 新 Provider 实现 `Provider`，优先复用文件、SQLite、transcript 和 message assembly 模块。在 registry 声明身份和 URI。
+2. 新格式修改 `output/formats.rs`、`output/export.rs` 及 Provider 能力；覆盖可观察输出和失败路径。
+3. 新模式在 `cli_args.rs` 声明参数，在 `command.rs` 归一化和分发，再实现对应 workflow。
+4. 增补隔离行为测试，并同步 README、recipes；领域事实边界变化时同步 `CONTEXT.md`。
+
+现有 Provider 的数据范围见 README；OpenCode 2.x 与 MiniMax 的读取规则见 [providers/](providers/)。DeepChat 不支持 SQLCipher/附件读取/Tape 恢复；Cherry 只读取当前分支及未删除会话；MiniMax 只读取支持的已迁移展示行。重写不会扩大 Provider 源写入权限，也不执行上游迁移。
