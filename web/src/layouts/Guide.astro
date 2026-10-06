@@ -48,6 +48,7 @@ const breadcrumbs = [
     breadcrumbs,
   }}
 >
+  <div class="reading-progress" aria-hidden="true"></div>
   <Header locale={locale} paths={paths} homeLinks />
   <main id="main" tabindex="-1" class="shell guide-page">
     <nav
@@ -85,12 +86,14 @@ const breadcrumbs = [
         </div>
         <div class="guide-related">
           <h2>{t.related}</h2>
-          {related.map((entry) => (
-            <a href={entry.href}>
-              {entry.title}
-              <span aria-hidden="true">↗</span>
-            </a>
-          ))}
+          <div class="guide-related__list">
+            {related.map((entry) => (
+              <a href={entry.href}>
+                <span class="guide-category">{t.categories[entry.category]}</span>
+                {entry.title}
+              </a>
+            ))}
+          </div>
         </div>
       </div>
       <aside class="guide-aside">
@@ -111,6 +114,18 @@ const breadcrumbs = [
   </main>
   <Footer locale={locale} />
 </Base>
+
+<script>
+  const progress = document.querySelector<HTMLElement>(".reading-progress");
+  if (progress) {
+    const update = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      progress.style.setProperty("--progress", String(max > 0 ? Math.min(1, window.scrollY / max) : 0));
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+  }
+</script>
 
 <script>
   import { copyText } from "../lib/clipboard";
