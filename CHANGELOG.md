@@ -55,7 +55,7 @@
 - Preserve session export, query, full-text search, stats, collect, and prompt handoff workflows across all ten providers; use Ratatui for interactive selection (#396).
 - Share native binaries between pip wheels and npm platform packages, with installation verification on macOS arm64/x64, Linux x64 (glibc 2.17+), and Windows x64 (#396).
 - Split the Rust workspace into CLI and core crates, freeze Python 0.15.9 as an isolated differential reference, and verify behavior with synthetic session data (#396).
-- Improve startup and workflow performance: paired synthetic benchmarks measured version startup at 141.53 → 5.09 ms and batch JSON export at 905.94 → 367.69 ms; see [the benchmark report](docs/benchmarks/rust-p6.md) for methodology and limits (#396).
+- Improve startup and workflow performance: paired synthetic benchmarks measured version startup at 141.53 → 5.09 ms and batch JSON export at 905.94 → 367.69 ms; see [the benchmark report](https://github.com/xingkaixin/agent-dump/blob/24f826403f7160ba7330d8ed5ec5df538eb2237b/docs/benchmarks/rust-p6.md) for methodology and limits (#396).
 - Update Rust dependencies, Python development tools, React, and Wrangler (#397–#403).
 
 ## [0.15.9] - 2026-09-24

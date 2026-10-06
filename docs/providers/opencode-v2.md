@@ -1,8 +1,8 @@
-# OpenCode 2.x 会话兼容设计
+# OpenCode 2.x Provider
 
 ## 1. 目标与依据
 
-在现有 `OpenCodeAgent` 中支持 OpenCode 2.x 本地 SQLite 会话，使列表、统计、URI、查询、全文搜索、JSON/Markdown/print/raw 导出及 collect 使用同一份标准化正文。保留旧版 OpenCode 和 ZCode 的既有行为、公开 Python API 与 `opencode://<session_id>`。
+在现有 OpenCode Provider 中支持 OpenCode 2.x 本地 SQLite 会话，使列表、统计、URI、查询、全文搜索、JSON/Markdown/print/raw 导出及 collect 使用同一份标准化正文。保留旧版 OpenCode 和 ZCode 的既有行为与 `opencode://<session_id>`。
 
 本设计核对 OpenCode `v2` 分支提交 `88a9688c9c44ada8e01c4c7cad3ae92f54027aba`，包版本 `2.0.15`（2026-09-23）：
 
@@ -99,23 +99,6 @@ JSON 无效、正文类型错误、已知工具结构错误时，整条 Session 
 - 索引内容版本递增，避免已迁移会话在数据库未变化时继续命中旧缓存正文。
 - collect 仅使用 user/assistant 可见文本；合成输入、系统/技能、压缩、shell、推理与工具结果不会混入需求和成果。
 
-## 7. 实现归属
+## 7. 实现位置
 
-- `agents/opencode.py`：路径、schema 识别、发现/定位、V2 会话事实和正文组装。
-- `agents/opencode_messages.py`：V2 消息到标准格式的纯转换。
-- `agents/sqlite_sessions.py`：继续负责旧版 OpenCode/ZCode 的读取与通用 SQLite 生命周期，不引入 V2 schema。
-- 不新增 Provider 注册、公开 API、CLI 参数、依赖或通用存储框架。
-
-## 8. 验收与提交
-
-测试使用临时 SQLite 和显式路径，覆盖以下真实边界：
-
-1. 旧版、纯 V2、共存、同 ID 去重及跨时间窗；URI 直接定位；未知 schema 和缺表。
-2. 默认、自定义、Windows 兼容路径，显式缺失不回退，特殊字符文件名，内存库不可用。
-3. `seq` 与时间戳顺序不同；11 种已知消息、未知消息/part、工具生命周期、错误、附件、模型与累计用量。
-4. head/list/count 一致、展示无正文 I/O；新实例按 source_path 读取；源缺失无路径回退。
-5. JSON/Markdown/raw、CLI 列表/URI、Search/Query 与 collect 排除规则。
-6. 损坏正文失败；DELETE/WAL 更新使正文缓存与搜索索引失效；读前后数据库内容不变。
-7. 运行 OpenCode/ZCode 相关测试和 Provider contract，再运行 `just isok`；PR CI 包含 Python 3.10–3.14 与覆盖率检查。
-
-提交按设计文档、Provider 实现与行为测试、使用文档与集成验证拆分。PR 使用英文说明。CI 通过、无未解决的阻塞评审且无合并冲突后，按用户授权执行 squash merge 并删除分支。
+`crates/agent-dump-core/src/providers/sqlite/` 下，`mod.rs` 负责路径、schema 识别、发现/定位与 Session facts，`v2.rs` 负责 V2 消息转换，`legacy.rs` 继续负责旧版 OpenCode/ZCode，`connection.rs` 负责只读连接。

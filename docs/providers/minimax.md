@@ -1,8 +1,8 @@
-# MiniMax Code Provider 功能设计
+# MiniMax Code Provider
 
 ## 1. 目标与依据
 
-新增独立 `MiniMaxAgent`，将 MiniMax Code CLI 的本地展示会话接入现有发现、查询、搜索、导出和 collect 流程。用户无需启动 MiniMax Code、登录或配置模型 API。
+将 MiniMax Code CLI 的本地展示会话接入现有发现、查询、搜索、导出和 collect 流程。用户无需启动 MiniMax Code、登录或配置模型 API。
 
 设计基线为 MiniMax Code 0.4.12，源码提交 `81b666a10bb1bd097633b373679dbf399278b8d3`。官方 npm 包需要另行验证；相同版本号不代表源码与发布包完全一致。
 
@@ -42,10 +42,9 @@ agent-dump --search "fix timeout" -query "provider:minimax"
 
 数据库位于 `<数据目录>/v2/sqlite/runtime-state.sqlite`。路径优先级为：
 
-1. Python 构造函数显式 `db_path`，主要用于嵌入调用和测试。
-2. 非空 `MINIMAX_DATA_DIR`。
-3. 非空 `MAVIS_DATA_DIR`。
-4. `~/.minimax`。
+1. 非空 `MINIMAX_DATA_DIR`。
+2. 非空 `MAVIS_DATA_DIR`。
+3. `~/.minimax`。
 
 环境变量先去除首尾空白。指定目录不存在时，不回退到另一份用户数据。自定义 profile、早期源码版的 `~/.minimax-code` 和其他安装目录由用户显式设置 `MINIMAX_DATA_DIR`；不扫描或合并多个 profile，不自动迁移目录。
 
@@ -103,47 +102,6 @@ agent-dump --search "fix timeout" -query "provider:minimax"
 - 检查 `local_runtime_message_row_migrations`：已有 marker 时以消息行为准；没有 marker 且旧 `display_messages_json` 非空时，报告需要由 MiniMax Code 完成迁移。不会由 agent-dump 写 marker 或清空旧 blob。
 - 数据源不存在返回 unavailable；一个受支持的空数据库保持 available。
 
-## 7. 实现边界
+## 7. 实现位置
 
-新增 `agents/minimax.py` 负责路径、只读连接、Session facts 和导出入口，`agents/minimax_messages.py` 负责消息 schema 转换。只有具体职责需要时才拆出存储 helper。
-
-继承 `BaseAgent`，复用 message builders、facts、缓存、搜索、渲染和 collect。既有 `PiAgent` 是文件型 Provider，`SQLiteSessionAgent` 绑定 OpenCode schema，均不作为父类。无需增加依赖、CLI 参数或跨工作流 Provider 分支。
-
-注册位置为 `AGENT_REGISTRATIONS` 和 `agents/__init__.py`。暂不增加顶层稳定公共 API。同步 README、CLI recipes、架构与开发文档；领域事实边界不变，无需修改 `CONTEXT.md`。
-
-## 8. 验收
-
-所有自动测试使用临时数据库和显式路径，新增 Provider 在全套测试中默认隔离真实数据目录。
-
-1. 路径优先级、空白环境变量、显式目录不回退。
-2. 无 availability 前置调用的发现/定位，时间筛选、可见性、归档、父子关系、空会话。
-3. 列表/head 不解码正文；计数和模型一致，缺失模型保持未知。
-4. user/assistant、思考、工具五种状态、结构化及不完整参数、附件引用、内部事件。
-5. 搜索可匹配逻辑工具输出；collect 不包含思考、工具和内部事件。
-6. 损坏消息、未知 schema/columnar version、待迁移旧消息、缺失数据源的明确失败；部分发现失败不丢失其他会话。
-7. 读取/导出前后数据库内容不变，WAL 新提交使缓存失效，Session 来源不被另一个数据库替换。
-8. Provider 公共合约及真实 CLI 的 query/search/head/export/raw 退出码与中英文诊断。
-9. 官方 npm 0.4.12 在临时数据目录生成会话的冒烟验证；记录实际执行范围，不用合成 fixture 代替发布包验证。
-10. 相关测试通过后运行 `just isok`；PR 检查通过且无冲突后，按用户授权 squash merge。
-
-## 9. 提交划分
-
-1. 设计文档。
-2. Provider、注册及行为/集成测试。
-3. 用户文档与验证记录。
-
-实现发现的新事实直接修订本设计，以最终行为为准。历史恢复、桌面端和 raw 另行设计，不预先增加抽象。
-
-## 10. 发布包验证记录
-
-2026-09-19 在 macOS、Node.js 24.21.0 下，将官方 `@minimax-ai/code@0.4.12` 安装到临时目录。数据目录、工作目录、模型配置和导出目录均隔离。使用本机 HTTP 模型 fixture，阻断外部网络连接；未登录 MiniMax，也未访问真实用户会话。
-
-- 通过 `mcode provider add` / `provider test` 配置并验证本地模型。该 npm 版仅使用 `exec --model` 仍会受默认 MiniMax 模型的登录检查影响；在临时 `config.yaml` 中将 `defaultModel` 设置为已验证的本地模型后运行成功。这是验证环境配置，不属于 agent-dump 接入逻辑。
-- `mcode exec` 新建会话并实际调用 `read` 读取临时文件，再通过 `--continue` 继续同一会话，两次退出成功。
-- 实际数据库包含一个可见 conversation、5 条展示消息：两条 user、一条工具调用 assistant、两条包含 reasoning/text 的 assistant。发现数量与正文数量一致，模型与工作目录可读。
-- agent-dump 的 list/query、head、print/JSON/Markdown 导出和工具结果搜索均成功。collect 提取 4 段可见正文，没有思考或工具结果。
-- 完成 agent-dump 读取、索引和导出后，数据库与已有 WAL 的 SHA-256 均未改变。
-
-该验证证明当前 npm 包的实际存储能被读取；不代表测试了在线模型质量、桌面端、TUI/ACP 独立流程或所有历史版本。压缩/内部事件、损坏数据、WAL 增量、迁移边界和未知字段由本仓库临时 SQLite 行为测试覆盖；未声称在官方客户端中实际操作过 compaction 或 rewind。
-
-本地 `just isok` 通过：Ruff、Pyright、ty、2,551 项 Python 测试（另有 1 项既有 skip）、74 项 npm wrapper 测试、网页类型检查/构建及 13 项 Playwright 测试。
+`crates/agent-dump-core/src/providers/desktop/minimax.rs` 负责路径、只读连接、Session facts 与消息转换；只读连接与导出复用 `desktop/mod.rs`。历史恢复、桌面端和 raw 另行设计，不预先增加抽象。

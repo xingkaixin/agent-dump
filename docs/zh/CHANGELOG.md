@@ -53,7 +53,7 @@
 - 保留全部十个 Provider 的会话导出、查询、全文搜索、统计、collect 和提示词交接工作流，交互选择改用 Ratatui (#396)。
 - pip wheel 与 npm 平台包共用原生二进制，并验证 macOS arm64/x64、Linux x64（glibc 2.17+）和 Windows x64 的安装路径 (#396)。
 - 将 Rust workspace 拆分为 CLI 与 core，冻结 Python 0.15.9 作为隔离差分参考，使用合成会话数据验证行为 (#396)。
-- 改善启动与工作流性能：配对合成基准中，版本命令启动由 141.53 降至 5.09 ms，批量 JSON 导出由 905.94 降至 367.69 ms；方法与限制见[基准报告](../benchmarks/rust-p6.md) (#396)。
+- 改善启动与工作流性能：配对合成基准中，版本命令启动由 141.53 降至 5.09 ms，批量 JSON 导出由 905.94 降至 367.69 ms；方法与限制见[基准报告](https://github.com/xingkaixin/agent-dump/blob/24f826403f7160ba7330d8ed5ec5df538eb2237b/docs/benchmarks/rust-p6.md) (#396)。
 - 更新 Rust 依赖、Python 开发工具、React 和 Wrangler (#397–#403)。
 
 ## [0.15.9] - 2026-09-24

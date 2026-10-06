@@ -929,7 +929,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Manual release benchmark; see docs/benchmarks/reader-redraw.md"]
+    #[ignore = "Manual release benchmark; run scripts/benchmark_reader_redraw.py"]
     fn benchmark_reader_redraw() {
         use std::hash::{DefaultHasher, Hash, Hasher};
         use std::time::Instant;
