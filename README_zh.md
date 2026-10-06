@@ -150,7 +150,7 @@ npx skills add xingkaixin/agent-dump
 agent-dump --interactive
 ```
 
-运行后会显示最近 7 天的会话列表，按时间分组显示（今天、昨天、本周、本月、更早）。使用空格选择/取消，回车确认导出。
+在终端中打开会话阅读器（同 `--browse`），显示最近 7 天的会话。空格标记会话，`e` 导出已标记会话。非终端环境下保留逐行输入编号的选择方式。
 
 不带参数运行 `agent-dump` 显示帮助。如果同时传入多个显式模式，agent-dump 会保留既有模式优先级，并告警列出被忽略的较低优先级参数。
 
@@ -385,7 +385,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `uri` | 用于直接查看的 Agent Session URI（如 `opencode://session-id`），或作用域查询 URI，如 `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
-| `--interactive`, `-i` | 进入交互式模式选择和导出会话 | - |
+| `--interactive`, `-i` | 打开会话阅读器选择和导出会话（终端中等同 `--browse`） | - |
 | `--days`, `-d` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `--since/--until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
 | `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 的时间依据：`created` 或 `updated`。 | `created` |
 | `--query`, `-q` | 查询过滤。关键词与 `--search` 一样按空白拆分、不区分大小写，所有 term 都必须出现在 Session 标题或逻辑 transcript 中。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
@@ -582,10 +582,10 @@ agent-dump --browse --search "database lock" --format json,markdown --output ./e
 - `/` 输入当前会话的字面搜索词，Enter 搜索，Esc 取消输入；n/N 跳到下一个/上一个命中消息。搜索自动展开工具详情。
 - `t`：展开或折叠工具详情；`y`：发送 URI 复制请求，需要终端支持 OSC 52。
 - `x`：预览当前命中消息及其前后各 3 条消息；`+`/`-` 调整上下文条数，n/N 切换命中。预览时 `e` 仅导出该范围，支持 JSON、Markdown，保留来源 URI 和消息位置。来源在预览后变化时拒绝导出。`x` 或 Esc 返回完整会话。
-- 完整会话视图中 `e`：导出当前会话，遵守 --format、--output 和现有 Provider 格式能力，默认 JSON；不支持 print 格式。
+- 空格：标记会话用于批量导出。完整会话视图中 `e`：导出所有已标记会话；没有标记时导出当前会话。遵守 --format、--output 和现有 Provider 格式能力，默认 JSON；不支持 print 格式。
 - q/Esc/Ctrl-C：关闭阅读器并恢复终端，正常关闭返回 0。
 
-搜索为空时仍可用 `s` 修改搜索、`c` 清空词。来源、目录、日期、角色和数量上限在阅读期间固定，需修改 CLI 参数后重新打开来扩大范围；不可用来源或非终端输入返回失败。单个会话读取失败会显示诊断，仍可切换其他会话。原有 --interactive 批量选择导出保持不变。
+搜索为空时仍可用 `s` 修改搜索、`c` 清空词。来源、目录、日期、角色和数量上限在阅读期间固定，需修改 CLI 参数后重新打开来扩大范围；不可用来源或非终端输入返回失败。单个会话读取失败会显示诊断，仍可切换其他会话。在终端中，`--interactive` 打开此阅读器；非终端环境下，`--interactive` 保留逐行选择提示，供管道使用。
 
 ## 项目结构
 

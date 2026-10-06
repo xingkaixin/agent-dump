@@ -26,6 +26,8 @@ agent-dump --interactive --format json,markdown,raw --output ./my-sessions
 agent-dump --interactive --lang zh
 ```
 
+终端中 `--interactive` 打开会话阅读器（同 `--browse`）：空格标记会话，`e` 批量导出。非终端环境保留逐行编号选择。
+
 ### 列表查询（list）
 
 ```bash

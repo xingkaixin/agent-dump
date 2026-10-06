@@ -7,7 +7,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 
 使用本技能时，始终通过 `agent-dump` CLI 查找、读取和复用本地会话，不改动业务源码或 Provider 会话源。
 
-个人开发者可用 `--browse` 阅读、`--interactive` 批量导出。Agent 先用 `--providers --json` 检查能力，通过 `--list --json` 或 `--search --locate --json` 选择会话，再用 `--head --json` 查看元数据、`--read-prompt` 获取分页读取说明。需要复用证据时，用 `--message` 和 `--format json,markdown` 导出带来源的上下文；需要跨会话报告时，使用 collect。
+个人开发者可用 `--browse` 阅读、标记并批量导出。Agent 先用 `--providers --json` 检查能力，通过 `--list --json` 或 `--search --locate --json` 选择会话，再用 `--head --json` 查看元数据、`--read-prompt` 获取分页读取说明。需要复用证据时，用 `--message` 和 `--format json,markdown` 导出带来源的上下文；需要跨会话报告时，使用 collect。
 
 ## 安装与运行入口
 
@@ -54,7 +54,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - 用户给了 `--config view` 或 `--config edit`：使用 config 模式。
 - 用户要”先看列表/筛选”：使用 `--list` 模式。
 - 用户要查找最近活跃的会话：在 list/search/browse/interactive 模式加 `--time-field updated`，配合 `--days`；不加时仍按创建时间筛选，collect 和 stats 不接受该参数。
-- 用户要”交互式勾选后导出”：使用 `--interactive` 模式。
+- 用户要”交互式勾选后导出”：使用 `--browse`（或兼容入口 `--interactive`），空格标记会话，`e` 批量导出。
 - 用户只给 `--days` 或 `--query` 且未指定 `--interactive`：按列表模式处理（CLI 会自动启用 `--list`）。
 - Codex URI 允许 `codex://threads/<session_id>` 变体，等价于 `codex://<session_id>`。
 - OpenCode 支持旧版与 2.x SQLite；自定义或 channel 数据库通过 `OPENCODE_DB` 指定。详见 recipes 的 OpenCode 2.x 部分。
@@ -172,7 +172,7 @@ agent-dump --browse --search "database lock" --format json,markdown --output ./e
 - `/` starts literal search within the current session; Enter searches, Esc cancels input, n/N jumps to the next/previous matching message. Search expands tool details.
 - `t` toggles tool details; `y` sends a URI clipboard request (requires terminal OSC 52 support).
 - `x` previews the current matching message with three surrounding messages on each side. `+`/`-` changes that radius; n/N changes the hit. `e` exports exactly this range as JSON and/or Markdown with source URI and message positions. If the source changed since preview, export is rejected. `x` or Esc returns to the full session.
-- Outside excerpt preview, `e` exports the selected session using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
+- Space marks sessions for batch export. Outside excerpt preview, `e` exports all marked sessions, or the selected session when none are marked, using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
 - q/Esc/Ctrl-C close the reader and restore the terminal, exiting 0.
 
-Empty search results stay open so `s` can change the search and `c` can clear it. Provider/path/date/role/limit filters stay fixed during a reader session; change CLI arguments and reopen to widen them. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. Existing --interactive batch export is unchanged.
+Empty search results stay open so `s` can change the search and `c` can clear it. Provider/path/date/role/limit filters stay fixed during a reader session; change CLI arguments and reopen to widen them. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. In a terminal, `--interactive` opens this reader. Without a terminal, `--interactive` keeps the line-based selection prompt for pipelines.

@@ -150,7 +150,7 @@ npx skills add xingkaixin/agent-dump
 agent-dump --interactive
 ```
 
-After running, it will display the list of sessions from the last 7 days grouped by time (Today, Yesterday, This Week, This Month, Earlier). Use the spacebar to select/deselect, and press Enter to confirm the export.
+In a terminal this opens the session reader (same as `--browse`) with sessions from the last 7 days. Press Space to mark sessions and `e` to export the marked ones. Without a terminal, the line-based numbered selection prompt is kept.
 
 Running `agent-dump` without arguments shows help. If multiple explicit modes are supplied, agent-dump preserves the existing mode priority and prints a warning listing the lower-priority options it ignored.
 
@@ -396,7 +396,7 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
-| `--interactive`, `-i` | Run in interactive mode to select and export sessions | - |
+| `--interactive`, `-i` | Open the session reader to select and export sessions (same as `--browse` in a terminal) | - |
 | `--days`, `-d` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `--since/--until` are omitted. | 7 outside collect; today only in collect |
 | `--time-field` | Use `created` or `updated` time for the `--days` window in list/search/browse/interactive modes. | `created` |
 | `--query`, `-q` | Query filter. Keyword terms are split on whitespace and matched case-insensitively like `--search`; every term must occur in the session title or logical transcript. Supports a plain keyword or structured terms like `bug provider:codex role:user path:. limit:20`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
@@ -597,10 +597,10 @@ agent-dump --browse --search "database lock" --format json,markdown --output ./e
 - `/` starts literal search within the current session; Enter searches, Esc cancels input, n/N jumps to the next/previous matching message. Search expands tool details.
 - `t` toggles tool details; `y` sends a URI clipboard request (requires terminal OSC 52 support).
 - `x` previews the current matching message with three surrounding messages on each side. `+`/`-` changes that radius; n/N changes the hit. `e` exports exactly this range as JSON and/or Markdown with source URI and message positions. If the source changed since preview, export is rejected. `x` or Esc returns to the full session.
-- Outside excerpt preview, `e` exports the selected session using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
+- Space marks sessions for batch export. Outside excerpt preview, `e` exports all marked sessions, or the selected session when none are marked, using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
 - q/Esc/Ctrl-C close the reader and restore the terminal, exiting 0.
 
-Empty search results stay open so `s` can change the search and `c` can clear it. Provider/path/date/role/limit filters stay fixed during a reader session; change CLI arguments and reopen to widen them. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. Existing --interactive batch export is unchanged.
+Empty search results stay open so `s` can change the search and `c` can clear it. Provider/path/date/role/limit filters stay fixed during a reader session; change CLI arguments and reopen to widen them. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. In a terminal, `--interactive` opens this reader. Without a terminal, `--interactive` keeps the line-based selection prompt for pipelines.
 
 ## Project Structure
 
