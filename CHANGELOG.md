@@ -4,6 +4,34 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-06
+
+### Breaking Changes
+
+- Match `--query` keywords and `agents://` `q` values as whitespace-separated literal terms, requiring every term instead of one contiguous phrase (#442).
+- Default the `--days` window to session update time in list, search, browse, and interactive modes. Pass `--time-field created` to retain creation-time filtering (#444).
+
+### Added
+
+- Search across sessions from the terminal reader, navigate matching messages, preview nearby context, and export the selected excerpt with source locators and revision checks (#440).
+- Add subcommand aliases such as `list`, `search`, `browse`, `export`, `read`, and `collect` while preserving existing option forms (#441).
+- Mark sessions with Space for batch export in the reader; `--interactive` now opens the reader in a terminal and keeps numbered selection for pipelines (#443).
+
+### Fixed
+
+- Attribute collect report text to its actual activity date, split sessions spanning multiple days, and apply the same date filters to prompt handoffs (#439).
+- Apply the configured output directory consistently to all file export formats (#444).
+- Keep existing version 3 search indexes reusable, including indexes created by Python v0.15.9 (#450).
+- Preserve the worker stop signal after a panic so parallel reads cannot hang (#453).
+
+### Changed
+
+- Reuse read-only SQLite connections, run collect reads and file discovery on a bounded worker pool, and reduce text-normalization allocations (#449, #451, #452, #454).
+- Avoid storing duplicate normalized text in newly created search indexes and build trigram search snippets around highlighted matching evidence (#448, #455).
+- Redesign the landing page with interactive CLI demos, installation choices, bilingual workflow guides, automatic initial language selection, and improved crawlability and conversion tracking; deploy static assets with the global Cloudflare CLI (#430, #434, #438, #446).
+- Make historical Python differential checks opt-in, streamline redundant tests, manage development tools with mise, and reorganize project documentation around goals and architecture (#435–#437, #445, #447).
+- Update Python development tools and web dependencies (#431–#433).
+
 ## [1.1.1] - 2026-10-03
 
 ### Added
@@ -1217,3 +1245,4 @@
 [1.0.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.0.0
 [1.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.0
 [1.1.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.1
+[1.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.0
