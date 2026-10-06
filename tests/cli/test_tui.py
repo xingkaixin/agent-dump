@@ -87,12 +87,12 @@ def test_cancel_restores_terminal(cli, lang, cancel):
     with terminal(cli, "--interactive", "-d", "36500", "--lang", lang) as (expect, send, _, finish):
         expect("Codex")
         send(cancel)
-        code, output = finish()
-        assert code == 1
+        code, _ = finish()
+        assert code == 0
         assert not (cli.root / "sessions").exists()
 
 
-def test_resize_narrow_window_and_multiselect(cli):
+def test_interactive_opens_reader_with_batch_export(cli):
     with terminal(
         cli,
         "--interactive",
@@ -107,10 +107,12 @@ def test_resize_narrow_window_and_multiselect(cli):
         width=24,
         height=8,
     ) as (expect, send, resize, finish):
-        expect("[ ]")
+        expect("Sessions")
         resize(100, 30)
         expect("00000")
-        send("\x1b[F \x1b[H \r")
+        send("\x1b[F \x1b[H e")
+        expect("exports")
+        send("q")
         code, _ = finish()
         assert code == 0
     assert len(list((cli.root / "exports" / "codex").glob("*.json"))) == 2

@@ -64,7 +64,7 @@
   "CLI_HEAD_HELP": "Show lightweight session metadata for URI discovery without exporting or printing body",
   "CLI_SUMMARY_HELP": "Generate AI summary for URI JSON export (requires config and json format)",
   "CLI_LIST_HELP": "List all available sessions without exporting",
-  "CLI_INTERACTIVE_HELP": "Run in interactive mode to select and export sessions",
+  "CLI_INTERACTIVE_HELP": "Open the session reader to select and export sessions (same as --browse in a terminal)",
   "CLI_NO_METADATA_SUMMARY_HELP": "Hide high-signal metadata summary in list and interactive views",
   "CLI_SAVE_HELP": "Collect output path: directory or .md file path (absolute or relative)",
   "CLI_PAGE_SIZE_HELP": "Accepted for compatibility; currently ignored",
@@ -332,7 +332,7 @@
   "READER_SMALL": "Resize terminal; q exits.",
   "READER_SESSIONS": "Sessions",
   "READER_BODY": "Transcript",
-  "READER_HELP": "s search sessions · / find here · n/N hits · x excerpt · +/- context\nTab panes · e export view · y URI · c clear search · ? help · q quit",
+  "READER_HELP": "s search sessions · / find here · n/N hits · x excerpt · +/- context\nTab panes · Space select · e export · y URI · c clear search · ? help · q quit",
   "READER_HELP_COMPACT": "s search · / find · x excerpt · e save\nTab panes · ? help · q quit",
   "READER_HELP_TINY": "s / x e ? q\nTab · +/- context",
   "CLI_READ_HELP": "Read a bounded page from a session URI",
@@ -371,9 +371,10 @@
   "READER_SEARCHING": "Searching sessions in the current scope…",
   "READER_INPUT_SESSIONS": "Sessions",
   "READER_INPUT_MESSAGES": "This session",
+  "READER_MARKED": "{count} selected · e exports selected sessions · Space toggles",
   "READER_NEED_HIT": "Find a matching message with / or s before previewing an excerpt.",
   "READER_EXCERPT_HELP": "Excerpt preview · +/- changes surrounding messages · e exports · x/Esc returns",
   "READER_EXCERPT_RANGE": "Excerpt #{start}–{end}/{total} · +/- context",
   "READER_HELP_TITLE": "Help · ↑/↓ scroll · ?/Esc close",
-  "READER_HELP_FULL": "s: search sessions in this scope (all words must match)\n/: find a literal phrase in the current session\nc: clear search words, keep Provider/path/date/role filters\nn/N: next/previous matching message\nx: preview the match with 3 messages on either side\n+/-: add/remove one message on each side\ne: export the previewed range, or the full session outside preview\nx/Esc: leave excerpt preview\nTab/Left/Right: switch panes · arrows/j/k: move\nt: toggle tool details · y: copy session URI\nq/Ctrl-C: quit · ?/Esc: close help\n\nProvider/path/date filters stay fixed while browsing. Reopen with different --query / --days / --time-field options to change scope."
+  "READER_HELP_FULL": "s: search sessions in this scope (all words must match)\n/: find a literal phrase in the current session\nc: clear search words, keep Provider/path/date/role filters\nn/N: next/previous matching message\nx: preview the match with 3 messages on either side\n+/-: add/remove one message on each side\nSpace: select sessions for batch export\ne: export the previewed range, selected sessions, or the full session\nx/Esc: leave excerpt preview\nTab/Left/Right: switch panes · arrows/j/k: move\nt: toggle tool details · y: copy session URI\nq/Ctrl-C: quit · ?/Esc: close help\n\nProvider/path/date filters stay fixed while browsing. Reopen with different --query / --days / --time-field options to change scope."
 }

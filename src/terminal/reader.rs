@@ -26,6 +26,7 @@ pub enum Action {
         locator: Option<String>,
         context: usize,
     },
+    ExportMarked(Vec<usize>),
     Search(String),
     Quit,
 }
@@ -51,6 +52,7 @@ struct State {
     hits: Vec<usize>,
     hit: usize,
     active_hit_line: Option<usize>,
+    marked: std::collections::BTreeSet<usize>,
 }
 
 pub struct Reader {
@@ -305,6 +307,27 @@ impl Reader {
                             self.state.expanded = !self.state.expanded;
                             dirty = true;
                         }
+                        KeyCode::Char(' ') if !self.rows.is_empty() => {
+                            if !self.state.marked.remove(&self.state.selected) {
+                                self.state.marked.insert(self.state.selected);
+                            }
+                            self.status = t(
+                                "READER_MARKED",
+                                self.zh,
+                                &[(
+                                    "count",
+                                    self.state.marked.len().to_string(),
+                                )],
+                            );
+                        }
+                        KeyCode::Char('e')
+                            if !self.state.marked.is_empty()
+                                && self.state.context.is_none() =>
+                        {
+                            return Ok(Action::ExportMarked(
+                                self.state.marked.iter().copied().collect(),
+                            ));
+                        }
                         KeyCode::Char('e') if data.is_some() => {
                             match self.state.export(data.unwrap(), self.zh) {
                                 Ok(action) => return Ok(action),
@@ -380,8 +403,11 @@ impl Reader {
                                     .min(self.rows.len().saturating_sub(1)),
                             };
                             if selected != self.state.selected {
+                                let marked =
+                                    std::mem::take(&mut self.state.marked);
                                 self.state =
                                     State::with_query(&self.query, selected);
+                                self.state.marked = marked;
                                 self.status = t("READER_READY", self.zh, &[]);
                                 return Ok(Action::Select);
                             }
@@ -683,8 +709,21 @@ fn draw_list(
     }
     let items = rows
         .iter()
-        .map(|row| {
-            let mut lines = vec![Line::raw(row.title.as_str())];
+        .enumerate()
+        .map(|(position, row)| {
+            let mut lines = vec![Line::raw(if state.marked.is_empty() {
+                row.title.clone()
+            } else {
+                format!(
+                    "{} {}",
+                    if state.marked.contains(&position) {
+                        "[x]"
+                    } else {
+                        "[ ]"
+                    },
+                    row.title
+                )
+            })];
             for (index, detail) in row.detail.lines().enumerate() {
                 let style = if index == 0 {
                     Style::default().fg(Color::DarkGray)

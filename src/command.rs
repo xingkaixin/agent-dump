@@ -394,7 +394,9 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             &mut io::stderr(),
         );
     }
-    if mode == Mode::Browse {
+    if mode == Mode::Browse
+        || (mode == Mode::Interactive && crate::terminal::tui::available())
+    {
         let formats =
             output_formats::parse(args.format.as_deref().unwrap_or("json"))?;
         if formats.contains(&output_formats::OutputFormat::Print) {
