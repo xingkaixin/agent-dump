@@ -125,6 +125,53 @@ fn scope(query: &Query, days: i64, zh: bool) -> String {
     )
 }
 
+fn export_marked(
+    scan: &Scan,
+    picks: &[(usize, usize)],
+    operation: &super::interactive::Operation,
+    zh: bool,
+) -> crate::Result<String> {
+    let groups: std::collections::BTreeSet<_> =
+        picks.iter().map(|&(g, _)| g).collect();
+    for g in groups {
+        let group = &scan.groups[g];
+        if let Some(diagnostic) = diagnostics::Diagnostic::unsupported_formats(
+            group.info,
+            group.provider.as_ref(),
+            &operation.formats,
+            zh,
+        ) {
+            return Ok(render::safe_line(&diagnostic.render(zh)));
+        }
+    }
+    let configured = match super::interactive::configured_output(operation, zh)?
+    {
+        Ok(configured) => configured,
+        Err(error) => return Ok(render::safe_line(&error)),
+    };
+    let mut result = Vec::new();
+    let mut notices = Vec::new();
+    Ok(
+        match super::interactive::export(
+            &scan.groups,
+            picks,
+            operation,
+            &configured,
+            zh,
+            &mut result,
+            &mut notices,
+        ) {
+            Ok(_) => render::safe_line(
+                String::from_utf8_lossy(&result)
+                    .lines()
+                    .rfind(|line| !line.trim().is_empty())
+                    .unwrap_or_default(),
+            ),
+            Err(error) => render::safe_line(&error.to_string()),
+        },
+    )
+}
+
 pub fn run(
     operation: &super::interactive::Operation,
     zh: bool,
@@ -210,6 +257,13 @@ pub fn run(
                         reader.status = render::safe_line(&error.to_string());
                     }
                 }
+            }
+            Action::ExportMarked(rows) => {
+                let picks: Vec<_> = rows
+                    .iter()
+                    .filter_map(|&row| positions.get(row).copied())
+                    .collect();
+                reader.status = export_marked(&scan, &picks, operation, zh)?;
             }
             Action::Export { locator, context } => {
                 let Some(&(g, s)) = positions.get(reader.selected()) else {

@@ -3,6 +3,7 @@ use agent_dump_core::output::formats::OutputFormat;
 use agent_dump_core::output::i18n::{t, terminal};
 use agent_dump_core::providers::contract::{RawExport, render_search_roots};
 use agent_dump_core::query::Query;
+use agent_dump_core::query::scanner::ScannedProvider;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
@@ -23,20 +24,12 @@ pub fn run(
     warnings: &mut impl Write,
     input: &mut impl BufRead,
 ) -> crate::Result<bool> {
-    let configured = if operation.output.is_none()
-        && operation
-            .formats
-            .iter()
-            .any(|f| matches!(f, OutputFormat::Json | OutputFormat::Raw))
-    {
-        let config = agent_dump_core::config::Config::load()?;
-        if let Err(error) = config.require_valid(zh) {
+    let configured = match configured_output(operation, zh)? {
+        Ok(configured) => configured,
+        Err(error) => {
             writeln!(out, "{error}")?;
             return Ok(false);
         }
-        config.output()
-    } else {
-        String::new()
     };
     write!(out, "{}", agent_dump_core::output::render::list_banner())?;
     let mut scan = agent_dump_core::query::scanner::discover(
@@ -225,15 +218,57 @@ pub fn run(
             &[("agent_name", group.info.display_name.into())]
         )
     )?;
+    let picks: Vec<_> = selected.into_iter().map(|s| (index, s)).collect();
+    let exported = export(
+        &scan.groups,
+        &picks,
+        operation,
+        &configured,
+        zh,
+        out,
+        warnings,
+    )?;
+    Ok(exported > 0)
+}
+
+pub fn configured_output(
+    operation: &Operation,
+    zh: bool,
+) -> crate::Result<Result<String, String>> {
+    if operation.output.is_some()
+        || !operation
+            .formats
+            .iter()
+            .any(|f| matches!(f, OutputFormat::Json | OutputFormat::Raw))
+    {
+        return Ok(Ok(String::new()));
+    }
+    let config = agent_dump_core::config::Config::load()?;
+    Ok(match config.require_valid(zh) {
+        Ok(()) => Ok(config.output()),
+        Err(error) => Err(error.to_string()),
+    })
+}
+
+pub fn export(
+    groups: &[ScannedProvider],
+    picks: &[(usize, usize)],
+    operation: &Operation,
+    configured: &str,
+    zh: bool,
+    out: &mut impl Write,
+    warnings: &mut impl Write,
+) -> crate::Result<usize> {
     let cache = agent_dump_core::session::cache::SessionDataCache::default();
     let mut targets: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
-    for (position, &index) in selected.iter().enumerate() {
+    for (position, &(g, index)) in picks.iter().enumerate() {
+        let group = &groups[g];
         let session = &group.sessions[index];
         let raw = group.provider.raw_export(session);
         for (f, &format) in operation.formats.iter().enumerate() {
             let base = agent_dump_core::output::export::output_base(
                 operation.output.as_deref(),
-                &configured,
+                configured,
                 format,
             )
             .join(group.info.name);
@@ -265,7 +300,8 @@ pub fn run(
         .collect();
     let mut exported = 0;
     let mut paths = BTreeSet::new();
-    for (position, index) in selected.into_iter().enumerate() {
+    for (position, &(g, index)) in picks.iter().enumerate() {
+        let group = &groups[g];
         let session = &group.sessions[index];
         let uri = format!("{}://{}", group.info.scheme, session.id);
         let raw = group.provider.raw_export(session);
@@ -291,7 +327,7 @@ pub fn run(
             if collisions.contains(&(position, f)) {
                 let base = agent_dump_core::output::export::output_base(
                     operation.output.as_deref(),
-                    &configured,
+                    configured,
                     format,
                 )
                 .join(group.info.name);
@@ -351,7 +387,7 @@ pub fn run(
             }
             let base = agent_dump_core::output::export::output_base(
                 operation.output.as_deref(),
-                &configured,
+                configured,
                 format,
             )
             .join(group.info.name);
@@ -414,10 +450,10 @@ pub fn run(
         agent_dump_core::storage::source_io::path_text(
             &agent_dump_core::output::export::output_base(
                 operation.output.as_deref(),
-                &configured,
+                configured,
                 operation.formats[0],
             )
-            .join(group.info.name),
+            .join(groups[picks[0].0].info.name),
         )
     } else {
         paths.into_iter().collect::<Vec<_>>().join(", ")
@@ -431,5 +467,5 @@ pub fn run(
             &[("count", exported.to_string()), ("path", path)]
         )
     )?;
-    Ok(exported > 0)
+    Ok(exported)
 }

@@ -64,7 +64,7 @@
   "CLI_HEAD_HELP": "仅查看 URI 会话的轻量元数据摘要，不导出文件也不打印正文",
   "CLI_SUMMARY_HELP": "为 URI JSON 导出生成 AI 总结（需要配置且 format 包含 json）",
   "CLI_LIST_HELP": "列出所有可用会话而不导出",
-  "CLI_INTERACTIVE_HELP": "进入交互式模式选择并导出",
+  "CLI_INTERACTIVE_HELP": "打开会话阅读器选择并导出（终端中等同 --browse）",
   "CLI_NO_METADATA_SUMMARY_HELP": "在列表和交互视图中隐藏高信号元数据摘要",
   "CLI_SAVE_HELP": "collect 输出路径：可传目录或 .md 文件路径（支持绝对/相对路径）",
   "CLI_PAGE_SIZE_HELP": "为兼容保留，当前不生效",
@@ -332,7 +332,7 @@
   "READER_SMALL": "请放大终端；q 退出。",
   "READER_SESSIONS": "会话",
   "READER_BODY": "正文",
-  "READER_HELP": "s 搜索会话 · / 会话内查找 · n/N 命中 · x 摘录 · +/- 上下文\nTab 切换 · e 导出 · y URI · c 清词 · ? 帮助 · q 退出",
+  "READER_HELP": "s 搜索会话 · / 会话内查找 · n/N 命中 · x 摘录 · +/- 上下文\nTab 切换 · 空格 选择 · e 导出 · y URI · c 清词 · ? 帮助 · q 退出",
   "READER_HELP_COMPACT": "s 搜索 · / 查找 · x 摘录 · e 导出\nTab 切换 · ? 帮助 · q 退出",
   "READER_HELP_TINY": "s / x e ? q\nTab · +/- 上下文",
   "CLI_READ_HELP": "分段读取指定会话 URI 的正文",
@@ -371,9 +371,10 @@
   "READER_SEARCHING": "正在搜索当前范围内的会话…",
   "READER_INPUT_SESSIONS": "搜索会话",
   "READER_INPUT_MESSAGES": "当前会话",
+  "READER_MARKED": "已选 {count} 个会话 · e 导出所选 · 空格切换",
   "READER_NEED_HIT": "请先用 / 或 s 找到命中消息，再预览摘录。",
   "READER_EXCERPT_HELP": "摘录预览 · +/- 调整前后消息数 · e 导出 · x/Esc 返回",
   "READER_EXCERPT_RANGE": "摘录 #{start}–{end}/{total} · +/- 上下文",
   "READER_HELP_TITLE": "帮助 · ↑/↓ 滚动 · ?/Esc 关闭",
-  "READER_HELP_FULL": "s：搜索当前范围内会话，全部词均须命中\n/：在当前会话内查找字面短语\nc：清除关键词，保留来源、目录、日期和角色筛选\nn/N：下一条/上一条命中消息\nx：预览命中消息，默认包含前后各 3 条\n+/-：前后各增加/减少一条消息\ne：导出预览范围；未预览时导出完整会话\nx/Esc：退出摘录预览\nTab/左右：切换栏 · 上下/j/k：移动\nt：工具详情 · y：复制会话 URI\nq/Ctrl-C：退出 · ?/Esc：关闭帮助\n\n浏览期间来源、目录、日期筛选保持固定。重新打开时使用 --query / --days / --time-field 更改范围。"
+  "READER_HELP_FULL": "s：搜索当前范围内会话，全部词均须命中\n/：在当前会话内查找字面短语\nc：清除关键词，保留来源、目录、日期和角色筛选\nn/N：下一条/上一条命中消息\nx：预览命中消息，默认包含前后各 3 条\n+/-：前后各增加/减少一条消息\n空格：选择会话用于批量导出\ne：导出预览范围；未预览时导出已选会话或当前完整会话\nx/Esc：退出摘录预览\nTab/左右：切换栏 · 上下/j/k：移动\nt：工具详情 · y：复制会话 URI\nq/Ctrl-C：退出 · ?/Esc：关闭帮助\n\n浏览期间来源、目录、日期筛选保持固定。重新打开时使用 --query / --days / --time-field 更改范围。"
 }
