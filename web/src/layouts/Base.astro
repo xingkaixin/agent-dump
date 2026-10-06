@@ -133,6 +133,30 @@ const jsonLd = {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {locale === "en" && !noindex && (
+      <script
+        is:inline
+        define:vars={{ targets: { zh: paths.zh ?? null, ja: paths.ja ?? null } }}
+      >
+        try {
+          if (!localStorage.getItem("agent-dump-locale")) {
+            var langs = navigator.languages && navigator.languages.length
+              ? navigator.languages
+              : [navigator.language || ""];
+            for (var i = 0; i < langs.length; i++) {
+              var tag = String(langs[i]).toLowerCase();
+              var code = tag.indexOf("zh") === 0 ? "zh"
+                : tag.indexOf("ja") === 0 ? "ja"
+                : tag.indexOf("en") === 0 ? "en" : null;
+              if (!code) continue;
+              if (targets[code])
+                location.replace(targets[code] + location.search + location.hash);
+              break;
+            }
+          }
+        } catch (e) {}
+      </script>
+    )}
     <link
       rel="preload"
       href={geistLatin}

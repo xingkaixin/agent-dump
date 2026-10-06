@@ -279,6 +279,37 @@ test("browse demo answers reader keys like the CLI", async ({ page }) => {
   await expect(demo.getByText("Auto demo · click the terminal to take over")).toBeVisible();
 });
 
+for (const { locale, path } of [
+  { locale: "zh-CN", path: "/zh/" },
+  { locale: "ja-JP", path: "/ja/" },
+]) {
+  test(`${locale} browsers open the matching translation by default`, async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ locale });
+    const page = await context.newPage();
+    await page.route("https://umami.xingkaixin.me/**", (route) => route.abort());
+    await page.goto("/#install");
+    await expect(page).toHaveURL(`${path}#install`);
+
+    await page.locator('header a[lang="en"]').click();
+    await expect(page).toHaveURL("/");
+    await page.goto("/");
+    await expect(page).toHaveURL("/");
+    await context.close();
+  });
+}
+
+test("browser language only redirects to translations that exist", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ locale: "ja-JP" });
+  const page = await context.newPage();
+  await page.goto("/guides/export-codex-session/");
+  await expect(page).toHaveURL("/guides/export-codex-session/");
+  await context.close();
+});
+
 test("mobile navigation is reachable by keyboard and closes on escape or navigation", async ({
   page,
 }) => {
