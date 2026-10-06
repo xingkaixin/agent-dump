@@ -34,17 +34,19 @@ def terminal(cli, *args, width=80, height=24, stdout_pipe=False):
         start_new_session=True,
     )
     output = bytearray()
+    seen = 0
 
     def expect(text):
+        nonlocal seen
         deadline = time.monotonic() + 12
         expected = text.encode()
-        start = 0
-        while expected not in output[start:]:
+        while (found := output.find(expected, seen)) < 0:
             assert time.monotonic() < deadline, output.decode(errors="replace")
             if select.select([master], [], [], 0.1)[0]:
                 output.extend(os.read(master, 65536))
             elif process.poll() is not None:
                 pytest.fail(output.decode(errors="replace"))
+        seen = found + len(expected)
 
     def send(text):
         os.write(master, text.encode())
