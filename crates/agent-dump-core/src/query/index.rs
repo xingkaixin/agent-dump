@@ -372,17 +372,14 @@ impl SearchIndex {
             return self.literal_search(query, keys);
         };
         // The contentless normalized table stores no text; its matches read
-        // the raw trigram row and keep the Rust evidence snippet.
+        // the raw trigram row.
         let (raw, fields) = if table == "sessions_fts" {
             (
                 "JOIN sessions_fts_trigram raw ON raw.rowid = f.rowid",
-                "raw.title, raw.content, NULL",
+                "raw.title, raw.content",
             )
         } else {
-            (
-                "",
-                "f.title, f.content, snippet(sessions_fts_trigram, 3, '**', '**', '...', 10)",
-            )
+            ("", "f.title, f.content")
         };
         // Unary + keeps MATCH as the FTS scan instead of repeating it per key.
         // Filtering returned rows retains the global BM25 corpus.
@@ -414,15 +411,11 @@ impl SearchIndex {
             let Some(evidence) = query.find(&[&title, &content]) else {
                 continue;
             };
-            let snippet = match row.get::<_, Option<String>>(4)? {
-                Some(snippet) if query.has_evidence(&snippet) => snippet,
-                _ => evidence.snippet,
-            };
             results.push(SearchResult {
                 provider,
                 id,
-                snippet,
-                rank: -row.get::<_, f64>(5)?,
+                snippet: evidence.snippet,
+                rank: -row.get::<_, f64>(4)?,
             });
         }
         Ok(results)

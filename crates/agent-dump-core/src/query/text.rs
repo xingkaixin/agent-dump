@@ -133,10 +133,4 @@ impl TextQuery {
             .min_by_key(regex::Match::start)
             .map(|matched| matched.range())
     }
-    pub fn has_evidence(&self, snippet: &str) -> bool {
-        let normalized = normalize(&snippet.replace("**", ""));
-        self.patterns
-            .iter()
-            .any(|pattern| pattern.is_match(&normalized))
-    }
 }
