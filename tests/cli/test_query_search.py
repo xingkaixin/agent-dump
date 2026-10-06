@@ -2,12 +2,22 @@
 
 from contextlib import closing
 import json
+import re
 import shutil
 import sqlite3
 from urllib.parse import quote
 
 from cli_fixture import IDENTITY, call, header, message, output, reasoning
 import pytest
+
+SNIPPET = re.compile(r"(?m)^(\s+(?:Snippet|命中片段)[:：]\s*)(.*)$")
+
+
+def search_parity(cli, *args: str) -> None:
+    # Search snippets come from the Rust evidence window, not FTS5 snippet().
+    cli.parity(*args, mask=lambda text: SNIPPET.sub(r"\1", text))
+    snippets = [match[1] for match in SNIPPET.findall(cli.run("rust", *args).stdout)]
+    assert all(re.search(r"\*\*.+?\*\*", snippet) for snippet in snippets), snippets
 
 
 @pytest.mark.differential
@@ -56,10 +66,10 @@ def test_literal_matching_rank_and_snippets(cli, lang, mode, keyword):
     )
     args = ["--lang", lang, "-days", "36500"]
     if mode == "query":
-        args += ["--list", "-query", f"codex:{keyword}"]
-    else:
-        args += ["--search", keyword, "-query", "provider:codex"]
-    cli.parity(*args)
+        cli.parity(*args, "--list", "-query", f"codex:{keyword}")
+        return
+    args += ["--search", keyword, "-query", "provider:codex"]
+    search_parity(cli, *args)
 
 
 @pytest.mark.differential
@@ -183,7 +193,7 @@ def test_cross_provider_ranking_uses_global_index_snapshot(cli, lang, keyword, l
     args = ["--search", keyword, "-days", "36500", "--lang", lang]
     if limit:
         args += ["-q", f"limit:{limit}"]
-    cli.parity(*args)
+    search_parity(cli, *args)
 
 
 @pytest.mark.parametrize("mode", ["query", "search"])
