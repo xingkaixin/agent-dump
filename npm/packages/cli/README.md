@@ -53,6 +53,20 @@ agent-dump --interactive
 agent-dump --interactive -days 3
 ```
 
+In a terminal, `--interactive` opens the session reader. Press Space to mark sessions and `e`
+to export the marked sessions. Without a terminal, numbered selection remains available.
+
+### Subcommands
+
+```bash
+agent-dump list --days 7 --json
+agent-dump browse --search "database lock" --format json,markdown
+agent-dump export codex://SESSION_ID --format markdown
+agent-dump collect --emit-prompt
+```
+
+Subcommands are aliases for the existing option forms; both remain supported.
+
 ### List sessions
 
 ```bash
@@ -117,6 +131,8 @@ agent-dump --collect --save ./reports
 Collect execution, dry-run, and prompt handoff all support `-query` filters. Do not combine
 `-query` with an `agents://...` query URI. Reports and handoff metadata retain discovery and
 session read failures so incomplete input remains visible.
+Daily reports split conversation text by its actual activity date, including sessions spanning
+multiple days. Prompt handoffs use the same date boundaries and text spans.
 
 ### Config
 
@@ -187,14 +203,19 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --format json,markdown --output excerpts
 ```
 
-`--browse` requires an interactive terminal and defaults to the last seven days. It supports
-session search (`/`, then n/N), tool details (`t`), URI clipboard requests (`y`, requires OSC 52),
-and export (`e`, using `--format` and `--output`). Tab switches panes on narrow terminals;
-q/Esc/Ctrl-C closes the reader. Source sessions remain read-only; reopen to refresh the list.
+`--browse` requires an interactive terminal and defaults to sessions updated in the last seven
+days. Use `s` to search across sessions, `/` to search within the selected session, and n/N to
+navigate matching messages. Press `x` to preview a hit with nearby context, `+`/`-` to change
+the context radius, and `e` to export that excerpt with source locators and revision checks.
+Outside excerpt preview, Space marks sessions and `e` exports all marked sessions, or the
+selected session if none are marked. Exports use `--format` and `--output`.
+Use `t` for tool details and `y` for URI clipboard requests (requires OSC 52). Tab switches
+panes on narrow terminals; q/Esc/Ctrl-C closes the reader. Source sessions remain read-only;
+reopen to refresh the list.
 
-Add `--time-field updated` to list, search, browse, or interactive selection to find sessions
-active within the `--days` window, including older conversations. Creation time remains the
-default; collect dates and statistics retain their existing meaning.
+List, search, browse, and interactive selection use session update time for the `--days`
+window by default, including older conversations with recent activity. Add `--time-field created`
+to filter by creation time. Collect uses text activity dates; statistics keep creation-date buckets.
 
 `--json` writes one versioned JSON envelope to stdout for list, search, statistics, message
 context, bounded reads, head metadata, or Provider capabilities; diagnostics go to stderr.
@@ -230,12 +251,12 @@ it does not create the report. See the full README for schemas, filters, and sou
 ## Key features
 
 - **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, Pi, DeepChat, Cherry Studio, and MiniMax Code
-- **Interactive selection**: Friendly CLI selector with time-based grouping
-- **Session reader**: `--browse` for terminal reading, in-session search, tool details, and export
+- **Interactive selection**: Mark sessions in the reader for batch export, with numbered selection for pipelines
+- **Session reader**: `--browse` for terminal reading, cross-session and in-session search, tool details, and excerpt export
 - **Machine-readable queries**: `--json` for list, search, statistics, message context, bounded reads, metadata, and capabilities
 - **Message context**: `--search --locate` and URI `--message` to read or export search hits with nearby messages and source locators
 - **Bounded Agent reading**: `--read` pages with continuation cursors and `--read-prompt` instructions
-- **Recent activity**: `--time-field updated` finds recently active sessions in list, search, browse, and interactive modes
+- **Recent activity**: Date windows default to session update time; `--time-field created` selects creation time
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` reuses bounded discovery metadata without rereading the transcript and marks incomplete message counts as unknown
 - **Statistics**: `--stats` shows session and message counts grouped by agent and time, reporting known subtotals separately from sessions with unknown counts
@@ -245,7 +266,7 @@ it does not create the report. See the full README for schemas, filters, and sou
 - **Collect dry-run**: `--collect --dry-run` previews provider breakdown, session/chunk counts, concurrency, and save path
 - **External agent handoff**: `--collect --emit-prompt` outputs a self-contained prompt with safe read-only URI commands and candidate manifests for external agents without requiring local LLM configuration
 - **Full-text search**: `--search` requires every distinct whitespace-delimited term, allows terms to match across corpus fields, keeps CJK matches contiguous, and gives FTS5 and in-process fallbacks the same literal semantics
-- **Structured queries**: `-query` treats its keyword as one normalized literal phrase and supports `provider:`, `role:`, `path:`, and `limit:` filters (`role:` snippets come only from allowed messages)
+- **Structured queries**: `-query` and `agents://` `q` values require every whitespace-separated literal term, like `--search`, and support `provider:`, `role:`, `path:`, and `limit:` filters (`role:` snippets come only from allowed messages)
 - **Scoped queries**: `agents://<path>?q=keyword&providers=codex,claude` for repo-scoped searches
 - **Multi-format export**: `--format json,markdown,raw,print` with `md` alias for markdown
 - **Localized CLI**: `--lang en|zh` for user-facing messages and diagnostics

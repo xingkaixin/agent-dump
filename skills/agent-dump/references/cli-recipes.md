@@ -508,10 +508,10 @@ agent-dump --browse --search "database lock" --format json,markdown --output ./e
 - `/` starts literal search within the current session; Enter searches, Esc cancels input, n/N jumps to the next/previous matching message. Search expands tool details.
 - `t` toggles tool details; `y` sends a URI clipboard request (requires terminal OSC 52 support).
 - `x` previews the current matching message with three surrounding messages on each side. `+`/`-` changes that radius; n/N changes the hit. `e` exports exactly this range as JSON and/or Markdown with source URI and message positions. If the source changed since preview, export is rejected. `x` or Esc returns to the full session.
-- Outside excerpt preview, `e` exports the selected session using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
+- Space marks sessions for batch export. Outside excerpt preview, `e` exports all marked sessions, or the selected session when none are marked, using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
 - q/Esc/Ctrl-C close the reader and restore the terminal, exiting 0.
 
-Empty search results stay open so `s` can change the search and `c` can clear it. Provider/path/date/role/limit filters stay fixed during a reader session; change CLI arguments and reopen to widen them. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. Existing --interactive batch export is unchanged.
+Empty search results stay open so `s` can change the search and `c` can clear it. Provider/path/date/role/limit filters stay fixed during a reader session; change CLI arguments and reopen to widen them. Unavailable sources or non-terminal input fail. Individual read errors are displayed while other sessions remain selectable. In a terminal, `--interactive` opens this reader. Without a terminal, `--interactive` keeps the line-based selection prompt for pipelines.
 
 ## 使用场景指南
 
