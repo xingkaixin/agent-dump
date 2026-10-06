@@ -10,6 +10,8 @@
 
 先按 [SKILL.md](../SKILL.md#安装与运行入口) 确认可用入口。下文统一使用 `agent-dump`；选择 `uvx agent-dump`、`npx @agent-dump/cli` 或 `bunx @agent-dump/cli` 时，只替换命令前缀。npx 和 bunx 都需要 Node.js 22+。持久安装、平台要求及升级方式见 [README](../../../README_zh.md#安装)。
 
+开头的命令是对应参数的简写，例如 `agent-dump list` 等同 `--list`，`agent-dump search TERMS` 等同 `--search TERMS`，`agent-dump head|read|read-prompt URI` 等同 `URI --head|--read|--read-prompt`，`agent-dump export URI` 在未指定 `--format` 时导出 JSON。下文沿用参数写法，两种写法可以互换；完整映射见 [README](../../../README_zh.md#命令)。
+
 ## 1) 常用命令模板
 
 ### 交互式导出（interactive）

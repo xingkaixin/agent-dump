@@ -96,7 +96,58 @@ pub struct Args {
     pub lang: Option<String>,
 }
 
+const SUBCOMMANDS: [(&str, &str); 13] = [
+    ("list", "--list"),
+    ("search", "--search"),
+    ("browse", "--browse"),
+    ("export", ""),
+    ("head", "--head"),
+    ("read", "--read"),
+    ("read-prompt", "--read-prompt"),
+    ("collect", "--collect"),
+    ("stats", "--stats"),
+    ("providers", "--providers"),
+    ("config", "--config"),
+    ("reindex", "--reindex"),
+    ("shortcut", "--shortcut"),
+];
+
+fn expand_subcommand(mut args: Vec<OsString>) -> Vec<OsString> {
+    let Some((name, flag)) = args.get(1).and_then(|arg| {
+        SUBCOMMANDS.iter().find(|(name, _)| arg == *name).copied()
+    }) else {
+        return args;
+    };
+    if args[2..].iter().any(|arg| arg == "-h" || arg == "--help") {
+        args.truncate(1);
+        args.push("--help".into());
+        return args;
+    }
+    if name != "export" {
+        args[1] = flag.into();
+        return args;
+    }
+    args.remove(1);
+    let uri = args.iter().skip(1).any(|arg| {
+        let arg = arg.to_string_lossy();
+        arg.contains("://") && !arg.starts_with("agents://")
+    });
+    let format = args.iter().any(|arg| {
+        let arg = arg.to_string_lossy();
+        ["--format", "-format"]
+            .iter()
+            .any(|flag| arg == *flag || arg.starts_with(&format!("{flag}=")))
+    });
+    if !uri {
+        args.insert(1, "--interactive".into());
+    } else if !format {
+        args.extend(["--format".into(), "json".into()]);
+    }
+    args
+}
+
 pub fn normalize_arguments(args: Vec<OsString>) -> Vec<OsString> {
+    let args = expand_subcommand(args);
     let mut positional = false;
     let mut expects_value = false;
     args.into_iter()
@@ -234,9 +285,39 @@ pub fn command(zh: bool) -> clap::Command {
         });
     }
     command.after_help(if zh {
-        "兼容别名：-days、-output、-format、-summary、-since、-until、-config、-page-size、-query、-v；--capabilities 等同于 --providers。"
+        "命令（等同于对应参数，参数写法继续可用）：
+  list                    --list
+  search <TERMS>          --search <TERMS>
+  browse                  --browse
+  export [URI]            URI 默认 --format json；无 URI 时为 --interactive
+  head <URI>              <URI> --head
+  read <URI>              <URI> --read
+  read-prompt <URI>       <URI> --read-prompt
+  collect                 --collect
+  stats                   --stats
+  providers               --providers
+  config <view|edit>      --config <view|edit>
+  reindex                 --reindex
+  shortcut <NAME> [ARGS]  --shortcut <NAME> [ARGS]
+
+兼容别名：-days、-output、-format、-summary、-since、-until、-config、-page-size、-query、-v；--capabilities 等同于 --providers。"
     } else {
-        "Compatibility aliases: -days, -output, -format, -summary, -since, -until, -config, -page-size, -query, -v; --capabilities is an alias for --providers."
+        "Commands (equivalent to the listed options, which remain available):
+  list                    --list
+  search <TERMS>          --search <TERMS>
+  browse                  --browse
+  export [URI]            URI defaults to --format json; --interactive without a URI
+  head <URI>              <URI> --head
+  read <URI>              <URI> --read
+  read-prompt <URI>       <URI> --read-prompt
+  collect                 --collect
+  stats                   --stats
+  providers               --providers
+  config <view|edit>      --config <view|edit>
+  reindex                 --reindex
+  shortcut <NAME> [ARGS]  --shortcut <NAME> [ARGS]
+
+Compatibility aliases: -days, -output, -format, -summary, -since, -until, -config, -page-size, -query, -v; --capabilities is an alias for --providers."
     })
 }
 
