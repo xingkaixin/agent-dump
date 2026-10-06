@@ -211,9 +211,12 @@ mod tests {
             .unwrap();
         assert_eq!(read(), "after");
         drop(writer);
-        let replacement = directory.path().join("replacement.sqlite");
-        drop(create(&replacement, "replaced"));
-        std::fs::rename(&replacement, &path).unwrap();
-        assert_eq!(read(), "replaced");
+        // Windows cannot replace a database file that a reader keeps open.
+        if cfg!(unix) {
+            let replacement = directory.path().join("replacement.sqlite");
+            drop(create(&replacement, "replaced"));
+            std::fs::rename(&replacement, &path).unwrap();
+            assert_eq!(read(), "replaced");
+        }
     }
 }
