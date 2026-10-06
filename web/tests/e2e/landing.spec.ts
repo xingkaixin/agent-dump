@@ -45,7 +45,7 @@ for (const locale of locales) {
         .toBe(width);
       const boxes = await page
         .locator(
-          "#hero h1, #hero canvas, #capabilities img, #capabilities [role='img'], #install code, #install button",
+          "#hero h1, #hero .hero-stage, #browse .tui-window, #install code, #install button",
         )
         .evaluateAll((elements) =>
           elements.map((element) => ({
@@ -59,10 +59,10 @@ for (const locale of locales) {
       }
 
       const install = page.locator("#install");
-      for (const tab of await install.getByRole("tab").all()) {
+      for (const method of await install.locator("button[aria-pressed]").all()) {
         await expect(async () => {
-          await tab.click();
-          await expect(tab).toHaveAttribute("aria-selected", "true");
+          await method.click();
+          await expect(method).toHaveAttribute("aria-pressed", "true");
         }).toPass();
         const commands = await install.locator("code").evaluateAll((elements) =>
           elements.map((element) => ({
@@ -113,14 +113,14 @@ for (const locale of locales) {
     );
 
     const install = page.locator("#install");
-    const npmTab = install.getByRole("tab", { name: "npm", exact: true });
+    const npmTab = install.getByRole("button", { name: "npm", exact: true });
     await npmTab.scrollIntoViewIfNeeded();
     await expect(async () => {
       await npmTab.click();
-      await expect(npmTab).toHaveAttribute("aria-selected", "true");
+      await expect(npmTab).toHaveAttribute("aria-pressed", "true");
     }).toPass();
 
-    const npmPanel = install.getByRole("tabpanel", { name: "npm" });
+    const npmPanel = install.getByRole("region", { name: "npm" });
     await expect(
       npmPanel.getByText("npm install -g @agent-dump/cli", { exact: true }),
     ).toBeVisible();
@@ -132,7 +132,7 @@ for (const locale of locales) {
       { width: 382, height: 678 },
     ]) {
       await page.setViewportSize(viewport);
-      await expect(npmTab).toHaveAttribute("aria-selected", "true");
+      await expect(npmTab).toHaveAttribute("aria-pressed", "true");
       await copyButton.click();
       await expect(copyButton).toHaveAccessibleName(locale.copied);
       await expect
@@ -151,19 +151,19 @@ for (const locale of locales) {
         "scoop bucket add xingkaixin https://github.com/xingkaixin/scoop-bucket\nscoop install xingkaixin/agent-dump",
       ],
     ]) {
-      const tab = install.getByRole("tab", { name: label, exact: true });
+      const tab = install.getByRole("button", { name: label, exact: true });
       if (label === "Scoop") {
         await install
-          .getByRole("tab", { name: "Homebrew", exact: true })
+          .getByRole("button", { name: "Homebrew", exact: true })
           .focus();
-        await page.keyboard.press("ArrowRight");
+        await page.keyboard.press("Tab");
         await expect(tab).toBeFocused();
         await tab.press("Enter");
       } else {
         await tab.click();
       }
-      await expect(tab).toHaveAttribute("aria-selected", "true");
-      const panel = install.getByRole("tabpanel", { name: label, exact: true });
+      await expect(tab).toHaveAttribute("aria-pressed", "true");
+      const panel = install.getByRole("region", { name: label, exact: true });
       await panel.getByRole("button").click();
       await expect
         .poll(() => page.evaluate(() => navigator.clipboard.readText()))
@@ -210,7 +210,7 @@ test("copy fallback does not report success when execCommand rejects it", async 
   });
   await page.goto("/");
 
-  const copyButton = page.locator("#install").getByRole("button").first();
+  const copyButton = page.locator("#install-command").getByRole("button");
   await expect(async () => {
     await copyButton.click();
     await expect(page.locator("html")).toHaveAttribute(
@@ -222,39 +222,61 @@ test("copy fallback does not report success when execCommand rejects it", async 
   expect(await copyButton.getAttribute("aria-label")).toBe("Copy");
 });
 
-test("sample explorer searches, switches formats and copies the selected conversation", async ({
-  context,
+test("capability tabs switch the sample terminal and stop autoplay", async ({
   page,
 }) => {
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
-  const explorer = page.locator(".session-explorer");
-  await explorer.scrollIntoViewIfNeeded();
-  const search = explorer.getByRole("searchbox");
-  await search.fill("database");
-  await expect(
-    explorer.getByRole("button", {
-      name: "Claude Code Plan the database migration",
-    }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await expect(explorer.locator("pre")).toContainText(
-    "without dropping existing records",
+  const capabilities = page.locator("#capabilities");
+  await capabilities.scrollIntoViewIfNeeded();
+  const exportTab = capabilities.getByRole("button", { name: /Export · Reuse with sources/ });
+  await expect(async () => {
+    await exportTab.click();
+    await expect(exportTab).toHaveAttribute("aria-pressed", "true");
+  }).toPass();
+  await expect(page.locator("#capability-terminal")).toContainText(
+    "agent-dump export codex://019a7c2e --format markdown",
   );
-  await explorer.getByRole("tab", { name: "JSON", exact: true }).click();
-  await explorer.getByRole("tabpanel", { name: "JSON", exact: true }).getByRole("button", { name: "Copy", exact: true }).click();
-  const output = JSON.parse(
-    await page.evaluate(() => navigator.clipboard.readText()),
+  await expect(capabilities.locator(".capability-tab__progress")).toHaveCount(0);
+});
+
+test("browse demo answers reader keys like the CLI", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  const demo = page.locator("#browse");
+  await demo.scrollIntoViewIfNeeded();
+  const terminal = demo.getByRole("application");
+  const status = demo.locator(".tui__status");
+  await expect(async () => {
+    await terminal.click();
+    await expect(demo.getByRole("button", { name: "Replay demo" })).toBeVisible();
+  }).toPass();
+
+  await terminal.press("j");
+  await expect(terminal).toContainText("claude://7f3c91");
+  await terminal.press(" ");
+  await expect(status).toHaveText(
+    "1 selected · e exports selected sessions · Space toggles",
   );
-  expect(output.title).toBe("Plan the database migration");
-  expect(output.messages).toHaveLength(2);
-  await search.fill("no-such-sample");
-  await expect(explorer.getByRole("status")).toContainText(
-    "No matching sessions",
+  await terminal.press("e");
+  await expect(status).toHaveText("Exporting 1 selected sessions…");
+
+  await terminal.pressSequentially("sauth");
+  await expect(status).toContainText("Sessions > auth");
+  await terminal.press("Enter");
+  await expect(terminal).toContainText("3 sessions · Search (all words): auth");
+  await expect(status).toHaveText("3 matching messages · n/N next/previous");
+  await terminal.press("x");
+  await expect(terminal).toContainText("Excerpt #1–4/6");
+
+  await terminal.press("?");
+  await expect(demo.locator(".tui__overlay")).toContainText(
+    "s: search sessions in this scope",
   );
-  await search.fill("");
-  await expect(
-    explorer.getByRole("button", { name: /Codex Fix/ }),
-  ).toBeVisible();
+  await terminal.press("Escape");
+  await expect(demo.locator(".tui__overlay")).toHaveCount(0);
+
+  await demo.getByRole("button", { name: "Replay demo" }).click();
+  await expect(demo.getByText("Auto demo · click the terminal to take over")).toBeVisible();
 });
 
 test("mobile navigation is reachable by keyboard and closes on escape or navigation", async ({

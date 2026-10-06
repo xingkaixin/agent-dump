@@ -53,9 +53,8 @@ test("Static asset hints reference the CSS and fonts used by each locale", async
   }
 });
 
-test("hero artwork is available without JavaScript and stays within its transfer budget", async ({
+test("hero and guide index are readable without JavaScript", async ({
   browser,
-  request,
 }) => {
   const context = await browser.newContext({
     javaScriptEnabled: false,
@@ -65,16 +64,6 @@ test("hero artwork is available without JavaScript and stays within its transfer
   await page.goto("/");
   await expect(page.locator("#hero h1")).toBeVisible();
   await expect(page.locator("#hero a[href='#install']")).toBeInViewport();
-  const art = page.locator(".hero-art");
-  await expect
-    .poll(() => art.evaluate((image: HTMLImageElement) => image.naturalWidth))
-    .toBeGreaterThan(0);
-  const source = await art.evaluate(
-    (image: HTMLImageElement) => image.currentSrc,
-  );
-  const response = await request.get(source);
-  expect(response.headers()["content-type"]).toContain("image/webp");
-  expect((await response.body()).byteLength).toBeLessThan(100 * 1024);
   await page.goto("/zh/guides/");
   await expect(page.locator(".guide-card")).toHaveCount(6);
   await expect(page.locator(".guide-card").first()).toBeVisible();
@@ -87,7 +76,8 @@ test("reduced motion keeps the hero and revealed content static", async ({
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await expect(page.locator(".hero-art")).toHaveCSS("animation-name", "none");
+  await expect(page.locator(".hero-stage")).toHaveCSS("animation-name", "none");
+  await expect(page.locator(".cycle").first()).toHaveCSS("opacity", "1");
   for (const section of ["#capabilities", "#guides", "#install"]) {
     await page.locator(section).scrollIntoViewIfNeeded();
     await expect(

@@ -1,0 +1,61 @@
+---
+import type { Locale } from "../lib/i18n";
+import { landing } from "../lib/landing";
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const a = landing[locale].audience;
+const developerCommands = [
+  "agent-dump --browse --time-field updated --days 7",
+  "agent-dump search 'auth timeout' --query 'path:.' --days 30",
+  "agent-dump export codex://SESSION_ID --format markdown --output ./sessions",
+];
+const agentCommands = [
+  "providers --json",
+  "list --days 7 --json",
+  "read-prompt <uri>",
+];
+---
+
+<section id="agents" class="audience-section">
+  <div class="shell">
+    <h2 class="audience-heading" data-reveal>
+      {a.headingLead}<span>{a.headingTail}</span>
+    </h2>
+    <div class="audience-grid">
+      <article class="panel-card" data-reveal>
+        <p class="eyebrow">{a.developer.tag}</p>
+        <h3>{a.developer.title}</h3>
+        <p>{a.developer.body}</p>
+        <ol class="command-steps">
+          {developerCommands.map((command, index) => (
+            <li>
+              <span>0{index + 1} · {a.developer.steps[index]}</span>
+              <code>{command}</code>
+            </li>
+          ))}
+        </ol>
+      </article>
+      <article class="panel-card" data-reveal>
+        <p class="eyebrow">{a.agent.tag}</p>
+        <h3>{a.agent.title}</h3>
+        <p>{a.agent.body}</p>
+        <ol class="agent-steps">
+          {agentCommands.map((command, index) => (
+            <li>
+              <b>0{index + 1}</b>
+              <code>{command}</code>
+              <span>{a.agent.steps[index]}</span>
+            </li>
+          ))}
+          <li class="is-final">
+            <b>04</b>
+            <code>follow cursor</code>
+            <span>until has_more=false</span>
+          </li>
+        </ol>
+      </article>
+    </div>
+  </div>
+</section>

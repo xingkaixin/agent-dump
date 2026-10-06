@@ -11,12 +11,8 @@ const t = ui[locale];
 
 <section id="faq" class="faq-section">
   <div class="shell faq-layout">
-    <div data-reveal class="section-heading">
-      <h2>
-        {t.faqHeading}
-      </h2>
-    </div>
-    <div data-reveal class="faq-panel">
+    <h2 data-reveal>{t.faqHeading}</h2>
+    <div data-reveal>
       <Faq client:visible items={t.faq} />
     </div>
   </div>

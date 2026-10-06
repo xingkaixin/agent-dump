@@ -2,29 +2,18 @@
 import type { UpdateItem } from "../lib/i18n";
 interface Props {
   update: UpdateItem;
-  featured?: boolean;
 }
-const { update, featured = false } = Astro.props;
+const { update } = Astro.props;
 ---
 
-<article class:list={["update-entry", featured && "update-entry--featured"]}>
-  <header class="update-entry__meta">
-    <div class="update-entry__version">
-      <span>{update.version}</span>
-      <time datetime={update.date}>{update.date}</time>
-    </div>
-    <div class="update-entry__tags">
-      {update.tags.map((tag) => (
-        <span>{tag}</span>
-      ))}
-    </div>
+<article class="release-card" data-reveal>
+  <header>
+    <span>{update.version}</span>
+    <time datetime={update.date}>{update.date}</time>
   </header>
   <h3>{update.title}</h3>
-  <p class="update-entry__description">{update.description}</p>
-  {update.command && (
-    <div class="command-line">
-      <span aria-hidden="true">$</span>
-      <code>{update.command}</code>
-    </div>
-  )}
+  <p>{update.description}</p>
+  <div class="tag-list">
+    {update.tags.map((tag) => <span>{tag}</span>)}
+  </div>
 </article>

@@ -1,5 +1,5 @@
 ---
-import { ArrowRightIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon } from "@phosphor-icons/react";
 import { getGuides, guideIndexPaths, guideUi } from "../lib/guides";
 import type { Locale } from "../lib/i18n";
 interface Props {
@@ -7,34 +7,37 @@ interface Props {
 }
 const { locale } = Astro.props;
 const t = guideUi[locale];
-const guides = (await getGuides(locale)).filter((guide) =>
-  [1, 2, 3].includes(guide.order),
-);
+const guides = await getGuides(locale);
 ---
 
 <section id="guides" class="guides-section">
-  <div class="shell guides-intro" data-reveal>
-    <p class="eyebrow">{t.label}</p>
-    <div class="section-heading">
-      <h2>{t.title}</h2>
-      <p>{t.note}</p>
+  <div class="shell">
+    <div class="section-head" data-reveal>
+      <div>
+        <p class="eyebrow">{t.label}</p>
+        <h2>{t.title}</h2>
+      </div>
+      <div>
+        <p>{t.description}</p>
+        <a href={guideIndexPaths[locale]} class="text-link">
+          {t.all}
+          <ArrowRightIcon size={16} aria-hidden="true" />
+        </a>
+      </div>
     </div>
-    <div class="guide-features">
-      {guides.map((guide) => (
-        <a href={guide.href} class="guide-feature">
-          <span class="guide-category">{t.categories[guide.category]}</span>
+    <div class="guide-grid">
+      {guides.map((guide, index) => (
+        <a href={guide.href} class="guide-tile" data-reveal>
+          <span class="guide-tile__meta">
+            <span>
+              0{index + 1} · {t.categories[guide.category]}
+            </span>
+            <ArrowRightIcon size={20} aria-hidden="true" className="guide-tile__arrow" />
+          </span>
           <h3>{guide.title}</h3>
           <p>{guide.description}</p>
-          <span class="guide-feature__link">
-            {t.read}
-            <ArrowUpRightIcon size={20} aria-hidden="true" />
-          </span>
         </a>
       ))}
     </div>
-    <a href={guideIndexPaths[locale]} class="text-link">
-      {t.all}
-      <ArrowRightIcon size={20} aria-hidden="true" />
-    </a>
   </div>
 </section>

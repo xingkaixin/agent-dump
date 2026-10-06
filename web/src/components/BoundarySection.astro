@@ -1,0 +1,24 @@
+---
+import type { Locale } from "../lib/i18n";
+import { landing } from "../lib/landing";
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const b = landing[locale].boundary;
+---
+
+<section class="boundary-section" aria-labelledby="boundary-heading">
+  <div class="shell">
+    <p class="eyebrow" data-reveal>{b.tag}</p>
+    <h2 id="boundary-heading" data-reveal>{b.heading}</h2>
+    <div class="boundary-grid">
+      {b.items.map((item) => (
+        <div data-reveal>
+          <h3>{item.title}</h3>
+          <p>{item.body}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

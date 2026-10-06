@@ -1,7 +1,7 @@
 ---
 import type { Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
-import { CapabilityDemo } from "./CapabilityDemo";
+import { BrowseDemo } from "./BrowseDemo";
 interface Props {
   locale: Locale;
 }
@@ -9,19 +9,20 @@ const { locale } = Astro.props;
 const l = landing[locale];
 ---
 
-<section id="capabilities" class="capabilities-section">
+<section id="browse" class="browse-section">
   <div class="shell">
     <div class="section-head" data-reveal>
-      <h2>{l.capabilities.heading}</h2>
-      <p>{l.capabilities.summary}</p>
+      <div>
+        <p class="eyebrow">agent-dump --browse</p>
+        <h2>{l.browse.heading}</h2>
+      </div>
+      <p>{l.browse.summary}</p>
     </div>
     <div data-reveal>
-      <CapabilityDemo
+      <BrowseDemo
         client:visible
-        items={l.capabilities.items}
-        sample={l.sample}
-        notes={l.notes}
-        untouched={l.stage.untouched}
+        lang={locale === "zh" ? "zh" : "en"}
+        copy={l.browse}
       />
     </div>
   </div>

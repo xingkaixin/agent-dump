@@ -1,51 +1,47 @@
 ---
+import { ArrowRightIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { codexGuideLinks } from "../lib/guides";
-import { ArrowUpRightIcon } from "@phosphor-icons/react";
 import { site, ui, providers, type Locale } from "../lib/i18n";
+import { landing } from "../lib/landing";
 
 interface Props {
   locale: Locale;
 }
 const { locale } = Astro.props;
 const t = ui[locale];
-const guide = codexGuideLinks[locale];
+const l = landing[locale];
 ---
 
 <section id="providers" class="providers-section">
-  <div class="shell">
-    <div data-reveal class="section-heading">
-      <h2>
-        {t.providersHeading}
-      </h2>
-      <p>{t.providersNote}</p>
-    </div>
-
-    <div class="provider-scroll" data-reveal>
-      <ul class="provider-track">
-        {
-          providers.map((provider, index) => (
-            <li class="provider-stop" style={`--provider-index: ${index}`}>
-              <span class="provider-name">{provider.name === "Codex" ? <a class="underline underline-offset-4" href={guide.href}>{provider.name}</a> : provider.name}</span>
-              <code>{provider.example}</code>
-            </li>
-          ))
-        }
-        <li class="provider-stop provider-stop--more">
-          <a
-            href={`${site.repo}/pulls`}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="group no-underline"
-          >
-            <span class="provider-name">{t.moreTools.title}</span>
-            <span class="provider-link">
-              {t.moreTools.note}
-              <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
-            </span>
-          </a>
-        </li>
+  <div class="shell section-head" data-reveal>
+    <h2>{t.providersHeading}</h2>
+    <p>{t.providersNote}</p>
+  </div>
+  <div class="marquee" data-reveal>
+    {[0, 1].map((copy) => (
+      <ul class="marquee__track" aria-hidden={copy === 1 ? "true" : undefined}>
+        {providers.map((provider) => (
+          <li>
+            <span>{provider.name}</span>
+            <code>{provider.example}</code>
+          </li>
+        ))}
       </ul>
-    </div>
-
+    ))}
+  </div>
+  <div class="shell provider-links">
+    <a class="text-link" href={codexGuideLinks[locale].href}>
+      {l.codexGuide}
+      <ArrowRightIcon size={16} aria-hidden="true" />
+    </a>
+    <a
+      class="text-link"
+      href={`${site.repo}/pulls`}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {t.moreTools.title} · {t.moreTools.note}
+      <ArrowUpRightIcon size={16} aria-hidden="true" />
+    </a>
   </div>
 </section>
