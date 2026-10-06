@@ -101,7 +101,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - `--collect` 会告警并跳过单条无法读取的会话；其他可读会话继续处理。
 - `--collect` 与普通 session URI、`--interactive`、`--list` 组合时会报冲突。
 - `--stats` 支持 `--days` 与 `--query`；存在未知消息数时输出已知小计和未知会话数。
-- `--query` 与 `agents://...?q=` 的 keyword 是一个归一化空白后的字面短语。
+- `--query` 与 `agents://...?q=` 的 keyword 与 `--search` 匹配语义相同：按空白拆分，全部 term 必须命中，可分散出现。
 - `--search` 作为列表搜索模式使用，可与 `--list`、`--days`、`--query` 组合；按空白切分的 distinct term 均按字面量匹配，不解释 FTS5 操作符语法（`AND`/`NEAR`/`*` 等），全部 term 必须命中，CJK term 必须连续。
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。
 - 同时传入多个显式模式时，CLI 保留既有优先级并告警列出被忽略的较低优先级模式；应按告警修正命令，而不是依赖优先级。

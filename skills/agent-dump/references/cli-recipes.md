@@ -201,7 +201,7 @@ agent-dump --config edit
 
 - 关键词查询：`--query "keyword"`
 - 指定 Provider 范围：`--query "keyword provider:codex,kimi"`
-- keyword 在归一化空白后作为一个不区分大小写的字面短语，在标题或逻辑 transcript 中匹配。
+- keyword 与 `--search` 语义一致：按空白拆分为不区分大小写的字面 term，全部 term 必须在标题或逻辑 transcript 中出现，可以分散在不同位置。
 
 当前 agent 名称：
 - `opencode`

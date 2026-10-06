@@ -314,7 +314,7 @@ agent-dump --config view
 agent-dump --config edit
 ```
 
-`--query` 按一个字面短语匹配。出现结构化字段（`provider`、`role`、`path`、`limit`）时启用结构化解析，带空格的值需要引号。`role` 限定参与匹配的消息，`limit` 限制最终全局结果数。`error:timeout` 仍是普通短语。列表输出全部匹配项，交互模式中的 Provider 计数反映筛选后的结果。
+`--query` 与 `--search` 匹配语义相同：按空白拆分的字面 term 必须全部出现在标题或 transcript 中，位置不限。出现结构化字段（`provider`、`role`、`path`、`limit`）时启用结构化解析，带空格的值需要引号。`role` 限定参与匹配的消息，`limit` 限制最终全局结果数。`error:timeout` 仍是普通 term。列表输出全部匹配项，交互模式中的 Provider 计数反映筛选后的结果。
 
 Collect 的日期优先级为显式 `--since`/`--until`、显式 `--days`，最后是当天。`--save` 接受目录或 `.md` 文件，可用绝对或相对路径。完整输入覆盖、排除规则、进度和不完整报告见 [collect 说明](#collect-配置文件)。
 
@@ -388,7 +388,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | `--interactive`, `-i` | 进入交互式模式选择和导出会话 | - |
 | `--days`, `-d` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `--since/--until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
 | `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 的时间依据：`created` 或 `updated`。 | `created` |
-| `--query`, `-q` | 查询过滤。关键词在归一化空白后作为一个不区分大小写的字面短语，在 Session 标题或逻辑 transcript 内匹配。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
+| `--query`, `-q` | 查询过滤。关键词与 `--search` 一样按空白拆分、不区分大小写，所有 term 都必须出现在 Session 标题或逻辑 transcript 中。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印有界发现阶段已有的元数据，不重新读取完整正文；发现阶段完整扫描时消息数为精确值，否则明确显示“未知”。不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
 | `--collect` | 按日期范围采集会话，可选通过 `--query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |

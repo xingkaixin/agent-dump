@@ -4,7 +4,7 @@ locale: "en"
 slug: "search-ai-coding-history"
 category: "search"
 order: 3
-updated: "2026-10-03"
+updated: "2026-10-06"
 title: "Search AI coding history and find past decisions"
 description: "Find a past fix or decision across Codex, Claude Code, and other local AI tools. Filter by project, locate matching messages, and read the surrounding context."
 ---
@@ -35,7 +35,7 @@ Run from your project's working directory:
 agent-dump --search 'database migration' --days 90 --query 'provider:codex,claude path:.'
 ```
 
-The `--query` option adds filters. Its keyword component matches one literal phrase; `--search` treats whitespace-separated terms individually. Keeping the search terms in `--search` and the scope in `--query` makes that distinction explicit.
+The `--query` option adds filters. Its keyword component matches like `--search`: every whitespace-separated term must occur. `--search` also ranks results and shows evidence, so keep the search terms in `--search` and the scope in `--query`.
 
 ## Locate the evidence
 
