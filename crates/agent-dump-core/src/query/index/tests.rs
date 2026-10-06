@@ -335,3 +335,33 @@ fn incremental_reads_retry_failure_keep_scoped_absences_and_expire_unseen_rows()
     assert!(search(&index, "body", "b").is_empty());
     assert_eq!(search(&index, "body", "a").len(), 1);
 }
+
+#[test]
+fn version_three_index_is_rebuilt_without_normalized_text_copies() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("index.db");
+    Connection::open(&path).unwrap().execute_batch("CREATE TABLE index_state (
+        fts_rowid INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT NOT NULL, session_id TEXT NOT NULL,
+        source_path TEXT NOT NULL, updated_signature TEXT NOT NULL, indexed_at REAL NOT NULL,
+        last_seen_at REAL NOT NULL, session_updated_at REAL NOT NULL, session_created_at REAL NOT NULL,
+        UNIQUE (agent, session_id));
+        CREATE VIRTUAL TABLE sessions_fts USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, content, tokenize='unicode61 remove_diacritics 1');
+        INSERT INTO index_state VALUES (1, 'codex', 'same', '', 'old', 0, 1e12, 0, 0);
+        INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (1, 'codex', 'same', 'task', 'stalebody');
+        PRAGMA user_version = 3;").unwrap();
+    let mut index = SearchIndex::at(&path).unwrap();
+    assert!(search(&index, "stalebody", "same").is_empty());
+    update(
+        &mut index,
+        &Reader(|_: &Session| Ok("freshbody 中文".into())),
+        &[session(directory.path(), "same", 0)],
+    );
+    for keyword in ["freshbody", "中文"] {
+        assert_eq!(search(&index, keyword, "same").len(), 1);
+    }
+    let stored: Option<String> = index
+        .connection
+        .query_row("SELECT content FROM sessions_fts", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(stored, None);
+}
