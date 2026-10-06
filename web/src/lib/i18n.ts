@@ -183,9 +183,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.0",
+        date: "2026-10-06",
+        isLatest: true,
+        title: "Search, Read, and Export Without Leaving the Terminal",
+        description:
+          "Search Codex, Claude Code, Cursor, Kimi, OpenCode, ZCode, Pi, and other supported AI sessions in one reader. Preview matching context, export excerpts with source locators, or mark sessions for batch export. New subcommands shorten common workflows, and AI collect assigns text to its actual activity date. Queries now match every word, and date windows use the latest session update by default; use --time-field created for creation dates.",
+        command: 'npx @agent-dump/cli@1.2.0 browse --search "database lock" --format json,markdown',
+        tags: ["Reader Search", "Excerpt Export", "Batch Export"],
+      },
+      {
         version: "v1.1.1",
         date: "2026-10-03",
-        isLatest: true,
         title: "Find Recent Work and Reuse Conversations with Sources",
         description:
           "Find recently active sessions from Codex, Claude Code, Cursor, Kimi, OpenCode, ZCode, Pi, and other supported tools. Give agents bounded reading pages and prompt handoff instructions, or export selected context with source locators. AI collect now processes all eligible conversation text through chunks and marks incomplete reports. Full-text search and terminal reading also avoid repeated work.",
@@ -334,9 +343,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.0",
+        date: "2026-10-06",
+        isLatest: true,
+        title: "在终端完成搜索、阅读与批量导出",
+        description:
+          "在同一阅读器中搜索 Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi 等工具的 AI 会话，预览命中上下文，导出带来源定位符的片段，或标记多个会话批量导出。新增子命令简化常用操作，AI collect 按正文的实际活动日期生成报告。查询现在要求每个词都匹配，日期筛选默认按会话最近更新时间；按创建时间筛选可用 --time-field created。",
+        command: 'npx @agent-dump/cli@1.2.0 browse --search "database lock" --format json,markdown',
+        tags: ["阅读器搜索", "片段导出", "批量导出"],
+      },
+      {
         version: "v1.1.1",
         date: "2026-10-03",
-        isLatest: true,
         title: "查找最近活跃会话，保留来源复用对话",
         description:
           "查找 Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi 等工具最近活跃的会话，让 Agent 按页读取并接收提示词交接说明，或导出带来源定位符的上下文片段。AI collect 通过分块处理全部符合条件的对话正文，并标记不完整报告。全文搜索与终端阅读也减少了重复处理。",
@@ -485,9 +503,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.0",
+        date: "2026-10-06",
+        isLatest: true,
+        title: "検索から閲覧、一括エクスポートまでターミナルで",
+        description:
+          "Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi などの AI セッションを同じリーダーで検索。ヒット周辺の文脈を確認し、出典の位置情報付きで抜粋を保存したり、複数のセッションを選んで一括エクスポートできます。新しいサブコマンドで操作が短くなり、AI collect は本文の実際の活動日ごとにレポートを作成します。クエリはすべての単語に一致する方式に変わり、期間指定は更新日時が既定になります。作成日時で絞るには --time-field created を指定してください。",
+        command: 'npx @agent-dump/cli@1.2.0 browse --search "database lock" --format json,markdown',
+        tags: ["リーダー内検索", "抜粋の保存", "一括エクスポート"],
+      },
+      {
         version: "v1.1.1",
         date: "2026-10-03",
-        isLatest: true,
         title: "最近の作業を見つけ、出典付きで会話を再利用",
         description:
           "Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi などで最近更新されたセッションを検索。エージェントにはページ単位の読み取りと引き継ぎ手順を渡し、必要な文脈は出典の位置情報付きでエクスポートできます。AI collect は対象となる会話本文を分割してすべて処理し、不完全なレポートを明示します。全文検索とターミナル閲覧の重複処理も削減しました。",
