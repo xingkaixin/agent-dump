@@ -4,10 +4,13 @@ import Header from "./Header.astro";
 import Hero from "./Hero.astro";
 import Providers from "./Providers.astro";
 import Capabilities from "./Capabilities.astro";
-import UpdatesSection from "./UpdatesSection.astro";
-import InstallSection from "./InstallSection.astro";
-import FaqSection from "./FaqSection.astro";
+import BrowseSection from "./BrowseSection.astro";
+import AudienceSection from "./AudienceSection.astro";
+import BoundarySection from "./BoundarySection.astro";
 import GuidesSection from "./GuidesSection.astro";
+import InstallSection from "./InstallSection.astro";
+import UpdatesSection from "./UpdatesSection.astro";
+import FaqSection from "./FaqSection.astro";
 import Footer from "./Footer.astro";
 
 interface Props {
@@ -21,6 +24,9 @@ const { locale } = Astro.props;
   <Hero locale={locale} />
   <Providers locale={locale} />
   <Capabilities locale={locale} />
+  <BrowseSection locale={locale} />
+  <AudienceSection locale={locale} />
+  <BoundarySection locale={locale} />
   <GuidesSection locale={locale} />
   <InstallSection locale={locale} />
   <UpdatesSection locale={locale} />
@@ -32,12 +38,7 @@ const { locale } = Astro.props;
   (function () {
     var els = document.querySelectorAll("[data-reveal]");
     if (!els.length) return;
-    if (!("IntersectionObserver" in window)) {
-      els.forEach(function (el) {
-        el.classList.add("is-in");
-      });
-      return;
-    }
+    if (!("IntersectionObserver" in window)) return;
     var io = new IntersectionObserver(
       function (entries) {
         entries.forEach(function (entry) {

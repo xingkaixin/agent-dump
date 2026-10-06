@@ -1,48 +1,108 @@
 ---
-import { Image } from "astro:assets";
 import { ArrowDownIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
-import { ui, type Locale } from "../lib/i18n";
+import { providers, ui, type Locale } from "../lib/i18n";
 import { guideIndexPaths, guideUi } from "../lib/guides";
-import paper from "../assets/editorial/session-paper.png";
+import { landing } from "../lib/landing";
+import { version } from "../lib/version";
 
 interface Props {
   locale: Locale;
 }
 const { locale } = Astro.props;
 const t = ui[locale];
+const l = landing[locale];
+const outputs = [
+  { kind: "HITS + LOCATORS", label: "auth timeout" },
+  { kind: "MARKDOWN", label: `${l.sample.s2}.md` },
+  { kind: "AGENT PROMPT", label: l.stage.handoff },
+];
 ---
 
-<section id="hero" class="shell hero-section">
-  <div class="hero-grid">
-    <div class="hero-copy">
-      <p class="hero-eyebrow">{t.eyebrow}</p>
-      <h1 class="hero-title">
-        {t.heroTitle} <span>{t.heroTitleAccent}</span>
-      </h1>
-      <p class="hero-description">{t.heroDescription}</p>
-      <div class="hero-actions">
-        <a href="#install" class="button button--primary" data-umami-event="install-cta" data-umami-event-location="hero" data-umami-event-locale={t.htmlLang}>
+<section id="hero" class="hero-section grid-backdrop">
+  <div class="shell">
+    <p class="hero-eyebrow rise">
+      <span class="pulse-dot" aria-hidden="true"></span>
+      v{version} · {t.eyebrow}
+    </p>
+    <h1 class="hero-title rise">
+      {t.heroTitle}<br /><span>{t.heroTitleAccent}</span>
+    </h1>
+    <div class="hero-lede">
+      <p class="hero-description rise">{t.heroDescription}</p>
+      <div class="hero-actions rise">
+        <a
+          href="#install"
+          class="button button--primary button--large"
+          data-umami-event="install-cta"
+          data-umami-event-location="hero"
+          data-umami-event-locale={t.htmlLang}
+        >
           {t.ctaInstall}
           <ArrowDownIcon size={18} aria-hidden="true" />
         </a>
-        <a href={guideIndexPaths[locale]} class="button button--text">
+        <a href={guideIndexPaths[locale]} class="button button--ghost button--large">
           {guideUi[locale].label}
           <ArrowUpRightIcon size={18} aria-hidden="true" />
         </a>
       </div>
     </div>
-    <div class="hero-visual">
-      <Image
-        src={paper}
-        alt=""
-        widths={[480, 800, 1200]}
-        sizes="(max-width: 767px) 100vw, 50vw"
-        format="webp"
-        quality={82}
-        loading="eager"
-        fetchpriority="high"
-        class="hero-art"
-      />
+
+    <div class="hero-stage rise" aria-hidden="true">
+      <div class="hero-stage__labels">
+        <span>{l.stage.sources}</span>
+        <span>{l.stage.sample}</span>
+        <span>{l.stage.output}</span>
+      </div>
+      <div class="hero-stage__grid">
+        <ul class="stage-sources">
+          {providers.map((provider, index) => (
+            <li style={`--delay: ${(index * 0.24).toFixed(2)}s`}>
+              <span class="pulse-dot"></span>
+              <span>{provider.name}</span>
+              <code>{provider.example.split("//")[0]}//</code>
+              <span class="wire"></span>
+            </li>
+          ))}
+        </ul>
+        <div class="term stage-terminal">
+          <div class="stage-terminal__bar">
+            <span>agent-dump</span>
+            <span>zsh</span>
+          </div>
+          <div class="stage-terminal__screens">
+            <div class="cycle" style="--delay: 0s">
+              <p><b>$</b> agent-dump search 'auth timeout'</p>
+              <p class="muted">{l.stage.hits}</p>
+              <p class="subtle">› claude://7f3c91 · msg 14</p>
+              <p class="subtle">› codex://019a7c2e · msg 3</p>
+            </div>
+            <div class="cycle" style="--delay: 3s">
+              <p><b>$</b> agent-dump export codex://019a7c2e</p>
+              <p class="muted">--format markdown --output ./sessions</p>
+              <p class="subtle">reading 38 messages</p>
+              <p class="ok">ok · {l.stage.untouched}</p>
+            </div>
+            <div class="cycle" style="--delay: 6s">
+              <p><b>$</b> agent-dump collect --days 7</p>
+              <p class="muted">--emit-prompt --save ./reports/weekly.md</p>
+              <p class="subtle">chunked · every eligible message</p>
+              <p class="ok">status: complete</p>
+            </div>
+          </div>
+          <p class="stage-terminal__foot">read-only · --json · cursor paging</p>
+        </div>
+        <ul class="stage-outputs">
+          {outputs.map((output, index) => (
+            <li>
+              <span class="wire"></span>
+              <span class="stage-output" style={`--delay: ${index * 3}s`}>
+                <span>{output.kind}</span>
+                <span>{output.label}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   </div>
 </section>

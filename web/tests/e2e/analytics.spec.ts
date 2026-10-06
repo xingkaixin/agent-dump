@@ -13,8 +13,8 @@ test("successful copies record intent without command or conversation contents",
     }),
   );
   await page.goto("/zh/#install");
-  await page.getByRole("tab", { name: "npm", exact: true }).click();
-  const panel = page.getByRole("tabpanel").filter({ hasText: "npm install" });
+  await page.getByRole("button", { name: "npm", exact: true }).click();
+  const panel = page.getByRole("region", { name: "npm" });
   await panel.getByRole("button", { name: "复制", exact: true }).click();
   await expect(panel.getByRole("status")).toHaveText("已复制");
   expect(events).toEqual([

@@ -7,26 +7,17 @@ interface Props {
 
 export function Faq({ items }: Props) {
   return (
-    <Accordion.Root
-      multiple={false}
-      className="grid divide-y divide-line border-y border-line"
-    >
+    <Accordion.Root multiple={false} className="faq-list">
       {items.map((item, i) => (
-        <Accordion.Item key={i} value={i} className="group">
-          <Accordion.Header>
-            <Accordion.Trigger className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-[var(--radius-xs)] py-4 text-left">
-              <span className="font-mono text-[15px] font-medium text-fg">{item.question}</span>
-              <PlusIcon
-                weight="bold"
-                aria-hidden="true"
-                className="size-4 shrink-0 text-subtle transition-transform duration-[260ms] ease-out group-data-[open]:rotate-45"
-              />
+        <Accordion.Item key={i} value={i} className="faq-item">
+          <Accordion.Header className="faq-item__header">
+            <Accordion.Trigger className="faq-item__trigger">
+              <span>{item.question}</span>
+              <PlusIcon weight="bold" aria-hidden="true" className="faq-item__icon" />
             </Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel keepMounted className="ad-accordion-panel">
-            <p className="max-w-[62ch] pb-5 pr-8 text-[14px] leading-relaxed text-muted">
-              {item.answer}
-            </p>
+            <p className="faq-item__answer">{item.answer}</p>
           </Accordion.Panel>
         </Accordion.Item>
       ))}

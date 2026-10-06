@@ -2,6 +2,7 @@
 import { ListIcon, MoonIcon, SunIcon } from "@phosphor-icons/react";
 import { guideIndexPaths, guideUi } from "../lib/guides";
 import { LOCALES, localeLabels, site, ui, type Locale } from "../lib/i18n";
+import { landing } from "../lib/landing";
 
 interface Props {
   locale: Locale;
@@ -11,6 +12,14 @@ interface Props {
 const { locale, paths = site.paths, homeLinks = false } = Astro.props;
 const home = homeLinks ? site.paths[locale] : "";
 const t = ui[locale];
+const l = landing[locale];
+const links = [
+  { href: `${home}#capabilities`, label: t.capabilitiesHeading },
+  { href: `${home}#browse`, label: l.nav.browse },
+  { href: guideIndexPaths[locale], label: guideUi[locale].label },
+  { href: `${home}#updates`, label: t.updatesHeading },
+  { href: `${home}#faq`, label: l.nav.faq },
+];
 ---
 
 <header class="site-header">
@@ -36,23 +45,52 @@ const t = ui[locale];
             : "Primary"
       }
     >
-      <a href={guideIndexPaths[locale]}>{guideUi[locale].label}</a>
-      <a href={`${home}#capabilities`}>{t.capabilitiesHeading}</a>
-      <a href={`${home}#updates`}>{t.updatesHeading}</a>
-      <a href={`${home}#install`} data-umami-event="install-cta" data-umami-event-location="header" data-umami-event-locale={t.htmlLang}>{t.installHeading}</a>
+      {links.map((link) => <a href={link.href}>{link.label}</a>)}
+      <a
+        href={`${home}#install`}
+        class="button button--primary site-nav__cta"
+        data-umami-event="install-cta"
+        data-umami-event-location="header"
+        data-umami-event-locale={t.htmlLang}>{t.installHeading}</a
+      >
     </nav>
 
     <div class="site-tools">
+      <div role="group" aria-label={t.langLabel} class="language-switcher">
+        {LOCALES.filter((code) => paths[code]).map((code) => {
+          const current = code === locale;
+          return (
+            <a
+              href={paths[code]}
+              lang={ui[code].htmlLang}
+              data-locale-choice={code}
+              aria-current={current ? "page" : undefined}
+              class:list={[
+                "language-switcher__link",
+                current && "language-switcher__link--active",
+              ]}
+            >
+              {localeLabels[code]}
+            </a>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        data-theme-toggle
+        aria-label={t.themeLabel}
+        title={t.themeLabel}
+        class="icon-button theme-toggle"
+      >
+        <span class="theme-toggle__icons">
+          <SunIcon weight="bold" aria-hidden="true" className="theme-toggle__sun" />
+          <MoonIcon weight="bold" aria-hidden="true" className="theme-toggle__moon" />
+        </span>
+      </button>
+
       <details class="mobile-menu">
-        <summary
-          aria-label={
-            locale === "zh"
-              ? "导航菜单"
-              : locale === "ja"
-                ? "メニュー"
-                : "Navigation menu"
-          }
-        >
+        <summary class="icon-button" aria-label={l.menu}>
           <ListIcon size={20} aria-hidden="true" />
         </summary>
         <nav
@@ -64,55 +102,17 @@ const t = ui[locale];
                 : "Mobile navigation"
           }
         >
-          <a href={guideIndexPaths[locale]}>{guideUi[locale].label}</a>
-          <a href={`${home}#capabilities`}>{t.capabilitiesHeading}</a>
-          <a href={`${home}#updates`}>{t.updatesHeading}</a>
-          <a href={`${home}#install`} data-umami-event="install-cta" data-umami-event-location="mobile-nav" data-umami-event-locale={t.htmlLang}>{t.installHeading}</a>
+          {links.map((link) => <a href={link.href}>{link.label}</a>)}
+          <a href={site.repo}>GitHub</a>
+          <a
+            href={`${home}#install`}
+            class="button button--primary"
+            data-umami-event="install-cta"
+            data-umami-event-location="mobile-nav"
+            data-umami-event-locale={t.htmlLang}>{t.installHeading}</a
+          >
         </nav>
       </details>
-      <div role="group" aria-label={t.langLabel} class="language-switcher">
-        {LOCALES.filter((code) => paths[code]).map((code) => {
-          const current = code === locale;
-          return (
-            <a
-              href={paths[code]}
-              lang={ui[code].htmlLang}
-              aria-current={current ? "page" : undefined}
-              class:list={[
-                "language-switcher__link",
-                current
-                  ? "language-switcher__link--active"
-                  : "language-switcher__link--idle",
-              ]}
-            >
-              {localeLabels[code]}
-            </a>
-          );
-        })}
-      </div>
-
-      <div class="size-9 shrink-0">
-        <button
-          type="button"
-          data-theme-toggle
-          aria-label={t.themeLabel}
-          title={t.themeLabel}
-          class="theme-toggle"
-        >
-          <span class="relative block size-[18px]">
-            <SunIcon
-              weight="bold"
-              aria-hidden="true"
-              className="absolute inset-0 size-[18px] transition-[opacity,transform] duration-200 ease-out dark:scale-60 dark:-rotate-90 dark:opacity-0"
-            />
-            <MoonIcon
-              weight="bold"
-              aria-hidden="true"
-              className="absolute inset-0 size-[18px] rotate-90 scale-60 text-accent opacity-0 transition-[opacity,transform] duration-200 ease-out dark:rotate-0 dark:scale-100 dark:opacity-100"
-            />
-          </span>
-        </button>
-      </div>
     </div>
   </div>
 </header>
@@ -127,6 +127,13 @@ const t = ui[locale];
         menu.open = false;
         menu.querySelector("summary").focus();
       }
+    });
+  });
+  document.querySelectorAll("[data-locale-choice]").forEach(function (link) {
+    link.addEventListener("click", function () {
+      try {
+        localStorage.setItem("agent-dump-locale", link.dataset.localeChoice);
+      } catch (e) {}
     });
   });
   document.querySelectorAll("[data-theme-toggle]").forEach(function (button) {

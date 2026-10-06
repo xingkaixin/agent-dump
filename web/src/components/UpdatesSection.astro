@@ -1,50 +1,76 @@
 ---
 import { ArrowUpRightIcon } from "@phosphor-icons/react";
 import { site, ui, type Locale } from "../lib/i18n";
+import { landing } from "../lib/landing";
 import ReleaseEntry from "./ReleaseEntry.astro";
 interface Props {
   locale: Locale;
 }
 const { locale } = Astro.props;
 const t = ui[locale];
-const older = {
-  en: "Earlier releases",
-  zh: "更早的版本",
-  ja: "以前のリリース",
-};
+const l = landing[locale];
+const [latest, ...rest] = t.updates;
+const recent = rest.slice(0, 2);
+const older = rest.slice(2);
 ---
 
 <section id="updates" aria-labelledby="updates-heading" class="updates-section">
   <div class="shell">
-    <div data-reveal class="section-heading">
+    <div class="section-head" data-reveal>
       <h2 id="updates-heading">{t.updatesHeading}</h2>
-      <p>{t.updatesSubheading}</p>
+      <div>
+        <p>{t.updatesSubheading}</p>
+        <a
+          href={site.changelogUrl[locale]}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-link"
+        >
+          {t.viewFullChangelog}
+          <ArrowUpRightIcon size={16} aria-hidden="true" />
+        </a>
+      </div>
     </div>
-    <div class="updates-grid" data-reveal>
-      {t.updates.slice(0, 3).map((update, index) => (
-        <ReleaseEntry update={update} featured={index === 0} />
-      ))}
+    <article class="release-feature" data-reveal>
+      <div>
+        <p class="release-feature__badge">
+          <span>{l.updates.latest}</span>
+          <time datetime={latest.date}>{latest.date}</time>
+        </p>
+        <p class="release-feature__version">{latest.version}</p>
+      </div>
+      <div>
+        <h3>{latest.title}</h3>
+        <p>{latest.description}</p>
+        <div class="tag-list">
+          {latest.tags.map((tag) => <span>{tag}</span>)}
+        </div>
+        {latest.command && (
+          <code class="term release-feature__command">
+            <span class="accent">$ </span>{latest.command}
+          </code>
+        )}
+      </div>
+    </article>
+    <div class="release-grid">
+      {recent.map((update) => <ReleaseEntry update={update} />)}
     </div>
     <details class="release-archive">
       <summary>
-        {older[locale]} ({t.updates.length - 3})
+        <span>{l.updates.older}</span>
+        <span>
+          {older.length} · {older.at(-1)?.version} – {older[0]?.version}
+        </span>
       </summary>
-      <div class="updates-grid">
-        {t.updates.slice(3).map((update) => (
-          <ReleaseEntry update={update} />
+      <ol>
+        {older.map((update) => (
+          <li>
+            <span>{update.version}</span>
+            <time datetime={update.date}>{update.date}</time>
+            <span>{update.title}</span>
+          </li>
         ))}
-      </div>
+      </ol>
     </details>
-    <div class="updates-link">
-      <a
-        href={site.changelogUrl[locale]}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="text-link"
-      >
-        {t.viewFullChangelog}
-        <ArrowUpRightIcon size={18} aria-hidden="true" />
-      </a>
-    </div>
   </div>
 </section>

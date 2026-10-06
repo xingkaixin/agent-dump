@@ -72,14 +72,12 @@ type UiStrings = {
   heroTitle: string;
   heroTitleAccent: string;
   heroDescription: string;
-  answerSummary: string;
   ctaInstall: string;
   ctaSource: string;
   providersHeading: string;
   providersNote: string;
   moreTools: { title: string; note: string };
   capabilitiesHeading: string;
-  capabilities: { title: string; body: string; command: string }[];
   updatesHeading: string;
   updatesSubheading: string;
   viewFullChangelog: string;
@@ -168,13 +166,11 @@ export const ui: Record<Locale, UiStrings> = {
     themeLabel: "Toggle theme",
     themeLight: "Light",
     themeDark: "Dark",
-    eyebrow: "CLI · Local AI session history",
+    eyebrow: "Local AI session CLI · read-only sources",
     heroTitle: "Your sessions.",
     heroTitleAccent: "Still useful.",
     heroDescription:
-      "Search local conversations from Codex, Claude Code, and more. Export to Markdown or JSON and reuse the context with a free, open-source CLI.",
-    answerSummary:
-      "Find the decision. Read the conversation. Take the useful context with you. One CLI, from search to handoff.",
+      "Find, read, and export local sessions from Codex, Claude Code, Cursor, and 7 more tools with one URI syntax, then hand them to the next Agent. Free, open source, and it never modifies source data.",
     ctaInstall: "Install",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} tools, one URI grammar`,
@@ -182,28 +178,6 @@ export const ui: Record<Locale, UiStrings> = {
       "Use a session URI to read history saved on this machine. Available formats and content depend on the source tool.",
     moreTools: { title: "More tools", note: "PRs welcome" },
     capabilitiesHeading: "What it does",
-    capabilities: [
-      {
-        title: "Find past work",
-        body: "Search conversations and filter by project, Provider, role, or recent activity.",
-        command: 'agent-dump --search "auth timeout"',
-      },
-      {
-        title: "Read and hand off context",
-        body: "Browse in the terminal, or give an Agent JSON pages with continuation cursors.",
-        command: "agent-dump --browse",
-      },
-      {
-        title: "Export with sources",
-        body: "Export a session, or selected context with its URI and message locator. Supported formats vary by tool.",
-        command: "agent-dump <uri> --format markdown",
-      },
-      {
-        title: "Collect complete input",
-        body: "Process all eligible user/assistant text in chunks. Failed reads or summaries are marked incomplete.",
-        command: "agent-dump --collect",
-      },
-    ],
     updatesHeading: "What's New",
     updatesSubheading: "Release notes for session reading, search, export, and collect.",
     viewFullChangelog: "View full changelog on GitHub",
@@ -344,39 +318,17 @@ export const ui: Record<Locale, UiStrings> = {
     themeLabel: "切换主题",
     themeLight: "浅色",
     themeDark: "深色",
-    eyebrow: "CLI · 本地 AI 会话历史",
+    eyebrow: "本地 AI 会话 CLI · 源数据只读",
     heroTitle: "写过的对话，",
     heroTitleAccent: "继续派上用场。",
-    heroDescription: "搜索 Codex、Claude Code 等工具的本地对话，导出 Markdown 或 JSON，复用已有上下文。免费、开源的 CLI，源会话保持不变。",
-    answerSummary: "找回当时的决策，读懂完整的讨论，再把有用的上下文带到下一次工作。先用下面的示例试一试。",
+    heroDescription:
+      "Codex、Claude Code、Cursor 等 10 款工具的本地会话，用一套 URI 查找、阅读、导出，并交给下一个 Agent 继续工作。免费、开源，不改动任何源数据。",
     ctaInstall: "安装",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} 款工具，一套 URI 语法`,
     providersNote: "通过会话 URI 读取本机保存的历史。可用格式和内容范围取决于来源工具。",
     moreTools: { title: "更多工具", note: "欢迎 PR" },
     capabilitiesHeading: "它能做什么",
-    capabilities: [
-      {
-        title: "查找历史工作",
-        body: "搜索对话，按项目、Provider、角色或最近活动筛选。",
-        command: 'agent-dump --search "auth timeout"',
-      },
-      {
-        title: "阅读与交接上下文",
-        body: "在终端浏览，或让 Agent 使用 JSON 分页和游标读取。",
-        command: "agent-dump --browse",
-      },
-      {
-        title: "带来源导出",
-        body: "导出会话，或保留 URI 与消息定位信息的上下文片段。可用格式取决于来源工具。",
-        command: "agent-dump <uri> --format markdown",
-      },
-      {
-        title: "完整覆盖汇总输入",
-        body: "分块处理所有符合规则的 user/assistant 正文，读取或摘要失败时明确标记不完整。",
-        command: "agent-dump --collect",
-      },
-    ],
     updatesHeading: "最新动态",
     updatesSubheading: "会话读取、搜索、导出与 collect 的版本更新。",
     viewFullChangelog: "在 GitHub 查看完整更新日志",
@@ -517,41 +469,17 @@ export const ui: Record<Locale, UiStrings> = {
     themeLabel: "テーマを切り替える",
     themeLight: "ライト",
     themeDark: "ダーク",
-    eyebrow: "CLI · ローカルの AI セッション履歴",
+    eyebrow: "ローカル AI セッション CLI · 元データは読み取り専用",
     heroTitle: "AI 対話を",
     heroTitleAccent: "再利用。",
     heroDescription:
-      "CodexやClaude Codeなどのローカル対話を検索し、Markdown・JSONにエクスポート。文脈を再利用できる無料のオープンソースCLIです。",
-    answerSummary:
-      "過去の判断を探し、対話を読み、必要な文脈を次の作業へ。下のサンプルで検索と出力形式を試せます。",
+      "Codex、Claude Code、Cursor など10のツールのローカルセッションを、ひとつの URI で検索・閲覧・エクスポートし、次の Agent へ引き継げます。無料のオープンソースで、元データは変更しません。",
     ctaInstall: "インストール",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} のツール、1 つの URI 構文`,
     providersNote: "セッション URI で、このマシンに保存された履歴を読み取ります。利用できる形式と内容はツールによって異なります。",
     moreTools: { title: "その他のツール", note: "PRを歓迎します" },
     capabilitiesHeading: "できること",
-    capabilities: [
-      {
-        title: "過去の作業を探す",
-        body: "対話を検索し、プロジェクト、Provider、ロール、最近の更新で絞り込みます。",
-        command: 'agent-dump --search "auth timeout"',
-      },
-      {
-        title: "文脈を読んで引き継ぐ",
-        body: "ターミナルで閲覧。Agent は JSON ページとカーソルで順に読み取れます。",
-        command: "agent-dump --browse",
-      },
-      {
-        title: "出典とともに書き出す",
-        body: "セッション全体、または URI とメッセージ位置を含む文脈をエクスポート。形式はツールによって異なります。",
-        command: "agent-dump <uri> --format markdown",
-      },
-      {
-        title: "対象本文をすべて要約に渡す",
-        body: "対象の user/assistant 本文を分割して処理。読み取りや要約の失敗は不完全として明示します。",
-        command: "agent-dump --collect",
-      },
-    ],
     updatesHeading: "更新履歴とロードマップ",
     updatesSubheading: "セッションの閲覧、検索、エクスポート、collect の更新履歴。",
     viewFullChangelog: "GitHubで完全な変更履歴を表示",

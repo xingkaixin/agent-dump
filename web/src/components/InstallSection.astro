@@ -1,6 +1,6 @@
 ---
 import { install, site, ui, type Locale } from "../lib/i18n";
-import { InstallTabs } from "./InstallTabs";
+import { InstallPicker } from "./InstallPicker";
 
 interface Props {
   locale: Locale;
@@ -9,23 +9,23 @@ const { locale } = Astro.props;
 const t = ui[locale];
 
 const groups = [
-  { label: install.nativeLabel[locale], tabs: install.native.map(({ note, ...tab }) => ({ ...tab, note: note[locale] })) },
-  { label: install.globalLabel[locale], tabs: install.global },
-  { label: install.runLabel[locale], tabs: install.run },
+  {
+    label: install.nativeLabel[locale],
+    methods: install.native.map(({ note, ...method }) => ({ ...method, note: note[locale] })),
+  },
+  { label: install.globalLabel[locale], methods: install.global },
+  { label: install.runLabel[locale], methods: install.run },
 ];
 ---
 
-<section id="install" class="install-section">
+<section id="install" class="install-section grid-backdrop">
   <div class="shell install-layout">
-    <div data-reveal class="section-heading">
-      <h2>
-        {t.installHeading}
-      </h2>
+    <div class="install-head" data-reveal>
+      <h2>{t.installHeading}</h2>
       <p>{t.installNote}</p>
     </div>
-
-    <div data-reveal class="install-panel">
-      <InstallTabs
+    <div data-reveal>
+      <InstallPicker
         client:visible
         groups={groups}
         skill={{ note: t.skillNote, command: site.skillCommand }}
