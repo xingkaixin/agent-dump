@@ -88,6 +88,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # 默认 TEMP 在远程托管的 C: 盘，测试大量读写临时目录和 SQLite；
+      # runner 的 D: 盘是本地临时盘，IOPS 更高
+      - name: Keep temporary files on the Windows work disk
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $temp = Join-Path $env:RUNNER_TEMP "tmp"
+          New-Item -ItemType Directory -Force -Path $temp | Out-Null
+          "TEMP=$temp" >> $env:GITHUB_ENV
+          "TMP=$temp" >> $env:GITHUB_ENV
+
       - name: Install uv
         uses: ./.github/actions/setup-uv
 
