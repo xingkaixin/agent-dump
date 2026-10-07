@@ -26,6 +26,8 @@ def endpoint(callback):
             calls.append((self.command, self.path, {k.lower(): v for k, v in self.headers.items()}, body))
             status, headers, data = callback(self, len(calls))
             self.send_response(status)
+            # ureq pools HTTP/1.0 responses unless told otherwise, racing this handler's close.
+            self.send_header("Connection", "close")
             for key, value in headers.items():
                 self.send_header(key, value)
             if "Content-Length" not in headers:
