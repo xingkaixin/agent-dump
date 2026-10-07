@@ -133,7 +133,7 @@ jobs:
         run: uv run pytest -q tests/tooling
 
       - name: Test Rust CLI contracts
-        run: uv run pytest -q tests/cli --durations=30 --junitxml=dist/ci/contracts.xml
+        run: uv run pytest -q -n auto tests/cli --durations=30 --junitxml=dist/ci/contracts.xml
 
       - name: Upload CLI test timings
         if: ${{ !cancelled() }}
