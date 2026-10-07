@@ -60,7 +60,7 @@ def test_long_session_is_split_by_text_date(cli: CliFixture, mode: str) -> None:
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-def test_report_omits_undated_text_and_marks_gap(cli: CliFixture) -> None:
+def test_report_omits_undated_text_silently(cli: CliFixture) -> None:
     only_session(cli)
     cli.write([header(), message("user", "dated work"), message("assistant", "unknown work", stamp="invalid")])
     prompts: list[str] = []
@@ -76,7 +76,8 @@ def test_report_omits_undated_text_and_marks_gap(cli: CliFixture) -> None:
     assert result.returncode == 0, result.stderr
     assert all("unknown work" not in prompt for prompt in prompts)
     report = (cli.root / "report.md").read_text()
-    assert "Incomplete date coverage" in report and f"codex://{IDENTITY}" in report
+    assert "Incomplete date coverage" not in report and f"codex://{IDENTITY}" not in report
+    assert "Incomplete date coverage" not in result.stderr
 
 
 def test_no_work_in_range_is_empty_success(cli: CliFixture) -> None:
@@ -89,9 +90,9 @@ def test_no_work_in_range_is_empty_success(cli: CliFixture) -> None:
     assert handoff.returncode == 0 and not handoff.stdout
     cli.write([header(), message("user", "unknown date", stamp="invalid")])
     result = cli.run("rust", *collect_args("2026-01-16", "2026-01-16"), "--dry-run")
-    assert result.returncode == 1 and "Incomplete date coverage" in result.stderr
+    assert result.returncode == 0 and "No sessions" in result.stdout
     handoff = cli.run("rust", *collect_args("2026-01-16", "2026-01-16"), "--emit-prompt")
-    assert handoff.returncode == 1 and not handoff.stdout
+    assert handoff.returncode == 0 and not handoff.stdout
 
 
 def test_handoff_read_spans_preserve_dates_across_pages(cli: CliFixture) -> None:
@@ -118,8 +119,7 @@ def test_handoff_read_spans_preserve_dates_across_pages(cli: CliFixture) -> None
     task, session = [json.loads(item["content"]) for item in envelopes]
     assert task["date_basis"] == "text_span_local_date" and task["session_count"] == 1
     assert "date" not in session
-    assert task["undated_session_count"] == 1
-    assert task["undated_sessions"] == [f"codex://{IDENTITY}"]
+    assert "undated_sessions" not in task
     assert other_id not in handoff.stdout
     args = [f"codex://{IDENTITY}", "--read", "--order", "asc", "--max-chars", "7", "--json"]
     texts: dict[str | None, str] = {}

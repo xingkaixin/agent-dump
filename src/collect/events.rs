@@ -8,12 +8,11 @@ pub fn extract(
     data: &SessionData,
     range: &std::ops::RangeInclusive<Date>,
     plan_chunks: bool,
-) -> (BTreeMap<Date, Vec<Vec<Event>>>, bool) {
+) -> BTreeMap<Date, Vec<Vec<Event>>> {
     static IGNORE: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(r"(?i)^(?:hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok|okay)[!！,.，。?？\s]*$").unwrap()
     });
     let mut dates: BTreeMap<Date, Vec<Vec<Event>>> = BTreeMap::new();
-    let mut undated = false;
     for message in &data.messages {
         if !matches!(message.role.as_str(), "user" | "assistant") {
             continue;
@@ -34,15 +33,12 @@ pub fn extract(
             {
                 continue;
             }
-            let Some(date) = time.map(
-                agent_dump_core::session::timestamp::Timestamp::local_date,
-            ) else {
-                undated = true;
+            let Some(date) = time
+                .map(agent_dump_core::session::timestamp::Timestamp::local_date)
+                .filter(|date| range.contains(date))
+            else {
                 continue;
             };
-            if !range.contains(&date) {
-                continue;
-            }
             let chunks = dates.entry(date).or_default();
             if !plan_chunks {
                 continue;
@@ -83,5 +79,5 @@ pub fn extract(
             }
         }
     }
-    (dates, undated)
+    dates
 }
