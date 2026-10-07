@@ -88,16 +88,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # 默认 TEMP 在远程托管的 C: 盘，测试大量读写临时目录和 SQLite；
-      # runner 的 D: 盘是本地临时盘，IOPS 更高
-      - name: Keep temporary files on the Windows work disk
+      # 默认 TEMP 和 CARGO_HOME 在远程托管的 C: 盘，测试大量读写临时目录和 SQLite，
+      # 缓存恢复也要解压整个 registry；runner 的 D: 盘是本地临时盘，IOPS 更高
+      - name: Keep temporary files and Cargo home on the Windows work disk
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $temp = Join-Path $env:RUNNER_TEMP "tmp"
-          New-Item -ItemType Directory -Force -Path $temp | Out-Null
+          $cargo = Join-Path $env:RUNNER_TEMP "cargo"
+          New-Item -ItemType Directory -Force -Path $temp, $cargo | Out-Null
           "TEMP=$temp" >> $env:GITHUB_ENV
           "TMP=$temp" >> $env:GITHUB_ENV
+          "CARGO_HOME=$cargo" >> $env:GITHUB_ENV
 
       - name: Install uv
         uses: ./.github/actions/setup-uv
@@ -114,7 +116,9 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: parity-${{ runner.os }}-${{ runner.arch }}
+          # 依赖的编译指纹包含 CARGO_HOME 下的源码路径；Windows 的 CARGO_HOME 换了位置，
+          # 旧缓存不可复用，key 需要区分
+          shared-key: parity-${{ runner.os }}-${{ runner.arch }}${{ runner.os == 'Windows' && '-cargo-d' || '' }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Check Rust formatting
