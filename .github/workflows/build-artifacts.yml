@@ -21,8 +21,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
+      # Intel macOS runner 排队和构建都最慢，是 PR CI 的瓶颈；
+      # darwin-x64 只在 main 和 release 上验证
       - id: targets
-        run: echo "matrix=$(node npm/scripts/native-targets.mjs)" >> "${GITHUB_OUTPUT}"
+        run: |
+          matrix=$(node npm/scripts/native-targets.mjs)
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            matrix=$(jq -c '.include |= map(select(.target != "darwin-x64"))' <<< "${matrix}")
+          fi
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
 
   build:
     name: Install artifacts (${{ matrix.target }})
