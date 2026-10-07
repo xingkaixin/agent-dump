@@ -21,7 +21,7 @@ Choose explicit dates so the report can be reproduced. These are example dates; 
 agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:codex,claude path:.' --dry-run
 ```
 
-Run from the project directory. Dates include both endpoints and select visible text by its actual local date. Long sessions are split into daily units: this week’s text in an older session is included, while text outside the requested period is excluded. Text without a reliable timestamp is excluded with an explicit coverage gap; session dates are never substituted. Remove `path:.` if you want a report across projects.
+Run from the project directory. Dates include both endpoints and select visible text by its actual local date. Long sessions are split into daily units: this week’s text in an older session is included, while text outside the requested period is excluded. Text without a reliable timestamp is excluded; session dates are never substituted. Remove `path:.` if you want a report across projects.
 
 Inspect the selected sources and any diagnostics before requesting summaries. A missing or unreadable source is a coverage gap, not proof that no work happened.
 

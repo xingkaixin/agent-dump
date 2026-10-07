@@ -90,7 +90,7 @@ summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标
 
 ## 7. Collect
 
-execute、dry-run、emit-prompt 共用配置安全校验和候选会话筛选，候选发现不按创建日期截断。core transcript 的 visible_segments 投影标准化文本段及可靠时间；内部 Collect 按文本段的本地日期筛选并逐日分块。无时间或 Provider 标记为推测时间的内容排除并记录日期覆盖缺口。生成外部汇总清单前读取候选正文，按相同日期投影筛选，但不规划 chunk；只交接含本期活动的唯一会话，并携带读取失败和无日期来源。外部汇总通过 read 的 text_spans 使用同一日期事实。会话计数保持唯一 URI 数，跨日单元分别摘要；查询先选候选，按文本日期过滤后再对唯一会话应用 limit。Collect 仅提取 user/assistant 可见文本，排除 tool、reasoning、system、plan 与 Provider 私有事件。没有可见对话的会话在 chunk 规划前忽略。候选正文由 core `parallel.rs` 的有界 worker 读取，结果、诊断和进度仍按候选顺序处理。全部符合筛选规则的正文进入有界事件块，超长消息按 Unicode 字符拆分，不设置会话总字符截断。会话摘要最多八份一组逐层归并；最终报告超过单次输入限制时按来源组拆分请求，单个过大归属组明确失败。部分报告列出遗漏会话 URI。
+execute、dry-run、emit-prompt 共用配置安全校验和候选会话筛选，候选发现不按创建日期截断。core transcript 的 visible_segments 投影标准化文本段及可靠时间；内部 Collect 按文本段的本地日期筛选并逐日分块。无时间或 Provider 标记为推测时间的内容不属于任何日期，直接排除，不记录覆盖缺口。生成外部汇总清单前读取候选正文，按相同日期投影筛选，但不规划 chunk；只交接含本期活动的唯一会话，并携带读取失败来源。外部汇总通过 read 的 text_spans 使用同一日期事实。会话计数保持唯一 URI 数，跨日单元分别摘要；查询先选候选，按文本日期过滤后再对唯一会话应用 limit。Collect 仅提取 user/assistant 可见文本，排除 tool、reasoning、system、plan 与 Provider 私有事件。没有可见对话的会话在 chunk 规划前忽略。候选正文由 core `parallel.rs` 的有界 worker 读取，结果、诊断和进度仍按候选顺序处理。全部符合筛选规则的正文进入有界事件块，超长消息按 Unicode 字符拆分，不设置会话总字符截断。会话摘要最多八份一组逐层归并；最终报告超过单次输入限制时按来源组拆分请求，单个过大归属组明确失败。部分报告列出遗漏会话 URI。
 
 PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹推断成功。PM 仅在日期相同且明确的 Working Directory 相同时归并；未知目录和 INSIGHT 保持单会话归属。读取失败、摘要失败和 Provider 发现不完整分别记录，部分成功报告明确注明遗漏；索引回退成功不计作读取失败。
 

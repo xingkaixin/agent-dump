@@ -13,7 +13,7 @@ pub fn read_entries(
     zh: bool,
     warnings: &mut impl Write,
     logger: Option<&crate::collect::log::Logger>,
-) -> crate::Result<(Vec<Entry>, Vec<String>, Vec<String>)> {
+) -> crate::Result<(Vec<Entry>, Vec<String>)> {
     progress(
         "COLLECT_PROGRESS_SCAN_SESSIONS",
         &[
@@ -25,7 +25,6 @@ pub fn read_entries(
     )?;
     let mut entries = Vec::new();
     let mut failed = Vec::new();
-    let mut undated = Vec::new();
     let mut last_error = None;
     let mut completed = 0;
     agent_dump_core::parallel::ordered(
@@ -57,13 +56,7 @@ pub fn read_entries(
                 )?;
             }
             match result {
-                Ok((dates, missing_time)) => {
-                    if missing_time {
-                        undated.push(format!(
-                            "{}://{}",
-                            group.info.scheme, session.id
-                        ));
-                    }
+                Ok(dates) => {
                     for (date, chunks) in dates {
                         entries.push(Entry {
                             date,
@@ -130,5 +123,5 @@ pub fn read_entries(
         )?;
     }
     entries.sort_by_key(|entry| entry.date);
-    Ok((entries, failed, undated))
+    Ok((entries, failed))
 }

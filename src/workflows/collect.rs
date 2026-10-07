@@ -225,7 +225,7 @@ pub fn run(
     } else {
         None
     };
-    let (mut entries, read_failed, undated) =
+    let (mut entries, read_failed) =
         match crate::collect::sessions::read_entries(
             &scan,
             &positions,
@@ -256,20 +256,6 @@ pub fn run(
                 return Ok(false);
             }
         };
-    if !undated.is_empty() {
-        writeln!(
-            warnings,
-            "{}",
-            t(
-                "COLLECT_UNDATED",
-                zh,
-                &[("count", undated.len().to_string())]
-            )
-        )?;
-        for uri in &undated {
-            writeln!(warnings, "{uri}")?;
-        }
-    }
     if entries.is_empty() {
         report(
             &t(
@@ -281,8 +267,7 @@ pub fn run(
             out,
             warnings,
         )?;
-        return Ok(undated.is_empty()
-            && read_failed.is_empty()
+        return Ok(read_failed.is_empty()
             && query_failures == 0
             && scan.failed_providers.is_empty());
     }
@@ -315,7 +300,6 @@ pub fn run(
                 &crate::collect::handoff::Gaps {
                     query_failures,
                     read_failed: &read_failed,
-                    undated: &undated
                 },
             )?
         )?;
@@ -530,18 +514,6 @@ pub fn run(
             )
         );
     }
-    let undated_count = undated.len();
-    if !undated.is_empty() {
-        markdown = format!(
-            "> {}\n\n{markdown}",
-            t(
-                "COLLECT_UNDATED",
-                zh,
-                &[("count", undated.len().to_string())]
-            )
-        );
-        omissions.extend(undated);
-    }
     if !scan.failed_providers.is_empty() {
         markdown = format!(
             "> {}\n\n{markdown}",
@@ -598,7 +570,7 @@ pub fn run(
         zh,
         warnings,
     )?;
-    logger.log("collect_run_finish", json!({"output_path":agent_dump_core::storage::source_io::path_text(&output_path), "session_count":included, "read_failed_count":failed, "discovery_failed_count":scan.failed_providers.len(), "summary_failed_count":summary_failed, "undated_session_count":undated_count}));
+    logger.log("collect_run_finish", json!({"output_path":agent_dump_core::storage::source_io::path_text(&output_path), "session_count":included, "read_failed_count":failed, "discovery_failed_count":scan.failed_providers.len(), "summary_failed_count":summary_failed}));
     writeln!(
         out,
         "{}",
