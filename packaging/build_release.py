@@ -53,6 +53,9 @@ def build(output: Path) -> None:
     if sys.platform == "linux":
         zig_directory = distribution("ziglang").locate_file("ziglang")
         environment["PATH"] = str(zig_directory) + os.pathsep + environment.get("PATH", "")
+        # cargo-zigbuild 按自身路径生成 linker wrapper 目录，而隔离构建环境路径每次随机；
+        # linker 路径变化会让 cargo 重编全部依赖，所以指向同版本、路径固定的 maturin
+        environment["CARGO_BIN_EXE_cargo-zigbuild"] = str(Path(sys.executable).with_name("maturin"))
     subprocess.run(command, cwd=ROOT, env=environment, check=True)  # noqa: S603
     wheels = list(output.glob("*.whl"))
     if len(wheels) != 1 or target["wheelPlatform"] not in wheels[0].name:
