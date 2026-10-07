@@ -24,6 +24,7 @@ jobs:
   installer:
     name: Test shell installer on macOS
     runs-on: macos-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -37,6 +38,7 @@ jobs:
   uv-windows:
     name: Verify pinned uv installer on Windows
     runs-on: windows-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -48,6 +50,7 @@ jobs:
   quality:
     name: Lint and type-check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -76,6 +79,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       PYTHONUTF8: "1"
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -132,6 +136,7 @@ jobs:
   web:
     name: Check landing page
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -180,6 +185,7 @@ jobs:
   npm-wrapper:
     name: Test npm wrapper on Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:

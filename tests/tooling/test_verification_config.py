@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 
 import pytest
+import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -57,6 +58,13 @@ class TestBuildBackendIsReproducible:
 
         assert source_pin.startswith("maturin==")
         assert any(record.startswith(source_pin) for record in self._constraint_records())
+
+    def test_zig_linker_maturin_matches_the_build_backend(self):
+        """Linux 的 zig linker wrapper 调用 packaging 组的 maturin，版本必须与构建后端一致。"""
+        source_pin = (REPO_ROOT / "packaging" / "build-constraints.in").read_text(encoding="utf-8").strip()
+        pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+        assert source_pin in pyproject["dependency-groups"]["packaging"]
 
     def test_local_and_release_builds_use_the_same_hash_gate(self):
         justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
