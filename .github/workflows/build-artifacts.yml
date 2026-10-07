@@ -14,6 +14,7 @@ jobs:
   targets:
     name: Resolve release targets
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.targets.outputs.matrix }}
     steps:
@@ -35,6 +36,7 @@ jobs:
     name: Install artifacts (${{ matrix.target }})
     needs: targets
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
