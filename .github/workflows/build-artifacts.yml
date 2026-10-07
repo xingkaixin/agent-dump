@@ -42,6 +42,16 @@ jobs:
       matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # 安装验证会反复创建 venv 和临时目录；默认 TEMP 在远程托管的 C: 盘，
+      # 曾让 uv venv 超时，改用 runner 本地的 D: 盘
+      - name: Keep temporary files on the Windows work disk
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $temp = Join-Path $env:RUNNER_TEMP "tmp"
+          New-Item -ItemType Directory -Force -Path $temp | Out-Null
+          "TEMP=$temp" >> $env:GITHUB_ENV
+          "TMP=$temp" >> $env:GITHUB_ENV
       - uses: ./.github/actions/setup-uv
       - name: Install Python
         run: uv python install 3.10 3.12 3.14
