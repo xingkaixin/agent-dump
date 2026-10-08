@@ -2,6 +2,19 @@
 
 ## [未发布]
 
+## [1.2.1] - 2026-10-08
+
+### 问题修复
+
+- collect 在按日期筛选的报告和提示词交接中排除缺少可靠活动时间的正文，不再将其报告为覆盖缺口或影响退出状态 (#462)。
+
+### 变更
+
+- 全文索引先排序命中结果再加载正文，未变化索引的最近发现时间改为每日刷新，减少排序和写入开销 (#463)。
+- 导出和消息定位复用会话数据，批量导出通过 worker pool 写入，发现会话时仅保留后续记录中需要读取的字段 (#464–#466)。
+- 减少渲染和 JSON 解析中的逐字符复制，生成搜索摘要时仅归一化命中证据窗口 (#467, #468)。
+- 缩短 CI 关键路径，改善 Windows 构建磁盘使用，并显式关闭本地 LLM 测试连接 (#457–#461)。
+
 ## [1.2.0] - 2026-10-06
 
 ### 破坏性变更
@@ -1249,3 +1262,4 @@
 [1.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.0
 [1.1.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.1
 [1.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.0
+[1.2.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.1

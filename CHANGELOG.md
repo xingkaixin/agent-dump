@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-08
+
+### Fixed
+
+- Exclude collect text without a reliable activity timestamp from date-filtered reports and prompt handoffs without reporting coverage gaps or changing the exit status (#462).
+
+### Changed
+
+- Rank full-text index hits before loading transcript text and refresh unchanged index last-seen times daily to reduce sorting and write overhead (#463).
+- Reuse session data for exports and message locators, write batch exports on the worker pool, and retain only discovery fields needed from later records (#464–#466).
+- Reduce per-character copying in rendering and JSON parsing, and normalize only the query evidence window when building snippets (#467, #468).
+- Shorten the CI critical path, improve Windows build disk usage, and explicitly close loopback LLM test connections (#457–#461).
+
 ## [1.2.0] - 2026-10-06
 
 ### Breaking Changes
@@ -1246,3 +1259,4 @@
 [1.1.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.0
 [1.1.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.1
 [1.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.0
+[1.2.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.1
