@@ -86,7 +86,7 @@ revision 将同一份 JSON 序列化流经固定大小缓冲区直接送入 SHA-
 
 格式闭集和 `md` 别名在 `output/formats.rs`。`output/export.rs` 负责文件名、来源拒写、私有权限、临时文件、同步及原子替换。`storage/private_files.rs` 共享目录和落盘语义。macOS 使用与 Python `os.fsync` 相同的同步级别；不会对每个导出文件额外执行 `F_FULLFSYNC`。
 
-summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标准化正文读取；print 失败不阻止文件导出。批量导出先规划目标冲突，保留部分成功结果。源目录和目标符号链接拒写，异常清理临时文件。已存在的用户导出目录不会被擅自 chmod。
+summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标准化正文读取；print 失败不阻止文件导出。批量导出先规划目标冲突，再由 core `parallel.rs` 的有界 worker 读取并写出各会话，进度与诊断仍按选择顺序输出；保留部分成功结果。源目录和目标符号链接拒写，异常清理临时文件。已存在的用户导出目录不会被擅自 chmod。
 
 ## 7. Collect
 
