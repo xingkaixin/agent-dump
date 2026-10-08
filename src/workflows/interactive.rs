@@ -247,6 +247,184 @@ pub fn configured_output(
     })
 }
 
+#[derive(Default)]
+struct Written {
+    out: Vec<u8>,
+    warnings: Vec<u8>,
+    exported: usize,
+    directories: Vec<String>,
+}
+
+struct Batch<'a> {
+    groups: &'a [ScannedProvider],
+    operation: &'a Operation,
+    configured: &'a str,
+    collisions: HashSet<(usize, usize)>,
+    cache: agent_dump_core::session::cache::SessionDataCache,
+    zh: bool,
+}
+
+impl Batch<'_> {
+    fn export(
+        &self,
+        position: usize,
+        (g, index): (usize, usize),
+        written: &mut Written,
+    ) -> crate::Result<()> {
+        let &Self {
+            groups,
+            operation,
+            configured,
+            ref collisions,
+            ref cache,
+            zh,
+        } = self;
+        let group = &groups[g];
+        let session = &group.sessions[index];
+        let uri = format!("{}://{}", group.info.scheme, session.id);
+        let raw = group.provider.raw_export(session);
+        let data = (operation.formats.iter().any(|f| *f != OutputFormat::Raw)
+            || matches!(raw, Ok(RawExport::Session)))
+        .then(|| {
+            cache.lease(
+                group.info.name,
+                group.provider.as_ref(),
+                session,
+                zh,
+                &mut |d| {
+                    writeln!(
+                        written.warnings,
+                        "{}",
+                        diagnostics::record_warning(&d, zh)
+                    )?;
+                    Ok(())
+                },
+            )
+        });
+        for (f, &format) in operation.formats.iter().enumerate() {
+            if collisions.contains(&(position, f)) {
+                let base = agent_dump_core::output::export::output_base(
+                    operation.output.as_deref(),
+                    configured,
+                )
+                .join(group.info.name);
+                let path = agent_dump_core::output::export::target(
+                    &session.id,
+                    &base,
+                    format,
+                    raw.as_ref().ok(),
+                )?;
+                let error =
+                    agent_dump_core::providers::error::ProviderError::Cause {
+                        kind: "ExportPathCollisionError",
+                        message: format!(
+                            "multiple exports resolve to the same output path: {}",
+                            agent_dump_core::storage::source_io::path_text(
+                                &path
+                            )
+                        ),
+                    };
+                write!(
+                    written.out,
+                    "{}",
+                    Diagnostic::read_failed(
+                        &error,
+                        render_search_roots(
+                            group.info,
+                            group.provider.as_ref()
+                        ),
+                        zh
+                    )
+                    .render(zh)
+                )?;
+                continue;
+            }
+            let needs_data = format != OutputFormat::Raw
+                || matches!(raw, Ok(RawExport::Session));
+            let error = match (&raw, &data) {
+                (Err(e), _) if format == OutputFormat::Raw => Some(e),
+                (_, Some(Err(e))) if needs_data => Some(e),
+                _ => None,
+            };
+            if let Some(error) = error {
+                write!(
+                    written.out,
+                    "{}",
+                    Diagnostic::read_failed(
+                        error.as_ref(),
+                        render_search_roots(
+                            group.info,
+                            group.provider.as_ref()
+                        ),
+                        zh
+                    )
+                    .render(zh)
+                )?;
+                continue;
+            }
+            let base = agent_dump_core::output::export::output_base(
+                operation.output.as_deref(),
+                configured,
+            )
+            .join(group.info.name);
+            let prepared = data
+                .as_ref()
+                .and_then(|d| d.as_ref().ok())
+                .map(std::ops::Deref::deref);
+            match (agent_dump_core::output::export::SessionExport {
+                provider: group.provider.as_ref(),
+                session,
+                uri: &uri,
+                data: prepared,
+                raw: &raw,
+            })
+            .write(format, &base, None)
+            {
+                Ok(path) => {
+                    written.exported += 1;
+                    written.directories.push(
+                        agent_dump_core::storage::source_io::path_text(
+                            path.parent().unwrap(),
+                        ),
+                    );
+                    writeln!(
+                        written.out,
+                        "{}",
+                        terminal(
+                            "EXPORT_SUCCESS_FORMAT",
+                            zh,
+                            &[
+                                ("title", session.title.chars().take(50).collect()),
+                                ("format", format.name().into()),
+                                (
+                                    "filename",
+                                    agent_dump_core::storage::source_io::path_text(std::path::Path::new(
+                                        path.file_name().unwrap()
+                                    ))
+                                )
+                            ]
+                        )
+                    )?;
+                }
+                Err(error) => write!(
+                    written.out,
+                    "{}",
+                    Diagnostic::read_failed(
+                        error.as_ref(),
+                        render_search_roots(
+                            group.info,
+                            group.provider.as_ref()
+                        ),
+                        zh
+                    )
+                    .render(zh)
+                )?,
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn export(
     groups: &[ScannedProvider],
     picks: &[(usize, usize)],
@@ -294,152 +472,32 @@ pub fn export(
         .flatten()
         .copied()
         .collect();
+    let batch = Batch {
+        groups,
+        operation,
+        configured,
+        collisions,
+        cache,
+        zh,
+    };
     let mut exported = 0;
     let mut paths = BTreeSet::new();
-    for (position, &(g, index)) in picks.iter().enumerate() {
-        let group = &groups[g];
-        let session = &group.sessions[index];
-        let uri = format!("{}://{}", group.info.scheme, session.id);
-        let raw = group.provider.raw_export(session);
-        let data = (operation.formats.iter().any(|f| *f != OutputFormat::Raw)
-            || matches!(raw, Ok(RawExport::Session)))
-        .then(|| {
-            cache.lease(
-                group.info.name,
-                group.provider.as_ref(),
-                session,
-                zh,
-                &mut |d| {
-                    writeln!(
-                        warnings,
-                        "{}",
-                        diagnostics::record_warning(&d, zh)
-                    )?;
-                    Ok(())
-                },
-            )
-        });
-        for (f, &format) in operation.formats.iter().enumerate() {
-            if collisions.contains(&(position, f)) {
-                let base = agent_dump_core::output::export::output_base(
-                    operation.output.as_deref(),
-                    configured,
-                )
-                .join(group.info.name);
-                let path = agent_dump_core::output::export::target(
-                    &session.id,
-                    &base,
-                    format,
-                    raw.as_ref().ok(),
-                )?;
-                let error =
-                    agent_dump_core::providers::error::ProviderError::Cause {
-                        kind: "ExportPathCollisionError",
-                        message: format!(
-                            "multiple exports resolve to the same output path: {}",
-                            agent_dump_core::storage::source_io::path_text(
-                                &path
-                            )
-                        ),
-                    };
-                write!(
-                    out,
-                    "{}",
-                    Diagnostic::read_failed(
-                        &error,
-                        render_search_roots(
-                            group.info,
-                            group.provider.as_ref()
-                        ),
-                        zh
-                    )
-                    .render(zh)
-                )?;
-                continue;
-            }
-            let needs_data = format != OutputFormat::Raw
-                || matches!(raw, Ok(RawExport::Session));
-            let error = match (&raw, &data) {
-                (Err(e), _) if format == OutputFormat::Raw => Some(e),
-                (_, Some(Err(e))) if needs_data => Some(e),
-                _ => None,
-            };
-            if let Some(error) = error {
-                write!(
-                    out,
-                    "{}",
-                    Diagnostic::read_failed(
-                        error.as_ref(),
-                        render_search_roots(
-                            group.info,
-                            group.provider.as_ref()
-                        ),
-                        zh
-                    )
-                    .render(zh)
-                )?;
-                continue;
-            }
-            let base = agent_dump_core::output::export::output_base(
-                operation.output.as_deref(),
-                configured,
-            )
-            .join(group.info.name);
-            let prepared = data
-                .as_ref()
-                .and_then(|d| d.as_ref().ok())
-                .map(std::ops::Deref::deref);
-            match (agent_dump_core::output::export::SessionExport {
-                provider: group.provider.as_ref(),
-                session,
-                uri: &uri,
-                data: prepared,
-                raw: &raw,
-            })
-            .write(format, &base, None)
-            {
-                Ok(path) => {
-                    exported += 1;
-                    paths.insert(
-                        agent_dump_core::storage::source_io::path_text(
-                            path.parent().unwrap(),
-                        ),
-                    );
-                    writeln!(
-                        out,
-                        "{}",
-                        terminal(
-                            "EXPORT_SUCCESS_FORMAT",
-                            zh,
-                            &[
-                                ("title", session.title.chars().take(50).collect()),
-                                ("format", format.name().into()),
-                                (
-                                    "filename",
-                                    agent_dump_core::storage::source_io::path_text(std::path::Path::new(
-                                        path.file_name().unwrap()
-                                    ))
-                                )
-                            ]
-                        )
-                    )?;
-                }
-                Err(error) => write!(
-                    out,
-                    "{}",
-                    Diagnostic::read_failed(
-                        error.as_ref(),
-                        render_search_roots(
-                            group.info,
-                            group.provider.as_ref()
-                        ),
-                        zh
-                    )
-                    .render(zh)
-                )?,
-            }
-        }
-    }
+    let items: Vec<_> = picks.iter().copied().enumerate().collect();
+    agent_dump_core::parallel::ordered(
+        &items,
+        |&(position, pick)| {
+            let mut written = Written::default();
+            let result = batch.export(position, pick, &mut written);
+            (written, result)
+        },
+        |(written, result)| {
+            warnings.write_all(&written.warnings)?;
+            out.write_all(&written.out)?;
+            exported += written.exported;
+            paths.extend(written.directories);
+            result
+        },
+    )?;
     let path = if paths.is_empty() {
         agent_dump_core::storage::source_io::path_text(
             &agent_dump_core::output::export::output_base(
