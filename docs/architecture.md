@@ -38,7 +38,7 @@ agent-dump-core (internal library)
 
 `providers/contract.rs` 的 `Provider` 是共享访问边界。`providers/registry.rs` 拥有 Provider 顺序、名称、URI scheme、路径前缀及实例装配；Provider 模块拥有来源选择和私有 schema。
 
-- `discover` 同时返回可用性、会话窗口和部分失败；文件型 Provider 由 `parallel.rs` 的有界 worker 并行读取元数据，再按文件顺序加载标题缓存、发出诊断并生成会话；`Some(days)` 按创建时间裁剪，`None` 发现全部会话元数据。`find` 是自包含直接定位入口。
+- `discover` 同时返回可用性、会话窗口和部分失败；文件型 Provider 由 `parallel.rs` 的有界 worker 并行读取元数据；Codex 与 Claude 在标题窗口之后只解析计数所需字段，serde_json 拒绝的行回退兼容解析。随后按文件顺序加载标题缓存、发出诊断并生成会话；`Some(days)` 按创建时间裁剪，`None` 发现全部会话元数据。`find` 是自包含直接定位入口。
 - `read` 读取标准化正文。`session/mod.rs` 的 Session facts 供列表、head、统计和筛选共用，未知计数始终保持未知。
 - `source_root`、`search_roots`、`change_sources` 声明来源与失效范围。
 - `json_payload`、`raw_export`、`supports_format` 投影 Provider 特有输出能力；共享工作流不解释 schema。

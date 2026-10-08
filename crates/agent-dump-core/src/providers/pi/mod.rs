@@ -36,7 +36,7 @@ impl Pi {
     }
 
     fn scan(path: &Path) -> crate::Result<crate::providers::jsonl::Metadata> {
-        crate::providers::jsonl::metadata(path, 20)
+        crate::providers::jsonl::metadata(path, 20, None)
     }
 
     fn parse(

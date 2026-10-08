@@ -14,6 +14,21 @@ use crate::session::{Session, SessionData, parse_timestamp};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+static RECORD: jsonl::Shape = jsonl::Shape::Fields(&[
+    ("timestamp", jsonl::Shape::Leaf),
+    (
+        "payload",
+        jsonl::Shape::Fields(&[
+            ("type", jsonl::Shape::Leaf),
+            ("model", jsonl::Shape::Leaf),
+            (
+                "arguments",
+                jsonl::Shape::Fields(&[("model", jsonl::Shape::Leaf)]),
+            ),
+        ]),
+    ),
+]);
+
 pub struct Codex {
     roots: SourceRoots,
     titles: Option<HashMap<String, String>>,
@@ -79,7 +94,7 @@ impl Codex {
     }
 
     fn scan(path: &Path) -> crate::Result<jsonl::Metadata> {
-        jsonl::metadata(path, 10)
+        jsonl::metadata(path, 10, Some(&RECORD))
     }
 
     fn parse(
