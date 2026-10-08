@@ -5,7 +5,10 @@ const fn unsafe_char(c: char) -> bool {
     matches!(c, '\u{0}'..='\u{8}' | '\u{b}'..='\u{1f}' | '\u{7f}'..='\u{9f}' | '\u{61c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
 }
 pub fn safe_body(text: &str) -> String {
-    text.chars().filter(|c| !unsafe_char(*c)).collect()
+    let mut safe = String::with_capacity(text.len());
+    text.split(unsafe_char)
+        .for_each(|piece| safe.push_str(piece));
+    safe
 }
 pub fn safe_line(text: &str) -> String {
     let replaced: String = text
@@ -457,4 +460,15 @@ pub fn metadata_summary(session: &Session, scheme: &str, zh: bool) -> String {
     ));
     fields.push(format!("uri={scheme}://{}", session.id));
     safe_line(&fields.join(" | "))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn safe_body_drops_terminal_controls_and_keeps_layout() {
+        assert_eq!(
+            super::safe_body("\x1b[2J测试\u{202e}\n\tmore\rtext\u{7f}\u{85}"),
+            "[2J测试\n\tmoretext"
+        );
+    }
 }
