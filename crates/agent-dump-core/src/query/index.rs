@@ -371,20 +371,10 @@ impl SearchIndex {
         let Some(table) = fts_table(query) else {
             return self.literal_search(query, keys);
         };
-        // The contentless normalized table stores no text; its matches read
-        // the raw trigram row.
-        let (raw, fields) = if table == "sessions_fts" {
-            (
-                "JOIN sessions_fts_trigram raw ON raw.rowid = f.rowid",
-                "raw.title, raw.content",
-            )
-        } else {
-            ("", "f.title, f.content")
-        };
         // Unary + keeps MATCH as the FTS scan instead of repeating it per key.
         // Filtering returned rows retains the global BM25 corpus.
         let sql = format!(
-            "SELECT s.agent, s.session_id, {fields}, bm25({table}) FROM {table} f {raw} JOIN index_state s ON s.fts_rowid = f.rowid WHERE {table} MATCH ? AND +f.rowid IN (SELECT scoped.fts_rowid FROM json_each(?) scope JOIN index_state scoped ON scoped.agent = json_extract(scope.value, '$[0]') AND scoped.session_id = json_extract(scope.value, '$[1]')) ORDER BY bm25({table}), s.session_updated_at DESC, s.session_created_at DESC, s.agent, s.session_id"
+            "SELECT s.agent, s.session_id, f.rowid, bm25({table}) FROM {table} f JOIN index_state s ON s.fts_rowid = f.rowid WHERE {table} MATCH ? AND +f.rowid IN (SELECT scoped.fts_rowid FROM json_each(?) scope JOIN index_state scoped ON scoped.agent = json_extract(scope.value, '$[0]') AND scoped.session_id = json_extract(scope.value, '$[1]')) ORDER BY bm25({table}), s.session_updated_at DESC, s.session_created_at DESC, s.agent, s.session_id"
         );
         let expression = query
             .literals
@@ -399,23 +389,33 @@ impl SearchIndex {
             })
             .collect::<Vec<_>>()
             .join(" ");
-        let mut statement = self.connection.prepare(&sql)?;
-        let mut rows = statement
-            .query(params![expression, serde_json::to_string(keys)?])?;
+        let mut ranked = self.connection.prepare(&sql)?;
+        let mut rows =
+            ranked.query(params![expression, serde_json::to_string(keys)?])?;
+        // Ranked rows carry no text, so sorting never spills whole bodies to
+        // temporary files. Both tables share rowids; the trigram row holds
+        // the text.
+        let mut text = self.connection.prepare(
+            "SELECT title, content FROM sessions_fts_trigram WHERE rowid = ?",
+        )?;
         let mut results = Vec::new();
         while let Some(row) = rows.next()? {
-            let provider: String = row.get(0)?;
-            let id: String = row.get(1)?;
-            let title: String = row.get(2)?;
-            let content: String = row.get(3)?;
+            let Some((title, content)) = text
+                .query_row([row.get::<_, i64>(2)?], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                })
+                .optional()?
+            else {
+                continue;
+            };
             let Some(evidence) = query.find(&[&title, &content]) else {
                 continue;
             };
             results.push(SearchResult {
-                provider,
-                id,
+                provider: row.get(0)?,
+                id: row.get(1)?,
                 snippet: evidence.snippet,
-                rank: -row.get::<_, f64>(4)?,
+                rank: -row.get::<_, f64>(3)?,
             });
         }
         Ok(results)
