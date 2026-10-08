@@ -1,6 +1,6 @@
 {
   "name": "@agent-dump/cli",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Standalone native binaries for agent-dump, runnable via bunx or npx.",
   "license": "MIT",
   "homepage": "https://github.com/xingkaixin/agent-dump",
