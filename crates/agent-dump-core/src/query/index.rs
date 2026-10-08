@@ -213,11 +213,10 @@ impl SearchIndex {
     ) -> crate::Result<(usize, Vec<String>)> {
         let observed = now();
         let indexed: HashMap<String, IndexedRow> = self.connection.prepare("SELECT session_id, updated_signature, fts_rowid, indexed_at FROM index_state WHERE agent = ?")?.query_map([info.name], |r| Ok((r.get(0)?, IndexedRow { signature: r.get(1)?, rowid: r.get(2)?, observed: r.get(3)? })))?.collect::<Result<_, _>>()?;
-        let transaction = self.connection.transaction()?;
-        for session in sessions {
-            transaction.execute("UPDATE index_state SET last_seen_at = MAX(last_seen_at, ?) WHERE agent = ? AND session_id = ?", params![observed, info.name, session.id])?;
-        }
-        transaction.commit()?;
+        let ids: Vec<_> = sessions.iter().map(|session| &session.id).collect();
+        // Rows expire after 30 unseen days. Refreshing at most daily lets
+        // repeated searches skip the write and its journal sync.
+        self.connection.execute("UPDATE index_state SET last_seen_at = ? WHERE agent = ? AND last_seen_at < ? AND session_id IN (SELECT value FROM json_each(?))", params![observed, info.name, observed - 86400.0, serde_json::to_string(&ids)?])?;
         let pending: Vec<_> = sessions
             .iter()
             .filter_map(|session| {

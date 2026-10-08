@@ -356,3 +356,30 @@ fn existing_normalized_text_copies_remain_usable() {
         .unwrap();
     assert_eq!(stored, "after 认 证");
 }
+
+#[test]
+fn updates_refresh_last_seen_only_after_a_day() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut index =
+        SearchIndex::at(&directory.path().join("index.db")).unwrap();
+    let a = session(directory.path(), "a", 0);
+    let provider = Reader(|_: &Session| Ok("body".into()));
+    let seen = |index: &mut SearchIndex, value: Option<f64>| -> f64 {
+        if let Some(value) = value {
+            index
+                .connection
+                .execute("UPDATE index_state SET last_seen_at = ?", [value])
+                .unwrap();
+            update(index, &provider, std::slice::from_ref(&a));
+        }
+        index
+            .connection
+            .query_row("SELECT last_seen_at FROM index_state", [], |r| r.get(0))
+            .unwrap()
+    };
+    update(&mut index, &provider, std::slice::from_ref(&a));
+    let stale = 2.0f64.mul_add(-86400.0, now());
+    assert!(seen(&mut index, Some(stale)) > stale + 86400.0);
+    let recent = now() - 3600.0;
+    assert!((seen(&mut index, Some(recent)) - recent).abs() < f64::EPSILON);
+}
