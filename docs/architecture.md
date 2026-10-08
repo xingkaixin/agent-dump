@@ -46,7 +46,7 @@ agent-dump-core (internal library)
 
 OpenCode 在同一数据库中兼容旧表与 V2，同 ID 优先 V2，旧版独有会话保留；ZCode 使用旧 SQLite 读取器。正文按定位时记录的来源读取，不在来源消失时静默切换数据库。每次 SQLite 正文读取使用独立只读事务；同一 Provider 实例复用空闲只读连接，数据库文件被替换（Unix 上设备号或 inode 变化）时丢弃旧连接。
 
-`session/cache.rs` 统一拥有正文缓存。`get` 复用有界 LRU；批量 Search/Collect 用 `lease`，完成投影即释放。并发读取合并，消费者得到隔离数据。数据库与 WAL 都属于 change sources，SHM 协调文件不作为持久内容失效依据。缓存不得恢复已经过期或删除的正文。
+`session/cache.rs` 统一拥有正文缓存。`get` 复用有界 LRU；批量 Search/Collect、批量导出和 `--search --locate` 用 `lease`，完成投影或写出即释放。并发读取合并，消费者得到隔离数据。数据库与 WAL 都属于 change sources，SHM 协调文件不作为持久内容失效依据。缓存不得恢复已经过期或删除的正文。
 
 Codex 与 Claude 的连续 assistant 片段由 `session/assembly.rs` 合并。每个 decoder 只记录当前消息已扫描到的位置及 text/tool/plan 类型，后续只检查新追加的片段；切换消息时重新扫描。工具输出和计划审批回填不改变片段类型。合并边界、相邻重复片段消除及 Codex 计划审批位置保持原有语义。
 
