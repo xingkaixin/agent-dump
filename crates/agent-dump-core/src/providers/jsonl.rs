@@ -1,5 +1,7 @@
 use crate::providers::contract::{DiagnosticSink, RecoverableDiagnostic};
-use serde_json::Value;
+use serde::de::{Deserializer, IgnoredAny, MapAccess, Visitor};
+use serde_json::value::RawValue;
+use serde_json::{Map, Value};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
@@ -13,17 +15,89 @@ pub struct Metadata {
     pub complete: bool,
 }
 
+/// Fields a provider reads from a record. `Fields` positions are only
+/// indexed, so a non-object there is kept as null.
+pub enum Shape {
+    Leaf,
+    Fields(&'static [(&'static str, Shape)]),
+}
+
+struct Pruned(&'static [(&'static str, Shape)]);
+
+impl<'de> Visitor<'de> for Pruned {
+    type Value = Map<String, Value>;
+
+    fn expecting(
+        &self,
+        formatter: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        formatter.write_str("a JSON object")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(
+        self,
+        mut map: A,
+    ) -> Result<Self::Value, A::Error> {
+        let mut object = Map::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if let Some((_, shape)) =
+                self.0.iter().find(|(name, _)| *name == key)
+            {
+                let raw = map.next_value::<&RawValue>()?;
+                let value = project(raw.get(), shape)
+                    .map_err(serde::de::Error::custom)?;
+                object.insert(key, value);
+            } else {
+                map.next_value::<IgnoredAny>()?;
+            }
+        }
+        Ok(object)
+    }
+}
+
+fn project(text: &str, shape: &'static Shape) -> serde_json::Result<Value> {
+    match shape {
+        Shape::Leaf => serde_json::from_str(text),
+        Shape::Fields(fields) if text.starts_with('{') => {
+            let mut deserializer = serde_json::Deserializer::from_str(text);
+            let object = deserializer.deserialize_map(Pruned(fields))?;
+            deserializer.end()?;
+            Ok(Value::Object(object))
+        }
+        Shape::Fields(_) => Ok(Value::Null),
+    }
+}
+
 fn object(bytes: &[u8]) -> Option<Value> {
     crate::compat::json::from_slice(bytes)
         .ok()
         .filter(Value::is_object)
 }
 
+fn pruned(bytes: &[u8], shape: &'static Shape) -> Option<Value> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let text = text.trim_start_matches([' ', '\t', '\n', '\r']);
+    if !text.starts_with('{') {
+        return None;
+    }
+    // Inputs serde_json rejects, such as NaN, take the compatible path.
+    let Ok(mut value) = project(text, shape) else {
+        return object(bytes);
+    };
+    crate::compat::json::normalize(&mut value);
+    Some(value)
+}
+
 fn nonempty(bytes: &[u8]) -> bool {
     bytes.iter().any(|byte| !byte.is_ascii_whitespace())
 }
 
-pub fn metadata(path: &Path, head_lines: usize) -> crate::Result<Metadata> {
+/// Records after the first `head_lines` keep only the fields in `shape`.
+pub fn metadata(
+    path: &Path,
+    head_lines: usize,
+    shape: Option<&'static Shape>,
+) -> crate::Result<Metadata> {
     let mut file = crate::storage::source_io::open(path)?;
     let size = file.metadata()?.len();
     let mut bytes = Vec::new();
@@ -33,9 +107,18 @@ pub fn metadata(path: &Path, head_lines: usize) -> crate::Result<Metadata> {
             .split(|byte| *byte == b'\n')
             .filter(|line| nonempty(line))
             .collect();
+        let mut records = Vec::new();
+        for line in &lines {
+            records.extend(match shape {
+                Some(shape) if records.len() >= head_lines => {
+                    pruned(line, shape)
+                }
+                _ => object(line),
+            });
+        }
         return Ok(Metadata {
             header: lines.first().and_then(|line| object(line)),
-            records: lines.iter().filter_map(|line| object(line)).collect(),
+            records,
             tail: None,
             complete: true,
         });

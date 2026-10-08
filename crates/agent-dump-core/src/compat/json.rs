@@ -32,7 +32,7 @@ pub fn nonfinite(number: &Number) -> Option<f64> {
     }
 }
 
-fn normalize(value: &mut Value) {
+pub(crate) fn normalize(value: &mut Value) {
     match value {
         Value::Number(number) if number.as_str().contains(['.', 'e', 'E']) => {
             if let Ok(value) = number.as_str().parse::<f64>()

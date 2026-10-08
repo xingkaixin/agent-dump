@@ -13,6 +13,17 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+static RECORD: jsonl::Shape = jsonl::Shape::Fields(&[
+    ("timestamp", jsonl::Shape::Leaf),
+    (
+        "message",
+        jsonl::Shape::Fields(&[
+            ("role", jsonl::Shape::Leaf),
+            ("model", jsonl::Shape::Leaf),
+        ]),
+    ),
+]);
+
 pub struct Claude {
     roots: SourceRoots,
     titles: HashMap<PathBuf, HashMap<String, Value>>,
@@ -117,7 +128,7 @@ impl Claude {
     }
 
     fn scan(path: &Path) -> crate::Result<jsonl::Metadata> {
-        jsonl::metadata(path, 20)
+        jsonl::metadata(path, 20, Some(&RECORD))
     }
 
     fn parse(
