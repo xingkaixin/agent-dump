@@ -32,6 +32,30 @@ pub fn normalize(text: &str) -> String {
     normalized
 }
 
+/// Normalizes the first 48 characters away from a match, which borders the
+/// text on the side the characters start from. Also reports whether more
+/// normalized text follows.
+fn window(chars: impl Iterator<Item = char>) -> (String, bool) {
+    let mut text = String::new();
+    let mut count = 0;
+    let mut gap = false;
+    for c in chars {
+        if whitespace(c) {
+            gap = true;
+            continue;
+        }
+        for c in gap.then_some(' ').into_iter().chain([c]) {
+            if count == 48 {
+                return (text, true);
+            }
+            text.push(c);
+            count += 1;
+        }
+        gap = false;
+    }
+    (text, false)
+}
+
 impl TextQuery {
     pub fn new(raw: &str, mode: Mode) -> Self {
         let normalized = normalize(raw);
@@ -75,7 +99,18 @@ impl TextQuery {
         if self.patterns.is_empty() {
             return None;
         }
-        let fields: Vec<_> = fields.iter().map(|s| normalize(s)).collect();
+        // Literals without spaces never span whitespace, so they match the
+        // raw text exactly where they match its normalized form.
+        if self.literals.iter().any(|literal| literal.contains(' ')) {
+            let normalized: Vec<_> =
+                fields.iter().map(|s| normalize(s)).collect();
+            let normalized: Vec<_> =
+                normalized.iter().map(String::as_str).collect();
+            return self.evidence(&normalized);
+        }
+        self.evidence(fields)
+    }
+    fn evidence(&self, fields: &[&str]) -> Option<Evidence> {
         let spans: Vec<Vec<_>> = fields
             .iter()
             .map(|s| self.patterns.iter().map(|p| p.find(s)).collect())
@@ -95,26 +130,18 @@ impl TextQuery {
         for term in 0..self.patterns.len() {
             for &i in &ranked {
                 if let Some(span) = spans[i][term] {
-                    let text = &fields[i];
-                    let before = &text[..span.start()];
-                    let after = &text[span.end()..];
-                    let start = before
-                        .char_indices()
-                        .rev()
-                        .nth(47)
-                        .map_or(0, |(i, _)| i);
-                    let end = after
-                        .char_indices()
-                        .nth(48)
-                        .map_or(after.len(), |(i, _)| i);
+                    let text = fields[i];
+                    let (before, earlier) =
+                        window(text[..span.start()].chars().rev());
+                    let (after, later) = window(text[span.end()..].chars());
                     return Some(Evidence {
                         snippet: format!(
                             "{}{}**{}**{}{}",
-                            if start > 0 { "..." } else { "" },
-                            &before[start..],
+                            if earlier { "..." } else { "" },
+                            before.chars().rev().collect::<String>(),
                             span.as_str(),
-                            &after[..end],
-                            if end < after.len() { "..." } else { "" }
+                            after,
+                            if later { "..." } else { "" }
                         ),
                         title_matches,
                     });
@@ -132,5 +159,33 @@ impl TextQuery {
             .filter_map(|pattern| pattern.find(text))
             .min_by_key(regex::Match::start)
             .map(|matched| matched.range())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snippets_read_raw_text_as_normalized_text() {
+        let text = format!(
+            "  \t{}\u{3000}\u{3000}needle\n\n{}  ",
+            "w ".repeat(30),
+            "x".repeat(47)
+        );
+        let snippet = |query: &str, mode| {
+            TextQuery::new(query, mode)
+                .find(&["", &text])
+                .unwrap()
+                .snippet
+        };
+        assert_eq!(
+            snippet("NEEDLE", Mode::Terms),
+            format!("...{}**needle** {}", "w ".repeat(24), "x".repeat(47))
+        );
+        assert_eq!(
+            snippet("w needle", Mode::Phrase),
+            format!("...{}**w needle** {}", "w ".repeat(24), "x".repeat(47))
+        );
     }
 }

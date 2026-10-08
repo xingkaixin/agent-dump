@@ -56,7 +56,7 @@ Codex 与 Claude 的连续 assistant 片段由 `session/assembly.rs` 合并。�
 - `-query`、URI 的 `q` 与 `--search` 使用同一匹配语义：按空白拆分且必须全部命中的 distinct terms。`--search` 额外按相关度排序并输出证据；`--read --match` 仍是单消息字面短语。
 - `query/filter.rs` 保留匹配证据和读取失败事实；角色过滤直接从允许角色生成 snippet。
 - `query/index.rs` 使用 SQLite FTS5，加速语义必须等价。tokenizer 不适用或索引失败时回退到进程内 matcher。
-- trigram 表保存唯一一份索引正文；unicode61 表为 contentless，只保存 CJK 分隔后的倒排索引，命中后从 trigram 行读取正文校验证据，命中片段统一由 Rust 证据窗口生成，不调用 FTS5 `snippet()`。已有索引（包括 Python v0.15.9 建立的）中带正文的旧 unicode61 表继续复用，不强制重建。正文读取和 CJK 分隔在读取线程完成，主线程只负责写入。
+- trigram 表保存唯一一份索引正文；unicode61 表为 contentless，只保存 CJK 分隔后的倒排索引，命中后从 trigram 行读取正文校验证据，命中片段统一由 Rust 证据窗口生成，不调用 FTS5 `snippet()`；不含空格的字面词直接匹配原文，只规范化命中两侧的窗口。已有索引（包括 Python v0.15.9 建立的）中带正文的旧 unicode61 表继续复用，不强制重建。正文读取和 CJK 分隔在读取线程完成，主线程只负责写入。
 - 路径范围内没有候选时，直接返回空结果，不打开或更新索引。非空查询先更新所有参与索引，保留全局 BM25 评分依据；SQL 按 Provider 与 Session ID 限制返回行，避免为范围外命中生成 snippet。排序查询只返回 rowid 与评分，避免排序器把整段正文写入临时文件；命中后按 rowid 读取 trigram 正文。会话的最近发现时间每天最多刷新一次，未变化索引上的重复搜索不发起写入。正文解析在事务外进行；旧请求不能覆盖新观察，也不能恢复已删除行。
 - 数据库与 WAL 信号变化后仍重新读取受影响会话。在现有事务和并发检查内，若标题、可搜索正文未变且两份 FTS 行仍在，则只更新索引状态，跳过正文删除与插入；状态签名、时间和处理计数仍更新。新会话、正文变化或缺失的 FTS 行仍完整写入。
 
