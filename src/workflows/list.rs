@@ -69,7 +69,7 @@ pub fn run(
             let group = &scan.groups[matched.group];
             let session = &group.sessions[matched.session];
             let result = cache
-                .get(
+                .lease(
                     group.info.name,
                     group.provider.as_ref(),
                     session,

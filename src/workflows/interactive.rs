@@ -304,7 +304,7 @@ pub fn export(
         let data = (operation.formats.iter().any(|f| *f != OutputFormat::Raw)
             || matches!(raw, Ok(RawExport::Session)))
         .then(|| {
-            cache.get(
+            cache.lease(
                 group.info.name,
                 group.provider.as_ref(),
                 session,
@@ -388,7 +388,7 @@ pub fn export(
             let prepared = data
                 .as_ref()
                 .and_then(|d| d.as_ref().ok())
-                .map(std::convert::AsRef::as_ref);
+                .map(std::ops::Deref::deref);
             match (agent_dump_core::output::export::SessionExport {
                 provider: group.provider.as_ref(),
                 session,
