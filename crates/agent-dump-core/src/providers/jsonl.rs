@@ -220,3 +220,56 @@ pub fn scan_numbered(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static SHAPE: Shape = Shape::Fields(&[
+        ("timestamp", Shape::Leaf),
+        (
+            "payload",
+            Shape::Fields(&[
+                ("type", Shape::Leaf),
+                ("arguments", Shape::Fields(&[("model", Shape::Leaf)])),
+            ]),
+        ),
+    ]);
+
+    #[test]
+    fn pruned_records_read_like_full_records() {
+        let lines: [&[u8]; 12] = [
+            br#"{"timestamp":"t","payload":{"type":"message","content":"x"}}"#,
+            br#"{"timestamp":"t","payload":[{"type":"message"}]}"#,
+            br#"{"payload":{"type":["message"]}}"#,
+            br#"{"payload":{"type":{"kind":"message"}}}"#,
+            br#"{"timestamp":"t","payload":{"type":"message","n":NaN}}"#,
+            br#"{"timestamp":"a","timestamp":"b","payload":{"type":1}}"#,
+            br#"  {"timestamp":"c","payload":{"arguments":"{}"}}"#,
+            br#"{"payload":{"arguments":{"model":"m"}},"timestamp":1e999}"#,
+            br#"[{"timestamp":"t"}]"#,
+            br#"{"timestamp":"t"} trailing"#,
+            b"{\"timestamp\":\"\xff\"}",
+            br#"{"timestamp":"t","payload":"text"}"#,
+        ];
+        for line in lines {
+            let full = object(line);
+            let pruned = pruned(line, &SHAPE);
+            assert_eq!(full.is_some(), pruned.is_some(), "{line:?}");
+            let (Some(full), Some(pruned)) = (full, pruned) else {
+                continue;
+            };
+            for path in [
+                &["timestamp"][..],
+                &["payload", "type"],
+                &["payload", "arguments", "model"],
+            ] {
+                let read = |value: &Value| {
+                    path.iter()
+                        .fold(value.clone(), |value, key| value[key].clone())
+                };
+                assert_eq!(read(&full), read(&pruned), "{line:?} {path:?}");
+            }
+        }
+    }
+}
