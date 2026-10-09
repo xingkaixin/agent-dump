@@ -18,6 +18,7 @@ use ratatui::{
     text::Line,
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
+use std::time::Duration;
 use unicode_width::UnicodeWidthChar;
 
 pub enum Action {
@@ -62,6 +63,7 @@ pub struct Reader {
     query: Query,
     scope: String,
     state: State,
+    pending: Option<Event>,
     zh: bool,
     pub status: String,
 }
@@ -81,6 +83,7 @@ impl Reader {
             state: State::with_query(query, 0),
             query: query.clone(),
             scope,
+            pending: None,
             zh,
             status: t("READER_READY", zh, &[]),
         })
@@ -184,6 +187,33 @@ impl Reader {
         Ok(None)
     }
 
+    fn navigate(&mut self, key: KeyCode) -> crate::Result<usize> {
+        let mut selected = step(self.state.selected, key, self.rows.len());
+        // Fold keys queued during a slow load so only the final row loads.
+        while event::poll(Duration::ZERO)? {
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Release => {}
+                Event::Key(key)
+                    if matches!(
+                        key.code,
+                        KeyCode::Up
+                            | KeyCode::Down
+                            | KeyCode::Home
+                            | KeyCode::End
+                            | KeyCode::Char('k' | 'j')
+                    ) =>
+                {
+                    selected = step(selected, key.code, self.rows.len());
+                }
+                event => {
+                    self.pending = Some(event);
+                    break;
+                }
+            }
+        }
+        Ok(selected)
+    }
+
     pub fn next(
         &mut self,
         data: Option<&SessionData>,
@@ -221,7 +251,7 @@ impl Reader {
                 .offset
                 .min(self.state.lines.len().saturating_sub(1));
             self.render()?;
-            match event::read()? {
+            match self.pending.take().map_or_else(event::read, Ok)? {
                 Event::Resize(_, _) => {
                     dirty = true;
                 }
@@ -391,17 +421,7 @@ impl Reader {
                         | KeyCode::Down
                         | KeyCode::Home
                         | KeyCode::End => {
-                            let selected = match key.code {
-                                KeyCode::Up | KeyCode::Char('k') => {
-                                    self.state.selected.saturating_sub(1)
-                                }
-                                KeyCode::Home => 0,
-                                KeyCode::End => {
-                                    self.rows.len().saturating_sub(1)
-                                }
-                                _ => (self.state.selected + 1)
-                                    .min(self.rows.len().saturating_sub(1)),
-                            };
+                            let selected = self.navigate(key.code)?;
                             if selected != self.state.selected {
                                 let marked =
                                     std::mem::take(&mut self.state.marked);
@@ -418,6 +438,15 @@ impl Reader {
                 _ => {}
             }
         }
+    }
+}
+
+fn step(selected: usize, key: KeyCode, rows: usize) -> usize {
+    match key {
+        KeyCode::Up | KeyCode::Char('k') => selected.saturating_sub(1),
+        KeyCode::Home => 0,
+        KeyCode::End => rows.saturating_sub(1),
+        _ => (selected + 1).min(rows.saturating_sub(1)),
     }
 }
 
