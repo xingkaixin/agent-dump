@@ -170,7 +170,7 @@ impl Reader {
                     ..Query::default()
                 };
                 self.state.context = None;
-                self.state.search(data)?;
+                self.state.search(data);
                 self.state.expanded = true;
                 self.state.body_focus = true;
                 self.status = t(
@@ -190,7 +190,7 @@ impl Reader {
         error: Option<&str>,
     ) -> crate::Result<Action> {
         let previous_hit = self.state.hit;
-        self.state.search(data)?;
+        self.state.search(data);
         self.state.hit =
             previous_hit.min(self.state.hits.len().saturating_sub(1));
         let mut dirty = true;
@@ -486,17 +486,12 @@ impl State {
             self.hits.get(self.hit).map(|&hit| self.hit_offset(hit));
     }
 
-    fn search(&mut self, data: Option<&SessionData>) -> crate::Result<()> {
+    fn search(&mut self, data: Option<&SessionData>) {
         self.hits = data
-            .map(|data| context::locate(data, &self.query))
-            .transpose()?
-            .unwrap_or_default()
-            .into_iter()
-            .map(|location| location.position - 1)
-            .collect();
+            .map(|data| context::hits(data, &self.query))
+            .unwrap_or_default();
         self.hit = 0;
         self.active_hit_line = None;
-        Ok(())
     }
 
     fn reflow(
@@ -860,7 +855,7 @@ mod tests {
             ..Query::default()
         };
         let mut state = State::with_query(&query, 0);
-        state.search(Some(&data)).unwrap();
+        state.search(Some(&data));
         assert_eq!(state.hits, [2, 4]);
         state.context = Some(0);
         state.reflow(Some(&data), None, 60, false);
@@ -974,7 +969,7 @@ mod tests {
                 },
                 ..State::default()
             };
-            state.search(Some(&data)).unwrap();
+            state.search(Some(&data));
             assert_eq!(state.hits, vec![0]);
             state.reflow(Some(&data), None, 65, false);
             state.offset = state.hit_offset(0);
@@ -1061,7 +1056,7 @@ mod tests {
                 .any(|line| line.contains("hidden-needle"))
         );
         state.query.keyword = Some("hidden-needle".into());
-        state.search(Some(&data)).unwrap();
+        state.search(Some(&data));
         assert_eq!(state.hits, vec![1]);
         state.reflow(Some(&data), None, 60, true);
         assert_eq!(state.active_hit_line, Some(state.starts[1]));
@@ -1133,7 +1128,7 @@ mod tests {
         state.reflow(Some(&data), None, 18, true);
         assert_eq!(state.active_hit_line, Some(state.starts[1]));
         state.query.keyword = None;
-        state.search(Some(&data)).unwrap();
+        state.search(Some(&data));
         assert_eq!(state.active_hit_line, None);
         state.reflow(Some(&data), None, 18, true);
         assert_eq!(state.active_hit_line, None);

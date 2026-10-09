@@ -45,17 +45,41 @@ pub fn locate(
     query: &Query,
 ) -> crate::Result<Vec<Location>> {
     let revision = revision(data)?;
+    Ok(evidence(data, query)
+        .into_iter()
+        .map(|(index, snippet)| {
+            let position = index + 1;
+            Location {
+                position,
+                locator: format!("{revision}:{position}"),
+                role: data.messages[index].role.clone(),
+                snippet,
+            }
+        })
+        .collect())
+}
+
+pub fn hits(data: &SessionData, query: &Query) -> Vec<usize> {
+    evidence(data, query)
+        .into_iter()
+        .map(|(index, _)| index)
+        .collect()
+}
+
+fn evidence(data: &SessionData, query: &Query) -> Vec<(usize, String)> {
     let text = TextQuery::new(
         query.keyword.as_deref().unwrap_or(""),
         crate::query::text::Mode::Terms,
     );
+    if text.literals.is_empty() {
+        return Vec::new();
+    }
     let terms: Vec<_> = text
         .literals
         .iter()
         .map(|term| TextQuery::new(term, crate::query::text::Mode::Phrase))
         .collect();
-    Ok(data
-        .messages
+    data.messages
         .iter()
         .enumerate()
         .filter_map(|(index, message)| {
@@ -69,15 +93,9 @@ pub fn locate(
             let content = searchable_message(message);
             let evidence =
                 terms.iter().find_map(|term| term.find(&[&content]))?;
-            let position = index + 1;
-            Some(Location {
-                position,
-                locator: format!("{revision}:{position}"),
-                role: message.role.clone(),
-                snippet: evidence.snippet,
-            })
+            Some((index, evidence.snippet))
         })
-        .collect())
+        .collect()
 }
 
 pub fn window(
