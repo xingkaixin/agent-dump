@@ -183,9 +183,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.2",
+        date: "2026-10-10",
+        isLatest: true,
+        title: "Switch Large Sessions with Less Waiting",
+        description:
+          "Browse long AI sessions from Codex, Claude Code, Cursor, and other supported tools with more responsive session switching. The terminal reader avoids repeated work when locating search matches and combines queued navigation keys so it loads the session where your cursor stops.",
+        command: 'npx @agent-dump/cli@1.2.2 browse',
+        tags: ["Terminal Reader", "Large Sessions", "Session Navigation"],
+      },
+      {
         version: "v1.2.1",
         date: "2026-10-08",
-        isLatest: true,
         title: "Faster Session Search and Batch Export",
         description:
           "Search and export AI sessions from Codex, Claude Code, Cursor, Kimi, OpenCode, ZCode, Pi, and other supported tools with less repeated reading and copying. Full-text search ranks matches before loading transcript text, and batch exports write files in parallel. AI collect excludes text without reliable dates from date-filtered reports and prompt handoffs without marking those reports incomplete.",
@@ -352,9 +361,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.2",
+        date: "2026-10-10",
+        isLatest: true,
+        title: "大型会话切换减少等待",
+        description:
+          "在终端浏览 Codex、Claude Code、Cursor 等工具的长篇 AI 会话时，切换响应更及时。阅读器减少定位搜索命中时的重复计算，并合并排队的连续导航按键，只加载光标最终停留的会话。",
+        command: 'npx @agent-dump/cli@1.2.2 browse',
+        tags: ["终端阅读器", "大型会话", "会话切换"],
+      },
+      {
         version: "v1.2.1",
         date: "2026-10-08",
-        isLatest: true,
         title: "搜索与批量导出减少等待",
         description:
           "搜索和导出 Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi 等工具的 AI 会话时，减少重复读取和复制。全文搜索先排序再加载正文，批量导出并行写入文件。AI collect 在按日期筛选的报告和提示词交接中排除没有可靠日期的正文，不再因此将报告标记为不完整。",
@@ -521,9 +539,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.2",
+        date: "2026-10-10",
+        isLatest: true,
+        title: "長いセッションの切り替えを快適に",
+        description:
+          "Codex、Claude Code、Cursor などの長い AI セッションをターミナルで閲覧する際、切り替えの応答性を改善しました。検索位置の特定に伴う重複処理を減らし、連続した移動キーをまとめて、カーソルが止まったセッションを読み込みます。",
+        command: 'npx @agent-dump/cli@1.2.2 browse',
+        tags: ["ターミナルリーダー", "長いセッション", "セッション切り替え"],
+      },
+      {
         version: "v1.2.1",
         date: "2026-10-08",
-        isLatest: true,
         title: "セッション検索と一括エクスポートを高速化",
         description:
           "Codex、Claude Code、Cursor、Kimi、OpenCode、ZCode、Pi などの AI セッションの検索とエクスポートで、重複した読み取りやコピーを削減。全文検索は一致結果を並べ替えてから本文を読み込み、一括エクスポートはファイルを並列に書き出します。AI collect は日付で絞ったレポートと引き継ぎ用プロンプトから日時不明の本文を除外し、それだけでレポートを不完全と表示しなくなりました。",

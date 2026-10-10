@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-10-10
+
+### Changed
+
+- Make terminal reader switching more responsive for large sessions by skipping snapshot hashing when locating search hits, returning early without a query, and coalescing queued navigation keys into one selection change (#470).
+
 ## [1.2.1] - 2026-10-08
 
 ### Fixed
@@ -1260,3 +1266,4 @@
 [1.1.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.1
 [1.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.0
 [1.2.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.1
+[1.2.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.2
