@@ -2,6 +2,12 @@
 
 ## [未发布]
 
+## [1.2.2] - 2026-10-10
+
+### 变更
+
+- 改善大型会话在终端阅读器中的切换响应：定位搜索命中时跳过快照哈希，无查询时提前返回，并将排队的连续导航按键合并为一次选择变化 (#470)。
+
 ## [1.2.1] - 2026-10-08
 
 ### 问题修复
@@ -1263,3 +1269,4 @@
 [1.1.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.1.1
 [1.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.0
 [1.2.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.1
+[1.2.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.2
