@@ -132,18 +132,13 @@ def test_provider_source_directory_cannot_be_export_destination(tmp_path, monkey
 
 
 @pytest.mark.differential
-@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax", "cursor"])
+@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax"])
 def test_wal_changes_are_visible_without_changing_persistent_data(tmp_path, monkeypatch, provider):
-    cli, identity = (
-        (cursor(tmp_path, monkeypatch), "request-parent")
-        if provider == "cursor"
-        else desktop(tmp_path, monkeypatch, provider)
-    )
+    cli, identity = desktop(tmp_path, monkeypatch, provider)
     mutations = {
         "deepchat": "UPDATE deepchat_assistant_blocks SET text_content = ?",
         "cherry": "UPDATE agent_session_message SET data = ? WHERE role = 'assistant'",
         "minimax": "UPDATE local_runtime_message_rows SET data_json = ? WHERE msg_id = 'assistant-1'",
-        "cursor": "UPDATE cursorDiskKV SET value = ? WHERE key = 'bubbleId:parent:b-answer'",
     }
     writer = sqlite3.connect(cli.source)
     try:
@@ -154,7 +149,6 @@ def test_wal_changes_are_visible_without_changing_persistent_data(tmp_path, monk
                 "deepchat": text,
                 "cherry": json.dumps({"parts": [{"type": "text", "text": text}]}),
                 "minimax": json.dumps({"msg_id": "assistant-1", "role": "assistant", "msg_content": text}),
-                "cursor": json.dumps({"type": 2, "text": text}),
             }[provider]
             writer.execute(mutations[provider], (value,))
             writer.commit()

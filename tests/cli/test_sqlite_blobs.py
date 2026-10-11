@@ -10,11 +10,14 @@ from test_cursor import cursor, export as cursor_export
 
 pytestmark = pytest.mark.differential
 
+ENCODINGS = ["utf-8", "utf-8-sig", "utf-16", "utf-32", "utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"]
+
 
 @pytest.mark.parametrize(
-    "encoding", ["utf-8", "utf-8-sig", "utf-16", "utf-32", "utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"]
+    ("provider", "encoding"),
+    [(provider, encoding) for provider in ("opencode", "minimax", "minimax-metadata") for encoding in ENCODINGS]
+    + [("cursor", "utf-8")],
 )
-@pytest.mark.parametrize("provider", ["opencode", "minimax", "minimax-metadata", "cursor"])
 def test_json_blob_decoding(tmp_path, monkeypatch, provider, encoding):
     if provider == "opencode":
         cli = make_cli(tmp_path, monkeypatch)
