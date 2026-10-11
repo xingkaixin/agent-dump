@@ -40,7 +40,7 @@ just isok
 
 `just test` 先构建 release 二进制，再运行 Rust 单元测试和不依赖历史 Python 的 pytest 契约。`just check-rust` 只运行 Rust 与 CLI 验证。`AGENT_DUMP_TEST_BINARY` 可指定实际安装的制品；缺少二进制会失败，不回退到其他命令。
 
-`pytest` 默认排除带 `differential` 标记的测试；CI 和 `just isok` 不安装或执行历史 Python 对照。需要比较时运行 `just test-differential`，或先 `just reference`，再用 `uv run pytest -q -m differential tests/cli` 选择差分测试。混合模块按测试函数标记，纯差分模块使用模块标记；新增差分测试必须显式标记。HTTP 凭据、响应边界和 Collect 合并测试直接断言 Rust 行为，仍进入默认验证。
+`pytest` 默认排除带 `differential` 标记的测试；CI 和 `just isok` 不安装或执行历史 Python 对照。需要比较时运行 `just test-differential`，或先 `just reference`，再用 `uv run pytest -q -m differential tests/cli` 选择差分测试。混合模块按测试函数标记，纯差分模块使用模块标记；v0.15.9 不再是行为基准，不再新增差分测试；修复与差分用例冲突时删除该用例，并用默认契约测试或 Rust 单元测试断言新行为。HTTP 凭据、响应边界和 Collect 合并测试直接断言 Rust 行为，仍进入默认验证。
 
 Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 hash 来自 `tests/reference/requirements.txt`。安装器核对包内全部 Python 文件的源码 hash，与 P6 冻结参考一致。对照只用于差分和配对性能测量，不进入主开发环境、Cargo 构建、wheel 或 npm。不要随依赖升级改变此历史参考。
 
