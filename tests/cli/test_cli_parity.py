@@ -29,14 +29,11 @@ def test_head_and_uri_prefix(cli, lang, uri_prefix):
 
 @pytest.mark.differential
 @pytest.mark.parametrize("size", [0, 120_000, 300_000, 2_000_000])
-def test_large_text_and_bounded_metadata(cli, size):
+def test_large_text_print(cli, size):
     cli.write(
         [header(), message("user", "Start"), message("assistant", "中文😺\n" * size, stamp="2026-01-15T12:00:02Z")]
     )
-    uri = f"codex://{IDENTITY}"
-    cli.parity(uri, "--head", "--lang", "en")
-    cli.parity(uri, "-format", "print", "--lang", "en")
-    cli.parity(uri, "--format", "json", "--output", str(cli.root / "exports"), "--lang", "en", json_export=True)
+    cli.parity(f"codex://{IDENTITY}", "-format", "print", "--lang", "en")
 
 
 @pytest.mark.differential

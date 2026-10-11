@@ -143,26 +143,47 @@ pub fn metadata(
         lines.first().and_then(|line| object(line))
     };
     let records = lines.iter().filter_map(|line| object(line)).collect();
-    file.seek(SeekFrom::Start(size - WINDOW))?;
-    let mut tail = Vec::new();
-    file.take(WINDOW).read_to_end(&mut tail)?;
-    let tail_record =
-        tail.iter()
-            .position(|byte| *byte == b'\n')
-            .and_then(|start| {
-                let end = tail.iter().rposition(|byte| *byte == b'\n')?;
-                tail[start + 1..=end]
-                    .split(|byte| *byte == b'\n')
-                    .rev()
-                    .find(|line| nonempty(line))
-                    .and_then(object)
-            });
     Ok(Metadata {
         header,
         records,
-        tail: tail_record,
+        tail: tail(&mut file, size)?,
         complete: false,
     })
+}
+
+fn tail(file: &mut std::fs::File, size: u64) -> std::io::Result<Option<Value>> {
+    let mut window = WINDOW;
+    loop {
+        let start = size.saturating_sub(window);
+        file.seek(SeekFrom::Start(start))?;
+        let mut bytes = Vec::new();
+        file.by_ref().take(size - start).read_to_end(&mut bytes)?;
+        let lines = if start == 0 {
+            &bytes[..]
+        } else {
+            bytes
+                .iter()
+                .position(|byte| *byte == b'\n')
+                .map_or(&[][..], |first| &bytes[first + 1..])
+        };
+        let mut lines = lines.rsplit(|byte| *byte == b'\n');
+        // A JSON object is never a strict prefix of a longer one-line
+        // object, so a parseable unterminated last line is complete.
+        if let Some(record) = lines.next().and_then(object) {
+            return Ok(Some(record));
+        }
+        let mut has_complete_line = false;
+        for line in lines.filter(|line| nonempty(line)) {
+            if let Some(record) = object(line) {
+                return Ok(Some(record));
+            }
+            has_complete_line = true;
+        }
+        if has_complete_line || start == 0 {
+            return Ok(None);
+        }
+        window *= 2;
+    }
 }
 
 pub fn scan(
@@ -270,6 +291,30 @@ mod tests {
                 };
                 assert_eq!(read(&full), read(&pruned), "{line:?} {path:?}");
             }
+        }
+    }
+
+    #[test]
+    fn large_files_read_the_last_parseable_record() {
+        let old =
+            serde_json::json!({"timestamp": "old", "pad": "p".repeat(2000)});
+        let recent = serde_json::json!({"timestamp": "recent"});
+        let large = serde_json::json!(
+            {"timestamp": "recent", "pad": "x".repeat(80_000)}
+        );
+        let body = format!("{old}\n").repeat(150);
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("session.jsonl");
+        for tail in [
+            format!("{large}\n"),
+            format!("{recent}\n{{\"timestamp\" garbage\n"),
+            format!("{recent}\n{{\"timestamp\":\"half"),
+            format!("{old}\n{recent}"),
+        ] {
+            std::fs::write(&path, format!("{body}{tail}")).unwrap();
+            let scan = metadata(&path, 10, None).unwrap();
+            assert!(!scan.complete);
+            assert_eq!(scan.tail.unwrap()["timestamp"], "recent", "{tail:.40}");
         }
     }
 }
