@@ -165,11 +165,7 @@ pub fn run(
         return Ok(names.is_some());
     }
     if reindex {
-        let mut index = agent_dump_core::query::index::SearchIndex::open(
-            scan.groups
-                .iter()
-                .map(|g| g.provider.source_root().to_owned()),
-        )?;
+        let mut index = agent_dump_core::query::index::SearchIndex::open()?;
         writeln!(out, "{}\n", t("REINDEX_START", zh, &[]))?;
         let mut total = 0;
         for group in &scan.groups {

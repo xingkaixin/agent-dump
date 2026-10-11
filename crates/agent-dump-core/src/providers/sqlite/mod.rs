@@ -268,6 +268,11 @@ impl Provider for SqliteProvider {
         &self.root
     }
 
+    fn select_source(&mut self) -> crate::Result<Option<&Path>> {
+        self.ensure_database()?;
+        Ok(self.database.is_some().then_some(self.root.as_path()))
+    }
+
     fn raw_export(&self, _session: &Session) -> crate::Result<RawExport> {
         Ok(RawExport::Session)
     }

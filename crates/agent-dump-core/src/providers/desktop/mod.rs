@@ -220,6 +220,10 @@ impl Provider for Desktop {
         self.database.parent().unwrap()
     }
 
+    fn select_source(&mut self) -> crate::Result<Option<&Path>> {
+        Ok(self.select_database()?.then(|| self.source_root()))
+    }
+
     fn supports_format(&self, format: OutputFormat) -> bool {
         format != OutputFormat::Raw
     }

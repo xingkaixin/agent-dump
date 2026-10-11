@@ -36,6 +36,9 @@ impl<F: Fn(&Session) -> crate::Result<SessionData> + Send + Sync> Provider
     fn source_root(&self) -> &Path {
         Path::new(".")
     }
+    fn select_source(&mut self) -> crate::Result<Option<&Path>> {
+        Ok(None)
+    }
     fn search_roots(
         &self,
     ) -> crate::Result<crate::providers::contract::SearchRoots> {

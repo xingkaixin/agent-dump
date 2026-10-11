@@ -59,25 +59,14 @@ fn filename(id: &str) -> crate::Result<String> {
     }
 }
 
-fn absolute_existing_ancestor(path: &Path) -> crate::Result<PathBuf> {
-    if path.exists() {
-        return Ok(path.canonicalize()?);
-    }
-    let parent = path.parent().ok_or("Cannot resolve output path")?;
-    Ok(absolute_existing_ancestor(parent)?
-        .join(path.file_name().ok_or("Invalid output path")?))
-}
-
 fn write(
     output: &Path,
     session_id: &str,
     suffix: &str,
-    source_root: &Path,
     contents: impl FnOnce(&mut fs::File) -> crate::Result<()>,
 ) -> crate::Result<PathBuf> {
     let directory = std::path::absolute(output)?;
-    let resolved = absolute_existing_ancestor(&directory)?;
-    if resolved.starts_with(source_root.canonicalize()?) {
+    if crate::providers::registry::inside_source(&directory)? {
         return Err(
             "Export output must be outside the Provider source directory"
                 .into(),
@@ -114,10 +103,9 @@ pub fn json(
     session_id: &str,
     data: &impl serde::Serialize,
     output: &Path,
-    source_root: &Path,
     suffix: &str,
 ) -> crate::Result<PathBuf> {
-    write(output, session_id, suffix, source_root, |file| {
+    write(output, session_id, suffix, |file| {
         let mut writer = io::BufWriter::new(file);
         data.serialize(&mut serde_json::Serializer::with_formatter(
             &mut writer,
@@ -132,19 +120,17 @@ pub fn markdown(
     session_id: &str,
     text: &str,
     output: &Path,
-    source_root: &Path,
 ) -> crate::Result<PathBuf> {
-    markdown_with_suffix(session_id, text, output, source_root, ".md")
+    markdown_with_suffix(session_id, text, output, ".md")
 }
 
 fn markdown_with_suffix(
     session_id: &str,
     text: &str,
     output: &Path,
-    source_root: &Path,
     suffix: &str,
 ) -> crate::Result<PathBuf> {
-    write(output, session_id, suffix, source_root, |file| {
+    write(output, session_id, suffix, |file| {
         if cfg!(windows) {
             file.write_all(text.replace('\n', "\r\n").as_bytes())?;
         } else {
@@ -158,9 +144,8 @@ pub fn raw(
     session_id: &str,
     source: &Path,
     output: &Path,
-    source_root: &Path,
 ) -> crate::Result<PathBuf> {
-    write(output, session_id, ".raw.jsonl", source_root, |file| {
+    write(output, session_id, ".raw.jsonl", |file| {
         io::copy(&mut fs::File::open(source)?, file)?;
         Ok(())
     })
@@ -179,7 +164,6 @@ impl Excerpt<'_> {
         &self,
         format: crate::output::formats::OutputFormat,
         output: &Path,
-        source_root: &Path,
     ) -> crate::Result<PathBuf> {
         use crate::output::formats::OutputFormat;
         let suffix =
@@ -197,7 +181,6 @@ impl Excerpt<'_> {
                     &self.data.id,
                     &document,
                     output,
-                    source_root,
                     &format!("{suffix}.json"),
                 )
             }
@@ -211,7 +194,6 @@ impl Excerpt<'_> {
                     self.incomplete,
                 ),
                 output,
-                source_root,
                 &format!("{suffix}.md"),
             ),
             OutputFormat::Raw | OutputFormat::Print => {
@@ -239,17 +221,13 @@ impl SessionExport<'_> {
         use crate::providers::contract::RawExport;
         match format {
             OutputFormat::Raw => match self.raw.as_ref().unwrap() {
-                RawExport::File(source) => raw(
-                    &self.session.id,
-                    source,
-                    output,
-                    self.provider.source_root(),
-                ),
+                RawExport::File(source) => {
+                    raw(&self.session.id, source, output)
+                }
                 RawExport::Session => json(
                     &self.session.id,
                     self.data.unwrap(),
                     output,
-                    self.provider.source_root(),
                     ".raw.json",
                 ),
             },
@@ -261,13 +239,7 @@ impl SessionExport<'_> {
                 {
                     object.insert("summary".into(), summary.into());
                 }
-                json(
-                    &self.session.id,
-                    &payload,
-                    output,
-                    self.provider.source_root(),
-                    ".json",
-                )
+                json(&self.session.id, &payload, output, ".json")
             }
             OutputFormat::Markdown => markdown(
                 &self.session.id,
@@ -276,7 +248,6 @@ impl SessionExport<'_> {
                     self.data.unwrap(),
                 ),
                 output,
-                self.provider.source_root(),
             ),
             OutputFormat::Print => unreachable!(),
         }

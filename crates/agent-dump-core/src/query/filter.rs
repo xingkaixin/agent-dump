@@ -119,9 +119,7 @@ fn indexed(
     if positions.is_empty() {
         return Ok(Selection::default());
     }
-    let mut index = crate::query::index::SearchIndex::open(
-        groups.iter().map(|g| g.provider.source_root().to_owned()),
-    )?;
+    let mut index = crate::query::index::SearchIndex::open()?;
     let mut selection = Selection::default();
     for group in groups {
         let (_, failed) = index.update(

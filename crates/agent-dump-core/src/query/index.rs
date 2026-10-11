@@ -114,9 +114,7 @@ fn delete_text(connection: &Connection, rowid: i64) -> crate::Result<()> {
 }
 
 impl SearchIndex {
-    pub fn open(
-        sources: impl IntoIterator<Item = std::path::PathBuf>,
-    ) -> crate::Result<Self> {
+    pub fn open() -> crate::Result<Self> {
         let root = std::env::var_os("XDG_CACHE_HOME")
             .filter(|s| !s.is_empty())
             .map_or(
@@ -124,16 +122,11 @@ impl SearchIndex {
                 std::path::PathBuf::from,
             );
         let path = root.join("agent-dump/search-index.db");
-        let resolved = crate::query::project_path(
-            &crate::storage::source_io::path_text(&path),
-        )?;
-        for source in sources {
-            let source = crate::query::project_path(
-                &crate::storage::source_io::path_text(&source),
-            )?;
-            if resolved.starts_with(source) {
-                return Err("Search index must be outside the Provider source directory".into());
-            }
+        if crate::providers::registry::inside_source(&path)? {
+            return Err(
+                "Search index must be outside the Provider source directory"
+                    .into(),
+            );
         }
         Self::at(&path)
     }
