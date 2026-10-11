@@ -255,12 +255,16 @@ impl Decoder {
                     continue;
                 }
                 let parts = output_parts(&item["content"], timestamp);
+                let mut updates = updates.clone();
+                if item["is_error"] == true {
+                    updates.insert("status".into(), "error".into());
+                }
                 if let Some(tool) = backfill(
                     &mut self.messages,
                     &self.pending,
                     &call_id,
                     &parts,
-                    Some(updates.clone()),
+                    Some(updates),
                 )? {
                     if !parts.is_empty() {
                         tool.state
