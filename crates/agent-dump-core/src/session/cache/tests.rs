@@ -420,6 +420,8 @@ fn sqlite_wal_updates_invalidate_without_changing_database_bytes() {
     connection
         .execute_batch(
             "PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;
+        CREATE TABLE session (id TEXT);
+        INSERT INTO session VALUES ('source');
         CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
         CREATE TABLE part (id TEXT, message_id TEXT, time_created INTEGER, data TEXT);
         INSERT INTO message VALUES ('message','source',0,'{\"role\":\"user\"}');
