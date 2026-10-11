@@ -183,9 +183,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.3",
+        date: "2026-10-11",
+        isLatest: true,
+        title: "More Reliable Session Search and Export",
+        description:
+          "Find recently updated AI sessions in the right order, preserve more Kimi conversation text, and read Codex plan approvals and token totals correctly. Full-text search handles more Unicode and tool-state matches. Export and AI collect protect all supported session sources, and truncated AI reports are reported as failures.",
+        command: 'npx @agent-dump/cli@1.2.3 list',
+        tags: ["Session Export", "Full-text Search", "Data Protection"],
+      },
+      {
         version: "v1.2.2",
         date: "2026-10-10",
-        isLatest: true,
         title: "Switch Large Sessions with Less Waiting",
         description:
           "Browse long AI sessions from Codex, Claude Code, Cursor, and other supported tools with more responsive session switching. The terminal reader avoids repeated work when locating search matches and combines queued navigation keys so it loads the session where your cursor stops.",
@@ -361,9 +370,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.3",
+        date: "2026-10-11",
+        isLatest: true,
+        title: "会话搜索与导出更可靠",
+        description:
+          "按更新时间查找最近活跃的 AI 会话，完整读取 Kimi 文本，正确呈现 Codex 计划确认与 token 总量。全文搜索修复 Unicode 和工具状态匹配；导出与 AI collect 保护所有受支持的会话数据源，并将被截断的 AI 报告明确报告为失败。",
+        command: 'npx @agent-dump/cli@1.2.3 list',
+        tags: ["会话导出", "全文搜索", "数据保护"],
+      },
+      {
         version: "v1.2.2",
         date: "2026-10-10",
-        isLatest: true,
         title: "大型会话切换减少等待",
         description:
           "在终端浏览 Codex、Claude Code、Cursor 等工具的长篇 AI 会话时，切换响应更及时。阅读器减少定位搜索命中时的重复计算，并合并排队的连续导航按键，只加载光标最终停留的会话。",
@@ -539,9 +557,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.3",
+        date: "2026-10-11",
+        isLatest: true,
+        title: "セッション検索とエクスポートの信頼性を改善",
+        description:
+          "更新順で最近の AI セッションを探し、Kimi のテキストや Codex の計画承認・トークン集計を正しく読み取れます。全文検索の Unicode とツール状態の検索を修正。エクスポートと AI collect は対応する全セッションソースを保護し、途中で切れた AI レポートを失敗として通知します。",
+        command: 'npx @agent-dump/cli@1.2.3 list',
+        tags: ["セッション出力", "全文検索", "データ保護"],
+      },
+      {
         version: "v1.2.2",
         date: "2026-10-10",
-        isLatest: true,
         title: "長いセッションの切り替えを快適に",
         description:
           "Codex、Claude Code、Cursor などの長い AI セッションをターミナルで閲覧する際、切り替えの応答性を改善しました。検索位置の特定に伴う重複処理を減らし、連続した移動キーをまとめて、カーソルが止まったセッションを読み込みます。",

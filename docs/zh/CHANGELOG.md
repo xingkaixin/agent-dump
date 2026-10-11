@@ -2,6 +2,25 @@
 
 ## [未发布]
 
+## [1.2.3] - 2026-10-11
+
+### 问题修复
+
+- 未筛选列表和交互选择按更新时间排序，统计的天数窗口继续按创建时间计算 (#482, #500)。
+- 导出、collect 和搜索索引写入检查覆盖所有 Provider 数据源，包括当前未选中的 Provider (#483)。
+- 遇到不可读子目录时继续发现其他会话，并从大型 JSONL 文件恢复最后一条可解析记录 (#481, #493)。
+- 保留 Kimi 字符串回复及 context、wire 输入中的全部文本片段；Codex 使用最新累计 token 快照，并在子代理通知到达时保留待确认计划 (#487, #488, #494, #498)。
+- 跳过 Claude 索引中的异常摘要，保留工具结果的失败状态，拒绝读取已删除的旧版 SQLite 会话，并在检查存储前过滤不支持的 MiniMax 会话 (#479, #485, #490, #495)。
+- 对大小写折叠不稳定的 Unicode 查询跳过 trigram 过滤，并在角色筛选搜索中包含工具状态 (#484, #492)。
+- 在 context JSON 中报告部分读取状态，统一提示词交接对无日期正文的规则，并拒绝因 LLM token 上限而截断的最终报告和 URI 摘要 (#486, #489, #496)。
+- 限制 JSON 诊断解析递归深度，拒绝 npm tar 中损坏的条目大小，并使原生制品校验路径不受脚本调用路径影响 (#477, #478, #480)。
+- 修正落地页 JSON 演示，并在减少动态效果模式下展示全部 Provider (#491, #497)。
+
+### 变更
+
+- 移除过时的 Python 差分用例，按需补充 Rust 行为契约；明确历史对照版本仅用于比较，不再作为行为基准 (#476, #499)。
+- 更新 GitHub Actions、Python 开发工具、Rust 依赖与 Astro 依赖 (#472–#475)。
+
 ## [1.2.2] - 2026-10-10
 
 ### 变更
@@ -1270,3 +1289,4 @@
 [1.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.0
 [1.2.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.1
 [1.2.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.2
+[1.2.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.3
