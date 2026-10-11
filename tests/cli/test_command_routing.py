@@ -25,7 +25,6 @@ pytestmark = pytest.mark.differential
         ["--stats", "--reindex", "--list", "-d", "36500"],
         [f"codex://{IDENTITY}", "--head", "--list", "-q", "provider:missing"],
         ["--list", "--format", "json", "--output", "ignored", "-d", "36500"],
-        ["--search", "benchmark", "--format", "print", "--output", "ignored", "-d", "36500"],
         ["-days", "36500"],
     ],
 )

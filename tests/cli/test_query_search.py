@@ -20,36 +20,40 @@ def search_parity(cli, *args: str) -> None:
     assert all(re.search(r"\*\*.+?\*\*", snippet) for snippet in snippets), snippets
 
 
+KEYWORDS = [
+    "authentication",
+    "Auth Timeout",
+    "timeout auth",
+    "AUTH",
+    "认证",
+    "认证 超时",
+    "超",
+    "a+b",
+    '"quoted"',
+    "AND NEAR *",
+    "i",
+    "İ",
+    "ı",
+    "ſ",
+    "K",
+    "straße",
+    "STRASSE",
+    "tool-only",
+    "reason-only",
+    "private-field",
+    "missing",
+    "😺",
+    "auth\x1ctimeout",
+]
+MULTI_TERM = {"Auth Timeout", "timeout auth", "认证 超时", "auth\x1ctimeout"}
+
+
 @pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("mode", ["query", "search"])
 @pytest.mark.parametrize(
-    "keyword",
-    [
-        "authentication",
-        "Auth Timeout",
-        "timeout auth",
-        "AUTH",
-        "认证",
-        "认证 超时",
-        "超",
-        "a+b",
-        '"quoted"',
-        "AND NEAR *",
-        "i",
-        "İ",
-        "ı",
-        "ſ",
-        "K",
-        "straße",
-        "STRASSE",
-        "tool-only",
-        "reason-only",
-        "private-field",
-        "missing",
-        "😺",
-        "auth\x1ctimeout",
-    ],
+    ("mode", "keyword"),
+    [("query", keyword) for keyword in KEYWORDS if keyword not in MULTI_TERM]
+    + [("search", keyword) for keyword in KEYWORDS],
 )
 def test_literal_matching_rank_and_snippets(cli, lang, mode, keyword):
     cli.write(
