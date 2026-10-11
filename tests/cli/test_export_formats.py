@@ -1,5 +1,6 @@
 """Export boundaries: byte preservation, partial success and source protection."""
 
+import json
 import shutil
 
 from cli_fixture import IDENTITY, header, message
@@ -55,3 +56,24 @@ def test_configured_output_applies_to_every_file_format(cli):
     exported = sorted(p.name for p in (cli.root / "configured" / "codex").iterdir())
     assert exported == sorted(f"{IDENTITY}{suffix}" for suffix in (".json", ".md", ".raw.jsonl"))
     assert not (cli.root / "sessions").exists()
+
+
+def test_codex_json_stats_use_the_latest_cumulative_token_snapshot(cli):
+    def usage(total, last):
+        return {
+            "type": "event_msg",
+            "payload": {
+                "type": "token_count",
+                "info": {
+                    "total_token_usage": {"input_tokens": total, "output_tokens": total // 10},
+                    "last_token_usage": {"input_tokens": last, "output_tokens": last // 10},
+                },
+            },
+        }
+
+    rate_limits_only = {"type": "event_msg", "payload": {"type": "token_count", "info": None}}
+    cli.write([header(), message("user", "Keep"), usage(100, 100), usage(300, 200), usage(300, 200), rate_limits_only])
+    result = cli.run("rust", f"codex://{IDENTITY}", "--format", "json", "--output", "exports")
+    assert result.returncode == 0, result.stderr
+    stats = json.loads((cli.root / "exports" / "codex" / f"{IDENTITY}.json").read_text())["stats"]
+    assert (stats["total_input_tokens"], stats["total_output_tokens"]) == (300, 30)

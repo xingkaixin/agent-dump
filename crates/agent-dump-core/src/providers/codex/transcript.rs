@@ -343,10 +343,13 @@ pub fn read(
 ) -> crate::Result<SessionData> {
     let mut decoder = Decoder::default();
     let mut stats = Stats::default();
+    let mut usage = Value::Null;
     jsonl::scan(&session.source_path, diagnostics, |record, diagnostics| {
-        let result = decoder.record(&record, zh).and_then(|()| {
-            let usage = &record["payload"]["info"]["total_token_usage"];
-            stats.add_tokens(&usage["input_tokens"], &usage["output_tokens"])
+        let result = decoder.record(&record, zh).map(|()| {
+            let snapshot = &record["payload"]["info"]["total_token_usage"];
+            if snapshot.is_object() {
+                usage = snapshot.clone();
+            }
         });
         if let Err(error) = result {
             diagnostics(RecoverableDiagnostic::MessageConvertFailed(
@@ -356,6 +359,7 @@ pub fn read(
         Ok(())
     })?;
     decoder.finish_plan("fail", None);
+    stats.add_tokens(&usage["input_tokens"], &usage["output_tokens"])?;
     stats.message_count = decoder.messages.len();
     let mut data = session.payload(decoder.messages, stats);
     data.directory = session.source_metadata["cwd"].clone();
