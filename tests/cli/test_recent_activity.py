@@ -103,6 +103,18 @@ def test_activity_dates_and_selector_groups_follow_updated_time(
     assert not (cli.root / "sessions").exists()
 
 
+def test_unfiltered_activity_lists_order_by_updated_time(cli: CliFixture) -> None:
+    ids, _ = activity_sessions(cli, "codex")
+    args = ("-d", "7", "--no-metadata-summary", "--lang", "en")
+    machine = cli.run("rust", "--list", *args, "--json")
+    assert machine.returncode == 0, machine.stderr
+    assert [item["id"] for item in json.loads(machine.stdout)["data"]] == [ids[1], ids[0]]
+    for mode, stdin in (("--list", None), ("--interactive", "2\nq\n")):
+        result = cli.run("rust", mode, *args, stdin=stdin)
+        assert "Codex" in result.stdout and not result.stderr
+        assert result.stdout.index(ids[1]) < result.stdout.index(ids[0])
+
+
 def test_stats_window_keeps_created_time(cli: CliFixture) -> None:
     activity_sessions(cli, "codex")
     result = cli.run("rust", "--stats", "-d", "7", "--json")

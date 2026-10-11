@@ -25,7 +25,7 @@ pub fn session_record(info: &ProviderInfo, session: &Session) -> Value {
 
 pub fn list(
     scan: &Scan,
-    selection: Option<&Selection>,
+    selection: &Selection,
     query: Option<&Query>,
     locations: Option<&Locations>,
     out: &mut impl Write,
@@ -36,38 +36,26 @@ pub fn list(
     };
     let search = query
         .is_some_and(|q| q.mode == agent_dump_core::query::text::Mode::Terms);
-    let records: Vec<_> = if let Some(selection) = selection {
-        selection
-            .matches
-            .iter()
-            .map(|matched| {
-                let mut value = record(matched.group, matched.session);
-                if search {
-                    value["rank"] = json!(matched.rank);
-                    value["snippet"] = json!(matched.snippet);
-                    if let Some(locations) = locations {
-                        value["locations"] = json!(
-                            locations.get(&(matched.group, matched.session))
-                        );
-                    }
+    let records: Vec<_> = selection
+        .matches
+        .iter()
+        .map(|matched| {
+            let mut value = record(matched.group, matched.session);
+            if search {
+                value["rank"] = json!(matched.rank);
+                value["snippet"] = json!(matched.snippet);
+                if let Some(locations) = locations {
+                    value["locations"] =
+                        json!(locations.get(&(matched.group, matched.session)));
                 }
-                value
-            })
-            .collect()
-    } else {
-        scan.groups
-            .iter()
-            .enumerate()
-            .flat_map(|(g, group)| {
-                let record = &record;
-                (0..group.sessions.len()).map(move |s| record(g, s))
-            })
-            .collect()
-    };
+            }
+            value
+        })
+        .collect();
     write(
         if search { "search" } else { "list" },
         scan,
-        selection,
+        Some(selection),
         query,
         &json!(records),
         out,

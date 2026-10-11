@@ -49,20 +49,16 @@ pub fn run(
         )?;
         return Ok(names.is_some());
     }
-    let mut selection = query
-        .as_ref()
-        .map(|query| {
-            agent_dump_core::query::filter::select(
-                &scan.groups,
-                query,
-                zh,
-                warnings,
-            )
-        })
-        .transpose()?;
+    let unfiltered = Query::default();
+    let mut selection = agent_dump_core::query::filter::select(
+        &scan.groups,
+        query.unwrap_or(&unfiltered),
+        zh,
+        warnings,
+    )?;
     let mut locations = std::collections::BTreeMap::new();
     if options.locate
-        && let (Some(selection), Some(query)) = (&mut selection, query)
+        && let Some(query) = query
     {
         let cache =
             agent_dump_core::session::cache::SessionDataCache::default();
@@ -109,7 +105,7 @@ pub fn run(
         }
         return super::machine::list(
             &scan,
-            selection.as_ref(),
+            &selection,
             query,
             options.locate.then_some(&locations),
             out,
@@ -143,7 +139,7 @@ pub fn run(
             )
         )?;
         writeln!(out, "{}", "-".repeat(60))?;
-        let matches = &selection.as_ref().unwrap().matches;
+        let matches = &selection.matches;
         if matches.is_empty() {
             writeln!(out, "{}", t("SEARCH_NO_RESULTS", zh, &[]))?;
         }
@@ -204,17 +200,12 @@ pub fn run(
         .enumerate()
         .map(|(g, group)| SessionGroup {
             provider: group.info,
-            sessions: selection.as_ref().map_or_else(
-                || group.sessions.clone(),
-                |selection| {
-                    selection
-                        .matches
-                        .iter()
-                        .filter(|m| m.group == g)
-                        .map(|m| group.sessions[m.session].clone())
-                        .collect()
-                },
-            ),
+            sessions: selection
+                .matches
+                .iter()
+                .filter(|m| m.group == g)
+                .map(|m| group.sessions[m.session].clone())
+                .collect(),
         })
         .collect();
     write!(

@@ -58,21 +58,22 @@ pub fn run(
         )?;
         return Ok(false);
     }
-    if let Some(query) = &operation.query {
-        let selection = agent_dump_core::query::filter::select(
-            &scan.groups,
-            query,
-            zh,
-            warnings,
-        )?;
-        for (g, group) in scan.groups.iter_mut().enumerate() {
-            group.sessions = selection
-                .matches
-                .iter()
-                .filter(|m| m.group == g)
-                .map(|m| group.sessions[m.session].clone())
-                .collect();
-        }
+    let unfiltered = Query::default();
+    let selection = agent_dump_core::query::filter::select(
+        &scan.groups,
+        operation.query.as_ref().unwrap_or(&unfiltered),
+        zh,
+        warnings,
+    )?;
+    for (g, group) in scan.groups.iter_mut().enumerate() {
+        group.sessions = selection
+            .matches
+            .iter()
+            .filter(|m| m.group == g)
+            .map(|m| group.sessions[m.session].clone())
+            .collect();
+    }
+    if operation.query.is_some() {
         scan.groups.retain(|g| !g.sessions.is_empty());
     }
     if scan.groups.is_empty() {
