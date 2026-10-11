@@ -20,7 +20,7 @@ npm install -g @agent-dump/cli
 agent-dump --list --days 30 --query 'provider:claude'
 ```
 
-[Other installation options](/#install) include native binaries, Homebrew, Scoop, and uv. The list command selects sessions created in the last 30 days. To find an older conversation you recently returned to, add `--time-field updated`.
+[Other installation options](/#install) include native binaries, Homebrew, Scoop, and uv. The list command selects sessions updated in the last 30 days, including older conversations you recently returned to. To filter by creation time instead, add `--time-field created`.
 
 Look for the conversation title and working directory. Copy the full `claude://...` URI. To focus on your current project, run this from its directory:
 

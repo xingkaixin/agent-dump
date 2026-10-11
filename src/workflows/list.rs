@@ -21,8 +21,9 @@ pub fn run(
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
     let time_field = query.map(|query| query.time_field).unwrap_or_default();
-    let scan =
-        agent_dump_core::query::scanner::discover(query, days, zh, warnings)?;
+    let scan = agent_dump_core::query::scanner::discover(
+        query, days, time_field, zh, warnings,
+    )?;
     if scan.groups.is_empty() && !options.json {
         let roots = match agent_dump_core::providers::registry::search_roots() {
             Ok(roots) => roots,

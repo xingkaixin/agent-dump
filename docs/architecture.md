@@ -64,7 +64,7 @@ Codex 与 Claude 的连续 assistant 片段由 `session/assembly.rs` 合并。�
 
 ### 活动时间筛选
 
-`Query.time_field` 默认 Created；显式 Updated 时，scanner 请求不按创建时间裁剪的 Provider 发现，再按稳定的 Session.updated_at 应用日期窗口。共享层不解释 Provider 私有日期字段，不用扩大天数的近似值冒充完整发现。普通活动列表先按更新时间排序再截断；Terms 搜索保留相关性优先。渲染和 selector 使用同一 TimeField 投影日期与时间分组，不改写 Session facts。collect、stats 和 reindex 不接受该 CLI 选项。
+`Query.time_field` 默认 Updated，`--time-field created` 改为 Created。scanner 的时间字段由调用方显式传入：Updated 时请求不按创建时间裁剪的 Provider 发现，再按稳定的 Session.updated_at 应用日期窗口；Created 时由 Provider 发现按创建时间裁剪。共享层不解释 Provider 私有日期字段，不用扩大天数的近似值冒充完整发现。普通活动列表先按更新时间排序再截断；Terms 搜索保留相关性优先。渲染和 selector 使用同一 TimeField 投影日期与时间分组，不改写 Session facts。collect、stats 和 reindex 不接受该 CLI 选项；stats 固定按创建时间开窗。
 
 ## 5. 读取与消息定位
 

@@ -20,7 +20,7 @@ npm install -g @agent-dump/cli
 agent-dump --list --days 30 --query 'provider:claude'
 ```
 
-也可以选择[原生二进制、Homebrew、Scoop 或 uv 安装](/zh/#install)。列表会筛选最近 30 天创建的会话。如果对话创建得较早，但最近还在使用，增加 `--time-field updated`，按最近活动时间筛选。
+也可以选择[原生二进制、Homebrew、Scoop 或 uv 安装](/zh/#install)。列表会筛选最近 30 天有更新的会话，包括创建得较早但最近还在使用的对话。需要按创建时间筛选时，增加 `--time-field created`。
 
 根据标题和工作目录找到目标对话，复制完整的 `claude://...` URI。只查当前项目时，在项目目录中运行：
 

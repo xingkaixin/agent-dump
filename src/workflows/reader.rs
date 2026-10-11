@@ -186,6 +186,7 @@ pub fn run(
     let scan = agent_dump_core::query::scanner::discover(
         Some(&query),
         operation.days,
+        query.time_field,
         zh,
         warnings,
     )?;

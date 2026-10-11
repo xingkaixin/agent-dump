@@ -18,10 +18,11 @@ pub struct Scan {
 pub fn discover(
     query: Option<&Query>,
     days: i64,
+    time_field: TimeField,
     zh: bool,
     warnings: &mut impl Write,
 ) -> crate::Result<Scan> {
-    discover_window(query, Some(days), zh, warnings)
+    discover_window(query, Some(days), time_field, zh, warnings)
 }
 
 pub fn discover_all(
@@ -29,17 +30,17 @@ pub fn discover_all(
     zh: bool,
     warnings: &mut impl Write,
 ) -> crate::Result<Scan> {
-    discover_window(query, None, zh, warnings)
+    discover_window(query, None, TimeField::Created, zh, warnings)
 }
 
 fn discover_window(
     query: Option<&Query>,
     days: Option<i64>,
+    time_field: TimeField,
     zh: bool,
     warnings: &mut impl Write,
 ) -> crate::Result<Scan> {
-    let updated_since = query
-        .is_none_or(|query| query.time_field == TimeField::Updated)
+    let updated_since = (time_field == TimeField::Updated)
         .then_some(days)
         .flatten()
         .map(crate::session::timestamp::Timestamp::days_ago)
