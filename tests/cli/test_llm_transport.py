@@ -3,10 +3,12 @@
 from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 import threading
 
 import pytest
-from test_collect import ARGS, configure, only_session
+from test_collect import ARGS, configure, only_session, server
+from test_config_shortcuts import config_path
 
 
 @contextmanager
@@ -132,3 +134,71 @@ def test_truncated_report_is_an_error(cli, provider):
         assert "truncated at the output token limit" in result.stdout
         assert not (cli.root / "report.md").exists()
     assert len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    ("scenario", "code", "count"),
+    [
+        ("429", 0, 3),
+        ("503", 0, 3),
+        ("401", 1, 1),
+        ("thinking", 0, 3),
+        ("parse", 0, 3),
+        ("invalid", 1, 2),
+        ("oversize", 1, 1),
+        ("empty", 1, 1),
+        ("final-transient", 0, 3),
+    ],
+)
+def test_retry_policy_and_bounded_responses(cli, scenario, code, count):
+    only_session(cli)
+
+    def respond(body, number):
+        if number == 1:
+            if scenario in {"429", "503", "401"}:
+                return int(scenario), {"error": {"message": "private remote body"}}
+            if scenario == "thinking":
+                return 400, {"error": {"param": "enable_thinking", "message": "private remote body"}}
+            if scenario == "oversize":
+                return 200, {"choices": [{"message": {"content": "x" * 262144}}]}
+        if scenario == "final-transient" and number == 2:
+            return 503, {"error": {"message": "private remote body"}}
+        text = json.dumps({"requests": ["fact"]}) if "response_format" in body else "# Final"
+        if (scenario == "parse" and number == 1) or scenario == "invalid":
+            text = '{"unknown": []}'
+        if scenario == "empty":
+            text = " "
+        return 200, {"choices": [{"message": {"content": text}}]}
+
+    with server(respond) as (url, requests):
+        configure(cli, url)
+        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+    assert result.returncode == code, result.stdout + result.stderr
+    assert "private remote body" not in result.stdout + result.stderr
+    assert len(requests) == count
+    assert (cli.root / "report.md").exists() == (code == 0)
+    if scenario == "thinking":
+        assert "enable_thinking" not in requests[1][2]
+    if scenario in {"parse", "invalid"}:
+        assert "untrusted_derived_summary" in requests[1][2]["messages"][-1]["content"]
+
+
+def test_collect_log_records_events_without_credentials(cli):
+    only_session(cli)
+
+    def respond(body, number):
+        text = json.dumps({"requests": ["fact"]}) if "response_format" in body else "# Final"
+        return 200, {"choices": [{"message": {"content": '{"unexpected": []}' if number == 1 else text}}]}
+
+    with server(respond) as (url, _):
+        configure(cli, url)
+        config = config_path(cli)
+        config.write_text(config.read_text().replace("enabled=false", 'enabled=true\npath="collect.jsonl"'))
+        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    log = cli.root / "collect.jsonl"
+    events = {json.loads(line)["event"] for line in log.read_text().splitlines()}
+    assert {"collect_run_start", "llm_parse_error", "collect_run_finish"} <= events
+    assert "fixture-secret" not in log.read_text()
+    if os.name != "nt":
+        assert log.stat().st_mode & 0o777 == 0o600

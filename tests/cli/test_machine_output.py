@@ -59,6 +59,9 @@ def test_machine_partial_discovery(cli):
     document = json.loads(result.stdout)
     assert document["status"] == "partial"
     assert "opencode" in document["failed_providers"]
+    scoped = cli.run("rust", "--list", "--json", "-d", "36500", "-q", "provider:codex")
+    assert scoped.returncode == 0 and not scoped.stderr
+    assert json.loads(scoped.stdout)["status"] == "ok"
 
 
 @pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="POSIX directory permissions")

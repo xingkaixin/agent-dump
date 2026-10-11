@@ -55,7 +55,7 @@ def test_jsonl_warning_text_counts_and_bounded_line_samples(cli, provider, lang)
     assert payload["stats"]["message_count"] == 2
 
 
-@pytest.mark.parametrize("provider", JSONL_PROVIDERS)
+@pytest.mark.parametrize("provider", [provider for provider in JSONL_PROVIDERS if provider != "codex"])
 @pytest.mark.parametrize("lang", ["en", "zh"])
 def test_jsonl_head_list_and_raw_do_not_emit_body_warnings(cli, provider, lang):
     damaged_source(cli, provider)

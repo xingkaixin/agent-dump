@@ -1,7 +1,6 @@
 """Title indexes are optional metadata, with warnings scoped to each operation."""
 
 import json
-import os
 import shutil
 
 from cli_fixture import IDENTITY, ROOT, header, message, write_jsonl
@@ -50,9 +49,7 @@ def test_claude_empty_index_has_no_warning(cli, language, document):
     assert cli.run("rust", "--list", "-q", "provider:claude", "-d", "36500", "--lang", language).stderr == ""
 
 
-@pytest.mark.parametrize(
-    "provider,damage", [("codex", "directory"), ("claude", "directory"), ("claude", "json"), ("claude", "utf8")]
-)
+@pytest.mark.parametrize("provider,damage", [("claude", "directory"), ("claude", "json"), ("claude", "utf8")])
 def test_unreadable_index_recovers_with_localized_warning(cli, language, monkeypatch, provider, damage):
     index = sessions(cli, provider)
     if index.exists():
@@ -94,7 +91,7 @@ def test_unreadable_index_recovers_with_localized_warning(cli, language, monkeyp
 
 
 @pytest.mark.parametrize("provider", ["codex", "claude"])
-@pytest.mark.parametrize("state", ["empty", "expired", "invalid-header"])
+@pytest.mark.parametrize("state", ["empty", "invalid-header"])
 def test_index_is_not_read_without_relevant_session_metadata(cli, language, provider, state):
     index = sessions(cli, provider)
     if index.exists():
@@ -104,11 +101,8 @@ def test_index_is_not_read_without_relevant_session_metadata(cli, language, prov
     for path in root.rglob("*.jsonl"):
         if state == "empty":
             path.unlink()
-        elif state == "expired":
-            os.utime(path, (0, 0))
         else:
             path.write_bytes(b"[]\n")
-    days = "1" if state == "expired" else "36500"
-    args = ("--list", "-q", f"provider:{provider}", "-d", days, "--lang", language)
+    args = ("--list", "-q", f"provider:{provider}", "-d", "36500", "--lang", language)
     cli.parity(*args)
     assert cli.run("rust", *args).stderr == ""

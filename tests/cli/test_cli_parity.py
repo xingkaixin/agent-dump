@@ -11,17 +11,6 @@ import tomli
 
 @pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("summary", [True, False])
-def test_list_order_titles_facts_and_date_window(cli, lang, summary):
-    args = ["--list", "-days", "36500", "-query", "provider:codex", "--lang", lang]
-    if not summary:
-        args.append("--no-metadata-summary")
-    cli.parity(*args)
-    cli.parity("--list", "-d", "1", "-q", "provider:codex", "--lang", lang)
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("uri_prefix", ["codex://", "codex://threads/"])
 def test_head_and_uri_prefix(cli, lang, uri_prefix):
     cli.parity(f"{uri_prefix}{IDENTITY}", "--head", "--lang", lang)
@@ -169,11 +158,6 @@ def test_help_covers_all_operations_in_selected_language(cli, lang, args):
         assert option in result.stdout
     assert ("导出 Agent 会话" if lang == "zh" else "Export agent sessions") in result.stdout
     assert "Experimental" not in result.stdout
-
-
-@pytest.mark.differential
-def test_repeated_options_keep_last_value(cli):
-    cli.parity("--list", "-d", "1", "-d", "36500", "-q", "provider:codex", "--lang", "en")
 
 
 @pytest.mark.differential

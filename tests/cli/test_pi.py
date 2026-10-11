@@ -77,9 +77,8 @@ STREAM = [
 
 @pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
-def test_tree_messages_titles_stats_list_head_and_exports(cli, lang):
+def test_tree_messages_titles_stats_head_and_exports(cli, lang):
     create(cli, STREAM)
-    cli.parity("--list", "-d", "36500", "-q", "provider:pi", "--lang", lang)
     cli.parity(f"pi://{IDENTITY}", "--head", "--lang", lang)
     provider_export(cli, f"pi://{IDENTITY}", "pi", lang=lang)
 

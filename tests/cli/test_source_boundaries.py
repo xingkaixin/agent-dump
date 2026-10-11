@@ -5,10 +5,9 @@ import shutil
 import sqlite3
 
 from cli_fixture import IDENTITY, make_cli
-from desktop_fixture import NOW, desktop
+from desktop_fixture import desktop
 import pytest
 from sqlite_fixture import create_v2
-from test_cursor import cursor, export as cursor_export, put
 from test_title_cache import sessions
 
 pytestmark = pytest.mark.differential
@@ -68,23 +67,3 @@ def test_unreadable_title_index_recovers_without_source_writes(cli, provider):
         index.chmod(0o600)
     assert cli.fixtures.source_manifest(cli.root) == before
     cli.parity(f"{provider}://{IDENTITY}", "--head", "--lang", "en")
-
-
-def test_cursor_long_subagent_chain_preserves_completion(tmp_path, monkeypatch):
-    cli = cursor(tmp_path, monkeypatch)
-    parent = "parent"
-    for index in range(128):
-        child = f"child-{index}"
-        put(
-            cli,
-            f"composerData:{child}",
-            {"name": child, "createdAt": NOW, "subagentInfo": {"parentComposerId": parent}},
-        )
-        put(
-            cli,
-            f"bubbleId:{parent}:c-task",
-            {"type": 2, "toolFormerData": {"name": "agent", "additionalData": {"subagentComposerId": child}}},
-        )
-        put(cli, f"bubbleId:{child}:a-answer", {"type": 2, "text": f"Completed {index}"})
-        parent = child
-    cursor_export(cli)

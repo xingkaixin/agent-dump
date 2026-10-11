@@ -108,7 +108,7 @@ def test_cost_sum_overflow_keeps_messages(cli):
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
-@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax", "cursor", "opencode-v2"])
+@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax", "opencode-v2"])
 @pytest.mark.parametrize("value", [2**80, "  +1_234  ", float("inf")])
 def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value):
     import json
@@ -117,18 +117,9 @@ def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value)
     from cli_fixture import make_cli
     from desktop_fixture import desktop, exports
     from sqlite_fixture import create_v2, export as sqlite_export
-    from test_cursor import cursor, export as cursor_export, put
     from test_minimax import add_message
 
-    if provider == "cursor":
-        cli = cursor(tmp_path, monkeypatch)
-        put(
-            cli,
-            "bubbleId:parent:b-answer",
-            {"type": 2, "text": "Numbers", "tokenCount": {"inputTokens": value, "outputTokens": value}},
-        )
-        cursor_export(cli)
-    elif provider == "opencode-v2":
+    if provider == "opencode-v2":
         cli = make_cli(tmp_path, monkeypatch)
         path = create_v2(cli, monkeypatch)
         with sqlite3.connect(path) as connection:

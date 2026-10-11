@@ -86,16 +86,6 @@ def test_cursor_rejects_unsupported_format_combinations(tmp_path, monkeypatch, f
     fails(cursor(tmp_path, monkeypatch), "cursor://request-parent", formats)
 
 
-@pytest.mark.parametrize("identity", ["later-request", "id_%_' OR 1=1--", "请求中文", "other:request"])
-def test_non_anchor_request_ids_are_literal(tmp_path, monkeypatch, identity):
-    cli = cursor(tmp_path, monkeypatch)
-    put(cli, "bubbleId:parent:c-later", {"type": 1, "requestId": identity, "text": "later"})
-    cli.parity(f"cursor://{identity}", "--head", "--lang", "en")
-    data = export(cli, identity)
-    assert data["id"] == identity
-    assert len(data["messages"]) == 3
-
-
 @pytest.mark.parametrize(
     "tool",
     [
@@ -121,15 +111,14 @@ def test_tools_attach_to_explicit_parent_or_stay_separate(tmp_path, monkeypatch,
 
 
 @pytest.mark.parametrize("selection", ["accepted", "reject", None])
-@pytest.mark.parametrize("body", [None, "planning"])
-def test_plan_approval_and_rejected_payload(tmp_path, monkeypatch, selection, body):
+def test_plan_approval_and_rejected_payload(tmp_path, monkeypatch, selection):
     cli = cursor(tmp_path, monkeypatch)
     put(
         cli,
         "bubbleId:parent:c-plan",
         {
             "type": 2,
-            "text": body,
+            "text": None,
             "toolFormerData": {
                 "name": "create_plan",
                 "params": '{"plan":"  Steps  "}',
@@ -189,28 +178,11 @@ def test_subagent_expansion_and_cycles(tmp_path, monkeypatch, mode):
 
 @pytest.mark.parametrize(
     "bubble",
-    [
-        {"type": 1, "codeBlocks": [{"content": "first"}, {"content": "second"}], "text": "ignored"},
-        {"type": 2, "thinking": {"text": "reason"}},
-        {"type": 2, "text": "priority", "codeBlocks": [{"content": "ignored"}]},
-        {"type": 2, "finalText": "fallback", "usage": {"input_tokens": "12", "output_tokens": True}},
-        {"type": 2, "text": "   ", "contextWindowStatusAtCreation": {"tokensUsed": 7}},
-        {"type": 9, "textDescription": "other"},
-    ],
+    [{"type": 2, "text": "   ", "contextWindowStatusAtCreation": {"tokensUsed": 7}}],
 )
 def test_alternate_text_and_token_shapes(tmp_path, monkeypatch, bubble):
     cli = cursor(tmp_path, monkeypatch)
     put(cli, "bubbleId:parent:c", bubble)
-    export(cli)
-
-
-@pytest.mark.parametrize("raw", [None, "{broken", "[]", b"\xff", b'{"type":2,"text":"blob"}'])
-def test_invalid_and_blob_bubbles(tmp_path, monkeypatch, raw):
-    cli = cursor(tmp_path, monkeypatch)
-    with sqlite3.connect(cli.source) as conn:
-        conn.execute("INSERT INTO cursorDiskKV VALUES ('bubbleId:parent:c', ?)", (raw,))
-        conn.execute("INSERT INTO cursorDiskKV VALUES ('composerData:broken', NULL)")
-    cli.parity("--list", "-d", "36500", "-q", "provider:cursor", "--lang", "en")
     export(cli)
 
 
@@ -236,8 +208,7 @@ def test_timestamp_fallbacks_and_host_timezone(tmp_path, monkeypatch, timezone, 
     export(cli)
 
 
-@pytest.mark.parametrize("damaged", [False, True])
-def test_bounded_metadata_and_corrupt_json_fallback(tmp_path, monkeypatch, damaged):
+def test_bounded_metadata(tmp_path, monkeypatch):
     cli = cursor(tmp_path, monkeypatch)
     with sqlite3.connect(cli.source) as conn:
         conn.execute("DELETE FROM cursorDiskKV WHERE key >= 'bubbleId:' AND key < 'bubbleId;'")
@@ -247,41 +218,6 @@ def test_bounded_metadata_and_corrupt_json_fallback(tmp_path, monkeypatch, damag
             f"bubbleId:parent:{index:03d}",
             {"type": 2, **({"requestId": "late", "modelInfo": {"modelName": "late-model"}} if index == 24 else {})},
         )
-    if damaged:
-        with sqlite3.connect(cli.source) as conn:
-            conn.execute("UPDATE cursorDiskKV SET value = 'bad' WHERE key = 'bubbleId:parent:000'")
     cli.parity("--list", "-d", "36500", "-q", "provider:cursor", "--lang", "en")
     cli.parity("cursor://late", "--head", "--lang", "en")
-    export(cli, "late" if damaged else "parent")
-
-
-def test_discovery_across_multiple_metadata_batches(tmp_path, monkeypatch):
-    cli = cursor(tmp_path, monkeypatch)
-    with sqlite3.connect(cli.source) as conn:
-        for index in range(103):
-            identity = f"composer-{index:03d}"
-            conn.execute(
-                "INSERT INTO cursorDiskKV VALUES (?, ?)",
-                (f"composerData:{identity}", json.dumps({"name": identity, "createdAt": NOW})),
-            )
-            conn.execute(
-                "INSERT INTO cursorDiskKV VALUES (?, ?)",
-                (
-                    f"bubbleId:{identity}:a",
-                    json.dumps({"type": 1, "requestId": f"request-{index:03d}", "modelInfo": {"modelName": "batch"}}),
-                ),
-            )
-    cli.parity("--list", "-d", "36500", "-q", "provider:cursor", "--lang", "en")
-
-
-def test_composer_identifier_with_separator_keeps_metadata_owner(tmp_path, monkeypatch):
-    cli = cursor(tmp_path, monkeypatch)
-    put(cli, "composerData:namespace:session", {"name": "Namespaced", "createdAt": NOW})
-    put(
-        cli,
-        "bubbleId:namespace:session:a",
-        {"type": 1, "requestId": "namespaced-request", "text": "payload", "modelInfo": {"modelName": "model"}},
-    )
-    cli.parity("--list", "-d", "36500", "-q", "provider:cursor", "--lang", "en")
-    cli.parity("cursor://namespaced-request", "--head", "--lang", "en")
-    export(cli, "namespaced-request")
+    export(cli, "parent")

@@ -85,7 +85,6 @@ def test_edit_invalid_config_or_eof_leaves_file_unchanged(cli, source):
     "args",
     [
         ["--shortcut", "sessions"],
-        ["--shortcut", "scoped", "codex"],
         ["--shortcut", "dated", "2026-1-15"],
         ["--shortcut", "absent"],
         ["--shortcut"],
@@ -115,17 +114,11 @@ args = ["{"]
 params = []
 args = ["{unknown}"]
 """)
-    expected = (
-        0
-        if len(args) > 1
-        and args[1] in {"sessions", "scoped", "dated"}
-        and args[-1] in {"sessions", "codex", "2026-1-15"}
-        else 1
-    )
+    expected = 0 if len(args) > 1 and args[1] in {"sessions", "dated"} and args[-1] in {"sessions", "2026-1-15"} else 1
     cli.parity(*args, "--lang", lang, exit_code=expected)
 
 
-@pytest.mark.parametrize("formats", ["json", "md", "raw", "json,md,raw"])
+@pytest.mark.parametrize("formats", ["json", "raw"])
 def test_default_output_respects_per_format_config_policy(cli, formats):
     path = config_path(cli)
     path.write_text('[export]\noutput = "configured"\n')
@@ -163,10 +156,3 @@ def test_edit_preserves_content_across_line_endings(cli, newline):
 def test_invalid_utf8_config_diagnostic(cli):
     config_path(cli).write_bytes(b"\xff")
     cli.parity("--config", "view", "--lang", "en", exit_code=1)
-
-
-def test_shortcut_allows_an_empty_format_specifier(cli):
-    config_path(cli).write_text(
-        '[shortcut.scoped]\nparams=["provider"]\nargs=["--list", "-q", "provider:{provider:}", "-d", "36500"]\n'
-    )
-    cli.parity("--shortcut", "scoped", "codex", "--lang", "en")

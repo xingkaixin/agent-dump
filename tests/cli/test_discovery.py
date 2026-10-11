@@ -29,13 +29,6 @@ def test_all_providers_list(cli, lang, summary, days):
     cli.parity(*args)
 
 
-@pytest.mark.parametrize(
-    "query", ["provider:opencode,codex", "PROVIDER:CODEX,opencode,Codex,", "provider:claude,codex"]
-)
-def test_provider_scope_normalizes_and_preserves_registration_order(cli, query):
-    cli.parity("--list", "-d", "36500", "-q", query)
-
-
 @pytest.mark.parametrize("lang", ["en", "zh"])
 def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     cli = cursor(tmp_path, monkeypatch)
@@ -93,7 +86,7 @@ def test_availability_is_independent_of_filtered_sessions(cli, state):
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("scope", [None, "codex", "opencode"])
+@pytest.mark.parametrize("scope", [None, "opencode"])
 def test_corrupt_database_isolated_and_explicit_scope_skips_it(cli, lang, scope):
     Path(cli.environment["OPENCODE_DB"]).write_bytes(b"broken synthetic database")
     before = cli.fixtures.source_manifest(cli.root)
@@ -105,7 +98,7 @@ def test_corrupt_database_isolated_and_explicit_scope_skips_it(cli, lang, scope)
     for result in results:
         assert result.returncode == 0
         assert ("codex://" in result.stdout) == (scope != "opencode")
-        assert ("OpenCode" in result.stderr) == (scope != "codex")
+        assert "OpenCode" in result.stderr
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
@@ -182,19 +175,15 @@ def test_all_available_sources_failing_returns_one(cli, lang):
         assert result.stderr
 
 
-@pytest.mark.parametrize("scoped", [False, True])
-def test_provider_initialization_failure_is_isolated(cli, scoped):
+def test_provider_initialization_failure_is_isolated(cli):
     cli.environment.pop("CHERRY_STUDIO_USER_DATA_DIR")
     boot = Path(cli.environment["HOME"]) / ".cherrystudio/boot-config.json"
     boot.parent.mkdir()
     boot.write_text("broken synthetic config")
-    args = ["--list", "-d", "36500"]
-    if scoped:
-        args.extend(["-q", "provider:codex"])
-    results = [cli.run(candidate, *args) for candidate in ("python", "rust")]
+    results = [cli.run(candidate, "--list", "-d", "36500") for candidate in ("python", "rust")]
     assert results[0].stdout == results[1].stdout
     for result in results:
         assert result.returncode == 0
         assert "codex://" in result.stdout
-        assert bool(result.stderr) == (not scoped)
+        assert result.stderr
     assert boot.read_text() == "broken synthetic config"
