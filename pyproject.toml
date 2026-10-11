@@ -36,7 +36,7 @@ dev = [
     "pytest-xdist>=3.6",
     "ruff>=0.15.2",
     "tomli>=2.0.0",
-    "ty==0.0.84",
+    "ty==0.0.85",
 ]
 packaging = [
     "maturin==1.15.0",
