@@ -46,6 +46,15 @@ pub fn request(
     timeout: u64,
     structured: Option<Mode>,
 ) -> Result<String, RequestError> {
+    content(config, &respond(config, prompt, timeout, structured)?)
+}
+
+fn respond(
+    config: &AiConfig,
+    prompt: &str,
+    timeout: u64,
+    structured: Option<Mode>,
+) -> Result<Value, RequestError> {
     let system = include_str!("../../resources/prompts/system.txt");
     let mut payload = if config.provider == "openai" {
         json!({"model":config.model, "messages":[{"role":"system", "content":system}, {"role":"user", "content":prompt}], "temperature":0.2, "enable_thinking":false})
@@ -59,15 +68,21 @@ pub fn request(
         payload["response_format"] =
             json!({"type":"json_schema", "json_schema":schema(mode)});
     }
-    let response = match post(config, &payload, timeout) {
+    match post(config, &payload, timeout) {
         Err(error)
             if error.rejected_thinking && config.provider == "openai" =>
         {
             payload.as_object_mut().unwrap().remove("enable_thinking");
-            post(config, &payload, timeout)?
+            post(config, &payload, timeout)
         }
-        result => result?,
-    };
+        result => result,
+    }
+}
+
+fn content(
+    config: &AiConfig,
+    response: &Value,
+) -> Result<String, RequestError> {
     let provider = if config.provider == "openai" {
         "OpenAI"
     } else {
@@ -286,11 +301,34 @@ pub fn summary(
     config: &AiConfig,
     prompt: &str,
     timeout: u64,
+    zh: bool,
 ) -> crate::Result<String> {
-    match request(config, prompt, timeout, None) {
+    let response = match respond(config, prompt, timeout, None) {
         Err(error) if error.retryable => {
-            Ok(request(config, prompt, timeout, None)?)
+            respond(config, prompt, timeout, None)?
         }
-        result => Ok(result?),
+        result => result?,
+    };
+    let (provider, reason) = if config.provider == "openai" {
+        (
+            "OpenAI",
+            (response["choices"][0]["finish_reason"] == "length")
+                .then_some("finish_reason=length"),
+        )
+    } else {
+        (
+            "Anthropic",
+            (response["stop_reason"] == "max_tokens")
+                .then_some("stop_reason=max_tokens"),
+        )
+    };
+    if let Some(reason) = reason {
+        return Err(agent_dump_core::output::i18n::t(
+            "LLM_RESPONSE_TRUNCATED",
+            zh,
+            &[("provider", provider.into()), ("reason", reason.into())],
+        )
+        .into());
     }
+    Ok(content(config, &response)?)
 }

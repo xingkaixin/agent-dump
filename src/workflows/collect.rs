@@ -461,7 +461,7 @@ pub fn run(
         prompts
             .iter()
             .map(|prompt| {
-                crate::collect::llm::summary(ai, prompt, collect.timeout)
+                crate::collect::llm::summary(ai, prompt, collect.timeout, zh)
             })
             .collect::<crate::Result<Vec<_>>>()
             .map(|parts| parts.join("\n\n"))
