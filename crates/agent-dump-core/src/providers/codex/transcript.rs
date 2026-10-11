@@ -154,13 +154,17 @@ impl Decoder {
             })
             .collect::<Vec<_>>()
             .join("\n\n");
+        let is_notification = user_text.starts_with("<subagent_notification>")
+            && user_text.ends_with("</subagent_notification>");
         if self.pending_plan.is_some()
             && role == "user"
             && !user_text.is_empty()
+            && !is_notification
         {
             if user_text
                 .trim_start()
                 .starts_with("PLEASE IMPLEMENT THIS PLAN")
+                || user_text == "Implement the plan."
             {
                 self.finish_plan("success", None);
             } else {
