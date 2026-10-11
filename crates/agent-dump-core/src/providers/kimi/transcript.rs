@@ -80,7 +80,15 @@ pub fn read(
             let id = format!("context-{seq}");
             match text(&record["role"]) {
                 "user" => {
-                    let body = field(&record, "content");
+                    let body = record["content"].as_array().map_or_else(
+                        || field(&record, "content"),
+                        |items| {
+                            items
+                                .iter()
+                                .filter_map(|item| item["text"].as_str())
+                                .collect()
+                        },
+                    );
                     if !body.trim().is_empty() {
                         messages.push(Message::new(
                             id,
