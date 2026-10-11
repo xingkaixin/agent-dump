@@ -122,6 +122,10 @@ pub fn read(
                                 Part::text(body, 0)
                             });
                         }
+                    } else if let Some(body) = record["content"].as_str()
+                        && !body.trim().is_empty()
+                    {
+                        parts.push(Part::text(body.into(), 0));
                     }
                     if let Some(calls) = record["tool_calls"].as_array() {
                         for call in calls {

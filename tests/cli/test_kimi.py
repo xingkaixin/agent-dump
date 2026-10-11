@@ -115,24 +115,32 @@ def test_context_user_coercion_empty_and_unknown_records(cli):
     create(
         cli,
         context=[{"role": "user", "content": value} for value in [None, "", "   ", 7]]
-        + [{"role": "assistant", "content": "ignored"}, {"role": "unknown", "content": "ignored"}],
+        + [{"role": "unknown", "content": "ignored"}],
     )
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
-def test_context_user_content_joins_every_text_part(cli):
+def test_context_reads_string_and_part_list_content(cli):
     pasted = [
         {"type": "text", "text": "Review "},
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA==", "id": None}},
         {"type": "text", "text": "PASTED BODY"},
         {"type": "text", "text": " then reply"},
     ]
-    create(cli, context=[{"role": "user", "content": "Plain prompt"}, {"role": "user", "content": pasted}])
+    create(
+        cli,
+        context=[
+            {"role": "user", "content": "Plain prompt"},
+            {"role": "assistant", "content": "Plain answer"},
+            {"role": "user", "content": pasted},
+        ],
+    )
     result = cli.run("rust", f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
     assert result.returncode == 0, result.stderr
     messages = json.loads(result.stdout)["data"]["messages"]
     assert [(item["role"], item["text"]) for item in messages] == [
         ("user", "Plain prompt"),
+        ("assistant", "Plain answer"),
         ("user", "Review PASTED BODY then reply"),
     ]
 
