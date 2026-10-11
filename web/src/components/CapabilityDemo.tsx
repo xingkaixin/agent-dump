@@ -19,11 +19,11 @@ const AUTOPLAY_MS = 7000;
 
 const commands = [
   "agent-dump search 'auth timeout' --query 'path:.' --days 30",
-  "agent-dump head codex://019a7c2e --json",
+  "agent-dump read codex://019a7c2e --json",
   "agent-dump export codex://019a7c2e --format markdown --output ./sessions",
   "agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md",
 ];
-const files = ["search", "head --json", "export", "collect"];
+const files = ["search", "read --json", "export", "collect"];
 
 function Line({ delay, className, children }: { delay: number; className?: string; children: ReactNode }) {
   return (
@@ -51,13 +51,15 @@ function Output({ index, sample, notes, untouched }: Omit<Props, "items"> & { in
     return (
       <>
         <Line delay={at(0)}>{"{"}</Line>
-        <Line delay={at(1)}>{"  "}<span className="muted">"uri"</span>: <span className="ok">"codex://019a7c2e"</span>,</Line>
-        <Line delay={at(2)}>{"  "}<span className="muted">"title"</span>: <span className="ok">"{sample.s2}"</span>,</Line>
-        <Line delay={at(3)}>{"  "}<span className="muted">"messages"</span>: <span className="num">38</span>,</Line>
-        <Line delay={at(4)}>{"  "}<span className="muted">"next_cursor"</span>: <span className="ok">"c_0040"</span>,</Line>
-        <Line delay={at(5)}>{"  "}<span className="muted">"has_more"</span>: <span className="accent">true</span></Line>
-        <Line delay={at(6)}>{"}"}</Line>
-        <Line delay={at(8)} className="subtle note">{notes.read}</Line>
+        <Line delay={at(1)}>{"  "}<span className="muted">"kind"</span>: <span className="ok">"read"</span>, <span className="muted">"status"</span>: <span className="ok">"ok"</span>,</Line>
+        <Line delay={at(2)}>{"  "}<span className="muted">"data"</span>: {"{"}</Line>
+        <Line delay={at(3)}>{"    "}<span className="muted">"total_messages"</span>: <span className="num">38</span>,</Line>
+        <Line delay={at(4)}>{"    "}<span className="muted">"messages"</span>: <span className="subtle">[ … ]</span>,</Line>
+        <Line delay={at(5)}>{"    "}<span className="muted">"next_cursor"</span>: <span className="ok">"r1.7b2275…"</span></Line>
+        <Line delay={at(6)}>{"  },"}</Line>
+        <Line delay={at(7)}>{"  "}<span className="muted">"has_more"</span>: <span className="accent">true</span></Line>
+        <Line delay={at(8)}>{"}"}</Line>
+        <Line delay={at(10)} className="subtle note">{notes.read}</Line>
       </>
     );
   if (index === 2)
