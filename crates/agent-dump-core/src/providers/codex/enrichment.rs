@@ -79,7 +79,10 @@ pub fn subagent_notification(
     if !payload.is_object() {
         return None;
     }
-    let agent_id = field(&payload, "agent_id").trim().to_owned();
+    let agent_id = match field(&payload, "agent_id").trim() {
+        "" => field(&payload, "agent_path").trim().to_owned(),
+        agent_id => agent_id.to_owned(),
+    };
     let nickname = field(&payload, "nickname").trim().to_owned();
     let completed = if payload["status"].is_object() {
         field(&payload["status"], "completed").trim().to_owned()
