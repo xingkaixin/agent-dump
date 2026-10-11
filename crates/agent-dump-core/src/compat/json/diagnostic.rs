@@ -39,6 +39,7 @@ pub fn syntax(text: &str, original: &serde_json::Error) -> Error {
     let mut parser = Parser {
         chars: text.chars().collect(),
         index: 0,
+        depth: 0,
     };
     let failure = if text.starts_with('\u{feff}') {
         Some(("Unexpected UTF-8 BOM (decode using utf-8-sig)", 0))
@@ -49,7 +50,9 @@ pub fn syntax(text: &str, original: &serde_json::Error) -> Error {
                 .then_some(("Extra data", parser.index))
         })
     };
-    let message = if let Some((message, position)) = failure {
+    let message = if let Some((message, position)) =
+        failure.filter(|(message, _)| *message != TOO_DEEP)
+    {
         let before = &parser.chars[..position];
         let line = before.iter().filter(|c| **c == '\n').count() + 1;
         let column = position
@@ -70,9 +73,14 @@ pub fn syntax(text: &str, original: &serde_json::Error) -> Error {
 
 type Failure = (&'static str, usize);
 
+// Matches serde_json's recursion limit so deep input cannot overflow the stack.
+const MAX_DEPTH: usize = 128;
+const TOO_DEEP: &str = "recursion limit exceeded";
+
 struct Parser {
     chars: Vec<char>,
     index: usize,
+    depth: usize,
 }
 
 impl Parser {
@@ -107,8 +115,19 @@ impl Parser {
         self.whitespace();
         match self.chars.get(self.index).copied() {
             Some('"') => self.string(),
-            Some('{') => self.object(),
-            Some('[') => self.array(),
+            Some('{' | '[') if self.depth == MAX_DEPTH => {
+                Err((TOO_DEEP, self.index))
+            }
+            Some(open @ ('{' | '[')) => {
+                self.depth += 1;
+                let result = if open == '{' {
+                    self.object()
+                } else {
+                    self.array()
+                };
+                self.depth -= 1;
+                result
+            }
             _ => {
                 for word in
                     ["null", "true", "false", "NaN", "Infinity", "-Infinity"]
