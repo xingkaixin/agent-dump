@@ -52,6 +52,30 @@ fn separate_cjk(text: &str) -> String {
     output
 }
 
+// Case variants that regex simple case folding matches but the trigram
+// tokenizer of the bundled SQLite (3.53.2) folds apart, found by comparing
+// both over every cased code point. Gaps hold only uncased code points.
+const fn unstable_fold(c: char) -> bool {
+    matches!(
+        c,
+        '\u{19b}' | '\u{25c}' | '\u{261}' | '\u{264}' | '\u{26a}' | '\u{26c}'
+            | '\u{282}' | '\u{287}' | '\u{29d}'..='\u{29e}' | '\u{37f}'
+            | '\u{390}' | '\u{3b0}' | '\u{3f3}' | '\u{412}' | '\u{414}'
+            | '\u{41e}' | '\u{421}'..='\u{422}' | '\u{42a}' | '\u{432}'
+            | '\u{434}' | '\u{43e}' | '\u{441}'..='\u{442}' | '\u{44a}'
+            | '\u{462}'..='\u{463}' | '\u{528}'..='\u{52f}'
+            | '\u{10d0}'..='\u{10ff}' | '\u{13a0}'..='\u{13fd}'
+            | '\u{1c80}'..='\u{1cbf}' | '\u{1d8e}' | '\u{1fd3}' | '\u{1fe3}'
+            | '\u{2c2f}' | '\u{2c5f}' | '\u{a64a}'..='\u{a64b}'
+            | '\u{a698}'..='\u{a69b}' | '\u{a794}'..='\u{a79f}'
+            | '\u{a7ab}'..='\u{a7f6}' | '\u{ab53}'..='\u{abbf}'
+            | '\u{fb05}'..='\u{fb06}' | '\u{104b0}'..='\u{104fb}'
+            | '\u{10570}'..='\u{105bc}' | '\u{10c80}'..='\u{10cf2}'
+            | '\u{10d50}'..='\u{10d85}' | '\u{118a0}'..='\u{118df}'
+            | '\u{16e40}'..='\u{16e7f}' | '\u{1e900}'..='\u{1e943}'
+    )
+}
+
 fn fts_table(query: &TextQuery) -> Option<&'static str> {
     if query.literals.is_empty()
         || (query.mode == Mode::Phrase && query.literals[0].contains(' '))
@@ -61,11 +85,9 @@ fn fts_table(query: &TextQuery) -> Option<&'static str> {
     if query.literals.iter().all(|s| s.chars().all(cjk)) {
         return Some("sessions_fts");
     }
-    if query
-        .literals
-        .iter()
-        .any(|s| s.contains(['i', 'I', 'İ', 'ı']))
-    {
+    if query.literals.iter().any(|s| {
+        s.contains(['i', 'I', 'İ', 'ı']) || s.chars().any(unstable_fold)
+    }) {
         return None;
     }
     if query
