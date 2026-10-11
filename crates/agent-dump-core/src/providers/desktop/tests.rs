@@ -408,3 +408,36 @@ fn migration_required_after_lookup_uses_localized_read_failure() {
     }
     assert_eq!(std::fs::read(&session.source_path).unwrap(), before);
 }
+
+#[test]
+fn minimax_out_of_scope_sessions_skip_storage_checks() {
+    let (_directory, mut provider, session, _) = fixture(Kind::MiniMax);
+    Connection::open(&session.source_path)
+        .unwrap()
+        .execute_batch(
+            "INSERT INTO local_runtime_sessions VALUES ('hidden-v2', 2, 'pi-agent', 'hidden', 'conversation', 0, NULL, NULL, NULL, 1768478400000, 1768478400000, '{}');
+             INSERT INTO local_runtime_sessions VALUES ('cron-pending', 3, 'pi-agent', 'visible', 'cron', 0, NULL, NULL, NULL, 1768478400000, 1768478400000, '{}');
+             INSERT INTO local_runtime_messages VALUES ('cron-pending', '[{}]');
+             INSERT INTO local_runtime_sessions VALUES ('opencode-v1', 1, 'opencode', 'visible', 'conversation', 0, NULL, NULL, NULL, 1768478400000, 1768478400000, '{}');",
+        )
+        .unwrap();
+    let found = provider.discover(None, &mut |_| Ok(())).unwrap();
+    assert!(found.failures.is_empty());
+    assert_eq!(
+        found
+            .sessions
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect::<Vec<_>>(),
+        ["kept"]
+    );
+    for id in ["hidden-v2", "cron-pending", "opencode-v1"] {
+        assert!(
+            provider
+                .find(id, &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .is_none()
+        );
+    }
+}
