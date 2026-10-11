@@ -375,3 +375,14 @@ def test_query_keyword_uses_search_terms(cli, keyword):
         uris.append([session["uri"] for session in json.loads(result.stdout)["data"]])
     expected = [] if "missing" in keyword else [f"codex://{IDENTITY}"]
     assert uris == [expected] * 3
+
+
+def test_role_filter_keeps_tool_state_in_search_corpus(cli):
+    cli.write([header(), call(arguments={"cmd": "quartz-marker"})])
+    for args in (
+        ["--list", "-q", "quartz-marker role:assistant provider:codex"],
+        ["--search", "quartz-marker", "-q", "role:assistant provider:codex"],
+    ):
+        result = cli.run("rust", *args, "--days", "36500", "--json")
+        assert result.returncode == 0, result.stderr
+        assert [session["uri"] for session in json.loads(result.stdout)["data"]] == [f"codex://{IDENTITY}"]

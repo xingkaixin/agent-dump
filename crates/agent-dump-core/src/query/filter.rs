@@ -224,10 +224,12 @@ fn fallback(
                         roles.contains(&message.role.to_lowercase())
                     })
                     .find_map(|message| {
-                        let content =
-                            crate::query::transcript::message_texts(message)
-                                .join("\n");
                         if text.literals.is_empty() {
+                            let content =
+                                crate::query::transcript::message_texts(
+                                    message,
+                                )
+                                .join("\n");
                             let normalized =
                                 crate::query::text::normalize(&content);
                             let excerpt: String =
@@ -239,6 +241,10 @@ fn fallback(
                             };
                             Some((snippet, 0.0))
                         } else {
+                            let content =
+                                crate::query::transcript::searchable_message(
+                                    message,
+                                );
                             text.find(&[&content]).map(|e| (e.snippet, 0.0))
                         }
                     })
