@@ -39,20 +39,23 @@ impl Decoder {
         let id = format!("wire-{seq}");
         match text(&message["type"]) {
             "TurnBegin" => {
-                if let Some(first) = payload["user_input"]
-                    .as_array()
-                    .and_then(|items| items.first())
-                    .filter(|item| item.is_object())
-                {
-                    let body = field(first, "text");
-                    if !body.trim().is_empty() {
-                        self.messages.push(Message::new(
-                            id,
-                            "user",
-                            timestamp,
-                            vec![Part::text(body, timestamp)],
-                        ));
-                    }
+                let input = &payload["user_input"];
+                let body = input.as_array().map_or_else(
+                    || text(input).to_owned(),
+                    |items| {
+                        items
+                            .iter()
+                            .filter_map(|item| item["text"].as_str())
+                            .collect()
+                    },
+                );
+                if !body.trim().is_empty() {
+                    self.messages.push(Message::new(
+                        id,
+                        "user",
+                        timestamp,
+                        vec![Part::text(body, timestamp)],
+                    ));
                 }
                 self.current = None;
                 self.open_call = None;
