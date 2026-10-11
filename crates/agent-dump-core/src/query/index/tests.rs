@@ -358,6 +358,20 @@ fn existing_normalized_text_copies_remain_usable() {
 }
 
 #[test]
+fn case_variants_sqlite_folds_apart_match_like_the_text_query() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut index =
+        SearchIndex::at(&directory.path().join("index.db")).unwrap();
+    let body = "ᲐᲑᲒᲓ ᏣᎳᎩ 𞤀𞤁𞤂";
+    let reader = Reader(move |_: &Session| Ok(body.into()));
+    update(&mut index, &reader, &[session(directory.path(), "s", 0)]);
+    for text in ["აბგდ", "ꮳꮃꭹ", "𞤢𞤣𞤤"] {
+        assert!(TextQuery::new(text, Mode::Terms).find(&[body]).is_some());
+        assert_eq!(search(&index, text, "s").len(), 1, "{text}");
+    }
+}
+
+#[test]
 fn updates_refresh_last_seen_only_after_a_day() {
     let directory = tempfile::tempdir().unwrap();
     let mut index =
