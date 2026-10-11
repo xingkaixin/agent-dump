@@ -165,13 +165,6 @@ def test_wire_assembly_streaming_arguments_and_unknown_head_count(cli, lang):
             wire_event("ContentPart", type="text", text="Keep"),
         ],
         [
-            wire_event("StepBegin"),
-            wire_event("StatusUpdate"),
-            wire_event("ApprovalRequest"),
-            wire_event("TurnBegin", user_input="ignored"),
-            wire_event("ToolResult", return_value=["fallback"]),
-        ],
-        [
             wire_event("ToolCall", id="a", function={"name": "ReadFile", "arguments": "{"}),
             wire_event("ToolCallPart", arguments_part='"incomplete":'),
             wire_event("TurnBegin", user_input=[]),
@@ -183,6 +176,23 @@ def test_wire_assembly_streaming_arguments_and_unknown_head_count(cli, lang):
 def test_wire_boundaries(cli, records):
     create(cli, wire=records)
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
+
+
+def test_wire_user_input_keeps_strings_and_every_text_part(cli):
+    pasted = [
+        {"type": "text", "text": "Review "},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}},
+        {"type": "text", "text": "PASTED BODY"},
+        {"type": "text", "text": " then reply"},
+    ]
+    create(cli, wire=[wire_event("TurnBegin", user_input="Plain prompt"), wire_event("TurnBegin", user_input=pasted)])
+    result = cli.run("rust", f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
+    assert result.returncode == 0, result.stderr
+    messages = json.loads(result.stdout)["data"]["messages"]
+    assert [(item["role"], item["text"]) for item in messages] == [
+        ("user", "Plain prompt"),
+        ("user", "Review PASTED BODY then reply"),
+    ]
 
 
 @pytest.mark.differential
