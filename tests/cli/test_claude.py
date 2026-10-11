@@ -144,6 +144,22 @@ def test_grouped_usage_and_first_metadata(cli, usage):
     provider_export(cli, f"claude://{IDENTITY}", "claudecode")
 
 
+def test_tool_result_is_error_marks_only_that_tool_failed(cli):
+    create(
+        cli,
+        [
+            event("assistant", [tool(), tool("other", "Bash")]),
+            event("user", [result(content="boom", is_error=True), result("other")]),
+        ],
+    )
+    result_ = cli.run("rust", f"claude://{IDENTITY}", "--format", "json", "--output", "exports")
+    assert result_.returncode == 0, result_.stderr
+    export = json.loads(next((cli.root / "exports/claudecode").glob("*.json")).read_text())
+    states = {part["callID"]: part["state"] for message in export["messages"] for part in message["parts"]}
+    assert states["call"]["status"] == "error"
+    assert states["other"]["status"] == "completed"
+
+
 @pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("title_source", ["index", "message", "directory", "project"])
