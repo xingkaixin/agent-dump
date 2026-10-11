@@ -154,6 +154,9 @@ def test_export_context_marks_recoverable_read_failures_partial(cli: CliFixture)
     document = json.loads(next(directory.glob("*.json")).read_text())
     assert document["status"] == "partial"
     assert "Status: partial" in next(directory.glob("*.md")).read_text()
+    printed = cli.run("rust", f"codex://{IDENTITY}", "--message", locator, "--json")
+    assert printed.returncode == 0 and printed.stderr
+    assert json.loads(printed.stdout)["status"] == "partial"
     assert cli.fixtures.source_manifest(cli.root) == before
 
 

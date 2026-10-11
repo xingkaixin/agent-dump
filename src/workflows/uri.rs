@@ -253,7 +253,7 @@ fn run_inner(
         if operation.json {
             serde_json::to_writer(
                 &mut *out,
-                &render::context_json(uri, locator, &data, range, false),
+                &render::context_json(uri, locator, &data, range, incomplete),
             )?;
             writeln!(out)?;
         } else {
