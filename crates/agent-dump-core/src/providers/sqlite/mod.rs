@@ -141,6 +141,21 @@ impl SqliteProvider {
             )
             .into());
         }
+        if rows(
+            connection,
+            "SELECT 1 FROM session WHERE id = ?",
+            &[&session.id],
+        )?
+        .is_empty()
+        {
+            let name = match self.kind {
+                Kind::OpenCode => "OpenCode",
+                Kind::ZCode => "ZCode",
+            };
+            return Err(
+                format!("{name} session is missing: {}", session.id).into()
+            );
+        }
         crate::providers::sqlite::legacy::read(connection, session, diagnostics)
     }
 }
@@ -666,6 +681,29 @@ mod tests {
                 .unwrap();
             assert_eq!(error.to_string(), expected);
             assert_eq!(std::fs::read(path).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn legacy_session_removed_after_lookup_is_missing() {
+        for (kind, expected) in [
+            (Kind::OpenCode, "OpenCode session is missing: kept"),
+            (Kind::ZCode, "ZCode session is missing: kept"),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("source.sqlite");
+            let mut provider = fixture(&path, kind, false);
+            let session = provider
+                .find("kept", &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .unwrap();
+            Connection::open(&path).unwrap().execute_batch("DELETE FROM session; CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT);").unwrap();
+            let error = provider
+                .read(&session, false, &mut |_| Ok(()))
+                .err()
+                .unwrap();
+            assert_eq!(error.to_string(), expected);
         }
     }
 }
