@@ -95,12 +95,6 @@ pub fn sessions(
 }
 
 fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
-    if row["columnar_version"] != 3 || truthy(&row["legacy_pending"]) {
-        return Err(ProviderError::Message([
-            "MiniMax Code session storage is unsupported or its display migration is incomplete. Open the session in a compatible MiniMax Code CLI to complete migration; agent-dump never migrates source data.",
-            "MiniMax Code 会话存储版本不受支持，或展示消息尚未完成迁移。请使用兼容的 MiniMax Code CLI 打开会话完成迁移；agent-dump 不会迁移源数据。",
-        ]).into());
-    }
     if row["runtime"] != "pi-agent"
         || row["visibility"] == "hidden"
         || !matches!(
@@ -109,6 +103,12 @@ fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
         )
     {
         return Ok(None);
+    }
+    if row["columnar_version"] != 3 || truthy(&row["legacy_pending"]) {
+        return Err(ProviderError::Message([
+            "MiniMax Code session storage is unsupported or its display migration is incomplete. Open the session in a compatible MiniMax Code CLI to complete migration; agent-dump never migrates source data.",
+            "MiniMax Code 会话存储版本不受支持，或展示消息尚未完成迁移。请使用兼容的 MiniMax Code CLI 打开会话完成迁移；agent-dump 不会迁移源数据。",
+        ]).into());
     }
     let id = string(&row["session_id"]);
     let extra = crate::providers::sqlite::connection::json_cell(
