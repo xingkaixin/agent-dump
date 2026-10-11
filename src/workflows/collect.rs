@@ -1,7 +1,6 @@
 use crate::collect::model::{Action, Operation};
 use agent_dump_core::config::Config;
 use agent_dump_core::output::i18n::{t, terminal};
-use agent_dump_core::query::scanner::Scan;
 use jiff::civil::Date;
 use serde_json::json;
 use std::collections::{BTreeMap, HashSet};
@@ -58,22 +57,12 @@ pub fn save_path(
     )
 }
 
-fn guard_output(path: &Path, scan: &Scan) -> crate::Result<()> {
-    let path = agent_dump_core::query::project_path(
-        &agent_dump_core::storage::source_io::path_text(path),
-    )?;
-    for group in &scan.groups {
-        let source = agent_dump_core::query::project_path(
-            &agent_dump_core::storage::source_io::path_text(
-                group.provider.source_root(),
-            ),
-        )?;
-        if path.starts_with(source) {
-            return Err(
-                "Collect output must be outside the Provider source directory"
-                    .into(),
-            );
-        }
+fn guard_output(path: &Path) -> crate::Result<()> {
+    if agent_dump_core::providers::registry::inside_source(path)? {
+        return Err(
+            "Collect output must be outside the Provider source directory"
+                .into(),
+        );
     }
     Ok(())
 }
@@ -219,7 +208,7 @@ pub fn run(
     let logger = if ai.is_some() {
         let logging = config.logging()?;
         if logging.enabled {
-            guard_output(&logging.path, &scan)?;
+            guard_output(&logging.path)?;
         }
         Some(crate::collect::log::Logger::new(logging, zh))
     } else {
@@ -542,7 +531,7 @@ pub fn run(
         zh,
         warnings,
     )?;
-    let write = guard_output(&output_path, &scan).and_then(|()| {
+    let write = guard_output(&output_path).and_then(|()| {
         agent_dump_core::storage::private_files::write_text(
             &output_path,
             &markdown,

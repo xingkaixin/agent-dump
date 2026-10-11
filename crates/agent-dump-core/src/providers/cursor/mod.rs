@@ -163,6 +163,11 @@ impl Provider for Cursor {
     fn source_root(&self) -> &Path {
         self.database.parent().unwrap()
     }
+
+    fn select_source(&mut self) -> crate::Result<Option<&Path>> {
+        self.database = (self.resolve_database)()?;
+        Ok(self.database.exists().then(|| self.source_root()))
+    }
     fn supports_format(&self, format: OutputFormat) -> bool {
         matches!(format, OutputFormat::Json | OutputFormat::Print)
     }

@@ -79,11 +79,7 @@ impl SourceRoots {
         &self.owned
     }
 
-    pub fn files(
-        &mut self,
-        depth: Option<usize>,
-        accept: impl Fn(&Path, &Path) -> bool,
-    ) -> crate::Result<Vec<PathBuf>> {
+    pub fn select(&mut self) -> crate::Result<Option<&Path>> {
         if self.base.is_none() {
             let root = self.configured_root()?;
             let primary = root.join(self.suffix);
@@ -95,6 +91,15 @@ impl SourceRoots {
                 self.owned = root;
             }
         }
+        Ok(self.base.is_some().then_some(self.owned.as_path()))
+    }
+
+    pub fn files(
+        &mut self,
+        depth: Option<usize>,
+        accept: impl Fn(&Path, &Path) -> bool,
+    ) -> crate::Result<Vec<PathBuf>> {
+        self.select()?;
         let Some(base) = &self.base else {
             return Ok(Vec::new());
         };

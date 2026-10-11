@@ -228,8 +228,7 @@ fn run_inner(
                     &default_output,
                 )
                 .join(registration.info.name);
-                let path =
-                    excerpt.write(*format, &output, provider.source_root())?;
+                let path = excerpt.write(*format, &output)?;
                 writeln!(
                     out,
                     "{}",

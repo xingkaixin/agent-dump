@@ -130,6 +130,18 @@ def test_missing_session_and_source_protection(cli):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
+def test_export_cannot_write_inside_another_provider_source(cli):
+    cli.environment.pop("OPENCODE_DB")
+    projects = cli.root / "sources" / "claude" / "projects"
+    projects.mkdir(parents=True, exist_ok=True)
+    before = cli.fixtures.source_manifest(cli.root)
+    result = cli.run("rust", f"codex://{IDENTITY}", "--format", "json", "--output", str(projects))
+    assert result.returncode == 1
+    assert "outside the Provider source directory" in result.stdout + result.stderr
+    assert not (projects / "codex").exists()
+    assert cli.fixtures.source_manifest(cli.root) == before
+
+
 @pytest.mark.skipif(os.name == "nt", reason="Symlink creation requires privileges on Windows")
 def test_export_symlink_cannot_modify_provider(cli):
     output = cli.root / "exports" / "codex"

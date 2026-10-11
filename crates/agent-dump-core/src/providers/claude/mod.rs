@@ -296,6 +296,10 @@ impl Provider for Claude {
     fn source_root(&self) -> &Path {
         self.roots.owned()
     }
+
+    fn select_source(&mut self) -> crate::Result<Option<&Path>> {
+        self.roots.select()
+    }
 }
 
 #[cfg(test)]

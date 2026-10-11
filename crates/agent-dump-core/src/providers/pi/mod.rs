@@ -181,6 +181,10 @@ impl Provider for Pi {
     fn source_root(&self) -> &Path {
         self.roots.owned()
     }
+
+    fn select_source(&mut self) -> crate::Result<Option<&Path>> {
+        self.roots.select()
+    }
 }
 
 pub fn datetime(value: &Value) -> Option<Timestamp> {

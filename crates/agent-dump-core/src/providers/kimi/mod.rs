@@ -249,6 +249,10 @@ impl Provider for Kimi {
         self.roots.owned()
     }
 
+    fn select_source(&mut self) -> crate::Result<Option<&Path>> {
+        self.roots.select()
+    }
+
     fn raw_export(&self, session: &Session) -> crate::Result<RawExport> {
         let roots = ["context.jsonl", "wire.jsonl"]
             .map(|name| {

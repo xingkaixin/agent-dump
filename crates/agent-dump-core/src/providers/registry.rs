@@ -172,6 +172,27 @@ pub fn search_roots() -> crate::Result<Vec<String>> {
     }
     Ok(roots)
 }
+
+pub fn inside_source(path: &std::path::Path) -> crate::Result<bool> {
+    let resolve = |path: &std::path::Path| {
+        // An absolute path keeps project_path from expanding a literal `~`.
+        crate::query::project_path(&crate::storage::source_io::path_text(
+            &std::path::absolute(path)?,
+        ))
+    };
+    let target = resolve(path)?;
+    Ok(all().iter().any(|registration| {
+        (registration.open)()
+            .and_then(|mut provider| {
+                Ok(match provider.select_source()? {
+                    Some(root) => target.starts_with(resolve(root)?),
+                    None => false,
+                })
+            })
+            .unwrap_or(false)
+    }))
+}
+
 pub fn uri_examples() -> Vec<String> {
     let mut examples = Vec::new();
     for registration in all() {

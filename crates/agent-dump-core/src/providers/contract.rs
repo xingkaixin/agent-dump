@@ -98,6 +98,7 @@ pub trait Provider: Send + Sync {
         diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<SessionData>;
     fn source_root(&self) -> &Path;
+    fn select_source(&mut self) -> crate::Result<Option<&Path>>;
     fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>>;
 
     fn change_sources(&self, session: &Session) -> Vec<PathBuf> {
