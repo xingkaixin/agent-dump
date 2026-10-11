@@ -520,7 +520,7 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 
 `--locate` 仅用于 `--search`，返回包含任一搜索词的消息位置（各搜索词仍须在会话中全部命中），并遵守角色筛选。仅标题命中时 locations 为空；定位读取失败时为 null，结果标记 partial。未加 --locate 的搜索行为不变。
 
-`--message` 不能与 `--head` 或 `--summary` 组合。不加 `--format` 时打印上下文；`--json` 将上下文对象写入 stdout，包含 kind=context、data.uri、locator、total_messages、start/end 和 messages；每项包含 position 与标准化 message。定位符过期或无效返回非零退出码，JSON 模式诊断仅进入 stderr。
+`--message` 不能与 `--head` 或 `--summary` 组合。不加 `--format` 时打印上下文；`--json` 将上下文对象写入 stdout，包含 kind=context、status（出现可恢复来源诊断时为 partial）、data.uri、locator、total_messages、start/end 和 messages；每项包含 position 与标准化 message。定位符过期或无效返回非零退出码，JSON 模式诊断仅进入 stderr。
 
 加 `--format json,markdown` 可导出选定片段。文件位于输出目录的 Provider 子目录，名称为 `<id>.messages-<start>-<end>.json` / `.md`，不会覆盖整条会话导出。两种格式均保留规范化会话 URI、定位符（正文 revision 和目标位置）、原始消息范围及状态。JSON 保留标准化消息记录；Markdown 展示消息的可搜索文本。可恢复的来源诊断会把文件标记为 `partial`，具体诊断进入 stderr。定位符过期时不会创建文件。各 Provider 的格式限制仍生效；不接受 raw/print 文件格式，也不能同时使用 `--json` 与文件导出参数。`--output` 需要显式指定 `--format`，默认目录与整条会话导出规则一致。
 
