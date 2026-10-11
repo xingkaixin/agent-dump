@@ -80,7 +80,15 @@ pub fn read(
             let id = format!("context-{seq}");
             match text(&record["role"]) {
                 "user" => {
-                    let body = field(&record, "content");
+                    let body = record["content"].as_array().map_or_else(
+                        || field(&record, "content"),
+                        |items| {
+                            items
+                                .iter()
+                                .filter_map(|item| item["text"].as_str())
+                                .collect()
+                        },
+                    );
                     if !body.trim().is_empty() {
                         messages.push(Message::new(
                             id,
@@ -114,6 +122,10 @@ pub fn read(
                                 Part::text(body, 0)
                             });
                         }
+                    } else if let Some(body) = record["content"].as_str()
+                        && !body.trim().is_empty()
+                    {
+                        parts.push(Part::text(body.into(), 0));
                     }
                     if let Some(calls) = record["tool_calls"].as_array() {
                         for call in calls {
