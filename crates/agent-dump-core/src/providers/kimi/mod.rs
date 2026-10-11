@@ -3,7 +3,9 @@ pub(super) mod wire;
 
 use crate::compat::value::text;
 use crate::providers::contract::{Provider, RawExport};
-use crate::providers::files::{self as file_sessions, SourceRoots};
+use crate::providers::files::{
+    self as file_sessions, SourceFiles, SourceRoots,
+};
 use crate::providers::title::{basename, normalize_title};
 use crate::session::timestamp::Timestamp;
 use crate::session::{Session, SessionData, Stats, epoch_seconds};
@@ -34,7 +36,7 @@ impl Kimi {
         })
     }
 
-    fn files(&mut self) -> crate::Result<Vec<PathBuf>> {
+    fn files(&mut self) -> crate::Result<SourceFiles> {
         self.roots.files(None, |path, _| {
             path.file_name().is_some_and(|name| name == "metadata.json")
         })
@@ -155,7 +157,7 @@ impl Provider for Kimi {
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.work_dirs = None;
         file_sessions::discover(
-            &self.files()?,
+            self.files()?,
             days,
             false,
             Self::scan,
@@ -172,7 +174,7 @@ impl Provider for Kimi {
         let files = self.files()?;
         file_sessions::find(
             self.roots.base.clone().as_deref(),
-            &files,
+            files,
             id,
             |path| {
                 path.parent()

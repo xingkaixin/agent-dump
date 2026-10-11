@@ -6,7 +6,9 @@ use crate::compat::value::text;
 use crate::providers::contract::{
     DiagnosticSink, Provider, RecoverableDiagnostic,
 };
-use crate::providers::files::{self as file_sessions, SourceRoots};
+use crate::providers::files::{
+    self as file_sessions, SourceFiles, SourceRoots,
+};
 use crate::providers::jsonl;
 use crate::providers::title::{basename, normalize_title};
 use crate::session::timestamp::Timestamp;
@@ -87,7 +89,7 @@ impl Codex {
             .cloned())
     }
 
-    fn files(&mut self) -> crate::Result<Vec<PathBuf>> {
+    fn files(&mut self) -> crate::Result<SourceFiles> {
         self.roots.files(None, |path, _| {
             path.extension().is_some_and(|ext| ext == "jsonl")
         })
@@ -219,7 +221,7 @@ impl Provider for Codex {
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.titles = None;
         file_sessions::discover(
-            &self.files()?,
+            self.files()?,
             days,
             true,
             Self::scan,
@@ -237,7 +239,7 @@ impl Provider for Codex {
         let files = self.files()?;
         file_sessions::find(
             self.roots.base.clone().as_deref(),
-            &files,
+            files,
             id,
             |path| {
                 path.file_name().is_some_and(|name| {

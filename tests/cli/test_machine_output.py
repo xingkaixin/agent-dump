@@ -1,6 +1,7 @@
 """Machine-readable output contracts using isolated provider records."""
 
 import json
+import os
 from pathlib import Path
 
 from cli_fixture import IDENTITY, CliFixture, header, message, write_jsonl
@@ -58,6 +59,28 @@ def test_machine_partial_discovery(cli):
     document = json.loads(result.stdout)
     assert document["status"] == "partial"
     assert "opencode" in document["failed_providers"]
+
+
+@pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="POSIX directory permissions")
+def test_unreadable_subdirectory_keeps_healthy_file_sessions(cli: CliFixture) -> None:
+    cli.write([header(), message("user", "healthy")])
+    blocked = cli.source.parent / "blocked"
+    blocked.mkdir()
+    blocked.chmod(0)
+    try:
+        listed = cli.run("rust", "--list", "--json", "-d", "36500", "-q", "provider:codex")
+        head = cli.run("rust", f"codex://{IDENTITY}", "--head", "--json")
+    finally:
+        blocked.chmod(0o700)
+    assert listed.returncode == 0, listed.stderr
+    document = json.loads(listed.stdout)
+    assert document["status"] == "partial"
+    assert document["failed_providers"] == ["codex"]
+    assert IDENTITY in [item["id"] for item in document["data"]]
+    assert str(blocked) in listed.stderr
+    assert head.returncode == 0, head.stderr
+    found = json.loads(head.stdout)
+    assert found["status"] == "partial" and found["data"]["id"] == IDENTITY
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])

@@ -2,7 +2,9 @@ pub(super) mod transcript;
 
 use crate::compat::value::{field, text, truthy};
 use crate::providers::contract::Provider;
-use crate::providers::files::{self as file_sessions, SourceRoots};
+use crate::providers::files::{
+    self as file_sessions, SourceFiles, SourceRoots,
+};
 use crate::providers::title::{basename, normalize_title};
 use crate::session::timestamp::Timestamp;
 use crate::session::{Session, SessionData, epoch_seconds, parse_timestamp};
@@ -29,7 +31,7 @@ impl Pi {
         })
     }
 
-    fn files(&mut self) -> crate::Result<Vec<PathBuf>> {
+    fn files(&mut self) -> crate::Result<SourceFiles> {
         self.roots.files(None, |path, _| {
             path.extension().is_some_and(|ext| ext == "jsonl")
         })
@@ -125,7 +127,7 @@ impl Provider for Pi {
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         file_sessions::discover(
-            &self.files()?,
+            self.files()?,
             days,
             true,
             Self::scan,
@@ -142,7 +144,7 @@ impl Provider for Pi {
         let files = self.files()?;
         file_sessions::find(
             self.roots.base.as_deref(),
-            &files,
+            files,
             id,
             |path| {
                 path.file_name().is_some_and(|name| {
