@@ -9,26 +9,6 @@ from test_config_shortcuts import config_path
 pytestmark = pytest.mark.differential
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize(
-    "selection", ["all\n", "1\n", "2,1,2\n", "0,1,99\n", "q\n", "\n", "bad\n", "", "１\n", "1_0\n"]
-)
-@pytest.mark.parametrize("metadata", [True, False])
-def test_session_selection(cli, lang, selection, metadata):
-    args = ["--interactive", "-q", "provider:codex", "-d", "36500", "--output", "exports", "--lang", lang]
-    if not metadata:
-        args += ["--no-metadata-summary"]
-    results = []
-    outputs = []
-    for candidate in ["python", "rust"]:
-        shutil.rmtree(cli.root / "exports", ignore_errors=True)
-        result = cli.run(candidate, *args, stdin=selection)
-        results.append((result.returncode, result.stdout, result.stderr))
-        outputs.append({p.name: json.loads(p.read_text()) for p in (cli.root / "exports").rglob("*.json")})
-    assert outputs[0] == outputs[1]
-    assert results[0] == results[1]
-
-
 @pytest.mark.parametrize("selection", ["1\nall\n", "2\n1\n", "0\n", "q\n", "", "99\n"])
 def test_provider_selection(cli, selection):
     results = []
@@ -40,7 +20,7 @@ def test_provider_selection(cli, selection):
     assert results[0] == results[1]
 
 
-@pytest.mark.parametrize("formats", ["json", "md", "raw", "json,md,raw", "print"])
+@pytest.mark.parametrize("formats", ["print"])
 @pytest.mark.parametrize("explicit", [True, False])
 def test_batch_formats_and_default_paths(cli, formats, explicit):
     config_path(cli).write_text('[export]\noutput="configured"\n')

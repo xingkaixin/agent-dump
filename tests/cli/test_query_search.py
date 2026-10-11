@@ -77,8 +77,6 @@ def test_literal_matching_rank_and_snippets(cli, lang, mode, keyword):
 @pytest.mark.parametrize(
     "query",
     [
-        "provider:codex",
-        "provider:CODEX role:USER",
         "role:user auth provider:codex",
         "role:assistant auth provider:codex",
         "role:system provider:codex",

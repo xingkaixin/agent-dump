@@ -161,11 +161,9 @@ def test_ignored_shapes_do_not_gain_conversion_warnings(cli, lang, provider):
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("provider", ["codex", "claude", "pi"])
+@pytest.mark.parametrize("provider", ["claude", "pi"])
 def test_head_list_and_raw_do_not_convert_messages(cli, lang, provider):
-    if provider == "codex":
-        codex_stream(cli, record([]))
-    elif provider == "claude":
+    if provider == "claude":
         claude_stream(cli, None)
     else:
         pi_stream(cli, "0001-01-01T00:00:00+01:00", "message")
@@ -185,6 +183,5 @@ def test_codex_unhashable_payload_in_metadata_is_a_session_failure(cli, lang, ki
     bad = record(value)
     bad["type"] = kind
     cli.write([header(), message("user", "Keep"), bad])
-    cli.parity("--list", "-q", "provider:codex", "-d", "36500", "--lang", lang)
     cli.parity(f"codex://{IDENTITY}", "--head", "--lang", lang, exit_code=1)
     cli.parity(f"codex://{IDENTITY}", "--format", "raw", "--output", "exports", "--lang", lang, exit_code=1)

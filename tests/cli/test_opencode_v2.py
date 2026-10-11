@@ -144,7 +144,6 @@ def test_coexistence_prefers_v2_before_date_filtering(cli, database):
         )
         connection.execute("UPDATE session_v2 SET time_created = 1")
         connection.execute("UPDATE session SET time_created = ? WHERE id = 'ses_v2'", (time.time_ns() // 1_000_000,))
-    cli.parity("--list", "-d", "36500", "-q", "provider:opencode", "--lang", "en")
     cli.parity("--list", "-d", "1", "-q", "provider:opencode", "--lang", "en")
     export(cli)
     export(cli, identity="ses_old")

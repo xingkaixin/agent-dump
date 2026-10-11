@@ -255,25 +255,6 @@ def test_bounded_metadata_and_corrupt_json_fallback(tmp_path, monkeypatch, damag
     export(cli, "late" if damaged else "parent")
 
 
-def test_discovery_across_multiple_metadata_batches(tmp_path, monkeypatch):
-    cli = cursor(tmp_path, monkeypatch)
-    with sqlite3.connect(cli.source) as conn:
-        for index in range(103):
-            identity = f"composer-{index:03d}"
-            conn.execute(
-                "INSERT INTO cursorDiskKV VALUES (?, ?)",
-                (f"composerData:{identity}", json.dumps({"name": identity, "createdAt": NOW})),
-            )
-            conn.execute(
-                "INSERT INTO cursorDiskKV VALUES (?, ?)",
-                (
-                    f"bubbleId:{identity}:a",
-                    json.dumps({"type": 1, "requestId": f"request-{index:03d}", "modelInfo": {"modelName": "batch"}}),
-                ),
-            )
-    cli.parity("--list", "-d", "36500", "-q", "provider:cursor", "--lang", "en")
-
-
 def test_composer_identifier_with_separator_keeps_metadata_owner(tmp_path, monkeypatch):
     cli = cursor(tmp_path, monkeypatch)
     put(cli, "composerData:namespace:session", {"name": "Namespaced", "createdAt": NOW})

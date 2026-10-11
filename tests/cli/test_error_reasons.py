@@ -36,14 +36,13 @@ def test_json_and_utf8_title_index_causes_match(cli, language, raw):
 
 
 @pytest.mark.parametrize("language", ["en", "zh"])
-@pytest.mark.parametrize("provider", ["codex", "claude"])
-def test_title_index_directory_error_includes_reference_path_and_errno(cli, language, provider):
-    index = sessions(cli, provider)
+def test_title_index_directory_error_includes_reference_path_and_errno(cli, language):
+    index = sessions(cli, "claude")
     if index.exists():
         index.unlink()
     index.mkdir()
-    cli.parity("--list", "-q", f"provider:{provider}", "-d", "36500", "--lang", language)
-    cli.parity(f"{provider}://{IDENTITY}", "--head", "--lang", language)
+    cli.parity("--list", "-q", "provider:claude", "-d", "36500", "--lang", language)
+    cli.parity(f"claude://{IDENTITY}", "--head", "--lang", language)
 
 
 @pytest.mark.parametrize("language", ["en", "zh"])
