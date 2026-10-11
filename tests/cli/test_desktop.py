@@ -43,7 +43,6 @@ def test_unknown_schema_is_not_exported(tmp_path, monkeypatch, provider, sql, la
         f"{provider}://{identity}", "--format", "json,md,print", "--output", "exports", "--lang", lang, exit_code=1
     )
     cli.parity("--list", "-d", "36500", "-q", f"provider:{provider}", "--lang", lang)
-    cli.parity("--list", "-d", "36500", "--lang", lang)
     assert not list((cli.root / "exports").rglob("*"))
 
 

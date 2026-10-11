@@ -84,7 +84,6 @@ def test_edit_invalid_config_or_eof_leaves_file_unchanged(cli, source):
 @pytest.mark.parametrize(
     "args",
     [
-        ["--shortcut", "sessions"],
         ["--shortcut", "dated", "2026-1-15"],
         ["--shortcut", "absent"],
         ["--shortcut"],

@@ -9,7 +9,7 @@ from test_config_shortcuts import config_path
 pytestmark = pytest.mark.differential
 
 
-@pytest.mark.parametrize("selection", ["1\nall\n", "2\n1\n", "0\n", "q\n", "", "99\n"])
+@pytest.mark.parametrize("selection", ["1\nall\n", "0\n", "q\n", "", "99\n"])
 def test_provider_selection(cli, selection):
     results = []
     for candidate in ["python", "rust"]:

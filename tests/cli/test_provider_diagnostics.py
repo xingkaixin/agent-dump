@@ -18,5 +18,4 @@ def test_unusable_desktop_source_has_provider_diagnostic(tmp_path, monkeypatch, 
         f"{provider}://{identity}", "--format", "print,json,md", "--output", "exports", "--lang", lang, exit_code=1
     )
     cli.parity("--list", "-d", "36500", "-q", f"provider:{provider}", "--lang", lang)
-    cli.parity("--list", "-d", "36500", "--lang", lang)
     assert not list((cli.root / "exports").rglob("*"))

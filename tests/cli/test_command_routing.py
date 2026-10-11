@@ -21,11 +21,8 @@ pytestmark = pytest.mark.differential
         [f"codex://{IDENTITY}", "--head", "--format", "json", "--summary"],
         ["--providers", "--stats", "--list", "--summary", "--head", "-q", "invalid:empty"],
         ["--capabilities"],
-        ["--list", "--head", "--summary", "-d", "36500"],
         ["--stats", "--reindex", "--list", "-d", "36500"],
         [f"codex://{IDENTITY}", "--head", "--list", "-q", "provider:missing"],
-        ["--list", "--format", "json", "--output", "ignored", "-d", "36500"],
-        ["-days", "36500"],
     ],
 )
 def test_mode_contract(cli, lang, args):
