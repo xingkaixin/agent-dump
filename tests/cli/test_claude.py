@@ -214,3 +214,13 @@ def test_exports_cannot_write_into_claude_sources(cli):
     )
     assert result_.returncode == 1
     assert cli.fixtures.source_manifest(cli.root) == before
+
+
+def test_non_string_index_summary_falls_back_to_message_title(cli):
+    index = create(cli, [event("user", "Fallback title")]).with_name("sessions-index.json")
+    index.write_text(json.dumps({"entries": [{"sessionId": IDENTITY, "summary": {"text": "bad"}}]}))
+    for args in (("--list", "-q", "provider:claude", "-d", "36500"), (f"claude://{IDENTITY}", "--head")):
+        result_ = cli.run("rust", *args, "--lang", "en")
+        assert result_.returncode == 0, result_.stderr
+        assert "Fallback title" in result_.stdout
+        assert len(result_.stderr.splitlines()) == 1 and str(index) in result_.stderr

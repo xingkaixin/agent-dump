@@ -1,6 +1,6 @@
 pub(super) mod transcript;
 
-use crate::compat::value::{field, text, truthy};
+use crate::compat::value::{field, text};
 use crate::providers::contract::{
     DiagnosticSink, Provider, RecoverableDiagnostic,
 };
@@ -112,11 +112,14 @@ impl Claude {
         let mut skipped = 0;
         for entry in value["entries"].as_array().into_iter().flatten() {
             let id = text(&entry["sessionId"]);
-            if id.trim().is_empty() {
+            let summary = &entry["summary"];
+            if id.trim().is_empty()
+                || !(summary.is_null() || summary.is_string())
+            {
                 skipped += 1;
                 continue;
             }
-            titles.insert(id.to_owned(), entry["summary"].clone());
+            titles.insert(id.to_owned(), summary.clone());
         }
         if skipped > 0 {
             diagnostics(RecoverableDiagnostic::TitleCacheEntriesSkipped {
@@ -149,21 +152,11 @@ impl Claude {
             .into_owned();
         let created_at = parse_timestamp(text(&header["timestamp"]))
             .unwrap_or(Timestamp::try_from(path.metadata()?.modified()?)?);
-        let explicit = match self
+        let explicit = self
             .titles(project, diagnostics)?
             .get(&id)
-            .filter(|value| truthy(value))
-        {
-            Some(Value::String(title)) => normalize_title(title),
-            Some(value) => {
-                let kind = crate::compat::value::type_name(value);
-                return Err(format!(
-                    "expected string or bytes-like object, got '{kind}'"
-                )
-                .into());
-            }
-            None => None,
-        };
+            .and_then(Value::as_str)
+            .and_then(normalize_title);
         let first_user = scan
             .records
             .iter()
