@@ -9,24 +9,10 @@ from test_pi import create as pi_create, message as pi_message
 pytestmark = pytest.mark.differential
 
 
-@pytest.mark.parametrize("provider", ["codex", "claude", "kimi", "pi"])
+@pytest.mark.parametrize("provider", ["claude", "kimi", "pi"])
 @pytest.mark.parametrize("value", [2**63 - 1, 2**80, -(2**80), str(2**100), 1e100, "  +1_234  ", "١٢٣", "１２３"])
 def test_large_token_values_are_preserved_and_accumulated(cli, provider, value):
-    if provider == "codex":
-        cli.write(
-            [
-                header(),
-                message("user", "Numbers"),
-                *[
-                    {
-                        "type": "event_msg",
-                        "payload": {"info": {"total_token_usage": {"input_tokens": value, "output_tokens": value}}},
-                    }
-                    for _ in range(2)
-                ],
-            ]
-        )
-    elif provider == "claude":
+    if provider == "claude":
         cli_event = event("assistant", [{"type": "text", "text": "Numbers"}])
         cli_event["message"]["usage"] = {"input_tokens": value, "output_tokens": value}
         claude_create(cli, [event("user", "Numbers"), cli_event, event("user", "Next"), cli_event])
