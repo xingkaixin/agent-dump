@@ -195,10 +195,16 @@ function parseTarEntries(tarBuffer) {
       .toString("utf8")
       .replace(/\0.*$/, "")
       .trim();
-    const size = Number.parseInt(sizeOctal || "0", 8);
+    if (!/^[0-7]+$/.test(sizeOctal)) {
+      throw new Error(`Package tarball entry ${fullName} has an invalid size field`);
+    }
+    const size = Number.parseInt(sizeOctal, 8);
 
     const contentStart = offset + 512;
     const contentEnd = contentStart + size;
+    if (contentEnd > tarBuffer.length) {
+      throw new Error(`Package tarball entry ${fullName} extends past the end of the archive`);
+    }
     entries.set(fullName, tarBuffer.subarray(contentStart, contentEnd));
 
     offset = contentStart + Math.ceil(size / 512) * 512;

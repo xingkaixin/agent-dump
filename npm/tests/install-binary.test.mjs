@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import fs from "node:fs/promises";
@@ -9,6 +10,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 
 const require = createRequire(import.meta.url);
+const installBinaryModule = require.resolve("../packages/cli/lib/install-binary.cjs");
 const {
   DEFAULT_TOTAL_TIMEOUT_MS,
   MAX_COMPRESSED_TARBALL_BYTES,
@@ -23,7 +25,7 @@ const {
   publishBinaryAtomically,
   runNpm,
   sha256
-} = require("../packages/cli/lib/install-binary.cjs");
+} = require(installBinaryModule);
 const { getBinarySpec } = require("../packages/cli/lib/targets.cjs");
 
 // 每个临时根都在创建时就注册清理：node:test 的 t.after() 在成功、assert 失败与
@@ -419,6 +421,23 @@ test("extractBinaryFromTarball rejects a small tarball that decompresses past th
     () => extractBinaryFromTarball(bomb, { packageName: "p", executableName: "e" }, { maxDecompressedBytes: 1024 }),
     /decompresses past the 1024 byte limit/
   );
+});
+
+test("parseTarEntries rejects a corrupt size field instead of looping", () => {
+  const entry = createTarEntry("package/bin/agent-dump", Buffer.from("binary"));
+  entry.write("-1000\0", 124);
+  const tar = Buffer.concat([entry, Buffer.alloc(1024, 0)]);
+
+  // 回归时解析是同步死循环，node:test 的超时无法打断，只能放进带超时的子进程
+  const result = spawnSync(
+    process.execPath,
+    ["-e", "require(process.argv[1]).parseTarEntries(require('node:fs').readFileSync(0))", installBinaryModule],
+    { input: tar, encoding: "utf8", timeout: 10_000 }
+  );
+
+  assert.equal(result.error, undefined);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /package\/bin\/agent-dump has an invalid size field/);
 });
 
 test("production defaults keep every limit switched on", () => {
