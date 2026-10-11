@@ -1,5 +1,5 @@
 use agent_dump_core::output::i18n::t;
-use agent_dump_core::query::Query;
+use agent_dump_core::query::{Query, TimeField};
 use std::collections::BTreeMap;
 use std::io::Write;
 
@@ -145,8 +145,17 @@ pub fn run(
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
-    let scan =
-        agent_dump_core::query::scanner::discover(query, days, zh, warnings)?;
+    let scan = agent_dump_core::query::scanner::discover(
+        query,
+        days,
+        if reindex {
+            TimeField::Updated
+        } else {
+            TimeField::Created
+        },
+        zh,
+        warnings,
+    )?;
     if scan.groups.is_empty() && !json {
         let names = query
             .as_ref()

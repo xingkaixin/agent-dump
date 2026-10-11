@@ -103,6 +103,13 @@ def test_activity_dates_and_selector_groups_follow_updated_time(
     assert not (cli.root / "sessions").exists()
 
 
+def test_stats_window_keeps_created_time(cli: CliFixture) -> None:
+    activity_sessions(cli, "codex")
+    result = cli.run("rust", "--stats", "-d", "7", "--json")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["data"]["by_provider"]["codex"]["sessions"] == 1
+
+
 @pytest.mark.parametrize(
     "args",
     [

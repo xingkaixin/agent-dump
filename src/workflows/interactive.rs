@@ -32,9 +32,15 @@ pub fn run(
         }
     };
     write!(out, "{}", agent_dump_core::output::render::list_banner())?;
+    let time_field = operation
+        .query
+        .as_ref()
+        .map(|query| query.time_field)
+        .unwrap_or_default();
     let mut scan = agent_dump_core::query::scanner::discover(
         operation.query.as_ref(),
         operation.days,
+        time_field,
         zh,
         warnings,
     )?;
@@ -187,11 +193,7 @@ pub fn run(
         &group.sessions,
         group.info.scheme,
         operation.metadata,
-        operation
-            .query
-            .as_ref()
-            .map(|query| query.time_field)
-            .unwrap_or_default(),
+        time_field,
         zh,
         out,
         input,
