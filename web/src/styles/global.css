@@ -1656,6 +1656,24 @@
     transform: translateY(18px);
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  .marquee__track {
+    flex: auto;
+    flex-wrap: wrap;
+    gap: 1.25rem 4.5rem;
+    max-width: 80rem;
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 4vw, 2.5rem);
+  }
+  .marquee__track li {
+    flex-wrap: wrap;
+    padding: 0;
+    border-right: 0;
+  }
+  .marquee__track[aria-hidden="true"] {
+    display: none;
+  }
+}
 @keyframes rise {
   from {
     opacity: 0;
