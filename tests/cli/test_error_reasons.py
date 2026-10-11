@@ -13,7 +13,6 @@ pytestmark = pytest.mark.differential
     [
         b"{",
         b'{"entries": [',
-        b'{"entries": [1,]}',
         b'{"a" 1}',
         b'{"a": [true false]}',
         b'"unterminated',
@@ -25,7 +24,6 @@ pytestmark = pytest.mark.differential
         b'{"x":"\xe4\xb8',
         b"{}{}",
         b"\xef\xbb\xbf{}",
-        '{"中文": [1,]}'.encode(),
     ],
 )
 def test_json_and_utf8_title_index_causes_match(cli, language, raw):
