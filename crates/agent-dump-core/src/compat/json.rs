@@ -156,3 +156,15 @@ impl serde_json::ser::Formatter for Formatter {
         writer.write_all(output.as_bytes())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deep_nesting_reports_error_without_overflow() {
+        let error = from_str(&"[".repeat(100_000)).unwrap_err();
+
+        assert!(error.to_string().starts_with("recursion limit exceeded"));
+    }
+}
