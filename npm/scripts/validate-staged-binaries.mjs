@@ -100,6 +100,6 @@ async function main() {
   console.log(`Validated staged binaries for ${STAGED_TARGETS.join(", ")}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   await main();
 }
