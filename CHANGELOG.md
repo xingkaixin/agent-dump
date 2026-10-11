@@ -4,6 +4,25 @@
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-10-11
+
+### Fixed
+
+- Order unfiltered lists and interactive selection by update time, while keeping the statistics day window based on creation time (#482, #500).
+- Protect every Provider source from export, collect, and search-index writes, even when that Provider is outside the selected scope (#483).
+- Continue discovering sessions after unreadable subdirectories and recover the last parseable JSONL record in large files (#481, #493).
+- Preserve Kimi string replies and all text parts in context and wire input; use the latest Codex cumulative token snapshot and keep pending plans across subagent notices (#487, #488, #494, #498).
+- Skip malformed Claude index summaries, preserve failed tool-result status, reject deleted legacy SQLite sessions, and filter unsupported MiniMax sessions before storage checks (#479, #485, #490, #495).
+- Avoid trigram filtering for unstable Unicode case folds and include tool state when searching with role filters (#484, #492).
+- Report partial reads in context JSON, align prompt handoff rules for undated text, and reject final reports and URI summaries truncated by LLM token limits (#486, #489, #496).
+- Bound JSON diagnostic recursion, reject corrupt npm tar entry sizes, and resolve staged-binary validation paths independently of the script invocation path (#477, #478, #480).
+- Correct the landing-page JSON demo and show all Providers when reduced motion is enabled (#491, #497).
+
+### Changed
+
+- Replace stale Python differential cases with Rust behavior contracts where needed; document the historical reference as a comparison tool rather than a behavior baseline (#476, #499).
+- Update GitHub Actions, Python development tools, Rust dependencies, and Astro dependencies (#472–#475).
+
 ## [1.2.2] - 2026-10-10
 
 ### Changed
@@ -1267,3 +1286,4 @@
 [1.2.0]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.0
 [1.2.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.1
 [1.2.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.2
+[1.2.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.3
