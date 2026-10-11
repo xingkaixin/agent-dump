@@ -474,7 +474,7 @@ fn generate_summary(
         }
     };
     writeln!(warnings, "{}", t("URI_SUMMARY_LOADING", zh, &[]))?;
-    match crate::collect::llm::summary(&ai, &prompt, 90) {
+    match crate::collect::llm::summary(&ai, &prompt, 90, zh) {
         Ok(summary) => Ok(Some(summary)),
         Err(error) => {
             writeln!(

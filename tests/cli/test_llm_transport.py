@@ -105,3 +105,30 @@ def test_response_boundaries(cli, scenario):
         assert result.returncode == 1
         assert "private" not in result.stdout + result.stderr
     assert len(calls) == (2 if scenario == "timeout" else 1)
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+def test_truncated_report_is_an_error(cli, provider):
+    only_session(cli)
+
+    def respond(_, count):
+        if count == 1:
+            text = json.dumps({"requests": ["fact"]})
+            response = (
+                {"choices": [{"message": {"content": text}, "finish_reason": "stop"}]}
+                if provider == "openai"
+                else {"content": [{"text": text}], "stop_reason": "end_turn"}
+            )
+        elif provider == "openai":
+            response = {"choices": [{"message": {"content": "# Report"}, "finish_reason": "length"}]}
+        else:
+            response = {"content": [{"text": "# Report"}], "stop_reason": "max_tokens"}
+        return 200, {}, json.dumps(response).encode()
+
+    with endpoint(respond) as (url, calls):
+        configure(cli, url, provider)
+        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        assert result.returncode == 1
+        assert "truncated at the output token limit" in result.stdout
+        assert not (cli.root / "report.md").exists()
+    assert len(calls) == 2
