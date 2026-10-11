@@ -13,6 +13,12 @@ pub struct SourceRoots {
     label: &'static str,
 }
 
+#[derive(Default)]
+pub struct SourceFiles {
+    pub paths: Vec<PathBuf>,
+    pub failures: Vec<SessionFailure>,
+}
+
 pub fn environment_root(
     variable: &str,
     default: &str,
@@ -98,31 +104,44 @@ impl SourceRoots {
         &mut self,
         depth: Option<usize>,
         accept: impl Fn(&Path, &Path) -> bool,
-    ) -> crate::Result<Vec<PathBuf>> {
+    ) -> crate::Result<SourceFiles> {
         self.select()?;
         let Some(base) = &self.base else {
-            return Ok(Vec::new());
+            return Ok(SourceFiles::default());
         };
         if !base.exists() {
-            return Ok(Vec::new());
+            return Ok(SourceFiles::default());
         }
         let mut walker = WalkDir::new(base);
         if let Some(depth) = depth {
             walker = walker.max_depth(depth);
         }
-        let mut paths = Vec::new();
+        let mut files = SourceFiles::default();
         for entry in walker {
-            let entry = entry?;
-            if !entry.file_type().is_dir() && accept(entry.path(), base) {
-                paths.push(entry.into_path());
+            match entry {
+                Ok(entry) => {
+                    if !entry.file_type().is_dir() && accept(entry.path(), base)
+                    {
+                        files.paths.push(entry.into_path());
+                    }
+                }
+                Err(error) if error.depth() > 0 => {
+                    files.failures.push(SessionFailure {
+                        source: crate::storage::source_io::path_text(
+                            error.path().unwrap_or(base),
+                        ),
+                        error: error.into(),
+                    });
+                }
+                Err(error) => return Err(error.into()),
             }
         }
-        Ok(paths)
+        Ok(files)
     }
 }
 
 pub fn discover<S: Send>(
-    paths: &[PathBuf],
+    files: SourceFiles,
     days: Option<i64>,
     prune_mtime: bool,
     scan: impl Fn(&Path) -> crate::Result<S> + Sync,
@@ -133,12 +152,14 @@ pub fn discover<S: Send>(
     ) -> crate::Result<Option<Session>>,
 ) -> crate::Result<Discovery> {
     let cutoff = days.map(Timestamp::days_ago).transpose()?;
+    let SourceFiles { paths, failures } = files;
     let mut discovery = Discovery {
         available: !paths.is_empty(),
+        failures,
         ..Discovery::default()
     };
     crate::parallel::ordered(
-        paths,
+        &paths,
         |path| {
             let scanned = (|| {
                 if prune_mtime
@@ -179,16 +200,20 @@ pub fn discover<S: Send>(
 
 pub fn find(
     base: Option<&Path>,
-    paths: &[PathBuf],
+    files: SourceFiles,
     id: &str,
     preferred: impl Fn(&Path) -> bool,
     mut parse: impl FnMut(&Path) -> crate::Result<Option<Session>>,
 ) -> crate::Result<Lookup> {
-    let mut lookup = Lookup::default();
+    let SourceFiles { paths, failures } = files;
+    let mut lookup = Lookup {
+        session: None,
+        failures,
+    };
     if let Some(base) = base.filter(|base| base.exists()) {
         let root = base.canonicalize()?;
         for direct in [true, false] {
-            for path in paths {
+            for path in &paths {
                 if direct && !preferred(path) {
                     continue;
                 }
@@ -241,21 +266,33 @@ mod tests {
                 Timestamp::now(),
             )))
         };
-        let discovery =
-            discover(&[missing.clone(), readable], Some(7), true, scan, parse)
-                .unwrap();
+        let files = |paths| SourceFiles {
+            paths,
+            failures: Vec::new(),
+        };
+        let discovery = discover(
+            files(vec![missing.clone(), readable]),
+            Some(7),
+            true,
+            scan,
+            parse,
+        )
+        .unwrap();
         assert!(discovery.available);
         assert_eq!(discovery.sessions.len(), 1);
         assert_eq!(discovery.sessions[0].id, "kept");
         assert_eq!(discovery.failures.len(), 1);
         assert_eq!(discovery.failures[0].source, missing.display().to_string());
 
-        let failed = discover(&[missing], Some(7), true, scan, parse).unwrap();
+        let failed =
+            discover(files(vec![missing]), Some(7), true, scan, parse).unwrap();
         assert!(failed.available);
         assert!(failed.sessions.is_empty());
         assert_eq!(failed.failures.len(), 1);
 
-        let absent = discover(&[], Some(7), true, scan, parse).unwrap();
+        let absent =
+            discover(SourceFiles::default(), Some(7), true, scan, parse)
+                .unwrap();
         assert!(!absent.available);
         assert!(absent.failures.is_empty());
     }
