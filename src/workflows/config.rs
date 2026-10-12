@@ -343,6 +343,9 @@ fn prompt(
             base_url: values[0].trim().into(),
             model: values[1].trim().into(),
             api_key: values[2].trim().into(),
+            reasoning: existing.map_or("off", |ai| &ai.reasoning).into(),
+            extra_body: existing
+                .map_or(serde_json::Value::Null, |ai| ai.extra_body.clone()),
         });
     let output = values[3].trim().to_owned();
     writeln!(out, "{}", t("CONFIG_CONFIRM_TITLE", zh, &[]))?;

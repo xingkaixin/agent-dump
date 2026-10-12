@@ -191,6 +191,81 @@ def test_retry_policy_and_bounded_responses(cli, scenario, code, count):
         assert "untrusted_derived_summary" in requests[1][2]["messages"][-1]["content"]
 
 
+def set_ai(cli, line):
+    path = config_path(cli)
+    path.write_text(path.read_text().replace('api_key="fixture-secret"\n', f'api_key="fixture-secret"\n{line}\n'))
+
+
+def reply(provider):
+    def respond(_, number):
+        text = json.dumps({"requests": ["fact"]}) if number == 1 else "# Report"
+        if provider == "openai":
+            return 200, {"choices": [{"message": {"content": text}}]}
+        blocks = [{"type": "thinking", "thinking": "plan", "signature": "sig"}, {"type": "text", "text": text}]
+        return 200, {"content": blocks}
+
+    return respond
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("reasoning", [None, "default"])
+def test_reasoning_controls_thinking_parameters(cli, provider, reasoning):
+    only_session(cli)
+    with server(reply(provider)) as (url, requests):
+        configure(cli, url, provider)
+        if reasoning:
+            set_ai(cli, f'reasoning="{reasoning}"')
+        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(requests) == 2
+    for _, _, body in requests:
+        if reasoning == "default":
+            assert "enable_thinking" not in body
+            assert "thinking" not in body
+        elif provider == "openai":
+            assert body["enable_thinking"] is False
+        else:
+            assert body["thinking"] == {"type": "disabled"}
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+def test_extra_body_deep_merges_into_requests(cli, provider):
+    only_session(cli)
+    extra = '[ai.extra_body]\nmax_tokens=8192\n[ai.extra_body.thinking]\ntype="enabled"\nbudget_tokens=1024\n'
+    with server(reply(provider)) as (url, requests):
+        configure(cli, url, provider, extra)
+        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    for _, _, body in requests:
+        assert body["max_tokens"] == 8192
+        assert body["thinking"] == {"type": "enabled", "budget_tokens": 1024}
+
+
+def test_rejected_extra_body_parameter_is_kept(cli):
+    only_session(cli)
+
+    def respond(_, number):
+        return 400, {"error": {"param": "temperature", "message": "private remote body"}}
+
+    with server(respond) as (url, requests):
+        configure(cli, url, extra="[ai.extra_body]\ntemperature=1\n")
+        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+    assert result.returncode == 1
+    assert [body["temperature"] for _, _, body in requests] == [1]
+
+
+@pytest.mark.parametrize("line", ['reasoning="on"', "reasoning=false", "extra_body=1"])
+def test_invalid_reasoning_config_stops_before_requests(cli, line):
+    only_session(cli)
+    with server(reply("openai")) as (url, requests):
+        configure(cli, url)
+        set_ai(cli, line)
+        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+    assert result.returncode == 1
+    assert line.split("=")[0] in result.stdout
+    assert requests == []
+
+
 def test_collect_log_records_events_without_credentials(cli):
     only_session(cli)
 

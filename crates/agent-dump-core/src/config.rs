@@ -10,6 +10,8 @@ pub struct AiConfig {
     pub base_url: String,
     pub model: String,
     pub api_key: String,
+    pub reasoning: String,
+    pub extra_body: Value,
 }
 
 pub struct CollectConfig {
@@ -183,6 +185,12 @@ impl Config {
             base_url: text(&self.data["ai"]["base_url"]),
             model: text(&self.data["ai"]["model"]),
             api_key: text(&self.data["ai"]["api_key"]),
+            reasoning: if self.data["ai"]["reasoning"].is_null() {
+                "off".into()
+            } else {
+                text(&self.data["ai"]["reasoning"])
+            },
+            extra_body: self.data["ai"]["extra_body"].clone(),
         })
     }
     pub fn output(&self) -> String {
@@ -435,6 +443,12 @@ pub fn validate_ai(
     }
     if config.api_key.is_empty() {
         errors.push("api_key");
+    }
+    if !matches!(config.reasoning.as_str(), "off" | "default") {
+        errors.push("reasoning");
+    }
+    if !config.extra_body.is_null() && !config.extra_body.is_object() {
+        errors.push("extra_body");
     }
     if !config.base_url.is_empty() {
         let scheme = config
