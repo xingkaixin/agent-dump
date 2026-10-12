@@ -9,7 +9,7 @@ use std::time::Duration;
 pub struct RequestError {
     message: String,
     pub retryable: bool,
-    rejected_thinking: bool,
+    rejected: Option<&'static str>,
 }
 impl fmt::Display for RequestError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -22,7 +22,7 @@ const fn error(message: String, retryable: bool) -> RequestError {
     RequestError {
         message,
         retryable,
-        rejected_thinking: false,
+        rejected: None,
     }
 }
 
@@ -68,15 +68,29 @@ fn respond(
         payload["response_format"] =
             json!({"type":"json_schema", "json_schema":schema(mode)});
     }
-    match post(config, &payload, timeout) {
-        Err(error)
-            if error.rejected_thinking && config.provider == "openai" =>
-        {
-            payload.as_object_mut().unwrap().remove("enable_thinking");
-            post(config, &payload, timeout)
+    loop {
+        let result = post(config, &payload, timeout);
+        let retry = match &result {
+            Err(error) if config.provider == "openai" => error
+                .rejected
+                .is_some_and(|param| drop_rejected(&mut payload, param)),
+            _ => false,
+        };
+        if !retry {
+            return result;
         }
-        result => result,
     }
+}
+
+fn drop_rejected(payload: &mut Value, param: &str) -> bool {
+    let payload = payload.as_object_mut().unwrap();
+    let Some(value) = payload.shift_remove(param) else {
+        return false;
+    };
+    if param == "max_tokens" {
+        payload.insert("max_completion_tokens".into(), value);
+    }
+    true
 }
 
 fn content(
@@ -277,17 +291,22 @@ fn post(
                     .as_str()
                     .unwrap_or("")
                     .to_lowercase();
-                failure.rejected_thinking = param == "enable_thinking"
-                    || (message.contains("enable_thinking")
-                        && [
-                            "unrecognized request argument",
-                            "unknown parameter",
-                            "unsupported parameter",
-                            "unexpected keyword argument",
-                            "extra inputs are not permitted",
-                        ]
-                        .iter()
-                        .any(|s| message.contains(s)));
+                failure.rejected =
+                    ["enable_thinking", "temperature", "max_tokens"]
+                        .into_iter()
+                        .find(|name| {
+                            param == *name
+                                || (message.contains(name)
+                                    && [
+                                        "unrecognized request argument",
+                                        "unknown parameter",
+                                        "unsupported parameter",
+                                        "unexpected keyword argument",
+                                        "extra inputs are not permitted",
+                                    ]
+                                    .iter()
+                                    .any(|s| message.contains(s)))
+                        });
             }
             return Err(failure);
         }

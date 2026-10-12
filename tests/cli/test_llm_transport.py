@@ -143,6 +143,8 @@ def test_truncated_report_is_an_error(cli, provider):
         ("503", 0, 3),
         ("401", 1, 1),
         ("thinking", 0, 3),
+        ("temperature", 0, 3),
+        ("max_tokens", 0, 3),
         ("parse", 0, 3),
         ("invalid", 1, 2),
         ("oversize", 1, 1),
@@ -157,8 +159,9 @@ def test_retry_policy_and_bounded_responses(cli, scenario, code, count):
         if number == 1:
             if scenario in {"429", "503", "401"}:
                 return int(scenario), {"error": {"message": "private remote body"}}
-            if scenario == "thinking":
-                return 400, {"error": {"param": "enable_thinking", "message": "private remote body"}}
+            if scenario in {"thinking", "temperature", "max_tokens"}:
+                param = "enable_thinking" if scenario == "thinking" else scenario
+                return 400, {"error": {"param": param, "message": "private remote body"}}
             if scenario == "oversize":
                 return 200, {"choices": [{"message": {"content": "x" * 262144}}]}
         if scenario == "final-transient" and number == 2:
@@ -179,6 +182,11 @@ def test_retry_policy_and_bounded_responses(cli, scenario, code, count):
     assert (cli.root / "report.md").exists() == (code == 0)
     if scenario == "thinking":
         assert "enable_thinking" not in requests[1][2]
+    if scenario == "temperature":
+        assert "temperature" not in requests[1][2]
+    if scenario == "max_tokens":
+        assert "max_tokens" not in requests[1][2]
+        assert requests[1][2]["max_completion_tokens"] == 4096
     if scenario in {"parse", "invalid"}:
         assert "untrusted_derived_summary" in requests[1][2]["messages"][-1]["content"]
 
