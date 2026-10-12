@@ -440,6 +440,7 @@ provider = "openai" # openai | anthropic
 base_url = "https://api.openai.com/v1"
 model = "gpt-4.1-mini"
 api_key = "sk-..."
+reasoning = "off" # off | default
 
 [collect]
 summary_concurrency = 4
@@ -461,6 +462,23 @@ deny = [
   "/Users/Kevin/workspace/projects/work/fin-agent/agent",
 ]
 ```
+
+`[ai].reasoning` 控制模型的思考模式。`off`（默认）向 OpenAI 兼容服务发送 `enable_thinking: false`，向 Anthropic 发送 `thinking: {type: "disabled"}`。`default` 两者都不发送，沿用服务端默认行为。开启推理或指定强度需要各厂商私有参数，请写在 `[ai.extra_body]` 中。该表会深度合并进每个请求体：嵌套表逐层合并，其他值直接覆盖。
+
+```toml
+# OpenAI 推理模型
+[ai.extra_body]
+reasoning_effort = "low"
+```
+
+```toml
+# Anthropic extended thinking；max_tokens 必须大于 budget_tokens
+[ai.extra_body]
+max_tokens = 8192
+thinking = { type = "enabled", budget_tokens = 2048 }
+```
+
+OpenAI 兼容服务拒绝默认发送的 `enable_thinking`、`temperature` 或 `max_tokens` 时，agent-dump 会去掉该参数后重试；`max_tokens` 改名为 `max_completion_tokens`。`extra_body` 中设置的参数不会被移除。`--config edit` 不询问 `reasoning` 和 `extra_body`，并保留其原值。
 
 `[agent.<name>].deny` 仅对 `--collect` 生效。当会话 `cwd` 与配置路径匹配或位于该路径下时，collect 阶段会忽略该会话。
 

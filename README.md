@@ -455,6 +455,7 @@ provider = "openai" # openai | anthropic
 base_url = "https://api.openai.com/v1"
 model = "gpt-4.1-mini"
 api_key = "sk-..."
+reasoning = "off" # off | default
 
 [collect]
 summary_concurrency = 4 # 1-32
@@ -476,6 +477,23 @@ deny = [
   "/Users/Kevin/workspace/projects/work/fin-agent/agent",
 ]
 ```
+
+`[ai].reasoning` controls the model's thinking mode. `off` (the default) sends `enable_thinking: false` to OpenAI-compatible services and `thinking: {type: "disabled"}` to Anthropic. `default` sends neither and leaves the service default in place. Enabling reasoning or choosing an effort level uses vendor-specific parameters, so set them in `[ai.extra_body]`. The table is deep-merged into every request body: nested tables merge, other values replace.
+
+```toml
+# OpenAI reasoning models
+[ai.extra_body]
+reasoning_effort = "low"
+```
+
+```toml
+# Anthropic extended thinking; max_tokens must exceed budget_tokens
+[ai.extra_body]
+max_tokens = 8192
+thinking = { type = "enabled", budget_tokens = 2048 }
+```
+
+When an OpenAI-compatible service rejects the default `enable_thinking`, `temperature`, or `max_tokens`, agent-dump retries without it; `max_tokens` is renamed to `max_completion_tokens`. Parameters set in `extra_body` are never removed. `--config edit` does not prompt for `reasoning` or `extra_body` and keeps their values.
 
 `[agent.<name>].deny` only applies to `--collect`. When a session `cwd` matches one of the configured paths, or is inside that path, the session is ignored during collect.
 
