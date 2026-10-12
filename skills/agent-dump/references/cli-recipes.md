@@ -359,7 +359,7 @@ agent-dump --search "auth" --list --days 30
 
 处理：
 1. 先执行 `agent-dump --config view` 检查状态。
-2. 再执行 `agent-dump --config edit` 补齐 `provider/base_url/model/api_key`。
+2. 再执行 `agent-dump --config edit` 补齐 `provider/base_url/model/api_key`。若提示 `reasoning` 或 `extra_body`，手动修正配置文件：`reasoning` 只能是 `off` 或 `default`，`extra_body` 必须是 TOML 表。
 3. 若当前只需导出，可去掉 `--summary`，CLI 会继续完成导出。
 
 ### format 语法非法

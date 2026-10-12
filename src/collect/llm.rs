@@ -9,7 +9,7 @@ use std::time::Duration;
 pub struct RequestError {
     message: String,
     pub retryable: bool,
-    rejected_thinking: bool,
+    rejected: Option<&'static str>,
 }
 impl fmt::Display for RequestError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -22,7 +22,7 @@ const fn error(message: String, retryable: bool) -> RequestError {
     RequestError {
         message,
         retryable,
-        rejected_thinking: false,
+        rejected: None,
     }
 }
 
@@ -56,27 +56,66 @@ fn respond(
     structured: Option<Mode>,
 ) -> Result<Value, RequestError> {
     let system = include_str!("../../resources/prompts/system.txt");
-    let mut payload = if config.provider == "openai" {
-        json!({"model":config.model, "messages":[{"role":"system", "content":system}, {"role":"user", "content":prompt}], "temperature":0.2, "enable_thinking":false})
+    let openai = config.provider == "openai";
+    let mut payload = if openai {
+        json!({"model":config.model, "messages":[{"role":"system", "content":system}, {"role":"user", "content":prompt}], "temperature":0.2})
     } else {
-        json!({"model":config.model, "max_tokens":4096, "system":system, "messages":[{"role":"user", "content":prompt}], "thinking":{"type":"disabled"}})
+        json!({"model":config.model, "max_tokens":4096, "system":system, "messages":[{"role":"user", "content":prompt}]})
     };
+    if config.reasoning == "off" {
+        if openai {
+            payload["enable_thinking"] = false.into();
+        } else {
+            payload["thinking"] = json!({"type":"disabled"});
+        }
+    }
     if let Some(mode) = structured
-        && config.provider == "openai"
+        && openai
     {
         payload["max_tokens"] = 4096.into();
         payload["response_format"] =
             json!({"type":"json_schema", "json_schema":schema(mode)});
     }
-    match post(config, &payload, timeout) {
-        Err(error)
-            if error.rejected_thinking && config.provider == "openai" =>
-        {
-            payload.as_object_mut().unwrap().remove("enable_thinking");
-            post(config, &payload, timeout)
+    merge(&mut payload, &config.extra_body);
+    loop {
+        let result = post(config, &payload, timeout);
+        let retry = match &result {
+            Err(error) if openai => error.rejected.is_some_and(|param| {
+                config.extra_body.get(param).is_none()
+                    && drop_rejected(&mut payload, param)
+            }),
+            _ => false,
+        };
+        if !retry {
+            return result;
         }
-        result => result,
     }
+}
+
+fn merge(target: &mut Value, source: &Value) {
+    if let (Value::Object(target), Value::Object(source)) = (target, source) {
+        for (key, value) in source {
+            match target.get_mut(key) {
+                Some(slot) if slot.is_object() && value.is_object() => {
+                    merge(slot, value);
+                }
+                _ => {
+                    target.insert(key.clone(), value.clone());
+                }
+            }
+        }
+    }
+}
+
+fn drop_rejected(payload: &mut Value, param: &str) -> bool {
+    let payload = payload.as_object_mut().unwrap();
+    let Some(value) = payload.shift_remove(param) else {
+        return false;
+    };
+    if param == "max_tokens" {
+        payload.insert("max_completion_tokens".into(), value);
+    }
+    true
 }
 
 fn content(
@@ -97,8 +136,8 @@ fn content(
     } else {
         response
             .get("content")
-            .and_then(|v| v.get(0))
-            .and_then(|v| v.get("text"))
+            .and_then(Value::as_array)
+            .and_then(|blocks| blocks.iter().find_map(|v| v.get("text")))
     };
     let content = content.ok_or_else(|| {
         error(format!("{provider} API response missing content"), false)
@@ -277,17 +316,22 @@ fn post(
                     .as_str()
                     .unwrap_or("")
                     .to_lowercase();
-                failure.rejected_thinking = param == "enable_thinking"
-                    || (message.contains("enable_thinking")
-                        && [
-                            "unrecognized request argument",
-                            "unknown parameter",
-                            "unsupported parameter",
-                            "unexpected keyword argument",
-                            "extra inputs are not permitted",
-                        ]
-                        .iter()
-                        .any(|s| message.contains(s)));
+                failure.rejected =
+                    ["enable_thinking", "temperature", "max_tokens"]
+                        .into_iter()
+                        .find(|name| {
+                            param == *name
+                                || (message.contains(name)
+                                    && [
+                                        "unrecognized request argument",
+                                        "unknown parameter",
+                                        "unsupported parameter",
+                                        "unexpected keyword argument",
+                                        "extra inputs are not permitted",
+                                    ]
+                                    .iter()
+                                    .any(|s| message.contains(s)))
+                        });
             }
             return Err(failure);
         }
