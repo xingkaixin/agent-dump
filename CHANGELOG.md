@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-10-15
+
+### Added
+
+- Configure AI collect reasoning with `[ai].reasoning` and deep-merge vendor-specific request options through `[ai.extra_body]`, preserving these settings when editing configuration (#502).
+
+### Fixed
+
+- Retry OpenAI-compatible requests when default thinking, temperature, or token-limit parameters are rejected, while preserving explicitly configured request options; extract Anthropic text replies after thinking blocks (#502).
+
+### Changed
+
+- Redesign the landing page with the Forest theme and refresh website and GitHub social preview images (#503).
+
 ## [1.2.3] - 2026-10-11
 
 ### Fixed
@@ -1287,3 +1301,4 @@
 [1.2.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.1
 [1.2.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.2
 [1.2.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.3
+[1.2.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.4

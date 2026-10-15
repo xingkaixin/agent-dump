@@ -2,6 +2,20 @@
 
 ## [未发布]
 
+## [1.2.4] - 2026-10-15
+
+### 新增功能
+
+- AI collect 支持通过 `[ai].reasoning` 配置推理模式，并通过 `[ai.extra_body]` 深度合并厂商专用请求参数；编辑配置时保留这些设置 (#502)。
+
+### 问题修复
+
+- OpenAI 兼容服务拒绝默认思考、温度或 token 上限参数时调整参数并重试，同时保留显式配置的请求选项；正确提取 Anthropic 思考块之后的文本回复 (#502)。
+
+### 变更
+
+- 使用 Forest 主题重新设计产品落地页，并更新网站和 GitHub 分享预览图片 (#503)。
+
 ## [1.2.3] - 2026-10-11
 
 ### 问题修复
@@ -1290,3 +1304,4 @@
 [1.2.1]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.1
 [1.2.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.2
 [1.2.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.3
+[1.2.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.4
