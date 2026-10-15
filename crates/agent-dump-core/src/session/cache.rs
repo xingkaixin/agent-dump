@@ -139,10 +139,15 @@ impl std::error::Error for SharedReadError {
 
 type Outcome = std::result::Result<Arc<SessionData>, SharedReadError>;
 
+// Serialized JSON bytes: dozens of ordinary sessions fit, while one
+// oversized transcript stays with its current consumer only.
+const RETAINED_BYTES: usize = 128 << 20;
+
 struct Load {
     identity: (String, String),
     signal: SessionSignal,
     outcome: OnceLock<Outcome>,
+    bytes: OnceLock<usize>,
 }
 
 struct Entry {
@@ -151,24 +156,54 @@ struct Entry {
     retain: bool,
 }
 
+impl Entry {
+    fn idle(&self) -> bool {
+        self.load.outcome.get().is_some() && self.leases == 0
+    }
+
+    fn bytes(&self) -> usize {
+        self.load.bytes.get().copied().unwrap_or(0)
+    }
+}
+
+struct ByteCount(usize);
+
+impl std::io::Write for ByteCount {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        self.0 += buffer.len();
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn serialized_len(data: &SessionData) -> usize {
+    let mut count = ByteCount(0);
+    serde_json::to_writer(&mut count, data).map_or(usize::MAX, |()| count.0)
+}
+
 pub struct SessionDataCache {
     entries: Mutex<VecDeque<Entry>>,
     ready: Condvar,
     completed_limit: usize,
+    byte_limit: usize,
 }
 
 impl Default for SessionDataCache {
     fn default() -> Self {
-        Self::new(32)
+        Self::new(32, RETAINED_BYTES)
     }
 }
 
 impl SessionDataCache {
-    pub const fn new(completed_limit: usize) -> Self {
+    pub const fn new(completed_limit: usize, byte_limit: usize) -> Self {
         Self {
             entries: Mutex::new(VecDeque::new()),
             ready: Condvar::new(),
             completed_limit,
+            byte_limit,
         }
     }
 
@@ -181,6 +216,7 @@ impl SessionDataCache {
         diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Arc<SessionData>> {
         let lease = self.lease(name, provider, session, zh, diagnostics)?;
+        lease.load.bytes.get_or_init(|| serialized_len(&lease.data));
         if let Some(entry) = self
             .entries
             .lock()
@@ -232,6 +268,7 @@ impl SessionDataCache {
                 identity,
                 signal,
                 outcome: OnceLock::new(),
+                bytes: OnceLock::new(),
             });
             entries.push_back(Entry {
                 load: load.clone(),
@@ -297,21 +334,19 @@ impl SessionDataCache {
     }
 
     fn evict(&self, entries: &mut VecDeque<Entry>) {
-        let mut completed = entries
+        entries
+            .retain(|entry| !entry.idle() || entry.bytes() <= self.byte_limit);
+        let mut completed = entries.iter().filter(|entry| entry.idle()).count();
+        let mut bytes: usize = entries
             .iter()
-            .filter(|entry| {
-                entry.load.outcome.get().is_some() && entry.leases == 0
-            })
-            .count();
-        while completed > self.completed_limit {
-            let position = entries
-                .iter()
-                .position(|entry| {
-                    entry.load.outcome.get().is_some() && entry.leases == 0
-                })
-                .unwrap();
-            entries.remove(position);
+            .filter(|entry| entry.idle())
+            .map(Entry::bytes)
+            .sum();
+        while completed > self.completed_limit || bytes > self.byte_limit {
+            let position = entries.iter().position(Entry::idle).unwrap();
+            let entry = entries.remove(position).unwrap();
             completed -= 1;
+            bytes -= entry.bytes();
         }
     }
 }

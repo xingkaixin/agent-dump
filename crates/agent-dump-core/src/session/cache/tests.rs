@@ -68,7 +68,7 @@ fn retained_payloads_are_isolated_and_lru_bounded() {
         reads.lock().unwrap().push(session.id.clone());
         Ok(payload(session))
     });
-    let cache = SessionDataCache::new(2);
+    let cache = SessionDataCache::new(2, usize::MAX);
     for id in ["first", "second", "first", "third", "first", "second"] {
         let mut data = cache
             .get(
@@ -86,7 +86,7 @@ fn retained_payloads_are_isolated_and_lru_bounded() {
         *reads.lock().unwrap(),
         ["first", "second", "third", "second"]
     );
-    let zero = SessionDataCache::new(0);
+    let zero = SessionDataCache::new(0, usize::MAX);
     for _ in 0..2 {
         zero.get(
             "test",
@@ -105,6 +105,45 @@ fn retained_payloads_are_isolated_and_lru_bounded() {
             .filter(|id| *id == "zero")
             .count(),
         2
+    );
+}
+
+#[test]
+fn retained_payloads_fit_a_byte_budget() {
+    let root = tempfile::tempdir().unwrap();
+    let reads = Mutex::new(Vec::new());
+    let provider = Reader(|session: &Session| {
+        reads.lock().unwrap().push(session.id.clone());
+        let size = if session.id == "large" { 8_000 } else { 1_000 };
+        let mut data = payload(session);
+        data.extra.insert("body".into(), "x".repeat(size).into());
+        Ok(data)
+    });
+    let cache = SessionDataCache::new(32, 3_000);
+    let get = |id: &str| {
+        cache
+            .get(
+                "test",
+                &provider,
+                &session(root.path(), id),
+                false,
+                &mut |_| Ok(()),
+            )
+            .unwrap()
+    };
+    get("a");
+    get("b");
+    let large = get("large");
+    get("a");
+    get("b");
+    get("large");
+    assert_eq!(large.extra["body"].as_str().map(str::len), Some(8_000));
+    get("c");
+    get("b");
+    get("a");
+    assert_eq!(
+        *reads.lock().unwrap(),
+        ["a", "b", "large", "large", "c", "a"]
     );
 }
 
@@ -190,7 +229,7 @@ fn leased_entries_survive_eviction_and_detached_leases_preserve_new_generation()
         reads.fetch_add(1, Ordering::SeqCst);
         Ok(payload(session))
     });
-    let cache = SessionDataCache::new(1);
+    let cache = SessionDataCache::new(1, usize::MAX);
     let mut session = session(root.path(), "held");
     let old = cache
         .lease("test", &provider, &session, false, &mut |_| Ok(()))
@@ -274,7 +313,7 @@ fn inflight_reads_survive_eviction_and_stale_requests_wait_for_reload() {
         }
         Ok(payload(session))
     });
-    let cache = SessionDataCache::new(1);
+    let cache = SessionDataCache::new(1, usize::MAX);
     std::thread::scope(|scope| {
         let original = scope.spawn(|| {
             cache
