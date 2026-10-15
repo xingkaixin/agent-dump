@@ -32,11 +32,18 @@ fn now() -> f64 {
         .as_secs_f64()
 }
 
+// Derived text a batch holds until its write transaction commits. Past this,
+// saving commits is not worth keeping more large transcripts alive.
+const BATCH_BYTES: usize = 64 << 20;
+
 fn cjk(c: char) -> bool {
     ('\u{4e00}'..='\u{9fff}').contains(&c)
 }
 
-fn separate_cjk(text: &str) -> String {
+fn separate_cjk(text: &str) -> Option<String> {
+    if !text.chars().any(cjk) {
+        return None;
+    }
     let mut output = String::new();
     let mut previous = None;
     for c in text.chars() {
@@ -49,7 +56,7 @@ fn separate_cjk(text: &str) -> String {
         output.push(c);
         previous = Some(c);
     }
-    output
+    Some(output)
 }
 
 // Case variants that regex simple case folding matches but the trigram
@@ -258,11 +265,11 @@ impl SearchIndex {
             )?;
         }
         let cache = SessionDataCache::default();
-        let mut added = 0;
-        let mut failed = Vec::new();
-        for batch in pending.chunks(32) {
-            let texts = std::thread::scope(|scope| {
-                let jobs: Vec<_> = batch
+        let workers = std::thread::available_parallelism()
+            .map_or(4, std::num::NonZero::get);
+        let read = |reads: &[(&Session, String)]| {
+            std::thread::scope(|scope| {
+                let jobs: Vec<_> = reads
                     .iter()
                     .map(|(session, _)| {
                         let cache = &cache;
@@ -299,7 +306,29 @@ impl SearchIndex {
                         job.join().map_err(|_| "Index reader panicked".into())
                     })
                     .collect::<crate::Result<Vec<_>>>()
-            })?;
+            })
+        };
+        let mut added = 0;
+        let mut failed = Vec::new();
+        let mut rest = &pending[..];
+        while !rest.is_empty() {
+            let limit = rest.len().min(32);
+            let mut texts = Vec::new();
+            let mut bytes = 0;
+            while texts.len() < limit && bytes < BATCH_BYTES {
+                let reads =
+                    read(&rest[texts.len()..limit.min(texts.len() + workers)])?;
+                bytes += reads
+                    .iter()
+                    .filter_map(|(text, _)| text.as_ref().ok())
+                    .map(|(text, (_, separated))| {
+                        text.len() + separated.as_ref().map_or(0, String::len)
+                    })
+                    .sum::<usize>();
+                texts.extend(reads);
+            }
+            let (batch, remaining) = rest.split_at(texts.len());
+            rest = remaining;
             for (_, diagnostics) in &texts {
                 for diagnostic in diagnostics {
                     writeln!(
@@ -341,7 +370,7 @@ impl SearchIndex {
                     (transaction.last_insert_rowid(), true)
                 };
                 if changed {
-                    transaction.execute("INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, title, separated])?;
+                    transaction.execute("INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, title.as_deref().unwrap_or(&session.title), separated.as_deref().unwrap_or(&text)])?;
                     transaction.execute("INSERT INTO sessions_fts_trigram (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, session.title, text])?;
                 }
                 added += 1;
@@ -394,12 +423,13 @@ impl SearchIndex {
             .literals
             .iter()
             .map(|s| {
-                let text = if table == "sessions_fts" {
-                    separate_cjk(s)
-                } else {
-                    s.clone()
-                };
-                format!("\"{}\"", text.replace('"', "\"\""))
+                let text = (table == "sessions_fts")
+                    .then(|| separate_cjk(s))
+                    .flatten();
+                format!(
+                    "\"{}\"",
+                    text.as_deref().unwrap_or(s).replace('"', "\"\"")
+                )
             })
             .collect::<Vec<_>>()
             .join(" ");
