@@ -64,6 +64,9 @@ export const guideUi = {
     empty: "No guides match. Try another keyword.",
     search: "Search guides",
     note: "Start with a task. Leave with a command.",
+    count: "{count} guides",
+    found: "{count} of {total} guides",
+    clear: "Clear search and filters",
     categories: {
       export: "Export & archive",
       search: "Search & read",
@@ -87,6 +90,9 @@ export const guideUi = {
     empty: "没有匹配的指南，试试其他关键词。",
     search: "搜索指南",
     note: "找到你的场景，直接开始操作。",
+    count: "共 {count} 篇指南",
+    found: "找到 {count} / {total} 篇指南",
+    clear: "清除搜索与筛选",
     categories: {
       export: "导出与归档",
       search: "搜索与阅读",
@@ -110,6 +116,9 @@ export const guideUi = {
     empty: "一致するガイドはありません。別のキーワードをお試しください。",
     search: "ガイドを検索",
     note: "目的に合うガイドから始めましょう。記事は英語です。",
+    count: "全 {count} 件のガイド",
+    found: "{total} 件中 {count} 件のガイド",
+    clear: "検索と絞り込みをクリア",
     categories: {
       export: "エクスポート",
       search: "検索と閲覧",

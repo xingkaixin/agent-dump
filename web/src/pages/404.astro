@@ -2,6 +2,7 @@
 import Base from "../layouts/Base.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
+import Icon from "../components/Icon.astro";
 import "../styles/guides.css";
 ---
 
@@ -15,13 +16,13 @@ import "../styles/guides.css";
   }}
 >
   <Header locale="en" homeLinks />
-  <main id="main" tabindex="-1" class="shell guide-index">
-    <header class="guide-index__header">
-      <p class="eyebrow">404</p>
-      <h1>Page not found</h1>
-      <p>The page may have moved, or the address may be incorrect.</p>
-      <a class="text-link" href="/guides/">Browse the guides</a>
-    </header>
+  <main id="main" tabindex="-1" class="lost dots">
+    <div class="wrap">
+      <p class="eyebrow"><span class="ix">404</span><span class="ln"></span>Not found</p>
+      <h1 class="gh1">Page not found</h1>
+      <p class="gdesc">The page may have moved, or the address may be incorrect.</p>
+      <a class="tlink" href="/guides/">Browse the guides <Icon name="arrowRight" small /></a>
+    </div>
   </main>
   <Footer locale="en" />
 </Base>

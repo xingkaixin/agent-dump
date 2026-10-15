@@ -2,6 +2,7 @@
 import Base from "./Base.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
+import Icon from "../components/Icon.astro";
 import {
   getGuides,
   guidePaths,
@@ -36,6 +37,15 @@ const breadcrumbs = [
   { name: t.label, path: guideIndexPaths[locale] },
   { name: title, path: paths[locale]! },
 ];
+const sections = headings.filter((heading) => heading.depth === 2);
+const steps = sections.flatMap((heading) => {
+  const match = heading.text.match(/^(\d+)\.\s+(.+)$/);
+  return match ? [{ slug: heading.slug, number: match[1], text: match[2] }] : [];
+});
+const content = (await Astro.slots.render("default")).replace(
+  /(<h2 id="[^"]*">)(\d+)\.\s+/g,
+  '$1<span class="no">$2</span>',
+);
 ---
 
 <Base
@@ -49,31 +59,50 @@ const breadcrumbs = [
   }}
 >
   <div class="reading-progress" aria-hidden="true"></div>
-  <Header locale={locale} paths={paths} homeLinks />
-  <main id="main" tabindex="-1" class="shell guide-page">
-    <nav
-      class="breadcrumbs"
-      aria-label={locale === "zh" ? "面包屑导航" : "Breadcrumb"}
-    >
-      <a href={site.paths[locale]}>{t.home}</a>
-      <span aria-hidden="true">/</span>
-      <a href={guideIndexPaths[locale]}>{t.label}</a>
-    </nav>
-    <article class="guide-layout">
-      <header class="guide-header">
-        <p class="guide-category">{t.categories[guide.category]}</p>
-        <h1>{titleWords ? titleWords.map(({ segment, isWordLike }) => isWordLike ? <span class="title-word">{segment}</span> : segment) : title}</h1>
-        <p class="guide-deck">{description}</p>
-        <p class="guide-meta">
-          <a href={site.author.url}>{site.author.name}</a>
-          <span>
-            {t.updated} <time datetime={updated}>{updated}</time>
-          </span>
+  <Header locale={locale} paths={paths} homeLinks current="guides" />
+  <main id="main" tabindex="-1">
+    <header class="ghead dots">
+      <div class="wrap rise">
+        <nav class="crumb" aria-label={locale === "zh" ? "面包屑导航" : "Breadcrumb"}>
+          <a href={site.paths[locale]}>{t.home}</a>
+          <span aria-hidden="true">/</span>
+          <a href={guideIndexPaths[locale]}>{t.label}</a>
+        </nav>
+        <p class="gcat">{t.categories[guide.category]}</p>
+        <h1 class="gt">
+          {titleWords
+            ? titleWords.map(({ segment, isWordLike }) =>
+                isWordLike ? <span class="title-word">{segment}</span> : segment,
+              )
+            : title}
+        </h1>
+        <p class="deck">{description}</p>
+        <p class="meta">
+          <a href={site.author.url}>
+            <span class="ava" aria-hidden="true">{site.author.name[0].toUpperCase()}</span>
+            {site.author.name}
+          </a>
+          <span class="sep" aria-hidden="true"></span>
+          <span>{t.updated} <time datetime={updated}>{updated}</time></span>
         </p>
-      </header>
-      <div class="guide-body">
+        {steps.length > 0 && (
+          <ol class="steps">
+            {steps.map((step) => (
+              <li>
+                <a href={`#${step.slug}`}>
+                  <b>STEP {step.number.padStart(2, "0")}</b>
+                  {step.text}
+                </a>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </header>
+    <div class="wrap gbody">
+      <article>
         <div
-          class="guide-content"
+          class="prose guide-content"
           data-copy={ui[locale].copy}
           data-copied={ui[locale].copied}
           data-copy-error={
@@ -81,50 +110,64 @@ const breadcrumbs = [
               ? "复制失败，请手动选择命令"
               : "Copy failed. Select the command manually."
           }
-        >
-          <slot />
-        </div>
-        <div class="guide-related">
-          <h2>{t.related}</h2>
-          <div class="guide-related__list">
+          set:html={content}
+        />
+        <section class="related" aria-labelledby="related-heading">
+          <h2 id="related-heading">{t.related}</h2>
+          <div class="relgrid">
             {related.map((entry) => (
-              <a href={entry.href}>
-                <span class="guide-category">{t.categories[entry.category]}</span>
-                {entry.title}
-              </a>
+              <div class="gwrap">
+                <a class="relcard" href={entry.href}>
+                  <span>{t.categories[entry.category]}</span>
+                  {entry.title}
+                </a>
+              </div>
             ))}
           </div>
-        </div>
-      </div>
-      <aside class="guide-aside">
-        <nav aria-label={t.contents} class="guide-toc">
-          <p>{t.contents}</p>
-          {headings
-            .filter((heading) => heading.depth === 2)
-            .map((heading) => (
+        </section>
+      </article>
+      <aside class="aside">
+        <div class="toc">
+          <nav aria-label={t.contents} class="guide-toc">
+            <p>{t.contents}</p>
+            {sections.map((heading) => (
               <a href={`#${heading.slug}`}>{heading.text}</a>
             ))}
-        </nav>
-        <a class="text-link" href={guideIndexPaths[locale]}>
-          {t.all}
-          <span aria-hidden="true">↗</span>
-        </a>
+          </nav>
+          <a class="all" href={guideIndexPaths[locale]}>
+            {t.all}
+            <Icon name="arrowUpRight" small />
+          </a>
+        </div>
       </aside>
-    </article>
+    </div>
   </main>
   <Footer locale={locale} />
 </Base>
 
 <script>
   const progress = document.querySelector<HTMLElement>(".reading-progress");
-  if (progress) {
-    const update = () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      progress.style.setProperty("--progress", String(max > 0 ? Math.min(1, window.scrollY / max) : 0));
-    };
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-  }
+  const links = [...document.querySelectorAll<HTMLAnchorElement>(".guide-toc a")];
+  const targets = links.map((link) =>
+    document.getElementById(decodeURIComponent(link.hash.slice(1))),
+  );
+  const update = () => {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    progress?.style.setProperty(
+      "--progress",
+      String(max > 0 ? Math.min(1, window.scrollY / max) : 0),
+    );
+    let current = 0;
+    targets.forEach((target, index) => {
+      if (target && target.getBoundingClientRect().top < 140) current = index;
+    });
+    links.forEach((link, index) => {
+      if (index === current) link.setAttribute("aria-current", "location");
+      else link.removeAttribute("aria-current");
+    });
+  };
+  update();
+  window.addEventListener("scroll", update, { passive: true });
 </script>
 
 <script>
@@ -138,25 +181,30 @@ const breadcrumbs = [
       const wrapper = document.createElement("div");
       wrapper.className = "guide-code";
       pre.before(wrapper);
-      wrapper.append(pre);
+      const bar = document.createElement("div");
+      bar.className = "gcode-bar";
+      const language = document.createElement("span");
+      language.textContent = pre.dataset.language ?? "sh";
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = content.dataset.copy!;
-      button.className = "guide-copy";
-      wrapper.prepend(button);
+      button.className = "cbtn guide-copy";
+      bar.append(language, button);
       const status = document.createElement("span");
       status.className = "sr-only";
       status.setAttribute("role", "status");
-      wrapper.append(status);
+      wrapper.append(bar, pre, status);
       let reset: ReturnType<typeof setTimeout>;
       button.addEventListener("click", async () => {
         try {
           if (!(await copyText(command))) throw new Error("Copy rejected");
           status.textContent = content.dataset.copied!;
           button.textContent = content.dataset.copied!;
+          button.classList.add("ok");
           clearTimeout(reset);
           reset = setTimeout(() => {
             button.textContent = content.dataset.copy!;
+            button.classList.remove("ok");
             status.textContent = "";
           }, 2000);
           trackEvent("guide-copy");
