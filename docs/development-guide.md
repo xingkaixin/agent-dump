@@ -88,6 +88,8 @@ selector 只展示工作流传入的会话与计数，不发现来源或读取�
 
 落地页使用 Cloudflare Workers Static Assets 托管，无需 Worker 运行时代码。`just check-web` 检查构建与浏览器行为；`just deploy-web` 才会发布，创建或合并 PR 本身不会部署网站。
 
+OG 图使用落地页字体、Logo 和配色。在安装 web 依赖及 Playwright Chromium 后，运行 `node web/scripts/generate-og.mjs`，生成网站的 `web/public/assets/og-image.png`（1200×631）和 GitHub 的 `assets/github-og.png`（1280×640）。GitHub 图片需在仓库 Settings → Social preview 中上传。
+
 - `Base.astro` 预加载首屏实际使用的两个 Latin 字体文件，URL 由构建生成，并使用 `crossorigin="anonymous"` 与字体请求保持一致。
 - `astro.config.mjs` 从生成的 HTML 提取样式表和字体预加载，写入 `dist/_headers` 的逐页面 `Link` 头。不要手写带 hash 的资源路径，也不要预加载首屏以下的图片或 React 组件。
 - 部署后检查 `/`、`/zh/`、`/ja/` 的 `Link` 头与资源 URL；`103` 是否发出受缓存和浏览器支持影响，不能只靠一次请求判断。
