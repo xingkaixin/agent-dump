@@ -183,9 +183,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.4",
+        date: "2026-10-15",
+        isLatest: true,
+        title: "More Flexible AI Collect",
+        description:
+          "Summarize Codex, Claude Code, Cursor, and other supported AI sessions with configurable reasoning and vendor-specific request options. AI collect adapts rejected default parameters for OpenAI-compatible services and reads Anthropic text replies after thinking blocks. Explore the redesigned website and guides.",
+        command: 'npx @agent-dump/cli@1.2.4 --collect --days 7',
+        tags: ["AI Collect", "Reasoning Options", "Model Compatibility"],
+      },
+      {
         version: "v1.2.3",
         date: "2026-10-11",
-        isLatest: true,
         title: "More Reliable Session Search and Export",
         description:
           "Find recently updated AI sessions in the right order, preserve more Kimi conversation text, and read Codex plan approvals and token totals correctly. Full-text search handles more Unicode and tool-state matches. Export and AI collect protect all supported session sources, and truncated AI reports are reported as failures.",
@@ -370,9 +379,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.4",
+        date: "2026-10-15",
+        isLatest: true,
+        title: "AI collect 支持更多模型配置",
+        description:
+          "汇总 Codex、Claude Code、Cursor 等工具的 AI 会话时，可配置推理模式和厂商专用请求参数。AI collect 会调整 OpenAI 兼容服务拒绝的默认参数，并正确读取 Anthropic 思考块之后的文本回复。新版网站让你浏览功能与使用指南。",
+        command: 'npx @agent-dump/cli@1.2.4 --collect --days 7',
+        tags: ["AI collect", "推理配置", "模型兼容"],
+      },
+      {
         version: "v1.2.3",
         date: "2026-10-11",
-        isLatest: true,
         title: "会话搜索与导出更可靠",
         description:
           "按更新时间查找最近活跃的 AI 会话，完整读取 Kimi 文本，正确呈现 Codex 计划确认与 token 总量。全文搜索修复 Unicode 和工具状态匹配；导出与 AI collect 保护所有受支持的会话数据源，并将被截断的 AI 报告明确报告为失败。",
@@ -557,9 +575,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.4",
+        date: "2026-10-15",
+        isLatest: true,
+        title: "AI collect のモデル設定を柔軟に",
+        description:
+          "Codex、Claude Code、Cursor などの AI セッションを、推論モードやサービス固有のリクエスト設定で要約できます。AI collect は OpenAI 互換サービスが拒否した既定のパラメーターを調整し、Anthropic の思考ブロック後のテキストを読み取ります。刷新したサイトで機能とガイドを確認できます。",
+        command: 'npx @agent-dump/cli@1.2.4 --collect --days 7',
+        tags: ["AI collect", "推論設定", "モデル互換性"],
+      },
+      {
         version: "v1.2.3",
         date: "2026-10-11",
-        isLatest: true,
         title: "セッション検索とエクスポートの信頼性を改善",
         description:
           "更新順で最近の AI セッションを探し、Kimi のテキストや Codex の計画承認・トークン集計を正しく読み取れます。全文検索の Unicode とツール状態の検索を修正。エクスポートと AI collect は対応する全セッションソースを保護し、途中で切れた AI レポートを失敗として通知します。",
