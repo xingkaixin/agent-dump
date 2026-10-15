@@ -2,7 +2,7 @@
 import Base from "../layouts/Base.astro";
 import Header from "./Header.astro";
 import Footer from "./Footer.astro";
-import { MagnifyingGlassIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
+import Icon from "./Icon.astro";
 import { getGuides, guideIndexPaths, guideUi } from "../lib/guides";
 import { site, type Locale } from "../lib/i18n";
 import "../styles/guides.css";
@@ -12,6 +12,12 @@ interface Props {
 const { locale } = Astro.props;
 const t = guideUi[locale];
 const guides = await getGuides(locale);
+const categories = Object.entries(t.categories).map(([key, label]) => ({
+  key,
+  label,
+  count: guides.filter((guide) => guide.category === key).length,
+}));
+const most = Math.max(...categories.map((category) => category.count));
 ---
 
 <Base
@@ -26,52 +32,105 @@ const guides = await getGuides(locale);
     ],
   }}
 >
-  <Header locale={locale} paths={guideIndexPaths} homeLinks />
-  <main id="main" tabindex="-1" class="shell guide-index">
-    <header class="guide-index__header">
-      <p class="eyebrow">{t.label}</p>
-      <h1>{t.title}</h1>
-      <p>{t.description}</p>
-    </header>
-    <div class="guide-filters" data-guide-filters hidden>
-      <div role="group" aria-label={t.filter} class="guide-filter-buttons">
-        <button type="button" data-category="all" aria-pressed="true">
-          {t.all}
-        </button>
-        {Object.entries(t.categories).map(([key, label]) => (
-          <button type="button" data-category={key} aria-pressed="false">
-            {label}
-          </button>
-        ))}
+  <Header locale={locale} paths={guideIndexPaths} homeLinks current="guides" />
+  <main id="main" tabindex="-1">
+    <section class="ghero dots">
+      <div class="wrap">
+        <nav class="crumb" aria-label={locale === "zh" ? "面包屑导航" : "Breadcrumb"}>
+          <a href={site.paths[locale]}>{t.home}</a>
+          <span aria-hidden="true">/</span>
+          <span>{t.label}</span>
+        </nav>
+        <div class="ghero-grid">
+          <div class="rise">
+            <p class="eyebrow"><span class="ix">06</span><span class="ln"></span>{t.label}</p>
+            <h1 class="gh1">{t.title}</h1>
+            <p class="gdesc">{t.description}</p>
+            <p class="gnote"><Icon name="arrowRight" small />{t.note}</p>
+          </div>
+          <div class="cats rise" style="animation-delay: 0.1s" aria-hidden="true">
+            {categories.map((category, index) => (
+              <div class="catrow">
+                <span>{category.label}</span>
+                <b>{category.count}</b>
+                <span class="catbar">
+                  <i
+                    style={`width: ${(category.count / most) * 100}%; animation-delay: ${index * 0.08}s`}
+                  ></i>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-      <label class="guide-search">
-        <MagnifyingGlassIcon size={18} aria-hidden="true" />
-        <span class="sr-only">{t.search}</span>
-        <input type="search" placeholder={t.search} />
-      </label>
+    </section>
+
+    <div class="bar guide-filters" data-guide-filters hidden>
+      <div class="wrap bar-in">
+        <div role="group" aria-label={t.filter} class="fbtns">
+          <button type="button" class="fbtn" data-category="all" aria-pressed="true">
+            {t.all}<span aria-hidden="true">{guides.length}</span>
+          </button>
+          {categories.map((category) => (
+            <button
+              type="button"
+              class="fbtn"
+              data-category={category.key}
+              aria-pressed="false"
+            >
+              {category.label}<span aria-hidden="true">{category.count}</span>
+            </button>
+          ))}
+        </div>
+        <label class="search">
+          <Icon name="search" />
+          <span class="sr-only">{t.search}</span>
+          <input type="search" placeholder={t.search} />
+        </label>
+      </div>
     </div>
-    <div class="guide-list">
-      {guides.map((guide) => (
-        <article
-          class="guide-card"
-          data-guide-card
-          data-category={guide.category}
+
+    <section class="glist">
+      <div class="wrap">
+        <p
+          class="count"
+          data-count={t.count}
+          data-found={t.found}
         >
-          <a href={guide.href}>
-            <span class="guide-category">{t.categories[guide.category]}</span>
-            <h2>{guide.title}</h2>
-            <p>{guide.description}</p>
-            <span class="guide-card__footer">
-              {t.read}
-              <ArrowUpRightIcon size={22} aria-hidden="true" />
-            </span>
-          </a>
-        </article>
-      ))}
-    </div>
-    <p class="guide-no-results" role="status" hidden>
-      {t.empty}
-    </p>
+          {t.count.replace("{count}", String(guides.length))}
+        </p>
+        <div class="guide-grid">
+          {guides.map((guide, index) => (
+            <article
+              class="gwrap guide-card"
+              data-guide-card
+              data-category={guide.category}
+              style={`animation-delay: ${index * 0.045}s`}
+            >
+              <a class="gcard" href={guide.href}>
+                <span class="gno" aria-hidden="true">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span class="gcat">{t.categories[guide.category]}</span>
+                <h2>{guide.title}</h2>
+                <p>{guide.description}</p>
+                <span class="gfoot">
+                  {t.read}
+                  <Icon name="arrowUpRight" />
+                </span>
+              </a>
+            </article>
+          ))}
+        </div>
+        <div class="empty guide-no-results" role="status" hidden>
+          <span class="ei"><Icon name="search" /></span>
+          <p>{t.empty}</p>
+          <button type="button" class="btn btn-ghost btn-sm" data-guide-clear>
+            {t.clear}
+          </button>
+        </div>
+      </div>
+    </section>
   </main>
   <Footer locale={locale} />
 </Base>
@@ -87,6 +146,7 @@ const guides = await getGuides(locale);
     const cards = [
       ...document.querySelectorAll<HTMLElement>("[data-guide-card]"),
     ];
+    const count = document.querySelector<HTMLElement>(".count")!;
     const empty = document.querySelector<HTMLElement>(".guide-no-results")!;
     let category = "all";
     function update() {
@@ -96,16 +156,29 @@ const guides = await getGuides(locale);
           (category !== "all" && card.dataset.category !== category) ||
           !card.textContent?.toLocaleLowerCase().includes(query);
       }
-      empty.hidden = cards.some((card) => !card.hidden);
+      const shown = cards.filter((card) => !card.hidden).length;
+      empty.hidden = shown > 0;
+      count.textContent = (
+        shown === cards.length ? count.dataset.count! : count.dataset.found!
+      )
+        .replace("{count}", String(shown))
+        .replace("{total}", String(cards.length));
+    }
+    function select(next: string) {
+      category = next;
+      for (const item of buttons)
+        item.setAttribute("aria-pressed", String(item.dataset.category === next));
+      update();
     }
     for (const button of buttons) {
-      button.addEventListener("click", () => {
-        category = button.dataset.category!;
-        for (const item of buttons)
-          item.setAttribute("aria-pressed", String(item === button));
-        update();
-      });
+      button.addEventListener("click", () => select(button.dataset.category!));
     }
     input.addEventListener("input", update);
+    document
+      .querySelector("[data-guide-clear]")!
+      .addEventListener("click", () => {
+        input.value = "";
+        select("all");
+      });
   }
 </script>

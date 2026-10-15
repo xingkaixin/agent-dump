@@ -1,7 +1,7 @@
 import { copyText } from "../lib/clipboard";
 import { trackEvent } from "../lib/analytics";
 import { useRef, useState } from "react";
-import { CheckIcon, CopyIcon } from "@phosphor-icons/react";
+import { Icon } from "./Icon";
 
 interface Props {
   text: string;
@@ -19,7 +19,7 @@ export function CopyButton({ text, copyLabel, copiedLabel, installMethod }: Prop
       if (!(await copyText(text))) return;
       setCopied(true);
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopied(false), 2000);
+      timer.current = setTimeout(() => setCopied(false), 1600);
       if (installMethod) {
         trackEvent("install-copy", { method: installMethod });
       }
@@ -36,27 +36,10 @@ export function CopyButton({ text, copyLabel, copiedLabel, installMethod }: Prop
         type="button"
         onClick={onCopy}
         aria-label={label}
-        title={label}
-        className="group grid size-8 shrink-0 place-items-center rounded-[var(--radius-xs)] border border-line-strong text-muted transition-[transform,color,background-color,border-color] duration-150 ease-out hover:bg-fg hover:text-bg hover:border-fg active:scale-95"
+        className={copied ? "cbtn ok" : "cbtn"}
       >
-        <span className="relative block size-3.5">
-          <CopyIcon
-            weight="bold"
-            className="absolute inset-0 size-3.5 transition-[opacity,transform] duration-150 ease-out"
-            style={{
-              opacity: copied ? 0 : 1,
-              transform: copied ? "scale(0.75)" : "scale(1)",
-            }}
-          />
-          <CheckIcon
-            weight="bold"
-            className="absolute inset-0 size-3.5 text-accent transition-[opacity,transform] duration-150 ease-out group-hover:text-bg"
-            style={{
-              opacity: copied ? 1 : 0,
-              transform: copied ? "scale(1)" : "scale(0.75)",
-            }}
-          />
-        </span>
+        <Icon name={copied ? "check" : "copy"} small />
+        <span aria-hidden="true">{label}</span>
       </button>
       <span role="status" aria-live="polite" className="sr-only">
         {copied ? copiedLabel : ""}

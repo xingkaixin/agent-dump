@@ -1,8 +1,14 @@
 ---
-import "@fontsource-variable/geist";
+import "@fontsource-variable/montserrat";
+import "@fontsource/ibm-plex-mono/300.css";
 import "@fontsource/ibm-plex-mono/400.css";
-import geistLatin from "@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url";
-import monoLatin from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
+import sansLatin from "@fontsource-variable/montserrat/files/montserrat-latin-wght-normal.woff2?url";
+import mono300 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-300-normal.woff2?url";
+import mono400 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url";
+import mono500 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2?url";
+import mono600 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2?url";
 import "../styles/global.css";
 import { site, ui, LOCALES, type Locale } from "../lib/i18n";
 import { version } from "../lib/version";
@@ -157,21 +163,16 @@ const jsonLd = {
         } catch (e) {}
       </script>
     )}
-    <link
-      rel="preload"
-      href={geistLatin}
-      as="font"
-      type="font/woff2"
-      crossorigin="anonymous"
-    />
-    <link
-      rel="preload"
-      href={monoLatin}
-      as="font"
-      type="font/woff2"
-      crossorigin="anonymous"
-    />
-    <meta name="theme-color" content="#f1f3ef" />
+    {[sansLatin, mono300, mono400, mono500, mono600].map((href) => (
+      <link
+        rel="preload"
+        href={href}
+        as="font"
+        type="font/woff2"
+        crossorigin="anonymous"
+      />
+    ))}
+    <meta name="theme-color" content="#fcfdfc" />
     <meta name="description" content={description} />
     <meta name="author" content={site.author.name} />
     <meta name="robots" content={noindex ? "noindex, follow" : "index, follow, max-image-preview:large"} />
@@ -238,18 +239,13 @@ const jsonLd = {
         if (meta)
           meta.setAttribute(
             "content",
-            theme === "dark" ? "#0c1011" : "#f1f3ef",
+            theme === "dark" ? "#0c100f" : "#fcfdfc",
           );
       })();
     </script>
   </head>
   <body>
-    <a
-      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-sm focus:border focus:border-line-strong focus:bg-bg focus:px-4 focus:py-2"
-      href="#main"
-    >
-      {t.skipLink}
-    </a>
+    <a class="skip" href="#main">{t.skipLink}</a>
     <slot />
   </body>
 </html>

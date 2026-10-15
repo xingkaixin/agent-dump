@@ -58,7 +58,7 @@ for (const guide of guides) {
         page.locator(`header a[lang="${translation.lang}"]`),
       ).toHaveAttribute("href", translation.path);
     }
-    await expect(page.locator('.site-nav a[href$="#install"]')).toHaveAttribute(
+    await expect(page.locator("header .cta-h")).toHaveAttribute(
       "href",
       `${guide.home}#install`,
     );
@@ -93,7 +93,7 @@ for (const guide of guides) {
       ).toBe(width);
       await expect(page.locator("article h2").first()).toBeVisible();
     }
-    await page.locator('.site-nav a[href$="#install"]').click();
+    await page.locator("header .cta-h").click();
     await expect(page.locator("#install")).toBeVisible();
   });
 }

@@ -2,7 +2,7 @@ import type { Locale } from "./i18n";
 
 export type CapabilityCopy = { verb: string; label: string; body: string };
 
-type LandingCopy = {
+export type LandingCopy = {
   nav: { browse: string; tools: string; faq: string };
   stage: {
     sources: string;
@@ -22,6 +22,18 @@ type LandingCopy = {
     collect: string;
   };
   codexGuide: string;
+  uri: { label: string; scheme: string; id: string };
+  demo: {
+    days: string;
+    provider: string;
+    role: string;
+    readDone: string;
+    exportUser: string;
+    exportAssistant: string;
+    exportNote: string;
+    exportFoot: string;
+    collectStdout: string;
+  };
   capabilities: {
     heading: string;
     summary: string;
@@ -35,9 +47,12 @@ type LandingCopy = {
     label: string;
     keysLabel: string;
     note: string;
+    keysHint: string;
+    space: string;
     keys: string[];
   };
   audience: {
+    tag: string;
     headingLead: string;
     headingTail: string;
     developer: {
@@ -56,6 +71,12 @@ type LandingCopy = {
   boundary: {
     tag: string;
     heading: string;
+    flow: {
+      source: string;
+      sourceItems: [string, string, string];
+      owned: string;
+      ownedItems: [string, string, string];
+    };
     items: { title: string; body: string }[];
   };
   updates: { latest: string; older: string };
@@ -90,6 +111,22 @@ export const landing: Record<Locale, LandingCopy> = {
       collect: "No API setup · any failed read is marked incomplete",
     },
     codexGuide: "Export a Codex session to Markdown",
+    uri: {
+      label: "A session URI combines the source tool scheme and the session ID",
+      scheme: "Source tool",
+      id: "Session ID",
+    },
+    demo: {
+      days: "last 30 days",
+      provider: "Provider: all",
+      role: "Role: all",
+      readDone: "done",
+      exportUser: "Upstream returns 504 now and then. Raise auth timeout from 30s to 60s?",
+      exportAssistant: "Not yet. The logs show timeouts cluster around the token refresh…",
+      exportNote: "Context exports keep the URI and message locators, so every reuse traces back to its source.",
+      exportFoot: "Export to Markdown or JSON · source untouched",
+      collectStdout: "external Agent instructions · saved to ./reports/weekly.md",
+    },
     capabilities: {
       heading: "Four moves for everything after the chat ends.",
       summary:
@@ -126,6 +163,8 @@ export const landing: Record<Locale, LandingCopy> = {
       label: "Interactive agent-dump --browse demo, keyboard operable",
       keysLabel: "Demo keys",
       note: "Sample sessions · layout, keys, and status text match the CLI",
+      keysHint: "Click the terminal to use your keyboard: ↑ ↓ ← → Space e s / n x t c ?",
+      space: "Space",
       keys: [
         "down",
         "up",
@@ -142,6 +181,7 @@ export const landing: Record<Locale, LandingCopy> = {
       ],
     },
     audience: {
+      tag: "People & Agents",
       headingLead: "People read in the terminal. ",
       headingTail: "Agents read JSON.",
       developer: {
@@ -164,6 +204,12 @@ export const landing: Record<Locale, LandingCopy> = {
     boundary: {
       tag: "Data boundary",
       heading: "Reads your sessions. Never touches your data.",
+      flow: {
+        source: "Provider sessions",
+        sourceItems: ["Databases", "JSONL", "Session directories"],
+        owned: "Paths agent-dump owns",
+        ownedItems: ["Index · config", "Logs", "Exports"],
+      },
       items: [
         {
           title: "Zero writes to sources",
@@ -208,6 +254,22 @@ export const landing: Record<Locale, LandingCopy> = {
       collect: "无需配置 API · 任何读取失败都会标记为不完整",
     },
     codexGuide: "将 Codex 会话导出为 Markdown",
+    uri: {
+      label: "会话 URI 由来源工具 scheme 与会话 ID 组成",
+      scheme: "来源工具",
+      id: "会话 ID",
+    },
+    demo: {
+      days: "近 30 天",
+      provider: "Provider: 全部",
+      role: "角色: 全部",
+      readDone: "读完",
+      exportUser: "上游偶发 504，auth timeout 要不要从 30s 提到 60s？",
+      exportAssistant: "先别改。日志显示超时集中在 token 刷新那一步…",
+      exportNote: "上下文片段保留 URI 与消息定位，复用时可追溯来源。",
+      exportFoot: "导出为 Markdown 或 JSON · 源会话未改动",
+      collectStdout: "外部 Agent 指令 · 保存到 ./reports/weekly.md",
+    },
     capabilities: {
       heading: "四个动作，覆盖一段对话的后半生。",
       summary:
@@ -244,6 +306,8 @@ export const landing: Record<Locale, LandingCopy> = {
       label: "agent-dump --browse 交互演示，可用键盘操作",
       keysLabel: "演示按键",
       note: "示例会话 · 界面布局、按键和提示文案与 CLI 一致",
+      keysHint: "点击终端后可直接用键盘：↑ ↓ ← → 空格 e s / n x t c ?",
+      space: "空格",
       keys: [
         "下移",
         "上移",
@@ -260,6 +324,7 @@ export const landing: Record<Locale, LandingCopy> = {
       ],
     },
     audience: {
+      tag: "人与 Agent",
       headingLead: "人用终端读，",
       headingTail: "Agent 用 JSON 读。",
       developer: {
@@ -278,6 +343,12 @@ export const landing: Record<Locale, LandingCopy> = {
     boundary: {
       tag: "数据边界",
       heading: "只读你的会话，不碰你的数据。",
+      flow: {
+        source: "Provider 会话源",
+        sourceItems: ["数据库", "JSONL", "会话目录"],
+        owned: "agent-dump 自有路径",
+        ownedItems: ["索引 · 配置", "日志", "导出文件"],
+      },
       items: [
         {
           title: "源数据零写入",
@@ -323,6 +394,22 @@ export const landing: Record<Locale, LandingCopy> = {
       collect: "API 設定不要 · 読み取りの失敗は不完全として明示",
     },
     codexGuide: "Codex セッションを Markdown にエクスポート（英語）",
+    uri: {
+      label: "セッション URI はツールの scheme とセッション ID で構成されます",
+      scheme: "ツール",
+      id: "セッション ID",
+    },
+    demo: {
+      days: "直近 30 日",
+      provider: "Provider: すべて",
+      role: "ロール: すべて",
+      readDone: "完了",
+      exportUser: "上流でときどき 504。auth timeout を 30 秒から 60 秒に上げる？",
+      exportAssistant: "まだ変えないで。ログではトークン更新の段階でタイムアウトが集中…",
+      exportNote: "書き出した文脈には URI とメッセージ位置が残り、再利用時に出典をたどれます。",
+      exportFoot: "Markdown や JSON にエクスポート · 元セッションは変更なし",
+      collectStdout: "外部 Agent 向け指示 · ./reports/weekly.md に保存",
+    },
     capabilities: {
       heading: "対話が終わったあとの、4つの使い方。",
       summary:
@@ -359,6 +446,8 @@ export const landing: Record<Locale, LandingCopy> = {
       label: "agent-dump --browse の操作できるデモ（キーボード対応）",
       keysLabel: "デモのキー",
       note: "サンプルのセッション · CLI の表示は英語または中国語です",
+      keysHint: "ターミナルをクリックするとキーボードで操作できます：↑ ↓ ← → Space e s / n x t c ?",
+      space: "Space",
       keys: [
         "下へ",
         "上へ",
@@ -375,6 +464,7 @@ export const landing: Record<Locale, LandingCopy> = {
       ],
     },
     audience: {
+      tag: "人と Agent",
       headingLead: "人はターミナルで、",
       headingTail: "Agent は JSON で。",
       developer: {
@@ -393,6 +483,12 @@ export const landing: Record<Locale, LandingCopy> = {
     boundary: {
       tag: "データの境界",
       heading: "セッションは読むだけ。データには触れない。",
+      flow: {
+        source: "Provider のセッション",
+        sourceItems: ["データベース", "JSONL", "セッションディレクトリ"],
+        owned: "agent-dump 管理下のパス",
+        ownedItems: ["インデックス · 設定", "ログ", "エクスポート"],
+      },
       items: [
         {
           title: "元データへの書き込みゼロ",

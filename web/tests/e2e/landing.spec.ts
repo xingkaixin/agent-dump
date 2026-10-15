@@ -45,7 +45,7 @@ for (const locale of locales) {
         .toBe(width);
       const boxes = await page
         .locator(
-          "#hero h1, #hero .hero-stage, #browse .tui-window, #install code, #install button",
+          "#hero h1, #hero .hv, #browse .tui, #install code, #install button",
         )
         .evaluateAll((elements) =>
           elements.map((element) => ({
@@ -228,15 +228,15 @@ test("capability tabs switch the sample terminal and stop autoplay", async ({
   await page.goto("/");
   const capabilities = page.locator("#capabilities");
   await capabilities.scrollIntoViewIfNeeded();
-  const exportTab = capabilities.getByRole("button", { name: /Export · Reuse with sources/ });
+  const exportTab = capabilities.getByRole("tab", { name: /Export/ });
   await expect(async () => {
     await exportTab.click();
-    await expect(exportTab).toHaveAttribute("aria-pressed", "true");
+    await expect(exportTab).toHaveAttribute("aria-selected", "true");
   }).toPass();
   await expect(page.locator("#capability-terminal")).toContainText(
     "agent-dump export codex://019a7c2e --format markdown",
   );
-  await expect(capabilities.locator(".capability-tab__progress")).toHaveCount(0);
+  await expect(capabilities.locator(".prog")).toHaveCount(0);
 });
 
 test("browse demo answers reader keys like the CLI", async ({ page }) => {
@@ -245,7 +245,7 @@ test("browse demo answers reader keys like the CLI", async ({ page }) => {
   const demo = page.locator("#browse");
   await demo.scrollIntoViewIfNeeded();
   const terminal = demo.getByRole("application");
-  const status = demo.locator(".tui__status");
+  const status = demo.locator(".tstat .l");
   await expect(async () => {
     await terminal.click();
     await expect(demo.getByRole("button", { name: "Replay demo" })).toBeVisible();
@@ -269,11 +269,11 @@ test("browse demo answers reader keys like the CLI", async ({ page }) => {
   await expect(terminal).toContainText("Excerpt #1–4/6");
 
   await terminal.press("?");
-  await expect(demo.locator(".tui__overlay")).toContainText(
+  await expect(demo.locator(".thelp")).toContainText(
     "s: search sessions in this scope",
   );
   await terminal.press("Escape");
-  await expect(demo.locator(".tui__overlay")).toHaveCount(0);
+  await expect(demo.locator(".thelp")).toHaveCount(0);
 
   await demo.getByRole("button", { name: "Replay demo" }).click();
   await expect(demo.getByText("Auto demo · click the terminal to take over")).toBeVisible();

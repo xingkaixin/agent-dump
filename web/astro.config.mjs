@@ -20,7 +20,10 @@ const version = versionMatch[1];
 export default defineConfig({
   site: "https://agent-dump.xingkaixin.me",
   markdown: {
-    shikiConfig: { themes: { light: "github-light", dark: "github-dark" } },
+    shikiConfig: {
+      themes: { light: "github-light", dark: "github-dark" },
+      defaultColor: false,
+    },
   },
   // `en` serves from `/`; translated locales use stable, prefixed paths.
   i18n: {

@@ -20,18 +20,18 @@ export function InstallPicker({ groups, skill, copy, copied }: Props) {
   const method = methods.find((item) => item.label === selected)!;
 
   return (
-    <div className="install-picker">
+    <div className="picker">
       {groups.map((group) => (
-        <div key={group.label} className="install-group">
-          <span className="install-group__label">{group.label}</span>
-          <div role="group" aria-label={group.label} className="install-group__options">
+        <div key={group.label} className="grp">
+          <span className="gl">{group.label}</span>
+          <div role="group" aria-label={group.label} className="opts">
             {group.methods.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 aria-pressed={item.label === selected}
                 aria-controls="install-command"
-                className="pill"
+                className="opt"
                 onClick={() => setSelected(item.label)}
               >
                 {item.label}
@@ -40,8 +40,8 @@ export function InstallPicker({ groups, skill, copy, copied }: Props) {
           </div>
         </div>
       ))}
-      <div id="install-command" className="term install-command" aria-label={method.label} role="region">
-        <span aria-hidden="true" className="accent">$</span>
+      <div id="install-command" className="cmdbox" aria-label={method.label} role="region">
+        <span aria-hidden="true" className="dl">$</span>
         <code>{method.code}</code>
         <CopyButton
           key={method.label}
@@ -51,8 +51,8 @@ export function InstallPicker({ groups, skill, copy, copied }: Props) {
           installMethod={method.label}
         />
       </div>
-      {method.note && <p className="install-note">{method.note}</p>}
-      <div className="install-skill">
+      {method.note && <p className="inote">{method.note}</p>}
+      <div className="skill">
         <span>{skill.note}</span>
         <code>{skill.command}</code>
         <CopyButton text={skill.command} copyLabel={copy} copiedLabel={copied} />

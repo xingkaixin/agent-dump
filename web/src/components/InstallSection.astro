@@ -16,13 +16,18 @@ const groups = [
   { label: install.globalLabel[locale], methods: install.global },
   { label: install.runLabel[locale], methods: install.run },
 ];
+const platforms = ["macOS Intel / Apple Silicon", "Linux x64", "Windows x64"];
 ---
 
-<section id="install" class="install-section grid-backdrop">
-  <div class="shell install-layout">
-    <div class="install-head" data-reveal>
-      <h2>{t.installHeading}</h2>
-      <p>{t.installNote}</p>
+<section id="install" class="sec panel dots">
+  <div class="wrap inst">
+    <div data-reveal>
+      <p class="eyebrow"><span class="ix">07</span><span class="ln"></span>Install</p>
+      <h2 class="inst-h">{t.installHeading}</h2>
+      <p class="sub" style="margin-top: 20px">{t.installNote}</p>
+      <div class="plats">
+        {platforms.map((platform) => <span class="plat"><i></i>{platform}</span>)}
+      </div>
     </div>
     <div data-reveal>
       <InstallPicker
