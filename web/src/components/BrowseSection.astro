@@ -9,14 +9,14 @@ const { locale } = Astro.props;
 const l = landing[locale];
 ---
 
-<section id="browse" class="browse-section">
-  <div class="shell">
-    <div class="section-head" data-reveal>
+<section id="browse" class="sec">
+  <div class="wrap">
+    <div class="shead" data-reveal>
       <div>
-        <p class="eyebrow">agent-dump --browse</p>
-        <h2>{l.browse.heading}</h2>
+        <p class="eyebrow"><span class="ix">03</span><span class="ln"></span>agent-dump --browse</p>
+        <h2 class="h2">{l.browse.heading}</h2>
       </div>
-      <p>{l.browse.summary}</p>
+      <p class="sub">{l.browse.summary}</p>
     </div>
     <div data-reveal>
       <BrowseDemo

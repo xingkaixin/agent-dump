@@ -34,14 +34,14 @@ test("Static asset hints reference the CSS and fonts used by each locale", async
     }
 
     const fonts = page.locator('link[rel="preload"][as="font"]');
-    await expect(fonts).toHaveCount(2);
+    await expect(fonts).toHaveCount(5);
     const requests = await page.evaluate(() =>
       performance
         .getEntriesByType("resource")
         .filter((entry) => new URL(entry.name).pathname.endsWith(".woff2"))
         .map((entry) => new URL(entry.name).pathname),
     );
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(5);
     for (const font of await fonts.all()) {
       await expect(font).toHaveAttribute("crossorigin", "anonymous");
       const href = await font.getAttribute("href");
@@ -76,8 +76,8 @@ test("reduced motion keeps the hero and revealed content static", async ({
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await expect(page.locator(".hero-stage")).toHaveCSS("animation-name", "none");
-  await expect(page.locator(".cycle").first()).toHaveCSS("opacity", "1");
+  await expect(page.locator("#hero .hv")).toHaveCSS("animation-name", "none");
+  await expect(page.locator(".scr").first()).toHaveCSS("opacity", "1");
   for (const section of ["#capabilities", "#guides", "#install"]) {
     await page.locator(section).scrollIntoViewIfNeeded();
     await expect(

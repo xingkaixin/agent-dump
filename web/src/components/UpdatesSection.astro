@@ -1,7 +1,7 @@
 ---
-import { ArrowUpRightIcon } from "@phosphor-icons/react";
 import { site, ui, type Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
+import Icon from "./Icon.astro";
 import ReleaseEntry from "./ReleaseEntry.astro";
 interface Props {
   locale: Locale;
@@ -14,58 +14,59 @@ const recent = rest.slice(0, 2);
 const older = rest.slice(2);
 ---
 
-<section id="updates" aria-labelledby="updates-heading" class="updates-section">
-  <div class="shell">
-    <div class="section-head" data-reveal>
-      <h2 id="updates-heading">{t.updatesHeading}</h2>
+<section id="updates" aria-labelledby="updates-heading" class="sec">
+  <div class="wrap">
+    <div class="shead" data-reveal>
       <div>
-        <p>{t.updatesSubheading}</p>
+        <p class="eyebrow"><span class="ix">08</span><span class="ln"></span>Changelog</p>
+        <h2 class="h2" id="updates-heading">{t.updatesHeading}</h2>
+      </div>
+      <div class="shead-side">
+        <p class="sub">{t.updatesSubheading}</p>
         <a
           href={site.changelogUrl[locale]}
           target="_blank"
           rel="noopener noreferrer"
-          class="text-link"
+          class="tlink"
         >
           {t.viewFullChangelog}
-          <ArrowUpRightIcon size={16} aria-hidden="true" />
+          <Icon name="arrowUpRight" small />
         </a>
       </div>
     </div>
-    <article class="release-feature" data-reveal>
+    <article class="feat dots" data-reveal>
       <div>
-        <p class="release-feature__badge">
-          <span>{l.updates.latest}</span>
-          <time datetime={latest.date}>{latest.date}</time>
+        <p class="badge">
+          <span class="pdot"></span>{l.updates.latest} · <time datetime={latest.date}>{latest.date}</time>
         </p>
-        <p class="release-feature__version">{latest.version}</p>
+        <p class="vbig">{latest.version}</p>
       </div>
       <div>
         <h3>{latest.title}</h3>
-        <p>{latest.description}</p>
-        <div class="tag-list">
+        <p class="ds">{latest.description}</p>
+        <div class="tags">
           {latest.tags.map((tag) => <span>{tag}</span>)}
         </div>
         {latest.command && (
-          <code class="term release-feature__command">
-            <span class="accent">$ </span>{latest.command}
-          </code>
+          <code class="cline"><b>$ </b>{latest.command}</code>
         )}
       </div>
     </article>
-    <div class="release-grid">
+    <div class="rgrid">
       {recent.map((update) => <ReleaseEntry update={update} />)}
     </div>
-    <details class="release-archive">
+    <details class="arch" data-reveal>
       <summary>
         <span>{l.updates.older}</span>
-        <span>
+        <span class="rng">
           {older.length} · {older.at(-1)?.version} – {older[0]?.version}
         </span>
+        <Icon name="chevronDown" />
       </summary>
-      <ol>
-        {older.map((update) => (
-          <li>
-            <span>{update.version}</span>
+      <ol class="alist">
+        {older.map((update, index) => (
+          <li style={`--i: ${index}`}>
+            <span class="av">{update.version}</span>
             <time datetime={update.date}>{update.date}</time>
             <span>{update.title}</span>
           </li>

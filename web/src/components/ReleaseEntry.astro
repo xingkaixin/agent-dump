@@ -6,14 +6,14 @@ interface Props {
 const { update } = Astro.props;
 ---
 
-<article class="release-card" data-reveal>
-  <header>
+<article class="rcard" data-reveal>
+  <p class="rv">
     <span>{update.version}</span>
     <time datetime={update.date}>{update.date}</time>
-  </header>
+  </p>
   <h3>{update.title}</h3>
   <p>{update.description}</p>
-  <div class="tag-list">
+  <div class="tags">
     {update.tags.map((tag) => <span>{tag}</span>)}
   </div>
 </article>

@@ -1,21 +1,17 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import type { CapabilityCopy } from "../lib/landing";
+import { useEffect, useState } from "react";
+import type { CapabilityCopy, LandingCopy } from "../lib/landing";
+import { Icon } from "./Icon";
 
 interface Props {
   items: CapabilityCopy[];
-  sample: { s1: string; s2: string; s3: string; q1: string; q2: string };
-  notes: {
-    search: string;
-    read: string;
-    scan: string;
-    chunk: string;
-    prompt: string;
-    collect: string;
-  };
+  sample: LandingCopy["sample"];
+  notes: LandingCopy["notes"];
+  demo: LandingCopy["demo"];
   untouched: string;
 }
 
-const AUTOPLAY_MS = 7000;
+const AUTOPLAY_MS = 6000;
+const QUERY = "auth timeout";
 
 const commands = [
   "agent-dump search 'auth timeout' --query 'path:.' --days 30",
@@ -23,71 +19,158 @@ const commands = [
   "agent-dump export codex://019a7c2e --format markdown --output ./sessions",
   "agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md",
 ];
-const files = ["search", "read --json", "export", "collect"];
 
-function Line({ delay, className, children }: { delay: number; className?: string; children: ReactNode }) {
-  return (
-    <div className={`term-line ${className ?? ""}`} style={{ animationDelay: `${delay}s` }}>
-      {children}
-    </div>
-  );
-}
-
-function Output({ index, sample, notes, untouched }: Omit<Props, "items"> & { index: number }) {
-  const start = commands[index].length * 0.028 + 0.4;
-  const at = (step: number) => start + step * 0.15;
-  if (index === 0)
-    return (
-      <>
-        <Line delay={at(0)} className="row"><span className="accent">claude://7f3c91</span><span>{sample.s1}</span><span className="subtle">2 hits · 3d</span></Line>
-        <Line delay={at(1)} className="muted">{`  › msg 14  “${sample.q1}”`}</Line>
-        <Line delay={at(2)} className="row"><span className="accent">codex://019a7c2e</span><span>{sample.s2}</span><span className="subtle">4 hits · 6d</span></Line>
-        <Line delay={at(3)} className="muted">{`  › msg 3   “${sample.q2}”`}</Line>
-        <Line delay={at(4)} className="row"><span className="accent">cursor://b21e04</span><span>{sample.s3}</span><span className="subtle">1 hit · 12d</span></Line>
-        <Line delay={at(6)} className="subtle note">{notes.search}</Line>
-      </>
-    );
-  if (index === 1)
-    return (
-      <>
-        <Line delay={at(0)}>{"{"}</Line>
-        <Line delay={at(1)}>{"  "}<span className="muted">"kind"</span>: <span className="ok">"read"</span>, <span className="muted">"status"</span>: <span className="ok">"ok"</span>,</Line>
-        <Line delay={at(2)}>{"  "}<span className="muted">"data"</span>: {"{"}</Line>
-        <Line delay={at(3)}>{"    "}<span className="muted">"total_messages"</span>: <span className="num">38</span>,</Line>
-        <Line delay={at(4)}>{"    "}<span className="muted">"messages"</span>: <span className="subtle">[ … ]</span>,</Line>
-        <Line delay={at(5)}>{"    "}<span className="muted">"next_cursor"</span>: <span className="ok">"r1.7b2275…"</span></Line>
-        <Line delay={at(6)}>{"  },"}</Line>
-        <Line delay={at(7)}>{"  "}<span className="muted">"has_more"</span>: <span className="accent">true</span></Line>
-        <Line delay={at(8)}>{"}"}</Line>
-        <Line delay={at(10)} className="subtle note">{notes.read}</Line>
-      </>
-    );
-  if (index === 2)
-    return (
-      <>
-        <Line delay={at(0)} className="muted">reading   codex://019a7c2e  (38 messages)</Line>
-        <Line delay={at(1)} className="muted">writing   ./sessions/{sample.s2}.md</Line>
-        <Line delay={at(2)} className="ok">ok        {untouched}</Line>
-        <Line delay={at(4)} className="term-doc">
-          <div className="fg"># {sample.s2}</div>
-          <div className="subtle">source: codex://019a7c2e · msg 3–17</div>
-          <div>## User · {sample.q2}</div>
-        </Line>
-      </>
-    );
+function Quote({ text }: { text: string }) {
+  const [before, after] = text.split(QUERY);
+  if (after === undefined) return <>{text}</>;
   return (
     <>
-      <Line delay={at(0)} className="muted">scan      {notes.scan}</Line>
-      <Line delay={at(1)} className="muted">chunk     {notes.chunk}</Line>
-      <Line delay={at(2)} className="muted">prompt    {notes.prompt}</Line>
-      <Line delay={at(3)} className="muted">target    ./reports/weekly.md</Line>
-      <Line delay={at(4)} className="ok">status    complete</Line>
-      <Line delay={at(6)} className="subtle note">{notes.collect}</Line>
+      {before}
+      <mark>{QUERY}</mark>
+      {after}
     </>
   );
 }
 
-export function CapabilityDemo({ items, ...rest }: Props) {
+function Search({ sample, demo }: Pick<Props, "sample" | "demo">) {
+  const results = [
+    { provider: "claude", title: sample.s1, meta: "2 hits · 3d", msg: 14, quote: sample.q1, loc: "claude://7f3c91#msg-14" },
+    { provider: "codex", title: sample.s2, meta: "4 hits · 6d", msg: 3, quote: sample.q2, loc: "codex://019a7c2e#msg-3" },
+    { provider: "cursor", title: sample.s3, meta: "1 hit · 12d" },
+  ];
+  return (
+    <div className="win-body stg">
+      <div className="sbar">
+        <Icon name="search" />
+        <span className="q">{QUERY}</span>
+        <span className="kbd">s</span>
+      </div>
+      <div className="fchips">
+        <span className="fchip on">path:.</span>
+        <span className="fchip on">{demo.days}</span>
+        <span className="fchip">{demo.provider}</span>
+        <span className="fchip">{demo.role}</span>
+      </div>
+      {results.map((result) => (
+        <div className="res" key={result.provider}>
+          <div className="r1">
+            <span className="pbadge">{result.provider}</span>
+            <span className="t">{result.title}</span>
+            <span className="m">{result.meta}</span>
+          </div>
+          {result.quote && (
+            <>
+              <p className="qq">
+                › msg {result.msg} “<Quote text={result.quote} />”
+              </p>
+              <p className="loc">{result.loc}</p>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Read({ demo }: Pick<Props, "demo">) {
+  return (
+    <div className="win-body">
+      <div className="rd stg">
+        <div className="code">
+          {"{\n  "}
+          <span className="tm">"kind"</span>: <span className="tok">"read"</span>,{" "}
+          <span className="tm">"status"</span>: <span className="tok">"ok"</span>
+          {",\n  "}
+          <span className="tm">"data"</span>
+          {": {\n    "}
+          <span className="tm">"total_messages"</span>: <span className="tam">38</span>
+          {",\n    "}
+          <span className="tm">"messages"</span>
+          {": [ … ],\n    "}
+          <span className="tm">"next_cursor"</span>: <span className="tok">"r1.7b2275…"</span>
+          {"\n  },\n  "}
+          <span className="tm">"has_more"</span>: <span className="tam">true</span>
+          {"\n}"}
+        </div>
+        <ol className="rail">
+          <li><b>PAGE 1</b><span>msg 1–16 · cursor →</span></li>
+          <li><b>PAGE 2</b><span>msg 17–32 · cursor →</span></li>
+          <li><b>PAGE 3</b><span>msg 33–38</span></li>
+          <li className="end"><b>DONE</b><span>has_more=false · {demo.readDone}</span></li>
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+function Export({ sample, demo, untouched }: Pick<Props, "sample" | "demo" | "untouched">) {
+  return (
+    <div className="win-body">
+      <div className="ex stg">
+        <div className="sheet">
+          <div className="doc">
+            <span className="fm">{"---\nuri: codex://019a7c2e\nprovider: codex\nmessages: 38\n---"}</span>
+            {"\n"}
+            <span className="hd"># {sample.s2}</span>
+            {"\n\n"}
+            <span className="rl">## user</span>
+            {` · msg 1\n${demo.exportUser}\n\n`}
+            <span className="rl">## assistant</span>
+            {` · msg 2\n${demo.exportAssistant}`}
+            <span className="stamp">{untouched}</span>
+          </div>
+        </div>
+        <div className="side">
+          <div className="filecard">
+            <Icon name="folder" small />
+            <span>./sessions/</span>
+            <span className="fmt">DIR</span>
+          </div>
+          <div className="filecard">
+            <span>{sample.s2}.md</span>
+            <span className="fmt">MD</span>
+          </div>
+          <div className="filecard">
+            <span>{sample.s2}.json</span>
+            <span className="fmt">JSON</span>
+          </div>
+          <p className="inote">{demo.exportNote}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Collect({ notes, demo }: Pick<Props, "notes" | "demo">) {
+  return (
+    <div className="win-body">
+      <div className="ctop">
+        <span className="fchip on">{notes.scan}</span>
+        <span className="fchip">{notes.chunk}</span>
+      </div>
+      <div className="chunks" aria-hidden="true">
+        {Array.from({ length: 56 }, (_, index) => (
+          <span
+            key={index}
+            className="ck"
+            style={{ animationDelay: `${(0.15 + index * 0.035).toFixed(3)}s` }}
+          />
+        ))}
+      </div>
+      <div className="cfoot">
+        <div className="stdout">
+          <span className="tok">→ stdout</span> {demo.collectStdout}
+        </div>
+        <span className="okpill">
+          <span className="pdot" />
+          status: complete
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function CapabilityDemo({ items, sample, notes, demo, untouched }: Props) {
   const [active, setActive] = useState(0);
   const [auto, setAuto] = useState(true);
 
@@ -97,58 +180,61 @@ export function CapabilityDemo({ items, ...rest }: Props) {
     return () => clearTimeout(timer);
   }, [active, auto, items.length]);
 
-  const command = commands[active];
+  const footers = [notes.search, notes.read, demo.exportFoot, notes.collect];
   return (
-    <div className="capability-demo">
-      <div className="capability-tabs">
+    <div className="capbox">
+      <div className="ctabs" role="tablist" aria-orientation="vertical">
         {items.map((item, index) => {
           const current = index === active;
           return (
             <button
               key={item.verb}
               type="button"
-              aria-pressed={current}
+              role="tab"
+              id={`capability-tab-${index}`}
+              aria-selected={current}
               aria-controls="capability-terminal"
-              className="capability-tab"
+              className="ctab"
               onClick={() => {
                 setActive(index);
                 setAuto(false);
               }}
             >
-              <span className="capability-tab__num">0{index + 1}</span>
-              <span className="capability-tab__text">
-                <span className="capability-tab__label">
-                  {item.verb} · {item.label}
-                </span>
-                {current && <span className="capability-tab__body">{item.body}</span>}
+              <span className="top">
+                <span className="no">0{index + 1}</span>
+                <span className="vb">{item.verb}</span>
+                <span className="lb">{item.label}</span>
               </span>
+              <span className="bd">{item.body}</span>
               {current && auto && (
-                <span
-                  className="capability-tab__progress"
-                  style={{ animationDuration: `${AUTOPLAY_MS}ms` }}
-                  aria-hidden="true"
-                />
+                <span className="prog" aria-hidden="true">
+                  <i style={{ animationDuration: `${AUTOPLAY_MS}ms` }} />
+                </span>
               )}
             </button>
           );
         })}
       </div>
-      <div className="term terminal-window" id="capability-terminal" aria-live="polite">
-        <div className="terminal-window__bar">
-          <span>~/work/gateway</span>
-          <span>agent-dump {files[active]}</span>
+      <div
+        className="win"
+        id="capability-terminal"
+        role="tabpanel"
+        aria-labelledby={`capability-tab-${active}`}
+      >
+        <div className="win-cmd">
+          <span className="tok">$</span>
+          <span>{commands[active]}</span>
         </div>
-        <div className="terminal-window__body" key={active}>
-          <div>
-            <span className="accent">$ </span>
-            <span className="typed" style={{ "--n": command.length } as CSSProperties}>
-              {command}
-            </span>
-            <span className="caret" aria-hidden="true" />
-          </div>
-          <div className="term-gap" />
-          <Output index={active} {...rest} />
+        <div key={active}>
+          {active === 0 && <Search sample={sample} demo={demo} />}
+          {active === 1 && <Read demo={demo} />}
+          {active === 2 && <Export sample={sample} demo={demo} untouched={untouched} />}
+          {active === 3 && <Collect notes={notes} demo={demo} />}
         </div>
+        <p className="win-note">
+          {active === 0 && <Icon name="search" small />}
+          {footers[active]}
+        </p>
       </div>
     </div>
   );

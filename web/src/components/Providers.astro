@@ -1,8 +1,8 @@
 ---
-import { ArrowRightIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { codexGuideLinks } from "../lib/guides";
 import { site, ui, providers, type Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
+import Icon from "./Icon.astro";
 
 interface Props {
   locale: Locale;
@@ -10,38 +10,76 @@ interface Props {
 const { locale } = Astro.props;
 const t = ui[locale];
 const l = landing[locale];
+const icons: Record<string, string> = {
+  Codex: "codex",
+  "Claude Code": "claudecode",
+  ZCode: "zcode",
+  Kimi: "kimi",
+  OpenCode: "opencode",
+  Cursor: "cursor",
+  Pi: "pi",
+  DeepChat: "deepchat",
+  "Cherry Studio": "cherrystudio",
+  "MiniMax Code": "minimax-code",
+};
+const uris = providers.map((provider) => provider.example.split("://"));
+const ticker = [...uris, uris[0]];
+const [headLead, headTail] = t.providersHeading.split(/(?<=[，、,])\s*/);
 ---
 
-<section id="providers" class="providers-section">
-  <div class="shell section-head" data-reveal>
-    <h2>{t.providersHeading}</h2>
-    <p>{t.providersNote}</p>
-  </div>
-  <div class="marquee" data-reveal>
-    {[0, 1].map((copy) => (
-      <ul class="marquee__track" aria-hidden={copy === 1 ? "true" : undefined}>
-        {providers.map((provider) => (
-          <li>
-            <span>{provider.name}</span>
-            <code>{provider.example}</code>
-          </li>
-        ))}
-      </ul>
-    ))}
-  </div>
-  <div class="shell provider-links">
-    <a class="text-link" href={codexGuideLinks[locale].href}>
-      {l.codexGuide}
-      <ArrowRightIcon size={16} aria-hidden="true" />
-    </a>
-    <a
-      class="text-link"
-      href={`${site.repo}/pulls`}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      {t.moreTools.title} · {t.moreTools.note}
-      <ArrowUpRightIcon size={16} aria-hidden="true" />
-    </a>
+<section id="providers" class="sec flush">
+  <div class="wrap">
+    <div class="prov-top">
+      <div data-reveal>
+        <p class="eyebrow"><span class="ix">01</span><span class="ln"></span>{l.nav.tools}</p>
+        <h2 class="h2">{headLead}{headTail && <><br />{headTail}</>}</h2>
+        <p class="sub" style="margin-top: 16px">{t.providersNote}</p>
+        <div class="tlinks">
+          <a class="tlink" href={codexGuideLinks[locale].href}>
+            {l.codexGuide}
+            <Icon name="arrowRight" small />
+          </a>
+          <a
+            class="tlink"
+            href={`${site.repo}/pulls`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t.moreTools.title} · {t.moreTools.note}
+            <Icon name="arrowUpRight" small />
+          </a>
+        </div>
+      </div>
+      <figure class="uri-box dots" aria-label={l.uri.label} data-reveal>
+        <p class="cap"><span>Session URI</span><span>agent-dump export &lt;uri&gt;</span></p>
+        <div class="uri" aria-hidden="true">
+          <span class="tick sch"><ul>{ticker.map(([scheme]) => <li>{scheme}</li>)}</ul></span>
+          <span class="sep">://</span>
+          <span class="tick sid"><ul>{ticker.map(([, id]) => <li>{id}</li>)}</ul></span>
+        </div>
+        <div class="uri-leg" aria-hidden="true">
+          <span class="a" style="width: 8ch"><em>{l.uri.scheme}</em></span>
+          <span class="gap" style="width: 3ch"></span>
+          <span style="width: 14ch"><em>{l.uri.id}</em></span>
+        </div>
+      </figure>
+    </div>
+    <ul class="ptiles" data-reveal>
+      {providers.map((provider) => (
+        <li class="ptile">
+          <span class="pic">
+            <img
+              src={`/assets/agents/${icons[provider.name]}.svg`}
+              alt=""
+              width="20"
+              height="20"
+              loading="lazy"
+            />
+          </span>
+          <b>{provider.name}</b>
+          <code>{provider.example}</code>
+        </li>
+      ))}
+    </ul>
   </div>
 </section>

@@ -1,6 +1,7 @@
 ---
 import { guideIndexPaths, guideUi } from "../lib/guides";
 import { site, ui, type Locale } from "../lib/i18n";
+import Logo from "./Logo.astro";
 
 interface Props {
   locale: Locale;
@@ -16,32 +17,32 @@ const links = [
 ];
 ---
 
-<footer class="site-footer">
-  <div class="shell site-footer__inner">
-    <div>
-      <p class="site-footer__brand">
-        <img src={site.logo} alt="" width="22" height="22" />
-        agent-dump
-      </p>
-      <p class="site-footer__tagline">{t.footerTagline}</p>
-    </div>
-    <nav aria-label="Footer" class="site-footer__nav">
-      <a href={guideIndexPaths[locale]} class="site-footer__link">
-        {guideUi[locale].label}
-      </a>
-      {links.map((link) => (
-        <a
-          href={link.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="site-footer__link"
-          data-umami-event="outbound-click"
-          data-umami-event-destination={link.label}
-          data-umami-event-locale={t.htmlLang}
-        >
-          {link.label}
+<footer class="ftr">
+  <div class="wrap">
+    <div class="ftr-in">
+      <div>
+        <a class="brand" href={site.paths[locale]}>
+          <Logo size={24} />
+          agent-dump
         </a>
-      ))}
-    </nav>
+        <p class="tg">{t.footerTagline}</p>
+      </div>
+      <nav aria-label="Footer" class="fnav">
+        <a href={guideIndexPaths[locale]}>{guideUi[locale].label}</a>
+        {links.map((link) => (
+          <a
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-umami-event="outbound-click"
+            data-umami-event-destination={link.label}
+            data-umami-event-locale={t.htmlLang}
+          >
+            {link.label}
+          </a>
+        ))}
+      </nav>
+    </div>
+    <p class="giant" aria-hidden="true"><b>$</b> agent-dump<i></i></p>
   </div>
 </footer>

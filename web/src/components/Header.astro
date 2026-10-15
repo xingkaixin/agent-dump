@@ -1,42 +1,42 @@
 ---
-import { ListIcon, MoonIcon, SunIcon } from "@phosphor-icons/react";
 import { guideIndexPaths, guideUi } from "../lib/guides";
 import { LOCALES, localeLabels, site, ui, type Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
+import Icon from "./Icon.astro";
+import Logo from "./Logo.astro";
 
 interface Props {
   locale: Locale;
   paths?: Partial<Record<Locale, string>>;
   homeLinks?: boolean;
+  current?: "guides";
 }
-const { locale, paths = site.paths, homeLinks = false } = Astro.props;
+const { locale, paths = site.paths, homeLinks = false, current } = Astro.props;
 const home = homeLinks ? site.paths[locale] : "";
 const t = ui[locale];
 const l = landing[locale];
 const links = [
   { href: `${home}#capabilities`, label: t.capabilitiesHeading },
   { href: `${home}#browse`, label: l.nav.browse },
-  { href: guideIndexPaths[locale], label: guideUi[locale].label },
+  {
+    href: guideIndexPaths[locale],
+    label: guideUi[locale].label,
+    current: current === "guides",
+  },
   { href: `${home}#updates`, label: t.updatesHeading },
   { href: `${home}#faq`, label: l.nav.faq },
 ];
 ---
 
-<header class="site-header">
-  <div class="shell site-header__inner">
-    <a href={site.paths[locale]} class="site-brand" aria-label="agent-dump">
-      <img
-        src={site.logo}
-        alt=""
-        width="26"
-        height="26"
-        class="rounded-[var(--radius-xs)]"
-      />
+<header class="hdr">
+  <div class="wrap hdr-in">
+    <a href={site.paths[locale]} class="brand" aria-label="agent-dump">
+      <Logo size={30} />
       <span>agent-dump</span>
     </a>
 
     <nav
-      class="site-nav"
+      class="nav"
       aria-label={
         locale === "zh"
           ? "主导航"
@@ -45,55 +45,52 @@ const links = [
             : "Primary"
       }
     >
-      {links.map((link) => <a href={link.href}>{link.label}</a>)}
-      <a
-        href={`${home}#install`}
-        class="button button--primary site-nav__cta"
-        data-umami-event="install-cta"
-        data-umami-event-location="header"
-        data-umami-event-locale={t.htmlLang}>{t.installHeading}</a
-      >
+      {links.map((link) => (
+        <a href={link.href} aria-current={link.current ? "page" : undefined}>
+          {link.label}
+        </a>
+      ))}
     </nav>
 
-    <div class="site-tools">
-      <div role="group" aria-label={t.langLabel} class="language-switcher">
-        {LOCALES.filter((code) => paths[code]).map((code) => {
-          const current = code === locale;
-          return (
-            <a
-              href={paths[code]}
-              lang={ui[code].htmlLang}
-              data-locale-choice={code}
-              aria-current={current ? "page" : undefined}
-              class:list={[
-                "language-switcher__link",
-                current && "language-switcher__link--active",
-              ]}
-            >
-              {localeLabels[code]}
-            </a>
-          );
-        })}
+    <div class="tools">
+      <div role="group" aria-label={t.langLabel} class="seg">
+        {LOCALES.filter((code) => paths[code]).map((code) => (
+          <a
+            href={paths[code]}
+            lang={ui[code].htmlLang}
+            data-locale-choice={code}
+            aria-current={code === locale ? "page" : undefined}
+          >
+            {localeLabels[code]}
+          </a>
+        ))}
       </div>
-
       <button
         type="button"
         data-theme-toggle
         aria-label={t.themeLabel}
         title={t.themeLabel}
-        class="icon-button theme-toggle"
+        class="ibtn"
       >
-        <span class="theme-toggle__icons">
-          <SunIcon weight="bold" aria-hidden="true" className="theme-toggle__sun" />
-          <MoonIcon weight="bold" aria-hidden="true" className="theme-toggle__moon" />
-        </span>
+        <Icon name="sun" class="theme-sun" />
+        <Icon name="moon" class="theme-moon" />
       </button>
-
+      <a class="ibtn gh" href={site.repo} aria-label="GitHub">
+        <Icon name="github" />
+      </a>
+      <a
+        href={`${home}#install`}
+        class="btn btn-key btn-sm cta-h"
+        data-umami-event="install-cta"
+        data-umami-event-location="header"
+        data-umami-event-locale={t.htmlLang}>{t.installHeading}</a
+      >
       <details class="mobile-menu">
-        <summary class="icon-button" aria-label={l.menu}>
-          <ListIcon size={20} aria-hidden="true" />
+        <summary class="ibtn" aria-label={l.menu}>
+          <Icon name="menu" />
         </summary>
         <nav
+          class="mnav"
           aria-label={
             locale === "zh"
               ? "移动导航"
@@ -102,11 +99,15 @@ const links = [
                 : "Mobile navigation"
           }
         >
-          {links.map((link) => <a href={link.href}>{link.label}</a>)}
+          {links.map((link) => (
+            <a href={link.href} aria-current={link.current ? "page" : undefined}>
+              {link.label}
+            </a>
+          ))}
           <a href={site.repo}>GitHub</a>
           <a
             href={`${home}#install`}
-            class="button button--primary"
+            class="btn btn-key"
             data-umami-event="install-cta"
             data-umami-event-location="mobile-nav"
             data-umami-event-locale={t.htmlLang}>{t.installHeading}</a
@@ -143,7 +144,7 @@ const links = [
       root.setAttribute("data-theme", next);
       var meta = document.querySelector('meta[name="theme-color"]');
       if (meta)
-        meta.setAttribute("content", next === "dark" ? "#0c1011" : "#f1f3ef");
+        meta.setAttribute("content", next === "dark" ? "#0c100f" : "#fcfdfc");
       try {
         localStorage.setItem("agent-dump-theme", next);
       } catch (e) {}

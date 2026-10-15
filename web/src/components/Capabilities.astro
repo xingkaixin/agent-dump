@@ -1,5 +1,5 @@
 ---
-import type { Locale } from "../lib/i18n";
+import { ui, type Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
 import { CapabilityDemo } from "./CapabilityDemo";
 interface Props {
@@ -9,11 +9,16 @@ const { locale } = Astro.props;
 const l = landing[locale];
 ---
 
-<section id="capabilities" class="capabilities-section">
-  <div class="shell">
-    <div class="section-head" data-reveal>
-      <h2>{l.capabilities.heading}</h2>
-      <p>{l.capabilities.summary}</p>
+<section id="capabilities" class="sec panel">
+  <div class="wrap">
+    <div class="shead" data-reveal>
+      <div>
+        <p class="eyebrow">
+          <span class="ix">02</span><span class="ln"></span>{ui[locale].capabilitiesHeading}
+        </p>
+        <h2 class="h2">{l.capabilities.heading}</h2>
+      </div>
+      <p class="sub">{l.capabilities.summary}</p>
     </div>
     <div data-reveal>
       <CapabilityDemo
@@ -21,6 +26,7 @@ const l = landing[locale];
         items={l.capabilities.items}
         sample={l.sample}
         notes={l.notes}
+        demo={l.demo}
         untouched={l.stage.untouched}
       />
     </div>

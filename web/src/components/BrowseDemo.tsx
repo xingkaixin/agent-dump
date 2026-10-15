@@ -15,6 +15,8 @@ interface Props {
     label: string;
     keysLabel: string;
     note: string;
+    keysHint: string;
+    space: string;
     keys: string[];
   };
 }
@@ -214,27 +216,41 @@ function press(state: State, key: string, sessions: DemoSession[]): State | null
   }
 }
 
-function body(state: State, v: ReturnType<typeof view>, t: TuiStrings) {
-  const lines: { text: string; kind: string }[] = [];
-  let active = -1;
-  if (!v.current) return { lines: [{ text: t.noMatches, kind: "" }], offset: 0 };
-  v.current.messages.forEach(([role, text, tool], index) => {
-    if (state.excerpt && (index < v.range.start || index >= v.range.end)) return;
-    lines.push({ text: `# ${index + 1} · ${role}`, kind: "heading" });
-    if (index === v.hitIndex) active = lines.length;
-    lines.push({ text, kind: index === v.hitIndex ? "hit" : "" });
-    if (state.details && tool) lines.push({ text: tool, kind: "dim" });
-    lines.push({ text: "", kind: "" });
-  });
-  const offset = Math.min(Math.max(0, lines.length - 1), Math.max(0, active - 3) + state.scroll);
-  return { lines, offset };
+function body(state: State, v: ReturnType<typeof view>) {
+  if (!v.current) return { items: [], offset: 0 };
+  const items = v.current.messages
+    .map(([role, text, tool], index) => ({ index, role, text, tool: tool?.trim() }))
+    .filter(
+      ({ index }) => !state.excerpt || (index >= v.range.start && index < v.range.end),
+    );
+  const active = items.findIndex((item) => item.index === v.hitIndex);
+  const offset = Math.min(
+    Math.max(0, items.length - 1),
+    Math.max(0, active - 1) + state.scroll,
+  );
+  return { items, offset };
+}
+
+function Marked({ text, terms }: { text: string; terms: string[] }) {
+  if (!terms.length) return <>{text}</>;
+  const pattern = new RegExp(
+    `(${terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
+    "gi",
+  );
+  return (
+    <>
+      {text
+        .split(pattern)
+        .map((part, index) => (index % 2 ? <mark key={index}>{part}</mark> : part))}
+    </>
+  );
 }
 
 const chips: [string, string][] = [
-  ["j", "j"],
-  ["k", "k"],
-  ["← →", "pane"],
-  ["space", " "],
+  ["↓", "j"],
+  ["↑", "k"],
+  ["Tab", "pane"],
+  ["", " "],
   ["e", "e"],
   ["s", "search"],
   ["/", "find"],
@@ -300,8 +316,12 @@ export function BrowseDemo({ lang, copy }: Props) {
   }
 
   const v = view(state, sessions);
-  const { lines, offset } = body(state, v, t);
-  const anyMarked = state.marked.length > 0;
+  const { items, offset } = body(state, v);
+  const terms = v.hits.length
+    ? state.messageQuery
+      ? [state.messageQuery]
+      : v.words
+    : [];
   let status: string;
   if (state.editing)
     status = `${state.editing === "sessions" ? t.inputSessions : t.inputMessages} > ${state.input}`;
@@ -311,22 +331,25 @@ export function BrowseDemo({ lang, copy }: Props) {
   else status = t.ready;
   const bodyTitle = state.excerpt
     ? format(t.excerptRange, { start: v.range.start + 1, end: v.range.end, total: v.range.total })
-    : `${t.body} · ${offset + 1}/${lines.length}`;
+    : `${t.body} · ${offset + 1}/${items.length}`;
 
   return (
-    <div className="browse-demo">
-      <div className="term tui-window">
-        <div className="tui-window__bar">
-          <span>~/work/gateway · agent-dump --browse --time-field updated --days 7</span>
+    <>
+      <div className="tui">
+        <div className="term-bar">
+          <span className="tab">
+            <span className="prompt-mark">&gt;_</span>
+            agent-dump --browse --time-field updated --days 7
+          </span>
           {auto ? (
-            <span className="tui-window__auto">
-              <span className="pulse-dot" aria-hidden="true" />
+            <span className="auto-pill">
+              <span className="pdot" aria-hidden="true" />
               {copy.autoplay}
             </span>
           ) : (
             <button
               type="button"
-              className="chip-button"
+              className="replay"
               onClick={() => {
                 takeOver();
                 step.current = 0;
@@ -339,7 +362,7 @@ export function BrowseDemo({ lang, copy }: Props) {
           )}
         </div>
         <div
-          className="tui"
+          className="tui-screen"
           tabIndex={0}
           role="application"
           aria-roledescription="terminal"
@@ -347,62 +370,83 @@ export function BrowseDemo({ lang, copy }: Props) {
           onKeyDown={onKeyDown}
           onMouseDown={takeOver}
         >
-          <div className="tui__group">{v.current?.uri ?? t.sessions}</div>
-          <div className="tui__dim tui__pre">{t.scope}</div>
-          <div>{format(t.state, { count: v.rows.length, mode: t.terms, query: state.sessionQuery })}</div>
-          <div className="tui__panes">
-            <div className={`tui__pane ${state.focus === "list" ? "is-focused" : "is-hidden-narrow"}`}>
-              <span className="tui__pane-title">{t.sessions}</span>
-              <div className="tui__pane-body">
-                {v.rows.length === 0 && <div className="tui__pre">{t.noMatches}</div>}
-                {v.rows.map((session, index) => (
+          <div className="tui-body">
+            <div className={state.focus === "list" ? "tpane act" : "tpane"}>
+              <p className="ph">
+                <span>{t.sessions}</span>
+                <span>{v.rows.length}</span>
+              </p>
+              {state.sessionQuery && (
+                <p className="tsearch">
+                  {format(t.state, { count: v.rows.length, mode: t.terms, query: state.sessionQuery })}
+                </p>
+              )}
+              {v.rows.length === 0 && <p className="tempty">{t.noMatches}</p>}
+              {v.rows.map((session, index) => {
+                const marked = state.marked.includes(session.uri);
+                return (
                   <div
                     key={session.uri}
-                    className={`tui__row ${index === v.selected ? "is-selected" : ""}`}
+                    className={`trow${index === v.selected ? " sel" : ""}${marked ? " marked" : ""}`}
                   >
-                    <div>
-                      {index === v.selected ? "› " : "  "}
-                      {anyMarked ? (state.marked.includes(session.uri) ? "[x] " : "[ ] ") : ""}
-                      {session.title}
-                    </div>
-                    <div className="tui__dim">
-                      {session.provider} · {session.when} · {session.path}
-                    </div>
-                    <div>{session.messages[0][1]}</div>
+                    <span className="cr">{index === v.selected ? "›" : ""}</span>
+                    <span className="mk2">{marked ? "●" : "○"}</span>
+                    <span className="tt">{session.title}</span>
+                    <span className="tw">
+                      {session.provider} · {session.when}
+                    </span>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-            <div className={`tui__pane ${state.focus === "body" ? "is-focused" : "is-hidden-narrow"}`}>
-              <span className="tui__pane-title">{bodyTitle}</span>
-              <div className="tui__pane-body">
-                {lines.slice(offset).map((line, index) => (
-                  <div key={`${offset}-${index}`} className={`tui__line is-${line.kind || "plain"}`}>
-                    {line.text}
+            <div className={state.focus === "body" ? "tpane act" : "tpane"}>
+              <p className="ph">
+                <span>{bodyTitle}</span>
+                <span>{v.current?.path}</span>
+              </p>
+              {v.current ? (
+                <p className="thead">
+                  <b>{v.current.uri}</b> · {v.current.title}
+                </p>
+              ) : (
+                <p className="tempty">{t.noMatches}</p>
+              )}
+              {items.slice(offset).map((item) => (
+                <div key={item.index}>
+                  <div className={item.index === v.hitIndex ? "tmsg cur" : "tmsg"}>
+                    <span className={item.role === "user" ? "trole u" : "trole a"}>
+                      {item.role}
+                    </span>
+                    <span>
+                      <Marked text={item.text} terms={terms} />
+                    </span>
                   </div>
-                ))}
-              </div>
+                  {state.details && item.tool && <p className="ttool">{item.tool}</p>}
+                </div>
+              ))}
             </div>
           </div>
-          <div className="tui__status" aria-live="polite">
-            {status}
-            {state.editing && <span className="caret" aria-hidden="true" />}
+          <div className="tstat">
+            <span className="l" aria-live="polite">
+              {status}
+              {state.editing && <span className="caret" aria-hidden="true" />}
+            </span>
+            <span className="r">{t.scope}</span>
           </div>
-          <div className="tui__pre tui__help">{t.help}</div>
           {state.help && (
-            <div className="tui__overlay">
-              <div className="tui__overlay-title">{t.helpTitle}</div>
+            <div className="thelp">
+              <b>{t.helpTitle}</b>
               {t.helpFull}
             </div>
           )}
         </div>
       </div>
-      <div role="group" aria-label={copy.keysLabel} className="browse-keys">
-        {chips.map(([label, action], index) => (
+      <div role="group" aria-label={copy.keysLabel} className="keys">
+        {chips.map(([cap, action], index) => (
           <button
-            key={label}
+            key={action}
             type="button"
-            className="key-chip"
+            className="key"
             onClick={() => {
               if (action === "search") macro(["s", "a", "u", "t", "h", "Enter"]);
               else if (action === "find") macro(["/", "t", "o", "k", "e", "n", "Enter"]);
@@ -418,12 +462,15 @@ export function BrowseDemo({ lang, copy }: Props) {
               }
             }}
           >
-            <kbd>{label}</kbd>
+            <kbd className="kbd">{cap || copy.space}</kbd>
             {copy.keys[index]}
           </button>
         ))}
       </div>
-      <p className="browse-note">{copy.note}</p>
-    </div>
+      <p className="bnote">
+        <span>{copy.note}</span>
+        <span>{copy.keysHint}</span>
+      </p>
+    </>
   );
 }

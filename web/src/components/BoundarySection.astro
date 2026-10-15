@@ -1,20 +1,50 @@
 ---
 import type { Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
+import Icon from "./Icon.astro";
+import Logo from "./Logo.astro";
 interface Props {
   locale: Locale;
 }
 const { locale } = Astro.props;
 const b = landing[locale].boundary;
+const icons = ["lock", "folder", "alert"] as const;
 ---
 
-<section class="boundary-section" aria-labelledby="boundary-heading">
-  <div class="shell">
-    <p class="eyebrow" data-reveal>{b.tag}</p>
-    <h2 id="boundary-heading" data-reveal>{b.heading}</h2>
-    <div class="boundary-grid">
-      {b.items.map((item) => (
-        <div data-reveal>
+<section class="sec bnd" aria-labelledby="boundary-heading">
+  <div class="wrap">
+    <div data-reveal>
+      <p class="eyebrow"><span class="ix">05</span><span class="ln"></span>{b.tag}</p>
+      <h2 class="h2" id="boundary-heading">{b.heading}</h2>
+    </div>
+    <div class="flow" aria-hidden="true" data-reveal>
+      <div class="node">
+        <p class="nt">{b.flow.source}</p>
+        <ul>{b.flow.sourceItems.map((item) => <li><i></i>{item}</li>)}</ul>
+      </div>
+      <div class="link">
+        <span class="rd2">READ</span>
+        <span class="wire"></span>
+        <span class="no"><Icon name="x" small />NO WRITE</span>
+      </div>
+      <div class="node core">
+        <Logo size={44} />
+        <p class="nm">agent-dump</p>
+      </div>
+      <div class="link">
+        <span class="rd2">WRITE</span>
+        <span class="wire"></span>
+        <span class="no ghost">—</span>
+      </div>
+      <div class="node out">
+        <p class="nt">{b.flow.owned}</p>
+        <ul>{b.flow.ownedItems.map((item) => <li><i></i>{item}</li>)}</ul>
+      </div>
+    </div>
+    <div class="bitems">
+      {b.items.map((item, index) => (
+        <div class="bitem" data-reveal>
+          <span class="bic"><Icon name={icons[index]} /></span>
           <h3>{item.title}</h3>
           <p>{item.body}</p>
         </div>
