@@ -252,6 +252,8 @@ agent-dump opencode://session-id-abc123
 
 Claude Code 列出 `<项目>/<会话>.jsonl`，以及 `<会话>/subagents/` 下的子代理记录，包括 `subagents/workflows/<run>/agent-*.jsonl` 中的 workflow agent。每个子代理作为独立会话列出，以 agent ID 标识；父会话中启动它的消息记录 `subagent_id`。没有可见消息的会话不列出。标题依次取最新的自定义标题、AI 标题、子代理名称或描述、`sessions-index.json`，以及前 20 条记录中首个用户输入的第一行。消息数只计可见记录。Token 合计按 API 请求取最后一次 usage，缓存读写计入输入。
 
+Pi 只读取当前活跃分支：从最后一条带 id 的记录沿 `parentId` 回溯，被放弃的分支不进入导出、搜索或计数；没有 entry id 的旧格式按文件顺序读取。工具结果合并到对应的工具调用，保留状态和 `details`；bash 执行按退出码和取消标记设置状态。只保留 `display` 为 true 的自定义消息。Token 按消息记录，输入包含缓存读写。没有可见消息的会话不列出。标题依次取 `session_info` 名称、`title` 记录、会话头 `title` 和首条用户消息。超过 256 KiB 的文件在列表阶段只读取首尾，消息数为未知。
+
 DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`；保留正文、思考和工具记录，压缩提示不进入 collect。JSON 还保留附件引用、链接及其他消息块，不读取附件实体或外置工具输出文件。Token 来自消息记录，不提供计费金额。
 
 暂不支持 SQLCipher 加密库、旧版 `chat.db` 直读和 raw 导出；不会执行 DeepChat 的迁移或 Tape 恢复。`DEEPCHAT_USER_DATA_DIR` 可用于指定自定义用户数据目录。

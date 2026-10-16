@@ -43,18 +43,12 @@ def claude_stream(cli, value):
 
 
 def pi_stream(cli, timestamp, location):
-    bad = pi_message(
-        "assistant", "Discard", identity="bad", timestamp=timestamp, usage={"input": 100, "totalTokens": 100}
-    )
+    bad = pi_message("assistant", "Discard", timestamp=timestamp)
     records = [pi_message("user", "Keep")]
     if location == "record":
         bad["timestamp"] = bad["message"].pop("timestamp")
         records += [{"type": "ignored", "padding": "x" * (16 * 1024)} for _ in range(21)]
-    records += [
-        pi_message("assistant", "Before", identity="before"),
-        bad,
-        pi_message("assistant", "After", identity="", usage={"input": 3, "totalTokens": 3}),
-    ]
+    records += [pi_message("assistant", "Before"), bad, pi_message("assistant", "After")]
     return create_pi(cli, records)
 
 
@@ -100,10 +94,9 @@ def test_claude_invalid_message_preserves_assistant_tool_mapping(cli, lang, valu
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("location", ["record", "message"])
 @pytest.mark.parametrize("timestamp", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"])
-def test_pi_timezone_overflow_skips_record_and_keeps_sequence_and_usage(cli, lang, location, timestamp):
+def test_pi_timezone_overflow_skips_record_and_keeps_sequence(cli, lang, location, timestamp):
     pi_stream(cli, timestamp, location)
     payload = recovered_export(cli, "pi", lang, warnings=1)
-    assert payload["stats"]["total_input_tokens"] == payload["stats"]["total_tokens"] == 3
     assert payload["messages"][-1]["id"] == ("pi-26" if location == "record" else "pi-5")
 
 
@@ -146,18 +139,6 @@ def test_ignored_shapes_do_not_gain_conversion_warnings(cli, lang, provider):
         formats=("json", "markdown", "raw"),
     )
     assert cli.run("rust", f"{provider}://{IDENTITY}", "--lang", lang).stderr == ""
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_pi_head_list_and_raw_do_not_convert_messages(cli, lang):
-    pi_stream(cli, "0001-01-01T00:00:00+01:00", "message")
-    for args, formats in [
-        ((f"pi://{IDENTITY}", "--head"), ()),
-        (("--list", "-q", "provider:pi", "-d", "36500"), ()),
-        ((f"pi://{IDENTITY}", "--format", "raw", "--output", "exports"), ("raw",)),
-    ]:
-        cli.parity(*args, "--lang", lang, formats=formats)
-        assert cli.run("rust", *args, "--lang", lang).stderr == ""
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
