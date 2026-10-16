@@ -140,27 +140,25 @@ def test_handoff_read_spans_preserve_dates_across_pages(cli: CliFixture) -> None
 
 
 def test_cursor_inferred_times_are_not_activity_dates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from desktop_fixture import NOW
     from test_cursor import cursor, put
 
     cli = cursor(tmp_path, monkeypatch)
     put(cli, "bubbleId:parent:c-undated", {"type": 2, "text": "undated answer"})
-    put(cli, "composerData:child", {"name": "Child", "createdAt": 1768478400000})
-    put(cli, "bubbleId:child:a", {"type": 2, "text": "child undated"})
-    put(cli, "bubbleId:child:b", {"type": 2, "text": "child dated", "createdAt": "2026-01-15T12:00:00Z"})
+    put(cli, "composerData:parent", {"composerId": "parent", "createdAt": NOW, "subagentInfos": [{"id": "child"}]})
     put(
         cli,
-        "bubbleId:parent:d-task",
+        "bubble:child",
         {
-            "type": 2,
-            "toolFormerData": {"name": "task_v2", "additionalData": {"subagentComposerId": "child"}},
+            "chatMessages": [
+                {"role": "assistant", "text": "child undated"},
+                {"role": "assistant", "text": "child dated", "createdAt": NOW},
+            ]
         },
     )
     read = cli.run("rust", "cursor://request-parent", "--read", "--json")
     assert read.returncode == 0, read.stderr
     fragments = json.loads(read.stdout)["data"]["messages"]
-    unknown = next(item for item in fragments if item["text"] == "undated answer")
-    assert all(span["date"] is None for span in unknown["text_spans"])
-    known = next(item for item in fragments if item["text"] == "prompt")
-    assert all(span["date"] is not None for span in known["text_spans"])
-    child = next(item for item in fragments if "child undated" in item["text"])
-    assert [span["date"] is None for span in child["text_spans"]] == [True, False]
+    dates = {item["text"]: [span["date"] for span in item["text_spans"]] for item in fragments}
+    assert dates["undated answer"] == dates["child undated"] == [None]
+    assert None not in dates["prompt"] + dates["child dated"]

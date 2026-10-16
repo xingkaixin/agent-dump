@@ -221,21 +221,24 @@ pub fn composer(
 pub fn bubbles(
     connection: &Connection,
     id: &str,
-    transcript: bool,
-    bounded: bool,
-) -> crate::Result<Vec<(String, Option<Value>)>> {
-    let order = if transcript { "rowid ASC" } else { "key" };
-    let limit = if bounded { " LIMIT 20" } else { "" };
+) -> crate::Result<Vec<(String, Value)>> {
     Ok(records(
         connection,
-        &format!(
-            "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY {order}{limit}"
-        ),
+        "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY rowid",
         &[&format!("bubbleId:{id}:"), &format!("bubbleId:{id};")],
     )?
     .into_iter()
-    .map(|(key, value)| (key.rsplit(':').next().unwrap().to_owned(), value))
+    .filter_map(|(key, value)| {
+        Some((key.rsplit(':').next().unwrap().to_owned(), value?))
+    })
     .collect())
+}
+
+pub fn model(composer: &Value) -> Option<&str> {
+    [&composer["modelConfig"]["modelName"], &composer["model"]]
+        .into_iter()
+        .map(text)
+        .find(|model| !model.is_empty())
 }
 
 struct Summary {
@@ -302,18 +305,14 @@ fn summaries(
         .collect();
     if fallback {
         for id in ids {
-            for (_, value) in bubbles(connection, id, false, false)? {
-                if let Some(value) = value {
-                    let summary = result.get_mut(*id).unwrap();
-                    if value["type"]
-                        .as_f64()
-                        .is_some_and(|v| v == 1.0 || v == 2.0)
-                        || value["type"] == true
-                    {
-                        summary.count += 1;
-                    }
-                    summary.metadata(&value);
+            for (_, value) in bubbles(connection, id)? {
+                let summary = result.get_mut(*id).unwrap();
+                if value["type"].as_f64().is_some_and(|v| v == 1.0 || v == 2.0)
+                    || value["type"] == true
+                {
+                    summary.count += 1;
                 }
+                summary.metadata(&value);
             }
         }
     } else {
