@@ -44,10 +44,19 @@ agent-dump --collect --emit-prompt -query 'provider:opencode'
 | --- | --- |
 | 只有 `session` | 沿用旧版读取器 |
 | 只有 `session_v2` | 读取 V2 会话 |
-| 新旧表共存 | V2 与旧版独有会话合并，同 ID 始终以 V2 为准 |
+| 新旧表共存，`kv` 中 `migration.v1-v2` 的 `phase` 为 `completed` | 只读取 V2 |
+| 新旧表共存，迁移未完成 | 读取 V2，并补入 ID 小于 `cursor` 且不在 V2 中的旧版会话；没有 `cursor` 时补入全部不在 V2 中的旧版会话 |
 | 没有支持的会话表 | 明确读取失败，不能视为合法空结果 |
 
+OpenCode 按会话 ID 降序逐个复制旧版会话，并把最后复制的 ID 记为 `cursor`。ID 不小于 `cursor` 却不在 V2 中的会话已在 V2 删除，不从旧表复活；两边都有的会话只读 V2。迁移完成后已发现的旧版会话按缺失处理，不回退到旧表正文。
+
 去重先于时间窗口判断：即使 V2 会话在窗口外，也不能让窗口内的旧副本重新出现。列表继续按创建时间倒序；直接定位在两种结构中使用相同优先级。保留现有按创建时间筛选最近 N 天的行为。
+
+会话选择：
+
+- 子会话作为独立 Session 列出。V2 和迁移中的旧版会话保留父会话不存在的孤立子会话。
+- 纯旧版数据库有 `parent_id` 列时，只保留根会话及能沿父链到达根会话的子会话；父会话不存在的子会话丢弃。没有 `parent_id` 列时（ZCode），排除 `task_type = 'subagent_child'` 的会话。
+- 没有可见消息的会话不列出。缺少消息表时仍列出，消息数未知，正文读取失败。
 
 一次发现使用 SQLite 读事务，保证新旧合并、计数和元数据来自同一快照。V2 正文读取在独立读事务内重新读取当前会话行与消息，避免长期持有的 Session 元数据导致正文过时。读取失败向既有 Scanner/Query/Collect 错误处理传播，不回退到同 ID 的旧正文。
 
@@ -55,17 +64,18 @@ agent-dump --collect --emit-prompt -query 'provider:opencode'
 
 | 信息 | V2 来源与规则 |
 | --- | --- |
-| 身份、标题 | `id`、`title`；空标题使用既有 `Untitled` 回退 |
+| 身份 | `id` |
+| 标题 | `title` 去除系统标签后取首个非空行，压缩空白并截到 100 字符；为空时用首条普通用户文本，再没有时为 `Untitled Session` |
 | 工作目录 | `directory`，不以 project ID 或数据库目录代替 |
 | Provider Project | `project_id` |
 | 模型 | 会话 `model.id`；缺失或无效时未知 |
-| 时间 | 毫秒时间戳 `time_created/time_updated` |
-| 消息数 | `session_message` 的行数；每行对应一个标准化消息，包括系统和状态记录 |
-| token 与费用 | 正文 stats 使用会话行的累计 `cost/tokens_input/tokens_output`；每条消息另保留其自身用量，二者不重复相加 |
+| 时间 | 毫秒时间戳 `time_created/time_updated`；`time_updated` 为空时使用创建时间 |
+| 消息数 | 可见消息数；丢弃 `idle`，以及既没有可见内容也没有用量的记录 |
+| token 与费用 | 正文 stats 使用会话行的累计值：输入为 `tokens_input` 加缓存读写，输出为 `tokens_output` 加 `tokens_reasoning`，`total_tokens` 为五项之和，费用为 `cost`；每条消息另保留其自身用量，二者不重复相加 |
 | 父子、fork、归档、revert | 保留为 Provider 元数据，不自动合并父子会话 |
 | 修改文件数 | `summary_files` 是数量，不能把数字显示成文件路径 |
 
-列表和 head 只投影发现 facts，不读取完整消息 JSON。没有 `session_message` 表时消息数未知，正文读取失败，不能导出伪空会话。SQL `COUNT` 不要求解码正文；坏消息可以在列表中存在，但正文读取必须报告失败。
+发现时解码消息以计算可见消息数和标题回退。无法解码的消息计为可见，坏会话仍在列表中，正文读取报告失败。没有 `session_message` 表时消息数未知，正文读取失败，不能导出伪空会话。
 
 归档会话仍可发现。读取数据库当前保留的完整消息序列，包括运行中的已持久化内容；不把尚未投递的 `session_inbox/session_pending` 当成对话。不模拟 UI 的暂存 revert 筛选，也不恢复已经删除的消息。会话移动后的工作目录使用当前 `directory`，移动事件保留在元数据中。
 
@@ -75,20 +85,28 @@ agent-dump --collect --emit-prompt -query 'provider:opencode'
 
 | V2 消息 | 标准化角色 | 正文处理 |
 | --- | --- | --- |
-| `user` | user | `text` 转 text part |
-| `assistant` | assistant | `content[]` 按原序转换 text、reasoning、tool |
-| `system`、`skill` | system | 保留 text，可搜索，不进入 collect |
-| `synthetic` | custom | 保留 text，可搜索，不冒充用户需求 |
+| `user` | user | `text` 转 text part；内联图片附件转 image part，其他附件转 `[Attachment] 名称 · 类型 · URI`；`agents/skills` 提及转 `@name` |
+| `assistant` | assistant | `content[]` 按原序转换 text、reasoning、tool；没有名字的 tool 和未知内容转 `[Unknown content] JSON` |
+| `system`、`skill` | system | `[类型] 描述或名称` 加 text，可搜索，不进入 collect |
+| `synthetic` | custom | `[synthetic] 描述或名称` 加 text，不冒充用户需求 |
 | `shell` | tool | 命令、状态、已存输出转换为工具调用 |
-| `compaction` | compaction | 保留 summary/recent，排除 collect |
-| agent/model/location 切换、idle | custom | 保留事件元数据，不生成虚构正文 |
-| 未知类型 | unknown | 保留原始数据作为元数据，不猜测对话角色 |
+| `compaction` | compaction | `[Compaction: 状态]` 与 summary/recent 合成一段文本，排除 collect |
+| agent/model/location 切换 | custom | `[类型] 原始 JSON` 文本 |
+| `idle` | - | 丢弃 |
+| 未知类型 | unknown | `[类型] 原始 JSON` 文本，不猜测对话角色 |
 
-工具调用映射 `name → tool`、`id → callID`、`state.input → state.input`、`state.content → state.output`。保留 streaming/running/completed/error、结构化错误、执行时间和文件引用；错误文本进入可搜索的输出。streaming 的部分 JSON 参数保持字符串，不强行解析。
+任意类型带 `error` 时追加 `[Error] 错误内容` 文本。图片以外的附件只显示名称、类型和 URI，不读取引用文件；附件不再写入消息元数据的 `files`。模型 variant、完成原因和其他非正文信息保留在消息元数据中。
 
-用户附件、agent/skill 引用，以及模型 variant、完成原因、错误和其他非正文信息保留在消息元数据中。附件内容不追加成用户可见文本。未知 assistant content 保留为元数据，不静默丢弃，也不让其原始序列化字段参与搜索。
+工具调用映射 `name → tool`、`id → callID`、`state.input → state.input`、`state.content → state.output`。状态只保留 completed/error，其余（含 streaming）归一为 running。保留结构化错误、执行时间和文件引用；错误文本进入可搜索的输出。streaming 的部分 JSON 参数保持字符串，不强行解析。shell 的 `status` 为 running 时为运行中；`exited` 且 `exit` 为空或 0 时为完成；其余为失败，并写入 `Shell 状态 (exit: 退出码)` 错误。`subagent` 工具的 `metadata.sessionID` 唯一时写入消息的 `subagent_id`。
 
-JSON 无效、正文类型错误、已知工具结构错误时，整条 Session 正文读取失败。这样 collect 能报告真实遗漏，搜索不会将解析失败记为成功空结果。新增解析不改变旧版坏记录的现有处理。
+只有消息 JSON 无效、不是对象，或 assistant 的 `content` 不是数组时，整条 Session 正文读取失败。其他字段缺失或类型错误时置空，不让整条会话读取失败。
+
+### 旧版与 ZCode
+
+- 丢弃 internal 类型（progress、file history snapshot、queue operation、last prompt）和没有可见 part 的消息。可见 part 为非空 text/reasoning/plan、image 和有名字的 tool。
+- ZCode 的 plan part 转 plan，文本取 `text`，否则按审批结果取 `input` 或 `output`；image part 转 image，需要 `data` 加 `mime_type`，或 `url`；只有 `url` 时 image 的 `data` 为该 URL。
+- tool 的输入依次取 `state.input`、`state.arguments`、`input`，输出依次取 `state.output`、`state.result`、`output`。状态归一为 running/error/completed：`success` 视为完成；没有状态时，有错误为失败，有输出为完成。缺少工具名时使用去掉 `Tool:` 前缀的 title，仍为空的 tool 丢弃。
+- stats 只统计可见消息。输入 token 包含缓存读写，输出 token 包含推理。纯旧版数据库中，父会话另加上全部后代会话非 internal 消息的费用和 token，消息数不变。
 
 ## 6. 导出、搜索与 collect
 

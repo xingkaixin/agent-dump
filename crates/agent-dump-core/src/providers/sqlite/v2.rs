@@ -1,34 +1,44 @@
-use crate::compat::value::{float, integer, json_object};
-use crate::providers::sqlite::connection::rows;
-use crate::session::{
-    Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
+use crate::compat::value::{
+    add_integer, float, integer, integer_number, json_object, string, text,
 };
-use rusqlite::Connection;
+use crate::providers::sqlite::Facts;
+use crate::providers::sqlite::connection::{each_row, rows};
+use crate::session::{
+    ImagePart, Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
+};
+use rusqlite::{Connection, ToSql};
 use serde_json::{Map, Value, json};
+use std::collections::{HashMap, HashSet};
 
 pub fn read(
     connection: &Connection,
     session: &Session,
     row: &Value,
 ) -> crate::Result<SessionData> {
+    let messages = rows(connection, "SELECT id, type, seq, time_created, data FROM session_message WHERE session_id = ? ORDER BY seq ASC", &[&session.id])?
+        .iter().map(decode).filter_map(Result::transpose).collect::<crate::Result<Vec<_>>>()?;
     let current = crate::providers::sqlite::build_session(
         row,
         &session.source_path,
         true,
+        Some(&Facts {
+            count: messages.len(),
+            title: crate::providers::sqlite::user_title(&messages),
+        }),
     );
-    let mut messages = rows(connection, "SELECT id, type, seq, time_created, data FROM session_message WHERE session_id = ? ORDER BY seq ASC", &[&session.id])?
-        .iter().map(decode).collect::<crate::Result<Vec<_>>>()?;
-    crate::providers::text::clean_messages(&mut messages);
+    let mut input = integer_number(&row["tokens_input"]);
+    add_integer(&mut input, &row["tokens_cache_read"]);
+    add_integer(&mut input, &row["tokens_cache_write"]);
+    let mut output = integer_number(&row["tokens_output"]);
+    add_integer(&mut output, &row["tokens_reasoning"]);
+    let mut total = input.clone();
+    add_integer(&mut total, &output.clone().into());
     let stats = Stats {
         total_cost: serde_json::Number::from_f64(float(&row["cost"])).unwrap(),
-        total_input_tokens: crate::compat::value::integer_number(
-            &row["tokens_input"],
-        ),
-        total_output_tokens: crate::compat::value::integer_number(
-            &row["tokens_output"],
-        ),
+        total_input_tokens: input,
+        total_output_tokens: output,
         message_count: messages.len(),
-        total_tokens: None,
+        total_tokens: Some(total),
         extra: Map::default(),
     };
     let mut payload = current.payload(messages, stats);
@@ -47,22 +57,67 @@ pub fn read(
     Ok(payload)
 }
 
-fn decode(row: &Value) -> crate::Result<Message> {
-    build_message(row).map_err(|error| {
+pub fn facts(
+    connection: &Connection,
+    sessions: &str,
+    parameters: &[&dyn ToSql],
+) -> crate::Result<HashMap<String, Facts>> {
+    let mut facts: HashMap<String, (Facts, i64)> = HashMap::new();
+    each_row(
+        connection,
+        &format!(
+            "SELECT id, session_id, type, seq, time_created, data FROM session_message WHERE session_id IN ({sessions})"
+        ),
+        parameters,
+        |row| {
+            // A corrupt message stays countable so reading reports it.
+            let message = match message(&row) {
+                Ok(None) => return Ok(()),
+                Ok(Some(message)) => Some(message),
+                Err(_) => None,
+            };
+            let (facts, first) =
+                facts.entry(string(&row["session_id"])).or_default();
+            facts.count += 1;
+            let seq = integer(&row["seq"]);
+            if (facts.title.is_none() || seq < *first)
+                && let Some(title) = message.and_then(|message| {
+                    crate::providers::sqlite::user_title(std::slice::from_ref(
+                        &message,
+                    ))
+                })
+            {
+                facts.title = Some(title);
+                *first = seq;
+            }
+            Ok(())
+        },
+    )?;
+    Ok(facts
+        .into_iter()
+        .map(|(session, (facts, _))| (session, facts))
+        .collect())
+}
+
+fn decode(row: &Value) -> crate::Result<Option<Message>> {
+    message(row).map_err(|error| {
         crate::providers::error::ProviderError::invalid(format!(
             "Invalid OpenCode V2 message {}: {error}",
-            crate::compat::value::string(&row["id"])
+            string(&row["id"])
         ))
         .into()
     })
 }
 
-fn build_message(row: &Value) -> crate::Result<Message> {
+fn message(row: &Value) -> crate::Result<Option<Message>> {
     let data = crate::providers::sqlite::connection::json_cell(&row["data"])?;
     if !data.is_object() {
         return Err("message data must be an object".into());
     }
-    let kind = crate::compat::value::text(&row["type"]);
+    let kind = text(&row["type"]);
+    if kind == "idle" {
+        return Ok(None);
+    }
     let role = match kind {
         "user" => "user",
         "assistant" => "assistant",
@@ -70,16 +125,12 @@ fn build_message(row: &Value) -> crate::Result<Message> {
         "shell" => "tool",
         "compaction" => "compaction",
         "synthetic" | "agent-switched" | "model-switched"
-        | "location-switched" | "idle" => "custom",
+        | "location-switched" => "custom",
         _ => "unknown",
     };
     let timestamp = integer(&row["time_created"]);
-    let mut message = Message::new(
-        crate::compat::value::string(&row["id"]),
-        role,
-        timestamp,
-        Vec::new(),
-    );
+    let mut message =
+        Message::new(string(&row["id"]), role, timestamp, Vec::new());
     message.agent = data["agent"].as_str().map(str::to_owned);
     message.model = data["model"]["id"].as_str().map(std::convert::Into::into);
     message.provider = data["model"]["providerID"].as_str().map(str::to_owned);
@@ -90,95 +141,133 @@ fn build_message(row: &Value) -> crate::Result<Message> {
     message.cost = serde_json::Number::from_f64(float(&data["cost"])).unwrap();
     message.entry_type = Some(row["type"].clone());
     let mut metadata = data.as_object().unwrap().clone();
-    metadata.remove("text");
-    metadata.remove("content");
-    metadata.insert("seq".into(), row["seq"].clone());
-    match kind {
-        "user" | "synthetic" | "system" | "skill" => message
-            .parts
-            .push(Part::text(required_text(&data, "text")?.into(), timestamp)),
-        "assistant" => {
-            let mut unmapped = Vec::new();
-            for content in objects(&data["content"])? {
-                match required_text(content, "type")? {
-                    "text" => message.parts.push(Part::text(
-                        required_text(content, "text")?.into(),
-                        timestamp,
-                    )),
-                    "reasoning" => {
-                        message.parts.push(Part::Reasoning(TextPart {
-                            text: required_text(content, "text")?.into(),
-                            time_created: timestamp,
-                        }));
-                    }
-                    "tool" => message.parts.push(tool(content, timestamp)?),
-                    _ => unmapped.push(content.clone()),
-                }
-            }
-            if !unmapped.is_empty() {
-                metadata.insert("unmapped_content".into(), unmapped.into());
-            }
-        }
-        "shell" => {
-            let command = required_text(&data, "command")?;
-            message.parts.push(Part::Tool(Box::new(ToolPart {
-                subagent_type: None,
-                tool: "shell".into(),
-                call_id: required_text(&data, "shellID")?.into(),
-                title: command.into(),
-                state: Map::from_iter([
-                    ("status".into(), data["status"].clone()),
-                    ("input".into(), json!({"command": command})),
-                    ("output".into(), data["output"]["output"].clone()),
-                    ("exit".into(), data["exit"].clone()),
-                    ("truncated".into(), data["output"]["truncated"].clone()),
-                    ("time".into(), object(&data["time"]).into()),
-                ]),
-                time_created: timestamp,
-                nickname: None,
-                subagent_id: None,
-            })));
-        }
-        "compaction" => {
-            for field in ["summary", "recent"] {
-                if data.get(field).is_some() {
-                    message.parts.push(Part::text(
-                        required_text(&data, field)?.into(),
-                        timestamp,
-                    ));
-                }
-            }
-        }
-        _ => metadata.extend(data.as_object().unwrap().clone()),
+    for name in ["text", "content", "files"] {
+        metadata.remove(name);
     }
+    metadata.insert("seq".into(), row["seq"].clone());
     message.metadata = Some(metadata);
-    Ok(message)
+    let line = |text: String| Part::text(text, timestamp);
+    let parts = &mut message.parts;
+    match kind {
+        "user" => {
+            parts.push(line(text(&data["text"]).into()));
+            for file in data["files"].as_array().into_iter().flatten() {
+                let image = file["mime"]
+                    .as_str()
+                    .is_some_and(|mime| mime.starts_with("image/"))
+                    && file["data"]
+                        .as_str()
+                        .is_some_and(|data| !data.is_empty());
+                parts.push(if image {
+                    Part::Image(ImagePart {
+                        mime_type: file["mime"].as_str().map(str::to_owned),
+                        data: file["data"].clone(),
+                        time_created: timestamp,
+                    })
+                } else {
+                    line(attachment(file))
+                });
+            }
+            for mention in ["agents", "skills"]
+                .iter()
+                .flat_map(|name| data[*name].as_array().into_iter().flatten())
+            {
+                if let Some(name) =
+                    mention["name"].as_str().filter(|name| !name.is_empty())
+                {
+                    parts.push(line(format!("@{name}")));
+                }
+            }
+        }
+        "assistant" => {
+            let content = data["content"]
+                .as_array()
+                .ok_or("content must be an array")?;
+            parts.extend(
+                content.iter().map(|item| content_part(item, timestamp)),
+            );
+            let children: HashSet<_> = parts
+                .iter()
+                .filter_map(|part| match part {
+                    Part::Tool(tool) if tool.tool == "subagent" => tool
+                        .state
+                        .get("metadata")
+                        .and_then(|metadata| metadata["sessionID"].as_str())
+                        .filter(|id| !id.is_empty()),
+                    _ => None,
+                })
+                .collect();
+            let child = (children.len() == 1)
+                .then(|| children.into_iter().next().map(str::to_owned))
+                .flatten();
+            message.subagent_id = child;
+        }
+        "shell" => parts.push(shell(&data, timestamp)),
+        "compaction" => {
+            let status =
+                data.get("status").map_or_else(|| "undefined".into(), plain);
+            let mut sections = vec![format!("[Compaction: {status}]")];
+            for name in ["summary", "recent"] {
+                if let Some(text) =
+                    data[name].as_str().filter(|text| !text.is_empty())
+                {
+                    sections.push(text.into());
+                }
+            }
+            parts.push(line(sections.join("\n\n")));
+        }
+        "synthetic" | "system" | "skill" => {
+            let label = data["description"]
+                .as_str()
+                .or_else(|| data["name"].as_str())
+                .unwrap_or_default();
+            parts.push(line(format!("[{kind}] {label}")));
+            parts.push(line(text(&data["text"]).into()));
+        }
+        _ => parts.push(line(format!("[{kind}] {}", describe(&data)))),
+    }
+    if !data["error"].is_null() {
+        message
+            .parts
+            .push(line(format!("[Error] {}", describe(&data["error"]))));
+    }
+    let used = usage(&data);
+    let mut messages = vec![message];
+    crate::providers::text::clean_messages(&mut messages);
+    Ok(messages
+        .pop()
+        .filter(|message| used || !message.parts.is_empty()))
 }
 
-fn tool(content: &Value, timestamp: i64) -> crate::Result<Part> {
-    let mut state = content["state"]
-        .as_object()
-        .cloned()
-        .ok_or("tool state must be an object")?;
-    state
-        .get("status")
-        .and_then(Value::as_str)
-        .ok_or("status must be a string")?;
-    if !state
-        .get("input")
-        .is_some_and(|input| input.is_object() || input.is_string())
-    {
-        return Err("tool input must be an object or streaming string".into());
-    }
-    let raw = state.remove("content").unwrap_or_else(|| json!([]));
-    let mut output = objects(&raw)?.to_vec();
-    for item in &output {
-        if item["type"] == "text" {
-            required_text(item, "text")?;
-        } else if item["type"] == "file" {
-            required_text(item, "uri")?;
+fn content_part(content: &Value, timestamp: i64) -> Part {
+    match content["type"].as_str() {
+        Some("text") => Part::text(text(&content["text"]).into(), timestamp),
+        Some("reasoning") => Part::Reasoning(TextPart {
+            text: text(&content["text"]).into(),
+            time_created: timestamp,
+        }),
+        Some("tool") if !text(&content["name"]).is_empty() => {
+            tool(content, timestamp)
         }
+        _ => Part::text(
+            format!("[Unknown content] {}", describe(content)),
+            timestamp,
+        ),
     }
+}
+
+fn tool(content: &Value, timestamp: i64) -> Part {
+    let mut state = object(&content["state"]);
+    let status = match state.get("status").and_then(Value::as_str) {
+        Some("completed") => "completed",
+        Some("error") => "error",
+        _ => "running",
+    };
+    state.insert("status".into(), status.into());
+    let mut output = match state.remove("content") {
+        Some(Value::Array(items)) => items,
+        _ => Vec::new(),
+    };
     if let Some(error) = state
         .get("error")
         .and_then(|error| error["message"].as_str())
@@ -196,33 +285,251 @@ fn tool(content: &Value, timestamp: i64) -> crate::Result<Part> {
             state.insert(field.into(), value.clone());
         }
     }
-    let name = required_text(content, "name")?;
-    Ok(Part::Tool(Box::new(ToolPart {
+    let name = text(&content["name"]);
+    Part::Tool(Box::new(ToolPart {
         subagent_type: None,
         tool: name.into(),
-        call_id: required_text(content, "id")?.into(),
+        call_id: text(&content["id"]).into(),
         title: name.into(),
         state,
         time_created: created,
         nickname: None,
         subagent_id: None,
-    })))
+    }))
 }
 
-fn required_text<'a>(data: &'a Value, field: &str) -> crate::Result<&'a str> {
-    data[field]
-        .as_str()
-        .ok_or_else(|| format!("{field} must be a string").into())
+fn shell(data: &Value, timestamp: i64) -> Part {
+    let status = match data["status"].as_str() {
+        Some("running") => "running",
+        Some("exited")
+            if data["exit"].is_null() || float(&data["exit"]) == 0.0 =>
+        {
+            "completed"
+        }
+        _ => "error",
+    };
+    let mut state = Map::from_iter([
+        ("status".into(), status.into()),
+        (
+            "input".into(),
+            data.get("command").map_or_else(
+                || json!({}),
+                |command| json!({"command": command}),
+            ),
+        ),
+        ("output".into(), data["output"]["output"].clone()),
+        ("exit".into(), data["exit"].clone()),
+        ("truncated".into(), data["output"]["truncated"].clone()),
+        ("time".into(), object(&data["time"]).into()),
+    ]);
+    if status == "error" {
+        let exit = if data["exit"].is_null() {
+            "unknown".into()
+        } else {
+            plain(&data["exit"])
+        };
+        state.insert(
+            "error".into(),
+            format!("Shell {} (exit: {exit})", plain(&data["status"])).into(),
+        );
+    }
+    let command = text(&data["command"]);
+    Part::Tool(Box::new(ToolPart {
+        subagent_type: None,
+        tool: "shell".into(),
+        call_id: text(&data["shellID"]).into(),
+        title: command.into(),
+        state,
+        time_created: timestamp,
+        nickname: None,
+        subagent_id: None,
+    }))
+}
+
+fn attachment(file: &Value) -> String {
+    let uri = if file["uri"].is_null() {
+        &file["source"]["uri"]
+    } else {
+        &file["uri"]
+    };
+    let fields: Vec<_> = [&file["name"], &file["mime"], uri]
+        .into_iter()
+        .filter(|value| !matches!(value, Value::Null | Value::Bool(false)))
+        .filter(|value| *value != "")
+        .map(plain)
+        .collect();
+    format!("[Attachment] {}", fields.join(" · "))
+}
+
+fn usage(data: &Value) -> bool {
+    let tokens = &data["tokens"];
+    let positive = |value: &Value| value.as_f64().is_some_and(|n| n > 0.0);
+    positive(&data["cost"])
+        || [
+            &tokens["input"],
+            &tokens["output"],
+            &tokens["reasoning"],
+            &tokens["cache"]["read"],
+            &tokens["cache"]["write"],
+        ]
+        .into_iter()
+        .any(positive)
+}
+
+fn describe(value: &Value) -> String {
+    value.as_str().map_or_else(
+        || serde_json::to_string_pretty(value).unwrap_or_default(),
+        str::to_owned,
+    )
+}
+
+fn plain(value: &Value) -> String {
+    match value {
+        Value::Null => String::new(),
+        Value::String(text) => text.clone(),
+        value => value.to_string(),
+    }
 }
 
 fn object(value: &Value) -> Map<String, Value> {
     value.as_object().cloned().unwrap_or_default()
 }
 
-fn objects(value: &Value) -> crate::Result<&[Value]> {
-    value
-        .as_array()
-        .filter(|items| items.iter().all(Value::is_object))
-        .map(Vec::as_slice)
-        .ok_or_else(|| "content must be an array of objects".into())
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn convert(kind: &str, data: &Value) -> Option<Value> {
+        let row = json!({"id": "m", "type": kind, "seq": 1, "time_created": 5, "data": data.to_string()});
+        message(&row)
+            .unwrap()
+            .map(|message| serde_json::to_value(message).unwrap())
+    }
+
+    fn texts(message: &Value) -> Vec<&str> {
+        message["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|part| part["text"].as_str())
+            .collect()
+    }
+
+    #[test]
+    fn user_attachments_mentions_and_errors_are_visible() {
+        let message = convert(
+            "user",
+            &json!({
+                "text": "Look",
+                "files": [
+                    {"mime": "image/png", "data": "aGk="},
+                    {"name": "a.txt", "mime": "text/plain", "source": {"uri": "file:///a.txt"}},
+                    {"mime": "image/png", "data": "", "uri": "https://x/y.png"},
+                ],
+                "agents": [{"name": "plan"}, {"name": ""}],
+                "skills": [{"name": "review"}],
+                "error": {"message": "boom"},
+            }),
+        )
+        .unwrap();
+        assert_eq!(message["parts"][1]["type"], "image");
+        assert_eq!(message["parts"][1]["data"], "aGk=");
+        assert_eq!(
+            texts(&message),
+            [
+                "Look",
+                "[Attachment] a.txt · text/plain · file:///a.txt",
+                "[Attachment] image/png · https://x/y.png",
+                "@plan",
+                "@review",
+                "[Error] {\n  \"message\": \"boom\"\n}",
+            ]
+        );
+        assert!(message["metadata"].get("files").is_none());
+    }
+
+    #[test]
+    fn assistant_content_is_lenient_and_links_one_subagent() {
+        let converted = convert(
+            "assistant",
+            &json!({"content": [
+                {"type": "tool", "id": "a", "name": "bash", "state": {"status": "streaming", "input": "{\"x\":"}},
+                {"type": "tool", "id": "b", "name": "subagent", "state": {"status": "completed", "metadata": {"sessionID": "ses_child"}}},
+                {"type": "tool", "id": "c"},
+                {"type": "text", "text": 7},
+                "invalid",
+            ]}),
+        )
+        .unwrap();
+        let parts = converted["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 4);
+        assert_eq!(parts[0]["state"]["status"], "running");
+        assert_eq!(parts[0]["state"]["input"], "{\"x\":");
+        assert_eq!(converted["subagent_id"], "ses_child");
+        assert_eq!(
+            texts(&converted),
+            [
+                "[Unknown content] {\n  \"type\": \"tool\",\n  \"id\": \"c\"\n}",
+                "[Unknown content] invalid",
+            ]
+        );
+        let row = json!({"id": "m", "type": "assistant", "seq": 1, "data": "{\"content\": null}"});
+        assert!(message(&row).is_err());
+    }
+
+    #[test]
+    fn records_get_labels_and_shell_status_follows_exit() {
+        let labelled = [
+            (
+                "system",
+                json!({"text": "Body", "name": "rules"}),
+                vec!["[system] rules", "Body"],
+            ),
+            (
+                "compaction",
+                json!({"summary": "S", "recent": "", "status": "completed"}),
+                vec!["[Compaction: completed]\n\nS"],
+            ),
+            (
+                "agent-switched",
+                json!({"agent": "plan"}),
+                vec!["[agent-switched] {\n  \"agent\": \"plan\"\n}"],
+            ),
+        ];
+        for (kind, data, expected) in labelled {
+            assert_eq!(texts(&convert(kind, &data).unwrap()), expected);
+        }
+        for (data, status, error) in [
+            (json!({"status": "exited", "exit": 0}), "completed", None),
+            (
+                json!({"status": "exited", "exit": 2}),
+                "error",
+                Some("Shell exited (exit: 2)"),
+            ),
+            (
+                json!({"status": "killed"}),
+                "error",
+                Some("Shell killed (exit: unknown)"),
+            ),
+            (json!({"status": "running"}), "running", None),
+        ] {
+            let state =
+                convert("shell", &data).unwrap()["parts"][0]["state"].clone();
+            assert_eq!(state["status"], status);
+            assert_eq!(state["error"].as_str(), error);
+        }
+    }
+
+    #[test]
+    fn idle_and_empty_records_without_usage_are_dropped() {
+        assert!(convert("idle", &json!({})).is_none());
+        assert!(convert("user", &json!({"text": 7})).is_none());
+        assert!(convert("assistant", &json!({"content": []})).is_none());
+        let used = convert(
+            "assistant",
+            &json!({"content": [], "tokens": {"cache": {"read": 3}}}),
+        )
+        .unwrap();
+        assert!(used["parts"].as_array().unwrap().is_empty());
+    }
 }

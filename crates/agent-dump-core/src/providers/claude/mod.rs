@@ -1,30 +1,232 @@
 pub(super) mod transcript;
 
-use crate::compat::value::{field, text};
+use crate::compat::value::text;
 use crate::providers::contract::{
     DiagnosticSink, Provider, RecoverableDiagnostic,
 };
 use crate::providers::files::{
     self as file_sessions, SourceFiles, SourceRoots,
 };
-use crate::providers::jsonl;
 use crate::providers::title::{basename, normalize_title};
 use crate::session::timestamp::Timestamp;
 use crate::session::{Session, SessionData, parse_timestamp};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
-static RECORD: jsonl::Shape = jsonl::Shape::Fields(&[
-    ("timestamp", jsonl::Shape::Leaf),
-    (
-        "message",
-        jsonl::Shape::Fields(&[
-            ("role", jsonl::Shape::Leaf),
-            ("model", jsonl::Shape::Leaf),
-        ]),
-    ),
-]);
+/// The record fields discovery reads. Content keeps only text items, so tool
+/// inputs and results are skipped without being materialized.
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
+struct Line {
+    #[serde(rename = "type")]
+    kind: Value,
+    #[serde(rename = "isMeta")]
+    is_meta: Value,
+    timestamp: Value,
+    cwd: Value,
+    version: Value,
+    #[serde(rename = "customTitle")]
+    custom_title: Value,
+    #[serde(rename = "aiTitle")]
+    ai_title: Value,
+    message: LineMessage,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
+struct LineMessage {
+    role: Value,
+    model: Value,
+    content: Content,
+}
+
+#[derive(serde::Deserialize)]
+struct Item {
+    text: Option<Value>,
+}
+
+/// Text of a string content, or of the content items carrying `text`.
+#[derive(Default)]
+struct Content(Option<String>);
+
+impl<'de> serde::Deserialize<'de> for Content {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = Content;
+
+            fn expecting(
+                &self,
+                formatter: &mut std::fmt::Formatter<'_>,
+            ) -> std::fmt::Result {
+                formatter.write_str("a string or content items")
+            }
+
+            fn visit_unit<E>(self) -> Result<Content, E> {
+                Ok(Content(None))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Content, E> {
+                Ok(Content(Some(value.to_owned())))
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut items: A,
+            ) -> Result<Content, A::Error> {
+                let mut texts = Vec::new();
+                while let Some(item) = items.next_element::<Item>()? {
+                    if let Some(Value::String(text)) = item.text {
+                        texts.push(text);
+                    }
+                }
+                Ok(Content(Some(texts.join(" "))))
+            }
+        }
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
+struct Child {
+    id: String,
+    title: Option<String>,
+    tool: Option<String>,
+    project: PathBuf,
+}
+
+#[derive(Default)]
+struct Scan {
+    child: Option<Child>,
+    created: Option<Timestamp>,
+    updated: Option<Timestamp>,
+    cwd: Option<String>,
+    version: Option<Value>,
+    model: String,
+    custom_title: Option<String>,
+    ai_title: Option<String>,
+    prompt_title: Option<String>,
+    visible: usize,
+}
+
+/// `<session>/subagents` for `subagents/*.jsonl` and for workflow agents in
+/// `subagents/workflows/<run>/agent-*.jsonl`.
+fn subagents_dir(path: &Path) -> Option<&Path> {
+    let directory = path.parent()?;
+    if directory.file_name()? == "subagents" {
+        return Some(directory);
+    }
+    let workflows = directory.parent()?;
+    let subagents = workflows.parent()?;
+    (workflows.file_name()? == "workflows"
+        && subagents.file_name()? == "subagents"
+        && path.file_name()?.to_string_lossy().starts_with("agent-"))
+    .then_some(subagents)
+}
+
+fn child(path: &Path) -> Option<Child> {
+    let project = subagents_dir(path)?.parent()?.parent()?.to_owned();
+    let stem = path.file_stem()?.to_string_lossy();
+    let meta: Value =
+        std::fs::read(path.with_file_name(format!("{stem}.meta.json")))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default();
+    let field = |key: &str| {
+        Some(text(&meta[key]).trim())
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+    };
+    let id = field("agentId").unwrap_or_else(|| {
+        stem.strip_prefix("agent-").unwrap_or(&stem).to_owned()
+    });
+    (!id.is_empty()).then(|| Child {
+        id,
+        title: field("name").or_else(|| field("description")),
+        tool: field("toolUseId"),
+        project,
+    })
+}
+
+/// Maps the tool calls that started subagents to the subagent session ids.
+fn children(path: &Path) -> HashMap<String, String> {
+    let root = subagents_dir(path).map_or_else(
+        || path.with_extension("").join("subagents"),
+        Path::to_owned,
+    );
+    walkdir::WalkDir::new(root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.file_type().is_file()
+                && entry.path().extension().is_some_and(|ext| ext == "jsonl")
+        })
+        .filter_map(|entry| child(entry.path()))
+        .filter_map(|child| Some((child.tool?, child.id)))
+        .collect()
+}
+
+fn line(bytes: &[u8]) -> Option<Line> {
+    if let Ok(line) = serde_json::from_slice(bytes) {
+        return Some(line);
+    }
+    let record = crate::compat::json::from_slice(bytes)
+        .ok()
+        .filter(Value::is_object)?;
+    let field = |key: &str| record.get(key).cloned().unwrap_or_default();
+    let message = &record["message"];
+    let content = match &message["content"] {
+        Value::String(value) => Some(value.clone()),
+        Value::Array(items) => Some(
+            items
+                .iter()
+                .filter_map(|item| item.get("text"))
+                .map(text)
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
+        _ => None,
+    };
+    Some(Line {
+        kind: field("type"),
+        is_meta: field("isMeta"),
+        timestamp: field("timestamp"),
+        cwd: field("cwd"),
+        version: field("version"),
+        custom_title: field("customTitle"),
+        ai_title: field("aiTitle"),
+        message: LineMessage {
+            role: message["role"].clone(),
+            model: message["model"].clone(),
+            content: Content(content),
+        },
+    })
+}
+
+fn internal(line: &Line) -> bool {
+    line.is_meta == true
+        || matches!(
+            text(&line.kind)
+                .trim()
+                .to_lowercase()
+                .replace(['_', '-'], " ")
+                .as_str(),
+            "progress"
+                | "file history snapshot"
+                | "queue operation"
+                | "last prompt"
+        )
+}
+
+fn title_line(value: &str) -> Option<String> {
+    crate::providers::text::clean(value)
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .and_then(normalize_title)
+}
 
 pub struct Claude {
     roots: SourceRoots,
@@ -54,9 +256,15 @@ impl Claude {
     }
 
     fn files(&mut self) -> crate::Result<SourceFiles> {
-        let files = self.roots.files(Some(2), |path, base| {
+        let files = self.roots.files(None, |path, base| {
             path.extension().is_some_and(|ext| ext == "jsonl")
-                && path.parent() != Some(base)
+                && (path
+                    .strip_prefix(base)
+                    .is_ok_and(|relative| relative.components().count() == 2)
+                    || subagents_dir(path)
+                        .and_then(Path::parent)
+                        .and_then(Path::parent)
+                        .is_some())
         })?;
         if let Some(base) = &self.roots.base {
             crate::storage::source_io::at(base, std::fs::read_dir(base))?;
@@ -132,101 +340,148 @@ impl Claude {
         Ok(titles)
     }
 
-    fn scan(path: &Path) -> crate::Result<jsonl::Metadata> {
-        jsonl::metadata(path, 20, Some(&RECORD))
+    fn scan(path: &Path) -> crate::Result<Option<Scan>> {
+        let mut reader =
+            std::io::BufReader::new(crate::storage::source_io::open(path)?);
+        let mut line = Vec::new();
+        let mut scan = Scan {
+            child: child(path),
+            ..Scan::default()
+        };
+        let mut index = 0;
+        loop {
+            line.clear();
+            if crate::storage::source_io::at(
+                path,
+                reader.read_until(b'\n', &mut line),
+            )? == 0
+            {
+                break;
+            }
+            if line.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            index += 1;
+            let Some(record) = self::line(&line) else {
+                if index == 1 {
+                    return Ok(None);
+                }
+                continue;
+            };
+            let timestamp = parse_timestamp(text(&record.timestamp));
+            if index == 1 {
+                scan.created = timestamp;
+            }
+            if internal(&record) {
+                continue;
+            }
+            match text(&record.kind) {
+                "custom-title" => {
+                    if let Some(value) = title_line(text(&record.custom_title))
+                    {
+                        scan.custom_title = Some(value);
+                    }
+                    continue;
+                }
+                "ai-title" => {
+                    if let Some(value) = title_line(text(&record.ai_title)) {
+                        scan.ai_title = Some(value);
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+            scan.updated = scan.updated.max(timestamp);
+            if scan.cwd.is_none() {
+                scan.cwd = record
+                    .cwd
+                    .as_str()
+                    .filter(|cwd| !cwd.is_empty())
+                    .map(str::to_owned);
+            }
+            if scan.version.is_none() && !record.version.is_null() {
+                scan.version = Some(record.version);
+            }
+            let message = record.message;
+            if scan.model.is_empty() {
+                scan.model = text(&message.model).trim().into();
+            }
+            let role = text(&message.role);
+            let prompt = (role == "user")
+                .then(|| message.content.0.as_deref().and_then(title_line))
+                .flatten();
+            if !role.trim().is_empty() && (role != "user" || prompt.is_some()) {
+                scan.visible += 1;
+            }
+            if scan.prompt_title.is_none() && index <= 20 {
+                scan.prompt_title = prompt;
+            }
+        }
+        Ok((index > 0).then_some(scan))
     }
 
     fn parse(
         &mut self,
         path: &Path,
-        scan: jsonl::Metadata,
+        scan: Option<Scan>,
         diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Option<Session>> {
-        let Some(header) = scan.header else {
+        let Some(scan) = scan.filter(|scan| scan.visible > 0) else {
             return Ok(None);
         };
-        let project =
-            path.parent().ok_or("Session has no project directory")?;
-        let id = path
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
-        let created_at = parse_timestamp(text(&header["timestamp"]))
-            .unwrap_or(Timestamp::try_from(path.metadata()?.modified()?)?);
-        let explicit = self
-            .titles(project, diagnostics)?
-            .get(&id)
-            .and_then(Value::as_str)
-            .and_then(normalize_title);
-        let first_user = scan
-            .records
-            .iter()
-            .take(20)
-            .find_map(|record| {
-                let message = &record["message"];
-                if message["role"] != "user"
-                    || !crate::compat::value::truthy(&message["content"])
-                {
-                    return None;
-                }
-                let content = &message["content"];
-                let text = match content.as_array() {
-                    Some(items) => items
-                        .iter()
-                        .filter_map(|item| {
-                            if item.is_object() {
-                                Some(field(item, "text"))
-                            } else {
-                                item.as_str().map(str::to_owned)
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                    None => text(content).to_owned(),
-                };
-                Some(normalize_title(&text))
-            })
-            .flatten();
-        let title = explicit
-            .or(first_user)
-            .or_else(|| crate::providers::title::value_basename(&header["cwd"]))
+        let project = match &scan.child {
+            Some(child) => child.project.as_path(),
+            None => path.parent().ok_or("Session has no project directory")?,
+        };
+        let id = scan.child.as_ref().map_or_else(
+            || {
+                path.file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned()
+            },
+            |child| child.id.clone(),
+        );
+        let created_at = match scan.created {
+            Some(created) => created,
+            None => Timestamp::try_from(path.metadata()?.modified()?)?,
+        };
+        let explicit = match scan.child.as_ref().and_then(|c| c.title.clone()) {
+            Some(title) => Some(title),
+            None => self
+                .titles(project, diagnostics)?
+                .get(&id)
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        };
+        let directory = scan
+            .cwd
+            .unwrap_or_else(|| crate::storage::source_io::path_text(project));
+        let title = scan
+            .custom_title
+            .or(scan.ai_title)
+            .or_else(|| explicit.as_deref().and_then(title_line))
+            .or(scan.prompt_title)
+            .or_else(|| basename(&directory))
             .or_else(|| basename(&project.to_string_lossy()))
             .unwrap_or_else(|| "Untitled Session".into());
-        let mut updated_at = created_at;
-        let mut count = 0;
-        let mut model = String::new();
-        for record in scan.records.iter().chain(scan.tail.iter()) {
-            if let Some(timestamp) = parse_timestamp(text(&record["timestamp"]))
-            {
-                updated_at = timestamp;
-            }
-            let message = &record["message"];
-            if !text(&message["role"]).trim().is_empty() {
-                count += 1;
-            }
-            if model.is_empty() {
-                model = text(&message["model"]).trim().into();
-            }
-        }
         Ok(Some(Session {
             id,
             title,
             created_at,
-            updated_at,
+            updated_at: scan
+                .updated
+                .map_or(created_at, |updated| updated.max(created_at)),
             subtargets: Vec::new(),
-            source_metadata: serde_json::json!({"cwd": header.get("cwd").cloned().unwrap_or_else(|| "".into())}),
+            source_metadata: Value::Null,
             source_path: path.to_owned(),
-            directory: text(&header["cwd"]).to_owned(),
-            version: header
-                .get("version")
-                .cloned()
-                .unwrap_or_else(|| "".into()),
-            model,
+            directory,
+            version: scan.version.unwrap_or_else(|| "".into()),
+            model: scan.model,
             project: project
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned()),
-            message_count: scan.complete.then_some(count),
+            message_count: Some(scan.visible),
         }))
     }
 }
@@ -258,7 +513,13 @@ impl Provider for Claude {
             self.roots.base.clone().as_deref(),
             files,
             id,
-            |path| path.file_stem().is_some_and(|name| name == id),
+            |path| {
+                path.file_stem().is_some_and(|name| {
+                    name == id
+                        || name.to_str().and_then(|n| n.strip_prefix("agent-"))
+                            == Some(id)
+                })
+            },
             |path| self.parse(path, Self::scan(path)?, diagnostics),
         )
     }
@@ -281,7 +542,11 @@ impl Provider for Claude {
                 ],
             ).into());
         }
-        crate::providers::claude::transcript::read(session, diagnostics)
+        crate::providers::claude::transcript::read(
+            session,
+            children(&session.source_path),
+            diagnostics,
+        )
     }
 
     fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
