@@ -175,7 +175,7 @@ agent-dump opencode://session-id-abc123
 - `kimi://<session_id>` - Kimi 会话
 - `kimi-code://<session_id>` - Kimi-Code 会话
 - `claude://<session_id>` - Claude Code 会话
-- `cursor://<requestid>` - Cursor 会话（`requestid` 作为 URI 标识符）
+- `cursor://<composer_id>` - Cursor 会话（旧的 `cursor://<requestid>` URI 仍能定位到同一会话）
 - `pi://<session_id>` - Pi 会话
 - `deepchat://<session_id>` - DeepChat 会话
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio 普通聊天 / Agent 会话
@@ -242,7 +242,7 @@ agent-dump opencode://session-id-abc123
 - **Kimi-Code**: `KIMI_CODE_HOME` -> `~/.kimi-code` -> `data/kimi-code`。会话是同时包含 `state.json` 和 `agents/main/wire.jsonl` 的 `sessions/<hash>/<id>/` 目录，没有消息的会话会跳过。工作目录依次取 `state.json` 的 `workDir`、`custom.cwd`，再查数据根目录的 `session_index.jsonl`。
 - **OpenCode**: `OPENCODE_DB` 指定唯一数据库（相对路径以 `XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 为基准）；未指定时读取该目录的 `opencode.db`，再回退到旧 Windows `LOCALAPPDATA`/`APPDATA` 路径和 `data/opencode/opencode.db`。
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
-- **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`；默认使用 macOS `~/Library/Application Support/Cursor`、Windows `%APPDATA%\Cursor`、Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor` 下的 `User` 目录。
+- **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`；默认使用 macOS `~/Library/Application Support/Cursor`、Windows `%APPDATA%\Cursor`、Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor` 下的 `User` 目录。工作目录取自 `workspaceStorage/*/workspace.json` 中登记了该 composer 的工作区文件夹。
 - **Pi**: `PI_CODING_AGENT_SESSION_DIR` -> agent 目录 `settings.json` 中的绝对路径 `sessionDir` -> `<agent 目录>/sessions` -> `data/pi`。agent 目录依次为 `PI_CODING_AGENT_DIR`、`PI_HOME/agent`、`~/.pi/agent`。
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 下的 `Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。覆盖变量可用于便携版、开发版或选择多个安装中的一个。

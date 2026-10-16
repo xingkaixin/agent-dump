@@ -72,7 +72,7 @@ agent-dump codex://threads/<session_id>
 agent-dump kimi://<session_id>
 agent-dump kimi-code://<session_id>
 agent-dump claude://<session_id>
-agent-dump cursor://<request_id>
+agent-dump cursor://<composer_id>
 agent-dump pi://<session_id>
 agent-dump minimax://<session_id>
 
@@ -82,7 +82,7 @@ agent-dump codex://<session_id> --format markdown --output ./my-sessions
 agent-dump codex://<session_id> --format print,json --output ./my-sessions
 agent-dump codex://<session_id> --format print,json --summary --output ./my-sessions
 agent-dump codex://<session_id> --format json,markdown,raw --output ./my-sessions
-agent-dump cursor://<request_id> --format print,json --output ./my-sessions
+agent-dump cursor://<composer_id> --format print,json --output ./my-sessions
 agent-dump codex://<session_id> --head
 ```
 
@@ -300,7 +300,7 @@ agent-dump --search "auth" --list --days 30
    - `kimi://<session_id>`
    - `kimi-code://<session_id>`
    - `claude://<session_id>`
-   - `cursor://<request_id>`
+   - `cursor://<composer_id>`
    - `pi://<session_id>`
    - `deepchat://<session_id>`
    - `cherry://topic-<id>` / `cherry://session-<id>`

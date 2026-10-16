@@ -79,7 +79,7 @@ static REGISTRATIONS: &[Registration] = &[
             name: "cursor",
             display_name: "Cursor",
             scheme: "cursor",
-            identifier_label: "<requestid>",
+            identifier_label: "<composer_id>",
             uri_prefixes: &[],
         },
         open: || Ok(Box::new(crate::providers::cursor::Cursor::open()?)),

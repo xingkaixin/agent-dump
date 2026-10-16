@@ -175,7 +175,7 @@ Supported URI schemes:
 - `kimi://<session_id>` - Kimi sessions
 - `kimi-code://<session_id>` - Kimi-Code sessions
 - `claude://<session_id>` - Claude Code sessions
-- `cursor://<requestid>` - Cursor sessions (`requestid` is used as URI identifier)
+- `cursor://<composer_id>` - Cursor sessions (legacy `cursor://<requestid>` URIs still resolve to the same session)
 - `pi://<session_id>` - Pi sessions
 - `deepchat://<session_id>` - DeepChat sessions
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
@@ -242,7 +242,7 @@ listed and fails when there is nothing to list because no provider has data.
 - **Kimi-Code**: `KIMI_CODE_HOME` -> `~/.kimi-code` -> `data/kimi-code`. A session is a `sessions/<hash>/<id>/` directory with both `state.json` and `agents/main/wire.jsonl`; sessions without messages are skipped. The working directory comes from `workDir` or `custom.cwd` in `state.json`, then `session_index.jsonl` in the data root.
 - **OpenCode**: `OPENCODE_DB` selects one database (relative to `XDG_DATA_HOME/opencode` or `~/.local/share/opencode`). Otherwise use `opencode.db` there, then the legacy Windows `LOCALAPPDATA`/`APPDATA` location, then `data/opencode/opencode.db`.
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
-- **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`; defaults to the `User` directory under macOS `~/Library/Application Support/Cursor`, Windows `%APPDATA%\Cursor`, or Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor`.
+- **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`; defaults to the `User` directory under macOS `~/Library/Application Support/Cursor`, Windows `%APPDATA%\Cursor`, or Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor`. The working directory comes from the workspace folder in `workspaceStorage/*/workspace.json` that lists the composer.
 - **Pi**: `PI_CODING_AGENT_SESSION_DIR` -> absolute `sessionDir` in the agent directory's `settings.json` -> `<agent directory>/sessions` -> `data/pi`. The agent directory is `PI_CODING_AGENT_DIR`, then `PI_HOME/agent`, then `~/.pi/agent`.
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` or `CHERRY_STUDIO_USER_DATA_DIR`, then `Data/cherrystudio.sqlite`; otherwise the first existing database in the user data directories configured by `~/.cherrystudio/boot-config.json`, then the platform default: macOS `~/Library/Application Support/CherryStudio`, Windows `%APPDATA%\CherryStudio`, or Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio` (each with `Data/cherrystudio.sqlite`). Use the override for portable/dev installations or to select among multiple installations.

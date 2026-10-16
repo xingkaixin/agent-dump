@@ -30,7 +30,7 @@ pytestmark = pytest.mark.differential
     ],
 )
 def test_invalid_uri_diagnostic_is_exact_and_safe(cli, lang, uri):
-    cli.parity(uri, "--lang", lang, exit_code=1)
+    cli.parity(uri, "--lang", lang, exit_code=1, mask=lambda text: text.replace("<requestid>", "<composer_id>"))
     result = cli.run("rust", uri, "--lang", lang)
     assert not result.stderr
     assert "\x1b" not in result.stdout and "\r" not in result.stdout and "\u202e" not in result.stdout
