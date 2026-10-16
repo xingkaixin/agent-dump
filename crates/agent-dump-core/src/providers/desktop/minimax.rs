@@ -9,30 +9,29 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
+const DATABASE: &str = "v2/sqlite/runtime-state.sqlite";
+
 pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
+    for (variable, label) in [
+        (
+            "MINIMAX_DATA_DIR",
+            "MINIMAX_DATA_DIR/v2/sqlite/runtime-state.sqlite",
+        ),
+        (
+            "MAVIS_DATA_DIR",
+            "MAVIS_DATA_DIR/v2/sqlite/runtime-state.sqlite",
+        ),
+    ] {
+        if let Some(root) = crate::providers::files::environment_path(variable)?
+        {
+            return Ok(vec![(label, root.join(DATABASE))]);
+        }
+    }
     let home = crate::providers::files::environment_root("HOME", "")?;
-    let selected = ["MINIMAX_DATA_DIR", "MAVIS_DATA_DIR"]
-        .into_iter()
-        .filter_map(|name| {
-            Some((name, std::env::var(name).ok()?.trim().to_owned()))
-        })
-        .find(|(_, value)| !value.is_empty());
-    let root = match selected.as_ref().map(|(_, value)| value.as_str()) {
-        Some("~") => home,
-        Some(value) if value.starts_with("~/") => home.join(&value[2..]),
-        Some(value) => PathBuf::from(value),
-        None => home.join(".minimax"),
-    };
-    let label = match selected.as_ref().map(|(name, _)| *name) {
-        Some("MINIMAX_DATA_DIR") => {
-            "MINIMAX_DATA_DIR/v2/sqlite/runtime-state.sqlite"
-        }
-        Some("MAVIS_DATA_DIR") => {
-            "MAVIS_DATA_DIR/v2/sqlite/runtime-state.sqlite"
-        }
-        _ => "MiniMax Code ~/.minimax/v2/sqlite/runtime-state.sqlite",
-    };
-    Ok(vec![(label, root.join("v2/sqlite/runtime-state.sqlite"))])
+    Ok(vec![(
+        "MiniMax Code ~/.minimax/v2/sqlite/runtime-state.sqlite",
+        home.join(".minimax").join(DATABASE),
+    )])
 }
 
 fn validate(connection: &Connection, path: &Path) -> crate::Result<()> {

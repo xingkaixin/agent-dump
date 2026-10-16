@@ -370,7 +370,7 @@ fn database_paths(kind: Kind) -> crate::Result<Vec<(&'static str, PathBuf)>> {
     )?
     .join("opencode");
     if let Some(explicit) =
-        std::env::var_os("OPENCODE_DB").filter(|value| !value.is_empty())
+        crate::providers::files::environment_value("OPENCODE_DB")
     {
         return Ok(if explicit == ":memory:" {
             Vec::new()
@@ -380,17 +380,18 @@ fn database_paths(kind: Kind) -> crate::Result<Vec<(&'static str, PathBuf)>> {
     }
     let mut paths = vec![("XDG/default opencode.db", root.join("opencode.db"))];
     if cfg!(target_os = "windows")
-        && std::env::var_os("XDG_DATA_HOME")
-            .is_none_or(|value| value.is_empty())
-        && let Some(base) =
-            ["LOCALAPPDATA", "APPDATA"].iter().find_map(|name| {
-                std::env::var_os(name).filter(|value| !value.is_empty())
-            })
+        && crate::providers::files::environment_value("XDG_DATA_HOME").is_none()
     {
-        paths.push((
-            "LOCALAPPDATA/APPDATA compatibility",
-            PathBuf::from(base).join("opencode/opencode.db"),
-        ));
+        for name in ["LOCALAPPDATA", "APPDATA"] {
+            if let Some(base) = crate::providers::files::environment_path(name)?
+            {
+                paths.push((
+                    "LOCALAPPDATA/APPDATA compatibility",
+                    base.join("opencode/opencode.db"),
+                ));
+                break;
+            }
+        }
     }
     paths.push((
         "local development fallback",
