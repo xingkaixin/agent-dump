@@ -88,6 +88,7 @@ pub fn read(
         }
         messages.push(message);
     }
+    crate::providers::text::clean_messages(&mut messages);
     stats.message_count = messages.len();
     let mut payload = session.payload(messages, stats);
     let row = &session.source_metadata["row"];

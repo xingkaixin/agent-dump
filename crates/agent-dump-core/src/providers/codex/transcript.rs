@@ -363,6 +363,7 @@ pub fn read(
         Ok(())
     })?;
     decoder.finish_plan("fail", None);
+    crate::providers::text::clean_messages(&mut decoder.messages);
     stats.add_tokens(&usage["input_tokens"], &usage["output_tokens"])?;
     stats.message_count = decoder.messages.len();
     let mut data = session.payload(decoder.messages, stats);

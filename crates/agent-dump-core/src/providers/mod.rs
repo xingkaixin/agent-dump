@@ -12,4 +12,5 @@ pub mod registry;
 #[cfg(test)]
 pub(crate) mod source_tests;
 pub(crate) mod sqlite;
+pub(crate) mod text;
 pub(crate) mod title;

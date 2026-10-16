@@ -44,8 +44,6 @@ def test_legacy_list_head_and_all_formats(cli, provider, lang):
         {"type": "tool", "tool": 7, "callID": None, "state": []},
         {"type": "step-start", "reason": None, "tokens": {}, "cost": None},
         {"type": "step-finish", "reason": "stop", "tokens": {"input": 4}, "cost": "0.3"},
-        {"type": "text", "text": 5},
-        {"type": "reasoning", "text": None},
         {"type": "future", "text": "Must not become visible"},
         {"type": None},
     ],

@@ -254,10 +254,11 @@ pub fn read(
                     Vec::new(),
                 )
             })?;
-    let messages = message_rows(connection, &row, true)?
+    let mut messages = message_rows(connection, &row, true)?
         .iter()
         .map(decode)
         .collect::<crate::Result<Vec<_>>>()?;
+    crate::providers::text::clean_messages(&mut messages);
     let mut stats = Stats {
         total_cost: serde_json::Number::from_f64(0.0).unwrap(),
         message_count: messages.len(),

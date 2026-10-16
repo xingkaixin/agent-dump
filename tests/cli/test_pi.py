@@ -87,11 +87,9 @@ def test_tree_messages_titles_stats_head_and_exports(cli, lang):
 @pytest.mark.parametrize(
     "content",
     [
-        "  Keep whitespace  ",
         None,
         5,
         [],
-        ["  Keep whitespace  ", 7, None, {"type": "text", "text": None}, {"type": "thinking", "thinking": False}],
         [{"type": "image", "mimeType": " image/png ", "data": "AA=="}, {"type": "image"}],
         [{"type": "toolCall", "name": "custom", "id": "call", "arguments": None}],
         [{"type": "toolCall", "name": " ", "id": ""}, {"type": "unknown", "text": "Ignored"}],
@@ -106,7 +104,6 @@ def test_content_shapes_images_and_tools(cli, content):
 @pytest.mark.parametrize(
     "role,fields",
     [
-        ("bashExecution", {"command": " pwd ", "output": " /workspace "}),
         ("bashExecution", {"command": "", "output": ""}),
         ("bashExecution", {"command": None, "output": None}),
         ("toolResult", {"toolName": "", "toolCallId": "", "isError": True}),

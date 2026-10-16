@@ -64,7 +64,7 @@ Follow the generated read commands and cursors until `has_more=false` to cover t
 - **Summarize conversations**: Collect all eligible user/assistant text through bounded chunks, or hand the task to an external Agent. Failures are marked as incomplete.
 - **Automate**: Query metadata, capabilities, search evidence, and statistics as JSON; unknown facts remain explicit.
 
-Available formats and message details depend on the source tool. Normalized output does not reproduce every private field or attachment file. Run `agent-dump --providers --json` to inspect capabilities.
+Available formats and message details depend on the source tool. Normalized output does not reproduce every private field or attachment file. Except for MiniMax Code, transcripts drop `system-reminder` and slash-command wrapper tags (`command-*`, `local-command-*`), trim trailing whitespace, and omit messages left empty by that cleanup. Run `agent-dump --providers --json` to inspect capabilities.
 
 ## Installation
 

@@ -64,7 +64,7 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **汇总对话**：将所有符合规则的 user/assistant 正文分块处理，或交给外部 Agent 汇总；失败时明确标记不完整。
 - **接入自动化**：通过 JSON 查询元数据、能力、搜索证据和统计，明确表示未知事实。
 
-可用格式和消息细节取决于来源工具。标准化输出不包含每个私有字段或附件实体。可运行 `agent-dump --providers --json` 检查能力。
+可用格式和消息细节取决于来源工具。标准化输出不包含每个私有字段或附件实体。除 MiniMax Code 外，正文会去掉 `system-reminder` 和斜杠命令包装标签（`command-*`、`local-command-*`），裁掉行尾空白，并省略清理后为空的消息。可运行 `agent-dump --providers --json` 检查能力。
 
 ## 安装
 
