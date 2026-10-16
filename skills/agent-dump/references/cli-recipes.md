@@ -430,7 +430,7 @@ agent-dump --search "timeout" --query "provider:minimax"
 
 读取当前 CLI 已迁移的 SQLite 展示消息。数据目录按非空 `MINIMAX_DATA_DIR`、非空 `MAVIS_DATA_DIR`、`~/.minimax` 选择，数据库为其下的 `v2/sqlite/runtime-state.sqlite`。显式目录缺失时不回退；profile、早期源码版或其他安装使用 `MINIMAX_DATA_DIR` 指定。
 
-保留隐藏的子会话和归档会话，排除没有消息的会话、隐藏的根会话及 peek/channel/cron 内部会话；无标题时使用第一条非自动用户消息。工具参数和结果参与搜索，思考、工具和内部事件不进入 collect。附件只保留引用，JSON 保留已知的消息 token 用量。支持 print / JSON / Markdown，不支持 raw、桌面端、旧存储或模型上下文恢复。待迁移和损坏记录是读取失败，不能当成没有会话；agent-dump 不运行客户端迁移。
+保留隐藏的子会话和归档会话，排除没有消息的会话、隐藏的根会话及 peek/channel/cron 内部会话；无标题时使用第一条非自动用户消息。工具参数和结果参与搜索；思考、工具、系统事件和权限响应不进入 collect，压缩和审查事件带标签文本进入搜索与 collect。附件引用和消息错误转为文本，不读取附件文件。token 用量和记录的 USD 费用来自 `local_runtime_token_usage`，单模型 turn 挂到最后一条 assistant 消息。支持 print / JSON / Markdown，不支持 raw、桌面端、旧存储或模型上下文恢复。待迁移和损坏记录是读取失败，不能当成没有会话；agent-dump 不运行客户端迁移。
 
 ### Machine-readable output
 

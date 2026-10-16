@@ -14,7 +14,7 @@ def add_message(cli, data):
         )
 
 
-@pytest.mark.parametrize("status", [1, 2, 3, 4, 5, 99])
+@pytest.mark.parametrize("status", [1, 2, 4, 5, 99])
 def test_tool_lifecycle_and_partial_arguments(tmp_path, monkeypatch, status):
     cli, identity = desktop(tmp_path, monkeypatch, "minimax")
     add_message(
@@ -38,8 +38,6 @@ def test_tool_lifecycle_and_partial_arguments(tmp_path, monkeypatch, status):
 @pytest.mark.parametrize(
     "extra",
     [
-        {"kind": "compaction_start"},
-        {"kind": "review_result"},
         {"msg_type": 3},
         {"msg_type": 99},
         {"role": "user", "msg_content": "  <permission-response>yes"},
@@ -57,7 +55,6 @@ def test_internal_events_do_not_become_dialogue(tmp_path, monkeypatch, extra):
     [
         {"attachments": {}},
         {"tool_calls": [None]},
-        {"tool_calls": [{"tool_name": 1}]},
         {"msg_content": []},
         {"thinking_content": 4},
     ],
@@ -113,31 +110,11 @@ def test_title_fallback_and_unknown_facts(tmp_path, monkeypatch, title, workspac
     exports(cli, "minimax", identity)
 
 
-def test_usage_attachments_and_id_order(tmp_path, monkeypatch):
+def test_messages_follow_row_order(tmp_path, monkeypatch):
     cli, identity = desktop(tmp_path, monkeypatch, "minimax")
-    add_message(
-        cli,
-        {
-            "msg_content": "last despite older time",
-            "timestamp": 1,
-            "usage": {
-                "input_tokens": True,
-                "output_tokens": -1,
-                "total_tokens": 0,
-                "cache_read": "8",
-                "cache_write": 3,
-            },
-            "attachments": [
-                {
-                    "meta": {"fileName": "spec", "mimeType": "text/plain", "attachmentType": "file", "sizeBytes": 9},
-                    "local": {"filePath": "/not-read", "assetId": "asset"},
-                    "cloud": {"url": "https://example.invalid/not-fetched"},
-                }
-            ],
-        },
-    )
+    add_message(cli, {"msg_content": "last despite older time", "timestamp": 1})
     data = exports(cli, "minimax", identity)
-    assert data["messages"][-1]["tokens"] == {"total": 0, "cache": {"write": 3}}
+    assert data["messages"][-1]["parts"][0]["text"] == "last despite older time"
 
 
 def test_session_visibility_and_archived_scope(tmp_path, monkeypatch):

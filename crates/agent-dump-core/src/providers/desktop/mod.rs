@@ -234,7 +234,9 @@ impl Provider for Desktop {
         for field in ["slug", "version", "summary_files"] {
             fields.remove(field);
         }
-        if matches!(self.kind, Kind::MiniMax) {
+        if matches!(self.kind, Kind::MiniMax)
+            && data.stats.total_tokens.is_none()
+        {
             fields.insert(
                 "stats".into(),
                 serde_json::json!({"message_count": data.messages.len()}),

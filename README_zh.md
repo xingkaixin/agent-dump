@@ -260,7 +260,7 @@ Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含
 
 正文、思考、工具调用及结果、代码和翻译会转换为统一格式。JSON 保留附件引用和控制事件，压缩摘要与内部事件不进入 collect 或搜索。Token 来自消息统计；各币种费用仅在 JSON 中保留，不换算或汇总计费金额。不读取附件实体、SDK 日志，也不执行应用迁移。暂不支持 1.x IndexedDB/Redux 原始数据和 raw 导出。
 
-MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。排除没有消息行的会话、隐藏的根会话及 peek/channel/cron 内部会话，保留隐藏的子会话和归档会话。无标题时使用第一条非自动用户消息，更新时间包含消息和 token 用量时间。正文按数据库消息行顺序读取，保留文字、思考、工具状态/结果和附件引用；压缩、审查和系统事件不进入 collect 或搜索。模型来自会话元数据，缺失时显示未知；JSON 保留消息中已记录的 token 用量，不推算费用。
+MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。排除没有消息行的会话、隐藏的根会话及 peek/channel/cron 内部会话，保留隐藏的子会话和归档会话。无标题时使用第一条非自动用户消息，更新时间包含消息和 token 用量时间。正文按数据库消息行顺序读取，保留文字、思考、工具状态/结果和附件引用，附件和消息错误也转为文本。压缩和审查事件保留 user/assistant 角色并加上 `Context compacted` 等标签，会进入搜索和 collect；系统事件和权限响应不进入。工具结果带 `isError` 或 `error` 时标为失败，task 工具只对应一个子会话时记录 `subagent_id`。会话模型来自会话元数据，缺失时显示未知。token 用量来自 `local_runtime_token_usage`：会话统计计入所有记录；一个 turn 只有一个模型时，模型、token（含 reasoning）和记录的 USD 费用挂到该 turn 最后一条 assistant 消息。不推算费用。
 
 自定义 profile 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/providers/minimax.md)。
 

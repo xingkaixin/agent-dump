@@ -26,7 +26,7 @@
 | 查询 | 支持现有 Provider、路径、角色、关键字和时间窗口语义 |
 | 搜索 | 使用标准化正文、思考和工具状态构建现有搜索语料 |
 | 导出 | print、JSON、Markdown；格式别名沿用现有规则 |
-| collect | 仅收集真实 user/assistant 的可见正文 |
+| collect | 收集 user/assistant 消息的可见正文，包括 compaction、review 等事件的标签文本 |
 | raw | 明确拒绝，提示使用 JSON/Markdown；不会复制整库 |
 
 示例：
@@ -61,7 +61,7 @@ agent-dump --search "fix timeout" -query "provider:minimax"
 | 创建时间 | `created_at_ms`；空值使用 `updated_at_ms` |
 | 更新时间 | `updated_at_ms`、消息行 `created_at_ms` 与 `local_runtime_token_usage.ts` 的最大值；用量表不存在时忽略 |
 | Working Directory | `workspace_dir`；不把 Provider 名称或源数据库目录当成工作目录 |
-| Model | `extra_data_json.effectiveModel`；缺失时保持未知，不读取当前全局模型配置 |
+| Model | `extra_data_json.effectiveModel`；缺失时保持未知，不读取当前全局模型配置。单条消息的模型来自用量表 |
 | Message Count Fact | 当前会话消息行 `COUNT(*)`，包括保留的内部事件；与完整导出消息数量一致 |
 | Session Source | 实际读取的 SQLite 文件 |
 | change sources | 数据库及同路径 `-wal`；不使用 `-shm` |
@@ -78,19 +78,21 @@ agent-dump --search "fix timeout" -query "provider:minimax"
 | --- | --- |
 | `msg_content` | text part |
 | `thinking_content` | reasoning part |
-| `tool_calls[]` | tool part；保留工具名、调用 ID、参数、结果、状态和耗时 |
+| `tool_calls[]` | tool part；保留工具名、调用 ID、参数、结果、状态和耗时。缺少工具名的调用只跳过该工具 |
 | 工具状态 1 / 2 / 3 / 4 / 5 | running / completed / error / pending / pending |
+| 结果含 `isError: true` 或非空 `error` | error 状态；`state.error` 依次取结果的 `error`、`text`、整个结果 |
+| `task` / `task_*` 结果的 `details.sub_session_id` 或 `session_id` | 一条消息只对应一个子会话时设为 `subagent_id` |
 | 参数、结果的 JSON 字符串 | 解码为逻辑数据；无法解析的流式片段保留文本 |
-| `usage.input_tokens` / `output_tokens` | 只保留源中存在的用量 |
-| `usage.cache_read` / `cache_write` | cache read/write |
-| `attachments` | 已有名称、路径、URL、类型等引用，不读取实体 |
-| `kind = compaction*` | compaction 角色 |
-| 其他非空 `kind` | custom 角色，保留原始 kind |
+| `attachments` | JSON 保留已有名称、路径、URL、类型等引用；另生成 `Attachment: <路径或名称> (<MIME>)` 文本，不读取实体 |
+| `error` | text part |
+| 非空 `kind` | 保留 user/assistant 角色，`mode` 为 kind；先加标签文本，如 `Context compacted`、`Review result`，未知 kind 为 `Event: <kind>`，再保留正文、思考和工具 |
 | `msg_type = 3` | system 角色 |
 | 未知消息类型或角色 | unknown，避免伪装成普通对话 |
 | user 正文以 `<permission-response>` 开头 | custom，保留权限响应但不作为用户需求收集 |
 
-内部事件仍作为一条消息计数。其状态保存在 Provider 私有 part/metadata，不把状态 JSON 变成用户正文。collect 复用既有角色与 part 规则，排除思考、工具、压缩和其他内部事件。JSON 保留单条消息已知用量，不用当前模型补写历史模型，也不推算费用。
+system、unknown 和权限响应仍作为一条内部事件消息计数，状态保存在 Provider 私有 part，不变成用户正文。kind 事件的标签和正文会进入搜索与 collect；collect 排除思考和工具。
+
+用量只来自 `local_runtime_token_usage`，不读取展示消息自带的 `usage`。每个用量行计入会话 input、output、total token 和 `cost_usd`；total 包含 input、output、reasoning、cache read 与 cache write。同一 turn 只有一个模型时，该 turn 的用量汇总挂到最后一条普通 assistant 消息，记录 model、input/output/reasoning/cache 和大于零的 `cost_usd`；多模型或没有普通回答的 turn 只计入会话汇总。有用量行时 JSON stats 输出这些汇总，否则只输出 `message_count`。不推算费用，也不用当前模型补写历史模型。
 
 ## 6. 只读与失败语义
 

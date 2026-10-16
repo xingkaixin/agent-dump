@@ -462,6 +462,95 @@ fn minimax_lists_child_sessions_with_messages() {
 }
 
 #[test]
+fn minimax_messages_carry_events_tools_and_turn_usage() {
+    let (_directory, mut provider, _, _) = fixture(Kind::MiniMax);
+    Connection::open(&provider.database)
+        .unwrap()
+        .execute_batch(
+            r#"CREATE TABLE local_runtime_token_usage (id INTEGER, session_id TEXT, turn_id TEXT, model TEXT, ts INTEGER, input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost_usd REAL);
+            INSERT INTO local_runtime_message_rows VALUES
+              (2, 'kept', 'a1', 'assistant', 'turn', 'agent', 2, '{"msg_id":"a1","role":"assistant","msg_content":"Draft"}'),
+              (3, 'kept', 'a2', 'assistant', 'turn', 'agent', 3, '{"msg_id":"a2","role":"assistant","thinking_content":"Think","msg_content":"Done","error":"Rate limited","usage":{"input_tokens":99},"attachments":[{"desktop_path":"/d/a.png","mime_type":"image/png"}],"tool_calls":[{"tool_name":"task","tool_call_id":"t1","tool_call_status":2,"tool_call_result_data":"{\"isError\":true,\"text\":\"boom\",\"details\":{\"sub_session_id\":\"child\"}}"},{"tool_call_id":"t2"},{"tool_name":"bash","tool_call_id":"t3","tool_call_status":2,"tool_call_result_data":"ok"}]}'),
+              (4, 'kept', 'c1', 'assistant', 'turn', 'agent', 4, '{"msg_id":"c1","role":"assistant","kind":"compaction","msg_content":"Summary"}'),
+              (5, 'kept', 'u2', 'user', 'multi', 'agent', 5, '{"msg_id":"u2","role":"user","kind":"review_x"}'),
+              (6, 'kept', 'a3', 'assistant', 'multi', 'agent', 6, '{"msg_id":"a3","role":"assistant","msg_content":"Mixed"}');
+            INSERT INTO local_runtime_token_usage VALUES
+              (1, 'kept', 'turn', 'm', 10, 100, 20, 5, 40, 10, 0.025),
+              (2, 'kept', 'turn', 'm', 11, 50, 10, 0, 0, 0, NULL),
+              (3, 'kept', 'multi', 'a', 12, 1, 1, 0, 0, 0, 0),
+              (4, 'kept', 'multi', 'b', 13, 1, 1, 0, 0, 0, 0);"#,
+        )
+        .unwrap();
+    let data = read_json(&mut provider, "kept");
+    let messages = data["messages"].as_array().unwrap();
+    let answer = &messages[2];
+    assert_eq!(
+        part_texts(answer),
+        [
+            "Think",
+            "Done",
+            "Attachment: /d/a.png (image/png)",
+            "Rate limited"
+        ]
+    );
+    assert_eq!(
+        answer["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|part| part["type"] == "tool")
+            .map(|part| (
+                &part["tool"],
+                &part["state"]["status"],
+                &part["state"]["error"]
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (&"task".into(), &"error".into(), &"boom".into()),
+            (
+                &"bash".into(),
+                &"completed".into(),
+                &serde_json::Value::Null
+            )
+        ]
+    );
+    assert_eq!(
+        (
+            &answer["subagent_id"],
+            &answer["model"],
+            &answer["cost"],
+            &answer["tokens"]
+        ),
+        (
+            &"child".into(),
+            &"m".into(),
+            &0.025.into(),
+            &serde_json::json!({"input": 150, "output": 30, "reasoning": 5, "cache": {"read": 40, "write": 10}})
+        )
+    );
+    assert!(messages[1]["tokens"].as_object().unwrap().is_empty());
+    assert!(messages[5]["tokens"].as_object().unwrap().is_empty());
+    assert_eq!(
+        messages[3..5]
+            .iter()
+            .map(|m| (&m["role"], &m["mode"], part_texts(m)))
+            .collect::<Vec<_>>(),
+        [
+            (
+                &"assistant".into(),
+                &"compaction".into(),
+                vec!["Context compacted", "Summary"]
+            ),
+            (&"user".into(), &"review_x".into(), vec!["Event: review_x"])
+        ]
+    );
+    assert_eq!(
+        data["stats"],
+        serde_json::json!({"total_cost": 0.025, "total_input_tokens": 152, "total_output_tokens": 32, "message_count": 6, "total_tokens": 239})
+    );
+}
+
+#[test]
 fn deepchat_lists_rooted_sessions_with_messages() {
     let (_directory, mut provider, _, _) = fixture(Kind::DeepChat);
     Connection::open(&provider.database)

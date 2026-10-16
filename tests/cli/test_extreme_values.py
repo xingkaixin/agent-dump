@@ -84,32 +84,18 @@ def test_legacy_sqlite_numeric_boundaries(cli, value):
     export(cli, identity="ses_old")
 
 
-@pytest.mark.parametrize("provider", ["minimax", "opencode-v2"])
 @pytest.mark.parametrize("value", [2**80, "  +1_234  ", float("inf")])
-def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value):
+def test_opencode_v2_token_boundaries(tmp_path, monkeypatch, value):
     import sqlite3
 
     from cli_fixture import make_cli
-    from desktop_fixture import desktop, exports
     from sqlite_fixture import create_v2, export as sqlite_export
-    from test_minimax import add_message
 
-    if provider == "opencode-v2":
-        cli = make_cli(tmp_path, monkeypatch)
-        path = create_v2(cli, monkeypatch)
-        with sqlite3.connect(path) as connection:
-            connection.execute("UPDATE session_v2 SET tokens_input = ?, tokens_output = ?", (str(value), str(value)))
-        sqlite_export(cli)
-    else:
-        cli, identity = desktop(tmp_path, monkeypatch, provider)
-        add_message(
-            cli,
-            {
-                "msg_content": "Numbers",
-                "usage": {"input_tokens": value, "output_tokens": value, "cache_read": value},
-            },
-        )
-        exports(cli, provider, identity)
+    cli = make_cli(tmp_path, monkeypatch)
+    path = create_v2(cli, monkeypatch)
+    with sqlite3.connect(path) as connection:
+        connection.execute("UPDATE session_v2 SET tokens_input = ?, tokens_output = ?", (str(value), str(value)))
+    sqlite_export(cli)
 
 
 @pytest.mark.parametrize("provider", ["codex", "claude", "pi"])

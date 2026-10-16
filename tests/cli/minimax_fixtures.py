@@ -48,14 +48,6 @@ def create_minimax_db(path: Path, now_ms: int) -> Path:
                 "role": "user",
                 "msg_content": "MiniMax prompt",
                 "timestamp": now_ms,
-                "attachments": [
-                    {
-                        "type": "file",
-                        "file_path": "/not-read/spec.txt",
-                        "file_name": "spec.txt",
-                        "mime_type": "text/plain",
-                    }
-                ],
             },
         )
         insert_message(
@@ -67,7 +59,6 @@ def create_minimax_db(path: Path, now_ms: int) -> Path:
                 "msg_content": "MiniMax answer",
                 "thinking_content": "private reasoning",
                 "timestamp": now_ms + 1000,
-                "usage": {"input_tokens": 30, "output_tokens": 10, "total_tokens": 45, "cache_read": 5},
                 "tool_calls": [
                     {
                         "tool_name": "bash",

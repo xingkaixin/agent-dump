@@ -3,13 +3,16 @@ use crate::compat::value::{
 };
 use crate::providers::desktop::{Kind, timestamp};
 use crate::providers::error::ProviderError;
+use crate::providers::sqlite::connection::has_table;
 use crate::providers::sqlite::connection::rows;
 use crate::session::{Message, Part, Session, SessionData, Stats, TextPart};
 use rusqlite::Connection;
 use serde_json::{Value, json};
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 const DATABASE: &str = "v2/sqlite/runtime-state.sqlite";
+const MESSAGES: &str = "SELECT msg_id, role, turn_id, source, created_at_ms, data_json FROM local_runtime_message_rows WHERE session_id = ? ORDER BY id";
 
 pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
     for (variable, label) in [
@@ -79,17 +82,16 @@ pub fn sessions(
     cutoff: Option<i64>,
 ) -> crate::Result<crate::providers::contract::Discovery> {
     validate(connection, path)?;
-    let usage = if crate::providers::sqlite::connection::has_table(
-        connection,
-        "local_runtime_token_usage",
-    )? {
+    let usage = if has_table(connection, "local_runtime_token_usage")? {
         "(SELECT MAX(u.ts) FROM local_runtime_token_usage u WHERE u.session_id = s.session_id)"
     } else {
         "NULL"
     };
     let records = rows(
         connection,
-        &format!("SELECT s.*, (SELECT COUNT(*) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_count, (SELECT MAX(m.created_at_ms) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_activity, {usage} AS usage_activity, (NOT EXISTS (SELECT 1 FROM local_runtime_message_row_migrations r WHERE r.session_id = s.session_id) AND EXISTS (SELECT 1 FROM local_runtime_messages l WHERE l.session_id = s.session_id AND trim(l.display_messages_json) <> '[]')) AS legacy_pending FROM local_runtime_sessions s WHERE (? IS NULL OR s.session_id = ?) AND (? IS NULL OR COALESCE(s.created_at_ms, s.updated_at_ms) >= ?) ORDER BY COALESCE(s.created_at_ms, s.updated_at_ms) DESC, s.session_id"),
+        &format!(
+            "SELECT s.*, (SELECT COUNT(*) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_count, (SELECT MAX(m.created_at_ms) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_activity, {usage} AS usage_activity, (NOT EXISTS (SELECT 1 FROM local_runtime_message_row_migrations r WHERE r.session_id = s.session_id) AND EXISTS (SELECT 1 FROM local_runtime_messages l WHERE l.session_id = s.session_id AND trim(l.display_messages_json) <> '[]')) AS legacy_pending FROM local_runtime_sessions s WHERE (? IS NULL OR s.session_id = ?) AND (? IS NULL OR COALESCE(s.created_at_ms, s.updated_at_ms) >= ?) ORDER BY COALESCE(s.created_at_ms, s.updated_at_ms) DESC, s.session_id"
+        ),
         &[&id, &id, &cutoff, &cutoff],
     )?;
     let mut result =
@@ -180,7 +182,7 @@ fn title(value: &str) -> Option<String> {
 }
 
 fn prompt(connection: &Connection, id: &str) -> crate::Result<Option<String>> {
-    Ok(rows(connection, "SELECT msg_id, role, turn_id, source, created_at_ms, data_json FROM local_runtime_message_rows WHERE session_id = ? ORDER BY id", &[&id])?
+    Ok(rows(connection, MESSAGES, &[&id])?
         .iter()
         .filter_map(|row| decode(row).ok())
         .filter(|message| message.role == "user" && !automated(message))
@@ -217,11 +219,20 @@ pub fn read(
                     Vec::new(),
                 )
             })?;
-    let messages = rows(connection, "SELECT msg_id, role, turn_id, source, created_at_ms, data_json FROM local_runtime_message_rows WHERE session_id = ? ORDER BY id", &[&session.id])?.iter().map(decode).collect::<crate::Result<Vec<_>>>()?;
-    let stats = Stats {
-        message_count: messages.len(),
-        ..Default::default()
+    let mut messages = rows(connection, MESSAGES, &[&session.id])?
+        .iter()
+        .map(decode)
+        .collect::<crate::Result<Vec<_>>>()?;
+    let usage = if has_table(connection, "local_runtime_token_usage")? {
+        rows(
+            connection,
+            "SELECT * FROM local_runtime_token_usage WHERE session_id = ? ORDER BY id",
+            &[&session.id],
+        )?
+    } else {
+        Vec::new()
     };
+    let stats = attach(&mut messages, &usage);
     let mut payload = current.payload(messages, stats);
     payload.directory = current.source_metadata["workspace_dir"].clone();
     payload
@@ -232,6 +243,99 @@ pub fn read(
         current.source_metadata["parent_session_id"].clone(),
     );
     Ok(payload)
+}
+
+#[derive(Default)]
+struct Usage {
+    tokens: [i64; 5],
+    cost: f64,
+}
+
+impl Usage {
+    fn add(&mut self, row: &Value) {
+        for (total, field) in self.tokens.iter_mut().zip([
+            "input_tokens",
+            "output_tokens",
+            "reasoning_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+        ]) {
+            *total = total.saturating_add(count(&row[field]));
+        }
+        self.cost += row["cost_usd"]
+            .as_f64()
+            .filter(|cost| *cost > 0.0)
+            .unwrap_or(0.0);
+    }
+}
+
+fn attach(messages: &mut [Message], usage: &[Value]) -> Stats {
+    let mut answers = HashMap::new();
+    for (index, message) in messages.iter().enumerate() {
+        if message.role == "assistant"
+            && message.mode.is_none()
+            && let Some(turn) =
+                message.extra.get("turn_id").and_then(Value::as_str)
+        {
+            answers.insert(turn.to_owned(), index);
+        }
+    }
+    let mut session = Usage::default();
+    let mut turns: HashMap<&str, Vec<&Value>> = HashMap::new();
+    for row in usage {
+        session.add(row);
+        if let Some(turn) = row["turn_id"].as_str() {
+            turns.entry(turn).or_default().push(row);
+        }
+    }
+    for (turn, rows) in turns {
+        let Some(&index) = answers.get(turn) else {
+            continue;
+        };
+        let models: BTreeSet<_> = rows
+            .iter()
+            .map(|row| row["model"].as_str().filter(|model| !model.is_empty()))
+            .collect();
+        let [model] = models.into_iter().collect::<Vec<_>>()[..] else {
+            continue;
+        };
+        let mut total = Usage::default();
+        for row in rows {
+            total.add(row);
+        }
+        let [input, output, reasoning, read, write] = total.tokens;
+        let message = &mut messages[index];
+        message.model = model.map(Value::from);
+        message.tokens.clone_from(
+            json!({"input": input, "output": output, "reasoning": reasoning, "cache": {"read": read, "write": write}})
+                .as_object()
+                .unwrap(),
+        );
+        if total.cost > 0.0 {
+            message.cost = crate::compat::json::float(total.cost);
+        }
+    }
+    let mut stats = Stats {
+        message_count: messages.len(),
+        ..Default::default()
+    };
+    if !usage.is_empty() {
+        let tokens = session.tokens;
+        stats.total_input_tokens = tokens[0].into();
+        stats.total_output_tokens = tokens[1].into();
+        stats.total_cost = crate::compat::json::float(session.cost);
+        stats.total_tokens =
+            Some(tokens.into_iter().fold(0_i64, i64::saturating_add).into());
+    }
+    stats
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Token counts are integral; out-of-range values saturate"
+)]
+fn count(value: &Value) -> i64 {
+    value.as_f64().filter(|count| *count > 0.0).unwrap_or(0.0) as i64
 }
 
 fn decode(row: &Value) -> crate::Result<Message> {
@@ -246,13 +350,7 @@ fn decode(row: &Value) -> crate::Result<Message> {
     }
     let time = integer(&row["created_at_ms"]);
     let kind = text(&data["kind"]);
-    let role = if !kind.is_empty() {
-        if kind.starts_with("compaction") {
-            "compaction"
-        } else {
-            "custom"
-        }
-    } else if data["msg_type"] == 3 {
+    let role = if data["msg_type"] == 3 {
         "system"
     } else if !matches!(data["msg_type"].as_i64(), None | Some(1 | 2))
         || (!data["msg_type"].is_null() && !data["msg_type"].is_number())
@@ -272,6 +370,9 @@ fn decode(row: &Value) -> crate::Result<Message> {
     };
     let mut message =
         Message::new(string(&row["msg_id"]), role, time, Vec::new());
+    if !kind.is_empty() {
+        message.mode = Some(kind.into());
+    }
     for field in ["turn_id", "source"] {
         message.extra.insert(field.into(), row[field].clone());
     }
@@ -279,43 +380,24 @@ fn decode(row: &Value) -> crate::Result<Message> {
         message.extra.insert(field.into(), data[field].clone());
     }
     let empty = json!([]);
-    message.extra.insert(
-        "attachments".into(),
-        objects(data.get("attachments").unwrap_or(&empty))
-            .map_err(|_| {
-                ProviderError::invalid(format!(
-                    "Invalid MiniMax Code attachments: {id}"
-                ))
-            })?
-            .iter()
-            .map(attachment)
-            .collect(),
-    );
-    for (source, target) in [
-        ("input_tokens", "input"),
-        ("output_tokens", "output"),
-        ("total_tokens", "total"),
-    ] {
-        if nonnegative_integer(&data["usage"][source]) {
-            message
-                .tokens
-                .insert(target.into(), data["usage"][source].clone());
-        }
-    }
-    let mut cache = serde_json::Map::new();
-    for (source, target) in [("cache_read", "read"), ("cache_write", "write")] {
-        if nonnegative_integer(&data["usage"][source]) {
-            cache.insert(target.into(), data["usage"][source].clone());
-        }
-    }
-    if !cache.is_empty() {
-        message.tokens.insert("cache".into(), cache.into());
-    }
+    let attachments = objects(data.get("attachments").unwrap_or(&empty))
+        .map_err(|_| {
+            ProviderError::invalid(format!(
+                "Invalid MiniMax Code attachments: {id}"
+            ))
+        })?;
+    let records: Vec<Value> = attachments.iter().map(attachment).collect();
+    message
+        .extra
+        .insert("attachments".into(), records.clone().into());
     if !matches!(message.role.as_str(), "user" | "assistant" | "tool") {
         message
             .parts
             .push(Part::event("minimax_event".into(), data, time));
         return Ok(message);
+    }
+    if !kind.is_empty() {
+        message.parts.push(Part::text(label(kind), time));
     }
     for field in ["thinking_content", "msg_content"] {
         match &data[field] {
@@ -338,6 +420,28 @@ fn decode(row: &Value) -> crate::Result<Message> {
             }
         }
     }
+    for (item, record) in attachments.iter().zip(&records) {
+        let name = [
+            &record["path"],
+            &item["desktop_path"],
+            &record["name"],
+            &record["asset_id"],
+            &record["url"],
+        ]
+        .into_iter()
+        .find_map(|value| value.as_str().filter(|name| !name.is_empty()));
+        if let Some(name) = name {
+            let mime = record["mime_type"]
+                .as_str()
+                .filter(|mime| !mime.is_empty())
+                .map(|mime| format!(" ({mime})"))
+                .unwrap_or_default();
+            message
+                .parts
+                .push(Part::text(format!("Attachment: {name}{mime}"), time));
+        }
+    }
+    let mut children = BTreeSet::new();
     for tool in
         objects(data.get("tool_calls").unwrap_or(&empty)).map_err(|_| {
             ProviderError::invalid(format!(
@@ -345,26 +449,70 @@ fn decode(row: &Value) -> crate::Result<Message> {
             ))
         })?
     {
-        let name = tool["tool_name"].as_str().ok_or_else(|| {
-            ProviderError::invalid(format!(
-                "Invalid MiniMax Code tool call: {id}"
-            ))
-        })?;
+        let Some(name) =
+            tool["tool_name"].as_str().filter(|name| !name.is_empty())
+        else {
+            continue;
+        };
         let id = tool["tool_call_id"].as_str().ok_or_else(|| {
             ProviderError::invalid(format!(
                 "Invalid MiniMax Code tool call: {id}"
             ))
         })?;
+        let output = parse_json(&tool["tool_call_result_data"]);
+        let failed = tool["tool_call_status"] == 3
+            || output["isError"] == true
+            || !output["error"].is_null();
         let status = match integer(&tool["tool_call_status"]) {
+            _ if failed => "error",
             1 => "running",
             2 => "completed",
-            3 => "error",
             4 | 5 => "pending",
             _ => "unknown",
         };
-        message.parts.push(Part::tool(name, id, json!({"status":status, "input":parse_json(tool.get("tool_call_args").unwrap_or_else(|| &tool["tool_call_args_delta"])), "output":parse_json(&tool["tool_call_result_data"]), "duration_ms":tool["tool_call_duration_ms"]}), time));
+        if name == "task" || name.starts_with("task_") {
+            let details = &output["details"];
+            if let Some(child) = details["sub_session_id"]
+                .as_str()
+                .or_else(|| details["session_id"].as_str())
+            {
+                children.insert(child.to_owned());
+            }
+        }
+        let mut state = json!({"status":status, "input":parse_json(tool.get("tool_call_args").unwrap_or_else(|| &tool["tool_call_args_delta"])), "output":output, "duration_ms":tool["tool_call_duration_ms"]});
+        if failed {
+            state["error"] = [&output["error"], &output["text"]]
+                .into_iter()
+                .find(|value| !value.is_null())
+                .unwrap_or(&output)
+                .clone();
+        }
+        message.parts.push(Part::tool(name, id, state, time));
+    }
+    if let Some(error) =
+        data["error"].as_str().filter(|error| !error.is_empty())
+    {
+        message.parts.push(Part::text(error.into(), time));
+    }
+    if children.len() == 1 {
+        message.subagent_id = children.pop_first();
     }
     Ok(message)
+}
+
+fn label(kind: &str) -> String {
+    match kind {
+        "compaction_start" => "Context compaction started",
+        "compaction" => "Context compacted",
+        "compaction_failed" => "Context compaction failed",
+        "review_start" => "Review started",
+        "review_result" => "Review result",
+        "review_failed" => "Review failed",
+        "review_aborted" => "Review aborted",
+        "review_interrupted" => "Review interrupted",
+        _ => return format!("Event: {kind}"),
+    }
+    .into()
 }
 
 fn attachment(item: &Value) -> Value {
@@ -377,10 +525,4 @@ fn attachment(item: &Value) -> Value {
             .clone()
     };
     json!({"name":first(&[&item["meta"]["fileName"], &item["file_name"], &item["fileName"]]), "path":first(&[&item["local"]["filePath"], &item["file_path"], &item["filePath"]]), "mime_type":first(&[&item["meta"]["mimeType"], &item["mime_type"], &item["mimeType"]]), "type":first(&[&item["meta"]["attachmentType"], &item["type"]]), "size":item["meta"]["sizeBytes"], "url":item["cloud"]["url"], "asset_id":first(&[&item["local"]["assetId"], &item["asset_id"], &item["assetId"]])})
-}
-
-fn nonnegative_integer(value: &Value) -> bool {
-    value
-        .as_number()
-        .is_some_and(|number| !number.as_str().contains(['-', '.', 'e', 'E']))
 }
