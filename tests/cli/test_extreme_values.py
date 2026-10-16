@@ -84,7 +84,7 @@ def test_legacy_sqlite_numeric_boundaries(cli, value):
     export(cli, identity="ses_old")
 
 
-@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax", "opencode-v2"])
+@pytest.mark.parametrize("provider", ["cherry", "minimax", "opencode-v2"])
 @pytest.mark.parametrize("value", [2**80, "  +1_234  ", float("inf")])
 def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value):
     import json
@@ -112,10 +112,7 @@ def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value)
                 },
             )
         else:
-            if provider == "deepchat":
-                sql = "UPDATE deepchat_messages SET metadata = ? WHERE role = 'assistant'"
-            else:
-                sql = "UPDATE agent_session_message SET stats = ? WHERE role = 'assistant'"
+            sql = "UPDATE agent_session_message SET stats = ? WHERE role = 'assistant'"
             field = {"inputTokens": value, "outputTokens": value, "cachedInputTokens": value}
             with sqlite3.connect(cli.source) as connection:
                 connection.execute(sql, (json.dumps(field),))

@@ -495,3 +495,89 @@ Second', 1, 1000, NULL, NULL, 'missing', NULL, 0);
         );
     }
 }
+
+fn read_json(provider: &mut Desktop, id: &str) -> serde_json::Value {
+    let session = provider.find(id, &mut |_| Ok(())).unwrap().session.unwrap();
+    serde_json::to_value(
+        provider.read(&session, false, &mut |_| Ok(())).unwrap(),
+    )
+    .unwrap()
+}
+
+fn part_texts(message: &serde_json::Value) -> Vec<&str> {
+    message["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|part| part["text"].as_str())
+        .collect()
+}
+
+#[test]
+fn deepchat_messages_carry_references_and_usage() {
+    let (_directory, mut provider, _, _) = fixture(Kind::DeepChat);
+    Connection::open(&provider.database)
+        .unwrap()
+        .execute_batch(
+            r#"CREATE TABLE deepchat_user_messages (message_id TEXT, text TEXT);
+            CREATE TABLE deepchat_user_message_files (message_id TEXT, ordinal INTEGER, name TEXT, path TEXT, mime_type TEXT, size INTEGER);
+            CREATE TABLE deepchat_user_message_links (message_id TEXT, ordinal INTEGER, url TEXT);
+            CREATE TABLE deepchat_assistant_blocks (message_id TEXT, block_index INTEGER, block_type TEXT, status TEXT, text_content TEXT, tool_call_id TEXT, tool_name TEXT, tool_params TEXT, tool_response TEXT, action_type TEXT, image_mime_type TEXT, extra_json TEXT, updated_at INTEGER);
+            CREATE TABLE deepchat_usage_stats (usage_id TEXT, session_id TEXT, message_id TEXT, model_id TEXT, provider_id TEXT, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER, cached_input_tokens INTEGER, cache_write_input_tokens INTEGER, created_at INTEGER);
+            INSERT INTO new_sessions VALUES ('main', 'Main', 1, 1, '/p', NULL, NULL, NULL, 0);
+            INSERT INTO deepchat_sessions VALUES ('main', 'session-model', 'session-provider');
+            INSERT INTO deepchat_messages VALUES
+              ('u', 'main', 1, 'user', '{"text":"stale","inlineItems":[{"type":"session","sessionId":"other","title":"Other"},{"type":"session","sessionId":"bare"}]}', 'sent', '{}', 1, 1),
+              ('a', 'main', 2, 'assistant', '[]', 'sent', '{"model":"meta","inputTokens":9,"outputTokens":9}', 1, 1),
+              ('b', 'main', 3, 'assistant', '"plain answer"', 'sent', '{"model":"meta","inputTokens":10,"outputTokens":2,"cachedInputTokens":30}', 1, 1),
+              ('c', 'main', 4, 'assistant', '{"not":"array"}', 'sent', '{}', 1, 1);
+            INSERT INTO deepchat_user_messages VALUES ('u', 'Prompt');
+            INSERT INTO deepchat_user_message_files VALUES ('u', 0, 'notes.txt', '/p/notes.txt', 'text/plain', 4);
+            INSERT INTO deepchat_user_message_links VALUES ('u', 0, 'https://example.invalid');
+            INSERT INTO deepchat_assistant_blocks (message_id, block_index, block_type, status, text_content, tool_call_id, tool_name, updated_at) VALUES
+              ('a', 0, 'search', 'success', 'Search results', NULL, NULL, 1),
+              ('a', 1, 'action', 'success', '', NULL, NULL, 1),
+              ('a', 2, 'tool_call', 'error', 'denied by user', 'call', 'shell', 1);
+            INSERT INTO deepchat_usage_stats VALUES
+              ('1', 'main', 'a', 'usage', 'usage-provider', 100, 20, 130, 150, 5, 1),
+              ('2', 'main', NULL, NULL, NULL, 7, 3, NULL, 0, 0, 1);"#,
+        )
+        .unwrap();
+    let data = read_json(&mut provider, "main");
+    let messages = data["messages"].as_array().unwrap();
+    assert_eq!(
+        part_texts(&messages[0]),
+        [
+            "Prompt",
+            "Session: Other (other)",
+            "Session: bare",
+            "Attachment: /p/notes.txt",
+            "https://example.invalid"
+        ]
+    );
+    assert!(messages[0]["model"].is_null());
+    assert_eq!(part_texts(&messages[1]), ["Search results"]);
+    assert_eq!(messages[1]["parts"][1]["state"]["error"], "denied by user");
+    assert_eq!(
+        messages[1]["tokens"],
+        serde_json::json!({"input": 100, "output": 20, "cache": {"read": 100, "write": 0}})
+    );
+    assert_eq!(
+        (&messages[1]["model"], &messages[1]["provider"]),
+        (&"usage".into(), &"usage-provider".into())
+    );
+    assert_eq!(part_texts(&messages[2]), ["plain answer"]);
+    assert_eq!(messages[2]["tokens"]["cache"]["read"], 10);
+    assert_eq!(
+        (&messages[2]["model"], &messages[2]["provider"]),
+        (&"meta".into(), &"session-provider".into())
+    );
+    assert!(messages[3]["parts"].as_array().unwrap().is_empty());
+    assert_eq!(
+        (
+            &data["stats"]["total_input_tokens"],
+            &data["stats"]["total_output_tokens"]
+        ),
+        (&117.into(), &25.into())
+    );
+}

@@ -389,7 +389,7 @@ agent-dump 'deepchat://<session_id>' --head
 agent-dump 'deepchat://<session_id>' --format json,markdown --output ./sessions
 ```
 
-读取当前未加密的 `app_db/agent.db`，可用 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。草稿不列出，已迁移历史可直接读取。暂不支持 raw、SQLCipher 和旧版 `chat.db` 直读；附件仅保留引用，不读取外置工具输出或执行 Tape 恢复。遇到加密或 schema 诊断时应保留报错，不把它当成没有会话。
+读取当前未加密的 `app_db/agent.db`，可用 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。草稿和没有消息的会话不列出，已迁移历史可直接读取。暂不支持 raw、SQLCipher 和旧版 `chat.db` 直读；引用的会话、附件路径和链接写入正文，不读取附件实体、外置工具输出，也不执行 Tape 恢复。遇到加密或 schema 诊断时应保留报错，不把它当成没有会话。
 
 ## Cherry Studio
 

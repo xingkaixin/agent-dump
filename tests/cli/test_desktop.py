@@ -49,7 +49,6 @@ def test_unknown_schema_is_not_exported(tmp_path, monkeypatch, provider, sql, la
 @pytest.mark.parametrize(
     "provider,sql",
     [
-        ("deepchat", "UPDATE deepchat_messages SET content = 'invalid' WHERE role = 'assistant'"),
         ("cherry", "UPDATE agent_session_message SET data = 'invalid' WHERE role = 'assistant'"),
         ("minimax", "UPDATE local_runtime_message_rows SET data_json = 'invalid'"),
     ],
@@ -57,8 +56,6 @@ def test_unknown_schema_is_not_exported(tmp_path, monkeypatch, provider, sql, la
 def test_bad_body_remains_head_readable_and_fails_export(tmp_path, monkeypatch, provider, sql):
     cli, identity = desktop(tmp_path, monkeypatch, provider)
     with sqlite3.connect(cli.source) as connection:
-        if provider == "deepchat":
-            connection.execute("DELETE FROM deepchat_assistant_blocks")
         connection.execute(sql)
     cli.parity(f"{provider}://{identity}", "--head", "--lang", "en")
     fails(cli, f"{provider}://{identity}")

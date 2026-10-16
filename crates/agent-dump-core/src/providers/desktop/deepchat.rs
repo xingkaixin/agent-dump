@@ -1,6 +1,4 @@
-use crate::compat::value::{
-    integer, objects, parse_json, string, text, truthy,
-};
+use crate::compat::value::{integer, parse_json, string, text};
 use crate::providers::desktop::{Kind, has_tables, timestamp};
 use crate::providers::error::ProviderError;
 use crate::providers::sqlite::connection::{has_table, rows};
@@ -129,39 +127,137 @@ pub fn read(
         "ordinal",
         &session.id,
     )?;
+    let mut ledger = Ledger::default();
+    if has_table(connection, "deepchat_usage_stats")? {
+        for row in rows(
+            connection,
+            "SELECT message_id, model_id AS model, provider_id AS provider, input_tokens AS inputTokens, output_tokens AS outputTokens, total_tokens AS totalTokens, cached_input_tokens AS cachedInputTokens, cache_write_input_tokens AS cacheWriteInputTokens FROM deepchat_usage_stats WHERE session_id = ? ORDER BY usage_id",
+            &[&session.id],
+        )? {
+            ledger.add(&row);
+        }
+    }
+    let header = &session.source_metadata;
     let mut messages = Vec::new();
-    let mut stats = Stats {
-        total_cost: serde_json::Number::from_f64(0.0).unwrap(),
-        ..Default::default()
-    };
     for row in rows(
         connection,
         "SELECT * FROM deepchat_messages WHERE session_id = ? ORDER BY order_seq, id",
         &[&session.id],
     )? {
         let id = text(&row["id"]);
-        let message = decode(
+        let mut metadata = object(&row["metadata"]);
+        let mut message = decode(
             &row,
+            &metadata,
             users.get(id).map_or(&[], Vec::as_slice),
             blocks.get(id).map_or(&[], Vec::as_slice),
             files.get(id).map_or(&[], Vec::as_slice),
             links.get(id).map_or(&[], Vec::as_slice),
-        )?;
-        stats
-            .add_tokens(&message.tokens["input"], &message.tokens["output"])?;
+        );
+        if row["role"] == "assistant" && !ledger.messages.contains_key(id) {
+            metadata["message_id"] = row["id"].clone();
+            ledger.add(&metadata);
+        }
+        let usage = ledger.messages.get(id);
+        let [input, output, read, write] = usage.map_or([0; 4], |u| u.tokens);
+        message.tokens.clone_from(json!({"input": input, "output": output, "cache": {"read": read, "write": write}}).as_object().unwrap());
+        let fallback = if row["role"] == "assistant" {
+            header
+        } else {
+            &Value::Null
+        };
+        message.model = usage
+            .and_then(|u| u.model.clone())
+            .or_else(|| name(&metadata["model"]))
+            .or_else(|| name(&fallback["model_id"]))
+            .map(Value::String);
+        message.provider = usage
+            .and_then(|u| u.provider.clone())
+            .or_else(|| name(&metadata["provider"]))
+            .or_else(|| name(&fallback["provider_id"]));
         messages.push(message);
     }
     crate::providers::text::clean_messages(&mut messages);
-    stats.message_count = messages.len();
+    let stats = Stats {
+        total_cost: serde_json::Number::from_f64(0.0).unwrap(),
+        total_input_tokens: ledger.input.into(),
+        total_output_tokens: ledger.output.into(),
+        message_count: messages.len(),
+        ..Default::default()
+    };
     let mut data = session.payload(messages, stats);
-    data.directory = session.source_metadata["project_dir"].clone();
+    data.directory = header["project_dir"].clone();
     data.extra
-        .insert("model".into(), session.source_metadata["model_id"].clone());
+        .insert("model".into(), header["model_id"].clone());
     data.extra.insert(
         "parent_session_id".into(),
-        session.source_metadata["parent_session_id"].clone(),
+        header["parent_session_id"].clone(),
     );
     Ok(data)
+}
+
+fn name(value: &Value) -> Option<String> {
+    value.as_str().filter(|v| !v.is_empty()).map(str::to_owned)
+}
+
+#[derive(Default)]
+struct Usage {
+    model: Option<String>,
+    provider: Option<String>,
+    tokens: [i64; 4],
+}
+
+#[derive(Default)]
+struct Ledger {
+    messages: HashMap<String, Usage>,
+    input: i64,
+    output: i64,
+}
+
+impl Ledger {
+    fn add(&mut self, row: &Value) {
+        let tokens = tokens(row);
+        if tokens.is_none() && !row["totalTokens"].is_number() {
+            return;
+        }
+        let tokens = tokens.unwrap_or_default();
+        let [input, output, ..] = tokens;
+        self.input = self.input.saturating_add(input);
+        self.output = self.output.saturating_add(output);
+        let Some(id) = name(&row["message_id"]) else {
+            return;
+        };
+        let usage = self.messages.entry(id).or_default();
+        usage.model = name(&row["model"]);
+        usage.provider = name(&row["provider"]);
+        for (sum, value) in usage.tokens.iter_mut().zip(tokens) {
+            *sum = sum.saturating_add(value);
+        }
+    }
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Token counts are integral; out-of-range values saturate"
+)]
+fn count(value: &Value) -> i64 {
+    value.as_f64().unwrap_or(0.0) as i64
+}
+
+fn tokens(row: &Value) -> Option<[i64; 4]> {
+    if !row["inputTokens"].is_number() && !row["outputTokens"].is_number() {
+        return None;
+    }
+    let raw = count(&row["inputTokens"]);
+    let input = raw.max(0);
+    let read = count(&row["cachedInputTokens"]).max(0);
+    let write = count(&row["cacheWriteInputTokens"]).max(0);
+    Some([
+        input,
+        count(&row["outputTokens"]).max(0),
+        read.min(input),
+        write.min(raw.saturating_sub(read).max(0)),
+    ])
 }
 
 fn details(
@@ -204,12 +300,12 @@ fn object(raw: &Value) -> Value {
 
 fn decode(
     row: &Value,
+    metadata: &Value,
     users: &[Value],
     blocks: &[Value],
     files: &[Value],
     links: &[Value],
-) -> crate::Result<Message> {
-    let metadata = object(&row["metadata"]);
+) -> Message {
     let time = integer(&row["created_at"]);
     let role = text(&row["role"]);
     let mut message = Message::new(
@@ -222,9 +318,6 @@ fn decode(
         time,
         Vec::new(),
     );
-    message.model = metadata.get("model").filter(|v| v.is_string()).cloned();
-    message.provider = metadata["provider"].as_str().map(str::to_owned);
-    message.tokens.clone_from(json!({"input": crate::compat::value::integer_number(&metadata["inputTokens"]), "output": crate::compat::value::integer_number(&metadata["outputTokens"]), "cache": {"read": crate::compat::value::integer_number(&metadata["cachedInputTokens"]), "write": crate::compat::value::integer_number(&metadata["cacheWriteInputTokens"])}}).as_object().unwrap());
     message.metadata = metadata.as_object().cloned();
     message.extra.insert("status".into(), row["status"].clone());
     if role == "user" {
@@ -236,41 +329,63 @@ fn decode(
         };
         let body =
             text(users.first().map_or(&raw["text"], |user| &user["text"]));
-        if !body.is_empty() {
-            message.parts.push(Part::text(body.into(), time));
+        let mut labels = vec![body.to_owned()];
+        for item in raw["inlineItems"].as_array().into_iter().flatten() {
+            if item["type"] != "session" {
+                continue;
+            }
+            let Some(id) = item["sessionId"].as_str() else {
+                continue;
+            };
+            labels.push(match name(&item["title"]) {
+                Some(title) => format!("Session: {title} ({id})"),
+                None => format!("Session: {id}"),
+            });
         }
-        message.extra.insert(
-            "links".into(),
-            if users.is_empty() {
-                raw.get("links").cloned().unwrap_or(json!([]))
-            } else {
-                links.iter().map(|link| link["url"].clone()).collect()
-            },
-        );
-        let attachments = if users.is_empty() {
+        let attachments: Vec<&Value> = if users.is_empty() {
             raw["files"].as_array().map_or(&[][..], Vec::as_slice)
         } else {
             files
+        }
+        .iter()
+        .filter(|item| item.is_object())
+        .collect();
+        labels.extend(attachments.iter().filter_map(|item| {
+            name(&item["path"])
+                .or_else(|| name(&item["name"]))
+                .map(|label| format!("Attachment: {label}"))
+        }));
+        let links = if users.is_empty() {
+            raw.get("links").cloned().unwrap_or(json!([]))
+        } else {
+            links.iter().map(|link| link["url"].clone()).collect()
         };
-        message.extra.insert("attachments".into(), attachments.iter().filter(|item| item.is_object()).map(|item| json!({"name":item["name"], "path":item["path"], "mime_type": ([&item["mime_type"], &item["mimeType"], &item["type"]].into_iter().find(|v| truthy(v)).unwrap_or_else(|| &item["type"])), "size":item["size"]})).collect());
-        return Ok(message);
+        labels.extend(links.as_array().into_iter().flatten().filter_map(name));
+        message.parts = labels
+            .into_iter()
+            .filter(|label| !label.is_empty())
+            .map(|label| Part::text(label, time))
+            .collect();
+        message.extra.insert("links".into(), links);
+        message.extra.insert("attachments".into(), attachments.iter().map(|item| json!({"name":item["name"], "path":item["path"], "mime_type": ([&item["mime_type"], &item["mimeType"], &item["type"]].into_iter().find(|v| crate::compat::value::truthy(v)).unwrap_or_else(|| &item["type"])), "size":item["size"]})).collect());
+        return message;
     }
     let content = if blocks.is_empty() {
         parse_json(&row["content"])
     } else {
         blocks.iter().map(structured_block).collect()
     };
-    message.parts = objects(&content)
-        .map_err(|_| {
-            ProviderError::invalid(format!(
-                "Invalid DeepChat assistant content: {}",
-                string(&row["id"])
-            ))
-        })?
-        .iter()
-        .map(|block| decode_block(block, time))
-        .collect();
-    Ok(message)
+    message.parts = match &content {
+        Value::Array(blocks) => blocks
+            .iter()
+            .filter_map(|block| decode_block(block, time))
+            .collect(),
+        Value::String(body) if !body.is_empty() => {
+            vec![Part::text(body.clone(), time)]
+        }
+        _ => Vec::new(),
+    };
+    message
 }
 
 fn structured_block(row: &Value) -> Value {
@@ -287,15 +402,10 @@ fn structured_block(row: &Value) -> Value {
     json!({"type":row["block_type"], "content":row["text_content"], "status":row["status"], "timestamp":extra.get("timestamp").unwrap_or_else(|| &row["updated_at"]), "tool_call":tool, "image_data":{"data":extra["imageData"],"mimeType":row["image_mime_type"]}, "action_type":row["action_type"], "extra":extra["extra"]})
 }
 
-fn decode_block(block: &Value, fallback: i64) -> Part {
+fn decode_block(block: &Value, fallback: i64) -> Option<Part> {
     let time = crate::compat::value::integer_or(&block["timestamp"], fallback);
     let body = text(&block["content"]);
     match text(&block["type"]) {
-        "content" | "error" => Part::text(body.into(), time),
-        "reasoning_content" => Part::Reasoning(TextPart {
-            text: body.into(),
-            time_created: time,
-        }),
         "tool_call" => {
             let tool = object(&block["tool_call"]);
             let status = match text(&block["status"]) {
@@ -306,29 +416,54 @@ fn decode_block(block: &Value, fallback: i64) -> Part {
                 _ => "unknown",
             };
             let mut state = json!({"status":status, "input":parse_json(&tool["params"]), "output":tool["response"]});
+            if status == "error" {
+                if !tool["response"].is_null() {
+                    state["error"] = tool["response"].clone();
+                } else if !body.is_empty() {
+                    state["error"] = body.into();
+                }
+            }
             if !tool["mcpResult"].is_null() {
                 state["mcp_result"] = tool["mcpResult"].clone();
             }
-            Part::tool(text(&tool["name"]), text(&tool["id"]), state, time)
+            return Some(Part::tool(
+                text(&tool["name"]),
+                text(&tool["id"]),
+                state,
+                time,
+            ));
         }
-        "plan" => Part::Plan(PlanPart {
-            input: body.into(),
-            output: block["extra"].clone(),
-            approval_status: text(&block["status"]).into(),
-            time_created: time,
-        }),
+        "plan" => {
+            return Some(Part::Plan(PlanPart {
+                input: body.into(),
+                output: block["extra"].clone(),
+                approval_status: text(&block["status"]).into(),
+                time_created: time,
+            }));
+        }
         "image" => {
             let image = object(&block["image_data"]);
-            Part::Image(ImagePart {
-                mime_type: image["mimeType"].as_str().map(str::to_owned),
-                data: image["data"].clone(),
-                time_created: time,
-            })
+            if let Some((data, mime)) =
+                name(&image["data"]).zip(name(&image["mimeType"]))
+            {
+                return Some(Part::Image(ImagePart {
+                    mime_type: Some(mime),
+                    data: data.into(),
+                    time_created: time,
+                }));
+            }
         }
-        _ => Part::event(
-            format!("deepchat_{}", string(&block["type"])),
-            block.clone(),
-            time,
-        ),
+        _ => {}
     }
+    if body.is_empty() {
+        return None;
+    }
+    Some(if block["type"] == "reasoning_content" {
+        Part::Reasoning(TextPart {
+            text: body.into(),
+            time_created: time,
+        })
+    } else {
+        Part::text(body.into(), time)
+    })
 }
