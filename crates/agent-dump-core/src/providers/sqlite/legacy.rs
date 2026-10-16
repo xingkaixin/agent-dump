@@ -1,5 +1,6 @@
 use crate::compat::value::{float, integer, json_object, string, text};
 use crate::providers::contract::{DiagnosticSink, RecoverableDiagnostic};
+use crate::providers::sqlite::Facts;
 use crate::providers::sqlite::connection::{each_row, has_column, rows};
 use crate::providers::text::clean;
 use crate::session::{
@@ -97,12 +98,103 @@ pub fn read(
         descendant_usage(connection, &session.id, &mut stats)?;
     }
     stats.message_count = messages.len();
-    let mut payload = session.payload(messages, stats);
     let row = &session.source_metadata["row"];
+    let title = crate::providers::sqlite::display_title(
+        row,
+        crate::providers::sqlite::user_title(&messages),
+    );
+    let mut payload = session.payload(messages, stats);
+    payload.title = title;
     payload.slug = row["slug"].clone();
     payload.directory = row["directory"].clone();
     payload.summary_files = row["summary_files"].clone();
     Ok(payload)
+}
+
+pub fn facts(
+    connection: &Connection,
+    sessions: &str,
+    parameters: &[&dyn ToSql],
+) -> crate::Result<HashMap<String, Facts>> {
+    struct Entry {
+        session: String,
+        time: i64,
+        user: bool,
+        visible: bool,
+        title: Option<(i64, String)>,
+    }
+    let mut entries = Vec::new();
+    let mut by_id = HashMap::new();
+    each_row(
+        connection,
+        &format!(
+            "SELECT id, session_id, time_created, CASE WHEN typeof(data) = 'text' THEN data END AS data
+             FROM message WHERE session_id IN ({sessions})"
+        ),
+        parameters,
+        |row| {
+            if let Some(data) = json_object(&row["data"])
+                && !internal(&data["type"])
+            {
+                by_id.insert(string(&row["id"]), entries.len());
+                entries.push(Entry {
+                    session: string(&row["session_id"]),
+                    time: integer(&row["time_created"]),
+                    user: data["role"] == "user",
+                    visible: false,
+                    title: None,
+                });
+            }
+            Ok(())
+        },
+    )?;
+    each_row(
+        connection,
+        &format!(
+            "SELECT message_id, time_created, CASE WHEN typeof(data) = 'text' THEN data END AS data
+             FROM part WHERE message_id IN (SELECT id FROM message WHERE session_id IN ({sessions}))"
+        ),
+        parameters,
+        |row| {
+            let Some(entry) = by_id
+                .get(&string(&row["message_id"]))
+                .map(|index| &mut entries[*index])
+            else {
+                return Ok(());
+            };
+            let time = integer(&row["time_created"]);
+            let Some(part) = json_object(&row["data"])
+                .and_then(|data| part(&data, time))
+                .filter(visible)
+            else {
+                return Ok(());
+            };
+            entry.visible = true;
+            if entry.user
+                && entry.title.as_ref().is_none_or(|(first, _)| time < *first)
+                && let Part::Text(text) = &part
+                && let Some(title) = crate::providers::sqlite::title(&text.text)
+            {
+                entry.title = Some((time, title));
+            }
+            Ok(())
+        },
+    )?;
+    let mut facts: HashMap<String, (Facts, i64)> = HashMap::new();
+    for entry in entries.into_iter().filter(|entry| entry.visible) {
+        let (facts, first) = facts.entry(entry.session).or_default();
+        facts.count += 1;
+        if let Some((_, title)) = entry.title
+            && (facts.title.is_none() || entry.time < *first)
+        {
+            facts.title = Some(title);
+            *first = entry.time;
+        }
+    }
+    Ok(facts
+        .into_iter()
+        .map(|(session, (facts, _))| (session, facts))
+        .collect())
 }
 
 fn internal(kind: &Value) -> bool {

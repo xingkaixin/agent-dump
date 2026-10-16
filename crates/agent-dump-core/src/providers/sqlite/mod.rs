@@ -4,17 +4,52 @@ pub mod v2;
 
 use crate::compat::value::{json_object, string, text};
 use crate::providers::contract::{Provider, RawExport};
-use crate::providers::sqlite::connection::{Readers, connect, has_table, rows};
+use crate::providers::sqlite::connection::{
+    Readers, connect, has_column, has_table, rows,
+};
 use crate::session::timestamp::Timestamp;
-use crate::session::{Session, SessionData, epoch_seconds};
+use crate::session::{Message, Part, Session, SessionData, epoch_seconds};
 use rusqlite::{Connection, ToSql};
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     OpenCode,
     ZCode,
+}
+
+#[derive(Default)]
+pub struct Facts {
+    pub count: usize,
+    pub title: Option<String>,
+}
+
+struct Layout {
+    v2: bool,
+    legacy: Option<Legacy>,
+}
+
+enum Legacy {
+    All,
+    Unmigrated(Option<String>),
+}
+
+impl Legacy {
+    fn filter(&self) -> (&'static str, Option<&dyn ToSql>) {
+        match self {
+            Self::All => ("1", None),
+            Self::Unmigrated(None) => (
+                "NOT EXISTS (SELECT 1 FROM session_v2 v WHERE v.id = s.id)",
+                None,
+            ),
+            Self::Unmigrated(Some(cursor)) => (
+                "NOT EXISTS (SELECT 1 FROM session_v2 v WHERE v.id = s.id) AND s.id < ?",
+                Some(cursor),
+            ),
+        }
+    }
 }
 
 pub struct SqliteProvider {
@@ -55,6 +90,42 @@ impl SqliteProvider {
         Ok(())
     }
 
+    fn layout(&self, connection: &Connection) -> crate::Result<Layout> {
+        let v2 =
+            self.kind == Kind::OpenCode && has_table(connection, "session_v2")?;
+        if !v2 {
+            return Ok(Layout {
+                v2,
+                legacy: Some(Legacy::All),
+            });
+        }
+        if !has_table(connection, "session")? {
+            return Ok(Layout { v2, legacy: None });
+        }
+        let state = if has_table(connection, "kv")? {
+            rows(
+                connection,
+                "SELECT value FROM kv WHERE key = 'migration.v1-v2'",
+                &[],
+            )?
+            .first()
+            .and_then(|row| row["value"].as_str())
+            .map(crate::compat::json::from_str)
+            .transpose()?
+            .unwrap_or_default()
+        } else {
+            Value::Null
+        };
+        // OpenCode copies V1 sessions in descending ID order and records the
+        // last copied ID; V1 IDs at or above it were copied or deleted in V2.
+        Ok(Layout {
+            v2,
+            legacy: (state["phase"] != "completed").then(|| {
+                Legacy::Unmigrated(state["cursor"].as_str().map(str::to_owned))
+            }),
+        })
+    }
+
     fn select(
         &self,
         connection: &Connection,
@@ -62,47 +133,79 @@ impl SqliteProvider {
         condition: &str,
         parameters: &[&dyn ToSql],
     ) -> crate::Result<Vec<Session>> {
-        let v2 =
-            self.kind == Kind::OpenCode && has_table(connection, "session_v2")?;
+        let layout = self.layout(connection)?;
         let mut sessions = Vec::new();
-        if v2 {
-            let count = if has_table(connection, "session_message")? {
-                "(SELECT COUNT(*) FROM session_message m WHERE m.session_id = s.id)"
+        if layout.v2 {
+            let selected = selected(connection, "session_v2", "1", &[], true)?;
+            let facts = if has_table(connection, "session_message")? {
+                Some(v2::facts(
+                    connection,
+                    &format!("SELECT s.id FROM session_v2 s WHERE {condition}"),
+                    parameters,
+                )?)
+            } else {
+                None
+            };
+            for row in rows(
+                connection,
+                &format!(
+                    "SELECT s.id, s.title, s.time_created, s.time_updated, s.slug, s.directory, s.version, s.summary_files, s.model, s.project_id, s.parent_id FROM session_v2 s WHERE {condition}"
+                ),
+                parameters,
+            )? {
+                sessions.extend(listed(
+                    &row,
+                    source,
+                    true,
+                    &selected,
+                    facts.as_ref(),
+                ));
+            }
+        }
+        if let Some(legacy) = &layout.legacy {
+            let (filter, cursor) = legacy.filter();
+            let scope = format!("({condition}) AND {filter}");
+            let mut bound = parameters.to_vec();
+            bound.extend(cursor);
+            let selected = selected(
+                connection,
+                "session",
+                filter,
+                &Vec::from_iter(cursor),
+                layout.v2,
+            )?;
+            let messages = has_table(connection, "message")?;
+            let facts = if messages {
+                Some(legacy::facts(
+                    connection,
+                    &format!("SELECT s.id FROM session s WHERE {scope}"),
+                    &bound,
+                )?)
+            } else {
+                None
+            };
+            let model = if messages {
+                "(SELECT m.data FROM message m WHERE m.session_id = s.id AND m.data LIKE '%\"modelID\"%' ORDER BY m.time_created DESC LIMIT 1)"
             } else {
                 "NULL"
             };
             for row in rows(
                 connection,
                 &format!(
-                    "SELECT s.id, s.title, s.time_created, s.time_updated, s.slug, s.directory, s.version, s.summary_files, s.model, s.project_id, s.parent_id, {count} AS message_count FROM session_v2 s WHERE {condition}"
+                    "SELECT s.id, s.title, s.time_created, s.time_updated, s.slug, s.directory, s.version, s.summary_files, {model} AS model_message_data FROM session s WHERE {scope} ORDER BY s.time_created DESC"
                 ),
-                parameters,
+                &bound,
             )? {
-                sessions.push(build_session(&row, source, true));
+                sessions.extend(listed(
+                    &row,
+                    source,
+                    false,
+                    &selected,
+                    facts.as_ref(),
+                ));
             }
         }
-        if !v2 || has_table(connection, "session")? {
-            let metadata = if has_table(connection, "message")? {
-                "(SELECT COUNT(*) FROM message m WHERE m.session_id = s.id) AS message_count,
-                 (SELECT m.data FROM message m WHERE m.session_id = s.id AND m.data LIKE '%\"modelID\"%' ORDER BY m.time_created DESC LIMIT 1) AS model_message_data"
-            } else {
-                "NULL AS message_count, NULL AS model_message_data"
-            };
-            let exclude = if v2 {
-                " AND NOT EXISTS (SELECT 1 FROM session_v2 v WHERE v.id = s.id)"
-            } else {
-                ""
-            };
-            let sql = format!(
-                "SELECT s.id, s.title, s.time_created, s.time_updated, s.slug, s.directory, s.version, s.summary_files, {metadata} FROM session s WHERE ({condition}){exclude} ORDER BY s.time_created DESC"
-            );
-            for row in rows(connection, &sql, parameters)? {
-                sessions.push(build_session(&row, source, false));
-            }
-        }
-        if v2 {
-            sessions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        }
+        sessions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         Ok(sessions)
     }
 
@@ -112,7 +215,8 @@ impl SqliteProvider {
         session: &Session,
         diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<SessionData> {
-        if self.kind == Kind::OpenCode && has_table(connection, "session_v2")? {
+        let layout = self.layout(connection)?;
+        if layout.v2 {
             if let Some(row) = rows(
                 connection,
                 "SELECT * FROM session_v2 WHERE id = ?",
@@ -125,15 +229,6 @@ impl SqliteProvider {
                     connection, session, &row,
                 );
             }
-            if session.source_metadata["schema"] == "v2"
-                || !has_table(connection, "session")?
-            {
-                return Err(format!(
-                    "OpenCode session is missing: {}",
-                    session.id
-                )
-                .into());
-            }
         } else if session.source_metadata["schema"] == "v2" {
             return Err(format!(
                 "OpenCode V2 session source is missing: {}",
@@ -141,13 +236,24 @@ impl SqliteProvider {
             )
             .into());
         }
-        if rows(
-            connection,
-            "SELECT 1 FROM session WHERE id = ?",
-            &[&session.id],
-        )?
-        .is_empty()
-        {
+        let legacy = layout
+            .legacy
+            .as_ref()
+            .filter(|_| session.source_metadata["schema"] != "v2");
+        let present = if let Some(legacy) = legacy {
+            let (filter, cursor) = legacy.filter();
+            let mut bound: Vec<&dyn ToSql> = vec![&session.id];
+            bound.extend(cursor);
+            !rows(
+                connection,
+                &format!("SELECT 1 FROM session s WHERE s.id = ? AND {filter}"),
+                &bound,
+            )?
+            .is_empty()
+        } else {
+            false
+        };
+        if !present {
             let name = match self.kind {
                 Kind::OpenCode => "OpenCode",
                 Kind::ZCode => "ZCode",
@@ -159,10 +265,100 @@ impl SqliteProvider {
         crate::providers::sqlite::legacy::read(
             connection,
             session,
-            self.kind == Kind::ZCode || !has_table(connection, "session_v2")?,
+            !layout.v2,
             diagnostics,
         )
     }
+}
+
+fn selected(
+    connection: &Connection,
+    table: &str,
+    filter: &str,
+    parameters: &[&dyn ToSql],
+    orphans: bool,
+) -> crate::Result<HashSet<String>> {
+    let parent = has_column(connection, table, "parent_id")?;
+    let task = !parent && has_column(connection, table, "task_type")?;
+    let rows = rows(
+        connection,
+        &format!(
+            "SELECT s.id, {} AS parent_id, {} AS task_type FROM {table} s WHERE {filter}",
+            if parent { "s.parent_id" } else { "NULL" },
+            if task { "s.task_type" } else { "NULL" },
+        ),
+        parameters,
+    )?;
+    let known: HashSet<_> = rows.iter().map(|row| string(&row["id"])).collect();
+    let mut children: HashMap<&str, Vec<String>> = HashMap::new();
+    let mut selected = HashSet::new();
+    for row in &rows {
+        let id = string(&row["id"]);
+        let child = row["parent_id"].as_str().filter(|parent| {
+            !orphans
+                || (!parent.is_empty()
+                    && *parent != id
+                    && known.contains(*parent))
+        });
+        if let Some(parent) = child {
+            children.entry(parent).or_default().push(id);
+        } else if orphans || parent || row["task_type"] != "subagent_child" {
+            selected.insert(id);
+        }
+    }
+    let mut pending: Vec<_> = selected.iter().cloned().collect();
+    while let Some(id) = pending.pop() {
+        for child in children.get(id.as_str()).into_iter().flatten() {
+            if selected.insert(child.clone()) {
+                pending.push(child.clone());
+            }
+        }
+    }
+    Ok(selected)
+}
+
+fn listed(
+    row: &Value,
+    source: &Path,
+    v2: bool,
+    selected: &HashSet<String>,
+    facts: Option<&HashMap<String, Facts>>,
+) -> Option<Session> {
+    let id = string(&row["id"]);
+    if !selected.contains(&id) {
+        return None;
+    }
+    let facts = match facts {
+        Some(facts) => Some(facts.get(&id)?),
+        None => None,
+    };
+    Some(build_session(row, source, v2, facts))
+}
+
+pub fn title(text: &str) -> Option<String> {
+    let text = crate::providers::text::clean(text);
+    crate::providers::title::normalize_title(
+        text.lines().find(|line| !line.trim().is_empty())?,
+    )
+}
+
+pub fn user_title(messages: &[Message]) -> Option<String> {
+    messages
+        .iter()
+        .filter(|message| message.role == "user")
+        .flat_map(|message| &message.parts)
+        .find_map(|part| match part {
+            Part::Text(part) => title(&part.text),
+            _ => None,
+        })
+}
+
+pub fn display_title(row: &Value, fallback: Option<String>) -> String {
+    row["title"]
+        .as_str()
+        .and_then(title)
+        .or(fallback)
+        .unwrap_or_else(|| "Untitled Session".into())
 }
 
 impl Provider for SqliteProvider {
@@ -283,13 +479,19 @@ impl Provider for SqliteProvider {
     }
 }
 
-pub fn build_session(row: &Value, path: &Path, v2: bool) -> Session {
-    let timestamp = |name: &str| {
-        row[name]
+pub fn build_session(
+    row: &Value,
+    path: &Path,
+    v2: bool,
+    facts: Option<&Facts>,
+) -> Session {
+    let timestamp = |value: &Value| {
+        value
             .as_f64()
             .and_then(|value| epoch_seconds(value / 1000.0))
             .unwrap_or(Timestamp::UNIX_EPOCH)
     };
+    let created_at = timestamp(&row["time_created"]);
     let model = if v2 {
         json_object(&row["model"])
             .and_then(|value| value["id"].as_str().map(str::to_owned))
@@ -301,13 +503,13 @@ pub fn build_session(row: &Value, path: &Path, v2: bool) -> Session {
     };
     Session {
         id: string(&row["id"]),
-        title: if crate::compat::value::truthy(&row["title"]) {
-            string(&row["title"])
+        title: display_title(row, facts.and_then(|facts| facts.title.clone())),
+        created_at,
+        updated_at: if row["time_updated"].is_null() {
+            created_at
         } else {
-            "Untitled".into()
+            timestamp(&row["time_updated"])
         },
-        created_at: timestamp("time_created"),
-        updated_at: timestamp("time_updated"),
         source_path: path.to_owned(),
         directory: text(&row["directory"]).into(),
         version: row["version"].clone(),
@@ -315,9 +517,7 @@ pub fn build_session(row: &Value, path: &Path, v2: bool) -> Session {
         project: v2
             .then(|| text(&row["project_id"]).trim().to_owned())
             .filter(|text| !text.is_empty()),
-        message_count: row["message_count"]
-            .as_u64()
-            .and_then(|count| count.try_into().ok()),
+        message_count: facts.map(|facts| facts.count),
         subtargets: if v2 {
             Vec::new()
         } else {
@@ -751,6 +951,136 @@ mod tests {
             write!(sql, "INSERT INTO part VALUES ('{id}-{index}', '{id}', {time}, '{part}');").unwrap();
         }
         sql
+    }
+
+    fn listed(provider: &mut SqliteProvider) -> Vec<Session> {
+        provider.discover(None, &mut |_| Ok(())).unwrap().sessions
+    }
+
+    #[test]
+    fn discovery_lists_reachable_sessions_with_visible_messages() {
+        let text = |body: &str| format!(r#"{{"type":"text","text":"{body}"}}"#);
+        let user = r#"{"role":"user"}"#;
+        let assistant = r#"{"role":"assistant"}"#;
+        let sql = [
+            LEGACY.to_owned(),
+            "INSERT INTO session VALUES ('root', NULL, 10, NULL, NULL, '/p', NULL, NULL, NULL), ('child', 'Child', 9, 9, NULL, '/p', NULL, NULL, 'root'), ('orphan', 'Orphan', 8, 8, NULL, '/p', NULL, NULL, 'gone'), ('empty', 'Empty', 7, 7, NULL, '/p', NULL, NULL, NULL), ('quiet', NULL, 6, 6, NULL, '/p', NULL, NULL, NULL);".into(),
+            message("u1", "root", 1, user, &[&text(r"<system-reminder>x</system-reminder>\n\n  First   line \nsecond")]),
+            message("a1", "root", 2, assistant, &[r#"{"type":"step-start"}"#]),
+            message("p1", "root", 3, r#"{"role":"assistant","type":"progress"}"#, &[&text("hidden")]),
+            message("a2", "root", 4, assistant, &[r#"{"type":"tool","title":"Tool: read","state":{}}"#]),
+            message("c1", "child", 1, assistant, &[&text("Done")]),
+            message("o1", "orphan", 1, user, &[&text("Lost")]),
+            message("e1", "empty", 1, assistant, &[r#"{"type":"step-finish"}"#]),
+            message("q1", "quiet", 1, assistant, &[&text("ok")]),
+        ]
+        .concat();
+        let (_directory, mut provider) = database(&sql, Kind::OpenCode);
+        let sessions = listed(&mut provider);
+        let facts: Vec<_> = sessions
+            .iter()
+            .map(|session| {
+                (
+                    session.id.as_str(),
+                    session.title.as_str(),
+                    session.message_count,
+                )
+            })
+            .collect();
+        assert_eq!(
+            facts,
+            [
+                ("root", "First line", Some(2)),
+                ("child", "Child", Some(1)),
+                ("quiet", "Untitled Session", Some(1)),
+            ]
+        );
+        assert_eq!(sessions[0].updated_at, sessions[0].created_at);
+        let data = provider.read(&sessions[0], false, &mut |_| Ok(())).unwrap();
+        assert_eq!(data.title, "First line");
+        assert_eq!(data.stats.message_count, 2);
+        let ids: Vec<_> = data
+            .messages
+            .iter()
+            .map(|message| message.id.as_str())
+            .collect();
+        assert_eq!(ids, ["u1", "a2"]);
+    }
+
+    #[test]
+    fn zcode_skips_subagent_children_without_parent_column() {
+        let sql = [
+            "CREATE TABLE session (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT, task_type TEXT); CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT); CREATE TABLE part (id TEXT, message_id TEXT, time_created INTEGER, data TEXT);",
+            "INSERT INTO session VALUES ('main', 'Main', 2, 2, NULL, '/p', NULL, NULL, 'main'), ('sub', 'Sub', 1, 1, NULL, '/p', NULL, NULL, 'subagent_child');",
+            &message("m1", "main", 1, r#"{"role":"user"}"#, &[r#"{"type":"text","text":"a"}"#]),
+            &message("s1", "sub", 1, r#"{"role":"user"}"#, &[r#"{"type":"text","text":"b"}"#]),
+        ]
+        .concat();
+        let (_directory, mut provider) = database(&sql, Kind::ZCode);
+        let ids: Vec<_> = listed(&mut provider)
+            .into_iter()
+            .map(|session| session.id)
+            .collect();
+        assert_eq!(ids, ["main"]);
+        assert!(
+            provider
+                .find("sub", &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn migration_cursor_keeps_only_uncopied_legacy_sessions() {
+        let mut sql = [
+            LEGACY,
+            "CREATE TABLE session_v2 (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT, model TEXT, project_id TEXT, parent_id TEXT); CREATE TABLE session_message (id TEXT, session_id TEXT, type TEXT, seq INTEGER, time_created INTEGER, data TEXT); CREATE TABLE kv (key TEXT, value TEXT);",
+            "INSERT INTO session_v2 VALUES ('ses_c', 'C', 3, 3, NULL, '/p', NULL, NULL, NULL, NULL, NULL); INSERT INTO session_message VALUES ('v1', 'ses_c', 'user', 1, 3, '{\"text\":\"hi\"}');",
+            "INSERT INTO kv VALUES ('migration.v1-v2', '{\"phase\":\"copying\",\"cursor\":\"ses_b\"}');",
+        ]
+        .concat();
+        for id in ["ses_a", "ses_b", "ses_c"] {
+            write!(sql, "INSERT INTO session VALUES ('{id}', '{id}', 1, 1, NULL, '/p', NULL, NULL, NULL);").unwrap();
+            sql.push_str(&message(
+                id,
+                id,
+                1,
+                r#"{"role":"user"}"#,
+                &[r#"{"type":"text","text":"hi"}"#],
+            ));
+        }
+        let (directory, mut provider) = database(&sql, Kind::OpenCode);
+        let ids = |provider: &mut SqliteProvider| -> Vec<String> {
+            listed(provider)
+                .into_iter()
+                .map(|session| session.id)
+                .collect()
+        };
+        assert_eq!(ids(&mut provider), ["ses_c", "ses_a"]);
+        assert!(
+            provider
+                .find("ses_b", &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .is_none()
+        );
+        let legacy = provider
+            .find("ses_a", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap();
+        assert!(provider.read(&legacy, false, &mut |_| Ok(())).is_ok());
+        Connection::open(directory.path().join("source.sqlite"))
+            .unwrap()
+            .execute("UPDATE kv SET value = '{\"phase\":\"completed\"}'", [])
+            .unwrap();
+        assert_eq!(ids(&mut provider), ["ses_c"]);
+        let error = provider
+            .read(&legacy, false, &mut |_| Ok(()))
+            .err()
+            .unwrap();
+        assert_eq!(error.to_string(), "OpenCode session is missing: ses_a");
     }
 
     #[test]

@@ -1,13 +1,14 @@
 use crate::compat::value::{
     add_integer, float, integer, integer_number, json_object, string, text,
 };
-use crate::providers::sqlite::connection::rows;
+use crate::providers::sqlite::Facts;
+use crate::providers::sqlite::connection::{each_row, rows};
 use crate::session::{
     ImagePart, Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
 };
-use rusqlite::Connection;
+use rusqlite::{Connection, ToSql};
 use serde_json::{Map, Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub fn read(
     connection: &Connection,
@@ -20,6 +21,10 @@ pub fn read(
         row,
         &session.source_path,
         true,
+        Some(&Facts {
+            count: messages.len(),
+            title: crate::providers::sqlite::user_title(&messages),
+        }),
     );
     let mut input = integer_number(&row["tokens_input"]);
     add_integer(&mut input, &row["tokens_cache_read"]);
@@ -50,6 +55,48 @@ pub fn read(
     }
     payload.metadata = Some(metadata.into());
     Ok(payload)
+}
+
+pub fn facts(
+    connection: &Connection,
+    sessions: &str,
+    parameters: &[&dyn ToSql],
+) -> crate::Result<HashMap<String, Facts>> {
+    let mut facts: HashMap<String, (Facts, i64)> = HashMap::new();
+    each_row(
+        connection,
+        &format!(
+            "SELECT id, session_id, type, seq, time_created, data FROM session_message WHERE session_id IN ({sessions})"
+        ),
+        parameters,
+        |row| {
+            // A corrupt message stays countable so reading reports it.
+            let message = match message(&row) {
+                Ok(None) => return Ok(()),
+                Ok(Some(message)) => Some(message),
+                Err(_) => None,
+            };
+            let (facts, first) =
+                facts.entry(string(&row["session_id"])).or_default();
+            facts.count += 1;
+            let seq = integer(&row["seq"]);
+            if (facts.title.is_none() || seq < *first)
+                && let Some(title) = message.and_then(|message| {
+                    crate::providers::sqlite::user_title(std::slice::from_ref(
+                        &message,
+                    ))
+                })
+            {
+                facts.title = Some(title);
+                *first = seq;
+            }
+            Ok(())
+        },
+    )?;
+    Ok(facts
+        .into_iter()
+        .map(|(session, (facts, _))| (session, facts))
+        .collect())
 }
 
 fn decode(row: &Value) -> crate::Result<Option<Message>> {
