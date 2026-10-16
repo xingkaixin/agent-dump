@@ -1,10 +1,17 @@
 """Cursor discovery and transcript rules asserted on the Rust CLI."""
 
 import json
+import os
 import sqlite3
 
 from desktop_fixture import NOW
 from test_cursor import cursor, put
+
+
+def run_json(cli, *args):
+    result = cli.run("rust", *args, "--json")
+    assert result.returncode == 0, result.stdout + result.stderr
+    return json.loads(result.stdout)["data"]
 
 
 def export(cli, uri):
@@ -13,29 +20,51 @@ def export(cli, uri):
     return json.loads(next((cli.root / "exports/cursor").glob("*.json")).read_text())
 
 
-def test_discovery_reads_metadata_beyond_one_batch(tmp_path, monkeypatch):
+def workspace(cli, name, folder, composers):
+    directory = cli.source.parent.parent / "workspaceStorage" / name
+    directory.mkdir(parents=True)
+    (directory / "workspace.json").write_text(json.dumps({"folder": folder}))
+    with sqlite3.connect(directory / "state.vscdb") as conn:
+        conn.execute("CREATE TABLE ItemTable (key TEXT, value TEXT)")
+        conn.execute(
+            "INSERT INTO ItemTable VALUES ('composer.composerData', ?)",
+            (json.dumps({"allComposers": [{"composerId": item} for item in composers]}),),
+        )
+
+
+def test_discovery_uses_composer_ids_titles_and_workspaces(tmp_path, monkeypatch):
     cli = cursor(tmp_path, monkeypatch)
-    requests = [f"request-{index:03d}" for index in range(103)]
-    with sqlite3.connect(cli.source) as conn:
-        for index, request in enumerate(requests):
-            identity = f"composer-{index:03d}"
-            conn.execute(
-                "INSERT INTO cursorDiskKV VALUES (?, ?)",
-                (f"composerData:{identity}", json.dumps({"name": identity, "createdAt": NOW})),
-            )
-            conn.execute(
-                "INSERT INTO cursorDiskKV VALUES (?, ?)",
-                (
-                    f"bubbleId:{identity}:a",
-                    json.dumps({"type": 1, "requestId": request, "modelInfo": {"modelName": "batch"}}),
-                ),
-            )
-    result = cli.run("rust", "--list", "--json", "-d", "36500", "-q", "provider:cursor")
-    assert result.returncode == 0, result.stderr
-    records = {item["id"]: item for item in json.loads(result.stdout)["data"]}
-    assert records.keys() == {"request-parent", *requests}
-    assert all(records[request]["model"] == "batch" for request in requests)
-    assert all(records[request]["message_count"] == 1 for request in requests)
+    put(cli, "bubbleId:parent:c-progress", {"type": 2, "kind": "progress", "text": "hidden"})
+    put(cli, "composerData:no-id", {"name": "No id", "createdAt": NOW})
+    put(cli, "bubbleId:no-id:a", {"type": 1, "text": "orphan"})
+    put(cli, "composerData:empty", {"composerId": "empty", "name": "Empty", "createdAt": NOW})
+    put(cli, "bubbleId:empty:a", {"type": 2, "thinking": {"text": "thought"}, "codeBlocks": [{"content": "x"}]})
+    put(cli, "composerData:delegated", {"composerId": "delegated", "createdAt": NOW, "subagentInfos": [{"id": "s"}]})
+    put(cli, "composerData:untitled", {"composerId": "untitled", "title": "  ", "createdAt": NOW})
+    put(
+        cli,
+        "bubbleId:untitled:a",
+        {"type": 1, "text": "<system-reminder>skip</system-reminder>\n\n  First   line  \nsecond"},
+    )
+    workspace(cli, "one", "file:///tmp/project%20one/./src/..", ["parent"])
+    records = {item["id"]: item for item in run_json(cli, "--list", "-d", "36500", "-q", "provider:cursor")}
+    assert records.keys() == {"parent", "delegated", "untitled"}
+    assert records["parent"]["title"] == "Cursor contract"
+    assert records["parent"]["message_count"] == 2
+    assert records["parent"]["working_directory"] == os.path.normpath("/tmp/project one")
+    assert records["delegated"]["title"] == "Untitled Session"
+    assert records["delegated"]["message_count"] == 0
+    assert records["untitled"]["title"] == "First line"
+
+
+def test_legacy_request_uri_finds_composer_session(tmp_path, monkeypatch):
+    cli = cursor(tmp_path, monkeypatch)
+    legacy = run_json(cli, "cursor://request-parent", "--head")
+    assert legacy == run_json(cli, "cursor://parent", "--head")
+    assert legacy["uri"] == "cursor://parent"
+    data = export(cli, "cursor://request-parent")
+    assert data["id"] == "parent"
+    assert [part["text"] for item in data["messages"] for part in item["parts"]] == ["prompt", "answer"]
 
 
 def test_transcript_follows_bubble_rows_tools_and_subagents(tmp_path, monkeypatch):
@@ -122,7 +151,7 @@ def test_transcript_follows_bubble_rows_tools_and_subagents(tmp_path, monkeypatc
             ]
         },
     )
-    data = export(cli, "cursor://request-parent")
+    data = export(cli, "cursor://parent")
     messages = data["messages"]
     assert [item["id"] for item in messages] == ["z-user", "c-tool", "d-plan", "e-plan", "subagent:sub:0"]
     assert messages[0]["parts"] == [{"type": "text", "text": "question", "time_created": NOW + 5000}]

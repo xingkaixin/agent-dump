@@ -1,10 +1,13 @@
 pub(super) mod transcript;
+mod workspace;
 
-use crate::compat::value::{string, text, truthy};
+use crate::compat::value::{text, truthy};
 use crate::output::formats::OutputFormat;
 use crate::providers::contract::Provider;
 use crate::session::timestamp::Timestamp;
-use crate::session::{Session, SessionData, epoch_seconds, parse_timestamp};
+use crate::session::{
+    Message, Part, Session, SessionData, epoch_seconds, parse_timestamp,
+};
 use rusqlite::{Connection, ToSql, types::ValueRef};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -27,37 +30,96 @@ impl Cursor {
         })
     }
 
+    fn directories(&self) -> HashMap<String, String> {
+        self.database
+            .parent()
+            .and_then(Path::parent)
+            .map(workspace::directories)
+            .unwrap_or_default()
+    }
+
     fn sessions(
         &self,
         connection: &Connection,
         cutoff: Option<Timestamp>,
     ) -> crate::Result<Vec<Session>> {
+        let directories = self.directories();
         let mut sessions = Vec::new();
-        for (key, data) in records(
+        for (_, data) in records(
             connection,
             "SELECT key, value FROM cursorDiskKV WHERE key >= 'composerData:' AND key < 'composerData;' ORDER BY rowid DESC",
             &[],
         )? {
-            let Some(data) = data else {
-                continue;
-            };
-            let id = key.split_once(':').unwrap().1;
-            let session = build_session(&self.database, id, id, &data);
-            if cutoff.is_none_or(|cutoff| session.created_at >= cutoff) {
+            if let Some(data) = data
+                && let Some(session) =
+                    self.session(connection, &data, &directories, cutoff)?
+            {
                 sessions.push(session);
             }
         }
-        let ids: Vec<_> = sessions
-            .iter()
-            .map(|s| text(&s.source_metadata["composer_id"]))
-            .collect();
-        let summaries = summaries(connection, &ids)?;
-        for session in &mut sessions {
-            let summary =
-                &summaries[text(&session.source_metadata["composer_id"])];
-            apply_summary(session, summary, true);
-        }
         Ok(sessions)
+    }
+
+    fn session(
+        &self,
+        connection: &Connection,
+        composer: &Value,
+        directories: &HashMap<String, String>,
+        cutoff: Option<Timestamp>,
+    ) -> crate::Result<Option<Session>> {
+        let Some(id) = composer_id(composer) else {
+            return Ok(None);
+        };
+        let updated = ["updatedAt", "lastUpdatedAt", "lastSendTime"]
+            .iter()
+            .map(|name| &composer[name])
+            .find(|value| truthy(value))
+            .and_then(cursor_time);
+        let created = cursor_time(&composer["createdAt"])
+            .or(updated)
+            .unwrap_or(Timestamp::UNIX_EPOCH);
+        if cutoff.is_some_and(|cutoff| created < cutoff) {
+            return Ok(None);
+        }
+        let messages = transcript::messages(
+            &bubbles(connection, id)?,
+            model(composer),
+            created.as_millisecond(),
+        );
+        let subagents = composer["subagentInfos"].as_array();
+        if messages.is_empty()
+            && !subagents
+                .is_some_and(|infos| infos.iter().any(Value::is_object))
+        {
+            return Ok(None);
+        }
+        let mut session = Session::new(
+            id.into(),
+            title(composer, &messages),
+            self.database.clone(),
+            created,
+            updated.unwrap_or(created),
+        );
+        session.model = model(composer)
+            .or_else(|| {
+                messages
+                    .iter()
+                    .find_map(|message| message.model.as_ref()?.as_str())
+            })
+            .unwrap_or_default()
+            .into();
+        session.message_count = Some(messages.len());
+        session.directory = directories.get(id).cloned().unwrap_or_default();
+        session.subtargets = subagents
+            .into_iter()
+            .flatten()
+            .map(|info| text(&info["id"]))
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned)
+            .collect();
+        session.source_metadata =
+            json!({"composer_id":id,"usage_data":composer["usageData"]});
+        Ok(Some(session))
     }
 }
 
@@ -89,37 +151,28 @@ impl Provider for Cursor {
         }
         let connection =
             crate::providers::sqlite::connection::connect(&self.database)?;
-        for (key, data) in records(
-            &connection,
-            "SELECT key, value FROM cursorDiskKV WHERE key >= 'bubbleId:' AND key < 'bubbleId;' AND instr(value, ?) > 0 ORDER BY rowid DESC",
-            &[&id],
-        )? {
-            if data.as_ref().is_some_and(|v| v["requestId"] == id) {
-                let composer_id = key.split(':').nth(1).unwrap_or("");
-                if let Some(composer) = composer(&connection, composer_id)? {
-                    let mut session = build_session(
-                        &self.database,
-                        composer_id,
-                        id,
-                        &composer,
-                    );
-                    apply_summary(
-                        &mut session,
-                        &summaries(&connection, &[composer_id])?[composer_id],
-                        false,
-                    );
-                    return Ok(crate::providers::contract::Lookup::new(Some(
-                        session,
-                    )));
-                }
-                break;
-            }
+        let mut composer = composer(&connection, id)?
+            .filter(|composer| composer_id(composer) == Some(id));
+        if composer.is_none() {
+            composer = request_composer(&connection, id)?;
         }
-        Ok(crate::providers::contract::Lookup::new(
-            self.sessions(&connection, None)?
-                .into_iter()
-                .find(|s| s.id == id),
-        ))
+        if composer.is_none() {
+            composer = records(
+                &connection,
+                "SELECT key, value FROM cursorDiskKV WHERE key >= 'composerData:' AND key < 'composerData;'",
+                &[],
+            )?
+            .into_iter()
+            .filter_map(|(_, value)| value)
+            .find(|composer| composer_id(composer) == Some(id));
+        }
+        let session = match composer {
+            Some(composer) => {
+                self.session(&connection, &composer, &self.directories(), None)?
+            }
+            None => None,
+        };
+        Ok(crate::providers::contract::Lookup::new(session))
     }
     fn read(
         &self,
@@ -234,6 +287,29 @@ pub fn bubbles(
     .collect())
 }
 
+fn request_composer(
+    connection: &Connection,
+    request: &str,
+) -> crate::Result<Option<Value>> {
+    for (key, data) in records(
+        connection,
+        "SELECT key, value FROM cursorDiskKV WHERE key >= 'bubbleId:' AND key < 'bubbleId;' AND instr(value, ?) > 0 ORDER BY rowid DESC",
+        &[&request],
+    )? {
+        if data.is_some_and(|bubble| bubble["requestId"] == request) {
+            return composer(connection, key.split(':').nth(1).unwrap_or(""));
+        }
+    }
+    Ok(None)
+}
+
+fn composer_id(composer: &Value) -> Option<&str> {
+    [&composer["id"], &composer["composerId"]]
+        .into_iter()
+        .map(text)
+        .find(|id| !id.is_empty())
+}
+
 pub fn model(composer: &Value) -> Option<&str> {
     [&composer["modelConfig"]["modelName"], &composer["model"]]
         .into_iter()
@@ -241,179 +317,31 @@ pub fn model(composer: &Value) -> Option<&str> {
         .find(|model| !model.is_empty())
 }
 
-struct Summary {
-    request: Option<String>,
-    model: String,
-    count: usize,
-}
-
-#[allow(
-    clippy::float_cmp,
-    reason = "Numeric role tags must equal 1 or 2 exactly, including floating-point encodings"
-)]
-fn summaries(
-    connection: &Connection,
-    ids: &[&str],
-) -> crate::Result<HashMap<String, Summary>> {
-    let mut counts = HashMap::new();
-    let mut fallback = false;
-    for batch in ids.chunks(100) {
-        let ranges = vec!["(key >= ? AND key < ?)"; batch.len()].join(" OR ");
-        let parameters: Vec<String> = batch
-            .iter()
-            .flat_map(|id| {
-                [format!("bubbleId:{id}:"), format!("bubbleId:{id};")]
-            })
-            .collect();
-        let parameters: Vec<&dyn ToSql> =
-            parameters.iter().map(|v| v as &dyn ToSql).collect();
-        if let Ok(rows) = crate::providers::sqlite::connection::rows(
-            connection,
-            &format!(
-                "SELECT substr(key, 10, instr(substr(key, 10), ':') - 1) AS composer_id, COUNT(*) AS message_count FROM cursorDiskKV WHERE ({ranges}) AND json_extract(value, '$.type') IN (1, 2) GROUP BY composer_id"
-            ),
-            &parameters,
-        ) {
-            for row in rows {
-                counts.insert(
-                    string(&row["composer_id"]),
-                    usize::try_from(row["message_count"].as_u64().unwrap_or(0))
-                        .unwrap_or(usize::MAX),
-                );
-            }
-        } else {
-            fallback = true;
-            break;
-        }
-    }
-    let mut result: HashMap<String, Summary> = ids
-        .iter()
-        .map(|id| {
-            (
-                (*id).to_owned(),
-                Summary {
-                    request: None,
-                    model: String::new(),
-                    count: if fallback {
-                        0
-                    } else {
-                        *counts.get(*id).unwrap_or(&0)
-                    },
-                },
-            )
-        })
-        .collect();
-    if fallback {
-        for id in ids {
-            for (_, value) in bubbles(connection, id)? {
-                let summary = result.get_mut(*id).unwrap();
-                if value["type"].as_f64().is_some_and(|v| v == 1.0 || v == 2.0)
-                    || value["type"] == true
-                {
-                    summary.count += 1;
-                }
-                summary.metadata(&value);
-            }
-        }
-    } else {
-        for batch in ids.chunks(100) {
-            // Python projects only the first 20 bubbles, even if later ones have request IDs.
-            let sql = vec!["SELECT * FROM (SELECT ? AS composer_id, value, key FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key LIMIT 20)"; batch.len()].join(" UNION ALL ") + " ORDER BY composer_id, key";
-            let parameters: Vec<String> = batch
-                .iter()
-                .flat_map(|id| {
-                    [
-                        (*id).to_owned(),
-                        format!("bubbleId:{id}:"),
-                        format!("bubbleId:{id};"),
-                    ]
-                })
-                .collect();
-            let parameters: Vec<&dyn ToSql> =
-                parameters.iter().map(|v| v as &dyn ToSql).collect();
-            for (id, value) in records(connection, &sql, &parameters)? {
-                if let Some(value) = value
-                    && let Some(summary) = result.get_mut(&id)
-                {
-                    summary.metadata(&value);
-                }
-            }
-        }
-    }
-    Ok(result)
-}
-
-impl Summary {
-    fn metadata(&mut self, value: &Value) {
-        if self.request.is_none()
-            && !text(&value["requestId"]).trim().is_empty()
-        {
-            self.request = Some(text(&value["requestId"]).trim().into());
-        }
-        if self.model.is_empty() {
-            self.model = text(&value["modelInfo"]["modelName"]).trim().into();
-        }
-    }
-}
-
-fn apply_summary(session: &mut Session, summary: &Summary, use_request: bool) {
-    if use_request && let Some(id) = &summary.request {
-        session.id.clone_from(id);
-        session.source_metadata["request_id"] = id.clone().into();
-    }
-    if session.model.is_empty() {
-        session.model.clone_from(&summary.model);
-    }
-    session.message_count = Some(summary.count);
-}
-
-pub fn build_session(
-    path: &Path,
-    composer_id: &str,
-    request_id: &str,
-    data: &Value,
-) -> Session {
-    let updated = ["updatedAt", "lastUpdatedAt", "lastSendTime"]
-        .iter()
-        .map(|name| &data[name])
-        .find(|value| truthy(value))
-        .and_then(cursor_time);
-    let created = cursor_time(&data["createdAt"])
-        .or(updated)
-        .unwrap_or(Timestamp::UNIX_EPOCH);
-    let title = ["name", "title"]
-        .iter()
-        .map(|field| text(&data[field]).trim())
-        .find(|v| !v.is_empty())
-        .map_or_else(
-            || {
-                format!(
-                    "Cursor Session {}",
-                    composer_id.chars().take(8).collect::<String>()
-                )
-            },
-            str::to_owned,
-        );
-    let mut session = Session::new(
-        request_id.into(),
-        title,
-        path.to_owned(),
-        created,
-        updated.unwrap_or(created),
-    );
-    session.model = text(&data["modelConfig"]["modelName"]).trim().into();
-    session.subtargets = data["subagentComposerIds"]
-        .as_array()
+fn title(composer: &Value, messages: &[Message]) -> String {
+    [&composer["name"], &composer["title"]]
         .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_owned)
-        .collect();
-    let parent = data["subagentInfo"]["parentComposerId"]
-        .as_str()
-        .filter(|v| !v.is_empty());
-    session.source_metadata = json!({"composer_id":composer_id,"request_id":request_id,"parent_composer_id":parent,"subagent_composer_ids":session.subtargets,"usage_data":data["usageData"]});
-    session
+        .map(text)
+        .find(|title| !title.is_empty())
+        .and_then(title_line)
+        .or_else(|| {
+            messages
+                .iter()
+                .filter(|message| message.role == "user")
+                .flat_map(|message| &message.parts)
+                .find_map(|part| match part {
+                    Part::Text(part) => title_line(&part.text),
+                    _ => None,
+                })
+        })
+        .or_else(|| title_line(text(&composer["text"])))
+        .unwrap_or_else(|| "Untitled Session".into())
+}
+
+fn title_line(value: &str) -> Option<String> {
+    crate::providers::text::clean(value)
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .and_then(crate::providers::title::normalize_title)
 }
 
 fn cursor_time(value: &Value) -> Option<Timestamp> {
@@ -454,7 +382,7 @@ mod tests {
         let missing = directory.path().join("missing.sqlite");
         for (path, body) in [(&first, "First"), (&second, "Second")] {
             let connection = Connection::open(path).unwrap();
-            connection.execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
+            connection.execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"composerId\":\"kept\",\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
             connection
                 .execute(
                     "INSERT INTO cursorDiskKV VALUES ('bubbleId:kept:message', ?)",
@@ -531,7 +459,7 @@ mod tests {
         let first = directory.path().join("first.sqlite");
         let second = directory.path().join("second.sqlite");
         for path in [&first, &second] {
-            Connection::open(path).unwrap().execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
+            Connection::open(path).unwrap().execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"composerId\":\"kept\",\"name\":\"Kept\",\"createdAt\":1768478400000}'), ('bubbleId:kept:message', '{\"text\":\"Kept\"}');").unwrap();
         }
         let configured = std::sync::Arc::new(std::sync::Mutex::new(
             directory.path().join("missing.sqlite"),
@@ -585,7 +513,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("state.vscdb");
         let connection = Connection::open(&path).unwrap();
-        connection.execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
+        connection.execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"composerId\":\"kept\",\"name\":\"Kept\",\"createdAt\":1768478400000}'), ('bubbleId:kept:message', '{\"text\":\"Kept\"}');").unwrap();
         drop(connection);
         let mut provider = Cursor {
             resolve_database: Box::new({

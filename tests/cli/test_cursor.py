@@ -39,6 +39,7 @@ def cursor(tmp_path, monkeypatch):
         cli,
         "composerData:parent",
         {
+            "composerId": "parent",
             "name": "  Cursor contract  ",
             "createdAt": NOW,
             "updatedAt": NOW + 1000,
