@@ -6,17 +6,139 @@ use crate::providers::contract::{Provider, RawExport};
 use crate::providers::files::{
     self as file_sessions, SourceFiles, SourceRoots,
 };
-use crate::providers::title::{basename, normalize_title};
+use crate::providers::title::normalize_title;
 use crate::session::timestamp::Timestamp;
-use crate::session::{Session, SessionData, Stats, epoch_seconds};
+use crate::session::{
+    Session, SessionData, Stats, epoch_seconds, parse_timestamp,
+};
 use md5::{Digest, Md5};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
 pub struct Kimi {
     roots: SourceRoots,
-    work_dirs: Option<HashMap<String, String>>,
+    settings: Option<Settings>,
+}
+
+#[derive(Default)]
+struct Settings {
+    work_dirs: HashMap<String, String>,
+    model: String,
+}
+
+impl Settings {
+    fn load(data: &Path) -> Self {
+        let mut settings = Self::default();
+        if let Some(raw) = std::fs::read(data.join("kimi.json"))
+            .ok()
+            .and_then(|bytes| crate::compat::json::from_slice(&bytes).ok())
+            && let Some(directories) = raw["work_dirs"].as_array()
+        {
+            for entry in directories {
+                if let Some(path) = entry["path"].as_str() {
+                    settings.work_dirs.insert(
+                        format!(
+                            "{:032x}",
+                            u128::from_be_bytes(
+                                Md5::digest(path.as_bytes()).into()
+                            )
+                        ),
+                        path.into(),
+                    );
+                }
+            }
+        }
+        if let Some(model) = std::fs::read_to_string(data.join("config.toml"))
+            .ok()
+            .and_then(|config| configured_model(&config))
+        {
+            settings.model = model;
+        }
+        settings
+    }
+}
+
+fn configured_model(config: &str) -> Option<String> {
+    let config = config.parse::<toml_edit::DocumentMut>().ok()?;
+    let key = config.get("default_model")?.as_str()?;
+    let model = config
+        .get("models")
+        .and_then(|models| models.get(key))
+        .and_then(|table| table.get("model"))
+        .and_then(toml_edit::Item::as_str);
+    Some(model.unwrap_or(key).to_owned())
+}
+
+fn timestamp(value: &Value) -> Option<Timestamp> {
+    let milliseconds = match value {
+        Value::Number(number) => number.as_f64()?,
+        Value::String(text) => {
+            let text = text.trim().replacen(' ', "T", 1);
+            match text.parse::<f64>() {
+                Ok(number) => number,
+                Err(_) => return parse_timestamp(&text),
+            }
+        }
+        _ => return None,
+    };
+    epoch_seconds(milliseconds / 1000.0)
+}
+
+fn modified(path: &Path) -> Option<Timestamp> {
+    Timestamp::try_from(path.metadata().ok()?.modified().ok()?).ok()
+}
+
+fn title(text: &str) -> Option<String> {
+    crate::providers::text::clean(text)
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .and_then(normalize_title)
+}
+
+fn first_user_title(context: &Path, wire: &Path) -> Option<String> {
+    for (path, is_wire) in [(context, false), (wire, true)] {
+        let Ok(file) = crate::storage::source_io::open(path) else {
+            continue;
+        };
+        for line in std::io::BufReader::new(file).split(b'\n') {
+            let Ok(line) = line else {
+                break;
+            };
+            let Ok(record) = crate::compat::json::from_slice(&line) else {
+                continue;
+            };
+            let content = if is_wire {
+                let message = &record["message"];
+                if message["type"] != "TurnBegin" {
+                    continue;
+                }
+                &message["payload"]["user_input"]
+            } else if record["role"] == "user" {
+                &record["content"]
+            } else {
+                continue;
+            };
+            if let Some(title) = title(&transcript::content_text(content)) {
+                return Some(title);
+            }
+        }
+    }
+    None
+}
+
+fn subagent_wires(session: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(session.join("subagents")) else {
+        return Vec::new();
+    };
+    let mut wires: Vec<_> = entries
+        .flatten()
+        .map(|entry| entry.path().join("wire.jsonl"))
+        .filter(|path| path.is_file())
+        .collect();
+    wires.sort();
+    wires
 }
 
 impl Kimi {
@@ -32,45 +154,32 @@ impl Kimi {
                 "data/kimi",
                 "KIMI_SHARE_DIR/sessions",
             ),
-            work_dirs: None,
+            settings: None,
         })
     }
 
     fn files(&mut self) -> crate::Result<SourceFiles> {
-        self.roots.files(None, |path, _| {
-            path.file_name().is_some_and(|name| name == "metadata.json")
+        self.roots.files(Some(3), |path, base| {
+            let session = path.parent().unwrap_or(path);
+            path.strip_prefix(base)
+                .is_ok_and(|path| path.components().count() == 3)
+                && path.file_name().is_some_and(|name| {
+                    name == "state.json"
+                        || (name == "metadata.json"
+                            && !session.join("state.json").is_file())
+                })
         })
     }
 
-    fn working_directory(&mut self, hash: &str) -> String {
-        let mapping = self.work_dirs.get_or_insert_with(|| {
-            let mut mapping = HashMap::new();
-            let Some(base) = self.roots.base.as_deref() else {
-                return mapping;
-            };
-            let path = base.parent().unwrap_or(base).join("kimi.json");
-            if let Some(raw) = std::fs::read(path)
-                .ok()
-                .and_then(|bytes| crate::compat::json::from_slice(&bytes).ok())
-                && let Some(directories) = raw["work_dirs"].as_array()
-            {
-                for entry in directories {
-                    if let Some(path) = entry["path"].as_str() {
-                        mapping.insert(
-                            format!(
-                                "{:032x}",
-                                u128::from_be_bytes(
-                                    Md5::digest(path.as_bytes()).into()
-                                )
-                            ),
-                            path.into(),
-                        );
-                    }
-                }
-            }
-            mapping
-        });
-        mapping.get(hash).cloned().unwrap_or_default()
+    fn settings(&mut self) -> &Settings {
+        self.settings.get_or_insert_with(|| {
+            self.roots
+                .base
+                .as_deref()
+                .map_or_else(Settings::default, |base| {
+                    Settings::load(base.parent().unwrap_or(base))
+                })
+        })
     }
 
     fn scan(path: &Path) -> crate::Result<Value> {
@@ -86,16 +195,24 @@ impl Kimi {
         if !metadata.is_object() {
             return Err("session metadata must be a JSON object".into());
         }
-        let created_at = metadata["wire_mtime"]
-            .as_f64()
-            .and_then(epoch_seconds)
-            .unwrap_or(Timestamp::try_from(path.metadata()?.modified()?)?);
+        let directory = path.parent().ok_or("Kimi session has no directory")?;
+        let created_at = if let Some(created_at) =
+            timestamp(&metadata["createdAt"])
+                .or_else(|| timestamp(&metadata["created_at"]))
+        {
+            created_at
+        } else {
+            let source = directory.metadata()?;
+            Timestamp::try_from(
+                source.created().or_else(|_| source.modified())?,
+            )?
+        };
         if cutoff.is_some_and(|cutoff| created_at < cutoff) {
             return Ok(None);
         }
-        let directory = path.parent().ok_or("Kimi session has no directory")?;
         let context = directory.join("context.jsonl");
-        if !context.exists() && !directory.join("wire.jsonl").exists() {
+        let wire = directory.join("wire.jsonl");
+        if !context.exists() && !wire.exists() {
             return Ok(None);
         }
         let id = match text(&metadata["session_id"]).trim() {
@@ -110,15 +227,30 @@ impl Kimi {
         if id.is_empty() {
             return Ok(None);
         }
+        let updated_at = [
+            metadata["wire_mtime"].as_f64().and_then(epoch_seconds),
+            modified(&context),
+            modified(&wire),
+        ]
+        .into_iter()
+        .flatten()
+        .fold(created_at, Timestamp::max);
+        let explicit = if path.ends_with("state.json") {
+            "custom_title"
+        } else {
+            "title"
+        };
+        let title = title(text(&metadata[explicit]))
+            .or_else(|| first_user_title(&context, &wire))
+            .unwrap_or_else(|| "Untitled Session".into());
         let hash = directory
             .parent()
             .and_then(Path::file_name)
             .unwrap_or_default()
             .to_string_lossy();
-        let cwd = self.working_directory(&hash);
-        let title = normalize_title(text(&metadata["title"]))
-            .or_else(|| basename(&cwd))
-            .unwrap_or_else(|| "Untitled Session".into());
+        let settings = self.settings();
+        let cwd = settings.work_dirs.get(hash.as_ref()).cloned();
+        let model = settings.model.clone();
         let message_count = if context.exists()
             && context.metadata()?.len()
                 <= crate::providers::jsonl::FULL_SCAN_LIMIT
@@ -133,16 +265,16 @@ impl Kimi {
             id,
             title,
             created_at,
-            updated_at: created_at,
+            updated_at,
             subtargets: Vec::new(),
             source_metadata: serde_json::json!({
                 "context_file": context.exists().then_some(&context),
-                "wire_file": directory.join("wire.jsonl").exists().then(|| directory.join("wire.jsonl")),
+                "wire_file": wire.exists().then_some(&wire),
             }),
             source_path: directory.to_owned(),
-            directory: cwd,
+            directory: cwd.unwrap_or_default(),
             version: Value::Null,
-            model: String::new(),
+            model,
             project: None,
             message_count,
         }))
@@ -155,7 +287,7 @@ impl Provider for Kimi {
         days: Option<i64>,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
-        self.work_dirs = None;
+        self.settings = None;
         file_sessions::discover(
             self.files()?,
             days,
@@ -170,7 +302,7 @@ impl Provider for Kimi {
         id: &str,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Lookup> {
-        self.work_dirs = None;
+        self.settings = None;
         let files = self.files()?;
         file_sessions::find(
             self.roots.base.clone().as_deref(),
@@ -208,7 +340,11 @@ impl Provider for Kimi {
                     ],
                 ).into());
             }
-            crate::providers::kimi::wire::read(&wire, diagnostics)?
+            crate::providers::kimi::wire::read(
+                &wire,
+                (!session.model.is_empty()).then_some(session.model.as_str()),
+                diagnostics,
+            )?
         };
         crate::providers::text::clean_messages(&mut messages);
         let mut stats = Stats {
@@ -216,11 +352,18 @@ impl Provider for Kimi {
             total_tokens: Some(0.into()),
             ..Stats::default()
         };
-        if wire.exists() {
-            crate::providers::jsonl::scan(&wire, diagnostics, |record, _| {
-                let usage = &record["message"]["usage"];
-                stats
-                    .add_tokens(&usage["input_tokens"], &usage["output_tokens"])
+        let wires = wire
+            .exists()
+            .then(|| wire.clone())
+            .into_iter()
+            .chain(subagent_wires(&session.source_path));
+        for path in wires {
+            crate::providers::jsonl::scan(&path, diagnostics, |record, _| {
+                match crate::providers::kimi::wire::usage(&record) {
+                    Some(usage) => stats
+                        .add_tokens(&usage.input.into(), &usage.output.into()),
+                    None => Ok(()),
+                }
             })?;
         }
         let raw = if context.exists() { &context } else { &wire };
@@ -318,7 +461,7 @@ mod tests {
             false,
             |roots| Kimi {
                 roots,
-                work_dirs: None,
+                settings: None,
             },
             |base| {
                 let path = base.join("project/kept");
@@ -362,7 +505,7 @@ mod tests {
                 "data/kimi",
                 "KIMI_SHARE_DIR/sessions",
             ),
-            work_dirs: None,
+            settings: None,
         };
         let session = provider
             .find("kept", &mut |_| Ok(()))
