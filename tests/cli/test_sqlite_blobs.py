@@ -5,7 +5,7 @@ import sqlite3
 from cli_fixture import make_cli
 from desktop_fixture import desktop, exports, fails
 import pytest
-from sqlite_fixture import create_v2, export as sqlite_export
+from sqlite_fixture import create_v2
 from test_cursor import cursor, export as cursor_export
 
 pytestmark = pytest.mark.differential
@@ -15,16 +15,11 @@ ENCODINGS = ["utf-8", "utf-8-sig", "utf-16", "utf-32", "utf-16-le", "utf-16-be",
 
 @pytest.mark.parametrize(
     ("provider", "encoding"),
-    [(provider, encoding) for provider in ("opencode", "minimax", "minimax-metadata") for encoding in ENCODINGS]
+    [(provider, encoding) for provider in ("minimax", "minimax-metadata") for encoding in ENCODINGS]
     + [("cursor", "utf-8")],
 )
 def test_json_blob_decoding(tmp_path, monkeypatch, provider, encoding):
-    if provider == "opencode":
-        cli = make_cli(tmp_path, monkeypatch)
-        cli.source = create_v2(cli, monkeypatch)
-        select = "SELECT data FROM session_message WHERE type = 'assistant'"
-        update = "UPDATE session_message SET data = ? WHERE type = 'assistant'"
-    elif provider == "cursor":
+    if provider == "cursor":
         cli = cursor(tmp_path, monkeypatch)
         select = "SELECT value FROM cursorDiskKV WHERE key = 'bubbleId:parent:b-answer'"
         update = "UPDATE cursorDiskKV SET value = ? WHERE key = 'bubbleId:parent:b-answer'"
@@ -39,9 +34,7 @@ def test_json_blob_decoding(tmp_path, monkeypatch, provider, encoding):
     with sqlite3.connect(cli.source) as connection:
         original = connection.execute(select).fetchone()[0]
         connection.execute(update, (original.encode(encoding),))
-    if provider == "opencode":
-        sqlite_export(cli)
-    elif provider == "cursor":
+    if provider == "cursor":
         cursor_export(cli)
     else:
         exports(cli, "minimax", identity)

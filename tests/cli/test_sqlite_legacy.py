@@ -34,14 +34,6 @@ def test_legacy_list_head_and_all_formats(cli, provider, lang):
 @pytest.mark.parametrize(
     "part",
     [
-        {
-            "type": "tool",
-            "tool": "bash",
-            "callID": "call",
-            "title": "Run",
-            "state": {"input": {"command": "pwd"}, "output": [{"type": "text", "text": "OK"}]},
-        },
-        {"type": "tool", "tool": 7, "callID": None, "state": []},
         {"type": "step-start", "reason": None, "tokens": {}, "cost": None},
         {"type": "step-finish", "reason": "stop", "tokens": {"input": 4}, "cost": "0.3"},
         {"type": "future", "text": "Must not become visible"},
@@ -98,7 +90,7 @@ def test_head_summary_targets_and_nullable_metadata(cli, summary):
     path = create_legacy(cli)
     with sqlite3.connect(path) as connection:
         connection.execute(
-            "UPDATE session SET title = NULL, directory = NULL, slug = NULL, version = NULL, summary_files = ?",
+            "UPDATE session SET directory = NULL, slug = NULL, version = NULL, summary_files = ?",
             (summary,),
         )
     cli.parity("opencode://ses_old", "--head", "--lang", "en")

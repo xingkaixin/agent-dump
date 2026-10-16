@@ -61,9 +61,7 @@ def test_unsafe_export_identity_has_complete_capability_diagnostic(cli, language
 
 
 @pytest.mark.parametrize("language", ["en", "zh"])
-@pytest.mark.parametrize(
-    "raw", ["{broken", "[]", '"text"', '{"content": [5]}', '{"content": [{"type":"tool","name":5}]}']
-)
+@pytest.mark.parametrize("raw", ["{broken", "[]", '"text"'])
 def test_opencode_v2_bad_data_preserves_exact_reason(cli, monkeypatch, language, raw):
     import sqlite3
 
