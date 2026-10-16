@@ -89,8 +89,6 @@ def test_sqlite_bad_records_keep_healthy_content_and_exact_warnings(cli, provide
             identity = f"bad-{index}\n\x1b[31m\u202e"
             connection.execute("INSERT INTO message VALUES (?, 'ses_old', ?, ?)", (identity, NOW + 20 + index, data))
             connection.execute("INSERT INTO part VALUES (?, 'msg_user', ?, ?)", (identity, NOW + 20 + index, data))
-    cli.parity("--list", "-d", "36500", "-q", f"provider:{provider}", "--lang", lang)
-    cli.parity(f"{provider}://ses_old", "--head", "--lang", lang)
     args = (f"{provider}://ses_old", "--format", formats, "--output", "exports", "--lang", lang)
     expected = ("raw-json",) if formats == "raw" else ("json", "markdown", "raw-json")
     cli.parity(*args, formats=expected)

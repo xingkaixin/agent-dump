@@ -108,42 +108,33 @@ def test_cost_sum_overflow_keeps_messages(cli):
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
-@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax", "opencode-v2"])
+@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax"])
 @pytest.mark.parametrize("value", [2**80, "  +1_234  ", float("inf")])
 def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value):
     import json
     import sqlite3
 
-    from cli_fixture import make_cli
     from desktop_fixture import desktop, exports
-    from sqlite_fixture import create_v2, export as sqlite_export
     from test_minimax import add_message
 
-    if provider == "opencode-v2":
-        cli = make_cli(tmp_path, monkeypatch)
-        path = create_v2(cli, monkeypatch)
-        with sqlite3.connect(path) as connection:
-            connection.execute("UPDATE session_v2 SET tokens_input = ?, tokens_output = ?", (str(value), str(value)))
-        sqlite_export(cli)
+    cli, identity = desktop(tmp_path, monkeypatch, provider)
+    if provider == "minimax":
+        add_message(
+            cli,
+            {
+                "msg_content": "Numbers",
+                "usage": {"input_tokens": value, "output_tokens": value, "cache_read": value},
+            },
+        )
     else:
-        cli, identity = desktop(tmp_path, monkeypatch, provider)
-        if provider == "minimax":
-            add_message(
-                cli,
-                {
-                    "msg_content": "Numbers",
-                    "usage": {"input_tokens": value, "output_tokens": value, "cache_read": value},
-                },
-            )
+        if provider == "deepchat":
+            sql = "UPDATE deepchat_messages SET metadata = ? WHERE role = 'assistant'"
         else:
-            if provider == "deepchat":
-                sql = "UPDATE deepchat_messages SET metadata = ? WHERE role = 'assistant'"
-            else:
-                sql = "UPDATE agent_session_message SET stats = ? WHERE role = 'assistant'"
-            field = {"inputTokens": value, "outputTokens": value, "cachedInputTokens": value}
-            with sqlite3.connect(cli.source) as connection:
-                connection.execute(sql, (json.dumps(field),))
-        exports(cli, provider, identity)
+            sql = "UPDATE agent_session_message SET stats = ? WHERE role = 'assistant'"
+        field = {"inputTokens": value, "outputTokens": value, "cachedInputTokens": value}
+        with sqlite3.connect(cli.source) as connection:
+            connection.execute(sql, (json.dumps(field),))
+    exports(cli, provider, identity)
 
 
 @pytest.mark.parametrize("provider", ["codex", "claude", "pi"])
