@@ -403,11 +403,11 @@ OPENCODE_DB=opencode-custom.db agent-dump --search 'timeout' --query 'provider:o
 agent-dump --collect --emit-prompt --query 'provider:opencode'
 ```
 
-支持旧版 `session/message/part` 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读。新版消息按 `seq` 排序，消息数包含系统和状态事件；collect 只读取 user/assistant 可见文本。
+支持旧版 `session/message/part` 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版；`migration.v1-v2` 完成前补入尚未复制的旧版会话，完成后只读新版。没有可见消息的会话不列出，消息数只计可见消息；标题为空时使用首条用户文本。新版消息按 `seq` 排序；collect 只读取 user/assistant 可见文本。
 
 默认读取 `$XDG_DATA_HOME/opencode/opencode.db`，未设置时使用 `~/.local/share/opencode/opencode.db`（含 Windows），再保留旧 Windows LOCALAPPDATA/APPDATA 路径与本地开发路径回退。`OPENCODE_DB` 可指定绝对路径或相对于 OpenCode 数据目录的文件名；显式路径缺失不回退，`:memory:` 不可用。不同 channel 的数据库需显式选择。
 
-工具参数、结果和推理可搜索，附件保存在 JSON 元数据中，不打开其文件或 URL。读取已持久化的运行中消息和归档会话，排除待投递 inbox；不执行迁移或恢复删除记录。raw 保持 `.raw.json` 标准化导出语义，不是 OpenCode import 文件。
+工具参数、结果和推理可搜索。图片附件转为 image part，其他附件、提及和错误转为可见文本，不打开引用的文件或 URL。读取已持久化的运行中消息和归档会话，排除待投递 inbox；不执行迁移或恢复删除记录。raw 保持 `.raw.json` 标准化导出语义，不是 OpenCode import 文件。
 
 ## MiniMax Code
 

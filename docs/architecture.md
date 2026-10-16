@@ -44,7 +44,7 @@ agent-dump-core (internal library)
 - `json_payload`、`raw_export`、`supports_format` 投影 Provider 特有输出能力；共享工作流不解释 schema。
 - 可恢复诊断经显式 `DiagnosticSink` 传递，Provider 不直接打印。部分失败保留健康会话，并向 Collect 传播遗漏事实。
 
-OpenCode 在同一数据库中兼容旧表与 V2，同 ID 优先 V2，旧版独有会话保留；ZCode 使用旧 SQLite 读取器。正文按定位时记录的来源读取，不在来源消失时静默切换数据库。每次 SQLite 正文读取使用独立只读事务；同一 Provider 实例复用空闲只读连接，数据库文件被替换（Unix 上设备号或 inode 变化）时丢弃旧连接。
+OpenCode 在同一数据库中兼容旧表与 V2，同 ID 优先 V2，按 `migration.v1-v2` 游标补入尚未复制的旧版会话；ZCode 使用旧 SQLite 读取器。正文按定位时记录的来源读取，不在来源消失时静默切换数据库。每次 SQLite 正文读取使用独立只读事务；同一 Provider 实例复用空闲只读连接，数据库文件被替换（Unix 上设备号或 inode 变化）时丢弃旧连接。
 
 `session/cache.rs` 统一拥有正文缓存。`get` 复用同时限制会话数和序列化字节数的 LRU，超过字节预算的单个正文只交给当前调用方，不长期保留；批量 Search/Collect、批量导出和 `--search --locate` 用 `lease`，完成投影或写出即释放。并发读取合并，消费者得到隔离数据。数据库与 WAL 都属于 change sources，SHM 协调文件不作为持久内容失效依据。缓存不得恢复已经过期或删除的正文。
 
