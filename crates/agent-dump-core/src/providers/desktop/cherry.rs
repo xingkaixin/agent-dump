@@ -3,7 +3,9 @@ use crate::providers::desktop::{Kind, has_tables, timestamp};
 use crate::providers::error::ProviderError;
 use crate::providers::sqlite::connection::rows;
 use crate::session::timestamp::Timestamp;
-use crate::session::{Message, Part, Session, SessionData, Stats, TextPart};
+use crate::session::{
+    ImagePart, Message, Part, Session, SessionData, Stats, TextPart,
+};
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
@@ -311,7 +313,15 @@ pub fn read(
         .filter_map(|record| decode(record).transpose())
         .collect::<crate::Result<Vec<_>>>()?;
     let mut stats = Stats {
-        total_cost: serde_json::Number::from_f64(0.0).unwrap(),
+        total_cost: crate::compat::json::float(
+            messages
+                .iter()
+                .filter_map(|message| {
+                    crate::compat::json::nonfinite(&message.cost)
+                        .or_else(|| message.cost.as_f64())
+                })
+                .sum(),
+        ),
         message_count: messages.len(),
         ..Default::default()
     };
@@ -380,29 +390,35 @@ fn decode(row: &Value) -> crate::Result<Option<Message>> {
             string(&row["id"])
         ))
     })?;
-    let cache = object(&stats["inputTokenDetails"])?;
+    let usage = if row["role"] == "assistant" {
+        usage(&stats)?
+    } else {
+        Usage::default()
+    };
+    let [input, output, read, write] = usage.tokens;
     let time = integer(&row["created_at"]);
     let mut message =
         Message::new(string(&row["id"]), text(&row["role"]), time, Vec::new());
     message.model = model.as_str().map(std::convert::Into::into);
     message.provider = provider.as_str().map(str::to_owned);
-    message.tokens.clone_from(json!({"input":crate::compat::value::integer_number(&stats["inputTokens"]), "output":crate::compat::value::integer_number(&stats["outputTokens"]), "cache":{"read":crate::compat::value::integer_number(&cache["cacheReadTokens"]),"write":crate::compat::value::integer_number(&cache["cacheWriteTokens"])}}).as_object().unwrap());
+    message.tokens.clone_from(json!({"input": input, "output": output, "cache": {"read": read, "write": write}}).as_object().unwrap());
+    if let Some(reasoning) = usage.reasoning {
+        message.tokens.insert("reasoning".into(), reasoning.into());
+    }
+    if usage.cost > 0.0 {
+        message.cost = crate::compat::json::float(usage.cost);
+    }
     message.extra.insert("status".into(), row["status"].clone());
     message.extra.insert(
         "costs".into(),
         stats.get("costs").cloned().unwrap_or(json!([])),
     );
     for part in objects(data.get("parts").unwrap_or(&json!([])))? {
-        message.parts.push(decode_part(part, time)?);
+        message.parts.extend(decode_part(part, time)?);
     }
-    let used = [
-        &stats["inputTokens"],
-        &stats["outputTokens"],
-        &cache["cacheReadTokens"],
-        &cache["cacheWriteTokens"],
-    ]
-    .into_iter()
-    .any(|value| integer(value) > 0);
+    let used = usage.tokens.iter().any(|&count| count > 0)
+        || usage.reasoning.is_some_and(|count| count > 0)
+        || usage.cost > 0.0;
     let mut cleaned = vec![message];
     crate::providers::text::clean_messages(&mut cleaned);
     Ok(cleaned
@@ -410,12 +426,75 @@ fn decode(row: &Value) -> crate::Result<Option<Message>> {
         .filter(|message| !message.parts.is_empty() || used))
 }
 
-fn decode_part(part: &Value, time: i64) -> crate::Result<Part> {
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Token counts are integral; out-of-range values saturate"
+)]
+fn count(value: &Value) -> i64 {
+    value.as_f64().unwrap_or(0.0) as i64
+}
+
+#[derive(Default)]
+struct Usage {
+    tokens: [i64; 4],
+    reasoning: Option<i64>,
+    cost: f64,
+}
+
+fn usage(stats: &Value) -> crate::Result<Usage> {
+    let input = object(&stats["inputTokenDetails"])?;
+    let output = object(&stats["outputTokenDetails"])?;
+    let read = count(&input["cacheReadTokens"]).max(0);
+    let write = count(&input["cacheWriteTokens"]).max(0);
+    let reasoning = count(&output["reasoningTokens"]).max(0);
+    let total = |key: &str, parts: [i64; 2]| {
+        if stats[key].is_number() {
+            count(&stats[key])
+        } else {
+            parts[0].saturating_add(parts[1])
+        }
+    };
+    let costs: Vec<&Value> = stats["costs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|cost| cost.is_object())
+        .collect();
+    let cost = if costs.iter().all(|cost| cost["currency"] == "USD") {
+        costs
+            .iter()
+            .map(|cost| cost["amount"].as_f64().unwrap_or(0.0).max(0.0))
+            .sum()
+    } else {
+        0.0
+    };
+    Ok(Usage {
+        tokens: [
+            total(
+                "inputTokens",
+                [
+                    count(&input["noCacheTokens"]).max(0),
+                    read.saturating_add(write),
+                ],
+            ),
+            total(
+                "outputTokens",
+                [count(&output["textTokens"]).max(0), reasoning],
+            ),
+            read,
+            write,
+        ],
+        reasoning: output["reasoningTokens"].is_number().then_some(reasoning),
+        cost,
+    })
+}
+
+fn decode_part(part: &Value, time: i64) -> crate::Result<Option<Part>> {
     let kind = part
         .get("type")
         .map_or(Some("unknown"), Value::as_str)
         .ok_or("Invalid part type")?;
-    Ok(match kind {
+    Ok(Some(match kind {
         "text" => Part::text(text(&part["text"]).into(), time),
         "reasoning" => Part::Reasoning(TextPart {
             text: text(&part["text"]).into(),
@@ -443,7 +522,26 @@ fn decode_part(part: &Value, time: i64) -> crate::Result<Part> {
                 time,
             )
         }
-        "data-code" | "data-translation" | "data-error" => {
+        "file" => {
+            let url = text(&part["url"]);
+            let mime = text(&part["mediaType"]);
+            if !url.is_empty() && mime.starts_with("image/") {
+                Part::Image(ImagePart {
+                    mime_type: Some(mime.into()),
+                    data: url.into(),
+                    time_created: time,
+                })
+            } else {
+                let label = Some(text(&part["filename"]))
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or(url);
+                if label.is_empty() {
+                    return Ok(None);
+                }
+                Part::text(format!("Attachment: {label}"), time)
+            }
+        }
+        "data-code" | "data-translation" | "data-error" | "data-compact" => {
             let data = object(&part["data"])?;
             Part::text(
                 text(
@@ -458,5 +556,5 @@ fn decode_part(part: &Value, time: i64) -> crate::Result<Part> {
             )
         }
         _ => Part::event(format!("cherry_{kind}"), part.clone(), time),
-    })
+    }))
 }

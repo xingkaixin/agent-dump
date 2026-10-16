@@ -87,8 +87,6 @@ def test_tool_parts_and_internal_references(tmp_path, monkeypatch, state):
         {"type": "data-code", "data": {"content": "print(1)"}},
         {"type": "data-translation", "data": {"content": "翻译"}},
         {"type": "data-error", "data": {"message": "problem"}},
-        {"type": "file", "url": "file:///not-read"},
-        {"type": "data-compact", "data": {"content": "Internal summary"}},
         {"type": "data-agent-task-event", "data": {"prompt": "Internal task"}},
     ]
     with sqlite3.connect(cli.source) as conn:

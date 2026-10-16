@@ -654,3 +654,47 @@ fn cherry_lists_sessions_with_content_or_usage() {
         ["n3", "n4"]
     );
 }
+
+#[test]
+fn cherry_reads_files_compact_summaries_and_usage() {
+    let (_directory, mut provider, _, _) = fixture(Kind::Cherry);
+    Connection::open(&provider.database)
+        .unwrap()
+        .execute_batch(
+            r#"ALTER TABLE agent_session_message ADD COLUMN stats TEXT;
+            INSERT INTO agent_session (id, name, created_at, updated_at) VALUES ('parts', 'Parts', 1, 1);
+            INSERT INTO agent_session_message (id, session_id, role, data, stats, created_at) VALUES
+              ('u', 'parts', 'user', '{"parts":[{"type":"file","url":"data:image/png;base64,AA","mediaType":"image/png"},{"type":"file","url":"file:///p/report.pdf","filename":"report.pdf","mediaType":"application/pdf"},{"type":"file","url":"file:///p/raw.bin"},{"type":"file"}]}', '{"inputTokens":99}', 1),
+              ('a', 'parts', 'assistant', '{"parts":[{"type":"data-compact","data":{"content":"Summary"}}]}', '{"inputTokenDetails":{"noCacheTokens":5,"cacheReadTokens":3,"cacheWriteTokens":2},"outputTokenDetails":{"textTokens":4,"reasoningTokens":6},"costs":[{"currency":"USD","amount":0.25},{"currency":"USD","amount":0.5}]}', 2),
+              ('b', 'parts', 'assistant', '{"parts":[{"type":"text","text":"Priced"}]}', '{"inputTokens":1,"outputTokens":1,"costs":[{"currency":"CNY","amount":3}]}', 3);"#,
+        )
+        .unwrap();
+    let data = read_json(&mut provider, "session-parts");
+    let messages = data["messages"].as_array().unwrap();
+    assert_eq!(
+        messages[0]["parts"][0],
+        serde_json::json!({"type": "image", "mime_type": "image/png", "data": "data:image/png;base64,AA", "time_created": 1})
+    );
+    assert_eq!(
+        part_texts(&messages[0]),
+        ["Attachment: report.pdf", "Attachment: file:///p/raw.bin"]
+    );
+    assert_eq!(messages[0]["tokens"]["input"], 0);
+    assert_eq!(part_texts(&messages[1]), ["Summary"]);
+    assert_eq!(
+        (&messages[1]["tokens"], &messages[1]["cost"]),
+        (
+            &serde_json::json!({"input": 10, "output": 10, "reasoning": 6, "cache": {"read": 3, "write": 2}}),
+            &0.75.into()
+        )
+    );
+    assert_eq!(messages[2]["cost"], 0);
+    assert_eq!(
+        (
+            &data["stats"]["total_input_tokens"],
+            &data["stats"]["total_output_tokens"],
+            &data["stats"]["total_cost"]
+        ),
+        (&11.into(), &11.into(), &0.75.into())
+    );
+}
