@@ -116,9 +116,11 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 
 Codex 同时读取 `sessions` 与 `archived_sessions` 中的 `rollout-*.jsonl[.zst]`，raw 导出压缩会话时写出解压后的 JSONL；注入上下文和 developer 消息不出现，子 Agent 用量计入父会话。
 
+Claude Code 的子代理记录（`<会话>/subagents/`）作为独立会话列出，URI 为 `claude://<agent_id>`；没有可见消息的会话不列出。
+
 Pi 只读取活跃分支，被放弃的分支不参与导出、搜索和计数；工具结果合并到对应调用，隐藏的自定义消息和没有可见消息的会话不出现。
 
-DeepChat 使用当前未加密的 `app_db/agent.db`，可通过 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。支持 print / JSON / Markdown；不支持 raw、SQLCipher 或旧版 `chat.db` 直读。附件仅保留引用，外置工具输出和 Tape 恢复不在导出范围。
+DeepChat 使用当前未加密的 `app_db/agent.db`，可通过 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。支持 print / JSON / Markdown；不支持 raw、SQLCipher 或旧版 `chat.db` 直读。引用的会话、附件路径和链接写入正文，不读取附件实体；外置工具输出和 Tape 恢复不在导出范围。
 
 Cherry Studio 使用 2.x 的 `Data/cherrystudio.sqlite`，可通过 `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录。URI 为 `cherry://topic-<id>` 或 `cherry://session-<id>`。普通聊天仅包含当前分支，Agent 会话按时间排序；支持 print / JSON / Markdown，不支持 raw 或 1.x IndexedDB/Redux 原始数据。
 

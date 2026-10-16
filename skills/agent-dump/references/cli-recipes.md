@@ -399,7 +399,7 @@ agent-dump 'deepchat://<session_id>' --head
 agent-dump 'deepchat://<session_id>' --format json,markdown --output ./sessions
 ```
 
-读取当前未加密的 `app_db/agent.db`，可用 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。草稿不列出，已迁移历史可直接读取。暂不支持 raw、SQLCipher 和旧版 `chat.db` 直读；附件仅保留引用，不读取外置工具输出或执行 Tape 恢复。遇到加密或 schema 诊断时应保留报错，不把它当成没有会话。
+读取当前未加密的 `app_db/agent.db`，可用 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。草稿和没有消息的会话不列出，已迁移历史可直接读取。暂不支持 raw、SQLCipher 和旧版 `chat.db` 直读；引用的会话、附件路径和链接写入正文，不读取附件实体、外置工具输出，也不执行 Tape 恢复。遇到加密或 schema 诊断时应保留报错，不把它当成没有会话。
 
 ## Cherry Studio
 
@@ -409,7 +409,7 @@ agent-dump 'cherry://topic-<id>' --head
 agent-dump 'cherry://session-<id>' --format json,markdown --output ./sessions
 ```
 
-读取当前 2.x 的 `Data/cherrystudio.sqlite`，可用 `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录；未指定时先查启动配置中的目录，再查平台默认目录。使用第一个存在的数据库，便携版、开发版或多个安装应显式指定目录。普通聊天只导出当前选中的路径，其他分支和并列回复不参与搜索与计数；Agent 会话按时间排序，可按 workspace 工作目录筛选。普通聊天没有工作目录，不能用路径筛选找到。
+读取当前 2.x 的 `Data/cherrystudio.sqlite`，可用 `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录；未指定时先查启动配置中的目录，再查平台默认目录。使用第一个存在的数据库，便携版、开发版或多个安装应显式指定目录。普通聊天只导出当前选中的路径，其他分支和并列回复不参与搜索与计数，没有消息的会话不列出；Agent 会话按时间排序，可按 workspace 工作目录筛选。普通聊天没有工作目录，不能用路径筛选找到。
 
 支持列表、查询、搜索、统计、collect 及 print / JSON / Markdown。附件仅保留引用，压缩摘要和内部事件不进入 collect；不读取 SDK 日志或执行迁移。暂不支持 raw 和 1.x IndexedDB/Redux 原始数据，已迁移到当前数据库的历史记录可读。分支损坏或读取失败属于不完整发现，不能当作没有会话。
 

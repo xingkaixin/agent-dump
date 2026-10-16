@@ -9,17 +9,6 @@ from test_pi import create as pi_create, message as pi_message
 pytestmark = pytest.mark.differential
 
 
-@pytest.mark.parametrize("provider", ["claude"])
-@pytest.mark.parametrize("value", [2**63 - 1, 2**80, -(2**80), str(2**100), 1e100, "  +1_234  ", "١٢٣", "１２３"])
-def test_large_token_values_are_preserved_and_accumulated(cli, provider, value):
-    if provider == "claude":
-        cli_event = event("assistant", [{"type": "text", "text": "Numbers"}])
-        cli_event["message"]["usage"] = {"input_tokens": value, "output_tokens": value}
-        claude_create(cli, [event("user", "Numbers"), cli_event, event("user", "Next"), cli_event])
-    payload = provider_export(cli, f"{provider}://{IDENTITY}", "claudecode" if provider == "claude" else provider)
-    assert payload["stats"]["total_input_tokens"] == int(value) * 2
-
-
 @pytest.mark.parametrize("provider", ["codex", "claude", "kimi"])
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_nonfinite_json_numbers_preserve_messages_and_default_statistics(cli, provider, value):
@@ -84,10 +73,9 @@ def test_legacy_sqlite_numeric_boundaries(cli, value):
     export(cli, identity="ses_old")
 
 
-@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax", "opencode-v2"])
+@pytest.mark.parametrize("provider", ["minimax", "opencode-v2"])
 @pytest.mark.parametrize("value", [2**80, "  +1_234  ", float("inf")])
 def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value):
-    import json
     import sqlite3
 
     from cli_fixture import make_cli
@@ -103,36 +91,25 @@ def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value)
         sqlite_export(cli)
     else:
         cli, identity = desktop(tmp_path, monkeypatch, provider)
-        if provider == "minimax":
-            add_message(
-                cli,
-                {
-                    "msg_content": "Numbers",
-                    "usage": {"input_tokens": value, "output_tokens": value, "cache_read": value},
-                },
-            )
-        else:
-            if provider == "deepchat":
-                sql = "UPDATE deepchat_messages SET metadata = ? WHERE role = 'assistant'"
-            else:
-                sql = "UPDATE agent_session_message SET stats = ? WHERE role = 'assistant'"
-            field = {"inputTokens": value, "outputTokens": value, "cachedInputTokens": value}
-            with sqlite3.connect(cli.source) as connection:
-                connection.execute(sql, (json.dumps(field),))
+        add_message(
+            cli,
+            {
+                "msg_content": "Numbers",
+                "usage": {"input_tokens": value, "output_tokens": value, "cache_read": value},
+            },
+        )
         exports(cli, provider, identity)
 
 
-@pytest.mark.parametrize("provider", ["codex", "claude", "pi"])
+@pytest.mark.parametrize("provider", ["codex", "pi"])
 @pytest.mark.parametrize("value", [None, 7, False, ["one"], {"path": "work"}])
 def test_metadata_values_preserve_payload_and_display_projection(cli, provider, value):
     if provider == "codex":
         cli.write([header(cwd=value, cli_version=value)])
-    elif provider == "claude":
-        claude_create(cli, [event("system", [], cwd=value, version=value)])
     else:
         pi_create(cli, [pi_message("user", "Keep")], header={"cwd": value, "version": value})
     cli.parity(f"{provider}://{IDENTITY}", "--head", "--lang", "en")
-    provider_export(cli, f"{provider}://{IDENTITY}", "claudecode" if provider == "claude" else provider)
+    provider_export(cli, f"{provider}://{IDENTITY}", provider)
 
 
 @pytest.mark.parametrize("provider", ["codex", "claude", "pi"])

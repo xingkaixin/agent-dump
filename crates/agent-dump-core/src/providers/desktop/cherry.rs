@@ -3,7 +3,9 @@ use crate::providers::desktop::{Kind, has_tables, timestamp};
 use crate::providers::error::ProviderError;
 use crate::providers::sqlite::connection::rows;
 use crate::session::timestamp::Timestamp;
-use crate::session::{Message, Part, Session, SessionData, Stats, TextPart};
+use crate::session::{
+    ImagePart, Message, Part, Session, SessionData, Stats, TextPart,
+};
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
@@ -96,21 +98,68 @@ fn records(
             vec![crate::storage::source_io::path_text(path)],
         ).into());
     }
-    let deleted = rows(connection, "PRAGMA table_info(agent_session)", &[])?
-        .iter()
-        .any(|row| row["name"] == "deleted_at");
-    let filter = if deleted {
+    let filter = if has_column(connection, "agent_session", "deleted_at")? {
         "WHERE s.deleted_at IS NULL"
     } else {
         ""
     };
+    let activity = |table, column| {
+        Ok::<_, crate::Error>(
+            if has_column(connection, table, "last_activity_at")? {
+                column
+            } else {
+                "NULL"
+            },
+        )
+    };
+    let topic = activity("topic", "last_activity_at")?;
+    let session = activity("agent_session", "s.last_activity_at")?;
     rows(
         connection,
         &format!(
-            "SELECT * FROM (SELECT 'topic-' || id AS session_id, 'topic' AS kind, id, name, created_at, updated_at, active_node_id, NULL AS directory FROM topic WHERE deleted_at IS NULL UNION ALL SELECT 'session-' || s.id, 'session', s.id, s.name, s.created_at, s.updated_at, NULL, w.path FROM agent_session s LEFT JOIN agent_workspace w ON w.id = s.workspace_id {filter}) WHERE (? IS NULL OR session_id = ?) AND (? IS NULL OR created_at >= ?) ORDER BY created_at DESC, session_id"
+            "SELECT * FROM (SELECT 'topic-' || id AS session_id, 'topic' AS kind, id, name, created_at, updated_at, {topic} AS last_activity_at, active_node_id, NULL AS directory FROM topic WHERE deleted_at IS NULL UNION ALL SELECT 'session-' || s.id, 'session', s.id, s.name, s.created_at, s.updated_at, {session}, NULL, w.path FROM agent_session s LEFT JOIN agent_workspace w ON w.id = s.workspace_id {filter}) WHERE (? IS NULL OR session_id = ?) AND (? IS NULL OR created_at >= ?) ORDER BY created_at DESC, session_id"
         ),
         &[&id, &id, &cutoff, &cutoff],
     )
+}
+
+fn has_column(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+) -> crate::Result<bool> {
+    Ok(
+        rows(connection, &format!("PRAGMA table_info({table})"), &[])?
+            .iter()
+            .any(|row| row["name"] == column),
+    )
+}
+
+fn updated(row: &Value) -> &Value {
+    if row["last_activity_at"].is_null() {
+        &row["updated_at"]
+    } else {
+        &row["last_activity_at"]
+    }
+}
+
+fn title(row: &Value, messages: &[Message]) -> String {
+    let first = messages
+        .iter()
+        .filter(|message| message.role == "user")
+        .flat_map(|message| &message.parts)
+        .find_map(|part| match part {
+            Part::Text(part) => Some(part.text.as_str()),
+            _ => None,
+        });
+    [text(&row["name"]), first.unwrap_or_default()]
+        .into_iter()
+        .find_map(|candidate| {
+            crate::providers::text::clean(candidate)
+                .lines()
+                .find_map(crate::providers::title::normalize_title)
+        })
+        .unwrap_or_else(|| "Cherry Studio".into())
 }
 
 pub fn sessions(
@@ -123,7 +172,8 @@ pub fn sessions(
         crate::providers::contract::Discovery::available(Vec::new());
     for row in records(connection, path, id, cutoff)? {
         match session(connection, path, &row) {
-            Ok(session) => result.sessions.push(session),
+            Ok(Some(session)) => result.sessions.push(session),
+            Ok(None) => {}
             Err(error) if id.is_none() => result.failures.push(
                 crate::providers::contract::SessionFailure {
                     source: string(&row["session_id"]),
@@ -140,49 +190,60 @@ fn session(
     connection: &Connection,
     path: &Path,
     row: &Value,
-) -> crate::Result<Session> {
-    let messages = message_rows(connection, row, false)?;
+) -> crate::Result<Option<Session>> {
+    let records = message_rows(connection, row)?;
     let mut model = String::new();
-    for message in messages.iter().rev().filter(|m| m["role"] == "assistant") {
+    for message in records.iter().rev().filter(|m| m["role"] == "assistant") {
         let (candidate, _) = message_model(message)?;
         if truthy(&candidate) {
             model = text(&candidate).into();
             break;
         }
     }
+    let mut messages = Vec::new();
+    let mut count = 0;
+    for record in &records {
+        match decode(record) {
+            Ok(Some(message)) => {
+                count += 1;
+                messages.push(message);
+            }
+            Ok(None) => {}
+            Err(_) => count += 1,
+        }
+    }
+    if count == 0 {
+        return Ok(None);
+    }
     let mut session = Session::new(
         string(&row["session_id"]),
-        if truthy(&row["name"]) {
-            string(&row["name"])
-        } else {
-            "Untitled".into()
-        },
+        title(row, &messages),
         path.to_owned(),
         timestamp(&row["created_at"]).unwrap_or(Timestamp::UNIX_EPOCH),
-        timestamp(&row["updated_at"]).unwrap_or(Timestamp::UNIX_EPOCH),
+        timestamp(updated(row)).unwrap_or(Timestamp::UNIX_EPOCH),
     );
     session.directory = text(&row["directory"]).into();
     session.model = model.trim().into();
-    session.message_count = Some(messages.len());
-    Ok(session)
+    session.message_count = Some(count);
+    Ok(Some(session))
 }
 
 fn message_rows(
     connection: &Connection,
     session: &Value,
-    full: bool,
 ) -> crate::Result<Vec<Value>> {
-    let columns = if full {
-        "m.*"
-    } else {
-        "m.id, m.role, m.model_id, m.message_snapshot"
-    };
     let id = text(&session["id"]);
     if session["kind"] == "session" {
+        let filter =
+            if has_column(connection, "agent_session_message", "deleted_at")? {
+                "AND deleted_at IS NULL"
+            } else {
+                ""
+            };
         return rows(
             connection,
             &format!(
-                "SELECT {columns} FROM agent_session_message m WHERE session_id = ? ORDER BY created_at, id"
+                "SELECT * FROM agent_session_message WHERE session_id = ? {filter} ORDER BY created_at, id"
             ),
             &[&id],
         );
@@ -193,9 +254,7 @@ fn message_rows(
     let active = text(&session["active_node_id"]);
     let records = rows(
         connection,
-        &format!(
-            "WITH RECURSIVE branch(id, parent_id) AS (SELECT id, parent_id FROM message WHERE id = ? AND topic_id = ? AND deleted_at IS NULL UNION SELECT m.id, m.parent_id FROM message m JOIN branch b ON m.id = b.parent_id WHERE m.topic_id = ? AND m.deleted_at IS NULL) SELECT {columns}, m.parent_id, json_array_length(m.data, '$.parts') AS parts_count FROM message m JOIN branch b ON m.id = b.id"
-        ),
+        "WITH RECURSIVE branch(id, parent_id) AS (SELECT id, parent_id FROM message WHERE id = ? AND topic_id = ? AND deleted_at IS NULL UNION SELECT m.id, m.parent_id FROM message m JOIN branch b ON m.id = b.parent_id WHERE m.topic_id = ? AND m.deleted_at IS NULL) SELECT m.* FROM message m JOIN branch b ON m.id = b.id",
         &[&active, &id, &id],
     )?;
     let by_id: HashMap<_, _> =
@@ -225,12 +284,7 @@ fn message_rows(
             chain.reverse();
             return Ok(chain);
         }
-        if !(node == active
-            && row["role"] == "user"
-            && !truthy(&row["parts_count"]))
-        {
-            chain.push(row.clone());
-        }
+        chain.push(row.clone());
         node = text(&row["parent_id"]);
     }
     Err(
@@ -254,13 +308,20 @@ pub fn read(
                     Vec::new(),
                 )
             })?;
-    let mut messages = message_rows(connection, &row, true)?
+    let messages = message_rows(connection, &row)?
         .iter()
-        .map(decode)
+        .filter_map(|record| decode(record).transpose())
         .collect::<crate::Result<Vec<_>>>()?;
-    crate::providers::text::clean_messages(&mut messages);
     let mut stats = Stats {
-        total_cost: serde_json::Number::from_f64(0.0).unwrap(),
+        total_cost: crate::compat::json::float(
+            messages
+                .iter()
+                .filter_map(|message| {
+                    crate::compat::json::nonfinite(&message.cost)
+                        .or_else(|| message.cost.as_f64())
+                })
+                .sum(),
+        ),
         message_count: messages.len(),
         ..Default::default()
     };
@@ -268,15 +329,12 @@ pub fn read(
         stats
             .add_tokens(&message.tokens["input"], &message.tokens["output"])?;
     }
+    let title = title(&row, &messages);
     let mut data = session.payload(messages, stats);
-    data.title = if truthy(&row["name"]) {
-        string(&row["name"])
-    } else {
-        "Untitled".into()
-    };
+    data.title = title;
     data.directory = row["directory"].clone();
     data.time_created = integer(&row["created_at"]);
-    data.time_updated = integer(&row["updated_at"]);
+    data.time_updated = integer(updated(&row));
     Ok(data)
 }
 
@@ -315,7 +373,10 @@ fn message_model(row: &Value) -> crate::Result<(Value, Value)> {
     })
 }
 
-fn decode(row: &Value) -> crate::Result<Message> {
+fn decode(row: &Value) -> crate::Result<Option<Message>> {
+    if row["role"] != "user" && row["role"] != "assistant" {
+        return Ok(None);
+    }
     let (data, stats, model, provider) = (|| -> crate::Result<_> {
         let data = object(&row["data"])?;
         objects(data.get("parts").unwrap_or(&json!([])))?;
@@ -329,30 +390,111 @@ fn decode(row: &Value) -> crate::Result<Message> {
             string(&row["id"])
         ))
     })?;
-    let cache = object(&stats["inputTokenDetails"])?;
+    let usage = if row["role"] == "assistant" {
+        usage(&stats)?
+    } else {
+        Usage::default()
+    };
+    let [input, output, read, write] = usage.tokens;
     let time = integer(&row["created_at"]);
     let mut message =
         Message::new(string(&row["id"]), text(&row["role"]), time, Vec::new());
     message.model = model.as_str().map(std::convert::Into::into);
     message.provider = provider.as_str().map(str::to_owned);
-    message.tokens.clone_from(json!({"input":crate::compat::value::integer_number(&stats["inputTokens"]), "output":crate::compat::value::integer_number(&stats["outputTokens"]), "cache":{"read":crate::compat::value::integer_number(&cache["cacheReadTokens"]),"write":crate::compat::value::integer_number(&cache["cacheWriteTokens"])}}).as_object().unwrap());
+    message.tokens.clone_from(json!({"input": input, "output": output, "cache": {"read": read, "write": write}}).as_object().unwrap());
+    if let Some(reasoning) = usage.reasoning {
+        message.tokens.insert("reasoning".into(), reasoning.into());
+    }
+    if usage.cost > 0.0 {
+        message.cost = crate::compat::json::float(usage.cost);
+    }
     message.extra.insert("status".into(), row["status"].clone());
     message.extra.insert(
         "costs".into(),
         stats.get("costs").cloned().unwrap_or(json!([])),
     );
     for part in objects(data.get("parts").unwrap_or(&json!([])))? {
-        message.parts.push(decode_part(part, time)?);
+        message.parts.extend(decode_part(part, time)?);
     }
-    Ok(message)
+    let used = usage.tokens.iter().any(|&count| count > 0)
+        || usage.reasoning.is_some_and(|count| count > 0)
+        || usage.cost > 0.0;
+    let mut cleaned = vec![message];
+    crate::providers::text::clean_messages(&mut cleaned);
+    Ok(cleaned
+        .pop()
+        .filter(|message| !message.parts.is_empty() || used))
 }
 
-fn decode_part(part: &Value, time: i64) -> crate::Result<Part> {
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Token counts are integral; out-of-range values saturate"
+)]
+fn count(value: &Value) -> i64 {
+    value.as_f64().unwrap_or(0.0) as i64
+}
+
+#[derive(Default)]
+struct Usage {
+    tokens: [i64; 4],
+    reasoning: Option<i64>,
+    cost: f64,
+}
+
+fn usage(stats: &Value) -> crate::Result<Usage> {
+    let input = object(&stats["inputTokenDetails"])?;
+    let output = object(&stats["outputTokenDetails"])?;
+    let read = count(&input["cacheReadTokens"]).max(0);
+    let write = count(&input["cacheWriteTokens"]).max(0);
+    let reasoning = count(&output["reasoningTokens"]).max(0);
+    let total = |key: &str, parts: [i64; 2]| {
+        if stats[key].is_number() {
+            count(&stats[key])
+        } else {
+            parts[0].saturating_add(parts[1])
+        }
+    };
+    let costs: Vec<&Value> = stats["costs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|cost| cost.is_object())
+        .collect();
+    let cost = if costs.iter().all(|cost| cost["currency"] == "USD") {
+        costs
+            .iter()
+            .map(|cost| cost["amount"].as_f64().unwrap_or(0.0).max(0.0))
+            .sum()
+    } else {
+        0.0
+    };
+    Ok(Usage {
+        tokens: [
+            total(
+                "inputTokens",
+                [
+                    count(&input["noCacheTokens"]).max(0),
+                    read.saturating_add(write),
+                ],
+            ),
+            total(
+                "outputTokens",
+                [count(&output["textTokens"]).max(0), reasoning],
+            ),
+            read,
+            write,
+        ],
+        reasoning: output["reasoningTokens"].is_number().then_some(reasoning),
+        cost,
+    })
+}
+
+fn decode_part(part: &Value, time: i64) -> crate::Result<Option<Part>> {
     let kind = part
         .get("type")
         .map_or(Some("unknown"), Value::as_str)
         .ok_or("Invalid part type")?;
-    Ok(match kind {
+    Ok(Some(match kind {
         "text" => Part::text(text(&part["text"]).into(), time),
         "reasoning" => Part::Reasoning(TextPart {
             text: text(&part["text"]).into(),
@@ -380,7 +522,26 @@ fn decode_part(part: &Value, time: i64) -> crate::Result<Part> {
                 time,
             )
         }
-        "data-code" | "data-translation" | "data-error" => {
+        "file" => {
+            let url = text(&part["url"]);
+            let mime = text(&part["mediaType"]);
+            if !url.is_empty() && mime.starts_with("image/") {
+                Part::Image(ImagePart {
+                    mime_type: Some(mime.into()),
+                    data: url.into(),
+                    time_created: time,
+                })
+            } else {
+                let label = Some(text(&part["filename"]))
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or(url);
+                if label.is_empty() {
+                    return Ok(None);
+                }
+                Part::text(format!("Attachment: {label}"), time)
+            }
+        }
+        "data-code" | "data-translation" | "data-error" | "data-compact" => {
             let data = object(&part["data"])?;
             Part::text(
                 text(
@@ -395,5 +556,5 @@ fn decode_part(part: &Value, time: i64) -> crate::Result<Part> {
             )
         }
         _ => Part::event(format!("cherry_{kind}"), part.clone(), time),
-    })
+    }))
 }
