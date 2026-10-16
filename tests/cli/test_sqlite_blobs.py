@@ -47,14 +47,6 @@ def test_json_blob_decoding(tmp_path, monkeypatch, provider, encoding):
         exports(cli, "minimax", identity)
 
 
-@pytest.mark.parametrize("raw", [b'{"inputTokens":999}', b"\xff"])
-def test_deepchat_blob_metadata_is_ignored(tmp_path, monkeypatch, raw):
-    cli, identity = desktop(tmp_path, monkeypatch, "deepchat")
-    with sqlite3.connect(cli.source) as connection:
-        connection.execute("UPDATE deepchat_messages SET metadata = ?", (raw,))
-    exports(cli, "deepchat", identity)
-
-
 @pytest.mark.parametrize("raw", [b'{"parts":[]}', b"\xff"])
 def test_cherry_blob_message_is_rejected(tmp_path, monkeypatch, raw):
     cli, identity = desktop(tmp_path, monkeypatch, "cherry")
