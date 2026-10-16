@@ -2,7 +2,7 @@
 
 import json
 
-from cli_fixture import IDENTITY, STAMP, header, message, record
+from cli_fixture import IDENTITY, header, message, record
 import pytest
 from test_claude import create as create_claude, event, result, tool
 from test_pi import create as create_pi, message as pi_message
