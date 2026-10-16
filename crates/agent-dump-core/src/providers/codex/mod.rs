@@ -505,7 +505,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let first = directory.path().join("first");
         let second = directory.path().join("second");
-        for (root, title) in [(&first, "First"), (&second, "Second")] {
+        for (root, title) in [(&first, "First"), (&second, "  Second\nnext")] {
             std::fs::create_dir_all(root.join("sessions")).unwrap();
             std::fs::write(
                 root.join("session_index.jsonl"),

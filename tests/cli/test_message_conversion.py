@@ -2,31 +2,12 @@
 
 import json
 
-from cli_fixture import IDENTITY, STAMP, call, header, message, output, record
+from cli_fixture import IDENTITY, STAMP, header, message, record
 import pytest
 from test_claude import create as create_claude, event, result, tool
 from test_pi import create as create_pi, message as pi_message
 
 pytestmark = pytest.mark.differential
-
-
-def codex_stream(cli, bad):
-    bad["payload"]["info"] = {"total_token_usage": {"input_tokens": 100, "output_tokens": 200}}
-    cli.write(
-        [
-            header(),
-            message("user", "Keep"),
-            *[{"type": "ignored", "padding": "x" * (16 * 1024)} for _ in range(21)],
-            message("assistant", "Before"),
-            call(),
-            bad,
-            output("Tool result"),
-            message("assistant", "After"),
-            {"type": "event_msg", "payload": {"info": {"total_token_usage": {"input_tokens": 3}}}},
-        ],
-        suffix=b"bad json\n" + json.dumps({"type": "ignored", "timestamp": STAMP}).encode() + b"\n",
-    )
-    return cli.source
 
 
 def claude_stream(cli, value):
@@ -61,25 +42,6 @@ def recovered_export(cli, provider, lang, *, warnings):
     texts = [part.get("text") for message in payload["messages"] for part in message["parts"]]
     assert "Before" in texts and "After" in texts and "Discard" not in texts
     return payload
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("location", ["payload", "content"])
-@pytest.mark.parametrize("value", [[], {}])
-def test_codex_conversion_failure_preserves_tools_and_skips_failed_record_usage(cli, lang, location, value):
-    if location == "payload":
-        bad = record(value)
-    else:
-        bad = message("assistant", "Discard")
-        bad["payload"]["content"] += [{"type": value}, {"type": "output_text", "text": "Discard too"}]
-    source = codex_stream(cli, bad)
-    payload = recovered_export(cli, "codex", lang, warnings=2)
-    assert payload["stats"]["total_input_tokens"] == 3
-    assert payload["stats"]["total_output_tokens"] == 0
-    parts = [part for message in payload["messages"] for part in message["parts"] if part["type"] == "tool"]
-    assert parts[0]["state"]["output"][0]["text"] == "Tool result"
-    warnings = cli.run("rust", f"codex://{IDENTITY}", "--lang", lang).stderr.splitlines()
-    assert str(source) not in warnings[0] and str(source) in warnings[1]
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])

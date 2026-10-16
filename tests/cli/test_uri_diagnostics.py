@@ -102,10 +102,10 @@ def test_lookup_failure_warns_then_prints_missing_session(cli, lang):
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
 def test_recovered_lookup_warning_does_not_hide_matching_session(cli, lang):
-    bad = cli.source.parent / f"bad-{IDENTITY}.jsonl"
+    bad = cli.source.parent / f"rollout-bad-{IDENTITY}.jsonl"
     write_jsonl(bad, [{"type": "session_meta", "payload": 42}])
     cli.write([header(), message("user", "Retained")])
-    cli.source.rename(cli.source.with_name("fallback.jsonl"))
+    cli.source.rename(cli.source.with_name("rollout-fallback.jsonl"))
     before = cli.fixtures.source_manifest(cli.root)
     results = [cli.run(candidate, f"codex://{IDENTITY}", "--head", "--lang", lang) for candidate in ("python", "rust")]
     assert results[0].stdout == results[1].stdout
@@ -118,8 +118,8 @@ def test_recovered_lookup_warning_does_not_hide_matching_session(cli, lang):
 @pytest.mark.parametrize("lang", ["en", "zh"])
 def test_fallback_lookup_chooses_newest_matching_session(cli, lang):
     cli.write([header(cwd="/older"), message("user", "Older")])
-    cli.source.rename(cli.source.with_name("older.jsonl"))
-    write_jsonl(cli.source.with_name("newer.jsonl"), [header(cwd="/newest", timestamp="2026-02-01T00:00:00Z")])
+    cli.source.rename(cli.source.with_name("rollout-older.jsonl"))
+    write_jsonl(cli.source.with_name("rollout-newer.jsonl"), [header(cwd="/newest", timestamp="2026-02-01T00:00:00Z")])
     cli.parity(f"codex://{IDENTITY}", "--head", "--lang", lang)
     assert str(Path("/newest")) in cli.run("rust", f"codex://{IDENTITY}", "--head").stdout
 

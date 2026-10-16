@@ -81,4 +81,8 @@ def test_codex_json_stats_sum_each_token_delta_once(cli):
     result = cli.run("rust", f"codex://{IDENTITY}", "--format", "json", "--output", "exports")
     assert result.returncode == 0, result.stderr
     stats = json.loads((cli.root / "exports" / "codex" / f"{IDENTITY}.json").read_text())["stats"]
-    assert (stats["total_input_tokens"], stats["total_output_tokens"], stats["total_cache_read_tokens"]) == (300, 30, 150)
+    assert (stats["total_input_tokens"], stats["total_output_tokens"], stats["total_cache_read_tokens"]) == (
+        300,
+        30,
+        150,
+    )

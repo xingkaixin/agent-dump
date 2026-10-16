@@ -152,7 +152,7 @@ def reasoning(text="Thinking"):
 
 
 def export_parity(cli, records, *, lang="en", formats="json,md,raw,print"):
-    cli.write([header(cli_version="1.0", model_provider="openai"), *records])
+    cli.write([header(cli_version="1.0"), *records])
     cli.parity(
         f"codex://{IDENTITY}",
         "--format",

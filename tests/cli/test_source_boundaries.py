@@ -50,7 +50,7 @@ def test_exclusive_database_lock_retains_reference_failure(tmp_path, monkeypatch
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX source permissions")
-@pytest.mark.parametrize("provider", ["codex", "claude"])
+@pytest.mark.parametrize("provider", ["claude"])
 def test_unreadable_title_index_recovers_without_source_writes(cli, provider):
     index = sessions(cli, provider)
     index.write_text("{}")

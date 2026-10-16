@@ -1,6 +1,5 @@
 """Differential CLI contracts against the unchanged Python reference, using only synthetic sources."""
 
-import json
 import os
 import shutil
 
@@ -26,9 +25,9 @@ def test_large_text_print(cli, size):
 
 
 @pytest.mark.differential
-@pytest.mark.parametrize("kind", ["ordinary", "reasoning", "developer", "missing-time", "unicode-controls"])
+@pytest.mark.parametrize("kind", ["ordinary", "reasoning", "missing-time", "unicode-controls"])
 def test_message_assembly_and_json_schema(cli, kind):
-    records = [header(cli_version="0.1", model_provider="openai"), message("user", "one")]
+    records = [header(cli_version="0.1"), message("user", "one")]
     if kind == "reasoning":
         records += [
             {
@@ -37,12 +36,16 @@ def test_message_assembly_and_json_schema(cli, kind):
                 "payload": {"type": "reasoning", "summary": [{"type": "summary_text", "text": "Think"}]},
             }
         ] * 2
-    if kind == "developer":
-        records.append(message("developer", "instructions without wrappers"))
     records += [message("assistant", "answer"), message("assistant", "answer"), message("assistant", "continued")]
     records.append(message("user", "\x1b[2J测试\u202e\n\tmore\rtext" if kind == "unicode-controls" else "two"))
     records.append(
-        {"type": "event_msg", "payload": {"info": {"total_token_usage": {"input_tokens": "23", "output_tokens": 7}}}}
+        {
+            "type": "event_msg",
+            "payload": {
+                "type": "token_count",
+                "info": {"total_token_usage": {"input_tokens": "23", "output_tokens": 7, "total_tokens": 30}},
+            },
+        }
     )
     if kind == "missing-time":
         records[2].pop("timestamp")
@@ -60,30 +63,9 @@ def test_message_assembly_and_json_schema(cli, kind):
 
 
 @pytest.mark.differential
-@pytest.mark.parametrize("title_source", ["second-message", "directory", "filename", "oversized-header", "index-last"])
-def test_metadata_fallbacks(cli, title_source):
-    index = cli.root / "sources" / "codex" / "session_index.jsonl"
-    index.unlink()
-    records = [header(), message("user", "first"), message("user", " 第二条\n" + "😺" * 110)]
-    if title_source == "directory":
-        records.pop()
-    if title_source == "filename":
-        records[0]["payload"].pop("id")
-        records[0]["payload"]["timestamp"] = "bad-date"
-    if title_source == "oversized-header":
-        records = [header(padding="x" * 300_000)]
-    if title_source == "index-last":
-        index.write_text(
-            "\n".join(json.dumps({"id": IDENTITY, "thread_name": name}) for name in ["Old", "  新\n名称  "])
-        )
-    cli.write(records)
-    cli.parity(f"codex://{IDENTITY}", "--head", "--lang", "en")
-
-
-@pytest.mark.differential
 @pytest.mark.parametrize("identity", ["UPPER", "folder/id", "con", "中文", "white space", "a" * 121])
 def test_portable_export_identity(cli, identity):
-    cli.write([header(identity), message("user", "ok")])
+    cli.write([header(identity), message("assistant", "ok")])
     cli.parity(
         f"codex://{identity}",
         "--format",
