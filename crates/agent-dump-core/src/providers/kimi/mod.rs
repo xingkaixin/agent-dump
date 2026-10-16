@@ -71,7 +71,7 @@ fn configured_model(config: &str) -> Option<String> {
     Some(model.unwrap_or(key).to_owned())
 }
 
-fn timestamp(value: &Value) -> Option<Timestamp> {
+pub(super) fn timestamp(value: &Value) -> Option<Timestamp> {
     let milliseconds = match value {
         Value::Number(number) => number.as_f64()?,
         Value::String(text) => {
@@ -90,7 +90,7 @@ fn modified(path: &Path) -> Option<Timestamp> {
     Timestamp::try_from(path.metadata().ok()?.modified().ok()?).ok()
 }
 
-fn title(text: &str) -> Option<String> {
+pub(super) fn title(text: &str) -> Option<String> {
     crate::providers::text::clean(text)
         .lines()
         .find(|line| !line.trim().is_empty())

@@ -9,8 +9,22 @@ use std::path::Path;
 pub struct Usage {
     pub input: i64,
     pub output: i64,
-    cache_read: i64,
-    cache_write: i64,
+    pub cache_read: i64,
+    pub cache_write: i64,
+}
+
+impl Usage {
+    pub fn add_to(&self, tokens: &mut serde_json::Map<String, Value>) {
+        add(tokens, "input", self.input);
+        add(tokens, "output", self.output);
+        let cache = tokens
+            .entry("cache")
+            .or_insert_with(|| Value::Object(serde_json::Map::new()));
+        if let Some(cache) = cache.as_object_mut() {
+            add(cache, "read", self.cache_read);
+            add(cache, "write", self.cache_write);
+        }
+    }
 }
 
 pub fn usage(record: &Value) -> Option<Usage> {
@@ -84,16 +98,7 @@ impl Decoder {
         if message.model.is_none() {
             message.model = self.model.clone().map(Value::String);
         }
-        add(&mut message.tokens, "input", usage.input);
-        add(&mut message.tokens, "output", usage.output);
-        let cache = message
-            .tokens
-            .entry("cache")
-            .or_insert_with(|| Value::Object(serde_json::Map::new()));
-        if let Some(cache) = cache.as_object_mut() {
-            add(cache, "read", usage.cache_read);
-            add(cache, "write", usage.cache_write);
-        }
+        usage.add_to(&mut message.tokens);
     }
 
     fn record(&mut self, seq: usize, record: &Value) -> crate::Result<()> {
