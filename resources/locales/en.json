@@ -264,7 +264,7 @@
   "DIAG_STEP_KIMI_WIRE_FALLBACK": "If only `wire.jsonl` exists, use the wire-compatible path or re-export this session.",
   "DIAG_STEP_KIMI_WIRE_INTACT": "Confirm `wire.jsonl` in the session directory has not been cleaned up.",
   "DIAG_STEP_KIMI_CONTEXT_FALLBACK": "If only `context.jsonl` exists, use the context export path.",
-  "DIAG_STEP_PI_SESSION_LOCATION": "Confirm the Pi session file is still under `PI_HOME/agent/sessions` or the local development data directory.",
+  "DIAG_STEP_PI_SESSION_LOCATION": "Confirm the Pi session file is still under the Pi session directory or the local development data directory.",
   "DIAG_STEP_CURSOR_DB_EXISTS": "Confirm `globalStorage/state.vscdb` still exists under the Cursor user directory.",
   "DIAG_STEP_CURSOR_LIST_TO_CHECK": "Re-run `agent-dump --list --agent cursor` to check whether sessions are still visible.",
   "DIAG_STEP_USE_JSON_OR_PRINT": "Use `--format json` or `--format print` instead.",

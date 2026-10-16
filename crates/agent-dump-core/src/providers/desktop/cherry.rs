@@ -10,13 +10,16 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
-    if let Some(root) = crate::providers::files::environment_path(
-        "CHERRY_STUDIO_USER_DATA_DIR",
-    )? {
-        return Ok(vec![(
-            "Cherry Studio userData",
-            root.join("Data/cherrystudio.sqlite"),
-        )]);
+    for variable in
+        ["CHERRYSTUDIO_USER_DATA_DIR", "CHERRY_STUDIO_USER_DATA_DIR"]
+    {
+        if let Some(root) = crate::providers::files::environment_path(variable)?
+        {
+            return Ok(vec![(
+                "Cherry Studio userData",
+                root.join("Data/cherrystudio.sqlite"),
+            )]);
+        }
     }
     let boot = crate::providers::files::environment_root("HOME", "")?
         .join(".cherrystudio/boot-config.json");

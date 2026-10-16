@@ -170,3 +170,41 @@ def test_wal_changes_are_visible_without_changing_persistent_data(tmp_path, monk
             assert payloads[0] == payloads[1]
     finally:
         writer.close()
+
+
+def head(cli, uri):
+    result = cli.run("rust", uri, "--head", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("variable", ["CURSOR_DATA_PATH", "XDG_CONFIG_HOME"])
+def test_cursor_user_directory_variables(tmp_path, monkeypatch, variable):
+    if variable == "XDG_CONFIG_HOME" and sys.platform != "linux":
+        pytest.skip("XDG_CONFIG_HOME locates Cursor only on Linux")
+    cli = cursor(tmp_path, monkeypatch)
+    root = tmp_path / "custom config"
+    user = root / "User" if variable == "CURSOR_DATA_PATH" else root / "Cursor/User"
+    user.mkdir(parents=True)
+    shutil.move(str(cli.source.parent), user / "globalStorage")
+    cli.environment[variable] = str(root / "User" if variable == "CURSOR_DATA_PATH" else root)
+    head(cli, "cursor://request-parent")
+
+
+def test_cherry_codesesh_variable_takes_precedence(tmp_path, monkeypatch):
+    cli, identity = desktop(tmp_path, monkeypatch, "cherry")
+    cli.environment["CHERRYSTUDIO_USER_DATA_DIR"] = cli.environment["CHERRY_STUDIO_USER_DATA_DIR"]
+    cli.environment["CHERRY_STUDIO_USER_DATA_DIR"] = str(tmp_path / "missing")
+    head(cli, f"cherry://{identity}")
+
+
+def test_minimax_falls_back_to_legacy_home_directory(tmp_path, monkeypatch):
+    cli, identity = desktop(tmp_path, monkeypatch, "minimax")
+    home = tmp_path / "sources/home"
+    target = home / ".minimax-code/v2/sqlite/runtime-state.sqlite"
+    target.parent.mkdir(parents=True)
+    shutil.copyfile(cli.source, target)
+    (home / ".minimax").mkdir()
+    cli.environment.update(HOME=str(home), USERPROFILE=str(home))
+    cli.environment.pop("MINIMAX_DATA_DIR")
+    cli.environment.pop("MAVIS_DATA_DIR")
+    head(cli, f"minimax://{identity}")

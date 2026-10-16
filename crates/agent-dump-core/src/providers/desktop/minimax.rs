@@ -28,10 +28,19 @@ pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
         }
     }
     let home = crate::providers::files::environment_root("HOME", "")?;
-    Ok(vec![(
-        "MiniMax Code ~/.minimax/v2/sqlite/runtime-state.sqlite",
-        home.join(".minimax").join(DATABASE),
-    )])
+    let primary = home.join(".minimax").join(DATABASE);
+    let legacy = home.join(".minimax-code").join(DATABASE);
+    Ok(vec![if !primary.exists() && legacy.exists() {
+        (
+            "MiniMax Code ~/.minimax-code/v2/sqlite/runtime-state.sqlite",
+            legacy,
+        )
+    } else {
+        (
+            "MiniMax Code ~/.minimax/v2/sqlite/runtime-state.sqlite",
+            primary,
+        )
+    }])
 }
 
 fn validate(connection: &Connection, path: &Path) -> crate::Result<()> {

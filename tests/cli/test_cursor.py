@@ -18,7 +18,12 @@ def put(cli, key, value):
 def cursor(tmp_path, monkeypatch):
     cli = make_cli(tmp_path, monkeypatch)
     home = tmp_path / "sources" / "cursor-home"
-    cli.environment.update(HOME=str(home), USERPROFILE=str(home), APPDATA=str(home / "AppData/Roaming"))
+    cli.environment.update(
+        HOME=str(home),
+        USERPROFILE=str(home),
+        APPDATA=str(home / "AppData/Roaming"),
+        XDG_CONFIG_HOME=str(home / ".config"),
+    )
     base = (
         "Library/Application Support"
         if sys.platform == "darwin"
