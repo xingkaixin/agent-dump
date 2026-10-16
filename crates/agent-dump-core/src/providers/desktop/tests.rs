@@ -134,7 +134,8 @@ fn fixture(kind: Kind) -> (tempfile::TempDir, Desktop, Session, &'static str) {
              CREATE TABLE local_runtime_message_rows (id INTEGER, session_id TEXT, msg_id TEXT, role TEXT, turn_id TEXT, source TEXT, created_at_ms INTEGER, data_json TEXT);
              CREATE TABLE local_runtime_messages (session_id TEXT, display_messages_json TEXT);
              CREATE TABLE local_runtime_message_row_migrations (session_id TEXT);
-             INSERT INTO local_runtime_sessions VALUES ('kept', 3, 'pi-agent', 'visible', 'conversation', 0, 'Kept', '/project', NULL, 1768478400000, 1768478400000, '{}');",
+             INSERT INTO local_runtime_sessions VALUES ('kept', 3, 'pi-agent', 'visible', 'conversation', 0, 'Kept', '/project', NULL, 1768478400000, 1768478400000, '{}');
+             INSERT INTO local_runtime_message_rows VALUES (1, 'kept', 'kept-user', 'user', 'turn', 'agent', 1768478400000, '{\"msg_id\":\"kept-user\",\"role\":\"user\",\"msg_content\":\"Prompt\"}');",
             "kept",
             "local_runtime_sessions",
         ),
@@ -412,15 +413,23 @@ fn migration_required_after_lookup_uses_localized_read_failure() {
 }
 
 #[test]
-fn minimax_out_of_scope_sessions_skip_storage_checks() {
-    let (_directory, mut provider, session, _) = fixture(Kind::MiniMax);
-    Connection::open(&session.source_path)
+fn minimax_lists_child_sessions_with_messages() {
+    let (_directory, mut provider, _, _) = fixture(Kind::MiniMax);
+    Connection::open(&provider.database)
         .unwrap()
         .execute_batch(
-            "INSERT INTO local_runtime_sessions VALUES ('hidden-v2', 2, 'pi-agent', 'hidden', 'conversation', 0, NULL, NULL, NULL, 1768478400000, 1768478400000, '{}');
-             INSERT INTO local_runtime_sessions VALUES ('cron-pending', 3, 'pi-agent', 'visible', 'cron', 0, NULL, NULL, NULL, 1768478400000, 1768478400000, '{}');
-             INSERT INTO local_runtime_messages VALUES ('cron-pending', '[{}]');
-             INSERT INTO local_runtime_sessions VALUES ('opencode-v1', 1, 'opencode', 'visible', 'conversation', 0, NULL, NULL, NULL, 1768478400000, 1768478400000, '{}');",
+            r#"CREATE TABLE local_runtime_token_usage (id INTEGER, session_id TEXT, turn_id TEXT, model TEXT, ts INTEGER);
+            INSERT INTO local_runtime_sessions VALUES
+              ('hidden-v2', 2, 'pi-agent', 'hidden', 'conversation', 0, NULL, NULL, NULL, 1, 1, '{}'),
+              ('cron-pending', 3, 'pi-agent', 'visible', 'cron', 0, NULL, NULL, NULL, 1, 1, '{}'),
+              ('empty', 3, 'pi-agent', 'visible', 'conversation', 0, 'Empty', NULL, NULL, 1, 1, '{}'),
+              ('child', 3, 'opencode', 'hidden', 'subagent', 0, '  ', NULL, 'kept', 1, 1, '{}');
+            INSERT INTO local_runtime_messages VALUES ('cron-pending', '[{}]');
+            INSERT INTO local_runtime_message_rows VALUES
+              (2, 'child', 'c1', 'user', 't', 'cron', 2, '{"msg_id":"c1","role":"user","msg_content":"Scheduled"}'),
+              (3, 'child', 'c2', 'user', 't', 'agent', 3, '{"msg_id":"c2","role":"user","msg_content":"<system-reminder>x</system-reminder>"}'),
+              (4, 'child', 'c3', 'user', 't', 'agent', 4, '{"msg_id":"c3","role":"user","msg_content":"\n  Fix   the bug\nnow"}');
+            INSERT INTO local_runtime_token_usage VALUES (1, 'child', 't', 'm', 9000);"#,
         )
         .unwrap();
     let found = provider.discover(None, &mut |_| Ok(())).unwrap();
@@ -429,11 +438,19 @@ fn minimax_out_of_scope_sessions_skip_storage_checks() {
         found
             .sessions
             .iter()
-            .map(|s| s.id.as_str())
+            .map(|s| (
+                s.id.as_str(),
+                s.title.as_str(),
+                s.updated_at.as_millisecond(),
+                s.message_count
+            ))
             .collect::<Vec<_>>(),
-        ["kept"]
+        [
+            ("kept", "Kept", 1_768_478_400_000, Some(1)),
+            ("child", "Fix the bug", 9000, Some(3))
+        ]
     );
-    for id in ["hidden-v2", "cron-pending", "opencode-v1"] {
+    for id in ["hidden-v2", "cron-pending", "empty"] {
         assert!(
             provider
                 .find(id, &mut |_| Ok(()))
@@ -442,6 +459,95 @@ fn minimax_out_of_scope_sessions_skip_storage_checks() {
                 .is_none()
         );
     }
+}
+
+#[test]
+fn minimax_messages_carry_events_tools_and_turn_usage() {
+    let (_directory, mut provider, _, _) = fixture(Kind::MiniMax);
+    Connection::open(&provider.database)
+        .unwrap()
+        .execute_batch(
+            r#"CREATE TABLE local_runtime_token_usage (id INTEGER, session_id TEXT, turn_id TEXT, model TEXT, ts INTEGER, input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost_usd REAL);
+            INSERT INTO local_runtime_message_rows VALUES
+              (2, 'kept', 'a1', 'assistant', 'turn', 'agent', 2, '{"msg_id":"a1","role":"assistant","msg_content":"Draft"}'),
+              (3, 'kept', 'a2', 'assistant', 'turn', 'agent', 3, '{"msg_id":"a2","role":"assistant","thinking_content":"Think","msg_content":"Done","error":"Rate limited","usage":{"input_tokens":99},"attachments":[{"desktop_path":"/d/a.png","mime_type":"image/png"}],"tool_calls":[{"tool_name":"task","tool_call_id":"t1","tool_call_status":2,"tool_call_result_data":"{\"isError\":true,\"text\":\"boom\",\"details\":{\"sub_session_id\":\"child\"}}"},{"tool_call_id":"t2"},{"tool_name":"bash","tool_call_id":"t3","tool_call_status":2,"tool_call_result_data":"ok"}]}'),
+              (4, 'kept', 'c1', 'assistant', 'turn', 'agent', 4, '{"msg_id":"c1","role":"assistant","kind":"compaction","msg_content":"Summary"}'),
+              (5, 'kept', 'u2', 'user', 'multi', 'agent', 5, '{"msg_id":"u2","role":"user","kind":"review_x"}'),
+              (6, 'kept', 'a3', 'assistant', 'multi', 'agent', 6, '{"msg_id":"a3","role":"assistant","msg_content":"Mixed"}');
+            INSERT INTO local_runtime_token_usage VALUES
+              (1, 'kept', 'turn', 'm', 10, 100, 20, 5, 40, 10, 0.025),
+              (2, 'kept', 'turn', 'm', 11, 50, 10, 0, 0, 0, NULL),
+              (3, 'kept', 'multi', 'a', 12, 1, 1, 0, 0, 0, 0),
+              (4, 'kept', 'multi', 'b', 13, 1, 1, 0, 0, 0, 0);"#,
+        )
+        .unwrap();
+    let data = read_json(&mut provider, "kept");
+    let messages = data["messages"].as_array().unwrap();
+    let answer = &messages[2];
+    assert_eq!(
+        part_texts(answer),
+        [
+            "Think",
+            "Done",
+            "Attachment: /d/a.png (image/png)",
+            "Rate limited"
+        ]
+    );
+    assert_eq!(
+        answer["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|part| part["type"] == "tool")
+            .map(|part| (
+                &part["tool"],
+                &part["state"]["status"],
+                &part["state"]["error"]
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (&"task".into(), &"error".into(), &"boom".into()),
+            (
+                &"bash".into(),
+                &"completed".into(),
+                &serde_json::Value::Null
+            )
+        ]
+    );
+    assert_eq!(
+        (
+            &answer["subagent_id"],
+            &answer["model"],
+            &answer["cost"],
+            &answer["tokens"]
+        ),
+        (
+            &"child".into(),
+            &"m".into(),
+            &0.025.into(),
+            &serde_json::json!({"input": 150, "output": 30, "reasoning": 5, "cache": {"read": 40, "write": 10}})
+        )
+    );
+    assert!(messages[1]["tokens"].as_object().unwrap().is_empty());
+    assert!(messages[5]["tokens"].as_object().unwrap().is_empty());
+    assert_eq!(
+        messages[3..5]
+            .iter()
+            .map(|m| (&m["role"], &m["mode"], part_texts(m)))
+            .collect::<Vec<_>>(),
+        [
+            (
+                &"assistant".into(),
+                &"compaction".into(),
+                vec!["Context compacted", "Summary"]
+            ),
+            (&"user".into(), &"review_x".into(), vec!["Event: review_x"])
+        ]
+    );
+    assert_eq!(
+        data["stats"],
+        serde_json::json!({"total_cost": 0.025, "total_input_tokens": 152, "total_output_tokens": 32, "message_count": 6, "total_tokens": 239})
+    );
 }
 
 #[test]

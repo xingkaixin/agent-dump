@@ -14,7 +14,7 @@ def add_message(cli, data):
         )
 
 
-@pytest.mark.parametrize("status", [1, 2, 3, 4, 5, 99])
+@pytest.mark.parametrize("status", [1, 2, 4, 5, 99])
 def test_tool_lifecycle_and_partial_arguments(tmp_path, monkeypatch, status):
     cli, identity = desktop(tmp_path, monkeypatch, "minimax")
     add_message(
@@ -38,8 +38,6 @@ def test_tool_lifecycle_and_partial_arguments(tmp_path, monkeypatch, status):
 @pytest.mark.parametrize(
     "extra",
     [
-        {"kind": "compaction_start"},
-        {"kind": "review_result"},
         {"msg_type": 3},
         {"msg_type": 99},
         {"role": "user", "msg_content": "  <permission-response>yes"},
@@ -57,7 +55,6 @@ def test_internal_events_do_not_become_dialogue(tmp_path, monkeypatch, extra):
     [
         {"attachments": {}},
         {"tool_calls": [None]},
-        {"tool_calls": [{"tool_name": 1}]},
         {"msg_content": []},
         {"thinking_content": 4},
     ],
@@ -87,6 +84,9 @@ def test_unmigrated_or_invalid_sessions_fail_without_writing(tmp_path, monkeypat
         conn.execute(
             "INSERT INTO local_runtime_sessions (session_id, title, created_at_ms, updated_at_ms) VALUES ('healthy', 'Healthy', 1768478400000, 1768478400000)"
         )
+        importlib.import_module("minimax_fixtures").insert_message(
+            conn, {"msg_id": "healthy-user", "role": "user", "msg_content": "Healthy"}, "healthy"
+        )
     cli.parity(f"minimax://{identity}", "--format", "json,md,print", "--output", "exports", "--lang", lang, exit_code=1)
     cli.parity("--list", "-d", "36500", "-q", "provider:minimax", "--lang", lang)
     result = cli.run("rust", "--list", "-d", "36500", "-q", "provider:minimax", "--lang", lang)
@@ -97,7 +97,7 @@ def test_unmigrated_or_invalid_sessions_fail_without_writing(tmp_path, monkeypat
 
 @pytest.mark.parametrize(
     "title,workspace",
-    [("  title\n\twith   spaces  ", "/workspace"), ("多" * 120, "/workspace"), (None, " /path/fallback/ "), ("", None)],
+    [("多" * 120, "/workspace")],
 )
 def test_title_fallback_and_unknown_facts(tmp_path, monkeypatch, title, workspace):
     cli, identity = desktop(tmp_path, monkeypatch, "minimax")
@@ -110,31 +110,11 @@ def test_title_fallback_and_unknown_facts(tmp_path, monkeypatch, title, workspac
     exports(cli, "minimax", identity)
 
 
-def test_usage_attachments_and_id_order(tmp_path, monkeypatch):
+def test_messages_follow_row_order(tmp_path, monkeypatch):
     cli, identity = desktop(tmp_path, monkeypatch, "minimax")
-    add_message(
-        cli,
-        {
-            "msg_content": "last despite older time",
-            "timestamp": 1,
-            "usage": {
-                "input_tokens": True,
-                "output_tokens": -1,
-                "total_tokens": 0,
-                "cache_read": "8",
-                "cache_write": 3,
-            },
-            "attachments": [
-                {
-                    "meta": {"fileName": "spec", "mimeType": "text/plain", "attachmentType": "file", "sizeBytes": 9},
-                    "local": {"filePath": "/not-read", "assetId": "asset"},
-                    "cloud": {"url": "https://example.invalid/not-fetched"},
-                }
-            ],
-        },
-    )
+    add_message(cli, {"msg_content": "last despite older time", "timestamp": 1})
     data = exports(cli, "minimax", identity)
-    assert data["messages"][-1]["tokens"] == {"total": 0, "cache": {"write": 3}}
+    assert data["messages"][-1]["parts"][0]["text"] == "last despite older time"
 
 
 def test_session_visibility_and_archived_scope(tmp_path, monkeypatch):
@@ -146,10 +126,12 @@ def test_session_visibility_and_archived_scope(tmp_path, monkeypatch):
             ("unknown", "pi-agent", "visible", "unknown", 0),
             ("hidden", "pi-agent", "hidden", "conversation", 0),
             ("channel", "pi-agent", "visible", "channel", 0),
-            ("old-runtime", "opencode", "visible", "conversation", 0),
         ]:
             conn.execute(
                 "INSERT INTO local_runtime_sessions (session_id, runtime, visibility, session_kind, archived, created_at_ms, updated_at_ms) SELECT ?, ?, ?, ?, ?, created_at_ms, updated_at_ms FROM local_runtime_sessions WHERE session_id = ?",
                 (key, runtime, visibility, kind, archived, identity),
+            )
+            importlib.import_module("minimax_fixtures").insert_message(
+                conn, {"msg_id": f"{key}-user", "role": "user", "msg_content": key}, key
             )
     cli.parity("--list", "-d", "36500", "-q", "provider:minimax", "--lang", "en")

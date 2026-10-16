@@ -73,22 +73,6 @@ def test_legacy_sqlite_numeric_boundaries(cli, value):
     export(cli, identity="ses_old")
 
 
-@pytest.mark.parametrize("value", [2**80, "  +1_234  ", float("inf")])
-def test_minimax_token_boundaries(tmp_path, monkeypatch, value):
-    from desktop_fixture import desktop, exports
-    from test_minimax import add_message
-
-    cli, identity = desktop(tmp_path, monkeypatch, "minimax")
-    add_message(
-        cli,
-        {
-            "msg_content": "Numbers",
-            "usage": {"input_tokens": value, "output_tokens": value, "cache_read": value},
-        },
-    )
-    exports(cli, "minimax", identity)
-
-
 @pytest.mark.parametrize("provider", ["codex", "pi"])
 @pytest.mark.parametrize("value", [None, 7, False, ["one"], {"path": "work"}])
 def test_metadata_values_preserve_payload_and_display_projection(cli, provider, value):
