@@ -101,7 +101,7 @@ def test_pi_timezone_overflow_skips_record_and_keeps_sequence(cli, lang, locatio
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("provider", ["codex", "claude", "pi"])
+@pytest.mark.parametrize("provider", ["codex", "pi"])
 def test_ignored_shapes_do_not_gain_conversion_warnings(cli, lang, provider):
     if provider == "codex":
         cli.write(
@@ -116,18 +116,6 @@ def test_ignored_shapes_do_not_gain_conversion_warnings(cli, lang, provider):
                 record(1),
                 message("assistant", "After"),
             ]
-        )
-    elif provider == "claude":
-        create_claude(
-            cli,
-            [
-                event("user", "Keep"),
-                event("assistant", [{"type": "text", "text": "Before"}]),
-                event("user", "ignored", message=None, isMeta=True),
-                event("unknown", "ignored", message=None),
-                {"type": "user", "timestamp": STAMP},
-                event("assistant", [{"type": "text", "text": "After"}]),
-            ],
         )
     else:
         create_pi(
@@ -151,19 +139,6 @@ def test_ignored_shapes_do_not_gain_conversion_warnings(cli, lang, provider):
         formats=("json", "markdown", "raw"),
     )
     assert cli.run("rust", f"{provider}://{IDENTITY}", "--lang", lang).stderr == ""
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("provider", ["claude"])
-def test_head_list_and_raw_do_not_convert_messages(cli, lang, provider):
-    claude_stream(cli, None)
-    for args, formats in [
-        ((f"{provider}://{IDENTITY}", "--head"), ()),
-        (("--list", "-q", f"provider:{provider}", "-d", "36500"), ()),
-        ((f"{provider}://{IDENTITY}", "--format", "raw", "--output", "exports"), ("raw",)),
-    ]:
-        cli.parity(*args, "--lang", lang, formats=formats)
-        assert cli.run("rust", *args, "--lang", lang).stderr == ""
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])

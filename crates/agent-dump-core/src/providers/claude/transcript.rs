@@ -1,47 +1,65 @@
 use crate::compat::value::{field, string, text, truthy};
 use crate::providers::contract::RecoverableDiagnostic;
+use crate::providers::text::clean;
 use crate::session::assembly::{AssistantFold, backfill};
 use crate::session::{
-    Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
+    ImagePart, Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
     parse_timestamp,
 };
 use serde_json::{Map, Value, json};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Default)]
 struct Decoder {
     messages: Vec<Message>,
     pending: HashMap<String, (usize, usize)>,
-    ignored: HashSet<String>,
     assistant_calls: HashMap<String, Vec<String>>,
+    requests: HashMap<String, usize>,
+    children: HashMap<String, String>,
     current: Option<usize>,
     assistant_fold: AssistantFold,
     latest_text: Option<usize>,
 }
 
 fn output_parts(content: &Value, timestamp: i64) -> Vec<Part> {
-    let texts = match content {
+    let text_part = |value: String| {
+        let value = clean(&value);
+        (!value.is_empty()).then(|| Part::text(value, timestamp))
+    };
+    match content {
         Value::Null => vec![],
         Value::Array(items) => items
             .iter()
             .filter_map(|item| match item {
-                Value::Object(_) => Some(
+                Value::Object(_)
+                    if item["type"] == "image" && !item["source"].is_null() =>
+                {
+                    image(&item["source"], timestamp)
+                }
+                Value::Object(_) => text_part(
                     item.get("text")
                         .or_else(|| item.get("content"))
                         .map(string)
                         .unwrap_or_default(),
                 ),
-                Value::String(value) => Some(value.clone()),
+                Value::String(value) => text_part(value.clone()),
                 _ => None,
             })
             .collect(),
-        _ => vec![string(content)],
-    };
-    texts
-        .into_iter()
-        .filter(|text| !text.trim().is_empty())
-        .map(|text| Part::text(text, timestamp))
-        .collect()
+        _ => text_part(string(content)).into_iter().collect(),
+    }
+}
+
+fn image(source: &Value, timestamp: i64) -> Option<Part> {
+    let data = text(&source["data"]);
+    let mime_type = text(&source["media_type"]);
+    (!data.is_empty() && mime_type.starts_with("image/")).then(|| {
+        Part::Image(ImagePart {
+            mime_type: Some(mime_type.into()),
+            data: data.into(),
+            time_created: timestamp,
+        })
+    })
 }
 
 fn user_parts(content: &Value, timestamp: i64) -> Vec<Part> {
@@ -64,16 +82,11 @@ fn user_parts(content: &Value, timestamp: i64) -> Vec<Part> {
     }
 }
 
-fn apply_metadata(message: &mut Message, source: &Value) {
+fn apply_model(message: &mut Message, source: &Value) {
     if truthy(&source["model"])
         && message.model.as_ref().is_none_or(|value| !truthy(value))
     {
         message.model = Some(source["model"].clone());
-    }
-    if message.tokens.is_empty()
-        && let Some(usage) = source["usage"].as_object()
-    {
-        message.tokens.clone_from(usage);
     }
 }
 
@@ -83,47 +96,70 @@ impl Decoder {
         self.latest_text = None;
     }
 
-    fn assistant_part(
+    fn push(
         &mut self,
         id: &str,
         source: &Value,
         timestamp: i64,
         part: Part,
-        reasoning: bool,
-    ) {
+    ) -> usize {
+        let tool = matches!(part, Part::Tool(_));
+        let text = matches!(part, Part::Text(_));
         let mut parts = vec![part];
-        let index = self
-            .assistant_fold
-            .fold(&mut self.messages, self.current, &mut parts, reasoning)
-            .unwrap_or_else(|| {
-                let mut message =
-                    Message::new(id.to_owned(), "assistant", timestamp, parts);
-                message.agent = Some("claude".into());
-                self.messages.push(message);
-                self.messages.len() - 1
-            });
-        apply_metadata(&mut self.messages[index], source);
+        let target = if tool {
+            let target = self.latest_text.or(self.current);
+            if let Some(index) = target {
+                self.messages[index].parts.append(&mut parts);
+            }
+            target
+        } else {
+            self.assistant_fold.fold(
+                &mut self.messages,
+                self.current,
+                &mut parts,
+                !text,
+            )
+        };
+        let index = target.unwrap_or_else(|| {
+            let mut message =
+                Message::new(id.to_owned(), "assistant", timestamp, parts);
+            message.agent = Some("claude".into());
+            if tool {
+                message.mode = Some("tool".into());
+            }
+            self.messages.push(message);
+            self.messages.len() - 1
+        });
+        apply_model(&mut self.messages[index], source);
         self.current = Some(index);
-        if !reasoning {
+        if text {
             self.latest_text = Some(index);
         }
+        index
     }
 
     fn assistant(&mut self, record: &Value, source: &Value, timestamp: i64) {
-        let Some(items) = source["content"].as_array() else {
-            return;
-        };
         let id = field(record, "uuid");
+        let key = Some(text(&record["requestId"]).trim())
+            .filter(|key| !key.is_empty())
+            .unwrap_or_else(|| text(&record["uuid"]).trim())
+            .to_owned();
+        let usage = source["usage"].as_object().filter(|_| !key.is_empty());
+        let mut usage_index =
+            usage.and_then(|_| self.requests.get(&key).copied());
+        if usage.is_some() && usage_index.is_none() {
+            self.reset();
+        }
         let mut calls = Vec::new();
-        for item in items {
-            match text(&item["type"]) {
+        for item in source["content"].as_array().into_iter().flatten() {
+            let (part, call_id) = match text(&item["type"]) {
                 "text" | "thinking" => {
                     let reasoning = item["type"] == "thinking";
-                    let body = field(
+                    let body = clean(&field(
                         item,
                         if reasoning { "thinking" } else { "text" },
-                    );
-                    if body.trim().is_empty() {
+                    ));
+                    if body.is_empty() {
                         continue;
                     }
                     let part = if reasoning {
@@ -134,18 +170,12 @@ impl Decoder {
                     } else {
                         Part::text(body, timestamp)
                     };
-                    self.assistant_part(
-                        &id, source, timestamp, part, reasoning,
-                    );
+                    (part, String::new())
                 }
                 "tool_use" => {
                     let name = field(item, "name");
                     let raw_id = field(item, "id");
                     let call_id = raw_id.trim().to_owned();
-                    if name.trim() == "TodoWrite" && !call_id.is_empty() {
-                        self.ignored.insert(call_id);
-                        continue;
-                    }
                     let input =
                         item.get("input").cloned().unwrap_or_else(|| json!({}));
                     let part = Part::Tool(Box::new(ToolPart {
@@ -153,44 +183,52 @@ impl Decoder {
                         tool: name.clone(),
                         call_id: raw_id,
                         title: format!("Tool: {name}"),
-                        state: json!({"input": input, "output": null})
-                            .as_object()
-                            .unwrap()
-                            .clone(),
+                        state: json!({
+                            "status": "running",
+                            "input": input,
+                            "output": null,
+                        })
+                        .as_object()
+                        .unwrap()
+                        .clone(),
                         time_created: timestamp,
                         nickname: None,
                         subagent_id: None,
                     }));
-                    let index = if let Some(index) = self.latest_text {
-                        self.messages[index].parts.push(part);
-                        index
-                    } else {
-                        let mut message = Message::new(
-                            id.clone(),
-                            "assistant",
-                            timestamp,
-                            vec![part],
-                        );
-                        message.agent = Some("claude".into());
-                        message.mode = Some("tool".into());
-                        self.messages.push(message);
-                        self.messages.len() - 1
-                    };
-                    apply_metadata(&mut self.messages[index], source);
-                    self.current = Some(index);
-                    if !call_id.is_empty() {
-                        self.pending.insert(
-                            call_id.clone(),
-                            (index, self.messages[index].parts.len() - 1),
-                        );
-                        calls.push(call_id);
-                    }
+                    (part, call_id)
                 }
-                _ => (),
+                _ => continue,
+            };
+            let index = self.push(&id, source, timestamp, part);
+            usage_index.get_or_insert(index);
+            if !call_id.is_empty() {
+                let message = &mut self.messages[index];
+                self.pending
+                    .insert(call_id.clone(), (index, message.parts.len() - 1));
+                if let Some(child) = self.children.get(&call_id) {
+                    message.subagent_id = Some(child.clone());
+                }
+                calls.push(call_id);
             }
         }
         if !calls.is_empty() {
-            self.assistant_calls.insert(id, calls);
+            self.assistant_calls.insert(id.clone(), calls);
+        }
+        if let Some(usage) = usage {
+            let index = usage_index.unwrap_or_else(|| {
+                let mut message =
+                    Message::new(id, "assistant", timestamp, Vec::new());
+                message.agent = Some("claude".into());
+                self.messages.push(message);
+                self.current = Some(self.messages.len() - 1);
+                self.messages.len() - 1
+            });
+            self.requests.insert(key, index);
+            let message = &mut self.messages[index];
+            message.tokens.clone_from(usage);
+            if truthy(&source["model"]) {
+                message.model = Some(source["model"].clone());
+            }
         }
     }
 
@@ -217,21 +255,18 @@ impl Decoder {
         let empty = Value::String(String::new());
         let content = source.get("content").unwrap_or(&empty);
         let visible = user_parts(content, timestamp);
-        if content.is_string() && visible.is_empty() {
-            return Ok(());
-        }
         if let Some(items) = content.as_array() {
             let mut updates = Map::new();
             let result = &record["toolUseResult"];
             if let Some(success) = result["success"].as_bool() {
                 updates.insert(
                     "status".into(),
-                    if success { "success" } else { "error" }.into(),
+                    if success { "completed" } else { "error" }.into(),
                 );
             }
             if truthy(&result["commandName"]) {
                 updates.insert(
-                    "meta".into(),
+                    "metadata".into(),
                     json!({"commandName": result["commandName"]}),
                 );
             }
@@ -251,9 +286,6 @@ impl Decoder {
                         call_id.clone_from(&calls[0]);
                     }
                 }
-                if self.ignored.contains(&call_id) {
-                    continue;
-                }
                 let parts = output_parts(&item["content"], timestamp);
                 let mut updates = updates.clone();
                 if item["is_error"] == true {
@@ -266,10 +298,8 @@ impl Decoder {
                     &parts,
                     Some(updates),
                 )? {
-                    if !parts.is_empty() {
-                        tool.state
-                            .entry("status")
-                            .or_insert("completed".into());
+                    if !parts.is_empty() && tool.state["status"] == "running" {
+                        tool.state.insert("status".into(), "completed".into());
                     }
                 } else {
                     self.fallback(
@@ -334,9 +364,13 @@ impl Decoder {
 
 pub fn read(
     session: &Session,
+    children: HashMap<String, String>,
     diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
 ) -> crate::Result<SessionData> {
-    let mut decoder = Decoder::default();
+    let mut decoder = Decoder {
+        children,
+        ..Decoder::default()
+    };
     crate::providers::jsonl::scan(
         &session.source_path,
         diagnostics,
@@ -355,12 +389,12 @@ pub fn read(
         ..Stats::default()
     };
     for message in &decoder.messages {
-        stats.add_tokens(
-            message.tokens.get("input_tokens").unwrap_or(&Value::Null),
-            message.tokens.get("output_tokens").unwrap_or(&Value::Null),
-        )?;
+        let tokens =
+            |key: &str| message.tokens.get(key).unwrap_or(&Value::Null);
+        stats.add_tokens(tokens("input_tokens"), tokens("output_tokens"))?;
+        for key in ["cache_read_input_tokens", "cache_creation_input_tokens"] {
+            stats.add_tokens(tokens(key), &Value::Null)?;
+        }
     }
-    let mut data = session.payload(decoder.messages, stats);
-    data.directory = session.source_metadata["cwd"].clone();
-    Ok(data)
+    Ok(session.payload(decoder.messages, stats))
 }
