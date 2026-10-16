@@ -17,6 +17,27 @@ pub fn tool_title(name: &str) -> &str {
     }
 }
 
+pub fn content_text(content: &Value) -> String {
+    match content {
+        Value::String(text) => text.clone(),
+        Value::Array(items) => items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .or_else(|| {
+                        item.get("text")
+                            .filter(|text| !text.is_null())
+                            .or_else(|| item.get("content"))
+                            .and_then(Value::as_str)
+                    })
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>()
+            .join(" "),
+        _ => text(&content["text"]).to_owned(),
+    }
+}
+
 pub fn arguments(raw: &Value) -> Value {
     raw.as_str()
         .and_then(|value| crate::compat::json::from_str(value).ok())
@@ -80,15 +101,7 @@ pub fn read(
             let id = format!("context-{seq}");
             match text(&record["role"]) {
                 "user" => {
-                    let body = record["content"].as_array().map_or_else(
-                        || field(&record, "content"),
-                        |items| {
-                            items
-                                .iter()
-                                .filter_map(|item| item["text"].as_str())
-                                .collect()
-                        },
-                    );
+                    let body = content_text(&record["content"]);
                     if !body.trim().is_empty() {
                         messages.push(Message::new(
                             id,
@@ -138,11 +151,6 @@ pub fn read(
                             }
                             if name == "SetTodoList" {
                                 ignored.insert(call_id);
-                                continue;
-                            }
-                            if call["type"] != "function"
-                                || !function.is_object()
-                            {
                                 continue;
                             }
                             pending.insert(

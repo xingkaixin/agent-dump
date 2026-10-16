@@ -1,6 +1,7 @@
 """Recoverable record warnings match Python without changing source or export bytes."""
 
 import json
+import os
 import sqlite3
 
 from cli_fixture import IDENTITY, header, message
@@ -35,6 +36,8 @@ def damaged_source(cli, provider):
         + original.splitlines(keepends=True)[-1]
         + b'{"partial":'
     )
+    if provider.startswith("kimi"):
+        os.utime(source, (1768478400, 1768478400))
     return source, original.count(b"\n") + 2
 
 
