@@ -52,17 +52,8 @@ CONTEXT_STREAM = [
 
 @pytest.mark.differential
 @pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("with_wire", [True, False])
-def test_context_precedence_usage_head_list_and_exports(cli, lang, with_wire):
-    wire = (
-        [
-            wire_event("TurnBegin", user_input=[{"text": "Wire must not replace context"}]),
-            {"message": {"usage": {"input_tokens": "7", "output_tokens": 2}}},
-        ]
-        if with_wire
-        else None
-    )
-    create(cli, context=CONTEXT_STREAM, wire=wire)
+def test_context_usage_head_list_and_exports(cli, lang):
+    create(cli, context=CONTEXT_STREAM)
     cli.parity(f"kimi://{IDENTITY}", "--head", "--lang", lang)
     cli.parity("--list", "-d", "36500", "-q", "provider:kimi", "--lang", lang)
     provider_export(cli, f"kimi://{IDENTITY}", "kimi", lang=lang)
@@ -222,18 +213,12 @@ def test_wire_user_input_keeps_strings_and_joins_parts_with_spaces(cli):
 
 @pytest.mark.differential
 @pytest.mark.parametrize("timestamp", [None, "1768478400", True, 1e30, -1e30, 0, 1768478400.123])
-def test_wire_timestamps_and_usage_coercion(cli, timestamp):
+def test_wire_timestamps_and_token_count_coercion(cli, timestamp):
     record = wire_event("TurnBegin", user_input=[{"text": "Keep"}])
     record["timestamp"] = timestamp
     create(
         cli,
-        wire=[
-            record,
-            {"message": {"usage": {"input_tokens": True, "output_tokens": "bad"}}},
-            {"message": {"usage": {"input_tokens": "9", "output_tokens": 2.9}}},
-            {"role": "_usage", "token_count": 12},
-            {"role": "_usage", "token_count": "ignored"},
-        ],
+        wire=[record, {"role": "_usage", "token_count": 12}, {"role": "_usage", "token_count": "ignored"}],
     )
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
@@ -313,7 +298,30 @@ def export(cli):
     return json.loads(next((cli.root / "exports/kimi").glob("*.json")).read_text())
 
 
-def test_context_keeps_untyped_tool_calls(cli):
+def status(**usage):
+    return wire_event("StatusUpdate", token_usage=usage)
+
+
+def test_status_usage_counts_cache_and_subagents_and_marks_wire_messages(cli):
+    directory = create(
+        cli,
+        wire=[
+            wire_event("TurnBegin", user_input=[{"text": "Start"}]),
+            wire_event("ContentPart", type="text", text="Answer"),
+            status(input_other=20, output=8, input_cache_read=5, input_cache_creation=2),
+            status(input_other=1, output=1),
+            {"message": {"usage": {"input_tokens": 100, "output_tokens": 100}}},
+        ],
+    )
+    write_jsonl(directory / "subagents/a1/wire.jsonl", [status(input_other=30, output=6, input_cache_read=10)])
+    payload = export(cli)
+    assert (payload["stats"]["total_input_tokens"], payload["stats"]["total_output_tokens"]) == (68, 15)
+    user, assistant = payload["messages"]
+    assert user["tokens"] == {}
+    assert assistant["tokens"] == {"input": 28, "output": 9, "cache": {"read": 5, "write": 2}}
+
+
+def test_context_keeps_untyped_tool_calls_and_leaves_usage_on_stats(cli):
     untyped = {"id": "call", "function": {"name": "Shell", "arguments": '{"command":"pwd"}'}}
     create(
         cli,
@@ -321,8 +329,12 @@ def test_context_keeps_untyped_tool_calls(cli):
             {"role": "assistant", "tool_calls": [untyped]},
             {"role": "tool", "tool_call_id": "call", "content": "OK"},
         ],
+        wire=[status(input_other=3, output=2, input_cache_read=1)],
     )
-    [message] = export(cli)["messages"]
+    payload = export(cli)
+    assert (payload["stats"]["total_input_tokens"], payload["stats"]["total_output_tokens"]) == (4, 2)
+    [message] = payload["messages"]
+    assert message["tokens"] == {}
     [part] = message["parts"]
     assert (part["tool"], part["state"]["arguments"]) == ("Shell", {"command": "pwd"})
     assert [item["text"] for item in part["state"]["output"]] == ["OK"]

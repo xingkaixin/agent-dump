@@ -19,6 +19,19 @@ pub struct Kimi {
     work_dirs: Option<HashMap<String, String>>,
 }
 
+fn subagent_wires(session: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(session.join("subagents")) else {
+        return Vec::new();
+    };
+    let mut wires: Vec<_> = entries
+        .flatten()
+        .map(|entry| entry.path().join("wire.jsonl"))
+        .filter(|path| path.is_file())
+        .collect();
+    wires.sort();
+    wires
+}
+
 impl Kimi {
     #[allow(
         clippy::unnecessary_wraps,
@@ -208,7 +221,11 @@ impl Provider for Kimi {
                     ],
                 ).into());
             }
-            crate::providers::kimi::wire::read(&wire, diagnostics)?
+            crate::providers::kimi::wire::read(
+                &wire,
+                (!session.model.is_empty()).then_some(session.model.as_str()),
+                diagnostics,
+            )?
         };
         crate::providers::text::clean_messages(&mut messages);
         let mut stats = Stats {
@@ -216,11 +233,18 @@ impl Provider for Kimi {
             total_tokens: Some(0.into()),
             ..Stats::default()
         };
-        if wire.exists() {
-            crate::providers::jsonl::scan(&wire, diagnostics, |record, _| {
-                let usage = &record["message"]["usage"];
-                stats
-                    .add_tokens(&usage["input_tokens"], &usage["output_tokens"])
+        let wires = wire
+            .exists()
+            .then(|| wire.clone())
+            .into_iter()
+            .chain(subagent_wires(&session.source_path));
+        for path in wires {
+            crate::providers::jsonl::scan(&path, diagnostics, |record, _| {
+                match crate::providers::kimi::wire::usage(&record) {
+                    Some(usage) => stats
+                        .add_tokens(&usage.input.into(), &usage.output.into()),
+                    None => Ok(()),
+                }
             })?;
         }
         let raw = if context.exists() { &context } else { &wire };
