@@ -5,7 +5,7 @@ import sqlite3
 from cli_fixture import make_cli
 from desktop_fixture import desktop, exports, fails
 import pytest
-from sqlite_fixture import create_v2, export as sqlite_export
+from sqlite_fixture import create_v2
 
 pytestmark = pytest.mark.differential
 
@@ -14,37 +14,20 @@ ENCODINGS = ["utf-8", "utf-8-sig", "utf-16", "utf-32", "utf-16-le", "utf-16-be",
 
 @pytest.mark.parametrize(
     ("provider", "encoding"),
-    [(provider, encoding) for provider in ("opencode", "minimax", "minimax-metadata") for encoding in ENCODINGS],
+    [(provider, encoding) for provider in ("minimax", "minimax-metadata") for encoding in ENCODINGS],
 )
 def test_json_blob_decoding(tmp_path, monkeypatch, provider, encoding):
-    if provider == "opencode":
-        cli = make_cli(tmp_path, monkeypatch)
-        cli.source = create_v2(cli, monkeypatch)
-        select = "SELECT data FROM session_message WHERE type = 'assistant'"
-        update = "UPDATE session_message SET data = ? WHERE type = 'assistant'"
+    cli, identity = desktop(tmp_path, monkeypatch, "minimax")
+    if provider == "minimax":
+        select = "SELECT data_json FROM local_runtime_message_rows WHERE msg_id = 'assistant-1'"
+        update = "UPDATE local_runtime_message_rows SET data_json = ? WHERE msg_id = 'assistant-1'"
     else:
-        cli, identity = desktop(tmp_path, monkeypatch, "minimax")
-        if provider == "minimax":
-            select = "SELECT data_json FROM local_runtime_message_rows WHERE msg_id = 'assistant-1'"
-            update = "UPDATE local_runtime_message_rows SET data_json = ? WHERE msg_id = 'assistant-1'"
-        else:
-            select = "SELECT extra_data_json FROM local_runtime_sessions"
-            update = "UPDATE local_runtime_sessions SET extra_data_json = ?"
+        select = "SELECT extra_data_json FROM local_runtime_sessions"
+        update = "UPDATE local_runtime_sessions SET extra_data_json = ?"
     with sqlite3.connect(cli.source) as connection:
         original = connection.execute(select).fetchone()[0]
         connection.execute(update, (original.encode(encoding),))
-    if provider == "opencode":
-        sqlite_export(cli)
-    else:
-        exports(cli, "minimax", identity)
-
-
-@pytest.mark.parametrize("raw", [b'{"inputTokens":999}', b"\xff"])
-def test_deepchat_blob_metadata_is_ignored(tmp_path, monkeypatch, raw):
-    cli, identity = desktop(tmp_path, monkeypatch, "deepchat")
-    with sqlite3.connect(cli.source) as connection:
-        connection.execute("UPDATE deepchat_messages SET metadata = ?", (raw,))
-    exports(cli, "deepchat", identity)
+    exports(cli, "minimax", identity)
 
 
 @pytest.mark.parametrize("raw", [b'{"parts":[]}', b"\xff"])

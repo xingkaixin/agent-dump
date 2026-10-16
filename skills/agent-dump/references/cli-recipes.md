@@ -4,7 +4,7 @@
 
 以下 recipes 对应当前 Rust CLI，只提供命令行入口。旧参数映射、源码安装和 Python API 迁移见[兼容参考](../../../docs/cli-compatibility.md#中文)。当前功能不保证适用于旧 Python 0.15.9。
 
-文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余七个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。Codex、Claude、Pi 的单条记录转换失败走本地化 stderr 警告并继续读取；head/list/raw 不执行正文转换。四个文件 Provider 与 OpenCode/ZCode 在未选中来源时读取当前配置并重试，选中后保持路径；Codex 标题索引跟随当前配置。DeepChat/Cherry/MiniMax 每次发现或查找重新选择来源；Cursor 正文读取也使用当前数据库配置。
+文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余七个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。Codex、Claude、Pi 的单条记录转换失败走本地化 stderr 警告并继续读取；head/list/raw 不输出转换警告。四个文件 Provider 与 OpenCode/ZCode 在未选中来源时读取当前配置并重试，选中后保持路径；Codex 标题索引跟随当前配置。DeepChat/Cherry/MiniMax 每次发现或查找重新选择来源；Cursor 正文读取也使用当前数据库配置。
 
 ## 命令入口
 
@@ -371,6 +371,16 @@ agent-dump --search "auth" --list --days 30
 1. 仅使用 `json/markdown/raw/print`（支持逗号组合）。
 2. 需要 markdown 简写时使用 `md`（等价 `markdown`）。
 
+## Pi
+
+```bash
+agent-dump --list --query "provider:pi"
+agent-dump 'pi://<session_id>' --head
+agent-dump 'pi://<session_id>' --format json,markdown --output ./sessions
+```
+
+只读取活跃分支：从最后一条带 id 的记录沿 `parentId` 回溯，被放弃的分支不参与导出、搜索和计数；没有 entry id 的旧格式按文件顺序读取。工具结果合并到对应调用并保留状态和 `details`，bash 执行按退出码和取消标记设置状态，只保留 `display` 为 true 的自定义消息。没有可见消息的会话不列出。超过 256 KiB 的文件在列表阶段消息数为未知。
+
 ## DeepChat
 
 ```bash
@@ -379,7 +389,7 @@ agent-dump 'deepchat://<session_id>' --head
 agent-dump 'deepchat://<session_id>' --format json,markdown --output ./sessions
 ```
 
-读取当前未加密的 `app_db/agent.db`，可用 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。草稿不列出，已迁移历史可直接读取。暂不支持 raw、SQLCipher 和旧版 `chat.db` 直读；附件仅保留引用，不读取外置工具输出或执行 Tape 恢复。遇到加密或 schema 诊断时应保留报错，不把它当成没有会话。
+读取当前未加密的 `app_db/agent.db`，可用 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。草稿和没有消息的会话不列出，已迁移历史可直接读取。暂不支持 raw、SQLCipher 和旧版 `chat.db` 直读；引用的会话、附件路径和链接写入正文，不读取附件实体、外置工具输出，也不执行 Tape 恢复。遇到加密或 schema 诊断时应保留报错，不把它当成没有会话。
 
 ## Cherry Studio
 
@@ -389,7 +399,7 @@ agent-dump 'cherry://topic-<id>' --head
 agent-dump 'cherry://session-<id>' --format json,markdown --output ./sessions
 ```
 
-读取当前 2.x 的 `Data/cherrystudio.sqlite`，可用 `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录；未指定时先查启动配置中的目录，再查平台默认目录。使用第一个存在的数据库，便携版、开发版或多个安装应显式指定目录。普通聊天只导出当前选中的路径，其他分支和并列回复不参与搜索与计数；Agent 会话按时间排序，可按 workspace 工作目录筛选。普通聊天没有工作目录，不能用路径筛选找到。
+读取当前 2.x 的 `Data/cherrystudio.sqlite`，可用 `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录；未指定时先查启动配置中的目录，再查平台默认目录。使用第一个存在的数据库，便携版、开发版或多个安装应显式指定目录。普通聊天只导出当前选中的路径，其他分支和并列回复不参与搜索与计数，没有消息的会话不列出；Agent 会话按时间排序，可按 workspace 工作目录筛选。普通聊天没有工作目录，不能用路径筛选找到。
 
 支持列表、查询、搜索、统计、collect 及 print / JSON / Markdown。附件仅保留引用，压缩摘要和内部事件不进入 collect；不读取 SDK 日志或执行迁移。暂不支持 raw 和 1.x IndexedDB/Redux 原始数据，已迁移到当前数据库的历史记录可读。分支损坏或读取失败属于不完整发现，不能当作没有会话。
 
@@ -403,11 +413,11 @@ OPENCODE_DB=opencode-custom.db agent-dump --search 'timeout' --query 'provider:o
 agent-dump --collect --emit-prompt --query 'provider:opencode'
 ```
 
-支持旧版 `session/message/part` 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读。新版消息按 `seq` 排序，消息数包含系统和状态事件；collect 只读取 user/assistant 可见文本。
+支持旧版 `session/message/part` 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版；`migration.v1-v2` 完成前补入尚未复制的旧版会话，完成后只读新版。没有可见消息的会话不列出，消息数只计可见消息；标题为空时使用首条用户文本。新版消息按 `seq` 排序；collect 只读取 user/assistant 可见文本。
 
 默认读取 `$XDG_DATA_HOME/opencode/opencode.db`，未设置时使用 `~/.local/share/opencode/opencode.db`（含 Windows），再保留旧 Windows LOCALAPPDATA/APPDATA 路径与本地开发路径回退。`OPENCODE_DB` 可指定绝对路径或相对于 OpenCode 数据目录的文件名；显式路径缺失不回退，`:memory:` 不可用。不同 channel 的数据库需显式选择。
 
-工具参数、结果和推理可搜索，附件保存在 JSON 元数据中，不打开其文件或 URL。读取已持久化的运行中消息和归档会话，排除待投递 inbox；不执行迁移或恢复删除记录。raw 保持 `.raw.json` 标准化导出语义，不是 OpenCode import 文件。
+工具参数、结果和推理可搜索。图片附件转为 image part，其他附件、提及和错误转为可见文本，不打开引用的文件或 URL。读取已持久化的运行中消息和归档会话，排除待投递 inbox；不执行迁移或恢复删除记录。raw 保持 `.raw.json` 标准化导出语义，不是 OpenCode import 文件。
 
 ## MiniMax Code
 

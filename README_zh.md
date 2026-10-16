@@ -250,11 +250,15 @@ agent-dump opencode://session-id-abc123
 - Windows 上建议优先配置工具官方环境变量。
 - `data/<agent>` 回退路径保留用于本地开发和测试。
 
-DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`；保留正文、思考和工具记录，压缩提示不进入 collect。JSON 还保留附件引用、链接及其他消息块，不读取附件实体或外置工具输出文件。Token 来自消息记录，不提供计费金额。
+Claude Code 列出 `<项目>/<会话>.jsonl`，以及 `<会话>/subagents/` 下的子代理记录，包括 `subagents/workflows/<run>/agent-*.jsonl` 中的 workflow agent。每个子代理作为独立会话列出，以 agent ID 标识；父会话中启动它的消息记录 `subagent_id`。没有可见消息的会话不列出。标题依次取最新的自定义标题、AI 标题、子代理名称或描述、`sessions-index.json`，以及前 20 条记录中首个用户输入的第一行。消息数只计可见记录。Token 合计按 API 请求取最后一次 usage，缓存读写计入输入。
+
+Pi 只读取当前活跃分支：从最后一条带 id 的记录沿 `parentId` 回溯，被放弃的分支不进入导出、搜索或计数；没有 entry id 的旧格式按文件顺序读取。工具结果合并到对应的工具调用，保留状态和 `details`；bash 执行按退出码和取消标记设置状态。只保留 `display` 为 true 的自定义消息。Token 按消息记录，输入包含缓存读写。没有可见消息的会话不列出。标题依次取 `session_info` 名称、`title` 记录、会话头 `title` 和首条用户消息。超过 256 KiB 的文件在列表阶段只读取首尾，消息数为未知。
+
+DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿、没有消息的会话和父会话链成环的会话。更新时间取会话、消息、消息块和用量记录中的最新时间。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`，纯文本 `content` 作为正文。保留正文、思考、计划、图片和工具记录，其他带文本的消息块转为正文，压缩提示不进入 collect。引用的会话、附件路径和链接写入正文，可被搜索；JSON 另外保留附件和链接记录。不读取附件实体或外置工具输出文件。Token 优先取自 `deepchat_usage_stats`，缺失时回退到消息元数据，缓存 token 不超过输入 token；不提供计费金额。
 
 暂不支持 SQLCipher 加密库、旧版 `chat.db` 直读和 raw 导出；不会执行 DeepChat 的迁移或 Tape 恢复。`DEEPCHAT_USER_DATA_DIR` 可用于指定自定义用户数据目录。
 
-Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含已迁移历史），可用于列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。普通聊天仅包含当前选中的根到叶路径，其他分支和多模型并列回复不进入导出、搜索或计数；虚拟根和空的待输入叶节点不计入消息。Agent 会话按时间排序，并从 workspace 获取工作目录；普通聊天不推断工作目录。已删除会话和聊天消息不会导出。
+Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含已迁移历史），可用于列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。普通聊天仅包含当前选中的根到叶路径，其他分支和多模型并列回复不进入导出、搜索或计数；虚拟根、非用户或助手的记录，以及既无内容也无用量的消息不计入；没有消息的会话不列出。Agent 会话按时间排序，并从 workspace 获取工作目录；普通聊天不推断工作目录。已删除的会话和消息不会导出。文件块转为图片或 `Attachment:` 正文，压缩摘要转为正文。缺少 token 总数时由明细求和，并记录推理 token；以 USD 记录的费用计入成本。未命名会话依次使用首条用户消息和 `Cherry Studio` 作为标题，更新时间取最后活动时间。
 
 正文、思考、工具调用及结果、代码和翻译会转换为统一格式。JSON 保留附件引用和控制事件，压缩摘要与内部事件不进入 collect 或搜索。Token 来自消息统计；各币种费用仅在 JSON 中保留，不换算或汇总计费金额。不读取附件实体、SDK 日志，也不执行应用迁移。暂不支持 1.x IndexedDB/Redux 原始数据和 raw 导出。
 
@@ -262,7 +266,7 @@ MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索�
 
 自定义 profile 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/providers/minimax.md)。
 
-OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读；新版消息按 `seq` 排序，消息数包含系统和状态记录。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。附件保留在 JSON 元数据中，不打开引用文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/providers/opencode-v2.md)。
+OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版。`migration.v1-v2` 完成前，OpenCode 尚未复制的旧版会话继续列出；完成后只读新版，V2 中已删除的会话不会重新出现。没有可见消息的会话不列出，消息数只计可见消息。标题为空时使用首条用户文本，再没有时为 `Untitled Session`。新版消息按 `seq` 排序。图片附件转为 image part；其他附件、`@agent`/`@skill` 提及、错误以及系统、压缩和切换记录转为带标签的文本。只有消息 JSON 无效或 assistant 的 `content` 不是数组时整条 V2 会话读取失败，其他异常字段置空。输入 token 包含缓存读写，输出 token 包含推理；旧版父会话累加后代会话的用量。ZCode 使用旧版读取器，排除 `subagent_child` 会话，保留 plan 和图片 part。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。不打开附件引用的文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/providers/opencode-v2.md)。
 
 ## 命令行参数
 

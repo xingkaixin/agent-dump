@@ -15,6 +15,14 @@ pub struct Pi {
     roots: SourceRoots,
 }
 
+struct Summary {
+    header: Value,
+    updated_at: Option<Timestamp>,
+    model: String,
+    title: Option<String>,
+    message_count: Option<usize>,
+}
+
 fn session_directory() -> crate::Result<Located> {
     let independent = |sessions: PathBuf, label| Located {
         owner: sessions.clone(),
@@ -82,16 +90,64 @@ impl Pi {
         })
     }
 
-    fn scan(path: &Path) -> crate::Result<crate::providers::jsonl::Metadata> {
-        crate::providers::jsonl::metadata(path, 20, None)
+    fn scan(path: &Path) -> crate::Result<Option<Summary>> {
+        let scan = crate::providers::jsonl::metadata(path, 20, None)?;
+        let mut updated_at = None;
+        let mut model = String::new();
+        for record in scan.records.iter().chain(scan.tail.iter()) {
+            updated_at = updated_at.max(datetime(&record["timestamp"]));
+            if model.is_empty() && record["type"] == "message" {
+                text(&record["message"]["model"])
+                    .trim()
+                    .clone_into(&mut model);
+            }
+        }
+        let (header, title, message_count) = if scan.complete {
+            let transcript =
+                transcript::Transcript::new(scan.records, |_| Ok(()))?;
+            let Some(header) = transcript.header else {
+                return Ok(None);
+            };
+            if transcript.messages.is_empty() {
+                return Ok(None);
+            }
+            (header, transcript.title, Some(transcript.messages.len()))
+        } else {
+            let Some(header) = scan
+                .records
+                .iter()
+                .find(|record| record["type"] == "session")
+                .cloned()
+            else {
+                return Ok(None);
+            };
+            let mut titles = Titles::default();
+            for record in scan.records.iter().chain(scan.tail.iter()) {
+                titles.add(record);
+            }
+            let title = titles.resolve(&header);
+            (header, title, None)
+        };
+        Ok(Some(Summary {
+            header,
+            updated_at,
+            model,
+            title,
+            message_count,
+        }))
     }
 
     fn parse(
         path: &Path,
-        scan: crate::providers::jsonl::Metadata,
+        summary: Option<Summary>,
     ) -> crate::Result<Option<Session>> {
-        let Some(header) =
-            scan.header.filter(|header| header["type"] == "session")
+        let Some(Summary {
+            header,
+            updated_at,
+            model,
+            title,
+            message_count,
+        }) = summary
         else {
             return Ok(None);
         };
@@ -109,39 +165,9 @@ impl Pi {
         }
         let created_at = datetime(&header["timestamp"])
             .unwrap_or(Timestamp::try_from(path.metadata()?.modified()?)?);
-        let mut updated_at = created_at;
-        let mut message_count = 0;
-        let mut model = String::new();
-        let mut title = None;
-        for record in scan.records.iter().chain(scan.tail.iter()) {
-            if let Some(timestamp) = datetime(&record["timestamp"]) {
-                updated_at = updated_at.max(timestamp);
-            }
-            if record["type"] == "message" {
-                message_count += 1;
-                if model.is_empty() {
-                    text(&record["message"]["model"])
-                        .trim()
-                        .clone_into(&mut model);
-                }
-            }
-            if let Some(name) = session_name(record) {
-                title = Some(name);
-            }
-        }
+        let updated_at = updated_at
+            .map_or(created_at, |updated_at| updated_at.max(created_at));
         let title = title
-            .or_else(|| {
-                scan.records.iter().find_map(|record| {
-                    (record["type"] == "message"
-                        && record["message"]["role"] == "user")
-                        .then(|| {
-                            normalize_title(&content_text(
-                                &record["message"]["content"],
-                            ))
-                        })
-                        .flatten()
-                })
-            })
             .or_else(|| crate::providers::title::value_basename(&header["cwd"]))
             .or_else(|| {
                 path.parent()
@@ -160,7 +186,7 @@ impl Pi {
             version: header["version"].clone(),
             model,
             project: None,
-            message_count: scan.complete.then_some(message_count),
+            message_count,
         }))
     }
 }
@@ -176,7 +202,7 @@ impl Provider for Pi {
             days,
             true,
             Self::scan,
-            |path, scan, _| Self::parse(path, scan),
+            |path, summary, _| Self::parse(path, summary),
         )
     }
 
@@ -241,39 +267,162 @@ pub fn datetime(value: &Value) -> Option<Timestamp> {
     parse_timestamp(value.as_str()?.trim())
 }
 
-pub fn session_name(record: &Value) -> Option<String> {
-    (record["type"] == "session_info")
-        .then(|| normalize_title(text(&record["name"])))
-        .flatten()
+#[derive(Default)]
+pub struct Titles {
+    named: Option<String>,
+    slot: Option<String>,
+    prompt: Option<String>,
 }
 
-fn content_text(content: &Value) -> String {
-    if let Some(text) = content.as_str() {
-        return text.into();
+impl Titles {
+    pub fn add(&mut self, record: &Value) {
+        match text(&record["type"]) {
+            "session_info" => {
+                if let Some(name) = title(text(&record["name"])) {
+                    self.named = Some(name);
+                }
+            }
+            "title" => self.slot = title(text(&record["title"])),
+            "message"
+                if self.prompt.is_none()
+                    && record["message"]["role"] == "user" =>
+            {
+                self.prompt =
+                    title(&prompt_text(&record["message"]["content"]));
+            }
+            _ => {}
+        }
     }
-    let Some(items) = content.as_array() else {
-        return String::new();
-    };
-    items
-        .iter()
-        .filter_map(|item| {
-            if let Some(text) = item.as_str() {
-                return Some(text.to_owned());
-            }
-            match text(&item["type"]) {
-                "text" => Some(field(item, "text")),
-                "thinking" => Some(field(item, "thinking")),
-                _ => None,
-            }
-        })
-        .filter(|text| !text.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+
+    pub fn resolve(self, header: &Value) -> Option<String> {
+        self.named
+            .or(self.slot)
+            .or_else(|| title(text(&header["title"])))
+            .or(self.prompt)
+    }
+}
+
+fn title(value: &str) -> Option<String> {
+    crate::providers::text::clean(value)
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .and_then(normalize_title)
+}
+
+fn prompt_text(content: &Value) -> String {
+    match content {
+        Value::String(prompt) => prompt.clone(),
+        Value::Array(items) => items
+            .iter()
+            .filter(|item| item["type"] == "text")
+            .map(|item| text(&item["text"]))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    fn write(path: &Path, records: &[Value]) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let lines: Vec<_> = records.iter().map(Value::to_string).collect();
+        std::fs::write(path, lines.join("\n")).unwrap();
+    }
+
+    #[test]
+    fn active_branch_drives_listing_and_export() {
+        let directory = tempfile::tempdir().unwrap();
+        let sessions = directory.path().join("agent/sessions");
+        write(
+            &sessions.join("tree.jsonl"),
+            &[
+                json!({"type":"title","title":"Slot title"}),
+                json!({"type":"session","id":"tree","cwd":"/work/tree","timestamp":"2026-01-15T00:00:00Z"}),
+                json!({"type":"message","id":"u","parentId":null,"message":{"role":"user","content":"Prompt"}}),
+                json!({"type":"message","id":"old","parentId":"u","message":{"role":"assistant","content":"Abandoned","usage":{"input":1000}}}),
+                json!({"type":"session_info","id":"old-name","parentId":"old","name":"Abandoned name"}),
+                json!({"type":"message","id":"a","parentId":"u","message":{"role":"assistant","content":[{"type":"toolCall","id":"call","name":"read","arguments":{"path":"a"}}],"usage":{"input":100,"output":20,"cacheRead":10,"cacheWrite":5,"totalTokens":135,"cost":{"total":0.25}}}}),
+                json!({"type":"message","id":"r","parentId":"a","message":{"role":"toolResult","toolCallId":"call","toolName":"read","content":[{"type":"text","text":"Result"}],"isError":false,"details":{"lines":1}}}),
+                json!({"type":"custom_message","id":"hidden","parentId":"r","display":false,"content":"Hidden"}),
+                json!({"type":"message","id":"note","parentId":"hidden","message":{"role":"custom","content":"Hidden note"}}),
+                json!({"type":"custom_message","id":"shown","parentId":"note","display":true,"content":"Shown"}),
+                json!({"type":"message","id":"b","parentId":"shown","message":{"role":"bashExecution","command":"false","output":"boom","exitCode":1,"cancelled":false,"truncated":false}}),
+            ],
+        );
+        write(
+            &sessions.join("empty.jsonl"),
+            &[
+                json!({"type":"session","id":"empty","timestamp":"2026-01-15T00:00:00Z"}),
+                json!({"type":"custom_message","id":"c","parentId":null,"display":false,"content":"Hidden"}),
+                json!({"type":"message","id":"a","parentId":"c","message":{"role":"assistant","content":[],"usage":{"input":5}}}),
+            ],
+        );
+        let mut provider = Pi {
+            roots: SourceRoots::fixed(
+                directory.path().into(),
+                "agent/sessions",
+                "data/pi",
+                "PI_HOME/agent/sessions",
+            ),
+        };
+        let discovery = provider.discover(None, &mut |_| Ok(())).unwrap();
+        let [session] = discovery.sessions.as_slice() else {
+            panic!("only the visible session is listed");
+        };
+        assert_eq!(session.title, "Slot title");
+        assert_eq!(session.message_count, Some(4));
+        let data = serde_json::to_value(
+            provider.read(session, false, &mut |_| Ok(())).unwrap(),
+        )
+        .unwrap();
+        let messages = data["messages"].as_array().unwrap();
+        let roles: Vec<_> =
+            messages.iter().map(|message| &message["role"]).collect();
+        assert_eq!(roles, ["user", "assistant", "custom", "tool"]);
+        let call = &messages[1]["parts"][0]["state"];
+        assert_eq!(call["output"][0]["text"], "Result");
+        assert_eq!(call["status"], "completed");
+        assert_eq!(call["metadata"], json!({"lines": 1}));
+        assert_eq!(
+            messages[1]["tokens"],
+            json!({"input":115,"output":20,"cache":{"read":10,"write":5},"total":135})
+        );
+        let bash = &messages[3]["parts"][0]["state"];
+        assert_eq!(bash["status"], "error");
+        assert_eq!(
+            bash["metadata"],
+            json!({"exitCode":1,"cancelled":false,"truncated":false})
+        );
+        assert_eq!(
+            data["stats"],
+            json!({"total_cost":0.25,"total_input_tokens":115,"total_output_tokens":20,"total_tokens":135,"message_count":4})
+        );
+    }
+
+    #[test]
+    fn titles_prefer_session_info_title_record_header_then_prompt() {
+        let header = json!({"type":"session","title":"Header"});
+        let prompt = json!({"type":"message","id":"u","parentId":null,"message":{"role":"user","content":"<system-reminder>x</system-reminder>\n  First   line \nSecond"}});
+        let slot = json!({"type":"title","title":"Slot"});
+        let named = json!({"type":"session_info","id":"n","parentId":"u","name":"Named"});
+        for (records, expected) in [
+            (
+                vec![json!({"type":"session"}), prompt.clone()],
+                "First line",
+            ),
+            (vec![header.clone(), prompt.clone()], "Header"),
+            (vec![slot.clone(), header.clone(), prompt.clone()], "Slot"),
+            (vec![header, prompt, slot, named], "Named"),
+        ] {
+            let transcript =
+                transcript::Transcript::new(records, |_| Ok(())).unwrap();
+            assert_eq!(transcript.title.as_deref(), Some(expected));
+        }
+    }
 
     #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
@@ -306,7 +455,12 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(
             &path,
-            "{\"type\":\"session\",\"id\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\"}\n",
+            concat!(
+                r#"{"type":"session","id":"kept","timestamp":"2026-01-15T00:00:00Z"}"#,
+                "\n",
+                r#"{"type":"message","message":{"role":"user","content":"Keep"}}"#,
+                "\n"
+            ),
         )
         .unwrap();
         let provider = Pi {

@@ -1,13 +1,45 @@
-use crate::compat::value::{field, pretty_json, string, text};
-use crate::providers::kimi::transcript::{arguments, tool_part};
+use crate::compat::value::{field, integer, pretty_json, string, text};
+use crate::providers::kimi::transcript::{arguments, content_text, tool_part};
 use crate::session::assembly::backfill;
 use crate::session::{Message, Part, TextPart, epoch_seconds};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+pub struct Usage {
+    pub input: i64,
+    pub output: i64,
+    cache_read: i64,
+    cache_write: i64,
+}
+
+pub fn usage(record: &Value) -> Option<Usage> {
+    let message = &record["message"];
+    let usage = &message["payload"]["token_usage"];
+    if message["type"] != "StatusUpdate" || !usage.is_object() {
+        return None;
+    }
+    let count = |key| integer(&usage[key]);
+    let cache_read = count("input_cache_read");
+    let cache_write = count("input_cache_creation");
+    Some(Usage {
+        input: count("input_other")
+            .saturating_add(cache_read)
+            .saturating_add(cache_write),
+        output: count("output"),
+        cache_read,
+        cache_write,
+    })
+}
+
+fn add(tokens: &mut serde_json::Map<String, Value>, key: &str, value: i64) {
+    let total = tokens.get(key).and_then(Value::as_i64).unwrap_or(0);
+    tokens.insert(key.into(), total.saturating_add(value).into());
+}
+
 #[derive(Default)]
 struct Decoder {
+    model: Option<String>,
     messages: Vec<Message>,
     pending: HashMap<String, (usize, usize)>,
     buffers: HashMap<String, String>,
@@ -26,7 +58,50 @@ impl Decoder {
         })
     }
 
+    fn usage(&mut self, usage: &Usage) {
+        let assistants = || {
+            self.messages
+                .iter()
+                .enumerate()
+                .rev()
+                .filter(|(_, message)| {
+                    message.role == "assistant" && !message.parts.is_empty()
+                })
+        };
+        let Some(index) = assistants()
+            .find(|(_, message)| message.tokens.is_empty())
+            .or_else(|| {
+                assistants().find(|(_, message)| {
+                    message.model.as_ref().and_then(Value::as_str)
+                        == self.model.as_deref()
+                })
+            })
+            .map(|(index, _)| index)
+        else {
+            return;
+        };
+        let message = &mut self.messages[index];
+        if message.model.is_none() {
+            message.model = self.model.clone().map(Value::String);
+        }
+        add(&mut message.tokens, "input", usage.input);
+        add(&mut message.tokens, "output", usage.output);
+        let cache = message
+            .tokens
+            .entry("cache")
+            .or_insert_with(|| Value::Object(serde_json::Map::new()));
+        if let Some(cache) = cache.as_object_mut() {
+            add(cache, "read", usage.cache_read);
+            add(cache, "write", usage.cache_write);
+        }
+    }
+
     fn record(&mut self, seq: usize, record: &Value) -> crate::Result<()> {
+        if let Some(usage) = usage(record)
+            && (usage.input != 0 || usage.output != 0)
+        {
+            self.usage(&usage);
+        }
         let message = &record["message"];
         let payload = &message["payload"];
         if !payload.is_object() {
@@ -39,16 +114,7 @@ impl Decoder {
         let id = format!("wire-{seq}");
         match text(&message["type"]) {
             "TurnBegin" => {
-                let input = &payload["user_input"];
-                let body = input.as_array().map_or_else(
-                    || text(input).to_owned(),
-                    |items| {
-                        items
-                            .iter()
-                            .filter_map(|item| item["text"].as_str())
-                            .collect()
-                    },
-                );
+                let body = content_text(&payload["user_input"]);
                 if !body.trim().is_empty() {
                     self.messages.push(Message::new(
                         id,
@@ -172,9 +238,13 @@ impl Decoder {
 
 pub fn read(
     path: &Path,
+    model: Option<&str>,
     diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
 ) -> crate::Result<Vec<Message>> {
-    let mut decoder = Decoder::default();
+    let mut decoder = Decoder {
+        model: model.map(str::to_owned),
+        ..Decoder::default()
+    };
     crate::providers::jsonl::scan_numbered(
         path,
         diagnostics,
