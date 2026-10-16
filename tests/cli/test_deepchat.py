@@ -120,17 +120,12 @@ def test_attachments_links_and_message_sequence(tmp_path, monkeypatch, structure
     assert data["messages"][0]["attachments"][0]["path"] == "/not-read/image.png"
 
 
-def test_drafts_window_and_missing_metadata(tmp_path, monkeypatch):
+def test_drafts_and_missing_metadata(tmp_path, monkeypatch):
     cli, identity = desktop(tmp_path, monkeypatch, "deepchat")
     with sqlite3.connect(cli.source) as conn:
         conn.execute(
             "INSERT INTO new_sessions SELECT 'draft', agent_id, title, NULL, 1, session_kind, NULL, created_at, updated_at FROM new_sessions"
         )
-        conn.execute(
-            "INSERT INTO new_sessions SELECT 'old', agent_id, '', NULL, 0, session_kind, NULL, 1, 1 FROM new_sessions WHERE id = ?",
-            (identity,),
-        )
         conn.execute("DELETE FROM deepchat_sessions")
     cli.parity("--list", "-d", "36500", "-q", "provider:deepchat", "--lang", "en")
-    cli.parity("deepchat://old", "--head", "--lang", "en")
     exports(cli, "deepchat", identity)

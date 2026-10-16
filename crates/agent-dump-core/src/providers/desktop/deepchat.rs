@@ -3,14 +3,14 @@ use crate::compat::value::{
 };
 use crate::providers::desktop::{Kind, has_tables, timestamp};
 use crate::providers::error::ProviderError;
-use crate::providers::sqlite::connection::rows;
+use crate::providers::sqlite::connection::{has_table, rows};
 use crate::session::timestamp::Timestamp;
 use crate::session::{
     ImagePart, Message, Part, PlanPart, Session, SessionData, Stats, TextPart,
 };
 use rusqlite::Connection;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 pub fn sessions(
@@ -36,15 +36,58 @@ pub fn sessions(
         )
         .into());
     }
-    rows(connection, "SELECT s.*, d.model_id, d.provider_id, (SELECT COUNT(*) FROM deepchat_messages m WHERE m.session_id = s.id) AS message_count FROM new_sessions s LEFT JOIN deepchat_sessions d ON d.id = s.id WHERE s.is_draft = 0 AND (? IS NULL OR s.id = ?) AND (? IS NULL OR s.created_at >= ?) ORDER BY s.created_at DESC, s.id", &[&id, &id, &cutoff, &cutoff])?
-        .into_iter().map(|row| {
-            let mut session = Session::new(string(&row["id"]), if truthy(&row["title"]) { string(&row["title"]) } else { "Untitled".into() }, path.to_owned(), timestamp(&row["created_at"]).unwrap_or(Timestamp::UNIX_EPOCH), timestamp(&row["updated_at"]).unwrap_or(Timestamp::UNIX_EPOCH));
+    let mut activity = vec![
+        "SELECT MAX(m.updated_at) AS time FROM deepchat_messages m WHERE m.session_id = s.id",
+    ];
+    if has_table(connection, "deepchat_assistant_blocks")? {
+        activity.push("SELECT MAX(b.updated_at) FROM deepchat_assistant_blocks b JOIN deepchat_messages m ON m.id = b.message_id WHERE m.session_id = s.id");
+    }
+    if has_table(connection, "deepchat_usage_stats")? {
+        activity.push("SELECT MAX(u.created_at) FROM deepchat_usage_stats u WHERE u.session_id = s.id");
+    }
+    let parents: HashMap<String, String> = rows(
+        connection,
+        "SELECT * FROM new_sessions WHERE is_draft = 0",
+        &[],
+    )?
+    .iter()
+    .map(|row| (string(&row["id"]), string(&row["parent_session_id"])))
+    .collect();
+    rows(connection, &format!("SELECT s.*, d.model_id, d.provider_id, (SELECT COUNT(*) FROM deepchat_messages m WHERE m.session_id = s.id) AS message_count, (SELECT MAX(time) FROM ({})) AS activity FROM new_sessions s LEFT JOIN deepchat_sessions d ON d.id = s.id WHERE s.is_draft = 0 AND (? IS NULL OR s.id = ?) AND (? IS NULL OR s.created_at >= ?) ORDER BY s.created_at DESC, s.id", activity.join(" UNION ALL ")), &[&id, &id, &cutoff, &cutoff])?
+        .into_iter()
+        .filter(|row| integer(&row["message_count"]) > 0 && rooted(&parents, text(&row["id"])))
+        .map(|row| {
+            let updated = [&row["updated_at"], &row["activity"]]
+                .into_iter()
+                .filter_map(timestamp)
+                .max()
+                .unwrap_or(Timestamp::UNIX_EPOCH);
+            let mut session = Session::new(string(&row["id"]), title(&row["title"]), path.to_owned(), timestamp(&row["created_at"]).unwrap_or(Timestamp::UNIX_EPOCH), updated);
             session.directory = text(&row["project_dir"]).into();
             session.model = text(&row["model_id"]).trim().into();
             session.message_count = row["message_count"].as_u64().and_then(|v| usize::try_from(v).ok());
             session.source_metadata = row;
             Ok(session)
         }).collect()
+}
+
+fn rooted(parents: &HashMap<String, String>, id: &str) -> bool {
+    let mut seen = HashSet::new();
+    let mut node = id;
+    while let Some(parent) = parents.get(node) {
+        if !seen.insert(node) {
+            return false;
+        }
+        node = parent;
+    }
+    true
+}
+
+fn title(value: &Value) -> String {
+    crate::providers::text::clean(text(value))
+        .lines()
+        .find_map(crate::providers::title::normalize_title)
+        .unwrap_or_else(|| "Untitled Session".into())
 }
 
 pub fn read(
@@ -128,7 +171,7 @@ fn details(
     id: &str,
 ) -> crate::Result<HashMap<String, Vec<Value>>> {
     let mut grouped: HashMap<String, Vec<Value>> = HashMap::new();
-    if crate::providers::sqlite::connection::has_table(connection, table)? {
+    if has_table(connection, table)? {
         let columns = if table == "deepchat_user_message_files" {
             "detail.message_id, detail.name, detail.path, detail.mime_type, detail.size"
         } else {

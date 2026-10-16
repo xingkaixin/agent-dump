@@ -112,8 +112,9 @@ fn fixture(kind: Kind) -> (tempfile::TempDir, Desktop, Session, &'static str) {
         Kind::DeepChat => (
             "CREATE TABLE new_sessions (id TEXT, title TEXT, created_at INTEGER, updated_at INTEGER, project_dir TEXT, agent_id TEXT, parent_session_id TEXT, session_kind TEXT, is_draft INTEGER);
              CREATE TABLE deepchat_sessions (id TEXT, model_id TEXT, provider_id TEXT);
-             CREATE TABLE deepchat_messages (session_id TEXT);
-             INSERT INTO new_sessions VALUES ('kept', 'Kept', 1768478400000, 1768478400000, '/project', NULL, NULL, 'conversation', 0);",
+             CREATE TABLE deepchat_messages (id TEXT, session_id TEXT, order_seq INTEGER, role TEXT, content TEXT, status TEXT, metadata TEXT, created_at INTEGER, updated_at INTEGER);
+             INSERT INTO new_sessions VALUES ('kept', 'Kept', 1768478400000, 1768478400000, '/project', NULL, NULL, 'conversation', 0);
+             INSERT INTO deepchat_messages VALUES ('kept-user', 'kept', 1, 'user', '{\"text\":\"Prompt\"}', 'sent', '{}', 1768478400000, 1768478400000);",
             "kept",
             "new_sessions",
         ),
@@ -432,6 +433,59 @@ fn minimax_out_of_scope_sessions_skip_storage_checks() {
         ["kept"]
     );
     for id in ["hidden-v2", "cron-pending", "opencode-v1"] {
+        assert!(
+            provider
+                .find(id, &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .is_none()
+        );
+    }
+}
+
+#[test]
+fn deepchat_lists_rooted_sessions_with_messages() {
+    let (_directory, mut provider, _, _) = fixture(Kind::DeepChat);
+    Connection::open(&provider.database)
+        .unwrap()
+        .execute_batch(
+            r#"CREATE TABLE deepchat_assistant_blocks (message_id TEXT, block_index INTEGER, updated_at INTEGER);
+            CREATE TABLE deepchat_usage_stats (session_id TEXT, created_at INTEGER);
+            INSERT INTO new_sessions VALUES
+              ('empty', 'Empty', 1, 1, NULL, NULL, NULL, NULL, 0),
+              ('loop-a', 'A', 1, 1, NULL, NULL, 'loop-b', NULL, 0),
+              ('loop-b', 'B', 1, 1, NULL, NULL, 'loop-a', NULL, 0),
+              ('child', '  ', 1, 1, NULL, NULL, 'kept', NULL, 0),
+              ('main', '<system-reminder>x</system-reminder>
+  First   line
+Second', 1, 1000, NULL, NULL, 'missing', NULL, 0);
+            INSERT INTO deepchat_messages VALUES
+              ('loop-a-m', 'loop-a', 1, 'user', '"hi"', 'sent', '{}', 1, 1),
+              ('loop-b-m', 'loop-b', 1, 'user', '"hi"', 'sent', '{}', 1, 1),
+              ('child-m', 'child', 1, 'user', '"hi"', 'sent', '{}', 1, 1),
+              ('m', 'main', 1, 'user', '"hi"', 'sent', '{}', 1, 2000);
+            INSERT INTO deepchat_assistant_blocks VALUES ('m', 0, 4000);
+            INSERT INTO deepchat_usage_stats VALUES ('main', 3000);"#,
+        )
+        .unwrap();
+    let found = provider.discover(None, &mut |_| Ok(())).unwrap();
+    assert_eq!(
+        found
+            .sessions
+            .iter()
+            .map(|s| (
+                s.id.as_str(),
+                s.title.as_str(),
+                s.updated_at.as_millisecond()
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("kept", "Kept", 1_768_478_400_000),
+            ("child", "Untitled Session", 1),
+            ("main", "First line", 4000)
+        ]
+    );
+    for id in ["empty", "loop-a"] {
         assert!(
             provider
                 .find(id, &mut |_| Ok(()))
