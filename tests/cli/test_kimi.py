@@ -17,13 +17,21 @@ def create(cli, *, context=None, wire=None, metadata=None, cwd="/workspace/kimi"
     (root / "kimi.json").write_text(json.dumps({"work_dirs": [{"path": cwd}]}))
     path = directory / "metadata.json"
     path.write_text(
-        json.dumps({"session_id": IDENTITY, "title": " Kimi\n会话 ", "wire_mtime": 1768478400, **(metadata or {})})
+        json.dumps(
+            {
+                "session_id": IDENTITY,
+                "title": " Kimi  会话 ",
+                "createdAt": 1768478400000,
+                "wire_mtime": 1768478400,
+                **(metadata or {}),
+            }
+        )
     )
     os.utime(path, (1768478400, 1768478400))
-    if context is not None:
-        write_jsonl(directory / "context.jsonl", context)
-    if wire is not None:
-        write_jsonl(directory / "wire.jsonl", wire)
+    for name, records in (("context.jsonl", context), ("wire.jsonl", wire)):
+        if records is not None:
+            write_jsonl(directory / name, records)
+            os.utime(directory / name, (1768478400, 1768478400))
     return directory
 
 
@@ -228,8 +236,6 @@ def test_wire_timestamps_and_token_count_coercion(cli, timestamp):
     "metadata,cwd",
     [
         ({}, ""),
-        ({"title": "", "session_id": None}, "/workspace/kimi"),
-        ({"title": 5, "session_id": 4}, ""),
         ({"wire_mtime": 1e30}, "/workspace/kimi"),
         ({"wire_mtime": "invalid"}, "/workspace/kimi"),
     ],
@@ -302,6 +308,45 @@ def status(**usage):
     return wire_event("StatusUpdate", token_usage=usage)
 
 
+def test_state_json_title_fallback_times_and_configured_model(cli):
+    directory = create(
+        cli,
+        wire=[
+            wire_event(
+                "TurnBegin", user_input=[{"text": "<system-reminder>hidden</system-reminder>\n  First   line\nmore"}]
+            )
+        ],
+        metadata={"title": "Ignored metadata"},
+    )
+    (directory / "state.json").write_text(
+        json.dumps({"custom_title": "", "createdAt": "2026-01-15T12:00:00Z", "wire_mtime": 1768478500})
+    )
+    os.utime(directory / "wire.jsonl", (1768478460, 1768478460))
+    untitled = directory.parent / "untitled"
+    nested = directory / "nested/deeper"
+    for path in (untitled, nested):
+        path.mkdir(parents=True)
+        (path / "metadata.json").write_text("{}")
+        write_jsonl(path / "context.jsonl", [{"role": "assistant", "content": "No prompt"}])
+    (cli.root / "sources/kimi/config.toml").write_text(
+        'default_model = "kimi-code/kimi-for-coding"\n\n'
+        '[models."moonshot-cn/kimi-k2.5"]\nmodel = "kimi-k2.5"\n\n'
+        '[models."kimi-code/kimi-for-coding"]\nmodel = "kimi-for-coding"\n'
+    )
+    result = cli.run("rust", "--list", "-d", "36500", "-q", "provider:kimi", "--json")
+    assert result.returncode == 0, result.stderr
+    sessions = {item["id"]: item for item in json.loads(result.stdout)["data"]}
+    assert sessions.keys() == {IDENTITY, "untitled"}
+    assert sessions["untitled"]["title"] == "Untitled Session"
+    head = sessions[IDENTITY]
+    assert (head["title"], head["created_at"], head["updated_at"], head["model"]) == (
+        "First line",
+        "2026-01-15T12:00:00.000000+00:00",
+        "2026-01-15T12:01:40.000000+00:00",
+        "kimi-for-coding",
+    )
+
+
 def test_status_usage_counts_cache_and_subagents_and_marks_wire_messages(cli):
     directory = create(
         cli,
@@ -314,10 +359,12 @@ def test_status_usage_counts_cache_and_subagents_and_marks_wire_messages(cli):
         ],
     )
     write_jsonl(directory / "subagents/a1/wire.jsonl", [status(input_other=30, output=6, input_cache_read=10)])
+    (cli.root / "sources/kimi/config.toml").write_text('default_model = "kimi-k2"\n')
     payload = export(cli)
     assert (payload["stats"]["total_input_tokens"], payload["stats"]["total_output_tokens"]) == (68, 15)
     user, assistant = payload["messages"]
     assert user["tokens"] == {}
+    assert assistant["model"] == "kimi-k2"
     assert assistant["tokens"] == {"input": 28, "output": 9, "cache": {"read": 5, "write": 2}}
 
 
