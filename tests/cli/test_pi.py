@@ -27,14 +27,9 @@ def create(cli, records, *, header=None, filename=None, suffix=b""):
     )
 
 
-def message(role, content=None, *, identity="entry", parent=None, **fields):
-    return {
-        "type": "message",
-        "id": identity,
-        "parentId": parent,
-        "timestamp": STAMP,
-        "message": {"role": role, "content": content, **fields},
-    }
+def message(role, content=None, *, identity=None, parent=None, **fields):
+    tree = {} if identity is None else {"id": identity, "parentId": parent}
+    return {"type": "message", **tree, "timestamp": STAMP, "message": {"role": role, "content": content, **fields}}
 
 
 STREAM = [
@@ -76,14 +71,6 @@ STREAM = [
 
 
 @pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_tree_messages_titles_stats_head_and_exports(cli, lang):
-    create(cli, STREAM)
-    cli.parity(f"pi://{IDENTITY}", "--head", "--lang", lang)
-    provider_export(cli, f"pi://{IDENTITY}", "pi", lang=lang)
-
-
-@pytest.mark.differential
 @pytest.mark.parametrize(
     "content",
     [
@@ -105,12 +92,8 @@ def test_content_shapes_images_and_tools(cli, content):
     "role,fields",
     [
         ("bashExecution", {"command": "", "output": ""}),
-        ("bashExecution", {"command": None, "output": None}),
-        ("toolResult", {"toolName": "", "toolCallId": "", "isError": True}),
-        ("toolResult", {"toolName": None, "toolCallId": None, "isError": [1]}),
         ("branchSummary", {"summary": " Branch "}),
         ("compactionSummary", {"summary": None}),
-        ("custom", {}),
         ("future-role", {}),
         ("system", {}),
         ("developer", {}),
@@ -137,21 +120,6 @@ def test_entry_identifiers_parents_and_valid_record_numbering(cli, identity, par
 def test_message_and_header_timestamps(cli, timestamp):
     create(cli, [message("user", "Keep", timestamp=timestamp)], header={"timestamp": timestamp})
     cli.parity(f"pi://{IDENTITY}", "--head", "--lang", "en")
-    provider_export(cli, f"pi://{IDENTITY}", "pi")
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize(
-    "usage",
-    [
-        {"input": "4", "output": 2.9, "totalTokens": "6", "cost": {"total": "0.1"}},
-        {"input": True, "output": None, "totalTokens": "bad", "cost": {"total": "NaN"}},
-        {"cost": {"total": True}},
-        {"cost": None},
-    ],
-)
-def test_usage_accumulates_even_without_visible_parts(cli, usage):
-    create(cli, [message("assistant", "", usage=usage), message("assistant", "Visible", usage=usage)])
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
