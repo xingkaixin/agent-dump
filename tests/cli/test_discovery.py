@@ -14,6 +14,7 @@ from sqlite_fixture import create_legacy
 from test_claude import create as create_claude, event
 from test_cursor import cursor
 from test_kimi import create as create_kimi
+from test_kimi_code import appended, create as create_kimi_code
 from test_pi import create as create_pi, message
 
 pytestmark = pytest.mark.differential
@@ -33,6 +34,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     cli = cursor(tmp_path, monkeypatch)
     create_claude(cli, [event("user", "Claude")])
     create_kimi(cli, context=[{"role": "user", "content": "Kimi"}])
+    create_kimi_code(cli, [appended("user", "Kimi-Code")], state={})
     create_pi(cli, [message("user", "Pi")])
     monkeypatch.syspath_prepend(str(ROOT / "tests" / "cli"))
     for provider, (variable, suffix, _) in PROVIDERS.items():
@@ -41,7 +43,18 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     if sys.platform == "darwin" or os.name == "nt":
         create_legacy(cli, "zcode", path=Path(cli.environment["HOME"]) / ".zcode/cli/db/db.sqlite")
     result = cli.run("rust", "--list", "-d", "36500")
-    expected = ["OpenCode", "Codex", "Kimi", "Claude Code", "Cursor", "Pi", "DeepChat", "Cherry Studio", "MiniMax Code"]
+    expected = [
+        "OpenCode",
+        "Codex",
+        "Kimi",
+        "Kimi-Code",
+        "Claude Code",
+        "Cursor",
+        "Pi",
+        "DeepChat",
+        "Cherry Studio",
+        "MiniMax Code",
+    ]
     if sys.platform == "darwin" or os.name == "nt":
         expected.insert(1, "ZCode")
     assert [line.split(" (")[0][2:] for line in result.stdout.splitlines() if line.startswith("📁 ")] == expected

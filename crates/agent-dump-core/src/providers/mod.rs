@@ -7,6 +7,7 @@ pub mod error;
 pub(crate) mod files;
 pub(crate) mod jsonl;
 pub(crate) mod kimi;
+pub(crate) mod kimi_code;
 pub(crate) mod pi;
 pub mod registry;
 #[cfg(test)]

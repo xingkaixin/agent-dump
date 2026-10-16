@@ -158,6 +158,7 @@ def test_machine_provider_capabilities_use_metadata_without_reading_sources(cli:
             "zcode",
             "codex",
             "kimi",
+            "kimi-code",
             "claude",
             "cursor",
             "pi",
