@@ -156,7 +156,12 @@ impl SqliteProvider {
                 format!("{name} session is missing: {}", session.id).into()
             );
         }
-        crate::providers::sqlite::legacy::read(connection, session, diagnostics)
+        crate::providers::sqlite::legacy::read(
+            connection,
+            session,
+            self.kind == Kind::ZCode || !has_table(connection, "session_v2")?,
+            diagnostics,
+        )
     }
 }
 
@@ -403,6 +408,7 @@ fn database_paths(kind: Kind) -> crate::Result<Vec<(&'static str, PathBuf)>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt::Write as _;
 
     #[test]
     fn configuration_changes_retry_missing_sources_without_replacing_selected_database()
@@ -711,5 +717,68 @@ mod tests {
                 .unwrap();
             assert_eq!(error.to_string(), expected);
         }
+    }
+
+    const LEGACY: &str = "CREATE TABLE session (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT, parent_id TEXT); CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT); CREATE TABLE part (id TEXT, message_id TEXT, time_created INTEGER, data TEXT);";
+
+    fn database(sql: &str, kind: Kind) -> (tempfile::TempDir, SqliteProvider) {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("source.sqlite");
+        Connection::open(&path).unwrap().execute_batch(sql).unwrap();
+        let provider = SqliteProvider {
+            kind,
+            database: Some(path.clone()),
+            root: directory.path().into(),
+            search_roots: Box::new(move || {
+                Ok(vec![("Synthetic", path.clone())])
+            }),
+            readers: Readers::default(),
+        };
+        (directory, provider)
+    }
+
+    fn message(
+        id: &str,
+        session: &str,
+        time: i64,
+        data: &str,
+        parts: &[&str],
+    ) -> String {
+        let mut sql = format!(
+            "INSERT INTO message VALUES ('{id}', '{session}', {time}, '{data}');"
+        );
+        for (index, part) in parts.iter().enumerate() {
+            write!(sql, "INSERT INTO part VALUES ('{id}-{index}', '{id}', {time}, '{part}');").unwrap();
+        }
+        sql
+    }
+
+    #[test]
+    fn legacy_usage_counts_cache_reasoning_and_descendants() {
+        let text = r#"{"type":"text","text":"Done"}"#;
+        let sql = [
+            LEGACY,
+            "INSERT INTO session VALUES ('root', 'Root', 3, 3, NULL, '/p', NULL, NULL, NULL), ('child', 'Child', 2, 2, NULL, '/p', NULL, NULL, 'root'), ('grandchild', 'Grandchild', 1, 1, NULL, '/p', NULL, NULL, 'child');",
+            &message("r1", "root", 1, r#"{"role":"assistant","cost":0.5,"tokens":{"input":10,"output":5,"reasoning":2,"cache":{"read":3,"write":1}}}"#, &[text]),
+            &message("c1", "child", 1, r#"{"role":"assistant","cost":0.25,"tokens":{"input":1,"output":1}}"#, &[text]),
+            &message("g1", "grandchild", 1, r#"{"role":"assistant","cost":0.25,"tokens":{"input":1,"reasoning":1}}"#, &[]),
+        ]
+        .concat();
+        let (_directory, mut provider) = database(&sql, Kind::OpenCode);
+        let root = provider
+            .find("root", &mut |_| Ok(()))
+            .unwrap()
+            .session
+            .unwrap();
+        let stats = provider.read(&root, false, &mut |_| Ok(())).unwrap().stats;
+        assert_eq!(
+            (
+                stats.message_count,
+                stats.total_cost.as_f64(),
+                stats.total_input_tokens.as_u64(),
+                stats.total_output_tokens.as_u64(),
+            ),
+            (1, Some(1.0), Some(16), Some(9))
+        );
     }
 }

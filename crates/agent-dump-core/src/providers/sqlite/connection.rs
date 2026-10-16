@@ -85,11 +85,37 @@ pub fn has_table(connection: &Connection, name: &str) -> crate::Result<bool> {
     )?)
 }
 
+pub fn has_column(
+    connection: &Connection,
+    table: &str,
+    name: &str,
+) -> crate::Result<bool> {
+    Ok(connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info(?) WHERE name = ?)",
+        [table, name],
+        |row| row.get(0),
+    )?)
+}
+
 pub fn rows(
     connection: &Connection,
     sql: &str,
     parameters: &[&dyn rusqlite::ToSql],
 ) -> crate::Result<Vec<Value>> {
+    let mut result = Vec::new();
+    each_row(connection, sql, parameters, |row| {
+        result.push(row);
+        Ok(())
+    })?;
+    Ok(result)
+}
+
+pub fn each_row(
+    connection: &Connection,
+    sql: &str,
+    parameters: &[&dyn rusqlite::ToSql],
+    mut visit: impl FnMut(Value) -> crate::Result<()>,
+) -> crate::Result<()> {
     let mut statement = connection.prepare(sql)?;
     let names: Vec<String> = statement
         .column_names()
@@ -97,7 +123,6 @@ pub fn rows(
         .map(|name| (*name).into())
         .collect();
     let mut rows = statement.query(parameters)?;
-    let mut result = Vec::new();
     while let Some(row) = rows.next()? {
         let mut record = Map::new();
         for (index, name) in names.iter().enumerate() {
@@ -114,9 +139,9 @@ pub fn rows(
             };
             record.insert(name.clone(), value);
         }
-        result.push(record.into());
+        visit(record.into())?;
     }
-    Ok(result)
+    Ok(())
 }
 
 pub fn json_cell(value: &Value) -> crate::Result<Value> {
