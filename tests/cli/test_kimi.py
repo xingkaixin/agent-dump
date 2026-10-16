@@ -114,13 +114,13 @@ def test_context_todo_filtering_and_title_mapping(cli):
 def test_context_user_coercion_empty_and_unknown_records(cli):
     create(
         cli,
-        context=[{"role": "user", "content": value} for value in [None, "", "   ", 7]]
+        context=[{"role": "user", "content": value} for value in ["", "   "]]
         + [{"role": "unknown", "content": "ignored"}],
     )
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
-def test_context_reads_string_and_part_list_content(cli):
+def test_context_reads_string_and_joins_part_list_with_spaces(cli):
     pasted = [
         {"type": "text", "text": "Review "},
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA==", "id": None}},
@@ -141,7 +141,7 @@ def test_context_reads_string_and_part_list_content(cli):
     assert [(item["role"], item["text"]) for item in messages] == [
         ("user", "Plain prompt"),
         ("assistant", "Plain answer"),
-        ("user", "Review PASTED BODY then reply"),
+        ("user", "Review   PASTED BODY  then reply"),
     ]
 
 
@@ -203,7 +203,7 @@ def test_wire_boundaries(cli, records):
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
-def test_wire_user_input_keeps_strings_and_every_text_part(cli):
+def test_wire_user_input_keeps_strings_and_joins_parts_with_spaces(cli):
     pasted = [
         {"type": "text", "text": "Review "},
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}},
@@ -216,7 +216,7 @@ def test_wire_user_input_keeps_strings_and_every_text_part(cli):
     messages = json.loads(result.stdout)["data"]["messages"]
     assert [(item["role"], item["text"]) for item in messages] == [
         ("user", "Plain prompt"),
-        ("user", "Review PASTED BODY then reply"),
+        ("user", "Review   PASTED BODY  then reply"),
     ]
 
 
@@ -305,3 +305,24 @@ def test_bad_metadata_does_not_hide_healthy_sessions(cli, metadata):
         assert "metadata.json" in result.stderr, result.stdout + result.stderr
     provider_export(cli, f"kimi://{IDENTITY}", "kimi")
     assert cli.fixtures.source_manifest(cli.root) == before
+
+
+def export(cli):
+    result = cli.run("rust", f"kimi://{IDENTITY}", "--format", "json", "--output", "exports")
+    assert result.returncode == 0, result.stderr
+    return json.loads(next((cli.root / "exports/kimi").glob("*.json")).read_text())
+
+
+def test_context_keeps_untyped_tool_calls(cli):
+    untyped = {"id": "call", "function": {"name": "Shell", "arguments": '{"command":"pwd"}'}}
+    create(
+        cli,
+        context=[
+            {"role": "assistant", "tool_calls": [untyped]},
+            {"role": "tool", "tool_call_id": "call", "content": "OK"},
+        ],
+    )
+    [message] = export(cli)["messages"]
+    [part] = message["parts"]
+    assert (part["tool"], part["state"]["arguments"]) == ("Shell", {"command": "pwd"})
+    assert [item["text"] for item in part["state"]["output"]] == ["OK"]

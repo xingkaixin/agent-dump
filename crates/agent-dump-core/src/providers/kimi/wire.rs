@@ -1,5 +1,5 @@
 use crate::compat::value::{field, pretty_json, string, text};
-use crate::providers::kimi::transcript::{arguments, tool_part};
+use crate::providers::kimi::transcript::{arguments, content_text, tool_part};
 use crate::session::assembly::backfill;
 use crate::session::{Message, Part, TextPart, epoch_seconds};
 use serde_json::Value;
@@ -39,16 +39,7 @@ impl Decoder {
         let id = format!("wire-{seq}");
         match text(&message["type"]) {
             "TurnBegin" => {
-                let input = &payload["user_input"];
-                let body = input.as_array().map_or_else(
-                    || text(input).to_owned(),
-                    |items| {
-                        items
-                            .iter()
-                            .filter_map(|item| item["text"].as_str())
-                            .collect()
-                    },
-                );
+                let body = content_text(&payload["user_input"]);
                 if !body.trim().is_empty() {
                     self.messages.push(Message::new(
                         id,
