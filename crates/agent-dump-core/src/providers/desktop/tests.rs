@@ -123,8 +123,9 @@ fn fixture(kind: Kind) -> (tempfile::TempDir, Desktop, Session, &'static str) {
              CREATE TABLE message (id TEXT);
              CREATE TABLE agent_workspace (id TEXT, path TEXT);
              CREATE TABLE agent_session (id TEXT, name TEXT, created_at INTEGER, updated_at INTEGER, workspace_id TEXT);
-             CREATE TABLE agent_session_message (id TEXT, session_id TEXT, role TEXT, model_id TEXT, message_snapshot TEXT, created_at INTEGER);
-             INSERT INTO agent_session VALUES ('kept', 'Kept', 1768478400000, 1768478400000, NULL);",
+             CREATE TABLE agent_session_message (id TEXT, session_id TEXT, role TEXT, data TEXT, model_id TEXT, message_snapshot TEXT, created_at INTEGER);
+             INSERT INTO agent_session VALUES ('kept', 'Kept', 1768478400000, 1768478400000, NULL);
+             INSERT INTO agent_session_message VALUES ('kept-user', 'kept', 'user', '{\"parts\":[{\"type\":\"text\",\"text\":\"Prompt\"}]}', NULL, NULL, 1768478400000);",
             "session-kept",
             "agent_session",
         ),
@@ -579,5 +580,77 @@ fn deepchat_messages_carry_references_and_usage() {
             &data["stats"]["total_output_tokens"]
         ),
         (&117.into(), &25.into())
+    );
+}
+
+#[test]
+fn cherry_lists_sessions_with_content_or_usage() {
+    let (_directory, mut provider, _, _) = fixture(Kind::Cherry);
+    Connection::open(&provider.database)
+        .unwrap()
+        .execute_batch(
+            r#"ALTER TABLE agent_session ADD COLUMN last_activity_at INTEGER;
+            ALTER TABLE agent_session_message ADD COLUMN stats TEXT;
+            ALTER TABLE agent_session_message ADD COLUMN deleted_at INTEGER;
+            INSERT INTO topic VALUES ('idle', 'Idle', 1, 1, NULL, NULL);
+            INSERT INTO agent_session (id, name, created_at, updated_at, last_activity_at) VALUES
+              ('empty', 'Empty', 1, 1, 1),
+              ('deleted', 'Deleted', 1, 1, 1),
+              ('named', '  ', 1, 1, 9000),
+              ('usage', NULL, 1, 1, NULL);
+            INSERT INTO agent_session_message (id, session_id, role, data, stats, deleted_at, created_at) VALUES
+              ('d', 'deleted', 'user', '{"parts":[{"type":"text","text":"gone"}]}', NULL, 5, 1),
+              ('n1', 'named', 'system', '{"parts":[{"type":"text","text":"setup"}]}', NULL, NULL, 1),
+              ('n2', 'named', 'user', '{"parts":[{"type":"text","text":"<system-reminder>x</system-reminder>"}]}', NULL, NULL, 2),
+              ('n3', 'named', 'user', '{"parts":[{"type":"text","text":"\n  Fix   the bug\nnow"}]}', NULL, NULL, 3),
+              ('n4', 'named', 'assistant', '{"parts":[{"type":"text","text":"Done"}]}', NULL, NULL, 4),
+              ('n5', 'named', 'assistant', '{"parts":[]}', NULL, NULL, 5),
+              ('u1', 'usage', 'assistant', '{"parts":[]}', '{"inputTokens":3}', NULL, 1);"#,
+        )
+        .unwrap();
+    let found = provider.discover(None, &mut |_| Ok(())).unwrap();
+    assert_eq!(
+        found
+            .sessions
+            .iter()
+            .map(|s| (
+                s.id.as_str(),
+                s.title.as_str(),
+                s.updated_at.as_millisecond(),
+                s.message_count
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("session-kept", "Kept", 1_768_478_400_000, Some(1)),
+            ("session-named", "Fix the bug", 9000, Some(2)),
+            ("session-usage", "Cherry Studio", 1, Some(1))
+        ]
+    );
+    for id in ["session-empty", "session-deleted", "topic-idle"] {
+        assert!(
+            provider
+                .find(id, &mut |_| Ok(()))
+                .unwrap()
+                .session
+                .is_none()
+        );
+    }
+    let data = read_json(&mut provider, "session-named");
+    assert_eq!(
+        (
+            &data["title"],
+            &data["time_updated"],
+            &data["stats"]["message_count"]
+        ),
+        (&"Fix the bug".into(), &9000.into(), &2.into())
+    );
+    assert_eq!(
+        data["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|message| message["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["n3", "n4"]
     );
 }

@@ -7,9 +7,7 @@ import pytest
 pytestmark = pytest.mark.differential
 
 
-@pytest.mark.parametrize(
-    "active,ids", [("empty", ["user", "answer"]), ("alternative", ["user", "alternative"]), ("root", []), (None, [])]
-)
+@pytest.mark.parametrize("active,ids", [("empty", ["user", "answer"]), ("alternative", ["user", "alternative"])])
 def test_active_branch_and_empty_leaf(tmp_path, monkeypatch, active, ids):
     cli, _ = desktop(tmp_path, monkeypatch, "cherry")
     with sqlite3.connect(cli.source) as conn:
