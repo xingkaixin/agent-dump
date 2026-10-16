@@ -80,7 +80,7 @@ class TestWebsiteMatchesTheRealCli:
         assert result.returncode == 0, result.stderr
         registered = {provider["scheme"] for provider in json.loads(result.stdout)["data"]}
         for guide in self.GUIDES.rglob("*.md"):
-            schemes = set(re.findall(r"([a-z][a-z0-9]*)://", guide.read_text(encoding="utf-8")))
+            schemes = set(re.findall(r"([a-z][a-z0-9-]*)://", guide.read_text(encoding="utf-8")))
             assert not (schemes - {"https"} - registered)
 
     def test_supported_tools_cover_the_provider_registry(self, cli):
@@ -89,5 +89,5 @@ class TestWebsiteMatchesTheRealCli:
         registered = {provider["scheme"] for provider in json.loads(result.stdout)["data"]}
         start = self.PROVIDERS.index("export const providers")
         block = self.PROVIDERS[start : self.PROVIDERS.index("] as const;", start)]
-        listed = set(re.findall(r'example: "([a-z][a-z0-9]*)://', block))
+        listed = set(re.findall(r'example: "([a-z][a-z0-9-]*)://', block))
         assert listed == registered

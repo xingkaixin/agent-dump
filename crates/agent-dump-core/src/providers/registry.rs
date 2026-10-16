@@ -56,6 +56,16 @@ static REGISTRATIONS: &[Registration] = &[
     },
     Registration {
         info: ProviderInfo {
+            name: "kimi-code",
+            display_name: "Kimi-Code",
+            scheme: "kimi-code",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || Ok(Box::new(crate::providers::kimi_code::KimiCode::open()?)),
+    },
+    Registration {
+        info: ProviderInfo {
             name: "claudecode",
             display_name: "Claude Code",
             scheme: "claude",

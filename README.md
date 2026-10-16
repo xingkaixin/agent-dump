@@ -49,6 +49,7 @@ Follow the generated read commands and cursors until `has_more=false` to cover t
 - **Claude Code** - Anthropic's AI coding tool
 - **Codex** - OpenAI's command-line AI coding assistant
 - **Kimi** - Moonshot AI assistant
+- **Kimi-Code** - Kimi Code CLI sessions
 - **Cursor** - Cursor composer sessions
 - **Pi** - Earendil's AI coding agent
 - **DeepChat** - Current local sessions from unencrypted databases
@@ -172,6 +173,7 @@ Supported URI schemes:
 - `codex://<session_id>` - Codex sessions
 - `codex://threads/<session_id>` - Codex sessions
 - `kimi://<session_id>` - Kimi sessions
+- `kimi-code://<session_id>` - Kimi-Code sessions
 - `claude://<session_id>` - Claude Code sessions
 - `cursor://<requestid>` - Cursor sessions (`requestid` is used as URI identifier)
 - `pi://<session_id>` - Pi sessions
@@ -237,6 +239,7 @@ listed and fails when there is nothing to list because no provider has data.
 - **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
 - **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
+- **Kimi-Code**: `KIMI_CODE_HOME` -> `~/.kimi-code` -> `data/kimi-code`. A session is a `sessions/<hash>/<id>/` directory with both `state.json` and `agents/main/wire.jsonl`; sessions without messages are skipped. The working directory comes from `workDir` or `custom.cwd` in `state.json`, then `session_index.jsonl` in the data root.
 - **OpenCode**: `OPENCODE_DB` selects one database (relative to `XDG_DATA_HOME/opencode` or `~/.local/share/opencode`). Otherwise use `opencode.db` there, then the legacy Windows `LOCALAPPDATA`/`APPDATA` location, then `data/opencode/opencode.db`.
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
 - **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`; defaults to the `User` directory under macOS `~/Library/Application Support/Cursor`, Windows `%APPDATA%\Cursor`, or Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor`.
@@ -571,7 +574,7 @@ Give an Agent this single command to obtain instructions and executable commands
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` works with every registered Provider, including Claude Code, OpenCode, ZCode, Kimi, Cursor, Pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
+`--read-prompt` works with every registered Provider, including Claude Code, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
 
 Direct reading is also available:
 
