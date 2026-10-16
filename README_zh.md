@@ -49,6 +49,7 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **Claude Code** - Anthropic 的 AI 编码工具
 - **Codex** - OpenAI 的命令行 AI 编码助手
 - **Kimi** - Moonshot AI 助手
+- **Kimi-Code** - Kimi Code CLI 会话
 - **Cursor** - Cursor composer 会话
 - **Pi** - Earendil 的 AI coding agent
 - **DeepChat** - 当前版本的本地会话（未加密数据库）
@@ -172,6 +173,7 @@ agent-dump opencode://session-id-abc123
 - `codex://<session_id>` - Codex 会话
 - `codex://threads/<session_id>` - Codex 会话
 - `kimi://<session_id>` - Kimi 会话
+- `kimi-code://<session_id>` - Kimi-Code 会话
 - `claude://<session_id>` - Claude Code 会话
 - `cursor://<requestid>` - Cursor 会话（`requestid` 作为 URI 标识符）
 - `pi://<session_id>` - Pi 会话
@@ -237,6 +239,7 @@ agent-dump opencode://session-id-abc123
 - **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
 - **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
+- **Kimi-Code**: `KIMI_CODE_HOME` -> `~/.kimi-code` -> `data/kimi-code`。会话是同时包含 `state.json` 和 `agents/main/wire.jsonl` 的 `sessions/<hash>/<id>/` 目录，没有消息的会话会跳过。工作目录依次取 `state.json` 的 `workDir`、`custom.cwd`，再查数据根目录的 `session_index.jsonl`。
 - **OpenCode**: `OPENCODE_DB` 指定唯一数据库（相对路径以 `XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 为基准）；未指定时读取该目录的 `opencode.db`，再回退到旧 Windows `LOCALAPPDATA`/`APPDATA` 路径和 `data/opencode/opencode.db`。
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
 - **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`；默认使用 macOS `~/Library/Application Support/Cursor`、Windows `%APPDATA%\Cursor`、Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor` 下的 `User` 目录。
@@ -552,7 +555,7 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、OpenCode、ZCode、Kimi、Cursor、Pi、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
+`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Pi、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
 
 也可以直接读取：
 
