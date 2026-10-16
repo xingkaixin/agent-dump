@@ -250,6 +250,8 @@ Notes:
 - On Windows, prefer configuring the tool's official environment variable when available.
 - The `data/<agent>` fallback is kept for local development and tests.
 
+Claude Code lists `<project>/<session>.jsonl` files and the subagent transcripts under `<session>/subagents/`, including workflow agents in `subagents/workflows/<run>/agent-*.jsonl`. Each subagent is a separate session identified by its agent ID, and the parent message that starts it records `subagent_id`. Sessions without a visible message are skipped. Titles use the latest custom title, then the AI title, the subagent name or description, `sessions-index.json`, and the first line of the first user prompt within the first 20 records. Message counts include visible records only. Token totals keep the last usage of each API request and count cache reads and writes as input.
+
 DeepChat reads saved sessions in the current `agent.db`, including migrated history, ACP sessions, and subagent sessions; drafts are excluded. It supports listing, query, search, stats, collect, and print / JSON / Markdown exports. Structured messages take precedence over the `content` fallback. Text, reasoning, and tool records are normalized; compaction markers do not enter collect. JSON also retains attachment references, links, and other message blocks. Attachment files and offloaded tool output are not read. Token totals come from message records; billing cost is unavailable.
 
 SQLCipher databases, direct reads of legacy `chat.db`, and raw export are unsupported. The reader does not run DeepChat migrations or Tape recovery. Set `DEEPCHAT_USER_DATA_DIR` to read a custom user data directory.

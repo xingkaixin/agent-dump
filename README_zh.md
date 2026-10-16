@@ -250,6 +250,8 @@ agent-dump opencode://session-id-abc123
 - Windows 上建议优先配置工具官方环境变量。
 - `data/<agent>` 回退路径保留用于本地开发和测试。
 
+Claude Code 列出 `<项目>/<会话>.jsonl`，以及 `<会话>/subagents/` 下的子代理记录，包括 `subagents/workflows/<run>/agent-*.jsonl` 中的 workflow agent。每个子代理作为独立会话列出，以 agent ID 标识；父会话中启动它的消息记录 `subagent_id`。没有可见消息的会话不列出。标题依次取最新的自定义标题、AI 标题、子代理名称或描述、`sessions-index.json`，以及前 20 条记录中首个用户输入的第一行。消息数只计可见记录。Token 合计按 API 请求取最后一次 usage，缓存读写计入输入。
+
 DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`；保留正文、思考和工具记录，压缩提示不进入 collect。JSON 还保留附件引用、链接及其他消息块，不读取附件实体或外置工具输出文件。Token 来自消息记录，不提供计费金额。
 
 暂不支持 SQLCipher 加密库、旧版 `chat.db` 直读和 raw 导出；不会执行 DeepChat 的迁移或 Tape 恢复。`DEEPCHAT_USER_DATA_DIR` 可用于指定自定义用户数据目录。
