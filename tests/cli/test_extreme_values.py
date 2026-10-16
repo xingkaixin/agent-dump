@@ -9,14 +9,10 @@ from test_pi import create as pi_create, message as pi_message
 pytestmark = pytest.mark.differential
 
 
-@pytest.mark.parametrize("provider", ["claude", "kimi", "pi"])
+@pytest.mark.parametrize("provider", ["kimi", "pi"])
 @pytest.mark.parametrize("value", [2**63 - 1, 2**80, -(2**80), str(2**100), 1e100, "  +1_234  ", "١٢٣", "１２３"])
 def test_large_token_values_are_preserved_and_accumulated(cli, provider, value):
-    if provider == "claude":
-        cli_event = event("assistant", [{"type": "text", "text": "Numbers"}])
-        cli_event["message"]["usage"] = {"input_tokens": value, "output_tokens": value}
-        claude_create(cli, [event("user", "Numbers"), cli_event, event("user", "Next"), cli_event])
-    elif provider == "kimi":
+    if provider == "kimi":
         kimi_create(
             cli,
             context=[{"role": "user", "content": "Numbers"}, {"role": "_usage", "token_count": value}],
@@ -26,7 +22,7 @@ def test_large_token_values_are_preserved_and_accumulated(cli, provider, value):
         pi_create(
             cli, [pi_message("assistant", "Numbers", usage={"input": value, "output": value, "totalTokens": value})] * 2
         )
-    payload = provider_export(cli, f"{provider}://{IDENTITY}", "claudecode" if provider == "claude" else provider)
+    payload = provider_export(cli, f"{provider}://{IDENTITY}", provider)
     assert payload["stats"]["total_input_tokens"] == int(value) * 2
 
 

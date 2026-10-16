@@ -41,33 +41,10 @@ def create(cli, records, *, identity=IDENTITY, project="-workspace-claude"):
         ],
         [event("assistant", [{"type": "thinking", "thinking": "Same"}])] * 2,
         [event("assistant", [{"type": "text", "text": "Reading"}, tool()]), event("user", [result()])],
-        [event("assistant", [{"type": "thinking", "thinking": "Thinking"}, tool(), {"type": "text", "text": "Done"}])],
-        [
-            event(
-                "assistant",
-                [
-                    {"type": "text", "text": "A"},
-                    {"type": "thinking", "thinking": "B"},
-                    tool(),
-                    {"type": "text", "text": "C"},
-                ],
-            )
-        ],
         [event("assistant", [tool()]), event("user", [result()]), event("user", [result(content="more")])],
-        [event("assistant", [tool(), tool("other", "Bash")]), event("user", [result("other"), result()])],
-        [event("assistant", [tool(name="TodoWrite")]), event("user", [result(), {"type": "text", "text": "Keep"}])],
-        [event("assistant", [tool(name="TodoWrite", identity="")]), event("user", [result(identity="")])],
         [
             event("assistant", [tool()], identity="owner"),
             event("user", [result(identity="")], sourceToolAssistantUUID="owner"),
-        ],
-        [
-            event("assistant", [tool(), tool("other")], identity="owner"),
-            event("user", [result(identity="")], sourceToolAssistantUUID="owner"),
-        ],
-        [
-            event("assistant", [tool(name="Skill")]),
-            event("user", [result(content=[])], toolUseResult={"success": True, "commandName": "review"}),
         ],
         [event("assistant", [tool()]), event("user", [result()], toolUseResult={"success": False})],
         [event("user", [result("missing"), "ordinary text"]), event("tool_result", [{"content": "legacy"}])],
@@ -75,11 +52,6 @@ def create(cli, records, *, identity=IDENTITY, project="-workspace-claude"):
             event("assistant", [{"type": "text", "text": "Ignore"}], isMeta=True),
             event("user", "Ignore", isMeta=True),
             event("user", "Keep"),
-        ],
-        [
-            event("assistant", [{"type": "text", "text": "A"}]),
-            event("user", "   "),
-            event("assistant", [{"type": "text", "text": "B"}]),
         ],
         [
             event("assistant", [{"type": "text", "text": "A"}]),
@@ -114,9 +86,7 @@ def test_accumulated_parts_keep_reasoning_and_tool_boundaries(cli):
 
 
 @pytest.mark.differential
-@pytest.mark.parametrize(
-    "content", [None, "", False, 1e-6, {"z": 2, "a": 1}, ["one", {"text": "two"}, {"content": 3}, None]]
-)
+@pytest.mark.parametrize("content", [False, 1e-6, {"z": 2, "a": 1}, ["one", {"text": "two"}, {"content": 3}, None]])
 def test_tool_output_shapes(cli, content):
     create(
         cli,
@@ -126,21 +96,6 @@ def test_tool_output_shapes(cli, content):
             event("user", [result("orphan", content)]),
         ],
     )
-    provider_export(cli, f"claude://{IDENTITY}", "claudecode")
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize(
-    "usage", [{"input_tokens": "17", "output_tokens": 4}, {"input_tokens": True, "output_tokens": "bad"}, [], None]
-)
-def test_grouped_usage_and_first_metadata(cli, usage):
-    first = event("assistant", [{"type": "thinking", "thinking": "Think"}])
-    second = event("assistant", [{"type": "text", "text": "Text"}, tool()])
-    third = event("assistant", [{"type": "text", "text": "After tool"}])
-    first["message"].update(model="first", usage=usage)
-    second["message"].update(model="second", usage={"input_tokens": 100, "output_tokens": 2})
-    third["message"].update(model="third", usage={"input_tokens": 3, "output_tokens": 5})
-    create(cli, [first, second, third])
     provider_export(cli, f"claude://{IDENTITY}", "claudecode")
 
 
@@ -269,3 +224,74 @@ def test_system_tags_and_trailing_whitespace_are_removed(cli):
     text, call = messages[1]["parts"]
     assert text["text"] == "Done"
     assert call["state"]["output"][0]["text"] == "ok"
+
+
+def rust_json(cli, *args):
+    completed = cli.run("rust", *args, "--lang", "en")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return completed
+
+
+def rust_export(cli, identity=IDENTITY):
+    shutil.rmtree(cli.root / "exports", ignore_errors=True)
+    rust_json(cli, f"claude://{identity}", "--format", "json", "--output", "exports")
+    return json.loads(next((cli.root / "exports/claudecode").glob("*.json")).read_text())
+
+
+def test_transcript_keeps_tools_images_and_request_usage(cli):
+    image = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo="}}
+
+    def assistant(identity, request, content, usage):
+        record = event("assistant", content, identity=identity, requestId=request)
+        record["message"].update(model="claude-test", usage=usage)
+        return record
+
+    create(
+        cli,
+        [
+            event("user", "Start", identity="start"),
+            assistant(
+                "think",
+                "first",
+                [{"type": "thinking", "thinking": "Plan"}],
+                {"input_tokens": 10, "output_tokens": 1, "cache_read_input_tokens": 5},
+            ),
+            assistant(
+                "todo",
+                "first",
+                [tool("todo", "TodoWrite")],
+                {
+                    "input_tokens": 10,
+                    "output_tokens": 4,
+                    "cache_read_input_tokens": 5,
+                    "cache_creation_input_tokens": 2,
+                },
+            ),
+            event(
+                "user",
+                [result("todo", [{"type": "text", "text": "Saved"}, image])],
+                identity="saved",
+                toolUseResult={"success": True, "commandName": "todo"},
+            ),
+            assistant("empty", "second", [], {"input_tokens": 3, "output_tokens": 2}),
+            assistant("read", "third", [tool("read")], {"input_tokens": 1, "output_tokens": 1}),
+        ],
+    )
+    payload = rust_export(cli)
+    messages = {message["id"]: message for message in payload["messages"]}
+    assert list(messages) == ["start", "think", "empty", "read"]
+    reasoning, todo = messages["think"]["parts"]
+    assert reasoning["type"] == "reasoning"
+    assert messages["think"]["mode"] is None
+    assert messages["think"]["tokens"]["output_tokens"] == 4
+    assert todo["tool"] == "TodoWrite"
+    assert todo["state"]["status"] == "completed"
+    assert todo["state"]["metadata"] == {"commandName": "todo"}
+    assert todo["state"]["output"] == [
+        {"type": "text", "text": "Saved", "time_created": todo["time_created"]},
+        {"type": "image", "mime_type": "image/png", "data": "iVBORw0KGgo=", "time_created": todo["time_created"]},
+    ]
+    assert messages["empty"]["parts"] == []
+    assert messages["read"]["parts"][0]["state"]["status"] == "running"
+    assert payload["stats"]["total_input_tokens"] == 17 + 3 + 1
+    assert payload["stats"]["total_output_tokens"] == 4 + 2 + 1

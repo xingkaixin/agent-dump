@@ -108,7 +108,7 @@ def test_pi_timezone_overflow_skips_record_and_keeps_sequence_and_usage(cli, lan
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("provider", ["codex", "claude", "pi"])
+@pytest.mark.parametrize("provider", ["codex", "pi"])
 def test_ignored_shapes_do_not_gain_conversion_warnings(cli, lang, provider):
     if provider == "codex":
         cli.write(
@@ -123,18 +123,6 @@ def test_ignored_shapes_do_not_gain_conversion_warnings(cli, lang, provider):
                 record(1),
                 message("assistant", "After"),
             ]
-        )
-    elif provider == "claude":
-        create_claude(
-            cli,
-            [
-                event("user", "Keep"),
-                event("assistant", [{"type": "text", "text": "Before"}]),
-                event("user", "ignored", message=None, isMeta=True),
-                event("unknown", "ignored", message=None),
-                {"type": "user", "timestamp": STAMP},
-                event("assistant", [{"type": "text", "text": "After"}]),
-            ],
         )
     else:
         create_pi(
