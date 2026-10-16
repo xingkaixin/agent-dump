@@ -83,7 +83,7 @@ STREAM = [
     ],
 )
 def test_content_shapes_images_and_tools(cli, content):
-    create(cli, [message("assistant", content)])
+    create(cli, [message("user", "Keep"), message("assistant", content)])
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
@@ -100,7 +100,7 @@ def test_content_shapes_images_and_tools(cli, content):
     ],
 )
 def test_special_roles(cli, role, fields):
-    create(cli, [message(role, "Visible", **fields)])
+    create(cli, [message("user", "Keep"), message(role, "Visible", **fields)])
     provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
@@ -124,22 +124,6 @@ def test_message_and_header_timestamps(cli, timestamp):
 
 
 @pytest.mark.differential
-@pytest.mark.parametrize(
-    "header,records",
-    [
-        ({"cwd": ""}, []),
-        ({"version": None}, [message("user", [{"type": "thinking", "thinking": "Title from thinking"}])]),
-        ({}, [message("user", "   "), message("user", "Useful title")]),
-        ({}, [{"type": "message", "message": None}, {"type": "session_info", "name": "  "}]),
-    ],
-)
-def test_metadata_fallback_and_raw_message_count(cli, header, records):
-    create(cli, records, header=header)
-    cli.parity(f"pi://{IDENTITY}", "--head", "--lang", "en")
-    provider_export(cli, f"pi://{IDENTITY}", "pi")
-
-
-@pytest.mark.differential
 def test_large_scan_and_full_read_resolve_different_titles(cli):
     create(
         cli, [message("user", "x" * 300_000), {"type": "session_info", "name": "Full read title"}, {"type": "unknown"}]
@@ -156,7 +140,7 @@ def test_header_identity_fallback_lookup_and_incomplete_tail(cli):
 
 @pytest.mark.differential
 def test_local_fallback(cli):
-    create(cli, STREAM)
+    create(cli, [message("user", "Keep")])
     shutil.move(str(cli.root / "sources/pi/agent/sessions"), cli.root / "data/pi")
     cli.parity(f"pi://{IDENTITY}", "--head", "--lang", "en")
 

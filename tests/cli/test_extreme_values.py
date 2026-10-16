@@ -136,7 +136,7 @@ def test_metadata_values_preserve_payload_and_display_projection(cli, provider, 
     elif provider == "claude":
         claude_create(cli, [event("system", [], cwd=value, version=value)])
     else:
-        pi_create(cli, [], header={"cwd": value, "version": value})
+        pi_create(cli, [pi_message("user", "Keep")], header={"cwd": value, "version": value})
     cli.parity(f"{provider}://{IDENTITY}", "--head", "--lang", "en")
     provider_export(cli, f"{provider}://{IDENTITY}", "claudecode" if provider == "claude" else provider)
 

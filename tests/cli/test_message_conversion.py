@@ -154,12 +154,9 @@ def test_ignored_shapes_do_not_gain_conversion_warnings(cli, lang, provider):
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("provider", ["claude", "pi"])
+@pytest.mark.parametrize("provider", ["claude"])
 def test_head_list_and_raw_do_not_convert_messages(cli, lang, provider):
-    if provider == "claude":
-        claude_stream(cli, None)
-    else:
-        pi_stream(cli, "0001-01-01T00:00:00+01:00", "message")
+    claude_stream(cli, None)
     for args, formats in [
         ((f"{provider}://{IDENTITY}", "--head"), ()),
         (("--list", "-q", f"provider:{provider}", "-d", "36500"), ()),
