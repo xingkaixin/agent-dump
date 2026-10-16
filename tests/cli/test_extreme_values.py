@@ -142,17 +142,15 @@ def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value)
         exports(cli, provider, identity)
 
 
-@pytest.mark.parametrize("provider", ["codex", "claude", "pi"])
+@pytest.mark.parametrize("provider", ["codex", "pi"])
 @pytest.mark.parametrize("value", [None, 7, False, ["one"], {"path": "work"}])
 def test_metadata_values_preserve_payload_and_display_projection(cli, provider, value):
     if provider == "codex":
         cli.write([header(cwd=value, cli_version=value)])
-    elif provider == "claude":
-        claude_create(cli, [event("system", [], cwd=value, version=value)])
     else:
         pi_create(cli, [], header={"cwd": value, "version": value})
     cli.parity(f"{provider}://{IDENTITY}", "--head", "--lang", "en")
-    provider_export(cli, f"{provider}://{IDENTITY}", "claudecode" if provider == "claude" else provider)
+    provider_export(cli, f"{provider}://{IDENTITY}", provider)
 
 
 @pytest.mark.parametrize("provider", ["codex", "claude", "pi"])

@@ -47,21 +47,10 @@ def create(cli, records, *, identity=IDENTITY, project="-workspace-claude"):
             event("user", [result(identity="")], sourceToolAssistantUUID="owner"),
         ],
         [event("assistant", [tool()]), event("user", [result()], toolUseResult={"success": False})],
-        [event("user", [result("missing"), "ordinary text"]), event("tool_result", [{"content": "legacy"}])],
-        [
-            event("assistant", [{"type": "text", "text": "Ignore"}], isMeta=True),
-            event("user", "Ignore", isMeta=True),
-            event("user", "Keep"),
-        ],
         [
             event("assistant", [{"type": "text", "text": "A"}]),
             event("user", []),
             event("assistant", [{"type": "text", "text": "B"}]),
-        ],
-        [
-            event("assistant", "ignored"),
-            event("user", ["Keep", None, {"type": "image", "source": "ignored"}]),
-            {"type": "system", "message": {"content": "ignored"}},
         ],
     ],
 )
@@ -116,35 +105,6 @@ def test_tool_result_is_error_marks_only_that_tool_failed(cli):
 
 
 @pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("title_source", ["index", "message", "directory", "project"])
-def test_discovery_titles_head_list_and_export(cli, lang, title_source):
-    first = event("user", ["First", {"type": "text", "text": "中文"}])
-    if title_source in ("directory", "project"):
-        first["message"]["content"] = ""
-    if title_source == "project":
-        first.pop("cwd")
-    path = create(
-        cli, [first, event("assistant", [{"type": "text", "text": "Reply"}], timestamp="2026-01-15T12:00:01Z")]
-    )
-    if title_source == "index":
-        path.with_name("sessions-index.json").write_text(
-            json.dumps(
-                {
-                    "entries": [
-                        {"sessionId": IDENTITY, "summary": "Old"},
-                        {"sessionId": IDENTITY, "summary": " New\n标题 "},
-                    ]
-                }
-            )
-        )
-    cli.parity("--list", "-d", "36500", "-q", "provider:claudecode", "--lang", lang)
-    cli.parity("--list", "-d", "36500", "-q", "provider:claudecode", "--no-metadata-summary", "--lang", lang)
-    cli.parity(f"claude://{IDENTITY}", "--head", "--lang", lang)
-    provider_export(cli, f"claude://{IDENTITY}", "claudecode", lang=lang)
-
-
-@pytest.mark.differential
 @pytest.mark.parametrize("layout", ["default-home", "local-fallback"])
 def test_discovery_root_resolution(cli, layout):
     create(cli, [event("user", "Start")])
@@ -157,22 +117,10 @@ def test_discovery_root_resolution(cli, layout):
 
 
 @pytest.mark.differential
-@pytest.mark.parametrize("oversized_header", [False, True])
-def test_large_file_bounded_head(cli, oversized_header):
-    records = [event("user", "Start"), event("assistant", [{"type": "text", "text": "文" * 350_000}])]
-    if oversized_header:
-        records[0]["padding"] = "x" * 300_000
-    create(cli, records)
-    cli.parity(f"claude://{IDENTITY}", "--head", "--lang", "en")
-    provider_export(cli, f"claude://{IDENTITY}", "claudecode")
-
-
-@pytest.mark.differential
 def test_discovery_date_order_and_project_depth(cli):
     create(cli, [event("user", "Older", timestamp="2026-01-14T12:00:00+00:00")], identity="older")
     create(cli, [event("user", "Current")])
     write_jsonl(cli.root / "sources/claude/projects/root.jsonl", [event("user", "Outside project")])
-    write_jsonl(cli.root / "sources/claude/projects/project/subagents/nested.jsonl", [event("user", "Nested")])
     cli.parity("--list", "-d", "36500", "-q", "provider:claudecode", "--lang", "en")
     cli.parity("--list", "-d", "1", "-q", "provider:claudecode", "--lang", "en")
 
@@ -236,6 +184,85 @@ def rust_export(cli, identity=IDENTITY):
     shutil.rmtree(cli.root / "exports", ignore_errors=True)
     rust_json(cli, f"claude://{identity}", "--format", "json", "--output", "exports")
     return json.loads(next((cli.root / "exports/claudecode").glob("*.json")).read_text())
+
+
+def listed(cli):
+    document = json.loads(rust_json(cli, "--list", "--json", "-d", "36500", "-q", "provider:claude").stdout)
+    return {item["id"]: item for item in document["data"]}
+
+
+def test_discovery_uses_visible_records_titles_and_subagents(cli):
+    later = "2026-01-15T12:05:00+00:00"
+    first = event("user", "First prompt  \nsecond line", identity="prompt")
+    first.pop("cwd")
+    create(
+        cli,
+        [
+            first,
+            event("assistant", [tool("spawn", "Agent")], identity="spawn", cwd="/workspace/late"),
+            {"type": "ai-title", "aiTitle": "Generated"},
+            {"type": "custom-title", "customTitle": "Old name"},
+            {"type": "custom-title", "customTitle": "New name\nignored"},
+            event("assistant", [{"type": "text", "text": "Done"}], identity="done", timestamp=later),
+            {"type": "last-prompt", "timestamp": "2026-01-15T13:00:00+00:00"},
+        ],
+    )
+    create(
+        cli,
+        [
+            *[{"type": "progress", "timestamp": STAMP}] * 20,
+            event("user", "Too late for a title"),
+        ],
+        identity="late-prompt",
+    )
+    create(
+        cli,
+        [
+            event("user", "<local-command-stdout>ok</local-command-stdout>"),
+            event("user", "Hidden", isMeta=True),
+            {"type": "progress", "timestamp": STAMP},
+        ],
+        identity="hidden",
+    )
+    session = cli.root / "sources/claude/projects/-workspace-claude" / IDENTITY / "subagents"
+    for path, meta in [
+        (session / "agent-a1.jsonl", {"agentId": "worker", "name": "Worker title", "toolUseId": "spawn"}),
+        (session / "workflows/run/agent-a2.jsonl", {"description": "Flow description"}),
+        (session / "workflows/run/journal.jsonl", None),
+    ]:
+        write_jsonl(path, [event("user", "Subagent prompt")])
+        if meta:
+            path.with_suffix(".meta.json").write_text(json.dumps(meta))
+
+    records = listed(cli)
+    assert set(records) == {IDENTITY, "late-prompt", "worker", "a2"}
+    parent = records[IDENTITY]
+    assert parent["title"] == "New name"
+    assert parent["working_directory"] == "/workspace/late"
+    assert parent["updated_at"].startswith("2026-01-15T12:05:00")
+    assert parent["message_count"] == 3
+    assert records["late-prompt"]["title"] == "claude"
+    assert records["worker"]["title"] == "Worker title"
+    assert records["a2"]["title"] == "Flow description"
+    assert rust_export(cli, "worker")["messages"][0]["parts"][0]["text"] == "Subagent prompt"
+    spawn = next(message for message in rust_export(cli)["messages"] if message["id"] == "spawn")
+    assert spawn["subagent_id"] == "worker"
+
+
+def test_large_session_lists_exact_visible_count(cli):
+    create(
+        cli,
+        [
+            event("user", "Start"),
+            event("assistant", [{"type": "text", "text": "x" * 300_000}]),
+            {"type": "custom-title", "customTitle": "Late title"},
+            event("user", [result()]),
+        ],
+    )
+    record = listed(cli)[IDENTITY]
+    assert record["title"] == "Late title"
+    assert record["message_count"] == 2
+    assert record["message_count_completeness"] == "exact"
 
 
 def test_transcript_keeps_tools_images_and_request_usage(cli):

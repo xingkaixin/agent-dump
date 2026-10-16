@@ -15,6 +15,7 @@ struct Decoder {
     pending: HashMap<String, (usize, usize)>,
     assistant_calls: HashMap<String, Vec<String>>,
     requests: HashMap<String, usize>,
+    children: HashMap<String, String>,
     current: Option<usize>,
     assistant_fold: AssistantFold,
     latest_text: Option<usize>,
@@ -201,10 +202,12 @@ impl Decoder {
             let index = self.push(&id, source, timestamp, part);
             usage_index.get_or_insert(index);
             if !call_id.is_empty() {
-                self.pending.insert(
-                    call_id.clone(),
-                    (index, self.messages[index].parts.len() - 1),
-                );
+                let message = &mut self.messages[index];
+                self.pending
+                    .insert(call_id.clone(), (index, message.parts.len() - 1));
+                if let Some(child) = self.children.get(&call_id) {
+                    message.subagent_id = Some(child.clone());
+                }
                 calls.push(call_id);
             }
         }
@@ -361,9 +364,13 @@ impl Decoder {
 
 pub fn read(
     session: &Session,
+    children: HashMap<String, String>,
     diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
 ) -> crate::Result<SessionData> {
-    let mut decoder = Decoder::default();
+    let mut decoder = Decoder {
+        children,
+        ..Decoder::default()
+    };
     crate::providers::jsonl::scan(
         &session.source_path,
         diagnostics,
@@ -389,7 +396,5 @@ pub fn read(
             stats.add_tokens(tokens(key), &Value::Null)?;
         }
     }
-    let mut data = session.payload(decoder.messages, stats);
-    data.directory = session.source_metadata["cwd"].clone();
-    Ok(data)
+    Ok(session.payload(decoder.messages, stats))
 }

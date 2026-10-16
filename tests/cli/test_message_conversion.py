@@ -149,16 +149,12 @@ def test_ignored_shapes_do_not_gain_conversion_warnings(cli, lang, provider):
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("provider", ["claude", "pi"])
-def test_head_list_and_raw_do_not_convert_messages(cli, lang, provider):
-    if provider == "claude":
-        claude_stream(cli, None)
-    else:
-        pi_stream(cli, "0001-01-01T00:00:00+01:00", "message")
+def test_pi_head_list_and_raw_do_not_convert_messages(cli, lang):
+    pi_stream(cli, "0001-01-01T00:00:00+01:00", "message")
     for args, formats in [
-        ((f"{provider}://{IDENTITY}", "--head"), ()),
-        (("--list", "-q", f"provider:{provider}", "-d", "36500"), ()),
-        ((f"{provider}://{IDENTITY}", "--format", "raw", "--output", "exports"), ("raw",)),
+        ((f"pi://{IDENTITY}", "--head"), ()),
+        (("--list", "-q", "provider:pi", "-d", "36500"), ()),
+        ((f"pi://{IDENTITY}", "--format", "raw", "--output", "exports"), ("raw",)),
     ]:
         cli.parity(*args, "--lang", lang, formats=formats)
         assert cli.run("rust", *args, "--lang", lang).stderr == ""
