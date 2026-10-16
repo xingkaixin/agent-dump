@@ -184,9 +184,16 @@ def test_cursor_user_directory_variables(tmp_path, monkeypatch, variable):
     cli = cursor(tmp_path, monkeypatch)
     root = tmp_path / "custom config"
     user = root / "User" if variable == "CURSOR_DATA_PATH" else root / "Cursor/User"
-    user.mkdir(parents=True)
-    shutil.move(str(cli.source.parent), user / "globalStorage")
-    cli.environment[variable] = str(root / "User" if variable == "CURSOR_DATA_PATH" else root)
+    # Windows keeps the fixture database open, so copy it and hide the default root instead of moving it.
+    shutil.copytree(cli.source.parent, user / "globalStorage")
+    other = tmp_path / "other home"
+    cli.environment.update(
+        HOME=str(other),
+        USERPROFILE=str(other),
+        APPDATA=str(other / "AppData/Roaming"),
+        XDG_CONFIG_HOME=str(other / ".config"),
+    )
+    cli.environment[variable] = str(user if variable == "CURSOR_DATA_PATH" else root)
     head(cli, "cursor://request-parent")
 
 
