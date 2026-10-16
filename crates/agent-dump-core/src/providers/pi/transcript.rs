@@ -1,74 +1,205 @@
-use crate::compat::value::{field, text, truthy};
+use crate::compat::value::{add_integer, field, integer_number, text, truthy};
 use crate::providers::contract::RecoverableDiagnostic;
-use crate::providers::pi::{datetime, session_name};
+use crate::providers::pi::{Titles, datetime};
 use crate::session::{
     ImagePart, Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
 };
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
+use std::collections::{HashMap, HashSet};
+
+pub struct Transcript {
+    pub header: Option<Value>,
+    pub title: Option<String>,
+    pub messages: Vec<Message>,
+}
+
+impl Transcript {
+    pub fn new(
+        records: Vec<Value>,
+        mut failed: impl FnMut(crate::Error) -> crate::Result<()>,
+    ) -> crate::Result<Self> {
+        let mut header = None;
+        let mut titles = Titles::default();
+        let mut entries = Vec::new();
+        for (sequence, record) in (1_usize..).zip(records) {
+            match text(&record["type"]) {
+                "session" => {
+                    if header.is_none() {
+                        header = Some(record);
+                    }
+                }
+                "title" => titles.add(&record),
+                _ => entries.push((sequence, record)),
+            }
+        }
+        let mut messages = Vec::new();
+        let mut calls = HashMap::new();
+        for (sequence, record) in active_branch(entries) {
+            titles.add(&record);
+            if let Err(error) =
+                append(&mut messages, &mut calls, &record, sequence)
+            {
+                failed(error)?;
+            }
+        }
+        crate::providers::text::clean_messages(&mut messages);
+        let title = titles.resolve(header.as_ref().unwrap_or(&Value::Null));
+        Ok(Self {
+            header,
+            title,
+            messages,
+        })
+    }
+}
 
 pub fn read(
     session: &Session,
     diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
 ) -> crate::Result<SessionData> {
-    let mut messages = Vec::new();
-    let mut stats = Stats {
-        total_tokens: Some(0.into()),
-        ..Stats::default()
-    };
-    let mut title = session.title.clone();
-    let mut sequence = 0;
-    let mut directory = session.source_metadata["cwd"].clone();
-    let mut version = session.version.clone();
+    let mut records = Vec::new();
     crate::providers::jsonl::scan(
         &session.source_path,
         diagnostics,
-        |record, diagnostics| {
-            sequence += 1;
-            if sequence == 1 {
-                if !truthy(&directory) {
-                    directory =
-                        record.get("cwd").cloned().unwrap_or_else(|| "".into());
-                }
-                if !truthy(&version) {
-                    version = record["version"].clone();
-                }
-            }
-            if let Some(name) = session_name(&record) {
-                title = name;
-            }
-            let result = (|| -> crate::Result<()> {
-                if let Some(message) = convert(&record, sequence)? {
-                    messages.push(message);
-                }
-                accumulate(&mut stats, &record)
-            })();
-            if let Err(error) = result {
-                diagnostics(RecoverableDiagnostic::PiRecordConvertFailed(
-                    error.to_string(),
-                ))?;
-            }
+        |record, _| {
+            records.push(record);
             Ok(())
         },
     )?;
-    crate::providers::text::clean_messages(&mut messages);
-    stats.message_count = messages.len();
-    let mut data = session.payload(messages, stats);
-    data.title = title;
+    let transcript = Transcript::new(records, |error| {
+        diagnostics(RecoverableDiagnostic::PiRecordConvertFailed(
+            error.to_string(),
+        ))
+    })?;
+    let header = transcript.header.unwrap_or_default();
+    let mut directory = session.source_metadata["cwd"].clone();
+    if !truthy(&directory) {
+        directory = header.get("cwd").cloned().unwrap_or_else(|| "".into());
+    }
+    let mut version = session.version.clone();
+    if !truthy(&version) {
+        version = header["version"].clone();
+    }
+    let stats = stats(&transcript.messages)?;
+    let mut data = session.payload(transcript.messages, stats);
+    data.title = transcript.title.unwrap_or_else(|| session.title.clone());
     data.directory = directory;
     data.version = version;
     Ok(data)
 }
 
-fn accumulate(stats: &mut Stats, record: &Value) -> crate::Result<()> {
-    let usage = &record["message"]["usage"];
-    if record["type"] != "message" || !usage.is_object() {
+fn entry_id(entry: &Value) -> Option<&str> {
+    entry["id"].as_str().filter(|id| !id.is_empty())
+}
+
+/// Walks `parentId` links back from the last identified entry. Legacy
+/// files without entry ids keep every entry in file order.
+fn active_branch(mut entries: Vec<(usize, Value)>) -> Vec<(usize, Value)> {
+    let Some(leaf) = entries
+        .iter()
+        .rposition(|(_, entry)| entry_id(entry).is_some())
+    else {
+        return entries;
+    };
+    let branch = {
+        let index: HashMap<&str, usize> = entries
+            .iter()
+            .enumerate()
+            .filter_map(|(position, (_, entry))| {
+                Some((entry_id(entry)?, position))
+            })
+            .collect();
+        let mut branch = vec![leaf];
+        let mut seen = HashSet::from([leaf]);
+        while let Some(&parent) = branch
+            .last()
+            .and_then(|current| entries[*current].1["parentId"].as_str())
+            .and_then(|parent| index.get(parent))
+        {
+            if !seen.insert(parent) {
+                break;
+            }
+            branch.push(parent);
+        }
+        branch
+    };
+    branch
+        .into_iter()
+        .rev()
+        .map(|position| std::mem::take(&mut entries[position]))
+        .collect()
+}
+
+fn append(
+    messages: &mut Vec<Message>,
+    calls: &mut HashMap<String, (usize, usize)>,
+    record: &Value,
+    sequence: usize,
+) -> crate::Result<()> {
+    let Some(message) = convert(record, sequence)? else {
+        return Ok(());
+    };
+    if field(&record["message"], "role").trim() == "toolResult"
+        && let [Part::Tool(result)] = message.parts.as_slice()
+        && let Some((index, position)) = calls.remove(&result.call_id)
+        && let Some(Part::Tool(call)) = messages[index].parts.get_mut(position)
+    {
+        for (key, value) in &result.state {
+            if key != "arguments" {
+                call.state.insert(key.clone(), value.clone());
+            }
+        }
         return Ok(());
     }
-    stats.add_tokens(&usage["input"], &usage["output"])?;
-    crate::compat::value::add_integer(
-        stats.total_tokens.as_mut().unwrap(),
-        &usage["totalTokens"],
-    );
+    if message.role != "tool" {
+        for (position, part) in message.parts.iter().enumerate() {
+            if let Part::Tool(tool) = part {
+                calls.insert(tool.call_id.clone(), (messages.len(), position));
+            }
+        }
+    }
+    messages.push(message);
+    Ok(())
+}
+
+fn stats(messages: &[Message]) -> crate::Result<Stats> {
+    let mut stats = Stats {
+        message_count: messages.len(),
+        ..Stats::default()
+    };
+    let mut total_tokens = serde_json::Number::from(0);
+    let mut total_cost = None;
+    for message in messages {
+        let tokens = |key| message.tokens.get(key).unwrap_or(&Value::Null);
+        stats.add_tokens(tokens("input"), tokens("output"))?;
+        add_integer(&mut total_tokens, tokens("total"));
+        if message.cost.is_f64() {
+            *total_cost.get_or_insert(0.0) +=
+                message.cost.as_f64().unwrap_or_default();
+        }
+    }
+    stats.total_tokens = Some(total_tokens);
+    if let Some(cost) = total_cost {
+        stats.total_cost = crate::compat::json::float(cost);
+    }
+    Ok(stats)
+}
+
+fn usage(message: &mut Message, usage: &Value) {
+    let mut input = integer_number(&usage["input"]);
+    add_integer(&mut input, &usage["cacheRead"]);
+    add_integer(&mut input, &usage["cacheWrite"]);
+    message.tokens = Map::from_iter([
+        ("input".into(), input.into()),
+        ("output".into(), integer_number(&usage["output"]).into()),
+        (
+            "cache".into(),
+            json!({
+                "read": integer_number(&usage["cacheRead"]),
+                "write": integer_number(&usage["cacheWrite"]),
+            }),
+        ),
+        ("total".into(), integer_number(&usage["totalTokens"]).into()),
+    ]);
     if usage["cost"].is_object() {
         let value = &usage["cost"]["total"];
         let cost = value
@@ -80,14 +211,8 @@ fn accumulate(stats: &mut Stats, record: &Value) -> crate::Result<()> {
             })
             .filter(|cost| cost.is_finite())
             .unwrap_or(0.0);
-        stats.total_cost = crate::compat::json::float(
-            crate::compat::json::nonfinite(&stats.total_cost)
-                .or_else(|| stats.total_cost.as_f64())
-                .unwrap_or(0.0)
-                + cost,
-        );
+        message.cost = crate::compat::json::float(cost);
     }
-    Ok(())
 }
 
 fn timestamp_ms(value: &Value) -> crate::Result<Option<i64>> {
@@ -140,7 +265,7 @@ fn convert(record: &Value, sequence: usize) -> crate::Result<Option<Message>> {
                 )
             })
         }
-        "custom_message" => {
+        "custom_message" if record["display"] == true => {
             let parts = content_parts(&record["content"], timestamp);
             (!parts.is_empty())
                 .then(|| Message::new(id, "custom", timestamp, parts))
@@ -178,14 +303,25 @@ fn agent_message(
         } else {
             vec![Part::text(output, time)]
         };
-        let part = tool(
+        let exit_code = &source["exitCode"];
+        let failed = source["cancelled"] == true
+            || !(exit_code.is_null() || exit_code.as_f64() == Some(0.0));
+        let metadata = ["exitCode", "cancelled", "truncated", "fullOutputPath"]
+            .into_iter()
+            .filter_map(|key| Some((key.to_owned(), source.get(key)?.clone())))
+            .collect();
+        let mut part = tool(
             "bash".into(),
             id.clone(),
             json!({"command": command}),
             serde_json::to_value(output)?,
             time,
         );
-        let mut message = Message::new(id, "tool", time, vec![part]);
+        part.state.insert("status".into(), status(failed));
+        part.state
+            .insert("metadata".into(), Value::Object(metadata));
+        let mut message =
+            Message::new(id, "tool", time, vec![Part::Tool(part)]);
         message.mode = Some("tool".into());
         return Ok(Some(message));
     }
@@ -207,13 +343,20 @@ fn agent_message(
         let output =
             serde_json::to_value(content_parts(&source["content"], time))?;
         let mut part = tool(name.into(), call_id, json!({}), output, time);
-        if let Part::Tool(part) = &mut part {
-            part.state
-                .insert("is_error".into(), truthy(&source["isError"]).into());
+        part.state
+            .insert("status".into(), status(source["isError"] == true));
+        if let Some(details) =
+            source.get("details").filter(|details| !details.is_null())
+        {
+            part.state.insert("metadata".into(), details.clone());
         }
-        let mut message = Message::new(id, "tool", time, vec![part]);
+        let mut message =
+            Message::new(id, "tool", time, vec![Part::Tool(part)]);
         message.mode = Some("tool".into());
         return Ok(Some(message));
+    }
+    if role == "custom" && source["display"] != true {
+        return Ok(None);
     }
     let (role, parts) = match role {
         "branchSummary" | "compactionSummary" => {
@@ -244,6 +387,9 @@ fn agent_message(
     message.model =
         source["model"].is_string().then(|| source["model"].clone());
     message.provider = source["provider"].as_str().map(str::to_owned);
+    if source["usage"].is_object() {
+        usage(&mut message, &source["usage"]);
+    }
     Ok(Some(message))
 }
 
@@ -288,13 +434,13 @@ fn content_parts(content: &Value, time: i64) -> Vec<Part> {
                 let name = field(item, "name").trim().to_owned();
                 let call_id = field(item, "id").trim().to_owned();
                 if !name.is_empty() && !call_id.is_empty() {
-                    parts.push(tool(
+                    parts.push(Part::Tool(tool(
                         name,
                         call_id,
                         item["arguments"].clone(),
                         Value::Null,
                         time,
-                    ));
+                    )));
                 }
             }
             "image" => {
@@ -311,29 +457,33 @@ fn content_parts(content: &Value, time: i64) -> Vec<Part> {
     parts
 }
 
+fn status(failed: bool) -> Value {
+    if failed { "error" } else { "completed" }.into()
+}
+
 fn tool(
     name: String,
     call_id: String,
     arguments: Value,
     output: Value,
     time: i64,
-) -> Part {
+) -> Box<ToolPart> {
     let arguments = if arguments.is_null() {
         json!({})
     } else {
         arguments
     };
-    Part::Tool(Box::new(ToolPart {
+    Box::new(ToolPart {
         subagent_type: None,
         tool: name.clone(),
         call_id,
         title: name,
-        state: serde_json::Map::from_iter([
+        state: Map::from_iter([
             ("arguments".into(), arguments),
             ("output".into(), output),
         ]),
         time_created: time,
         nickname: None,
         subagent_id: None,
-    }))
+    })
 }

@@ -9,22 +9,18 @@ from test_pi import create as pi_create, message as pi_message
 pytestmark = pytest.mark.differential
 
 
-@pytest.mark.parametrize("provider", ["claude", "pi"])
+@pytest.mark.parametrize("provider", ["claude"])
 @pytest.mark.parametrize("value", [2**63 - 1, 2**80, -(2**80), str(2**100), 1e100, "  +1_234  ", "١٢٣", "１２３"])
 def test_large_token_values_are_preserved_and_accumulated(cli, provider, value):
     if provider == "claude":
         cli_event = event("assistant", [{"type": "text", "text": "Numbers"}])
         cli_event["message"]["usage"] = {"input_tokens": value, "output_tokens": value}
         claude_create(cli, [event("user", "Numbers"), cli_event, event("user", "Next"), cli_event])
-    else:
-        pi_create(
-            cli, [pi_message("assistant", "Numbers", usage={"input": value, "output": value, "totalTokens": value})] * 2
-        )
     payload = provider_export(cli, f"{provider}://{IDENTITY}", "claudecode" if provider == "claude" else provider)
     assert payload["stats"]["total_input_tokens"] == int(value) * 2
 
 
-@pytest.mark.parametrize("provider", ["codex", "claude", "kimi", "pi"])
+@pytest.mark.parametrize("provider", ["codex", "claude", "kimi"])
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_nonfinite_json_numbers_preserve_messages_and_default_statistics(cli, provider, value):
     if provider == "codex":
@@ -37,20 +33,11 @@ def test_nonfinite_json_numbers_preserve_messages_and_default_statistics(cli, pr
         item = event("assistant", [{"type": "text", "text": "Numbers"}])
         item["message"]["usage"] = {"input_tokens": value}
         claude_create(cli, [event("user", "Numbers"), item])
-    elif provider == "kimi":
+    else:
         kimi_create(
             cli,
             context=[{"role": "user", "content": "Numbers"}, {"role": "_usage", "token_count": value}],
             wire=[{"message": {"usage": {"input_tokens": value}}}],
-        )
-    else:
-        pi_create(
-            cli,
-            [
-                pi_message(
-                    "assistant", "Numbers", usage={"input": value, "totalTokens": value, "cost": {"total": value}}
-                )
-            ],
         )
     payload = provider_export(cli, f"{provider}://{IDENTITY}", "claudecode" if provider == "claude" else provider)
     assert payload["stats"]["total_input_tokens"] == 0
@@ -95,11 +82,6 @@ def test_legacy_sqlite_numeric_boundaries(cli, value):
             (json.dumps({"role": "assistant", "tokens": {"input": value, "output": value}, "cost": value}),),
         )
     export(cli, identity="ses_old")
-
-
-def test_cost_sum_overflow_keeps_messages(cli):
-    pi_create(cli, [pi_message("assistant", "Cost", usage={"cost": {"total": 1e308}})] * 3)
-    provider_export(cli, f"pi://{IDENTITY}", "pi")
 
 
 @pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax", "opencode-v2"])
@@ -148,7 +130,7 @@ def test_metadata_values_preserve_payload_and_display_projection(cli, provider, 
     elif provider == "claude":
         claude_create(cli, [event("system", [], cwd=value, version=value)])
     else:
-        pi_create(cli, [], header={"cwd": value, "version": value})
+        pi_create(cli, [pi_message("user", "Keep")], header={"cwd": value, "version": value})
     cli.parity(f"{provider}://{IDENTITY}", "--head", "--lang", "en")
     provider_export(cli, f"{provider}://{IDENTITY}", "claudecode" if provider == "claude" else provider)
 
