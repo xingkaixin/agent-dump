@@ -349,6 +349,7 @@ pub fn read(
             Ok(())
         },
     )?;
+    crate::providers::text::clean_messages(&mut decoder.messages);
     let mut stats = Stats {
         message_count: decoder.messages.len(),
         ..Stats::default()

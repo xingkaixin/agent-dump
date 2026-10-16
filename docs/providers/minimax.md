@@ -44,9 +44,9 @@ agent-dump --search "fix timeout" -query "provider:minimax"
 
 1. 非空 `MINIMAX_DATA_DIR`。
 2. 非空 `MAVIS_DATA_DIR`。
-3. `~/.minimax`。
+3. `~/.minimax`；只有 `~/.minimax-code` 存在 `v2/sqlite/runtime-state.sqlite` 时改用 `~/.minimax-code`。
 
-环境变量先去除首尾空白。指定目录不存在时，不回退到另一份用户数据。自定义 profile、早期源码版的 `~/.minimax-code` 和其他安装目录由用户显式设置 `MINIMAX_DATA_DIR`；不扫描或合并多个 profile，不自动迁移目录。
+环境变量先去除首尾空白，开头的 `~` 展开为用户目录。指定目录不存在时，不回退到另一份用户数据。自定义 profile 和其他安装目录由用户显式设置 `MINIMAX_DATA_DIR`；不扫描或合并多个 profile，不自动迁移目录。
 
 首版支持当前 SQLite 中 `columnar_version = 3` 的 `pi-agent` 会话及已落盘的展示消息行。发现范围是可见的 `conversation`、`task`、`unknown` 会话，保留归档会话与父子关系；不把隐藏会话、peek、channel、cron 内部会话混入列表。URI 定位使用相同范围。空会话可显示，消息数为零。不同会话各自导出，不合并父子正文。
 

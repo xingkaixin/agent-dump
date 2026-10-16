@@ -3,7 +3,7 @@ pub(super) mod transcript;
 use crate::compat::value::{field, text, truthy};
 use crate::providers::contract::Provider;
 use crate::providers::files::{
-    self as file_sessions, SourceFiles, SourceRoots,
+    self as file_sessions, Located, SourceFiles, SourceRoots,
 };
 use crate::providers::title::{basename, normalize_title};
 use crate::session::timestamp::Timestamp;
@@ -15,6 +15,56 @@ pub struct Pi {
     roots: SourceRoots,
 }
 
+fn session_directory() -> crate::Result<Located> {
+    let independent = |sessions: PathBuf, label| Located {
+        owner: sessions.clone(),
+        sessions,
+        label,
+    };
+    if let Some(sessions) =
+        file_sessions::environment_path("PI_CODING_AGENT_SESSION_DIR")?
+    {
+        return Ok(independent(sessions, "PI_CODING_AGENT_SESSION_DIR"));
+    }
+    let (owner, agent, label) = if let Some(agent) =
+        file_sessions::environment_path("PI_CODING_AGENT_DIR")?
+    {
+        (agent.clone(), agent, "PI_CODING_AGENT_DIR/sessions")
+    } else {
+        let home = file_sessions::environment_root("PI_HOME", ".pi")?;
+        (home.clone(), home.join("agent"), "PI_HOME/agent/sessions")
+    };
+    if let Some(sessions) = settings_session_directory(&agent)? {
+        return Ok(independent(sessions, "Pi settings.json sessionDir"));
+    }
+    Ok(Located {
+        owner,
+        sessions: agent.join("sessions"),
+        label,
+    })
+}
+
+fn settings_session_directory(agent: &Path) -> crate::Result<Option<PathBuf>> {
+    let Ok(bytes) =
+        crate::storage::source_io::read(&agent.join("settings.json"))
+    else {
+        return Ok(None);
+    };
+    let Ok(settings) = crate::compat::json::from_slice(&bytes) else {
+        return Ok(None);
+    };
+    let Some(directory) = settings["sessionDir"]
+        .as_str()
+        .map(str::trim)
+        .filter(|directory| !directory.is_empty())
+    else {
+        return Ok(None);
+    };
+    // Pi resolves a relative sessionDir from its own working directory.
+    let directory = file_sessions::expand_home(directory)?;
+    Ok(directory.is_absolute().then_some(directory))
+}
+
 impl Pi {
     #[allow(
         clippy::unnecessary_wraps,
@@ -22,12 +72,7 @@ impl Pi {
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self {
-            roots: SourceRoots::new(
-                || file_sessions::environment_root("PI_HOME", ".pi"),
-                "agent/sessions",
-                "data/pi",
-                "PI_HOME/agent/sessions",
-            ),
+            roots: SourceRoots::located(session_directory, "data/pi"),
         })
     }
 
@@ -168,7 +213,7 @@ impl Provider for Pi {
                 Vec::new(),
                 crate::providers::contract::source_roots(self)?,
                 vec![
-                    ["Confirm the Pi session file is still under `PI_HOME/agent/sessions` or the local development data directory.", "确认 Pi 会话文件仍在 `PI_HOME/agent/sessions` 或本地开发数据目录。"],
+                    ["Confirm the Pi session file is still under the Pi session directory or the local development data directory.", "确认 Pi 会话文件仍在 Pi 会话目录或本地开发数据目录。"],
                     ["Re-run `agent-dump --list` to confirm the session id still exists.", "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。"],
                 ],
             ).into());
@@ -276,7 +321,7 @@ mod tests {
             provider,
             &path,
             "kept",
-            "PI_HOME/agent/sessions",
+            "Pi session directory",
         );
     }
 }

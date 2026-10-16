@@ -108,6 +108,7 @@ pub fn read(
             .add_tokens(&message.tokens["input"], &message.tokens["output"])?;
         messages.push(message);
     }
+    crate::providers::text::clean_messages(&mut messages);
     stats.message_count = messages.len();
     let mut data = session.payload(messages, stats);
     data.directory = session.source_metadata["project_dir"].clone();

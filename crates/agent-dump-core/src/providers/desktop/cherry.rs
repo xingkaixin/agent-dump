@@ -10,13 +10,16 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
-    if let Some(root) = std::env::var_os("CHERRY_STUDIO_USER_DATA_DIR")
-        .filter(|v| !v.is_empty())
+    for variable in
+        ["CHERRYSTUDIO_USER_DATA_DIR", "CHERRY_STUDIO_USER_DATA_DIR"]
     {
-        return Ok(vec![(
-            "Cherry Studio userData",
-            PathBuf::from(root).join("Data/cherrystudio.sqlite"),
-        )]);
+        if let Some(root) = crate::providers::files::environment_path(variable)?
+        {
+            return Ok(vec![(
+                "Cherry Studio userData",
+                root.join("Data/cherrystudio.sqlite"),
+            )]);
+        }
     }
     let boot = crate::providers::files::environment_root("HOME", "")?
         .join(".cherrystudio/boot-config.json");
@@ -251,10 +254,11 @@ pub fn read(
                     Vec::new(),
                 )
             })?;
-    let messages = message_rows(connection, &row, true)?
+    let mut messages = message_rows(connection, &row, true)?
         .iter()
         .map(decode)
         .collect::<crate::Result<Vec<_>>>()?;
+    crate::providers::text::clean_messages(&mut messages);
     let mut stats = Stats {
         total_cost: serde_json::Number::from_f64(0.0).unwrap(),
         message_count: messages.len(),

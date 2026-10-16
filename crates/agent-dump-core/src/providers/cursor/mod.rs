@@ -174,13 +174,12 @@ impl Provider for Cursor {
 }
 
 fn database_path() -> crate::Result<PathBuf> {
-    let root = if cfg!(target_os = "linux") {
-        crate::providers::files::environment_root("HOME", "")?
-            .join(".config/Cursor")
-    } else {
-        crate::providers::desktop::app_data("Cursor")?
-    };
-    Ok(root.join("User/globalStorage/state.vscdb"))
+    let user =
+        match crate::providers::files::environment_path("CURSOR_DATA_PATH")? {
+            Some(user) => user,
+            None => crate::providers::desktop::app_data("Cursor")?.join("User"),
+        };
+    Ok(user.join("globalStorage/state.vscdb"))
 }
 
 pub fn records(

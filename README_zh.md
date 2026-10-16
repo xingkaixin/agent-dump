@@ -64,7 +64,7 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **汇总对话**：将所有符合规则的 user/assistant 正文分块处理，或交给外部 Agent 汇总；失败时明确标记不完整。
 - **接入自动化**：通过 JSON 查询元数据、能力、搜索证据和统计，明确表示未知事实。
 
-可用格式和消息细节取决于来源工具。标准化输出不包含每个私有字段或附件实体。可运行 `agent-dump --providers --json` 检查能力。
+可用格式和消息细节取决于来源工具。标准化输出不包含每个私有字段或附件实体。除 MiniMax Code 外，正文会去掉 `system-reminder` 和斜杠命令包装标签（`command-*`、`local-command-*`），裁掉行尾空白，并省略清理后为空的消息。可运行 `agent-dump --providers --json` 检查能力。
 
 ## 安装
 
@@ -232,18 +232,18 @@ agent-dump opencode://session-id-abc123
 
 ## 路径发现
 
-`agent-dump` 大多数 provider 按以下顺序解析会话数据根目录：官方环境变量 → 工具默认目录 → 本地开发回退路径 `data/<agent>`。ZCode 当前只使用 macOS/Windows 默认数据库路径。
+`agent-dump` 大多数 provider 按以下顺序解析会话数据根目录：官方环境变量 → 工具默认目录 → 本地开发回退路径 `data/<agent>`。ZCode 当前只使用 macOS/Windows 默认数据库路径。路径类环境变量会去除首尾空白，空值视为未设置，开头的 `~` 展开为用户目录。
 
 - **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
 - **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **OpenCode**: `OPENCODE_DB` 指定唯一数据库（相对路径以 `XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 为基准）；未指定时读取该目录的 `opencode.db`，再回退到旧 Windows `LOCALAPPDATA`/`APPDATA` 路径和 `data/opencode/opencode.db`。
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
-- **Cursor**: Cursor 默认用户目录下的 `globalStorage/state.vscdb`
-- **Pi**: `PI_HOME` -> `~/.pi` -> `data/pi`
+- **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`；默认使用 macOS `~/Library/Application Support/Cursor`、Windows `%APPDATA%\Cursor`、Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor` 下的 `User` 目录。
+- **Pi**: `PI_CODING_AGENT_SESSION_DIR` -> agent 目录 `settings.json` 中的绝对路径 `sessionDir` -> `<agent 目录>/sessions` -> `data/pi`。agent 目录依次为 `PI_CODING_AGENT_DIR`、`PI_HOME/agent`、`~/.pi/agent`。
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
-- **Cherry Studio**: `CHERRY_STUDIO_USER_DATA_DIR/Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。该覆盖变量由 agent-dump 提供，可用于便携版、开发版或选择多个安装中的一个。
-- **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`；数据库位于所选目录的 `v2/sqlite/runtime-state.sqlite`。只选择一个目录，显式路径不存在时不回退。
+- **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 下的 `Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。覆盖变量可用于便携版、开发版或选择多个安装中的一个。
+- **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`，只有 `~/.minimax-code` 存在数据库时改用该目录；数据库位于所选目录的 `v2/sqlite/runtime-state.sqlite`。只选择一个目录，显式路径不存在时不回退。
 
 注意：
 
@@ -260,7 +260,7 @@ Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含
 
 MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。包含可见的普通会话、子任务和归档会话，排除隐藏及 peek/channel/cron 内部会话。正文按数据库消息行顺序读取，保留文字、思考、工具状态/结果和附件引用；压缩、审查和系统事件不进入 collect 或搜索。模型来自会话元数据，缺失时显示未知；JSON 保留消息中已记录的 token 用量，不推算费用。
 
-自定义 profile、早期源码版 `~/.minimax-code` 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/providers/minimax.md)。
+自定义 profile 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/providers/minimax.md)。
 
 OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版，旧版独有会话继续可读；新版消息按 `seq` 排序，消息数包含系统和状态记录。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。附件保留在 JSON 元数据中，不打开引用文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/providers/opencode-v2.md)。
 

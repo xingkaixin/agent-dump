@@ -67,7 +67,6 @@ def test_tool_stream_assembly(cli, records):
     "value",
     [
         "text",
-        "",
         None,
         False,
         1.5,
@@ -114,8 +113,6 @@ def test_custom_tool_output_prefers_decoded_output_field(cli, value):
         "No, revise it",
         "请先缩小范围",
         "<instructions>Context</instructions>",
-        "",
-        "   ",
     ],
 )
 def test_plan_response_consumption(cli, response):

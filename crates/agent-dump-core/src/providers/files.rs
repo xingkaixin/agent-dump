@@ -1,16 +1,21 @@
 use crate::providers::contract::{Discovery, Lookup, SessionFailure};
 use crate::session::Session;
 use crate::session::timestamp::Timestamp;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 pub struct SourceRoots {
     pub base: Option<PathBuf>,
-    root: Box<dyn Fn() -> crate::Result<PathBuf> + Send + Sync>,
-    suffix: &'static str,
+    resolve: Box<dyn Fn() -> crate::Result<Located> + Send + Sync>,
     owned: PathBuf,
     fallback: PathBuf,
-    label: &'static str,
+}
+
+pub struct Located {
+    pub owner: PathBuf,
+    pub sessions: PathBuf,
+    pub label: &'static str,
 }
 
 #[derive(Default)]
@@ -24,11 +29,45 @@ pub fn environment_root(
     default: &str,
 ) -> crate::Result<PathBuf> {
     if variable != "HOME"
-        && let Some(value) =
-            std::env::var_os(variable).filter(|value| !value.is_empty())
+        && let Some(path) = environment_path(variable)?
     {
-        return Ok(PathBuf::from(value));
+        return Ok(path);
     }
+    Ok(home()?.join(default))
+}
+
+pub fn environment_value(variable: &str) -> Option<OsString> {
+    let value = std::env::var_os(variable)?;
+    let value = match value.to_str() {
+        Some(text) => OsString::from(text.trim()),
+        None => value,
+    };
+    (!value.is_empty()).then_some(value)
+}
+
+pub fn environment_path(variable: &str) -> crate::Result<Option<PathBuf>> {
+    let Some(value) = environment_value(variable) else {
+        return Ok(None);
+    };
+    Ok(Some(match value.to_str() {
+        Some(text) => expand_home(text)?,
+        None => PathBuf::from(value),
+    }))
+}
+
+pub fn expand_home(text: &str) -> crate::Result<PathBuf> {
+    if text == "~" {
+        return home();
+    }
+    Ok(
+        match text.strip_prefix("~/").or_else(|| text.strip_prefix("~\\")) {
+            Some(rest) => home()?.join(rest),
+            None => PathBuf::from(text),
+        },
+    )
+}
+
+fn home() -> crate::Result<PathBuf> {
     let home = if cfg!(windows) {
         std::env::var_os("USERPROFILE").or_else(|| {
             let mut drive = std::env::var_os("HOMEDRIVE")?;
@@ -39,7 +78,7 @@ pub fn environment_root(
         std::env::var_os("HOME")
     }
     .ok_or("Could not determine home directory")?;
-    Ok(PathBuf::from(home).join(default))
+    Ok(PathBuf::from(home))
 }
 
 impl SourceRoots {
@@ -59,24 +98,40 @@ impl SourceRoots {
         fallback: impl Into<PathBuf>,
         label: &'static str,
     ) -> Self {
+        Self::located(
+            move || {
+                let owner = root()?;
+                Ok(Located {
+                    sessions: owner.join(suffix),
+                    owner,
+                    label,
+                })
+            },
+            fallback,
+        )
+    }
+
+    pub fn located(
+        resolve: impl Fn() -> crate::Result<Located> + Send + Sync + 'static,
+        fallback: impl Into<PathBuf>,
+    ) -> Self {
         let fallback = fallback.into();
         Self {
             base: None,
-            root: Box::new(root),
-            suffix,
+            resolve: Box::new(resolve),
             owned: fallback.clone(),
             fallback,
-            label,
         }
     }
 
     pub fn configured_root(&self) -> crate::Result<PathBuf> {
-        (self.root)()
+        Ok((self.resolve)()?.owner)
     }
 
     pub fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
+        let located = (self.resolve)()?;
         Ok(vec![
-            (self.label, self.configured_root()?.join(self.suffix)),
+            (located.label, located.sessions),
             ("local development fallback", self.fallback.clone()),
         ])
     }
@@ -87,8 +142,11 @@ impl SourceRoots {
 
     pub fn select(&mut self) -> crate::Result<Option<&Path>> {
         if self.base.is_none() {
-            let root = self.configured_root()?;
-            let primary = root.join(self.suffix);
+            let Located {
+                owner: root,
+                sessions: primary,
+                ..
+            } = (self.resolve)()?;
             self.base = [&primary, &self.fallback]
                 .into_iter()
                 .find(|path| path.exists())

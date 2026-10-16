@@ -1,6 +1,6 @@
 """Pi tree entries, content and metadata through both public CLI implementations."""
 
-import os
+import json
 from pathlib import Path
 import shutil
 
@@ -87,11 +87,9 @@ def test_tree_messages_titles_stats_head_and_exports(cli, lang):
 @pytest.mark.parametrize(
     "content",
     [
-        "  Keep whitespace  ",
         None,
         5,
         [],
-        ["  Keep whitespace  ", 7, None, {"type": "text", "text": None}, {"type": "thinking", "thinking": False}],
         [{"type": "image", "mimeType": " image/png ", "data": "AA=="}, {"type": "image"}],
         [{"type": "toolCall", "name": "custom", "id": "call", "arguments": None}],
         [{"type": "toolCall", "name": " ", "id": ""}, {"type": "unknown", "text": "Ignored"}],
@@ -106,7 +104,6 @@ def test_content_shapes_images_and_tools(cli, content):
 @pytest.mark.parametrize(
     "role,fields",
     [
-        ("bashExecution", {"command": " pwd ", "output": " /workspace "}),
         ("bashExecution", {"command": "", "output": ""}),
         ("bashExecution", {"command": None, "output": None}),
         ("toolResult", {"toolName": "", "toolCallId": "", "isError": True}),
@@ -210,25 +207,42 @@ def test_exports_cannot_write_into_pi_sources(cli):
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.differential
 @pytest.mark.parametrize(
-    "root",
+    "value,location",
     [
-        "",
-        "relative provider",
-        "~/literal-provider",
-        pytest.param(
-            " ",
-            marks=pytest.mark.skipif(
-                os.name == "nt", reason="Windows cannot create a whitespace-only directory component"
-            ),
-        ),
+        ("", "home/.pi"),
+        ("  ", "home/.pi"),
+        ("relative provider", "relative provider"),
+        (" ~/pi home ", "home/pi home"),
     ],
 )
-def test_environment_paths_follow_python_path_semantics(cli, root):
+def test_environment_paths_trim_and_expand_home(cli, value, location):
     create(cli, STREAM)
-    target = Path(cli.environment["HOME"]) / ".pi" if root == "" else cli.root / root
+    target = cli.root / location
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(cli.root / "sources/pi"), target)
-    cli.environment["PI_HOME"] = root
-    cli.parity(f"pi://{IDENTITY}", "--head", "--lang", "en")
+    cli.environment["PI_HOME"] = value
+    result = cli.run("rust", f"pi://{IDENTITY}", "--head", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("layout", ["agent", "sessions", "settings", "relative-settings"])
+def test_coding_agent_directories_take_precedence(cli, layout):
+    create(cli, STREAM)
+    agent = cli.root / "coding agent"
+    target = agent / "sessions"
+    if layout == "sessions":
+        target = cli.root / "session override"
+        cli.environment["PI_CODING_AGENT_SESSION_DIR"] = str(target)
+    else:
+        cli.environment["PI_CODING_AGENT_DIR"] = str(agent)
+    if layout.endswith("settings"):
+        directory = "relative sessions" if layout == "relative-settings" else str(cli.root / "settings sessions")
+        if layout == "settings":
+            target = Path(directory)
+        agent.mkdir()
+        (agent / "settings.json").write_text(json.dumps({"sessionDir": directory}))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(cli.root / "sources/pi/agent/sessions"), target)
+    result = cli.run("rust", f"pi://{IDENTITY}", "--head", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr

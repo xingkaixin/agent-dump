@@ -199,6 +199,7 @@ impl Frame {
 
     fn finish(mut self) -> SessionData {
         self.messages.sort_by_key(|message| message.time_created);
+        crate::providers::text::clean_messages(&mut self.messages);
         self.stats.message_count = self.messages.len();
         for (source, target) in [
             ("contextTokensUsed", "context_tokens_used"),

@@ -50,6 +50,7 @@ pub fn read(
             Ok(())
         },
     )?;
+    crate::providers::text::clean_messages(&mut messages);
     stats.message_count = messages.len();
     let mut data = session.payload(messages, stats);
     data.title = title;

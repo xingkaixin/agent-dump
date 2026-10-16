@@ -264,7 +264,7 @@
   "DIAG_STEP_KIMI_WIRE_FALLBACK": "如果只有 `wire.jsonl`，请改走 wire 兼容路径或重新导出该会话。",
   "DIAG_STEP_KIMI_WIRE_INTACT": "确认会话目录中的 `wire.jsonl` 未被清理。",
   "DIAG_STEP_KIMI_CONTEXT_FALLBACK": "如果只有 `context.jsonl`，请改走 context 导出路径。",
-  "DIAG_STEP_PI_SESSION_LOCATION": "确认 Pi 会话文件仍在 `PI_HOME/agent/sessions` 或本地开发数据目录。",
+  "DIAG_STEP_PI_SESSION_LOCATION": "确认 Pi 会话文件仍在 Pi 会话目录或本地开发数据目录。",
   "DIAG_STEP_CURSOR_DB_EXISTS": "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。",
   "DIAG_STEP_CURSOR_LIST_TO_CHECK": "重新运行 `agent-dump --list --agent cursor` 检查会话是否仍可见。",
   "DIAG_STEP_USE_JSON_OR_PRINT": "改用 `--format json` 或 `--format print`。",

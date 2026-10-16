@@ -249,10 +249,10 @@ fn search_roots(
 ) -> crate::Result<crate::providers::contract::SearchRoots> {
     match kind {
         Kind::DeepChat => {
-            let root = match std::env::var_os("DEEPCHAT_USER_DATA_DIR")
-                .filter(|v| !v.is_empty())
-            {
-                Some(root) => PathBuf::from(root),
+            let root = match crate::providers::files::environment_path(
+                "DEEPCHAT_USER_DATA_DIR",
+            )? {
+                Some(root) => root,
                 None => app_data("DeepChat")?,
             };
             Ok(vec![(

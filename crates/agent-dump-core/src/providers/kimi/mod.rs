@@ -193,7 +193,7 @@ impl Provider for Kimi {
     ) -> crate::Result<SessionData> {
         let context = session.source_path.join("context.jsonl");
         let wire = session.source_path.join("wire.jsonl");
-        let messages = if context.exists() {
+        let mut messages = if context.exists() {
             crate::providers::kimi::transcript::read(&context, diagnostics)?
         } else {
             if !wire.exists() {
@@ -210,6 +210,7 @@ impl Provider for Kimi {
             }
             crate::providers::kimi::wire::read(&wire, diagnostics)?
         };
+        crate::providers::text::clean_messages(&mut messages);
         let mut stats = Stats {
             message_count: messages.len(),
             total_tokens: Some(0.into()),

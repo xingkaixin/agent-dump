@@ -116,7 +116,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 
 DeepChat 使用当前未加密的 `app_db/agent.db`，可通过 `DEEPCHAT_USER_DATA_DIR` 指定用户数据目录。支持 print / JSON / Markdown；不支持 raw、SQLCipher 或旧版 `chat.db` 直读。附件仅保留引用，外置工具输出和 Tape 恢复不在导出范围。
 
-Cherry Studio 使用 2.x 的 `Data/cherrystudio.sqlite`，可通过 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录。URI 为 `cherry://topic-<id>` 或 `cherry://session-<id>`。普通聊天仅包含当前分支，Agent 会话按时间排序；支持 print / JSON / Markdown，不支持 raw 或 1.x IndexedDB/Redux 原始数据。
+Cherry Studio 使用 2.x 的 `Data/cherrystudio.sqlite`，可通过 `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录。URI 为 `cherry://topic-<id>` 或 `cherry://session-<id>`。普通聊天仅包含当前分支，Agent 会话按时间排序；支持 print / JSON / Markdown，不支持 raw 或 1.x IndexedDB/Redux 原始数据。
 
 MiniMax Code 使用 `minimax://<session_id>`，读取当前 CLI 的 `v2/sqlite/runtime-state.sqlite` 展示消息；路径按 `MINIMAX_DATA_DIR`、`MAVIS_DATA_DIR`、`~/.minimax` 选择。自定义 profile 需显式指定目录。支持 print / JSON / Markdown，不支持 raw、旧存储恢复和桌面端；遇到迁移诊断时保留错误，不代替客户端迁移。
 

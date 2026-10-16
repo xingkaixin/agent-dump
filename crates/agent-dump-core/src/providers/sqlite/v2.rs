@@ -16,8 +16,9 @@ pub fn read(
         &session.source_path,
         true,
     );
-    let messages = rows(connection, "SELECT id, type, seq, time_created, data FROM session_message WHERE session_id = ? ORDER BY seq ASC", &[&session.id])?
+    let mut messages = rows(connection, "SELECT id, type, seq, time_created, data FROM session_message WHERE session_id = ? ORDER BY seq ASC", &[&session.id])?
         .iter().map(decode).collect::<crate::Result<Vec<_>>>()?;
+    crate::providers::text::clean_messages(&mut messages);
     let stats = Stats {
         total_cost: serde_json::Number::from_f64(float(&row["cost"])).unwrap(),
         total_input_tokens: crate::compat::value::integer_number(

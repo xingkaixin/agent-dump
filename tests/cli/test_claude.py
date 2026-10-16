@@ -115,7 +115,7 @@ def test_accumulated_parts_keep_reasoning_and_tool_boundaries(cli):
 
 @pytest.mark.differential
 @pytest.mark.parametrize(
-    "content", [None, "", "  text  ", False, 1e-6, {"z": 2, "a": 1}, ["one", {"text": "two"}, {"content": 3}, None]]
+    "content", [None, "", False, 1e-6, {"z": 2, "a": 1}, ["one", {"text": "two"}, {"content": 3}, None]]
 )
 def test_tool_output_shapes(cli, content):
     create(
@@ -240,3 +240,32 @@ def test_non_string_index_summary_falls_back_to_message_title(cli):
         assert result_.returncode == 0, result_.stderr
         assert "Fallback title" in result_.stdout
         assert len(result_.stderr.splitlines()) == 1 and str(index) in result_.stderr
+
+
+def test_system_tags_and_trailing_whitespace_are_removed(cli):
+    create(
+        cli,
+        [
+            event(
+                "user",
+                "<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>",
+                identity="command",
+            ),
+            event("user", "Fix it  \n<system-reminder>internal</system-reminder>", identity="prompt"),
+            event(
+                "assistant",
+                [{"type": "text", "text": "Done <system-reminder>hidden</system-reminder>\n"}, tool()],
+                identity="answer",
+            ),
+            event("user", [result(content="ok  \n<system-reminder>hidden</system-reminder>")], identity="output"),
+        ],
+    )
+    completed = cli.run("rust", f"claude://{IDENTITY}", "--format", "json", "--output", "exports", "--lang", "en")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    payload = json.loads(next((cli.root / "exports/claudecode").glob("*.json")).read_text())
+    messages = payload["messages"]
+    assert [message["id"] for message in messages] == ["prompt", "answer"]
+    assert messages[0]["parts"][0]["text"] == "Fix it"
+    text, call = messages[1]["parts"]
+    assert text["text"] == "Done"
+    assert call["state"]["output"][0]["text"] == "ok"
