@@ -1,4 +1,4 @@
-use crate::compat::value::{field, parsed_string, string};
+use crate::compat::value::{field, parsed_string};
 use crate::session::{Message, Part, SessionData, ToolPart};
 use regex::Regex;
 use serde_json::{Value, json};
@@ -59,6 +59,34 @@ pub fn injected_context(content: &Value) -> bool {
         rest = &rest[matched.end()..];
     }
     true
+}
+
+/// User text joined the way Codex titles and context checks read it.
+pub fn user_text(content: &Value) -> String {
+    match content {
+        Value::Array(items) => items
+            .iter()
+            .filter_map(|item| item["text"].as_str().or_else(|| item.as_str()))
+            .collect::<Vec<_>>()
+            .join(" "),
+        Value::String(text) => text.clone(),
+        _ => String::new(),
+    }
+}
+
+/// Codex injects these into user turns; any occurrence marks context.
+pub fn context(content: &Value, text: &str) -> bool {
+    let lower = text.to_lowercase();
+    injected_context(content)
+        || [
+            "agents.md instructions for",
+            "<instructions>",
+            "<environment_context>",
+            "<permissions instructions>",
+            "<collaboration_mode>",
+        ]
+        .iter()
+        .any(|marker| lower.contains(marker))
 }
 
 pub fn subagent_notification(
@@ -196,7 +224,7 @@ pub fn json_payload(data: &SessionData) -> SessionData {
     for message in &mut payload.messages {
         message
             .parts
-            .retain(|part| !matches!(part, Part::Tool(tool) if tool.tool == "wait_agent"));
+            .retain(|part| !matches!(part, Part::Tool(tool) if tool.tool.rsplit('.').next() == Some("wait_agent")));
         if message
             .parts
             .iter()
@@ -207,13 +235,15 @@ pub fn json_payload(data: &SessionData) -> SessionData {
             message.mode = None;
         }
     }
-    payload.messages.retain(|message| {
-        message.role != "developer" && !message.parts.is_empty()
-    });
+    payload.messages.retain(|message| !message.parts.is_empty());
     payload
 }
 
-pub fn output_parts(raw: &Value, timestamp: i64, custom: bool) -> Vec<Part> {
+pub fn output_parts(
+    raw: &Value,
+    timestamp: i64,
+    custom: bool,
+) -> (Vec<Part>, &'static str) {
     let parsed = custom.then(|| parsed_string(raw)).flatten();
     let value = match parsed.as_ref() {
         Some(value) if value.is_object() && value.get("output").is_some() => {
@@ -222,14 +252,5 @@ pub fn output_parts(raw: &Value, timestamp: i64, custom: bool) -> Vec<Part> {
         Some(value) => value,
         None => raw,
     };
-    if value.is_null() {
-        return Vec::new();
-    }
-    let text = match value {
-        Value::Object(_) | Value::Array(_) => {
-            crate::compat::value::pretty_json(value)
-        }
-        _ => string(value),
-    };
-    vec![Part::text(text, timestamp)]
+    crate::providers::codex::exec::output(value, timestamp)
 }

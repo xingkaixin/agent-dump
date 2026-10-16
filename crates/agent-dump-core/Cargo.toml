@@ -21,6 +21,8 @@ sha2.workspace = true
 tempfile.workspace = true
 walkdir.workspace = true
 rusqlite.workspace = true
+# Codex compresses archived rollouts as `.jsonl.zst`; pure Rust keeps builds free of C toolchains.
+ruzstd = { version = "0.9.0", default-features = false, features = ["std"] }
 num-bigint.workspace = true
 toml_edit.workspace = true
 url.workspace = true

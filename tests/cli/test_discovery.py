@@ -71,9 +71,9 @@ def test_availability_is_independent_of_filtered_sessions(cli, state):
         directory = cli.root / "sources/codex/sessions"
         directory.mkdir()
         if state == "candidate":
-            (directory / "empty.jsonl").touch()
+            (directory / "rollout-empty.jsonl").touch()
         if state == "old":
-            write_jsonl(directory / "old.jsonl", [header()])
+            write_jsonl(directory / "rollout-old.jsonl", [header()])
     if state == "empty-database":
         with sqlite3.connect(cli.environment["OPENCODE_DB"]) as connection:
             connection.execute("DELETE FROM session_v2")
@@ -102,7 +102,7 @@ def test_corrupt_database_isolated_and_explicit_scope_skips_it(cli, lang, scope)
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.skipif(os.name == "nt", reason="Windows forbids control characters in filenames")
 def test_bad_file_keeps_good_sessions_and_warning_is_one_line(cli, lang):
-    bad = cli.source.parent / "bad\n\x1b[31m.jsonl"
+    bad = cli.source.parent / "rollout-bad\n\x1b[31m.jsonl"
     write_jsonl(bad, [{"type": "session_meta", "payload": 42}])
     before = cli.fixtures.source_manifest(cli.root)
     results = [cli.run(candidate, "--list", "-d", "36500", "--lang", lang) for candidate in ("python", "rust")]

@@ -114,6 +114,8 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 
 读取 [references/cli-recipes.md](references/cli-recipes.md) 获取完整命令模板、行为矩阵、查询语法和错误处理策略。
 
+Codex 同时读取 `sessions` 与 `archived_sessions` 中的 `rollout-*.jsonl[.zst]`，raw 导出压缩会话时写出解压后的 JSONL；注入上下文和 developer 消息不出现，子 Agent 用量计入父会话。
+
 Claude Code 的子代理记录（`<会话>/subagents/`）作为独立会话列出，URI 为 `claude://<agent_id>`；没有可见消息的会话不列出。
 
 Pi 只读取活跃分支，被放弃的分支不参与导出、搜索和计数；工具结果合并到对应调用，隐藏的自定义消息和没有可见消息的会话不出现。

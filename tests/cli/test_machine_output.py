@@ -114,8 +114,8 @@ def test_machine_head_unknown_facts_are_null(cli: CliFixture) -> None:
 
 
 def test_machine_head_partial_lookup_keeps_diagnostics_outside_json(cli: CliFixture) -> None:
-    write_jsonl(cli.source.parent / f"bad-{IDENTITY}.jsonl", [{"type": "session_meta", "payload": 42}])
-    cli.source.rename(cli.source.with_name("fallback.jsonl"))
+    write_jsonl(cli.source.parent / f"rollout-bad-{IDENTITY}.jsonl", [{"type": "session_meta", "payload": 42}])
+    cli.source.rename(cli.source.with_name("rollout-fallback.jsonl"))
     before = cli.fixtures.source_manifest(cli.root)
     result = cli.run("rust", f"codex://{IDENTITY}", "--head", "--json")
     assert result.returncode == 0 and result.stderr

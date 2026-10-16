@@ -58,16 +58,21 @@ def test_configured_output_applies_to_every_file_format(cli):
     assert not (cli.root / "sessions").exists()
 
 
-def test_codex_json_stats_use_the_latest_cumulative_token_snapshot(cli):
+def test_codex_json_stats_sum_each_token_delta_once(cli):
     def usage(total, last):
+        def counts(tokens):
+            return {
+                "input_tokens": tokens,
+                "cached_input_tokens": tokens // 2,
+                "output_tokens": tokens // 10,
+                "total_tokens": tokens + tokens // 10,
+            }
+
         return {
             "type": "event_msg",
             "payload": {
                 "type": "token_count",
-                "info": {
-                    "total_token_usage": {"input_tokens": total, "output_tokens": total // 10},
-                    "last_token_usage": {"input_tokens": last, "output_tokens": last // 10},
-                },
+                "info": {"total_token_usage": counts(total), "last_token_usage": counts(last)},
             },
         }
 
@@ -76,4 +81,8 @@ def test_codex_json_stats_use_the_latest_cumulative_token_snapshot(cli):
     result = cli.run("rust", f"codex://{IDENTITY}", "--format", "json", "--output", "exports")
     assert result.returncode == 0, result.stderr
     stats = json.loads((cli.root / "exports" / "codex" / f"{IDENTITY}.json").read_text())["stats"]
-    assert (stats["total_input_tokens"], stats["total_output_tokens"]) == (300, 30)
+    assert (stats["total_input_tokens"], stats["total_output_tokens"], stats["total_cache_read_tokens"]) == (
+        300,
+        30,
+        150,
+    )

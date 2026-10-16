@@ -109,7 +109,6 @@ def write_codex(root: Path, profile: Profile) -> None:
                     "timestamp": created.isoformat(),
                     "cwd": "/benchmark/project",
                     "cli_version": "benchmark-v1",
-                    "model_provider": "openai",
                 },
             }
         ]
