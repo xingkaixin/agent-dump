@@ -371,6 +371,16 @@ agent-dump --search "auth" --list --days 30
 1. 仅使用 `json/markdown/raw/print`（支持逗号组合）。
 2. 需要 markdown 简写时使用 `md`（等价 `markdown`）。
 
+## Codex
+
+```bash
+agent-dump --list --query "provider:codex"
+agent-dump 'codex://<session_id>' --head
+agent-dump 'codex://<session_id>' --format json,raw --output ./sessions
+```
+
+同时扫描 `sessions` 与 `archived_sessions`，只读取 `rollout-*.jsonl` 与 `rollout-*.jsonl.zst`，两者同时存在时使用未压缩文件；压缩会话的 raw 导出写出解压后的 JSONL。developer/system 消息和包含注入上下文标记的用户消息不进入导出。Token 按每次增量累加一次，计入远程压缩和子 Agent 用量，不计 fork 回放的父会话历史。子 Agent 会话单独列出；父会话缺少完成通知时插入子 Agent 的最终回复。超过 256 KiB 的未压缩文件在列表阶段消息数为未知。
+
 ## Pi
 
 ```bash

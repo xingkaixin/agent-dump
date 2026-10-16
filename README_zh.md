@@ -250,6 +250,8 @@ agent-dump opencode://session-id-abc123
 - Windows 上建议优先配置工具官方环境变量。
 - `data/<agent>` 回退路径保留用于本地开发和测试。
 
+Codex 扫描 `sessions` 和 `archived_sessions`，只读取 `rollout-*.jsonl` 与 `rollout-*.jsonl.zst`；两者同时存在时使用未压缩文件。压缩会话的 raw 导出写出解压后的 JSONL。标题依次取标题索引、前 20 条记录中首条非注入上下文用户消息的第一行。developer/system 消息以及包含注入上下文标记的用户消息不进入导出。Token 按每次 `token_count` 增量累加一次，计入远程压缩和子 Agent 用量，不计 fork 从父会话回放的历史，并记录缓存读取。子 Agent 会话单独列出；父会话没有收到完成通知时，把子 Agent 的最终回复插入父会话。超过 256 KiB 的未压缩文件在列表阶段只读取首尾，消息数为未知。
+
 Pi 只读取当前活跃分支：从最后一条带 id 的记录沿 `parentId` 回溯，被放弃的分支不进入导出、搜索或计数；没有 entry id 的旧格式按文件顺序读取。工具结果合并到对应的工具调用，保留状态和 `details`；bash 执行按退出码和取消标记设置状态。只保留 `display` 为 true 的自定义消息。Token 按消息记录，输入包含缓存读写。没有可见消息的会话不列出。标题依次取 `session_info` 名称、`title` 记录、会话头 `title` 和首条用户消息。超过 256 KiB 的文件在列表阶段只读取首尾，消息数为未知。
 
 DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`；保留正文、思考和工具记录，压缩提示不进入 collect。JSON 还保留附件引用、链接及其他消息块，不读取附件实体或外置工具输出文件。Token 来自消息记录，不提供计费金额。
