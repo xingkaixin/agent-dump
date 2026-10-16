@@ -79,15 +79,23 @@ pub fn sessions(
     cutoff: Option<i64>,
 ) -> crate::Result<crate::providers::contract::Discovery> {
     validate(connection, path)?;
+    let usage = if crate::providers::sqlite::connection::has_table(
+        connection,
+        "local_runtime_token_usage",
+    )? {
+        "(SELECT MAX(u.ts) FROM local_runtime_token_usage u WHERE u.session_id = s.session_id)"
+    } else {
+        "NULL"
+    };
     let records = rows(
         connection,
-        "SELECT s.*, (SELECT COUNT(*) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_count, (NOT EXISTS (SELECT 1 FROM local_runtime_message_row_migrations r WHERE r.session_id = s.session_id) AND EXISTS (SELECT 1 FROM local_runtime_messages l WHERE l.session_id = s.session_id AND trim(l.display_messages_json) <> '[]')) AS legacy_pending FROM local_runtime_sessions s WHERE (? IS NULL OR s.session_id = ?) AND (? IS NULL OR COALESCE(s.created_at_ms, s.updated_at_ms) >= ?) ORDER BY COALESCE(s.created_at_ms, s.updated_at_ms) DESC, s.session_id",
+        &format!("SELECT s.*, (SELECT COUNT(*) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_count, (SELECT MAX(m.created_at_ms) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_activity, {usage} AS usage_activity, (NOT EXISTS (SELECT 1 FROM local_runtime_message_row_migrations r WHERE r.session_id = s.session_id) AND EXISTS (SELECT 1 FROM local_runtime_messages l WHERE l.session_id = s.session_id AND trim(l.display_messages_json) <> '[]')) AS legacy_pending FROM local_runtime_sessions s WHERE (? IS NULL OR s.session_id = ?) AND (? IS NULL OR COALESCE(s.created_at_ms, s.updated_at_ms) >= ?) ORDER BY COALESCE(s.created_at_ms, s.updated_at_ms) DESC, s.session_id"),
         &[&id, &id, &cutoff, &cutoff],
     )?;
     let mut result =
         crate::providers::contract::Discovery::available(Vec::new());
     for row in records {
-        match session(path, &row) {
+        match session(connection, path, &row) {
             Ok(Some(session)) => result.sessions.push(session),
             Ok(None) => (),
             Err(error) if id.is_none() => result.failures.push(
@@ -102,13 +110,14 @@ pub fn sessions(
     Ok(result)
 }
 
-fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
-    if row["runtime"] != "pi-agent"
-        || row["visibility"] == "hidden"
-        || !matches!(
-            text(&row["session_kind"]),
-            "conversation" | "task" | "unknown"
-        )
+fn session(
+    connection: &Connection,
+    path: &Path,
+    row: &Value,
+) -> crate::Result<Option<Session>> {
+    if (row["visibility"] == "hidden"
+        && text(&row["parent_session_id"]).is_empty())
+        || matches!(text(&row["session_kind"]), "peek" | "cron" | "channel")
     {
         return Ok(None);
     }
@@ -117,6 +126,9 @@ fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
             "MiniMax Code session storage is unsupported or its display migration is incomplete. Open the session in a compatible MiniMax Code CLI to complete migration; agent-dump never migrates source data.",
             "MiniMax Code 会话存储版本不受支持，或展示消息尚未完成迁移。请使用兼容的 MiniMax Code CLI 打开会话完成迁移；agent-dump 不会迁移源数据。",
         ]).into());
+    }
+    if integer(&row["message_count"]) == 0 {
+        return Ok(None);
     }
     let id = string(&row["session_id"]);
     let extra = crate::providers::sqlite::connection::json_cell(
@@ -139,8 +151,13 @@ fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
     let updated = timestamp(&row["updated_at_ms"]).ok_or_else(|| {
         format!("Invalid MiniMax Code session timestamp: {id}")
     })?;
+    let updated = [&row["message_activity"], &row["usage_activity"]]
+        .into_iter()
+        .filter_map(timestamp)
+        .fold(updated, Ord::max);
     let directory = text(&row["workspace_dir"]);
-    let title = crate::providers::title::normalize_title(text(&row["title"]))
+    let title = title(text(&row["title"]))
+        .map_or_else(|| prompt(connection, &id), |title| Ok(Some(title)))?
         .or_else(|| crate::providers::title::basename(directory))
         .or_else(|| crate::providers::title::normalize_title(&id))
         .unwrap_or_else(|| "Untitled Session".into());
@@ -154,6 +171,34 @@ fn session(path: &Path, row: &Value) -> crate::Result<Option<Session>> {
     session.source_metadata = row.clone();
     session.source_metadata["model"] = extra["effectiveModel"].clone();
     Ok(Some(session))
+}
+
+fn title(value: &str) -> Option<String> {
+    crate::providers::text::clean(value)
+        .lines()
+        .find_map(crate::providers::title::normalize_title)
+}
+
+fn prompt(connection: &Connection, id: &str) -> crate::Result<Option<String>> {
+    Ok(rows(connection, "SELECT msg_id, role, turn_id, source, created_at_ms, data_json FROM local_runtime_message_rows WHERE session_id = ? ORDER BY id", &[&id])?
+        .iter()
+        .filter_map(|row| decode(row).ok())
+        .filter(|message| message.role == "user" && !automated(message))
+        .find_map(|message| {
+            message.parts.iter().find_map(|part| match part {
+                Part::Text(part) => title(&part.text),
+                _ => None,
+            })
+        }))
+}
+
+fn automated(message: &Message) -> bool {
+    let field = |name| message.extra.get(name).map_or("", text);
+    !field("kind").is_empty()
+        || matches!(
+            field("source"),
+            "cron" | "thread-goal" | "team" | "background-task" | "system"
+        )
 }
 
 pub fn read(

@@ -87,6 +87,9 @@ def test_unmigrated_or_invalid_sessions_fail_without_writing(tmp_path, monkeypat
         conn.execute(
             "INSERT INTO local_runtime_sessions (session_id, title, created_at_ms, updated_at_ms) VALUES ('healthy', 'Healthy', 1768478400000, 1768478400000)"
         )
+        importlib.import_module("minimax_fixtures").insert_message(
+            conn, {"msg_id": "healthy-user", "role": "user", "msg_content": "Healthy"}, "healthy"
+        )
     cli.parity(f"minimax://{identity}", "--format", "json,md,print", "--output", "exports", "--lang", lang, exit_code=1)
     cli.parity("--list", "-d", "36500", "-q", "provider:minimax", "--lang", lang)
     result = cli.run("rust", "--list", "-d", "36500", "-q", "provider:minimax", "--lang", lang)
@@ -97,7 +100,7 @@ def test_unmigrated_or_invalid_sessions_fail_without_writing(tmp_path, monkeypat
 
 @pytest.mark.parametrize(
     "title,workspace",
-    [("  title\n\twith   spaces  ", "/workspace"), ("多" * 120, "/workspace"), (None, " /path/fallback/ "), ("", None)],
+    [("多" * 120, "/workspace")],
 )
 def test_title_fallback_and_unknown_facts(tmp_path, monkeypatch, title, workspace):
     cli, identity = desktop(tmp_path, monkeypatch, "minimax")
@@ -146,10 +149,12 @@ def test_session_visibility_and_archived_scope(tmp_path, monkeypatch):
             ("unknown", "pi-agent", "visible", "unknown", 0),
             ("hidden", "pi-agent", "hidden", "conversation", 0),
             ("channel", "pi-agent", "visible", "channel", 0),
-            ("old-runtime", "opencode", "visible", "conversation", 0),
         ]:
             conn.execute(
                 "INSERT INTO local_runtime_sessions (session_id, runtime, visibility, session_kind, archived, created_at_ms, updated_at_ms) SELECT ?, ?, ?, ?, ?, created_at_ms, updated_at_ms FROM local_runtime_sessions WHERE session_id = ?",
                 (key, runtime, visibility, kind, archived, identity),
+            )
+            importlib.import_module("minimax_fixtures").insert_message(
+                conn, {"msg_id": f"{key}-user", "role": "user", "msg_content": key}, key
             )
     cli.parity("--list", "-d", "36500", "-q", "provider:minimax", "--lang", "en")

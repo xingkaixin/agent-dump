@@ -134,7 +134,8 @@ fn fixture(kind: Kind) -> (tempfile::TempDir, Desktop, Session, &'static str) {
              CREATE TABLE local_runtime_message_rows (id INTEGER, session_id TEXT, msg_id TEXT, role TEXT, turn_id TEXT, source TEXT, created_at_ms INTEGER, data_json TEXT);
              CREATE TABLE local_runtime_messages (session_id TEXT, display_messages_json TEXT);
              CREATE TABLE local_runtime_message_row_migrations (session_id TEXT);
-             INSERT INTO local_runtime_sessions VALUES ('kept', 3, 'pi-agent', 'visible', 'conversation', 0, 'Kept', '/project', NULL, 1768478400000, 1768478400000, '{}');",
+             INSERT INTO local_runtime_sessions VALUES ('kept', 3, 'pi-agent', 'visible', 'conversation', 0, 'Kept', '/project', NULL, 1768478400000, 1768478400000, '{}');
+             INSERT INTO local_runtime_message_rows VALUES (1, 'kept', 'kept-user', 'user', 'turn', 'agent', 1768478400000, '{\"msg_id\":\"kept-user\",\"role\":\"user\",\"msg_content\":\"Prompt\"}');",
             "kept",
             "local_runtime_sessions",
         ),
@@ -412,15 +413,23 @@ fn migration_required_after_lookup_uses_localized_read_failure() {
 }
 
 #[test]
-fn minimax_out_of_scope_sessions_skip_storage_checks() {
-    let (_directory, mut provider, session, _) = fixture(Kind::MiniMax);
-    Connection::open(&session.source_path)
+fn minimax_lists_child_sessions_with_messages() {
+    let (_directory, mut provider, _, _) = fixture(Kind::MiniMax);
+    Connection::open(&provider.database)
         .unwrap()
         .execute_batch(
-            "INSERT INTO local_runtime_sessions VALUES ('hidden-v2', 2, 'pi-agent', 'hidden', 'conversation', 0, NULL, NULL, NULL, 1768478400000, 1768478400000, '{}');
-             INSERT INTO local_runtime_sessions VALUES ('cron-pending', 3, 'pi-agent', 'visible', 'cron', 0, NULL, NULL, NULL, 1768478400000, 1768478400000, '{}');
-             INSERT INTO local_runtime_messages VALUES ('cron-pending', '[{}]');
-             INSERT INTO local_runtime_sessions VALUES ('opencode-v1', 1, 'opencode', 'visible', 'conversation', 0, NULL, NULL, NULL, 1768478400000, 1768478400000, '{}');",
+            r#"CREATE TABLE local_runtime_token_usage (id INTEGER, session_id TEXT, turn_id TEXT, model TEXT, ts INTEGER);
+            INSERT INTO local_runtime_sessions VALUES
+              ('hidden-v2', 2, 'pi-agent', 'hidden', 'conversation', 0, NULL, NULL, NULL, 1, 1, '{}'),
+              ('cron-pending', 3, 'pi-agent', 'visible', 'cron', 0, NULL, NULL, NULL, 1, 1, '{}'),
+              ('empty', 3, 'pi-agent', 'visible', 'conversation', 0, 'Empty', NULL, NULL, 1, 1, '{}'),
+              ('child', 3, 'opencode', 'hidden', 'subagent', 0, '  ', NULL, 'kept', 1, 1, '{}');
+            INSERT INTO local_runtime_messages VALUES ('cron-pending', '[{}]');
+            INSERT INTO local_runtime_message_rows VALUES
+              (2, 'child', 'c1', 'user', 't', 'cron', 2, '{"msg_id":"c1","role":"user","msg_content":"Scheduled"}'),
+              (3, 'child', 'c2', 'user', 't', 'agent', 3, '{"msg_id":"c2","role":"user","msg_content":"<system-reminder>x</system-reminder>"}'),
+              (4, 'child', 'c3', 'user', 't', 'agent', 4, '{"msg_id":"c3","role":"user","msg_content":"\n  Fix   the bug\nnow"}');
+            INSERT INTO local_runtime_token_usage VALUES (1, 'child', 't', 'm', 9000);"#,
         )
         .unwrap();
     let found = provider.discover(None, &mut |_| Ok(())).unwrap();
@@ -429,11 +438,19 @@ fn minimax_out_of_scope_sessions_skip_storage_checks() {
         found
             .sessions
             .iter()
-            .map(|s| s.id.as_str())
+            .map(|s| (
+                s.id.as_str(),
+                s.title.as_str(),
+                s.updated_at.as_millisecond(),
+                s.message_count
+            ))
             .collect::<Vec<_>>(),
-        ["kept"]
+        [
+            ("kept", "Kept", 1_768_478_400_000, Some(1)),
+            ("child", "Fix the bug", 9000, Some(3))
+        ]
     );
-    for id in ["hidden-v2", "cron-pending", "opencode-v1"] {
+    for id in ["hidden-v2", "cron-pending", "empty"] {
         assert!(
             provider
                 .find(id, &mut |_| Ok(()))
