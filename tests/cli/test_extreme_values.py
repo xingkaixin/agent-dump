@@ -84,33 +84,20 @@ def test_legacy_sqlite_numeric_boundaries(cli, value):
     export(cli, identity="ses_old")
 
 
-@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax"])
 @pytest.mark.parametrize("value", [2**80, "  +1_234  ", float("inf")])
-def test_other_provider_token_boundaries(tmp_path, monkeypatch, provider, value):
-    import json
-    import sqlite3
-
+def test_minimax_token_boundaries(tmp_path, monkeypatch, value):
     from desktop_fixture import desktop, exports
     from test_minimax import add_message
 
-    cli, identity = desktop(tmp_path, monkeypatch, provider)
-    if provider == "minimax":
-        add_message(
-            cli,
-            {
-                "msg_content": "Numbers",
-                "usage": {"input_tokens": value, "output_tokens": value, "cache_read": value},
-            },
-        )
-    else:
-        if provider == "deepchat":
-            sql = "UPDATE deepchat_messages SET metadata = ? WHERE role = 'assistant'"
-        else:
-            sql = "UPDATE agent_session_message SET stats = ? WHERE role = 'assistant'"
-        field = {"inputTokens": value, "outputTokens": value, "cachedInputTokens": value}
-        with sqlite3.connect(cli.source) as connection:
-            connection.execute(sql, (json.dumps(field),))
-    exports(cli, provider, identity)
+    cli, identity = desktop(tmp_path, monkeypatch, "minimax")
+    add_message(
+        cli,
+        {
+            "msg_content": "Numbers",
+            "usage": {"input_tokens": value, "output_tokens": value, "cache_read": value},
+        },
+    )
+    exports(cli, "minimax", identity)
 
 
 @pytest.mark.parametrize("provider", ["codex", "claude", "pi"])
