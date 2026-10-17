@@ -96,6 +96,16 @@ static REGISTRATIONS: &[Registration] = &[
     },
     Registration {
         info: ProviderInfo {
+            name: "gemini-cli",
+            display_name: "Gemini CLI",
+            scheme: "gemini-cli",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || Ok(Box::new(crate::providers::gemini_cli::GeminiCli::open()?)),
+    },
+    Registration {
+        info: ProviderInfo {
             name: "deepchat",
             display_name: "DeepChat",
             scheme: "deepchat",

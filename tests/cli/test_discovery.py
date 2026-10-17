@@ -13,6 +13,7 @@ import pytest
 from sqlite_fixture import create_legacy
 from test_claude import create as create_claude, event
 from test_cursor import cursor
+from test_gemini_cli import create as create_gemini_cli, entry, header as gemini_header
 from test_kimi import create as create_kimi
 from test_kimi_code import appended, create as create_kimi_code
 from test_pi import create as create_pi, message
@@ -36,6 +37,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     create_kimi(cli, context=[{"role": "user", "content": "Kimi"}])
     create_kimi_code(cli, [appended("user", "Kimi-Code")], state={})
     create_pi(cli, [message("user", "Pi")])
+    create_gemini_cli(cli, [gemini_header(), entry("u", "user", "Gemini CLI")])
     monkeypatch.syspath_prepend(str(ROOT / "tests" / "cli"))
     for provider, (variable, suffix, _) in PROVIDERS.items():
         module = importlib.import_module(f"{provider}_fixtures")
@@ -51,6 +53,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
         "Claude Code",
         "Cursor",
         "Pi",
+        "Gemini CLI",
         "DeepChat",
         "Cherry Studio",
         "MiniMax Code",
