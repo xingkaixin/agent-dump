@@ -4,6 +4,7 @@ pub(crate) mod codex;
 pub mod contract;
 pub(crate) mod cursor;
 pub(crate) mod desktop;
+pub(crate) mod droid;
 pub(crate) mod dsh;
 pub mod error;
 pub(crate) mod files;

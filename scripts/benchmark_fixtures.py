@@ -69,6 +69,7 @@ def isolated_environment(root: Path) -> dict[str, str]:
         "QODERCN_CONFIG_DIR": "sources/qoder-cn",
         "KIMI_SHARE_DIR": "sources/kimi",
         "KIMI_CODE_HOME": "sources/kimi-code",
+        "FACTORY_HOME_OVERRIDE": "sources/droid",
         "GROK_HOME": "sources/grok",
         "PI_HOME": "sources/pi",
         "GEMINI_CLI_HOME": "sources/gemini-cli",

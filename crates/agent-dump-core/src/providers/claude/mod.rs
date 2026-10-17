@@ -222,7 +222,7 @@ fn internal(line: &Line) -> bool {
         )
 }
 
-fn title_line(value: &str) -> Option<String> {
+pub(super) fn title_line(value: &str) -> Option<String> {
     crate::providers::text::clean(value)
         .lines()
         .find(|line| !line.trim().is_empty())
