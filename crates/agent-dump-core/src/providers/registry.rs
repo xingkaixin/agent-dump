@@ -216,6 +216,20 @@ static REGISTRATIONS: &[Registration] = &[
             )?))
         },
     },
+    Registration {
+        info: ProviderInfo {
+            name: "antigravity-cli",
+            display_name: "Antigravity CLI",
+            scheme: "antigravity-cli",
+            identifier_label: "<conversation_id>",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(
+                crate::providers::antigravity_cli::AntigravityCli::open()?,
+            ))
+        },
+    },
 ];
 pub fn all() -> &'static [Registration] {
     REGISTRATIONS

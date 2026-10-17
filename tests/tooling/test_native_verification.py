@@ -40,6 +40,7 @@ class FakeRunner:
                 "PI_HOME",
                 "GEMINI_CLI_HOME",
                 "DSH_HOME",
+                "AGY_CONVERSATIONS_DIR",
                 "CODEX_HOME",
             )
         )
