@@ -11,6 +11,7 @@ from cli_fixture import ROOT, header, write_jsonl
 from desktop_fixture import NOW, PROVIDERS, desktop
 import pytest
 from sqlite_fixture import create_legacy
+from test_antigravity_cli import create as create_antigravity, user
 from test_claude import create as create_claude, event
 from test_cursor import cursor
 from test_kimi import create as create_kimi
@@ -36,6 +37,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     create_kimi(cli, context=[{"role": "user", "content": "Kimi"}])
     create_kimi_code(cli, [appended("user", "Kimi-Code")], state={})
     create_pi(cli, [message("user", "Pi")])
+    create_antigravity(cli, [user("Antigravity CLI")])
     monkeypatch.syspath_prepend(str(ROOT / "tests" / "cli"))
     for provider, (variable, suffix, _) in PROVIDERS.items():
         module = importlib.import_module(f"{provider}_fixtures")
@@ -54,6 +56,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
         "DeepChat",
         "Cherry Studio",
         "MiniMax Code",
+        "Antigravity CLI",
     ]
     if sys.platform == "darwin" or os.name == "nt":
         expected.insert(1, "ZCode")

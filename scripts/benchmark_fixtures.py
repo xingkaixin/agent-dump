@@ -68,6 +68,7 @@ def isolated_environment(root: Path) -> dict[str, str]:
         "KIMI_SHARE_DIR": "sources/kimi",
         "KIMI_CODE_HOME": "sources/kimi-code",
         "PI_HOME": "sources/pi",
+        "AGY_CONVERSATIONS_DIR": "sources/antigravity-cli/conversations",
         "DEEPCHAT_USER_DATA_DIR": "sources/deepchat",
         "CHERRY_STUDIO_USER_DATA_DIR": "sources/cherry",
         "MINIMAX_DATA_DIR": "sources/minimax",

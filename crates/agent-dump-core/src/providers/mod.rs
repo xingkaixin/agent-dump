@@ -1,3 +1,4 @@
+pub(crate) mod antigravity_cli;
 pub(crate) mod claude;
 pub(crate) mod codex;
 pub mod contract;
