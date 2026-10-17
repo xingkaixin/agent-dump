@@ -51,6 +51,7 @@ Follow the generated read commands and cursors until `has_more=false` to cover t
 - **Kimi** - Moonshot AI assistant
 - **Kimi-Code** - Kimi Code CLI sessions
 - **Cursor** - Cursor composer sessions
+- **Grok** - Grok CLI sessions
 - **Pi** - Earendil's AI coding agent
 - **DeepChat** - Current local sessions from unencrypted databases
 - **Cherry Studio** - Local 2.x chats and agent sessions
@@ -176,6 +177,7 @@ Supported URI schemes:
 - `kimi-code://<session_id>` - Kimi-Code sessions
 - `claude://<session_id>` - Claude Code sessions
 - `cursor://<composer_id>` - Cursor sessions (legacy `cursor://<requestid>` URIs still resolve to the same session)
+- `grok://<session_id>` - Grok sessions
 - `pi://<session_id>` - Pi sessions
 - `deepchat://<session_id>` - DeepChat sessions
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
@@ -243,6 +245,7 @@ listed and fails when there is nothing to list because no provider has data.
 - **OpenCode**: `OPENCODE_DB` selects one database (relative to `XDG_DATA_HOME/opencode` or `~/.local/share/opencode`). Otherwise use `opencode.db` there, then the legacy Windows `LOCALAPPDATA`/`APPDATA` location, then `data/opencode/opencode.db`.
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
 - **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`; defaults to the `User` directory under macOS `~/Library/Application Support/Cursor`, Windows `%APPDATA%\Cursor`, or Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor`. The working directory comes from the workspace folder in `workspaceStorage/*/workspace.json` that lists the composer.
+- **Grok**: `GROK_HOME` -> `~/.grok` -> `data/grok`. Every `summary.json` under `sessions/`, at any depth, is a session when its `info` has both `id` and `cwd`; messages come from the sibling `updates.jsonl`, and sessions without messages are skipped. Prompts discarded by a rewind are left out of the transcript. See the [Grok reading rules](docs/providers/grok.md).
 - **Pi**: `PI_CODING_AGENT_SESSION_DIR` -> absolute `sessionDir` in the agent directory's `settings.json` -> `<agent directory>/sessions` -> `data/pi`. The agent directory is `PI_CODING_AGENT_DIR`, then `PI_HOME/agent`, then `~/.pi/agent`.
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` or `CHERRY_STUDIO_USER_DATA_DIR`, then `Data/cherrystudio.sqlite`; otherwise the first existing database in the user data directories configured by `~/.cherrystudio/boot-config.json`, then the platform default: macOS `~/Library/Application Support/CherryStudio`, Windows `%APPDATA%\CherryStudio`, or Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio` (each with `Data/cherrystudio.sqlite`). Use the override for portable/dev installations or to select among multiple installations.
@@ -574,7 +577,7 @@ Give an Agent this single command to obtain instructions and executable commands
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` works with every registered Provider, including Claude Code, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
+`--read-prompt` works with every registered Provider, including Claude Code, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Grok, Pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
 
 Direct reading is also available:
 
