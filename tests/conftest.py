@@ -3,7 +3,7 @@ import re
 from cli_fixture import CliFixture, make_cli
 import pytest
 
-LATER_PROVIDERS = re.compile(r"kimi[-_]code|\bdsh\b", re.IGNORECASE)
+LATER_PROVIDERS = re.compile(r"kimi[-_]code|qoder|\bomp\b|oh-my-pi|\bdsh\b", re.IGNORECASE)
 
 
 @pytest.fixture

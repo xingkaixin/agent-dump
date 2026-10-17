@@ -2,6 +2,7 @@ pub(super) mod transcript;
 
 use crate::compat::value::{field, text, truthy};
 use crate::providers::contract::Provider;
+use crate::providers::error::LocalizedText;
 use crate::providers::files::{
     self as file_sessions, Located, SourceFiles, SourceRoots,
 };
@@ -11,7 +12,51 @@ use crate::session::{Session, SessionData, epoch_seconds, parse_timestamp};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+/// Providers that keep Pi's session tree format.
+#[derive(Clone, Copy)]
+pub enum Kind {
+    Pi,
+    Omp,
+}
+
+impl Kind {
+    fn roots(self) -> SourceRoots {
+        match self {
+            Self::Pi => SourceRoots::located(session_directory, "data/pi"),
+            Self::Omp => SourceRoots::located(omp_directory, "data/omp"),
+        }
+    }
+
+    const fn agent(self) -> &'static str {
+        match self {
+            Self::Pi => "pi",
+            Self::Omp => "omp",
+        }
+    }
+
+    const fn display_name(self) -> &'static str {
+        match self {
+            Self::Pi => "Pi",
+            Self::Omp => "oh-my-pi",
+        }
+    }
+
+    const fn location_hint(self) -> LocalizedText {
+        match self {
+            Self::Pi => [
+                "Confirm the Pi session file is still under the Pi session directory or the local development data directory.",
+                "确认 Pi 会话文件仍在 Pi 会话目录或本地开发数据目录。",
+            ],
+            Self::Omp => [
+                "Confirm the oh-my-pi session file is still under the oh-my-pi session directory or the local development data directory.",
+                "确认 oh-my-pi 会话文件仍在 oh-my-pi 会话目录或本地开发数据目录。",
+            ],
+        }
+    }
+}
+
 pub struct Pi {
+    kind: Kind,
     roots: SourceRoots,
 }
 
@@ -52,6 +97,27 @@ fn session_directory() -> crate::Result<Located> {
     })
 }
 
+fn omp_directory() -> crate::Result<Located> {
+    if !cfg!(windows)
+        && let Some(data) = file_sessions::environment_path("XDG_DATA_HOME")?
+    {
+        let owner = data.join("omp");
+        if owner.exists() {
+            return Ok(Located {
+                sessions: owner.join("sessions"),
+                owner,
+                label: "XDG_DATA_HOME/omp/sessions",
+            });
+        }
+    }
+    let owner = file_sessions::environment_root("HOME", ".omp")?;
+    Ok(Located {
+        sessions: owner.join("agent/sessions"),
+        owner,
+        label: "~/.omp/agent/sessions",
+    })
+}
+
 fn settings_session_directory(agent: &Path) -> crate::Result<Option<PathBuf>> {
     let Ok(bytes) =
         crate::storage::source_io::read(&agent.join("settings.json"))
@@ -78,9 +144,10 @@ impl Pi {
         clippy::unnecessary_wraps,
         reason = "Provider factories share the fallible registry interface; source access is deferred"
     )]
-    pub fn open() -> crate::Result<Self> {
+    pub fn open(kind: Kind) -> crate::Result<Self> {
         Ok(Self {
-            roots: SourceRoots::located(session_directory, "data/pi"),
+            kind,
+            roots: kind.roots(),
         })
     }
 
@@ -90,7 +157,7 @@ impl Pi {
         })
     }
 
-    fn scan(path: &Path) -> crate::Result<Option<Summary>> {
+    fn scan(path: &Path, kind: Kind) -> crate::Result<Option<Summary>> {
         let scan = crate::providers::jsonl::metadata(path, 20, None)?;
         let mut updated_at = None;
         let mut model = String::new();
@@ -104,7 +171,7 @@ impl Pi {
         }
         let (header, title, message_count) = if scan.complete {
             let transcript =
-                transcript::Transcript::new(scan.records, |_| Ok(()))?;
+                transcript::Transcript::new(scan.records, kind, |_| Ok(()))?;
             let Some(header) = transcript.header else {
                 return Ok(None);
             };
@@ -197,11 +264,12 @@ impl Provider for Pi {
         days: Option<i64>,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
+        let kind = self.kind;
         file_sessions::discover(
             self.files()?,
             days,
             true,
-            Self::scan,
+            |path| Self::scan(path, kind),
             |path, summary, _| Self::parse(path, summary),
         )
     }
@@ -222,7 +290,7 @@ impl Provider for Pi {
                     name.to_string_lossy().ends_with(&suffix)
                 })
             },
-            |path| Self::parse(path, Self::scan(path)?),
+            |path| Self::parse(path, Self::scan(path, self.kind)?),
         )
     }
 
@@ -239,12 +307,12 @@ impl Provider for Pi {
                 Vec::new(),
                 crate::providers::contract::source_roots(self)?,
                 vec![
-                    ["Confirm the Pi session file is still under the Pi session directory or the local development data directory.", "确认 Pi 会话文件仍在 Pi 会话目录或本地开发数据目录。"],
+                    self.kind.location_hint(),
                     ["Re-run `agent-dump --list` to confirm the session id still exists.", "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。"],
                 ],
             ).into());
         }
-        crate::providers::pi::transcript::read(session, diagnostics)
+        crate::providers::pi::transcript::read(session, self.kind, diagnostics)
     }
 
     fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
@@ -362,6 +430,7 @@ mod tests {
             ],
         );
         let mut provider = Pi {
+            kind: Kind::Pi,
             roots: SourceRoots::fixed(
                 directory.path().into(),
                 "agent/sessions",
@@ -419,7 +488,8 @@ mod tests {
             (vec![header, prompt, slot, named], "Named"),
         ] {
             let transcript =
-                transcript::Transcript::new(records, |_| Ok(())).unwrap();
+                transcript::Transcript::new(records, Kind::Pi, |_| Ok(()))
+                    .unwrap();
             assert_eq!(transcript.title.as_deref(), Some(expected));
         }
     }
@@ -429,7 +499,10 @@ mod tests {
         crate::providers::source_tests::source_selection(
             "agent/sessions",
             false,
-            |roots| Pi { roots },
+            |roots| Pi {
+                kind: Kind::Pi,
+                roots,
+            },
             |base| {
                 let path = base.join("kept.jsonl");
                 std::fs::create_dir_all(base).unwrap();
@@ -464,6 +537,7 @@ mod tests {
         )
         .unwrap();
         let provider = Pi {
+            kind: Kind::Pi,
             roots: SourceRoots::fixed(
                 directory.path().into(),
                 "agent/sessions",

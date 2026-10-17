@@ -47,11 +47,14 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **OpenCode** - 开源 AI 编程助手
 - **ZCode** - ZCode 编码助手会话
 - **Claude Code** - Anthropic 的 AI 编码工具
+- **Qoder** - Qoder CLI 会话
+- **Qoder CN** - Qoder CN CLI 会话
 - **Codex** - OpenAI 的命令行 AI 编码助手
 - **Kimi** - Moonshot AI 助手
 - **Kimi-Code** - Kimi Code CLI 会话
 - **Cursor** - Cursor composer 会话
 - **Pi** - Earendil 的 AI coding agent
+- **oh-my-pi** - 基于 Pi 的 coding agent（`omp`）
 - **DSH** - DeepSeek Harness 会话
 - **DeepChat** - 当前版本的本地会话（未加密数据库）
 - **Cherry Studio** - 2.x 的本地聊天和 Agent 会话
@@ -176,8 +179,11 @@ agent-dump opencode://session-id-abc123
 - `kimi://<session_id>` - Kimi 会话
 - `kimi-code://<session_id>` - Kimi-Code 会话
 - `claude://<session_id>` - Claude Code 会话
+- `qoder://<session_id>` - Qoder 会话
+- `qoder-cn://<session_id>` - Qoder CN 会话
 - `cursor://<composer_id>` - Cursor 会话（旧的 `cursor://<requestid>` URI 仍能定位到同一会话）
 - `pi://<session_id>` - Pi 会话
+- `omp://<session_id>` - oh-my-pi 会话
 - `dsh://<session_id>` - DSH 会话
 - `deepchat://<session_id>` - DeepChat 会话
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio 普通聊天 / Agent 会话
@@ -240,12 +246,15 @@ agent-dump opencode://session-id-abc123
 
 - **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
 - **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
+- **Qoder**: `QODER_CONFIG_DIR` -> `~/.qoder` -> `data/qoder`
+- **Qoder CN**: `QODERCN_CONFIG_DIR` -> `~/.qoder-cn` -> `data/qoder-cn`
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **Kimi-Code**: `KIMI_CODE_HOME` -> `~/.kimi-code` -> `data/kimi-code`。会话是同时包含 `state.json` 和 `agents/main/wire.jsonl` 的 `sessions/<hash>/<id>/` 目录，没有消息的会话会跳过。工作目录依次取 `state.json` 的 `workDir`、`custom.cwd`，再查数据根目录的 `session_index.jsonl`。
 - **OpenCode**: `OPENCODE_DB` 指定唯一数据库（相对路径以 `XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 为基准）；未指定时读取该目录的 `opencode.db`，再回退到旧 Windows `LOCALAPPDATA`/`APPDATA` 路径和 `data/opencode/opencode.db`。
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
 - **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`；默认使用 macOS `~/Library/Application Support/Cursor`、Windows `%APPDATA%\Cursor`、Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor` 下的 `User` 目录。工作目录取自 `workspaceStorage/*/workspace.json` 中登记了该 composer 的工作区文件夹。
 - **Pi**: `PI_CODING_AGENT_SESSION_DIR` -> agent 目录 `settings.json` 中的绝对路径 `sessionDir` -> `<agent 目录>/sessions` -> `data/pi`。agent 目录依次为 `PI_CODING_AGENT_DIR`、`PI_HOME/agent`、`~/.pi/agent`。
+- **oh-my-pi**: `XDG_DATA_HOME/omp` 存在时（Windows 除外）使用 `XDG_DATA_HOME/omp/sessions` -> `~/.omp/agent/sessions` -> `data/omp`
 - **DSH**: `DSH_HOME` -> `~/.dsh` -> `data/dsh`。会话是 `sessions/<project>/<session>/` 下的日志；附件从数据根目录的 `attachments/v1` 读取。
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 下的 `Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。覆盖变量可用于便携版、开发版或选择多个安装中的一个。
@@ -260,7 +269,11 @@ Codex 扫描 `sessions` 和 `archived_sessions`，只读取 `rollout-*.jsonl` �
 
 Claude Code 列出 `<项目>/<会话>.jsonl`，以及 `<会话>/subagents/` 下的子代理记录，包括 `subagents/workflows/<run>/agent-*.jsonl` 中的 workflow agent。每个子代理作为独立会话列出，以 agent ID 标识；父会话中启动它的消息记录 `subagent_id`。没有可见消息的会话不列出。标题依次取最新的自定义标题、AI 标题、子代理名称或描述、`sessions-index.json`，以及前 20 条记录中首个用户输入的第一行。消息数只计可见记录。Token 合计按 API 请求取最后一次 usage，缓存读写计入输入。
 
+Qoder 与 Qoder CN 沿用 Claude Code 在 `projects/` 下的项目布局和上述规则；assistant 消息标记为 `qoder` 或 `qoder-cn`。
+
 Pi 只读取当前活跃分支：从最后一条带 id 的记录沿 `parentId` 回溯，被放弃的分支不进入导出、搜索或计数；没有 entry id 的旧格式按文件顺序读取。工具结果合并到对应的工具调用，保留状态和 `details`；bash 执行按退出码和取消标记设置状态。只保留 `display` 为 true 的自定义消息。Token 按消息记录，输入包含缓存读写。没有可见消息的会话不列出。标题依次取 `session_info` 名称、`title` 记录、会话头 `title` 和首条用户消息。超过 256 KiB 的文件在列表阶段只读取首尾，消息数为未知。
+
+oh-my-pi 沿用 Pi 的规则；assistant 消息标记为 `omp`。会话文件旁同名目录中的子代理和 advisor 记录作为独立会话列出，以记录头的 `id` 标识，不关联父会话。
 
 DSH 每个会话目录只读一个日志：在 `session.jsonl`、`session.v<N>.jsonl` 和 `.jsonl.zstd` 中先比格式版本，再比修改时间，取最新的。日志只有位于 DSH 按其自身工作目录和会话 ID 推导出的目录时才计入。会话头无效、序号不连续的日志和没有消息的会话会跳过。末尾仍在写入的记录或 zstd 帧会被忽略；压缩日志的 raw 导出写入解压后的 JSONL。分叉会话不包含从父会话继承的事件。没有最终消息的流式步骤按其分块重建。工具结果合并到对应的工具调用，保留状态和元数据。附件与记录的 SHA-256 摘要和大小一致时才读取图片；图片全部不可用的消息显示 `Image attachment unavailable`。标题依次取会话标题、子 agent 标签、首条用户消息、继承的标题和工作目录名。输入 token 包含缓存读写，输出 token 包含推理。不估算费用。
 
@@ -564,7 +577,7 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Pi、DSH、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
+`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、Qoder、Qoder CN、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Pi、oh-my-pi、DSH、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
 
 也可以直接读取：
 
