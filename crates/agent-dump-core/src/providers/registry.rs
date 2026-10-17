@@ -96,6 +96,16 @@ static REGISTRATIONS: &[Registration] = &[
     },
     Registration {
         info: ProviderInfo {
+            name: "dsh",
+            display_name: "DSH",
+            scheme: "dsh",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || Ok(Box::new(crate::providers::dsh::Dsh::open()?)),
+    },
+    Registration {
+        info: ProviderInfo {
             name: "deepchat",
             display_name: "DeepChat",
             scheme: "deepchat",
