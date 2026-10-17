@@ -32,10 +32,15 @@ class FakeRunner:
                 "APPDATA",
                 "LOCALAPPDATA",
                 "CLAUDE_CONFIG_DIR",
+                "QODER_CONFIG_DIR",
+                "QODERCN_CONFIG_DIR",
                 "KIMI_SHARE_DIR",
                 "KIMI_CODE_HOME",
                 "FACTORY_HOME_OVERRIDE",
+                "GROK_HOME",
                 "PI_HOME",
+                "GEMINI_CLI_HOME",
+                "AGY_CONVERSATIONS_DIR",
                 "CODEX_HOME",
             )
         )

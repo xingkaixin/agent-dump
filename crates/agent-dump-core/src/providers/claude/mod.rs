@@ -4,6 +4,7 @@ use crate::compat::value::text;
 use crate::providers::contract::{
     DiagnosticSink, Provider, RecoverableDiagnostic,
 };
+use crate::providers::error::LocalizedText;
 use crate::providers::files::{
     self as file_sessions, SourceFiles, SourceRoots,
 };
@@ -228,7 +229,72 @@ pub(super) fn title_line(value: &str) -> Option<String> {
         .and_then(normalize_title)
 }
 
+/// Providers that keep Claude Code's `projects/` transcript layout.
+#[derive(Clone, Copy)]
+pub enum Kind {
+    Claude,
+    Qoder,
+    QoderCn,
+}
+
+impl Kind {
+    fn roots(self) -> SourceRoots {
+        let (variable, directory, fallback, label) = match self {
+            Self::Claude => (
+                "CLAUDE_CONFIG_DIR",
+                ".claude",
+                "data/claudecode",
+                "CLAUDE_CONFIG_DIR/projects",
+            ),
+            Self::Qoder => (
+                "QODER_CONFIG_DIR",
+                ".qoder",
+                "data/qoder",
+                "QODER_CONFIG_DIR/projects",
+            ),
+            Self::QoderCn => (
+                "QODERCN_CONFIG_DIR",
+                ".qoder-cn",
+                "data/qoder-cn",
+                "QODERCN_CONFIG_DIR/projects",
+            ),
+        };
+        SourceRoots::new(
+            move || file_sessions::environment_root(variable, directory),
+            "projects",
+            fallback,
+            label,
+        )
+    }
+
+    const fn agent(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Qoder => "qoder",
+            Self::QoderCn => "qoder-cn",
+        }
+    }
+
+    const fn location_hint(self) -> LocalizedText {
+        match self {
+            Self::Claude => [
+                "Confirm the Claude Code session file is still under the projects directory.",
+                "确认 Claude Code 会话文件仍位于 projects 目录下。",
+            ],
+            Self::Qoder => [
+                "Confirm the Qoder session file is still under the projects directory.",
+                "确认 Qoder 会话文件仍位于 projects 目录下。",
+            ],
+            Self::QoderCn => [
+                "Confirm the Qoder CN session file is still under the projects directory.",
+                "确认 Qoder CN 会话文件仍位于 projects 目录下。",
+            ],
+        }
+    }
+}
+
 pub struct Claude {
+    kind: Kind,
     roots: SourceRoots,
     titles: HashMap<PathBuf, HashMap<String, Value>>,
 }
@@ -238,19 +304,10 @@ impl Claude {
         clippy::unnecessary_wraps,
         reason = "Provider factories share the fallible registry interface; source access is deferred"
     )]
-    pub fn open() -> crate::Result<Self> {
+    pub fn open(kind: Kind) -> crate::Result<Self> {
         Ok(Self {
-            roots: SourceRoots::new(
-                || {
-                    file_sessions::environment_root(
-                        "CLAUDE_CONFIG_DIR",
-                        ".claude",
-                    )
-                },
-                "projects",
-                "data/claudecode",
-                "CLAUDE_CONFIG_DIR/projects",
-            ),
+            kind,
+            roots: kind.roots(),
             titles: HashMap::new(),
         })
     }
@@ -537,13 +594,14 @@ impl Provider for Claude {
                 Vec::new(),
                 crate::providers::contract::source_roots(self)?,
                 vec![
-                    ["Confirm the Claude Code session file is still under the projects directory.", "确认 Claude Code 会话文件仍位于 projects 目录下。"],
+                    self.kind.location_hint(),
                     ["Re-run `agent-dump --list` to confirm the session still exists.", "重新运行 `agent-dump --list` 确认该会话是否仍存在。"],
                 ],
             ).into());
         }
         crate::providers::claude::transcript::read(
             session,
+            self.kind.agent(),
             children(&session.source_path),
             diagnostics,
         )
@@ -572,6 +630,7 @@ mod tests {
             "projects",
             true,
             |roots| Claude {
+                kind: Kind::Claude,
                 roots,
                 titles: HashMap::new(),
             },
@@ -605,6 +664,7 @@ mod tests {
         )
         .unwrap();
         let mut provider = Claude {
+            kind: Kind::Claude,
             roots: SourceRoots::fixed(
                 directory.path().into(),
                 "projects",
@@ -661,6 +721,7 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "{\"type\":\"user\",\"sessionId\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\",\"message\":{\"role\":\"user\",\"content\":\"hello\"}}\n").unwrap();
         let provider = Claude {
+            kind: Kind::Claude,
             roots: SourceRoots::fixed(
                 directory.path().into(),
                 "projects",

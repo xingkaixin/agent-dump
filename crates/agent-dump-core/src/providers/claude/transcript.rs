@@ -391,10 +391,11 @@ impl Decoder {
 
 pub fn read(
     session: &Session,
+    agent: &'static str,
     children: HashMap<String, String>,
     diagnostics: &mut DiagnosticSink<'_>,
 ) -> crate::Result<SessionData> {
-    let mut decoder = Decoder::new("claude", children);
+    let mut decoder = Decoder::new(agent, children);
     crate::providers::jsonl::scan(
         &session.source_path,
         diagnostics,

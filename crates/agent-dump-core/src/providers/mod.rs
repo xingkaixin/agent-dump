@@ -1,3 +1,4 @@
+pub(crate) mod antigravity_cli;
 pub(crate) mod claude;
 pub(crate) mod codex;
 pub mod contract;
@@ -6,6 +7,8 @@ pub(crate) mod desktop;
 pub(crate) mod droid;
 pub mod error;
 pub(crate) mod files;
+pub(crate) mod gemini_cli;
+pub(crate) mod grok;
 pub(crate) mod jsonl;
 pub(crate) mod kimi;
 pub(crate) mod kimi_code;

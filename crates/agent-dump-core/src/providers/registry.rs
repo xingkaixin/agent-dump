@@ -72,7 +72,39 @@ static REGISTRATIONS: &[Registration] = &[
             identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
-        open: || Ok(Box::new(crate::providers::claude::Claude::open()?)),
+        open: || {
+            Ok(Box::new(crate::providers::claude::Claude::open(
+                crate::providers::claude::Kind::Claude,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "qoder",
+            display_name: "Qoder",
+            scheme: "qoder",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::providers::claude::Claude::open(
+                crate::providers::claude::Kind::Qoder,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "qoder-cn",
+            display_name: "Qoder CN",
+            scheme: "qoder-cn",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::providers::claude::Claude::open(
+                crate::providers::claude::Kind::QoderCn,
+            )?))
+        },
     },
     Registration {
         info: ProviderInfo {
@@ -96,13 +128,51 @@ static REGISTRATIONS: &[Registration] = &[
     },
     Registration {
         info: ProviderInfo {
+            name: "grok",
+            display_name: "Grok",
+            scheme: "grok",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || Ok(Box::new(crate::providers::grok::Grok::open()?)),
+    },
+    Registration {
+        info: ProviderInfo {
             name: "pi",
             display_name: "Pi",
             scheme: "pi",
             identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
-        open: || Ok(Box::new(crate::providers::pi::Pi::open()?)),
+        open: || {
+            Ok(Box::new(crate::providers::pi::Pi::open(
+                crate::providers::pi::Kind::Pi,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "omp",
+            display_name: "oh-my-pi",
+            scheme: "omp",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::providers::pi::Pi::open(
+                crate::providers::pi::Kind::Omp,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "gemini-cli",
+            display_name: "Gemini CLI",
+            scheme: "gemini-cli",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || Ok(Box::new(crate::providers::gemini_cli::GeminiCli::open()?)),
     },
     Registration {
         info: ProviderInfo {
@@ -144,6 +214,20 @@ static REGISTRATIONS: &[Registration] = &[
             Ok(Box::new(crate::providers::desktop::Desktop::open(
                 crate::providers::desktop::Kind::MiniMax,
             )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "antigravity-cli",
+            display_name: "Antigravity CLI",
+            scheme: "antigravity-cli",
+            identifier_label: "<conversation_id>",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(
+                crate::providers::antigravity_cli::AntigravityCli::open()?,
+            ))
         },
     },
 ];

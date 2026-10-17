@@ -4,7 +4,7 @@
 
 以下 recipes 对应当前 Rust CLI，只提供命令行入口。旧参数映射、源码安装和 Python API 迁移见[兼容参考](../../../docs/cli-compatibility.md#中文)。当前功能不保证适用于旧 Python 0.15.9。
 
-文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余九个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。Codex、Claude、Pi 的单条记录转换失败走本地化 stderr 警告并继续读取；head/list/raw 不输出转换警告。六个文件 Provider 与 OpenCode/ZCode 在未选中来源时读取当前配置并重试，选中后保持路径；Codex 标题索引跟随当前配置。DeepChat/Cherry/MiniMax 每次发现或查找重新选择来源；Cursor 正文读取也使用当前数据库配置。
+文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余十五个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。Codex、Claude、Pi 的单条记录转换失败走本地化 stderr 警告并继续读取；head/list/raw 不输出转换警告。十二个文件 Provider 与 OpenCode/ZCode 在未选中来源时读取当前配置并重试，选中后保持路径；Codex 标题索引跟随当前配置。DeepChat/Cherry/MiniMax 每次发现或查找重新选择来源；Cursor 正文读取也使用当前数据库配置。Qoder、Qoder CN 沿用 Claude 的规则，oh-my-pi 沿用 Pi 的规则。
 
 ## 命令入口
 
@@ -72,10 +72,16 @@ agent-dump codex://threads/<session_id>
 agent-dump kimi://<session_id>
 agent-dump kimi-code://<session_id>
 agent-dump claude://<session_id>
+agent-dump qoder://<session_id>
+agent-dump qoder-cn://<session_id>
 agent-dump cursor://<composer_id>
 agent-dump droid://<session_id>
+agent-dump grok://<session_id>
 agent-dump pi://<session_id>
+agent-dump omp://<session_id>
+agent-dump gemini-cli://<session_id>
 agent-dump minimax://<session_id>
+agent-dump antigravity-cli://<conversation_id>
 
 # 导出单会话
 agent-dump codex://<session_id> --format json --output ./my-sessions
@@ -214,12 +220,18 @@ agent-dump --config edit
 - `kimi`
 - `kimi-code`
 - `claudecode`
+- `qoder`
+- `qoder-cn`
 - `cursor`
 - `droid`
+- `grok`
 - `pi`
+- `omp`
+- `gemini-cli`
 - `deepchat`
 - `cherry`
 - `minimax`
+- `antigravity-cli`
 
 示例：
 
@@ -302,12 +314,18 @@ agent-dump --search "auth" --list --days 30
    - `kimi://<session_id>`
    - `kimi-code://<session_id>`
    - `claude://<session_id>`
+   - `qoder://<session_id>`
+   - `qoder-cn://<session_id>`
    - `cursor://<composer_id>`
    - `droid://<session_id>`
+   - `grok://<session_id>`
    - `pi://<session_id>`
+   - `omp://<session_id>`
+   - `gemini-cli://<session_id>`
    - `deepchat://<session_id>`
    - `cherry://topic-<id>` / `cherry://session-<id>`
    - `minimax://<session_id>`
+   - `antigravity-cli://<conversation_id>`
 2. 确认 `<session_id>` 非空。
 
 ### URI 协议与实际会话来源不匹配
@@ -347,7 +365,7 @@ agent-dump --search "auth" --list --days 30
 
 处理：
 1. 改为 `keyword` 或 `agent1,agent2:keyword`。
-2. 将 agent 名称改为 `opencode/zcode/codex/kimi/kimi-code/claudecode/cursor/droid/pi/deepchat/cherry/minimax` 中的合法值。
+2. 将 agent 名称改为 `opencode/zcode/codex/kimi/kimi-code/claudecode/qoder/qoder-cn/cursor/droid/grok/pi/omp/gemini-cli/deepchat/cherry/minimax/antigravity-cli` 中的合法值。
 
 ### collect 模式参数冲突
 
@@ -396,6 +414,16 @@ agent-dump 'pi://<session_id>' --format json,markdown --output ./sessions
 ```
 
 只读取活跃分支：从最后一条带 id 的记录沿 `parentId` 回溯，被放弃的分支不参与导出、搜索和计数；没有 entry id 的旧格式按文件顺序读取。工具结果合并到对应调用并保留状态和 `details`，bash 执行按退出码和取消标记设置状态，只保留 `display` 为 true 的自定义消息。没有可见消息的会话不列出。超过 256 KiB 的文件在列表阶段消息数为未知。
+
+## Gemini CLI
+
+```bash
+agent-dump --list --query "provider:gemini-cli"
+agent-dump 'gemini-cli://<session_id>' --head
+agent-dump 'gemini-cli://<session_id>' --format json,raw --output ./sessions
+```
+
+读取 `GEMINI_CLI_HOME/.gemini/tmp`，未设置时读取 `~/.gemini/tmp`；`GEMINI_CLI_HOME` 是包含 `.gemini` 的目录。只列出 `<项目>/chats/` 下的 `.jsonl` 与旧格式 `.json`，以及 `chats/<父会话 ID>/` 下的子代理会话；旧 `.json` 已恢复为 `.jsonl` 时只读 `.jsonl`。工作目录取自 `<项目>/.project_root`。没有 `sessionId` 或没有消息的文件不列出。子代理会话单独列出，不关联父会话。
 
 ## DeepChat
 
@@ -447,6 +475,19 @@ agent-dump --search "timeout" --query "provider:minimax"
 读取当前 CLI 已迁移的 SQLite 展示消息。数据目录按非空 `MINIMAX_DATA_DIR`、非空 `MAVIS_DATA_DIR`、`~/.minimax` 选择，数据库为其下的 `v2/sqlite/runtime-state.sqlite`。显式目录缺失时不回退；profile、早期源码版或其他安装使用 `MINIMAX_DATA_DIR` 指定。
 
 保留隐藏的子会话和归档会话，排除没有消息的会话、隐藏的根会话及 peek/channel/cron 内部会话；无标题时使用第一条非自动用户消息。工具参数和结果参与搜索；思考、工具、系统事件和权限响应不进入 collect，压缩和审查事件带标签文本进入搜索与 collect。附件引用和消息错误转为文本，不读取附件文件。token 用量和记录的 USD 费用来自 `local_runtime_token_usage`，单模型 turn 挂到最后一条 assistant 消息。支持 print / JSON / Markdown，不支持 raw、桌面端、旧存储或模型上下文恢复。待迁移和损坏记录是读取失败，不能当成没有会话；agent-dump 不运行客户端迁移。
+
+## Antigravity CLI
+
+```bash
+agent-dump --list --query "provider:antigravity-cli"
+agent-dump 'antigravity-cli://<conversation_id>' --head
+agent-dump 'antigravity-cli://<conversation_id>' --format json,markdown --output ./sessions
+AGY_CONVERSATIONS_DIR=~/backup/conversations agent-dump --list --query "provider:antigravity-cli"
+```
+
+会话目录按非空 `AGY_CONVERSATIONS_DIR`、`~/.gemini/antigravity-cli/conversations` 选择，其下任意深度的 `<conversation_id>.db` 各为一个会话；父目录中可选的 `conversation_summaries.db` 提供标题、工作目录和更新时间。不读取 Antigravity IDE 的 `.pb` 文件。
+
+只解码用户输入、助手文本、标题更新、工具调用、步骤时间和用量；工具结果不解析，工具状态为 `unknown`，其他步骤跳过。没有原生时间的消息标记为推测时间，collect 不按该日期归档。重试中重复的用量只计一次，挂到下一条 assistant 消息；不估算费用。支持 print / JSON / Markdown，不支持 raw。步骤格式错误或表结构不支持时，只有该会话报告读取失败。
 
 ### Machine-readable output
 
