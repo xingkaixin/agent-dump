@@ -35,6 +35,7 @@ class FakeRunner:
                 "KIMI_SHARE_DIR",
                 "KIMI_CODE_HOME",
                 "PI_HOME",
+                "DSH_HOME",
                 "CODEX_HOME",
             )
         )
