@@ -56,6 +56,7 @@ Follow the generated read commands and cursors until `has_more=false` to cover t
 - **Grok** - Grok CLI sessions
 - **Pi** - Earendil's AI coding agent
 - **oh-my-pi** - Pi-based coding agent (`omp`)
+- **Gemini CLI** - Google's command-line AI coding agent
 - **DeepChat** - Current local sessions from unencrypted databases
 - **Cherry Studio** - Local 2.x chats and agent sessions
 - **MiniMax Code** - Current CLI sessions from local SQLite storage
@@ -185,6 +186,7 @@ Supported URI schemes:
 - `grok://<session_id>` - Grok sessions
 - `pi://<session_id>` - Pi sessions
 - `omp://<session_id>` - oh-my-pi sessions
+- `gemini-cli://<session_id>` - Gemini CLI sessions
 - `deepchat://<session_id>` - DeepChat sessions
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
 - `minimax://<session_id>` - MiniMax Code CLI sessions
@@ -256,6 +258,7 @@ listed and fails when there is nothing to list because no provider has data.
 - **Grok**: `GROK_HOME` -> `~/.grok` -> `data/grok`. Every `summary.json` under `sessions/`, at any depth, is a session when its `info` has both `id` and `cwd`; messages come from the sibling `updates.jsonl`, and sessions without messages are skipped. Prompts discarded by a rewind are left out of the transcript. See the [Grok reading rules](docs/providers/grok.md).
 - **Pi**: `PI_CODING_AGENT_SESSION_DIR` -> absolute `sessionDir` in the agent directory's `settings.json` -> `<agent directory>/sessions` -> `data/pi`. The agent directory is `PI_CODING_AGENT_DIR`, then `PI_HOME/agent`, then `~/.pi/agent`.
 - **oh-my-pi**: `XDG_DATA_HOME/omp/sessions` when `XDG_DATA_HOME/omp` exists (not on Windows) -> `~/.omp/agent/sessions` -> `data/omp`
+- **Gemini CLI**: `GEMINI_CLI_HOME/.gemini/tmp` -> `~/.gemini/tmp` -> `data/gemini-cli`. `GEMINI_CLI_HOME` is the directory that contains `.gemini`, not the data directory itself.
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` or `CHERRY_STUDIO_USER_DATA_DIR`, then `Data/cherrystudio.sqlite`; otherwise the first existing database in the user data directories configured by `~/.cherrystudio/boot-config.json`, then the platform default: macOS `~/Library/Application Support/CherryStudio`, Windows `%APPDATA%\CherryStudio`, or Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio` (each with `Data/cherrystudio.sqlite`). Use the override for portable/dev installations or to select among multiple installations.
 - **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`, or `~/.minimax-code` when only that directory has a database; the database is `v2/sqlite/runtime-state.sqlite` under the selected root. Only one root is selected; a missing explicit path never falls back to another installation.
@@ -274,6 +277,8 @@ Qoder and Qoder CN keep the Claude Code project layout under `projects/` and fol
 Pi reads only the active branch: it follows `parentId` back from the last entry that has an id, so abandoned branches are excluded from exports, search, and counts. Legacy files without entry ids are read in file order. Tool results are merged into their tool calls with status and `details`; bash executions get a status from the exit code and cancellation flag. Only custom messages with `display: true` are kept. Tokens are recorded per message, and input includes cache reads and writes. Sessions without visible messages are not listed. Titles come from the `session_info` name, then a `title` record, the header `title`, and the first user message. For files over 256 KiB, listing reads only the head and tail, so the message count is unknown.
 
 oh-my-pi follows the Pi rules; assistant messages are labeled `omp`. Subagent and advisor transcripts in the directory named after a session file are listed as separate sessions, identified by their header `id`, without a link to the parent session.
+
+Gemini CLI lists `tmp/<project>/chats/*.jsonl` and legacy `*.json` chats, plus subagent chats in `chats/<parent session id>/`. A legacy `.json` chat that was resumed as `.jsonl` is read only from the `.jsonl` file. Files without a `sessionId` and sessions without messages are skipped. JSONL records are replayed in order, including `$set`, `$patch`, and `$rewindTo` updates. The working directory comes from `tmp/<project>/.project_root`. Titles use the chat `summary`, then the first user prompt that does not start with `<session_context>` or `<hook_context>`. User text prefers `displayContent`. Thought summaries become reasoning, and tool calls take results from the call record or a later `functionResponse`. Input tokens include cached and tool-use prompt tokens; output totals include thinking tokens. Subagent chats are listed as separate sessions without a link to the parent.
 
 DeepChat reads saved sessions in the current `agent.db`, including migrated history, ACP sessions, and subagent sessions; drafts, sessions without messages, and sessions whose parent chain forms a loop are excluded. The update time is the latest of the session, message, block, and usage records. It supports listing, query, search, stats, collect, and print / JSON / Markdown exports. Structured messages take precedence over the `content` fallback, and plain-text `content` becomes message text. Text, reasoning, plan, image, and tool records are normalized; other blocks with text become message text, and compaction markers do not enter collect. Referenced sessions, attachment paths, and links become message text, so search finds them; JSON also keeps the attachment and link records. Attachment files and offloaded tool output are not read. Token totals come from `deepchat_usage_stats`, falling back to message metadata, with cached tokens capped at the input count; billing cost is unavailable.
 
@@ -590,7 +595,7 @@ Give an Agent this single command to obtain instructions and executable commands
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` works with every registered Provider, including Claude Code, Qoder, Qoder CN, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Grok, Pi, oh-my-pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
+`--read-prompt` works with every registered Provider, including Claude Code, Qoder, Qoder CN, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Grok, Pi, oh-my-pi, Gemini CLI, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
 
 Direct reading is also available:
 
