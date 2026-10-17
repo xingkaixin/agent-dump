@@ -109,4 +109,4 @@ PM 摘要字段为 requests、decisions、outcomes，outcomes 不从工具轨迹
 3. 新模式在 `cli_args.rs` 声明参数，在 `command.rs` 归一化和分发，再实现对应 workflow。
 4. 增补隔离行为测试，并同步 README、recipes；领域事实边界变化时同步 `CONTEXT.md`。
 
-现有 Provider 的数据范围见 README；OpenCode 2.x 与 MiniMax 的读取规则见 [providers/](providers/)。DeepChat 不支持 SQLCipher/附件读取/Tape 恢复；Cherry 只读取当前分支及未删除会话；MiniMax 只读取支持的已迁移展示行。重写不会扩大 Provider 源写入权限，也不执行上游迁移。
+现有 Provider 的数据范围见 README；OpenCode 2.x、MiniMax 与 Antigravity CLI 的读取规则见 [providers/](providers/)。DeepChat 不支持 SQLCipher/附件读取/Tape 恢复；Cherry 只读取当前分支及未删除会话；MiniMax 只读取支持的已迁移展示行。重写不会扩大 Provider 源写入权限，也不执行上游迁移。
