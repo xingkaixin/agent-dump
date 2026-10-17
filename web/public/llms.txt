@@ -1,6 +1,6 @@
 # Agent Dump
 
-> Agent Dump is a local command-line tool for finding, reading, exporting, and reusing AI coding conversations. Sources remain read-only. Supported tools include Codex, Claude Code, Qoder, Qoder CN, ZCode, Kimi, Kimi-Code, OpenCode, Cursor, Grok, Pi, oh-my-pi, DSH, DeepChat, Cherry Studio, and MiniMax Code. Formats vary by provider.
+> Agent Dump is a local command-line tool for finding, reading, exporting, and reusing AI coding conversations. Sources remain read-only. Supported tools include Codex, Claude Code, Qoder, Qoder CN, ZCode, Kimi, Kimi-Code, OpenCode, Cursor, Grok, Pi, oh-my-pi, Gemini CLI, DSH, DeepChat, Cherry Studio, and MiniMax Code. Formats vary by provider.
 
 ## Guides
 

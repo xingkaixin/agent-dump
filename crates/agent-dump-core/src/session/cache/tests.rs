@@ -437,7 +437,7 @@ fn provider_change_sources_include_payload_files_and_wal_only() {
             session.source_path = root.path().join("source");
             let expected = match registration.info.name {
                 "codex" | "claudecode" | "qoder" | "qoder-cn" | "pi"
-                | "omp" | "dsh" => {
+                | "omp" | "gemini-cli" | "dsh" => {
                     vec![session.source_path.clone()]
                 }
                 "kimi-code" => vec![

@@ -56,6 +56,7 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **Grok** - Grok CLI 会话
 - **Pi** - Earendil 的 AI coding agent
 - **oh-my-pi** - 基于 Pi 的 coding agent（`omp`）
+- **Gemini CLI** - Google 的命令行 AI 编码 Agent
 - **DSH** - DeepSeek Harness 会话
 - **DeepChat** - 当前版本的本地会话（未加密数据库）
 - **Cherry Studio** - 2.x 的本地聊天和 Agent 会话
@@ -186,6 +187,7 @@ agent-dump opencode://session-id-abc123
 - `grok://<session_id>` - Grok 会话
 - `pi://<session_id>` - Pi 会话
 - `omp://<session_id>` - oh-my-pi 会话
+- `gemini-cli://<session_id>` - Gemini CLI 会话
 - `dsh://<session_id>` - DSH 会话
 - `deepchat://<session_id>` - DeepChat 会话
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio 普通聊天 / Agent 会话
@@ -258,6 +260,7 @@ agent-dump opencode://session-id-abc123
 - **Grok**: `GROK_HOME` -> `~/.grok` -> `data/grok`。`sessions/` 下任意深度的 `summary.json`，只要 `info` 同时含 `id` 和 `cwd`，即为一个会话；消息来自同目录的 `updates.jsonl`，没有消息的会话会跳过。被 rewind 撤销的提问不进入正文。读取规则见 [Grok Provider](docs/providers/grok.md)。
 - **Pi**: `PI_CODING_AGENT_SESSION_DIR` -> agent 目录 `settings.json` 中的绝对路径 `sessionDir` -> `<agent 目录>/sessions` -> `data/pi`。agent 目录依次为 `PI_CODING_AGENT_DIR`、`PI_HOME/agent`、`~/.pi/agent`。
 - **oh-my-pi**: `XDG_DATA_HOME/omp` 存在时（Windows 除外）使用 `XDG_DATA_HOME/omp/sessions` -> `~/.omp/agent/sessions` -> `data/omp`
+- **Gemini CLI**: `GEMINI_CLI_HOME/.gemini/tmp` -> `~/.gemini/tmp` -> `data/gemini-cli`。`GEMINI_CLI_HOME` 指向包含 `.gemini` 的目录，而不是数据目录本身。
 - **DSH**: `DSH_HOME` -> `~/.dsh` -> `data/dsh`。会话是 `sessions/<project>/<session>/` 下的日志；附件从数据根目录的 `attachments/v1` 读取。
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 下的 `Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。覆盖变量可用于便携版、开发版或选择多个安装中的一个。
@@ -277,6 +280,8 @@ Qoder 与 Qoder CN 沿用 Claude Code 在 `projects/` 下的项目布局和上�
 Pi 只读取当前活跃分支：从最后一条带 id 的记录沿 `parentId` 回溯，被放弃的分支不进入导出、搜索或计数；没有 entry id 的旧格式按文件顺序读取。工具结果合并到对应的工具调用，保留状态和 `details`；bash 执行按退出码和取消标记设置状态。只保留 `display` 为 true 的自定义消息。Token 按消息记录，输入包含缓存读写。没有可见消息的会话不列出。标题依次取 `session_info` 名称、`title` 记录、会话头 `title` 和首条用户消息。超过 256 KiB 的文件在列表阶段只读取首尾，消息数为未知。
 
 oh-my-pi 沿用 Pi 的规则；assistant 消息标记为 `omp`。会话文件旁同名目录中的子代理和 advisor 记录作为独立会话列出，以记录头的 `id` 标识，不关联父会话。
+
+Gemini CLI 列出 `tmp/<项目>/chats/*.jsonl` 和旧格式 `*.json` 会话，以及 `chats/<父会话 ID>/` 下的子代理会话。旧 `.json` 会话恢复后改写为 `.jsonl` 时，只读取 `.jsonl` 文件。没有 `sessionId` 的文件和没有消息的会话不列出。JSONL 记录按顺序回放，包括 `$set`、`$patch` 和 `$rewindTo` 更新。工作目录取自 `tmp/<项目>/.project_root`。标题依次取会话 `summary`、首个不以 `<session_context>` 或 `<hook_context>` 开头的用户输入。用户文本优先取 `displayContent`。思考摘要作为推理内容，工具调用的结果取自调用记录或后续的 `functionResponse`。输入 token 包含缓存和工具调用提示 token，输出合计包含思考 token。子代理会话单独列出，不关联父会话。
 
 DSH 每个会话目录只读一个日志：在 `session.jsonl`、`session.v<N>.jsonl` 和 `.jsonl.zstd` 中先比格式版本，再比修改时间，取最新的。日志只有位于 DSH 按其自身工作目录和会话 ID 推导出的目录时才计入。会话头无效、序号不连续的日志和没有消息的会话会跳过。末尾仍在写入的记录或 zstd 帧会被忽略；压缩日志的 raw 导出写入解压后的 JSONL。分叉会话不包含从父会话继承的事件。没有最终消息的流式步骤按其分块重建。工具结果合并到对应的工具调用，保留状态和元数据。附件与记录的 SHA-256 摘要和大小一致时才读取图片；图片全部不可用的消息显示 `Image attachment unavailable`。标题依次取会话标题、子 agent 标签、首条用户消息、继承的标题和工作目录名。输入 token 包含缓存读写，输出 token 包含推理。不估算费用。
 
@@ -580,7 +585,7 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、Qoder、Qoder CN、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Grok、Pi、oh-my-pi、DSH、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
+`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、Qoder、Qoder CN、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Grok、Pi、oh-my-pi、Gemini CLI、DSH、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
 
 也可以直接读取：
 

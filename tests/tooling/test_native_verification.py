@@ -38,6 +38,7 @@ class FakeRunner:
                 "KIMI_CODE_HOME",
                 "GROK_HOME",
                 "PI_HOME",
+                "GEMINI_CLI_HOME",
                 "DSH_HOME",
                 "CODEX_HOME",
             )

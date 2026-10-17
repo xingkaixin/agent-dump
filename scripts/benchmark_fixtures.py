@@ -71,6 +71,7 @@ def isolated_environment(root: Path) -> dict[str, str]:
         "KIMI_CODE_HOME": "sources/kimi-code",
         "GROK_HOME": "sources/grok",
         "PI_HOME": "sources/pi",
+        "GEMINI_CLI_HOME": "sources/gemini-cli",
         "DSH_HOME": "sources/dsh",
         "DEEPCHAT_USER_DATA_DIR": "sources/deepchat",
         "CHERRY_STUDIO_USER_DATA_DIR": "sources/cherry",

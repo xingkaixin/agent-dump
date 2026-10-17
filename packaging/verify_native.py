@@ -81,6 +81,7 @@ def build_isolated_environment(root: Path, codex_home: Path) -> dict[str, str]:
         "KIMI_CODE_HOME": root / "kimi-code",
         "GROK_HOME": root / "grok",
         "PI_HOME": root / "pi",
+        "GEMINI_CLI_HOME": root / "gemini-cli",
         "DSH_HOME": root / "dsh",
     }
     for path in locations.values():
