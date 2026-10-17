@@ -36,11 +36,11 @@ dev = [
     "pytest-xdist>=3.6",
     "ruff>=0.15.2",
     "tomli>=2.0.0",
-    "ty==0.0.85",
+    "ty==0.0.87",
 ]
 packaging = [
     "maturin==1.15.0",
-    "ziglang==0.16.0; sys_platform == 'linux'",
+    "ziglang==0.17.0; sys_platform == 'linux'",
 ]
 
 [build-system]
