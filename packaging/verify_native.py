@@ -75,6 +75,8 @@ def build_isolated_environment(root: Path, codex_home: Path) -> dict[str, str]:
         "APPDATA": root / "app-data",
         "LOCALAPPDATA": root / "local-app-data",
         "CLAUDE_CONFIG_DIR": root / "claude",
+        "QODER_CONFIG_DIR": root / "qoder",
+        "QODERCN_CONFIG_DIR": root / "qoder-cn",
         "KIMI_SHARE_DIR": root / "kimi",
         "KIMI_CODE_HOME": root / "kimi-code",
         "PI_HOME": root / "pi",

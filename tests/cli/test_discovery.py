@@ -7,7 +7,7 @@ import shutil
 import sqlite3
 import sys
 
-from cli_fixture import ROOT, header, write_jsonl
+from cli_fixture import IDENTITY, ROOT, header, write_jsonl
 from desktop_fixture import NOW, PROVIDERS, desktop
 import pytest
 from sqlite_fixture import create_legacy
@@ -16,7 +16,9 @@ from test_cursor import cursor
 from test_gemini_cli import create as create_gemini_cli, entry, header as gemini_header
 from test_kimi import create as create_kimi
 from test_kimi_code import appended, create as create_kimi_code
+from test_omp import create as create_omp
 from test_pi import create as create_pi, message
+from test_qoder import create as create_qoder
 
 pytestmark = pytest.mark.differential
 
@@ -37,6 +39,9 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     create_kimi(cli, context=[{"role": "user", "content": "Kimi"}])
     create_kimi_code(cli, [appended("user", "Kimi-Code")], state={})
     create_pi(cli, [message("user", "Pi")])
+    create_qoder(cli.root / "sources/qoder", [event("user", "Qoder")])
+    create_qoder(cli.root / "sources/qoder-cn", [event("user", "Qoder CN")])
+    create_omp(Path(cli.environment["HOME"]) / ".omp/agent/sessions", IDENTITY, [message("user", "oh-my-pi")])
     create_gemini_cli(cli, [gemini_header(), entry("u", "user", "Gemini CLI")])
     monkeypatch.syspath_prepend(str(ROOT / "tests" / "cli"))
     for provider, (variable, suffix, _) in PROVIDERS.items():
@@ -51,8 +56,11 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
         "Kimi",
         "Kimi-Code",
         "Claude Code",
+        "Qoder",
+        "Qoder CN",
         "Cursor",
         "Pi",
+        "oh-my-pi",
         "Gemini CLI",
         "DeepChat",
         "Cherry Studio",
