@@ -4,6 +4,31 @@
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-10-17
+
+### Added
+
+- Read sessions from Kimi-Code, Qoder, Qoder CN, oh-my-pi, Grok, Gemini CLI, Antigravity CLI, Droid, and DSH, with source roots and reading rules aligned with CodeSesh (#516–#522).
+- Decode every complete frame of `.zst` and `.zstd` sources in raw exports, leaving out a frame that is still being written (#522).
+
+### Fixed
+
+- Accept CodeSesh source variables and default locations for Cursor, Pi, Cherry Studio, and MiniMax; trim and expand path variables; strip `system-reminder` and slash-command wrapper tags from transcripts except MiniMax Code (#507).
+- Claude Code: list subagent transcripts as separate sessions linked from the parent tool call, keep TodoWrite calls and tool-result images, count each API request's usage once, and skip sessions without visible messages (#510).
+- Codex: read archived and `.jsonl.zst` rollouts, follow Codex tool identities for built-in and code-mode calls, drop injected context, and count token deltas, remote compaction, and subagent usage once (#515).
+- Cursor: key sessions by composer id while resolving legacy `cursor://<requestid>` URIs, read subagent chats listed by the composer, and take the working directory from the workspace that lists it (#513).
+- OpenCode and ZCode: follow the V1-to-V2 migration cursor, convert plan, image, and attachment parts, skip subagent and orphaned children, and count cache and reasoning tokens (#512).
+- Kimi: discover `state.json` sessions, read `StatusUpdate` token usage including subagent wires, join multi-part user text, and keep context tool calls without `type` (#508).
+- Pi: export only the active session branch and take titles, message counts, and usage from it (#509).
+- MiniMax: list child and non-empty sessions, and read event labels, tools, and turn usage (#514).
+- DeepChat and Cherry Studio: skip empty, looping, and deleted records, keep references, attachments, and compact summaries as text, and read token usage and costs (#511).
+- Skip files modified before an update-time window starts, so `--list -d 1` no longer decodes every compressed Codex rollout (#523).
+- Bound reader cache memory with a 128 MiB budget of serialized payloads, and limit search-index updates to one session read per CPU with batches committed at 64 MiB of text (#505, #506).
+
+### Changed
+
+- Replace outdated Codex and OpenCode differential cases with Rust behavior contracts (#512, #515).
+
 ## [1.2.4] - 2026-10-15
 
 ### Added
@@ -1302,3 +1327,4 @@
 [1.2.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.2
 [1.2.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.3
 [1.2.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.4
+[1.2.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.5
