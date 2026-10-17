@@ -52,6 +52,7 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **Kimi-Code** - Kimi Code CLI 会话
 - **Cursor** - Cursor composer 会话
 - **Pi** - Earendil 的 AI coding agent
+- **Gemini CLI** - Google 的命令行 AI 编码 Agent
 - **DeepChat** - 当前版本的本地会话（未加密数据库）
 - **Cherry Studio** - 2.x 的本地聊天和 Agent 会话
 - **MiniMax Code** - 当前 CLI 的本地 SQLite 会话
@@ -177,6 +178,7 @@ agent-dump opencode://session-id-abc123
 - `claude://<session_id>` - Claude Code 会话
 - `cursor://<composer_id>` - Cursor 会话（旧的 `cursor://<requestid>` URI 仍能定位到同一会话）
 - `pi://<session_id>` - Pi 会话
+- `gemini-cli://<session_id>` - Gemini CLI 会话
 - `deepchat://<session_id>` - DeepChat 会话
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio 普通聊天 / Agent 会话
 - `minimax://<session_id>` - MiniMax Code CLI 会话
@@ -244,6 +246,7 @@ agent-dump opencode://session-id-abc123
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
 - **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`；默认使用 macOS `~/Library/Application Support/Cursor`、Windows `%APPDATA%\Cursor`、Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor` 下的 `User` 目录。工作目录取自 `workspaceStorage/*/workspace.json` 中登记了该 composer 的工作区文件夹。
 - **Pi**: `PI_CODING_AGENT_SESSION_DIR` -> agent 目录 `settings.json` 中的绝对路径 `sessionDir` -> `<agent 目录>/sessions` -> `data/pi`。agent 目录依次为 `PI_CODING_AGENT_DIR`、`PI_HOME/agent`、`~/.pi/agent`。
+- **Gemini CLI**: `GEMINI_CLI_HOME/.gemini/tmp` -> `~/.gemini/tmp` -> `data/gemini-cli`。`GEMINI_CLI_HOME` 指向包含 `.gemini` 的目录，而不是数据目录本身。
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 下的 `Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。覆盖变量可用于便携版、开发版或选择多个安装中的一个。
 - **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`，只有 `~/.minimax-code` 存在数据库时改用该目录；数据库位于所选目录的 `v2/sqlite/runtime-state.sqlite`。只选择一个目录，显式路径不存在时不回退。
@@ -258,6 +261,8 @@ Codex 扫描 `sessions` 和 `archived_sessions`，只读取 `rollout-*.jsonl` �
 Claude Code 列出 `<项目>/<会话>.jsonl`，以及 `<会话>/subagents/` 下的子代理记录，包括 `subagents/workflows/<run>/agent-*.jsonl` 中的 workflow agent。每个子代理作为独立会话列出，以 agent ID 标识；父会话中启动它的消息记录 `subagent_id`。没有可见消息的会话不列出。标题依次取最新的自定义标题、AI 标题、子代理名称或描述、`sessions-index.json`，以及前 20 条记录中首个用户输入的第一行。消息数只计可见记录。Token 合计按 API 请求取最后一次 usage，缓存读写计入输入。
 
 Pi 只读取当前活跃分支：从最后一条带 id 的记录沿 `parentId` 回溯，被放弃的分支不进入导出、搜索或计数；没有 entry id 的旧格式按文件顺序读取。工具结果合并到对应的工具调用，保留状态和 `details`；bash 执行按退出码和取消标记设置状态。只保留 `display` 为 true 的自定义消息。Token 按消息记录，输入包含缓存读写。没有可见消息的会话不列出。标题依次取 `session_info` 名称、`title` 记录、会话头 `title` 和首条用户消息。超过 256 KiB 的文件在列表阶段只读取首尾，消息数为未知。
+
+Gemini CLI 列出 `tmp/<项目>/chats/*.jsonl` 和旧格式 `*.json` 会话，以及 `chats/<父会话 ID>/` 下的子代理会话。旧 `.json` 会话恢复后改写为 `.jsonl` 时，只读取 `.jsonl` 文件。没有 `sessionId` 的文件和没有消息的会话不列出。JSONL 记录按顺序回放，包括 `$set`、`$patch` 和 `$rewindTo` 更新。工作目录取自 `tmp/<项目>/.project_root`。标题依次取会话 `summary`、首个不以 `<session_context>` 或 `<hook_context>` 开头的用户输入。用户文本优先取 `displayContent`。思考摘要作为推理内容，工具调用的结果取自调用记录或后续的 `functionResponse`。输入 token 包含缓存和工具调用提示 token，输出合计包含思考 token。子代理会话单独列出，不关联父会话。
 
 DeepChat 支持当前 `agent.db` 中的已保存会话（含已迁移的历史会话、ACP 会话和子会话），忽略草稿、没有消息的会话和父会话链成环的会话。更新时间取会话、消息、消息块和用量记录中的最新时间。支持列表、查询、搜索、统计、collect，以及 print / JSON / Markdown 导出。优先读取结构化消息，缺失时回退到 `content`，纯文本 `content` 作为正文。保留正文、思考、计划、图片和工具记录，其他带文本的消息块转为正文，压缩提示不进入 collect。引用的会话、附件路径和链接写入正文，可被搜索；JSON 另外保留附件和链接记录。不读取附件实体或外置工具输出文件。Token 优先取自 `deepchat_usage_stats`，缺失时回退到消息元数据，缓存 token 不超过输入 token；不提供计费金额。
 
@@ -559,7 +564,7 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Pi、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
+`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Pi、Gemini CLI、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
 
 也可以直接读取：
 
