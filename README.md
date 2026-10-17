@@ -51,6 +51,7 @@ Follow the generated read commands and cursors until `has_more=false` to cover t
 - **Kimi** - Moonshot AI assistant
 - **Kimi-Code** - Kimi Code CLI sessions
 - **Cursor** - Cursor composer sessions
+- **Droid** - Factory Droid CLI sessions
 - **Pi** - Earendil's AI coding agent
 - **DeepChat** - Current local sessions from unencrypted databases
 - **Cherry Studio** - Local 2.x chats and agent sessions
@@ -176,6 +177,7 @@ Supported URI schemes:
 - `kimi-code://<session_id>` - Kimi-Code sessions
 - `claude://<session_id>` - Claude Code sessions
 - `cursor://<composer_id>` - Cursor sessions (legacy `cursor://<requestid>` URIs still resolve to the same session)
+- `droid://<session_id>` - Droid sessions
 - `pi://<session_id>` - Pi sessions
 - `deepchat://<session_id>` - DeepChat sessions
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
@@ -241,6 +243,7 @@ listed and fails when there is nothing to list because no provider has data.
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **Kimi-Code**: `KIMI_CODE_HOME` -> `~/.kimi-code` -> `data/kimi-code`. A session is a `sessions/<hash>/<id>/` directory with both `state.json` and `agents/main/wire.jsonl`; sessions without messages are skipped. The working directory comes from `workDir` or `custom.cwd` in `state.json`, then `session_index.jsonl` in the data root.
 - **OpenCode**: `OPENCODE_DB` selects one database (relative to `XDG_DATA_HOME/opencode` or `~/.local/share/opencode`). Otherwise use `opencode.db` there, then the legacy Windows `LOCALAPPDATA`/`APPDATA` location, then `data/opencode/opencode.db`.
+- **Droid**: `FACTORY_HOME_OVERRIDE/.factory` -> `~/.factory` -> `data/droid`. A session is a `<id>.jsonl` file in `sessions/` or one folder below it whose first line is a `session_start` record; sessions without visible messages are skipped, and so are messages marked `llm_only`. The working directory comes from `lastCwd` or `cwd` in `session_start`. Token usage and the model come from the sibling `<id>.settings.json`; custom model ids map through `customModels` in the data root `settings.json`.
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`; Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`; no Linux default path
 - **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`; defaults to the `User` directory under macOS `~/Library/Application Support/Cursor`, Windows `%APPDATA%\Cursor`, or Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor`. The working directory comes from the workspace folder in `workspaceStorage/*/workspace.json` that lists the composer.
 - **Pi**: `PI_CODING_AGENT_SESSION_DIR` -> absolute `sessionDir` in the agent directory's `settings.json` -> `<agent directory>/sessions` -> `data/pi`. The agent directory is `PI_CODING_AGENT_DIR`, then `PI_HOME/agent`, then `~/.pi/agent`.
@@ -574,7 +577,7 @@ Give an Agent this single command to obtain instructions and executable commands
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` works with every registered Provider, including Claude Code, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
+`--read-prompt` works with every registered Provider, including Claude Code, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Droid, Pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
 
 Direct reading is also available:
 
