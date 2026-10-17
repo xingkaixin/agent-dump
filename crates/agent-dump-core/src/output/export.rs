@@ -146,17 +146,15 @@ pub fn raw(
     output: &Path,
 ) -> crate::Result<PathBuf> {
     write(output, session_id, ".raw.jsonl", |file| {
-        let reader = fs::File::open(source)?;
-        let mut reader: Box<dyn io::Read> =
-            if source.extension().is_some_and(|value| value == "zst") {
-                let decoder = ruzstd::decoding::StreamingDecoder::new(reader);
-                Box::new(decoder.map_err(|error| {
-                    format!("{}: {error}", source.display())
-                })?)
-            } else {
-                Box::new(reader)
-            };
-        io::copy(&mut reader, file)?;
+        if !crate::storage::zstd::compressed(source) {
+            io::copy(&mut fs::File::open(source)?, file)?;
+            return Ok(());
+        }
+        let (frames, _) = crate::storage::zstd::frames(&fs::read(source)?)
+            .map_err(|error| format!("{}: {error}", source.display()))?;
+        for frame in frames {
+            file.write_all(&frame)?;
+        }
         Ok(())
     })
 }

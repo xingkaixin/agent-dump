@@ -4,7 +4,7 @@
 
 以下 recipes 对应当前 Rust CLI，只提供命令行入口。旧参数映射、源码安装和 Python API 迁移见[兼容参考](../../../docs/cli-compatibility.md#中文)。当前功能不保证适用于旧 Python 0.15.9。
 
-文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余十五个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。Codex、Claude、Pi 的单条记录转换失败走本地化 stderr 警告并继续读取；head/list/raw 不输出转换警告。十二个文件 Provider 与 OpenCode/ZCode 在未选中来源时读取当前配置并重试，选中后保持路径；Codex 标题索引跟随当前配置。DeepChat/Cherry/MiniMax 每次发现或查找重新选择来源；Cursor 正文读取也使用当前数据库配置。Qoder、Qoder CN 沿用 Claude 的规则，oh-my-pi 沿用 Pi 的规则。
+文件导出必须传 `--output`；URI 共用失败诊断走 stdout，查找警告走 stderr。DeepChat、Cherry Studio、MiniMax 的 schema/源缺失/迁移诊断已对齐，待迁移来源只读拒绝。其余十六个 Provider 保留源缺失诊断；Kimi raw 使用定位时记录的文件，文件消失时不会静默改选。JSONL/旧 SQLite 坏记录警告走 stderr 并跟随 `--lang`，坏记录不阻止健康内容导出。Codex、Claude 标题索引不可读时告警并回退标题；Claude 坏索引条目按项目汇总数量。Codex、Claude、Pi 的单条记录转换失败走本地化 stderr 警告并继续读取；head/list/raw 不输出转换警告。十三个文件 Provider 与 OpenCode/ZCode 在未选中来源时读取当前配置并重试，选中后保持路径；Codex 标题索引跟随当前配置。DeepChat/Cherry/MiniMax 每次发现或查找重新选择来源；Cursor 正文读取也使用当前数据库配置。Qoder、Qoder CN 沿用 Claude 的规则，oh-my-pi 沿用 Pi 的规则。
 
 ## 命令入口
 
@@ -80,6 +80,7 @@ agent-dump grok://<session_id>
 agent-dump pi://<session_id>
 agent-dump omp://<session_id>
 agent-dump gemini-cli://<session_id>
+agent-dump dsh://<session_id>
 agent-dump minimax://<session_id>
 agent-dump antigravity-cli://<conversation_id>
 
@@ -228,6 +229,7 @@ agent-dump --config edit
 - `pi`
 - `omp`
 - `gemini-cli`
+- `dsh`
 - `deepchat`
 - `cherry`
 - `minimax`
@@ -322,6 +324,7 @@ agent-dump --search "auth" --list --days 30
    - `pi://<session_id>`
    - `omp://<session_id>`
    - `gemini-cli://<session_id>`
+   - `dsh://<session_id>`
    - `deepchat://<session_id>`
    - `cherry://topic-<id>` / `cherry://session-<id>`
    - `minimax://<session_id>`
@@ -365,7 +368,7 @@ agent-dump --search "auth" --list --days 30
 
 处理：
 1. 改为 `keyword` 或 `agent1,agent2:keyword`。
-2. 将 agent 名称改为 `opencode/zcode/codex/kimi/kimi-code/claudecode/qoder/qoder-cn/cursor/droid/grok/pi/omp/gemini-cli/deepchat/cherry/minimax/antigravity-cli` 中的合法值。
+2. 将 agent 名称改为 `opencode/zcode/codex/kimi/kimi-code/claudecode/qoder/qoder-cn/cursor/droid/grok/pi/omp/gemini-cli/dsh/deepchat/cherry/minimax/antigravity-cli` 中的合法值。
 
 ### collect 模式参数冲突
 

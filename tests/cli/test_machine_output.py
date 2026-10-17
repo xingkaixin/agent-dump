@@ -168,6 +168,7 @@ def test_machine_provider_capabilities_use_metadata_without_reading_sources(cli:
             "pi",
             "omp",
             "gemini-cli",
+            "dsh",
             "deepchat",
             "cherry",
             "minimax",

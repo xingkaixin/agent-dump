@@ -15,6 +15,7 @@ from test_antigravity_cli import create as create_antigravity, user
 from test_claude import create as create_claude, event
 from test_cursor import cursor
 from test_droid import create as create_droid, message as droid_message
+from test_dsh import create as create_dsh, header as dsh_header, user as dsh_user
 from test_gemini_cli import create as create_gemini_cli, entry, header as gemini_header
 from test_grok import create as create_grok, summary as grok_summary, user as grok_user
 from test_kimi import create as create_kimi
@@ -48,6 +49,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     create_qoder(cli.root / "sources/qoder-cn", [event("user", "Qoder CN")])
     create_omp(Path(cli.environment["HOME"]) / ".omp/agent/sessions", IDENTITY, [message("user", "oh-my-pi")])
     create_gemini_cli(cli, [gemini_header(), entry("u", "user", "Gemini CLI")])
+    create_dsh(cli, [dsh_header(), dsh_user(0, "DSH")])
     create_antigravity(cli, [user("Antigravity CLI")])
     monkeypatch.syspath_prepend(str(ROOT / "tests" / "cli"))
     for provider, (variable, suffix, _) in PROVIDERS.items():
@@ -70,6 +72,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
         "Pi",
         "oh-my-pi",
         "Gemini CLI",
+        "DSH",
         "DeepChat",
         "Cherry Studio",
         "MiniMax Code",
