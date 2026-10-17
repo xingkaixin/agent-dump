@@ -436,12 +436,17 @@ fn provider_change_sources_include_payload_files_and_wal_only() {
         } else {
             session.source_path = root.path().join("source");
             let expected = match registration.info.name {
-                "codex" | "claudecode" | "pi" => {
+                "codex" | "claudecode" | "qoder" | "qoder-cn" | "pi"
+                | "omp" | "gemini-cli" => {
                     vec![session.source_path.clone()]
                 }
                 "kimi-code" => vec![
                     session.source_path.join("state.json"),
                     session.source_path.join("agents/main/wire.jsonl"),
+                ],
+                "grok" => vec![
+                    session.source_path.join("summary.json"),
+                    session.source_path.join("updates.jsonl"),
                 ],
                 _ => vec![
                     session.source_path.clone(),
