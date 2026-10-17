@@ -79,6 +79,7 @@ def build_isolated_environment(root: Path, codex_home: Path) -> dict[str, str]:
         "QODERCN_CONFIG_DIR": root / "qoder-cn",
         "KIMI_SHARE_DIR": root / "kimi",
         "KIMI_CODE_HOME": root / "kimi-code",
+        "GROK_HOME": root / "grok",
         "PI_HOME": root / "pi",
         "DSH_HOME": root / "dsh",
     }
