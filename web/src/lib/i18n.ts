@@ -39,6 +39,7 @@ export const providers = [
   { name: "OpenCode", example: "opencode://5c4b3a" },
   { name: "Cursor", example: "cursor://req-8821" },
   { name: "Pi", example: "pi://019e7978-b2ec" },
+  { name: "DSH", example: "dsh://d5f0a2c1" },
   { name: "DeepChat", example: "deepchat://session-123" },
   { name: "Cherry Studio", example: "cherry://topic-123" },
   { name: "MiniMax Code", example: "minimax://session-123" },
@@ -155,7 +156,7 @@ export const ui: Record<Locale, UiStrings> = {
     dir: "ltr",
     title: "Export Codex & Claude Code Sessions | Agent Dump",
     description:
-      "Export Codex and Claude Code conversations to Markdown or JSON. Search local AI coding history and reuse context with a free, open-source CLI for 11 tools.",
+      "Export Codex and Claude Code conversations to Markdown or JSON. Search local AI coding history and reuse context with a free, open-source CLI for 12 tools.",
     softwareDescription:
       "A local AI session CLI for individual developers and AI Agents. Search coding history, read conversations, export context with sources, and prepare reports.",
     websiteDescription: "Find, read, export, and reuse local AI coding sessions with Agent Dump.",
@@ -171,7 +172,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitle: "Your sessions.",
     heroTitleAccent: "Still useful.",
     heroDescription:
-      "Find, read, and export local sessions from Codex, Claude Code, Cursor, and 8 more tools with one URI syntax, then hand them to the next Agent. Free, open source, and it never modifies source data.",
+      "Find, read, and export local sessions from Codex, Claude Code, Cursor, and 9 more tools with one URI syntax, then hand them to the next Agent. Free, open source, and it never modifies source data.",
     ctaInstall: "Install",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} tools, one URI grammar`,
@@ -353,7 +354,7 @@ export const ui: Record<Locale, UiStrings> = {
     ogLocale: "zh_CN",
     dir: "ltr",
     title: "Codex、Claude Code 会话导出与搜索 | Agent Dump",
-    description: "将 Codex、Claude Code 对话导出为 Markdown 或 JSON，搜索本地 AI 编码历史并复用上下文。Agent Dump 是免费开源 CLI，支持 11 款工具，源会话保持不变。",
+    description: "将 Codex、Claude Code 对话导出为 Markdown 或 JSON，搜索本地 AI 编码历史并复用上下文。Agent Dump 是免费开源 CLI，支持 12 款工具，源会话保持不变。",
     softwareDescription: "面向个人开发者与 AI Agent 的本地会话 CLI。查找编码历史、读取对话、导出带来源的上下文并生成汇总报告。",
     websiteDescription: "使用 Agent Dump 查找、读取、导出和复用本地 AI 编码会话。",
     keywords:
@@ -368,7 +369,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitle: "写过的对话，",
     heroTitleAccent: "继续派上用场。",
     heroDescription:
-      "Codex、Claude Code、Cursor 等 11 款工具的本地会话，用一套 URI 查找、阅读、导出，并交给下一个 Agent 继续工作。免费、开源，不改动任何源数据。",
+      "Codex、Claude Code、Cursor 等 12 款工具的本地会话，用一套 URI 查找、阅读、导出，并交给下一个 Agent 继续工作。免费、开源，不改动任何源数据。",
     ctaInstall: "安装",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} 款工具，一套 URI 语法`,
@@ -549,7 +550,7 @@ export const ui: Record<Locale, UiStrings> = {
     ogLocale: "ja_JP",
     dir: "ltr",
     title: "Codex・Claude Codeの会話をエクスポート | Agent Dump",
-    description: "CodexやClaude Codeの対話をMarkdown・JSONにエクスポート。ローカルのAI履歴を検索し、文脈を再利用できる無料のオープンソースCLI。11種類のツールに対応し、元の記録は変更しません。",
+    description: "CodexやClaude Codeの対話をMarkdown・JSONにエクスポート。ローカルのAI履歴を検索し、文脈を再利用できる無料のオープンソースCLI。12種類のツールに対応し、元の記録は変更しません。",
     softwareDescription: "個人開発者と AI Agent のためのローカルセッション CLI。履歴の検索、対話の閲覧、出典付きの文脈のエクスポート、レポート作成に対応します。",
     websiteDescription: "Agent Dump でローカルの AI コーディング履歴を検索・閲覧・エクスポートして再利用。",
     keywords:
@@ -564,7 +565,7 @@ export const ui: Record<Locale, UiStrings> = {
     heroTitle: "AI 対話を",
     heroTitleAccent: "再利用。",
     heroDescription:
-      "Codex、Claude Code、Cursor など11のツールのローカルセッションを、ひとつの URI で検索・閲覧・エクスポートし、次の Agent へ引き継げます。無料のオープンソースで、元データは変更しません。",
+      "Codex、Claude Code、Cursor など12のツールのローカルセッションを、ひとつの URI で検索・閲覧・エクスポートし、次の Agent へ引き継げます。無料のオープンソースで、元データは変更しません。",
     ctaInstall: "インストール",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} のツール、1 つの URI 構文`,
