@@ -78,6 +78,7 @@ def build_isolated_environment(root: Path, codex_home: Path) -> dict[str, str]:
         "KIMI_SHARE_DIR": root / "kimi",
         "KIMI_CODE_HOME": root / "kimi-code",
         "PI_HOME": root / "pi",
+        "GEMINI_CLI_HOME": root / "gemini-cli",
     }
     for path in locations.values():
         path.mkdir(parents=True, exist_ok=True)
