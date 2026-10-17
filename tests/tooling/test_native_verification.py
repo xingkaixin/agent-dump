@@ -35,6 +35,7 @@ class FakeRunner:
                 "KIMI_SHARE_DIR",
                 "KIMI_CODE_HOME",
                 "PI_HOME",
+                "AGY_CONVERSATIONS_DIR",
                 "CODEX_HOME",
             )
         )
