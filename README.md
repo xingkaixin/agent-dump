@@ -47,6 +47,8 @@ Follow the generated read commands and cursors until `has_more=false` to cover t
 - **OpenCode** - Open source AI coding assistant
 - **ZCode** - ZCode coding assistant sessions
 - **Claude Code** - Anthropic's AI coding tool
+- **Qoder** - Qoder CLI sessions
+- **Qoder CN** - Qoder CN CLI sessions
 - **Codex** - OpenAI's command-line AI coding assistant
 - **Kimi** - Moonshot AI assistant
 - **Kimi-Code** - Kimi Code CLI sessions
@@ -175,6 +177,8 @@ Supported URI schemes:
 - `kimi://<session_id>` - Kimi sessions
 - `kimi-code://<session_id>` - Kimi-Code sessions
 - `claude://<session_id>` - Claude Code sessions
+- `qoder://<session_id>` - Qoder sessions
+- `qoder-cn://<session_id>` - Qoder CN sessions
 - `cursor://<composer_id>` - Cursor sessions (legacy `cursor://<requestid>` URIs still resolve to the same session)
 - `pi://<session_id>` - Pi sessions
 - `deepchat://<session_id>` - DeepChat sessions
@@ -238,6 +242,8 @@ listed and fails when there is nothing to list because no provider has data.
 
 - **Codex**: `CODEX_HOME` -> `~/.codex` -> `data/codex`
 - **Claude Code**: `CLAUDE_CONFIG_DIR` -> `~/.claude` -> `data/claudecode`
+- **Qoder**: `QODER_CONFIG_DIR` -> `~/.qoder` -> `data/qoder`
+- **Qoder CN**: `QODERCN_CONFIG_DIR` -> `~/.qoder-cn` -> `data/qoder-cn`
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **Kimi-Code**: `KIMI_CODE_HOME` -> `~/.kimi-code` -> `data/kimi-code`. A session is a `sessions/<hash>/<id>/` directory with both `state.json` and `agents/main/wire.jsonl`; sessions without messages are skipped. The working directory comes from `workDir` or `custom.cwd` in `state.json`, then `session_index.jsonl` in the data root.
 - **OpenCode**: `OPENCODE_DB` selects one database (relative to `XDG_DATA_HOME/opencode` or `~/.local/share/opencode`). Otherwise use `opencode.db` there, then the legacy Windows `LOCALAPPDATA`/`APPDATA` location, then `data/opencode/opencode.db`.
@@ -256,6 +262,8 @@ Notes:
 Codex scans `sessions` and `archived_sessions` and reads only `rollout-*.jsonl` and `rollout-*.jsonl.zst`; when both exist, the uncompressed file wins. Raw export of a compressed rollout writes the decompressed JSONL. Titles come from the title index, then the first line of the first user message in the first 20 records that is not injected context. Developer and system messages, and user messages that contain injected-context markers, are excluded. Token totals add each `token_count` delta once, include remote compaction and subagent usage, exclude history a fork replays from its parent, and record cache reads. Subagent rollouts are listed as separate sessions; when the parent never received a completion notification, the subagent's final reply is inserted into the parent. For uncompressed files over 256 KiB, listing reads only the head and tail, so the message count is unknown.
 
 Claude Code lists `<project>/<session>.jsonl` files and the subagent transcripts under `<session>/subagents/`, including workflow agents in `subagents/workflows/<run>/agent-*.jsonl`. Each subagent is a separate session identified by its agent ID, and the parent message that starts it records `subagent_id`. Sessions without a visible message are skipped. Titles use the latest custom title, then the AI title, the subagent name or description, `sessions-index.json`, and the first line of the first user prompt within the first 20 records. Message counts include visible records only. Token totals keep the last usage of each API request and count cache reads and writes as input.
+
+Qoder and Qoder CN keep the Claude Code project layout under `projects/` and follow the same rules; assistant messages are labeled `qoder` or `qoder-cn`.
 
 Pi reads only the active branch: it follows `parentId` back from the last entry that has an id, so abandoned branches are excluded from exports, search, and counts. Legacy files without entry ids are read in file order. Tool results are merged into their tool calls with status and `details`; bash executions get a status from the exit code and cancellation flag. Only custom messages with `display: true` are kept. Tokens are recorded per message, and input includes cache reads and writes. Sessions without visible messages are not listed. Titles come from the `session_info` name, then a `title` record, the header `title`, and the first user message. For files over 256 KiB, listing reads only the head and tail, so the message count is unknown.
 
@@ -574,7 +582,7 @@ Give an Agent this single command to obtain instructions and executable commands
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` works with every registered Provider, including Claude Code, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
+`--read-prompt` works with every registered Provider, including Claude Code, Qoder, Qoder CN, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Pi, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
 
 Direct reading is also available:
 

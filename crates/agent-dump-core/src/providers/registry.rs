@@ -72,7 +72,39 @@ static REGISTRATIONS: &[Registration] = &[
             identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
-        open: || Ok(Box::new(crate::providers::claude::Claude::open()?)),
+        open: || {
+            Ok(Box::new(crate::providers::claude::Claude::open(
+                crate::providers::claude::Kind::Claude,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "qoder",
+            display_name: "Qoder",
+            scheme: "qoder",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::providers::claude::Claude::open(
+                crate::providers::claude::Kind::Qoder,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "qoder-cn",
+            display_name: "Qoder CN",
+            scheme: "qoder-cn",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::providers::claude::Claude::open(
+                crate::providers::claude::Kind::QoderCn,
+            )?))
+        },
     },
     Registration {
         info: ProviderInfo {

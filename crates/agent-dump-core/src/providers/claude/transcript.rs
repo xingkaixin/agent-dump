@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 #[derive(Default)]
 struct Decoder {
+    agent: &'static str,
     messages: Vec<Message>,
     pending: HashMap<String, (usize, usize)>,
     assistant_calls: HashMap<String, Vec<String>>,
@@ -123,7 +124,7 @@ impl Decoder {
         let index = target.unwrap_or_else(|| {
             let mut message =
                 Message::new(id.to_owned(), "assistant", timestamp, parts);
-            message.agent = Some("claude".into());
+            message.agent = Some(self.agent.into());
             if tool {
                 message.mode = Some("tool".into());
             }
@@ -218,7 +219,7 @@ impl Decoder {
             let index = usage_index.unwrap_or_else(|| {
                 let mut message =
                     Message::new(id, "assistant", timestamp, Vec::new());
-                message.agent = Some("claude".into());
+                message.agent = Some(self.agent.into());
                 self.messages.push(message);
                 self.current = Some(self.messages.len() - 1);
                 self.messages.len() - 1
@@ -364,10 +365,12 @@ impl Decoder {
 
 pub fn read(
     session: &Session,
+    agent: &'static str,
     children: HashMap<String, String>,
     diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
 ) -> crate::Result<SessionData> {
     let mut decoder = Decoder {
+        agent,
         children,
         ..Decoder::default()
     };
