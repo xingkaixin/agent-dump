@@ -439,6 +439,10 @@ fn provider_change_sources_include_payload_files_and_wal_only() {
                 "codex" | "claudecode" | "pi" => {
                     vec![session.source_path.clone()]
                 }
+                "droid" => vec![
+                    session.source_path.clone(),
+                    root.path().join("source.settings.json"),
+                ],
                 "kimi-code" => vec![
                     session.source_path.join("state.json"),
                     session.source_path.join("agents/main/wire.jsonl"),

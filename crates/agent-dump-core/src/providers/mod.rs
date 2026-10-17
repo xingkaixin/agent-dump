@@ -3,6 +3,7 @@ pub(crate) mod codex;
 pub mod contract;
 pub(crate) mod cursor;
 pub(crate) mod desktop;
+pub(crate) mod droid;
 pub mod error;
 pub(crate) mod files;
 pub(crate) mod jsonl;

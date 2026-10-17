@@ -67,7 +67,7 @@ pub fn expand_home(text: &str) -> crate::Result<PathBuf> {
     )
 }
 
-fn home() -> crate::Result<PathBuf> {
+pub fn home() -> crate::Result<PathBuf> {
     let home = if cfg!(windows) {
         std::env::var_os("USERPROFILE").or_else(|| {
             let mut drive = std::env::var_os("HOMEDRIVE")?;

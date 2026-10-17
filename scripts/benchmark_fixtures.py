@@ -67,6 +67,7 @@ def isolated_environment(root: Path) -> dict[str, str]:
         "CLAUDE_CONFIG_DIR": "sources/claude",
         "KIMI_SHARE_DIR": "sources/kimi",
         "KIMI_CODE_HOME": "sources/kimi-code",
+        "FACTORY_HOME_OVERRIDE": "sources/droid",
         "PI_HOME": "sources/pi",
         "DEEPCHAT_USER_DATA_DIR": "sources/deepchat",
         "CHERRY_STUDIO_USER_DATA_DIR": "sources/cherry",

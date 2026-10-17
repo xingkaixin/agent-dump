@@ -86,6 +86,16 @@ static REGISTRATIONS: &[Registration] = &[
     },
     Registration {
         info: ProviderInfo {
+            name: "droid",
+            display_name: "Droid",
+            scheme: "droid",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || Ok(Box::new(crate::providers::droid::Droid::open()?)),
+    },
+    Registration {
+        info: ProviderInfo {
             name: "pi",
             display_name: "Pi",
             scheme: "pi",
