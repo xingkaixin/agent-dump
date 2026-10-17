@@ -14,6 +14,7 @@ from sqlite_fixture import create_legacy
 from test_claude import create as create_claude, event
 from test_cursor import cursor
 from test_gemini_cli import create as create_gemini_cli, entry, header as gemini_header
+from test_grok import create as create_grok, summary as grok_summary, user as grok_user
 from test_kimi import create as create_kimi
 from test_kimi_code import appended, create as create_kimi_code
 from test_omp import create as create_omp
@@ -38,6 +39,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     create_claude(cli, [event("user", "Claude")])
     create_kimi(cli, context=[{"role": "user", "content": "Kimi"}])
     create_kimi_code(cli, [appended("user", "Kimi-Code")], state={})
+    create_grok(cli, [grok_user("Grok")], summary=grok_summary())
     create_pi(cli, [message("user", "Pi")])
     create_qoder(cli.root / "sources/qoder", [event("user", "Qoder")])
     create_qoder(cli.root / "sources/qoder-cn", [event("user", "Qoder CN")])
@@ -59,6 +61,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
         "Qoder",
         "Qoder CN",
         "Cursor",
+        "Grok",
         "Pi",
         "oh-my-pi",
         "Gemini CLI",
