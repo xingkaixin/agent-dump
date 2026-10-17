@@ -560,7 +560,7 @@ agent-dump --interactive --time-field updated -d 7
 
 `--days` uses the Provider-reported `updated_at` by default, so it finds sessions with activity in the last N days, including sessions created much earlier. Add `--time-field created` to filter by creation time instead. This option is available only for list, search, browse and interactive modes; collect dates and statistics retain their existing meaning.
 
-Activity lists order by updated time before applying a result limit. Human lists and interactive selection retain Provider groups; dates and Today/Yesterday groups use the selected time field. Search still orders primarily by relevance. JSON records retain both original timestamps. Discovery may scan metadata outside the creation-time window to find old active sessions; filtering uses the existing Provider-projected `updated_at` fact without adding a separate file-modification-time filter. Provider coverage and partial-discovery diagnostics remain unchanged.
+Activity lists order by updated time before applying a result limit. Human lists and interactive selection retain Provider groups; dates and Today/Yesterday groups use the selected time field. Search still orders primarily by relevance. JSON records retain both original timestamps. Discovery may scan metadata outside the creation-time window to find old active sessions. File-based Providers skip session files last modified before the window, so a file whose modification time is older than its recorded activity is not found by an activity window; filtering otherwise uses the Provider-projected `updated_at` fact. Provider coverage and partial-discovery diagnostics remain unchanged.
 
 ### Machine-readable output
 

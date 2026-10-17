@@ -1,7 +1,7 @@
 mod chat;
 
 use crate::providers::contract::{
-    DiagnosticSink, Discovery, Lookup, Provider, source_roots,
+    DiagnosticSink, Discovery, Lookup, Provider, Window, source_roots,
 };
 use crate::providers::error::ProviderError;
 use crate::providers::files::{
@@ -122,13 +122,13 @@ impl GeminiCli {
 impl Provider for GeminiCli {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Discovery> {
         let (base, files) = self.files()?;
         file_sessions::discover(
             files,
-            days,
+            window,
             true,
             |path| scan(&base, path),
             |_, session, _| Ok(session),

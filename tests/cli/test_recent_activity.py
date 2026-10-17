@@ -23,7 +23,7 @@ def activity_sessions(cli: CliFixture, provider: str) -> tuple[list[str], dateti
         for path in cli.source.parent.glob("*.jsonl"):
             path.unlink()
         ids = [f"activity-{index}" for index in range(len(times))]
-        for index, (identity, (created, updated)) in enumerate(zip(ids, times, strict=True)):
+        for identity, (created, updated) in zip(ids, times, strict=True):
             path = write_jsonl(
                 cli.source.parent / f"rollout-{identity}.jsonl",
                 [
@@ -31,7 +31,7 @@ def activity_sessions(cli: CliFixture, provider: str) -> tuple[list[str], dateti
                     message("user", "activity-marker", stamp=updated.isoformat()),
                 ],
             )
-            modified = created if index < 2 else now
+            modified = max(created, updated)
             os.utime(path, (modified.timestamp(), modified.timestamp()))
     else:
         ids = [f"ses_bench_{index:06d}" for index in range(len(times))]

@@ -2,7 +2,7 @@ pub(super) mod transcript;
 
 use crate::compat::value::text;
 use crate::providers::contract::{
-    DiagnosticSink, Provider, RecoverableDiagnostic,
+    DiagnosticSink, Provider, RecoverableDiagnostic, Window,
 };
 use crate::providers::error::LocalizedText;
 use crate::providers::files::{
@@ -546,13 +546,13 @@ impl Claude {
 impl Provider for Claude {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.titles.clear();
         file_sessions::discover(
             self.files()?,
-            days,
+            window,
             true,
             Self::scan,
             |path, scan, _| self.parse(path, scan, diagnostics),
@@ -675,7 +675,7 @@ mod tests {
         };
         let mut warnings = Vec::new();
         let discovery = provider
-            .discover(Some(36500), &mut |warning| {
+            .discover(Window::Created(36500), &mut |warning| {
                 warnings.push(warning);
                 Ok(())
             })

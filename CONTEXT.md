@@ -10,7 +10,7 @@ _Avoid_: Agent, when referring to the data source
 
 **Provider Discovery**:
 The Provider-owned operation that resolves its read-only source roots and returns
-explicit availability, discovery completeness, and a requested creation-time window of Session records in one pass. An unrestricted discovery returns all Session metadata for activity-time filtering.
+explicit availability, discovery completeness, and a requested window of Session records in one pass. A creation-time window drops Sessions created before it. An activity-time window keeps older Sessions for activity-time filtering but may skip file sources last modified before it. An unrestricted discovery returns all Session metadata.
 _Avoid_: Availability probe, when referring to the complete lookup process
 
 **Session**:

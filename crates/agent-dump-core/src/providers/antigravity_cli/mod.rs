@@ -3,7 +3,7 @@ mod transcript;
 
 use crate::output::formats::OutputFormat;
 use crate::providers::contract::{
-    DiagnosticSink, Discovery, Lookup, Provider, source_roots,
+    DiagnosticSink, Discovery, Lookup, Provider, Window, source_roots,
 };
 use crate::providers::error::ProviderError;
 use crate::providers::files::{
@@ -214,7 +214,7 @@ impl AntigravityCli {
 impl Provider for AntigravityCli {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Discovery> {
         let files = self.files()?;
@@ -222,7 +222,7 @@ impl Provider for AntigravityCli {
         // Native step times can be newer than a WAL database's file time.
         file_sessions::discover(
             files,
-            days,
+            window,
             false,
             |path| session(path, &summaries),
             |_, session, _| Ok(session),

@@ -1,5 +1,5 @@
 use super::*;
-use crate::providers::contract::{DiagnosticSink, Discovery, Lookup};
+use crate::providers::contract::{DiagnosticSink, Discovery, Lookup, Window};
 use crate::session::timestamp::Timestamp;
 use crate::session::{Message, Part, SessionData, Stats};
 use std::sync::{Arc, Condvar, Mutex, mpsc};
@@ -11,7 +11,7 @@ impl<F: Fn(&Session) -> crate::Result<String> + Send + Sync> Provider
 {
     fn discover(
         &mut self,
-        _: Option<i64>,
+        _: Window,
         _: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Discovery> {
         unreachable!()

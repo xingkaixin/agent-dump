@@ -1,4 +1,4 @@
-use crate::providers::contract::{Provider, ProviderInfo};
+use crate::providers::contract::{Provider, ProviderInfo, Window};
 use crate::query::{Query, TimeField};
 use crate::session::Session;
 use std::io::Write;
@@ -45,6 +45,11 @@ fn discover_window(
         .flatten()
         .map(crate::session::timestamp::Timestamp::days_ago)
         .transpose()?;
+    let window = match (days, time_field) {
+        (None, _) => Window::All,
+        (Some(days), TimeField::Created) => Window::Created(days),
+        (Some(days), TimeField::Updated) => Window::Updated(days),
+    };
     let mut scan = Scan::default();
     for registration in crate::providers::registry::all() {
         let info = &registration.info;
@@ -55,20 +60,14 @@ fn discover_window(
             continue;
         }
         let result = (registration.open)().and_then(|mut provider| {
-            let discovery = provider.discover(
-                if updated_since.is_none() { days } else { None },
-                &mut |diagnostic| {
-                    writeln!(
-                        warnings,
-                        "{}",
-                        crate::output::diagnostics::record_warning(
-                            &diagnostic,
-                            zh
-                        )
-                    )?;
-                    Ok(())
-                },
-            )?;
+            let discovery = provider.discover(window, &mut |diagnostic| {
+                writeln!(
+                    warnings,
+                    "{}",
+                    crate::output::diagnostics::record_warning(&diagnostic, zh)
+                )?;
+                Ok(())
+            })?;
             Ok((provider, discovery))
         });
         match result {

@@ -8,7 +8,7 @@ mod usage;
 
 use crate::compat::value::text;
 use crate::providers::contract::{
-    DiagnosticSink, Provider, RecoverableDiagnostic, SessionFailure,
+    DiagnosticSink, Provider, RecoverableDiagnostic, SessionFailure, Window,
 };
 use crate::providers::files::{
     self as file_sessions, SourceFiles, SourceRoots,
@@ -413,13 +413,13 @@ impl Codex {
 impl Provider for Codex {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.titles = None;
         file_sessions::discover(
             self.files()?,
-            days,
+            window,
             true,
             Self::scan,
             |path, scan, _| self.parse(path, scan, diagnostics),
@@ -552,7 +552,7 @@ mod tests {
         std::fs::remove_file(second.join("session_index.jsonl")).unwrap();
         assert_ne!(
             provider
-                .discover(Some(36500), &mut |_| Ok(()))
+                .discover(Window::Created(36500), &mut |_| Ok(()))
                 .unwrap()
                 .sessions[0]
                 .title,
@@ -599,7 +599,7 @@ mod tests {
         ));
         let mut warnings = Vec::new();
         let discovery = provider
-            .discover(Some(36500), &mut |warning| {
+            .discover(Window::Created(36500), &mut |warning| {
                 warnings.push(warning);
                 Ok(())
             })
@@ -630,7 +630,7 @@ mod tests {
 
         std::fs::remove_file(&index).unwrap();
         let discovery = provider
-            .discover(Some(36500), &mut |_| {
+            .discover(Window::Created(36500), &mut |_| {
                 panic!("absent index must not warn")
             })
             .unwrap();
@@ -775,7 +775,7 @@ mod tests {
         );
         let mut provider = fixed(root);
         let mut sessions = provider
-            .discover(Some(36500), &mut |_| Ok(()))
+            .discover(Window::Created(36500), &mut |_| Ok(()))
             .unwrap()
             .sessions;
         sessions.sort_by(|a, b| a.id.cmp(&b.id));

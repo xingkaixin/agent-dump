@@ -1,4 +1,4 @@
-use crate::providers::contract::{Discovery, Lookup, SessionFailure};
+use crate::providers::contract::{Discovery, Lookup, SessionFailure, Window};
 use crate::session::Session;
 use crate::session::timestamp::Timestamp;
 use std::ffi::OsString;
@@ -200,7 +200,7 @@ impl SourceRoots {
 
 pub fn discover<S: Send>(
     files: SourceFiles,
-    days: Option<i64>,
+    window: Window,
     prune_mtime: bool,
     scan: impl Fn(&Path) -> crate::Result<S> + Sync,
     mut parse: impl FnMut(
@@ -209,7 +209,8 @@ pub fn discover<S: Send>(
         Option<Timestamp>,
     ) -> crate::Result<Option<Session>>,
 ) -> crate::Result<Discovery> {
-    let cutoff = days.map(Timestamp::days_ago).transpose()?;
+    let since = window.days().map(Timestamp::days_ago).transpose()?;
+    let cutoff = since.filter(|_| window.created_days().is_some());
     let SourceFiles { paths, failures } = files;
     let mut discovery = Discovery {
         available: !paths.is_empty(),
@@ -221,9 +222,9 @@ pub fn discover<S: Send>(
         |path| {
             let scanned = (|| {
                 if prune_mtime
-                    && let Some(cutoff) = cutoff
+                    && let Some(since) = since
                     && Timestamp::try_from(path.metadata()?.modified()?)?
-                        < cutoff
+                        < since
                 {
                     return Ok(None);
                 }
@@ -330,7 +331,7 @@ mod tests {
         };
         let discovery = discover(
             files(vec![missing.clone(), readable]),
-            Some(7),
+            Window::Created(7),
             true,
             scan,
             parse,
@@ -342,16 +343,74 @@ mod tests {
         assert_eq!(discovery.failures.len(), 1);
         assert_eq!(discovery.failures[0].source, missing.display().to_string());
 
-        let failed =
-            discover(files(vec![missing]), Some(7), true, scan, parse).unwrap();
+        let failed = discover(
+            files(vec![missing]),
+            Window::Created(7),
+            true,
+            scan,
+            parse,
+        )
+        .unwrap();
         assert!(failed.available);
         assert!(failed.sessions.is_empty());
         assert_eq!(failed.failures.len(), 1);
 
-        let absent =
-            discover(SourceFiles::default(), Some(7), true, scan, parse)
-                .unwrap();
+        let absent = discover(
+            SourceFiles::default(),
+            Window::Created(7),
+            true,
+            scan,
+            parse,
+        )
+        .unwrap();
         assert!(!absent.available);
         assert!(absent.failures.is_empty());
+    }
+
+    #[test]
+    fn updated_window_prunes_stale_sources_without_a_creation_cutoff() {
+        let directory = tempfile::tempdir().unwrap();
+        let stale = directory.path().join("stale.jsonl");
+        let recent = directory.path().join("recent.jsonl");
+        std::fs::write(&stale, b"").unwrap();
+        std::fs::write(&recent, b"").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&stale)
+            .unwrap()
+            .set_modified(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap();
+        let created = Timestamp::days_ago(30).unwrap();
+        let scan = |path: &Path| {
+            if path == stale {
+                return Err("stale source was scanned".into());
+            }
+            Ok(())
+        };
+        let parse = |path: &Path, (): (), _: Option<Timestamp>| {
+            Ok(Some(Session::new(
+                "old".into(),
+                "Old".into(),
+                path.to_owned(),
+                created,
+                Timestamp::now(),
+            )))
+        };
+        let run = |window| {
+            let files = SourceFiles {
+                paths: vec![stale.clone(), recent.clone()],
+                failures: Vec::new(),
+            };
+            discover(files, window, true, scan, parse).unwrap()
+        };
+
+        let active = run(Window::Updated(7));
+        assert!(active.failures.is_empty());
+        assert_eq!(active.sessions.len(), 1);
+        assert_eq!(active.sessions[0].source_path, recent);
+
+        let new = run(Window::Created(7));
+        assert!(new.failures.is_empty());
+        assert!(new.sessions.is_empty());
     }
 }

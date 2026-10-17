@@ -1,6 +1,6 @@
 pub(super) mod wire;
 
-use crate::providers::contract::{Provider, RawExport, source_roots};
+use crate::providers::contract::{Provider, RawExport, Window, source_roots};
 use crate::providers::error::ProviderError;
 use crate::providers::files::{
     self as file_sessions, SourceFiles, SourceRoots,
@@ -199,14 +199,15 @@ impl KimiCode {
 impl Provider for KimiCode {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.work_dirs = None;
         file_sessions::discover(
             self.files()?,
-            days,
-            true,
+            window,
+            // updated_at follows wire.jsonl, which can be newer than state.json.
+            !matches!(window, Window::Updated(_)),
             Self::scan,
             |path, scan, _| self.parse(path, scan),
         )

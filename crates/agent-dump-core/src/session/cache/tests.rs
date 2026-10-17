@@ -1,5 +1,5 @@
 use super::*;
-use crate::providers::contract::{Discovery, Lookup};
+use crate::providers::contract::{Discovery, Lookup, Window};
 use crate::session::Stats;
 use crate::session::timestamp::Timestamp;
 use std::path::Path;
@@ -13,7 +13,7 @@ impl<F: Fn(&Session) -> crate::Result<SessionData> + Send + Sync> Provider
 {
     fn discover(
         &mut self,
-        _: Option<i64>,
+        _: Window,
         _: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Discovery> {
         unreachable!()

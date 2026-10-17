@@ -38,7 +38,7 @@ agent-dump-core (internal library)
 
 `providers/contract.rs` 的 `Provider` 是共享访问边界。`providers/registry.rs` 拥有 Provider 顺序、名称、URI scheme、路径前缀及实例装配；Provider 模块拥有来源选择和私有 schema。
 
-- `discover` 同时返回可用性、会话窗口和部分失败；文件型 Provider 由 `parallel.rs` 的有界 worker 并行读取元数据；Codex 与 Claude 在标题窗口之后只解析计数所需字段，serde_json 拒绝的行回退兼容解析。随后按文件顺序加载标题缓存、发出诊断并生成会话；`Some(days)` 按创建时间裁剪，`None` 发现全部会话元数据。`find` 是自包含直接定位入口。
+- `discover` 同时返回可用性、会话窗口和部分失败；文件型 Provider 由 `parallel.rs` 的有界 worker 并行读取元数据；Codex 与 Claude 在标题窗口之后只解析计数所需字段，serde_json 拒绝的行回退兼容解析。随后按文件顺序加载标题缓存、发出诊断并生成会话；`Window::Created` 按创建时间裁剪；`Window::Updated` 不按创建时间裁剪，但文件型 Provider 跳过修改时间早于窗口的来源文件；`Window::All` 发现全部会话元数据。`find` 是自包含直接定位入口。
 - `read` 读取标准化正文。`session/mod.rs` 的 Session facts 供列表、head、统计和筛选共用，未知计数始终保持未知。
 - `source_root`、`search_roots`、`change_sources` 声明来源与失效范围。`select_source` 只做来源选择，不发现会话、不打开数据库；registry 的 `inside_source` 用它检查所有 Provider 的来源根，导出、collect 报告与日志和搜索索引写入前共用该检查。
 - `json_payload`、`raw_export`、`supports_format` 投影 Provider 特有输出能力；共享工作流不解释 schema。
@@ -64,7 +64,7 @@ Codex 与 Claude 的连续 assistant 片段由 `session/assembly.rs` 合并。�
 
 ### 活动时间筛选
 
-`Query.time_field` 默认 Updated，`--time-field created` 改为 Created。scanner 的时间字段由调用方显式传入：Updated 时请求不按创建时间裁剪的 Provider 发现，再按稳定的 Session.updated_at 应用日期窗口；Created 时由 Provider 发现按创建时间裁剪。共享层不解释 Provider 私有日期字段，不用扩大天数的近似值冒充完整发现。普通活动列表先按更新时间排序再截断；Terms 搜索保留相关性优先。渲染和 selector 使用同一 TimeField 投影日期与时间分组，不改写 Session facts。collect、stats 和 reindex 不接受该 CLI 选项；stats 固定按创建时间开窗。
+`Query.time_field` 默认 Updated，`--time-field created` 改为 Created。scanner 的时间字段由调用方显式传入：Updated 时以 `Window::Updated` 请求 Provider 发现，不按创建时间裁剪；文件修改时间不早于其中记录的最后活动，文件型 Provider 据此跳过修改时间早于窗口的来源，`updated_at` 取自未剪枝文件的 Provider（如 Kimi-Code 的 wire.jsonl）在该窗口下不剪枝；随后按稳定的 Session.updated_at 应用日期窗口；Created 时由 Provider 发现按创建时间裁剪。共享层不解释 Provider 私有日期字段，不用扩大天数的近似值冒充完整发现。普通活动列表先按更新时间排序再截断；Terms 搜索保留相关性优先。渲染和 selector 使用同一 TimeField 投影日期与时间分组，不改写 Session facts。collect、stats 和 reindex 不接受该 CLI 选项；stats 固定按创建时间开窗。
 
 ## 5. 读取与消息定位
 
