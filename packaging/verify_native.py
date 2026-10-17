@@ -77,6 +77,7 @@ def build_isolated_environment(root: Path, codex_home: Path) -> dict[str, str]:
         "CLAUDE_CONFIG_DIR": root / "claude",
         "KIMI_SHARE_DIR": root / "kimi",
         "KIMI_CODE_HOME": root / "kimi-code",
+        "FACTORY_HOME_OVERRIDE": root / "droid",
         "PI_HOME": root / "pi",
     }
     for path in locations.values():

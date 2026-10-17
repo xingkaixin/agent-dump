@@ -34,6 +34,7 @@ class FakeRunner:
                 "CLAUDE_CONFIG_DIR",
                 "KIMI_SHARE_DIR",
                 "KIMI_CODE_HOME",
+                "FACTORY_HOME_OVERRIDE",
                 "PI_HOME",
                 "CODEX_HOME",
             )
