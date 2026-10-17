@@ -44,7 +44,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 
 1. 识别任务模式
 - 用户给出会话 URI 并希望 Agent 按需读取：优先执行 `agent-dump <URI> --read-prompt`，按返回说明使用 `--read --json` 分页。此能力适用于所有已支持 Provider，无需 MCP；详细规则见 recipes 的“按需读取”。
-- 用户给了 `opencode://...`、`zcode://...`、`codex://...`、`kimi://...`、`kimi-code://...`、`claude://...`、`qoder://...`、`qoder-cn://...`、`cursor://...`、`grok://...`、`pi://...`、`omp://...`、`gemini-cli://...`、`deepchat://...`、`cherry://...`、`minimax://...` 这类 URI：使用 URI 模式。
+- 用户给了 `opencode://...`、`zcode://...`、`codex://...`、`kimi://...`、`kimi-code://...`、`claude://...`、`qoder://...`、`qoder-cn://...`、`cursor://...`、`grok://...`、`pi://...`、`omp://...`、`gemini-cli://...`、`deepchat://...`、`cherry://...`、`minimax://...`、`antigravity-cli://...` 这类 URI：使用 URI 模式。
 - 用户给了 `agents://<path>?q=...&providers=...`：使用路径作用域查询，可配合 list、interactive 或 collect。
 - 用户给了 `--collect`：使用 collect 模式，默认调用已配置的 AI 总结。
 - 用户要使用自有外部 agent 汇总、不配置 API，或只要汇总提示词：使用 `--collect --emit-prompt`；详细用法见 recipes 的“外部 agent 汇总”。
@@ -106,7 +106,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。
 - 同时传入多个显式模式时，CLI 保留既有优先级并告警列出被忽略的较低优先级模式；应按告警修正命令，而不是依赖优先级。
 - `--providers` 是只读能力发现命令，不扫描会话；输出格式与路径能力均从 provider 声明派生。
-- 仅使用当前 CLI 已支持的 URI 协议：`opencode`、`zcode`、`codex`、`kimi`、`kimi-code`、`claude`、`qoder`、`qoder-cn`、`cursor`、`grok`、`pi`、`omp`、`gemini-cli`、`deepchat`、`cherry`、`minimax`（其中 `claude` 对应 Claude Code）。
+- 仅使用当前 CLI 已支持的 URI 协议：`opencode`、`zcode`、`codex`、`kimi`、`kimi-code`、`claude`、`qoder`、`qoder-cn`、`cursor`、`grok`、`pi`、`omp`、`gemini-cli`、`deepchat`、`cherry`、`minimax`、`antigravity-cli`（其中 `claude` 对应 Claude Code）。
 - 路径作用域查询 URI 使用 `agents://<path>?q=<keyword>&providers=<names>&roles=<roles>&limit=<n>`；`limit` 必须为有符号 64 位范围内的正整数。
 - `--list` 在本机完全没有 provider 数据时退出 `1`；时间窗或关键词无命中仍为 `0`。
 
@@ -129,6 +129,8 @@ DeepChat 使用当前未加密的 `app_db/agent.db`，可通过 `DEEPCHAT_USER_D
 Cherry Studio 使用 2.x 的 `Data/cherrystudio.sqlite`，可通过 `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 指定用户数据目录。URI 为 `cherry://topic-<id>` 或 `cherry://session-<id>`。普通聊天仅包含当前分支，Agent 会话按时间排序；支持 print / JSON / Markdown，不支持 raw 或 1.x IndexedDB/Redux 原始数据。
 
 MiniMax Code 使用 `minimax://<session_id>`，读取当前 CLI 的 `v2/sqlite/runtime-state.sqlite` 展示消息；路径按 `MINIMAX_DATA_DIR`、`MAVIS_DATA_DIR`、`~/.minimax` 选择。自定义 profile 需显式指定目录。压缩和审查事件带标签进入搜索与 collect；token 用量来自 `local_runtime_token_usage`。支持 print / JSON / Markdown，不支持 raw、旧存储恢复和桌面端；遇到迁移诊断时保留错误，不代替客户端迁移。
+
+Antigravity CLI 使用 `antigravity-cli://<conversation_id>`，读取 `AGY_CONVERSATIONS_DIR`（默认 `~/.gemini/antigravity-cli/conversations`）下的 `*.db`，父目录的 `conversation_summaries.db` 提供标题和工作目录。工具结果不解析，工具状态为 `unknown`；没有原生时间的消息标记为推测时间，不进入 collect 日期。支持 print / JSON / Markdown，不支持 raw，不估算费用。
 
 ### Machine-readable output
 

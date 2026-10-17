@@ -39,6 +39,7 @@ class FakeRunner:
                 "GROK_HOME",
                 "PI_HOME",
                 "GEMINI_CLI_HOME",
+                "AGY_CONVERSATIONS_DIR",
                 "CODEX_HOME",
             )
         )

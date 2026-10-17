@@ -60,6 +60,7 @@ Follow the generated read commands and cursors until `has_more=false` to cover t
 - **DeepChat** - Current local sessions from unencrypted databases
 - **Cherry Studio** - Local 2.x chats and agent sessions
 - **MiniMax Code** - Current CLI sessions from local SQLite storage
+- **Antigravity CLI** - Conversation databases; tool results are not decoded
 - **More Tools** - PRs are welcome to support other AI coding tools
 
 ## Features
@@ -190,6 +191,7 @@ Supported URI schemes:
 - `deepchat://<session_id>` - DeepChat sessions
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
 - `minimax://<session_id>` - MiniMax Code CLI sessions
+- `antigravity-cli://<conversation_id>` - Antigravity CLI conversations
 
 ### Typical Errors
 
@@ -262,6 +264,7 @@ listed and fails when there is nothing to list because no provider has data.
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` or `CHERRY_STUDIO_USER_DATA_DIR`, then `Data/cherrystudio.sqlite`; otherwise the first existing database in the user data directories configured by `~/.cherrystudio/boot-config.json`, then the platform default: macOS `~/Library/Application Support/CherryStudio`, Windows `%APPDATA%\CherryStudio`, or Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio` (each with `Data/cherrystudio.sqlite`). Use the override for portable/dev installations or to select among multiple installations.
 - **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`, or `~/.minimax-code` when only that directory has a database; the database is `v2/sqlite/runtime-state.sqlite` under the selected root. Only one root is selected; a missing explicit path never falls back to another installation.
+- **Antigravity CLI**: `AGY_CONVERSATIONS_DIR` -> `~/.gemini/antigravity-cli/conversations` -> `data/antigravity-cli/conversations`. Each `<conversation_id>.db` below it is a session; the optional `conversation_summaries.db` in its parent directory supplies the title, working directory, and update time. Antigravity IDE `.gemini/antigravity/conversations/*.pb` files are not read.
 
 Notes:
 
@@ -291,6 +294,8 @@ Text, reasoning, tool calls/results, code, and translations are normalized. JSON
 MiniMax Code supports listing, query, search, stats, collect, and print / JSON / Markdown exports from the current CLI's migrated display messages. Sessions without message rows, hidden root sessions, and internal peek/channel/cron sessions are excluded; hidden child sessions and archived sessions are kept. Untitled sessions use the first non-automated user message, and the update time includes message and token-usage times. Messages follow database row order and preserve text, reasoning, tool state/results, and attachment references; attachments and message errors also become text. Compaction and review events keep their user/assistant role with a label such as `Context compacted`, so they enter search and collect; system events and permission responses do not. A tool fails when its result reports `isError` or `error`, and a task tool's single child session becomes `subagent_id`. The session model comes from session metadata and remains unknown when absent. Token usage comes from `local_runtime_token_usage`: session stats count every row, and a turn with one model attaches its model, tokens (including reasoning), and recorded USD cost to the turn's last assistant message. Billing cost is never estimated.
 
 Set `MINIMAX_DATA_DIR` explicitly for custom profiles or other directories. The reader does not read model-context JSONL or attachment files, run migrations, or recover rewound messages. Raw export, direct legacy storage reads, and desktop data are unsupported. Pending migrations and corrupt sessions produce diagnostics instead of appearing empty. See the [MiniMax Code design and acceptance scope](docs/providers/minimax.md).
+
+Antigravity CLI supports listing, query, search, stats, collect, and print / JSON / Markdown exports. Databases are opened read-only, and only the Protobuf fields for user prompts, assistant text, title updates, tool calls, step times, and token usage are decoded. Tool results are not stored in a known format, so tool calls have status `unknown` and keep the native step type and status in metadata; other unrecognized steps are skipped. Databases without steps are not listed. Titles come from the latest title step, the summary title, then the first user prompt. Steps without a native time use the summary update time or the database modification time and are marked as inferred, so collect does not date them. Usage repeated across retries is counted once and attached to the next assistant message; usage after the last step becomes a usage-only assistant message. Input includes cache tokens and session output includes reasoning; cost is not estimated. Raw export is unsupported. A malformed step or unsupported table fails only that session. See the [Antigravity CLI reading rules](docs/providers/antigravity-cli.md).
 
 OpenCode supports legacy SQLite and 2.x `session_v2/session_message`. When both schemas coexist, V2 wins for the same session ID. Until `migration.v1-v2` is completed, legacy sessions that OpenCode has not copied yet stay listed; after that only V2 is read, so sessions deleted in V2 do not come back. Sessions without visible messages are not listed, and message counts include only visible messages. An empty title falls back to the first user text, then `Untitled Session`. V2 messages follow `seq` order. Image attachments become image parts; other attachments, `@agent`/`@skill` mentions, errors and system, compaction or switch records become labelled text. Only invalid message JSON or a non-array assistant `content` fails a V2 session; other malformed fields are left empty. Input tokens include cache reads and writes, output tokens include reasoning, and legacy parent sessions add their descendants' usage. ZCode uses the legacy reader, skips `subagent_child` sessions and keeps plan and image parts. Synthetic input, system/skill messages, compaction and shell records are excluded from collect. `OPENCODE_DB` selects a custom or channel database; a missing explicit path never falls back, and `:memory:` is unavailable. Referenced attachment files are never opened. Running and archived records remain readable; pending inbox items are excluded. Raw export remains normalized `.raw.json`, not an OpenCode import file. See the [design and acceptance scope](docs/providers/opencode-v2.md).
 
@@ -595,7 +600,7 @@ Give an Agent this single command to obtain instructions and executable commands
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` works with every registered Provider, including Claude Code, Qoder, Qoder CN, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Grok, Pi, oh-my-pi, Gemini CLI, DeepChat, Cherry Studio and MiniMax Code. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
+`--read-prompt` works with every registered Provider, including Claude Code, Qoder, Qoder CN, OpenCode, ZCode, Kimi, Kimi-Code, Cursor, Grok, Pi, oh-my-pi, Gemini CLI, DeepChat, Cherry Studio, MiniMax Code and Antigravity CLI. It validates the URI syntax without discovering sources, reading transcripts, calling a model or creating files. Generated commands use the running native executable's absolute path and require the original Provider path environment variables. Instructions follow `--lang en|zh`. Generating a prompt does not confirm that the session exists or has been read.
 
 Direct reading is also available:
 

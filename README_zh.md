@@ -60,6 +60,7 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **DeepChat** - 当前版本的本地会话（未加密数据库）
 - **Cherry Studio** - 2.x 的本地聊天和 Agent 会话
 - **MiniMax Code** - 当前 CLI 的本地 SQLite 会话
+- **Antigravity CLI** - 本地会话数据库，不解析工具结果
 - **更多工具** - 欢迎提交 PR 支持其他 AI 编码工具
 
 ## 功能特性
@@ -190,6 +191,7 @@ agent-dump opencode://session-id-abc123
 - `deepchat://<session_id>` - DeepChat 会话
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio 普通聊天 / Agent 会话
 - `minimax://<session_id>` - MiniMax Code CLI 会话
+- `antigravity-cli://<conversation_id>` - Antigravity CLI 会话
 
 ### 典型错误
 
@@ -262,6 +264,7 @@ agent-dump opencode://session-id-abc123
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 下的 `Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。覆盖变量可用于便携版、开发版或选择多个安装中的一个。
 - **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`，只有 `~/.minimax-code` 存在数据库时改用该目录；数据库位于所选目录的 `v2/sqlite/runtime-state.sqlite`。只选择一个目录，显式路径不存在时不回退。
+- **Antigravity CLI**: `AGY_CONVERSATIONS_DIR` -> `~/.gemini/antigravity-cli/conversations` -> `data/antigravity-cli/conversations`。其下每个 `<conversation_id>.db` 是一个会话；父目录中可选的 `conversation_summaries.db` 提供标题、工作目录和更新时间。不读取 Antigravity IDE 的 `.gemini/antigravity/conversations/*.pb`。
 
 注意：
 
@@ -291,6 +294,8 @@ Cherry Studio 支持当前 2.x 数据库中的普通聊天和 Agent 会话（含
 MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。排除没有消息行的会话、隐藏的根会话及 peek/channel/cron 内部会话，保留隐藏的子会话和归档会话。无标题时使用第一条非自动用户消息，更新时间包含消息和 token 用量时间。正文按数据库消息行顺序读取，保留文字、思考、工具状态/结果和附件引用，附件和消息错误也转为文本。压缩和审查事件保留 user/assistant 角色并加上 `Context compacted` 等标签，会进入搜索和 collect；系统事件和权限响应不进入。工具结果带 `isError` 或 `error` 时标为失败，task 工具只对应一个子会话时记录 `subagent_id`。会话模型来自会话元数据，缺失时显示未知。token 用量来自 `local_runtime_token_usage`：会话统计计入所有记录；一个 turn 只有一个模型时，模型、token（含 reasoning）和记录的 USD 费用挂到该 turn 最后一条 assistant 消息。不推算费用。
 
 自定义 profile 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/providers/minimax.md)。
+
+Antigravity CLI 支持列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。数据库以只读方式打开，只解码用户输入、助手文本、标题更新、工具调用、步骤时间和 token 用量对应的 Protobuf 字段。工具结果没有已知格式，工具调用状态为 `unknown`，元数据保留原始步骤类型和状态；其他无法识别的步骤跳过。没有步骤的数据库不列出。标题依次取最后一次标题更新、摘要标题和首条用户输入。没有原生时间的步骤使用摘要更新时间或数据库修改时间，并标记为推测时间，collect 不按该日期归档。重试中重复的用量只计一次，挂到下一条助手消息；最后一步之后的用量生成一条只有用量的助手消息。输入包含缓存 token，会话输出包含推理 token；不估算费用。不支持 raw 导出。步骤格式错误或表结构不支持时，只有该会话读取失败。详见 [Antigravity CLI 读取规则](docs/providers/antigravity-cli.md)。
 
 OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版。`migration.v1-v2` 完成前，OpenCode 尚未复制的旧版会话继续列出；完成后只读新版，V2 中已删除的会话不会重新出现。没有可见消息的会话不列出，消息数只计可见消息。标题为空时使用首条用户文本，再没有时为 `Untitled Session`。新版消息按 `seq` 排序。图片附件转为 image part；其他附件、`@agent`/`@skill` 提及、错误以及系统、压缩和切换记录转为带标签的文本。只有消息 JSON 无效或 assistant 的 `content` 不是数组时整条 V2 会话读取失败，其他异常字段置空。输入 token 包含缓存读写，输出 token 包含推理；旧版父会话累加后代会话的用量。ZCode 使用旧版读取器，排除 `subagent_child` 会话，保留 plan 和图片 part。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。不打开附件引用的文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/providers/opencode-v2.md)。
 
@@ -580,7 +585,7 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、Qoder、Qoder CN、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Grok、Pi、oh-my-pi、Gemini CLI、DeepChat、Cherry Studio 和 MiniMax Code），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
+`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、Qoder、Qoder CN、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Grok、Pi、oh-my-pi、Gemini CLI、DeepChat、Cherry Studio、MiniMax Code 和 Antigravity CLI），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
 
 也可以直接读取：
 

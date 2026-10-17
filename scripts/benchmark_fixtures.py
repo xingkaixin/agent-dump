@@ -72,6 +72,7 @@ def isolated_environment(root: Path) -> dict[str, str]:
         "GROK_HOME": "sources/grok",
         "PI_HOME": "sources/pi",
         "GEMINI_CLI_HOME": "sources/gemini-cli",
+        "AGY_CONVERSATIONS_DIR": "sources/antigravity-cli/conversations",
         "DEEPCHAT_USER_DATA_DIR": "sources/deepchat",
         "CHERRY_STUDIO_USER_DATA_DIR": "sources/cherry",
         "MINIMAX_DATA_DIR": "sources/minimax",

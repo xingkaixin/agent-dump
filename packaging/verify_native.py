@@ -82,6 +82,7 @@ def build_isolated_environment(root: Path, codex_home: Path) -> dict[str, str]:
         "GROK_HOME": root / "grok",
         "PI_HOME": root / "pi",
         "GEMINI_CLI_HOME": root / "gemini-cli",
+        "AGY_CONVERSATIONS_DIR": root / "antigravity-cli" / "conversations",
     }
     for path in locations.values():
         path.mkdir(parents=True, exist_ok=True)

@@ -170,6 +170,7 @@ def test_machine_provider_capabilities_use_metadata_without_reading_sources(cli:
             "deepchat",
             "cherry",
             "minimax",
+            "antigravity-cli",
         }
         assert records["claude"]["provider"] == "claudecode"
         assert records["codex"]["uri_prefixes"] == ["threads/"]
@@ -177,7 +178,7 @@ def test_machine_provider_capabilities_use_metadata_without_reading_sources(cli:
             assert record["display_name"] and record["identifier_label"]
             if scheme == "cursor":
                 formats = ["json", "print"]
-            elif scheme in {"deepchat", "cherry", "minimax"}:
+            elif scheme in {"deepchat", "cherry", "minimax", "antigravity-cli"}:
                 formats = ["json", "markdown", "print"]
             else:
                 formats = ["json", "markdown", "print", "raw"]
