@@ -2,7 +2,7 @@ pub(super) mod transcript;
 pub(super) mod wire;
 
 use crate::compat::value::text;
-use crate::providers::contract::{Provider, RawExport};
+use crate::providers::contract::{Provider, RawExport, Window};
 use crate::providers::files::{
     self as file_sessions, SourceFiles, SourceRoots,
 };
@@ -284,13 +284,13 @@ impl Kimi {
 impl Provider for Kimi {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.settings = None;
         file_sessions::discover(
             self.files()?,
-            days,
+            window,
             false,
             Self::scan,
             |path, metadata, cutoff| self.parse(path, &metadata, cutoff),

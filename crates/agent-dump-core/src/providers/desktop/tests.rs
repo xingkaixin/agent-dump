@@ -33,7 +33,7 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
             } else {
                 assert_eq!(
                     provider
-                        .discover(Some(36500), &mut |_| Ok(()))
+                        .discover(Window::Created(36500), &mut |_| Ok(()))
                         .unwrap()
                         .sessions[0]
                         .source_path,
@@ -54,7 +54,7 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
                 );
                 assert_eq!(
                     provider
-                        .discover(Some(36500), &mut |_| Ok(()))
+                        .discover(Window::Created(36500), &mut |_| Ok(()))
                         .unwrap()
                         .sessions[0]
                         .source_path,
@@ -72,7 +72,7 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
             );
             assert!(
                 !provider
-                    .discover(Some(36500), &mut |_| Ok(()))
+                    .discover(Window::Created(36500), &mut |_| Ok(()))
                     .unwrap()
                     .available
             );
@@ -89,7 +89,7 @@ fn each_operation_selects_current_candidates_and_reads_keep_session_source() {
             );
             assert_eq!(
                 provider
-                    .discover(Some(36500), &mut |_| Ok(()))
+                    .discover(Window::Created(36500), &mut |_| Ok(()))
                     .unwrap()
                     .sessions[0]
                     .source_path,
@@ -195,7 +195,7 @@ fn cherry_boot_config_edits_failures_and_recovery_keep_existing_sessions_readabl
         assert_eq!(session.source_path, root.join("Data/cherrystudio.sqlite"));
         assert_eq!(
             provider
-                .discover(Some(36500), &mut |_| Ok(()))
+                .discover(Window::Created(36500), &mut |_| Ok(()))
                 .unwrap()
                 .sessions[0]
                 .source_path,
@@ -211,7 +211,11 @@ fn cherry_boot_config_edits_failures_and_recovery_keep_existing_sessions_readabl
     ] {
         std::fs::write(&boot, bad).unwrap();
         assert!(provider.find("session-kept", &mut |_| Ok(())).is_err());
-        assert!(provider.discover(Some(36500), &mut |_| Ok(())).is_err());
+        assert!(
+            provider
+                .discover(Window::Created(36500), &mut |_| Ok(()))
+                .is_err()
+        );
         for session in &selected {
             let before = std::fs::read(&session.source_path).unwrap();
             assert_eq!(
@@ -432,7 +436,7 @@ fn minimax_lists_child_sessions_with_messages() {
             INSERT INTO local_runtime_token_usage VALUES (1, 'child', 't', 'm', 9000);"#,
         )
         .unwrap();
-    let found = provider.discover(None, &mut |_| Ok(())).unwrap();
+    let found = provider.discover(Window::All, &mut |_| Ok(())).unwrap();
     assert!(found.failures.is_empty());
     assert_eq!(
         found
@@ -575,7 +579,7 @@ Second', 1, 1000, NULL, NULL, 'missing', NULL, 0);
             INSERT INTO deepchat_usage_stats VALUES ('main', 3000);"#,
         )
         .unwrap();
-    let found = provider.discover(None, &mut |_| Ok(())).unwrap();
+    let found = provider.discover(Window::All, &mut |_| Ok(())).unwrap();
     assert_eq!(
         found
             .sessions
@@ -714,7 +718,7 @@ fn cherry_lists_sessions_with_content_or_usage() {
               ('u1', 'usage', 'assistant', '{"parts":[]}', '{"inputTokens":3}', NULL, 1);"#,
         )
         .unwrap();
-    let found = provider.discover(None, &mut |_| Ok(())).unwrap();
+    let found = provider.discover(Window::All, &mut |_| Ok(())).unwrap();
     assert_eq!(
         found
             .sessions

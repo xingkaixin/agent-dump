@@ -136,3 +136,10 @@ def test_discovery_needs_state_and_wire_and_skips_empty_sessions(cli):
     }
     missing = cli.run("rust", "kimi-code://empty", "--head")
     assert missing.returncode == 1
+
+
+def test_activity_window_follows_wire_newer_than_state(cli):
+    directory = create(cli, [appended("user", "Recent")], state={})
+    os.utime(directory / "agents/main/wire.jsonl")
+    sessions = run_json(cli, "--list", "-d", "7", "-q", "provider:kimi-code")
+    assert [item["id"] for item in sessions] == [IDENTITY]

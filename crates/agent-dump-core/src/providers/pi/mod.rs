@@ -1,7 +1,7 @@
 pub(super) mod transcript;
 
 use crate::compat::value::{field, text, truthy};
-use crate::providers::contract::Provider;
+use crate::providers::contract::{Provider, Window};
 use crate::providers::error::LocalizedText;
 use crate::providers::files::{
     self as file_sessions, Located, SourceFiles, SourceRoots,
@@ -261,13 +261,13 @@ impl Pi {
 impl Provider for Pi {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         let kind = self.kind;
         file_sessions::discover(
             self.files()?,
-            days,
+            window,
             true,
             |path| Self::scan(path, kind),
             |path, summary, _| Self::parse(path, summary),
@@ -438,7 +438,8 @@ mod tests {
                 "PI_HOME/agent/sessions",
             ),
         };
-        let discovery = provider.discover(None, &mut |_| Ok(())).unwrap();
+        let discovery =
+            provider.discover(Window::All, &mut |_| Ok(())).unwrap();
         let [session] = discovery.sessions.as_slice() else {
             panic!("only the visible session is listed");
         };

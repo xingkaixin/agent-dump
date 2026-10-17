@@ -35,7 +35,7 @@ fn provider(root: &Path) -> AntigravityCli {
 }
 
 fn discover(provider: &mut AntigravityCli) -> Discovery {
-    provider.discover(None, &mut |_| Ok(())).unwrap()
+    provider.discover(Window::All, &mut |_| Ok(())).unwrap()
 }
 
 fn read(provider: &AntigravityCli, session: &Session) -> serde_json::Value {

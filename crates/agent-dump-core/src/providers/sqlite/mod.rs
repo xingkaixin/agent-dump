@@ -3,7 +3,7 @@ pub mod legacy;
 pub mod v2;
 
 use crate::compat::value::{json_object, string, text};
-use crate::providers::contract::{Provider, RawExport};
+use crate::providers::contract::{Provider, RawExport, Window};
 use crate::providers::sqlite::connection::{
     Readers, connect, has_column, has_table, rows,
 };
@@ -364,14 +364,15 @@ pub fn display_title(row: &Value, fallback: Option<String>) -> String {
 impl Provider for SqliteProvider {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.ensure_database()?;
         let Some(path) = &self.database else {
             return Ok(crate::providers::contract::Discovery::default());
         };
-        let cutoff = days
+        let cutoff = window
+            .created_days()
             .map(Timestamp::days_ago)
             .transpose()?
             .map(Timestamp::as_millisecond);
@@ -643,7 +644,7 @@ mod tests {
                 } else {
                     assert!(
                         !provider
-                            .discover(Some(36500), &mut |_| Ok(()))
+                            .discover(Window::Created(36500), &mut |_| Ok(()))
                             .unwrap()
                             .available
                     );
@@ -671,7 +672,7 @@ mod tests {
                 );
                 assert_eq!(
                     provider
-                        .discover(Some(36500), &mut |_| Ok(()))
+                        .discover(Window::Created(36500), &mut |_| Ok(()))
                         .unwrap()
                         .sessions[0]
                         .source_path,
@@ -737,7 +738,7 @@ mod tests {
                         );
                     } else {
                         let found = provider
-                            .discover(Some(36500), &mut |_| {
+                            .discover(Window::Created(36500), &mut |_| {
                                 panic!("unexpected warning")
                             })
                             .unwrap();
@@ -770,7 +771,7 @@ mod tests {
                         expected.parent().unwrap()
                     );
                     let found = provider
-                        .discover(Some(36500), &mut |_| {
+                        .discover(Window::Created(36500), &mut |_| {
                             panic!("unexpected warning")
                         })
                         .unwrap();
@@ -787,7 +788,7 @@ mod tests {
                     );
                     assert!(
                         provider
-                            .discover(Some(36500), &mut |_| panic!(
+                            .discover(Window::Created(36500), &mut |_| panic!(
                                 "unexpected warning"
                             ))
                             .is_err()
@@ -954,7 +955,10 @@ mod tests {
     }
 
     fn listed(provider: &mut SqliteProvider) -> Vec<Session> {
-        provider.discover(None, &mut |_| Ok(())).unwrap().sessions
+        provider
+            .discover(Window::All, &mut |_| Ok(()))
+            .unwrap()
+            .sessions
     }
 
     #[test]

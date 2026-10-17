@@ -3,7 +3,7 @@ mod transcript;
 
 use crate::compat::value::{integer, text};
 use crate::providers::contract::{
-    DiagnosticSink, Discovery, Lookup, Provider, source_roots,
+    DiagnosticSink, Discovery, Lookup, Provider, Window, source_roots,
 };
 use crate::providers::error::ProviderError;
 use crate::providers::files::{
@@ -168,7 +168,7 @@ impl Dsh {
 impl Provider for Dsh {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Discovery> {
         let files = self.files()?;
@@ -176,7 +176,7 @@ impl Provider for Dsh {
         let mut seen = HashSet::new();
         file_sessions::discover(
             files,
-            days,
+            window,
             true,
             |path| Self::scan(&sessions, path),
             |_, session, _| {

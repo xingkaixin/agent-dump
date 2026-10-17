@@ -3,7 +3,7 @@ mod workspace;
 
 use crate::compat::value::{text, truthy};
 use crate::output::formats::OutputFormat;
-use crate::providers::contract::Provider;
+use crate::providers::contract::{Provider, Window};
 use crate::session::timestamp::Timestamp;
 use crate::session::{
     Message, Part, Session, SessionData, epoch_seconds, parse_timestamp,
@@ -126,14 +126,15 @@ impl Cursor {
 impl Provider for Cursor {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.database = (self.resolve_database)()?;
         if !self.database.exists() {
             return Ok(crate::providers::contract::Discovery::default());
         }
-        let cutoff = days.map(Timestamp::days_ago).transpose()?;
+        let cutoff =
+            window.created_days().map(Timestamp::days_ago).transpose()?;
         self.sessions(
             &crate::providers::sqlite::connection::connect(&self.database)?,
             cutoff,
@@ -473,7 +474,7 @@ mod tests {
         };
         assert!(
             !provider
-                .discover(Some(36500), &mut |_| Ok(()))
+                .discover(Window::Created(36500), &mut |_| Ok(()))
                 .unwrap()
                 .available
         );
@@ -498,7 +499,7 @@ mod tests {
             );
             assert_eq!(
                 provider
-                    .discover(Some(36500), &mut |_| Ok(()))
+                    .discover(Window::Created(36500), &mut |_| Ok(()))
                     .unwrap()
                     .sessions[0]
                     .source_path,

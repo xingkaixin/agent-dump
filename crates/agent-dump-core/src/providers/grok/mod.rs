@@ -1,6 +1,6 @@
 mod transcript;
 
-use crate::providers::contract::{Provider, RawExport, source_roots};
+use crate::providers::contract::{Provider, RawExport, Window, source_roots};
 use crate::providers::error::ProviderError;
 use crate::providers::files::{
     self as file_sessions, SourceFiles, SourceRoots,
@@ -134,12 +134,12 @@ impl Grok {
 impl Provider for Grok {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         file_sessions::discover(
             self.files()?,
-            days,
+            window,
             true,
             Self::session,
             |_, session, _| Ok(session),

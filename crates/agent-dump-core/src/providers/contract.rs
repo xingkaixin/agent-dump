@@ -83,10 +83,37 @@ impl Discovery {
     }
 }
 
+/// Lookback window in days. Providers drop sessions created before a
+/// `Created` cutoff. For `Updated` they may skip sources that cannot hold
+/// activity after the cutoff, and the caller filters `updated_at`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Window {
+    #[default]
+    All,
+    Created(i64),
+    Updated(i64),
+}
+
+impl Window {
+    pub const fn days(self) -> Option<i64> {
+        match self {
+            Self::All => None,
+            Self::Created(days) | Self::Updated(days) => Some(days),
+        }
+    }
+
+    pub const fn created_days(self) -> Option<i64> {
+        match self {
+            Self::Created(days) => Some(days),
+            Self::All | Self::Updated(_) => None,
+        }
+    }
+}
+
 pub trait Provider: Send + Sync {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Discovery>;
     fn find(

@@ -1,6 +1,8 @@
 use crate::providers::claude::title_line;
 use crate::providers::claude::transcript::Decoder;
-use crate::providers::contract::{DiagnosticSink, Provider, source_roots};
+use crate::providers::contract::{
+    DiagnosticSink, Provider, Window, source_roots,
+};
 use crate::providers::error::ProviderError;
 use crate::providers::files::{
     self as file_sessions, SourceFiles, SourceRoots,
@@ -229,13 +231,13 @@ impl Droid {
 impl Provider for Droid {
     fn discover(
         &mut self,
-        days: Option<i64>,
+        window: Window,
         _diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<crate::providers::contract::Discovery> {
         self.models = None;
         file_sessions::discover(
             self.files()?,
-            days,
+            window,
             true,
             Self::scan,
             |path, scan, _| self.parse(path, scan),
