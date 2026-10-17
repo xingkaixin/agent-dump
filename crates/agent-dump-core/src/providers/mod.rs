@@ -5,6 +5,7 @@ pub(crate) mod cursor;
 pub(crate) mod desktop;
 pub mod error;
 pub(crate) mod files;
+pub(crate) mod grok;
 pub(crate) mod jsonl;
 pub(crate) mod kimi;
 pub(crate) mod kimi_code;

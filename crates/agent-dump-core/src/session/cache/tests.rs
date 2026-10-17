@@ -443,6 +443,10 @@ fn provider_change_sources_include_payload_files_and_wal_only() {
                     session.source_path.join("state.json"),
                     session.source_path.join("agents/main/wire.jsonl"),
                 ],
+                "grok" => vec![
+                    session.source_path.join("summary.json"),
+                    session.source_path.join("updates.jsonl"),
+                ],
                 _ => vec![
                     session.source_path.clone(),
                     root.path().join("source-wal"),

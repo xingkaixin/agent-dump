@@ -86,6 +86,16 @@ static REGISTRATIONS: &[Registration] = &[
     },
     Registration {
         info: ProviderInfo {
+            name: "grok",
+            display_name: "Grok",
+            scheme: "grok",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || Ok(Box::new(crate::providers::grok::Grok::open()?)),
+    },
+    Registration {
+        info: ProviderInfo {
             name: "pi",
             display_name: "Pi",
             scheme: "pi",
