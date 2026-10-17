@@ -1,6 +1,6 @@
 use crate::compat::value::{add_integer, field, integer_number, text, truthy};
 use crate::providers::contract::RecoverableDiagnostic;
-use crate::providers::pi::{Titles, datetime};
+use crate::providers::pi::{Kind, Titles, datetime};
 use crate::session::{
     ImagePart, Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
 };
@@ -16,6 +16,7 @@ pub struct Transcript {
 impl Transcript {
     pub fn new(
         records: Vec<Value>,
+        kind: Kind,
         mut failed: impl FnMut(crate::Error) -> crate::Result<()>,
     ) -> crate::Result<Self> {
         let mut header = None;
@@ -37,7 +38,7 @@ impl Transcript {
         for (sequence, record) in active_branch(entries) {
             titles.add(&record);
             if let Err(error) =
-                append(&mut messages, &mut calls, &record, sequence)
+                append(&mut messages, &mut calls, &record, sequence, kind)
             {
                 failed(error)?;
             }
@@ -54,6 +55,7 @@ impl Transcript {
 
 pub fn read(
     session: &Session,
+    kind: Kind,
     diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
 ) -> crate::Result<SessionData> {
     let mut records = Vec::new();
@@ -65,10 +67,11 @@ pub fn read(
             Ok(())
         },
     )?;
-    let transcript = Transcript::new(records, |error| {
-        diagnostics(RecoverableDiagnostic::PiRecordConvertFailed(
-            error.to_string(),
-        ))
+    let transcript = Transcript::new(records, kind, |error| {
+        diagnostics(RecoverableDiagnostic::PiRecordConvertFailed {
+            provider: kind.display_name(),
+            error: error.to_string(),
+        })
     })?;
     let header = transcript.header.unwrap_or_default();
     let mut directory = session.source_metadata["cwd"].clone();
@@ -134,8 +137,9 @@ fn append(
     calls: &mut HashMap<String, (usize, usize)>,
     record: &Value,
     sequence: usize,
+    kind: Kind,
 ) -> crate::Result<()> {
-    let Some(message) = convert(record, sequence)? else {
+    let Some(message) = convert(record, sequence, kind)? else {
         return Ok(());
     };
     if field(&record["message"], "role").trim() == "toolResult"
@@ -242,17 +246,21 @@ fn timestamp_ms(value: &Value) -> crate::Result<Option<i64>> {
         .map(crate::session::timestamp::Timestamp::as_millisecond))
 }
 
-fn convert(record: &Value, sequence: usize) -> crate::Result<Option<Message>> {
+fn convert(
+    record: &Value,
+    sequence: usize,
+    kind: Kind,
+) -> crate::Result<Option<Message>> {
     let raw_id = field(record, "id").trim().to_owned();
     let id = if raw_id.is_empty() {
-        format!("pi-{sequence}")
+        format!("{}-{sequence}", kind.agent())
     } else {
         raw_id.clone()
     };
     let timestamp = timestamp_ms(&record["timestamp"])?.unwrap_or(0);
     let message = match text(&record["type"]) {
         "message" if record["message"].is_object() => {
-            agent_message(&record["message"], id, timestamp)?
+            agent_message(&record["message"], id, timestamp, kind)?
         }
         "compaction" | "branch_summary" => {
             let summary = field(record, "summary").trim().to_owned();
@@ -286,6 +294,7 @@ fn agent_message(
     source: &Value,
     id: String,
     entry_time: i64,
+    kind: Kind,
 ) -> crate::Result<Option<Message>> {
     let role = field(source, "role");
     let role = role.trim();
@@ -382,7 +391,7 @@ fn agent_message(
     }
     let tool_only = parts.iter().all(|part| matches!(part, Part::Tool(_)));
     let mut message = Message::new(id, role, time, parts);
-    message.agent = (message.role == "assistant").then(|| "pi".into());
+    message.agent = (message.role == "assistant").then(|| kind.agent().into());
     message.mode = tool_only.then(|| "tool".into());
     message.model =
         source["model"].is_string().then(|| source["model"].clone());
