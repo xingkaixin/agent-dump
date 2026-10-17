@@ -16,12 +16,12 @@ pub fn record_warning(diagnostic: &RecoverableDiagnostic, zh: bool) -> String {
                 format!("⚠️  Failed to convert message format: {error}")
             }
         }
-        RecoverableDiagnostic::PiRecordConvertFailed(error) => {
+        RecoverableDiagnostic::PiRecordConvertFailed { provider, error } => {
             let error = safe_line(error);
             if zh {
-                format!("警告: 转换 Pi 记录失败: {error}")
+                format!("警告: 转换 {provider} 记录失败: {error}")
             } else {
-                format!("⚠️  Failed to convert Pi record: {error}")
+                format!("⚠️  Failed to convert {provider} record: {error}")
             }
         }
         RecoverableDiagnostic::TitleCacheFailed(error) => {

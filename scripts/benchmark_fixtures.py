@@ -65,6 +65,8 @@ def isolated_environment(root: Path) -> dict[str, str]:
         "LOCALAPPDATA": "localappdata",
         "CODEX_HOME": "sources/codex",
         "CLAUDE_CONFIG_DIR": "sources/claude",
+        "QODER_CONFIG_DIR": "sources/qoder",
+        "QODERCN_CONFIG_DIR": "sources/qoder-cn",
         "KIMI_SHARE_DIR": "sources/kimi",
         "KIMI_CODE_HOME": "sources/kimi-code",
         "GROK_HOME": "sources/grok",
