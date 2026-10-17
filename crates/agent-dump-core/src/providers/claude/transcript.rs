@@ -1,6 +1,6 @@
 use crate::compat::value::{field, string, text, truthy};
-use crate::providers::contract::RecoverableDiagnostic;
-use crate::providers::text::clean;
+use crate::providers::contract::{DiagnosticSink, RecoverableDiagnostic};
+use crate::providers::text::{clean, clean_messages};
 use crate::session::assembly::{AssistantFold, backfill};
 use crate::session::{
     ImagePart, Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
@@ -10,7 +10,8 @@ use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 
 #[derive(Default)]
-struct Decoder {
+pub struct Decoder {
+    agent: &'static str,
     messages: Vec<Message>,
     pending: HashMap<String, (usize, usize)>,
     assistant_calls: HashMap<String, Vec<String>>,
@@ -91,7 +92,15 @@ fn apply_model(message: &mut Message, source: &Value) {
 }
 
 impl Decoder {
-    const fn reset(&mut self) {
+    pub fn new(agent: &'static str, children: HashMap<String, String>) -> Self {
+        Self {
+            agent,
+            children,
+            ..Self::default()
+        }
+    }
+
+    pub const fn reset(&mut self) {
         self.current = None;
         self.latest_text = None;
     }
@@ -123,7 +132,7 @@ impl Decoder {
         let index = target.unwrap_or_else(|| {
             let mut message =
                 Message::new(id.to_owned(), "assistant", timestamp, parts);
-            message.agent = Some("claude".into());
+            message.agent = Some(self.agent.into());
             if tool {
                 message.mode = Some("tool".into());
             }
@@ -218,7 +227,7 @@ impl Decoder {
             let index = usage_index.unwrap_or_else(|| {
                 let mut message =
                     Message::new(id, "assistant", timestamp, Vec::new());
-                message.agent = Some("claude".into());
+                message.agent = Some(self.agent.into());
                 self.messages.push(message);
                 self.current = Some(self.messages.len() - 1);
                 self.messages.len() - 1
@@ -360,35 +369,43 @@ impl Decoder {
         }
         Ok(())
     }
+
+    pub fn convert(
+        &mut self,
+        record: &Value,
+        diagnostics: &mut DiagnosticSink<'_>,
+    ) -> crate::Result<()> {
+        if let Err(error) = self.record(record) {
+            diagnostics(RecoverableDiagnostic::MessageConvertFailed(
+                error.to_string(),
+            ))?;
+        }
+        Ok(())
+    }
+
+    pub fn finish(mut self) -> Vec<Message> {
+        clean_messages(&mut self.messages);
+        self.messages
+    }
 }
 
 pub fn read(
     session: &Session,
     children: HashMap<String, String>,
-    diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
+    diagnostics: &mut DiagnosticSink<'_>,
 ) -> crate::Result<SessionData> {
-    let mut decoder = Decoder {
-        children,
-        ..Decoder::default()
-    };
+    let mut decoder = Decoder::new("claude", children);
     crate::providers::jsonl::scan(
         &session.source_path,
         diagnostics,
-        |record, diagnostics| {
-            if let Err(error) = decoder.record(&record) {
-                diagnostics(RecoverableDiagnostic::MessageConvertFailed(
-                    error.to_string(),
-                ))?;
-            }
-            Ok(())
-        },
+        |record, diagnostics| decoder.convert(&record, diagnostics),
     )?;
-    crate::providers::text::clean_messages(&mut decoder.messages);
+    let messages = decoder.finish();
     let mut stats = Stats {
-        message_count: decoder.messages.len(),
+        message_count: messages.len(),
         ..Stats::default()
     };
-    for message in &decoder.messages {
+    for message in &messages {
         let tokens =
             |key: &str| message.tokens.get(key).unwrap_or(&Value::Null);
         stats.add_tokens(tokens("input_tokens"), tokens("output_tokens"))?;
@@ -396,5 +413,5 @@ pub fn read(
             stats.add_tokens(tokens(key), &Value::Null)?;
         }
     }
-    Ok(session.payload(decoder.messages, stats))
+    Ok(session.payload(messages, stats))
 }
