@@ -164,6 +164,7 @@ def test_machine_provider_capabilities_use_metadata_without_reading_sources(cli:
             "qoder-cn",
             "cursor",
             "pi",
+            "omp",
             "deepchat",
             "cherry",
             "minimax",

@@ -124,7 +124,25 @@ static REGISTRATIONS: &[Registration] = &[
             identifier_label: "<session_id>",
             uri_prefixes: &[],
         },
-        open: || Ok(Box::new(crate::providers::pi::Pi::open()?)),
+        open: || {
+            Ok(Box::new(crate::providers::pi::Pi::open(
+                crate::providers::pi::Kind::Pi,
+            )?))
+        },
+    },
+    Registration {
+        info: ProviderInfo {
+            name: "omp",
+            display_name: "oh-my-pi",
+            scheme: "omp",
+            identifier_label: "<session_id>",
+            uri_prefixes: &[],
+        },
+        open: || {
+            Ok(Box::new(crate::providers::pi::Pi::open(
+                crate::providers::pi::Kind::Omp,
+            )?))
+        },
     },
     Registration {
         info: ProviderInfo {
