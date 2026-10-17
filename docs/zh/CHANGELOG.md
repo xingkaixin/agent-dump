@@ -2,6 +2,31 @@
 
 ## [未发布]
 
+## [1.2.5] - 2026-10-17
+
+### 新增功能
+
+- 支持读取 Kimi-Code、Qoder、Qoder CN、oh-my-pi、Grok、Gemini CLI、Antigravity CLI、Droid 和 DSH 会话，数据源位置与读取规则与 CodeSesh 一致 (#516–#522)。
+- 原始导出解码 `.zst` 和 `.zstd` 数据源的全部完整帧，跳过仍在写入的帧 (#522)。
+
+### 问题修复
+
+- Cursor、Pi、Cherry Studio 和 MiniMax 支持 CodeSesh 的数据源变量与默认位置；路径变量会去除首尾空白并展开；除 MiniMax Code 外，会话正文移除 `system-reminder` 和斜杠命令包装标签 (#507)。
+- Claude Code：子代理会话单独列出，并由父会话的工具调用关联；保留 TodoWrite 调用和工具结果中的图片；每个 API 请求的用量只统计一次；跳过没有可见消息的会话 (#510)。
+- Codex：读取归档目录和 `.jsonl.zst` rollout；内置工具和 code-mode 调用使用 Codex 工具名称；移除注入的上下文；token 增量、远程压缩和子代理用量各只统计一次 (#515)。
+- Cursor：按 composer id 区分会话，旧的 `cursor://<requestid>` URI 仍可解析；读取 composer 列出的子代理对话；工作目录取自列出该 composer 的 workspace (#513)。
+- OpenCode 与 ZCode：遵循 V1 到 V2 的迁移游标；转换计划、图片和附件片段；跳过子代理与孤立子会话；统计缓存和推理 token (#512)。
+- Kimi：发现 `state.json` 会话；读取 `StatusUpdate` 中的 token 用量，包括子代理 wire；合并多段用户文本；保留缺少 `type` 的 context 工具调用 (#508)。
+- Pi：只导出当前活动分支，标题、消息数和用量均取自该分支 (#509)。
+- MiniMax：列出子会话和非空会话，并读取事件标签、工具和每轮用量 (#514)。
+- DeepChat 与 Cherry Studio：跳过空记录、循环记录和已删除记录；会话引用、附件和压缩摘要保留为文本；读取 token 用量与费用 (#511)。
+- 按更新时间筛选时跳过窗口开始前修改的文件，`--list -d 1` 不再解码全部 Codex 压缩 rollout (#523)。
+- 阅读器缓存按序列化后的会话数据限制在 128 MiB 内；搜索索引更新的会话并发读取数不超过 CPU 数，批次文本达到 64 MiB 时提前提交 (#505, #506)。
+
+### 变更
+
+- 移除过时的 Codex 和 OpenCode 差分用例，改用 Rust 行为契约 (#512, #515)。
+
 ## [1.2.4] - 2026-10-15
 
 ### 新增功能
@@ -1305,3 +1330,4 @@
 [1.2.2]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.2
 [1.2.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.3
 [1.2.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.4
+[1.2.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.5

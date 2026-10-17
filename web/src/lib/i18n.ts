@@ -192,9 +192,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.5",
+        date: "2026-10-17",
+        isLatest: true,
+        title: "Read Sessions from 9 More AI Coding Tools",
+        description:
+          "Export, search, and summarize AI sessions from Gemini CLI, Grok, Droid, Qoder, Qoder CN, Kimi-Code, oh-my-pi, Antigravity CLI, and DSH alongside Codex, Claude Code, Cursor, and other supported tools. Claude Code subagents, archived Codex rollouts, Cursor subagent chats, and the active Pi branch are read more completely, and recent-session lists skip stale files to return faster.",
+        command: 'npx @agent-dump/cli@1.2.5 providers',
+        tags: ["New Providers", "Session Export", "Faster Listing"],
+      },
+      {
         version: "v1.2.4",
         date: "2026-10-15",
-        isLatest: true,
         title: "More Flexible AI Collect",
         description:
           "Summarize Codex, Claude Code, Cursor, and other supported AI sessions with configurable reasoning and vendor-specific request options. AI collect adapts rejected default parameters for OpenAI-compatible services and reads Anthropic text replies after thinking blocks. Explore the redesigned website and guides.",
@@ -388,9 +397,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.5",
+        date: "2026-10-17",
+        isLatest: true,
+        title: "新增 9 款 AI 编程工具的会话读取",
+        description:
+          "除 Codex、Claude Code、Cursor 等工具外，现在还可以导出、搜索和汇总 Gemini CLI、Grok、Droid、Qoder、Qoder CN、Kimi-Code、oh-my-pi、Antigravity CLI 和 DSH 的 AI 会话。Claude Code 子代理、Codex 归档会话、Cursor 子代理对话和 Pi 当前分支的读取更完整；列出近期会话时跳过过期文件，结果返回更快。",
+        command: 'npx @agent-dump/cli@1.2.5 providers',
+        tags: ["新增工具", "会话导出", "更快列出"],
+      },
+      {
         version: "v1.2.4",
         date: "2026-10-15",
-        isLatest: true,
         title: "AI collect 支持更多模型配置",
         description:
           "汇总 Codex、Claude Code、Cursor 等工具的 AI 会话时，可配置推理模式和厂商专用请求参数。AI collect 会调整 OpenAI 兼容服务拒绝的默认参数，并正确读取 Anthropic 思考块之后的文本回复。新版网站让你浏览功能与使用指南。",
@@ -584,9 +602,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.5",
+        date: "2026-10-17",
+        isLatest: true,
+        title: "新たに 9 つの AI コーディングツールに対応",
+        description:
+          "Codex、Claude Code、Cursor などに加え、Gemini CLI、Grok、Droid、Qoder、Qoder CN、Kimi-Code、oh-my-pi、Antigravity CLI、DSH の AI セッションをエクスポート・検索・要約できます。Claude Code のサブエージェント、Codex のアーカイブ済みセッション、Cursor のサブエージェント会話、Pi のアクティブブランチをより完全に読み取り、最近のセッション一覧は古いファイルを読み飛ばして素早く表示します。",
+        command: 'npx @agent-dump/cli@1.2.5 providers',
+        tags: ["新規ツール", "セッション出力", "高速な一覧表示"],
+      },
+      {
         version: "v1.2.4",
         date: "2026-10-15",
-        isLatest: true,
         title: "AI collect のモデル設定を柔軟に",
         description:
           "Codex、Claude Code、Cursor などの AI セッションを、推論モードやサービス固有のリクエスト設定で要約できます。AI collect は OpenAI 互換サービスが拒否した既定のパラメーターを調整し、Anthropic の思考ブロック後のテキストを読み取ります。刷新したサイトで機能とガイドを確認できます。",
