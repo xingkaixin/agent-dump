@@ -53,6 +53,7 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **Kimi** - Moonshot AI 助手
 - **Kimi-Code** - Kimi Code CLI 会话
 - **Cursor** - Cursor composer 会话
+- **Droid** - Factory Droid CLI 会话
 - **Grok** - Grok CLI 会话
 - **Pi** - Earendil 的 AI coding agent
 - **oh-my-pi** - 基于 Pi 的 coding agent（`omp`）
@@ -184,6 +185,7 @@ agent-dump opencode://session-id-abc123
 - `qoder://<session_id>` - Qoder 会话
 - `qoder-cn://<session_id>` - Qoder CN 会话
 - `cursor://<composer_id>` - Cursor 会话（旧的 `cursor://<requestid>` URI 仍能定位到同一会话）
+- `droid://<session_id>` - Droid 会话
 - `grok://<session_id>` - Grok 会话
 - `pi://<session_id>` - Pi 会话
 - `omp://<session_id>` - oh-my-pi 会话
@@ -255,6 +257,7 @@ agent-dump opencode://session-id-abc123
 - **Kimi**: `KIMI_SHARE_DIR` -> `~/.kimi` -> `data/kimi`
 - **Kimi-Code**: `KIMI_CODE_HOME` -> `~/.kimi-code` -> `data/kimi-code`。会话是同时包含 `state.json` 和 `agents/main/wire.jsonl` 的 `sessions/<hash>/<id>/` 目录，没有消息的会话会跳过。工作目录依次取 `state.json` 的 `workDir`、`custom.cwd`，再查数据根目录的 `session_index.jsonl`。
 - **OpenCode**: `OPENCODE_DB` 指定唯一数据库（相对路径以 `XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 为基准）；未指定时读取该目录的 `opencode.db`，再回退到旧 Windows `LOCALAPPDATA`/`APPDATA` 路径和 `data/opencode/opencode.db`。
+- **Droid**: `FACTORY_HOME_OVERRIDE/.factory` -> `~/.factory` -> `data/droid`。会话是 `sessions/` 或其下一层目录中首行为 `session_start` 记录的 `<id>.jsonl` 文件；没有可见消息的会话会跳过，标记为 `llm_only` 的消息也会跳过。工作目录取 `session_start` 的 `lastCwd` 或 `cwd`。Token 用量和模型来自同名的 `<id>.settings.json`；自定义模型 ID 通过数据根目录 `settings.json` 的 `customModels` 映射。
 - **ZCode**: macOS `~/.zcode/cli/db/db.sqlite`；Windows `%USERPROFILE%\.zcode\cli\db\db.sqlite`；Linux 无默认路径
 - **Cursor**: `CURSOR_DATA_PATH/globalStorage/state.vscdb`；默认使用 macOS `~/Library/Application Support/Cursor`、Windows `%APPDATA%\Cursor`、Linux `${XDG_CONFIG_HOME:-~/.config}/Cursor` 下的 `User` 目录。工作目录取自 `workspaceStorage/*/workspace.json` 中登记了该 composer 的工作区文件夹。
 - **Grok**: `GROK_HOME` -> `~/.grok` -> `data/grok`。`sessions/` 下任意深度的 `summary.json`，只要 `info` 同时含 `id` 和 `cwd`，即为一个会话；消息来自同目录的 `updates.jsonl`，没有消息的会话会跳过。被 rewind 撤销的提问不进入正文。读取规则见 [Grok Provider](docs/providers/grok.md)。
@@ -585,7 +588,7 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 agent-dump codex://SESSION_ID --read-prompt
 ```
 
-`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、Qoder、Qoder CN、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Grok、Pi、oh-my-pi、Gemini CLI、DeepChat、Cherry Studio、MiniMax Code 和 Antigravity CLI），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
+`--read-prompt` 支持所有已注册的 Provider（包括 Claude Code、Qoder、Qoder CN、OpenCode、ZCode、Kimi、Kimi-Code、Cursor、Droid、Grok、Pi、oh-my-pi、Gemini CLI、DeepChat、Cherry Studio、MiniMax Code 和 Antigravity CLI），只校验 URI 格式，不发现来源、读取正文、调用模型或创建文件。它输出的命令使用当前原生可执行文件的绝对路径，保留相同的 Provider 路径环境变量后可直接执行。提示词随 `--lang en|zh` 本地化；成功生成说明不代表会话存在或已经读完。
 
 也可以直接读取：
 

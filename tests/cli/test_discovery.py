@@ -14,6 +14,7 @@ from sqlite_fixture import create_legacy
 from test_antigravity_cli import create as create_antigravity, user
 from test_claude import create as create_claude, event
 from test_cursor import cursor
+from test_droid import create as create_droid, message as droid_message
 from test_gemini_cli import create as create_gemini_cli, entry, header as gemini_header
 from test_grok import create as create_grok, summary as grok_summary, user as grok_user
 from test_kimi import create as create_kimi
@@ -40,6 +41,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     create_claude(cli, [event("user", "Claude")])
     create_kimi(cli, context=[{"role": "user", "content": "Kimi"}])
     create_kimi_code(cli, [appended("user", "Kimi-Code")], state={})
+    create_droid(cli, [droid_message("user", "Droid")], start={})
     create_grok(cli, [grok_user("Grok")], summary=grok_summary())
     create_pi(cli, [message("user", "Pi")])
     create_qoder(cli.root / "sources/qoder", [event("user", "Qoder")])
@@ -63,6 +65,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
         "Qoder",
         "Qoder CN",
         "Cursor",
+        "Droid",
         "Grok",
         "Pi",
         "oh-my-pi",
