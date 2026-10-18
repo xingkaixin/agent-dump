@@ -139,7 +139,7 @@ v1.0.0 是首个 Rust 发布目标。Cargo 与 npm 产品版本同步为 1.0.0�
 - 旧 Python 应用已移出主树，差分参考由 `tests/reference/requirements.txt` 固定并独立安装。旧 API 使用方可固定 Python 0.15.9。
 - `.github/workflows/build-artifacts.yml` 同时被 PR CI 和 tag release 调用。四目标由 `npm/packages/cli/lib/native-targets.json` 派生，不在 workflow 复制平台列表；PR 跳过 Intel runner 上的 `darwin-x64`，该目标只在 main 和 release 上验证。
 - `packaging/build_release.py` 在固定 Rust 工具链下使用 PEP 517 隔离构建，Maturin 由完整 hash constraints 约束；先构建 sdist，再从 sdist 构建 wheel。npm 原生文件直接提取自 wheel，字节一致。
-- Linux 使用固定 Zig 0.13.0 链接，Maturin 检查 `manylinux_2_17`；另在固定镜像 digest 的 manylinux2014 容器运行隔离会话验证。最低 glibc 为 2.17；不发布 musllinux/Alpine wheel。
+- Linux 使用 `pyproject.toml` packaging 组固定的 Zig 链接，Maturin 检查 `manylinux_2_17`；另在固定镜像 digest 的 manylinux2014 容器运行隔离会话验证。最低 glibc 为 2.17；不发布 musllinux/Alpine wheel。
 - macOS x64 最低 10.12，arm64 最低 11.0；Windows x64 使用 MSVC。macOS/Windows 验证在当前 GitHub runner，wheel 标签不代表对每个历史 OS 版本做过实机测试。
 - 四目标分别验证 Python 3.10 与 3.14 的 pip、uv tool install、uvx，以及 npm、npx、bunx。测试生成合成来源，验证版本、帮助、print、JSON 导出和源未改写，所有临时安装自动清理。
 - 每个目标输出 `artifact-report.json`，记录 wheel、sdist、native 的大小与 SHA-256。发布 job 下载已验证的四个 wheel 和 Linux 生成的 sdist，不重新构建。
