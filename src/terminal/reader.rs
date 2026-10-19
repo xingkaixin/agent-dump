@@ -8,6 +8,7 @@ use agent_dump_core::{
     session::SessionData,
 };
 use crossterm::{
+    clipboard::CopyToClipboard,
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
 };
@@ -368,9 +369,18 @@ impl Reader {
                             }
                         }
                         KeyCode::Char('y') if !self.rows.is_empty() => {
-                            self.status = match execute!(self.terminal.backend_mut(), crossterm::clipboard::CopyToClipboard::to_clipboard_from(&self.rows[self.state.selected].group)) {
-                                Ok(()) => t("READER_COPY_REQUEST", self.zh, &[]),
-                                Err(error) => render::safe_line(&error.to_string()),
+                            self.status = match execute!(
+                                self.terminal.backend_mut(),
+                                CopyToClipboard::to_clipboard_from(
+                                    &self.rows[self.state.selected].group
+                                )
+                            ) {
+                                Ok(()) => {
+                                    t("READER_COPY_REQUEST", self.zh, &[])
+                                }
+                                Err(error) => {
+                                    render::safe_line(&error.to_string())
+                                }
                             };
                         }
                         KeyCode::Char('n' | 'N')
@@ -1067,10 +1077,34 @@ mod tests {
             Timestamp::UNIX_EPOCH,
             Timestamp::UNIX_EPOCH,
         );
-        let data = session.payload(vec![
-            Message::new("one".into(), "user", 0, vec![Part::text("导出遇到数据库锁。请检查原因。".into(), 0)]),
-            Message::new("two".into(), "assistant", 0, vec![Part::tool("exec", "call", serde_json::json!({"input": "hidden-needle", "output": "completed"}), 0)]),
-        ], Stats::default());
+        let data = session.payload(
+            vec![
+                Message::new(
+                    "one".into(),
+                    "user",
+                    0,
+                    vec![Part::text(
+                        "导出遇到数据库锁。请检查原因。".into(),
+                        0,
+                    )],
+                ),
+                Message::new(
+                    "two".into(),
+                    "assistant",
+                    0,
+                    vec![Part::tool(
+                        "exec",
+                        "call",
+                        serde_json::json!({
+                            "input": "hidden-needle",
+                            "output": "completed"
+                        }),
+                        0,
+                    )],
+                ),
+            ],
+            Stats::default(),
+        );
         let rows = vec![Row {
             title: session.title,
             detail: "Codex · 09-29 16:00".into(),

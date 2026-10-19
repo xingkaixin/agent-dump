@@ -85,7 +85,19 @@ pub fn read_entries(
                         )
                     )?;
                     if let Some(logger) = logger {
-                        logger.log("session_read_failed", json!({"agent":group.info.name, "session_uri":uri, "error_type":provider_error::kind(error.as_ref()).unwrap_or("RuntimeError"), "error":provider_error::message(error.as_ref(), zh)}));
+                        let error_type = provider_error::kind(error.as_ref())
+                            .unwrap_or("RuntimeError");
+                        let message =
+                            provider_error::message(error.as_ref(), zh);
+                        logger.log(
+                            "session_read_failed",
+                            json!({
+                                "agent": group.info.name,
+                                "session_uri": uri,
+                                "error_type": error_type,
+                                "error": message
+                            }),
+                        );
                     }
                     last_error = Some(error);
                 }

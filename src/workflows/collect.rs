@@ -196,7 +196,17 @@ pub fn run(
         .collect::<HashSet<_>>()
         .len();
     if let Some(logger) = &logger {
-        logger.log("collect_run_start", json!({"since":since.to_string(), "until":until.to_string(), "summary_concurrency":collect.concurrency, "agent_count":scan.groups.len(), "session_count":session_count, "session_day_count":entries.len()}));
+        logger.log(
+            "collect_run_start",
+            json!({
+                "since": since.to_string(),
+                "until": until.to_string(),
+                "summary_concurrency": collect.concurrency,
+                "agent_count": scan.groups.len(),
+                "session_count": session_count,
+                "session_day_count": entries.len()
+            }),
+        );
     }
     let (chunk_count, breakdown) =
         plan(&entries, session_count, collect.concurrency, zh, warnings)?;
@@ -286,7 +296,13 @@ pub fn run(
         &markdown,
         &output_path,
         logger,
-        json!({"output_path":path_text(&output_path), "session_count":included, "read_failed_count":failed, "discovery_failed_count":scan.failed_providers.len(), "summary_failed_count":summary_failed}),
+        json!({
+            "output_path": path_text(&output_path),
+            "session_count": included,
+            "read_failed_count": failed,
+            "discovery_failed_count": scan.failed_providers.len(),
+            "summary_failed_count": summary_failed
+        }),
         zh,
         out,
         warnings,

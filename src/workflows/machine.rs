@@ -20,7 +20,11 @@ pub fn session_record(info: &ProviderInfo, session: &Session) -> Value {
         "working_directory": optional(&session.directory),
         "model": optional(&session.model),
         "message_count": session.message_count,
-        "message_count_completeness": if session.message_count.is_some() { "exact" } else { "unknown" }
+        "message_count_completeness": if session.message_count.is_some() {
+            "exact"
+        } else {
+            "unknown"
+        }
     })
 }
 
@@ -88,7 +92,15 @@ pub fn write(
         &json!({
             "schema_version": 1,
             "kind": kind,
-            "status": if !success { "error" } else if !scan.failed_providers.is_empty() || !failed_sessions.is_empty() { "partial" } else { "ok" },
+            "status": if !success {
+                "error"
+            } else if !scan.failed_providers.is_empty()
+                || !failed_sessions.is_empty()
+            {
+                "partial"
+            } else {
+                "ok"
+            },
             "failed_providers": scan.failed_providers,
             "failed_sessions": failed_sessions,
             "error": if success { None } else { Some("no_available_provider") },

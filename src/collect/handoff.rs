@@ -23,7 +23,22 @@ pub fn handoff(
     gaps: &Gaps<'_>,
 ) -> crate::Result<String> {
     let now = Timestamp::now();
-    let context = json!({"generated_at":now.iso_local(), "timezone":now.format_local("%Z"), "since":since.to_string(), "until":until.to_string(), "mode":operation.mode.name(), "working_directory":path_text(&std::env::current_dir()?), "report_path":path_text(&project_path(&path_text(output))?), "shell":if cfg!(windows) {"PowerShell"} else {"POSIX"}, "session_count":positions.len(), "date_basis":"text_span_local_date", "discovery_failed_count":scan.failed_providers.len(), "query_read_failed_count":gaps.query_failures, "date_read_failed_count":gaps.read_failed.len(), "date_read_failed_sessions":gaps.read_failed});
+    let context = json!({
+        "generated_at": now.iso_local(),
+        "timezone": now.format_local("%Z"),
+        "since": since.to_string(),
+        "until": until.to_string(),
+        "mode": operation.mode.name(),
+        "working_directory": path_text(&std::env::current_dir()?),
+        "report_path": path_text(&project_path(&path_text(output))?),
+        "shell": if cfg!(windows) { "PowerShell" } else { "POSIX" },
+        "session_count": positions.len(),
+        "date_basis": "text_span_local_date",
+        "discovery_failed_count": scan.failed_providers.len(),
+        "query_read_failed_count": gaps.query_failures,
+        "date_read_failed_count": gaps.read_failed.len(),
+        "date_read_failed_sessions": gaps.read_failed
+    });
     let mut prompt =
         crate::collect::prompts::handoff_header(operation.mode, since, until);
     prompt += &crate::collect::prompts::envelope(
@@ -50,7 +65,15 @@ pub fn handoff(
             "--json".into(),
         ];
         let command = crate::command::shell_command(&argv);
-        let record = json!({"uri":uri, "created_at":session.created_at.iso_local(), "updated_at":session.updated_at.iso_local(), "title":session.title, "project_directory":session.working_directory(), "read_argv":argv, "read_command":command});
+        let record = json!({
+            "uri": uri,
+            "created_at": session.created_at.iso_local(),
+            "updated_at": session.updated_at.iso_local(),
+            "title": session.title,
+            "project_directory": session.working_directory(),
+            "read_argv": argv,
+            "read_command": command
+        });
         prompt += "\n";
         prompt += &crate::collect::prompts::envelope(
             "collect_session",

@@ -297,7 +297,8 @@ pub fn command(zh: bool) -> clap::Command {
   reindex                 --reindex
   shortcut <NAME> [ARGS]  --shortcut <NAME> [ARGS]
 
-兼容别名：-days、-output、-format、-summary、-since、-until、-config、-page-size、-query、-v；--capabilities 等同于 --providers。"
+兼容别名：-days、-output、-format、-summary、-since、-until、-config、\
+-page-size、-query、-v；--capabilities 等同于 --providers。"
     } else {
         "Commands (equivalent to the listed options, which remain available):
   list                    --list
@@ -314,7 +315,8 @@ pub fn command(zh: bool) -> clap::Command {
   reindex                 --reindex
   shortcut <NAME> [ARGS]  --shortcut <NAME> [ARGS]
 
-Compatibility aliases: -days, -output, -format, -summary, -since, -until, -config, -page-size, -query, -v; --capabilities is an alias for --providers."
+Compatibility aliases: -days, -output, -format, -summary, -since, -until, \
+-config, -page-size, -query, -v; --capabilities is an alias for --providers."
     })
 }
 

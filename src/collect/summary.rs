@@ -173,9 +173,20 @@ pub fn request(
             .into());
         }
         let id = uuid::Uuid::new_v4().to_string();
-        let mut fields = json!({"request_id":id, "provider":config.provider, "model":config.model, "phase":context.phase, "context":context.label,
-            "session_uri":context.uri, "chunk_index":context.chunk, "chunk_total":context.chunks,
-            "parse_attempt":parse_attempt + 1, "parse_attempt_limit":2, "transport_attempt":transport_attempt + 1, "transport_attempt_limit":2});
+        let mut fields = json!({
+            "request_id": id,
+            "provider": config.provider,
+            "model": config.model,
+            "phase": context.phase,
+            "context": context.label,
+            "session_uri": context.uri,
+            "chunk_index": context.chunk,
+            "chunk_total": context.chunks,
+            "parse_attempt": parse_attempt + 1,
+            "parse_attempt_limit": 2,
+            "transport_attempt": transport_attempt + 1,
+            "transport_attempt_limit": 2
+        });
         fields["prompt_chars"] = current.chars().count().into();
         logger.log("llm_request", fields.clone());
         fields.as_object_mut().unwrap().remove("prompt_chars");

@@ -40,7 +40,16 @@ pub fn schema(mode: Mode) -> Value {
             )
         })
         .collect();
-    json!({"name":"collect_summary", "schema":{"type":"object", "properties": properties, "required":fields, "additionalProperties":false}, "strict":true})
+    json!({
+        "name": "collect_summary",
+        "schema": {
+            "type": "object",
+            "properties": properties,
+            "required": fields,
+            "additionalProperties": false
+        },
+        "strict": true
+    })
 }
 
 pub fn request(
@@ -61,9 +70,21 @@ fn respond(
     let system = include_str!("../../resources/prompts/system.txt");
     let openai = config.provider == "openai";
     let mut payload = if openai {
-        json!({"model":config.model, "messages":[{"role":"system", "content":system}, {"role":"user", "content":prompt}], "temperature":0.2})
+        json!({
+            "model": config.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.2
+        })
     } else {
-        json!({"model":config.model, "max_tokens":4096, "system":system, "messages":[{"role":"user", "content":prompt}]})
+        json!({
+            "model": config.model,
+            "max_tokens": 4096,
+            "system": system,
+            "messages": [{"role": "user", "content": prompt}]
+        })
     };
     if config.reasoning == "off" {
         if openai {

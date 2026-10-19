@@ -76,11 +76,30 @@ fn merge_session(
             )
             .into());
         }
-        match collect_summary::request(ai, &prompt, timeout, mode, &Context {
-            label: format!("{uri} session merge"), phase: "session_merge", uri: Some(&uri), chunk: None, chunks: Some(entry.chunks.len()),
-        }, logger) {
+        match collect_summary::request(
+            ai,
+            &prompt,
+            timeout,
+            mode,
+            &Context {
+                label: format!("{uri} session merge"),
+                phase: "session_merge",
+                uri: Some(&uri),
+                chunk: None,
+                chunks: Some(entry.chunks.len()),
+            },
+            logger,
+        ) {
             Ok(summary) => merged = summary,
-            Err(error) => logger.log("llm_merge_fallback", json!({"phase":"session_merge", "session_uri":uri, "chunk_total":entry.chunks.len(), "error":error.to_string()})),
+            Err(error) => logger.log(
+                "llm_merge_fallback",
+                json!({
+                    "phase": "session_merge",
+                    "session_uri": uri,
+                    "chunk_total": entry.chunks.len(),
+                    "error": error.to_string()
+                }),
+            ),
         }
     }
     Ok(merged)
@@ -280,9 +299,36 @@ pub fn run(
                 if batch.len() > 1
                     && collect_summary::needs_compression(&merged)
                 {
-                    match collect_summary::request(ai, &crate::collect::prompts::merge(&source, &payloads, &format!("group-level-{depth}"), mode), config.timeout, mode, &Context { label:source.clone(), phase:"group_merge", uri:None, chunk:None, chunks:None }, logger) {
+                    match collect_summary::request(
+                        ai,
+                        &crate::collect::prompts::merge(
+                            &source,
+                            &payloads,
+                            &format!("group-level-{depth}"),
+                            mode,
+                        ),
+                        config.timeout,
+                        mode,
+                        &Context {
+                            label: source.clone(),
+                            phase: "group_merge",
+                            uri: None,
+                            chunk: None,
+                            chunks: None,
+                        },
+                        logger,
+                    ) {
                         Ok(summary) => merged = summary,
-                        Err(error) => logger.log("llm_merge_fallback", json!({"phase":"group_merge", "context":source,"level":depth,"group_index":index,"error":error.to_string()})),
+                        Err(error) => logger.log(
+                            "llm_merge_fallback",
+                            json!({
+                                "phase": "group_merge",
+                                "context": source,
+                                "level": depth,
+                                "group_index": index,
+                                "error": error.to_string()
+                            }),
+                        ),
                     }
                 }
                 next.push(Group {

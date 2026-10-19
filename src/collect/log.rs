@@ -35,7 +35,11 @@ impl Logger {
         if *failed {
             return;
         }
-        let mut record = json!({"timestamp": Timestamp::now().iso_local(), "event":event, "run_id":self.run_id});
+        let mut record = json!({
+            "timestamp": Timestamp::now().iso_local(),
+            "event": event,
+            "run_id": self.run_id
+        });
         if let Value::Object(payload) = payload {
             record.as_object_mut().unwrap().extend(payload);
         }

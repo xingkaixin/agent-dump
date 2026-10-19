@@ -52,9 +52,12 @@ fn text(mode: Mode, stage: &str) -> &'static str {
 }
 
 pub fn envelope(kind: &str, source: &str, body: &str) -> String {
-    search_value(
-        &json!({"untrusted_data": kind, "source": source, "length": body.chars().count(), "content": body}),
-    )
+    search_value(&json!({
+        "untrusted_data": kind,
+        "source": source,
+        "length": body.chars().count(),
+        "content": body
+    }))
 }
 
 pub fn chunk(

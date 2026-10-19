@@ -13,7 +13,11 @@ pub fn extract(
     plan_chunks: bool,
 ) -> BTreeMap<Date, Vec<Vec<Event>>> {
     static IGNORE: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r"(?i)^(?:hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok|okay)[!！,.，。?？\s]*$").unwrap()
+        regex::Regex::new(concat!(
+            r"(?i)^(?:hi|hello|thanks|thank you|",
+            r"你好|您好|好的|收到|明白|嗯嗯|ok|okay)[!！,.，。?？\s]*$"
+        ))
+        .unwrap()
     });
     let mut dates: BTreeMap<Date, Vec<Vec<Event>>> = BTreeMap::new();
     for message in &data.messages {
