@@ -1,14 +1,19 @@
-use crate::collect::model::{Action, Operation};
-use agent_dump_core::config::Config;
+use crate::collect::log::Logger;
+use crate::collect::model::{Action, Entry, Group, Mode, Operation};
+use agent_dump_core::config::{AiConfig, CollectConfig, Config};
 use agent_dump_core::output::i18n::{t, terminal};
+use agent_dump_core::query::scanner::Scan;
 use jiff::civil::Date;
 use serde_json::json;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write as _;
 use std::io::Write;
+use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 
 use crate::collect::progress::progress;
+
+type Positions = Vec<(usize, usize)>;
 
 fn report(
     message: &str,
@@ -86,40 +91,8 @@ pub fn run(
             return Ok(false);
         }
     };
-    let config = match Config::load().and_then(|config| {
-        config.validate_collect()?;
-        Ok(config)
-    }) {
-        Ok(config) => config,
-        Err(error) => {
-            report(
-                &terminal(
-                    "COLLECT_CONFIG_UNSAFE",
-                    zh,
-                    &[("field", error.to_string())],
-                ),
-                emit,
-                out,
-                warnings,
-            )?;
-            return Ok(false);
-        }
-    };
-    let ai = if matches!(operation.action, Action::Execute) {
-        let ai = config.ai();
-        let errors =
-            agent_dump_core::config::validate_ai(ai.as_ref(), config.exists);
-        if !errors.is_empty() {
-            writeln!(
-                out,
-                "{}",
-                agent_dump_core::config::collect_ai_error(&errors, zh)
-            )?;
-            return Ok(false);
-        }
-        ai
-    } else {
-        None
+    let Some((config, ai)) = load_config(operation, zh, out, warnings)? else {
+        return Ok(false);
     };
     let collect = config.collect();
     progress(
@@ -128,89 +101,19 @@ pub fn run(
         zh,
         warnings,
     )?;
-    let mut scan = agent_dump_core::query::scanner::discover_all(
-        operation.query.as_ref(),
-        zh,
-        warnings,
-    )?;
-    if scan.groups.is_empty()
-        && operation
-            .query
-            .as_ref()
-            .is_none_or(|q| q.providers.is_none())
-    {
-        report(&t("NO_AGENTS_FOUND", zh, &[]), emit, out, warnings)?;
+    let Some(scan) = discover(operation, &collect, zh, out, warnings)? else {
         return Ok(false);
-    }
-    for group in &mut scan.groups {
-        let denied: Vec<_> = collect
-            .denies
-            .get(group.info.name)
-            .into_iter()
-            .flatten()
-            .map(|path| agent_dump_core::query::project_path(path))
-            .collect::<crate::Result<_>>()?;
-        group.sessions.retain(|session| {
-            let path = (!session.directory.trim().is_empty())
-                .then(|| {
-                    agent_dump_core::query::project_path(&session.directory)
-                })
-                .transpose()
-                .ok()
-                .flatten();
-            !path.is_some_and(|path| {
-                denied.iter().any(|root| path.starts_with(root))
-            })
-        });
-    }
-    let selected = operation
-        .query
-        .as_ref()
-        .map(|q| {
-            let mut unbounded = q.clone();
-            // Keep limit ordering, but truncate after text-date eligibility.
-            unbounded.limit = q.limit.map(|_| usize::MAX);
-            agent_dump_core::query::filter::select(
-                &scan.groups,
-                &unbounded,
-                zh,
-                warnings,
-            )
-        })
-        .transpose()?;
-    let mut omissions: Vec<String> = selected
-        .as_ref()
-        .into_iter()
-        .flat_map(|selection| &selection.failures)
-        .map(|(provider, id)| {
-            let group = scan
-                .groups
-                .iter()
-                .find(|group| group.info.name == provider)
-                .unwrap();
-            format!("{}://{id}", group.info.scheme)
-        })
-        .collect();
+    };
+    let (mut positions, mut omissions) =
+        select(operation, &scan, zh, warnings)?;
     let query_failures = omissions.len();
-    let mut positions: Vec<_> = selected.map_or_else(
-        || {
-            scan.groups
-                .iter()
-                .enumerate()
-                .flat_map(|(g, group)| {
-                    (0..group.sessions.len()).map(move |s| (g, s))
-                })
-                .collect()
-        },
-        |s| s.matches.iter().map(|m| (m.group, m.session)).collect(),
-    );
     let output_path = save_path(operation.save.as_deref(), since, until)?;
     let logger = if ai.is_some() {
         let logging = config.logging()?;
         if logging.enabled {
             guard_output(&logging.path)?;
         }
-        Some(crate::collect::log::Logger::new(logging, zh))
+        Some(Logger::new(logging, zh))
     } else {
         None
     };
@@ -260,21 +163,7 @@ pub fn run(
             && query_failures == 0
             && scan.failed_providers.is_empty());
     }
-    let eligible: HashSet<_> = entries
-        .iter()
-        .map(crate::collect::model::Entry::uri)
-        .collect();
-    let uri_at = |&(g, s): &(usize, usize)| {
-        let group = &scan.groups[g];
-        format!("{}://{}", group.info.scheme, group.sessions[s].id)
-    };
-    positions.retain(|position| eligible.contains(&uri_at(position)));
-    if let Some(limit) = operation.query.as_ref().and_then(|query| query.limit)
-    {
-        positions.truncate(limit);
-        let selected: HashSet<_> = positions.iter().map(uri_at).collect();
-        entries.retain(|entry| selected.contains(&entry.uri()));
-    }
+    retain_eligible(operation, &scan, &mut positions, &mut entries);
     if emit {
         writeln!(
             out,
@@ -302,6 +191,266 @@ pub fn run(
     if let Some(logger) = &logger {
         logger.log("collect_run_start", json!({"since":since.to_string(), "until":until.to_string(), "summary_concurrency":collect.concurrency, "agent_count":scan.groups.len(), "session_count":session_count, "session_day_count":entries.len()}));
     }
+    let (chunk_count, breakdown) =
+        plan(&entries, session_count, collect.concurrency, zh, warnings)?;
+    if matches!(operation.action, Action::DryRun) {
+        for line in dry_run(
+            &(since..=until),
+            &breakdown,
+            session_count,
+            chunk_count,
+            collect.concurrency,
+            &output_path,
+            zh,
+        ) {
+            writeln!(out, "{line}")?;
+        }
+        return Ok(true);
+    }
+    let logger = logger.as_ref().unwrap();
+    let ai = ai.as_ref().unwrap();
+    let (groups, depth, summary_failures) = match crate::collect::reduction::run(
+        &entries,
+        ai,
+        &collect,
+        operation.mode,
+        logger,
+        zh,
+        warnings,
+    ) {
+        Ok(result) => result,
+        Err(error) => {
+            return fail(
+                logger,
+                "summarize",
+                "COLLECT_API_FAILED",
+                &error,
+                zh,
+                out,
+            );
+        }
+    };
+    let markdown = match render(
+        &(since..=until),
+        &groups,
+        depth,
+        operation.mode,
+        ai,
+        collect.timeout,
+        zh,
+    ) {
+        Ok(markdown) => markdown,
+        Err(error) => {
+            return fail(
+                logger,
+                "render",
+                "COLLECT_API_FAILED",
+                &error,
+                zh,
+                out,
+            );
+        }
+    };
+    progress(
+        "COLLECT_PROGRESS_RENDER_FINAL",
+        &[("current", "2".into()), ("total", "2".into())],
+        zh,
+        warnings,
+    )?;
+    let failed = read_failed.len() + query_failures;
+    let summary_failed = summary_failures.len();
+    let included = groups
+        .iter()
+        .flat_map(|group| &group.session_uris)
+        .collect::<HashSet<_>>()
+        .len();
+    omissions.extend(read_failed);
+    omissions.extend(summary_failures);
+    let markdown = annotate(
+        markdown,
+        failed,
+        summary_failed,
+        included,
+        scan.failed_providers.len(),
+        omissions,
+        zh,
+    )?;
+    save(
+        &markdown,
+        &output_path,
+        logger,
+        json!({"output_path":agent_dump_core::storage::source_io::path_text(&output_path), "session_count":included, "read_failed_count":failed, "discovery_failed_count":scan.failed_providers.len(), "summary_failed_count":summary_failed}),
+        zh,
+        out,
+        warnings,
+    )
+}
+
+fn load_config(
+    operation: &Operation,
+    zh: bool,
+    out: &mut impl Write,
+    warnings: &mut impl Write,
+) -> crate::Result<Option<(Config, Option<AiConfig>)>> {
+    let emit = matches!(operation.action, Action::EmitPrompt);
+    let config = match Config::load().and_then(|config| {
+        config.validate_collect()?;
+        Ok(config)
+    }) {
+        Ok(config) => config,
+        Err(error) => {
+            report(
+                &terminal(
+                    "COLLECT_CONFIG_UNSAFE",
+                    zh,
+                    &[("field", error.to_string())],
+                ),
+                emit,
+                out,
+                warnings,
+            )?;
+            return Ok(None);
+        }
+    };
+    if !matches!(operation.action, Action::Execute) {
+        return Ok(Some((config, None)));
+    }
+    let ai = config.ai();
+    let errors =
+        agent_dump_core::config::validate_ai(ai.as_ref(), config.exists);
+    if !errors.is_empty() {
+        writeln!(
+            out,
+            "{}",
+            agent_dump_core::config::collect_ai_error(&errors, zh)
+        )?;
+        return Ok(None);
+    }
+    Ok(Some((config, ai)))
+}
+
+fn discover(
+    operation: &Operation,
+    collect: &CollectConfig,
+    zh: bool,
+    out: &mut impl Write,
+    warnings: &mut impl Write,
+) -> crate::Result<Option<Scan>> {
+    let mut scan = agent_dump_core::query::scanner::discover_all(
+        operation.query.as_ref(),
+        zh,
+        warnings,
+    )?;
+    if scan.groups.is_empty()
+        && operation
+            .query
+            .as_ref()
+            .is_none_or(|q| q.providers.is_none())
+    {
+        let emit = matches!(operation.action, Action::EmitPrompt);
+        report(&t("NO_AGENTS_FOUND", zh, &[]), emit, out, warnings)?;
+        return Ok(None);
+    }
+    for group in &mut scan.groups {
+        let denied: Vec<_> = collect
+            .denies
+            .get(group.info.name)
+            .into_iter()
+            .flatten()
+            .map(|path| agent_dump_core::query::project_path(path))
+            .collect::<crate::Result<_>>()?;
+        group.sessions.retain(|session| {
+            let path = (!session.directory.trim().is_empty())
+                .then(|| {
+                    agent_dump_core::query::project_path(&session.directory)
+                })
+                .transpose()
+                .ok()
+                .flatten();
+            !path.is_some_and(|path| {
+                denied.iter().any(|root| path.starts_with(root))
+            })
+        });
+    }
+    Ok(Some(scan))
+}
+
+fn select(
+    operation: &Operation,
+    scan: &Scan,
+    zh: bool,
+    warnings: &mut impl Write,
+) -> crate::Result<(Positions, Vec<String>)> {
+    let selected = operation
+        .query
+        .as_ref()
+        .map(|q| {
+            let mut unbounded = q.clone();
+            // Keep limit ordering, but truncate after text-date eligibility.
+            unbounded.limit = q.limit.map(|_| usize::MAX);
+            agent_dump_core::query::filter::select(
+                &scan.groups,
+                &unbounded,
+                zh,
+                warnings,
+            )
+        })
+        .transpose()?;
+    let omissions = selected
+        .as_ref()
+        .into_iter()
+        .flat_map(|selection| &selection.failures)
+        .map(|(provider, id)| {
+            let group = scan
+                .groups
+                .iter()
+                .find(|group| group.info.name == provider)
+                .unwrap();
+            format!("{}://{id}", group.info.scheme)
+        })
+        .collect();
+    let positions = selected.map_or_else(
+        || {
+            scan.groups
+                .iter()
+                .enumerate()
+                .flat_map(|(g, group)| {
+                    (0..group.sessions.len()).map(move |s| (g, s))
+                })
+                .collect()
+        },
+        |s| s.matches.iter().map(|m| (m.group, m.session)).collect(),
+    );
+    Ok((positions, omissions))
+}
+
+fn retain_eligible(
+    operation: &Operation,
+    scan: &Scan,
+    positions: &mut Vec<(usize, usize)>,
+    entries: &mut Vec<Entry>,
+) {
+    let eligible: HashSet<_> = entries.iter().map(Entry::uri).collect();
+    let uri_at = |&(g, s): &(usize, usize)| {
+        let group = &scan.groups[g];
+        format!("{}://{}", group.info.scheme, group.sessions[s].id)
+    };
+    positions.retain(|position| eligible.contains(&uri_at(position)));
+    if let Some(limit) = operation.query.as_ref().and_then(|query| query.limit)
+    {
+        positions.truncate(limit);
+        let selected: HashSet<_> = positions.iter().map(uri_at).collect();
+        entries.retain(|entry| selected.contains(&entry.uri()));
+    }
+}
+
+fn plan(
+    entries: &[Entry],
+    session_count: usize,
+    concurrency: usize,
+    zh: bool,
+    warnings: &mut impl Write,
+) -> crate::Result<(usize, serde_json::Map<String, serde_json::Value>)> {
     let mut count = 0;
     progress(
         "COLLECT_PROGRESS_PLAN_CHUNKS",
@@ -343,7 +492,7 @@ pub fn run(
     let values = [
         ("session_count", session_count.to_string()),
         ("chunk_count", count.to_string()),
-        ("concurrency", collect.concurrency.to_string()),
+        ("concurrency", concurrency.to_string()),
     ];
     let breakdown_text = breakdown
         .iter()
@@ -363,132 +512,42 @@ pub fn run(
             )
         ))
     )?;
-    if matches!(operation.action, Action::DryRun) {
-        let sorted: BTreeMap<_, _> = breakdown.iter().collect();
-        let breakdown = sorted
-            .iter()
-            .map(|(name, count)| format!("{name} {count}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        for (key, values) in [
-            ("COLLECT_DRY_RUN_HEADER", vec![]),
-            (
-                "COLLECT_DRY_RUN_DATE_RANGE",
-                vec![
-                    ("since", since.to_string()),
-                    ("until", until.to_string()),
-                ],
-            ),
-            (
-                "COLLECT_DRY_RUN_PROVIDER_BREAKDOWN",
-                vec![("breakdown", breakdown)],
-            ),
-            (
-                "COLLECT_DRY_RUN_SESSION_COUNT",
-                vec![("count", session_count.to_string())],
-            ),
-            (
-                "COLLECT_DRY_RUN_CHUNK_COUNT",
-                vec![("count", count.to_string())],
-            ),
-            (
-                "COLLECT_DRY_RUN_CONCURRENCY",
-                vec![("concurrency", collect.concurrency.to_string())],
-            ),
-            (
-                "COLLECT_DRY_RUN_SAVE_PATH",
-                vec![(
-                    "path",
-                    agent_dump_core::storage::source_io::path_text(
-                        &output_path,
-                    ),
-                )],
-            ),
-        ] {
-            writeln!(out, "{}", terminal(key, zh, &values))?;
-        }
-        return Ok(true);
-    }
-    let logger = logger.as_ref().unwrap();
-    let ai = ai.as_ref().unwrap();
-    let (groups, depth, summary_failures) = match crate::collect::reduction::run(
-        &entries,
-        ai,
-        &collect,
-        operation.mode,
-        logger,
-        zh,
-        warnings,
-    ) {
-        Ok(result) => result,
-        Err(error) => {
-            logger.log(
-                "collect_run_fail",
-                json!({"phase":"summarize", "error":error.to_string()}),
-            );
-            writeln!(
-                out,
-                "{}",
-                terminal(
-                    "COLLECT_API_FAILED",
-                    zh,
-                    &[("error", error.to_string())]
-                )
-            )?;
-            return Ok(false);
-        }
-    };
-    let rendered = crate::collect::prompts::final_prompts(
-        since,
-        until,
-        &groups,
+    Ok((count, breakdown))
+}
+
+fn render(
+    period: &RangeInclusive<Date>,
+    groups: &[Group],
+    depth: usize,
+    mode: Mode,
+    ai: &AiConfig,
+    timeout: u64,
+    zh: bool,
+) -> crate::Result<String> {
+    let prompts = crate::collect::prompts::final_prompts(
+        *period.start(),
+        *period.end(),
+        groups,
         depth,
-        operation.mode,
+        mode,
         zh,
-    )
-    .and_then(|prompts| {
-        prompts
-            .iter()
-            .map(|prompt| {
-                crate::collect::llm::summary(ai, prompt, collect.timeout, zh)
-            })
-            .collect::<crate::Result<Vec<_>>>()
-            .map(|parts| parts.join("\n\n"))
-    });
-    let mut markdown = match rendered {
-        Ok(markdown) => markdown,
-        Err(error) => {
-            logger.log(
-                "collect_run_fail",
-                json!({"phase":"render", "error":error.to_string()}),
-            );
-            writeln!(
-                out,
-                "{}",
-                terminal(
-                    "COLLECT_API_FAILED",
-                    zh,
-                    &[("error", error.to_string())]
-                )
-            )?;
-            return Ok(false);
-        }
-    };
-    progress(
-        "COLLECT_PROGRESS_RENDER_FINAL",
-        &[("current", "2".into()), ("total", "2".into())],
-        zh,
-        warnings,
     )?;
-    let failed = read_failed.len() + query_failures;
-    let summary_failed = summary_failures.len();
-    let included = groups
+    let parts = prompts
         .iter()
-        .flat_map(|group| &group.session_uris)
-        .collect::<HashSet<_>>()
-        .len();
-    omissions.extend(read_failed);
-    omissions.extend(summary_failures);
+        .map(|prompt| crate::collect::llm::summary(ai, prompt, timeout, zh))
+        .collect::<crate::Result<Vec<_>>>()?;
+    Ok(parts.join("\n\n"))
+}
+
+fn annotate(
+    mut markdown: String,
+    failed: usize,
+    summary_failed: usize,
+    included: usize,
+    discovery_failed: usize,
+    mut omissions: Vec<String>,
+    zh: bool,
+) -> crate::Result<String> {
     if failed + summary_failed > 0 {
         markdown = format!(
             "> {}\n\n{markdown}",
@@ -503,13 +562,13 @@ pub fn run(
             )
         );
     }
-    if !scan.failed_providers.is_empty() {
+    if discovery_failed > 0 {
         markdown = format!(
             "> {}\n\n{markdown}",
             t(
                 "COLLECT_DISCOVERY_INCOMPLETE_REPORT",
                 zh,
-                &[("count", scan.failed_providers.len().to_string())]
+                &[("count", discovery_failed.to_string())]
             )
         );
     }
@@ -525,33 +584,85 @@ pub fn run(
             )?;
         }
     }
+    Ok(markdown)
+}
+
+fn dry_run(
+    period: &RangeInclusive<Date>,
+    breakdown: &serde_json::Map<String, serde_json::Value>,
+    session_count: usize,
+    chunk_count: usize,
+    concurrency: usize,
+    output_path: &Path,
+    zh: bool,
+) -> Vec<String> {
+    let sorted: BTreeMap<_, _> = breakdown.iter().collect();
+    let breakdown = sorted
+        .iter()
+        .map(|(name, count)| format!("{name} {count}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    [
+        ("COLLECT_DRY_RUN_HEADER", vec![]),
+        (
+            "COLLECT_DRY_RUN_DATE_RANGE",
+            vec![
+                ("since", period.start().to_string()),
+                ("until", period.end().to_string()),
+            ],
+        ),
+        (
+            "COLLECT_DRY_RUN_PROVIDER_BREAKDOWN",
+            vec![("breakdown", breakdown)],
+        ),
+        (
+            "COLLECT_DRY_RUN_SESSION_COUNT",
+            vec![("count", session_count.to_string())],
+        ),
+        (
+            "COLLECT_DRY_RUN_CHUNK_COUNT",
+            vec![("count", chunk_count.to_string())],
+        ),
+        (
+            "COLLECT_DRY_RUN_CONCURRENCY",
+            vec![("concurrency", concurrency.to_string())],
+        ),
+        (
+            "COLLECT_DRY_RUN_SAVE_PATH",
+            vec![(
+                "path",
+                agent_dump_core::storage::source_io::path_text(output_path),
+            )],
+        ),
+    ]
+    .into_iter()
+    .map(|(key, values)| terminal(key, zh, &values))
+    .collect()
+}
+
+fn save(
+    markdown: &str,
+    output_path: &Path,
+    logger: &Logger,
+    finish: serde_json::Value,
+    zh: bool,
+    out: &mut impl Write,
+    warnings: &mut impl Write,
+) -> crate::Result<bool> {
     progress(
         "COLLECT_PROGRESS_WRITE_OUTPUT",
         &[("current", "0".into()), ("total", "1".into())],
         zh,
         warnings,
     )?;
-    let write = guard_output(&output_path).and_then(|()| {
+    let write = guard_output(output_path).and_then(|()| {
         agent_dump_core::storage::private_files::write_text(
-            &output_path,
-            &markdown,
+            output_path,
+            markdown,
         )
     });
     if let Err(error) = write {
-        logger.log(
-            "collect_run_fail",
-            json!({"phase":"write", "error":error.to_string()}),
-        );
-        writeln!(
-            out,
-            "{}",
-            terminal(
-                "COLLECT_WRITE_FAILED",
-                zh,
-                &[("error", error.to_string())]
-            )
-        )?;
-        return Ok(false);
+        return fail(logger, "write", "COLLECT_WRITE_FAILED", &error, zh, out);
     }
     progress(
         "COLLECT_PROGRESS_WRITE_OUTPUT",
@@ -559,11 +670,11 @@ pub fn run(
         zh,
         warnings,
     )?;
-    logger.log("collect_run_finish", json!({"output_path":agent_dump_core::storage::source_io::path_text(&output_path), "session_count":included, "read_failed_count":failed, "discovery_failed_count":scan.failed_providers.len(), "summary_failed_count":summary_failed}));
+    logger.log("collect_run_finish", finish);
     writeln!(
         out,
         "{}",
-        agent_dump_core::output::render::safe_body(&markdown)
+        agent_dump_core::output::render::safe_body(markdown)
     )?;
     writeln!(
         out,
@@ -573,9 +684,29 @@ pub fn run(
             zh,
             &[(
                 "path",
-                agent_dump_core::storage::source_io::path_text(&output_path)
+                agent_dump_core::storage::source_io::path_text(output_path)
             )]
         )
     )?;
     Ok(true)
+}
+
+fn fail(
+    logger: &Logger,
+    phase: &str,
+    key: &str,
+    error: &crate::Error,
+    zh: bool,
+    out: &mut impl Write,
+) -> crate::Result<bool> {
+    logger.log(
+        "collect_run_fail",
+        json!({"phase":phase, "error":error.to_string()}),
+    );
+    writeln!(
+        out,
+        "{}",
+        terminal(key, zh, &[("error", error.to_string())])
+    )?;
+    Ok(false)
 }
