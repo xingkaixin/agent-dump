@@ -70,6 +70,8 @@ CLI 验证输出最慢 30 项测试及 `dist/ci/contracts.xml`，CI 将报告上
 
 Python 数值兼容、统一 Provider 工厂、平台差异和并发锁等例外仅放在对应函数上，每处注明 `reason`。新例外需要具体原因；能够消除的多余复制、未检查转换和不必要所有权应直接修正。
 
+模块文件统一使用 `mod.rs` 风格，由 Clippy `self_named_module_files` 强制。单元测试默认写在 inline `mod tests` 中；大型测试套件放在 `mod.rs` 模块下的 `tests.rs`。
+
 ## 3. 交互式 CLI
 
 selector 只展示工作流传入的会话与计数，不发现来源或读取正文。Ratatui/Crossterm 处理终端；stdin 管道保留行输入。RAII 恢复终端模式；真实 PTY 验证位于 `tests/cli/test_tui.py`，Windows 用 TestBackend 验证绘制。
