@@ -103,7 +103,55 @@ fn mode(args: &Args) -> Mode {
 }
 
 pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
-    let zh = args.lang.as_deref().map_or_else(
+    let zh = chinese(args.lang.as_deref());
+    let mut plan_stderr = io::stderr();
+    let plan_out: &mut dyn Write =
+        if args.emit_prompt || args.json || args.read || args.read_prompt {
+            &mut plan_stderr
+        } else {
+            out
+        };
+    let mode = mode(&args);
+    if let Some(key) = stderr_error(&args, mode) {
+        eprintln!("{}", i18n::t(key, zh, &[]));
+        return Ok(false);
+    }
+    if let Some(key) = plan_error(&args, mode) {
+        writeln!(plan_out, "{}", i18n::t(key, zh, &[]))?;
+        return Ok(false);
+    }
+    warn_ignored(&args, mode, zh, plan_out)?;
+    if mode == Mode::Providers {
+        return maintenance::providers(args.json, zh, out);
+    }
+    if let Some(action) = &args.config {
+        return config_command::run(action, zh, out, &mut io::stdin().lock());
+    }
+    validate_days(args.days, mode, zh)?;
+    let query = match resolve_query(&args, mode, zh) {
+        Ok(query) => query,
+        Err(diagnostic) => {
+            write!(plan_out, "{diagnostic}")?;
+            return Ok(false);
+        }
+    };
+    if mode == Mode::Uri && args.head && args.format.is_some() {
+        writeln!(
+            plan_out,
+            "{}",
+            if zh {
+                "❌ --head 不能与 -format/--format 同时使用。"
+            } else {
+                "❌ --head cannot be used with -format/--format."
+            }
+        )?;
+        return Ok(false);
+    }
+    dispatch(args, mode, query, zh, out)
+}
+
+fn chinese(lang: Option<&str>) -> bool {
+    lang.map_or_else(
         || {
             ["LC_ALL", "LC_MESSAGES", "LANG"]
                 .iter()
@@ -113,24 +161,17 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
                 .is_some_and(|v| v.starts_with("zh"))
         },
         |lang| lang == "zh",
-    );
-    let mut plan_stderr = io::stderr();
-    let plan_out: &mut dyn Write =
-        if args.emit_prompt || args.json || args.read || args.read_prompt {
-            &mut plan_stderr
-        } else {
-            out
-        };
-    let mode = mode(&args);
+    )
+}
+
+fn stderr_error(args: &Args, mode: Mode) -> Option<&'static str> {
     if args.time_field.is_some()
         && !matches!(mode, Mode::List | Mode::Interactive | Mode::Browse)
     {
-        eprintln!("{}", i18n::t("TIME_FIELD_MODE_ERROR", zh, &[]));
-        return Ok(false);
-    }
-    if (args.read || args.read_prompt)
+        Some("TIME_FIELD_MODE_ERROR")
+    } else if (args.read || args.read_prompt)
         && (mode != Mode::Uri
-            || candidates(&args)
+            || candidates(args)
                 .iter()
                 .any(|(candidate, _)| *candidate != Mode::Uri)
             || args.head
@@ -146,10 +187,8 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             || args.save.is_some()
             || (args.read_prompt && args.json))
     {
-        eprintln!("{}", i18n::t("READ_MODE_ERROR", zh, &[]));
-        return Ok(false);
-    }
-    if args.cursor.is_some()
+        Some("READ_MODE_ERROR")
+    } else if args.cursor.is_some()
         && (args.limit.is_some()
             || args.max_chars.is_some()
             || args.order.is_some()
@@ -157,18 +196,14 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             || args.read_match.is_some()
             || args.details)
     {
-        eprintln!("{}", i18n::t("READ_CURSOR_OPTIONS_ERROR", zh, &[]));
-        return Ok(false);
-    }
-    if args.json
+        Some("READ_CURSOR_OPTIONS_ERROR")
+    } else if args.json
         && !matches!(mode, Mode::List | Mode::Stats | Mode::Providers)
         && !(mode == Mode::Uri
             && (args.message.is_some() || args.read || args.head))
     {
-        eprintln!("{}", i18n::t("JSON_MODE_ERROR", zh, &[]));
-        return Ok(false);
-    }
-    if (args.locate
+        Some("JSON_MODE_ERROR")
+    } else if (args.locate
         && (mode != Mode::List
             || args.search.as_deref().is_none_or(str::is_empty)))
         || (args.message.is_some()
@@ -179,14 +214,18 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
                     && (args.format.is_some() || args.output.is_some()))
                 || (args.output.is_some() && args.format.is_none())))
     {
-        eprintln!("{}", i18n::t("MESSAGE_MODE_ERROR", zh, &[]));
-        return Ok(false);
+        Some("MESSAGE_MODE_ERROR")
+    } else {
+        None
     }
-    let query_uri_requested = args
+}
+
+fn plan_error(args: &Args, mode: Mode) -> Option<&'static str> {
+    let query_uri = args
         .uri
         .as_deref()
         .is_some_and(|s| s.starts_with("agents://"));
-    let error_key = if args.emit_prompt && mode != Mode::Collect {
+    if args.emit_prompt && mode != Mode::Collect {
         Some("EMIT_PROMPT_REQUIRES_COLLECT")
     } else if args.emit_prompt && args.dry_run {
         Some("COLLECT_ACTION_CONFLICT")
@@ -194,7 +233,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         && (args.list
             || args.interactive
             || args.browse
-            || (args.uri.is_some() && !query_uri_requested))
+            || (args.uri.is_some() && !query_uri))
     {
         Some("COLLECT_MODE_CONFLICT")
     } else if mode == Mode::Uri
@@ -205,26 +244,26 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         Some("URI_HEAD_WITH_SUMMARY_ERROR")
     } else {
         None
-    };
-    if let Some(key) = error_key {
-        if args.emit_prompt || args.json {
-            eprintln!("{}", i18n::t(key, zh, &[]));
-        } else {
-            writeln!(plan_out, "{}", i18n::t(key, zh, &[]))?;
-        }
-        return Ok(false);
     }
+}
+
+fn warn_ignored(
+    args: &Args,
+    mode: Mode,
+    zh: bool,
+    out: &mut dyn Write,
+) -> Result<()> {
     if mode != Mode::Uri && mode != Mode::Providers {
         for (present, key) in [
             (args.summary, "SUMMARY_IGNORED_NON_URI_WARNING"),
             (args.head, "HEAD_IGNORED_NON_URI_WARNING"),
         ] {
             if present {
-                writeln!(plan_out, "{}", i18n::t(key, zh, &[]))?;
+                writeln!(out, "{}", i18n::t(key, zh, &[]))?;
             }
         }
     }
-    let ignored: Vec<_> = candidates(&args)
+    let ignored: Vec<_> = candidates(args)
         .into_iter()
         .filter(|(candidate, _)| *candidate != mode)
         .map(|(_, label)| label)
@@ -232,7 +271,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         .collect();
     if !ignored.is_empty() {
         writeln!(
-            plan_out,
+            out,
             "{}",
             i18n::terminal(
                 "CLI_MODE_OPTIONS_IGNORED_WARNING",
@@ -241,12 +280,10 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             )
         )?;
     }
-    if mode == Mode::Providers {
-        return maintenance::providers(args.json, zh, out);
-    }
-    if let Some(action) = &args.config {
-        return config_command::run(action, zh, out, &mut io::stdin().lock());
-    }
+    Ok(())
+}
+
+fn validate_days(days: Option<i64>, mode: Mode, zh: bool) -> Result<()> {
     if matches!(
         mode,
         Mode::Collect
@@ -255,7 +292,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             | Mode::List
             | Mode::Interactive
             | Mode::Browse
-    ) && let Some(days) = args.days
+    ) && let Some(days) = days
     {
         let maximum = i64::from(
             jiff::Zoned::now()
@@ -271,6 +308,14 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             .into());
         }
     }
+    Ok(())
+}
+
+fn resolve_query(
+    args: &Args,
+    mode: Mode,
+    zh: bool,
+) -> std::result::Result<Option<query::Query>, String> {
     let query_uri = args.uri.as_deref().filter(|uri| {
         uri.starts_with("agents://")
             && matches!(
@@ -279,18 +324,13 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             )
     });
     if query_uri.is_some() && args.query.is_some() {
-        write!(
-            plan_out,
-            "{}",
-            diagnostics::Diagnostic::query_error(
-                &i18n::t("DIAG_QUERY_URI_WITH_Q_DETAIL", zh, &[]),
-                query_uri,
-                true,
-                zh
-            )
-            .render(zh)
-        )?;
-        return Ok(false);
+        return Err(diagnostics::Diagnostic::query_error(
+            &i18n::t("DIAG_QUERY_URI_WITH_Q_DETAIL", zh, &[]),
+            query_uri,
+            true,
+            zh,
+        )
+        .render(zh));
     }
     let query = if let Some(uri) = query_uri {
         query::Query::from_uri(uri, zh).map(Some)
@@ -304,29 +344,40 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             .map(|raw| query::Query::parse(raw, zh))
             .transpose()
     };
-    let mut query = match query {
-        Ok(query) => query,
-        Err(error) => {
-            write!(
-                plan_out,
-                "{}",
-                diagnostics::Diagnostic::query_error(
-                    &error.to_string(),
-                    query_uri,
-                    false,
-                    zh
-                )
-                .render(zh)
-            )?;
-            return Ok(false);
-        }
-    };
+    let mut query = query.map_err(|error| {
+        diagnostics::Diagnostic::query_error(
+            &error.to_string(),
+            query_uri,
+            false,
+            zh,
+        )
+        .render(zh)
+    })?;
     if args.time_field.as_deref() == Some("created") {
         query.get_or_insert_with(query::Query::default).time_field =
             query::TimeField::Created;
     }
-    if mode == Mode::Collect {
-        return collect_workflow::run(
+    if let Some(search) = args
+        .search
+        .as_ref()
+        .filter(|s| !s.is_empty() && matches!(mode, Mode::List | Mode::Browse))
+    {
+        let query = query.get_or_insert_with(query::Query::default);
+        query.keyword = Some(search.clone());
+        query.mode = query_text::Mode::Terms;
+    }
+    Ok(query)
+}
+
+fn dispatch(
+    args: Args,
+    mode: Mode,
+    query: Option<query::Query>,
+    zh: bool,
+    out: &mut impl Write,
+) -> Result<bool> {
+    match mode {
+        Mode::Collect => collect_workflow::run(
             &collect_model::Operation {
                 days: args.days,
                 since: args.since,
@@ -345,10 +396,8 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             zh,
             out,
             &mut io::stderr(),
-        );
-    }
-    if matches!(mode, Mode::Stats | Mode::Reindex) {
-        return maintenance::run(
+        ),
+        Mode::Stats | Mode::Reindex => maintenance::run(
             query.as_ref(),
             args.days.unwrap_or(7),
             mode == Mode::Reindex,
@@ -356,113 +405,94 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             zh,
             out,
             &mut io::stderr(),
-        );
-    }
-    if let Some(search) = args
-        .search
-        .as_ref()
-        .filter(|s| !s.is_empty() && matches!(mode, Mode::List | Mode::Browse))
-    {
-        let query = query.get_or_insert_with(query::Query::default);
-        query.keyword = Some(search.clone());
-        query.mode = query_text::Mode::Terms;
-    }
-    if mode == Mode::List {
-        if let Some(spec) = &args.format {
-            output_formats::parse(spec).map_err(|_| {
-                clap::Error::raw(
-                    clap::error::ErrorKind::ValueValidation,
-                    i18n::t(
-                        "CLI_FORMAT_INVALID",
-                        zh,
-                        &[("value", spec.clone())],
-                    ),
-                )
-            })?;
+        ),
+        Mode::List => list(&args, query.as_ref(), zh, out),
+        Mode::Interactive | Mode::Browse => {
+            interactive(args, mode, query, zh, out)
         }
-        return list_workflow::run(
-            query.as_ref(),
-            args.days.unwrap_or(7),
-            &list_workflow::Options {
-                summary: !args.no_metadata_summary,
-                ignored: (args.format.is_some(), args.output.is_some()),
-                json: args.json,
-                locate: args.locate,
-            },
-            zh,
-            out,
-            &mut io::stderr(),
-        );
-    }
-    if mode == Mode::Browse
-        || (mode == Mode::Interactive && crate::terminal::tui::available())
-    {
-        let formats =
-            output_formats::parse(args.format.as_deref().unwrap_or("json"))?;
-        if formats.contains(&output_formats::OutputFormat::Print) {
-            writeln!(
-                out,
-                "{}",
-                diagnostics::Diagnostic::interactive_print(zh).render(zh)
-            )?;
-            return Ok(false);
+        Mode::Help => {
+            crate::cli_args::command(zh).print_help()?;
+            writeln!(out)?;
+            Ok(true)
         }
-        return crate::workflows::reader::run(
-            &crate::workflows::interactive::Operation {
-                query,
-                days: args.days.unwrap_or(7),
-                formats,
-                output: args.output,
-                metadata: !args.no_metadata_summary,
-            },
-            zh,
-            out,
-            &mut io::stderr(),
-        );
-    }
-    if mode == Mode::Interactive {
-        let formats =
-            output_formats::parse(args.format.as_deref().unwrap_or("json"))?;
-        if formats.contains(&output_formats::OutputFormat::Print) {
-            write!(
-                out,
-                "{}",
-                diagnostics::Diagnostic::interactive_print(zh).render(zh)
-            )?;
-            return Ok(false);
+        Mode::Uri => uri(args, zh, out),
+        Mode::Providers | Mode::Config => {
+            unreachable!("dispatched before query normalization")
         }
-        return crate::workflows::interactive::run(
-            &crate::workflows::interactive::Operation {
-                query,
-                days: args.days.unwrap_or(7),
-                formats,
-                output: args.output,
-                metadata: !args.no_metadata_summary,
-            },
+    }
+}
+
+fn list(
+    args: &Args,
+    query: Option<&query::Query>,
+    zh: bool,
+    out: &mut impl Write,
+) -> Result<bool> {
+    if let Some(spec) = &args.format {
+        output_formats::parse(spec).map_err(|_| {
+            clap::Error::raw(
+                clap::error::ErrorKind::ValueValidation,
+                i18n::t("CLI_FORMAT_INVALID", zh, &[("value", spec.clone())]),
+            )
+        })?;
+    }
+    list_workflow::run(
+        query,
+        args.days.unwrap_or(7),
+        &list_workflow::Options {
+            summary: !args.no_metadata_summary,
+            ignored: (args.format.is_some(), args.output.is_some()),
+            json: args.json,
+            locate: args.locate,
+        },
+        zh,
+        out,
+        &mut io::stderr(),
+    )
+}
+
+fn interactive(
+    args: Args,
+    mode: Mode,
+    query: Option<query::Query>,
+    zh: bool,
+    out: &mut impl Write,
+) -> Result<bool> {
+    let browse = mode == Mode::Browse || crate::terminal::tui::available();
+    let formats =
+        output_formats::parse(args.format.as_deref().unwrap_or("json"))?;
+    if formats.contains(&output_formats::OutputFormat::Print) {
+        let diagnostic =
+            diagnostics::Diagnostic::interactive_print(zh).render(zh);
+        if browse {
+            writeln!(out, "{diagnostic}")?;
+        } else {
+            write!(out, "{diagnostic}")?;
+        }
+        return Ok(false);
+    }
+    let operation = crate::workflows::interactive::Operation {
+        query,
+        days: args.days.unwrap_or(7),
+        formats,
+        output: args.output,
+        metadata: !args.no_metadata_summary,
+    };
+    if browse {
+        crate::workflows::reader::run(&operation, zh, out, &mut io::stderr())
+    } else {
+        crate::workflows::interactive::run(
+            &operation,
             zh,
             out,
             &mut io::stderr(),
             &mut io::stdin().lock(),
-        );
+        )
     }
-    if mode == Mode::Help {
-        crate::cli_args::command(zh).print_help()?;
-        writeln!(out)?;
-        return Ok(true);
-    }
-    let uri = args.uri.ok_or("Provide a session URI or --list")?;
-    if args.head && args.format.is_some() {
-        writeln!(
-            plan_out,
-            "{}",
-            if zh {
-                "❌ --head 不能与 -format/--format 同时使用。"
-            } else {
-                "❌ --head cannot be used with -format/--format."
-            }
-        )?;
-        return Ok(false);
-    }
+}
+
+fn uri(mut args: Args, zh: bool, out: &mut impl Write) -> Result<bool> {
+    let uri = args.uri.take().ok_or("Provide a session URI or --list")?;
     let formats = if args.head || args.read || args.read_prompt {
         Vec::new()
     } else {
@@ -492,6 +522,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         eprintln!("{}", i18n::t("MESSAGE_EXPORT_FORMAT_ERROR", zh, &[]));
         return Ok(false);
     }
+    let read = read_operation(&mut args);
     uri_workflow::run(
         &uri_workflow::UriOperation {
             uri,
@@ -501,38 +532,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             before: args.before.unwrap_or(3) as usize,
             after: args.after.unwrap_or(3) as usize,
             json: args.json,
-            read: if args.read_prompt {
-                Some(uri_workflow::ReadOperation::Prompt)
-            } else {
-                args.read.then(|| {
-                    use agent_dump_core::query::read::{
-                        Options, Order, Request,
-                    };
-                    uri_workflow::ReadOperation::Page(
-                        if let Some(cursor) = args.cursor {
-                            Request::Continue(cursor)
-                        } else {
-                            let defaults = Options::default();
-                            Request::Start(Options {
-                                limit: args.limit.unwrap_or(defaults.limit),
-                                max_chars: args
-                                    .max_chars
-                                    .unwrap_or(defaults.max_chars),
-                                order: if args.order.as_deref() == Some("asc") {
-                                    Order::Asc
-                                } else {
-                                    Order::Desc
-                                },
-                                role: args
-                                    .role
-                                    .map(|s| s.trim().to_lowercase()),
-                                keyword: args.read_match,
-                                details: args.details,
-                            })
-                        },
-                    )
-                })
-            },
+            read,
             formats,
             output: args.output,
         },
@@ -540,4 +540,32 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         out,
         &mut io::stderr(),
     )
+}
+
+fn read_operation(args: &mut Args) -> Option<uri_workflow::ReadOperation> {
+    use agent_dump_core::query::read::{Options, Order, Request};
+    if args.read_prompt {
+        return Some(uri_workflow::ReadOperation::Prompt);
+    }
+    if !args.read {
+        return None;
+    }
+    let request = if let Some(cursor) = args.cursor.take() {
+        Request::Continue(cursor)
+    } else {
+        let defaults = Options::default();
+        Request::Start(Options {
+            limit: args.limit.unwrap_or(defaults.limit),
+            max_chars: args.max_chars.unwrap_or(defaults.max_chars),
+            order: if args.order.as_deref() == Some("asc") {
+                Order::Asc
+            } else {
+                Order::Desc
+            },
+            role: args.role.take().map(|s| s.trim().to_lowercase()),
+            keyword: args.read_match.take(),
+            details: args.details,
+        })
+    };
+    Some(uri_workflow::ReadOperation::Page(request))
 }
