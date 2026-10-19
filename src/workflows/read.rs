@@ -1,5 +1,6 @@
 use agent_dump_core::output::{i18n::t, render};
 use agent_dump_core::query::read::Page;
+use agent_dump_core::storage::source_io::path_text;
 use serde_json::json;
 use std::io::Write;
 
@@ -7,9 +8,7 @@ pub fn prompt(uri: &str, zh: bool) -> crate::Result<String> {
     if uri.len() > 4096 {
         return Err(t("READ_OPTIONS_INVALID", zh, &[]).into());
     }
-    let executable = agent_dump_core::storage::source_io::path_text(
-        &std::env::current_exe()?,
-    );
+    let executable = path_text(&std::env::current_exe()?);
     let command = |args: &[&str]| {
         let argv: Vec<_> = [executable.clone(), uri.into()]
             .into_iter()

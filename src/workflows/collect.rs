@@ -1,6 +1,8 @@
 use crate::collect::log::Logger;
 use crate::collect::model::{Action, Entry, Group, Mode, Operation};
-use agent_dump_core::config::{AiConfig, CollectConfig, Config};
+use agent_dump_core::config::{
+    AiConfig, CollectConfig, Config, collect_ai_error, validate_ai,
+};
 use agent_dump_core::output::i18n::{t, terminal};
 use agent_dump_core::query::scanner::Scan;
 use jiff::civil::Date;
@@ -12,6 +14,11 @@ use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 
 use crate::collect::progress::progress;
+use agent_dump_core::output::render;
+use agent_dump_core::providers::registry;
+use agent_dump_core::query::{filter, project_path, scanner};
+use agent_dump_core::storage::private_files;
+use agent_dump_core::storage::source_io::path_text;
 
 type Positions = Vec<(usize, usize)>;
 
@@ -63,7 +70,7 @@ pub fn save_path(
 }
 
 fn guard_output(path: &Path) -> crate::Result<()> {
-    if agent_dump_core::providers::registry::inside_source(path)? {
+    if registry::inside_source(path)? {
         return Err(
             "Collect output must be outside the Provider source directory"
                 .into(),
@@ -230,7 +237,7 @@ pub fn run(
             );
         }
     };
-    let markdown = match render(
+    let markdown = match final_summary(
         &(since..=until),
         &groups,
         depth,
@@ -279,7 +286,7 @@ pub fn run(
         &markdown,
         &output_path,
         logger,
-        json!({"output_path":agent_dump_core::storage::source_io::path_text(&output_path), "session_count":included, "read_failed_count":failed, "discovery_failed_count":scan.failed_providers.len(), "summary_failed_count":summary_failed}),
+        json!({"output_path":path_text(&output_path), "session_count":included, "read_failed_count":failed, "discovery_failed_count":scan.failed_providers.len(), "summary_failed_count":summary_failed}),
         zh,
         out,
         warnings,
@@ -316,14 +323,9 @@ fn load_config(
         return Ok(Some((config, None)));
     }
     let ai = config.ai();
-    let errors =
-        agent_dump_core::config::validate_ai(ai.as_ref(), config.exists);
+    let errors = validate_ai(ai.as_ref(), config.exists);
     if !errors.is_empty() {
-        writeln!(
-            out,
-            "{}",
-            agent_dump_core::config::collect_ai_error(&errors, zh)
-        )?;
+        writeln!(out, "{}", collect_ai_error(&errors, zh))?;
         return Ok(None);
     }
     Ok(Some((config, ai)))
@@ -336,11 +338,8 @@ fn discover(
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<Option<Scan>> {
-    let mut scan = agent_dump_core::query::scanner::discover_all(
-        operation.query.as_ref(),
-        zh,
-        warnings,
-    )?;
+    let mut scan =
+        scanner::discover_all(operation.query.as_ref(), zh, warnings)?;
     if scan.groups.is_empty()
         && operation
             .query
@@ -357,13 +356,11 @@ fn discover(
             .get(group.info.name)
             .into_iter()
             .flatten()
-            .map(|path| agent_dump_core::query::project_path(path))
+            .map(|path| project_path(path))
             .collect::<crate::Result<_>>()?;
         group.sessions.retain(|session| {
             let path = (!session.directory.trim().is_empty())
-                .then(|| {
-                    agent_dump_core::query::project_path(&session.directory)
-                })
+                .then(|| project_path(&session.directory))
                 .transpose()
                 .ok()
                 .flatten();
@@ -388,12 +385,7 @@ fn select(
             let mut unbounded = q.clone();
             // Keep limit ordering, but truncate after text-date eligibility.
             unbounded.limit = q.limit.map(|_| usize::MAX);
-            agent_dump_core::query::filter::select(
-                &scan.groups,
-                &unbounded,
-                zh,
-                warnings,
-            )
+            filter::select(&scan.groups, &unbounded, zh, warnings)
         })
         .transpose()?;
     let omissions = selected
@@ -502,7 +494,7 @@ fn plan(
     writeln!(
         warnings,
         "{}",
-        agent_dump_core::output::render::safe_line(&format!(
+        render::safe_line(&format!(
             "{}\n{}",
             t("COLLECT_PROGRESS_OVERVIEW", zh, &values),
             t(
@@ -515,7 +507,7 @@ fn plan(
     Ok((count, breakdown))
 }
 
-fn render(
+fn final_summary(
     period: &RangeInclusive<Date>,
     groups: &[Group],
     depth: usize,
@@ -577,11 +569,7 @@ fn annotate(
         omissions.dedup();
         writeln!(markdown, "\n\n> {}", t("COLLECT_OMITTED_SESSIONS", zh, &[]))?;
         for uri in omissions {
-            writeln!(
-                markdown,
-                "> - {}",
-                agent_dump_core::output::render::safe_line(&uri)
-            )?;
+            writeln!(markdown, "> - {}", render::safe_line(&uri))?;
         }
     }
     Ok(markdown)
@@ -629,10 +617,7 @@ fn dry_run(
         ),
         (
             "COLLECT_DRY_RUN_SAVE_PATH",
-            vec![(
-                "path",
-                agent_dump_core::storage::source_io::path_text(output_path),
-            )],
+            vec![("path", path_text(output_path))],
         ),
     ]
     .into_iter()
@@ -655,12 +640,8 @@ fn save(
         zh,
         warnings,
     )?;
-    let write = guard_output(output_path).and_then(|()| {
-        agent_dump_core::storage::private_files::write_text(
-            output_path,
-            markdown,
-        )
-    });
+    let write = guard_output(output_path)
+        .and_then(|()| private_files::write_text(output_path, markdown));
     if let Err(error) = write {
         return fail(logger, "write", "COLLECT_WRITE_FAILED", &error, zh, out);
     }
@@ -671,21 +652,14 @@ fn save(
         warnings,
     )?;
     logger.log("collect_run_finish", finish);
-    writeln!(
-        out,
-        "{}",
-        agent_dump_core::output::render::safe_body(markdown)
-    )?;
+    writeln!(out, "{}", render::safe_body(markdown))?;
     writeln!(
         out,
         "{}",
         terminal(
             "COLLECT_OUTPUT_SAVED",
             zh,
-            &[(
-                "path",
-                agent_dump_core::storage::source_io::path_text(output_path)
-            )]
+            &[("path", path_text(output_path))]
         )
     )?;
     Ok(true)

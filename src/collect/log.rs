@@ -1,4 +1,9 @@
 use agent_dump_core::config::LoggingConfig;
+use agent_dump_core::output::i18n::terminal;
+use agent_dump_core::query::transcript::search_value;
+use agent_dump_core::session::timestamp::Timestamp;
+use agent_dump_core::storage::source_io::path_text;
+use agent_dump_core::storage::{private_files, source_io};
 use serde_json::{Value, json};
 use std::io::Write;
 use std::sync::Mutex;
@@ -30,16 +35,14 @@ impl Logger {
         if *failed {
             return;
         }
-        let mut record = json!({"timestamp": agent_dump_core::session::timestamp::Timestamp::now().iso_local(), "event":event, "run_id":self.run_id});
+        let mut record = json!({"timestamp": Timestamp::now().iso_local(), "event":event, "run_id":self.run_id});
         if let Value::Object(payload) = payload {
             record.as_object_mut().unwrap().extend(payload);
         }
         let path = &self.config.path;
         let write = || -> crate::Result<()> {
             if let Some(parent) = path.parent() {
-                agent_dump_core::storage::private_files::ensure_directory(
-                    parent,
-                )?;
+                private_files::ensure_directory(parent)?;
             }
             let mut options = std::fs::OpenOptions::new();
             options.create(true).append(true);
@@ -48,38 +51,26 @@ impl Logger {
                 use std::os::unix::fs::OpenOptionsExt;
                 options.mode(0o600);
             }
-            let mut file = options.open(path).map_err(|e| {
-                agent_dump_core::storage::source_io::Error::new(path, &e)
-            })?;
+            let mut file = options
+                .open(path)
+                .map_err(|e| source_io::Error::new(path, &e))?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
                 let _ = file
                     .set_permissions(std::fs::Permissions::from_mode(0o600));
             }
-            writeln!(
-                file,
-                "{}",
-                agent_dump_core::query::transcript::search_value(&record)
-            )?;
+            writeln!(file, "{}", search_value(&record))?;
             Ok(())
         };
         if let Err(error) = write() {
             *failed = true;
             eprintln!(
                 "{}",
-                agent_dump_core::output::i18n::terminal(
+                terminal(
                     "COLLECT_LOG_WRITE_FAILED",
                     self.zh,
-                    &[
-                        (
-                            "path",
-                            agent_dump_core::storage::source_io::path_text(
-                                path
-                            )
-                        ),
-                        ("error", error.to_string())
-                    ]
+                    &[("path", path_text(path)), ("error", error.to_string())]
                 )
             );
         }

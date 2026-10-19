@@ -1,3 +1,4 @@
+use agent_dump_core::output::render;
 use crossterm::{
     event::{
         self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode,
@@ -303,7 +304,7 @@ pub fn input(
         })?;
         match event::read()? {
             Event::Paste(value) => {
-                let value = agent_dump_core::output::render::safe_line(&value);
+                let value = render::safe_line(&value);
                 let added: Vec<_> = value.chars().collect();
                 let count = added.len();
                 text.splice(cursor..cursor, added);
@@ -392,8 +393,7 @@ pub fn secret_line(prompt: &str) -> crate::Result<Option<String>> {
     let mut text = String::new();
     let result = loop {
         match event::read()? {
-            Event::Paste(value) => text
-                .push_str(&agent_dump_core::output::render::safe_line(&value)),
+            Event::Paste(value) => text.push_str(&render::safe_line(&value)),
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 match key.code {
                     KeyCode::Enter => break Some(text),

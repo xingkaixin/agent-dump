@@ -4,6 +4,9 @@
 )]
 
 use crate::collect::model::{Entry, Event, Group, Mode, Summary};
+use agent_dump_core::compat::value::pretty_json;
+use agent_dump_core::output::i18n::t;
+use agent_dump_core::query::transcript::search_value;
 use jiff::civil::Date;
 use serde_json::{Value, json};
 use std::fmt::Write as _;
@@ -49,7 +52,7 @@ fn text(mode: Mode, stage: &str) -> &'static str {
 }
 
 pub fn envelope(kind: &str, source: &str, body: &str) -> String {
-    agent_dump_core::query::transcript::search_value(
+    search_value(
         &json!({"untrusted_data": kind, "source": source, "length": body.chars().count(), "content": body}),
     )
 }
@@ -108,9 +111,7 @@ pub fn merge(
             envelope(
                 "untrusted_derived_summary",
                 &format!("{source}#summary-{}", i + 1),
-                &agent_dump_core::compat::value::pretty_json(&Value::Object(
-                    summary.clone(),
-                )),
+                &pretty_json(&Value::Object(summary.clone())),
             )
         })
         .collect::<Vec<_>>()
@@ -175,16 +176,14 @@ pub fn final_prompt(
                 envelope(
                     "untrusted_derived_summary",
                     &format!("collect://final/group/{}", i + 1),
-                    &agent_dump_core::query::transcript::search_value(
-                        &serde_json::to_value(group).unwrap(),
-                    ),
+                    &search_value(&serde_json::to_value(group).unwrap()),
                 )
             })
             .collect::<Vec<_>>()
             .join("\n");
     }
     if result.chars().count() > 64_000 {
-        return Err(agent_dump_core::output::i18n::t(
+        return Err(t(
             "COLLECT_FINAL_INPUT_TOO_LARGE",
             zh,
             &[("limit", "64000".into())],

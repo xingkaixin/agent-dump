@@ -1,5 +1,8 @@
 use crate::collect::model::Mode;
+use agent_dump_core::compat::json as compat_json;
 use agent_dump_core::config::AiConfig;
+use agent_dump_core::output::i18n::t;
+use agent_dump_core::output::render;
 use serde_json::{Value, json};
 use std::fmt;
 use std::io::Read;
@@ -216,9 +219,7 @@ fn post(
                     if matches!(e, ureq::Error::Timeout(_)) {
                         "timed out".into()
                     } else {
-                        agent_dump_core::output::render::safe_line(
-                            &e.to_string(),
-                        )
+                        render::safe_line(&e.to_string())
                     }
                 ),
                 true,
@@ -285,9 +286,7 @@ fn post(
                 error(
                     format!(
                         "{provider} API request failed: {}",
-                        agent_dump_core::output::render::safe_line(
-                            &e.to_string()
-                        )
+                        render::safe_line(&e.to_string())
                     ),
                     true,
                 )
@@ -335,7 +334,7 @@ fn post(
             }
             return Err(failure);
         }
-        return agent_dump_core::compat::json::from_slice(&bytes)
+        return compat_json::from_slice(&bytes)
             .map_err(|e| error(e.to_string(), false));
     }
     unreachable!()
@@ -367,7 +366,7 @@ pub fn summary(
         )
     };
     if let Some(reason) = reason {
-        return Err(agent_dump_core::output::i18n::t(
+        return Err(t(
             "LLM_RESPONSE_TRUNCATED",
             zh,
             &[("provider", provider.into()), ("reason", reason.into())],

@@ -1,6 +1,8 @@
 use crate::collect::log::Logger;
 use crate::collect::model::{Mode, Summary};
+use agent_dump_core::compat::json as compat_json;
 use agent_dump_core::config::AiConfig;
+use agent_dump_core::query::text as query_text;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
@@ -44,7 +46,7 @@ fn dedupe<'a>(
     let mut seen = HashSet::new();
     let mut values = Vec::new();
     for text in items {
-        let text = agent_dump_core::query::text::normalize(text);
+        let text = query_text::normalize(text);
         if text.is_empty()
             || !seen.insert(caseless::default_case_fold_str(&text))
         {
@@ -113,9 +115,9 @@ fn extract(response: &str) -> crate::Result<Value> {
             Some(Ok(value)) if value.is_object() => return Ok(value),
             Some(Ok(_)) => {}
             _ => {
-                if let Err(error) = agent_dump_core::compat::json::from_slice(
-                    text.trim().as_bytes(),
-                ) {
+                if let Err(error) =
+                    compat_json::from_slice(text.trim().as_bytes())
+                {
                     let message = error.to_string();
                     if let Some((reason, location)) =
                         message.rsplit_once(": line ")

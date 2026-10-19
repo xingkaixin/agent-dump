@@ -1,5 +1,8 @@
 use crate::terminal::tui::Row;
+use agent_dump_core::compat::value::decimal_digit;
 use agent_dump_core::output::i18n::{t, terminal};
+use agent_dump_core::output::render;
+use agent_dump_core::query::TimeField;
 use agent_dump_core::session::Session;
 use std::fmt::Write as _;
 use std::io::{BufRead, Write};
@@ -71,10 +74,7 @@ pub fn provider(
 }
 
 fn integer(value: &str) -> Option<i128> {
-    let normalized: String = value
-        .chars()
-        .map(agent_dump_core::compat::value::decimal_digit)
-        .collect();
+    let normalized: String = value.chars().map(decimal_digit).collect();
     if normalized.contains("__")
         || normalized.starts_with('_')
         || normalized.ends_with('_')
@@ -90,7 +90,7 @@ pub fn sessions(
     sessions: &[Session],
     scheme: &str,
     summary: bool,
-    time_field: agent_dump_core::query::TimeField,
+    time_field: TimeField,
     zh: bool,
     out: &mut impl Write,
     reader: &mut impl BufRead,
@@ -128,21 +128,14 @@ pub fn sessions(
         let group_title = t(keys[group], zh, &[]);
         for (position, &index) in indices.iter().enumerate() {
             let session = &sessions[index];
-            let mut title = agent_dump_core::output::render::formatted_title(
-                session, time_field,
-            );
+            let mut title = render::formatted_title(session, time_field);
             let detail = if summary {
-                agent_dump_core::output::render::metadata_summary(
-                    session, scheme, zh,
-                )
+                render::metadata_summary(session, scheme, zh)
             } else {
                 write!(
                     title,
                     " {}",
-                    agent_dump_core::output::render::safe_line(&format!(
-                        "{scheme}://{}",
-                        session.id
-                    ))
+                    render::safe_line(&format!("{scheme}://{}", session.id))
                 )?;
                 String::new()
             };

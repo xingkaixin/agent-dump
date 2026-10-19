@@ -1,3 +1,5 @@
+use agent_dump_core::compat::value::decimal_digit;
+use agent_dump_core::output::i18n::t;
 use jiff::civil::Date;
 
 pub fn parse(raw: &str) -> Option<Date> {
@@ -19,7 +21,7 @@ pub fn parse(raw: &str) -> Option<Date> {
             .as_str()
             .trim()
             .chars()
-            .map(agent_dump_core::compat::value::decimal_digit)
+            .map(decimal_digit)
             .collect::<String>()
     };
     let date = Date::new(
@@ -39,13 +41,7 @@ pub fn collect_range(
 ) -> crate::Result<(Date, Date)> {
     let today = jiff::Zoned::now().date();
     let parse = |raw| {
-        parse(raw).ok_or_else(|| {
-            agent_dump_core::output::i18n::t(
-                "COLLECT_DATE_FORMAT_INVALID",
-                zh,
-                &[],
-            )
-        })
+        parse(raw).ok_or_else(|| t("COLLECT_DATE_FORMAT_INVALID", zh, &[]))
     };
     let since = since.filter(|s| !s.is_empty());
     let until = until.filter(|s| !s.is_empty());
@@ -62,12 +58,7 @@ pub fn collect_range(
         }
     };
     if start > end {
-        return Err(agent_dump_core::output::i18n::t(
-            "COLLECT_DATE_RANGE_INVALID",
-            zh,
-            &[],
-        )
-        .into());
+        return Err(t("COLLECT_DATE_RANGE_INVALID", zh, &[]).into());
     }
     Ok((start, end))
 }

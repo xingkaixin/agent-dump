@@ -3,6 +3,7 @@ use crate::collect::model::{Entry, Group, Mode, Summary};
 use crate::collect::progress::progress;
 use crate::collect::summary::{self as collect_summary, Context};
 use agent_dump_core::config::{AiConfig, CollectConfig};
+use agent_dump_core::output::i18n::{t, terminal};
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::Write;
@@ -179,7 +180,7 @@ pub fn run(
                     writeln!(
                         warnings,
                         "{}",
-                        agent_dump_core::output::i18n::terminal(
+                        terminal(
                             "WARN_SESSION_SUMMARY_SKIPPED",
                             zh,
                             &[
@@ -210,7 +211,7 @@ pub fn run(
         writeln!(
             warnings,
             "{}",
-            agent_dump_core::output::i18n::t(
+            t(
                 "WARN_SESSION_SUMMARY_FAILURES",
                 zh,
                 &[("count", failed.len().to_string())]

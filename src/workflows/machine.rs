@@ -1,12 +1,13 @@
-use agent_dump_core::query::{Query, filter::Selection, scanner::Scan};
+use agent_dump_core::query::text::Mode;
+use agent_dump_core::query::{
+    Query, context, filter::Selection, scanner::Scan,
+};
 use agent_dump_core::{providers::contract::ProviderInfo, session::Session};
 use serde_json::{Value, json};
 use std::io::Write;
 
-pub type Locations = std::collections::BTreeMap<
-    (usize, usize),
-    Vec<agent_dump_core::query::context::Location>,
->;
+pub type Locations =
+    std::collections::BTreeMap<(usize, usize), Vec<context::Location>>;
 
 pub fn session_record(info: &ProviderInfo, session: &Session) -> Value {
     json!({
@@ -34,8 +35,7 @@ pub fn list(
         let group = &scan.groups[g];
         session_record(group.info, &group.sessions[s])
     };
-    let search = query
-        .is_some_and(|q| q.mode == agent_dump_core::query::text::Mode::Terms);
+    let search = query.is_some_and(|q| q.mode == Mode::Terms);
     let records: Vec<_> = selection
         .matches
         .iter()

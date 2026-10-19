@@ -1,4 +1,6 @@
+use agent_dump_core::config::{Config, expand_home};
 use agent_dump_core::output::i18n::terminal;
+use agent_dump_core::storage::source_io::path_text;
 use std::collections::HashMap;
 use std::ffi::OsString;
 
@@ -17,7 +19,7 @@ pub fn expand(args: Vec<OsString>, zh: bool) -> crate::Result<Vec<OsString>> {
     let end = (index + 2..args.len())
         .find(|&i| args[i].to_string_lossy().starts_with('-'))
         .unwrap_or(args.len());
-    let config = agent_dump_core::config::Config::load()?;
+    let config = Config::load()?;
     config.require_valid(zh)?;
     let Some((_, shortcut)) =
         config.shortcuts().into_iter().find(|(n, _)| n == name)
@@ -107,9 +109,7 @@ fn render(
         }
     }
     if output.starts_with('~') {
-        output = agent_dump_core::storage::source_io::path_text(
-            &agent_dump_core::config::expand_home(&output)?,
-        );
+        output = path_text(&expand_home(&output)?);
     }
     Ok(output)
 }

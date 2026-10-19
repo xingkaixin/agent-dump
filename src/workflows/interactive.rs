@@ -1,9 +1,16 @@
+use agent_dump_core::config::Config;
 use agent_dump_core::output::diagnostics::{self, Diagnostic};
 use agent_dump_core::output::formats::OutputFormat;
 use agent_dump_core::output::i18n::{t, terminal};
+use agent_dump_core::output::{export, render};
+use agent_dump_core::parallel;
 use agent_dump_core::providers::contract::{RawExport, render_search_roots};
-use agent_dump_core::query::Query;
+use agent_dump_core::providers::error::ProviderError;
+use agent_dump_core::providers::registry;
 use agent_dump_core::query::scanner::ScannedProvider;
+use agent_dump_core::query::{Query, filter, project_path, scanner};
+use agent_dump_core::session::cache::SessionDataCache;
+use agent_dump_core::storage::source_io::path_text;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
@@ -31,13 +38,13 @@ pub fn run(
             return Ok(false);
         }
     };
-    write!(out, "{}", agent_dump_core::output::render::list_banner())?;
+    write!(out, "{}", render::list_banner())?;
     let time_field = operation
         .query
         .as_ref()
         .map(|query| query.time_field)
         .unwrap_or_default();
-    let mut scan = agent_dump_core::query::scanner::discover(
+    let mut scan = scanner::discover(
         operation.query.as_ref(),
         operation.days,
         time_field,
@@ -45,7 +52,7 @@ pub fn run(
         warnings,
     )?;
     if scan.groups.is_empty() {
-        let roots = agent_dump_core::providers::registry::search_roots()?;
+        let roots = registry::search_roots()?;
         let names = operation
             .query
             .as_ref()
@@ -59,7 +66,7 @@ pub fn run(
         return Ok(false);
     }
     let unfiltered = Query::default();
-    let selection = agent_dump_core::query::filter::select(
+    let selection = filter::select(
         &scan.groups,
         operation.query.as_ref().unwrap_or(&unfiltered),
         zh,
@@ -243,7 +250,7 @@ pub fn configured_output(
     {
         return Ok(Ok(String::new()));
     }
-    let config = agent_dump_core::config::Config::load()?;
+    let config = Config::load()?;
     Ok(match config.require_valid(zh) {
         Ok(()) => Ok(config.output()),
         Err(error) => Err(error.to_string()),
@@ -263,7 +270,7 @@ struct Batch<'a> {
     operation: &'a Operation,
     configured: &'a str,
     collisions: HashSet<(usize, usize)>,
-    cache: agent_dump_core::session::cache::SessionDataCache,
+    cache: SessionDataCache,
     zh: bool,
 }
 
@@ -306,27 +313,24 @@ impl Batch<'_> {
         });
         for (f, &format) in operation.formats.iter().enumerate() {
             if collisions.contains(&(position, f)) {
-                let base = agent_dump_core::output::export::output_base(
+                let base = export::output_base(
                     operation.output.as_deref(),
                     configured,
                 )
                 .join(group.info.name);
-                let path = agent_dump_core::output::export::target(
+                let path = export::target(
                     &session.id,
                     &base,
                     format,
                     raw.as_ref().ok(),
                 )?;
-                let error =
-                    agent_dump_core::providers::error::ProviderError::Cause {
-                        kind: "ExportPathCollisionError",
-                        message: format!(
-                            "multiple exports resolve to the same output path: {}",
-                            agent_dump_core::storage::source_io::path_text(
-                                &path
-                            )
-                        ),
-                    };
+                let error = ProviderError::Cause {
+                    kind: "ExportPathCollisionError",
+                    message: format!(
+                        "multiple exports resolve to the same output path: {}",
+                        path_text(&path)
+                    ),
+                };
                 write!(
                     written.out,
                     "{}",
@@ -365,16 +369,14 @@ impl Batch<'_> {
                 )?;
                 continue;
             }
-            let base = agent_dump_core::output::export::output_base(
-                operation.output.as_deref(),
-                configured,
-            )
-            .join(group.info.name);
+            let base =
+                export::output_base(operation.output.as_deref(), configured)
+                    .join(group.info.name);
             let prepared = data
                 .as_ref()
                 .and_then(|d| d.as_ref().ok())
                 .map(std::ops::Deref::deref);
-            match (agent_dump_core::output::export::SessionExport {
+            match (export::SessionExport {
                 provider: group.provider.as_ref(),
                 session,
                 uri: &uri,
@@ -385,11 +387,7 @@ impl Batch<'_> {
             {
                 Ok(path) => {
                     written.exported += 1;
-                    written.directories.push(
-                        agent_dump_core::storage::source_io::path_text(
-                            path.parent().unwrap(),
-                        ),
-                    );
+                    written.directories.push(path_text(path.parent().unwrap()));
                     writeln!(
                         written.out,
                         "{}",
@@ -397,11 +395,14 @@ impl Batch<'_> {
                             "EXPORT_SUCCESS_FORMAT",
                             zh,
                             &[
-                                ("title", session.title.chars().take(50).collect()),
+                                (
+                                    "title",
+                                    session.title.chars().take(50).collect()
+                                ),
                                 ("format", format.name().into()),
                                 (
                                     "filename",
-                                    agent_dump_core::storage::source_io::path_text(std::path::Path::new(
+                                    path_text(std::path::Path::new(
                                         path.file_name().unwrap()
                                     ))
                                 )
@@ -437,31 +438,21 @@ pub fn export(
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<usize> {
-    let cache = agent_dump_core::session::cache::SessionDataCache::default();
+    let cache = SessionDataCache::default();
     let mut targets: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
     for (position, &(g, index)) in picks.iter().enumerate() {
         let group = &groups[g];
         let session = &group.sessions[index];
         let raw = group.provider.raw_export(session);
         for (f, &format) in operation.formats.iter().enumerate() {
-            let base = agent_dump_core::output::export::output_base(
-                operation.output.as_deref(),
-                configured,
-            )
-            .join(group.info.name);
-            if let Ok(path) = agent_dump_core::output::export::target(
-                &session.id,
-                &base,
-                format,
-                raw.as_ref().ok(),
-            ) {
-                let absolute = agent_dump_core::query::project_path(
-                    &agent_dump_core::storage::source_io::path_text(&path),
-                )?;
-                let normalized: String =
-                    agent_dump_core::storage::source_io::path_text(&absolute)
-                        .nfc()
-                        .collect();
+            let base =
+                export::output_base(operation.output.as_deref(), configured)
+                    .join(group.info.name);
+            if let Ok(path) =
+                export::target(&session.id, &base, format, raw.as_ref().ok())
+            {
+                let absolute = project_path(&path_text(&path))?;
+                let normalized: String = path_text(&absolute).nfc().collect();
                 targets
                     .entry(caseless::default_case_fold_str(&normalized))
                     .or_default()
@@ -486,7 +477,7 @@ pub fn export(
     let mut exported = 0;
     let mut paths = BTreeSet::new();
     let items: Vec<_> = picks.iter().copied().enumerate().collect();
-    agent_dump_core::parallel::ordered(
+    parallel::ordered(
         &items,
         |&(position, pick)| {
             let mut written = Written::default();
@@ -502,12 +493,9 @@ pub fn export(
         },
     )?;
     let path = if paths.is_empty() {
-        agent_dump_core::storage::source_io::path_text(
-            &agent_dump_core::output::export::output_base(
-                operation.output.as_deref(),
-                configured,
-            )
-            .join(groups[picks[0].0].info.name),
+        path_text(
+            &export::output_base(operation.output.as_deref(), configured)
+                .join(groups[picks[0].0].info.name),
         )
     } else {
         paths.into_iter().collect::<Vec<_>>().join(", ")

@@ -3,7 +3,10 @@ use crate::terminal::tui::Row;
 use agent_dump_core::output::{
     diagnostics, formats::OutputFormat, i18n::t, render,
 };
-use agent_dump_core::query::{Query, TimeField, scanner::Scan, text::Mode};
+use agent_dump_core::query::{
+    Query, TimeField, filter, scanner, scanner::Scan, text::Mode,
+};
+use agent_dump_core::session::cache::SessionDataCache;
 use std::io::Write;
 
 struct Results {
@@ -14,12 +17,7 @@ struct Results {
 
 fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
     let mut notices = Vec::new();
-    let mut selection = agent_dump_core::query::filter::select(
-        &scan.groups,
-        query,
-        zh,
-        &mut notices,
-    )?;
+    let mut selection = filter::select(&scan.groups, query, zh, &mut notices)?;
     if query.mode != Mode::Terms {
         selection.matches.sort_by_key(|matched| {
             std::cmp::Reverse(
@@ -183,7 +181,7 @@ pub fn run(
         return Ok(false);
     }
     let mut query = operation.query.clone().unwrap_or_default();
-    let scan = agent_dump_core::query::scanner::discover(
+    let scan = scanner::discover(
         Some(&query),
         operation.days,
         query.time_field,
@@ -204,7 +202,7 @@ pub fn run(
         zh,
     )?;
     reader.status = selected.status;
-    let cache = agent_dump_core::session::cache::SessionDataCache::default();
+    let cache = SessionDataCache::default();
     loop {
         let mut notices = Vec::new();
         let loaded = positions.get(reader.selected()).map(|&(g, s)| {

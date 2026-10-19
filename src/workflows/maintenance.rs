@@ -1,5 +1,11 @@
+use agent_dump_core::output::diagnostics::Diagnostic;
+use agent_dump_core::output::formats::OutputFormat;
 use agent_dump_core::output::i18n::t;
-use agent_dump_core::query::{Query, TimeField};
+use agent_dump_core::output::render;
+use agent_dump_core::providers::registry;
+use agent_dump_core::query::index::SearchIndex;
+use agent_dump_core::query::{Query, TimeField, filter, scanner};
+use agent_dump_core::storage::source_io::path_text;
 use std::collections::BTreeMap;
 use std::io::Write;
 
@@ -18,7 +24,7 @@ pub fn providers(
     }
     let mut roots = Vec::new();
     let mut records = Vec::new();
-    for registration in agent_dump_core::providers::registry::all() {
+    for registration in registry::all() {
         let provider = (registration.open)()?;
         let search_roots = provider.search_roots()?;
         let states: Vec<_> = search_roots
@@ -29,10 +35,10 @@ pub fn providers(
             })
             .collect();
         let formats = [
-            agent_dump_core::output::formats::OutputFormat::Json,
-            agent_dump_core::output::formats::OutputFormat::Markdown,
-            agent_dump_core::output::formats::OutputFormat::Print,
-            agent_dump_core::output::formats::OutputFormat::Raw,
+            OutputFormat::Json,
+            OutputFormat::Markdown,
+            OutputFormat::Print,
+            OutputFormat::Raw,
         ];
         let supported = formats
             .iter()
@@ -40,13 +46,16 @@ pub fn providers(
             .map(|f| f.name())
             .collect::<Vec<_>>();
         if json {
-            let search_roots: Vec<_> = states.iter().map(|(label, path, exists)| {
-                serde_json::json!({
-                    "label": label,
-                    "path": agent_dump_core::storage::source_io::path_text(path),
-                    "exists": exists
+            let search_roots: Vec<_> = states
+                .iter()
+                .map(|(label, path, exists)| {
+                    serde_json::json!({
+                        "label": label,
+                        "path": path_text(path),
+                        "exists": exists
+                    })
                 })
-            }).collect();
+                .collect();
             records.push(serde_json::json!({
                 "provider": registration.info.name,
                 "display_name": registration.info.display_name,
@@ -127,9 +136,7 @@ pub fn providers(
                     &[]
                 ),
                 label,
-                agent_dump_core::output::render::safe_line(
-                    &agent_dump_core::storage::source_io::path_text(&path)
-                )
+                render::safe_line(&path_text(&path))
             )?;
         }
     }
@@ -145,7 +152,7 @@ pub fn run(
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
-    let scan = agent_dump_core::query::scanner::discover(
+    let scan = scanner::discover(
         query,
         days,
         if reindex {
@@ -164,9 +171,9 @@ pub fn run(
         write!(
             out,
             "{}",
-            agent_dump_core::output::diagnostics::Diagnostic::empty_list(
+            Diagnostic::empty_list(
                 names.as_deref(),
-                agent_dump_core::providers::registry::search_roots()?,
+                registry::search_roots()?,
                 zh
             )
             .render(zh)
@@ -174,7 +181,7 @@ pub fn run(
         return Ok(names.is_some());
     }
     if reindex {
-        let mut index = agent_dump_core::query::index::SearchIndex::open()?;
+        let mut index = SearchIndex::open()?;
         writeln!(out, "{}\n", t("REINDEX_START", zh, &[]))?;
         let mut total = 0;
         for group in &scan.groups {
@@ -212,14 +219,7 @@ pub fn run(
     }
     let selection = query
         .as_ref()
-        .map(|q| {
-            agent_dump_core::query::filter::select(
-                &scan.groups,
-                q,
-                zh,
-                warnings,
-            )
-        })
+        .map(|q| filter::select(&scan.groups, q, zh, warnings))
         .transpose()?;
     let mut stats: BTreeMap<&str, MessageStats> = BTreeMap::new();
     let selected = selection.as_ref().map(|s| {
