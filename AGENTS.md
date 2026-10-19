@@ -1,74 +1,42 @@
 # AGENTS.md
 
-> 本文件只保存所有仓库任务都需要的稳定约束和任务路由。具体实现事实按任务读取，避免把易变化的模块清单常驻到每次 Agent 执行中。
+只放所有任务都需要的约束和文档路由；实现细节以代码和按需文档为准。只在约束、职责边界或路由变化时修改本文件。
 
-## 1. 稳定约束
+## 约束
 
-### 1.1 数据安全
+### 数据安全
+- Provider 会话源只读：导出、搜索、统计、collect 不得修改数据库、JSONL 或会话目录。
+- 索引、配置、日志、导出只写入本项目拥有的路径或用户指定的输出目录。
+- 测试只用 `tmp_path`、临时 SQLite 或显式注入路径，不读写真实用户目录。
 
-- Provider 会话源只读。导出、搜索、统计和 collect 不得修改数据库、JSONL 或用户会话目录。
-- 工具生成的索引、配置、日志和导出文件必须写入本项目明确拥有的路径，不得混入 Provider 数据源。
-- 测试不得读取或写入真实用户会话目录；使用 `tmp_path`、临时 SQLite 或显式注入的路径。
-- 临时文件使用 `tempfile` 等可清理机制，并确保异常路径也会清理。
+### 兼容性
+- CLI 参数、输出格式、退出码和默认路径是公开契约。改变需明确要求，并同步测试、README 和 skill recipes。
+- 发布物只有 CLI，不提供 Python API 或 Rust 库。
+- Python v0.15.9 只是历史对照，不是行为基准。修复可以偏离它，并用默认契约测试断言新行为；不改动对照版本。
 
-### 1.2 兼容性
+### 架构边界
+- 依赖方向只允许 CLI → core。core 不依赖终端、参数解析或 LLM 客户端。
+- `cli_args.rs` 声明参数，`command.rs` 归一化并分发；业务逻辑进入 `workflows/`、`collect/` 或 core。
+- Provider 私有 schema 只在 core `providers/` 内解释。其他层只依赖 `providers/contract.rs` 的 `Provider` 契约和 Session facts。
+- `terminal/` 只展示调用方传入的数据，不触发 Provider 发现或正文读取。
 
-- Rust 发布只提供 CLI，pip wheel 不包含 Python API 或 `python -m agent_dump`。旧 Python 实现只保留在 Git 历史和固定的 v0.15.9 外部对照环境中，不再作为行为基准：修复缺陷可以偏离 v0.15.9，删除与修复冲突的差分用例，并用默认契约测试断言新行为。不得改动对照版本。
-- CLI 参数、输出格式、退出码和默认路径属于可观察行为。修改时同步更新对应测试和用户文档。
-- 未经明确要求不得改变既有默认行为；新增能力应保持现有调用路径兼容。
+### 代码与测试
+- 只在新增或变更可观察行为、修复回归、保护高风险边界时加测试。CLI 变更覆盖参数归一化、分发、输出或退出码。mock 只用于 Provider、终端和外部系统边界。
+- 不随意新增第三方依赖；未被代码直接 import 的依赖在声明处写明原因。
+- 正文默认不写注释，只解释 workaround、magic value 等无法从代码看出的原因。
 
-### 1.3 架构边界
+## 文档
 
-- `main.rs`、`cli_args.rs` 负责参数入口，`command.rs` 负责工作流分发。业务逻辑进入对应 workflow 或职责模块。
-- 会话发现、读取和导出统一通过 `crates/agent-dump-core/src/providers/contract.rs` 的 `Provider` 契约进入。实现位于 Provider 模块或共享读取/转换模块。
-- Provider 私有 schema 只能由 Rust Provider 层解释。CLI、workflow 和 selector 只依赖稳定的 Session、facts 与 Provider 契约。
-- selector 不得触发 Provider 发现、扫描或完整内容读取。会话计数由调用方传入；允许调用不执行 I/O 的展示投影方法。
-- 共享逻辑保持单一归属：URI、输出格式、渲染、导出和跨工作流 CLI 能力分别进入 CLI 的 `workflows/uri.rs`、core 的 `output/{formats,render,export}.rs` 和 CLI 的 `command.rs`。
-- workspace 只允许 CLI → core 的依赖方向。core 不依赖终端或 LLM 客户端，具体 Provider 模块不对 CLI 暴露；不得引入循环依赖。
+| 文档 | 何时读 | 何时同步 |
+| --- | --- | --- |
+| `docs/product.md` | 新增能力或改变方向前 | 目标、非目标、原则变化 |
+| `CONTEXT.md` | 涉及术语、Session facts | 术语或事实边界变化 |
+| `docs/architecture.md` | 改模块职责、Provider、Query、Collect | 职责边界变化 |
+| `docs/providers/` | 改特定 Provider | 该 Provider 读取规则变化 |
+| `docs/development-guide.md` | 测试、lint、本地验证 | 工具链或门禁变化 |
+| `docs/release-guide.md` | 构建、打包、发版 | 发布流程变化 |
+| `web/README.md` | 改落地页、部署、统计 | 落地页流程变化 |
+| `README.md`、`README_zh.md`、`skills/agent-dump/` | 改 CLI 可见行为 | CLI 可见行为变化 |
 
-### 1.4 代码与测试
-
-- Rust 所有 workspace 成员继承统一 lint；通过 80 列 stable Rustfmt、严格 Clippy 和单元测试；辅助 Python 脚本保持类型注解，由 Ruff 与 ty 检查。
-- 只在新增或变更可观察行为、修复回归或保护高风险边界时补测试。测试覆盖行为契约，不要求按函数一一对应。
-- CLI 变更至少覆盖参数归一化、工作流分发及相关输出或退出码。仅在 Provider、终端交互或外部系统等边界需要隔离时使用 mock。
-- 不随意新增第三方依赖。必要但未被代码直接 import 的依赖应在声明处说明原因。
-- 正文代码默认不写注释；只为 workaround、magic value、反直觉边界等无法从代码直接理解的原因添加注释。
-
-## 2. 按任务读取
-
-开始修改前，只读取与任务相关的参考：
-
-- 项目目标、非目标和设计原则（新增能力或改变方向前）：`docs/product.md`
-- 领域术语、Session facts 和读写边界：`CONTEXT.md`
-- 架构、Provider contract、Query/Search、Collect 和扩展步骤：`docs/architecture.md`
-- 特定 Provider 的读取规则：`docs/providers/`
-- 测试、i18n、交互式 CLI、依赖和本地验证：`docs/development-guide.md`
-- 性能评估与基准脚本：`docs/benchmarking.md`
-- 发版、构建约束和发布控制边界：`docs/release-guide.md`
-- 面向用户的 CLI 行为：`README.md`、`README_zh.md`
-- Agent 使用 recipes：`skills/agent-dump/SKILL.md`、`skills/agent-dump/references/cli-recipes.md`
-
-快速定位：
-
-- CLI 参数与分发：`src/cli_args.rs`、`src/command.rs`
-- 工作流、Collect 与终端：`src/workflows/`、`src/collect/`、`src/terminal/`
-- core 根：`crates/agent-dump-core/src/`
-- core Provider 注册与契约：`providers/registry.rs`、`providers/contract.rs`
-- core Query、缓存与输出：`query/`、`session/cache.rs`、`output/`
-- core 配置与文件边界：`config.rs`、`storage/`
-
-## 3. 验证与文档
-
-- 开发时先运行与改动直接相关的测试。
-- 提交 PR 前运行 `just isok`。默认验证运行 Rust 单元测试和独立行为契约。`tests/cli` 中标记为 `differential` 的历史差分测试仅通过 `just test-differential` 手动运行；不得读取真实用户数据。
-- 修改公开 API、CLI 或用户可见能力时，同步更新 README 和相关 skill recipes。
-- 目标、非目标或设计原则变化时更新 `docs/product.md`；只在稳定约束、职责边界或任务路由变化时更新本文件。模块增删和实现细节记录到对应按需文档或由代码、配置和测试作为来源。
-- 修改架构术语或事实边界时同步更新 `CONTEXT.md`。
-
-## 4. 提交前检查
-
-- [ ] 未修改 Provider 会话源或在测试中访问真实用户目录
-- [ ] 公开 API 和 CLI 可观察行为保持兼容，或变更已获明确要求
-- [ ] 业务逻辑位于正确职责层，没有重复解释 Provider schema
-- [ ] 相关行为测试和用户文档已同步
-- [ ] `just isok` 通过
+## 验证
+- 提交 PR 前运行 `just isok`。
