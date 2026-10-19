@@ -17,7 +17,7 @@ def create(root, records, *, identity=IDENTITY):
 
 
 def listed(cli, provider):
-    listing = cli.run("rust", "--list", "-d", "36500", "-q", f"provider:{provider}", "--json")
+    listing = cli.run("--list", "-d", "36500", "-q", f"provider:{provider}", "--json")
     assert listing.returncode == 0, listing.stderr
     return {item["id"]: item for item in json.loads(listing.stdout)["data"]}
 
@@ -42,12 +42,12 @@ def test_list_head_and_export_use_the_claude_transcript(cli, provider):
         "model": "glm-5",
         "message_count": 2,
     }
-    shown = cli.run("rust", record["uri"], "--head", "--json")
+    shown = cli.run(record["uri"], "--head", "--json")
     assert shown.returncode == 0, shown.stderr
     head = json.loads(shown.stdout)["data"]
     assert {key: head[key] for key in record} == record
 
-    exported = cli.run("rust", record["uri"], "--format", "json,raw", "--output", "exports")
+    exported = cli.run(record["uri"], "--format", "json,raw", "--output", "exports")
     assert exported.returncode == 0, exported.stderr
     exports = cli.root / "exports" / provider
     assert (exports / f"{IDENTITY}.raw.jsonl").read_bytes() == source.read_bytes()
@@ -68,5 +68,5 @@ def test_default_roots_keep_qoder_and_qoder_cn_apart(cli):
 
     for provider in PROVIDERS:
         assert {key: item["title"] for key, item in listed(cli, provider).items()} == {provider: provider}
-    missing = cli.run("rust", "qoder://qoder-cn", "--head")
+    missing = cli.run("qoder://qoder-cn", "--head")
     assert missing.returncode == 1

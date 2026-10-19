@@ -36,7 +36,7 @@ def test_long_unicode_message_and_late_outcome_are_fully_processed(cli: CliFixtu
     before = cli.fixtures.source_manifest(cli.root)
     with server(respond) as (url, _):
         configure(cli, url)
-        result = cli.run("rust", *ARGS, "--collect-mode", mode, "--save", "report.md")
+        result = cli.run(*ARGS, "--collect-mode", mode, "--save", "report.md")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "".join(events) == body + outcome
     assert len(events) > 8 and len(merges) > 1 and max(merges) <= 8
@@ -59,7 +59,7 @@ def test_failed_chunk_lists_omitted_session(cli: CliFixture) -> None:
 
     with server(respond) as (url, _):
         configure(cli, url)
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     report = (cli.root / "report.md").read_text()
     assert "This report is incomplete" in report
@@ -70,7 +70,7 @@ def test_failed_chunk_lists_omitted_session(cli: CliFixture) -> None:
 
 
 def test_dry_run_counts_complete_fixture_text(cli: CliFixture) -> None:
-    result = cli.run("rust", *ARGS, "--dry-run", "--lang", "en", "--save", "report.md")
+    result = cli.run(*ARGS, "--dry-run", "--lang", "en", "--save", "report.md")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Sessions: 9\nChunks: 30\n" in result.stdout
     assert "9 sessions, 30 summary units" in result.stderr
@@ -104,7 +104,7 @@ def test_large_final_report_preserves_all_source_groups(cli: CliFixture) -> None
 
     with server(respond) as (url, _):
         configure(cli, url)
-        result = cli.run("rust", *ARGS, "--save", "report.md")
+        result = cli.run(*ARGS, "--save", "report.md")
     assert result.returncode == 0, result.stdout + result.stderr
     assert len(rendered) > 1
     report = (cli.root / "report.md").read_text()

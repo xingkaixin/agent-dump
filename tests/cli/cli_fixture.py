@@ -1,17 +1,13 @@
-"""Isolated subprocess fixtures shared by Rust/Python CLI differential tests."""
+"""Isolated subprocess fixtures shared by Rust CLI contract tests."""
 
-from collections.abc import Callable
 from dataclasses import dataclass
 import gc
 import importlib
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 from typing import Any
-
-from python_reference import command as reference_command
 
 ROOT = Path(__file__).resolve().parents[2]
 RUST = Path(
@@ -31,10 +27,9 @@ class CliFixture:
     source: Path
     fixtures: Any
 
-    def run(self, candidate: str, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
-        command = reference_command() if candidate == "python" else [str(RUST)]
+    def run(self, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(  # noqa: S603
-            [*command, *args],
+            [str(RUST), *args],
             cwd=self.root,
             env=self.environment,
             input=stdin,
@@ -49,42 +44,6 @@ class CliFixture:
             b"".join(json.dumps(record, ensure_ascii=False).encode() + b"\n" for record in records) + suffix
         )
         os.utime(self.source, (1768478400, 1768478400))
-
-    def parity(
-        self,
-        *args: str,
-        json_export: bool = False,
-        formats: tuple[str, ...] = (),
-        exit_code: int = 0,
-        mask: Callable[[str], str] = str,
-    ) -> None:
-        before = self.fixtures.source_manifest(self.root)
-        results = []
-        outputs = []
-        for candidate in ("python", "rust"):
-            output = self.root / "exports"
-            shutil.rmtree(output, ignore_errors=True)
-            result = self.run(candidate, *args)
-            assert result.returncode == exit_code, result.stdout + result.stderr
-            results.append((mask(result.stdout), result.stderr))
-            files = sorted(path for path in output.rglob("*") if path.is_file())
-            expected = formats or (("json",) if json_export else ())
-            if expected:
-                suffixes = {"json": ".json", "markdown": ".md", "raw": ".jsonl", "raw-json": ".json"}
-                assert sorted(path.suffix for path in files) == sorted(suffixes[item] for item in expected)
-            outputs.append(
-                {
-                    path.relative_to(output): json.loads(path.read_text())
-                    if path.suffix == ".json"
-                    else path.read_bytes()
-                    for path in files
-                }
-            )
-            if os.name != "nt":
-                assert all(path.stat().st_mode & 0o777 == 0o600 for path in files)
-            assert self.fixtures.source_manifest(self.root) == before
-        assert results[0] == results[1], results
-        assert outputs[0] == outputs[1], outputs
 
 
 def make_cli(tmp_path, monkeypatch):
@@ -109,13 +68,6 @@ def write_jsonl(path: Path, records: list[dict[str, Any]], *, suffix: bytes = b"
     path.write_bytes(b"".join(json.dumps(record, ensure_ascii=False).encode() + b"\n" for record in records) + suffix)
     os.utime(path, (1768478400, 1768478400))
     return path
-
-
-def provider_export(cli: CliFixture, uri: str, provider: str, *, lang: str = "en") -> dict[str, Any]:
-    cli.parity(
-        uri, "--format", "json,md,raw,print", "--output", "exports", "--lang", lang, formats=("json", "markdown", "raw")
-    )
-    return json.loads(next((cli.root / "exports" / provider).glob("*.json")).read_text())
 
 
 def message(role: str | None, text: str, *, stamp: str = STAMP) -> dict[str, Any]:
@@ -149,18 +101,3 @@ def output(value="done", identity="one", *, custom=False):
 
 def reasoning(text="Thinking"):
     return record("reasoning", summary=[{"type": "summary_text", "text": text}])
-
-
-def export_parity(cli, records, *, lang="en", formats="json,md,raw,print"):
-    cli.write([header(cli_version="1.0"), *records])
-    cli.parity(
-        f"codex://{IDENTITY}",
-        "--format",
-        formats,
-        "--output",
-        "exports",
-        "--lang",
-        lang,
-        formats=("json", "markdown", "raw"),
-    )
-    return json.loads((cli.root / "exports" / "codex" / f"{IDENTITY}.json").read_text())

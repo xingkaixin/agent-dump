@@ -47,11 +47,7 @@ test: build-rust
     cargo test --locked --workspace
     uv run pytest -q
 
-# Compare with the frozen Python CLI only when explicitly requested
-test-differential: reference build-rust
-    uv run pytest -q -m differential tests/cli
-
-# Install the frozen external Python CLI for differential verification
+# Install the frozen external Python CLI for paired performance evaluation
 reference:
     uv run python scripts/python_reference.py --install
 

@@ -682,7 +682,7 @@ web/            # Landing page
 
 ## Development
 
-Rust is the build and runtime implementation starting with v1.0.0, with Ratatui for terminal interaction. The old Python application has been removed from the working tree. CI and `just isok` run Rust behavior contracts without the historical Python CLI. Optional differential tests install the immutable 0.15.9 wheel in an isolated reference environment through `just test-differential`. Migration plans and acceptance records remain in Git history. See [project goals](docs/product.md) and [architecture](docs/architecture.md) for the current design.
+Rust is the build and runtime implementation starting with v1.0.0, with Ratatui for terminal interaction. The old Python application has been removed from the working tree. CI and `just isok` run Rust behavior contracts without the historical Python CLI. Paired performance evaluation installs the immutable 0.15.9 wheel in an isolated reference environment through `just reference`. Migration plans and acceptance records remain in Git history. See [project goals](docs/product.md) and [architecture](docs/architecture.md) for the current design.
 
 ```bash
 # Run Cargo directly from the repository root
@@ -718,7 +718,7 @@ just build-npm
 just test-npm-smoke
 ```
 
-Both crates inherit workspace lints: unsafe code is denied, Clippy all/pedantic are denied, and nursery warnings fail the gate through `-D warnings`. Explicit exceptions and their reasons are documented in the [development guide](docs/development-guide.md#rust-格式与-lint). Existing CLI differential and tooling tests remain in `tests/`.
+Both crates inherit workspace lints: unsafe code is denied, Clippy all/pedantic are denied, and nursery warnings fail the gate through `-D warnings`. Explicit exceptions and their reasons are documented in the [development guide](docs/development-guide.md#rust-格式与-lint). CLI contract and tooling tests remain in `tests/`.
 
 ## Release
 

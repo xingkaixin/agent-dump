@@ -15,7 +15,7 @@ def create(sessions, identity, records, *, name=STEM):
 
 
 def listed(cli):
-    listing = cli.run("rust", "--list", "-d", "36500", "-q", "provider:omp", "--json")
+    listing = cli.run("--list", "-d", "36500", "-q", "provider:omp", "--json")
     assert listing.returncode == 0, listing.stderr
     return {item["id"]: item for item in json.loads(listing.stdout)["data"]}
 
@@ -55,7 +55,7 @@ def test_list_and_export_use_the_pi_session_tree(cli):
         2,
     )
 
-    exported = cli.run("rust", record["uri"], "--format", "json,raw", "--output", "exports")
+    exported = cli.run(record["uri"], "--format", "json,raw", "--output", "exports")
     assert exported.returncode == 0, exported.stderr
     exports = cli.root / "exports/omp"
     assert (exports / f"{IDENTITY}.raw.jsonl").read_bytes() == source.read_bytes() == before

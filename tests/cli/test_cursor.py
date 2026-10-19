@@ -4,10 +4,8 @@ import sqlite3
 import sys
 
 from cli_fixture import make_cli
-from desktop_fixture import NOW, fails
+from desktop_fixture import NOW
 import pytest
-
-pytestmark = pytest.mark.differential
 
 
 def put(cli, key, value):
@@ -70,6 +68,22 @@ def cursor(tmp_path, monkeypatch):
     return cli
 
 
-@pytest.mark.parametrize("formats", ["raw", "md", "json,markdown", "print,raw"])
-def test_cursor_rejects_unsupported_format_combinations(tmp_path, monkeypatch, formats):
-    fails(cursor(tmp_path, monkeypatch), "cursor://request-parent", formats)
+@pytest.mark.parametrize(
+    ("formats", "rejected"),
+    [("raw", ["raw"]), ("md", ["markdown"]), ("json,markdown", ["markdown"]), ("raw,md,json,raw", ["raw", "markdown"])],
+)
+def test_cursor_rejects_unsupported_format_combinations(tmp_path, monkeypatch, formats, rejected):
+    cli = cursor(tmp_path, monkeypatch)
+    before = cli.fixtures.source_manifest(cli.root)
+    result = cli.run("cursor://request-parent", "--format", formats, "--output", "exports", "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert not result.stderr
+    assert result.stdout.splitlines()[:4] == [
+        "Diagnostic",
+        "Summary: The current request uses an export capability Cursor does not support.",
+        f"Capability gap: Cursor supports only json, print; requested {','.join(rejected)}",
+        "Next steps:",
+    ]
+    assert f"  - Remove {', '.join(f'`{item}`' for item in rejected)} and use a supported format." in result.stdout
+    assert not (cli.root / "exports").exists()
+    assert cli.fixtures.source_manifest(cli.root) == before

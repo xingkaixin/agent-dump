@@ -1,15 +1,10 @@
 """Configuration and shortcut CLI contracts, without touching the user's home."""
 
-import json
 import os
 from pathlib import Path
-import shutil
 
-from cli_fixture import IDENTITY
 import pytest
 import tomli as tomllib
-
-pytestmark = pytest.mark.differential
 
 
 def config_path(cli):
@@ -19,84 +14,87 @@ def config_path(cli):
     return path
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
+@pytest.mark.parametrize(("key", "masked"), [("secret-key-value", "sec**********lue"), ("😺1234终", "******")])
+def test_view_masks_api_key(cli, key, masked):
+    path = config_path(cli)
+    source = f'[ai]\nprovider="openai"\nbase_url="https://example.invalid/v1"\nmodel="example"\napi_key="{key}"\n'
+    path.write_text(source, encoding="utf-8")
+    result = cli.run("--config", "view", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"  api_key: {masked}\n" in result.stdout
+    assert key not in result.stdout + result.stderr
+    assert path.read_text(encoding="utf-8") == source
+
+
+def test_non_tty_edit_preserves_unknown_fields_and_comments(cli):
+    path = config_path(cli)
+    path.write_text(
+        '# keep this comment\n[plugin."with.dot"]\nsecret = "unchanged" # keep suffix\n\n'
+        '[export]\noutput = "old" # export suffix\n'
+    )
+    answers = "1\nhttps://example.invalid/v1\nexample\nsecret-key-value\n./exported\ny\n"
+    result = cli.run("--config", "edit", "--lang", "en", stdin=answers)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "secret-key-value" not in result.stdout + result.stderr
+    content = path.read_text()
+    for comment in ("# keep this comment", "# keep suffix", "# export suffix"):
+        assert comment in content
+    assert tomllib.loads(content) == {
+        "plugin": {"with.dot": {"secret": "unchanged"}},
+        "export": {"output": "./exported"},
+        "ai": {
+            "provider": "openai",
+            "base_url": "https://example.invalid/v1",
+            "model": "example",
+            "api_key": "secret-key-value",
+        },
+    }
+    if os.name != "nt":
+        assert path.stat().st_mode & 0o777 == 0o600
+
+
 @pytest.mark.parametrize(
-    "source",
+    ("source", "answers"),
     [
-        "",
-        '[ai]\nprovider="openai"\nbase_url="https://example.invalid/v1"\nmodel="example"\napi_key="secret-key-value"\n',
-        '[collect]\nsummary_concurrency=33\nsummary_timeout_seconds="180"\n[logging]\nenabled="off"\npath="~/logs/example"\n',
-        "[collect]\nsummary_concurrency=true\nsummary_timeout_seconds=-3\n[export]\noutput=42\n",
-        '[shortcut.example]\nparams=["date"]\nargs=["--list", "-q", "provider:codex"]\n[shortcut.empty]\nargs=[]\n',
-        'bad = "unterminated',
-        '[ai]\nbase_url="C:\\new\\folder"\n',
-        '[export]\noutput=" with \\u001b[0m controls "\n[ai]\napi_key="😺1234终"\n',
+        ('[export]\noutput = "old"\n', "0\n"),
+        ('[export]\noutput = "old"\n', "\n\n\n\n\nn\n"),
+        ('bad = "unterminated', ""),
+        ('[export]\noutput="C:\\new\\folder"\n', ""),
     ],
 )
-def test_view_parity_and_key_masking(cli, lang, source):
+def test_cancelled_or_failed_edit_leaves_file_unchanged(cli, source, answers):
     path = config_path(cli)
     path.write_text(source)
-    cli.parity("--config", "view", "--lang", lang)
+    result = cli.run("--config", "edit", "--lang", "en", stdin=answers)
+    assert result.returncode == 1, result.stdout + result.stderr
     assert path.read_text() == source
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_invalid_utf8_config_diagnostic(cli):
+    path = config_path(cli)
+    path.write_bytes(b"\xff")
+    result = cli.run("--config", "view", "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff" in result.stdout
+    assert path.read_bytes() == b"\xff"
+
+
 @pytest.mark.parametrize(
-    "answers",
+    ("args", "code", "first_line"),
     [
-        "\n\n\n\n./exported\ny\n",
-        "1\nhttps://example.invalid/v1\nexample\nsecret-key-value\n./exported\ny\n",
-        "2\nhttp://localhost:19999\nexample\nshort\n\nyes\n",
-        "0\n",
-        "\n\n\n\n\nn\n",
-        "1\nhttp://remote.invalid\nexample\nsecret-key-value\n\ny\n",
+        (["sessions"], 0, "🚀 Agent Session Exporter"),
+        (["scoped", "codex"], 0, "🚀 Agent Session Exporter"),
+        (["dated", "2026-1-15"], 0, "🚀 Agent Session Exporter"),
+        (["absent"], 1, "❌ Shortcut not found: absent"),
+        (["scoped"], 1, "❌ Shortcut scoped expects 1 args, got 0."),
+        (["scoped", "a", "b"], 1, "❌ Shortcut scoped expects 1 args, got 2."),
+        (["dated", "invalid"], 1, "❌ Invalid shortcut date value. Use YYYY-MM-DD or YYYYMMDD."),
+        (["bad-brace"], 1, "❌ Invalid shortcut template. format/conversion syntax is not supported."),
+        (["unknown-variable"], 1, "❌ Shortcut template references unknown variable: unknown"),
     ],
 )
-def test_non_tty_edit_preserves_unknown_fields_and_comments(cli, lang, answers):
-    path = config_path(cli)
-    source = '# keep this comment\n[plugin."with.dot"]\nsecret = "unchanged" # keep suffix\n\n[export]\noutput = "old" # export suffix\n'
-    results = []
-    documents = []
-    for candidate in ["python", "rust"]:
-        path.write_text(source)
-        result = cli.run(candidate, "--config", "edit", "--lang", lang, stdin=answers)
-        results.append((result.returncode, result.stdout, result.stderr))
-        documents.append(tomllib.loads(path.read_text()))
-        assert "# keep this comment" in path.read_text()
-        assert "# keep suffix" in path.read_text()
-        assert "# export suffix" in path.read_text()
-        assert "secret-key-value" not in result.stdout + result.stderr
-        if result.returncode == 0 and os.name != "nt":
-            assert path.stat().st_mode & 0o777 == 0o600
-    assert results[0] == results[1], results
-    assert documents[0] == documents[1]
-
-
-@pytest.mark.parametrize("source", ['bad = "unterminated', '[export]\noutput="C:\\new\\folder"\n'])
-def test_edit_invalid_config_or_eof_leaves_file_unchanged(cli, source):
-    path = config_path(cli)
-    path.write_text(source)
-    cli.parity("--config", "edit", "--lang", "en", exit_code=1)
-    assert path.read_text() == source
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize(
-    "args",
-    [
-        ["--shortcut", "dated", "2026-1-15"],
-        ["--shortcut", "absent"],
-        ["--shortcut"],
-        ["--shortcut", "scoped"],
-        ["--shortcut", "scoped", "a", "b"],
-        ["--shortcut", "dated", "invalid"],
-        ["--shortcut", "bad-brace"],
-        ["--shortcut", "unknown-variable"],
-    ],
-)
-def test_shortcut_expansion_and_diagnostics(cli, lang, args):
-    path = config_path(cli)
-    path.write_text("""
+def test_shortcut_expansion_and_diagnostics(cli, args, code, first_line):
+    config_path(cli).write_text("""
 [shortcut.sessions]
 params = []
 args = ["--list", "-days", "36500"]
@@ -113,45 +111,12 @@ args = ["{"]
 params = []
 args = ["{unknown}"]
 """)
-    expected = 0 if len(args) > 1 and args[1] in {"sessions", "dated"} and args[-1] in {"sessions", "2026-1-15"} else 1
-    cli.parity(*args, "--lang", lang, exit_code=expected)
-
-
-@pytest.mark.parametrize("formats", ["json", "raw"])
-def test_default_output_respects_per_format_config_policy(cli, formats):
-    path = config_path(cli)
-    path.write_text('[export]\noutput = "configured"\n')
-    results = []
-    files = []
-    for candidate in ["python", "rust"]:
-        for directory in ["configured", "sessions"]:
-            shutil.rmtree(cli.root / directory, ignore_errors=True)
-        result = cli.run(candidate, f"codex://{IDENTITY}", "--format", formats, "--lang", "en")
-        results.append((result.returncode, result.stdout, result.stderr))
-        files.append(
-            {
-                str(f.relative_to(cli.root)): json.loads(f.read_text()) if f.suffix == ".json" else f.read_bytes()
-                for directory in ["configured", "sessions"]
-                for f in (cli.root / directory).rglob("*")
-                if f.is_file()
-            }
-        )
-    assert results[0] == results[1], results
-    assert files[0] == files[1]
-
-
-@pytest.mark.parametrize("newline", ["\r\n", "\r"])
-def test_edit_preserves_content_across_line_endings(cli, newline):
-    path = config_path(cli)
-    source = '# comment\n[export]\noutput="old" # suffix\n'.replace("\n", newline).encode()
-    results = []
-    for candidate in ["python", "rust"]:
-        path.write_bytes(source)
-        result = cli.run(candidate, "--config", "edit", "--lang", "en", stdin="\n\n\n\nnew\ny\n")
-        results.append((result.returncode, result.stdout, result.stderr, path.read_bytes()))
-    assert results[0] == results[1]
-
-
-def test_invalid_utf8_config_diagnostic(cli):
-    config_path(cli).write_bytes(b"\xff")
-    cli.parity("--config", "view", "--lang", "en", exit_code=1)
+    result = cli.run("--shortcut", *args, "--lang", "en")
+    assert result.returncode == code, result.stdout + result.stderr
+    assert not result.stderr
+    assert result.stdout.splitlines()[0] == first_line
+    if args == ["scoped", "codex"]:
+        assert "matching 'providers=codex'" in result.stdout
+        assert "📁 OpenCode" not in result.stdout
+    if args == ["dated", "2026-1-15"]:
+        assert "matching '20260115 2026 01 2026-01'" in result.stdout

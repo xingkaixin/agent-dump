@@ -3,10 +3,8 @@
 import hashlib
 import json
 import os
-import shutil
 
-from cli_fixture import IDENTITY, provider_export, write_jsonl
-import pytest
+from cli_fixture import IDENTITY, write_jsonl
 
 
 def create(cli, *, context=None, wire=None, metadata=None, cwd="/workspace/kimi"):
@@ -58,67 +56,6 @@ CONTEXT_STREAM = [
 ]
 
 
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_context_usage_head_list_and_exports(cli, lang):
-    create(cli, context=CONTEXT_STREAM)
-    cli.parity(f"kimi://{IDENTITY}", "--head", "--lang", lang)
-    cli.parity("--list", "-d", "36500", "-q", "provider:kimi", "--lang", lang)
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi", lang=lang)
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("arguments", ['{"z":1,"a":2}', "invalid", "null", "[]", None, 4, {"z": "中文"}])
-def test_context_tool_arguments(cli, arguments):
-    create(
-        cli,
-        context=[
-            {"role": "assistant", "tool_calls": [call(arguments=arguments)]},
-            {"role": "tool", "tool_call_id": "call", "content": "OK"},
-        ],
-    )
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi")
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize(
-    "content",
-    [None, "", False, 1e-6, {"z": 1, "a": "中文"}, ["one", {"type": "text", "text": "two"}, {"type": "image"}, None]],
-)
-def test_context_output_shapes_and_orphans(cli, content):
-    create(
-        cli,
-        context=[
-            {"role": "assistant", "tool_calls": [call()]},
-            *({"role": "tool", "tool_call_id": identity, "content": content} for identity in ("call", "unknown", "")),
-        ],
-    )
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi")
-
-
-@pytest.mark.differential
-def test_context_todo_filtering_and_title_mapping(cli):
-    names = ["SetTodoList", "ReadFile", "Glob", "StrReplaceFile", "Grep", "WriteFile", "Shell", "Unknown"]
-    create(
-        cli,
-        context=[
-            {"role": "assistant", "tool_calls": [call(name, name) for name in names]},
-            *({"role": "tool", "tool_call_id": name, "content": "Result"} for name in names),
-        ],
-    )
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi")
-
-
-@pytest.mark.differential
-def test_context_user_coercion_empty_and_unknown_records(cli):
-    create(
-        cli,
-        context=[{"role": "user", "content": value} for value in ["", "   "]]
-        + [{"role": "unknown", "content": "ignored"}],
-    )
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi")
-
-
 def test_context_reads_string_and_joins_part_list_with_spaces(cli):
     pasted = [
         {"type": "text", "text": "Review "},
@@ -134,7 +71,7 @@ def test_context_reads_string_and_joins_part_list_with_spaces(cli):
             {"role": "user", "content": pasted},
         ],
     )
-    result = cli.run("rust", f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
+    result = cli.run(f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
     assert result.returncode == 0, result.stderr
     messages = json.loads(result.stdout)["data"]["messages"]
     assert [(item["role"], item["text"]) for item in messages] == [
@@ -142,64 +79,6 @@ def test_context_reads_string_and_joins_part_list_with_spaces(cli):
         ("assistant", "Plain answer"),
         ("user", "Review   PASTED BODY  then reply"),
     ]
-
-
-WIRE_STREAM = [
-    wire_event("TurnBegin", user_input=[{"text": "Start"}]),
-    wire_event("ContentPart", type="think", think="Think"),
-    wire_event("ContentPart", type="text", text="Running"),
-    wire_event("ToolCall", id="call", function={"name": "Shell", "arguments": '{"command":'}),
-    wire_event("ToolCallPart", arguments_part='"pwd"}'),
-    wire_event("ToolResult", tool_call_id="call", return_value={"z": "value", "a": [1e-6]}),
-    wire_event("ToolResult", tool_call_id="call", return_value="Again"),
-    wire_event("TurnBegin", user_input=[{"text": "Next"}]),
-    wire_event("ContentPart", type="text", text="Done"),
-]
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_wire_assembly_streaming_arguments_and_unknown_head_count(cli, lang):
-    create(cli, wire=WIRE_STREAM)
-    cli.parity(f"kimi://{IDENTITY}", "--head", "--lang", lang)
-    cli.parity("--list", "-d", "36500", "-q", "provider:kimi", "--lang", lang)
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi", lang=lang)
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize(
-    "records",
-    [
-        [
-            wire_event("ContentPart", type="text", text="Owner"),
-            wire_event("ToolResult", tool_call_id="missing", return_value="Orphan"),
-            wire_event("ToolCall", id="call", function={"name": "ReadFile", "arguments": "{}"}),
-            wire_event("ToolResult", tool_call_id="call", return_value="Result"),
-        ],
-        [
-            wire_event("ToolCall", id="todo", function={"name": "SetTodoList", "arguments": "{"}),
-            wire_event("ToolCallPart", arguments_part='"items":[]}'),
-            wire_event("ToolResult", tool_call_id="todo", return_value="Ignored"),
-            wire_event("ContentPart", type="text", text="Keep"),
-        ],
-        [
-            wire_event("ContentPart", type="unknown"),
-            wire_event("ToolCall", id="bad", function=None),
-            wire_event("ToolCallPart", arguments_part="ignored"),
-            wire_event("ContentPart", type="text", text="Keep"),
-        ],
-        [
-            wire_event("ToolCall", id="a", function={"name": "ReadFile", "arguments": "{"}),
-            wire_event("ToolCallPart", arguments_part='"incomplete":'),
-            wire_event("TurnBegin", user_input=[]),
-            wire_event("ToolCallPart", arguments_part="3}"),
-            wire_event("ContentPart", type="text", text="Keep"),
-        ],
-    ],
-)
-def test_wire_boundaries(cli, records):
-    create(cli, wire=records)
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi")
 
 
 def test_wire_user_input_keeps_strings_and_joins_parts_with_spaces(cli):
@@ -210,7 +89,7 @@ def test_wire_user_input_keeps_strings_and_joins_parts_with_spaces(cli):
         {"type": "text", "text": " then reply"},
     ]
     create(cli, wire=[wire_event("TurnBegin", user_input="Plain prompt"), wire_event("TurnBegin", user_input=pasted)])
-    result = cli.run("rust", f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
+    result = cli.run(f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
     assert result.returncode == 0, result.stderr
     messages = json.loads(result.stdout)["data"]["messages"]
     assert [(item["role"], item["text"]) for item in messages] == [
@@ -219,87 +98,16 @@ def test_wire_user_input_keeps_strings_and_joins_parts_with_spaces(cli):
     ]
 
 
-@pytest.mark.differential
-@pytest.mark.parametrize("timestamp", [None, "1768478400", True, 1e30, -1e30, 0, 1768478400.123])
-def test_wire_timestamps_and_token_count_coercion(cli, timestamp):
-    record = wire_event("TurnBegin", user_input=[{"text": "Keep"}])
-    record["timestamp"] = timestamp
-    create(
-        cli,
-        wire=[record, {"role": "_usage", "token_count": 12}, {"role": "_usage", "token_count": "ignored"}],
-    )
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi")
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize(
-    "metadata,cwd",
-    [
-        ({}, ""),
-        ({"wire_mtime": 1e30}, "/workspace/kimi"),
-        ({"wire_mtime": "invalid"}, "/workspace/kimi"),
-    ],
-)
-def test_metadata_identity_title_time_and_working_directory_fallback(cli, metadata, cwd):
-    create(cli, context=CONTEXT_STREAM, metadata=metadata, cwd=cwd)
-    cli.parity(f"kimi://{IDENTITY}", "--head", "--lang", "en")
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi")
-
-
-@pytest.mark.differential
-def test_metadata_mtime_does_not_hide_a_current_wire_mtime(cli):
-    directory = create(cli, context=CONTEXT_STREAM)
-    os.utime(directory / "metadata.json", (0, 0))
-    cli.parity("--list", "-d", "36500", "-q", "provider:kimi", "--lang", "en")
-    cli.parity("--list", "-d", "1", "-q", "provider:kimi", "--lang", "en")
-
-
-@pytest.mark.differential
-def test_large_context_head_keeps_count_unknown(cli):
-    create(cli, context=[{"role": "user", "content": "x" * 300_000}])
-    cli.parity(f"kimi://{IDENTITY}", "--head", "--lang", "en")
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi")
-
-
-@pytest.mark.differential
-def test_local_fallback_and_project_hash_map(cli):
-    create(cli, context=CONTEXT_STREAM)
-    shutil.move(str(cli.root / "sources/kimi/sessions"), cli.root / "data/kimi")
-    shutil.move(str(cli.root / "sources/kimi/kimi.json"), cli.root / "data/kimi.json")
-    cli.parity(f"kimi://{IDENTITY}", "--head", "--lang", "en")
-
-
 def test_exports_cannot_write_into_kimi_sources(cli):
     create(cli, context=CONTEXT_STREAM)
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run(
-        "rust", f"kimi://{IDENTITY}", "--format", "json,md,raw", "--output", str(cli.root / "sources/kimi")
-    )
+    result = cli.run(f"kimi://{IDENTITY}", "--format", "json,md,raw", "--output", str(cli.root / "sources/kimi"))
     assert result.returncode == 1
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.differential
-@pytest.mark.parametrize("metadata", ["{broken", "[]"])
-def test_bad_metadata_does_not_hide_healthy_sessions(cli, metadata):
-    directory = create(cli, context=CONTEXT_STREAM)
-    bad = directory.parent / "bad-session"
-    bad.mkdir()
-    (bad / "metadata.json").write_text(metadata)
-    write_jsonl(bad / "context.jsonl", [{"role": "user", "content": "ignored"}])
-    before = cli.fixtures.source_manifest(cli.root)
-    for candidate in ("python", "rust"):
-        result = cli.run(candidate, "--list", "-d", "36500", "-q", "provider:kimi", "--lang", "en")
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert f"kimi://{IDENTITY}" in result.stdout
-        assert "bad-session" not in result.stdout.split("URI:")[-1]
-        assert "metadata.json" in result.stderr, result.stdout + result.stderr
-    provider_export(cli, f"kimi://{IDENTITY}", "kimi")
-    assert cli.fixtures.source_manifest(cli.root) == before
-
-
 def export(cli):
-    result = cli.run("rust", f"kimi://{IDENTITY}", "--format", "json", "--output", "exports")
+    result = cli.run(f"kimi://{IDENTITY}", "--format", "json", "--output", "exports")
     assert result.returncode == 0, result.stderr
     return json.loads(next((cli.root / "exports/kimi").glob("*.json")).read_text())
 
@@ -333,7 +141,7 @@ def test_state_json_title_fallback_times_and_configured_model(cli):
         '[models."moonshot-cn/kimi-k2.5"]\nmodel = "kimi-k2.5"\n\n'
         '[models."kimi-code/kimi-for-coding"]\nmodel = "kimi-for-coding"\n'
     )
-    result = cli.run("rust", "--list", "-d", "36500", "-q", "provider:kimi", "--json")
+    result = cli.run("--list", "-d", "36500", "-q", "provider:kimi", "--json")
     assert result.returncode == 0, result.stderr
     sessions = {item["id"]: item for item in json.loads(result.stdout)["data"]}
     assert sessions.keys() == {IDENTITY, "untitled"}

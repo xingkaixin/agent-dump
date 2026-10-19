@@ -15,7 +15,7 @@ class TestReadmeDocumentsEveryCliFlag:
 
     @staticmethod
     def _declared_option_strings(cli) -> set[str]:
-        result = cli.run("rust", "--help", "--lang", "en")
+        result = cli.run("--help", "--lang", "en")
         assert result.returncode == 0
         return set(re.findall(r"(?<![a-z0-9-])(--?[a-z][a-z0-9-]*)", result.stdout))
 
@@ -61,7 +61,6 @@ class TestWebsiteMatchesTheRealCli:
         from cli_fixture import IDENTITY
 
         result = cli.run(
-            "rust",
             f"codex://{IDENTITY}",
             "--format",
             "markdown",
@@ -76,7 +75,7 @@ class TestWebsiteMatchesTheRealCli:
             assert "./exports/codex/" in guide.read_text(encoding="utf-8")
 
     def test_guide_uris_use_registered_schemes(self, cli):
-        result = cli.run("rust", "--providers", "--json")
+        result = cli.run("--providers", "--json")
         assert result.returncode == 0, result.stderr
         registered = {provider["scheme"] for provider in json.loads(result.stdout)["data"]}
         for guide in self.GUIDES.rglob("*.md"):
@@ -84,7 +83,7 @@ class TestWebsiteMatchesTheRealCli:
             assert not (schemes - {"https"} - registered)
 
     def test_supported_tools_cover_the_provider_registry(self, cli):
-        result = cli.run("rust", "--providers", "--json")
+        result = cli.run("--providers", "--json")
         assert result.returncode == 0, result.stderr
         registered = {provider["scheme"] for provider in json.loads(result.stdout)["data"]}
         start = self.PROVIDERS.index("export const providers")

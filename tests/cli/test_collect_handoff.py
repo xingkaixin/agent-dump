@@ -17,7 +17,7 @@ def test_handoff_commands_read_every_fragment(cli: CliFixture, mode: str) -> Non
     outcome = "最终结果已经验证"
     cli.write([header(), message("user", body), reasoning("private reasoning"), message("assistant", outcome)])
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", *ARGS, "--emit-prompt", "--collect-mode", mode, "--save", "report.md")
+    result = cli.run(*ARGS, "--emit-prompt", "--collect-mode", mode, "--save", "report.md")
     assert result.returncode == 0, result.stderr
     assert result.stdout.rstrip().endswith("<!-- agent-dump:collect-manifest-end -->")
     for required in (

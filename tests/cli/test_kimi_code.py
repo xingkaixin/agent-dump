@@ -28,7 +28,7 @@ def loop(time=STAMP * 1000, **event):
 
 
 def run_json(cli, *args):
-    result = cli.run("rust", *args, "--json")
+    result = cli.run(*args, "--json")
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)["data"]
 
@@ -77,7 +77,7 @@ def test_list_head_and_export(cli):
     head = run_json(cli, f"kimi-code://{IDENTITY}", "--head")
     assert {key: head[key] for key in record} == record
 
-    result = cli.run("rust", f"kimi-code://{IDENTITY}", "--format", "json,md,raw", "--output", "exports")
+    result = cli.run(f"kimi-code://{IDENTITY}", "--format", "json,md,raw", "--output", "exports")
     assert result.returncode == 0, result.stderr
     exports = cli.root / "exports/kimi-code"
     assert (exports / f"{IDENTITY}.raw.jsonl").read_bytes() == (directory / "agents/main/wire.jsonl").read_bytes()
@@ -134,7 +134,7 @@ def test_discovery_needs_state_and_wire_and_skips_empty_sessions(cli):
         "custom": ("Custom title", "/custom"),
         "indexed": ("Prompt title", "/indexed"),
     }
-    missing = cli.run("rust", "kimi-code://empty", "--head")
+    missing = cli.run("kimi-code://empty", "--head")
     assert missing.returncode == 1
 
 

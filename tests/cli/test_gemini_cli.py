@@ -22,7 +22,7 @@ def entry(identity, kind, content, **fields):
 
 
 def run_json(cli, *args):
-    result = cli.run("rust", *args, "--json")
+    result = cli.run(*args, "--json")
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)["data"]
 
@@ -98,7 +98,7 @@ def test_list_head_and_export(cli):
     head = run_json(cli, f"gemini-cli://{IDENTITY}", "--head")
     assert {key: head[key] for key in record} == record
 
-    result = cli.run("rust", f"gemini-cli://{IDENTITY}", "--format", "json,md,raw", "--output", "exports")
+    result = cli.run(f"gemini-cli://{IDENTITY}", "--format", "json,md,raw", "--output", "exports")
     assert result.returncode == 0, result.stderr
     exports = cli.root / "exports/gemini-cli"
     assert (exports / f"{IDENTITY}.raw.jsonl").read_bytes() == source.read_bytes()
@@ -152,7 +152,7 @@ def test_discovery_reads_chats_and_subagents_only(cli):
     }
     assert len(sessions) == 4
     assert run_json(cli, "gemini-cli://agent01", "--head")["message_count"] == 2
-    assert cli.run("rust", "gemini-cli://empty", "--head").returncode == 1
+    assert cli.run("gemini-cli://empty", "--head").returncode == 1
 
 
 def test_gemini_cli_home_is_a_home_directory(cli):

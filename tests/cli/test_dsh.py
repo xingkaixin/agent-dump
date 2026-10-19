@@ -47,7 +47,7 @@ def image(data):
 
 
 def run_json(cli, *args):
-    result = cli.run("rust", *args, "--json")
+    result = cli.run(*args, "--json")
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)["data"]
 
@@ -124,7 +124,7 @@ def test_list_head_and_export(cli):
     head = run_json(cli, f"dsh://{IDENTITY}", "--head")
     assert {key: head[key] for key in record} == record
 
-    exported = cli.run("rust", f"dsh://{IDENTITY}", "--format", "json,raw", "--output", "exports")
+    exported = cli.run(f"dsh://{IDENTITY}", "--format", "json,raw", "--output", "exports")
     assert exported.returncode == 0, exported.stderr
     exports = cli.root / "exports/dsh"
     assert (exports / f"{IDENTITY}.raw.jsonl").read_bytes() == source.read_bytes()
@@ -186,7 +186,7 @@ def test_reads_the_newest_generation_and_complete_zstd_frames(cli):
     os.utime(compressed, (STAMP + 60, STAMP + 60))
     assert listed(cli)[IDENTITY]["title"] == "Newer write"
 
-    exported = cli.run("rust", f"dsh://{IDENTITY}", "--format", "raw", "--output", "exports")
+    exported = cli.run(f"dsh://{IDENTITY}", "--format", "raw", "--output", "exports")
     assert exported.returncode == 0, exported.stderr
     raw = (cli.root / f"exports/dsh/{IDENTITY}.raw.jsonl").read_bytes()
     assert raw == b"".join(json.dumps(record).encode() + b"\n" for record in records)
@@ -223,4 +223,4 @@ def test_discovery_skips_misfiled_invalid_and_inherited_sessions(cli):
         "loose": ("No working directory", None, 1),
         "fork": ("Child question", "/workspace/dsh", 1),
     }
-    assert cli.run("rust", "dsh://other", "--head").returncode == 1
+    assert cli.run("dsh://other", "--head").returncode == 1

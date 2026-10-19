@@ -11,7 +11,7 @@ from test_tui import terminal
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
 def test_reader_requires_terminal(cli, lang):
-    result = cli.run("rust", "--browse", "--lang", lang)
+    result = cli.run("--browse", "--lang", lang)
     assert result.returncode == 1
     assert "--browse" in result.stderr
     assert not (cli.root / "sessions").exists()
@@ -115,7 +115,7 @@ def test_reader_switch_session_and_ctrl_c(cli):
 
 @pytest.mark.parametrize("extra", [["--search", "needle"], ["--search", "needle", "--json"]])
 def test_browse_search_routes_to_reader(cli, extra):
-    result = cli.run("rust", "--browse", *extra, "--lang", "en")
+    result = cli.run("--browse", *extra, "--lang", "en")
     assert result.returncode == 1
     assert not result.stdout
     assert "--browse" in result.stderr or "--json" in result.stderr

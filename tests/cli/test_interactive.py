@@ -1,46 +1,34 @@
 """Non-TTY selection remains usable in pipelines without a terminal UI."""
 
-import json
-import shutil
+from pathlib import Path
+import re
 
 import pytest
-from test_config_shortcuts import config_path
-
-pytestmark = pytest.mark.differential
 
 
-@pytest.mark.parametrize("selection", ["1\nall\n", "0\n", "q\n", "", "99\n"])
-def test_provider_selection(cli, selection):
-    results = []
-    for candidate in ["python", "rust"]:
-        result = cli.run(
-            candidate, "--interactive", "-d", "36500", "--lang", "en", "--output", "exports", stdin=selection
-        )
-        results.append((result.returncode, result.stdout, result.stderr))
-    assert results[0] == results[1]
+def test_provider_selection_exports_all_sessions(cli):
+    before = cli.fixtures.source_manifest(cli.root)
+    result = cli.run("--interactive", "-d", "36500", "--lang", "en", "--output", "exports", stdin="1\nall\n")
+    assert result.returncode == 0, result.stdout + result.stderr
+    directory = re.escape(str(Path("exports/opencode")))
+    exported = re.search(rf"✅ Successfully exported (\d+) sessions to {directory}/\n\Z", result.stdout)
+    assert exported, result.stdout
+    assert len(list((cli.root / "exports/opencode").glob("*.json"))) == int(exported[1]) > 0
+    assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize("formats", ["print"])
-@pytest.mark.parametrize("explicit", [True, False])
-def test_batch_formats_and_default_paths(cli, formats, explicit):
-    config_path(cli).write_text('[export]\noutput="configured"\n')
-    args = ["--interactive", "-q", "provider:codex", "-d", "36500", "--format", formats, "--lang", "en"]
-    if explicit:
-        args += ["--output", "exports"]
-    results = []
-    files = []
-    for candidate in ["python", "rust"]:
-        for directory in ["exports", "configured", "sessions"]:
-            shutil.rmtree(cli.root / directory, ignore_errors=True)
-        result = cli.run(candidate, *args, stdin="all\n")
-        results.append((result.returncode, result.stdout, result.stderr))
-        files.append(
-            {
-                str(p.relative_to(cli.root)): json.loads(p.read_text()) if p.suffix == ".json" else p.read_bytes()
-                for directory in ["exports", "configured", "sessions"]
-                for p in (cli.root / directory).rglob("*")
-                if p.is_file()
-            }
-        )
-    assert files[0] == files[1]
-    assert results[0] == results[1]
+@pytest.mark.parametrize(
+    ("selection", "warning"),
+    [
+        ("0\n", "> ⚠️  Invalid selection: 0\n"),
+        ("99\n", "> ⚠️  Invalid selection: 99\n"),
+        ("q\n", "> ⚠️  Invalid input. Please enter a number.\n"),
+        ("", "> \n⚠️  No input provided. Exiting.\n"),
+    ],
+)
+def test_invalid_provider_selection_exits_without_export(cli, selection, warning):
+    result = cli.run("--interactive", "-d", "36500", "--lang", "en", "--output", "exports", stdin=selection)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert not result.stderr
+    assert result.stdout.endswith(f"{warning}\n⚠️  No Agent Tool selected, exiting.\n")
+    assert not (cli.root / "exports").exists()

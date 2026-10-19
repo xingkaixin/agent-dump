@@ -82,18 +82,3 @@ def create_legacy(cli, provider="opencode", *, path=None):
                 (f"part_{index}", owner, NOW + index, json.dumps({"type": kind, "text": body})),
             )
     return path
-
-
-def export(cli, provider="opencode", identity="ses_v2", *, lang="en"):
-    cli.parity(
-        f"{provider}://{identity}",
-        "--format",
-        "json,md,raw,print",
-        "--output",
-        "exports",
-        "--lang",
-        lang,
-        formats=("json", "markdown", "raw-json"),
-    )
-    directory = cli.root / "exports" / provider
-    return json.loads((directory / f"{identity}.json").read_text())

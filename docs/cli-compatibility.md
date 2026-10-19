@@ -43,7 +43,7 @@ uvx --from git+https://github.com/xingkaixin/agent-dump agent-dump --help
 
 See the [development guide](development-guide.md) for validation and build details.
 
-Version 0.15.9 is the last Python release. Since v1.0.0, wheels provide only the `agent-dump` command: Python imports and `python -m agent_dump` are not included. Existing API consumers can pin `agent-dump==0.15.9`, or migrate to subprocess calls with JSON output or JSON file exports. Current Rust features are not all available in 0.15.9; the frozen Python environment is used only for differential verification. Historical Python source remains in Git history.
+Version 0.15.9 is the last Python release. Since v1.0.0, wheels provide only the `agent-dump` command: Python imports and `python -m agent_dump` are not included. Existing API consumers can pin `agent-dump==0.15.9`, or migrate to subprocess calls with JSON output or JSON file exports. Current Rust features are not all available in 0.15.9; the frozen Python environment is used only for paired performance evaluation. Historical Python source remains in Git history.
 
 ## 中文
 
@@ -74,4 +74,4 @@ Version 0.15.9 is the last Python release. Since v1.0.0, wheels provide only the
 
 预构建 wheel 无需 Rust 编译器。从 Git 或 sdist 构建需要 Rust 1.90.0 和 C 工具链。Linux ARM64、Linux musl/Alpine、Windows ARM64 没有预构建产物。源码安装和临时运行命令见[上方示例](#source-builds-and-python-api-migration)，验证流程见[开发指南](development-guide.md)。
 
-0.15.9 是最后一个 Python 版本。从 v1.0.0 起，wheel 仅提供 `agent-dump` 命令，不包含 Python 导入 API 或 `python -m agent_dump`。旧 API 使用方可固定 `agent-dump==0.15.9`，或迁移到子进程调用，用 JSON 输出或 JSON 文件导出交换结构化数据。当前 Rust 功能并非全部适用于 0.15.9；冻结的 Python 环境只用于差分验证，历史源码保留在 Git 历史中。
+0.15.9 是最后一个 Python 版本。从 v1.0.0 起，wheel 仅提供 `agent-dump` 命令，不包含 Python 导入 API 或 `python -m agent_dump`。旧 API 使用方可固定 `agent-dump==0.15.9`，或迁移到子进程调用，用 JSON 输出或 JSON 文件导出交换结构化数据。当前 Rust 功能并非全部适用于 0.15.9；冻结的 Python 环境只用于配对性能评估，历史源码保留在 Git 历史中。

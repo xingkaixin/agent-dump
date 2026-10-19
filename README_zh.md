@@ -667,7 +667,7 @@ web/            # Landing page
 
 ## Development
 
-从 v1.0.0 起，Rust 是构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树。CI 和 `just isok` 验证 Rust 行为契约，不依赖历史 Python CLI；需要历史差分验证时，`just test-differential` 在独立环境安装固定的 0.15.9 wheel。迁移计划与验收记录保留在 Git 历史中；当前设计见[项目定位](docs/product.md)和[架构](docs/architecture.md)。
+从 v1.0.0 起，Rust 是构建和运行实现，交互界面使用 Ratatui。旧 Python 应用已移出主树。CI 和 `just isok` 验证 Rust 行为契约，不依赖历史 Python CLI；配对性能评估通过 `just reference` 在独立环境安装固定的 0.15.9 wheel。迁移计划与验收记录保留在 Git 历史中；当前设计见[项目定位](docs/product.md)和[架构](docs/architecture.md)。
 
 ```bash
 # 从仓库根直接运行 Cargo
@@ -703,7 +703,7 @@ just build-npm
 just test-npm-smoke
 ```
 
-两个 crate 统一继承 workspace lint：禁止 unsafe，Clippy all/pedantic 为 deny、nursery 为 warn；门禁以 `-D warnings` 执行。逐项例外及原因见[开发指南](docs/development-guide.md#rust-格式与-lint)。`tests/` 保留现有 CLI 差分和工具验收测试。
+两个 crate 统一继承 workspace lint：禁止 unsafe，Clippy all/pedantic 为 deny、nursery 为 warn；门禁以 `-D warnings` 执行。逐项例外及原因见[开发指南](docs/development-guide.md#rust-格式与-lint)。`tests/` 保留 CLI 契约和工具验收测试。
 
 ## 发布
 

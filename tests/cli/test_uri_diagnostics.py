@@ -2,144 +2,122 @@
 
 from pathlib import Path
 import shutil
-import sqlite3
 
 from cli_fixture import IDENTITY, header, message, write_jsonl
 from desktop_fixture import desktop
 import pytest
-from sqlite_fixture import create_v2
-from test_cursor import cursor
 
-pytestmark = pytest.mark.differential
+CONTROLS = ("\x1b", "\r", "‮")
+NAMES = {"deepchat": "DeepChat", "cherry": "Cherry Studio", "minimax": "MiniMax Code"}
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(
-    "uri",
+    ("uri", "summary", "parsed"),
     [
-        "invalid",
-        "https://session",
-        "Codex://id",
-        "codex://",
-        "codex://threads/",
-        "codex://\n",
-        "codex://id\nforged",
-        "claudecode://id",
-        " codex://id",
-        "bad://\x1b[2K\rforged\u202e",
+        ("invalid", "Invalid URI format.", "invalid"),
+        ("https://session", "Invalid URI format.", "https://session"),
+        ("Codex://id", "Invalid URI format.", "Codex://id"),
+        ("codex://", "Invalid URI format.", "codex://"),
+        ("codex://threads/", "Invalid URI format.", "codex://threads/"),
+        ("codex://\n", "Invalid URI format.", "codex://"),
+        ("codex://id\nforged", "Invalid URI format.", "codex://id forged"),
+        ("claudecode://id", "Invalid URI format.", "claudecode://id"),
+        (" codex://id", "Invalid URI format.", "codex://id"),
+        ("bad://\x1b[2K\rforged‮", "Invalid URI format.", "bad:// [2K forged"),
+        ("codex://threads/missing", "No matching session found.", "codex://threads/missing"),
+        ("codex://missing\n", "No matching session found.", "codex://missing"),
+        ("codex://not-found\r\x1b[2K‮", "No matching session found.", "codex://not-found [2K"),
     ],
 )
-def test_invalid_uri_diagnostic_is_exact_and_safe(cli, lang, uri):
-    cli.parity(uri, "--lang", lang, exit_code=1, mask=lambda text: text.replace("<requestid>", "<composer_id>"))
-    result = cli.run("rust", uri, "--lang", lang)
+def test_uri_diagnostic_is_exact_and_safe(cli, uri, summary, parsed):
+    result = cli.run(uri, "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
     assert not result.stderr
-    assert "\x1b" not in result.stdout and "\r" not in result.stdout and "\u202e" not in result.stdout
+    assert result.stdout.splitlines()[:3] == ["Diagnostic", f"Summary: {summary}", f"Parsed URI: {parsed}"]
+    assert not any(control in result.stdout for control in CONTROLS)
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_long_missing_uri_is_truncated_in_diagnostic(cli):
+    result = cli.run("codex://not-found-" + "字" * 600, "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    parsed = result.stdout.splitlines()[2]
+    assert parsed.startswith("Parsed URI: codex://not-found-字") and parsed.endswith("字…")
+    assert len(parsed) == 512
+
+
 @pytest.mark.parametrize(
     "scheme", ["opencode", "zcode", "codex", "kimi", "claude", "cursor", "pi", "deepchat", "cherry", "minimax"]
 )
-def test_missing_session_and_missing_provider_share_diagnostic(cli, lang, scheme):
-    cli.parity(f"{scheme}://missing", "--head", "--lang", lang, exit_code=1)
-    shutil.rmtree(cli.root / "sources")
-    cli.parity(f"{scheme}://missing", "--head", "--lang", lang, exit_code=1)
+def test_missing_session_and_missing_provider_share_diagnostic(cli, scheme):
+    expected = [
+        "Diagnostic",
+        "Summary: No matching session found.",
+        f"Parsed URI: {scheme}://missing",
+        f"  - scheme: {scheme}",
+        "  - session_id: missing",
+    ]
+    for _ in range(2):
+        result = cli.run(f"{scheme}://missing", "--head", "--lang", "en")
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert not result.stderr
+        assert result.stdout.splitlines()[:5] == expected
+        shutil.rmtree(cli.root / "sources", ignore_errors=True)
     assert not (cli.root / "sources").exists()
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize(
-    "identity", ["threads/missing", "missing\n", "not-found\r\x1b[2K\u202e", "not-found-" + "字" * 600]
-)
-def test_missing_uri_preserves_parsed_evidence_without_terminal_controls(cli, lang, identity):
-    cli.parity(f"codex://{identity}", "--lang", lang, exit_code=1)
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("formats", ["raw", "md", "raw,md,json,raw"])
-def test_cursor_format_rejection_lists_all_unsupported_formats(tmp_path, monkeypatch, lang, formats):
-    cli = cursor(tmp_path, monkeypatch)
-    cli.parity("cursor://request-parent", "--format", formats, "--lang", lang, exit_code=1)
-    assert not (cli.root / "exports").exists()
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax"])
-def test_desktop_format_rejection_precedes_any_export(tmp_path, monkeypatch, provider, lang):
+def test_desktop_format_rejection_precedes_any_export(tmp_path, monkeypatch, provider):
     cli, identity = desktop(tmp_path, monkeypatch, provider)
-    cli.parity(
-        f"{provider}://{identity}", "--format", "json,raw,print", "--output", "exports", "--lang", lang, exit_code=1
-    )
+    result = cli.run(f"{provider}://{identity}", "--format", "json,raw,print", "--output", "exports", "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert not result.stderr
+    assert result.stdout.splitlines()[:3] == [
+        "Diagnostic",
+        f"Summary: The current request uses an export capability {NAMES[provider]} does not support.",
+        f"Capability gap: {NAMES[provider]} supports only json, markdown, print; requested raw",
+    ]
     assert not (cli.root / "exports").exists()
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("formats", ["json", "invalid", ""])
-def test_head_format_conflict_precedes_lookup_and_format_validation(cli, lang, formats):
-    cli.parity("codex://missing", "--head", "--format", formats, "--lang", lang, exit_code=1)
+def test_head_format_conflict_precedes_lookup_and_format_validation(cli, formats):
+    result = cli.run("codex://missing", "--head", "--format", formats, "--lang", "en")
+    assert (result.returncode, result.stdout, result.stderr) == (
+        1,
+        "❌ --head cannot be used with -format/--format.\n",
+        "",
+    )
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_head_ignores_output_without_creating_directories(cli, lang):
-    cli.parity(f"codex://{IDENTITY}", "--head", "--output", "exports", "--lang", lang)
+def test_head_ignores_output_without_creating_directories(cli):
+    result = cli.run(f"codex://{IDENTITY}", "--head", "--output", "exports", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"- URI: codex://{IDENTITY}" in result.stdout
     assert not (cli.root / "exports").exists()
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("formats", ["", "json,", "xml", "raw,,json"])
-def test_invalid_format_list_is_an_argument_error(cli, lang, formats):
-    for candidate in ("python", "rust"):
-        result = cli.run(candidate, "codex://missing", "--format", formats, "--lang", lang)
-        assert result.returncode == 2
-        assert not result.stdout and result.stderr
+def test_invalid_format_list_is_an_argument_error(cli, formats):
+    result = cli.run("codex://missing", "--format", formats, "--lang", "en")
+    assert result.returncode == 2
+    assert not result.stdout
+    assert result.stderr.startswith(f"error: Invalid format list: {formats}")
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_lookup_failure_warns_then_prints_missing_session(cli, lang):
+def test_lookup_failure_warns_then_prints_missing_session(cli):
     Path(cli.environment["OPENCODE_DB"]).write_bytes(b"broken synthetic database")
-    cli.parity("opencode://missing", "--lang", lang, exit_code=1)
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_recovered_lookup_warning_does_not_hide_matching_session(cli, lang):
-    bad = cli.source.parent / f"rollout-bad-{IDENTITY}.jsonl"
-    write_jsonl(bad, [{"type": "session_meta", "payload": 42}])
-    cli.write([header(), message("user", "Retained")])
-    cli.source.rename(cli.source.with_name("rollout-fallback.jsonl"))
     before = cli.fixtures.source_manifest(cli.root)
-    results = [cli.run(candidate, f"codex://{IDENTITY}", "--head", "--lang", lang) for candidate in ("python", "rust")]
-    assert results[0].stdout == results[1].stdout
-    assert all(result.returncode == 0 for result in results)
-    assert all(len(result.stderr.splitlines()) == 2 for result in results)
-    assert results[0].stderr.split("bad-", 1)[0] == results[1].stderr.split("bad-", 1)[0]
+    result = cli.run("opencode://missing", "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stderr == "⚠️  OpenCode session lookup failed: file is not a database\n"
+    assert result.stdout.startswith("Diagnostic\nSummary: No matching session found.\n")
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_fallback_lookup_chooses_newest_matching_session(cli, lang):
+def test_fallback_lookup_chooses_newest_matching_session(cli):
     cli.write([header(cwd="/older"), message("user", "Older")])
     cli.source.rename(cli.source.with_name("rollout-older.jsonl"))
     write_jsonl(cli.source.with_name("rollout-newer.jsonl"), [header(cwd="/newest", timestamp="2026-02-01T00:00:00Z")])
-    cli.parity(f"codex://{IDENTITY}", "--head", "--lang", lang)
-    assert str(Path("/newest")) in cli.run("rust", f"codex://{IDENTITY}", "--head").stdout
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_read_failure_has_diagnostic_per_requested_format(cli, monkeypatch, lang):
-    database = create_v2(cli, monkeypatch)
-    with sqlite3.connect(database) as connection:
-        connection.execute("UPDATE session_message SET data = '{broken'")
-    before = cli.fixtures.source_manifest(cli.root)
-    results = [
-        cli.run(candidate, "opencode://ses_v2", "--format", "print,json,md,raw", "--output", "exports", "--lang", lang)
-        for candidate in ("python", "rust")
-    ]
-    for result in results:
-        assert result.returncode == 1
-        assert not result.stderr
-        assert not list((cli.root / "exports").rglob("*.*"))
-    python_lines = results[0].stdout.splitlines()
-    rust_lines = results[1].stdout.splitlines()
-    assert python_lines[0:2] == rust_lines[0:2]
-    assert rust_lines.count(python_lines[0]) == python_lines.count(python_lines[0]) == 4
-    assert cli.fixtures.source_manifest(cli.root) == before
+    result = cli.run(f"codex://{IDENTITY}", "--head", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"- CWD/Project: {Path('/newest')}" in result.stdout

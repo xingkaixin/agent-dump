@@ -1,4 +1,4 @@
-"""Shared discovery behavior through isolated Python and Rust processes."""
+"""Shared discovery behavior, diagnostics and failure isolation."""
 
 import importlib
 import os
@@ -7,7 +7,7 @@ import shutil
 import sqlite3
 import sys
 
-from cli_fixture import IDENTITY, ROOT, header, write_jsonl
+from cli_fixture import IDENTITY, ROOT, write_jsonl
 from desktop_fixture import NOW, PROVIDERS, desktop
 import pytest
 from sqlite_fixture import create_legacy
@@ -24,20 +24,8 @@ from test_omp import create as create_omp
 from test_pi import create as create_pi, message
 from test_qoder import create as create_qoder
 
-pytestmark = pytest.mark.differential
 
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("summary", [True, False])
-def test_all_providers_list(cli, lang, summary):
-    args = ["--list", "-d", "1", "--lang", lang]
-    if not summary:
-        args.append("--no-metadata-summary")
-    cli.parity(*args)
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
+def test_all_registered_providers_together(tmp_path, monkeypatch):
     cli = cursor(tmp_path, monkeypatch)
     create_claude(cli, [event("user", "Claude")])
     create_kimi(cli, context=[{"role": "user", "content": "Kimi"}])
@@ -57,7 +45,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
         getattr(module, f"create_{provider}_db")(Path(cli.environment[variable]) / suffix, NOW)
     if sys.platform == "darwin" or os.name == "nt":
         create_legacy(cli, "zcode", path=Path(cli.environment["HOME"]) / ".zcode/cli/db/db.sqlite")
-    result = cli.run("rust", "--list", "-d", "36500")
+    result = cli.run("--list", "-d", "36500")
     expected = [
         "OpenCode",
         "Codex",
@@ -83,97 +71,86 @@ def test_all_registered_providers_together(tmp_path, monkeypatch, lang):
     assert [line.split(" (")[0][2:] for line in result.stdout.splitlines() if line.startswith("📁 ")] == expected
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("scope", [None, "codex", "pi,codex"])
-def test_no_sources_diagnostic_and_exit_code(cli, lang, scope):
+@pytest.mark.parametrize(
+    ("scope", "code", "summary"),
+    [
+        (None, 1, "No usable local session data found."),
+        ("codex", 0, "No usable provider within the query scope."),
+        ("pi,codex", 0, "No usable provider within the query scope."),
+    ],
+)
+def test_no_sources_diagnostic_and_exit_code(cli, scope, code, summary):
     shutil.rmtree(cli.root / "sources")
-    args = ["--list", "--lang", lang]
+    args = ["--list", "--lang", "en"]
     if scope:
         args.extend(["-q", f"provider:{scope}"])
-    results = [cli.run(candidate, *args) for candidate in ("python", "rust")]
-    assert (results[0].returncode, results[0].stdout, results[0].stderr) == (
-        results[1].returncode,
-        results[1].stdout,
-        results[1].stderr,
-    )
-    assert results[1].returncode == (0 if scope else 1)
+    result = cli.run(*args)
+    assert result.returncode == code, result.stdout + result.stderr
+    assert not result.stderr
+    assert f"Diagnostic\nSummary: {summary}\n" in result.stdout
     assert not (cli.root / "sources").exists()
 
 
-@pytest.mark.parametrize("state", ["missing", "directory", "candidate", "old", "empty-database"])
-def test_availability_is_independent_of_filtered_sessions(cli, state):
-    shutil.rmtree(cli.root / "sources/codex/sessions")
-    if state in {"directory", "candidate", "old"}:
-        directory = cli.root / "sources/codex/sessions"
-        directory.mkdir()
-        if state == "candidate":
-            (directory / "rollout-empty.jsonl").touch()
-        if state == "old":
-            write_jsonl(directory / "rollout-old.jsonl", [header()])
-    if state == "empty-database":
-        with sqlite3.connect(cli.environment["OPENCODE_DB"]) as connection:
-            connection.execute("DELETE FROM session_v2")
-    cli.parity("--list", "-d", "1")
-    result = cli.run("rust", "--list", "-d", "1")
-    assert ("📁 Codex" in result.stdout) == (state in {"candidate", "old"})
-    assert "📁 OpenCode (0 " in result.stdout
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("scope", [None, "opencode"])
-def test_corrupt_database_isolated_and_explicit_scope_skips_it(cli, lang, scope):
+def test_corrupt_database_isolated_and_explicit_scope_skips_it(cli, scope):
     Path(cli.environment["OPENCODE_DB"]).write_bytes(b"broken synthetic database")
     before = cli.fixtures.source_manifest(cli.root)
-    args = ["--list", "-d", "36500", "--lang", lang]
+    args = ["--list", "-d", "36500", "--lang", "en"]
     if scope:
         args.extend(["-q", f"provider:{scope}"])
-    results = [cli.run(candidate, *args) for candidate in ("python", "rust")]
-    for result in results:
-        assert result.returncode == 0
-        assert ("codex://" in result.stdout) == (scope != "opencode")
-        assert "OpenCode" in result.stderr
+    result = cli.run(*args)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ("codex://" in result.stdout) == (scope != "opencode")
+    assert result.stderr == "⚠️  OpenCode provider operation failed: DatabaseError: file is not a database\n"
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.skipif(os.name == "nt", reason="Windows forbids control characters in filenames")
-def test_bad_file_keeps_good_sessions_and_warning_is_one_line(cli, lang):
+def test_bad_file_keeps_good_sessions_and_warning_is_one_line(cli):
     bad = cli.source.parent / "rollout-bad\n\x1b[31m.jsonl"
     write_jsonl(bad, [{"type": "session_meta", "payload": 42}])
     before = cli.fixtures.source_manifest(cli.root)
-    results = [cli.run(candidate, "--list", "-d", "36500", "--lang", lang) for candidate in ("python", "rust")]
-    assert results[0].stderr.split("bad", 1)[0] == results[1].stderr.split("bad", 1)[0]
-    for result in results:
-        assert result.returncode == 0
-        assert "codex://" in result.stdout and "opencode://" in result.stdout
-        assert len(result.stderr.splitlines()) == 1
-        assert "\x1b" not in result.stderr
+    result = cli.run("--list", "-d", "36500", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "codex://" in result.stdout and "opencode://" in result.stdout
+    assert len(result.stderr.splitlines()) == 1
+    assert "\x1b" not in result.stderr
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_claude_projects_file_is_a_source_failure(cli, lang):
+def test_claude_projects_file_is_a_source_failure(cli):
     source = cli.root / "sources/claude/projects"
     source.parent.mkdir(parents=True, exist_ok=True)
     if source.exists():
         shutil.rmtree(source)
     source.write_text("not a project directory")
     before = cli.fixtures.source_manifest(cli.root)
-    for args, exit_code in [
-        (("--list", "-q", "provider:claude", "-d", "36500"), 0),
-        (("claude://missing", "--head"), 1),
+    for args, exit_code, prefix in [
+        (("--list", "-q", "provider:claude", "-d", "36500"), 0, "⚠️  Claude Code provider operation failed: "),
+        (("claude://missing", "--head"), 1, "⚠️  Claude Code session lookup failed: "),
     ]:
-        results = [cli.run(candidate, *args, "--lang", lang) for candidate in ("python", "rust")]
-        assert results[0].stdout == results[1].stdout
-        for result in results:
-            assert result.returncode == exit_code
-            assert len(result.stderr.splitlines()) == 1
-            assert str(source) in result.stderr or "directory" in result.stderr.lower()
-            assert cli.fixtures.source_manifest(cli.root) == before
+        result = cli.run(*args, "--lang", "en")
+        assert result.returncode == exit_code, result.stdout + result.stderr
+        assert len(result.stderr.splitlines()) == 1
+        assert result.stderr.startswith(prefix)
+        assert str(source) in result.stderr or "directory" in result.stderr.lower()
+        assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize("provider", ["cherry", "minimax"])
-def test_partial_desktop_failure_keeps_other_providers(tmp_path, monkeypatch, provider):
+@pytest.mark.parametrize(
+    ("provider", "warning"),
+    [
+        (
+            "cherry",
+            "Failed to read Cherry Studio session topic-contract: Invalid Cherry Studio active branch: contract",
+        ),
+        (
+            "minimax",
+            "Failed to read MiniMax Code session minimax-contract: MiniMax Code session storage is unsupported",
+        ),
+    ],
+)
+def test_partial_desktop_failure_keeps_other_providers(tmp_path, monkeypatch, provider, warning):
     cli, _ = desktop(tmp_path, monkeypatch, provider)
     with sqlite3.connect(cli.source) as connection:
         connection.execute(
@@ -182,28 +159,23 @@ def test_partial_desktop_failure_keeps_other_providers(tmp_path, monkeypatch, pr
             else "UPDATE local_runtime_sessions SET columnar_version = 2"
         )
     before = cli.fixtures.source_manifest(cli.root)
-    results = [cli.run(candidate, "--list", "-d", "36500") for candidate in ("python", "rust")]
-    for result in results:
-        assert result.returncode == 0
-        assert "codex://" in result.stdout and "opencode://" in result.stdout
-        assert result.stderr
+    result = cli.run("--list", "-d", "36500", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "codex://" in result.stdout and "opencode://" in result.stdout
+    assert result.stderr.startswith(warning)
+    assert len(result.stderr.splitlines()) == 1
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize("query", ["", "  ", "provider:"])
-def test_invalid_query_never_silently_broadens_scope(cli, query):
-    cli.parity("--list", "-q", query, exit_code=1)
-
-
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_all_available_sources_failing_returns_one(cli, lang):
+def test_all_available_sources_failing_returns_one(cli):
     shutil.rmtree(cli.root / "sources/codex")
     Path(cli.environment["OPENCODE_DB"]).write_bytes(b"broken synthetic database")
-    results = [cli.run(candidate, "--list", "--lang", lang) for candidate in ("python", "rust")]
-    assert results[0].stdout == results[1].stdout
-    for result in results:
-        assert result.returncode == 1
-        assert result.stderr
+    before = cli.fixtures.source_manifest(cli.root)
+    result = cli.run("--list", "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Diagnostic\nSummary: No usable local session data found.\n" in result.stdout
+    assert result.stderr == "⚠️  OpenCode provider operation failed: DatabaseError: file is not a database\n"
+    assert cli.fixtures.source_manifest(cli.root) == before
 
 
 def test_provider_initialization_failure_is_isolated(cli):
@@ -211,9 +183,8 @@ def test_provider_initialization_failure_is_isolated(cli):
     boot = Path(cli.environment["HOME"]) / ".cherrystudio/boot-config.json"
     boot.parent.mkdir()
     boot.write_text("broken synthetic config")
-    results = [cli.run(candidate, "--list", "-d", "36500") for candidate in ("python", "rust")]
-    for result in results:
-        assert result.returncode == 0
-        assert "codex://" in result.stdout
-        assert result.stderr
+    result = cli.run("--list", "-d", "36500", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "codex://" in result.stdout
+    assert result.stderr.startswith("⚠️  Cherry Studio provider operation failed: JSONDecodeError: ")
     assert boot.read_text() == "broken synthetic config"
