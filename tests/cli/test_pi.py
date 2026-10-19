@@ -73,7 +73,7 @@ STREAM = [
 def test_exports_cannot_write_into_pi_sources(cli):
     create(cli, STREAM)
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", f"pi://{IDENTITY}", "--format", "json,md,raw", "--output", str(cli.root / "sources/pi"))
+    result = cli.run(f"pi://{IDENTITY}", "--format", "json,md,raw", "--output", str(cli.root / "sources/pi"))
     assert result.returncode == 1
     assert cli.fixtures.source_manifest(cli.root) == before
 
@@ -93,7 +93,7 @@ def test_environment_paths_trim_and_expand_home(cli, value, location):
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(cli.root / "sources/pi"), target)
     cli.environment["PI_HOME"] = value
-    result = cli.run("rust", f"pi://{IDENTITY}", "--head", "--lang", "en")
+    result = cli.run(f"pi://{IDENTITY}", "--head", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -115,5 +115,5 @@ def test_coding_agent_directories_take_precedence(cli, layout):
         (agent / "settings.json").write_text(json.dumps({"sessionDir": directory}))
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(cli.root / "sources/pi/agent/sessions"), target)
-    result = cli.run("rust", f"pi://{IDENTITY}", "--head", "--lang", "en")
+    result = cli.run(f"pi://{IDENTITY}", "--head", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr

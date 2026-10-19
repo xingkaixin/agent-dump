@@ -30,7 +30,7 @@ NAMES = {"deepchat": "DeepChat", "cherry": "Cherry Studio", "minimax": "MiniMax 
     ],
 )
 def test_uri_diagnostic_is_exact_and_safe(cli, uri, summary, parsed):
-    result = cli.run("rust", uri, "--lang", "en")
+    result = cli.run(uri, "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert not result.stderr
     assert result.stdout.splitlines()[:3] == ["Diagnostic", f"Summary: {summary}", f"Parsed URI: {parsed}"]
@@ -38,7 +38,7 @@ def test_uri_diagnostic_is_exact_and_safe(cli, uri, summary, parsed):
 
 
 def test_long_missing_uri_is_truncated_in_diagnostic(cli):
-    result = cli.run("rust", "codex://not-found-" + "字" * 600, "--lang", "en")
+    result = cli.run("codex://not-found-" + "字" * 600, "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     parsed = result.stdout.splitlines()[2]
     assert parsed.startswith("Parsed URI: codex://not-found-字") and parsed.endswith("字…")
@@ -57,7 +57,7 @@ def test_missing_session_and_missing_provider_share_diagnostic(cli, scheme):
         "  - session_id: missing",
     ]
     for _ in range(2):
-        result = cli.run("rust", f"{scheme}://missing", "--head", "--lang", "en")
+        result = cli.run(f"{scheme}://missing", "--head", "--lang", "en")
         assert result.returncode == 1, result.stdout + result.stderr
         assert not result.stderr
         assert result.stdout.splitlines()[:5] == expected
@@ -68,9 +68,7 @@ def test_missing_session_and_missing_provider_share_diagnostic(cli, scheme):
 @pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax"])
 def test_desktop_format_rejection_precedes_any_export(tmp_path, monkeypatch, provider):
     cli, identity = desktop(tmp_path, monkeypatch, provider)
-    result = cli.run(
-        "rust", f"{provider}://{identity}", "--format", "json,raw,print", "--output", "exports", "--lang", "en"
-    )
+    result = cli.run(f"{provider}://{identity}", "--format", "json,raw,print", "--output", "exports", "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert not result.stderr
     assert result.stdout.splitlines()[:3] == [
@@ -83,7 +81,7 @@ def test_desktop_format_rejection_precedes_any_export(tmp_path, monkeypatch, pro
 
 @pytest.mark.parametrize("formats", ["json", "invalid", ""])
 def test_head_format_conflict_precedes_lookup_and_format_validation(cli, formats):
-    result = cli.run("rust", "codex://missing", "--head", "--format", formats, "--lang", "en")
+    result = cli.run("codex://missing", "--head", "--format", formats, "--lang", "en")
     assert (result.returncode, result.stdout, result.stderr) == (
         1,
         "❌ --head cannot be used with -format/--format.\n",
@@ -92,7 +90,7 @@ def test_head_format_conflict_precedes_lookup_and_format_validation(cli, formats
 
 
 def test_head_ignores_output_without_creating_directories(cli):
-    result = cli.run("rust", f"codex://{IDENTITY}", "--head", "--output", "exports", "--lang", "en")
+    result = cli.run(f"codex://{IDENTITY}", "--head", "--output", "exports", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"- URI: codex://{IDENTITY}" in result.stdout
     assert not (cli.root / "exports").exists()
@@ -100,7 +98,7 @@ def test_head_ignores_output_without_creating_directories(cli):
 
 @pytest.mark.parametrize("formats", ["", "json,", "xml", "raw,,json"])
 def test_invalid_format_list_is_an_argument_error(cli, formats):
-    result = cli.run("rust", "codex://missing", "--format", formats, "--lang", "en")
+    result = cli.run("codex://missing", "--format", formats, "--lang", "en")
     assert result.returncode == 2
     assert not result.stdout
     assert result.stderr.startswith(f"error: Invalid format list: {formats}")
@@ -109,7 +107,7 @@ def test_invalid_format_list_is_an_argument_error(cli, formats):
 def test_lookup_failure_warns_then_prints_missing_session(cli):
     Path(cli.environment["OPENCODE_DB"]).write_bytes(b"broken synthetic database")
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", "opencode://missing", "--lang", "en")
+    result = cli.run("opencode://missing", "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert result.stderr == "⚠️  OpenCode session lookup failed: file is not a database\n"
     assert result.stdout.startswith("Diagnostic\nSummary: No matching session found.\n")
@@ -120,6 +118,6 @@ def test_fallback_lookup_chooses_newest_matching_session(cli):
     cli.write([header(cwd="/older"), message("user", "Older")])
     cli.source.rename(cli.source.with_name("rollout-older.jsonl"))
     write_jsonl(cli.source.with_name("rollout-newer.jsonl"), [header(cwd="/newest", timestamp="2026-02-01T00:00:00Z")])
-    result = cli.run("rust", f"codex://{IDENTITY}", "--head", "--lang", "en")
+    result = cli.run(f"codex://{IDENTITY}", "--head", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"- CWD/Project: {Path('/newest')}" in result.stdout

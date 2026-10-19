@@ -22,7 +22,7 @@ URI = f"codex://{IDENTITY}"
 
 
 def read(cli: CliFixture, uri: str = URI, *args: str) -> dict[str, Any]:
-    result = cli.run("rust", uri, "--read", "--json", *args)
+    result = cli.run(uri, "--read", "--json", *args)
     assert result.returncode == 0, result.stderr
     document = json.loads(result.stdout)
     assert document["schema_version"] == 1
@@ -38,7 +38,7 @@ def test_read_prompt_needs_no_source_and_contains_executable_commands(cli: CliFi
     cli.environment["OPENCODE_DB"] = ":memory:"
     before = cli.fixtures.source_manifest(cli.root)
     uri = f"{scheme}://missing'$(touch injected)"
-    result = cli.run("rust", uri, "--read-prompt", "--lang", lang)
+    result = cli.run(uri, "--read-prompt", "--lang", lang)
     assert result.returncode == 0, result.stderr
     assert not result.stderr
     manifest = json.loads(result.stdout.split("```json\n", 1)[1].split("\n```", 1)[0])
@@ -84,7 +84,7 @@ def test_prompt_read_command_works_for_every_provider(
             identity = "ses_old"
     before = cli.fixtures.source_manifest(cli.root)
     uri = f"{scheme}://{identity}"
-    prompt = cli.run("rust", uri, "--read-prompt")
+    prompt = cli.run(uri, "--read-prompt")
     assert prompt.returncode == 0, prompt.stderr
     manifest = json.loads(prompt.stdout.split("```json\n", 1)[1].split("\n```", 1)[0])
     result = subprocess.run(  # noqa: S603
@@ -176,7 +176,7 @@ def test_filter_before_pagination_and_details_are_opt_in(cli: CliFixture) -> Non
         found = read(cli, URI, "--match", keyword, "--details")
         assert keyword in found["data"]["messages"][0]["text"]
     locator = page["data"]["messages"][0]["locator"]
-    context = cli.run("rust", URI, "--message", locator, "--before", "0", "--after", "0", "--json")
+    context = cli.run(URI, "--message", locator, "--before", "0", "--after", "0", "--json")
     assert context.returncode == 0, context.stderr
     assert json.loads(context.stdout)["data"]["messages"][0]["position"] == 1
     cli.write([header(), message("user", "-days")])
@@ -190,11 +190,11 @@ def test_empty_partial_and_text_output(cli: CliFixture, lang: str) -> None:
     assert page["data"]["messages"] == []
     assert not page["has_more"]
     cli.write([header(), message("user", "Visible")], suffix=b"{bad-json}\n")
-    partial = cli.run("rust", URI, "--read", "--json", "--lang", lang)
+    partial = cli.run(URI, "--read", "--json", "--lang", lang)
     assert partial.returncode == 0
     assert partial.stderr
     assert json.loads(partial.stdout)["status"] == "partial"
-    text = cli.run("rust", URI, "--read", "--lang", lang)
+    text = cli.run(URI, "--read", "--lang", lang)
     assert text.returncode == 0 and "Visible" in text.stdout
     assert "已读完" in text.stdout if lang == "zh" else "End of matching" in text.stdout
 
@@ -210,12 +210,12 @@ def test_cursor_rejects_modified_source_other_session_and_invalid_offsets(cli: C
         changed = {**payload, name: value}
         invalid.append("r1." + json.dumps(changed).encode().hex())
     for token in invalid:
-        result = cli.run("rust", URI, "--read", "--cursor", token, "--json", "--lang", lang)
+        result = cli.run(URI, "--read", "--cursor", token, "--json", "--lang", lang)
         assert result.returncode == 1 and result.stdout == "" and result.stderr
-    other = cli.run("rust", URI.replace("000000000000", "000000000001"), "--read", "--cursor", cursor, "--json")
+    other = cli.run(URI.replace("000000000000", "000000000001"), "--read", "--cursor", cursor, "--json")
     assert other.returncode == 1 and other.stdout == ""
     cli.write([*records, message("user", "Appended")])
-    stale = cli.run("rust", URI, "--read", "--cursor", cursor, "--json", "--lang", lang)
+    stale = cli.run(URI, "--read", "--cursor", cursor, "--json", "--lang", lang)
     assert stale.returncode == 1 and stale.stdout == "" and stale.stderr
 
 
@@ -247,6 +247,6 @@ def test_cursor_rejects_modified_source_other_session_and_invalid_offsets(cli: C
 )
 def test_invalid_read_arguments_fail_without_stdout(cli: CliFixture, args: list[str]) -> None:
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", *args)
+    result = cli.run(*args)
     assert result.returncode != 0 and result.stdout == "" and result.stderr
     assert cli.fixtures.source_manifest(cli.root) == before

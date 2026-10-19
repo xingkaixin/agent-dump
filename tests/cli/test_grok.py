@@ -40,7 +40,7 @@ def xai(kind, offset=0, **fields):
 
 
 def run_json(cli, *args):
-    result = cli.run("rust", *args, "--json")
+    result = cli.run(*args, "--json")
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)["data"]
 
@@ -113,7 +113,7 @@ def test_list_head_and_export(cli):
     head = run_json(cli, f"grok://{IDENTITY}", "--head")
     assert {key: head[key] for key in record} == record
 
-    result = cli.run("rust", f"grok://{IDENTITY}", "--format", "json,raw", "--output", "exports")
+    result = cli.run(f"grok://{IDENTITY}", "--format", "json,raw", "--output", "exports")
     assert result.returncode == 0, result.stderr
     exports = cli.root / "exports/grok"
     assert (exports / f"{IDENTITY}.raw.jsonl").read_bytes() == (session / "updates.jsonl").read_bytes()
@@ -189,4 +189,4 @@ def test_discovery_needs_identity_cwd_and_messages(cli):
         "renamed": "Prompt title",
     }
     assert run_json(cli, "grok://renamed", "--head")["id"] == "renamed"
-    assert cli.run("rust", "grok://empty", "--head").returncode == 1
+    assert cli.run("grok://empty", "--head").returncode == 1

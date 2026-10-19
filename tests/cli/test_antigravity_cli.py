@@ -79,7 +79,7 @@ def create(cli, steps, *, identity=IDENTITY, conversations=None, summary=None, m
 
 
 def run_json(cli, *args):
-    result = cli.run("rust", *args, "--json")
+    result = cli.run(*args, "--json")
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)["data"]
 
@@ -122,7 +122,7 @@ def test_list_head_and_export(cli):
     head = run_json(cli, f"antigravity-cli://{IDENTITY}", "--head")
     assert {key: head[key] for key in record} == record
 
-    result = cli.run("rust", f"antigravity-cli://{IDENTITY}", "--format", "json,md", "--output", "exports")
+    result = cli.run(f"antigravity-cli://{IDENTITY}", "--format", "json,md", "--output", "exports")
     assert result.returncode == 0, result.stderr
     exports = cli.root / "exports/antigravity-cli"
     assert "Fix   the bug" in (exports / f"{IDENTITY}.md").read_text()
@@ -168,7 +168,7 @@ def test_default_root_override_and_empty_databases(cli):
     create(cli, [], identity="empty")
 
     assert {key: item["title"] for key, item in listed(cli).items()} == {"override": "Override prompt"}
-    missing = cli.run("rust", "antigravity-cli://empty", "--head")
+    missing = cli.run("antigravity-cli://empty", "--head")
     assert missing.returncode == 1
 
     del cli.environment["AGY_CONVERSATIONS_DIR"]

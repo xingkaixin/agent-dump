@@ -75,7 +75,7 @@ def cursor(tmp_path, monkeypatch):
 def test_cursor_rejects_unsupported_format_combinations(tmp_path, monkeypatch, formats, rejected):
     cli = cursor(tmp_path, monkeypatch)
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", "cursor://request-parent", "--format", formats, "--output", "exports", "--lang", "en")
+    result = cli.run("cursor://request-parent", "--format", formats, "--output", "exports", "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert not result.stderr
     assert result.stdout.splitlines()[:4] == [

@@ -21,7 +21,7 @@ def test_database_and_wal_remain_unchanged_and_new_commits_are_visible(cli, jour
             writer.commit()
             files = sorted(path.parent.iterdir())
             durable = {item: item.read_bytes() for item in files if not item.name.endswith("-shm")}
-            result = cli.run("rust", "opencode://ses_old", "--format", "json", "--output", "exports", "--lang", "en")
+            result = cli.run("opencode://ses_old", "--format", "json", "--output", "exports", "--lang", "en")
             assert result.returncode == 0, result.stdout + result.stderr
             data = json.loads((cli.root / "exports/opencode/ses_old.json").read_text())
             assert data["messages"][0]["parts"][0]["text"] == body
@@ -34,6 +34,6 @@ def test_database_and_wal_remain_unchanged_and_new_commits_are_visible(cli, jour
 def test_exports_cannot_write_inside_database_source(cli):
     path = create_legacy(cli)
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", "opencode://ses_old", "--format", "json,md,raw", "--output", str(path.parent))
+    result = cli.run("opencode://ses_old", "--format", "json,md,raw", "--output", str(path.parent))
     assert result.returncode == 1
     assert cli.fixtures.source_manifest(cli.root) == before

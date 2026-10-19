@@ -21,7 +21,7 @@ def test_notification_does_not_consume_the_pending_plan(cli, reference, approval
             message("user", approval),
         ]
     )
-    result = cli.run("rust", f"codex://{IDENTITY}", "--format", "json", "--output", "exports")
+    result = cli.run(f"codex://{IDENTITY}", "--format", "json", "--output", "exports")
     assert result.returncode == 0, result.stderr
     messages = json.loads((cli.root / "exports" / "codex" / f"{IDENTITY}.json").read_text())["messages"]
     assert [message["role"] for message in messages] == ["user", "assistant", "assistant"]

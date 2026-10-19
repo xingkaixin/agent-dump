@@ -41,7 +41,7 @@ def test_paths_and_explicit_missing_source(tmp_path, monkeypatch, provider, mode
     else:
         cli.environment[variable] = str(root / "missing")
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", f"{provider}://{identity}", "--format", "json", "--output", "exports", "--lang", "en")
+    result = cli.run(f"{provider}://{identity}", "--format", "json", "--output", "exports", "--lang", "en")
     assert cli.fixtures.source_manifest(cli.root) == before
     if mode == "missing":
         assert result.returncode == 1, result.stdout + result.stderr
@@ -61,9 +61,7 @@ def test_provider_source_directory_cannot_be_export_destination(tmp_path, monkey
         else desktop(tmp_path, monkeypatch, provider)
     )
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run(
-        "rust", f"{provider}://{identity}", "--format", "json", "--output", str(cli.source.parent), "--lang", "en"
-    )
+    result = cli.run(f"{provider}://{identity}", "--format", "json", "--output", str(cli.source.parent), "--lang", "en")
     assert result.returncode != 0
     assert cli.fixtures.source_manifest(cli.root) == before
 
@@ -92,9 +90,7 @@ def test_wal_changes_are_visible_without_changing_persistent_data(tmp_path, monk
             before = {p.name: p.read_bytes() for p in files if not p.name.endswith("-shm")}
             output = cli.root / "exports"
             shutil.rmtree(output, ignore_errors=True)
-            result = cli.run(
-                "rust", f"{provider}://{identity}", "--format", "json", "--output", "exports", "--lang", "en"
-            )
+            result = cli.run(f"{provider}://{identity}", "--format", "json", "--output", "exports", "--lang", "en")
             assert result.returncode == 0, result.stdout + result.stderr
             payload = json.loads(next(output.rglob("*.json")).read_text())
             assert text in json.dumps(payload)
@@ -105,7 +101,7 @@ def test_wal_changes_are_visible_without_changing_persistent_data(tmp_path, monk
 
 
 def head(cli, uri):
-    result = cli.run("rust", uri, "--head", "--lang", "en")
+    result = cli.run(uri, "--head", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
 
 

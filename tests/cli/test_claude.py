@@ -38,7 +38,7 @@ def test_tool_result_is_error_marks_only_that_tool_failed(cli):
             event("user", [result(content="boom", is_error=True), result("other")]),
         ],
     )
-    result_ = cli.run("rust", f"claude://{IDENTITY}", "--format", "json", "--output", "exports")
+    result_ = cli.run(f"claude://{IDENTITY}", "--format", "json", "--output", "exports")
     assert result_.returncode == 0, result_.stderr
     export = json.loads(next((cli.root / "exports/claudecode").glob("*.json")).read_text())
     states = {part["callID"]: part["state"] for message in export["messages"] for part in message["parts"]}
@@ -49,9 +49,7 @@ def test_tool_result_is_error_marks_only_that_tool_failed(cli):
 def test_exports_cannot_write_into_claude_sources(cli):
     create(cli, [event("user", "Start")])
     before = cli.fixtures.source_manifest(cli.root)
-    result_ = cli.run(
-        "rust", f"claude://{IDENTITY}", "--format", "json,md,raw", "--output", str(cli.root / "sources/claude")
-    )
+    result_ = cli.run(f"claude://{IDENTITY}", "--format", "json,md,raw", "--output", str(cli.root / "sources/claude"))
     assert result_.returncode == 1
     assert cli.fixtures.source_manifest(cli.root) == before
 
@@ -60,7 +58,7 @@ def test_non_string_index_summary_falls_back_to_message_title(cli):
     index = create(cli, [event("user", "Fallback title")]).with_name("sessions-index.json")
     index.write_text(json.dumps({"entries": [{"sessionId": IDENTITY, "summary": {"text": "bad"}}]}))
     for args in (("--list", "-q", "provider:claude", "-d", "36500"), (f"claude://{IDENTITY}", "--head")):
-        result_ = cli.run("rust", *args, "--lang", "en")
+        result_ = cli.run(*args, "--lang", "en")
         assert result_.returncode == 0, result_.stderr
         assert "Fallback title" in result_.stdout
         assert len(result_.stderr.splitlines()) == 1 and str(index) in result_.stderr
@@ -84,7 +82,7 @@ def test_system_tags_and_trailing_whitespace_are_removed(cli):
             event("user", [result(content="ok  \n<system-reminder>hidden</system-reminder>")], identity="output"),
         ],
     )
-    completed = cli.run("rust", f"claude://{IDENTITY}", "--format", "json", "--output", "exports", "--lang", "en")
+    completed = cli.run(f"claude://{IDENTITY}", "--format", "json", "--output", "exports", "--lang", "en")
     assert completed.returncode == 0, completed.stdout + completed.stderr
     payload = json.loads(next((cli.root / "exports/claudecode").glob("*.json")).read_text())
     messages = payload["messages"]
@@ -96,7 +94,7 @@ def test_system_tags_and_trailing_whitespace_are_removed(cli):
 
 
 def rust_json(cli, *args):
-    completed = cli.run("rust", *args, "--lang", "en")
+    completed = cli.run(*args, "--lang", "en")
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return completed
 

@@ -20,13 +20,11 @@ def test_unusable_desktop_source_has_provider_diagnostic(tmp_path, monkeypatch, 
             else "file is not a database"
         )
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run(
-        "rust", f"{provider}://{identity}", "--format", "print,json,md", "--output", "exports", "--lang", "en"
-    )
+    result = cli.run(f"{provider}://{identity}", "--format", "print,json,md", "--output", "exports", "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert result.stderr == f"⚠️  {NAMES[provider]} session lookup failed: {reason}\n"
     assert result.stdout.startswith("Diagnostic\nSummary: No matching session found.\n")
-    listing = cli.run("rust", "--list", "-d", "36500", "-q", f"provider:{provider}", "--lang", "en")
+    listing = cli.run("--list", "-d", "36500", "-q", f"provider:{provider}", "--lang", "en")
     assert listing.returncode == 0, listing.stdout + listing.stderr
     assert "Summary: No usable provider within the query scope." in listing.stdout
     assert listing.stderr.startswith(f"⚠️  {NAMES[provider]} provider operation failed: ")

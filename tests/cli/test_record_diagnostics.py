@@ -54,7 +54,7 @@ def test_jsonl_warning_text_counts_and_bounded_line_samples(cli, provider):
     before = cli.fixtures.source_manifest(cli.root)
     scheme = provider.split("-")[0]
     args = (f"{scheme}://{IDENTITY}", "--format", "json,md,raw,print", "--output", "exports", "--lang", "en")
-    result = cli.run("rust", *args)
+    result = cli.run(*args)
     assert result.returncode == 0, result.stdout + result.stderr
     warnings = result.stderr.splitlines()
     assert len(warnings) == {"kimi-context": 2, "kimi-wire": 3}.get(provider, 1)
@@ -76,7 +76,7 @@ def test_sqlite_bad_records_keep_healthy_content_and_sanitized_warnings(cli, pro
             connection.execute("INSERT INTO part VALUES (?, 'msg_user', ?, ?)", (identity, NOW + 20 + index, data))
     before = cli.fixtures.source_manifest(cli.root)
     args = (f"{provider}://ses_old", "--format", "json,md,raw,print", "--output", "exports", "--lang", "en")
-    result = cli.run("rust", *args)
+    result = cli.run(*args)
     assert result.returncode == 0, result.stdout + result.stderr
     assert len(result.stderr.splitlines()) == 12
     assert "\x1b" not in result.stderr and "\u202e" not in result.stderr

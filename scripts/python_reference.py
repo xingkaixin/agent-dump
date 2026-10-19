@@ -1,4 +1,4 @@
-"""Install and locate the immutable Python CLI used only by differential evaluation."""
+"""Install and locate the immutable Python CLI used only by paired performance evaluation."""
 
 import argparse
 from functools import cache
@@ -16,7 +16,7 @@ SOURCE_SHA256 = "a5f4b5feb6fd525688a6fda930087f4446eaccbe016457524369620aa5f5823
 
 def command() -> list[str]:
     if not PYTHON.is_file():
-        raise RuntimeError("Python reference missing; run `just reference` before differential evaluation")
+        raise RuntimeError("Python reference missing; run `just reference` before paired evaluation")
     return [str(PYTHON), "-m", "agent_dump"]
 
 

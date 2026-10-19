@@ -72,7 +72,7 @@ def test_redirect_credentials(cli, provider, cross_origin):
     with endpoint(respond) as (second, _), endpoint(respond) as (first, _):
         destination["url"] = second if cross_origin else first
         configure(cli, first, provider)
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
         assert result.returncode == 0, result.stdout + result.stderr
         assert len(reads) == 2
         header = "authorization" if provider == "openai" else "x-api-key"
@@ -103,7 +103,7 @@ def test_response_boundaries(cli, scenario):
 
     with endpoint(respond) as (url, calls):
         configure(cli, url)
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
         assert result.returncode == 1
         assert "private" not in result.stdout + result.stderr
     assert len(calls) == (2 if scenario == "timeout" else 1)
@@ -129,7 +129,7 @@ def test_truncated_report_is_an_error(cli, provider):
 
     with endpoint(respond) as (url, calls):
         configure(cli, url, provider)
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
         assert result.returncode == 1
         assert "truncated at the output token limit" in result.stdout
         assert not (cli.root / "report.md").exists()
@@ -175,7 +175,7 @@ def test_retry_policy_and_bounded_responses(cli, scenario, code, count):
 
     with server(respond) as (url, requests):
         configure(cli, url)
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
     assert result.returncode == code, result.stdout + result.stderr
     assert "private remote body" not in result.stdout + result.stderr
     assert len(requests) == count
@@ -215,7 +215,7 @@ def test_reasoning_controls_thinking_parameters(cli, provider, reasoning):
         configure(cli, url, provider)
         if reasoning:
             set_ai(cli, f'reasoning="{reasoning}"')
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert len(requests) == 2
     for _, _, body in requests:
@@ -234,7 +234,7 @@ def test_extra_body_deep_merges_into_requests(cli, provider):
     extra = '[ai.extra_body]\nmax_tokens=8192\n[ai.extra_body.thinking]\ntype="enabled"\nbudget_tokens=1024\n'
     with server(reply(provider)) as (url, requests):
         configure(cli, url, provider, extra)
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     for _, _, body in requests:
         assert body["max_tokens"] == 8192
@@ -249,7 +249,7 @@ def test_rejected_extra_body_parameter_is_kept(cli):
 
     with server(respond) as (url, requests):
         configure(cli, url, extra="[ai.extra_body]\ntemperature=1\n")
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
     assert result.returncode == 1
     assert [body["temperature"] for _, _, body in requests] == [1]
 
@@ -260,7 +260,7 @@ def test_invalid_reasoning_config_stops_before_requests(cli, line):
     with server(reply("openai")) as (url, requests):
         configure(cli, url)
         set_ai(cli, line)
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
     assert result.returncode == 1
     assert line.split("=")[0] in result.stdout
     assert requests == []
@@ -277,7 +277,7 @@ def test_collect_log_records_events_without_credentials(cli):
         configure(cli, url)
         config = config_path(cli)
         config.write_text(config.read_text().replace("enabled=false", 'enabled=true\npath="collect.jsonl"'))
-        result = cli.run("rust", *ARGS, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     log = cli.root / "collect.jsonl"
     events = {json.loads(line)["event"] for line in log.read_text().splitlines()}

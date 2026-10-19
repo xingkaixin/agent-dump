@@ -67,7 +67,7 @@ def only_session(cli):
 )
 def test_invalid_date_ranges(cli, dates, message):
     only_session(cli)
-    result = cli.run("rust", "--collect", "--dry-run", "-q", "provider:codex", "--lang", "en", *dates)
+    result = cli.run("--collect", "--dry-run", "-q", "provider:codex", "--lang", "en", *dates)
     assert (result.returncode, result.stdout, result.stderr) == (1, f"{message}\n", "")
 
 
@@ -84,7 +84,7 @@ def test_invalid_date_ranges(cli, dates, message):
 def test_invalid_exclusion_config_stops_collect(cli, config, field):
     only_session(cli)
     config_path(cli).write_text(config)
-    result = cli.run("rust", *ARGS, "--dry-run", "--lang", "en")
+    result = cli.run(*ARGS, "--dry-run", "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert not result.stderr
     assert result.stdout == (
@@ -94,7 +94,7 @@ def test_invalid_exclusion_config_stops_collect(cli, config, field):
 
 
 def test_collect_requires_ai_configuration(cli):
-    result = cli.run("rust", "--collect", "--lang", "en")
+    result = cli.run("--collect", "--lang", "en")
     assert (result.returncode, result.stdout, result.stderr) == (
         1,
         "❌ Collect requires config file.\nRun: agent-dump -config edit\n",
@@ -121,9 +121,7 @@ def test_uri_summary_failures_still_export(cli, scenario, requests, notice):
             config_path(cli).unlink()
         if scenario == "incomplete-config":
             config_path(cli).write_text('[ai]\nprovider="openai"\n')
-        result = cli.run(
-            "rust", f"codex://{IDENTITY}", "--summary", "--format", "json", "--output", "exports", "--lang", "en"
-        )
+        result = cli.run(f"codex://{IDENTITY}", "--summary", "--format", "json", "--output", "exports", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.startswith(notice)
     assert len(calls) == requests

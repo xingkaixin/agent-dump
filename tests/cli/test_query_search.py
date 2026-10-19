@@ -33,7 +33,7 @@ import pytest
     ],
 )
 def test_query_diagnostics_never_broaden_scope(cli, query, reason):
-    result = cli.run("rust", "--list", "-query", query, "--lang", "en")
+    result = cli.run("--list", "-query", query, "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert not result.stderr
     assert result.stdout.startswith(f"Diagnostic\nSummary: Invalid query expression.\nDetails:\n  - {reason}\n")
@@ -54,7 +54,7 @@ def test_query_diagnostics_never_broaden_scope(cli, query, reason):
     ],
 )
 def test_query_uri_diagnostics(cli, args, summary, reason):
-    result = cli.run("rust", *args, "--lang", "en")
+    result = cli.run(*args, "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert not result.stderr
     assert result.stdout.splitlines()[:5] == [
@@ -74,7 +74,7 @@ def test_empty_path_scope_does_not_create_a_search_index(cli, mode, keyword):
     args = ["--days", "36500", "--json"]
     args += ["--search", keyword, "--query", scope] if mode == "search" else ["--list", "--query", f"{keyword} {scope}"]
 
-    result = cli.run("rust", *args)
+    result = cli.run(*args)
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
@@ -90,8 +90,8 @@ def test_cold_path_search_retains_global_scores_and_evidence(cli, keyword):
     before = cli.fixtures.source_manifest(cli.root)
     args = ["--search", keyword, "--days", "36500", "--json"]
 
-    scoped = cli.run("rust", *args, "--query", "path:/project")
-    full = cli.run("rust", *args)
+    scoped = cli.run(*args, "--query", "path:/project")
+    full = cli.run(*args)
 
     assert scoped.returncode == full.returncode == 0, (scoped.stderr, full.stderr)
     selected = json.loads(scoped.stdout)
@@ -111,7 +111,7 @@ def test_database_message_changes_refresh_search_without_session_timestamp_chang
         writer.execute(f"PRAGMA journal_mode={journal}")
         writer.execute("PRAGMA wal_autocheckpoint=0")
         writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        initial = cli.run("rust", "--search", "delta-wal", *args)
+        initial = cli.run("--search", "delta-wal", *args)
         assert initial.returncode == 0, initial.stderr
         assert json.loads(initial.stdout)["data"] == []
         times = writer.execute("SELECT id, time_created, time_updated FROM session_v2 ORDER BY id").fetchall()
@@ -131,7 +131,7 @@ def test_database_message_changes_refresh_search_without_session_timestamp_chang
         }
 
         for keyword in ["delta-wal", "新增正文"]:
-            result = cli.run("rust", "--search", keyword, *args)
+            result = cli.run("--search", keyword, *args)
             assert result.returncode == 0, result.stderr
             payload = json.loads(result.stdout)
             assert payload["status"] == "ok"
@@ -152,7 +152,7 @@ def test_index_failures_fall_back_to_logical_transcript(cli, kind, cause):
         cache.rmdir()
         cache.write_text("a file instead of the cache directory")
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", "--search", "fallback-needle", "-q", "provider:codex", "-days", "36500", "--lang", "en")
+    result = cli.run("--search", "fallback-needle", "-q", "provider:codex", "-days", "36500", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"codex://{IDENTITY}" in result.stdout
     assert result.stderr.startswith(f"⚠️  The Codex search index is unusable ({cause}")
@@ -163,7 +163,7 @@ def test_index_failures_fall_back_to_logical_transcript(cli, kind, cause):
 def test_index_location_cannot_write_inside_provider_source(cli):
     cli.environment["XDG_CACHE_HOME"] = str(cli.root / "sources" / "codex")
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", "--search", "benchmark", "-q", "provider:codex", "-days", "36500", "--lang", "en")
+    result = cli.run("--search", "benchmark", "-q", "provider:codex", "-days", "36500", "--lang", "en")
     assert result.returncode == 0
     assert "falling back to a file scan" in result.stderr
     assert cli.fixtures.source_manifest(cli.root) == before
@@ -179,7 +179,7 @@ def test_query_keyword_uses_search_terms(cli, keyword):
         [f"agents:///project?q={quote(keyword)}&providers=codex"],
         ["--search", keyword, "-q", "provider:codex"],
     ):
-        result = cli.run("rust", *args, "--days", "36500", "--json")
+        result = cli.run(*args, "--days", "36500", "--json")
         assert result.returncode == 0, result.stderr
         uris.append([session["uri"] for session in json.loads(result.stdout)["data"]])
     expected = [] if "missing" in keyword else [f"codex://{IDENTITY}"]
@@ -192,6 +192,6 @@ def test_role_filter_keeps_tool_state_in_search_corpus(cli):
         ["--list", "-q", "quartz-marker role:assistant provider:codex"],
         ["--search", "quartz-marker", "-q", "role:assistant provider:codex"],
     ):
-        result = cli.run("rust", *args, "--days", "36500", "--json")
+        result = cli.run(*args, "--days", "36500", "--json")
         assert result.returncode == 0, result.stderr
         assert [session["uri"] for session in json.loads(result.stdout)["data"]] == [f"codex://{IDENTITY}"]

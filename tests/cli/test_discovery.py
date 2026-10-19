@@ -45,7 +45,7 @@ def test_all_registered_providers_together(tmp_path, monkeypatch):
         getattr(module, f"create_{provider}_db")(Path(cli.environment[variable]) / suffix, NOW)
     if sys.platform == "darwin" or os.name == "nt":
         create_legacy(cli, "zcode", path=Path(cli.environment["HOME"]) / ".zcode/cli/db/db.sqlite")
-    result = cli.run("rust", "--list", "-d", "36500")
+    result = cli.run("--list", "-d", "36500")
     expected = [
         "OpenCode",
         "Codex",
@@ -84,7 +84,7 @@ def test_no_sources_diagnostic_and_exit_code(cli, scope, code, summary):
     args = ["--list", "--lang", "en"]
     if scope:
         args.extend(["-q", f"provider:{scope}"])
-    result = cli.run("rust", *args)
+    result = cli.run(*args)
     assert result.returncode == code, result.stdout + result.stderr
     assert not result.stderr
     assert f"Diagnostic\nSummary: {summary}\n" in result.stdout
@@ -98,7 +98,7 @@ def test_corrupt_database_isolated_and_explicit_scope_skips_it(cli, scope):
     args = ["--list", "-d", "36500", "--lang", "en"]
     if scope:
         args.extend(["-q", f"provider:{scope}"])
-    result = cli.run("rust", *args)
+    result = cli.run(*args)
     assert result.returncode == 0, result.stdout + result.stderr
     assert ("codex://" in result.stdout) == (scope != "opencode")
     assert result.stderr == "⚠️  OpenCode provider operation failed: DatabaseError: file is not a database\n"
@@ -110,7 +110,7 @@ def test_bad_file_keeps_good_sessions_and_warning_is_one_line(cli):
     bad = cli.source.parent / "rollout-bad\n\x1b[31m.jsonl"
     write_jsonl(bad, [{"type": "session_meta", "payload": 42}])
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", "--list", "-d", "36500", "--lang", "en")
+    result = cli.run("--list", "-d", "36500", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "codex://" in result.stdout and "opencode://" in result.stdout
     assert len(result.stderr.splitlines()) == 1
@@ -129,7 +129,7 @@ def test_claude_projects_file_is_a_source_failure(cli):
         (("--list", "-q", "provider:claude", "-d", "36500"), 0, "⚠️  Claude Code provider operation failed: "),
         (("claude://missing", "--head"), 1, "⚠️  Claude Code session lookup failed: "),
     ]:
-        result = cli.run("rust", *args, "--lang", "en")
+        result = cli.run(*args, "--lang", "en")
         assert result.returncode == exit_code, result.stdout + result.stderr
         assert len(result.stderr.splitlines()) == 1
         assert result.stderr.startswith(prefix)
@@ -159,7 +159,7 @@ def test_partial_desktop_failure_keeps_other_providers(tmp_path, monkeypatch, pr
             else "UPDATE local_runtime_sessions SET columnar_version = 2"
         )
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", "--list", "-d", "36500", "--lang", "en")
+    result = cli.run("--list", "-d", "36500", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "codex://" in result.stdout and "opencode://" in result.stdout
     assert result.stderr.startswith(warning)
@@ -171,7 +171,7 @@ def test_all_available_sources_failing_returns_one(cli):
     shutil.rmtree(cli.root / "sources/codex")
     Path(cli.environment["OPENCODE_DB"]).write_bytes(b"broken synthetic database")
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", "--list", "--lang", "en")
+    result = cli.run("--list", "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Diagnostic\nSummary: No usable local session data found.\n" in result.stdout
     assert result.stderr == "⚠️  OpenCode provider operation failed: DatabaseError: file is not a database\n"
@@ -183,7 +183,7 @@ def test_provider_initialization_failure_is_isolated(cli):
     boot = Path(cli.environment["HOME"]) / ".cherrystudio/boot-config.json"
     boot.parent.mkdir()
     boot.write_text("broken synthetic config")
-    result = cli.run("rust", "--list", "-d", "36500", "--lang", "en")
+    result = cli.run("--list", "-d", "36500", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "codex://" in result.stdout
     assert result.stderr.startswith("⚠️  Cherry Studio provider operation failed: JSONDecodeError: ")

@@ -20,7 +20,7 @@ def test_default_home_uses_the_platform_environment(cli):
         HOME=str(ignored if os.name == "nt" else selected),
         USERPROFILE=str(selected if os.name == "nt" else ignored),
     )
-    result = cli.run("rust", f"codex://{IDENTITY}", "--head", "--lang", "en")
+    result = cli.run(f"codex://{IDENTITY}", "--head", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"- URI: codex://{IDENTITY}" in result.stdout
     assert not ignored.exists()
@@ -38,13 +38,13 @@ def test_exclusive_database_lock_fails_without_source_writes(tmp_path, monkeypat
     with sqlite3.connect(cli.source) as writer:
         writer.execute("BEGIN EXCLUSIVE")
         # Reading the manifest here would release this process's POSIX SQLite lock.
-        result = cli.run("rust", f"{provider}://{identity}", "--head", "--lang", "en")
+        result = cli.run(f"{provider}://{identity}", "--head", "--lang", "en")
         writer.rollback()
     assert result.returncode == 1, result.stdout + result.stderr
     assert result.stderr == f"⚠️  {name} session lookup failed: database is locked\n"
     assert result.stdout.startswith("Diagnostic\nSummary: No matching session found.\n")
     assert cli.fixtures.source_manifest(cli.root) == before
-    unlocked = cli.run("rust", f"{provider}://{identity}", "--head", "--lang", "en")
+    unlocked = cli.run(f"{provider}://{identity}", "--head", "--lang", "en")
     assert unlocked.returncode == 0, unlocked.stdout + unlocked.stderr
     assert f"- URI: {provider}://{identity}" in unlocked.stdout
 
@@ -56,7 +56,7 @@ def test_unreadable_title_index_recovers_without_source_writes(cli):
     before = cli.fixtures.source_manifest(cli.root)
     index.chmod(0)
     try:
-        result = cli.run("rust", f"claude://{IDENTITY}", "--head", "--lang", "en")
+        result = cli.run(f"claude://{IDENTITY}", "--head", "--lang", "en")
     finally:
         index.chmod(0o600)
     assert result.returncode == 0, result.stdout + result.stderr

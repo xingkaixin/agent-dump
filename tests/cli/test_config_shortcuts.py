@@ -19,7 +19,7 @@ def test_view_masks_api_key(cli, key, masked):
     path = config_path(cli)
     source = f'[ai]\nprovider="openai"\nbase_url="https://example.invalid/v1"\nmodel="example"\napi_key="{key}"\n'
     path.write_text(source, encoding="utf-8")
-    result = cli.run("rust", "--config", "view", "--lang", "en")
+    result = cli.run("--config", "view", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"  api_key: {masked}\n" in result.stdout
     assert key not in result.stdout + result.stderr
@@ -33,7 +33,7 @@ def test_non_tty_edit_preserves_unknown_fields_and_comments(cli):
         '[export]\noutput = "old" # export suffix\n'
     )
     answers = "1\nhttps://example.invalid/v1\nexample\nsecret-key-value\n./exported\ny\n"
-    result = cli.run("rust", "--config", "edit", "--lang", "en", stdin=answers)
+    result = cli.run("--config", "edit", "--lang", "en", stdin=answers)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "secret-key-value" not in result.stdout + result.stderr
     content = path.read_text()
@@ -65,7 +65,7 @@ def test_non_tty_edit_preserves_unknown_fields_and_comments(cli):
 def test_cancelled_or_failed_edit_leaves_file_unchanged(cli, source, answers):
     path = config_path(cli)
     path.write_text(source)
-    result = cli.run("rust", "--config", "edit", "--lang", "en", stdin=answers)
+    result = cli.run("--config", "edit", "--lang", "en", stdin=answers)
     assert result.returncode == 1, result.stdout + result.stderr
     assert path.read_text() == source
 
@@ -73,7 +73,7 @@ def test_cancelled_or_failed_edit_leaves_file_unchanged(cli, source, answers):
 def test_invalid_utf8_config_diagnostic(cli):
     path = config_path(cli)
     path.write_bytes(b"\xff")
-    result = cli.run("rust", "--config", "view", "--lang", "en")
+    result = cli.run("--config", "view", "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff" in result.stdout
     assert path.read_bytes() == b"\xff"
@@ -111,7 +111,7 @@ args = ["{"]
 params = []
 args = ["{unknown}"]
 """)
-    result = cli.run("rust", "--shortcut", *args, "--lang", "en")
+    result = cli.run("--shortcut", *args, "--lang", "en")
     assert result.returncode == code, result.stdout + result.stderr
     assert not result.stderr
     assert result.stdout.splitlines()[0] == first_line

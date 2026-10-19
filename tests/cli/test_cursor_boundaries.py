@@ -9,13 +9,13 @@ from test_cursor import cursor, put
 
 
 def run_json(cli, *args):
-    result = cli.run("rust", *args, "--json")
+    result = cli.run(*args, "--json")
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(result.stdout)["data"]
 
 
 def export(cli, uri):
-    result = cli.run("rust", uri, "--format", "json", "--output", "exports")
+    result = cli.run(uri, "--format", "json", "--output", "exports")
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(next((cli.root / "exports/cursor").glob("*.json")).read_text())
 

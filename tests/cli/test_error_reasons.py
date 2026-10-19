@@ -14,7 +14,7 @@ def test_unsafe_export_identity_has_complete_capability_diagnostic(cli, identity
         connection.execute("UPDATE session SET id = ?", (identity,))
         connection.execute("UPDATE message SET session_id = ?", (identity,))
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", f"opencode://{identity}", "--format", "json,md,raw", "--output", "exports", "--lang", "en")
+    result = cli.run(f"opencode://{identity}", "--format", "json,md,raw", "--output", "exports", "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
     assert not result.stderr
     diagnostic = (
@@ -41,9 +41,7 @@ def test_opencode_v2_bad_data_fails_each_requested_format(cli, monkeypatch, lang
     with sqlite3.connect(path) as connection:
         connection.execute("UPDATE session_message SET data = ? WHERE type = 'assistant'", (raw,))
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run(
-        "rust", "opencode://ses_v2", "--format", "print,json,md,raw", "--output", "exports", "--lang", lang
-    )
+    result = cli.run("opencode://ses_v2", "--format", "print,json,md,raw", "--output", "exports", "--lang", lang)
     assert result.returncode == 1, result.stdout + result.stderr
     assert not result.stderr
     assert result.stdout.count(f"  - Invalid OpenCode V2 message msg_2: {reason}\n") == 4
@@ -63,7 +61,7 @@ def test_export_filesystem_errors_keep_obstacles_and_partial_success(cli, obstac
     else:
         output.write_text("obstacle")
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", f"codex://{IDENTITY}", "--format", "json,md,raw", "--output", "exports", "--lang", "en")
+    result = cli.run(f"codex://{IDENTITY}", "--format", "json,md,raw", "--output", "exports", "--lang", "en")
     assert not result.stderr
     assert cli.fixtures.source_manifest(cli.root) == before
     if obstacle == "destination":

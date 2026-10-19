@@ -18,27 +18,27 @@ import pytest
     ],
 )
 def test_subcommand_matches_option_mode(cli: CliFixture, command: list[str], options: list[str]) -> None:
-    subcommand = cli.run("rust", *command, "--lang", "en")
-    option = cli.run("rust", *options, "--lang", "en")
+    subcommand = cli.run(*command, "--lang", "en")
+    option = cli.run(*options, "--lang", "en")
     assert subcommand.returncode == option.returncode == 0, subcommand.stderr
     assert (subcommand.stdout, subcommand.stderr) == (option.stdout, option.stderr)
 
 
 def test_export_subcommand_defaults_uri_exports_to_json(cli: CliFixture) -> None:
-    result = cli.run("rust", "export", f"codex://{IDENTITY}", "--output", "exports", "--lang", "en")
+    result = cli.run("export", f"codex://{IDENTITY}", "--output", "exports", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     exported = cli.root / "exports" / "codex" / f"{IDENTITY}.json"
     assert json.loads(exported.read_text())["id"] == IDENTITY
 
-    result = cli.run("rust", "export", f"codex://{IDENTITY}", "--format", "md", "--output", "md", "--lang", "en")
+    result = cli.run("export", f"codex://{IDENTITY}", "--format", "md", "--output", "md", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
     assert not (cli.root / "md" / "codex" / f"{IDENTITY}.json").exists()
 
 
 def test_subcommand_help_and_unknown_words(cli: CliFixture) -> None:
-    help_result = cli.run("rust", "search", "--help", "--lang", "en")
+    help_result = cli.run("search", "--help", "--lang", "en")
     assert help_result.returncode == 0
     assert "search <TERMS>" in help_result.stdout
 
-    unknown = cli.run("rust", "lists", "--lang", "en")
+    unknown = cli.run("lists", "--lang", "en")
     assert unknown.returncode == 1

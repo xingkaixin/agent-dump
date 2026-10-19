@@ -48,14 +48,14 @@ def test_long_session_is_split_by_text_date(cli: CliFixture, mode: str) -> None:
     args = collect_args("2026-01-14", "2026-01-16")
     with server(respond) as (url, _):
         configure(cli, url)
-        result = cli.run("rust", *args, "--collect-mode", mode, "--save", "report.md")
+        result = cli.run(*args, "--collect-mode", mode, "--save", "report.md")
     assert result.returncode == 0, result.stdout + result.stderr
     assert set(chunks) == {"2026-01-14", "2026-01-15", "2026-01-16"}
     for date, word in zip(sorted(chunks), ["fourteen", "fifteen", "sixteen"], strict=True):
         assert chunks[date] == f"[agent_message] role=assistant text=day {word}"
     assert [group["date"] for group in groups] == sorted(chunks)
     assert all(group["session_uris"] == [f"codex://{IDENTITY}"] for group in groups)
-    dry_run = cli.run("rust", *args, "--dry-run")
+    dry_run = cli.run(*args, "--dry-run")
     assert "Sessions: 1\nChunks: 3\n" in dry_run.stdout
     assert cli.fixtures.source_manifest(cli.root) == before
 
@@ -72,7 +72,7 @@ def test_report_omits_undated_text_silently(cli: CliFixture) -> None:
 
     with server(respond) as (url, _):
         configure(cli, url)
-        result = cli.run("rust", *collect_args("2026-01-15", "2026-01-15"), "--save", "report.md")
+        result = cli.run(*collect_args("2026-01-15", "2026-01-15"), "--save", "report.md")
     assert result.returncode == 0, result.stderr
     assert all("unknown work" not in prompt for prompt in prompts)
     report = (cli.root / "report.md").read_text()
@@ -83,15 +83,15 @@ def test_report_omits_undated_text_silently(cli: CliFixture) -> None:
 def test_no_work_in_range_is_empty_success(cli: CliFixture) -> None:
     only_session(cli)
     cli.write([header(), message("user", "outside period")])
-    result = cli.run("rust", *collect_args("2026-01-16", "2026-01-16"), "--dry-run")
+    result = cli.run(*collect_args("2026-01-16", "2026-01-16"), "--dry-run")
     assert result.returncode == 0, result.stderr
     assert "No sessions" in result.stdout
-    handoff = cli.run("rust", *collect_args("2026-01-16", "2026-01-16"), "--emit-prompt")
+    handoff = cli.run(*collect_args("2026-01-16", "2026-01-16"), "--emit-prompt")
     assert handoff.returncode == 0 and not handoff.stdout
     cli.write([header(), message("user", "unknown date", stamp="invalid")])
-    result = cli.run("rust", *collect_args("2026-01-16", "2026-01-16"), "--dry-run")
+    result = cli.run(*collect_args("2026-01-16", "2026-01-16"), "--dry-run")
     assert result.returncode == 0 and "No sessions" in result.stdout
-    handoff = cli.run("rust", *collect_args("2026-01-16", "2026-01-16"), "--emit-prompt")
+    handoff = cli.run(*collect_args("2026-01-16", "2026-01-16"), "--emit-prompt")
     assert handoff.returncode == 0 and not handoff.stdout
 
 
@@ -111,9 +111,7 @@ def test_handoff_read_spans_preserve_dates_across_pages(cli: CliFixture) -> None
         cli.source.parent / f"rollout-{other_id}.jsonl",
         [header(other_id), message("user", "outside", stamp="2026-01-13T12:00:00Z")],
     )
-    handoff = cli.run(
-        "rust", *collect_args("2026-01-15", "2026-01-15"), "--emit-prompt", "--query", "provider:codex limit:1"
-    )
+    handoff = cli.run(*collect_args("2026-01-15", "2026-01-15"), "--emit-prompt", "--query", "provider:codex limit:1")
     assert handoff.returncode == 0, handoff.stderr
     envelopes = [json.loads(line) for line in handoff.stdout.splitlines() if line.startswith('{"untrusted_data"')]
     task, session = [json.loads(item["content"]) for item in envelopes]
@@ -124,7 +122,7 @@ def test_handoff_read_spans_preserve_dates_across_pages(cli: CliFixture) -> None
     args = [f"codex://{IDENTITY}", "--read", "--order", "asc", "--max-chars", "7", "--json"]
     texts: dict[str | None, str] = {}
     while True:
-        result = cli.run("rust", *args)
+        result = cli.run(*args)
         assert result.returncode == 0, result.stderr
         page = json.loads(result.stdout)
         for fragment in page["data"]["messages"]:
@@ -156,7 +154,7 @@ def test_cursor_inferred_times_are_not_activity_dates(tmp_path: Path, monkeypatc
             ]
         },
     )
-    read = cli.run("rust", "cursor://request-parent", "--read", "--json")
+    read = cli.run("cursor://request-parent", "--read", "--json")
     assert read.returncode == 0, read.stderr
     fragments = json.loads(read.stdout)["data"]["messages"]
     dates = {item["text"]: [span["date"] for span in item["text_spans"]] for item in fragments}

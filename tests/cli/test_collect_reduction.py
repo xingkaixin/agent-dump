@@ -60,7 +60,7 @@ def test_reduction_and_partial_failures(cli, mode, scenario):
             .replace("summary_concurrency=1", "summary_concurrency=2")
             .replace("summary_timeout_seconds=2", "summary_timeout_seconds=15")
         )
-        result = cli.run("rust", *ARGS, "--collect-mode", mode, "--save", "report.md", "--lang", "en")
+        result = cli.run(*ARGS, "--collect-mode", mode, "--save", "report.md", "--lang", "en")
         assert result.returncode == 0, result.stdout + result.stderr
         assert peak == 2
         final_prompt = requests[-1][2]["messages"][-1]["content"]

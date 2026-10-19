@@ -71,7 +71,7 @@ def test_context_reads_string_and_joins_part_list_with_spaces(cli):
             {"role": "user", "content": pasted},
         ],
     )
-    result = cli.run("rust", f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
+    result = cli.run(f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
     assert result.returncode == 0, result.stderr
     messages = json.loads(result.stdout)["data"]["messages"]
     assert [(item["role"], item["text"]) for item in messages] == [
@@ -89,7 +89,7 @@ def test_wire_user_input_keeps_strings_and_joins_parts_with_spaces(cli):
         {"type": "text", "text": " then reply"},
     ]
     create(cli, wire=[wire_event("TurnBegin", user_input="Plain prompt"), wire_event("TurnBegin", user_input=pasted)])
-    result = cli.run("rust", f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
+    result = cli.run(f"kimi://{IDENTITY}", "--read", "--json", "--order", "asc")
     assert result.returncode == 0, result.stderr
     messages = json.loads(result.stdout)["data"]["messages"]
     assert [(item["role"], item["text"]) for item in messages] == [
@@ -101,15 +101,13 @@ def test_wire_user_input_keeps_strings_and_joins_parts_with_spaces(cli):
 def test_exports_cannot_write_into_kimi_sources(cli):
     create(cli, context=CONTEXT_STREAM)
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run(
-        "rust", f"kimi://{IDENTITY}", "--format", "json,md,raw", "--output", str(cli.root / "sources/kimi")
-    )
+    result = cli.run(f"kimi://{IDENTITY}", "--format", "json,md,raw", "--output", str(cli.root / "sources/kimi"))
     assert result.returncode == 1
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
 def export(cli):
-    result = cli.run("rust", f"kimi://{IDENTITY}", "--format", "json", "--output", "exports")
+    result = cli.run(f"kimi://{IDENTITY}", "--format", "json", "--output", "exports")
     assert result.returncode == 0, result.stderr
     return json.loads(next((cli.root / "exports/kimi").glob("*.json")).read_text())
 
@@ -143,7 +141,7 @@ def test_state_json_title_fallback_times_and_configured_model(cli):
         '[models."moonshot-cn/kimi-k2.5"]\nmodel = "kimi-k2.5"\n\n'
         '[models."kimi-code/kimi-for-coding"]\nmodel = "kimi-for-coding"\n'
     )
-    result = cli.run("rust", "--list", "-d", "36500", "-q", "provider:kimi", "--json")
+    result = cli.run("--list", "-d", "36500", "-q", "provider:kimi", "--json")
     assert result.returncode == 0, result.stderr
     sessions = {item["id"]: item for item in json.loads(result.stdout)["data"]}
     assert sessions.keys() == {IDENTITY, "untitled"}

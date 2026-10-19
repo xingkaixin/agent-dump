@@ -30,7 +30,7 @@ def message(role, content, offset=0, identity="m", **fields):
 
 
 def run_json(cli, *args):
-    result = cli.run("rust", *args, "--json")
+    result = cli.run(*args, "--json")
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)["data"]
 
@@ -97,7 +97,7 @@ def test_list_head_and_export(cli):
     head = run_json(cli, f"droid://{IDENTITY}", "--head")
     assert {key: head[key] for key in record} == record
 
-    result = cli.run("rust", f"droid://{IDENTITY}", "--format", "json,md,raw", "--output", "exports")
+    result = cli.run(f"droid://{IDENTITY}", "--format", "json,md,raw", "--output", "exports")
     assert result.returncode == 0, result.stderr
     exports = cli.root / "exports/droid"
     assert (exports / f"{IDENTITY}.raw.jsonl").read_bytes() == source.read_bytes()
@@ -139,4 +139,4 @@ def test_discovery_reads_sessions_and_titles_like_codesesh(cli):
         "folder": "repo",
         "child": "Prompt title",
     }
-    assert cli.run("rust", "droid://hidden", "--head").returncode == 1
+    assert cli.run("droid://hidden", "--head").returncode == 1

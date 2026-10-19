@@ -56,7 +56,7 @@ URI = f"codex://{IDENTITY}"
 )
 def test_mode_contract(cli, args, code, stream, first_line):
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run("rust", *args, "--lang", "en")
+    result = cli.run(*args, "--lang", "en")
     assert result.returncode == code, result.stdout + result.stderr
     assert getattr(result, stream).splitlines()[0] == first_line
     if code:
