@@ -28,9 +28,10 @@ static PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
         }
     }
     patterns.push((
-        Regex::new(
-            r"(?i)</?(?:command-message|command-name|local-command-caveat|local-command-stdout|system-reminder|command-args)(?-u:\b)[^>]*>",
-        )
+        Regex::new(concat!(
+            r"(?i)</?(?:command-message|command-name|local-command-caveat|",
+            r"local-command-stdout|system-reminder|command-args)(?-u:\b)[^>]*>",
+        ))
         .unwrap(),
         "",
     ));
@@ -129,7 +130,9 @@ mod tests {
     fn strips_system_tags_and_trailing_whitespace() {
         for (input, expected) in [
             (
-                "<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>",
+                "<command-name>/clear</command-name>\n\
+                 <command-message>clear</command-message>\n\
+                 <command-args></command-args>",
                 "",
             ),
             (

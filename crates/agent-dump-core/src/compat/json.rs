@@ -130,7 +130,11 @@ pub struct Formatter(serde_json::ser::PrettyFormatter<'static>);
 
 macro_rules! delegate {
     ($($name:ident($($argument:ident: $type:ty),*));* $(;)?) => {
-        $(fn $name<W: ?Sized + Write>(&mut self, writer: &mut W, $($argument: $type),*) -> io::Result<()> {
+        $(fn $name<W: ?Sized + Write>(
+            &mut self,
+            writer: &mut W,
+            $($argument: $type),*
+        ) -> io::Result<()> {
             self.0.$name(writer, $($argument),*)
         })*
     };

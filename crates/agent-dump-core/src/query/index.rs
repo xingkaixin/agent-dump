@@ -182,17 +182,31 @@ impl SearchIndex {
                 .collect::<Vec<_>>()
                 == ["fts_rowid"];
         if !columns.is_empty() && (version != 3 || !valid) {
-            transaction.execute_batch("DROP TABLE IF EXISTS sessions_fts; DROP TABLE IF EXISTS sessions_fts_trigram; DROP TABLE IF EXISTS index_state;")?;
+            transaction.execute_batch(
+                "DROP TABLE IF EXISTS sessions_fts; DROP TABLE IF EXISTS \
+                 sessions_fts_trigram; DROP TABLE IF EXISTS index_state;",
+            )?;
         }
-        transaction.execute_batch("CREATE TABLE IF NOT EXISTS index_state (
-            fts_rowid INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT NOT NULL, session_id TEXT NOT NULL,
-            source_path TEXT NOT NULL, updated_signature TEXT NOT NULL, indexed_at REAL NOT NULL,
-            last_seen_at REAL NOT NULL, session_updated_at REAL NOT NULL, session_created_at REAL NOT NULL,
-            UNIQUE (agent, session_id));
-            CREATE INDEX IF NOT EXISTS index_state_last_seen_idx ON index_state(last_seen_at);
-            CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, content, content='', contentless_delete=1, tokenize='unicode61 remove_diacritics 1');
-            CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts_trigram USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, content, tokenize='trigram');
-            PRAGMA user_version = 3;")?;
+        transaction.execute_batch(concat!(
+            "CREATE TABLE IF NOT EXISTS index_state (\n",
+            "            fts_rowid INTEGER PRIMARY KEY AUTOINCREMENT, \
+             agent TEXT NOT NULL, session_id TEXT NOT NULL,\n",
+            "            source_path TEXT NOT NULL, updated_signature TEXT \
+             NOT NULL, indexed_at REAL NOT NULL,\n",
+            "            last_seen_at REAL NOT NULL, session_updated_at \
+             REAL NOT NULL, session_created_at REAL NOT NULL,\n",
+            "            UNIQUE (agent, session_id));\n",
+            "            CREATE INDEX IF NOT EXISTS \
+             index_state_last_seen_idx ON index_state(last_seen_at);\n",
+            "            CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts \
+             USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, \
+             content, content='', contentless_delete=1, \
+             tokenize='unicode61 remove_diacritics 1');\n",
+            "            CREATE VIRTUAL TABLE IF NOT EXISTS \
+             sessions_fts_trigram USING fts5(agent_name UNINDEXED, \
+             session_id UNINDEXED, title, content, tokenize='trigram');\n",
+            "            PRAGMA user_version = 3;",
+        ))?;
         let expired: Vec<i64> = transaction
             .prepare(
                 "SELECT fts_rowid FROM index_state WHERE last_seen_at < ?",
@@ -234,11 +248,37 @@ impl SearchIndex {
         warnings: &mut impl Write,
     ) -> crate::Result<(usize, Vec<String>)> {
         let observed = now();
-        let indexed: HashMap<String, IndexedRow> = self.connection.prepare("SELECT session_id, updated_signature, fts_rowid, indexed_at FROM index_state WHERE agent = ?")?.query_map([info.name], |r| Ok((r.get(0)?, IndexedRow { signature: r.get(1)?, rowid: r.get(2)?, observed: r.get(3)? })))?.collect::<Result<_, _>>()?;
+        let indexed: HashMap<String, IndexedRow> = self
+            .connection
+            .prepare(
+            "SELECT session_id, updated_signature, fts_rowid, indexed_at FROM \
+             index_state WHERE agent = ?",
+            )?
+            .query_map([info.name], |r| {
+                Ok((
+                    r.get(0)?,
+                    IndexedRow {
+                        signature: r.get(1)?,
+                        rowid: r.get(2)?,
+                        observed: r.get(3)?,
+                    },
+                ))
+            })?
+            .collect::<Result<_, _>>()?;
         let ids: Vec<_> = sessions.iter().map(|session| &session.id).collect();
         // Rows expire after 30 unseen days. Refreshing at most daily lets
         // repeated searches skip the write and its journal sync.
-        self.connection.execute("UPDATE index_state SET last_seen_at = ? WHERE agent = ? AND last_seen_at < ? AND session_id IN (SELECT value FROM json_each(?))", params![observed, info.name, observed - 86400.0, serde_json::to_string(&ids)?])?;
+        self.connection.execute(
+            "UPDATE index_state SET last_seen_at = ? WHERE agent = ? AND \
+             last_seen_at < ? AND session_id IN (SELECT value FROM \
+             json_each(?))",
+            params![
+                observed,
+                info.name,
+                observed - 86400.0,
+                serde_json::to_string(&ids)?
+            ],
+        )?;
         let pending: Vec<_> = sessions
             .iter()
             .filter_map(|session| {
@@ -344,7 +384,20 @@ impl SearchIndex {
                 rusqlite::TransactionBehavior::Immediate,
             )?;
             for ((session, signature), (text, _)) in batch.iter().zip(texts) {
-                let latest = transaction.query_row("SELECT updated_signature, fts_rowid, indexed_at FROM index_state WHERE agent = ? AND session_id = ?", params![info.name, session.id], |r| Ok(IndexedRow { signature: r.get(0)?, rowid: r.get(1)?, observed: r.get(2)? })).optional()?;
+                let latest = transaction
+                    .query_row(
+                        "SELECT updated_signature, fts_rowid, indexed_at FROM \
+                         index_state WHERE agent = ? AND session_id = ?",
+                        params![info.name, session.id],
+                        |r| {
+                            Ok(IndexedRow {
+                                signature: r.get(0)?,
+                                rowid: r.get(1)?,
+                                observed: r.get(2)?,
+                            })
+                        },
+                    )
+                    .optional()?;
                 if latest.as_ref().is_some_and(|row| {
                     row.signature == *signature || row.observed > observed
                 }) || (latest.is_none() && indexed.contains_key(&session.id))
@@ -359,19 +412,79 @@ impl SearchIndex {
                     continue;
                 };
                 let (rowid, changed) = if let Some(row) = latest {
-                    let unchanged: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM sessions_fts_trigram raw JOIN sessions_fts normalized ON normalized.rowid = raw.rowid WHERE raw.rowid = ? AND raw.title = ? AND raw.content = ?)", params![row.rowid, session.title, text], |row| row.get(0))?;
+                    let unchanged: bool = transaction.query_row(
+                        "SELECT EXISTS(SELECT 1 FROM sessions_fts_trigram raw \
+                         JOIN sessions_fts normalized ON normalized.rowid = \
+                         raw.rowid WHERE raw.rowid = ? AND raw.title = ? AND \
+                         raw.content = ?)",
+                        params![row.rowid, session.title, text],
+                        |row| row.get(0),
+                    )?;
                     if !unchanged {
                         delete_text(&transaction, row.rowid)?;
                     }
-                    transaction.execute("UPDATE index_state SET source_path = ?, updated_signature = ?, indexed_at = ?, last_seen_at = MAX(last_seen_at, ?), session_updated_at = ?, session_created_at = ? WHERE fts_rowid = ?", params![crate::storage::source_io::path_text(&session.source_path), signature, observed, observed, session.updated_at.as_microsecond() as f64 / 1e6, session.created_at.as_microsecond() as f64 / 1e6, row.rowid])?;
+                    transaction.execute(
+                        "UPDATE index_state SET source_path = ?, \
+                         updated_signature = ?, indexed_at = ?, last_seen_at = \
+                         MAX(last_seen_at, ?), session_updated_at = ?, \
+                         session_created_at = ? WHERE fts_rowid = ?",
+                        params![
+                            crate::storage::source_io::path_text(
+                                &session.source_path
+                            ),
+                            signature,
+                            observed,
+                            observed,
+                            session.updated_at.as_microsecond() as f64 / 1e6,
+                            session.created_at.as_microsecond() as f64 / 1e6,
+                            row.rowid
+                        ],
+                    )?;
                     (row.rowid, !unchanged)
                 } else {
-                    transaction.execute("INSERT INTO index_state (agent, session_id, source_path, updated_signature, indexed_at, last_seen_at, session_updated_at, session_created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", params![info.name, session.id, crate::storage::source_io::path_text(&session.source_path), signature, observed, observed, session.updated_at.as_microsecond() as f64 / 1e6, session.created_at.as_microsecond() as f64 / 1e6])?;
+                    transaction.execute(
+                        "INSERT INTO index_state (agent, session_id, \
+                         source_path, updated_signature, indexed_at, \
+                         last_seen_at, session_updated_at, session_created_at) \
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        params![
+                            info.name,
+                            session.id,
+                            crate::storage::source_io::path_text(
+                                &session.source_path
+                            ),
+                            signature,
+                            observed,
+                            observed,
+                            session.updated_at.as_microsecond() as f64 / 1e6,
+                            session.created_at.as_microsecond() as f64 / 1e6
+                        ],
+                    )?;
                     (transaction.last_insert_rowid(), true)
                 };
                 if changed {
-                    transaction.execute("INSERT INTO sessions_fts (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, title.as_deref().unwrap_or(&session.title), separated.as_deref().unwrap_or(&text)])?;
-                    transaction.execute("INSERT INTO sessions_fts_trigram (rowid, agent_name, session_id, title, content) VALUES (?, ?, ?, ?, ?)", params![rowid, info.name, session.id, session.title, text])?;
+                    transaction.execute(
+                        "INSERT INTO sessions_fts (rowid, agent_name, \
+                         session_id, title, content) VALUES (?, ?, ?, ?, ?)",
+                        params![
+                            rowid,
+                            info.name,
+                            session.id,
+                            title.as_deref().unwrap_or(&session.title),
+                            separated.as_deref().unwrap_or(&text)
+                        ],
+                    )?;
+                    transaction.execute(
+                        "INSERT INTO sessions_fts_trigram (rowid, agent_name, \
+                         session_id, title, content) VALUES (?, ?, ?, ?, ?)",
+                        params![
+                            rowid,
+                            info.name,
+                            session.id,
+                            session.title,
+                            text
+                        ],
+                    )?;
                 }
                 added += 1;
             }
@@ -417,7 +530,14 @@ impl SearchIndex {
         // Unary + keeps MATCH as the FTS scan instead of repeating it per key.
         // Filtering returned rows retains the global BM25 corpus.
         let sql = format!(
-            "SELECT s.agent, s.session_id, f.rowid, bm25({table}) FROM {table} f JOIN index_state s ON s.fts_rowid = f.rowid WHERE {table} MATCH ? AND +f.rowid IN (SELECT scoped.fts_rowid FROM json_each(?) scope JOIN index_state scoped ON scoped.agent = json_extract(scope.value, '$[0]') AND scoped.session_id = json_extract(scope.value, '$[1]')) ORDER BY bm25({table}), s.session_updated_at DESC, s.session_created_at DESC, s.agent, s.session_id"
+            "SELECT s.agent, s.session_id, f.rowid, bm25({table}) FROM {table} \
+             f JOIN index_state s ON s.fts_rowid = f.rowid WHERE {table} MATCH \
+             ? AND +f.rowid IN (SELECT scoped.fts_rowid FROM json_each(?) \
+             scope JOIN index_state scoped ON scoped.agent = \
+             json_extract(scope.value, '$[0]') AND scoped.session_id = \
+             json_extract(scope.value, '$[1]')) ORDER BY bm25({table}), \
+             s.session_updated_at DESC, s.session_created_at DESC, s.agent, \
+             s.session_id"
         );
         let expression = query
             .literals
@@ -477,7 +597,9 @@ impl SearchIndex {
                 vec!["(s.agent = ? AND s.session_id = ?)"; batch.len()]
                     .join(" OR ");
             let sql = format!(
-                "SELECT s.agent, s.session_id, f.title, f.content FROM index_state s JOIN sessions_fts_trigram f ON f.rowid = s.fts_rowid WHERE {filters}"
+                "SELECT s.agent, s.session_id, f.title, f.content FROM \
+                 index_state s JOIN sessions_fts_trigram f ON f.rowid = \
+                 s.fts_rowid WHERE {filters}"
             );
             let mut statement = self.connection.prepare(&sql)?;
             let mut rows = statement.query(rusqlite::params_from_iter(

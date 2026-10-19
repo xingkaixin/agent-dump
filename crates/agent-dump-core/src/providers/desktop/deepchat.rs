@@ -28,20 +28,29 @@ pub fn sessions(
             ],
             [
                 "Use the current app_db/agent.db database. Legacy chat.db is not supported.",
-                "请使用当前版本的 app_db/agent.db 数据库，暂不支持旧版 chat.db。",
+                "请使用当前版本的 app_db/agent.db 数据库，\
+                暂不支持旧版 chat.db。",
             ],
             vec![crate::storage::source_io::path_text(path)],
         )
         .into());
     }
     let mut activity = vec![
-        "SELECT MAX(m.updated_at) AS time FROM deepchat_messages m WHERE m.session_id = s.id",
+        "SELECT MAX(m.updated_at) AS time FROM deepchat_messages m WHERE \
+        m.session_id = s.id",
     ];
     if has_table(connection, "deepchat_assistant_blocks")? {
-        activity.push("SELECT MAX(b.updated_at) FROM deepchat_assistant_blocks b JOIN deepchat_messages m ON m.id = b.message_id WHERE m.session_id = s.id");
+        activity.push(
+            "SELECT MAX(b.updated_at) FROM deepchat_assistant_blocks b JOIN \
+            deepchat_messages m ON m.id = b.message_id WHERE m.session_id = \
+            s.id",
+        );
     }
     if has_table(connection, "deepchat_usage_stats")? {
-        activity.push("SELECT MAX(u.created_at) FROM deepchat_usage_stats u WHERE u.session_id = s.id");
+        activity.push(
+            "SELECT MAX(u.created_at) FROM deepchat_usage_stats u WHERE \
+            u.session_id = s.id",
+        );
     }
     let parents: HashMap<String, String> = rows(
         connection,
@@ -51,22 +60,45 @@ pub fn sessions(
     .iter()
     .map(|row| (string(&row["id"]), string(&row["parent_session_id"])))
     .collect();
-    rows(connection, &format!("SELECT s.*, d.model_id, d.provider_id, (SELECT COUNT(*) FROM deepchat_messages m WHERE m.session_id = s.id) AS message_count, (SELECT MAX(time) FROM ({})) AS activity FROM new_sessions s LEFT JOIN deepchat_sessions d ON d.id = s.id WHERE s.is_draft = 0 AND (? IS NULL OR s.id = ?) AND (? IS NULL OR s.created_at >= ?) ORDER BY s.created_at DESC, s.id", activity.join(" UNION ALL ")), &[&id, &id, &cutoff, &cutoff])?
-        .into_iter()
-        .filter(|row| integer(&row["message_count"]) > 0 && rooted(&parents, text(&row["id"])))
-        .map(|row| {
-            let updated = [&row["updated_at"], &row["activity"]]
-                .into_iter()
-                .filter_map(timestamp)
-                .max()
-                .unwrap_or(Timestamp::UNIX_EPOCH);
-            let mut session = Session::new(string(&row["id"]), title(&row["title"]), path.to_owned(), timestamp(&row["created_at"]).unwrap_or(Timestamp::UNIX_EPOCH), updated);
-            session.directory = text(&row["project_dir"]).into();
-            session.model = text(&row["model_id"]).trim().into();
-            session.message_count = row["message_count"].as_u64().and_then(|v| usize::try_from(v).ok());
-            session.source_metadata = row;
-            Ok(session)
-        }).collect()
+    rows(
+        connection,
+        &format!(
+            "SELECT s.*, d.model_id, d.provider_id, (SELECT COUNT(*) FROM \
+            deepchat_messages m WHERE m.session_id = s.id) AS message_count, \
+            (SELECT MAX(time) FROM ({})) AS activity FROM new_sessions s \
+            LEFT JOIN deepchat_sessions d ON d.id = s.id WHERE s.is_draft = \
+            0 AND (? IS NULL OR s.id = ?) AND (? IS NULL OR s.created_at >= \
+            ?) ORDER BY s.created_at DESC, s.id",
+            activity.join(" UNION ALL ")
+        ),
+        &[&id, &id, &cutoff, &cutoff],
+    )?
+    .into_iter()
+    .filter(|row| {
+        integer(&row["message_count"]) > 0 && rooted(&parents, text(&row["id"]))
+    })
+    .map(|row| {
+        let updated = [&row["updated_at"], &row["activity"]]
+            .into_iter()
+            .filter_map(timestamp)
+            .max()
+            .unwrap_or(Timestamp::UNIX_EPOCH);
+        let mut session = Session::new(
+            string(&row["id"]),
+            title(&row["title"]),
+            path.to_owned(),
+            timestamp(&row["created_at"]).unwrap_or(Timestamp::UNIX_EPOCH),
+            updated,
+        );
+        session.directory = text(&row["project_dir"]).into();
+        session.model = text(&row["model_id"]).trim().into();
+        session.message_count = row["message_count"]
+            .as_u64()
+            .and_then(|v| usize::try_from(v).ok());
+        session.source_metadata = row;
+        Ok(session)
+    })
+    .collect()
 }
 
 fn rooted(parents: &HashMap<String, String>, id: &str) -> bool {
@@ -131,7 +163,12 @@ pub fn read(
     if has_table(connection, "deepchat_usage_stats")? {
         for row in rows(
             connection,
-            "SELECT message_id, model_id AS model, provider_id AS provider, input_tokens AS inputTokens, output_tokens AS outputTokens, total_tokens AS totalTokens, cached_input_tokens AS cachedInputTokens, cache_write_input_tokens AS cacheWriteInputTokens FROM deepchat_usage_stats WHERE session_id = ? ORDER BY usage_id",
+            "SELECT message_id, model_id AS model, provider_id AS provider, \
+            input_tokens AS inputTokens, output_tokens AS outputTokens, \
+            total_tokens AS totalTokens, cached_input_tokens AS \
+            cachedInputTokens, cache_write_input_tokens AS \
+            cacheWriteInputTokens FROM deepchat_usage_stats WHERE session_id \
+            = ? ORDER BY usage_id",
             &[&session.id],
         )? {
             ledger.add(&row);
@@ -160,7 +197,15 @@ pub fn read(
         }
         let usage = ledger.messages.get(id);
         let [input, output, read, write] = usage.map_or([0; 4], |u| u.tokens);
-        message.tokens.clone_from(json!({"input": input, "output": output, "cache": {"read": read, "write": write}}).as_object().unwrap());
+        message.tokens.clone_from(
+            json!({
+                "input": input,
+                "output": output,
+                "cache": {"read": read, "write": write}
+            })
+            .as_object()
+            .unwrap(),
+        );
         let fallback = if row["role"] == "assistant" {
             header
         } else {
@@ -276,7 +321,9 @@ fn details(
         for row in rows(
             connection,
             &format!(
-                "SELECT {columns} FROM {table} detail JOIN deepchat_messages m ON m.id = detail.message_id WHERE m.session_id = ? ORDER BY detail.message_id, detail.{order}"
+                "SELECT {columns} FROM {table} detail JOIN deepchat_messages \
+                m ON m.id = detail.message_id WHERE m.session_id = ? ORDER \
+                BY detail.message_id, detail.{order}"
             ),
             &[&id],
         )? {
@@ -367,7 +414,25 @@ fn decode(
             .map(|label| Part::text(label, time))
             .collect();
         message.extra.insert("links".into(), links);
-        message.extra.insert("attachments".into(), attachments.iter().map(|item| json!({"name":item["name"], "path":item["path"], "mime_type": ([&item["mime_type"], &item["mimeType"], &item["type"]].into_iter().find(|v| crate::compat::value::truthy(v)).unwrap_or_else(|| &item["type"])), "size":item["size"]})).collect());
+        message.extra.insert(
+            "attachments".into(),
+            attachments
+                .iter()
+                .map(|item| {
+                    let mime_type =
+                        [&item["mime_type"], &item["mimeType"], &item["type"]]
+                            .into_iter()
+                            .find(|v| crate::compat::value::truthy(v))
+                            .unwrap_or_else(|| &item["type"]);
+                    json!({
+                        "name": item["name"],
+                        "path": item["path"],
+                        "mime_type": mime_type,
+                        "size": item["size"]
+                    })
+                })
+                .collect(),
+        );
         return message;
     }
     let content = if blocks.is_empty() {
@@ -399,7 +464,21 @@ fn structured_block(row: &Value) -> Value {
     ] {
         tool[target] = row[source].clone();
     }
-    json!({"type":row["block_type"], "content":row["text_content"], "status":row["status"], "timestamp":extra.get("timestamp").unwrap_or_else(|| &row["updated_at"]), "tool_call":tool, "image_data":{"data":extra["imageData"],"mimeType":row["image_mime_type"]}, "action_type":row["action_type"], "extra":extra["extra"]})
+    json!({
+        "type": row["block_type"],
+        "content": row["text_content"],
+        "status": row["status"],
+        "timestamp": extra
+            .get("timestamp")
+            .unwrap_or_else(|| &row["updated_at"]),
+        "tool_call": tool,
+        "image_data": {
+            "data": extra["imageData"],
+            "mimeType": row["image_mime_type"]
+        },
+        "action_type": row["action_type"],
+        "extra": extra["extra"]
+    })
 }
 
 fn decode_block(block: &Value, fallback: i64) -> Option<Part> {
@@ -415,7 +494,11 @@ fn decode_block(block: &Value, fallback: i64) -> Option<Part> {
                 "loading" => "running",
                 _ => "unknown",
             };
-            let mut state = json!({"status":status, "input":parse_json(&tool["params"]), "output":tool["response"]});
+            let mut state = json!({
+                "status": status,
+                "input": parse_json(&tool["params"]),
+                "output": tool["response"]
+            });
             if status == "error" {
                 if !tool["response"].is_null() {
                     state["error"] = tool["response"].clone();

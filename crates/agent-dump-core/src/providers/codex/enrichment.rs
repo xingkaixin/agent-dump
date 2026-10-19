@@ -22,7 +22,15 @@ static CONTEXT_BLOCK: LazyLock<Regex> = LazyLock::new(|| {
         .map(|tag| format!("<{tag}>.*?</{tag}>"))
         .collect::<Vec<_>>()
         .join("|");
-    Regex::new(&format!(r"(?is)\A(?:# AGENTS\.md instructions for [^\r\n]+\r?\n(?:[ \t]*\r?\n)*)?(?:{blocks})(?:[ \t]*\r?\n)*")).unwrap()
+    Regex::new(&format!(
+        concat!(
+            r"(?is)\A(?:# AGENTS\.md instructions for [^\r\n]+\r?\n",
+            r"(?:[ \t]*\r?\n)*)?",
+            r"(?:{blocks})(?:[ \t]*\r?\n)*",
+        ),
+        blocks = blocks,
+    ))
+    .unwrap()
 });
 
 pub fn inner_tag<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
@@ -222,9 +230,13 @@ pub fn json_payload(data: &SessionData) -> SessionData {
         skill_index += 1;
     }
     for message in &mut payload.messages {
-        message
-            .parts
-            .retain(|part| !matches!(part, Part::Tool(tool) if tool.tool.rsplit('.').next() == Some("wait_agent")));
+        message.parts.retain(|part| {
+            !matches!(
+                part,
+                Part::Tool(tool)
+                    if tool.tool.rsplit('.').next() == Some("wait_agent")
+            )
+        });
         if message
             .parts
             .iter()

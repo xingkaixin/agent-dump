@@ -169,15 +169,30 @@ pub trait Provider: Send + Sync {
         }
         if !path.is_file() {
             return Err(ProviderError::Diagnostic {
-                summary: ["raw export is not supported for this session source"; 2],
-                details: vec![format!("source path: {}", crate::storage::source_io::path_text(path))],
+                summary: ["raw export is not supported for this session source";
+                    2],
+                details: vec![format!(
+                    "source path: {}",
+                    crate::storage::source_io::path_text(path)
+                )],
                 roots: Vec::new(),
-                capability: Some(["session source is a directory, not a single raw file"; 2]),
+                capability: Some(
+                    ["session source is a directory, not a single raw file"; 2],
+                ),
                 next_steps: vec![
-                    ["Use `--format json` or `--format markdown` instead.", "改用 `--format json` 或 `--format markdown`。"],
-                    ["If you need the original file, check whether this provider keeps a standalone raw file.", "若需要原始文件，请检查该 provider 是否有独立 raw 文件。"],
+                    [
+                        "Use `--format json` or `--format markdown` instead.",
+                        "改用 `--format json` 或 `--format markdown`。",
+                    ],
+                    [
+                        "If you need the original file, check whether this \
+                         provider keeps a standalone raw file.",
+                        "若需要原始文件，请检查该 provider 是否有独立 raw \
+                         文件。",
+                    ],
                 ],
-            }.into());
+            }
+            .into());
         }
         Ok(RawExport::File(path.clone()))
     }

@@ -60,7 +60,8 @@ pub struct Desktop {
 impl Desktop {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open(kind: Kind) -> crate::Result<Self> {
         Ok(Self {
@@ -134,16 +135,28 @@ impl Desktop {
         let result = crate::providers::sqlite::connection::connect(path)
             .and_then(|connection| read(&connection));
         if matches!(self.kind, Kind::DeepChat)
-            && result.as_ref().err().is_some_and(|error| matches!(
-                error.downcast_ref::<rusqlite::Error>(),
-                Some(rusqlite::Error::SqliteFailure(failure, _)) if failure.code == rusqlite::ErrorCode::NotADatabase
-            ))
+            && result.as_ref().err().is_some_and(|error| {
+                matches!(
+                    error.downcast_ref::<rusqlite::Error>(),
+                    Some(rusqlite::Error::SqliteFailure(failure, _))
+                        if failure.code == rusqlite::ErrorCode::NotADatabase
+                )
+            })
         {
             return Err(ProviderError::capability(
-                ["DeepChat database is encrypted or is not a readable SQLite database.", "DeepChat 数据库已加密，或不是可读取的 SQLite 数据库。"],
-                ["Only unencrypted DeepChat databases are supported; SQLCipher decryption is unavailable.", "仅支持未加密的 DeepChat 数据库，暂不支持 SQLCipher 解密。"],
+                [
+                    "DeepChat database is encrypted or is not a readable \
+                    SQLite database.",
+                    "DeepChat 数据库已加密，或不是可读取的 SQLite 数据库。",
+                ],
+                [
+                    "Only unencrypted DeepChat databases are supported; \
+                    SQLCipher decryption is unavailable.",
+                    "仅支持未加密的 DeepChat 数据库，暂不支持 SQLCipher 解密。",
+                ],
                 vec![crate::storage::source_io::path_text(path)],
-            ).into());
+            )
+            .into());
         }
         result
     }

@@ -144,7 +144,8 @@ fn subagent_wires(session: &Path) -> Vec<PathBuf> {
 impl Kimi {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self {
@@ -333,10 +334,21 @@ impl Provider for Kimi {
                     ["wire.jsonl is missing for this Kimi session"; 2],
                     &wire,
                     Vec::new(),
-                    vec![crate::storage::source_io::path_text(&context), crate::storage::source_io::path_text(&wire)],
                     vec![
-                        ["Confirm `wire.jsonl` in the session directory has not been cleaned up.", "确认会话目录中的 `wire.jsonl` 未被清理。"],
-                        ["If only `context.jsonl` exists, use the context export path.", "如果只有 `context.jsonl`，请改走 context 导出路径。"],
+                        crate::storage::source_io::path_text(&context),
+                        crate::storage::source_io::path_text(&wire),
+                    ],
+                    vec![
+                        [
+                            "Confirm `wire.jsonl` in the session directory \
+                             has not been cleaned up.",
+                            "确认会话目录中的 `wire.jsonl` 未被清理。",
+                        ],
+                        [
+                            "If only `context.jsonl` exists, use the context \
+                             export path.",
+                            "如果只有 `context.jsonl`，请改走 context 导出路径。",
+                        ],
                     ],
                 ).into());
             }
@@ -422,10 +434,21 @@ impl Provider for Kimi {
                 Vec::new(),
                 roots,
                 vec![
-                    ["Confirm the session directory holds at least `context.jsonl` or `wire.jsonl`.", "确认该会话目录下至少存在 `context.jsonl` 或 `wire.jsonl`。"],
-                    ["For a readable export, use `--format json` or `--format markdown`.", "若只需要可读导出，改用 `--format json` 或 `--format markdown`。"],
+                    [
+                        "Confirm the session directory holds at least \
+                         `context.jsonl` or `wire.jsonl`.",
+                        "确认该会话目录下至少存在 `context.jsonl` 或 \
+                         `wire.jsonl`。",
+                    ],
+                    [
+                        "For a readable export, use `--format json` or \
+                         `--format markdown`.",
+                        "若只需要可读导出，改用 `--format json` 或 \
+                         `--format markdown`。",
+                    ],
                 ],
-            ).into());
+            )
+            .into());
         };
         if !source.exists() {
             return Err(crate::providers::error::ProviderError::missing(
@@ -497,7 +520,12 @@ mod tests {
             )
             .unwrap();
         }
-        std::fs::write(directory.join("wire.jsonl"), "{\"timestamp\":1768478400,\"message\":{\"type\":\"TurnBegin\",\"payload\":{\"user_input\":[{\"text\":\"Wire\"}]}}}\n").unwrap();
+        std::fs::write(
+            directory.join("wire.jsonl"),
+            "{\"timestamp\":1768478400,\"message\":{\"type\":\"TurnBegin\",\
+             \"payload\":{\"user_input\":[{\"text\":\"Wire\"}]}}}\n",
+        )
+        .unwrap();
         let mut provider = Kimi {
             roots: SourceRoots::fixed(
                 root.into(),
@@ -557,9 +585,11 @@ mod tests {
             .unwrap()
             .session
             .unwrap();
-        assert!(
-            matches!(provider.raw_export(&current).unwrap(), RawExport::File(path) if path == session.source_path.join("wire.jsonl"))
-        );
+        assert!(matches!(
+            provider.raw_export(&current).unwrap(),
+            RawExport::File(path)
+                if path == session.source_path.join("wire.jsonl")
+        ));
         assert!(!context.exists());
     }
 

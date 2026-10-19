@@ -2,7 +2,17 @@ use crate::session::{Part, Session, SessionData};
 use std::fmt::Write;
 
 const fn unsafe_char(c: char) -> bool {
-    matches!(c, '\u{0}'..='\u{8}' | '\u{b}'..='\u{1f}' | '\u{7f}'..='\u{9f}' | '\u{61c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+    matches!(
+        c,
+        '\u{0}'..='\u{8}'
+            | '\u{b}'..='\u{1f}'
+            | '\u{7f}'..='\u{9f}'
+            | '\u{61c}'
+            | '\u{200e}'
+            | '\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2066}'..='\u{2069}'
+    )
 }
 pub fn safe_body(text: &str) -> String {
     let mut safe = String::with_capacity(text.len());
@@ -181,7 +191,8 @@ pub fn excerpt(
     incomplete: bool,
 ) -> String {
     let mut output = format!(
-        "# Session Context\n\n- URI: `{}`\n- Locator: `{}`\n- Messages: {}–{} of {}\n- Status: {}\n\n",
+        "# Session Context\n\n- URI: `{}`\n- Locator: `{}`\n- Messages: {}–{} \
+         of {}\n- Status: {}\n\n",
         safe_line(uri),
         safe_line(locator),
         range.start + 1,

@@ -12,7 +12,8 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 const DATABASE: &str = "v2/sqlite/runtime-state.sqlite";
-const MESSAGES: &str = "SELECT msg_id, role, turn_id, source, created_at_ms, data_json FROM local_runtime_message_rows WHERE session_id = ? ORDER BY id";
+const MESSAGES: &str = "SELECT msg_id, role, turn_id, source, created_at_ms, data_json FROM \
+    local_runtime_message_rows WHERE session_id = ? ORDER BY id";
 
 pub fn search_roots() -> crate::Result<Vec<(&'static str, PathBuf)>> {
     for (variable, label) in [
@@ -50,7 +51,9 @@ fn validate(connection: &Connection, path: &Path) -> crate::Result<()> {
     for (table, required) in [
         (
             "local_runtime_sessions",
-            "session_id columnar_version runtime visibility session_kind archived title workspace_dir parent_session_id created_at_ms updated_at_ms extra_data_json",
+            "session_id columnar_version runtime visibility session_kind \
+            archived title workspace_dir parent_session_id created_at_ms \
+            updated_at_ms extra_data_json",
         ),
         (
             "local_runtime_message_rows",
@@ -66,10 +69,21 @@ fn validate(connection: &Connection, path: &Path) -> crate::Result<()> {
             .any(|name| !columns.iter().any(|column| column["name"] == name))
         {
             return Err(ProviderError::capability(
-                ["This database does not contain the supported MiniMax Code session tables and columns.", "数据库不包含受支持的 MiniMax Code 会话表和字段。"],
-                ["Use the current CLI v2/sqlite/runtime-state.sqlite database. Legacy history recovery and desktop data are not supported.", "请使用当前 CLI 的 v2/sqlite/runtime-state.sqlite 数据库，暂不支持旧版历史恢复和桌面端数据。"],
+                [
+                    "This database does not contain the supported MiniMax \
+                    Code session tables and columns.",
+                    "数据库不包含受支持的 MiniMax Code 会话表和字段。",
+                ],
+                [
+                    "Use the current CLI v2/sqlite/runtime-state.sqlite \
+                    database. Legacy history recovery and desktop data are \
+                    not supported.",
+                    "请使用当前 CLI 的 v2/sqlite/runtime-state.sqlite \
+                    数据库，暂不支持旧版历史恢复和桌面端数据。",
+                ],
                 vec![crate::storage::source_io::path_text(path), table.into()],
-            ).into());
+            )
+            .into());
         }
     }
     Ok(())
@@ -90,7 +104,19 @@ pub fn sessions(
     let records = rows(
         connection,
         &format!(
-            "SELECT s.*, (SELECT COUNT(*) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_count, (SELECT MAX(m.created_at_ms) FROM local_runtime_message_rows m WHERE m.session_id = s.session_id) AS message_activity, {usage} AS usage_activity, (NOT EXISTS (SELECT 1 FROM local_runtime_message_row_migrations r WHERE r.session_id = s.session_id) AND EXISTS (SELECT 1 FROM local_runtime_messages l WHERE l.session_id = s.session_id AND trim(l.display_messages_json) <> '[]')) AS legacy_pending FROM local_runtime_sessions s WHERE (? IS NULL OR s.session_id = ?) AND (? IS NULL OR COALESCE(s.created_at_ms, s.updated_at_ms) >= ?) ORDER BY COALESCE(s.created_at_ms, s.updated_at_ms) DESC, s.session_id"
+            "SELECT s.*, (SELECT COUNT(*) FROM local_runtime_message_rows m \
+            WHERE m.session_id = s.session_id) AS message_count, (SELECT \
+            MAX(m.created_at_ms) FROM local_runtime_message_rows m WHERE \
+            m.session_id = s.session_id) AS message_activity, {usage} AS \
+            usage_activity, (NOT EXISTS (SELECT 1 FROM \
+            local_runtime_message_row_migrations r WHERE r.session_id = \
+            s.session_id) AND EXISTS (SELECT 1 FROM local_runtime_messages l \
+            WHERE l.session_id = s.session_id AND \
+            trim(l.display_messages_json) <> '[]')) AS legacy_pending FROM \
+            local_runtime_sessions s WHERE (? IS NULL OR s.session_id = ?) \
+            AND (? IS NULL OR COALESCE(s.created_at_ms, s.updated_at_ms) >= \
+            ?) ORDER BY COALESCE(s.created_at_ms, s.updated_at_ms) DESC, \
+            s.session_id"
         ),
         &[&id, &id, &cutoff, &cutoff],
     )?;
@@ -125,9 +151,15 @@ fn session(
     }
     if row["columnar_version"] != 3 || truthy(&row["legacy_pending"]) {
         return Err(ProviderError::Message([
-            "MiniMax Code session storage is unsupported or its display migration is incomplete. Open the session in a compatible MiniMax Code CLI to complete migration; agent-dump never migrates source data.",
-            "MiniMax Code 会话存储版本不受支持，或展示消息尚未完成迁移。请使用兼容的 MiniMax Code CLI 打开会话完成迁移；agent-dump 不会迁移源数据。",
-        ]).into());
+            "MiniMax Code session storage is unsupported or its display \
+            migration is incomplete. Open the session in a compatible \
+            MiniMax Code CLI to complete migration; agent-dump never \
+            migrates source data.",
+            "MiniMax Code 会话存储版本不受支持，或展示消息尚未完成迁移。\
+            请使用兼容的 MiniMax Code CLI 打开会话完成迁移；\
+            agent-dump 不会迁移源数据。",
+        ])
+        .into());
     }
     if integer(&row["message_count"]) == 0 {
         return Ok(None);
@@ -307,9 +339,14 @@ fn attach(messages: &mut [Message], usage: &[Value]) -> Stats {
         let message = &mut messages[index];
         message.model = model.map(Value::from);
         message.tokens.clone_from(
-            json!({"input": input, "output": output, "reasoning": reasoning, "cache": {"read": read, "write": write}})
-                .as_object()
-                .unwrap(),
+            json!({
+                "input": input,
+                "output": output,
+                "reasoning": reasoning,
+                "cache": {"read": read, "write": write}
+            })
+            .as_object()
+            .unwrap(),
         );
         if total.cost > 0.0 {
             message.cost = crate::compat::json::float(total.cost);
@@ -479,7 +516,15 @@ fn decode(row: &Value) -> crate::Result<Message> {
                 children.insert(child.to_owned());
             }
         }
-        let mut state = json!({"status":status, "input":parse_json(tool.get("tool_call_args").unwrap_or_else(|| &tool["tool_call_args_delta"])), "output":output, "duration_ms":tool["tool_call_duration_ms"]});
+        let mut state = json!({
+            "status": status,
+            "input": parse_json(
+                tool.get("tool_call_args")
+                    .unwrap_or_else(|| &tool["tool_call_args_delta"])
+            ),
+            "output": output,
+            "duration_ms": tool["tool_call_duration_ms"]
+        });
         if failed {
             state["error"] = [&output["error"], &output["text"]]
                 .into_iter()
@@ -524,5 +569,29 @@ fn attachment(item: &Value) -> Value {
             .unwrap_or(values[values.len() - 1])
             .clone()
     };
-    json!({"name":first(&[&item["meta"]["fileName"], &item["file_name"], &item["fileName"]]), "path":first(&[&item["local"]["filePath"], &item["file_path"], &item["filePath"]]), "mime_type":first(&[&item["meta"]["mimeType"], &item["mime_type"], &item["mimeType"]]), "type":first(&[&item["meta"]["attachmentType"], &item["type"]]), "size":item["meta"]["sizeBytes"], "url":item["cloud"]["url"], "asset_id":first(&[&item["local"]["assetId"], &item["asset_id"], &item["assetId"]])})
+    json!({
+        "name": first(&[
+            &item["meta"]["fileName"],
+            &item["file_name"],
+            &item["fileName"]
+        ]),
+        "path": first(&[
+            &item["local"]["filePath"],
+            &item["file_path"],
+            &item["filePath"]
+        ]),
+        "mime_type": first(&[
+            &item["meta"]["mimeType"],
+            &item["mime_type"],
+            &item["mimeType"]
+        ]),
+        "type": first(&[&item["meta"]["attachmentType"], &item["type"]]),
+        "size": item["meta"]["sizeBytes"],
+        "url": item["cloud"]["url"],
+        "asset_id": first(&[
+            &item["local"]["assetId"],
+            &item["asset_id"],
+            &item["assetId"]
+        ])
+    })
 }

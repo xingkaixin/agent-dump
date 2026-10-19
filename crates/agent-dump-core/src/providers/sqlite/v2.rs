@@ -15,8 +15,16 @@ pub fn read(
     session: &Session,
     row: &Value,
 ) -> crate::Result<SessionData> {
-    let messages = rows(connection, "SELECT id, type, seq, time_created, data FROM session_message WHERE session_id = ? ORDER BY seq ASC", &[&session.id])?
-        .iter().map(decode).filter_map(Result::transpose).collect::<crate::Result<Vec<_>>>()?;
+    let messages = rows(
+        connection,
+        "SELECT id, type, seq, time_created, data FROM session_message \
+         WHERE session_id = ? ORDER BY seq ASC",
+        &[&session.id],
+    )?
+    .iter()
+    .map(decode)
+    .filter_map(Result::transpose)
+    .collect::<crate::Result<Vec<_>>>()?;
     let current = crate::providers::sqlite::build_session(
         row,
         &session.source_path,
@@ -66,7 +74,8 @@ pub fn facts(
     each_row(
         connection,
         &format!(
-            "SELECT id, session_id, type, seq, time_created, data FROM session_message WHERE session_id IN ({sessions})"
+            "SELECT id, session_id, type, seq, time_created, data \
+             FROM session_message WHERE session_id IN ({sessions})"
         ),
         parameters,
         |row| {
@@ -400,7 +409,13 @@ mod tests {
     use super::*;
 
     fn convert(kind: &str, data: &Value) -> Option<Value> {
-        let row = json!({"id": "m", "type": kind, "seq": 1, "time_created": 5, "data": data.to_string()});
+        let row = json!({
+            "id": "m",
+            "type": kind,
+            "seq": 1,
+            "time_created": 5,
+            "data": data.to_string(),
+        });
         message(&row)
             .unwrap()
             .map(|message| serde_json::to_value(message).unwrap())
@@ -453,8 +468,17 @@ mod tests {
         let converted = convert(
             "assistant",
             &json!({"content": [
-                {"type": "tool", "id": "a", "name": "bash", "state": {"status": "streaming", "input": "{\"x\":"}},
-                {"type": "tool", "id": "b", "name": "subagent", "state": {"status": "completed", "metadata": {"sessionID": "ses_child"}}},
+                {
+                    "type": "tool", "id": "a", "name": "bash",
+                    "state": {"status": "streaming", "input": "{\"x\":"},
+                },
+                {
+                    "type": "tool", "id": "b", "name": "subagent",
+                    "state": {
+                        "status": "completed",
+                        "metadata": {"sessionID": "ses_child"},
+                    },
+                },
                 {"type": "tool", "id": "c"},
                 {"type": "text", "text": 7},
                 "invalid",

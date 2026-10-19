@@ -78,7 +78,8 @@ fn scan(base: &Path, path: &Path) -> crate::Result<Option<Session>> {
 impl GeminiCli {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self {
@@ -106,7 +107,8 @@ impl GeminiCli {
             source_roots(self)?,
             vec![
                 [
-                    "Confirm the Gemini CLI chat file is still under the `tmp/<project>/chats` directory.",
+                    "Confirm the Gemini CLI chat file is still under the \
+                     `tmp/<project>/chats` directory.",
                     "确认 Gemini CLI 会话文件仍位于 `tmp/<project>/chats` 目录下。",
                 ],
                 [

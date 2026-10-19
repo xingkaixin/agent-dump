@@ -211,7 +211,8 @@ fn recent(
 impl Codex {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self::new(SourceRoots::new(
@@ -396,7 +397,9 @@ impl Codex {
             created_at,
             updated_at: scan.activity.updated.unwrap_or(created_at),
             subtargets: Vec::new(),
-            source_metadata: serde_json::json!({"cwd": payload.get("cwd").cloned().unwrap_or_else(|| "".into())}),
+            source_metadata: serde_json::json!({
+                "cwd": payload.get("cwd").cloned().unwrap_or_else(|| "".into())
+            }),
             source_path: path.to_owned(),
             directory: text(&payload["cwd"]).to_owned(),
             version: payload
@@ -456,10 +459,21 @@ impl Provider for Codex {
                 Vec::new(),
                 crate::providers::contract::source_roots(self)?,
                 vec![
-                    ["Confirm the Codex session file is still under `CODEX_HOME/sessions` or the local development data directory.", "确认 Codex 会话文件仍在 `CODEX_HOME/sessions` 或本地开发数据目录。"],
-                    ["Re-run `agent-dump --list` to confirm the session id still exists.", "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。"],
+                    [
+                        "Confirm the Codex session file is still under \
+                         `CODEX_HOME/sessions` or the local development \
+                         data directory.",
+                        "确认 Codex 会话文件仍在 `CODEX_HOME/sessions` \
+                         或本地开发数据目录。",
+                    ],
+                    [
+                        "Re-run `agent-dump --list` to confirm the session \
+                         id still exists.",
+                        "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。",
+                    ],
                 ],
-            ).into());
+            )
+            .into());
         }
         let children = self.children().get(&session.id);
         transcript::read(
@@ -573,7 +587,19 @@ mod tests {
             |base| {
                 let path = base.join("rollout-kept.jsonl");
                 std::fs::create_dir_all(base).unwrap();
-                std::fs::write(&path, concat!(r#"{"type":"session_meta","payload":{"id":"kept","timestamp":"2026-01-15T00:00:00Z"}}"#, "\n", r#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Keep"}]}}"#, "\n")).unwrap();
+                std::fs::write(
+                    &path,
+                    concat!(
+                        r#"{"type":"session_meta","payload":{"id":"kept","#,
+                        r#""timestamp":"2026-01-15T00:00:00Z"}}"#,
+                        "\n",
+                        r#"{"type":"response_item","payload":{"type":"message","#,
+                        r#""role":"user","content":[{"type":"input_text","#,
+                        r#""text":"Keep"}]}}"#,
+                        "\n",
+                    ),
+                )
+                .unwrap();
                 path
             },
         );
@@ -585,9 +611,19 @@ mod tests {
         let sessions = directory.path().join("sessions");
         std::fs::create_dir(&sessions).unwrap();
         for id in ["kept", "other"] {
-            std::fs::write(sessions.join(format!("rollout-{id}.jsonl")), serde_json::json!({
-                "type": "session_meta", "payload": {"id": id, "timestamp": "2026-01-15T00:00:00Z", "cwd": "/fallback"}
-            }).to_string()).unwrap();
+            std::fs::write(
+                sessions.join(format!("rollout-{id}.jsonl")),
+                serde_json::json!({
+                    "type": "session_meta",
+                    "payload": {
+                        "id": id,
+                        "timestamp": "2026-01-15T00:00:00Z",
+                        "cwd": "/fallback"
+                    }
+                })
+                .to_string(),
+            )
+            .unwrap();
         }
         let index = directory.path().join("session_index.jsonl");
         std::fs::create_dir(&index).unwrap();
@@ -648,7 +684,12 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("sessions/rollout-kept.jsonl");
         std::fs::create_dir(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, "{\"type\":\"session_meta\",\"payload\":{\"id\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\"}}\n").unwrap();
+        std::fs::write(
+            &path,
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"kept\",\
+             \"timestamp\":\"2026-01-15T00:00:00Z\"}}\n",
+        )
+        .unwrap();
         let provider = Codex::new(SourceRoots::fixed(
             directory.path().into(),
             "sessions",
@@ -724,7 +765,11 @@ mod tests {
         };
         item(
             time,
-            serde_json::json!({"type": "message", "role": role, "content": [{"type": kind, "text": text}]}),
+            serde_json::json!({
+                "type": "message",
+                "role": role,
+                "content": [{"type": kind, "text": text}]
+            }),
         )
     }
 
@@ -762,14 +807,38 @@ mod tests {
             &root.join("archived_sessions/rollout-2026-01-15T00-00-00-archived.jsonl.zst"),
             &[
                 meta("archived", Value::Null),
-                event("turn_context", "2026-01-15T00:00:01Z", serde_json::json!({"model": "gpt-5"})),
-                said("2026-01-15T00:00:02Z", "user", "<environment_context>cwd</environment_context>"),
-                said("2026-01-15T00:00:03Z", "user", "<subagent_notification>{}</subagent_notification>"),
+                event(
+                    "turn_context",
+                    "2026-01-15T00:00:01Z",
+                    serde_json::json!({"model": "gpt-5"}),
+                ),
+                said(
+                    "2026-01-15T00:00:02Z",
+                    "user",
+                    "<environment_context>cwd</environment_context>",
+                ),
+                said(
+                    "2026-01-15T00:00:03Z",
+                    "user",
+                    "<subagent_notification>{}</subagent_notification>",
+                ),
                 said("2026-01-15T00:00:04Z", "user", "\n  Fix the parser  \nwith details"),
                 said("2026-01-15T00:00:05Z", "assistant", "Done"),
-                event("event_msg", "2026-01-15T00:00:06Z", serde_json::json!({"type": "task_complete"})),
-                event("event_msg", "2026-01-15T00:00:07Z", serde_json::json!({"type": "thread_settings_applied"})),
-                event("turn_context", "2026-01-15T00:00:08Z", serde_json::json!({"model": "gpt-5.5"})),
+                event(
+                    "event_msg",
+                    "2026-01-15T00:00:06Z",
+                    serde_json::json!({"type": "task_complete"}),
+                ),
+                event(
+                    "event_msg",
+                    "2026-01-15T00:00:07Z",
+                    serde_json::json!({"type": "thread_settings_applied"}),
+                ),
+                event(
+                    "turn_context",
+                    "2026-01-15T00:00:08Z",
+                    serde_json::json!({"model": "gpt-5.5"}),
+                ),
                 said("2026-01-15T00:00:09Z", "developer", "Environment settings"),
             ],
         );
@@ -893,49 +962,107 @@ mod tests {
                 said(t, "user", "PLEASE IMPLEMENT THIS PLAN"),
                 item(
                     t,
-                    serde_json::json!({"type": "function_call", "name": "exec_command", "call_id": "call-1", "arguments": "{\"cmd\":\"ls\"}"}),
+                    serde_json::json!({
+                        "type": "function_call",
+                        "name": "exec_command",
+                        "call_id": "call-1",
+                        "arguments": "{\"cmd\":\"ls\"}"
+                    }),
                 ),
                 item(
                     t,
-                    serde_json::json!({"type": "function_call_output", "call_id": "call-1", "output": "Script completed\nWall time 0.1s\nOutput:\nok"}),
+                    serde_json::json!({
+                        "type": "function_call_output",
+                        "call_id": "call-1",
+                        "output": "Script completed\nWall time 0.1s\nOutput:\nok"
+                    }),
                 ),
                 item(
                     t,
-                    serde_json::json!({"type": "function_call_output", "call_id": "orphan", "output": "dropped"}),
+                    serde_json::json!({
+                        "type": "function_call_output",
+                        "call_id": "orphan",
+                        "output": "dropped"
+                    }),
                 ),
                 item(
                     t,
-                    serde_json::json!({"type": "function_call", "name": "create_issue", "namespace": "mcp__codex_apps__github", "call_id": "call-2", "arguments": "{}"}),
+                    serde_json::json!({
+                        "type": "function_call",
+                        "name": "create_issue",
+                        "namespace": "mcp__codex_apps__github",
+                        "call_id": "call-2",
+                        "arguments": "{}"
+                    }),
                 ),
                 item(
                     t,
-                    serde_json::json!({"type": "custom_tool_call", "name": "exec", "call_id": "exec-1",
-                    "input": "await tools.exec_command({cmd:'pwd'});\nawait tools.apply_patch('*** Begin Patch\\n*** Delete File: a\\n*** End Patch');"}),
+                    serde_json::json!({
+                        "type": "custom_tool_call",
+                        "name": "exec",
+                        "call_id": "exec-1",
+                        "input": concat!(
+                            "await tools.exec_command({cmd:'pwd'});\n",
+                            "await tools.apply_patch('*** Begin Patch\\n",
+                            "*** Delete File: a\\n*** End Patch');",
+                        )
+                    }),
                 ),
                 item(
                     t,
-                    serde_json::json!({"type": "custom_tool_call_output", "call_id": "exec-1", "output": [
-                        {"type": "input_text", "text": "Script failed\nWall time 1s\nOutput:\nboom"},
-                        {"type": "input_image", "image_url": "data:image/png;base64,AAAA"}
-                    ]}),
+                    serde_json::json!({
+                        "type": "custom_tool_call_output",
+                        "call_id": "exec-1",
+                        "output": [
+                            {
+                                "type": "input_text",
+                                "text": "Script failed\nWall time 1s\nOutput:\nboom"
+                            },
+                            {
+                                "type": "input_image",
+                                "image_url": "data:image/png;base64,AAAA"
+                            }
+                        ]
+                    }),
                 ),
                 item(
                     t,
-                    serde_json::json!({"type": "web_search_call", "status": "completed", "action": {"type": "search", "query": "codex"}}),
+                    serde_json::json!({
+                        "type": "web_search_call",
+                        "status": "completed",
+                        "action": {"type": "search", "query": "codex"}
+                    }),
                 ),
                 item(
                     t,
-                    serde_json::json!({"type": "tool_search_call", "call_id": "search-1", "arguments": {"query": "sim"}}),
+                    serde_json::json!({
+                        "type": "tool_search_call",
+                        "call_id": "search-1",
+                        "arguments": {"query": "sim"}
+                    }),
                 ),
                 item(
                     t,
-                    serde_json::json!({"type": "tool_search_output", "call_id": "search-1", "tools": [
-                        {"type": "namespace", "name": "mcp__sim__", "tools": [{"name": "boot"}, {"name": "build"}]}
-                    ]}),
+                    serde_json::json!({
+                        "type": "tool_search_output",
+                        "call_id": "search-1",
+                        "tools": [
+                            {
+                                "type": "namespace",
+                                "name": "mcp__sim__",
+                                "tools": [{"name": "boot"}, {"name": "build"}]
+                            }
+                        ]
+                    }),
                 ),
                 item(
                     t,
-                    serde_json::json!({"type": "image_generation_call", "id": "ig_1", "revised_prompt": "A lighthouse", "result": "aW1hZ2U="}),
+                    serde_json::json!({
+                        "type": "image_generation_call",
+                        "id": "ig_1",
+                        "revised_prompt": "A lighthouse",
+                        "result": "aW1hZ2U="
+                    }),
                 ),
             ],
         );
@@ -948,7 +1075,11 @@ mod tests {
         assert_eq!(data.messages[0].role, "user");
         assert_eq!(
             parts[0],
-            serde_json::json!([{"type": "text", "text": "Run it", "time_created": time(t).as_millisecond()}])
+            serde_json::json!([{
+                "type": "text",
+                "text": "Run it",
+                "time_created": time(t).as_millisecond()
+            }])
         );
         let assistant = &data.messages[1];
         assert_eq!(assistant.model, Some("gpt-5".into()));
@@ -1004,7 +1135,12 @@ mod tests {
                     "error",
                     serde_json::json!([
                         {"type": "text", "text": "boom", "time_created": ms},
-                        {"type": "image", "mime_type": "image/png", "data": "AAAA", "time_created": ms}
+                        {
+                            "type": "image",
+                            "mime_type": "image/png",
+                            "data": "AAAA",
+                            "time_created": ms
+                        }
                     ])
                 ),
                 ("patch", "exec-1#1", "running", Value::Null),
@@ -1013,7 +1149,11 @@ mod tests {
                     "tool_search",
                     "search-1",
                     "completed",
-                    serde_json::json!([{"type": "text", "text": "mcp__sim__: boot, build", "time_created": ms}])
+                    serde_json::json!([{
+                        "type": "text",
+                        "text": "mcp__sim__: boot, build",
+                        "time_created": ms
+                    }])
                 ),
                 ("image_generation", "", "completed", Value::Null),
             ]
@@ -1030,8 +1170,16 @@ mod tests {
                 "event_msg",
                 t,
                 serde_json::json!({"type": "token_count", "info": {
-                    "total_token_usage": {"input_tokens": total, "cached_input_tokens": total / 2, "total_tokens": total},
-                    "last_token_usage": {"input_tokens": last, "cached_input_tokens": last / 2, "total_tokens": last}
+                    "total_token_usage": {
+                        "input_tokens": total,
+                        "cached_input_tokens": total / 2,
+                        "total_tokens": total
+                    },
+                    "last_token_usage": {
+                        "input_tokens": last,
+                        "cached_input_tokens": last / 2,
+                        "total_tokens": last
+                    }
                 }}),
             )
         };
@@ -1106,7 +1254,10 @@ mod tests {
                     "user",
                     &format!(
                         "<subagent_notification>{}</subagent_notification>",
-                        serde_json::json!({"agent_path": "reported", "status": {"completed": "reported result"}})
+                        serde_json::json!({
+                            "agent_path": "reported",
+                            "status": {"completed": "reported result"}
+                        })
                     ),
                 ),
             ],

@@ -157,13 +157,28 @@ impl Diagnostic {
         zh: bool,
     ) -> Self {
         Self {
-            summary: if zh { "命令因未预期的错误中止。" } else { "Command aborted with an unexpected error." }.into(),
+            summary: if zh {
+                "命令因未预期的错误中止。"
+            } else {
+                "Command aborted with an unexpected error."
+            }
+            .into(),
             details: vec![provider_error::operation_message(error, zh)],
             next_steps: if zh {
-                ["重试一次以确认是否为瞬时故障。", "若可稳定复现，请带上上面的错误类型与命令参数提交 issue。"]
+                [
+                    "重试一次以确认是否为瞬时故障。",
+                    "若可稳定复现，请带上上面的错误类型与命令参数提交 issue。",
+                ]
             } else {
-                ["Retry once to check whether the failure is transient.", "If it reproduces consistently, open an issue with the error type above and your command arguments."]
-            }.into_iter().map(str::to_owned).collect(),
+                [
+                    "Retry once to check whether the failure is transient.",
+                    "If it reproduces consistently, open an issue with the \
+                     error type above and your command arguments.",
+                ]
+            }
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
             ..Self::default()
         }
     }
@@ -235,7 +250,12 @@ impl Diagnostic {
                     "检查 URI 中的 session id 是否完整且对应正确 provider。".into(),
                 ]
             } else {
-                vec!["Run `agent-dump --list` to confirm the session still exists.".into(), "Check that the session id in the URI is complete and belongs to that provider.".into()]
+                vec![
+                    "Run `agent-dump --list` to confirm the session still \
+                     exists.".into(),
+                    "Check that the session id in the URI is complete and \
+                     belongs to that provider.".into(),
+                ]
             },
             ..Self::default()
         }
@@ -380,8 +400,10 @@ impl Diagnostic {
             ],
             (false, None) => &[
                 "Confirm the agent has produced session data on this machine.",
-                "If you use a custom directory, check that the relevant environment variable points at it.",
-                "In a development environment, check whether the `data/<agent>` fallback directory exists.",
+                "If you use a custom directory, check that the relevant \
+                 environment variable points at it.",
+                "In a development environment, check whether the \
+                 `data/<agent>` fallback directory exists.",
             ],
         };
         Self {

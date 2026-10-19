@@ -454,7 +454,12 @@ mod tests {
             json!([
                 {"type":"text","text":"boom","time_created":7},
                 {"type":"image","mime_type":"image/png","data":"AAAA","time_created":7},
-                {"type":"image","mime_type":null,"data":"https://example.test/a.png","time_created":7}
+                {
+                    "type":"image",
+                    "mime_type":null,
+                    "data":"https://example.test/a.png",
+                    "time_created":7
+                }
             ])
         );
         assert_eq!(

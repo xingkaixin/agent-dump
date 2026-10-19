@@ -93,10 +93,20 @@ fn records(
         ],
     )? {
         return Err(ProviderError::capability(
-            ["This database does not contain the supported Cherry Studio session tables.", "数据库不包含受支持的 Cherry Studio 会话表。"],
-            ["Use the Cherry Studio 2.x Data/cherrystudio.sqlite database. Legacy IndexedDB data is not supported.", "请使用 Cherry Studio 2.x 的 Data/cherrystudio.sqlite 数据库，暂不支持旧版 IndexedDB 数据。"],
+            [
+                "This database does not contain the supported Cherry Studio \
+                session tables.",
+                "数据库不包含受支持的 Cherry Studio 会话表。",
+            ],
+            [
+                "Use the Cherry Studio 2.x Data/cherrystudio.sqlite database. \
+                Legacy IndexedDB data is not supported.",
+                "请使用 Cherry Studio 2.x 的 Data/cherrystudio.sqlite \
+                数据库，暂不支持旧版 IndexedDB 数据。",
+            ],
             vec![crate::storage::source_io::path_text(path)],
-        ).into());
+        )
+        .into());
     }
     let filter = if has_column(connection, "agent_session", "deleted_at")? {
         "WHERE s.deleted_at IS NULL"
@@ -117,7 +127,15 @@ fn records(
     rows(
         connection,
         &format!(
-            "SELECT * FROM (SELECT 'topic-' || id AS session_id, 'topic' AS kind, id, name, created_at, updated_at, {topic} AS last_activity_at, active_node_id, NULL AS directory FROM topic WHERE deleted_at IS NULL UNION ALL SELECT 'session-' || s.id, 'session', s.id, s.name, s.created_at, s.updated_at, {session}, NULL, w.path FROM agent_session s LEFT JOIN agent_workspace w ON w.id = s.workspace_id {filter}) WHERE (? IS NULL OR session_id = ?) AND (? IS NULL OR created_at >= ?) ORDER BY created_at DESC, session_id"
+            "SELECT * FROM (SELECT 'topic-' || id AS session_id, 'topic' AS \
+            kind, id, name, created_at, updated_at, {topic} AS \
+            last_activity_at, active_node_id, NULL AS directory FROM topic \
+            WHERE deleted_at IS NULL UNION ALL SELECT 'session-' || s.id, \
+            'session', s.id, s.name, s.created_at, s.updated_at, {session}, \
+            NULL, w.path FROM agent_session s LEFT JOIN agent_workspace w ON \
+            w.id = s.workspace_id {filter}) WHERE (? IS NULL OR session_id = \
+            ?) AND (? IS NULL OR created_at >= ?) ORDER BY created_at DESC, \
+            session_id"
         ),
         &[&id, &id, &cutoff, &cutoff],
     )
@@ -243,7 +261,8 @@ fn message_rows(
         return rows(
             connection,
             &format!(
-                "SELECT * FROM agent_session_message WHERE session_id = ? {filter} ORDER BY created_at, id"
+                "SELECT * FROM agent_session_message WHERE session_id = ? \
+                {filter} ORDER BY created_at, id"
             ),
             &[&id],
         );
@@ -254,7 +273,11 @@ fn message_rows(
     let active = text(&session["active_node_id"]);
     let records = rows(
         connection,
-        "WITH RECURSIVE branch(id, parent_id) AS (SELECT id, parent_id FROM message WHERE id = ? AND topic_id = ? AND deleted_at IS NULL UNION SELECT m.id, m.parent_id FROM message m JOIN branch b ON m.id = b.parent_id WHERE m.topic_id = ? AND m.deleted_at IS NULL) SELECT m.* FROM message m JOIN branch b ON m.id = b.id",
+        "WITH RECURSIVE branch(id, parent_id) AS (SELECT id, parent_id FROM \
+        message WHERE id = ? AND topic_id = ? AND deleted_at IS NULL UNION \
+        SELECT m.id, m.parent_id FROM message m JOIN branch b ON m.id = \
+        b.parent_id WHERE m.topic_id = ? AND m.deleted_at IS NULL) SELECT \
+        m.* FROM message m JOIN branch b ON m.id = b.id",
         &[&active, &id, &id],
     )?;
     let by_id: HashMap<_, _> =
@@ -401,7 +424,15 @@ fn decode(row: &Value) -> crate::Result<Option<Message>> {
         Message::new(string(&row["id"]), text(&row["role"]), time, Vec::new());
     message.model = model.as_str().map(std::convert::Into::into);
     message.provider = provider.as_str().map(str::to_owned);
-    message.tokens.clone_from(json!({"input": input, "output": output, "cache": {"read": read, "write": write}}).as_object().unwrap());
+    message.tokens.clone_from(
+        json!({
+            "input": input,
+            "output": output,
+            "cache": {"read": read, "write": write}
+        })
+        .as_object()
+        .unwrap(),
+    );
     if let Some(reasoning) = usage.reasoning {
         message.tokens.insert("reasoning".into(), reasoning.into());
     }
@@ -518,7 +549,13 @@ fn decode_part(part: &Value, time: i64) -> crate::Result<Option<Part>> {
             Part::tool(
                 name,
                 text(&part["toolCallId"]),
-                json!({"status":status,"input":part["input"],"output":part["output"],"error":part["errorText"],"approval":part["approval"]}),
+                json!({
+                    "status": status,
+                    "input": part["input"],
+                    "output": part["output"],
+                    "error": part["errorText"],
+                    "approval": part["approval"]
+                }),
                 time,
             )
         }

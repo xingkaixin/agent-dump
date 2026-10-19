@@ -357,8 +357,12 @@ impl Projector<'_> {
                 .saturating_add(write);
             let output = positive(&usage["outputTokens"]);
             let reasoning = positive(&usage["reasoningTokens"]).min(output);
-            if let Value::Object(tokens) = json!({"input": input, "output": output - reasoning, "reasoning": reasoning, "cache": {"read": read, "write": write}})
-            {
+            if let Value::Object(tokens) = json!({
+                "input": input,
+                "output": output - reasoning,
+                "reasoning": reasoning,
+                "cache": {"read": read, "write": write}
+            }) {
                 message.tokens = tokens;
             }
             self.input = self.input.saturating_add(input);

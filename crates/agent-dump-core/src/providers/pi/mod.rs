@@ -44,12 +44,16 @@ impl Kind {
     const fn location_hint(self) -> LocalizedText {
         match self {
             Self::Pi => [
-                "Confirm the Pi session file is still under the Pi session directory or the local development data directory.",
+                "Confirm the Pi session file is still under the Pi session \
+                 directory or the local development data directory.",
                 "确认 Pi 会话文件仍在 Pi 会话目录或本地开发数据目录。",
             ],
             Self::Omp => [
-                "Confirm the oh-my-pi session file is still under the oh-my-pi session directory or the local development data directory.",
-                "确认 oh-my-pi 会话文件仍在 oh-my-pi 会话目录或本地开发数据目录。",
+                "Confirm the oh-my-pi session file is still under the \
+                 oh-my-pi session directory or the local development data \
+                 directory.",
+                "确认 oh-my-pi 会话文件仍在 oh-my-pi 会话目录\
+                 或本地开发数据目录。",
             ],
         }
     }
@@ -142,7 +146,8 @@ fn settings_session_directory(agent: &Path) -> crate::Result<Option<PathBuf>> {
 impl Pi {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open(kind: Kind) -> crate::Result<Self> {
         Ok(Self {
@@ -247,7 +252,9 @@ impl Pi {
             created_at,
             updated_at,
             subtargets: Vec::new(),
-            source_metadata: serde_json::json!({"cwd": header.get("cwd").cloned().unwrap_or_else(|| "".into())}),
+            source_metadata: serde_json::json!({
+                "cwd": header.get("cwd").cloned().unwrap_or_else(|| "".into()),
+            }),
             source_path: path.to_owned(),
             directory: text(&header["cwd"]).into(),
             version: header["version"].clone(),
@@ -308,9 +315,14 @@ impl Provider for Pi {
                 crate::providers::contract::source_roots(self)?,
                 vec![
                     self.kind.location_hint(),
-                    ["Re-run `agent-dump --list` to confirm the session id still exists.", "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。"],
+                    [
+                        "Re-run `agent-dump --list` to confirm the session id \
+                         still exists.",
+                        "重新运行 `agent-dump --list` 确认会话 ID 是否仍存在。",
+                    ],
                 ],
-            ).into());
+            )
+            .into());
         }
         crate::providers::pi::transcript::read(session, self.kind, diagnostics)
     }
@@ -409,24 +421,125 @@ mod tests {
             &sessions.join("tree.jsonl"),
             &[
                 json!({"type":"title","title":"Slot title"}),
-                json!({"type":"session","id":"tree","cwd":"/work/tree","timestamp":"2026-01-15T00:00:00Z"}),
-                json!({"type":"message","id":"u","parentId":null,"message":{"role":"user","content":"Prompt"}}),
-                json!({"type":"message","id":"old","parentId":"u","message":{"role":"assistant","content":"Abandoned","usage":{"input":1000}}}),
-                json!({"type":"session_info","id":"old-name","parentId":"old","name":"Abandoned name"}),
-                json!({"type":"message","id":"a","parentId":"u","message":{"role":"assistant","content":[{"type":"toolCall","id":"call","name":"read","arguments":{"path":"a"}}],"usage":{"input":100,"output":20,"cacheRead":10,"cacheWrite":5,"totalTokens":135,"cost":{"total":0.25}}}}),
-                json!({"type":"message","id":"r","parentId":"a","message":{"role":"toolResult","toolCallId":"call","toolName":"read","content":[{"type":"text","text":"Result"}],"isError":false,"details":{"lines":1}}}),
-                json!({"type":"custom_message","id":"hidden","parentId":"r","display":false,"content":"Hidden"}),
-                json!({"type":"message","id":"note","parentId":"hidden","message":{"role":"custom","content":"Hidden note"}}),
-                json!({"type":"custom_message","id":"shown","parentId":"note","display":true,"content":"Shown"}),
-                json!({"type":"message","id":"b","parentId":"shown","message":{"role":"bashExecution","command":"false","output":"boom","exitCode":1,"cancelled":false,"truncated":false}}),
+                json!({
+                    "type": "session",
+                    "id": "tree",
+                    "cwd": "/work/tree",
+                    "timestamp": "2026-01-15T00:00:00Z",
+                }),
+                json!({
+                    "type": "message",
+                    "id": "u",
+                    "parentId": null,
+                    "message": {"role": "user", "content": "Prompt"},
+                }),
+                json!({
+                    "type": "message",
+                    "id": "old",
+                    "parentId": "u",
+                    "message": {
+                        "role": "assistant",
+                        "content": "Abandoned",
+                        "usage": {"input": 1000},
+                    },
+                }),
+                json!({
+                    "type": "session_info",
+                    "id": "old-name",
+                    "parentId": "old",
+                    "name": "Abandoned name",
+                }),
+                json!({
+                    "type": "message",
+                    "id": "a",
+                    "parentId": "u",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{
+                            "type": "toolCall",
+                            "id": "call",
+                            "name": "read",
+                            "arguments": {"path": "a"},
+                        }],
+                        "usage": {
+                            "input": 100,
+                            "output": 20,
+                            "cacheRead": 10,
+                            "cacheWrite": 5,
+                            "totalTokens": 135,
+                            "cost": {"total": 0.25},
+                        },
+                    },
+                }),
+                json!({
+                    "type": "message",
+                    "id": "r",
+                    "parentId": "a",
+                    "message": {
+                        "role": "toolResult",
+                        "toolCallId": "call",
+                        "toolName": "read",
+                        "content": [{"type": "text", "text": "Result"}],
+                        "isError": false,
+                        "details": {"lines": 1},
+                    },
+                }),
+                json!({
+                    "type": "custom_message",
+                    "id": "hidden",
+                    "parentId": "r",
+                    "display": false,
+                    "content": "Hidden",
+                }),
+                json!({
+                    "type": "message",
+                    "id": "note",
+                    "parentId": "hidden",
+                    "message": {"role": "custom", "content": "Hidden note"},
+                }),
+                json!({
+                    "type": "custom_message",
+                    "id": "shown",
+                    "parentId": "note",
+                    "display": true,
+                    "content": "Shown",
+                }),
+                json!({
+                    "type": "message",
+                    "id": "b",
+                    "parentId": "shown",
+                    "message": {
+                        "role": "bashExecution",
+                        "command": "false",
+                        "output": "boom",
+                        "exitCode": 1,
+                        "cancelled": false,
+                        "truncated": false,
+                    },
+                }),
             ],
         );
         write(
             &sessions.join("empty.jsonl"),
             &[
                 json!({"type":"session","id":"empty","timestamp":"2026-01-15T00:00:00Z"}),
-                json!({"type":"custom_message","id":"c","parentId":null,"display":false,"content":"Hidden"}),
-                json!({"type":"message","id":"a","parentId":"c","message":{"role":"assistant","content":[],"usage":{"input":5}}}),
+                json!({
+                    "type": "custom_message",
+                    "id": "c",
+                    "parentId": null,
+                    "display": false,
+                    "content": "Hidden",
+                }),
+                json!({
+                    "type": "message",
+                    "id": "a",
+                    "parentId": "c",
+                    "message": {
+                        "role": "assistant",
+                        "content": [],
+                        "usage": {"input": 5},
+                    },
+                }),
             ],
         );
         let mut provider = Pi {
@@ -469,14 +582,28 @@ mod tests {
         );
         assert_eq!(
             data["stats"],
-            json!({"total_cost":0.25,"total_input_tokens":115,"total_output_tokens":20,"total_tokens":135,"message_count":4})
+            json!({
+                "total_cost": 0.25,
+                "total_input_tokens": 115,
+                "total_output_tokens": 20,
+                "total_tokens": 135,
+                "message_count": 4,
+            })
         );
     }
 
     #[test]
     fn titles_prefer_session_info_title_record_header_then_prompt() {
         let header = json!({"type":"session","title":"Header"});
-        let prompt = json!({"type":"message","id":"u","parentId":null,"message":{"role":"user","content":"<system-reminder>x</system-reminder>\n  First   line \nSecond"}});
+        let prompt = json!({
+            "type": "message",
+            "id": "u",
+            "parentId": null,
+            "message": {
+                "role": "user",
+                "content": "<system-reminder>x</system-reminder>\n  First   line \nSecond",
+            },
+        });
         let slot = json!({"type":"title","title":"Slot"});
         let named = json!({"type":"session_info","id":"n","parentId":"u","name":"Named"});
         for (records, expected) in [

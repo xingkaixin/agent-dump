@@ -339,7 +339,13 @@ fn action_part(action: &Value, time: i64) -> Option<Part> {
         merged.extend(extras);
         metadata = Value::Object(merged);
     }
-    let mut state = json!({"status":status,"input":input,"output":output,"error":error,"metadata":metadata});
+    let mut state = json!({
+        "status": status,
+        "input": input,
+        "output": output,
+        "error": error,
+        "metadata": metadata,
+    });
     let (call_id, title) = if terminal {
         let command = js_string(&action["input"]["command"]);
         let description =
