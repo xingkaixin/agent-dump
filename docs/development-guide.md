@@ -16,9 +16,9 @@ Node、Python、uv 和 just 的版本与 CI 对齐，pnpm 与 `web/package.json`
 - `src/`：CLI 参数、分发、`workflows/`、`collect/` 与 `terminal/`。
 - `crates/agent-dump-core/src/`：Provider、Session、Query/Search、输出与存储；模块内保留 Rust 单元测试。
 - `resources/locales/`、`resources/prompts/`：编译时嵌入的文案与提示词。
-- `tests/cli/`：通过真实子进程执行的 CLI 契约、差分和终端测试。
+- `tests/cli/`：通过真实子进程执行的 CLI 契约和终端测试。
 - `tests/tooling/`：构建、发布、文档和 benchmark 的行为验证。
-- `tests/reference/`：Python v0.15.9 的精确依赖及 hash 清单；不包含旧应用源码。
+- `tests/reference/`：配对性能评估使用的 Python v0.15.9 精确依赖及 hash 清单；不包含旧应用源码。
 - `scripts/`、`packaging/`：性能评估和 pip wheel 工具。Python 不是产品运行依赖。
 
 测试只使用临时 JSONL、SQLite 和显式注入的目录，禁止访问真实用户的 Provider 会话或导出路径。CLI 变更覆盖参数、分发、输出与退出码；只在行为变化、回归或高风险边界需要时增加测试。
@@ -31,18 +31,15 @@ CLI 文案位于 `resources/locales/`。测试按中英文参数运行；需要�
 cargo build --locked --release
 cargo test --locked --workspace
 
-# 可选的历史差分验证：安装固定参考、核对 hash，再比较两套 CLI
-just test-differential
-
 # 完整本地门禁：Rust、CLI、工具、npm、网站
 just isok
 ```
 
 `just test` 先构建 release 二进制，再运行 Rust 单元测试和不依赖历史 Python 的 pytest 契约。`just check-rust` 只运行 Rust 与 CLI 验证。`AGENT_DUMP_TEST_BINARY` 可指定实际安装的制品；缺少二进制会失败，不回退到其他命令。
 
-`pytest` 默认排除带 `differential` 标记的测试；CI 和 `just isok` 不安装或执行历史 Python 对照。需要比较时运行 `just test-differential`，或先 `just reference`，再用 `uv run pytest -q -m differential tests/cli` 选择差分测试。混合模块按测试函数标记，纯差分模块使用模块标记；v0.15.9 不再是行为基准，不再新增差分测试；修复与差分用例冲突时删除该用例，并用默认契约测试或 Rust 单元测试断言新行为。HTTP 凭据、响应边界和 Collect 合并测试直接断言 Rust 行为，仍进入默认验证。
+`pytest` 运行全部 CLI 契约，不依赖历史 Python 对照；CI 和 `just isok` 不安装参考环境。v0.15.9 不是行为基准，缺陷修复用默认契约测试或 Rust 单元测试断言新行为。
 
-Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 hash 来自 `tests/reference/requirements.txt`。安装器核对包内全部 Python 文件的源码 hash，与 P6 冻结参考一致。对照只用于差分和配对性能测量，不进入主开发环境、Cargo 构建、wheel 或 npm。不要随依赖升级改变此历史参考。
+Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 hash 来自 `tests/reference/requirements.txt`。安装器核对包内全部 Python 文件的源码 hash，与 P6 冻结参考一致。对照只用于配对性能测量，不进入主开发环境、Cargo 构建、wheel 或 npm。不要随依赖升级改变此历史参考。
 
 `uv sync --locked --dev` 安装 pytest、Ruff、ty 等辅助工具；`pyproject.toml` 同时保留 pip/Maturin 所需元数据。pytest 配置只位于该文件，禁止额外配置覆盖。Python 应用的旧单元测试和覆盖率门禁已随源码退场，历史结果保留在 Git 历史中。
 
