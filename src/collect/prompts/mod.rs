@@ -18,34 +18,34 @@ pub const MANIFEST_END: &str = "<!-- agent-dump:collect-manifest-end -->";
 fn text(mode: Mode, stage: &str) -> &'static str {
     match (mode, stage) {
         (Mode::Pm, "chunk") => {
-            include_str!("../../resources/prompts/pm-chunk.txt")
+            include_str!("../../../resources/prompts/pm-chunk.txt")
         }
         (Mode::Insight, "chunk") => {
-            include_str!("../../resources/prompts/insight-chunk.txt")
+            include_str!("../../../resources/prompts/insight-chunk.txt")
         }
         (Mode::Pm, "report") => {
-            include_str!("../../resources/prompts/pm-report.txt")
+            include_str!("../../../resources/prompts/pm-report.txt")
         }
         (Mode::Insight, "report") => {
-            include_str!("../../resources/prompts/insight-report.txt")
+            include_str!("../../../resources/prompts/insight-report.txt")
         }
         (Mode::Pm, "merge") => {
-            include_str!("../../resources/prompts/pm-merge.txt")
+            include_str!("../../../resources/prompts/pm-merge.txt")
         }
         (Mode::Insight, "merge") => {
-            include_str!("../../resources/prompts/insight-merge.txt")
+            include_str!("../../../resources/prompts/insight-merge.txt")
         }
         (Mode::Pm, "retry") => {
-            include_str!("../../resources/prompts/pm-retry.txt")
+            include_str!("../../../resources/prompts/pm-retry.txt")
         }
         (Mode::Insight, "retry") => {
-            include_str!("../../resources/prompts/insight-retry.txt")
+            include_str!("../../../resources/prompts/insight-retry.txt")
         }
         (Mode::Pm, "handoff") => {
-            include_str!("../../resources/prompts/pm-handoff.txt")
+            include_str!("../../../resources/prompts/pm-handoff.txt")
         }
         (Mode::Insight, "handoff") => {
-            include_str!("../../resources/prompts/insight-handoff.txt")
+            include_str!("../../../resources/prompts/insight-handoff.txt")
         }
         _ => unreachable!(),
     }
@@ -221,7 +221,7 @@ pub fn final_prompts(
 pub fn uri_summary(uri: &str, transcript: &str) -> String {
     format!(
         "{}{DATA_BOUNDARY}{}",
-        include_str!("../../resources/prompts/uri.txt"),
+        include_str!("../../../resources/prompts/uri.txt"),
         envelope("session_transcript", uri, transcript)
     )
 }
