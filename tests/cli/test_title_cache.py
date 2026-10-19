@@ -43,7 +43,7 @@ def test_unreadable_index_recovers_with_localized_warning(cli, language, damage)
         assert len(result.stderr.splitlines()) == 1
         assert result.stderr.startswith(prefix) and result.stderr[len(prefix) :].strip()
         if damage == "directory":
-            assert str(index) in result.stderr
+            assert repr(str(index)) in result.stderr
         assert cli.fixtures.source_manifest(cli.root) == before
     assert f"claude://{IDENTITY}" in cli.run("--list", "-q", "provider:claude", "-d", "36500").stdout
     exported = json.loads((cli.root / "exports/claudecode" / f"{IDENTITY}.json").read_text())
