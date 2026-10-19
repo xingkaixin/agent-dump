@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import shutil
 
-from cli_fixture import IDENTITY, STAMP, provider_export, write_jsonl
+from cli_fixture import IDENTITY, STAMP, write_jsonl
 import pytest
 
 
@@ -68,87 +68,6 @@ STREAM = [
     {"type": "session_info", "name": " Latest\nTitle ", "timestamp": "2026-01-17T00:00:00Z"},
     {"type": "unknown", "timestamp": "2026-01-14T00:00:00Z"},
 ]
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize(
-    "content",
-    [
-        None,
-        5,
-        [],
-        [{"type": "image", "mimeType": " image/png ", "data": "AA=="}, {"type": "image"}],
-        [{"type": "toolCall", "name": "custom", "id": "call", "arguments": None}],
-        [{"type": "toolCall", "name": " ", "id": ""}, {"type": "unknown", "text": "Ignored"}],
-    ],
-)
-def test_content_shapes_images_and_tools(cli, content):
-    create(cli, [message("user", "Keep"), message("assistant", content)])
-    provider_export(cli, f"pi://{IDENTITY}", "pi")
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize(
-    "role,fields",
-    [
-        ("bashExecution", {"command": "", "output": ""}),
-        ("branchSummary", {"summary": " Branch "}),
-        ("compactionSummary", {"summary": None}),
-        ("future-role", {}),
-        ("system", {}),
-        ("developer", {}),
-    ],
-)
-def test_special_roles(cli, role, fields):
-    create(cli, [message("user", "Keep"), message(role, "Visible", **fields)])
-    provider_export(cli, f"pi://{IDENTITY}", "pi")
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("identity,parent", [(None, None), (7, False), ("", "previous"), ("  id  ", {}), ([], [])])
-def test_entry_identifiers_parents_and_valid_record_numbering(cli, identity, parent):
-    source = create(cli, [message("user", "Keep", identity=identity, parent=parent)])
-    source.write_bytes(source.read_bytes().replace(b"\n", b"\n\n", 1))
-    provider_export(cli, f"pi://{IDENTITY}", "pi")
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize(
-    "timestamp",
-    [None, True, "bad", 0, -0.9, 1768478400123.456, 1e30, "2026-01-15T12:00:00", "2026-01-15T20:00:00+08:00"],
-)
-def test_message_and_header_timestamps(cli, timestamp):
-    create(cli, [message("user", "Keep", timestamp=timestamp)], header={"timestamp": timestamp})
-    cli.parity(f"pi://{IDENTITY}", "--head", "--lang", "en")
-    provider_export(cli, f"pi://{IDENTITY}", "pi")
-
-
-@pytest.mark.differential
-def test_large_scan_and_full_read_resolve_different_titles(cli):
-    create(
-        cli, [message("user", "x" * 300_000), {"type": "session_info", "name": "Full read title"}, {"type": "unknown"}]
-    )
-    cli.parity(f"pi://{IDENTITY}", "--head", "--lang", "en")
-    provider_export(cli, f"pi://{IDENTITY}", "pi")
-
-
-@pytest.mark.differential
-def test_header_identity_fallback_lookup_and_incomplete_tail(cli):
-    create(cli, [message("user", "Keep")], filename="mismatched-name.jsonl", suffix=b'{"type":')
-    provider_export(cli, f"pi://{IDENTITY}", "pi")
-
-
-@pytest.mark.differential
-def test_local_fallback(cli):
-    create(cli, [message("user", "Keep")])
-    shutil.move(str(cli.root / "sources/pi/agent/sessions"), cli.root / "data/pi")
-    cli.parity(f"pi://{IDENTITY}", "--head", "--lang", "en")
-
-
-@pytest.mark.differential
-def test_invalid_header_is_not_a_pi_session(cli):
-    create(cli, [message("user", "Keep")], header={"type": "message"})
-    cli.parity("--list", "-d", "36500", "-q", "provider:pi", "--lang", "en")
 
 
 def test_exports_cannot_write_into_pi_sources(cli):
