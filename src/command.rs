@@ -479,7 +479,7 @@ fn interactive(
         metadata: !args.no_metadata_summary,
     };
     if browse {
-        crate::workflows::reader::run(&operation, zh, out, &mut io::stderr())
+        crate::workflows::browse::run(&operation, zh, out, &mut io::stderr())
     } else {
         crate::workflows::interactive::run(
             &operation,
