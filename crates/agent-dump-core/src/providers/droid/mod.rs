@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::source_tests::source_selection(
+        crate::providers::tests::source_selection(
             "sessions",
             false,
             |roots| Droid {

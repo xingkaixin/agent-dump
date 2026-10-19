@@ -896,7 +896,7 @@ mod tests {
                 .read(&session, false, &mut |_| Ok(()))
                 .err()
                 .unwrap();
-            crate::providers::source_tests::assert_missing(
+            crate::providers::tests::assert_missing(
                 error.as_ref(),
                 summary,
                 &path,

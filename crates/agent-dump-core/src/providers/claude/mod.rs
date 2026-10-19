@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::source_tests::source_selection(
+        crate::providers::tests::source_selection(
             "projects",
             true,
             |roots| Claude {
@@ -762,7 +762,7 @@ mod tests {
             ),
             titles: HashMap::new(),
         };
-        crate::providers::source_tests::removed_file(
+        crate::providers::tests::removed_file(
             provider,
             &path,
             "kept",

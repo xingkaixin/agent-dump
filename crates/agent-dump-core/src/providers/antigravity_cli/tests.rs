@@ -321,7 +321,7 @@ fn empty_databases_are_skipped_and_invalid_ones_fail_alone() {
 
 #[test]
 fn source_selection_retries_absence_and_keeps_selected_root() {
-    crate::providers::source_tests::source_selection(
+    crate::providers::tests::source_selection(
         "conversations",
         false,
         |roots| AntigravityCli { roots },

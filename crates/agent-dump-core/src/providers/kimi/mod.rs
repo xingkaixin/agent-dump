@@ -479,7 +479,7 @@ mod tests {
 
     #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::source_tests::source_selection(
+        crate::providers::tests::source_selection(
             "sessions",
             false,
             |roots| Kimi {
@@ -503,7 +503,7 @@ mod tests {
             },
         );
     }
-    use crate::providers::source_tests::assert_missing;
+    use crate::providers::tests::assert_missing;
 
     fn fixture(root: &Path, context: bool) -> (Kimi, Session) {
         let directory = root.join("sessions/project/kept");
