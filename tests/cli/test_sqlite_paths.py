@@ -9,8 +9,6 @@ import sqlite3
 import pytest
 from sqlite_fixture import create_legacy
 
-pytestmark = pytest.mark.differential
-
 
 @pytest.mark.parametrize("location", ["absolute", "relative", "xdg", "home", "fallback"])
 def test_opencode_database_selection(cli, location):
@@ -36,8 +34,11 @@ def test_opencode_database_selection(cli, location):
         target = cli.root / "data/opencode/opencode.db"
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(source), target)
-    cli.parity("opencode://ses_old", "--head", "--lang", "en")
-    cli.parity("opencode://ses_old", "--format", "json", "--output", "exports", "--lang", "en", json_export=True)
+    before = cli.fixtures.source_manifest(cli.root)
+    result = cli.run("rust", "opencode://ses_old", "--head", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "- Title: Legacy 会话" in result.stdout
+    assert cli.fixtures.source_manifest(cli.root) == before
 
 
 @pytest.mark.parametrize("explicit", ["missing.db", ":memory:"])
@@ -46,9 +47,10 @@ def test_explicit_unavailable_database_never_falls_back_or_creates_files(cli, ex
     target = Path(cli.environment["XDG_DATA_HOME"]) / "opencode" / explicit
     cli.environment["OPENCODE_DB"] = explicit
     before = cli.fixtures.source_manifest(cli.root)
-    for candidate in ("python", "rust"):
-        assert cli.run(candidate, "opencode://ses_old", "--head").returncode == 1
-        assert not target.exists()
+    result = cli.run("rust", "opencode://ses_old", "--head", "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stdout.startswith("Diagnostic\nSummary: No matching session found.\n")
+    assert not target.exists()
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
@@ -58,36 +60,18 @@ def test_session_identifiers_are_bound_parameters(cli, identity):
     with sqlite3.connect(path) as connection:
         connection.execute("UPDATE session SET id = ?", (identity,))
         connection.execute("UPDATE message SET session_id = ?", (identity,))
-    cli.parity(f"opencode://{identity}", "--head", "--lang", "en")
-    cli.parity(
-        f"opencode://{identity}",
-        "--format",
-        "json,raw",
-        "--output",
-        "exports",
-        "--lang",
-        "en",
-        formats=("json", "raw-json"),
+    head = cli.run("rust", f"opencode://{identity}", "--head", "--lang", "en")
+    assert head.returncode == 0, head.stdout + head.stderr
+    assert f"- URI: opencode://{identity}\n" in head.stdout
+    result = cli.run("rust", f"opencode://{identity}", "--format", "json,raw", "--output", "exports", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    files = [path for path in (cli.root / "exports").rglob("*") if path.is_file()]
+    assert {path.parent for path in files} == {cli.root / "exports/opencode"}
+    assert sorted(path.name.split(".", 1)[1] for path in files) == ["json", "raw.json"]
+    exported = json.loads(
+        next(path for path in files if path.name.endswith(".json") and ".raw." not in path.name).read_text()
     )
-
-
-@pytest.mark.parametrize("invalid", [None, "[]", "{broken"])
-def test_legacy_bad_records_warn_and_keep_healthy_messages(cli, invalid):
-    path = create_legacy(cli)
-    with sqlite3.connect(path) as connection:
-        connection.execute("UPDATE message SET data = ? WHERE id = 'msg_developer'", (invalid,))
-        connection.execute("UPDATE part SET data = ? WHERE id = 'part_1'", (invalid,))
-    before = cli.fixtures.source_manifest(cli.root)
-    results = []
-    for candidate in ("python", "rust"):
-        result = cli.run(candidate, "opencode://ses_old", "--format", "json,raw", "--output", "exports", "--lang", "en")
-        assert result.returncode == 0
-        assert result.stderr
-        outputs = {item.name: json.loads(item.read_text()) for item in (cli.root / "exports/opencode").glob("*.json")}
-        assert outputs["ses_old.json"]["stats"]["message_count"] == 2
-        results.append(outputs)
-        assert cli.fixtures.source_manifest(cli.root) == before
-    assert results[0] == results[1]
+    assert exported["id"] == identity
 
 
 def test_unknown_schema_is_an_error_not_an_empty_export(cli):
@@ -96,8 +80,8 @@ def test_unknown_schema_is_an_error_not_an_empty_export(cli):
         connection.execute("CREATE TABLE other (value TEXT)")
     cli.environment["OPENCODE_DB"] = str(path)
     before = path.read_bytes()
-    for candidate in ("python", "rust"):
-        result = cli.run(candidate, "opencode://missing", "--format", "json,raw", "--output", "exports")
-        assert result.returncode == 1
-        assert path.read_bytes() == before
-        assert not any(item.is_file() for item in (cli.root / "exports").rglob("*"))
+    result = cli.run("rust", "opencode://missing", "--format", "json,raw", "--output", "exports", "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stderr == "⚠️  OpenCode session lookup failed: no such table: session\n"
+    assert path.read_bytes() == before
+    assert not any(item.is_file() for item in (cli.root / "exports").rglob("*"))

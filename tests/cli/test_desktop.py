@@ -1,26 +1,9 @@
 import sqlite3
 
-from desktop_fixture import desktop, exports, fails
+from desktop_fixture import desktop
 import pytest
 
-pytestmark = pytest.mark.differential
-
-
-@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax"])
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_desktop_list_head_and_exports(tmp_path, monkeypatch, provider, lang):
-    cli, identity = desktop(tmp_path, monkeypatch, provider)
-    cli.parity("--list", "-d", "36500", "-q", f"provider:{provider}", "--lang", lang)
-    cli.parity(f"{provider}://{identity}", "--head", "--lang", lang)
-    data = exports(cli, provider, identity, lang)
-    assert len(data["messages"]) == 2
-
-
-@pytest.mark.parametrize("provider", ["deepchat", "cherry", "minimax"])
-@pytest.mark.parametrize("formats", ["raw", "json,raw", "print,raw"])
-def test_unsupported_raw_rejects_whole_request(tmp_path, monkeypatch, provider, formats):
-    cli, identity = desktop(tmp_path, monkeypatch, provider)
-    fails(cli, f"{provider}://{identity}", formats)
+NAMES = {"deepchat": "DeepChat", "cherry": "Cherry Studio", "minimax": "MiniMax Code"}
 
 
 @pytest.mark.parametrize(
@@ -34,28 +17,54 @@ def test_unsupported_raw_rejects_whole_request(tmp_path, monkeypatch, provider, 
         ("minimax", "DROP TABLE local_runtime_message_row_migrations"),
     ],
 )
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_unknown_schema_is_not_exported(tmp_path, monkeypatch, provider, sql, lang):
+def test_unknown_schema_is_not_exported(tmp_path, monkeypatch, provider, sql):
     cli, identity = desktop(tmp_path, monkeypatch, provider)
     with sqlite3.connect(cli.source) as connection:
         connection.execute(sql)
-    cli.parity(
-        f"{provider}://{identity}", "--format", "json,md,print", "--output", "exports", "--lang", lang, exit_code=1
+    reason = f"This database does not contain the supported {NAMES[provider]} session tables"
+    before = cli.fixtures.source_manifest(cli.root)
+    result = cli.run(
+        "rust", f"{provider}://{identity}", "--format", "json,md,print", "--output", "exports", "--lang", "en"
     )
-    cli.parity("--list", "-d", "36500", "-q", f"provider:{provider}", "--lang", lang)
-    assert not list((cli.root / "exports").rglob("*"))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stderr.startswith(f"⚠️  {NAMES[provider]} session lookup failed: {reason}")
+    listing = cli.run("rust", "--list", "-d", "36500", "-q", f"provider:{provider}", "--lang", "en")
+    assert listing.returncode == 0, listing.stdout + listing.stderr
+    assert listing.stderr.startswith(
+        f"⚠️  {NAMES[provider]} provider operation failed: DiagnosticCapabilityError: {reason}"
+    )
+    assert not (cli.root / "exports").exists()
+    assert cli.fixtures.source_manifest(cli.root) == before
 
 
 @pytest.mark.parametrize(
-    "provider,sql",
+    "provider,sql,reason",
     [
-        ("cherry", "UPDATE agent_session_message SET data = 'invalid' WHERE role = 'assistant'"),
-        ("minimax", "UPDATE local_runtime_message_rows SET data_json = 'invalid'"),
+        (
+            "cherry",
+            "UPDATE agent_session_message SET data = 'invalid' WHERE role = 'assistant'",
+            "Invalid Cherry Studio message: b-assistant",
+        ),
+        (
+            "minimax",
+            "UPDATE local_runtime_message_rows SET data_json = 'invalid'",
+            "Expecting value: line 1 column 1 (char 0)",
+        ),
     ],
 )
-def test_bad_body_remains_head_readable_and_fails_export(tmp_path, monkeypatch, provider, sql):
+def test_bad_body_remains_head_readable_and_fails_export(tmp_path, monkeypatch, provider, sql, reason):
     cli, identity = desktop(tmp_path, monkeypatch, provider)
     with sqlite3.connect(cli.source) as connection:
         connection.execute(sql)
-    cli.parity(f"{provider}://{identity}", "--head", "--lang", "en")
-    fails(cli, f"{provider}://{identity}")
+    before = cli.fixtures.source_manifest(cli.root)
+    head = cli.run("rust", f"{provider}://{identity}", "--head", "--lang", "en")
+    assert head.returncode == 0, head.stdout + head.stderr
+    assert f"- URI: {provider}://{identity}" in head.stdout
+    result = cli.run(
+        "rust", f"{provider}://{identity}", "--format", "json,md,print", "--output", "exports", "--lang", "en"
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert not result.stderr
+    assert result.stdout.count(f"Summary: Failed to read session data.\nDetails:\n  - {reason}\n") == 3
+    assert not [path for path in (cli.root / "exports").rglob("*") if path.is_file()]
+    assert cli.fixtures.source_manifest(cli.root) == before

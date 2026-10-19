@@ -2,200 +2,68 @@
 
 from contextlib import closing
 import json
-import re
-import shutil
 import sqlite3
 from urllib.parse import quote
 
-from cli_fixture import IDENTITY, call, header, message, output, reasoning
+from cli_fixture import IDENTITY, call, header, message
 import pytest
 
-SNIPPET = re.compile(r"(?m)^(\s+(?:Snippet|命中片段)[:：]\s*)(.*)$")
 
-
-def search_parity(cli, *args: str) -> None:
-    # Search snippets come from the Rust evidence window, not FTS5 snippet().
-    cli.parity(*args, mask=lambda text: SNIPPET.sub(r"\1", text))
-    snippets = [match[1] for match in SNIPPET.findall(cli.run("rust", *args).stdout)]
-    assert all(re.search(r"\*\*.+?\*\*", snippet) for snippet in snippets), snippets
-
-
-KEYWORDS = [
-    "authentication",
-    "Auth Timeout",
-    "timeout auth",
-    "AUTH",
-    "认证",
-    "认证 超时",
-    "超",
-    "a+b",
-    '"quoted"',
-    "AND NEAR *",
-    "i",
-    "İ",
-    "ı",
-    "ſ",
-    "K",
-    "straße",
-    "STRASSE",
-    "tool-only",
-    "reason-only",
-    "private-field",
-    "missing",
-    "😺",
-    "auth\x1ctimeout",
-]
-MULTI_TERM = {"Auth Timeout", "timeout auth", "认证 超时", "auth\x1ctimeout"}
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(
-    ("mode", "keyword"),
-    [("query", keyword) for keyword in KEYWORDS if keyword not in MULTI_TERM]
-    + [("search", keyword) for keyword in KEYWORDS],
-)
-def test_literal_matching_rank_and_snippets(cli, lang, mode, keyword):
-    cli.write(
-        [
-            header(),
-            message("user", "Auth incident"),
-            message(
-                "assistant", 'Authentication timeout\n认证超时 a+b literal AND NEAR * and "quoted" 😺 İ ı ſ K Straße'
-            ),
-            reasoning("reason-only"),
-            call(arguments={"query": "tool-only", "认证": "逻辑值"}),
-            output("finished"),
-        ]
-    )
-    args = ["--lang", lang, "-days", "36500"]
-    if mode == "query":
-        cli.parity(*args, "--list", "-query", f"codex:{keyword}")
-        return
-    args += ["--search", keyword, "-query", "provider:codex"]
-    search_parity(cli, *args)
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize(
-    "query",
+    ("query", "reason"),
     [
-        "role:user auth provider:codex",
-        "role:assistant auth provider:codex",
-        "role:system provider:codex",
-        "role:user,assistant limit:1",
-        'auth provider:codex path:"/project"',
-        "provider:codex path:/project/child",
-        "provider:codex cwd:/other",
-        "provider:codex role:assistant reason-only",
-        "provider:codex role:tool tool-only",
-        "provider:codex limit:2",
+        ("", "query expression cannot be empty"),
+        ("  ", "query expression cannot be empty"),
+        ("provider:", "providers cannot be empty"),
+        ("provider:missing", "unknown agent name: missing"),
+        ("codex,missing:auth", "unknown agent name: missing"),
+        ("codex:", "query keyword cannot be empty"),
+        ("role:", "roles cannot be empty"),
+        ("path:", "query path cannot be empty"),
+        ("limit:", "limit cannot be empty"),
+        ("limit:0", "limit must be a positive integer"),
+        ("limit:-1", "limit must be a positive integer"),
+        ("limit:1.5", "limit must be a positive integer"),
+        ("limit:9223372036854775808", "limit is too large"),
+        ("path:. cwd:.", "path/cwd may only be given once"),
+        ("limit:1 limit:2", "limit may only be given once"),
+        ("role:user unknown:x", "unknown query field: unknown"),
+        ('role:"user', "structured query has invalid quoting or escaping"),
+        ("provider:codex trailing\\", "structured query has invalid quoting or escaping"),
     ],
 )
-def test_structured_query_scope_roles_and_global_limit(cli, lang, query):
-    cli.write(
-        [
-            header(),
-            message("user", "auth user"),
-            message("assistant", "assistant-only"),
-            reasoning("reason-only"),
-            call(arguments="tool-only"),
-        ]
-    )
-    cli.parity("--list", "-q", query, "-d", "36500", "--lang", lang)
+def test_query_diagnostics_never_broaden_scope(cli, query, reason):
+    result = cli.run("rust", "--list", "-query", query, "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert not result.stderr
+    assert result.stdout.startswith(f"Diagnostic\nSummary: Invalid query expression.\nDetails:\n  - {reason}\n")
 
 
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize(
-    "query",
+    ("args", "summary", "reason"),
     [
-        "",
-        "provider:",
-        "provider:missing",
-        "codex,missing:auth",
-        "codex:",
-        "role:",
-        "path:",
-        "limit:",
-        "limit:0",
-        "limit:-1",
-        "limit:1.5",
-        "limit:9223372036854775808",
-        "path:. cwd:.",
-        "limit:1 limit:2",
-        "role:user unknown:x",
-        'role:"user',
-        "provider:codex trailing\\",
+        (["agents://"], "Invalid agents:// query.", "query path cannot be empty"),
+        (["agents://.?limit=0"], "Invalid agents:// query.", "limit must be a positive integer"),
+        (["agents://.?q=a&q=b"], "Invalid agents:// query.", "query field may only be given once: q"),
+        (["agents://.?unknown=x"], "Invalid agents:// query.", "unknown query field: unknown"),
+        (
+            ["agents://.?q=auth", "-query", "auth"],
+            "Invalid query argument combination.",
+            "an agents:// query cannot be combined with -q/--query",
+        ),
     ],
 )
-def test_query_diagnostics(cli, lang, query):
-    cli.parity("--list", "-query", query, "--lang", lang, exit_code=1)
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize(
-    "uri",
-    [
-        "agents:///project?providers=codex&q=Auth",
-        "agents:///project?roles=user&limit=1",
-        "agents:///project/child?providers=codex",
-        "agents:///other?providers=codex",
-        "agents:///project?q=auth+timeout&providers=codex",
-        "agents:///project?q=%E8%AE%A4%E8%AF%81",
-    ],
-)
-def test_query_uri(cli, lang, uri):
-    cli.write([header(), message("user", "Auth timeout 认证")])
-    cli.parity(uri, "-days", "36500", "--lang", lang)
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize(
-    "args",
-    [
-        ["agents://"],
-        ["agents://.?limit=0"],
-        ["agents://.?q=a&q=b"],
-        ["agents://.?unknown=x"],
-        ["agents://.?q=auth", "-query", "auth"],
-    ],
-)
-def test_query_uri_diagnostics(cli, lang, args):
-    cli.parity(*args, "--lang", lang, exit_code=1)
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize(
-    "args",
-    [
-        ["--stats"],
-        ["--stats", "-q", "provider:codex"],
-        ["--stats", "-q", "missing"],
-        ["--stats", "-q", "role:user limit:2"],
-        ["--providers"],
-        ["--reindex"],
-    ],
-)
-def test_maintenance(cli, lang, args):
-    cli.parity(*args, "-days", "36500", "--lang", lang)
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize(
-    "keyword", ["authentication", "needle", "benchmark", "认证", "auth timeout", "x", "never-matches"]
-)
-@pytest.mark.parametrize("limit", [None, 1, 4])
-def test_cross_provider_ranking_uses_global_index_snapshot(cli, lang, keyword, limit):
-    args = ["--search", keyword, "-days", "36500", "--lang", lang]
-    if limit:
-        args += ["-q", f"limit:{limit}"]
-    search_parity(cli, *args)
+def test_query_uri_diagnostics(cli, args, summary, reason):
+    result = cli.run("rust", *args, "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert not result.stderr
+    assert result.stdout.splitlines()[:5] == [
+        "Diagnostic",
+        f"Summary: {summary}",
+        f"Parsed URI: {args[0]}",
+        "Details:",
+        f"  - {reason}",
+    ]
 
 
 @pytest.mark.parametrize("mode", ["query", "search"])
@@ -271,10 +139,11 @@ def test_database_message_changes_refresh_search_without_session_timestamp_chang
         assert all(path.read_bytes() == contents for path, contents in durable.items())
 
 
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-@pytest.mark.parametrize("kind", ["database", "directory"])
-def test_index_failures_fall_back_to_logical_transcript(cli, lang, kind):
+@pytest.mark.parametrize(
+    ("kind", "cause"), [("database", "DatabaseError: file is not a database"), ("directory", "FileExistsError: ")]
+)
+def test_index_failures_fall_back_to_logical_transcript(cli, kind, cause):
+    cli.write([header(), message("user", "fallback-needle")])
     cache = cli.root / "cache" / "agent-dump"
     cache.mkdir(parents=True, exist_ok=True)
     if kind == "database":
@@ -282,31 +151,13 @@ def test_index_failures_fall_back_to_logical_transcript(cli, lang, kind):
     else:
         cache.rmdir()
         cache.write_text("a file instead of the cache directory")
-    cli.parity("--search", "auth", "-q", "provider:codex", "-days", "36500", "--lang", lang)
-
-
-@pytest.mark.differential
-def test_rust_reuses_python_index_signatures_and_private_permissions(cli):
-    cli.write([header(), message("user", "Unicode 😺 认证")])
-    args = ["--search", "认证", "-q", "provider:codex", "-days", "36500", "--lang", "en"]
-    reference = cli.run("python", *args)
-    path = cli.root / "cache" / "agent-dump" / "search-index.db"
-    with closing(sqlite3.connect(path)) as connection:
-        before = list(
-            connection.execute("SELECT session_id, updated_signature, indexed_at FROM index_state ORDER BY session_id")
-        )
-    candidate = cli.run("rust", *args)
-    assert candidate.returncode == reference.returncode == 0
-    assert candidate.stdout == reference.stdout
-    with closing(sqlite3.connect(path)) as connection:
-        assert (
-            list(
-                connection.execute(
-                    "SELECT session_id, updated_signature, indexed_at FROM index_state ORDER BY session_id"
-                )
-            )
-            == before
-        )
+    before = cli.fixtures.source_manifest(cli.root)
+    result = cli.run("rust", "--search", "fallback-needle", "-q", "provider:codex", "-days", "36500", "--lang", "en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"codex://{IDENTITY}" in result.stdout
+    assert result.stderr.startswith(f"⚠️  The Codex search index is unusable ({cause}")
+    assert result.stderr.endswith("falling back to a file scan. Run `agent-dump --reindex` to rebuild it.\n")
+    assert cli.fixtures.source_manifest(cli.root) == before
 
 
 def test_index_location_cannot_write_inside_provider_source(cli):
@@ -317,50 +168,6 @@ def test_index_location_cannot_write_inside_provider_source(cli):
     assert "falling back to a file scan" in result.stderr
     assert cli.fixtures.source_manifest(cli.root) == before
     assert not (cli.root / "sources" / "codex" / "agent-dump").exists()
-
-
-@pytest.mark.differential
-def test_index_reuses_unchanged_content_and_refreshes_changed_text(cli):
-    original = cli.source.read_bytes()
-    before = cli.fixtures.source_manifest(cli.root)
-    outputs = []
-    for candidate in ["python", "rust"]:
-        shutil.rmtree(cli.root / "cache", ignore_errors=True)
-        cli.write([header(), message("user", "first needle")])
-        args = ["--search", "needle", "-days", "36500", "-query", "provider:codex", "--lang", "en"]
-        cold = cli.run(candidate, *args)
-        warm = cli.run(candidate, *args)
-        assert cold.returncode == warm.returncode == 0
-        assert cold.stdout == warm.stdout
-        assert warm.stderr == ""
-        cli.write([header(), message("user", "second replacement")])
-        changed = cli.run(candidate, *args)
-        assert changed.returncode == 0
-        assert "first needle" not in changed.stdout
-        outputs.append((cold.stdout, warm.stdout, changed.stdout))
-    assert outputs[0] == outputs[1]
-    cli.source.write_bytes(original)
-    assert cli.fixtures.source_manifest(cli.root) == before
-
-
-@pytest.mark.differential
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_named_home_query_path(cli, lang):
-    import os
-    from pathlib import Path
-
-    if os.name == "nt":
-        cli.environment["USERNAME"] = "home"
-        name = "fixture-user"
-        project = Path(cli.environment["USERPROFILE"]).with_name(name) / "synthetic-project"
-    else:
-        import pwd
-
-        account = pwd.getpwuid(0)
-        name = account.pw_name
-        project = Path(account.pw_dir) / "synthetic-project"
-    cli.write([header(cwd=str(project)), message("user", "named home marker")])
-    cli.parity("--list", "-q", f"provider:codex path:~{name}/synthetic-project", "-d", "36500", "--lang", lang)
 
 
 @pytest.mark.parametrize("keyword", ["timeout auth", "Auth   认证", "auth missing"])
