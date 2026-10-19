@@ -452,33 +452,135 @@ mod tests {
 
     #[test]
     fn jsonl_updates_replay_into_messages_tools_and_usage() {
-        let thinking = json!({"id":"g1","timestamp":"2026-10-01T10:00:02.000Z","type":"gemini","content":"","thoughts":[{"subject":"Reading","description":"Open the file first."}],"tokens":null,"model":"gemini-2.5-pro"});
+        let thinking = json!({
+            "id": "g1",
+            "timestamp": "2026-10-01T10:00:02.000Z",
+            "type": "gemini",
+            "content": "",
+            "thoughts": [{
+                "subject": "Reading",
+                "description": "Open the file first.",
+            }],
+            "tokens": null,
+            "model": "gemini-2.5-pro",
+        });
         let mut counted = thinking.clone();
-        counted["tokens"] = json!({"input":1000,"output":50,"cached":400,"thoughts":30,"tool":10,"total":1090});
+        counted["tokens"] = json!({
+            "input": 1000,
+            "output": 50,
+            "cached": 400,
+            "thoughts": 30,
+            "tool": 10,
+            "total": 1090,
+        });
         let mut called = counted.clone();
         called["toolCalls"] = json!([
-            {"id":"call-read","name":"read_file","args":{"file_path":"src/main.rs"},"status":"success","result":[
-                {"functionResponse":{"id":"call-read","name":"read_file","response":{"output":"fn main() {}"}}},
-                {"functionResponse":{"id":"call-shell","name":"run_shell_command","response":{"output":"sibling"}}}
-            ]},
-            {"id":"call-shell","name":"run_shell_command","args":{"command":"cargo test"},"status":"error","result":null}
+            {
+                "id": "call-read",
+                "name": "read_file",
+                "args": {"file_path": "src/main.rs"},
+                "status": "success",
+                "result": [
+                    {"functionResponse": {
+                        "id": "call-read",
+                        "name": "read_file",
+                        "response": {"output": "fn main() {}"},
+                    }},
+                    {"functionResponse": {
+                        "id": "call-shell",
+                        "name": "run_shell_command",
+                        "response": {"output": "sibling"},
+                    }}
+                ]
+            },
+            {
+                "id": "call-shell",
+                "name": "run_shell_command",
+                "args": {"command": "cargo test"},
+                "status": "error",
+                "result": null
+            }
         ]);
         let chat = chat(&[
-            json!({"sessionId":"abcd1234-0000","projectHash":"hash","startTime":"2026-10-01T10:00:00.000Z","lastUpdated":"2026-10-01T10:00:00.000Z"}),
-            json!({"id":"u1","timestamp":"2026-10-01T10:00:01.000Z","type":"user","content":[{"text":"Explain @src/main.rs\n--- Content ---"}],"displayContent":[{"text":"Explain @src/main.rs"}]}),
+            json!({
+                "sessionId": "abcd1234-0000",
+                "projectHash": "hash",
+                "startTime": "2026-10-01T10:00:00.000Z",
+                "lastUpdated": "2026-10-01T10:00:00.000Z",
+            }),
+            json!({
+                "id": "u1",
+                "timestamp": "2026-10-01T10:00:01.000Z",
+                "type": "user",
+                "content": [{"text": "Explain @src/main.rs\n--- Content ---"}],
+                "displayContent": [{"text": "Explain @src/main.rs"}],
+            }),
             thinking,
             counted,
             called,
-            json!({"$patch":{"updates":[{"id":"g1","toolCalls":[{"id":"call-shell","result":[{"functionResponse":{"id":"call-shell","name":"run_shell_command","response":{"error":"exit 1"}}}]}]}]}}),
-            json!({"id":"u2","timestamp":"2026-10-01T10:00:04.000Z","type":"user","content":[{"functionResponse":{"id":"call-read","name":"read_file","response":{"output":"fn main() {}"}}}]}),
-            json!({"id":"g2","timestamp":"2026-10-01T10:00:05.000Z","type":"gemini","model":"gemini-2.5-pro","content":[{"text":"Plan","thought":true},{"text":" more","thought":true},{"text":"The file is empty."},{"functionCall":{"id":"call-ls","name":"list_directory","args":{"dir_path":"."}}}],"tokens":{"input":2000,"output":20,"cached":1500,"thoughts":0,"tool":0}}),
-            json!({"id":"u3","timestamp":"2026-10-01T10:00:06.000Z","type":"user","content":[{"functionResponse":{"id":"call-ls","name":"list_directory","response":{"output":"src/"}}}]}),
+            json!({"$patch": {"updates": [{
+                "id": "g1",
+                "toolCalls": [{
+                    "id": "call-shell",
+                    "result": [{"functionResponse": {
+                        "id": "call-shell",
+                        "name": "run_shell_command",
+                        "response": {"error": "exit 1"},
+                    }}],
+                }],
+            }]}}),
+            json!({
+                "id": "u2",
+                "timestamp": "2026-10-01T10:00:04.000Z",
+                "type": "user",
+                "content": [{"functionResponse": {
+                    "id": "call-read",
+                    "name": "read_file",
+                    "response": {"output": "fn main() {}"},
+                }}],
+            }),
+            json!({
+                "id": "g2",
+                "timestamp": "2026-10-01T10:00:05.000Z",
+                "type": "gemini",
+                "model": "gemini-2.5-pro",
+                "content": [
+                    {"text": "Plan", "thought": true},
+                    {"text": " more", "thought": true},
+                    {"text": "The file is empty."},
+                    {"functionCall": {
+                        "id": "call-ls",
+                        "name": "list_directory",
+                        "args": {"dir_path": "."},
+                    }},
+                ],
+                "tokens": {
+                    "input": 2000,
+                    "output": 20,
+                    "cached": 1500,
+                    "thoughts": 0,
+                    "tool": 0,
+                },
+            }),
+            json!({
+                "id": "u3",
+                "timestamp": "2026-10-01T10:00:06.000Z",
+                "type": "user",
+                "content": [{"functionResponse": {
+                    "id": "call-ls",
+                    "name": "list_directory",
+                    "response": {"output": "src/"},
+                }}],
+            }),
             json!({"id":"g3","type":"gemini","content":"Rewound answer"}),
             json!({"$rewindTo":"g3"}),
             json!({"id":"g4","type":"gemini","content":"Removed answer"}),
             json!({"$patch":{"removeIds":["g4"]}}),
             json!({"id":"u4","type":"user","content":"<session_context>cwd</session_context>"}),
-            json!({"$set":{"summary":"Explain the main file","lastUpdated":"2026-10-01T10:00:10.000Z"}}),
+            json!({"$set": {
+                "summary": "Explain the main file",
+                "lastUpdated": "2026-10-01T10:00:10.000Z",
+            }}),
         ]);
         assert_eq!(chat.id, "abcd1234-0000");
         assert_eq!(chat.title.as_deref(), Some("Explain the main file"));
@@ -487,9 +589,10 @@ mod tests {
         let ids: Vec<_> = chat.messages.iter().map(|m| m.id.as_str()).collect();
         assert_eq!(ids, ["u1", "g1", "g2", "u4"]);
         assert!(chat.messages[3].inferred_time);
-        assert!(
-            matches!(&chat.messages[0].parts[0], Part::Text(part) if part.text == "Explain @src/main.rs")
-        );
+        assert!(matches!(
+            &chat.messages[0].parts[0],
+            Part::Text(part) if part.text == "Explain @src/main.rs"
+        ));
         let parts = |index: usize| {
             let parts = serde_json::to_value(&chat.messages[index].parts);
             let mut parts = parts.unwrap();
@@ -498,13 +601,39 @@ mod tests {
             }
             parts
         };
-        let tool = |id: &str, name: &str, state: Value| json!({"type":"tool","tool":name,"callID":id,"title":name,"state":state});
+        let tool = |id: &str, name: &str, state: Value| {
+            json!({
+                "type": "tool",
+                "tool": name,
+                "callID": id,
+                "title": name,
+                "state": state,
+            })
+        };
         assert_eq!(
             parts(1),
             json!([
                 {"type":"reasoning","text":"**Reading** Open the file first."},
-                tool("call-read", "read_file", json!({"status":"completed","input":{"file_path":"src/main.rs"},"output":"fn main() {}","error":null})),
-                tool("call-shell", "run_shell_command", json!({"status":"error","input":{"command":"cargo test"},"output":null,"error":"exit 1"})),
+                tool(
+                    "call-read",
+                    "read_file",
+                    json!({
+                        "status": "completed",
+                        "input": {"file_path": "src/main.rs"},
+                        "output": "fn main() {}",
+                        "error": null,
+                    }),
+                ),
+                tool(
+                    "call-shell",
+                    "run_shell_command",
+                    json!({
+                        "status": "error",
+                        "input": {"command": "cargo test"},
+                        "output": null,
+                        "error": "exit 1",
+                    }),
+                ),
             ])
         );
         assert_eq!(
@@ -512,7 +641,16 @@ mod tests {
             json!([
                 {"type":"reasoning","text":"Plan more"},
                 {"type":"text","text":"The file is empty."},
-                tool("call-ls", "list_directory", json!({"status":"completed","input":{"dir_path":"."},"output":"src/","error":null})),
+                tool(
+                    "call-ls",
+                    "list_directory",
+                    json!({
+                        "status": "completed",
+                        "input": {"dir_path": "."},
+                        "output": "src/",
+                        "error": null,
+                    }),
+                ),
             ])
         );
         assert_eq!(
@@ -528,9 +666,25 @@ mod tests {
             "sessionId":"legacy01",
             "projectHash":"0123abcd",
             "messages":[
-                {"id":"a","timestamp":"2025-09-18T02:45:01.000Z","type":"user","content":"<session_context>cwd</session_context>"},
-                {"id":"b","timestamp":"2025-09-18T02:45:02.000Z","type":"user","content":"Old question"},
-                {"id":"c","timestamp":"2025-09-18T02:45:03.000Z","type":"gemini","content":"","tokens":{"input":0,"output":0}}
+                {
+                    "id": "a",
+                    "timestamp": "2025-09-18T02:45:01.000Z",
+                    "type": "user",
+                    "content": "<session_context>cwd</session_context>"
+                },
+                {
+                    "id": "b",
+                    "timestamp": "2025-09-18T02:45:02.000Z",
+                    "type": "user",
+                    "content": "Old question"
+                },
+                {
+                    "id": "c",
+                    "timestamp": "2025-09-18T02:45:03.000Z",
+                    "type": "gemini",
+                    "content": "",
+                    "tokens": {"input": 0, "output": 0}
+                }
             ]
         });
         let chat =

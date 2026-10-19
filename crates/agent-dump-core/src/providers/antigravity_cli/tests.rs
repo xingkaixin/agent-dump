@@ -4,11 +4,14 @@ use rusqlite::Connection;
 use serde_json::json;
 
 const FIXTURE: &str = "
-CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER NOT NULL, status INTEGER NOT NULL, step_payload BLOB);
+CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER NOT NULL, \
+    status INTEGER NOT NULL, step_payload BLOB);
 CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB);
 INSERT INTO steps VALUES (1, 14, 3, X'9a010412024869');
 INSERT INTO steps VALUES (2, 15, 3, X'a201060a04446f6e65');
-INSERT INTO steps VALUES (3, 132, 3, X'2a2322210a0663616c6c2d311209726561645f66696c651a0c7b2270617468223a2261227d');
+INSERT INTO steps VALUES (3, 132, 3, \
+    X'2a2322210a0663616c6c2d311209726561645f66696c65\
+    1a0c7b2270617468223a2261227d');
 INSERT INTO steps VALUES (4, 23, 3, X'f20109220741207469746c65');
 INSERT INTO steps VALUES (5, 999, 3, X'a00601');
 ";
@@ -52,12 +55,25 @@ fn native_steps_keep_order_tools_titles_and_summary_facts() {
     let summaries =
         Connection::open(root.path().join("conversation_summaries.db"))
             .unwrap();
-    summaries.execute_batch("CREATE TABLE conversation_summaries (conversation_id TEXT PRIMARY KEY, title TEXT, workspace_uris TEXT, last_modified_time TEXT, parent_conversation_id TEXT);").unwrap();
+    summaries
+        .execute_batch(
+            "CREATE TABLE conversation_summaries (\
+             conversation_id TEXT PRIMARY KEY, title TEXT, \
+             workspace_uris TEXT, last_modified_time TEXT, \
+             parent_conversation_id TEXT);",
+        )
+        .unwrap();
     let workspace = root.path().join("agy-fixture");
     summaries
         .execute(
-            "INSERT INTO conversation_summaries VALUES ('session', 'Summary title', ?1, '2026-09-02 16:57:28.971105+00:00', '')",
-            [json!(["not a uri", url::Url::from_file_path(&workspace).unwrap().as_str()]).to_string()],
+            "INSERT INTO conversation_summaries VALUES \
+             ('session', 'Summary title', ?1, \
+             '2026-09-02 16:57:28.971105+00:00', '')",
+            [json!([
+                "not a uri",
+                url::Url::from_file_path(&workspace).unwrap().as_str(),
+            ])
+            .to_string()],
         )
         .unwrap();
     let mut provider = provider(root.path());
@@ -104,11 +120,24 @@ fn native_steps_keep_order_tools_titles_and_summary_facts() {
     );
     assert_eq!(
         tool["state"],
-        json!({"status": "unknown", "input": {"path": "a"}, "output": null, "metadata": {"antigravity_step_type": 132, "antigravity_status": 3}})
+        json!({
+            "status": "unknown",
+            "input": {"path": "a"},
+            "output": null,
+            "metadata": {
+                "antigravity_step_type": 132,
+                "antigravity_status": 3,
+            },
+        })
     );
     assert_eq!(
         data["stats"],
-        json!({"total_cost": 0, "total_input_tokens": 0, "total_output_tokens": 0, "message_count": 3})
+        json!({
+            "total_cost": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "message_count": 3,
+        })
     );
     assert_eq!(
         provider
@@ -215,7 +244,13 @@ fn usage_deduplicates_retries_and_attaches_to_the_next_assistant_message() {
     assert_eq!(usage["tokens"]["output"], 2);
     assert_eq!(
         data["stats"],
-        json!({"total_cost": 0, "total_input_tokens": 193, "total_output_tokens": 37, "message_count": 5, "total_tokens": 230})
+        json!({
+            "total_cost": 0,
+            "total_input_tokens": 193,
+            "total_output_tokens": 37,
+            "message_count": 5,
+            "total_tokens": 230,
+        })
     );
     assert_eq!(session.created_at.as_millisecond(), 1_788_000_001_500);
 }
@@ -286,7 +321,7 @@ fn empty_databases_are_skipped_and_invalid_ones_fail_alone() {
 
 #[test]
 fn source_selection_retries_absence_and_keeps_selected_root() {
-    crate::providers::source_tests::source_selection(
+    crate::providers::tests::source_selection(
         "conversations",
         false,
         |roots| AntigravityCli { roots },

@@ -33,8 +33,10 @@ pub fn read(
         for part in rows(
             connection,
             &format!(
-                "SELECT id, message_id, time_created, CASE WHEN typeof(data) = 'text' THEN data END AS data
-                 FROM part WHERE message_id IN ({placeholders}) ORDER BY message_id ASC, time_created ASC"
+                "SELECT id, message_id, time_created, \
+                 CASE WHEN typeof(data) = 'text' THEN data END AS data \
+                 FROM part WHERE message_id IN ({placeholders}) \
+                 ORDER BY message_id ASC, time_created ASC"
             ),
             &parameters,
         )? {
@@ -128,7 +130,8 @@ pub fn facts(
     each_row(
         connection,
         &format!(
-            "SELECT id, session_id, time_created, CASE WHEN typeof(data) = 'text' THEN data END AS data
+            "SELECT id, session_id, time_created, \
+             CASE WHEN typeof(data) = 'text' THEN data END AS data \
              FROM message WHERE session_id IN ({sessions})"
         ),
         parameters,
@@ -151,8 +154,10 @@ pub fn facts(
     each_row(
         connection,
         &format!(
-            "SELECT message_id, time_created, CASE WHEN typeof(data) = 'text' THEN data END AS data
-             FROM part WHERE message_id IN (SELECT id FROM message WHERE session_id IN ({sessions}))"
+            "SELECT message_id, time_created, \
+             CASE WHEN typeof(data) = 'text' THEN data END AS data \
+             FROM part WHERE message_id IN \
+             (SELECT id FROM message WHERE session_id IN ({sessions}))"
         ),
         parameters,
         |row| {

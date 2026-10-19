@@ -302,7 +302,8 @@ pub struct Claude {
 impl Claude {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open(kind: Kind) -> crate::Result<Self> {
         Ok(Self {
@@ -595,9 +596,14 @@ impl Provider for Claude {
                 crate::providers::contract::source_roots(self)?,
                 vec![
                     self.kind.location_hint(),
-                    ["Re-run `agent-dump --list` to confirm the session still exists.", "重新运行 `agent-dump --list` 确认该会话是否仍存在。"],
+                    [
+                        "Re-run `agent-dump --list` to confirm the session \
+                         still exists.",
+                        "重新运行 `agent-dump --list` 确认该会话是否仍存在。",
+                    ],
                 ],
-            ).into());
+            )
+            .into());
         }
         crate::providers::claude::transcript::read(
             session,
@@ -626,7 +632,7 @@ mod tests {
 
     #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::source_tests::source_selection(
+        crate::providers::tests::source_selection(
             "projects",
             true,
             |roots| Claude {
@@ -637,7 +643,15 @@ mod tests {
             |base| {
                 let path = base.join("project/kept.jsonl");
                 std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-                std::fs::write(&path, concat!(r#"{"type":"user","timestamp":"2026-01-15T00:00:00Z","message":{"role":"user","content":"Keep"}}"#, "\n")).unwrap();
+                std::fs::write(
+                    &path,
+                    concat!(
+                        r#"{"type":"user","timestamp":"2026-01-15T00:00:00Z","#,
+                        r#""message":{"role":"user","content":"Keep"}}"#,
+                        "\n",
+                    ),
+                )
+                .unwrap();
                 path
             },
         );
@@ -654,7 +668,16 @@ mod tests {
         ] {
             let path = projects.join(project).join(format!("{id}.jsonl"));
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(&path, serde_json::json!({"type": "user", "timestamp": "2026-01-15T00:00:00Z", "message": {"role": "user", "content": "Fallback"}}).to_string()).unwrap();
+            std::fs::write(
+                &path,
+                serde_json::json!({
+                    "type": "user",
+                    "timestamp": "2026-01-15T00:00:00Z",
+                    "message": {"role": "user", "content": "Fallback"}
+                })
+                .to_string(),
+            )
+            .unwrap();
         }
         let index = projects.join("first/sessions-index.json");
         std::fs::write(&index, "[]").unwrap();
@@ -719,7 +742,16 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("projects/project/kept.jsonl");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, "{\"type\":\"user\",\"sessionId\":\"kept\",\"timestamp\":\"2026-01-15T00:00:00Z\",\"message\":{\"role\":\"user\",\"content\":\"hello\"}}\n").unwrap();
+        std::fs::write(
+            &path,
+            concat!(
+                r#"{"type":"user","sessionId":"kept","#,
+                r#""timestamp":"2026-01-15T00:00:00Z","#,
+                r#""message":{"role":"user","content":"hello"}}"#,
+                "\n",
+            ),
+        )
+        .unwrap();
         let provider = Claude {
             kind: Kind::Claude,
             roots: SourceRoots::fixed(
@@ -730,7 +762,7 @@ mod tests {
             ),
             titles: HashMap::new(),
         };
-        crate::providers::source_tests::removed_file(
+        crate::providers::tests::removed_file(
             provider,
             &path,
             "kept",

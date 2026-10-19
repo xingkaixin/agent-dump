@@ -110,32 +110,56 @@ fn fixture(kind: Kind) -> (tempfile::TempDir, Desktop, Session, &'static str) {
     let connection = Connection::open(&database).unwrap();
     let (sql, id, table) = match kind {
         Kind::DeepChat => (
-            "CREATE TABLE new_sessions (id TEXT, title TEXT, created_at INTEGER, updated_at INTEGER, project_dir TEXT, agent_id TEXT, parent_session_id TEXT, session_kind TEXT, is_draft INTEGER);
+            "CREATE TABLE new_sessions (id TEXT, title TEXT, created_at INTEGER,
+              updated_at INTEGER, project_dir TEXT, agent_id TEXT,
+              parent_session_id TEXT, session_kind TEXT, is_draft INTEGER);
              CREATE TABLE deepchat_sessions (id TEXT, model_id TEXT, provider_id TEXT);
-             CREATE TABLE deepchat_messages (id TEXT, session_id TEXT, order_seq INTEGER, role TEXT, content TEXT, status TEXT, metadata TEXT, created_at INTEGER, updated_at INTEGER);
-             INSERT INTO new_sessions VALUES ('kept', 'Kept', 1768478400000, 1768478400000, '/project', NULL, NULL, 'conversation', 0);
-             INSERT INTO deepchat_messages VALUES ('kept-user', 'kept', 1, 'user', '{\"text\":\"Prompt\"}', 'sent', '{}', 1768478400000, 1768478400000);",
+             CREATE TABLE deepchat_messages (id TEXT, session_id TEXT,
+               order_seq INTEGER, role TEXT, content TEXT, status TEXT,
+               metadata TEXT, created_at INTEGER, updated_at INTEGER);
+             INSERT INTO new_sessions VALUES ('kept', 'Kept', 1768478400000,
+               1768478400000, '/project', NULL, NULL, 'conversation', 0);
+             INSERT INTO deepchat_messages VALUES ('kept-user', 'kept', 1,
+               'user', '{\"text\":\"Prompt\"}', 'sent', '{}', 1768478400000,
+               1768478400000);",
             "kept",
             "new_sessions",
         ),
         Kind::Cherry => (
-            "CREATE TABLE topic (id TEXT, name TEXT, created_at INTEGER, updated_at INTEGER, active_node_id TEXT, deleted_at INTEGER);
+            "CREATE TABLE topic (id TEXT, name TEXT, created_at INTEGER,
+              updated_at INTEGER, active_node_id TEXT, deleted_at INTEGER);
              CREATE TABLE message (id TEXT);
              CREATE TABLE agent_workspace (id TEXT, path TEXT);
-             CREATE TABLE agent_session (id TEXT, name TEXT, created_at INTEGER, updated_at INTEGER, workspace_id TEXT);
-             CREATE TABLE agent_session_message (id TEXT, session_id TEXT, role TEXT, data TEXT, model_id TEXT, message_snapshot TEXT, created_at INTEGER);
+             CREATE TABLE agent_session (id TEXT, name TEXT, created_at INTEGER,
+               updated_at INTEGER, workspace_id TEXT);
+             CREATE TABLE agent_session_message (id TEXT, session_id TEXT,
+               role TEXT, data TEXT, model_id TEXT, message_snapshot TEXT,
+               created_at INTEGER);
              INSERT INTO agent_session VALUES ('kept', 'Kept', 1768478400000, 1768478400000, NULL);
-             INSERT INTO agent_session_message VALUES ('kept-user', 'kept', 'user', '{\"parts\":[{\"type\":\"text\",\"text\":\"Prompt\"}]}', NULL, NULL, 1768478400000);",
+             INSERT INTO agent_session_message VALUES ('kept-user', 'kept',
+               'user', '{\"parts\":[{\"type\":\"text\",\"text\":\"Prompt\"}]}',
+               NULL, NULL, 1768478400000);",
             "session-kept",
             "agent_session",
         ),
         Kind::MiniMax => (
-            "CREATE TABLE local_runtime_sessions (session_id TEXT, columnar_version INTEGER, runtime TEXT, visibility TEXT, session_kind TEXT, archived INTEGER, title TEXT, workspace_dir TEXT, parent_session_id TEXT, created_at_ms INTEGER, updated_at_ms INTEGER, extra_data_json TEXT);
-             CREATE TABLE local_runtime_message_rows (id INTEGER, session_id TEXT, msg_id TEXT, role TEXT, turn_id TEXT, source TEXT, created_at_ms INTEGER, data_json TEXT);
+            "CREATE TABLE local_runtime_sessions (session_id TEXT,
+              columnar_version INTEGER, runtime TEXT, visibility TEXT,
+              session_kind TEXT, archived INTEGER, title TEXT,
+              workspace_dir TEXT, parent_session_id TEXT, created_at_ms INTEGER,
+              updated_at_ms INTEGER, extra_data_json TEXT);
+             CREATE TABLE local_runtime_message_rows (id INTEGER,
+               session_id TEXT, msg_id TEXT, role TEXT, turn_id TEXT,
+               source TEXT, created_at_ms INTEGER, data_json TEXT);
              CREATE TABLE local_runtime_messages (session_id TEXT, display_messages_json TEXT);
              CREATE TABLE local_runtime_message_row_migrations (session_id TEXT);
-             INSERT INTO local_runtime_sessions VALUES ('kept', 3, 'pi-agent', 'visible', 'conversation', 0, 'Kept', '/project', NULL, 1768478400000, 1768478400000, '{}');
-             INSERT INTO local_runtime_message_rows VALUES (1, 'kept', 'kept-user', 'user', 'turn', 'agent', 1768478400000, '{\"msg_id\":\"kept-user\",\"role\":\"user\",\"msg_content\":\"Prompt\"}');",
+             INSERT INTO local_runtime_sessions VALUES ('kept', 3, 'pi-agent',
+               'visible', 'conversation', 0, 'Kept', '/project', NULL,
+               1768478400000, 1768478400000, '{}');
+             INSERT INTO local_runtime_message_rows VALUES (1, 'kept',
+               'kept-user', 'user', 'turn', 'agent', 1768478400000,
+               '{\"msg_id\":\"kept-user\",\"role\":\"user\",
+               \"msg_content\":\"Prompt\"}');",
             "kept",
             "local_runtime_sessions",
         ),
@@ -274,11 +298,13 @@ fn source_removed_after_lookup_keeps_missing_path_and_provider_roots() {
             let path = session.source_path.display();
             let mut expected = if zh {
                 format!(
-                    "诊断信息\n结论: {name} 会话数据源不存在。\n证据:\n  - missing path: {path}\n"
+                    "诊断信息\n结论: {name} 会话数据源不存在。\n证据:\n\
+                     \x20 - missing path: {path}\n"
                 )
             } else {
                 format!(
-                    "Diagnostic\nSummary: {name} session source is missing.\nDetails:\n  - missing path: {path}\n"
+                    "Diagnostic\nSummary: {name} session source is missing.\n\
+                     Details:\n  - missing path: {path}\n"
                 )
             };
             if !matches!(kind, Kind::Cherry) {
@@ -422,17 +448,24 @@ fn minimax_lists_child_sessions_with_messages() {
     Connection::open(&provider.database)
         .unwrap()
         .execute_batch(
-            r#"CREATE TABLE local_runtime_token_usage (id INTEGER, session_id TEXT, turn_id TEXT, model TEXT, ts INTEGER);
+            r#"CREATE TABLE local_runtime_token_usage (id INTEGER,
+              session_id TEXT, turn_id TEXT, model TEXT, ts INTEGER);
             INSERT INTO local_runtime_sessions VALUES
-              ('hidden-v2', 2, 'pi-agent', 'hidden', 'conversation', 0, NULL, NULL, NULL, 1, 1, '{}'),
+              ('hidden-v2', 2, 'pi-agent', 'hidden', 'conversation', 0, NULL,
+                NULL, NULL, 1, 1, '{}'),
               ('cron-pending', 3, 'pi-agent', 'visible', 'cron', 0, NULL, NULL, NULL, 1, 1, '{}'),
-              ('empty', 3, 'pi-agent', 'visible', 'conversation', 0, 'Empty', NULL, NULL, 1, 1, '{}'),
+              ('empty', 3, 'pi-agent', 'visible', 'conversation', 0, 'Empty',
+                NULL, NULL, 1, 1, '{}'),
               ('child', 3, 'opencode', 'hidden', 'subagent', 0, '  ', NULL, 'kept', 1, 1, '{}');
             INSERT INTO local_runtime_messages VALUES ('cron-pending', '[{}]');
             INSERT INTO local_runtime_message_rows VALUES
-              (2, 'child', 'c1', 'user', 't', 'cron', 2, '{"msg_id":"c1","role":"user","msg_content":"Scheduled"}'),
-              (3, 'child', 'c2', 'user', 't', 'agent', 3, '{"msg_id":"c2","role":"user","msg_content":"<system-reminder>x</system-reminder>"}'),
-              (4, 'child', 'c3', 'user', 't', 'agent', 4, '{"msg_id":"c3","role":"user","msg_content":"\n  Fix   the bug\nnow"}');
+              (2, 'child', 'c1', 'user', 't', 'cron', 2, '{"msg_id":"c1",
+                "role":"user","msg_content":"Scheduled"}'),
+              (3, 'child', 'c2', 'user', 't', 'agent', 3, '{"msg_id":"c2",
+                "role":"user",
+                "msg_content":"<system-reminder>x</system-reminder>"}'),
+              (4, 'child', 'c3', 'user', 't', 'agent', 4, '{"msg_id":"c3",
+                "role":"user","msg_content":"\n  Fix   the bug\nnow"}');
             INSERT INTO local_runtime_token_usage VALUES (1, 'child', 't', 'm', 9000);"#,
         )
         .unwrap();
@@ -470,20 +503,40 @@ fn minimax_messages_carry_events_tools_and_turn_usage() {
     let (_directory, mut provider, _, _) = fixture(Kind::MiniMax);
     Connection::open(&provider.database)
         .unwrap()
-        .execute_batch(
-            r#"CREATE TABLE local_runtime_token_usage (id INTEGER, session_id TEXT, turn_id TEXT, model TEXT, ts INTEGER, input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost_usd REAL);
+        .execute_batch(concat!(
+            r#"CREATE TABLE local_runtime_token_usage (id INTEGER,
+              session_id TEXT, turn_id TEXT, model TEXT, ts INTEGER,
+              input_tokens INTEGER, output_tokens INTEGER,
+              reasoning_tokens INTEGER, cache_read_tokens INTEGER,
+              cache_write_tokens INTEGER, cost_usd REAL);
             INSERT INTO local_runtime_message_rows VALUES
-              (2, 'kept', 'a1', 'assistant', 'turn', 'agent', 2, '{"msg_id":"a1","role":"assistant","msg_content":"Draft"}'),
-              (3, 'kept', 'a2', 'assistant', 'turn', 'agent', 3, '{"msg_id":"a2","role":"assistant","thinking_content":"Think","msg_content":"Done","error":"Rate limited","usage":{"input_tokens":99},"attachments":[{"desktop_path":"/d/a.png","mime_type":"image/png"}],"tool_calls":[{"tool_name":"task","tool_call_id":"t1","tool_call_status":2,"tool_call_result_data":"{\"isError\":true,\"text\":\"boom\",\"details\":{\"sub_session_id\":\"child\"}}"},{"tool_call_id":"t2"},{"tool_name":"bash","tool_call_id":"t3","tool_call_status":2,"tool_call_result_data":"ok"}]}'),
-              (4, 'kept', 'c1', 'assistant', 'turn', 'agent', 4, '{"msg_id":"c1","role":"assistant","kind":"compaction","msg_content":"Summary"}'),
-              (5, 'kept', 'u2', 'user', 'multi', 'agent', 5, '{"msg_id":"u2","role":"user","kind":"review_x"}'),
-              (6, 'kept', 'a3', 'assistant', 'multi', 'agent', 6, '{"msg_id":"a3","role":"assistant","msg_content":"Mixed"}');
+              (2, 'kept', 'a1', 'assistant', 'turn', 'agent', 2,
+                '{"msg_id":"a1","role":"assistant","msg_content":"Draft"}'),
+              (3, 'kept', 'a2', 'assistant', 'turn', 'agent', 3,
+                '{"msg_id":"a2","role":"assistant","thinking_content":"Think",
+                "msg_content":"Done","error":"Rate limited",
+                "usage":{"input_tokens":99},
+                "attachments":[{"desktop_path":"/d/a.png",
+                "mime_type":"image/png"}],"tool_calls":[{"tool_name":"task",
+                "tool_call_id":"t1","tool_call_status":2,
+                "tool_call_result_data":"#,
+            r#""{\"isError\":true,\"text\":\"boom\","#,
+            r#"\"details\":{\"sub_session_id\":\"child\"}}"},
+                {"tool_call_id":"t2"},{"tool_name":"bash","tool_call_id":"t3",
+                "tool_call_status":2,"tool_call_result_data":"ok"}]}'),
+              (4, 'kept', 'c1', 'assistant', 'turn', 'agent', 4,
+                '{"msg_id":"c1","role":"assistant","kind":"compaction",
+                "msg_content":"Summary"}'),
+              (5, 'kept', 'u2', 'user', 'multi', 'agent', 5, '{"msg_id":"u2",
+                "role":"user","kind":"review_x"}'),
+              (6, 'kept', 'a3', 'assistant', 'multi', 'agent', 6,
+                '{"msg_id":"a3","role":"assistant","msg_content":"Mixed"}');
             INSERT INTO local_runtime_token_usage VALUES
               (1, 'kept', 'turn', 'm', 10, 100, 20, 5, 40, 10, 0.025),
               (2, 'kept', 'turn', 'm', 11, 50, 10, 0, 0, 0, NULL),
               (3, 'kept', 'multi', 'a', 12, 1, 1, 0, 0, 0, 0),
               (4, 'kept', 'multi', 'b', 13, 1, 1, 0, 0, 0, 0);"#,
-        )
+        ))
         .unwrap();
     let data = read_json(&mut provider, "kept");
     let messages = data["messages"].as_array().unwrap();
@@ -529,7 +582,12 @@ fn minimax_messages_carry_events_tools_and_turn_usage() {
             &"child".into(),
             &"m".into(),
             &0.025.into(),
-            &serde_json::json!({"input": 150, "output": 30, "reasoning": 5, "cache": {"read": 40, "write": 10}})
+            &serde_json::json!({
+                "input": 150,
+                "output": 30,
+                "reasoning": 5,
+                "cache": {"read": 40, "write": 10}
+            })
         )
     );
     assert!(messages[1]["tokens"].as_object().unwrap().is_empty());
@@ -550,7 +608,13 @@ fn minimax_messages_carry_events_tools_and_turn_usage() {
     );
     assert_eq!(
         data["stats"],
-        serde_json::json!({"total_cost": 0.025, "total_input_tokens": 152, "total_output_tokens": 32, "message_count": 6, "total_tokens": 239})
+        serde_json::json!({
+            "total_cost": 0.025,
+            "total_input_tokens": 152,
+            "total_output_tokens": 32,
+            "message_count": 6,
+            "total_tokens": 239
+        })
     );
 }
 
@@ -560,7 +624,8 @@ fn deepchat_lists_rooted_sessions_with_messages() {
     Connection::open(&provider.database)
         .unwrap()
         .execute_batch(
-            r#"CREATE TABLE deepchat_assistant_blocks (message_id TEXT, block_index INTEGER, updated_at INTEGER);
+            r#"CREATE TABLE deepchat_assistant_blocks (message_id TEXT,
+              block_index INTEGER, updated_at INTEGER);
             CREATE TABLE deepchat_usage_stats (session_id TEXT, created_at INTEGER);
             INSERT INTO new_sessions VALUES
               ('empty', 'Empty', 1, 1, NULL, NULL, NULL, NULL, 0),
@@ -631,21 +696,40 @@ fn deepchat_messages_carry_references_and_usage() {
         .unwrap()
         .execute_batch(
             r#"CREATE TABLE deepchat_user_messages (message_id TEXT, text TEXT);
-            CREATE TABLE deepchat_user_message_files (message_id TEXT, ordinal INTEGER, name TEXT, path TEXT, mime_type TEXT, size INTEGER);
+            CREATE TABLE deepchat_user_message_files (message_id TEXT,
+              ordinal INTEGER, name TEXT, path TEXT, mime_type TEXT,
+              size INTEGER);
             CREATE TABLE deepchat_user_message_links (message_id TEXT, ordinal INTEGER, url TEXT);
-            CREATE TABLE deepchat_assistant_blocks (message_id TEXT, block_index INTEGER, block_type TEXT, status TEXT, text_content TEXT, tool_call_id TEXT, tool_name TEXT, tool_params TEXT, tool_response TEXT, action_type TEXT, image_mime_type TEXT, extra_json TEXT, updated_at INTEGER);
-            CREATE TABLE deepchat_usage_stats (usage_id TEXT, session_id TEXT, message_id TEXT, model_id TEXT, provider_id TEXT, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER, cached_input_tokens INTEGER, cache_write_input_tokens INTEGER, created_at INTEGER);
+            CREATE TABLE deepchat_assistant_blocks (message_id TEXT,
+              block_index INTEGER, block_type TEXT, status TEXT,
+              text_content TEXT, tool_call_id TEXT, tool_name TEXT,
+              tool_params TEXT, tool_response TEXT, action_type TEXT,
+              image_mime_type TEXT, extra_json TEXT, updated_at INTEGER);
+            CREATE TABLE deepchat_usage_stats (usage_id TEXT, session_id TEXT,
+              message_id TEXT, model_id TEXT, provider_id TEXT,
+              input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER,
+              cached_input_tokens INTEGER, cache_write_input_tokens INTEGER,
+              created_at INTEGER);
             INSERT INTO new_sessions VALUES ('main', 'Main', 1, 1, '/p', NULL, NULL, NULL, 0);
             INSERT INTO deepchat_sessions VALUES ('main', 'session-model', 'session-provider');
             INSERT INTO deepchat_messages VALUES
-              ('u', 'main', 1, 'user', '{"text":"stale","inlineItems":[{"type":"session","sessionId":"other","title":"Other"},{"type":"session","sessionId":"bare"}]}', 'sent', '{}', 1, 1),
-              ('a', 'main', 2, 'assistant', '[]', 'sent', '{"model":"meta","inputTokens":9,"outputTokens":9}', 1, 1),
-              ('b', 'main', 3, 'assistant', '"plain answer"', 'sent', '{"model":"meta","inputTokens":10,"outputTokens":2,"cachedInputTokens":30}', 1, 1),
+              ('u', 'main', 1, 'user', '{"text":"stale",
+                "inlineItems":[{"type":"session","sessionId":"other",
+                "title":"Other"},{"type":"session","sessionId":"bare"}]}',
+                'sent', '{}', 1, 1),
+              ('a', 'main', 2, 'assistant', '[]', 'sent', '{"model":"meta",
+                "inputTokens":9,"outputTokens":9}', 1, 1),
+              ('b', 'main', 3, 'assistant', '"plain answer"', 'sent',
+                '{"model":"meta","inputTokens":10,"outputTokens":2,
+                "cachedInputTokens":30}', 1, 1),
               ('c', 'main', 4, 'assistant', '{"not":"array"}', 'sent', '{}', 1, 1);
             INSERT INTO deepchat_user_messages VALUES ('u', 'Prompt');
-            INSERT INTO deepchat_user_message_files VALUES ('u', 0, 'notes.txt', '/p/notes.txt', 'text/plain', 4);
+            INSERT INTO deepchat_user_message_files VALUES ('u', 0, 'notes.txt',
+              '/p/notes.txt', 'text/plain', 4);
             INSERT INTO deepchat_user_message_links VALUES ('u', 0, 'https://example.invalid');
-            INSERT INTO deepchat_assistant_blocks (message_id, block_index, block_type, status, text_content, tool_call_id, tool_name, updated_at) VALUES
+            INSERT INTO deepchat_assistant_blocks (message_id, block_index,
+              block_type, status, text_content, tool_call_id, tool_name,
+              updated_at) VALUES
               ('a', 0, 'search', 'success', 'Search results', NULL, NULL, 1),
               ('a', 1, 'action', 'success', '', NULL, NULL, 1),
               ('a', 2, 'tool_call', 'error', 'denied by user', 'call', 'shell', 1);
@@ -708,12 +792,18 @@ fn cherry_lists_sessions_with_content_or_usage() {
               ('deleted', 'Deleted', 1, 1, 1),
               ('named', '  ', 1, 1, 9000),
               ('usage', NULL, 1, 1, NULL);
-            INSERT INTO agent_session_message (id, session_id, role, data, stats, deleted_at, created_at) VALUES
+            INSERT INTO agent_session_message (id, session_id, role, data,
+              stats, deleted_at, created_at) VALUES
               ('d', 'deleted', 'user', '{"parts":[{"type":"text","text":"gone"}]}', NULL, 5, 1),
-              ('n1', 'named', 'system', '{"parts":[{"type":"text","text":"setup"}]}', NULL, NULL, 1),
-              ('n2', 'named', 'user', '{"parts":[{"type":"text","text":"<system-reminder>x</system-reminder>"}]}', NULL, NULL, 2),
-              ('n3', 'named', 'user', '{"parts":[{"type":"text","text":"\n  Fix   the bug\nnow"}]}', NULL, NULL, 3),
-              ('n4', 'named', 'assistant', '{"parts":[{"type":"text","text":"Done"}]}', NULL, NULL, 4),
+              ('n1', 'named', 'system', '{"parts":[{"type":"text",
+                "text":"setup"}]}', NULL, NULL, 1),
+              ('n2', 'named', 'user', '{"parts":[{"type":"text",
+                "text":"<system-reminder>x</system-reminder>"}]}', NULL, NULL,
+                2),
+              ('n3', 'named', 'user', '{"parts":[{"type":"text",
+                "text":"\n  Fix   the bug\nnow"}]}', NULL, NULL, 3),
+              ('n4', 'named', 'assistant', '{"parts":[{"type":"text",
+                "text":"Done"}]}', NULL, NULL, 4),
               ('n5', 'named', 'assistant', '{"parts":[]}', NULL, NULL, 5),
               ('u1', 'usage', 'assistant', '{"parts":[]}', '{"inputTokens":3}', NULL, 1);"#,
         )
@@ -772,18 +862,36 @@ fn cherry_reads_files_compact_summaries_and_usage() {
         .unwrap()
         .execute_batch(
             r#"ALTER TABLE agent_session_message ADD COLUMN stats TEXT;
-            INSERT INTO agent_session (id, name, created_at, updated_at) VALUES ('parts', 'Parts', 1, 1);
+            INSERT INTO agent_session (id, name, created_at,
+              updated_at) VALUES ('parts', 'Parts', 1, 1);
             INSERT INTO agent_session_message (id, session_id, role, data, stats, created_at) VALUES
-              ('u', 'parts', 'user', '{"parts":[{"type":"file","url":"data:image/png;base64,AA","mediaType":"image/png"},{"type":"file","url":"file:///p/report.pdf","filename":"report.pdf","mediaType":"application/pdf"},{"type":"file","url":"file:///p/raw.bin"},{"type":"file"}]}', '{"inputTokens":99}', 1),
-              ('a', 'parts', 'assistant', '{"parts":[{"type":"data-compact","data":{"content":"Summary"}}]}', '{"inputTokenDetails":{"noCacheTokens":5,"cacheReadTokens":3,"cacheWriteTokens":2},"outputTokenDetails":{"textTokens":4,"reasoningTokens":6},"costs":[{"currency":"USD","amount":0.25},{"currency":"USD","amount":0.5}]}', 2),
-              ('b', 'parts', 'assistant', '{"parts":[{"type":"text","text":"Priced"}]}', '{"inputTokens":1,"outputTokens":1,"costs":[{"currency":"CNY","amount":3}]}', 3);"#,
+              ('u', 'parts', 'user', '{"parts":[{"type":"file",
+                "url":"data:image/png;base64,AA","mediaType":"image/png"},
+                {"type":"file","url":"file:///p/report.pdf",
+                "filename":"report.pdf","mediaType":"application/pdf"},
+                {"type":"file","url":"file:///p/raw.bin"},{"type":"file"}]}',
+                '{"inputTokens":99}', 1),
+              ('a', 'parts', 'assistant', '{"parts":[{"type":"data-compact",
+                "data":{"content":"Summary"}}]}',
+                '{"inputTokenDetails":{"noCacheTokens":5,"cacheReadTokens":3,
+                "cacheWriteTokens":2},"outputTokenDetails":{"textTokens":4,
+                "reasoningTokens":6},"costs":[{"currency":"USD","amount":0.25},
+                {"currency":"USD","amount":0.5}]}', 2),
+              ('b', 'parts', 'assistant', '{"parts":[{"type":"text",
+                "text":"Priced"}]}', '{"inputTokens":1,"outputTokens":1,
+                "costs":[{"currency":"CNY","amount":3}]}', 3);"#,
         )
         .unwrap();
     let data = read_json(&mut provider, "session-parts");
     let messages = data["messages"].as_array().unwrap();
     assert_eq!(
         messages[0]["parts"][0],
-        serde_json::json!({"type": "image", "mime_type": "image/png", "data": "data:image/png;base64,AA", "time_created": 1})
+        serde_json::json!({
+            "type": "image",
+            "mime_type": "image/png",
+            "data": "data:image/png;base64,AA",
+            "time_created": 1
+        })
     );
     assert_eq!(
         part_texts(&messages[0]),
@@ -794,7 +902,12 @@ fn cherry_reads_files_compact_summaries_and_usage() {
     assert_eq!(
         (&messages[1]["tokens"], &messages[1]["cost"]),
         (
-            &serde_json::json!({"input": 10, "output": 10, "reasoning": 6, "cache": {"read": 3, "write": 2}}),
+            &serde_json::json!({
+                "input": 10,
+                "output": 10,
+                "reasoning": 6,
+                "cache": {"read": 3, "write": 2}
+            }),
             &0.75.into()
         )
     );

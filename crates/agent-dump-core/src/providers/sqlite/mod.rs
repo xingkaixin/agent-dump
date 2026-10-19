@@ -63,7 +63,8 @@ pub struct SqliteProvider {
 impl SqliteProvider {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open(kind: Kind) -> crate::Result<Self> {
         Ok(Self {
@@ -149,7 +150,10 @@ impl SqliteProvider {
             for row in rows(
                 connection,
                 &format!(
-                    "SELECT s.id, s.title, s.time_created, s.time_updated, s.slug, s.directory, s.version, s.summary_files, s.model, s.project_id, s.parent_id FROM session_v2 s WHERE {condition}"
+                    "SELECT s.id, s.title, s.time_created, s.time_updated, \
+                     s.slug, s.directory, s.version, s.summary_files, s.model, \
+                     s.project_id, s.parent_id FROM session_v2 s \
+                     WHERE {condition}"
                 ),
                 parameters,
             )? {
@@ -185,14 +189,20 @@ impl SqliteProvider {
                 None
             };
             let model = if messages {
-                "(SELECT m.data FROM message m WHERE m.session_id = s.id AND m.data LIKE '%\"modelID\"%' ORDER BY m.time_created DESC LIMIT 1)"
+                "(SELECT m.data FROM message m \
+                 WHERE m.session_id = s.id \
+                 AND m.data LIKE '%\"modelID\"%' \
+                 ORDER BY m.time_created DESC LIMIT 1)"
             } else {
                 "NULL"
             };
             for row in rows(
                 connection,
                 &format!(
-                    "SELECT s.id, s.title, s.time_created, s.time_updated, s.slug, s.directory, s.version, s.summary_files, {model} AS model_message_data FROM session s WHERE {scope} ORDER BY s.time_created DESC"
+                    "SELECT s.id, s.title, s.time_created, s.time_updated, \
+                     s.slug, s.directory, s.version, s.summary_files, \
+                     {model} AS model_message_data FROM session s \
+                     WHERE {scope} ORDER BY s.time_created DESC"
                 ),
                 &bound,
             )? {
@@ -417,8 +427,10 @@ impl Provider for SqliteProvider {
                             "确认 OpenCode 已在本机生成会话数据库。",
                         ],
                         [
-                            "In a test or development environment, check whether `data/opencode/opencode.db` exists.",
-                            "若在测试或开发环境，检查 `data/opencode/opencode.db` 是否存在。",
+                            "In a test or development environment, check \
+                             whether `data/opencode/opencode.db` exists.",
+                            "若在测试或开发环境，\
+                             检查 `data/opencode/opencode.db` 是否存在。",
                         ],
                     ],
                 ),
@@ -426,12 +438,17 @@ impl Provider for SqliteProvider {
                     "ZCode database is missing",
                     vec![
                         [
-                            "Confirm ZCode has produced a session database on this macOS or Windows machine.",
+                            "Confirm ZCode has produced a session database \
+                             on this macOS or Windows machine.",
                             "确认 ZCode 已在 macOS 或 Windows 本机生成会话数据库。",
                         ],
                         [
-                            "On macOS check `~/.zcode/cli/db/db.sqlite`; on Windows check `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`.",
-                            "macOS 检查 `~/.zcode/cli/db/db.sqlite`；Windows 检查 `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`。",
+                            "On macOS check `~/.zcode/cli/db/db.sqlite`; \
+                             on Windows check \
+                             `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`.",
+                            "macOS 检查 `~/.zcode/cli/db/db.sqlite`；\
+                             Windows 检查 \
+                             `%USERPROFILE%\\.zcode\\cli\\db\\db.sqlite`。",
                         ],
                         [
                             "Linux has no default ZCode session path.",
@@ -524,7 +541,10 @@ pub fn build_session(
         } else {
             summary_targets(&row["summary_files"])
         },
-        source_metadata: serde_json::json!({"schema": if v2 { "v2" } else { "legacy" }, "row": row}),
+        source_metadata: serde_json::json!({
+            "schema": if v2 { "v2" } else { "legacy" },
+            "row": row,
+        }),
     }
 }
 
@@ -750,7 +770,15 @@ mod tests {
                     }
                     for path in [&primary, &fallback] {
                         if path.exists() {
-                            Connection::open(path).unwrap().execute_batch("INSERT INTO session VALUES ('kept', 'Kept', 1768478400000, 1768478400000, NULL, '/project', NULL, NULL);").unwrap();
+                            Connection::open(path)
+                                .unwrap()
+                                .execute_batch(
+                                    "INSERT INTO session VALUES \
+                                     ('kept', 'Kept', 1768478400000, \
+                                     1768478400000, NULL, '/project', NULL, \
+                                     NULL);",
+                                )
+                                .unwrap();
                         } else {
                             fixture(path, kind, false);
                         }
@@ -812,9 +840,27 @@ mod tests {
 
     fn fixture(path: &Path, kind: Kind, v2: bool) -> SqliteProvider {
         let connection = Connection::open(path).unwrap();
-        connection.execute_batch("CREATE TABLE session (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT); INSERT INTO session VALUES ('kept', 'Kept', 1768478400000, 1768478400000, NULL, '/project', NULL, NULL);").unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE session (id TEXT, title TEXT, \
+                 time_created INTEGER, time_updated INTEGER, slug TEXT, \
+                 directory TEXT, version TEXT, summary_files TEXT); \
+                 INSERT INTO session VALUES ('kept', 'Kept', 1768478400000, \
+                 1768478400000, NULL, '/project', NULL, NULL);",
+            )
+            .unwrap();
         if v2 {
-            connection.execute_batch("CREATE TABLE session_v2 (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT, model TEXT, project_id TEXT, parent_id TEXT); INSERT INTO session_v2 VALUES ('kept', 'V2', 1768478400000, 1768478400000, NULL, '/project', NULL, NULL, NULL, NULL, NULL);").unwrap();
+            connection
+                .execute_batch(
+                    "CREATE TABLE session_v2 (id TEXT, title TEXT, \
+                     time_created INTEGER, time_updated INTEGER, slug TEXT, \
+                     directory TEXT, version TEXT, summary_files TEXT, \
+                     model TEXT, project_id TEXT, parent_id TEXT); \
+                     INSERT INTO session_v2 VALUES ('kept', 'V2', \
+                     1768478400000, 1768478400000, NULL, '/project', NULL, \
+                     NULL, NULL, NULL, NULL);",
+                )
+                .unwrap();
         }
         SqliteProvider {
             kind,
@@ -850,7 +896,7 @@ mod tests {
                 .read(&session, false, &mut |_| Ok(()))
                 .err()
                 .unwrap();
-            crate::providers::source_tests::assert_missing(
+            crate::providers::tests::assert_missing(
                 error.as_ref(),
                 summary,
                 &path,
@@ -911,7 +957,13 @@ mod tests {
                 .unwrap()
                 .session
                 .unwrap();
-            Connection::open(&path).unwrap().execute_batch("DELETE FROM session; CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT);").unwrap();
+            Connection::open(&path)
+                .unwrap()
+                .execute_batch(
+                    "DELETE FROM session; CREATE TABLE message (id TEXT, \
+                     session_id TEXT, time_created INTEGER, data TEXT);",
+                )
+                .unwrap();
             let error = provider
                 .read(&session, false, &mut |_| Ok(()))
                 .err()
@@ -920,7 +972,13 @@ mod tests {
         }
     }
 
-    const LEGACY: &str = "CREATE TABLE session (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT, parent_id TEXT); CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT); CREATE TABLE part (id TEXT, message_id TEXT, time_created INTEGER, data TEXT);";
+    const LEGACY: &str = "CREATE TABLE session (id TEXT, title TEXT, \
+        time_created INTEGER, time_updated INTEGER, slug TEXT, \
+        directory TEXT, version TEXT, summary_files TEXT, parent_id TEXT); \
+        CREATE TABLE message (id TEXT, session_id TEXT, \
+        time_created INTEGER, data TEXT); \
+        CREATE TABLE part (id TEXT, message_id TEXT, \
+        time_created INTEGER, data TEXT);";
 
     fn database(sql: &str, kind: Kind) -> (tempfile::TempDir, SqliteProvider) {
         let directory = tempfile::tempdir().unwrap();
@@ -949,7 +1007,12 @@ mod tests {
             "INSERT INTO message VALUES ('{id}', '{session}', {time}, '{data}');"
         );
         for (index, part) in parts.iter().enumerate() {
-            write!(sql, "INSERT INTO part VALUES ('{id}-{index}', '{id}', {time}, '{part}');").unwrap();
+            write!(
+                sql,
+                "INSERT INTO part VALUES \
+                 ('{id}-{index}', '{id}', {time}, '{part}');"
+            )
+            .unwrap();
         }
         sql
     }
@@ -968,11 +1031,37 @@ mod tests {
         let assistant = r#"{"role":"assistant"}"#;
         let sql = [
             LEGACY.to_owned(),
-            "INSERT INTO session VALUES ('root', NULL, 10, NULL, NULL, '/p', NULL, NULL, NULL), ('child', 'Child', 9, 9, NULL, '/p', NULL, NULL, 'root'), ('orphan', 'Orphan', 8, 8, NULL, '/p', NULL, NULL, 'gone'), ('empty', 'Empty', 7, 7, NULL, '/p', NULL, NULL, NULL), ('quiet', NULL, 6, 6, NULL, '/p', NULL, NULL, NULL);".into(),
-            message("u1", "root", 1, user, &[&text(r"<system-reminder>x</system-reminder>\n\n  First   line \nsecond")]),
+            "INSERT INTO session VALUES \
+             ('root', NULL, 10, NULL, NULL, '/p', NULL, NULL, NULL), \
+             ('child', 'Child', 9, 9, NULL, '/p', NULL, NULL, 'root'), \
+             ('orphan', 'Orphan', 8, 8, NULL, '/p', NULL, NULL, 'gone'), \
+             ('empty', 'Empty', 7, 7, NULL, '/p', NULL, NULL, NULL), \
+             ('quiet', NULL, 6, 6, NULL, '/p', NULL, NULL, NULL);"
+                .into(),
+            message(
+                "u1",
+                "root",
+                1,
+                user,
+                &[&text(
+                    r"<system-reminder>x</system-reminder>\n\n  First   line \nsecond",
+                )],
+            ),
             message("a1", "root", 2, assistant, &[r#"{"type":"step-start"}"#]),
-            message("p1", "root", 3, r#"{"role":"assistant","type":"progress"}"#, &[&text("hidden")]),
-            message("a2", "root", 4, assistant, &[r#"{"type":"tool","title":"Tool: read","state":{}}"#]),
+            message(
+                "p1",
+                "root",
+                3,
+                r#"{"role":"assistant","type":"progress"}"#,
+                &[&text("hidden")],
+            ),
+            message(
+                "a2",
+                "root",
+                4,
+                assistant,
+                &[r#"{"type":"tool","title":"Tool: read","state":{}}"#],
+            ),
             message("c1", "child", 1, assistant, &[&text("Done")]),
             message("o1", "orphan", 1, user, &[&text("Lost")]),
             message("e1", "empty", 1, assistant, &[r#"{"type":"step-finish"}"#]),
@@ -1014,10 +1103,30 @@ mod tests {
     #[test]
     fn zcode_skips_subagent_children_without_parent_column() {
         let sql = [
-            "CREATE TABLE session (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT, task_type TEXT); CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT); CREATE TABLE part (id TEXT, message_id TEXT, time_created INTEGER, data TEXT);",
-            "INSERT INTO session VALUES ('main', 'Main', 2, 2, NULL, '/p', NULL, NULL, 'main'), ('sub', 'Sub', 1, 1, NULL, '/p', NULL, NULL, 'subagent_child');",
-            &message("m1", "main", 1, r#"{"role":"user"}"#, &[r#"{"type":"text","text":"a"}"#]),
-            &message("s1", "sub", 1, r#"{"role":"user"}"#, &[r#"{"type":"text","text":"b"}"#]),
+            "CREATE TABLE session (id TEXT, title TEXT, time_created INTEGER, \
+             time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, \
+             summary_files TEXT, task_type TEXT); \
+             CREATE TABLE message (id TEXT, session_id TEXT, \
+             time_created INTEGER, data TEXT); \
+             CREATE TABLE part (id TEXT, message_id TEXT, \
+             time_created INTEGER, data TEXT);",
+            "INSERT INTO session VALUES \
+             ('main', 'Main', 2, 2, NULL, '/p', NULL, NULL, 'main'), \
+             ('sub', 'Sub', 1, 1, NULL, '/p', NULL, NULL, 'subagent_child');",
+            &message(
+                "m1",
+                "main",
+                1,
+                r#"{"role":"user"}"#,
+                &[r#"{"type":"text","text":"a"}"#],
+            ),
+            &message(
+                "s1",
+                "sub",
+                1,
+                r#"{"role":"user"}"#,
+                &[r#"{"type":"text","text":"b"}"#],
+            ),
         ]
         .concat();
         let (_directory, mut provider) = database(&sql, Kind::ZCode);
@@ -1039,13 +1148,28 @@ mod tests {
     fn migration_cursor_keeps_only_uncopied_legacy_sessions() {
         let mut sql = [
             LEGACY,
-            "CREATE TABLE session_v2 (id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, slug TEXT, directory TEXT, version TEXT, summary_files TEXT, model TEXT, project_id TEXT, parent_id TEXT); CREATE TABLE session_message (id TEXT, session_id TEXT, type TEXT, seq INTEGER, time_created INTEGER, data TEXT); CREATE TABLE kv (key TEXT, value TEXT);",
-            "INSERT INTO session_v2 VALUES ('ses_c', 'C', 3, 3, NULL, '/p', NULL, NULL, NULL, NULL, NULL); INSERT INTO session_message VALUES ('v1', 'ses_c', 'user', 1, 3, '{\"text\":\"hi\"}');",
-            "INSERT INTO kv VALUES ('migration.v1-v2', '{\"phase\":\"copying\",\"cursor\":\"ses_b\"}');",
+            "CREATE TABLE session_v2 (id TEXT, title TEXT, \
+             time_created INTEGER, time_updated INTEGER, slug TEXT, \
+             directory TEXT, version TEXT, summary_files TEXT, model TEXT, \
+             project_id TEXT, parent_id TEXT); \
+             CREATE TABLE session_message (id TEXT, session_id TEXT, \
+             type TEXT, seq INTEGER, time_created INTEGER, data TEXT); \
+             CREATE TABLE kv (key TEXT, value TEXT);",
+            "INSERT INTO session_v2 VALUES ('ses_c', 'C', 3, 3, NULL, '/p', \
+             NULL, NULL, NULL, NULL, NULL); \
+             INSERT INTO session_message VALUES \
+             ('v1', 'ses_c', 'user', 1, 3, '{\"text\":\"hi\"}');",
+            "INSERT INTO kv VALUES ('migration.v1-v2', \
+             '{\"phase\":\"copying\",\"cursor\":\"ses_b\"}');",
         ]
         .concat();
         for id in ["ses_a", "ses_b", "ses_c"] {
-            write!(sql, "INSERT INTO session VALUES ('{id}', '{id}', 1, 1, NULL, '/p', NULL, NULL, NULL);").unwrap();
+            write!(
+                sql,
+                "INSERT INTO session VALUES \
+                 ('{id}', '{id}', 1, 1, NULL, '/p', NULL, NULL, NULL);"
+            )
+            .unwrap();
             sql.push_str(&message(
                 id,
                 id,
@@ -1092,10 +1216,42 @@ mod tests {
         let text = r#"{"type":"text","text":"Done"}"#;
         let sql = [
             LEGACY,
-            "INSERT INTO session VALUES ('root', 'Root', 3, 3, NULL, '/p', NULL, NULL, NULL), ('child', 'Child', 2, 2, NULL, '/p', NULL, NULL, 'root'), ('grandchild', 'Grandchild', 1, 1, NULL, '/p', NULL, NULL, 'child');",
-            &message("r1", "root", 1, r#"{"role":"assistant","cost":0.5,"tokens":{"input":10,"output":5,"reasoning":2,"cache":{"read":3,"write":1}}}"#, &[text]),
-            &message("c1", "child", 1, r#"{"role":"assistant","cost":0.25,"tokens":{"input":1,"output":1}}"#, &[text]),
-            &message("g1", "grandchild", 1, r#"{"role":"assistant","cost":0.25,"tokens":{"input":1,"reasoning":1}}"#, &[]),
+            "INSERT INTO session VALUES \
+             ('root', 'Root', 3, 3, NULL, '/p', NULL, NULL, NULL), \
+             ('child', 'Child', 2, 2, NULL, '/p', NULL, NULL, 'root'), \
+             ('grandchild', 'Grandchild', 1, 1, NULL, '/p', NULL, NULL, \
+             'child');",
+            &message(
+                "r1",
+                "root",
+                1,
+                concat!(
+                    r#"{"role":"assistant","cost":0.5,"#,
+                    r#""tokens":{"input":10,"output":5,"reasoning":2,"#,
+                    r#""cache":{"read":3,"write":1}}}"#,
+                ),
+                &[text],
+            ),
+            &message(
+                "c1",
+                "child",
+                1,
+                concat!(
+                    r#"{"role":"assistant","cost":0.25,"#,
+                    r#""tokens":{"input":1,"output":1}}"#,
+                ),
+                &[text],
+            ),
+            &message(
+                "g1",
+                "grandchild",
+                1,
+                concat!(
+                    r#"{"role":"assistant","cost":0.25,"#,
+                    r#""tokens":{"input":1,"reasoning":1}}"#,
+                ),
+                &[],
+            ),
         ]
         .concat();
         let (_directory, mut provider) = database(&sql, Kind::OpenCode);

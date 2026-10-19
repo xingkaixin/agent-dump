@@ -60,7 +60,8 @@ fn read_summaries(
     }
     let connection = connect(&path)?;
     let mut statement = connection.prepare(
-        "SELECT conversation_id, title, workspace_uris, last_modified_time FROM conversation_summaries",
+        "SELECT conversation_id, title, workspace_uris, last_modified_time \
+         FROM conversation_summaries",
     )?;
     let mut rows = statement.query([])?;
     while let Some(row) = rows.next()? {
@@ -153,7 +154,8 @@ fn session(
 impl AntigravityCli {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self {
@@ -198,7 +200,8 @@ impl AntigravityCli {
             source_roots(self)?,
             vec![
                 [
-                    "Confirm the Antigravity CLI conversation database has not been moved or cleaned up.",
+                    "Confirm the Antigravity CLI conversation database has \
+                     not been moved or cleaned up.",
                     "确认 Antigravity CLI 会话数据库没有被移动或清理。",
                 ],
                 [

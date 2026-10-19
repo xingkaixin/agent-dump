@@ -37,7 +37,8 @@ fn model(session: &Session) -> Option<String> {
 impl Grok {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self {
@@ -118,7 +119,8 @@ impl Grok {
             source_roots(self)?,
             vec![
                 [
-                    "Confirm `updates.jsonl` in the Grok session directory has not been moved or cleaned up.",
+                    "Confirm `updates.jsonl` in the Grok session directory \
+                     has not been moved or cleaned up.",
                     "确认 Grok 会话目录中的 `updates.jsonl` 没有被移动或清理。",
                 ],
                 [
@@ -219,7 +221,7 @@ mod tests {
 
     #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::source_tests::source_selection(
+        crate::providers::tests::source_selection(
             "sessions",
             false,
             |roots| Grok { roots },
@@ -233,7 +235,11 @@ mod tests {
                 .unwrap();
                 std::fs::write(
                     path.join(UPDATES),
-                    r#"{"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"Keep"}}}}"#,
+                    concat!(
+                        r#"{"params":{"update":{"#,
+                        r#""sessionUpdate":"user_message_chunk","#,
+                        r#""content":{"type":"text","text":"Keep"}}}}"#,
+                    ),
                 )
                 .unwrap();
                 path

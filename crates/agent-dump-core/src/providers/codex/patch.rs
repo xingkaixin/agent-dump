@@ -187,5 +187,10 @@ fn block(operation: Operation<'_>) -> Value {
             ("edit_file", lines.join("\n"))
         }
     };
-    json!({"type": kind, "path": operation.path, "old_path": operation.old_path, "input": {"content": content}})
+    json!({
+        "type": kind,
+        "path": operation.path,
+        "old_path": operation.old_path,
+        "input": {"content": content}
+    })
 }

@@ -56,7 +56,8 @@ fn work_dirs(sessions: &Path) -> HashMap<PathBuf, String> {
 impl KimiCode {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self {
@@ -183,8 +184,10 @@ impl KimiCode {
             source_roots(self)?,
             vec![
                 [
-                    "Confirm `agents/main/wire.jsonl` in the Kimi-Code session directory has not been moved or cleaned up.",
-                    "确认 Kimi-Code 会话目录中的 `agents/main/wire.jsonl` 没有被移动或清理。",
+                    "Confirm `agents/main/wire.jsonl` in the Kimi-Code \
+                     session directory has not been moved or cleaned up.",
+                    "确认 Kimi-Code 会话目录中的 \
+                     `agents/main/wire.jsonl` 没有被移动或清理。",
                 ],
                 [
                     "Re-run `agent-dump --list` to check whether the session is still visible.",
@@ -292,7 +295,7 @@ mod tests {
 
     #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::source_tests::source_selection(
+        crate::providers::tests::source_selection(
             "sessions",
             false,
             |roots| KimiCode {
@@ -305,7 +308,10 @@ mod tests {
                 std::fs::write(path.join("state.json"), "{}").unwrap();
                 std::fs::write(
                     path.join(WIRE),
-                    r#"{"type":"context.append_message","message":{"role":"user","content":"Keep"}}"#,
+                    concat!(
+                        r#"{"type":"context.append_message","#,
+                        r#""message":{"role":"user","content":"Keep"}}"#,
+                    ),
                 )
                 .unwrap();
                 path

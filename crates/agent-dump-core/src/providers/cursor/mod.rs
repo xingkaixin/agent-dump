@@ -21,7 +21,8 @@ pub struct Cursor {
 impl Cursor {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self {
@@ -47,7 +48,9 @@ impl Cursor {
         let mut sessions = Vec::new();
         for (_, data) in records(
             connection,
-            "SELECT key, value FROM cursorDiskKV WHERE key >= 'composerData:' AND key < 'composerData;' ORDER BY rowid DESC",
+            "SELECT key, value FROM cursorDiskKV \
+             WHERE key >= 'composerData:' AND key < 'composerData;' \
+             ORDER BY rowid DESC",
             &[],
         )? {
             if let Some(data) = data
@@ -160,7 +163,8 @@ impl Provider for Cursor {
         if composer.is_none() {
             composer = records(
                 &connection,
-                "SELECT key, value FROM cursorDiskKV WHERE key >= 'composerData:' AND key < 'composerData;'",
+                "SELECT key, value FROM cursorDiskKV \
+                 WHERE key >= 'composerData:' AND key < 'composerData;'",
                 &[],
             )?
             .into_iter()
@@ -189,8 +193,17 @@ impl Provider for Cursor {
                 Vec::new(),
                 crate::providers::contract::source_roots(self)?,
                 vec![
-                    ["Confirm `globalStorage/state.vscdb` still exists under the Cursor user directory.", "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。"],
-                    ["Re-run `agent-dump --list --agent cursor` to check whether sessions are still visible.", "重新运行 `agent-dump --list --agent cursor` 检查会话是否仍可见。"],
+                    [
+                        "Confirm `globalStorage/state.vscdb` still exists \
+                         under the Cursor user directory.",
+                        "确认 Cursor 用户目录下的 globalStorage/state.vscdb 仍存在。",
+                    ],
+                    [
+                        "Re-run `agent-dump --list --agent cursor` to check \
+                         whether sessions are still visible.",
+                        "重新运行 `agent-dump --list --agent cursor` \
+                         检查会话是否仍可见。",
+                    ],
                 ],
             ).into());
         }
@@ -294,7 +307,9 @@ fn request_composer(
 ) -> crate::Result<Option<Value>> {
     for (key, data) in records(
         connection,
-        "SELECT key, value FROM cursorDiskKV WHERE key >= 'bubbleId:' AND key < 'bubbleId;' AND instr(value, ?) > 0 ORDER BY rowid DESC",
+        "SELECT key, value FROM cursorDiskKV \
+         WHERE key >= 'bubbleId:' AND key < 'bubbleId;' \
+         AND instr(value, ?) > 0 ORDER BY rowid DESC",
         &[&request],
     )? {
         if data.is_some_and(|bubble| bubble["requestId"] == request) {
@@ -383,7 +398,14 @@ mod tests {
         let missing = directory.path().join("missing.sqlite");
         for (path, body) in [(&first, "First"), (&second, "Second")] {
             let connection = Connection::open(path).unwrap();
-            connection.execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"composerId\":\"kept\",\"name\":\"Kept\",\"createdAt\":1768478400000}');").unwrap();
+            connection
+                .execute_batch(
+                    "CREATE TABLE cursorDiskKV (key TEXT, value TEXT); \
+                     INSERT INTO cursorDiskKV VALUES ('composerData:kept', \
+                     '{\"composerId\":\"kept\",\"name\":\"Kept\",\
+                     \"createdAt\":1768478400000}');",
+                )
+                .unwrap();
             connection
                 .execute(
                     "INSERT INTO cursorDiskKV VALUES ('bubbleId:kept:message', ?)",
@@ -443,7 +465,7 @@ mod tests {
             .read(&session, false, &mut |_| Ok(()))
             .err()
             .unwrap();
-        crate::providers::source_tests::assert_missing(
+        crate::providers::tests::assert_missing(
             error.as_ref(),
             "Cursor global database is missing",
             &missing,
@@ -460,7 +482,16 @@ mod tests {
         let first = directory.path().join("first.sqlite");
         let second = directory.path().join("second.sqlite");
         for path in [&first, &second] {
-            Connection::open(path).unwrap().execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"composerId\":\"kept\",\"name\":\"Kept\",\"createdAt\":1768478400000}'), ('bubbleId:kept:message', '{\"text\":\"Kept\"}');").unwrap();
+            Connection::open(path)
+                .unwrap()
+                .execute_batch(
+                    "CREATE TABLE cursorDiskKV (key TEXT, value TEXT); \
+                     INSERT INTO cursorDiskKV VALUES ('composerData:kept', \
+                     '{\"composerId\":\"kept\",\"name\":\"Kept\",\
+                     \"createdAt\":1768478400000}'), \
+                     ('bubbleId:kept:message', '{\"text\":\"Kept\"}');",
+                )
+                .unwrap();
         }
         let configured = std::sync::Arc::new(std::sync::Mutex::new(
             directory.path().join("missing.sqlite"),
@@ -514,7 +545,15 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("state.vscdb");
         let connection = Connection::open(&path).unwrap();
-        connection.execute_batch("CREATE TABLE cursorDiskKV (key TEXT, value TEXT); INSERT INTO cursorDiskKV VALUES ('composerData:kept', '{\"composerId\":\"kept\",\"name\":\"Kept\",\"createdAt\":1768478400000}'), ('bubbleId:kept:message', '{\"text\":\"Kept\"}');").unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE cursorDiskKV (key TEXT, value TEXT); \
+                 INSERT INTO cursorDiskKV VALUES ('composerData:kept', \
+                 '{\"composerId\":\"kept\",\"name\":\"Kept\",\
+                 \"createdAt\":1768478400000}'), \
+                 ('bubbleId:kept:message', '{\"text\":\"Kept\"}');",
+            )
+            .unwrap();
         drop(connection);
         let mut provider = Cursor {
             resolve_database: Box::new({
@@ -533,7 +572,7 @@ mod tests {
             .read(&session, false, &mut |_| Ok(()))
             .err()
             .unwrap();
-        crate::providers::source_tests::assert_missing(
+        crate::providers::tests::assert_missing(
             error.as_ref(),
             "Cursor global database is missing",
             &path,

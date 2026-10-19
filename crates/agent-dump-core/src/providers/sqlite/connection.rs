@@ -177,7 +177,13 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("source.sqlite");
         let writer = Connection::open(&path).unwrap();
-        writer.execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE messages (body TEXT); INSERT INTO messages VALUES ('before')").unwrap();
+        writer
+            .execute_batch(
+                "PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; \
+                 CREATE TABLE messages (body TEXT); \
+                 INSERT INTO messages VALUES ('before')",
+            )
+            .unwrap();
         let reader = connect(&path).unwrap();
         let read = |connection: &Connection| {
             rows(connection, "SELECT body FROM messages", &[]).unwrap()

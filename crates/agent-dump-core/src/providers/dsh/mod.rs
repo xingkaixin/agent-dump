@@ -85,7 +85,8 @@ fn filed(sessions: &Path, path: &Path, header: &serde_json::Value) -> bool {
 impl Dsh {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self {
@@ -261,7 +262,7 @@ mod tests {
 
     #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::source_tests::source_selection(
+        crate::providers::tests::source_selection(
             "sessions",
             false,
             |roots| Dsh { roots },
@@ -271,9 +272,17 @@ mod tests {
                 std::fs::write(
                     &path,
                     concat!(
-                        r#"{"type":"session","version":0,"id":"kept","createdAt":1768478400000,"delegationDepth":0}"#,
+                        concat!(
+                            r#"{"type":"session","version":0,"id":"kept","#,
+                            r#""createdAt":1768478400000,"delegationDepth":0}"#,
+                        ),
                         "\n",
-                        r#"{"type":"user/message","seq":0,"time":1768478400000,"surfaceOp":"append","data":{"source":{"kind":"user"},"content":[{"type":"text","text":"Keep"}]}}"#,
+                        concat!(
+                            r#"{"type":"user/message","seq":0,"#,
+                            r#""time":1768478400000,"surfaceOp":"append","#,
+                            r#""data":{"source":{"kind":"user"},"#,
+                            r#""content":[{"type":"text","text":"Keep"}]}}"#,
+                        ),
                         "\n",
                     ),
                 )

@@ -268,7 +268,14 @@ fn failed_batch_rolls_back_state_and_both_full_text_tables() {
     let directory = tempfile::tempdir().unwrap();
     let mut index =
         SearchIndex::at(&directory.path().join("index.db")).unwrap();
-    index.connection.execute_batch("CREATE TRIGGER reject_bad BEFORE INSERT ON index_state WHEN NEW.session_id = 'bad' BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
+    index
+        .connection
+        .execute_batch(
+            "CREATE TRIGGER reject_bad BEFORE INSERT ON index_state WHEN \
+             NEW.session_id = 'bad' BEGIN SELECT RAISE(ABORT, 'test failure'); \
+             END;",
+        )
+        .unwrap();
     let provider = Reader(|_: &Session| Ok("body".into()));
     let result = index.update(
         info(),
@@ -343,7 +350,14 @@ fn incremental_reads_retry_failure_keep_scoped_absences_and_expire_unseen_rows()
 fn existing_normalized_text_copies_remain_usable() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("index.db");
-    Connection::open(&path).unwrap().execute_batch("CREATE VIRTUAL TABLE sessions_fts USING fts5(agent_name UNINDEXED, session_id UNINDEXED, title, content, tokenize='unicode61 remove_diacritics 1');").unwrap();
+    Connection::open(&path)
+        .unwrap()
+        .execute_batch(
+            "CREATE VIRTUAL TABLE sessions_fts USING fts5(agent_name \
+             UNINDEXED, session_id UNINDEXED, title, content, \
+             tokenize='unicode61 remove_diacritics 1');",
+        )
+        .unwrap();
     let mut index = SearchIndex::at(&path).unwrap();
     let mut current = session(directory.path(), "same", 0);
     let reader =

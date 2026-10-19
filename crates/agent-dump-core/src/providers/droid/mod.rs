@@ -118,7 +118,8 @@ fn timestamp(milliseconds: i64) -> crate::Result<Timestamp> {
 impl Droid {
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Provider factories share the fallible registry interface; source access is deferred"
+        reason = "Provider factories share the fallible registry interface; \
+                  source access is deferred"
     )]
     pub fn open() -> crate::Result<Self> {
         Ok(Self {
@@ -273,10 +274,19 @@ impl Provider for Droid {
                 Vec::new(),
                 source_roots(self)?,
                 vec![
-                    ["Confirm the Droid session file is still under the sessions directory.", "确认 Droid 会话文件仍位于 sessions 目录下。"],
-                    ["Re-run `agent-dump --list` to confirm the session still exists.", "重新运行 `agent-dump --list` 确认该会话是否仍存在。"],
+                    [
+                        "Confirm the Droid session file is still under the \
+                         sessions directory.",
+                        "确认 Droid 会话文件仍位于 sessions 目录下。",
+                    ],
+                    [
+                        "Re-run `agent-dump --list` to confirm the session \
+                         still exists.",
+                        "重新运行 `agent-dump --list` 确认该会话是否仍存在。",
+                    ],
                 ],
-            ).into());
+            )
+            .into());
         }
         let messages = transcript(&session.source_path, diagnostics)?.messages;
         let settings = settings(&session.source_path);
@@ -325,7 +335,7 @@ mod tests {
 
     #[test]
     fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::source_tests::source_selection(
+        crate::providers::tests::source_selection(
             "sessions",
             false,
             |roots| Droid {
@@ -335,7 +345,18 @@ mod tests {
             |base| {
                 let path = base.join("kept.jsonl");
                 std::fs::create_dir_all(base).unwrap();
-                std::fs::write(&path, concat!(r#"{"type":"session_start","id":"kept"}"#, "\n", r#"{"type":"message","id":"m","timestamp":"2026-01-15T00:00:00Z","message":{"role":"user","content":"Keep"}}"#, "\n")).unwrap();
+                std::fs::write(
+                    &path,
+                    concat!(
+                        r#"{"type":"session_start","id":"kept"}"#,
+                        "\n",
+                        r#"{"type":"message","id":"m","#,
+                        r#""timestamp":"2026-01-15T00:00:00Z","#,
+                        r#""message":{"role":"user","content":"Keep"}}"#,
+                        "\n",
+                    ),
+                )
+                .unwrap();
                 path
             },
         );
