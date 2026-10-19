@@ -1,6 +1,9 @@
 use crate::collect::model::Entry;
 use crate::collect::progress::progress;
+use agent_dump_core::output::diagnostics;
 use agent_dump_core::output::i18n::{t, terminal};
+use agent_dump_core::parallel;
+use agent_dump_core::providers::error as provider_error;
 use agent_dump_core::query::scanner::Scan;
 use serde_json::json;
 use std::io::Write;
@@ -27,7 +30,7 @@ pub fn read_entries(
     let mut failed = Vec::new();
     let mut last_error = None;
     let mut completed = 0;
-    agent_dump_core::parallel::ordered(
+    parallel::ordered(
         positions,
         |&(g, s)| {
             let group = &scan.groups[g];
@@ -49,10 +52,7 @@ pub fn read_entries(
                 writeln!(
                     warnings,
                     "{}",
-                    agent_dump_core::output::diagnostics::record_warning(
-                        &diagnostic,
-                        zh
-                    )
+                    diagnostics::record_warning(&diagnostic, zh)
                 )?;
             }
             match result {
@@ -79,16 +79,25 @@ pub fn read_entries(
                                 ("uri", uri.clone()),
                                 (
                                     "error",
-                                    agent_dump_core::providers::error::message(
-                                        error.as_ref(),
-                                        zh
-                                    )
+                                    provider_error::message(error.as_ref(), zh)
                                 )
                             ]
                         )
                     )?;
                     if let Some(logger) = logger {
-                        logger.log("session_read_failed", json!({"agent":group.info.name, "session_uri":uri, "error_type":agent_dump_core::providers::error::kind(error.as_ref()).unwrap_or("RuntimeError"), "error":agent_dump_core::providers::error::message(error.as_ref(), zh)}));
+                        let error_type = provider_error::kind(error.as_ref())
+                            .unwrap_or("RuntimeError");
+                        let message =
+                            provider_error::message(error.as_ref(), zh);
+                        logger.log(
+                            "session_read_failed",
+                            json!({
+                                "agent": group.info.name,
+                                "session_uri": uri,
+                                "error_type": error_type,
+                                "error": message
+                            }),
+                        );
                     }
                     last_error = Some(error);
                 }

@@ -1,8 +1,11 @@
 use agent_dump_core::output::diagnostics::Diagnostic;
 use agent_dump_core::output::i18n::t;
+use agent_dump_core::output::{diagnostics, render};
 use agent_dump_core::providers::contract::SessionGroup;
-use agent_dump_core::query::Query;
+use agent_dump_core::providers::registry;
 use agent_dump_core::query::text::Mode;
+use agent_dump_core::query::{Query, context, filter, scanner};
+use agent_dump_core::session::cache::SessionDataCache;
 use std::io::Write;
 
 pub struct Options {
@@ -21,17 +24,15 @@ pub fn run(
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
     let time_field = query.map(|query| query.time_field).unwrap_or_default();
-    let scan = agent_dump_core::query::scanner::discover(
-        query, days, time_field, zh, warnings,
-    )?;
+    let scan = scanner::discover(query, days, time_field, zh, warnings)?;
     if scan.groups.is_empty() && !options.json {
-        let roots = match agent_dump_core::providers::registry::search_roots() {
+        let roots = match registry::search_roots() {
             Ok(roots) => roots,
             Err(error) => {
                 write!(
                     out,
                     "{}{}",
-                    agent_dump_core::output::render::list_banner(),
+                    render::list_banner(),
                     Diagnostic::unexpected(error.as_ref(), zh).render(zh)
                 )?;
                 return Ok(false);
@@ -44,13 +45,13 @@ pub fn run(
         write!(
             out,
             "{}{}",
-            agent_dump_core::output::render::list_banner(),
+            render::list_banner(),
             Diagnostic::empty_list(names.as_deref(), roots, zh).render(zh)
         )?;
         return Ok(names.is_some());
     }
     let unfiltered = Query::default();
-    let mut selection = agent_dump_core::query::filter::select(
+    let mut selection = filter::select(
         &scan.groups,
         query.unwrap_or(&unfiltered),
         zh,
@@ -60,8 +61,7 @@ pub fn run(
     if options.locate
         && let Some(query) = query
     {
-        let cache =
-            agent_dump_core::session::cache::SessionDataCache::default();
+        let cache = SessionDataCache::default();
         for matched in &selection.matches {
             let group = &scan.groups[matched.group];
             let session = &group.sessions[matched.session];
@@ -72,11 +72,15 @@ pub fn run(
                     session,
                     zh,
                     &mut |diagnostic| {
-                        writeln!(warnings, "{}", agent_dump_core::output::diagnostics::record_warning(&diagnostic, zh))?;
+                        writeln!(
+                            warnings,
+                            "{}",
+                            diagnostics::record_warning(&diagnostic, zh)
+                        )?;
                         Ok(())
                     },
                 )
-                .and_then(|data| agent_dump_core::query::context::locate(&data, query));
+                .and_then(|data| context::locate(&data, query));
             match result {
                 Ok(found) => {
                     locations.insert((matched.group, matched.session), found);
@@ -123,12 +127,7 @@ pub fn run(
     if let Some(query) = &query
         && query.mode == Mode::Terms
     {
-        write!(
-            out,
-            "{}{}",
-            agent_dump_core::output::render::list_banner(),
-            ignored_text
-        )?;
+        write!(out, "{}{}", render::list_banner(), ignored_text)?;
         writeln!(
             out,
             "{}",
@@ -150,9 +149,7 @@ pub fn run(
                 out,
                 "\n{}. {}",
                 i + 1,
-                agent_dump_core::output::render::formatted_title(
-                    session, time_field
-                )
+                render::formatted_title(session, time_field)
             )?;
             for (key, value) in [
                 ("SEARCH_RESULT_PROVIDER", group.info.display_name.to_owned()),
@@ -171,7 +168,7 @@ pub fn run(
                     out,
                     "   {}: {}",
                     t(key, zh, &[]),
-                    agent_dump_core::output::render::safe_line(&value)
+                    render::safe_line(&value)
                 )?;
             }
             if let Some(found) =
@@ -184,9 +181,7 @@ pub fn run(
                         location.position,
                         location.role,
                         location.locator,
-                        agent_dump_core::output::render::safe_line(
-                            &location.snippet
-                        )
+                        render::safe_line(&location.snippet)
                     )?;
                 }
             }
@@ -211,7 +206,7 @@ pub fn run(
     write!(
         out,
         "{}",
-        agent_dump_core::output::render::list(
+        render::list(
             &groups,
             query.map(|q| q.summary(zh)).as_deref(),
             days,
@@ -220,8 +215,8 @@ pub fn run(
             zh
         )
         .replacen(
-            &agent_dump_core::output::render::list_banner(),
-            &(agent_dump_core::output::render::list_banner() + &ignored_text),
+            &render::list_banner(),
+            &(render::list_banner() + &ignored_text),
             1
         )
     )?;

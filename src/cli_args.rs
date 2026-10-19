@@ -1,4 +1,5 @@
 use crate::collect::model as collect_model;
+use agent_dump_core::output::i18n::t;
 use clap::{CommandFactory, FromArgMatches, Parser};
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -220,7 +221,7 @@ pub fn normalize_arguments(args: Vec<OsString>) -> Vec<OsString> {
 
 pub fn command(zh: bool) -> clap::Command {
     let mut command = Args::command()
-        .about(agent_dump_core::output::i18n::t("CLI_DESC", zh, &[]))
+        .about(t("CLI_DESC", zh, &[]))
         .disable_version_flag(true)
         .arg(
             clap::Arg::new("version")
@@ -277,11 +278,7 @@ pub fn command(zh: bool) -> clap::Command {
         ("version", "VERSION"),
     ] {
         command = command.mut_arg(id, |arg| {
-            arg.help(agent_dump_core::output::i18n::t(
-                &format!("CLI_{key}_HELP"),
-                zh,
-                &[],
-            ))
+            arg.help(t(&format!("CLI_{key}_HELP"), zh, &[]))
         });
     }
     command.after_help(if zh {
@@ -300,7 +297,8 @@ pub fn command(zh: bool) -> clap::Command {
   reindex                 --reindex
   shortcut <NAME> [ARGS]  --shortcut <NAME> [ARGS]
 
-兼容别名：-days、-output、-format、-summary、-since、-until、-config、-page-size、-query、-v；--capabilities 等同于 --providers。"
+兼容别名：-days、-output、-format、-summary、-since、-until、-config、\
+-page-size、-query、-v；--capabilities 等同于 --providers。"
     } else {
         "Commands (equivalent to the listed options, which remain available):
   list                    --list
@@ -317,7 +315,8 @@ pub fn command(zh: bool) -> clap::Command {
   reindex                 --reindex
   shortcut <NAME> [ARGS]  --shortcut <NAME> [ARGS]
 
-Compatibility aliases: -days, -output, -format, -summary, -since, -until, -config, -page-size, -query, -v; --capabilities is an alias for --providers."
+Compatibility aliases: -days, -output, -format, -summary, -since, -until, \
+-config, -page-size, -query, -v; --capabilities is an alias for --providers."
     })
 }
 

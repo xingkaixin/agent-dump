@@ -1,5 +1,9 @@
-use agent_dump_core::config::{AiConfig, Config, ParseMode};
+use agent_dump_core::compat::value::repr;
+use agent_dump_core::config::{AiConfig, Config, ParseMode, validate_ai};
 use agent_dump_core::output::i18n::{t, terminal};
+use agent_dump_core::output::render;
+use agent_dump_core::providers::error::ProviderError;
+use agent_dump_core::storage::source_io::path_text;
 use std::io::IsTerminal;
 use std::io::{BufRead, Write};
 
@@ -25,7 +29,7 @@ pub fn read_line(
     out.flush()?;
     let mut line = String::new();
     if input.read_line(&mut line)? == 0 {
-        return Err(agent_dump_core::providers::error::ProviderError::Cause {
+        return Err(ProviderError::Cause {
             kind: "EOFError",
             message: "EOF when reading a line".into(),
         }
@@ -84,12 +88,7 @@ pub fn run(
             terminal(
                 "CONFIG_VIEW_TITLE",
                 zh,
-                &[(
-                    "path",
-                    agent_dump_core::storage::source_io::path_text(
-                        &config.path
-                    )
-                )]
+                &[("path", path_text(&config.path))]
             )
         )?;
         fields(
@@ -123,23 +122,17 @@ pub fn run(
         writeln!(
             out,
             "  logging.path: {}",
-            agent_dump_core::output::render::safe_line(
-                &agent_dump_core::storage::source_io::path_text(&logging.path)
-            )
+            render::safe_line(&path_text(&logging.path))
         )?;
         writeln!(out, "  shortcuts.count: {}", shortcuts.len())?;
         for (name, shortcut) in shortcuts {
             writeln!(
                 out,
                 "{}",
-                agent_dump_core::output::render::safe_line(&format!(
+                render::safe_line(&format!(
                     "  shortcut.{name}: params={} args={}",
-                    agent_dump_core::compat::value::repr(&serde_json::json!(
-                        shortcut.params
-                    )),
-                    agent_dump_core::compat::value::repr(&serde_json::json!(
-                        shortcut.args
-                    ))
+                    repr(&serde_json::json!(shortcut.params)),
+                    repr(&serde_json::json!(shortcut.args))
                 ))
             )?;
         }
@@ -152,12 +145,7 @@ pub fn run(
             terminal(
                 "CONFIG_NOT_FOUND",
                 zh,
-                &[(
-                    "path",
-                    agent_dump_core::storage::source_io::path_text(
-                        &config.path
-                    )
-                )]
+                &[("path", path_text(&config.path))]
             )
         )?;
         let answer = read_line(
@@ -183,12 +171,7 @@ pub fn run(
             terminal(
                 "CONFIG_EDIT_REQUIRES_VALID_TOML",
                 zh,
-                &[(
-                    "path",
-                    agent_dump_core::storage::source_io::path_text(
-                        &config.path
-                    )
-                )]
+                &[("path", path_text(&config.path))]
             )
         )?;
         return Ok(false);
@@ -199,7 +182,7 @@ pub fn run(
         return Ok(false);
     };
     if let Some(ai) = &ai {
-        let errors = agent_dump_core::config::validate_ai(Some(ai), true);
+        let errors = validate_ai(Some(ai), true);
         if !errors.is_empty() {
             writeln!(
                 out,
@@ -217,14 +200,7 @@ pub fn run(
     writeln!(
         out,
         "{}",
-        terminal(
-            "CONFIG_SAVED",
-            zh,
-            &[(
-                "path",
-                agent_dump_core::storage::source_io::path_text(&config.path)
-            )]
-        )
+        terminal("CONFIG_SAVED", zh, &[("path", path_text(&config.path))])
     )?;
     Ok(true)
 }
@@ -296,13 +272,13 @@ fn prompt(
         let shown = if secret {
             mask_key(default)
         } else {
-            agent_dump_core::output::render::safe_line(default)
+            render::safe_line(default)
         };
         if tty {
             let shown_default = if secret {
                 default.to_owned()
             } else {
-                agent_dump_core::output::render::safe_line(default)
+                render::safe_line(default)
             };
             let Some(value) = crate::terminal::tui::input(
                 &t(key, zh, &[]),

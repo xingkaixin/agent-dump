@@ -1,5 +1,8 @@
 use crate::collect::model::Event;
+use agent_dump_core::query::text as query_text;
+use agent_dump_core::query::transcript::visible_segments;
 use agent_dump_core::session::SessionData;
+use agent_dump_core::session::timestamp::Timestamp;
 use jiff::civil::Date;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::LazyLock;
@@ -10,7 +13,11 @@ pub fn extract(
     plan_chunks: bool,
 ) -> BTreeMap<Date, Vec<Vec<Event>>> {
     static IGNORE: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r"(?i)^(?:hi|hello|thanks|thank you|你好|您好|好的|收到|明白|嗯嗯|ok|okay)[!！,.，。?？\s]*$").unwrap()
+        regex::Regex::new(concat!(
+            r"(?i)^(?:hi|hello|thanks|thank you|",
+            r"你好|您好|好的|收到|明白|嗯嗯|ok|okay)[!！,.，。?？\s]*$"
+        ))
+        .unwrap()
     });
     let mut dates: BTreeMap<Date, Vec<Vec<Event>>> = BTreeMap::new();
     for message in &data.messages {
@@ -18,23 +25,22 @@ pub fn extract(
             continue;
         }
         let mut seen = HashSet::new();
-        let segments =
-            agent_dump_core::query::transcript::visible_segments(message);
+        let segments = visible_segments(message);
         let repeated = segments.len() > 1;
         for (text, time) in segments {
-            let text = agent_dump_core::query::text::normalize(&text);
+            let text = query_text::normalize(&text);
             if text.is_empty()
                 || IGNORE.is_match(&text)
                 || (repeated
                     && !seen.insert((
-                        time.map(agent_dump_core::session::timestamp::Timestamp::as_microsecond),
+                        time.map(Timestamp::as_microsecond),
                         caseless::default_case_fold_str(&text),
                     )))
             {
                 continue;
             }
             let Some(date) = time
-                .map(agent_dump_core::session::timestamp::Timestamp::local_date)
+                .map(Timestamp::local_date)
                 .filter(|date| range.contains(date))
             else {
                 continue;

@@ -1,3 +1,5 @@
+use agent_dump_core::providers::contract::ProviderInfo;
+use agent_dump_core::query::Query;
 use agent_dump_core::session::Session;
 use jiff::civil::Date;
 use serde::Serialize;
@@ -35,7 +37,7 @@ pub struct Operation {
     pub save: Option<String>,
     pub mode: Mode,
     pub action: Action,
-    pub query: Option<agent_dump_core::query::Query>,
+    pub query: Option<Query>,
 }
 
 #[derive(Clone)]
@@ -61,7 +63,7 @@ impl Event {
 pub struct Entry {
     pub date: Date,
     pub session: Session,
-    pub provider: &'static agent_dump_core::providers::contract::ProviderInfo,
+    pub provider: &'static ProviderInfo,
     pub chunks: Vec<Vec<Event>>,
 }
 impl Entry {

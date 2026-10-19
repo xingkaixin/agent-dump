@@ -1,5 +1,8 @@
 use crate::collect::model::Mode;
+use agent_dump_core::compat::json as compat_json;
 use agent_dump_core::config::AiConfig;
+use agent_dump_core::output::i18n::t;
+use agent_dump_core::output::render;
 use serde_json::{Value, json};
 use std::fmt;
 use std::io::Read;
@@ -37,7 +40,16 @@ pub fn schema(mode: Mode) -> Value {
             )
         })
         .collect();
-    json!({"name":"collect_summary", "schema":{"type":"object", "properties": properties, "required":fields, "additionalProperties":false}, "strict":true})
+    json!({
+        "name": "collect_summary",
+        "schema": {
+            "type": "object",
+            "properties": properties,
+            "required": fields,
+            "additionalProperties": false
+        },
+        "strict": true
+    })
 }
 
 pub fn request(
@@ -58,9 +70,21 @@ fn respond(
     let system = include_str!("../../resources/prompts/system.txt");
     let openai = config.provider == "openai";
     let mut payload = if openai {
-        json!({"model":config.model, "messages":[{"role":"system", "content":system}, {"role":"user", "content":prompt}], "temperature":0.2})
+        json!({
+            "model": config.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.2
+        })
     } else {
-        json!({"model":config.model, "max_tokens":4096, "system":system, "messages":[{"role":"user", "content":prompt}]})
+        json!({
+            "model": config.model,
+            "max_tokens": 4096,
+            "system": system,
+            "messages": [{"role": "user", "content": prompt}]
+        })
     };
     if config.reasoning == "off" {
         if openai {
@@ -216,9 +240,7 @@ fn post(
                     if matches!(e, ureq::Error::Timeout(_)) {
                         "timed out".into()
                     } else {
-                        agent_dump_core::output::render::safe_line(
-                            &e.to_string(),
-                        )
+                        render::safe_line(&e.to_string())
                     }
                 ),
                 true,
@@ -285,9 +307,7 @@ fn post(
                 error(
                     format!(
                         "{provider} API request failed: {}",
-                        agent_dump_core::output::render::safe_line(
-                            &e.to_string()
-                        )
+                        render::safe_line(&e.to_string())
                     ),
                     true,
                 )
@@ -335,7 +355,7 @@ fn post(
             }
             return Err(failure);
         }
-        return agent_dump_core::compat::json::from_slice(&bytes)
+        return compat_json::from_slice(&bytes)
             .map_err(|e| error(e.to_string(), false));
     }
     unreachable!()
@@ -367,7 +387,7 @@ pub fn summary(
         )
     };
     if let Some(reason) = reason {
-        return Err(agent_dump_core::output::i18n::t(
+        return Err(t(
             "LLM_RESPONSE_TRUNCATED",
             zh,
             &[("provider", provider.into()), ("reason", reason.into())],

@@ -1,6 +1,8 @@
 use crate::collect::log::Logger;
 use crate::collect::model::{Mode, Summary};
+use agent_dump_core::compat::json as compat_json;
 use agent_dump_core::config::AiConfig;
+use agent_dump_core::query::text as query_text;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
@@ -44,7 +46,7 @@ fn dedupe<'a>(
     let mut seen = HashSet::new();
     let mut values = Vec::new();
     for text in items {
-        let text = agent_dump_core::query::text::normalize(text);
+        let text = query_text::normalize(text);
         if text.is_empty()
             || !seen.insert(caseless::default_case_fold_str(&text))
         {
@@ -113,9 +115,9 @@ fn extract(response: &str) -> crate::Result<Value> {
             Some(Ok(value)) if value.is_object() => return Ok(value),
             Some(Ok(_)) => {}
             _ => {
-                if let Err(error) = agent_dump_core::compat::json::from_slice(
-                    text.trim().as_bytes(),
-                ) {
+                if let Err(error) =
+                    compat_json::from_slice(text.trim().as_bytes())
+                {
                     let message = error.to_string();
                     if let Some((reason, location)) =
                         message.rsplit_once(": line ")
@@ -171,9 +173,20 @@ pub fn request(
             .into());
         }
         let id = uuid::Uuid::new_v4().to_string();
-        let mut fields = json!({"request_id":id, "provider":config.provider, "model":config.model, "phase":context.phase, "context":context.label,
-            "session_uri":context.uri, "chunk_index":context.chunk, "chunk_total":context.chunks,
-            "parse_attempt":parse_attempt + 1, "parse_attempt_limit":2, "transport_attempt":transport_attempt + 1, "transport_attempt_limit":2});
+        let mut fields = json!({
+            "request_id": id,
+            "provider": config.provider,
+            "model": config.model,
+            "phase": context.phase,
+            "context": context.label,
+            "session_uri": context.uri,
+            "chunk_index": context.chunk,
+            "chunk_total": context.chunks,
+            "parse_attempt": parse_attempt + 1,
+            "parse_attempt_limit": 2,
+            "transport_attempt": transport_attempt + 1,
+            "transport_attempt_limit": 2
+        });
         fields["prompt_chars"] = current.chars().count().into();
         logger.log("llm_request", fields.clone());
         fields.as_object_mut().unwrap().remove("prompt_chars");

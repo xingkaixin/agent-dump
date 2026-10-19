@@ -3,6 +3,7 @@ use crate::collect::model::{Entry, Group, Mode, Summary};
 use crate::collect::progress::progress;
 use crate::collect::summary::{self as collect_summary, Context};
 use agent_dump_core::config::{AiConfig, CollectConfig};
+use agent_dump_core::output::i18n::{t, terminal};
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::Write;
@@ -75,11 +76,30 @@ fn merge_session(
             )
             .into());
         }
-        match collect_summary::request(ai, &prompt, timeout, mode, &Context {
-            label: format!("{uri} session merge"), phase: "session_merge", uri: Some(&uri), chunk: None, chunks: Some(entry.chunks.len()),
-        }, logger) {
+        match collect_summary::request(
+            ai,
+            &prompt,
+            timeout,
+            mode,
+            &Context {
+                label: format!("{uri} session merge"),
+                phase: "session_merge",
+                uri: Some(&uri),
+                chunk: None,
+                chunks: Some(entry.chunks.len()),
+            },
+            logger,
+        ) {
             Ok(summary) => merged = summary,
-            Err(error) => logger.log("llm_merge_fallback", json!({"phase":"session_merge", "session_uri":uri, "chunk_total":entry.chunks.len(), "error":error.to_string()})),
+            Err(error) => logger.log(
+                "llm_merge_fallback",
+                json!({
+                    "phase": "session_merge",
+                    "session_uri": uri,
+                    "chunk_total": entry.chunks.len(),
+                    "error": error.to_string()
+                }),
+            ),
         }
     }
     Ok(merged)
@@ -179,7 +199,7 @@ pub fn run(
                     writeln!(
                         warnings,
                         "{}",
-                        agent_dump_core::output::i18n::terminal(
+                        terminal(
                             "WARN_SESSION_SUMMARY_SKIPPED",
                             zh,
                             &[
@@ -210,7 +230,7 @@ pub fn run(
         writeln!(
             warnings,
             "{}",
-            agent_dump_core::output::i18n::t(
+            t(
                 "WARN_SESSION_SUMMARY_FAILURES",
                 zh,
                 &[("count", failed.len().to_string())]
@@ -279,9 +299,36 @@ pub fn run(
                 if batch.len() > 1
                     && collect_summary::needs_compression(&merged)
                 {
-                    match collect_summary::request(ai, &crate::collect::prompts::merge(&source, &payloads, &format!("group-level-{depth}"), mode), config.timeout, mode, &Context { label:source.clone(), phase:"group_merge", uri:None, chunk:None, chunks:None }, logger) {
+                    match collect_summary::request(
+                        ai,
+                        &crate::collect::prompts::merge(
+                            &source,
+                            &payloads,
+                            &format!("group-level-{depth}"),
+                            mode,
+                        ),
+                        config.timeout,
+                        mode,
+                        &Context {
+                            label: source.clone(),
+                            phase: "group_merge",
+                            uri: None,
+                            chunk: None,
+                            chunks: None,
+                        },
+                        logger,
+                    ) {
                         Ok(summary) => merged = summary,
-                        Err(error) => logger.log("llm_merge_fallback", json!({"phase":"group_merge", "context":source,"level":depth,"group_index":index,"error":error.to_string()})),
+                        Err(error) => logger.log(
+                            "llm_merge_fallback",
+                            json!({
+                                "phase": "group_merge",
+                                "context": source,
+                                "level": depth,
+                                "group_index": index,
+                                "error": error.to_string()
+                            }),
+                        ),
                     }
                 }
                 next.push(Group {

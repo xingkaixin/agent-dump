@@ -4,6 +4,9 @@
 )]
 
 use crate::collect::model::{Entry, Event, Group, Mode, Summary};
+use agent_dump_core::compat::value::pretty_json;
+use agent_dump_core::output::i18n::t;
+use agent_dump_core::query::transcript::search_value;
 use jiff::civil::Date;
 use serde_json::{Value, json};
 use std::fmt::Write as _;
@@ -15,43 +18,46 @@ pub const MANIFEST_END: &str = "<!-- agent-dump:collect-manifest-end -->";
 fn text(mode: Mode, stage: &str) -> &'static str {
     match (mode, stage) {
         (Mode::Pm, "chunk") => {
-            include_str!("../../resources/prompts/pm-chunk.txt")
+            include_str!("../../../resources/prompts/pm-chunk.txt")
         }
         (Mode::Insight, "chunk") => {
-            include_str!("../../resources/prompts/insight-chunk.txt")
+            include_str!("../../../resources/prompts/insight-chunk.txt")
         }
         (Mode::Pm, "report") => {
-            include_str!("../../resources/prompts/pm-report.txt")
+            include_str!("../../../resources/prompts/pm-report.txt")
         }
         (Mode::Insight, "report") => {
-            include_str!("../../resources/prompts/insight-report.txt")
+            include_str!("../../../resources/prompts/insight-report.txt")
         }
         (Mode::Pm, "merge") => {
-            include_str!("../../resources/prompts/pm-merge.txt")
+            include_str!("../../../resources/prompts/pm-merge.txt")
         }
         (Mode::Insight, "merge") => {
-            include_str!("../../resources/prompts/insight-merge.txt")
+            include_str!("../../../resources/prompts/insight-merge.txt")
         }
         (Mode::Pm, "retry") => {
-            include_str!("../../resources/prompts/pm-retry.txt")
+            include_str!("../../../resources/prompts/pm-retry.txt")
         }
         (Mode::Insight, "retry") => {
-            include_str!("../../resources/prompts/insight-retry.txt")
+            include_str!("../../../resources/prompts/insight-retry.txt")
         }
         (Mode::Pm, "handoff") => {
-            include_str!("../../resources/prompts/pm-handoff.txt")
+            include_str!("../../../resources/prompts/pm-handoff.txt")
         }
         (Mode::Insight, "handoff") => {
-            include_str!("../../resources/prompts/insight-handoff.txt")
+            include_str!("../../../resources/prompts/insight-handoff.txt")
         }
         _ => unreachable!(),
     }
 }
 
 pub fn envelope(kind: &str, source: &str, body: &str) -> String {
-    agent_dump_core::query::transcript::search_value(
-        &json!({"untrusted_data": kind, "source": source, "length": body.chars().count(), "content": body}),
-    )
+    search_value(&json!({
+        "untrusted_data": kind,
+        "source": source,
+        "length": body.chars().count(),
+        "content": body
+    }))
 }
 
 pub fn chunk(
@@ -108,9 +114,7 @@ pub fn merge(
             envelope(
                 "untrusted_derived_summary",
                 &format!("{source}#summary-{}", i + 1),
-                &agent_dump_core::compat::value::pretty_json(&Value::Object(
-                    summary.clone(),
-                )),
+                &pretty_json(&Value::Object(summary.clone())),
             )
         })
         .collect::<Vec<_>>()
@@ -175,16 +179,14 @@ pub fn final_prompt(
                 envelope(
                     "untrusted_derived_summary",
                     &format!("collect://final/group/{}", i + 1),
-                    &agent_dump_core::query::transcript::search_value(
-                        &serde_json::to_value(group).unwrap(),
-                    ),
+                    &search_value(&serde_json::to_value(group).unwrap()),
                 )
             })
             .collect::<Vec<_>>()
             .join("\n");
     }
     if result.chars().count() > 64_000 {
-        return Err(agent_dump_core::output::i18n::t(
+        return Err(t(
             "COLLECT_FINAL_INPUT_TOO_LARGE",
             zh,
             &[("limit", "64000".into())],
@@ -219,7 +221,7 @@ pub fn final_prompts(
 pub fn uri_summary(uri: &str, transcript: &str) -> String {
     format!(
         "{}{DATA_BOUNDARY}{}",
-        include_str!("../../resources/prompts/uri.txt"),
+        include_str!("../../../resources/prompts/uri.txt"),
         envelope("session_transcript", uri, transcript)
     )
 }
