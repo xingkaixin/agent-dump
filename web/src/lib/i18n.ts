@@ -192,9 +192,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.6",
+        date: "2026-10-21",
+        isLatest: true,
+        title: "Safer HTTPS Connections for AI Collect",
+        description:
+          "AI collect summarizes Codex, Claude Code, Cursor, and other supported AI sessions over HTTPS with an updated certificate trust list. After eMudhra intermediate CA keys leaked, it no longer trusts the emSign ECC Root CA - G3. Session export, full-text search, and prompt handoff work as before and are now covered by stricter CLI contract tests.",
+        command: 'npx @agent-dump/cli@1.2.6 --collect --days 7',
+        tags: ["AI Collect", "HTTPS Security", "Certificate Trust"],
+      },
+      {
         version: "v1.2.5",
         date: "2026-10-17",
-        isLatest: true,
         title: "Read Sessions from 9 More AI Coding Tools",
         description:
           "Export, search, and summarize AI sessions from Gemini CLI, Grok, Droid, Qoder, Qoder CN, Kimi-Code, oh-my-pi, Antigravity CLI, and DSH alongside Codex, Claude Code, Cursor, and other supported tools. Claude Code subagents, archived Codex rollouts, Cursor subagent chats, and the active Pi branch are read more completely, and recent-session lists skip stale files to return faster.",
@@ -397,9 +406,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.6",
+        date: "2026-10-21",
+        isLatest: true,
+        title: "AI collect 的 HTTPS 连接更安全",
+        description:
+          "汇总 Codex、Claude Code、Cursor 等工具的 AI 会话时，AI collect 使用更新后的 HTTPS 证书信任列表。eMudhra 中间 CA 私钥泄露后，不再信任 emSign ECC Root CA - G3。会话导出、全文搜索和 prompt handoff 的行为不变，并由更严格的 CLI 契约测试覆盖。",
+        command: 'npx @agent-dump/cli@1.2.6 --collect --days 7',
+        tags: ["AI collect", "HTTPS 安全", "证书信任"],
+      },
+      {
         version: "v1.2.5",
         date: "2026-10-17",
-        isLatest: true,
         title: "新增 9 款 AI 编程工具的会话读取",
         description:
           "除 Codex、Claude Code、Cursor 等工具外，现在还可以导出、搜索和汇总 Gemini CLI、Grok、Droid、Qoder、Qoder CN、Kimi-Code、oh-my-pi、Antigravity CLI 和 DSH 的 AI 会话。Claude Code 子代理、Codex 归档会话、Cursor 子代理对话和 Pi 当前分支的读取更完整；列出近期会话时跳过过期文件，结果返回更快。",
@@ -602,9 +620,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.6",
+        date: "2026-10-21",
+        isLatest: true,
+        title: "AI collect の HTTPS 通信をより安全に",
+        description:
+          "Codex、Claude Code、Cursor などの AI セッションを要約する AI collect は、更新した HTTPS 証明書の信頼リストを使います。eMudhra の中間 CA 秘密鍵の漏洩を受け、emSign ECC Root CA - G3 を信頼しなくなりました。セッションのエクスポート、全文検索、prompt handoff の動作は変わらず、より厳密な CLI 契約テストで検証しています。",
+        command: 'npx @agent-dump/cli@1.2.6 --collect --days 7',
+        tags: ["AI collect", "HTTPS セキュリティ", "証明書の信頼"],
+      },
+      {
         version: "v1.2.5",
         date: "2026-10-17",
-        isLatest: true,
         title: "新たに 9 つの AI コーディングツールに対応",
         description:
           "Codex、Claude Code、Cursor などに加え、Gemini CLI、Grok、Droid、Qoder、Qoder CN、Kimi-Code、oh-my-pi、Antigravity CLI、DSH の AI セッションをエクスポート・検索・要約できます。Claude Code のサブエージェント、Codex のアーカイブ済みセッション、Cursor のサブエージェント会話、Pi のアクティブブランチをより完全に読み取り、最近のセッション一覧は古いファイルを読み飛ばして素早く表示します。",

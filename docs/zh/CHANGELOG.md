@@ -2,6 +2,20 @@
 
 ## [未发布]
 
+## [1.2.6] - 2026-10-21
+
+### 问题修复
+
+- 更新内置的 `webpki-roots` 和 `rustls-webpki`，AI collect 的 HTTPS 请求不再信任 emSign ECC Root CA - G3；该根证书下的 eMudhra 中间 CA 私钥已泄露 (#533)。
+
+### 变更
+
+- 与冻结的 Python 0.15.9 对照的 CLI 差分测试改为默认 Rust 契约测试，断言输出、退出码和数据源未改写；移除差分测试配置 (#531)。
+- 拆分 CLI 命令分发、collect 和 URI 等较长 workflow，重命名 browse workflow 模块，并折行超过 100 列的代码 (#530, #532)。
+- 所有模块目录统一使用 `mod.rs`，并在 workspace 级别禁止 `clippy::self_named_module_files` (#530)。
+- 精简 `AGENTS.md`，只保留约束和文档路由；落地页说明移至 `web/README.md` (#529)。
+- 更新 Rust 依赖、Python 开发工具、Astro、Base UI 和 Playwright (#525–#528)。
+
 ## [1.2.5] - 2026-10-17
 
 ### 新增功能
@@ -1331,3 +1345,4 @@
 [1.2.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.3
 [1.2.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.4
 [1.2.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.5
+[1.2.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.6

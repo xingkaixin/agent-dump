@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-10-21
+
+### Fixed
+
+- Stop trusting the emSign ECC Root CA - G3 in AI collect HTTPS requests by updating bundled `webpki-roots` and `rustls-webpki`, following the leaked eMudhra intermediate CA keys (#533).
+
+### Changed
+
+- Replace differential CLI tests against the frozen Python 0.15.9 reference with default Rust contracts that assert output, exit codes, and unchanged sources; remove the differential test configuration (#531).
+- Split long CLI command, collect, and URI workflows into steps, rename the browse workflow module, and wrap lines longer than 100 columns (#530, #532).
+- Use `mod.rs` for every module directory and deny `clippy::self_named_module_files` across the workspace (#530).
+- Slim `AGENTS.md` to constraints and document routing, and move the landing-page guide to `web/README.md` (#529).
+- Update Rust dependencies, Python development tools, Astro, Base UI, and Playwright (#525–#528).
+
 ## [1.2.5] - 2026-10-17
 
 ### Added
@@ -1328,3 +1342,4 @@
 [1.2.3]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.3
 [1.2.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.4
 [1.2.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.5
+[1.2.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.6
