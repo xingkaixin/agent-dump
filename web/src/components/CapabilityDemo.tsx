@@ -134,7 +134,6 @@ function Export({ sample, demo, untouched }: Pick<Props, "sample" | "demo" | "un
             <span>{sample.s2}.json</span>
             <span className="fmt">JSON</span>
           </div>
-          <p className="inote">{demo.exportNote}</p>
         </div>
       </div>
     </div>
@@ -180,7 +179,6 @@ export function CapabilityDemo({ items, sample, notes, demo, untouched }: Props)
     return () => clearTimeout(timer);
   }, [active, auto, items.length]);
 
-  const footers = [notes.search, notes.read, demo.exportFoot, notes.collect];
   return (
     <div className="capbox">
       <div className="ctabs" role="tablist" aria-orientation="vertical">
@@ -200,11 +198,7 @@ export function CapabilityDemo({ items, sample, notes, demo, untouched }: Props)
                 setAuto(false);
               }}
             >
-              <span className="top">
-                <span className="no">0{index + 1}</span>
-                <span className="vb">{item.verb}</span>
-                <span className="lb">{item.label}</span>
-              </span>
+              <span className="vb">{item.verb}</span>
               <span className="bd">{item.body}</span>
               {current && auto && (
                 <span className="prog" aria-hidden="true">
@@ -231,10 +225,6 @@ export function CapabilityDemo({ items, sample, notes, demo, untouched }: Props)
           {active === 2 && <Export sample={sample} demo={demo} untouched={untouched} />}
           {active === 3 && <Collect notes={notes} demo={demo} />}
         </div>
-        <p className="win-note">
-          {active === 0 && <Icon name="search" small />}
-          {footers[active]}
-        </p>
       </div>
     </div>
   );

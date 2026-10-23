@@ -14,8 +14,6 @@ interface Props {
     replay: string;
     label: string;
     keysLabel: string;
-    note: string;
-    keysHint: string;
     space: string;
     keys: string[];
   };
@@ -467,10 +465,6 @@ export function BrowseDemo({ lang, copy }: Props) {
           </button>
         ))}
       </div>
-      <p className="bnote">
-        <span>{copy.note}</span>
-        <span>{copy.keysHint}</span>
-      </p>
     </>
   );
 }

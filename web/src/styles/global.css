@@ -230,6 +230,9 @@ mark {
   align-items: end;
   margin-bottom: 48px;
 }
+.shead > :only-child {
+  grid-column: 1 / -1;
+}
 .shead-side {
   display: grid;
   gap: 14px;
@@ -1316,26 +1319,12 @@ mark {
   border-color: var(--line);
   box-shadow: var(--sh-card);
 }
-.ctab .top {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-}
-.ctab .no {
-  font: 500 12px/1 var(--mono);
-  color: var(--mfg);
-}
 .ctab .vb {
+  display: block;
   font-size: 26px;
   font-weight: 300;
   letter-spacing: -0.01em;
   line-height: 1.2;
-}
-.ctab .lb {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--mfg);
-  text-align: right;
 }
 .ctab .bd {
   display: none;
@@ -1393,16 +1382,6 @@ mark {
   padding: 22px;
   min-height: 400px;
   background: var(--panel);
-}
-.win-note {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 12px 18px;
-  border-top: 1px solid var(--line);
-  font-size: 12.5px;
-  color: var(--mfg);
-  background: var(--card);
 }
 .stg > * {
   animation: rise 0.38s var(--ease-settle) both;
@@ -1995,15 +1974,6 @@ mark {
 .key:active .kbd {
   border-bottom-width: 1px;
   margin-top: 2px;
-}
-.bnote {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 14px;
-  font-size: 12.5px;
-  color: var(--mfg);
 }
 
 /* audience */
