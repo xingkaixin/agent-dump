@@ -8,7 +8,6 @@ interface Props {
 }
 const { locale } = Astro.props;
 const b = landing[locale].boundary;
-const icons = ["lock", "folder", "alert"] as const;
 ---
 
 <section class="sec bnd" aria-labelledby="boundary-heading">
@@ -38,14 +37,10 @@ const icons = ["lock", "folder", "alert"] as const;
         <ul>{b.flow.ownedItems.map((item) => <li><i></i>{item}</li>)}</ul>
       </div>
     </div>
-    <div class="bitems">
-      {b.items.map((item, index) => (
-        <div class="bitem" data-reveal>
-          <span class="bic"><Icon name={icons[index]} /></span>
-          <h3>{item.title}</h3>
-          <p>{item.body}</p>
-        </div>
-      ))}
+    <div class="bitem" data-reveal>
+      <span class="bic"><Icon name="alert" /></span>
+      <h3>{b.note.title}</h3>
+      <p>{b.note.body}</p>
     </div>
   </div>
 </section>

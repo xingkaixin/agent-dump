@@ -42,13 +42,10 @@ export type LandingCopy = {
     headingLead: string;
     headingTail: string;
     developer: {
-      tag: string;
       title: string;
-      body: string;
       steps: [string, string, string];
     };
     agent: {
-      tag: string;
       title: string;
       body: string;
       steps: [string, string, string];
@@ -62,7 +59,7 @@ export type LandingCopy = {
       owned: string;
       ownedItems: [string, string, string];
     };
-    items: { title: string; body: string }[];
+    note: { title: string; body: string };
   };
   updates: { latest: string; older: string };
   menu: string;
@@ -152,13 +149,10 @@ export const landing: Record<Locale, LandingCopy> = {
       headingLead: "People read in the terminal. ",
       headingTail: "Agents read JSON.",
       developer: {
-        tag: "For developers",
         title: "Three commands for last week's work",
-        body: "Browse recently active sessions, search within this project, then export by URI.",
         steps: ["browse the last week", "search this project", "export by URI"],
       },
       agent: {
-        tag: "For AI Agents",
         title: "Reading you can verify",
         body: "Check exit codes and status; a partial result never passes as a complete read.",
         steps: [
@@ -176,20 +170,10 @@ export const landing: Record<Locale, LandingCopy> = {
         owned: "Paths agent-dump owns",
         ownedItems: ["Index · config", "Logs", "Exports"],
       },
-      items: [
-        {
-          title: "Zero writes to sources",
-          body: "Export, search, stats, and collect never modify databases, JSONL, or session directories.",
-        },
-        {
-          title: "Output stays in its own place",
-          body: "Indexes, config, logs, and exports go only to paths agent-dump owns.",
-        },
-        {
-          title: "Incomplete says incomplete",
-          body: "Failed reads or summaries are marked; unknown facts stay unknown.",
-        },
-      ],
+      note: {
+        title: "Incomplete says incomplete",
+        body: "Failed reads or summaries are marked; unknown facts stay unknown.",
+      },
     },
     updates: { latest: "Latest", older: "Earlier releases" },
     menu: "Navigation menu",
@@ -277,13 +261,10 @@ export const landing: Record<Locale, LandingCopy> = {
       headingLead: "人用终端读，",
       headingTail: "Agent 用 JSON 读。",
       developer: {
-        tag: "给开发者",
         title: "三条命令找回上周的工作",
-        body: "浏览最近活跃的会话，在当前项目里搜索，再用 URI 导出。",
         steps: ["浏览最近一周", "在当前项目里搜索", "按 URI 导出"],
       },
       agent: {
-        tag: "给 AI Agent",
         title: "可验证的完整读取",
         body: "检查退出码和 status；部分结果不会被当成完整读取。",
         steps: ["能力与路径", "候选会话", "分页指令"],
@@ -297,20 +278,10 @@ export const landing: Record<Locale, LandingCopy> = {
         owned: "agent-dump 自有路径",
         ownedItems: ["索引 · 配置", "日志", "导出文件"],
       },
-      items: [
-        {
-          title: "源数据零写入",
-          body: "导出、搜索、统计和 collect 都不会修改数据库、JSONL 或会话目录。",
-        },
-        {
-          title: "产物写在自己的地方",
-          body: "索引、配置、日志和导出文件只进入 agent-dump 拥有的路径。",
-        },
-        {
-          title: "不完整就说不完整",
-          body: "读取或摘要失败会被明确标记；未知的事实保持未知。",
-        },
-      ],
+      note: {
+        title: "不完整就说不完整",
+        body: "读取或摘要失败会被明确标记；未知的事实保持未知。",
+      },
     },
     updates: { latest: "最新版本", older: "更早版本" },
     menu: "导航菜单",
@@ -398,13 +369,10 @@ export const landing: Record<Locale, LandingCopy> = {
       headingLead: "人はターミナルで、",
       headingTail: "Agent は JSON で。",
       developer: {
-        tag: "開発者向け",
         title: "先週の作業を3つのコマンドで",
-        body: "最近更新されたセッションを閲覧し、このプロジェクト内を検索して、URI でエクスポート。",
         steps: ["直近1週間を閲覧", "このプロジェクトを検索", "URI でエクスポート"],
       },
       agent: {
-        tag: "AI Agent 向け",
         title: "検証できる完全な読み取り",
         body: "終了コードと status を確認。部分的な結果を完全な読み取りとして扱いません。",
         steps: ["機能とパス", "候補セッション", "ページング手順"],
@@ -418,20 +386,10 @@ export const landing: Record<Locale, LandingCopy> = {
         owned: "agent-dump 管理下のパス",
         ownedItems: ["インデックス · 設定", "ログ", "エクスポート"],
       },
-      items: [
-        {
-          title: "元データへの書き込みゼロ",
-          body: "エクスポート、検索、統計、collect はデータベース、JSONL、セッションディレクトリを変更しません。",
-        },
-        {
-          title: "生成物は専用の場所へ",
-          body: "インデックス、設定、ログ、エクスポートは agent-dump 管理下のパスにのみ書き込みます。",
-        },
-        {
-          title: "不完全は不完全と示す",
-          body: "読み取りや要約の失敗は明示され、不明な事実は不明のまま残ります。",
-        },
-      ],
+      note: {
+        title: "不完全は不完全と示す",
+        body: "読み取りや要約の失敗は明示され、不明な事実は不明のまま残ります。",
+      },
     },
     updates: { latest: "最新", older: "以前のバージョン" },
     menu: "メニュー",
