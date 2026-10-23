@@ -213,7 +213,6 @@ mark {
   overflow-wrap: anywhere;
 }
 .h2 {
-  margin-top: 18px;
   font-weight: 300;
   font-size: clamp(30px, 3.8vw, 50px);
   line-height: 1.12;
@@ -230,6 +229,9 @@ mark {
   gap: 20px 64px;
   align-items: end;
   margin-bottom: 48px;
+}
+.shead > :only-child {
+  grid-column: 1 / -1;
 }
 .shead-side {
   display: grid;
@@ -849,13 +851,6 @@ mark {
     opacity: 0;
   }
 }
-.shell-foot {
-  position: absolute;
-  left: 20px;
-  bottom: 14px;
-  font-size: 11px;
-  color: var(--t-mfg);
-}
 .arrow {
   position: absolute;
   top: 0;
@@ -1069,22 +1064,9 @@ mark {
   box-shadow: var(--sh-card);
   overflow: hidden;
 }
-.uri-box .cap {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-  font: 600 10px/1 var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--mfg);
-}
-.uri,
-.uri-leg {
+.uri {
   display: flex;
   font: 300 clamp(17px, 2.6vw, 34px)/1 var(--mono);
-}
-.uri {
   align-items: flex-start;
   color: var(--fg);
 }
@@ -1162,47 +1144,6 @@ mark {
   100% {
     transform: translateY(-15em);
   }
-}
-.uri-leg {
-  margin-top: 14px;
-}
-.uri-leg > span {
-  position: relative;
-  display: block;
-  border-top: 1.5px solid var(--line-strong);
-  padding-top: 10px;
-}
-.uri-leg > span::before,
-.uri-leg > span::after {
-  content: "";
-  position: absolute;
-  top: -6px;
-  width: 1.5px;
-  height: 6px;
-  background: var(--line-strong);
-}
-.uri-leg > span::before {
-  left: 0;
-}
-.uri-leg > span::after {
-  right: 0;
-}
-.uri-leg > .gap {
-  border-top-color: transparent;
-}
-.uri-leg > .gap::before,
-.uri-leg > .gap::after {
-  display: none;
-}
-.uri-leg em {
-  display: block;
-  font: 500 12px/1.4 var(--sans);
-  font-style: normal;
-  color: var(--mfg);
-}
-.uri-leg .a em {
-  text-align: right;
-  color: var(--signal-ink);
 }
 .ptiles {
   display: grid;
@@ -1317,26 +1258,12 @@ mark {
   border-color: var(--line);
   box-shadow: var(--sh-card);
 }
-.ctab .top {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-}
-.ctab .no {
-  font: 500 12px/1 var(--mono);
-  color: var(--mfg);
-}
 .ctab .vb {
+  display: block;
   font-size: 26px;
   font-weight: 300;
   letter-spacing: -0.01em;
   line-height: 1.2;
-}
-.ctab .lb {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--mfg);
-  text-align: right;
 }
 .ctab .bd {
   display: none;
@@ -1394,16 +1321,6 @@ mark {
   padding: 22px;
   min-height: 400px;
   background: var(--panel);
-}
-.win-note {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 12px 18px;
-  border-top: 1px solid var(--line);
-  font-size: 12.5px;
-  color: var(--mfg);
-  background: var(--card);
 }
 .stg > * {
   animation: rise 0.38s var(--ease-settle) both;
@@ -1997,19 +1914,9 @@ mark {
   border-bottom-width: 1px;
   margin-top: 2px;
 }
-.bnote {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 14px;
-  font-size: 12.5px;
-  color: var(--mfg);
-}
 
 /* audience */
 .aud-h {
-  margin-top: 18px;
   font-weight: 300;
   font-size: clamp(30px, 4.4vw, 58px);
   line-height: 1.12;
@@ -2045,23 +1952,7 @@ mark {
   color: var(--t-fg);
   border-color: var(--t-edge);
 }
-.acard .tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font: 600 11px/1 var(--mono);
-  letter-spacing: 0.06em;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: var(--muted);
-  color: var(--fg2);
-}
-.acard.dk .tag {
-  background: rgb(74 222 128 / 0.12);
-  color: var(--signal);
-}
 .acard h3 {
-  margin-top: 16px;
   font-size: 22px;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -2201,15 +2092,6 @@ mark {
 [data-theme="dark"] .bnd {
   border-block: 1px solid var(--line);
 }
-.bnd .eyebrow {
-  color: var(--signal);
-}
-.bnd .eyebrow .ix {
-  color: #8b9893;
-}
-.bnd .eyebrow .ln {
-  background: #34403b;
-}
 .bnd .h2 {
   font-size: clamp(32px, 4.6vw, 60px);
   max-width: 15em;
@@ -2343,16 +2225,6 @@ mark {
     border-bottom: 0;
   }
 }
-.bitems {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-@media (max-width: 860px) {
-  .bitems {
-    grid-template-columns: 1fr;
-  }
-}
 .bitem {
   border-top: 1px solid #2a3430;
   padding-top: 22px;
@@ -2484,7 +2356,6 @@ mark {
   }
 }
 .inst-h {
-  margin-top: 18px;
   font-weight: 300;
   font-size: clamp(48px, 7vw, 96px);
   line-height: 1;

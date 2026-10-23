@@ -21,15 +21,10 @@ const agentSteps = [
 
 <section id="agents" class="sec panel">
   <div class="wrap">
-    <div data-reveal>
-      <p class="eyebrow"><span class="ix">04</span><span class="ln"></span>{a.tag}</p>
-      <h2 class="aud-h">{a.headingLead}<span class="tail">{a.headingTail}</span></h2>
-    </div>
+    <h2 class="aud-h" data-reveal>{a.headingLead}<span class="tail">{a.headingTail}</span></h2>
     <div class="aud">
       <article class="acard" data-reveal>
-        <span class="tag">{a.developer.tag}</span>
         <h3>{a.developer.title}</h3>
-        <p class="bd">{a.developer.body}</p>
         <ol class="dsteps">
           {developerCommands.map((command, index) => (
             <li>
@@ -42,7 +37,6 @@ const agentSteps = [
         </ol>
       </article>
       <article class="acard dk" data-reveal>
-        <span class="tag">{a.agent.tag}</span>
         <h3>{a.agent.title}</h3>
         <p class="bd">{a.agent.body}</p>
         <ol class="ladder">

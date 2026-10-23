@@ -27,7 +27,7 @@ const screens: { command: string; lines: Line[] }[] = [
     lines: [
       { text: "--format markdown --output ./sessions", kind: "tm" },
       { text: "reading", count: "38", after: "messages" },
-      { text: `ok · ${l.stage.untouched}`, kind: "tok" },
+      { text: "ok", kind: "tok" },
     ],
   },
   {
@@ -147,7 +147,6 @@ const papers = [
                 ))}
               </div>
             ))}
-            <p class="shell-foot">read-only · --json · cursor paging</p>
           </div>
         </div>
       </div>
