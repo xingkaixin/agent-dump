@@ -13,10 +13,7 @@ const icons = ["lock", "folder", "alert"] as const;
 
 <section class="sec bnd" aria-labelledby="boundary-heading">
   <div class="wrap">
-    <div data-reveal>
-      <p class="eyebrow"><span class="ix">05</span><span class="ln"></span>{b.tag}</p>
-      <h2 class="h2" id="boundary-heading">{b.heading}</h2>
-    </div>
+    <h2 class="h2" id="boundary-heading" data-reveal>{b.heading}</h2>
     <div class="flow" aria-hidden="true" data-reveal>
       <div class="node">
         <p class="nt">{b.flow.source}</p>

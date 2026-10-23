@@ -3,7 +3,7 @@ import type { Locale } from "./i18n";
 export type CapabilityCopy = { verb: string; label: string; body: string };
 
 export type LandingCopy = {
-  nav: { browse: string; tools: string; faq: string };
+  nav: { browse: string; faq: string };
   stage: {
     sources: string;
     sample: string;
@@ -52,7 +52,6 @@ export type LandingCopy = {
     keys: string[];
   };
   audience: {
-    tag: string;
     headingLead: string;
     headingTail: string;
     developer: {
@@ -69,7 +68,6 @@ export type LandingCopy = {
     };
   };
   boundary: {
-    tag: string;
     heading: string;
     flow: {
       source: string;
@@ -85,7 +83,7 @@ export type LandingCopy = {
 
 export const landing: Record<Locale, LandingCopy> = {
   en: {
-    nav: { browse: "Browse", tools: "Tools", faq: "FAQ" },
+    nav: { browse: "Browse", faq: "FAQ" },
     stage: {
       sources: "Sources · read-only",
       sample: "agent-dump · sample output",
@@ -181,7 +179,6 @@ export const landing: Record<Locale, LandingCopy> = {
       ],
     },
     audience: {
-      tag: "People & Agents",
       headingLead: "People read in the terminal. ",
       headingTail: "Agents read JSON.",
       developer: {
@@ -202,7 +199,6 @@ export const landing: Record<Locale, LandingCopy> = {
       },
     },
     boundary: {
-      tag: "Data boundary",
       heading: "Reads your sessions. Never touches your data.",
       flow: {
         source: "Provider sessions",
@@ -229,7 +225,7 @@ export const landing: Record<Locale, LandingCopy> = {
     menu: "Navigation menu",
   },
   zh: {
-    nav: { browse: "会话阅读器", tools: "支持工具", faq: "常见问题" },
+    nav: { browse: "会话阅读器", faq: "常见问题" },
     stage: {
       sources: "来源 · 只读",
       sample: "agent-dump · 示例输出",
@@ -324,7 +320,6 @@ export const landing: Record<Locale, LandingCopy> = {
       ],
     },
     audience: {
-      tag: "人与 Agent",
       headingLead: "人用终端读，",
       headingTail: "Agent 用 JSON 读。",
       developer: {
@@ -341,7 +336,6 @@ export const landing: Record<Locale, LandingCopy> = {
       },
     },
     boundary: {
-      tag: "数据边界",
       heading: "只读你的会话，不碰你的数据。",
       flow: {
         source: "Provider 会话源",
@@ -368,7 +362,7 @@ export const landing: Record<Locale, LandingCopy> = {
     menu: "导航菜单",
   },
   ja: {
-    nav: { browse: "閲覧", tools: "対応ツール", faq: "よくある質問" },
+    nav: { browse: "閲覧", faq: "よくある質問" },
     stage: {
       sources: "読み取り元 · 読み取り専用",
       sample: "agent-dump · サンプル出力",
@@ -464,7 +458,6 @@ export const landing: Record<Locale, LandingCopy> = {
       ],
     },
     audience: {
-      tag: "人と Agent",
       headingLead: "人はターミナルで、",
       headingTail: "Agent は JSON で。",
       developer: {
@@ -481,7 +474,6 @@ export const landing: Record<Locale, LandingCopy> = {
       },
     },
     boundary: {
-      tag: "データの境界",
       heading: "セッションは読むだけ。データには触れない。",
       flow: {
         source: "Provider のセッション",

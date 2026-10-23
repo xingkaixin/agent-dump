@@ -213,7 +213,6 @@ mark {
   overflow-wrap: anywhere;
 }
 .h2 {
-  margin-top: 18px;
   font-weight: 300;
   font-size: clamp(30px, 3.8vw, 50px);
   line-height: 1.12;
@@ -2009,7 +2008,6 @@ mark {
 
 /* audience */
 .aud-h {
-  margin-top: 18px;
   font-weight: 300;
   font-size: clamp(30px, 4.4vw, 58px);
   line-height: 1.12;
@@ -2200,15 +2198,6 @@ mark {
 }
 [data-theme="dark"] .bnd {
   border-block: 1px solid var(--line);
-}
-.bnd .eyebrow {
-  color: var(--signal);
-}
-.bnd .eyebrow .ix {
-  color: #8b9893;
-}
-.bnd .eyebrow .ln {
-  background: #34403b;
 }
 .bnd .h2 {
   font-size: clamp(32px, 4.6vw, 60px);
@@ -2484,7 +2473,6 @@ mark {
   }
 }
 .inst-h {
-  margin-top: 18px;
   font-weight: 300;
   font-size: clamp(48px, 7vw, 96px);
   line-height: 1;

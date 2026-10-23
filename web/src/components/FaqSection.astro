@@ -11,10 +11,7 @@ const t = ui[locale];
 
 <section id="faq" class="sec flush">
   <div class="wrap faq">
-    <div data-reveal>
-      <p class="eyebrow"><span class="ix">09</span><span class="ln"></span>FAQ</p>
-      <h2 class="h2">{t.faqHeading}</h2>
-    </div>
+    <h2 class="h2" data-reveal>{t.faqHeading}</h2>
     <div data-reveal>
       <Faq client:visible items={t.faq} />
     </div>

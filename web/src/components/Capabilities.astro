@@ -1,5 +1,5 @@
 ---
-import { ui, type Locale } from "../lib/i18n";
+import type { Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
 import { CapabilityDemo } from "./CapabilityDemo";
 interface Props {
@@ -13,9 +13,6 @@ const l = landing[locale];
   <div class="wrap">
     <div class="shead" data-reveal>
       <div>
-        <p class="eyebrow">
-          <span class="ix">02</span><span class="ln"></span>{ui[locale].capabilitiesHeading}
-        </p>
         <h2 class="h2">{l.capabilities.heading}</h2>
       </div>
       <p class="sub">{l.capabilities.summary}</p>
