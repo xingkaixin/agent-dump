@@ -15,7 +15,7 @@ export type LandingCopy = {
   sample: { s1: string; s2: string; s3: string; q1: string; q2: string };
   notes: { scan: string; chunk: string };
   codexGuide: string;
-  uri: { label: string; scheme: string; id: string };
+  uri: { label: string };
   demo: {
     days: string;
     provider: string;
@@ -69,7 +69,7 @@ export const landing: Record<Locale, LandingCopy> = {
   en: {
     nav: { browse: "Browse", faq: "FAQ" },
     stage: {
-      sources: "Sources · read-only",
+      sources: "Sources",
       sample: "agent-dump · sample output",
       output: "Output",
       hits: "3 sessions · 7 hits · locators kept",
@@ -90,8 +90,6 @@ export const landing: Record<Locale, LandingCopy> = {
     codexGuide: "Export a Codex session to Markdown",
     uri: {
       label: "A session URI combines the source tool scheme and the session ID",
-      scheme: "Source tool",
-      id: "Session ID",
     },
     demo: {
       days: "last 30 days",
@@ -181,7 +179,7 @@ export const landing: Record<Locale, LandingCopy> = {
   zh: {
     nav: { browse: "会话阅读器", faq: "常见问题" },
     stage: {
-      sources: "来源 · 只读",
+      sources: "来源",
       sample: "agent-dump · 示例输出",
       output: "输出",
       hits: "3 sessions · 7 hits · 保留消息定位",
@@ -202,8 +200,6 @@ export const landing: Record<Locale, LandingCopy> = {
     codexGuide: "将 Codex 会话导出为 Markdown",
     uri: {
       label: "会话 URI 由来源工具 scheme 与会话 ID 组成",
-      scheme: "来源工具",
-      id: "会话 ID",
     },
     demo: {
       days: "近 30 天",
@@ -289,7 +285,7 @@ export const landing: Record<Locale, LandingCopy> = {
   ja: {
     nav: { browse: "閲覧", faq: "よくある質問" },
     stage: {
-      sources: "読み取り元 · 読み取り専用",
+      sources: "読み取り元",
       sample: "agent-dump · サンプル出力",
       output: "出力",
       hits: "3 sessions · 7 hits · 位置情報を保持",
@@ -310,8 +306,6 @@ export const landing: Record<Locale, LandingCopy> = {
     codexGuide: "Codex セッションを Markdown にエクスポート（英語）",
     uri: {
       label: "セッション URI はツールの scheme とセッション ID で構成されます",
-      scheme: "ツール",
-      id: "セッション ID",
     },
     demo: {
       days: "直近 30 日",

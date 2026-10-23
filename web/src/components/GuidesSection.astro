@@ -14,10 +14,9 @@ const guides = await getGuides(locale);
   <div class="wrap">
     <div class="shead" data-reveal>
       <div>
-        <h2 class="h2">{t.title}</h2>
+        <h2 class="h2">{t.label}</h2>
       </div>
       <div class="shead-side">
-        <p class="sub">{t.description}</p>
         <a href={guideIndexPaths[locale]} class="tlink">
           {t.all}
           <Icon name="arrowRight" small />
@@ -25,11 +24,11 @@ const guides = await getGuides(locale);
       </div>
     </div>
     <div class="ggrid">
-      {guides.map((guide, index) => (
+      {guides.map((guide) => (
         <div class="gwrap" data-reveal>
           <a href={guide.href} class="gtile">
             <span class="gmeta">
-              <span>0{index + 1} · {t.categories[guide.category]}</span>
+              <span>{t.categories[guide.category]}</span>
               <Icon name="arrowRight" />
             </span>
             <h3>{guide.title}</h3>

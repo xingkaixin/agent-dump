@@ -41,7 +41,6 @@ const [headLead, headTail] = t.providersHeading.split(/(?<=[，、,])\s*/);
     <div class="prov-top">
       <div data-reveal>
         <h2 class="h2">{headLead}{headTail && <><br />{headTail}</>}</h2>
-        <p class="sub" style="margin-top: 16px">{t.providersNote}</p>
         <div class="tlinks">
           <a class="tlink" href={codexGuideLinks[locale].href}>
             {l.codexGuide}
@@ -59,16 +58,10 @@ const [headLead, headTail] = t.providersHeading.split(/(?<=[，、,])\s*/);
         </div>
       </div>
       <figure class="uri-box dots" aria-label={l.uri.label} data-reveal>
-        <p class="cap"><span>Session URI</span><span>agent-dump export &lt;uri&gt;</span></p>
         <div class="uri" aria-hidden="true">
           <span class="tick sch"><ul>{ticker.map(([scheme]) => <li>{scheme}</li>)}</ul></span>
           <span class="sep">://</span>
           <span class="tick sid"><ul>{ticker.map(([, id]) => <li>{id}</li>)}</ul></span>
-        </div>
-        <div class="uri-leg" aria-hidden="true">
-          <span class="a" style="width: 8ch"><em>{l.uri.scheme}</em></span>
-          <span class="gap" style="width: 3ch"></span>
-          <span style="width: 14ch"><em>{l.uri.id}</em></span>
         </div>
       </figure>
     </div>

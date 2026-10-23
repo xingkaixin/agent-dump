@@ -84,11 +84,9 @@ type UiStrings = {
   ctaInstall: string;
   ctaSource: string;
   providersHeading: string;
-  providersNote: string;
   moreTools: { title: string; note: string };
   capabilitiesHeading: string;
   updatesHeading: string;
-  updatesSubheading: string;
   viewFullChangelog: string;
   updates: UpdateItem[];
   installHeading: string;
@@ -175,7 +173,7 @@ export const ui: Record<Locale, UiStrings> = {
     themeLabel: "Toggle theme",
     themeLight: "Light",
     themeDark: "Dark",
-    eyebrow: "Local AI session CLI · read-only sources",
+    eyebrow: "Local AI session CLI",
     heroTitle: "Your sessions.",
     heroTitleAccent: "Still useful.",
     heroDescription:
@@ -183,12 +181,9 @@ export const ui: Record<Locale, UiStrings> = {
     ctaInstall: "Install",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} tools, one URI grammar`,
-    providersNote:
-      "Use a session URI to read history saved on this machine. Available formats and content depend on the source tool.",
     moreTools: { title: "More tools", note: "PRs welcome" },
     capabilitiesHeading: "What it does",
     updatesHeading: "What's New",
-    updatesSubheading: "Release notes for session reading, search, export, and collect.",
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
@@ -390,7 +385,7 @@ export const ui: Record<Locale, UiStrings> = {
     themeLabel: "切换主题",
     themeLight: "浅色",
     themeDark: "深色",
-    eyebrow: "本地 AI 会话 CLI · 源数据只读",
+    eyebrow: "本地 AI 会话 CLI",
     heroTitle: "写过的对话，",
     heroTitleAccent: "继续派上用场。",
     heroDescription:
@@ -398,11 +393,9 @@ export const ui: Record<Locale, UiStrings> = {
     ctaInstall: "安装",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} 款工具，一套 URI 语法`,
-    providersNote: "通过会话 URI 读取本机保存的历史。可用格式和内容范围取决于来源工具。",
     moreTools: { title: "更多工具", note: "欢迎 PR" },
     capabilitiesHeading: "它能做什么",
     updatesHeading: "最新动态",
-    updatesSubheading: "会话读取、搜索、导出与 collect 的版本更新。",
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
@@ -604,7 +597,7 @@ export const ui: Record<Locale, UiStrings> = {
     themeLabel: "テーマを切り替える",
     themeLight: "ライト",
     themeDark: "ダーク",
-    eyebrow: "ローカル AI セッション CLI · 元データは読み取り専用",
+    eyebrow: "ローカル AI セッション CLI",
     heroTitle: "AI 対話を",
     heroTitleAccent: "再利用。",
     heroDescription:
@@ -612,11 +605,9 @@ export const ui: Record<Locale, UiStrings> = {
     ctaInstall: "インストール",
     ctaSource: "GitHub",
     providersHeading: `${providers.length} のツール、1 つの URI 構文`,
-    providersNote: "セッション URI で、このマシンに保存された履歴を読み取ります。利用できる形式と内容はツールによって異なります。",
     moreTools: { title: "その他のツール", note: "PRを歓迎します" },
     capabilitiesHeading: "できること",
     updatesHeading: "更新履歴とロードマップ",
-    updatesSubheading: "セッションの閲覧、検索、エクスポート、collect の更新履歴。",
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {

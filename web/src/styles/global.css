@@ -851,13 +851,6 @@ mark {
     opacity: 0;
   }
 }
-.shell-foot {
-  position: absolute;
-  left: 20px;
-  bottom: 14px;
-  font-size: 11px;
-  color: var(--t-mfg);
-}
 .arrow {
   position: absolute;
   top: 0;
@@ -1071,22 +1064,9 @@ mark {
   box-shadow: var(--sh-card);
   overflow: hidden;
 }
-.uri-box .cap {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-  font: 600 10px/1 var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--mfg);
-}
-.uri,
-.uri-leg {
+.uri {
   display: flex;
   font: 300 clamp(17px, 2.6vw, 34px)/1 var(--mono);
-}
-.uri {
   align-items: flex-start;
   color: var(--fg);
 }
@@ -1164,47 +1144,6 @@ mark {
   100% {
     transform: translateY(-15em);
   }
-}
-.uri-leg {
-  margin-top: 14px;
-}
-.uri-leg > span {
-  position: relative;
-  display: block;
-  border-top: 1.5px solid var(--line-strong);
-  padding-top: 10px;
-}
-.uri-leg > span::before,
-.uri-leg > span::after {
-  content: "";
-  position: absolute;
-  top: -6px;
-  width: 1.5px;
-  height: 6px;
-  background: var(--line-strong);
-}
-.uri-leg > span::before {
-  left: 0;
-}
-.uri-leg > span::after {
-  right: 0;
-}
-.uri-leg > .gap {
-  border-top-color: transparent;
-}
-.uri-leg > .gap::before,
-.uri-leg > .gap::after {
-  display: none;
-}
-.uri-leg em {
-  display: block;
-  font: 500 12px/1.4 var(--sans);
-  font-style: normal;
-  color: var(--mfg);
-}
-.uri-leg .a em {
-  text-align: right;
-  color: var(--signal-ink);
 }
 .ptiles {
   display: grid;
