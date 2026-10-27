@@ -66,7 +66,7 @@ agent-dump --search "fix timeout" -query "provider:minimax"
 | Session Source | 实际读取的 SQLite 文件 |
 | change sources | 数据库及同路径 `-wal`；不使用 `-shm` |
 
-列表只在标题为空时读取该会话的 `data_json` 以取得首条用户正文，无法解析的行跳过；不反序列化 `record_json`，不扫描模型历史文件。`get_session_head()` 等展示入口只投影已发现的 facts。
+列表只在标题为空时读取该会话的 `data_json` 以取得首条用户正文，无法解析的行跳过；不反序列化 `record_json`，不扫描模型历史文件。`--head` 等展示入口只使用发现阶段得到的 facts，不重新读取正文。
 
 ## 5. 正文与内部事件
 
@@ -96,11 +96,11 @@ system、unknown 和权限响应仍作为一条内部事件消息计数，状态
 
 ## 6. 只读与失败语义
 
-- 每次发现、直接定位和正文读取独立建立 `mode=ro` 连接，启用 `query_only`，使用一个读取事务；无预先调用 `is_available()` 的要求。
+- 每次发现、直接定位和正文读取独立建立 `mode=ro` 连接，启用 `query_only`，使用一个读取事务；读取前不需要先检查可用性。
 - 正文始终从 `session.source_path` 读取，不回退到实例新发现的其他数据库。
 - 不调用上游运行时、迁移器或会触发惰性迁移的读接口。只读事务可读取已提交 WAL；缓存以数据库和 WAL 的变化失效。
 - 验证必要表及字段。缺表、缺字段或不可读取数据库通过现有诊断路径报告，不能把整库失败当成零会话。
-- 单会话元数据损坏、未知 columnar version，或存在未完成迁移的旧展示消息时，发现保留其他成功会话并返回 `complete=False`；直接读取失败。
+- 单会话元数据损坏、未知 columnar version，或存在未完成迁移的旧展示消息时，发现保留其他成功会话，并把该会话报告为发现失败；用 URI 直接读取该会话时报错。
 - 检查 `local_runtime_message_row_migrations`：已有 marker 时以消息行为准；没有 marker 且旧 `display_messages_json` 非空时，报告需要由 MiniMax Code 完成迁移。不会由 agent-dump 写 marker 或清空旧 blob。
 - 数据源不存在返回 unavailable；一个受支持的空数据库保持 available。
 

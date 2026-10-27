@@ -21,7 +21,7 @@ Grok CLI 会话的发现和解析以 CodeSesh 的 `agents/grok.rs` 为准。Prov
 - 同一条 assistant 消息中的 `plan` 只保留最后一次，全部条目完成时为 `success`。
 - `model_changed`、`model_auto_switched` 更新后续消息的模型，初始模型为 `current_model_id`；`current_mode_update` 更新模式；`subagent_spawned` 记录子会话 ID。
 - `turn_completed` 的用量归入最近一条尚无用量的 assistant 消息。`costUsdTicks` 在用量完整时记为费用（1 tick = 1e-10 美元）。
-- 记录缺少 `agentTimestampMs` 和 `timestamp` 时，消息时间使用会话创建时间，并标记为推测时间，collect 不按日期使用这类消息。
+- 记录缺少 `agentTimestampMs` 和 `timestamp` 时，消息时间使用会话创建时间，并标记为推测时间，collect 排除这类消息。
 
 ## 3. 统计
 

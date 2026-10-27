@@ -27,7 +27,7 @@ Inspect the selected sources and any diagnostics before requesting summaries. A 
 
 ## Generate with your configured AI provider
 
-Configure the `[ai]` section using `agent-dump --config`; see the [configuration reference](https://github.com/xingkaixin/agent-dump#collect-configuration-file). Then run:
+Configure the `[ai]` section using `agent-dump --config`; see the [configuration reference](https://github.com/xingkaixin/agent-dump#configuration-file). Then run:
 
 ```sh
 agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:codex,claude path:.' --save ./reports/weekly.md
@@ -35,7 +35,7 @@ agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:cod
 
 Unlike local search and export, AI collect sends selected conversation content to the configured model provider. Choose an appropriate provider for your project and review the scope first.
 
-Collect processes eligible user and assistant text in chunks. It excludes system/developer messages, tool results, reasoning, and plan data. Sessions without eligible visible text are skipped. The default PM report groups work by date and known working directory; `--collect-mode insight` selects the alternate analysis mode. Built-in report instructions currently produce Chinese reports.
+Collect processes eligible user and assistant text in chunks. It excludes system/developer messages, tool results, reasoning, and plan data. Sessions without eligible visible text are skipped. The default PM report groups work by date and known working directory; `--collect-mode insight` instead lists what you set out to do, where you got stuck, and where your approach changed. Built-in report instructions currently produce Chinese reports.
 
 ## Use an existing agent instead
 

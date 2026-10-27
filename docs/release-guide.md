@@ -81,7 +81,7 @@ just isok
 - `uv lock --check`：依赖锁定文件一致
 - `ruff check` & `ruff format`：代码风格与格式化检查
 - Clippy 与 `ty`：Rust 和辅助工具类型检查通过
-- `cargo test --locked --workspace` 与 `pytest`：Rust 单元、CLI 差分和工具验证通过
+- `cargo test --locked --workspace` 与 `pytest`：Rust 单元测试、CLI 契约和工具验证通过
 - `npm test`：npm 包装器单元测试全部通过
 - `check-web`：Astro 静态构建与 Playwright E2E 测试全部通过
 
@@ -133,10 +133,10 @@ just isok
 
 ## Rust 制品与验收
 
-v1.0.0 是首个 Rust 发布目标。Cargo 与 npm 产品版本同步为 1.0.0；外部 Python 差分参考继续固定为 0.15.9，不随产品发版升级。不得以已发布的 0.15.9 发布 Rust 制品。版本准备不代表已发布；合并与 tag 仍由用户控制。
+v1.0.0 是首个 Rust 发布目标。Cargo 与 npm 产品版本同步为 1.0.0；Python 性能对照参考继续固定为 0.15.9，不随产品发版升级。不得以已发布的 0.15.9 发布 Rust 制品。版本准备不代表已发布；合并与 tag 仍由用户控制。
 
 - `pyproject.toml` 使用 Maturin `bin`，版本取自 Cargo；wheel 只安装原生 `agent-dump`，没有 Python API、模块入口或 Python runtime dependencies。
-- 旧 Python 应用已移出主树，差分参考由 `tests/reference/requirements.txt` 固定并独立安装。旧 API 使用方可固定 Python 0.15.9。
+- 旧 Python 应用已移出主树，性能对照参考由 `tests/reference/requirements.txt` 固定并独立安装。旧 API 使用方可固定 Python 0.15.9。
 - `.github/workflows/build-artifacts.yml` 同时被 PR CI 和 tag release 调用。四目标由 `npm/packages/cli/lib/native-targets.json` 派生，不在 workflow 复制平台列表；PR 跳过 Intel runner 上的 `darwin-x64`，该目标只在 main 和 release 上验证。
 - `packaging/build_release.py` 在固定 Rust 工具链下使用 PEP 517 隔离构建，Maturin 由完整 hash constraints 约束；先构建 sdist，再从 sdist 构建 wheel。npm 原生文件直接提取自 wheel，字节一致。
 - Linux 使用 `pyproject.toml` packaging 组固定的 Zig 链接，Maturin 检查 `manylinux_2_17`；另在固定镜像 digest 的 manylinux2014 容器运行隔离会话验证。最低 glibc 为 2.17；不发布 musllinux/Alpine wheel。

@@ -237,16 +237,14 @@ Next steps:
 
 ### Exit Codes
 
-Explicit provider scopes (`provider:`, legacy provider prefixes, or `providers=` in query URIs) are applied before discovery. Unselected providers are not scanned. An empty explicit scope result keeps the mode’s no-match behavior, without probing unrelated providers.
-
 | Code | Meaning |
 |------|---------|
 | `0` | The command did what was asked — including when the result set is legitimately empty (no sessions in the `--days` window, a keyword or `--search` that matched nothing), and when interactive export partially succeeds. |
 | `1` | The command could not do what was asked: no provider data exists on this machine, a URI did not resolve to a session, every requested interactive export failed, or an argument combination is invalid. |
-| `2` | Argument usage error, raised by `argparse` (unknown flag, invalid `--format` value). |
+| `2` | Argument usage error rejected by the argument parser (unknown flag, invalid `--format` value). |
 
-This makes `agent-dump --list && ...` meaningful: it succeeds when sessions were
-listed and fails when there is nothing to list because no provider has data.
+`agent-dump --list && ...` continues after an empty listing and stops only when no
+provider has data on this machine.
 
 ## Path Discovery
 
@@ -303,7 +301,7 @@ MiniMax Code supports listing, query, search, stats, collect, and print / JSON /
 
 Set `MINIMAX_DATA_DIR` explicitly for custom profiles or other directories. The reader does not read model-context JSONL or attachment files, run migrations, or recover rewound messages. Raw export, direct legacy storage reads, and desktop data are unsupported. Pending migrations and corrupt sessions produce diagnostics instead of appearing empty. See the [MiniMax Code design and acceptance scope](docs/providers/minimax.md).
 
-Antigravity CLI supports listing, query, search, stats, collect, and print / JSON / Markdown exports. Databases are opened read-only, and only the Protobuf fields for user prompts, assistant text, title updates, tool calls, step times, and token usage are decoded. Tool results are not stored in a known format, so tool calls have status `unknown` and keep the native step type and status in metadata; other unrecognized steps are skipped. Databases without steps are not listed. Titles come from the latest title step, the summary title, then the first user prompt. Steps without a native time use the summary update time or the database modification time and are marked as inferred, so collect does not date them. Usage repeated across retries is counted once and attached to the next assistant message; usage after the last step becomes a usage-only assistant message. Input includes cache tokens and session output includes reasoning; cost is not estimated. Raw export is unsupported. A malformed step or unsupported table fails only that session. See the [Antigravity CLI reading rules](docs/providers/antigravity-cli.md).
+Antigravity CLI supports listing, query, search, stats, collect, and print / JSON / Markdown exports. Databases are opened read-only, and only the Protobuf fields for user prompts, assistant text, title updates, tool calls, step times, and token usage are decoded. Tool results are not stored in a known format, so tool calls have status `unknown` and keep the native step type and status in metadata; other unrecognized steps are skipped. Databases without steps are not listed. Titles come from the latest title step, the summary title, then the first user prompt. Steps without a native time use the summary update time or the database modification time and are marked as inferred, so collect excludes them. Usage repeated across retries is counted once and attached to the next assistant message; usage after the last step becomes a usage-only assistant message. Input includes cache tokens and session output includes reasoning; cost is not estimated. Raw export is unsupported. A malformed step or unsupported table fails only that session. See the [Antigravity CLI reading rules](docs/providers/antigravity-cli.md).
 
 OpenCode supports legacy SQLite and 2.x `session_v2/session_message`. When both schemas coexist, V2 wins for the same session ID. Until `migration.v1-v2` is completed, legacy sessions that OpenCode has not copied yet stay listed; after that only V2 is read, so sessions deleted in V2 do not come back. Sessions without visible messages are not listed, and message counts include only visible messages. An empty title falls back to the first user text, then `Untitled Session`. V2 messages follow `seq` order. Image attachments become image parts; other attachments, `@agent`/`@skill` mentions, errors and system, compaction or switch records become labelled text. Only invalid message JSON or a non-array assistant `content` fails a V2 session; other malformed fields are left empty. Input tokens include cache reads and writes, output tokens include reasoning, and legacy parent sessions add their descendants' usage. ZCode uses the legacy reader, skips `subagent_child` sessions and keeps plan and image parts. Synthetic input, system/skill messages, compaction and shell records are excluded from collect. `OPENCODE_DB` selects a custom or channel database; a missing explicit path never falls back, and `:memory:` is unavailable. Referenced attachment files are never opened. Running and archived records remain readable; pending inbox items are excluded. Raw export remains normalized `.raw.json`, not an OpenCode import file. See the [design and acceptance scope](docs/providers/opencode-v2.md).
 
@@ -357,9 +355,11 @@ agent-dump --config view
 agent-dump --config edit
 ```
 
-`--query` uses the same matching as `--search`: whitespace-separated literal terms must all occur, anywhere in the title or transcript. Structured keys (`provider`, `role`, `path`, `limit`) activate structured parsing; quote values containing spaces. `role` restricts matching to those messages, and `limit` applies to the final global results. `error:timeout` remains a plain term. Lists print all matches; interactive Provider counts reflect the filtered results.
+`--query` uses the same matching as `--search`: whitespace-separated literal terms must all occur, anywhere in the title or transcript. Structured keys (`provider`, `role`, `path`, `limit`) activate structured parsing; quote values containing spaces. `role` restricts matching to those messages, and `limit` applies to the final global results. Without a structured key, `error:timeout` is a plain term; once the query contains one, any other `key:value` token is rejected. Lists print all matches; interactive Provider counts reflect the filtered results.
 
-Collect uses explicit `--since`/`--until` first, then explicit `--days`, otherwise today. `--save` accepts a directory or a `.md` file, with absolute or relative paths. The [collect section](#collect-configuration-file) describes full input coverage, exclusions, progress, and incomplete reports.
+Explicit provider scopes (`provider:`, legacy provider prefixes, or `providers=` in query URIs) are applied before discovery. Unselected providers are not scanned. An empty explicit scope result keeps the mode's no-match behavior, without probing unrelated providers.
+
+Collect uses explicit `--since`/`--until` first, then explicit `--days`, otherwise today. `--save` accepts a directory or a `.md` file, with absolute or relative paths. The [collect coverage section](#collect-coverage) describes full input coverage, exclusions, progress, and incomplete reports.
 
 ### Summarize with an external agent
 
@@ -442,7 +442,7 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `--interactive`, `-i` | Open the session reader to select and export sessions (same as `--browse` in a terminal) | - |
 | `--days`, `-d` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `--since/--until` are omitted. | 7 outside collect; today only in collect |
 | `--time-field` | Use `created` or `updated` time for the `--days` window in list/search/browse/interactive modes. | `updated` |
-| `--query`, `-q` | Query filter. Keyword terms are split on whitespace and matched case-insensitively like `--search`; every term must occur in the session title or logical transcript. Supports a plain keyword or structured terms like `bug provider:codex role:user path:. limit:20`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Unknown structured keys are rejected. Cannot be combined with `agents://...` query URIs. | - |
+| `--query`, `-q` | Query filter. Keyword terms are split on whitespace and matched case-insensitively like `--search`; every term must occur in the session title or logical transcript. Supports a plain keyword or structured terms like `bug provider:codex role:user path:. limit:20`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Once the query contains a structured key, other `key:value` tokens are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print bounded discovery metadata without rereading the transcript; message count is exact when discovery scanned the complete source and explicitly `unknown` otherwise. Does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect sessions by date range, optionally constrained by `--query` or an `agents://...` query URI (mutually exclusive). Only visible user/assistant text is summarized; system/developer/tool messages, reasoning, plans, tool calls, and tool results are excluded, and empty projected sessions are ignored. PM mode extracts requests, decisions, and agent-reported outcomes before deterministic session merge and tree reduction. Multi-stage progress is shown on stderr. | - |
 | `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |
@@ -473,7 +473,7 @@ When URI mode combines `print` with file formats, a print read/render failure is
 
 See [CLI migration and the frozen Python release](docs/cli-compatibility.md#source-builds-and-python-api-migration).
 
-### collect configuration file
+### Collect coverage
 
 Discovery failures are counted separately because the number of missing sessions is unknown. Reads that fail during query filtering also count as session read failures. These gaps are included in saved reports and completion logs; `--emit-prompt` carries them in its task metadata and fails if failures leave no candidates.
 
@@ -484,6 +484,8 @@ When some session reads or summaries fail, collection continues with successful 
 Collect discovers candidate sessions without a creation-time cutoff and processes user/assistant visible text only within the requested local dates. A session spanning several days is split into separate daily units before summarization; session counts remain unique URI counts. Text without a reliable timestamp (including undated Kimi context and inferred Cursor times) belongs to no date and is excluded without being reported as a coverage gap. No session creation/update time is substituted. Query filters select candidates; limits apply to unique sessions after text-date filtering. Events, including long individual messages, are split into chunks of at most 3,200 Unicode characters including labels. Chunk summaries are merged in groups of at most eight; large final reports are rendered in separate source-preserving groups. Model inputs are limited to 64,000 characters per request. Oversized metadata or derived summaries fail explicitly; source text is never silently truncated. A final report or `--summary` reply that stops at the model output token limit is treated as a failed request, not saved as complete. Partial reports list omitted session URIs. Full input coverage does not mean a summary preserves every detail.
 
 PM summaries merge sessions only within the same date and known working directory. Sessions without a working directory retain separate attribution.
+
+### Configuration file
 
 Default config path:
 

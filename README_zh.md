@@ -237,16 +237,13 @@ agent-dump opencode://session-id-abc123
 
 ### 退出码
 
-显式 Provider 范围（`provider:`、旧式 Provider 前缀或查询 URI 的 `providers=`）在发现会话前生效，不扫描未选中的 Provider。范围内无会话时按对应模式的无匹配行为处理，不探测其他来源。
-
 | 退出码 | 含义 |
 |------|------|
 | `0` | 命令做到了被要求的事——包括结果集本就为空（`--days` 窗口内没有会话、关键词或 `--search` 没有命中），以及交互式导出部分成功。 |
 | `1` | 命令做不到被要求的事：本机不存在任何 provider 数据、URI 未能解析到会话、交互式导出全部失败、或参数组合非法。 |
-| `2` | 参数用法错误，由 `argparse` 抛出（未知参数、非法的 `--format` 值）。 |
+| `2` | 参数用法错误，由参数解析器拒绝（未知参数、非法的 `--format` 值）。 |
 
-这样 `agent-dump --list && ...` 才有意义：列出了会话就成功，因为没有任何 provider
-数据而无从列出则失败。
+`agent-dump --list && ...` 在列表为空时仍会继续，只有本机没有任何 provider 数据时才中断。
 
 ## 路径发现
 
@@ -303,7 +300,7 @@ MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索�
 
 自定义 profile 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/providers/minimax.md)。
 
-Antigravity CLI 支持列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。数据库以只读方式打开，只解码用户输入、助手文本、标题更新、工具调用、步骤时间和 token 用量对应的 Protobuf 字段。工具结果没有已知格式，工具调用状态为 `unknown`，元数据保留原始步骤类型和状态；其他无法识别的步骤跳过。没有步骤的数据库不列出。标题依次取最后一次标题更新、摘要标题和首条用户输入。没有原生时间的步骤使用摘要更新时间或数据库修改时间，并标记为推测时间，collect 不按该日期归档。重试中重复的用量只计一次，挂到下一条助手消息；最后一步之后的用量生成一条只有用量的助手消息。输入包含缓存 token，会话输出包含推理 token；不估算费用。不支持 raw 导出。步骤格式错误或表结构不支持时，只有该会话读取失败。详见 [Antigravity CLI 读取规则](docs/providers/antigravity-cli.md)。
+Antigravity CLI 支持列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。数据库以只读方式打开，只解码用户输入、助手文本、标题更新、工具调用、步骤时间和 token 用量对应的 Protobuf 字段。工具结果没有已知格式，工具调用状态为 `unknown`，元数据保留原始步骤类型和状态；其他无法识别的步骤跳过。没有步骤的数据库不列出。标题依次取最后一次标题更新、摘要标题和首条用户输入。没有原生时间的步骤使用摘要更新时间或数据库修改时间，并标记为推测时间，collect 排除这类消息。重试中重复的用量只计一次，挂到下一条助手消息；最后一步之后的用量生成一条只有用量的助手消息。输入包含缓存 token，会话输出包含推理 token；不估算费用。不支持 raw 导出。步骤格式错误或表结构不支持时，只有该会话读取失败。详见 [Antigravity CLI 读取规则](docs/providers/antigravity-cli.md)。
 
 OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版。`migration.v1-v2` 完成前，OpenCode 尚未复制的旧版会话继续列出；完成后只读新版，V2 中已删除的会话不会重新出现。没有可见消息的会话不列出，消息数只计可见消息。标题为空时使用首条用户文本，再没有时为 `Untitled Session`。新版消息按 `seq` 排序。图片附件转为 image part；其他附件、`@agent`/`@skill` 提及、错误以及系统、压缩和切换记录转为带标签的文本。只有消息 JSON 无效或 assistant 的 `content` 不是数组时整条 V2 会话读取失败，其他异常字段置空。输入 token 包含缓存读写，输出 token 包含推理；旧版父会话累加后代会话的用量。ZCode 使用旧版读取器，排除 `subagent_child` 会话，保留 plan 和图片 part。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。不打开附件引用的文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/providers/opencode-v2.md)。
 
@@ -357,9 +354,11 @@ agent-dump --config view
 agent-dump --config edit
 ```
 
-`--query` 与 `--search` 匹配语义相同：按空白拆分的字面 term 必须全部出现在标题或 transcript 中，位置不限。出现结构化字段（`provider`、`role`、`path`、`limit`）时启用结构化解析，带空格的值需要引号。`role` 限定参与匹配的消息，`limit` 限制最终全局结果数。`error:timeout` 仍是普通 term。列表输出全部匹配项，交互模式中的 Provider 计数反映筛选后的结果。
+`--query` 与 `--search` 匹配语义相同：按空白拆分的字面 term 必须全部出现在标题或 transcript 中，位置不限。出现结构化字段（`provider`、`role`、`path`、`limit`）时启用结构化解析，带空格的值需要引号。`role` 限定参与匹配的消息，`limit` 限制最终全局结果数。没有结构化字段时，`error:timeout` 是普通 term；一旦出现结构化字段，其他 `key:value` 写法会被拒绝。列表输出全部匹配项，交互模式中的 Provider 计数反映筛选后的结果。
 
-Collect 的日期优先级为显式 `--since`/`--until`、显式 `--days`，最后是当天。`--save` 接受目录或 `.md` 文件，可用绝对或相对路径。完整输入覆盖、排除规则、进度和不完整报告见 [collect 说明](#collect-配置文件)。
+显式 Provider 范围（`provider:`、旧式 Provider 前缀或查询 URI 的 `providers=`）在发现会话前生效，不扫描未选中的 Provider。范围内无会话时按对应模式的无匹配行为处理，不探测其他来源。
+
+Collect 的日期优先级为显式 `--since`/`--until`、显式 `--days`，最后是当天。`--save` 接受目录或 `.md` 文件，可用绝对或相对路径。完整输入覆盖、排除规则、进度和不完整报告见 [collect 覆盖范围](#collect-覆盖范围)。
 
 ### 交给外部 agent 汇总
 
@@ -431,7 +430,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | `--interactive`, `-i` | 打开会话阅读器选择和导出会话（终端中等同 `--browse`） | - |
 | `--days`, `-d` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `--since/--until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
 | `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 的时间依据：`created` 或 `updated`。 | `updated` |
-| `--query`, `-q` | 查询过滤。关键词与 `--search` 一样按空白拆分、不区分大小写，所有 term 都必须出现在 Session 标题或逻辑 transcript 中。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
+| `--query`, `-q` | 查询过滤。关键词与 `--search` 一样按空白拆分、不区分大小写，所有 term 都必须出现在 Session 标题或逻辑 transcript 中。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。出现结构化字段后，其他 `key:value` 写法会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印有界发现阶段已有的元数据，不重新读取完整正文；发现阶段完整扫描时消息数为精确值，否则明确显示“未知”。不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
 | `--collect` | 按日期范围采集会话，可选通过 `--query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |
@@ -460,7 +459,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 
 详见 [CLI 迁移与固定 Python 版本](docs/cli-compatibility.md#源码构建与-python-api-迁移)。
 
-### collect 配置文件
+### collect 覆盖范围
 
 部分会话读取或摘要失败时，collect 继续处理成功会话，并在保存的 Markdown 中固定注明读取失败数、摘要失败数和实际包含的会话数；全部失败时仍整体失败。
 
@@ -469,6 +468,8 @@ Provider 发现失败（含部分文件检查或解析失败）单独计数，�
 Collect 发现候选时不按创建日期截断，只汇总请求日期范围内的 user/assistant 可见文本段。跨日会话在摘要前拆成每日单元；会话计数仍按唯一 URI 统计。没有可靠时间的文本不属于任何日期，直接排除，不作为覆盖缺口报告，包括无时间的 Kimi context 和使用推测时间的 Cursor 消息；不借用会话创建或更新时间。先按查询筛选候选，再按文本日期过滤，最后按 limit 限制唯一会话数。包括超长单条消息在内，事件按最多 3,200 个 Unicode 字符分块（含标签）。分块摘要每组最多八份逐层归并，较大的最终报告按来源分组分次生成。每次模型请求最多 64,000 个输入字符；超大的元数据或派生摘要会明确失败，不静默截断来源正文。最终报告或 `--summary` 的模型回复若停在输出 token 上限，按请求失败处理，不当作完整结果保存。部分成功报告列出遗漏会话 URI。完整输入覆盖不代表摘要逐字保留所有细节。
 
 PM 摘要只合并同一天、工作目录明确且相同的会话；工作目录未知的会话保留独立归属。
+
+### 配置文件
 
 默认配置文件路径：
 

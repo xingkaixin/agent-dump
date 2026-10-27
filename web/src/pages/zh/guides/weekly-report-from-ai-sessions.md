@@ -27,7 +27,7 @@ agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:cod
 
 ## 使用配置好的 AI 服务汇总
 
-通过 `agent-dump --config` 配置 `[ai]`，具体字段见[配置参考](https://github.com/xingkaixin/agent-dump#collect-configuration-file)。然后执行：
+通过 `agent-dump --config` 配置 `[ai]`，具体字段见[配置参考](https://github.com/xingkaixin/agent-dump#configuration-file)。然后执行：
 
 ```sh
 agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:codex,claude path:.' --save ./reports/weekly.md
@@ -35,7 +35,7 @@ agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:cod
 
 与本地搜索和导出不同，AI collect 会将选中的对话内容发送给配置的模型服务。先确认来源范围，再选择适合当前项目的服务。
 
-Collect 分块处理符合条件的 user/assistant 可见文本，排除 system/developer 消息、工具结果、推理和计划。没有有效可见文本的会话会被忽略。默认 PM 报告按日期和已知工作目录汇总；增加 `--collect-mode insight` 可使用另一种分析模式。内置报告指令目前生成中文报告。
+Collect 分块处理符合条件的 user/assistant 可见文本，排除 system/developer 消息、工具结果、推理和计划。没有有效可见文本的会话会被忽略。默认 PM 报告按日期和已知工作目录汇总；`--collect-mode insight` 改为整理想做什么、卡在哪、转折点。内置报告指令目前生成中文报告。
 
 ## 交给现有 Agent 处理
 
