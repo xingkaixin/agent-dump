@@ -51,15 +51,13 @@ agent-dump --browse --time-field updated -d 7
 agent-dump --interactive --time-field updated -d 7
 ```
 
-`--days` 默认按 Provider 记录的 `updated_at` 筛选，可找到最近 N 天内有活动的会话，包括很早创建的会话。加 `--time-field created` 改为按创建时间筛选。该参数只用于列表、搜索、浏览和交互模式；collect 日期和统计含义不变。
+`--days` 默认按 Provider 记录的 `updated_at` 筛选，可找到最近 N 天内有活动的会话，包括很早创建的会话。加 `--time-field created` 改为按创建时间筛选。`--time-field` 只用于列表、搜索、浏览和交互模式，collect 和 stats 不接受它。
 
 活动列表先按更新时间排序，再应用结果数量限制。文本列表和交互选择保留 Provider 分组；显示日期和“今天／昨天”等分组使用所选时间字段。全文搜索仍优先按相关性排序。JSON 保留原有创建时间和更新时间。为发现旧会话的新活动，可能需要扫描创建时间窗口之外的元数据。文件型 Provider 跳过修改时间早于窗口的会话文件，因此修改时间早于其中记录活动的文件不会被活动窗口找到；其余筛选沿用各 Provider 的 `updated_at` 事实。各 Provider 的覆盖范围和发现不完整时的诊断规则不变。
 
 ### URI 直读 / 单会话导出（uri）
 
-库调用中，OpenCode/ZCode 可以用新的 Provider 实例直接读取或导出已有 `Session`；数据库由 `Session.source_path` 指定，源缺失时不回退。
-
-`--head` 与列表复用发现阶段的计数和模型。库调用手动构造的 Session 如果没有这些 facts，展示保持未知，不触发数据库补查。
+`--head` 与列表复用发现阶段的计数和模型，不触发数据库补查。
 
 OpenCode/ZCode 的正文缓存与搜索索引会跟踪数据库及 WAL 的变化，无需先重新扫描才能刷新正文；需要更新计数、模型等发现 facts 时仍应重新发现 Session。
 
@@ -214,7 +212,7 @@ agent-dump --config edit
 - 指定 Provider 范围：`--query "keyword provider:codex,kimi"`
 - keyword 与 `--search` 语义一致：按空白拆分为不区分大小写的字面 term，全部 term 必须在标题或逻辑 transcript 中出现，可以分散在不同位置。
 
-当前 agent 名称：
+当前 Provider 名称：
 - `opencode`
 - `zcode`
 - `codex`
@@ -334,16 +332,16 @@ agent-dump --search "auth" --list --days 30
 ### URI 协议与实际会话来源不匹配
 
 现象：
-- 会话能找到，但 URI scheme 对应的 agent 与真实 agent 不一致。
+- 会话能找到，但 URI scheme 对应的 Provider 与会话实际来源不一致。
 
 处理：
-1. 改用真实 agent 的 URI scheme。
+1. 改用会话实际来源 Provider 的 URI scheme。
 2. 重新执行同一导出命令。
 
-### 无可用 agent
+### 无可用 Provider
 
 现象：
-- 扫描后没有可用 agent 数据源。
+- 扫描后没有可用的 Provider 数据源。
 - `--list` / `--stats` / URI 等模式退出码为 `1`，并输出「未找到任何可用的本地会话数据」类诊断。
 
 处理：
@@ -359,16 +357,16 @@ agent-dump --search "auth" --list --days 30
 
 处理：
 1. 扩大时间窗（例如 `--days 30`）。
-2. 放宽关键词或移除 agent 限定范围。
+2. 放宽关键词或移除 Provider 限定范围。
 
 ### query 语法非法
 
 现象：
-- `--query` 使用了无效 agent 名称或格式不正确。
+- `--query` 使用了无效 Provider 名称或格式不正确。
 
 处理：
-1. 改为 `keyword` 或 `agent1,agent2:keyword`。
-2. 将 agent 名称改为 `opencode/zcode/codex/kimi/kimi-code/claudecode/qoder/qoder-cn/cursor/droid/grok/pi/omp/gemini-cli/dsh/deepchat/cherry/minimax/antigravity-cli` 中的合法值。
+1. 改为 `keyword` 或 `keyword provider:a,b`。
+2. 将 Provider 名称改为 `opencode/zcode/codex/kimi/kimi-code/claudecode/qoder/qoder-cn/cursor/droid/grok/pi/omp/gemini-cli/dsh/deepchat/cherry/minimax/antigravity-cli` 中的合法值。
 
 ### collect 模式参数冲突
 
@@ -492,7 +490,7 @@ AGY_CONVERSATIONS_DIR=~/backup/conversations agent-dump --list --query "provider
 
 只解码用户输入、助手文本、标题更新、工具调用、步骤时间和用量；工具结果不解析，工具状态为 `unknown`，其他步骤跳过。没有原生时间的消息标记为推测时间，collect 排除这类消息。重试中重复的用量只计一次，挂到下一条 assistant 消息；不估算费用。支持 print / JSON / Markdown，不支持 raw。步骤格式错误或表结构不支持时，只有该会话报告读取失败。
 
-### Machine-readable output
+## Machine-readable output
 
 Add `--json` to list, search or statistics mode to write one JSON object to stdout. Diagnostics go to stderr. Existing `--format json` file exports are unchanged.
 
@@ -513,7 +511,7 @@ No matches produce an empty array and exit 0. No available source without an exp
 `agent-dump --providers --json` returns `kind: "providers"` and a `data` array containing each Provider's name, display name, scheme, identifier label, optional ID prefixes, supported `formats`, and `search_roots` with label/path/exists. This inspects capabilities and path existence without reading session contents. An existing root does not guarantee a readable session. Both envelopes use `schema_version: 1`; failures return a nonzero exit code and may leave stdout empty.
 
 
-### Message locations and context
+## Message locations and context
 
 ```bash
 agent-dump --search 'database locked' --locate --json --query 'provider:codex'
@@ -530,7 +528,7 @@ Pass `locations[].locator` from search unchanged to `--message`. Positions are o
 
 Use `--format json,markdown` to export the selected context. Files are named `<id>.messages-<start>-<end>.json` / `.md` under the Provider's output directory, separate from full-session exports. Both formats retain the canonical Session URI, the locator (revision plus target position), the absolute message range, and status. JSON retains normalized message records; Markdown renders their searchable text. Recoverable source diagnostics mark the file `partial` and are reported on stderr. Stale locators are rejected before file creation. Provider format restrictions still apply; raw/print file formats and `--json` with file-export options are rejected. `--output` requires an explicit `--format`; output-directory defaults follow full-session export rules.
 
-### 按需读取
+## 按需读取
 
 只需一个入口即可获得可执行的读取说明，所有已支持 Provider 均可使用：
 
@@ -561,7 +559,7 @@ agent-dump codex://SESSION_ID --read --details --order asc --max-chars 4000 --js
 
 Read pages without `--details` include `messages[].text_spans`: local `date` (null when unknown or inferred) and absolute Unicode `start`/`end` offsets within the message text. Spans are clipped to each returned fragment; subtract the fragment start when slicing its text. Separators between text parts are not dated. Collect handoffs use these spans to split and filter actual activity dates.
 
-### TUI session reader
+## TUI session reader
 
 ```bash
 agent-dump --browse
