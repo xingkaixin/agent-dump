@@ -27,7 +27,7 @@ Inspect the selected sources and any diagnostics before requesting summaries. A 
 
 ## Generate with your configured AI provider
 
-Configure the `[ai]` section using `agent-dump --config`; see the [configuration reference](https://github.com/xingkaixin/agent-dump#collect-configuration-file). Then run:
+Configure the `[ai]` section using `agent-dump --config`; see the [configuration reference](https://github.com/xingkaixin/agent-dump#configuration-file). Then run:
 
 ```sh
 agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:codex,claude path:.' --save ./reports/weekly.md

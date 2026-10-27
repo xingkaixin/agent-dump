@@ -27,7 +27,7 @@ agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:cod
 
 ## 使用配置好的 AI 服务汇总
 
-通过 `agent-dump --config` 配置 `[ai]`，具体字段见[配置参考](https://github.com/xingkaixin/agent-dump#collect-configuration-file)。然后执行：
+通过 `agent-dump --config` 配置 `[ai]`，具体字段见[配置参考](https://github.com/xingkaixin/agent-dump#configuration-file)。然后执行：
 
 ```sh
 agent-dump --collect --since 2026-09-28 --until 2026-10-02 --query 'provider:codex,claude path:.' --save ./reports/weekly.md

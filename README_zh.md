@@ -237,16 +237,13 @@ agent-dump opencode://session-id-abc123
 
 ### 退出码
 
-显式 Provider 范围（`provider:`、旧式 Provider 前缀或查询 URI 的 `providers=`）在发现会话前生效，不扫描未选中的 Provider。范围内无会话时按对应模式的无匹配行为处理，不探测其他来源。
-
 | 退出码 | 含义 |
 |------|------|
 | `0` | 命令做到了被要求的事——包括结果集本就为空（`--days` 窗口内没有会话、关键词或 `--search` 没有命中），以及交互式导出部分成功。 |
 | `1` | 命令做不到被要求的事：本机不存在任何 provider 数据、URI 未能解析到会话、交互式导出全部失败、或参数组合非法。 |
-| `2` | 参数用法错误，由 `argparse` 抛出（未知参数、非法的 `--format` 值）。 |
+| `2` | 参数用法错误，由参数解析器拒绝（未知参数、非法的 `--format` 值）。 |
 
-这样 `agent-dump --list && ...` 才有意义：列出了会话就成功，因为没有任何 provider
-数据而无从列出则失败。
+`agent-dump --list && ...` 在列表为空时仍会继续，只有本机没有任何 provider 数据时才中断。
 
 ## 路径发现
 
@@ -357,9 +354,11 @@ agent-dump --config view
 agent-dump --config edit
 ```
 
-`--query` 与 `--search` 匹配语义相同：按空白拆分的字面 term 必须全部出现在标题或 transcript 中，位置不限。出现结构化字段（`provider`、`role`、`path`、`limit`）时启用结构化解析，带空格的值需要引号。`role` 限定参与匹配的消息，`limit` 限制最终全局结果数。`error:timeout` 仍是普通 term。列表输出全部匹配项，交互模式中的 Provider 计数反映筛选后的结果。
+`--query` 与 `--search` 匹配语义相同：按空白拆分的字面 term 必须全部出现在标题或 transcript 中，位置不限。出现结构化字段（`provider`、`role`、`path`、`limit`）时启用结构化解析，带空格的值需要引号。`role` 限定参与匹配的消息，`limit` 限制最终全局结果数。没有结构化字段时，`error:timeout` 是普通 term；一旦出现结构化字段，其他 `key:value` 写法会被拒绝。列表输出全部匹配项，交互模式中的 Provider 计数反映筛选后的结果。
 
-Collect 的日期优先级为显式 `--since`/`--until`、显式 `--days`，最后是当天。`--save` 接受目录或 `.md` 文件，可用绝对或相对路径。完整输入覆盖、排除规则、进度和不完整报告见 [collect 说明](#collect-配置文件)。
+显式 Provider 范围（`provider:`、旧式 Provider 前缀或查询 URI 的 `providers=`）在发现会话前生效，不扫描未选中的 Provider。范围内无会话时按对应模式的无匹配行为处理，不探测其他来源。
+
+Collect 的日期优先级为显式 `--since`/`--until`、显式 `--days`，最后是当天。`--save` 接受目录或 `.md` 文件，可用绝对或相对路径。完整输入覆盖、排除规则、进度和不完整报告见 [collect 覆盖范围](#collect-覆盖范围)。
 
 ### 交给外部 agent 汇总
 
@@ -431,7 +430,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | `--interactive`, `-i` | 打开会话阅读器选择和导出会话（终端中等同 `--browse`） | - |
 | `--days`, `-d` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `--since/--until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
 | `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 的时间依据：`created` 或 `updated`。 | `updated` |
-| `--query`, `-q` | 查询过滤。关键词与 `--search` 一样按空白拆分、不区分大小写，所有 term 都必须出现在 Session 标题或逻辑 transcript 中。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。未知结构化 key 会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
+| `--query`, `-q` | 查询过滤。关键词与 `--search` 一样按空白拆分、不区分大小写，所有 term 都必须出现在 Session 标题或逻辑 transcript 中。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。出现结构化字段后，其他 `key:value` 写法会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印有界发现阶段已有的元数据，不重新读取完整正文；发现阶段完整扫描时消息数为精确值，否则明确显示“未知”。不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
 | `--collect` | 按日期范围采集会话，可选通过 `--query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |
@@ -460,7 +459,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 
 详见 [CLI 迁移与固定 Python 版本](docs/cli-compatibility.md#源码构建与-python-api-迁移)。
 
-### collect 配置文件
+### collect 覆盖范围
 
 部分会话读取或摘要失败时，collect 继续处理成功会话，并在保存的 Markdown 中固定注明读取失败数、摘要失败数和实际包含的会话数；全部失败时仍整体失败。
 
@@ -469,6 +468,8 @@ Provider 发现失败（含部分文件检查或解析失败）单独计数，�
 Collect 发现候选时不按创建日期截断，只汇总请求日期范围内的 user/assistant 可见文本段。跨日会话在摘要前拆成每日单元；会话计数仍按唯一 URI 统计。没有可靠时间的文本不属于任何日期，直接排除，不作为覆盖缺口报告，包括无时间的 Kimi context 和使用推测时间的 Cursor 消息；不借用会话创建或更新时间。先按查询筛选候选，再按文本日期过滤，最后按 limit 限制唯一会话数。包括超长单条消息在内，事件按最多 3,200 个 Unicode 字符分块（含标签）。分块摘要每组最多八份逐层归并，较大的最终报告按来源分组分次生成。每次模型请求最多 64,000 个输入字符；超大的元数据或派生摘要会明确失败，不静默截断来源正文。最终报告或 `--summary` 的模型回复若停在输出 token 上限，按请求失败处理，不当作完整结果保存。部分成功报告列出遗漏会话 URI。完整输入覆盖不代表摘要逐字保留所有细节。
 
 PM 摘要只合并同一天、工作目录明确且相同的会话；工作目录未知的会话保留独立归属。
+
+### 配置文件
 
 默认配置文件路径：
 
