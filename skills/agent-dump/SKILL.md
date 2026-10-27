@@ -130,7 +130,7 @@ Cherry Studio 使用 2.x 的 `Data/cherrystudio.sqlite`，可通过 `CHERRYSTUDI
 
 MiniMax Code 使用 `minimax://<session_id>`，读取当前 CLI 的 `v2/sqlite/runtime-state.sqlite` 展示消息；路径按 `MINIMAX_DATA_DIR`、`MAVIS_DATA_DIR`、`~/.minimax` 选择。自定义 profile 需显式指定目录。压缩和审查事件带标签进入搜索与 collect；token 用量来自 `local_runtime_token_usage`。支持 print / JSON / Markdown，不支持 raw、旧存储恢复和桌面端；遇到迁移诊断时保留错误，不代替客户端迁移。
 
-Antigravity CLI 使用 `antigravity-cli://<conversation_id>`，读取 `AGY_CONVERSATIONS_DIR`（默认 `~/.gemini/antigravity-cli/conversations`）下的 `*.db`，父目录的 `conversation_summaries.db` 提供标题和工作目录。工具结果不解析，工具状态为 `unknown`；没有原生时间的消息标记为推测时间，不进入 collect 日期。支持 print / JSON / Markdown，不支持 raw，不估算费用。
+Antigravity CLI 使用 `antigravity-cli://<conversation_id>`，读取 `AGY_CONVERSATIONS_DIR`（默认 `~/.gemini/antigravity-cli/conversations`）下的 `*.db`，父目录的 `conversation_summaries.db` 提供标题和工作目录。工具结果不解析，工具状态为 `unknown`；没有原生时间的消息标记为推测时间，collect 排除这类消息。支持 print / JSON / Markdown，不支持 raw，不估算费用。
 
 ### Machine-readable output
 

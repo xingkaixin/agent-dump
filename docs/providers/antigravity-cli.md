@@ -50,6 +50,6 @@
 - 不输出父会话引用：agent-dump 的 Session 没有父会话字段。
 - 不输出“未识别步骤数量”提示：agent-dump 没有对应的会话提示字段。
 - 缓存读写总量只保留在消息 token 中，会话统计没有单独字段。
-- 没有原生时间的消息标记为推测时间，collect 不按该日期归档。CodeSesh 直接使用回退时间。
+- 没有原生时间的消息标记为推测时间，collect 排除这类消息。CodeSesh 直接使用回退时间。
 - 增加 `data/antigravity-cli/conversations` 本地开发回退目录，与其他文件型 Provider 一致。
 - 不支持 raw 导出：来源是 SQLite 数据库，与 DeepChat、Cherry Studio、MiniMax Code 一致。
