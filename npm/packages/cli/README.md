@@ -28,7 +28,8 @@ Supported targets:
 <!-- native-targets:end -->
 
 Linux x64 requires glibc 2.17 or newer; Alpine/musl is not supported by this prebuilt target.
-macOS wheel baselines are 10.12 (x64) and 11.0 (arm64). No Python runtime is needed.
+The macOS binary requires macOS 10.12 or newer on x64 and 11.0 or newer on arm64. No Python
+runtime is needed.
 
 ## Installation
 
@@ -50,7 +51,7 @@ agent-dump --help
 
 ```bash
 agent-dump --interactive
-agent-dump --interactive -days 3
+agent-dump --interactive --days 3
 ```
 
 In a terminal, `--interactive` opens the session reader. Press Space to mark sessions and `e`
@@ -71,8 +72,8 @@ Subcommands are aliases for the existing option forms; both remain supported.
 
 ```bash
 agent-dump --list
-agent-dump --list -days 7
-agent-dump --list -query error
+agent-dump --list --days 7
+agent-dump --list --query error
 ```
 
 ### URI direct dump
@@ -84,7 +85,7 @@ agent-dump codex://<session-id>
 agent-dump codex://threads/<session-id>
 agent-dump kimi://<session-id>
 agent-dump claude://<session-id>
-agent-dump cursor://<request-id>
+agent-dump cursor://<composer-id>
 agent-dump pi://<session-id>
 agent-dump deepchat://<session-id>
 agent-dump cherry://topic-<id>
@@ -97,7 +98,7 @@ agent-dump codex://<session-id> --head
 
 ```bash
 agent-dump --stats
-agent-dump --stats -days 30
+agent-dump --stats --days 30
 ```
 
 ### Provider capabilities
@@ -111,7 +112,7 @@ agent-dump --capabilities
 
 ```bash
 agent-dump --search "auth timeout"
-agent-dump --search "auth" --list -days 30
+agent-dump --search "auth" --list --days 30
 agent-dump --reindex
 ```
 
@@ -119,17 +120,17 @@ agent-dump --reindex
 
 ```bash
 agent-dump --collect
-agent-dump --collect -days 7
-agent-dump --collect -days 7 -query "provider:codex path:. limit:20" --dry-run
-agent-dump --collect -since 2026-04-01 -until 2026-04-15
+agent-dump --collect --days 7
+agent-dump --collect --days 7 --query "provider:codex path:. limit:20" --dry-run
+agent-dump --collect --since 2026-04-01 --until 2026-04-15
 agent-dump --collect --collect-mode insight
 agent-dump --collect --dry-run --save ./reports
 agent-dump --collect --emit-prompt --save ./reports/weekly.md
 agent-dump --collect --save ./reports
 ```
 
-Collect execution, dry-run, and prompt handoff all support `-query` filters. Do not combine
-`-query` with an `agents://...` query URI. Reports and handoff metadata retain discovery and
+Collect execution, dry-run, and prompt handoff all support `--query` filters. Do not combine
+`--query` with an `agents://...` query URI. Reports and handoff metadata retain discovery and
 session read failures so incomplete input remains visible.
 Daily reports split conversation text by its actual activity date, including sessions spanning
 multiple days. Prompt handoffs use the same date boundaries and text spans.
@@ -148,12 +149,21 @@ agent-dump --config edit
 - `codex://<session_id>` - Codex sessions
 - `codex://threads/<session_id>` - Codex sessions
 - `kimi://<session_id>` - Kimi sessions
+- `kimi-code://<session_id>` - Kimi-Code sessions
 - `claude://<session_id>` - Claude Code sessions
-- `cursor://<requestid>` - Cursor sessions
+- `qoder://<session_id>` - Qoder sessions
+- `qoder-cn://<session_id>` - Qoder CN sessions
+- `cursor://<composer_id>` - Cursor sessions (legacy `cursor://<requestid>` URIs still resolve to the same session)
+- `droid://<session_id>` - Droid sessions
+- `grok://<session_id>` - Grok sessions
 - `pi://<session_id>` - Pi sessions
+- `omp://<session_id>` - oh-my-pi sessions
+- `gemini-cli://<session_id>` - Gemini CLI sessions
+- `dsh://<session_id>` - DSH sessions
 - `deepchat://<session_id>` - DeepChat sessions
 - `cherry://topic-<id>` / `cherry://session-<id>` - Cherry Studio chats / agent sessions
 - `minimax://<session_id>` - MiniMax Code CLI sessions
+- `antigravity-cli://<conversation_id>` - Antigravity CLI conversations
 
 DeepChat supports saved sessions in its current unencrypted `app_db/agent.db`, including migrated
 history, ACP sessions, and subagent sessions. Set `DEEPCHAT_USER_DATA_DIR` for a custom user data
@@ -185,20 +195,20 @@ a missing explicit path never falls back. Reads are read-only, and raw export re
 `.raw.json`, not an OpenCode import file.
 
 ```bash
-agent-dump --list -query "provider:opencode"
+agent-dump --list --query "provider:opencode"
 agent-dump 'opencode://<session-id>' --format json,markdown --output ./sessions
-agent-dump --collect --emit-prompt -query "provider:opencode"
+agent-dump --collect --emit-prompt --query "provider:opencode"
 ```
 
 ## Browse sessions and consume query results
 
 ```bash
-agent-dump --browse -query 'provider:codex path:.' -days 30
+agent-dump --browse --query 'provider:codex path:.' --days 30
 agent-dump --list --json
 agent-dump --list --time-field updated --days 7 --json
 agent-dump --providers --json
 agent-dump codex://SESSION_ID --head --json
-agent-dump --search 'database locked' --locate --json -query 'provider:codex'
+agent-dump --search 'database locked' --locate --json --query 'provider:codex'
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3 --json
 agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --format json,markdown --output excerpts
 ```
@@ -250,7 +260,7 @@ it does not create the report. See the full README for schemas, filters, and sou
 
 ## Key features
 
-- **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Codex, Kimi, Cursor, Pi, DeepChat, Cherry Studio, and MiniMax Code
+- **Multi-agent support**: Scan and export sessions from OpenCode, ZCode, Claude Code, Qoder, Qoder CN, Codex, Kimi, Kimi-Code, Cursor, Droid, Grok, Pi, oh-my-pi, Gemini CLI, DSH, DeepChat, Cherry Studio, MiniMax Code, and Antigravity CLI
 - **Interactive selection**: Mark sessions in the reader for batch export, with numbered selection for pipelines
 - **Session reader**: `--browse` for terminal reading, cross-session and in-session search, tool details, and excerpt export
 - **Machine-readable queries**: `--json` for list, search, statistics, message context, bounded reads, metadata, and capabilities
@@ -260,13 +270,13 @@ it does not create the report. See the full README for schemas, filters, and sou
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` reuses bounded discovery metadata without rereading the transcript and marks incomplete message counts as unknown
 - **Statistics**: `--stats` shows session and message counts grouped by agent and time, reporting known subtotals separately from sessions with unknown counts
-- **Provider capabilities**: `--providers` reports URI schemes, export formats, keyword fast paths, and local search-root status without scanning sessions
+- **Provider capabilities**: `--providers` reports URI schemes, export formats, and local search-root status without scanning sessions
 - **AI collect**: `--collect` summarizes sessions over a date range using your configured LLM, with `pm` and `insight` modes
-- **Relative collect windows**: Explicit `-days N` selects today minus N days through today; `-since/-until` takes precedence, while collect without either remains today-only
+- **Relative collect windows**: Explicit `--days N` selects today minus N days through today; `--since/--until` takes precedence, while collect without either remains today-only
 - **Collect dry-run**: `--collect --dry-run` previews provider breakdown, session/chunk counts, concurrency, and save path
 - **External agent handoff**: `--collect --emit-prompt` outputs a self-contained prompt with safe read-only URI commands and candidate manifests for external agents without requiring local LLM configuration
 - **Full-text search**: `--search` requires every distinct whitespace-delimited term, allows terms to match across corpus fields, keeps CJK matches contiguous, and gives FTS5 and in-process fallbacks the same literal semantics
-- **Structured queries**: `-query` and `agents://` `q` values require every whitespace-separated literal term, like `--search`, and support `provider:`, `role:`, `path:`, and `limit:` filters (`role:` snippets come only from allowed messages)
+- **Structured queries**: `--query` and `agents://` `q` values require every whitespace-separated literal term, like `--search`, and support `provider:`, `role:`, `path:`, and `limit:` filters (`role:` snippets come only from allowed messages)
 - **Scoped queries**: `agents://<path>?q=keyword&providers=codex,claude` for repo-scoped searches
 - **Multi-format export**: `--format json,markdown,raw,print` with `md` alias for markdown
 - **Localized CLI**: `--lang en|zh` for user-facing messages and diagnostics
