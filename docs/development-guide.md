@@ -39,7 +39,7 @@ just isok
 
 `pytest` 运行全部 CLI 契约，不依赖历史 Python 对照；CI 和 `just isok` 不安装参考环境。v0.15.9 不是行为基准，缺陷修复用默认契约测试或 Rust 单元测试断言新行为。
 
-Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 hash 来自 `tests/reference/requirements.txt`。安装器核对包内全部 Python 文件的源码 hash，与 P6 冻结参考一致。对照只用于配对性能测量，不进入主开发环境、Cargo 构建、wheel 或 npm。不要随依赖升级改变此历史参考。
+Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 hash 来自 `tests/reference/requirements.txt`。安装器核对包内全部 Python 文件的源码 hash，须与 `scripts/python_reference.py` 中固定的 `SOURCE_SHA256` 一致。对照只用于配对性能测量，不进入主开发环境、Cargo 构建、wheel 或 npm。不要随依赖升级改变此历史参考。
 
 `uv sync --locked --dev` 安装 pytest、Ruff、ty 等辅助工具；`pyproject.toml` 同时保留 pip/Maturin 所需元数据。pytest 配置只位于该文件，禁止额外配置覆盖。Python 应用的旧单元测试和覆盖率门禁已随源码退场，历史结果保留在 Git 历史中。
 
