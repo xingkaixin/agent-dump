@@ -1,14 +1,10 @@
 ---
-import "@fontsource-variable/montserrat";
-import "@fontsource/ibm-plex-mono/300.css";
-import "@fontsource/ibm-plex-mono/400.css";
-import "@fontsource/ibm-plex-mono/500.css";
-import "@fontsource/ibm-plex-mono/600.css";
-import sansLatin from "@fontsource-variable/montserrat/files/montserrat-latin-wght-normal.woff2?url";
-import mono300 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-300-normal.woff2?url";
-import mono400 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2?url";
-import mono500 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2?url";
-import mono600 from "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2?url";
+import "../fonts/fonts.css";
+import sansCore from "../fonts/sans-core.woff2?url";
+import mono300 from "../fonts/mono-300-core.woff2?url";
+import mono400 from "../fonts/mono-400-core.woff2?url";
+import mono500 from "../fonts/mono-500-core.woff2?url";
+import mono600 from "../fonts/mono-600-core.woff2?url";
 import "../styles/global.css";
 import { site, ui, LOCALES, type Locale } from "../lib/i18n";
 import { version } from "../lib/version";
@@ -163,7 +159,7 @@ const jsonLd = {
         } catch (e) {}
       </script>
     )}
-    {[sansLatin, mono300, mono400, mono500, mono600].map((href) => (
+    {[sansCore, mono300, mono400, mono500, mono600].map((href) => (
       <link
         rel="preload"
         href={href}
