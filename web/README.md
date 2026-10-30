@@ -4,7 +4,15 @@
 
 OG 图使用落地页字体、Logo 和配色。在安装 web 依赖及 Playwright Chromium 后，运行 `node web/scripts/generate-og.mjs`，生成网站的 `web/public/assets/og-image.png`（1200×631）和 GitHub 的 `assets/github-og.png`（1280×640）。GitHub 图片需在仓库 Settings → Social preview 中上传。
 
-- `Base.astro` 预加载首屏实际使用的两个 Latin 字体文件，URL 由构建生成，并使用 `crossorigin="anonymous"` 与字体请求保持一致。
+网页字体由 `scripts/subset-fonts.py` 从固定提交的 google/fonts TTF 子集化，输出提交在 `src/fonts/`，构建不处理字体。每个字体文件拆成两份：core 包含 ASCII、常用标点和页面用到的符号；ext 包含 Latin-1、Latin Extended-A 和页面用到的其余字符，通过 `unicode-range` 按需下载。IBM Plex 的保留字体名 “Plex” 在子集内部改为 “Agent Dump Mono”，CSS 字体名不变。页面、组件或样式引入新字符或 OpenType 特性，或修改脚本中的 `FACES`、源文件时，在 `web/` 下重新生成并提交输出：
+
+```bash
+pnpm build
+uv run scripts/subset-fonts.py
+pnpm build
+```
+
+- `Base.astro` 预加载每个字体的 core 文件，URL 由构建生成，并使用 `crossorigin="anonymous"` 与字体请求保持一致。
 - `astro.config.mjs` 从生成的 HTML 提取样式表和字体预加载，写入 `dist/_headers` 的逐页面 `Link` 头。不要手写带 hash 的资源路径，也不要预加载首屏以下的图片或 React 组件。
 - 部署后检查 `/`、`/zh/`、`/ja/` 的 `Link` 头与资源 URL；`103` 是否发出受缓存和浏览器支持影响，不能只靠一次请求判断。
 - 保留 `public/_headers` 中 `/_astro/*` 的一年期 immutable 缓存。HTML 使用 Workers Static Assets 默认缓存策略，避免叠加 Cache Everything 后出现旧版本。
