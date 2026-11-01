@@ -8,9 +8,11 @@ on:
     branches:
       - main
 
+# PR 只保留最新一次推送。main 的 group 带 SHA：同一 group 只留一个等待中的运行，
+# 否则连续合并时中间的提交会被顶掉，没有完整跑过
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # uv sync 默认会在同步前重新锁定，uv run 也一样。验证过程绝不能修改 uv.lock：
 # 临时 checkout 里的静默重锁不会出现在 PR diff 中，评审看到的解析结果与实际
@@ -21,34 +23,59 @@ env:
   QUALITY_PYTHON_VERSION: "3.12"
 
 jobs:
-  installer:
-    name: Test shell installer on macOS
-    runs-on: macos-latest
-    timeout-minutes: 10
+  # PR 按改动范围跳过 job；main 不过滤，保证每个提交都完整跑过。
+  # 过滤放在 job 级而不是 on.paths：工作流级跳过不产生任何 check，必需检查会一直挂起
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.areas.outputs.code }}
+      web: ${{ steps.areas.outputs.web }}
+      matrix: ${{ steps.targets.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-      - run: node --test npm/tests/shell-install.test.mjs npm/tests/distribution.test.mjs
+
+      # 改名要带上 previous_filename，否则把代码移进 docs/ 会被当成纯文档改动
+      - id: areas
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+              --jq '.[] | .filename, .previous_filename // empty' \
+              | bash .github/scripts/changed-areas.sh >> "${GITHUB_OUTPUT}"
+          else
+            echo "code=true" >> "${GITHUB_OUTPUT}"
+            echo "web=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      # Intel macOS runner 排队和构建都最慢，是 PR CI 的瓶颈；
+      # darwin-x64 只在 main 和 release 上验证
+      - id: targets
+        run: |
+          matrix=$(node npm/scripts/native-targets.mjs)
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            matrix=$(jq -c '.include |= map(select(.target != "darwin-x64"))' <<< "${matrix}")
+          fi
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
 
   artifacts:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/build-artifacts.yml
-
-  uv-windows:
-    name: Verify pinned uv installer on Windows
-    runs-on: windows-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Install uv
-        uses: ./.github/actions/setup-uv
+    with:
+      matrix: ${{ needs.changes.outputs.matrix }}
 
   quality:
     name: Lint and type-check
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -74,11 +101,15 @@ jobs:
       - name: Check
         run: just check-tools
 
+  # release 二进制只在 artifacts 里构建一次，CLI 契约和工具验证也在那里跑
   rust:
-    name: Rust CLI contracts (${{ matrix.os }})
+    name: Rust checks (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     env:
-      PYTHONUTF8: "1"
+      # CI 不调试：不生成调试信息，链接更快，缓存也更小
+      CARGO_PROFILE_DEV_DEBUG: "0"
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -88,68 +119,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # 默认 TEMP 和 CARGO_HOME 在远程托管的 C: 盘，测试大量读写临时目录和 SQLite，
-      # 缓存恢复也要解压整个 registry；runner 的 D: 盘是本地临时盘，IOPS 更高
-      - name: Keep temporary files and Cargo home on the Windows work disk
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $temp = Join-Path $env:RUNNER_TEMP "tmp"
-          $cargo = Join-Path $env:RUNNER_TEMP "cargo"
-          New-Item -ItemType Directory -Force -Path $temp, $cargo | Out-Null
-          "TEMP=$temp" >> $env:GITHUB_ENV
-          "TMP=$temp" >> $env:GITHUB_ENV
-          "CARGO_HOME=$cargo" >> $env:GITHUB_ENV
-
-      - name: Install uv
-        uses: ./.github/actions/setup-uv
-
-      - name: Set up Python
-        run: uv python install ${{ env.QUALITY_PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: uv sync --locked --dev --python ${{ env.QUALITY_PYTHON_VERSION }}
+      - uses: ./.github/actions/use-windows-work-disk
 
       - name: Install pinned Rust toolchain
-        run: rustup show active-toolchain
+        run: rustup install
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          # 依赖的编译指纹包含 CARGO_HOME 下的源码路径；Windows 的 CARGO_HOME 换了位置，
-          # 旧缓存不可复用，key 需要区分
-          shared-key: parity-${{ runner.os }}-${{ runner.arch }}${{ runner.os == 'Windows' && '-cargo-d' || '' }}
+          shared-key: checks-${{ runner.os }}-${{ runner.arch }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Check Rust formatting
+        if: runner.os == 'Linux'
         run: cargo fmt --all --check
 
-      - name: Check Rust types
+      # Windows 有大量 cfg(windows) 代码，需要单独 lint。macOS 独有的只有 private_files.rs
+      # 的一行 fsync，它由下面的 cargo test 编译，不值得再占一遍 macOS runner
+      - name: Check Rust lints
+        if: runner.os != 'macOS'
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Test Rust
         run: cargo test --locked --workspace
 
-      - name: Build Rust
-        run: cargo build --locked --release
-
-      - name: Verify build and evaluation tooling
-        run: uv run pytest -q tests/tooling
-
-      - name: Test Rust CLI contracts
-        run: uv run pytest -q -n auto tests/cli --durations=30 --junitxml=dist/ci/contracts.xml
-
-      - name: Upload CLI test timings
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: contracts-${{ matrix.os }}
-          path: dist/ci/contracts.xml
-          retention-days: 14
-          if-no-files-found: ignore
-
   web:
     name: Check landing page
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -188,7 +185,7 @@ jobs:
         run: |
           for attempt in 1 2 3; do
             echo "Installing Chromium (attempt ${attempt}/3)"
-            if timeout --kill-after=10s 3m pnpm --dir web exec playwright install --with-deps chromium; then
+            if timeout --kill-after=10s 3m pnpm --dir web exec playwright install --only-shell chromium; then
               exit 0
             fi
           done
@@ -199,6 +196,8 @@ jobs:
 
   npm-wrapper:
     name: Test npm wrapper on Node ${{ matrix.node-version }}
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -218,3 +217,19 @@ jobs:
 
       - name: Test npm wrapper
         run: npm --prefix npm test
+
+  # 分支保护只需要要求这一个 check：被跳过的 job 算通过，失败或取消的 job 会让它失败
+  ci-ok:
+    name: CI OK
+    needs: [changes, artifacts, quality, rust, web, npm-wrapper]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "${RESULTS}"
+          case " ${RESULTS} " in
+            *" failure "* | *" cancelled "*) exit 1 ;;
+          esac

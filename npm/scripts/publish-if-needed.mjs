@@ -86,51 +86,60 @@ function emitOutput(result) {
 }
 
 /**
- * @param {{ name: string, version: string, integrity: string }} local
+ * @param {{ name: string, version: string, integrity: string }[]} packages
  * @param {{ run?: typeof runNpm, log?: typeof console.log, wait?: typeof setTimeout }} options
  * @returns {Promise<void>}
  */
-async function waitForPublishedPackage(local, options) {
+async function waitForPublishedPackages(packages, options) {
   const run = options.run ?? runNpm;
   const log = options.log ?? console.log;
   const wait = options.wait ?? setTimeout;
-  const packageSpec = `${local.name}@${local.version}`;
   const attempts = 40;
+  let pending = packages;
 
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    log(`Checking download availability for ${packageSpec} (${attempt}/${attempts}).`);
-    const result = run([
-      "pack", packageSpec, "--json", "--dry-run", "--ignore-scripts", "--prefer-online",
-      "--fetch-retries=0", "--fetch-timeout=15000"
-    ]);
-    if (result.status === 0) {
-      const records = requireSuccessJson(result, `Could not download ${packageSpec}`);
-      const remote = Array.isArray(records) && records.length === 1 ? records[0] : undefined;
-      if (remote?.name !== local.name || remote?.version !== local.version || remote?.integrity !== local.integrity) {
-        throw new Error(`Downloaded package does not match the release tarball for ${packageSpec}`);
+  for (let attempt = 1; pending.length > 0; attempt += 1) {
+    const unavailable = [];
+    for (const local of pending) {
+      const packageSpec = `${local.name}@${local.version}`;
+      log(`Checking download availability for ${packageSpec} (${attempt}/${attempts}).`);
+      const result = run([
+        "pack", packageSpec, "--json", "--dry-run", "--ignore-scripts", "--prefer-online",
+        "--fetch-retries=0", "--fetch-timeout=15000"
+      ]);
+      if (result.status === 0) {
+        const records = requireSuccessJson(result, `Could not download ${packageSpec}`);
+        const remote = Array.isArray(records) && records.length === 1 ? records[0] : undefined;
+        if (remote?.name !== local.name || remote?.version !== local.version || remote?.integrity !== local.integrity) {
+          throw new Error(`Downloaded package does not match the release tarball for ${packageSpec}`);
+        }
+        log(`Verified ${packageSpec}: the published tarball is downloadable and identical.`);
+        continue;
       }
-      log(`Verified ${packageSpec}: the published tarball is downloadable and identical.`);
-      return;
-    }
 
-    let errorCode;
-    try {
-      errorCode = JSON.parse(result.stdout)?.error?.code;
-    } catch {
-      throw commandError(`Could not check download availability for ${packageSpec}`, result);
+      let errorCode;
+      try {
+        errorCode = JSON.parse(result.stdout)?.error?.code;
+      } catch {
+        throw commandError(`Could not check download availability for ${packageSpec}`, result);
+      }
+      if (result.error || !["E404", "ETARGET"].includes(errorCode)) {
+        throw commandError(`Could not check download availability for ${packageSpec}`, result);
+      }
+      if (attempt === attempts) {
+        throw commandError(`${packageSpec} is still unavailable after ${attempts} checks`, result);
+      }
+      log(`${packageSpec} is not available yet (${errorCode}).`);
+      unavailable.push(local);
     }
-    if (result.error || !["E404", "ETARGET"].includes(errorCode)) {
-      throw commandError(`Could not check download availability for ${packageSpec}`, result);
+    pending = unavailable;
+    if (pending.length > 0) {
+      log("Retrying in 15 seconds.");
+      await wait(15_000);
     }
-    if (attempt === attempts) {
-      throw commandError(`${packageSpec} is still unavailable after ${attempts} checks`, result);
-    }
-    log(`${packageSpec} is not available yet (${errorCode}); retrying in 15 seconds.`);
-    await wait(15_000);
   }
 }
 
-export async function publishPackageIfNeeded(packageDir, options = {}) {
+function publishPackage(packageDir, options) {
   const run = options.run ?? runNpm;
   const log = options.log ?? console.log;
   const local = readLocalMetadata(packageDir, run);
@@ -139,8 +148,7 @@ export async function publishPackageIfNeeded(packageDir, options = {}) {
 
   if (remoteIntegrity === local.integrity) {
     log(`Skipping ${packageSpec}: the registry already has the identical tarball.`);
-    await waitForPublishedPackage(local, options);
-    return PublishOutcome.SKIPPED;
+    return { local, outcome: PublishOutcome.SKIPPED };
   }
   if (remoteIntegrity !== null) {
     throw new Error(`${packageSpec} already exists with different contents`);
@@ -149,8 +157,7 @@ export async function publishPackageIfNeeded(packageDir, options = {}) {
   const published = run(["publish", packageDir, "--provenance", "--access", "public"]);
   if (published.status === 0) {
     emitOutput(published);
-    await waitForPublishedPackage(local, options);
-    return PublishOutcome.PUBLISHED;
+    return { local, outcome: PublishOutcome.PUBLISHED };
   }
   if (published.error) {
     throw commandError(`Could not publish ${packageSpec}`, published);
@@ -159,10 +166,15 @@ export async function publishPackageIfNeeded(packageDir, options = {}) {
   const racedIntegrity = readRemoteIntegrity(local.name, local.version, run);
   if (racedIntegrity === local.integrity) {
     log(`Recovered ${packageSpec}: an identical concurrent publish completed first.`);
-    await waitForPublishedPackage(local, options);
-    return PublishOutcome.RECOVERED;
+    return { local, outcome: PublishOutcome.RECOVERED };
   }
   throw commandError(`Could not publish ${packageSpec}`, published);
+}
+
+export async function publishPackageIfNeeded(packageDir, options = {}) {
+  const { local, outcome } = publishPackage(packageDir, options);
+  await waitForPublishedPackages([local], options);
+  return outcome;
 }
 
 export function releaseTarballPaths(releaseDir) {
@@ -191,9 +203,11 @@ export async function main(args = process.argv.slice(2), options = {}) {
   if (packageDirs.length === 0) {
     throw new Error("Usage: publish-if-needed.mjs <package-path> [<package-path> ...]");
   }
-  for (const packageDir of packageDirs) {
-    await publishPackageIfNeeded(packageDir, options);
-  }
+  // registry 处理每个包要 1.5 到 5 分钟，逐个等会把一次发布拖到 13 分钟以上，所以原生包
+  // 一起等。wrapper 依赖它们，必须等全部可下载后才发布，否则 npx 用户会装到缺失的版本。
+  const nativePackages = packageDirs.slice(0, -1).map((packageDir) => publishPackage(packageDir, options));
+  await waitForPublishedPackages(nativePackages.map(({ local }) => local), options);
+  await publishPackageIfNeeded(packageDirs.at(-1), options);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -2,6 +2,11 @@ name: Build Rust artifacts
 
 on:
   workflow_call:
+    inputs:
+      matrix:
+        description: Native target matrix from npm/scripts/native-targets.mjs
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -11,58 +16,30 @@ env:
   PYTHONUTF8: "1"
 
 jobs:
-  targets:
-    name: Resolve release targets
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      matrix: ${{ steps.targets.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-      # Intel macOS runner 排队和构建都最慢，是 PR CI 的瓶颈；
-      # darwin-x64 只在 main 和 release 上验证
-      - id: targets
-        run: |
-          matrix=$(node npm/scripts/native-targets.mjs)
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-            matrix=$(jq -c '.include |= map(select(.target != "darwin-x64"))' <<< "${matrix}")
-          fi
-          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
-
   build:
     name: Install artifacts (${{ matrix.target }})
-    needs: targets
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+      matrix: ${{ fromJSON(inputs.matrix) }}
+    env:
+      # 契约直接验证待发布的二进制，不再为测试单独构建一份 release
+      AGENT_DUMP_TEST_BINARY: dist/native/${{ matrix.target }}/${{ matrix.binary_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # 安装验证会反复创建 venv 和临时目录；默认 TEMP 在远程托管的 C: 盘，
-      # 曾让 uv venv 超时，改用 runner 本地的 D: 盘
-      - name: Keep temporary files on the Windows work disk
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $temp = Join-Path $env:RUNNER_TEMP "tmp"
-          New-Item -ItemType Directory -Force -Path $temp | Out-Null
-          "TEMP=$temp" >> $env:GITHUB_ENV
-          "TMP=$temp" >> $env:GITHUB_ENV
+      - uses: ./.github/actions/use-windows-work-disk
       - uses: ./.github/actions/setup-uv
       - name: Install Python
         run: uv python install 3.10 3.12 3.14
       - name: Install build tools
         run: uv sync --locked --dev --group packaging --python 3.12
       - name: Install pinned Rust toolchain
-        run: rustup show active-toolchain
+        run: rustup install
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          shared-key: packaging-v2-${{ matrix.target }}
+          shared-key: packaging-v3-${{ matrix.target }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -70,6 +47,24 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - name: Build wheel from sdist and stage identical npm binary
         run: uv run --group packaging python packaging/build_release.py
+      # Intel macOS 与 darwin-arm64 是同一份测试，不值得再占一台最慢的 runner
+      - name: Verify build and evaluation tooling
+        if: matrix.target != 'darwin-x64'
+        run: uv run pytest -q tests/tooling
+      - name: Test Rust CLI contracts
+        if: matrix.target != 'darwin-x64'
+        run: uv run pytest -q -n auto tests/cli --durations=30 --junitxml=dist/ci/contracts.xml
+      - name: Upload CLI test timings
+        if: ${{ !cancelled() && matrix.target != 'darwin-x64' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: contracts-${{ matrix.target }}
+          path: dist/ci/contracts.xml
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Test shell installer on macOS
+        if: matrix.target == 'darwin-arm64'
+        run: node --test npm/tests/shell-install.test.mjs npm/tests/distribution.test.mjs
       - name: Verify pip, uv tool and uvx on Python 3.10
         run: uv run python packaging/verify_wheel.py --python 3.10
       - name: Verify pip, uv tool and uvx on Python 3.14
@@ -87,23 +82,27 @@ jobs:
           quay.io/pypa/manylinux2014_x86_64@sha256:2fa5f99f660f115f547d96b4edcadfc19f77a6de8807734bf0fc4924f81be01a
           /opt/python/cp310-cp310/bin/python /work/packaging/verify_native.py
           --binary /work/dist/native/${{ matrix.target }}/${{ matrix.binary_name }}
+      # 只有 release 的 publish job 下载这些制品，PR 和 main 上传了也没人用
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.ref_type == 'tag'
         with:
           name: native-${{ matrix.target }}
           path: dist/native/${{ matrix.target }}/${{ matrix.binary_name }}
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.ref_type == 'tag'
         with:
           name: wheel-${{ matrix.target }}
           path: dist/*.whl
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.ref_type == 'tag'
         with:
           name: artifact-report-${{ matrix.target }}
           path: dist/artifact-report.json
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && github.ref_type == 'tag'
         with:
           name: sdist
           path: dist/*.tar.gz

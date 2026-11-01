@@ -1,0 +1,19 @@
+name: Use the Windows work disk
+description: Keep temporary files and tool homes on the runner's fast D drive
+
+# 默认位置都在远程托管的 C: 盘：SQLite 测试和 uv venv 曾因此超时，uv python install
+# 要 21 秒（D: 盘 3 秒）。Linux 和 macOS 上这个 action 什么也不做。
+runs:
+  using: composite
+  steps:
+    - if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $temp = Join-Path $env:RUNNER_TEMP "tmp"
+        New-Item -ItemType Directory -Force -Path $temp | Out-Null
+        "TEMP=$temp" >> $env:GITHUB_ENV
+        "TMP=$temp" >> $env:GITHUB_ENV
+        "CARGO_HOME=$(Join-Path $env:RUNNER_TEMP 'cargo')" >> $env:GITHUB_ENV
+        "RUSTUP_HOME=$(Join-Path $env:RUNNER_TEMP 'rustup')" >> $env:GITHUB_ENV
+        "UV_CACHE_DIR=$(Join-Path $env:RUNNER_TEMP 'uv-cache')" >> $env:GITHUB_ENV
+        "UV_PYTHON_INSTALL_DIR=$(Join-Path $env:RUNNER_TEMP 'uv-python')" >> $env:GITHUB_ENV

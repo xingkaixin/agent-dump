@@ -32,7 +32,8 @@ def server(responder):
             pass
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    # shutdown() 要等一个轮询周期，默认 0.5 秒会加到每个测试上
+    thread = threading.Thread(target=httpd.serve_forever, args=(0.01,), daemon=True)
     thread.start()
     try:
         yield f"http://127.0.0.1:{httpd.server_port}/v1", requests
