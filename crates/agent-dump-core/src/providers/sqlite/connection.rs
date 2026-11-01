@@ -117,11 +117,7 @@ pub fn each_row(
     mut visit: impl FnMut(Value) -> crate::Result<()>,
 ) -> crate::Result<()> {
     let mut statement = connection.prepare(sql)?;
-    let names: Vec<String> = statement
-        .column_names()
-        .iter()
-        .map(|name| (*name).into())
-        .collect();
+    let names: Vec<String> = statement.column_names().map(Into::into).collect();
     let mut rows = statement.query(parameters)?;
     while let Some(row) = rows.next()? {
         let mut record = Map::new();
