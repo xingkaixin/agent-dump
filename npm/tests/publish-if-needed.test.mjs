@@ -118,6 +118,34 @@ test("waits for a processed native package before publishing the wrapper", async
   assert.ok(logs.some((message) => message.includes("E404")));
 });
 
+test("publishes every native package before polling them together", async () => {
+  const calls = [];
+  const waits = [];
+  const otherMetadata = localMetadata.replace("cli-test", "cli-other");
+  const wrapperMetadata = localMetadata.replace("cli-test", "cli");
+  const run = queuedRunner([
+    command(0, localMetadata), command(1, missing), command(0),
+    command(0, otherMetadata), command(1, missing), command(0),
+    command(1, missing), command(0, otherMetadata),
+    command(0, localMetadata),
+    command(0, wrapperMetadata), command(1, missing), command(0), command(0, wrapperMetadata)
+  ], calls);
+
+  await main(["./native", "./other", "./wrapper"], {
+    run,
+    log() {},
+    wait: async (delay) => { waits.push(delay); }
+  });
+
+  assert.deepEqual(waits, [15_000]);
+  assert.deepEqual(calls.slice(6, 9).map(([verb, spec]) => [verb, spec]), [
+    ["pack", "@agent-dump/cli-test@1.2.3"],
+    ["pack", "@agent-dump/cli-other@1.2.3"],
+    ["pack", "@agent-dump/cli-test@1.2.3"]
+  ]);
+  assert.equal(calls[9][1], "./wrapper");
+});
+
 test("stops the release if a published package never becomes downloadable", async () => {
   const calls = [];
   const waits = [];

@@ -43,13 +43,15 @@ Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 h
 
 `uv sync --locked --dev` 安装 pytest、Ruff、ty 等辅助工具；`pyproject.toml` 同时保留 pip/Maturin 所需元数据。pytest 配置只位于该文件，禁止额外配置覆盖。Python 应用的旧单元测试和覆盖率门禁已随源码退场，历史结果保留在 Git 历史中。
 
-`just fmt` 格式化整个 Rust workspace 和 Python 验证工具，`just fmt-check` 只检查格式；`just lint-format` 保留为 `fmt` 的别名。`just lint` 执行 Rustfmt、Clippy 和 Ruff；`just check` 执行 Cargo check 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 各执行一组 Rust 单元测试、CLI 契约和工具验证。四目标安装 CI 另行检查 pip/uv tool/uvx 与 npm/npx/bunx。
+`just fmt` 格式化整个 Rust workspace 和 Python 验证工具，`just fmt-check` 只检查格式；`just lint-format` 保留为 `fmt` 的别名。`just lint` 执行 Rustfmt、Clippy 和 Ruff；`just check` 执行 Cargo check 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 各执行一组 Rust 单元测试；四目标制品 job 构建 release 二进制，检查 pip/uv tool/uvx 与 npm/npx/bunx，并在 Linux、macOS arm64、Windows 上对这份二进制运行 CLI 契约和工具验证。
 
 ### CI 构建缓存与耗时报告
 
-Rust 依赖缓存按 OS、架构和构建用途隔离。CLI 验证沿用 parity 缓存键以复用现有缓存，由 main 写入；四目标打包使用独立 packaging 缓存，由 main 写入。PR 只恢复已有缓存，首次运行或工具链/依赖变化时仍可能冷编译。
+Rust 依赖缓存按 OS、架构和构建用途隔离。`rust` job 使用 checks 缓存，release 的 validate 只读复用；四目标打包使用独立 packaging 缓存。两者都由 main 写入，PR 只恢复已有缓存，首次运行或工具链/依赖变化时仍可能冷编译。
 
-CLI 验证输出最慢 30 项测试及 `dist/ci/contracts.xml`，CI 将报告上传为 `contracts-<os>` artifact，保留 14 天。JUnit 时间包含 setup、call 和 teardown。移除常规差分验证后不再分片，也不再维护历史分片耗时基线。
+PR 由 `.github/scripts/changed-areas.sh` 按改动范围跳过 job：纯文档不跑任何 job，纯网站只跑 `web`；未识别的路径一律全跑。README 和网站指南有 `tests/tooling/test_docs_sync.py` 守卫，只改 README 的 PR 不在合并前校验，由合并后 main 的全量运行兜底。main 不过滤，每个提交独占一个 concurrency group，不会被后续提交取消。分支保护只要求 `CI OK` 一个 check，被跳过的 job 不会让它挂起。
+
+CLI 验证输出最慢 30 项测试及 `dist/ci/contracts.xml`，CI 将报告上传为 `contracts-<target>` artifact，保留 14 天。JUnit 时间包含 setup、call 和 teardown。移除常规差分验证后不再分片，也不再维护历史分片耗时基线。
 
 ### Rust 格式与 lint
 
