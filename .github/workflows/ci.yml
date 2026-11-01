@@ -185,7 +185,7 @@ jobs:
         run: |
           for attempt in 1 2 3; do
             echo "Installing Chromium (attempt ${attempt}/3)"
-            if timeout --kill-after=10s 3m pnpm --dir web exec playwright install --with-deps chromium; then
+            if timeout --kill-after=10s 3m pnpm --dir web exec playwright install --only-shell chromium; then
               exit 0
             fi
           done
