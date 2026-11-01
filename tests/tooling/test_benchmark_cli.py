@@ -8,6 +8,7 @@ import shlex
 import subprocess
 import sys
 
+from cli_fixture import RUST
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -43,6 +44,8 @@ def test_rust_cli_passes_every_smoke_workload_and_comparison_rejects_invalid_res
         [
             sys.executable,
             str(SCRIPT),
+            "--command",
+            shlex.quote(str(RUST)),
             "--profile",
             "smoke",
             "--repeats",
