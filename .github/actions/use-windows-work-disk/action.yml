@@ -1,8 +1,8 @@
 name: Use the Windows work disk
 description: Keep temporary files and tool homes on the runner's fast D drive
 
-# 默认位置都在远程托管的 C: 盘：SQLite 测试和 uv venv 曾因此超时，sdist 解压到 uv 缓存后
-# 同样的 release 编译要慢 20 秒。Linux 和 macOS 上这个 action 什么也不做。
+# 默认位置都在远程托管的 C: 盘：SQLite 测试和 uv venv 曾因此超时，uv python install
+# 要 21 秒（D: 盘 3 秒）。Linux 和 macOS 上这个 action 什么也不做。
 runs:
   using: composite
   steps:

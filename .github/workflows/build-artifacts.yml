@@ -82,23 +82,27 @@ jobs:
           quay.io/pypa/manylinux2014_x86_64@sha256:2fa5f99f660f115f547d96b4edcadfc19f77a6de8807734bf0fc4924f81be01a
           /opt/python/cp310-cp310/bin/python /work/packaging/verify_native.py
           --binary /work/dist/native/${{ matrix.target }}/${{ matrix.binary_name }}
+      # 只有 release 的 publish job 下载这些制品，PR 和 main 上传了也没人用
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.ref_type == 'tag'
         with:
           name: native-${{ matrix.target }}
           path: dist/native/${{ matrix.target }}/${{ matrix.binary_name }}
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.ref_type == 'tag'
         with:
           name: wheel-${{ matrix.target }}
           path: dist/*.whl
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.ref_type == 'tag'
         with:
           name: artifact-report-${{ matrix.target }}
           path: dist/artifact-report.json
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && github.ref_type == 'tag'
         with:
           name: sdist
           path: dist/*.tar.gz

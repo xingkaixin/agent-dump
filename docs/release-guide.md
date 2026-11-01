@@ -142,7 +142,7 @@ v1.0.0 是首个 Rust 发布目标。Cargo 与 npm 产品版本同步为 1.0.0�
 - Linux 使用 `pyproject.toml` packaging 组固定的 Zig 链接，Maturin 检查 `manylinux_2_17`；另在固定镜像 digest 的 manylinux2014 容器运行隔离会话验证。最低 glibc 为 2.17；不发布 musllinux/Alpine wheel。
 - macOS x64 最低 10.12，arm64 最低 11.0；Windows x64 使用 MSVC。macOS/Windows 验证在当前 GitHub runner，wheel 标签不代表对每个历史 OS 版本做过实机测试。
 - 四目标分别验证 Python 3.10 与 3.14 的 pip、uv tool install、uvx，以及 npm、npx、bunx。测试生成合成来源，验证版本、帮助、print、JSON 导出和源未改写，所有临时安装自动清理。
-- 每个目标输出 `artifact-report.json`，记录 wheel、sdist、native 的大小与 SHA-256。发布 job 下载已验证的四个 wheel 和 Linux 生成的 sdist，不重新构建。
+- 每个目标输出 `artifact-report.json`，记录 wheel、sdist、native 的大小与 SHA-256。制品只在 tag 上传；发布 job 下载已验证的四个 wheel 和 Linux 生成的 sdist，不重新构建。
 
 本地：`just build`、`just verify-wheel`；使用 `node npm/scripts/stage-binaries.mjs <manifest target> dist/native/<target>/<executable>` 暂存后运行 `just test-npm-smoke`。发布前仍需 `just isok`、PR 全部 CI 通过及无冲突。用户控制 merge 和 tag；构建制品不等于授权发布。
 
