@@ -18,11 +18,24 @@ env:
   UV_LOCKED: "1"
 
 jobs:
+  targets:
+    name: Resolve release targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: targets
+        run: echo "matrix=$(node npm/scripts/native-targets.mjs)" >> "${GITHUB_OUTPUT}"
+
+  # CLI 契约和工具验证在 build-native 里针对待发布的二进制运行，这里只做与制品无关的检查
   validate:
     name: Validate Release
     runs-on: ubuntu-latest
-    outputs:
-      native-matrix: ${{ steps.native-targets.outputs.matrix }}
+    env:
+      # 与 ci.yml 的 rust job 一致，否则 rust-cache 的 key 对不上
+      CARGO_PROFILE_DEV_DEBUG: "0"
 
     steps:
       - name: Checkout code
@@ -45,10 +58,14 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Resolve native target matrix
-        id: native-targets
-        shell: bash
-        run: echo "matrix=$(node npm/scripts/native-targets.mjs)" >> "${GITHUB_OUTPUT}"
+      - name: Install pinned Rust toolchain
+        run: rustup install
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: checks-${{ runner.os }}-${{ runner.arch }}
+          save-if: false
 
       - name: Validate tag version
         shell: bash
@@ -83,19 +100,21 @@ jobs:
       - name: Check
         run: just check
 
-      - name: Test
-        run: just test
+      - name: Test Rust
+        run: cargo test --locked --workspace
 
       - name: Test npm wrapper
         run: npm --prefix npm test
 
   build-native:
-    needs: validate
+    needs: targets
     uses: ./.github/workflows/build-artifacts.yml
+    with:
+      matrix: ${{ needs.targets.outputs.matrix }}
 
   publish:
     name: Publish Release
-    needs: build-native
+    needs: [validate, build-native]
     runs-on: ubuntu-latest
     environment: release
 
@@ -202,11 +221,11 @@ jobs:
 
   smoke-npm:
     name: Smoke npx ${{ matrix.target }}
-    needs: [validate, publish]
+    needs: [targets, publish]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.validate.outputs.native-matrix) }}
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
 
     steps:
       - name: Set up Node 24

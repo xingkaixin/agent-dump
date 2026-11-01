@@ -113,13 +113,13 @@ class TestCiCancelsSupersededRuns:
 
         assert "github.workflow" in concurrency
         assert "github.event_name" in concurrency
-        assert "github.event.pull_request.number || github.ref" in concurrency
-        assert "cancel-in-progress: true" in concurrency
+        assert "github.event.pull_request.number || github.sha" in concurrency
+        assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in concurrency
 
     def test_release_does_not_share_the_ci_cancellation_group(self):
         release_preamble = self._workflow_preamble("release.yml")
 
-        assert "github.event.pull_request.number || github.ref" not in release_preamble
+        assert "github.event.pull_request.number" not in release_preamble
 
 
 class TestReleasePermissions:
