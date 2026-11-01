@@ -9,8 +9,9 @@ export default defineConfig({
   testDir: "./tests/e2e",
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  // Locale journeys assert the process-wide system clipboard.
-  workers: 1,
+  // Locale journeys assert the clipboard: a headed desktop run shares the system
+  // one, while CI's headless shell keeps one per browser process.
+  workers: process.env.CI ? 4 : 1,
   reporter: "line",
   use: {
     baseURL,
