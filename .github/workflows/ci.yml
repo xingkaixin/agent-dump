@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - ci/speed-up-actions
 
 # PR 只保留最新一次推送。main 的 group 带 SHA：同一 group 只留一个等待中的运行，
 # 否则连续合并时中间的提交会被顶掉，没有完整跑过
@@ -192,7 +193,7 @@ jobs:
           exit 1
 
       - name: Test web interactions
-        run: pnpm --dir web test:e2e --repeat-each=3
+        run: pnpm --dir web test:e2e
 
   npm-wrapper:
     name: Test npm wrapper on Node ${{ matrix.node-version }}
