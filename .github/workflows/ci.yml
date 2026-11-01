@@ -128,7 +128,7 @@ jobs:
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: checks-${{ runner.os }}-${{ runner.arch }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: true
 
       - name: Check Rust formatting
         if: runner.os == 'Linux'
@@ -192,7 +192,7 @@ jobs:
           exit 1
 
       - name: Test web interactions
-        run: pnpm --dir web test:e2e
+        run: pnpm --dir web test:e2e --repeat-each=3
 
   npm-wrapper:
     name: Test npm wrapper on Node ${{ matrix.node-version }}
