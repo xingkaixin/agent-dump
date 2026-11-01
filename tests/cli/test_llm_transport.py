@@ -42,7 +42,8 @@ def endpoint(callback):
             pass
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    worker = threading.Thread(target=httpd.serve_forever, daemon=True)
+    # shutdown() 要等一个轮询周期，默认 0.5 秒会加到每个测试上
+    worker = threading.Thread(target=httpd.serve_forever, args=(0.01,), daemon=True)
     worker.start()
     try:
         yield f"http://127.0.0.1:{httpd.server_port}", calls
