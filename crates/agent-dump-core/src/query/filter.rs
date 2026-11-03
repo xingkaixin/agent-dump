@@ -2,6 +2,7 @@ use crate::query::Query;
 use crate::query::scanner::ScannedProvider;
 use crate::query::text::{Mode, TextQuery};
 use crate::session::cache::SessionDataCache;
+use crate::session::{Session, SessionData};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 
@@ -160,7 +161,7 @@ fn fallback(
     warnings: &mut impl Write,
 ) -> crate::Result<Selection> {
     let mut selection = Selection::default();
-    let cache = SessionDataCache::default();
+    let mut candidates = Vec::new();
     for (g, group) in groups.iter().enumerate() {
         for (s, session) in group.sessions.iter().enumerate() {
             if !query.includes_path(&session.directory) {
@@ -173,23 +174,50 @@ fn fallback(
                     snippet: session.title.clone(),
                     rank: 0.0,
                 });
-                continue;
+            } else {
+                candidates.push((g, s));
             }
-            let data = match cache.lease(
-                group.info.name,
-                group.provider.as_ref(),
-                session,
-                zh,
-                &mut |d| {
-                    writeln!(
-                        warnings,
-                        "{}",
-                        crate::output::diagnostics::record_warning(&d, zh)
-                    )?;
-                    Ok(())
-                },
-            ) {
-                Ok(data) => data,
+        }
+    }
+    let cache = SessionDataCache::default();
+    crate::parallel::ordered(
+        &candidates,
+        |&(g, s)| {
+            let group = &groups[g];
+            let session = &group.sessions[s];
+            let mut diagnostics = Vec::new();
+            let result = cache
+                .lease(
+                    group.info.name,
+                    group.provider.as_ref(),
+                    session,
+                    zh,
+                    &mut |d| {
+                        diagnostics.push(d);
+                        Ok(())
+                    },
+                )
+                .map(|data| evidence(&data, session, query, text));
+            (g, s, result, diagnostics)
+        },
+        |(g, s, result, diagnostics)| {
+            for diagnostic in diagnostics {
+                writeln!(
+                    warnings,
+                    "{}",
+                    crate::output::diagnostics::record_warning(&diagnostic, zh)
+                )?;
+            }
+            let group = &groups[g];
+            let session = &group.sessions[s];
+            match result {
+                Ok(Some((snippet, rank))) => selection.matches.push(Match {
+                    group: g,
+                    session: s,
+                    snippet,
+                    rank,
+                }),
+                Ok(None) => {}
                 Err(error) => {
                     selection
                         .failures
@@ -212,56 +240,48 @@ fn fallback(
                             ]
                         )
                     )?;
-                    continue;
                 }
-            };
-            let evidence = if let Some(roles) = &query.roles {
-                data.messages
-                    .iter()
-                    .filter(|message| {
-                        roles.contains(&message.role.to_lowercase())
-                    })
-                    .find_map(|message| {
-                        if text.literals.is_empty() {
-                            let content =
-                                crate::query::transcript::message_texts(
-                                    message,
-                                )
-                                .join("\n");
-                            let normalized =
-                                crate::query::text::normalize(&content);
-                            let excerpt: String =
-                                normalized.chars().take(96).collect();
-                            let snippet = if normalized.chars().count() > 96 {
-                                format!("{}...", excerpt.trim_end())
-                            } else {
-                                excerpt
-                            };
-                            Some((snippet, 0.0))
-                        } else {
-                            let content =
-                                crate::query::transcript::searchable_message(
-                                    message,
-                                );
-                            text.find(&[&content]).map(|e| (e.snippet, 0.0))
-                        }
-                    })
-            } else {
-                text.find(&[
-                    &session.title,
-                    &crate::query::transcript::searchable(&data),
-                ])
-                .map(|e| (e.snippet, if e.title_matches { 1.0 } else { 0.0 }))
-            };
-            if let Some((snippet, rank)) = evidence {
-                selection.matches.push(Match {
-                    group: g,
-                    session: s,
-                    snippet,
-                    rank,
-                });
             }
-        }
-    }
+            Ok(())
+        },
+    )?;
     Ok(selection)
+}
+
+fn evidence(
+    data: &SessionData,
+    session: &Session,
+    query: &Query,
+    text: &TextQuery,
+) -> Option<(String, f64)> {
+    if let Some(roles) = &query.roles {
+        data.messages
+            .iter()
+            .filter(|message| roles.contains(&message.role.to_lowercase()))
+            .find_map(|message| {
+                if text.literals.is_empty() {
+                    let content =
+                        crate::query::transcript::message_texts(message)
+                            .join("\n");
+                    let normalized = crate::query::text::normalize(&content);
+                    let excerpt: String = normalized.chars().take(96).collect();
+                    let snippet = if normalized.chars().count() > 96 {
+                        format!("{}...", excerpt.trim_end())
+                    } else {
+                        excerpt
+                    };
+                    Some((snippet, 0.0))
+                } else {
+                    let content =
+                        crate::query::transcript::searchable_message(message);
+                    text.find(&[&content]).map(|e| (e.snippet, 0.0))
+                }
+            })
+    } else {
+        text.find(&[
+            &session.title,
+            &crate::query::transcript::searchable(data),
+        ])
+        .map(|e| (e.snippet, if e.title_matches { 1.0 } else { 0.0 }))
+    }
 }

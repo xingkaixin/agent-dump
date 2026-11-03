@@ -53,7 +53,7 @@ Codex 与 Claude 的连续 assistant 片段由 `session/assembly.rs` 合并。�
 
 - `query/mod.rs` 拥有旧查询语法、结构化字段、`agents://`、路径规范化和 home 展开。
 - `-query`、URI 的 `q` 与 `--search` 使用同一匹配语义：按空白拆分且必须全部命中的 distinct terms。`--search` 额外按相关度排序并输出证据；`--read --match` 仍是单消息字面短语。
-- `query/filter.rs` 保留匹配证据和读取失败事实；角色过滤只从允许的角色生成 snippet。
+- `query/filter.rs` 保留匹配证据和读取失败事实；角色过滤只从允许的角色生成 snippet。进程内 matcher 与 `--search --locate` 并行读取正文，诊断、读取失败和结果按候选顺序处理。
 - `query/index.rs` 使用 SQLite FTS5，加速语义必须与进程内 matcher 等价。tokenizer 不适用或索引失败时回退到进程内 matcher。命中片段统一由 Rust 证据窗口生成，不调用 FTS5 `snippet()`。
 - 路径范围内没有候选时直接返回空结果，不打开或更新索引。非空查询先更新所有参与索引，BM25 按全局索引评分，结果只返回范围内会话。change sources 变化后重新读取受影响会话；未变化索引上的重复搜索不发起写入。旧请求不能覆盖新观察，也不能恢复已删除行。
 
