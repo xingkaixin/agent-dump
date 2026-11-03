@@ -253,7 +253,7 @@ pub fn run(
         depth,
         operation.mode,
         ai,
-        collect.timeout,
+        &collect,
         zh,
     ) {
         Ok(markdown) => markdown,
@@ -529,7 +529,7 @@ fn final_summary(
     depth: usize,
     mode: Mode,
     ai: &AiConfig,
-    timeout: u64,
+    config: &CollectConfig,
     zh: bool,
 ) -> crate::Result<String> {
     let prompts = crate::collect::prompts::final_prompts(
@@ -540,10 +540,24 @@ fn final_summary(
         mode,
         zh,
     )?;
-    let parts = prompts
-        .iter()
-        .map(|prompt| crate::collect::llm::summary(ai, prompt, timeout, zh))
-        .collect::<crate::Result<Vec<_>>>()?;
+    let mut parts = vec![String::new(); prompts.len()];
+    crate::collect::pool::run(
+        config.concurrency,
+        (0..prompts.len()).collect(),
+        |index| {
+            let part = crate::collect::llm::summary(
+                ai,
+                &prompts[index],
+                config.timeout,
+                zh,
+            );
+            (index, part)
+        },
+        |(index, part), _| {
+            parts[index] = part?;
+            Ok(())
+        },
+    )?;
     Ok(parts.join("\n\n"))
 }
 

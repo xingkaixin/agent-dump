@@ -1,60 +1,76 @@
 use crate::collect::log::Logger;
 use crate::collect::model::{Entry, Group, Mode, Summary};
+use crate::collect::pool;
 use crate::collect::progress::progress;
 use crate::collect::summary::{self as collect_summary, Context};
 use agent_dump_core::config::{AiConfig, CollectConfig};
 use agent_dump_core::output::i18n::{t, terminal};
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::Write;
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    mpsc,
-};
 
-enum Event {
-    Chunk,
-    Complete(usize, crate::Result<Summary>),
+enum Job {
+    Chunk(usize, usize),
+    Merge(usize, usize, Vec<Summary>),
 }
 
-fn summarize(
+struct Session {
+    slots: Vec<Option<Summary>>,
+    merging: bool,
+    failed: bool,
+}
+
+impl Session {
+    fn advance(
+        &mut self,
+        entry: usize,
+        queue: &mut VecDeque<Job>,
+    ) -> Option<Summary> {
+        let payloads: Vec<_> = std::mem::take(&mut self.slots)
+            .into_iter()
+            .flatten()
+            .collect();
+        if self.merging && payloads.len() == 1 {
+            return payloads.into_iter().next();
+        }
+        self.merging = true;
+        let batches: Vec<_> = payloads.chunks(8).map(<[_]>::to_vec).collect();
+        self.slots = vec![None; batches.len()];
+        for (index, batch) in batches.into_iter().enumerate().rev() {
+            queue.push_front(Job::Merge(entry, index, batch));
+        }
+        None
+    }
+}
+
+fn summarize_chunk(
     entry: &Entry,
+    index: usize,
     ai: &AiConfig,
     timeout: u64,
     mode: Mode,
     logger: &Logger,
-    sender: &mpsc::Sender<Event>,
 ) -> crate::Result<Summary> {
     let uri = entry.uri();
-    let mut payloads = Vec::new();
-    for (index, chunk) in entry.chunks.iter().enumerate() {
-        payloads.push(collect_summary::request(
-            ai,
-            &crate::collect::prompts::chunk(entry, chunk, index, mode),
-            timeout,
+    collect_summary::request(
+        ai,
+        &crate::collect::prompts::chunk(
+            entry,
+            &entry.chunks[index],
+            index,
             mode,
-            &Context {
-                label: format!(
-                    "{uri} chunk {}/{}",
-                    index + 1,
-                    entry.chunks.len()
-                ),
-                phase: "chunk_summary",
-                uri: Some(&uri),
-                chunk: Some(index + 1),
-                chunks: Some(entry.chunks.len()),
-            },
-            logger,
-        )?);
-        let _ = sender.send(Event::Chunk);
-    }
-    while payloads.len() > 8 {
-        payloads = payloads
-            .chunks(8)
-            .map(|batch| merge_session(entry, batch, ai, timeout, mode, logger))
-            .collect::<crate::Result<_>>()?;
-    }
-    merge_session(entry, &payloads, ai, timeout, mode, logger)
+        ),
+        timeout,
+        mode,
+        &Context {
+            label: format!("{uri} chunk {}/{}", index + 1, entry.chunks.len()),
+            phase: "chunk_summary",
+            uri: Some(&uri),
+            chunk: Some(index + 1),
+            chunks: Some(entry.chunks.len()),
+        },
+        logger,
+    )
 }
 
 fn merge_session(
@@ -105,6 +121,62 @@ fn merge_session(
     Ok(merged)
 }
 
+fn merge_group(
+    batch: &[Group],
+    index: usize,
+    depth: usize,
+    ai: &AiConfig,
+    timeout: u64,
+    mode: Mode,
+    logger: &Logger,
+) -> Group {
+    let payloads: Vec<_> = batch.iter().map(|g| g.summary.clone()).collect();
+    let mut merged = collect_summary::merge(&payloads, mode);
+    let source = format!("collect://group-level-{depth}/group-{index}");
+    if batch.len() > 1 && collect_summary::needs_compression(&merged) {
+        match collect_summary::request(
+            ai,
+            &crate::collect::prompts::merge(
+                &source,
+                &payloads,
+                &format!("group-level-{depth}"),
+                mode,
+            ),
+            timeout,
+            mode,
+            &Context {
+                label: source.clone(),
+                phase: "group_merge",
+                uri: None,
+                chunk: None,
+                chunks: None,
+            },
+            logger,
+        ) {
+            Ok(summary) => merged = summary,
+            Err(error) => logger.log(
+                "llm_merge_fallback",
+                json!({
+                    "phase": "group_merge",
+                    "context": source,
+                    "level": depth,
+                    "group_index": index,
+                    "error": error.to_string()
+                }),
+            ),
+        }
+    }
+    Group {
+        date: batch[0].date.clone(),
+        project_directory: batch[0].project_directory.clone(),
+        session_uris: batch
+            .iter()
+            .flat_map(|g| g.session_uris.clone())
+            .collect(),
+        summary: merged,
+    }
+}
+
 pub fn run(
     entries: &[Entry],
     ai: &AiConfig,
@@ -140,61 +212,93 @@ pub fn run(
         zh,
         warnings,
     )?;
-    let (sender, receiver) = mpsc::channel();
-    let next = AtomicUsize::new(0);
+    let mut sessions: Vec<_> = entries
+        .iter()
+        .map(|entry| Session {
+            slots: vec![None; entry.chunks.len()],
+            merging: false,
+            failed: false,
+        })
+        .collect();
+    let queue = entries
+        .iter()
+        .enumerate()
+        .flat_map(|(entry, e)| {
+            (0..e.chunks.len()).map(move |index| Job::Chunk(entry, index))
+        })
+        .collect();
     let mut results = vec![None; entries.len()];
     let mut failed = Vec::new();
     let mut last_error = None;
-    std::thread::scope(|scope| -> crate::Result<()> {
-        for _ in 0..config.concurrency.min(entries.len()) {
-            let sender = sender.clone();
-            let next = &next;
-            scope.spawn(move || {
-                loop {
-                    let index = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(entry) = entries.get(index) else {
-                        break;
-                    };
-                    let result = summarize(
-                        entry,
-                        ai,
-                        config.timeout,
-                        mode,
-                        logger,
-                        &sender,
-                    );
-                    if sender.send(Event::Complete(index, result)).is_err() {
-                        break;
+    let mut chunks = 0;
+    let mut merged = 0;
+    pool::run(
+        config.concurrency,
+        queue,
+        |job| match job {
+            Job::Chunk(entry, index) => (
+                entry,
+                index,
+                true,
+                summarize_chunk(
+                    &entries[entry],
+                    index,
+                    ai,
+                    config.timeout,
+                    mode,
+                    logger,
+                ),
+            ),
+            Job::Merge(entry, index, payloads) => (
+                entry,
+                index,
+                false,
+                merge_session(
+                    &entries[entry],
+                    &payloads,
+                    ai,
+                    config.timeout,
+                    mode,
+                    logger,
+                ),
+            ),
+        },
+        |(entry, index, chunk, result), queue| {
+            let session = &mut sessions[entry];
+            if session.failed {
+                return Ok(());
+            }
+            match result {
+                Ok(summary) => {
+                    session.slots[index] = Some(summary);
+                    if chunk {
+                        chunks += 1;
+                        progress(
+                            "COLLECT_PROGRESS_SUMMARIZE_CHUNKS",
+                            &chunk_values(chunks),
+                            zh,
+                            warnings,
+                        )?;
+                    }
+                    if session.slots.iter().all(Option::is_some)
+                        && let Some(summary) = session.advance(entry, queue)
+                    {
+                        results[entry] = Some(summary);
+                        merged += 1;
+                        progress(
+                            "COLLECT_PROGRESS_MERGE_SESSIONS",
+                            &session_values(merged),
+                            zh,
+                            warnings,
+                        )?;
                     }
                 }
-            });
-        }
-        drop(sender);
-        let mut chunks = 0;
-        let mut merged = 0;
-        for event in receiver {
-            match event {
-                Event::Chunk => {
-                    chunks += 1;
-                    progress(
-                        "COLLECT_PROGRESS_SUMMARIZE_CHUNKS",
-                        &chunk_values(chunks),
-                        zh,
-                        warnings,
-                    )?;
-                }
-                Event::Complete(index, Ok(summary)) => {
-                    results[index] = Some(summary);
-                    merged += 1;
-                    progress(
-                        "COLLECT_PROGRESS_MERGE_SESSIONS",
-                        &session_values(merged),
-                        zh,
-                        warnings,
-                    )?;
-                }
-                Event::Complete(index, Err(error)) => {
-                    let uri = entries[index].uri();
+                Err(error) => {
+                    session.failed = true;
+                    queue.retain(|job| {
+                        !matches!(job, Job::Chunk(i, _) | Job::Merge(i, ..) if *i == entry)
+                    });
+                    let uri = entries[entry].uri();
                     failed.push(uri.clone());
                     writeln!(
                         warnings,
@@ -215,9 +319,9 @@ pub fn run(
                     last_error = Some(error);
                 }
             }
-        }
-        Ok(())
-    })?;
+            Ok(())
+        },
+    )?;
     let included = entries.len() - failed.len();
     if included == 0
         && let Some(error) = last_error
@@ -287,68 +391,37 @@ pub fn run(
             ]
         };
         progress("COLLECT_PROGRESS_TREE_REDUCTION", &values(0), zh, warnings)?;
-        let mut next = Vec::new();
-        for bucket in buckets {
-            for batch in bucket.chunks(8) {
-                let payloads: Vec<_> =
-                    batch.iter().map(|g| g.summary.clone()).collect();
-                let mut merged = collect_summary::merge(&payloads, mode);
-                let index = next.len() + 1;
-                let source =
-                    format!("collect://group-level-{depth}/group-{index}");
-                if batch.len() > 1
-                    && collect_summary::needs_compression(&merged)
-                {
-                    match collect_summary::request(
-                        ai,
-                        &crate::collect::prompts::merge(
-                            &source,
-                            &payloads,
-                            &format!("group-level-{depth}"),
-                            mode,
-                        ),
-                        config.timeout,
-                        mode,
-                        &Context {
-                            label: source.clone(),
-                            phase: "group_merge",
-                            uri: None,
-                            chunk: None,
-                            chunks: None,
-                        },
-                        logger,
-                    ) {
-                        Ok(summary) => merged = summary,
-                        Err(error) => logger.log(
-                            "llm_merge_fallback",
-                            json!({
-                                "phase": "group_merge",
-                                "context": source,
-                                "level": depth,
-                                "group_index": index,
-                                "error": error.to_string()
-                            }),
-                        ),
-                    }
-                }
-                next.push(Group {
-                    date: batch[0].date.clone(),
-                    project_directory: batch[0].project_directory.clone(),
-                    session_uris: batch
-                        .iter()
-                        .flat_map(|g| g.session_uris.clone())
-                        .collect(),
-                    summary: merged,
-                });
+        let batches: Vec<_> =
+            buckets.iter().flat_map(|bucket| bucket.chunks(8)).collect();
+        let mut next = vec![None; batches.len()];
+        let mut done = 0;
+        pool::run(
+            config.concurrency,
+            (0..batches.len()).collect(),
+            |index| {
+                let group = merge_group(
+                    batches[index],
+                    index + 1,
+                    depth,
+                    ai,
+                    config.timeout,
+                    mode,
+                    logger,
+                );
+                (index, group)
+            },
+            |(index, group), _| {
+                next[index] = Some(group);
+                done += 1;
                 progress(
                     "COLLECT_PROGRESS_TREE_REDUCTION",
-                    &values(index),
+                    &values(done),
                     zh,
                     warnings,
-                )?;
-            }
-        }
-        working = next;
+                )
+            },
+        )?;
+        working = next.into_iter().flatten().collect();
     }
     progress(
         "COLLECT_PROGRESS_RENDER_FINAL",
