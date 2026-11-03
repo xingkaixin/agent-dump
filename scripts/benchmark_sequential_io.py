@@ -1,6 +1,7 @@
 """Compare workloads bound by sequential provider reads and LLM requests."""
 
 import argparse
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import asdict
 import gc
@@ -41,7 +42,8 @@ NAMES = (*COLLECT, *SEARCH)
 
 @contextmanager
 def local_model(delay: float):
-    stats = {"in_flight": 0, "peak": 0, "connections": 0, "phases": {}}
+    stats = {"in_flight": 0, "peak": 0, "connections": 0}
+    phases: dict[str, dict[str, float]] = {}
     lock = threading.Lock()
     counter = iter(range(1 << 30))
 
@@ -95,7 +97,7 @@ def local_model(delay: float):
                 ended = time.perf_counter()
                 with lock:
                     stats["in_flight"] -= 1
-                    span = stats["phases"].setdefault(phase, {"requests": 0, "first": started, "last": ended})
+                    span = phases.setdefault(phase, {"requests": 0, "first": started, "last": ended})
                     span["requests"] += 1
                     span["first"] = min(span["first"], started)
                     span["last"] = max(span["last"], ended)
@@ -108,7 +110,7 @@ def local_model(delay: float):
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
     try:
-        yield f"http://127.0.0.1:{server.server_port}/v1", stats
+        yield f"http://127.0.0.1:{server.server_port}/v1", stats, phases
     finally:
         server.shutdown()
         server.server_close()
@@ -126,9 +128,11 @@ def write_config(environment: dict[str, str], url: str) -> None:
     )
 
 
-def measure(commands: dict[str, list[str]], repeats: int, sample) -> tuple[dict, dict]:
+def measure(
+    commands: dict[str, list[str]], repeats: int, sample: Callable[[list[str]], tuple[dict, dict]]
+) -> tuple[dict, dict]:
     samples: dict[str, list[dict]] = {label: [] for label in commands}
-    reference = None
+    reference: dict | None = None
     for iteration in range(repeats + 1):
         order = list(commands) if iteration % 2 == 0 else list(reversed(commands))
         for label in order:
@@ -138,6 +142,8 @@ def measure(commands: dict[str, list[str]], repeats: int, sample) -> tuple[dict,
             require(checked == reference, f"result differs for {label}: {checked} != {reference}")
             if iteration:
                 samples[label].append(metrics)
+    if reference is None:
+        raise ValueError("benchmark produced no samples")
     return samples, reference
 
 
@@ -167,7 +173,7 @@ def collect_case(name: str, commands: dict[str, list[str]], repeats: int, delay:
         )
 
         def sample(command: list[str]) -> tuple[dict, dict]:
-            with local_model(delay) as (url, stats):
+            with local_model(delay) as (url, stats, phases):
                 write_config(environment, url)
                 metrics, _ = run_sample(command, case, root, environment, timeout=600)
             report = (root / "report.md").read_text(encoding="utf-8")
@@ -175,10 +181,10 @@ def collect_case(name: str, commands: dict[str, list[str]], repeats: int, delay:
             metrics.update(
                 peak_in_flight=stats["peak"],
                 connections=stats["connections"],
-                phase_seconds={name: span["last"] - span["first"] for name, span in stats["phases"].items()},
+                phase_seconds={name: span["last"] - span["first"] for name, span in phases.items()},
             )
             return metrics, {
-                "requests": {name: span["requests"] for name, span in sorted(stats["phases"].items())},
+                "requests": {name: span["requests"] for name, span in sorted(phases.items())},
                 "report_sha256": hashlib.sha256(report.encode()).hexdigest(),
             }
 
