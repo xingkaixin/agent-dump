@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-11-03
+
+### Changed
+
+- AI collect summarizes chunks and session merge batches from one pool capped by `summary_concurrency`, merges group batches of the same level concurrently, and requests final report parts concurrently, so long sessions no longer leave workers idle (#552).
+- Search reads fallback candidates and locates hits in parallel (#551).
+- Subset landing page fonts into preloaded core files and on-demand extension files, cutting preloaded fonts per page from 97,920 B to 53,408 B (#542).
+- Remove redundant labels and copy from the landing page (#535).
+- Fix README, npm README, and provider docs that contradicted the code and CLI contract (#541).
+- Build release binaries once per OS, run CLI contracts against them, skip unrelated PR jobs behind a single `CI OK` check, and wait for native npm packages together during release (#547).
+- Add a sequential I/O benchmark (#550).
+- Update Rust dependencies, rusqlite, Python development tools, Astro, web runtime packages, and GitHub Actions (#536–#540, #543–#546).
+
 ## [1.2.6] - 2026-10-21
 
 ### Fixed
@@ -1343,3 +1356,4 @@
 [1.2.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.4
 [1.2.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.5
 [1.2.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.6
+[1.2.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.7
