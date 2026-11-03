@@ -187,9 +187,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.7",
+        date: "2026-11-03",
+        isLatest: true,
+        title: "Faster AI Collect and Full-Text Search",
+        description:
+          "AI collect sends independent LLM requests concurrently, so summarizing long Codex, Claude Code, Cursor, and other AI sessions no longer leaves workers idle. Full-text search reads session bodies in parallel to locate matches faster. The website loads lighter fonts, and the docs now match the CLI contract.",
+        command: 'npx @agent-dump/cli@1.2.7 --collect --days 7',
+        tags: ["AI Collect", "Full-Text Search", "Performance"],
+      },
+      {
         version: "v1.2.6",
         date: "2026-10-21",
-        isLatest: true,
         title: "Safer HTTPS Connections for AI Collect",
         description:
           "AI collect summarizes Codex, Claude Code, Cursor, and other supported AI sessions over HTTPS with an updated certificate trust list. After eMudhra intermediate CA keys leaked, it no longer trusts the emSign ECC Root CA - G3. Session export, full-text search, and prompt handoff work as before and are now covered by stricter CLI contract tests.",
@@ -399,9 +408,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.7",
+        date: "2026-11-03",
+        isLatest: true,
+        title: "AI collect 与全文搜索更快",
+        description:
+          "AI collect 并发发送彼此独立的 LLM 请求，汇总 Codex、Claude Code、Cursor 等工具的长 AI 会话时不再让 worker 空闲。全文搜索并行读取会话正文，更快定位命中位置。网站字体更轻量，文档与 CLI 契约保持一致。",
+        command: 'npx @agent-dump/cli@1.2.7 --collect --days 7',
+        tags: ["AI collect", "全文搜索", "性能"],
+      },
+      {
         version: "v1.2.6",
         date: "2026-10-21",
-        isLatest: true,
         title: "AI collect 的 HTTPS 连接更安全",
         description:
           "汇总 Codex、Claude Code、Cursor 等工具的 AI 会话时，AI collect 使用更新后的 HTTPS 证书信任列表。eMudhra 中间 CA 私钥泄露后，不再信任 emSign ECC Root CA - G3。会话导出、全文搜索和 prompt handoff 的行为不变，并由更严格的 CLI 契约测试覆盖。",
@@ -611,9 +629,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.7",
+        date: "2026-11-03",
+        isLatest: true,
+        title: "AI collect と全文検索を高速化",
+        description:
+          "AI collect は互いに独立した LLM リクエストを並行して送信し、Codex、Claude Code、Cursor などの長い AI セッションを要約する際にワーカーが待機しなくなりました。全文検索はセッション本文を並列に読み込み、一致箇所をより速く特定します。Web サイトのフォントは軽量化し、ドキュメントは CLI の契約と一致させました。",
+        command: 'npx @agent-dump/cli@1.2.7 --collect --days 7',
+        tags: ["AI collect", "全文検索", "パフォーマンス"],
+      },
+      {
         version: "v1.2.6",
         date: "2026-10-21",
-        isLatest: true,
         title: "AI collect の HTTPS 通信をより安全に",
         description:
           "Codex、Claude Code、Cursor などの AI セッションを要約する AI collect は、更新した HTTPS 証明書の信頼リストを使います。eMudhra の中間 CA 秘密鍵の漏洩を受け、emSign ECC Root CA - G3 を信頼しなくなりました。セッションのエクスポート、全文検索、prompt handoff の動作は変わらず、より厳密な CLI 契約テストで検証しています。",

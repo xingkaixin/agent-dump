@@ -2,6 +2,19 @@
 
 ## [未发布]
 
+## [1.2.7] - 2026-11-03
+
+### 变更
+
+- AI collect 的分块摘要与会话合并批次共用一个以 `summary_concurrency` 为上限的任务池，同一层级的分组合并批次和最终报告各部分并发请求，长会话不再让其他 worker 空闲 (#552)。
+- 搜索并行读取回退候选会话并定位命中位置 (#551)。
+- 落地页字体子集化为预加载的 core 文件和按需下载的扩展文件，每页预加载字体从 97,920 B 降至 53,408 B (#542)。
+- 移除落地页中重复的标签和文案 (#535)。
+- 修正 README、npm README 和 Provider 文档中与代码及 CLI 契约不一致的内容 (#541)。
+- 每个操作系统只构建一次发布二进制并用于 CLI 契约测试；PR 跳过无关 job，由单一 `CI OK` 检查汇总；发布时同时等待各原生 npm 包可下载 (#547)。
+- 新增顺序 I/O 基准测试 (#550)。
+- 更新 Rust 依赖、rusqlite、Python 开发工具、Astro、web 运行时依赖和 GitHub Actions (#536–#540, #543–#546)。
+
 ## [1.2.6] - 2026-10-21
 
 ### 问题修复
@@ -1346,3 +1359,4 @@
 [1.2.4]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.4
 [1.2.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.5
 [1.2.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.6
+[1.2.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.7
