@@ -61,42 +61,58 @@ pub fn run(
     if options.locate
         && let Some(query) = query
     {
+        let mut failures = Vec::new();
         let cache = SessionDataCache::default();
-        for matched in &selection.matches {
-            let group = &scan.groups[matched.group];
-            let session = &group.sessions[matched.session];
-            let result = cache
-                .lease(
-                    group.info.name,
-                    group.provider.as_ref(),
-                    session,
-                    zh,
-                    &mut |diagnostic| {
-                        writeln!(
-                            warnings,
-                            "{}",
-                            diagnostics::record_warning(&diagnostic, zh)
-                        )?;
-                        Ok(())
-                    },
-                )
-                .and_then(|data| context::locate(&data, query));
-            match result {
-                Ok(found) => {
-                    locations.insert((matched.group, matched.session), found);
-                }
-                Err(error) => {
-                    selection
-                        .failures
-                        .insert((group.info.name.into(), session.id.clone()));
+        agent_dump_core::parallel::ordered(
+            &selection.matches,
+            |matched| {
+                let group = &scan.groups[matched.group];
+                let session = &group.sessions[matched.session];
+                let mut diagnostics = Vec::new();
+                let result = cache
+                    .lease(
+                        group.info.name,
+                        group.provider.as_ref(),
+                        session,
+                        zh,
+                        &mut |diagnostic| {
+                            diagnostics.push(diagnostic);
+                            Ok(())
+                        },
+                    )
+                    .and_then(|data| context::locate(&data, query));
+                (matched, result, diagnostics)
+            },
+            |(matched, result, diagnostics)| {
+                for diagnostic in diagnostics {
                     writeln!(
                         warnings,
                         "{}",
-                        Diagnostic::unexpected(error.as_ref(), zh).render(zh)
+                        diagnostics::record_warning(&diagnostic, zh)
                     )?;
                 }
-            }
-        }
+                match result {
+                    Ok(found) => {
+                        locations
+                            .insert((matched.group, matched.session), found);
+                    }
+                    Err(error) => {
+                        let group = &scan.groups[matched.group];
+                        let session = &group.sessions[matched.session];
+                        failures
+                            .push((group.info.name.into(), session.id.clone()));
+                        writeln!(
+                            warnings,
+                            "{}",
+                            Diagnostic::unexpected(error.as_ref(), zh)
+                                .render(zh)
+                        )?;
+                    }
+                }
+                Ok(())
+            },
+        )?;
+        selection.failures.extend(failures);
     }
     if options.json {
         for (present, key) in [
