@@ -121,6 +121,62 @@ fn merge_session(
     Ok(merged)
 }
 
+fn merge_group(
+    batch: &[Group],
+    index: usize,
+    depth: usize,
+    ai: &AiConfig,
+    timeout: u64,
+    mode: Mode,
+    logger: &Logger,
+) -> Group {
+    let payloads: Vec<_> = batch.iter().map(|g| g.summary.clone()).collect();
+    let mut merged = collect_summary::merge(&payloads, mode);
+    let source = format!("collect://group-level-{depth}/group-{index}");
+    if batch.len() > 1 && collect_summary::needs_compression(&merged) {
+        match collect_summary::request(
+            ai,
+            &crate::collect::prompts::merge(
+                &source,
+                &payloads,
+                &format!("group-level-{depth}"),
+                mode,
+            ),
+            timeout,
+            mode,
+            &Context {
+                label: source.clone(),
+                phase: "group_merge",
+                uri: None,
+                chunk: None,
+                chunks: None,
+            },
+            logger,
+        ) {
+            Ok(summary) => merged = summary,
+            Err(error) => logger.log(
+                "llm_merge_fallback",
+                json!({
+                    "phase": "group_merge",
+                    "context": source,
+                    "level": depth,
+                    "group_index": index,
+                    "error": error.to_string()
+                }),
+            ),
+        }
+    }
+    Group {
+        date: batch[0].date.clone(),
+        project_directory: batch[0].project_directory.clone(),
+        session_uris: batch
+            .iter()
+            .flat_map(|g| g.session_uris.clone())
+            .collect(),
+        summary: merged,
+    }
+}
+
 pub fn run(
     entries: &[Entry],
     ai: &AiConfig,
@@ -335,68 +391,37 @@ pub fn run(
             ]
         };
         progress("COLLECT_PROGRESS_TREE_REDUCTION", &values(0), zh, warnings)?;
-        let mut next = Vec::new();
-        for bucket in buckets {
-            for batch in bucket.chunks(8) {
-                let payloads: Vec<_> =
-                    batch.iter().map(|g| g.summary.clone()).collect();
-                let mut merged = collect_summary::merge(&payloads, mode);
-                let index = next.len() + 1;
-                let source =
-                    format!("collect://group-level-{depth}/group-{index}");
-                if batch.len() > 1
-                    && collect_summary::needs_compression(&merged)
-                {
-                    match collect_summary::request(
-                        ai,
-                        &crate::collect::prompts::merge(
-                            &source,
-                            &payloads,
-                            &format!("group-level-{depth}"),
-                            mode,
-                        ),
-                        config.timeout,
-                        mode,
-                        &Context {
-                            label: source.clone(),
-                            phase: "group_merge",
-                            uri: None,
-                            chunk: None,
-                            chunks: None,
-                        },
-                        logger,
-                    ) {
-                        Ok(summary) => merged = summary,
-                        Err(error) => logger.log(
-                            "llm_merge_fallback",
-                            json!({
-                                "phase": "group_merge",
-                                "context": source,
-                                "level": depth,
-                                "group_index": index,
-                                "error": error.to_string()
-                            }),
-                        ),
-                    }
-                }
-                next.push(Group {
-                    date: batch[0].date.clone(),
-                    project_directory: batch[0].project_directory.clone(),
-                    session_uris: batch
-                        .iter()
-                        .flat_map(|g| g.session_uris.clone())
-                        .collect(),
-                    summary: merged,
-                });
+        let batches: Vec<_> =
+            buckets.iter().flat_map(|bucket| bucket.chunks(8)).collect();
+        let mut next = vec![None; batches.len()];
+        let mut done = 0;
+        pool::run(
+            config.concurrency,
+            (0..batches.len()).collect(),
+            |index| {
+                let group = merge_group(
+                    batches[index],
+                    index + 1,
+                    depth,
+                    ai,
+                    config.timeout,
+                    mode,
+                    logger,
+                );
+                (index, group)
+            },
+            |(index, group), _| {
+                next[index] = Some(group);
+                done += 1;
                 progress(
                     "COLLECT_PROGRESS_TREE_REDUCTION",
-                    &values(index),
+                    &values(done),
                     zh,
                     warnings,
-                )?;
-            }
-        }
-        working = next;
+                )
+            },
+        )?;
+        working = next.into_iter().flatten().collect();
     }
     progress(
         "COLLECT_PROGRESS_RENDER_FINAL",
