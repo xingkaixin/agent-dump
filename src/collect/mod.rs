@@ -3,6 +3,7 @@ pub mod handoff;
 pub mod llm;
 pub mod log;
 pub mod model;
+pub mod pool;
 pub mod progress;
 pub mod prompts;
 pub mod reduction;
