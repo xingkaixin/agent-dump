@@ -2,7 +2,7 @@
 
 这套评估通过 CLI 子进程测量当前 Rust release 二进制，可与固定的 Python v0.15.9 参考或另一份 Rust 制品交错比较。结果校验只保护 benchmark 工作负载，不能代替功能测试。
 
-单项优化另有专用脚本：`scripts/benchmark_{scoped_search,bounded_read,index_refresh,reader_redraw,assistant_folding,read_batches}.py`，它们比较基线与候选二进制并校验输出一致。历史测量报告已从主树移除，可在 Git 历史中查阅；新结论应在同机重新配对测量，结果写入 `dist/benchmarks/`，需要留档时放进对应 PR 描述。
+单项优化另有专用脚本：`scripts/benchmark_{scoped_search,bounded_read,index_refresh,reader_redraw,assistant_folding,read_batches,sequential_io}.py`，它们比较基线与候选二进制并校验输出一致。历史测量报告已从主树移除，可在 Git 历史中查阅；新结论应在同机重新配对测量，结果写入 `dist/benchmarks/`，需要留档时放进对应 PR 描述。
 
 ## 运行
 
