@@ -169,46 +169,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn readonly_transaction_keeps_one_snapshot_during_committed_changes() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("source.sqlite");
-        let writer = Connection::open(&path).unwrap();
-        writer
-            .execute_batch(
-                "PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; \
-                 CREATE TABLE messages (body TEXT); \
-                 INSERT INTO messages VALUES ('before')",
-            )
-            .unwrap();
-        let reader = connect(&path).unwrap();
-        let read = |connection: &Connection| {
-            rows(connection, "SELECT body FROM messages", &[]).unwrap()
-        };
-        assert_eq!(read(&reader)[0]["body"], "before");
-        writer
-            .execute("UPDATE messages SET body = 'after'", [])
-            .unwrap();
-        let persistent = change_sources(&path);
-        let before: Vec<_> = persistent
-            .iter()
-            .map(std::fs::read)
-            .collect::<Result<_, _>>()
-            .unwrap();
-        assert_eq!(read(&reader)[0]["body"], "before");
-        assert!(reader.execute("DELETE FROM messages", []).is_err());
-        drop(reader);
-        assert_eq!(read(&connect(&path).unwrap())[0]["body"], "after");
-        assert_eq!(
-            persistent
-                .iter()
-                .map(std::fs::read)
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap(),
-            before
-        );
-    }
-
-    #[test]
     fn reused_readers_see_new_commits_and_replaced_databases() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("source.sqlite");

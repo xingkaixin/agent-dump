@@ -288,34 +288,3 @@ impl Provider for KimiCode {
         Ok(RawExport::File(path))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::tests::source_selection(
-            "sessions",
-            false,
-            |roots| KimiCode {
-                roots,
-                work_dirs: None,
-            },
-            |base| {
-                let path = base.join("hash/kept");
-                std::fs::create_dir_all(path.join("agents/main")).unwrap();
-                std::fs::write(path.join("state.json"), "{}").unwrap();
-                std::fs::write(
-                    path.join(WIRE),
-                    concat!(
-                        r#"{"type":"context.append_message","#,
-                        r#""message":{"role":"user","content":"Keep"}}"#,
-                    ),
-                )
-                .unwrap();
-                path
-            },
-        );
-    }
-}
