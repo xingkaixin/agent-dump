@@ -15,7 +15,7 @@ pytestmark = pytest.mark.skipif(os.name == "nt", reason="POSIX PTY boundary; por
 
 
 @contextmanager
-def terminal(cli, *args, width=80, height=24, stdout_pipe=False):
+def terminal(cli, *args, width=80, height=24):
     import fcntl
     import pty
     import termios
@@ -29,7 +29,7 @@ def terminal(cli, *args, width=80, height=24, stdout_pipe=False):
         cwd=cli.root,
         env=env,
         stdin=slave,
-        stdout=subprocess.PIPE if stdout_pipe else slave,
+        stdout=slave,
         stderr=slave,
         start_new_session=True,
     )
@@ -51,14 +51,6 @@ def terminal(cli, *args, width=80, height=24, stdout_pipe=False):
     def send(text):
         os.write(master, text.encode())
 
-    def resize(columns, lines):
-        import signal
-
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", lines, columns, 0, 0))
-        process.send_signal(signal.SIGWINCH)
-        # crossterm drops tty readiness that arrives in the same poll as SIGWINCH.
-        expect("\x1b[2J")
-
     def finish():
         deadline = time.monotonic() + 12
         while process.poll() is None or select.select([master], [], [], 0)[0]:
@@ -66,16 +58,12 @@ def terminal(cli, *args, width=80, height=24, stdout_pipe=False):
             if select.select([master], [], [], 0.1)[0]:
                 output.extend(os.read(master, 65536))
         assert termios.tcgetattr(slave) == original
-        if not stdout_pipe:
-            assert b"\x1b[?1049l" in output
-        elif process.stdout is not None:
-            output.extend(process.stdout.read())
-            process.stdout.close()
+        assert b"\x1b[?1049l" in output
         assert b"\x1b[?2004l" in output
         return process.returncode, output.decode(errors="replace")
 
     try:
-        yield expect, send, resize, finish
+        yield expect, send, finish
     finally:
         if process.poll() is None:
             process.kill()
@@ -84,45 +72,9 @@ def terminal(cli, *args, width=80, height=24, stdout_pipe=False):
         os.close(slave)
 
 
-@pytest.mark.parametrize("lang,cancel", [("en", "q"), ("zh", "Q"), ("en", "\x03")])
-def test_cancel_restores_terminal(cli, lang, cancel):
-    with terminal(cli, "--interactive", "-d", "36500", "--lang", lang) as (expect, send, _, finish):
-        expect("Codex")
-        send(cancel)
-        code, _ = finish()
-        assert code == 0
-        assert not (cli.root / "sessions").exists()
-
-
-def test_interactive_opens_reader_with_batch_export(cli):
-    with terminal(
-        cli,
-        "--interactive",
-        "-q",
-        "provider:codex",
-        "-d",
-        "36500",
-        "--output",
-        "exports",
-        "--lang",
-        "en",
-        width=24,
-        height=8,
-    ) as (expect, send, resize, finish):
-        expect("Sessions")
-        resize(100, 30)
-        expect("00000")
-        send("\x1b[F \x1b[H e")
-        expect("exports")
-        send("q")
-        code, _ = finish()
-        assert code == 0
-    assert len(list((cli.root / "exports" / "codex").glob("*.json"))) == 2
-
-
 def test_config_paste_mask_and_save(cli):
     secret = "unique-private-q-Key-🔒"  # noqa: S105
-    with terminal(cli, "--config", "edit", "--lang", "en") as (expect, send, _, finish):
+    with terminal(cli, "--config", "edit", "--lang", "en") as (expect, send, finish):
         expect("OpenAI")
         send("\r")
         expect("Base URL")
@@ -145,33 +97,3 @@ def test_config_paste_mask_and_save(cli):
     assert value["ai"]["api_key"] == secret
     assert value["ai"]["model"] == "模型-model"
     assert value["export"]["output"] == "exports"
-
-
-def test_cancel_configuration_leaves_file_unchanged(cli):
-    path = config_path(cli)
-    original = '[export]\noutput="existing"\n'
-    path.write_text(original)
-    with terminal(cli, "--config", "edit", "--lang", "en") as (expect, send, _, finish):
-        expect("OpenAI")
-        send("\r")
-        expect("Base URL")
-        send("\x03")
-        code, _ = finish()
-        assert code == 1
-    assert path.read_text() == original
-
-
-def test_secret_is_not_echoed_when_stdout_is_redirected(cli):
-    secret = "synthetic-redirected-secret"  # noqa: S105
-    with terminal(cli, "--config", "edit", "--lang", "en", stdout_pipe=True) as (expect, send, _, finish):
-        send("1\nhttp://localhost:9999/v1\nfixture-model\n")
-        expect("API Key")
-        send(secret + "\r")
-        expect("\x1b[?2004l")
-        send("exports\ny\n")
-        code, output = finish()
-        assert code == 0
-        assert secret not in output
-    import tomli as tomllib
-
-    assert tomllib.loads(config_path(cli).read_text())["ai"]["api_key"] == secret

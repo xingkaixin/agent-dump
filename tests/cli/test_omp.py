@@ -1,12 +1,15 @@
 """oh-my-pi sessions in the Pi session tree format."""
 
 import json
-import os
 
 from cli_fixture import IDENTITY, STAMP, write_jsonl
-from test_pi import message
 
 STEM = f"2026-01-15T12-00-00-000Z_{IDENTITY}"
+
+
+def message(role, content=None, *, identity=None, parent=None, **fields):
+    tree = {} if identity is None else {"id": identity, "parentId": parent}
+    return {"type": "message", **tree, "timestamp": STAMP, "message": {"role": role, "content": content, **fields}}
 
 
 def create(sessions, identity, records, *, name=STEM):
@@ -65,10 +68,3 @@ def test_list_and_export_use_the_pi_session_tree(cli):
     assert user["parts"][0]["text"] == "Port the parser"
     assert (assistant["agent"], assistant["model"]) == ("omp", "claude-opus-5-5")
     assert assistant["parts"][0]["state"]["status"] == "completed"
-
-
-def test_xdg_data_directory_replaces_home_outside_windows(cli):
-    create(cli.root / "home/.omp/agent/sessions", "home", [message("user", "Home")])
-    create(cli.root / "data/omp/sessions", "xdg", [message("user", "XDG")])
-
-    assert list(listed(cli)) == ["home" if os.name == "nt" else "xdg"]

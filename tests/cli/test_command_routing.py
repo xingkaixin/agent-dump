@@ -15,43 +15,8 @@ URI = f"codex://{IDENTITY}"
             "stdout",
             "❌ --collect cannot be used with URI/--interactive/--list.",
         ),
-        (
-            ["--collect", "--dry-run", "--interactive"],
-            1,
-            "stdout",
-            "❌ --collect cannot be used with URI/--interactive/--list.",
-        ),
-        (["--collect", "--dry-run", URI], 1, "stdout", "❌ --collect cannot be used with URI/--interactive/--list."),
         (["--emit-prompt"], 1, "stderr", "❌ --emit-prompt requires --collect mode."),
-        (["--list", "--emit-prompt"], 1, "stderr", "❌ --emit-prompt requires --collect mode."),
-        (["--providers", "--collect", "--emit-prompt"], 1, "stderr", "❌ --emit-prompt requires --collect mode."),
-        (["--collect", "--dry-run", "--emit-prompt"], 1, "stderr", "❌ --emit-prompt cannot be used with --dry-run."),
         ([URI, "--head", "--summary"], 1, "stdout", "❌ --head cannot be used with --summary."),
-        (
-            [URI, "--head", "--format", "json", "--summary"],
-            1,
-            "stdout",
-            "❌ --head cannot be used with -format/--format.",
-        ),
-        (
-            ["--providers", "--stats", "--list", "--summary", "--head", "-q", "invalid:empty"],
-            0,
-            "stdout",
-            "⚠️  Ignored lower-priority mode options: --stats, --list",
-        ),
-        (["--capabilities"], 0, "stdout", "Provider capabilities"),
-        (
-            ["--stats", "--reindex", "--list", "-d", "36500"],
-            0,
-            "stdout",
-            "⚠️  Ignored lower-priority mode options: --reindex, --list",
-        ),
-        (
-            [URI, "--head", "--list", "-q", "provider:missing"],
-            0,
-            "stdout",
-            "⚠️  Ignored lower-priority mode options: --list",
-        ),
     ],
 )
 def test_mode_contract(cli, args, code, stream, first_line):

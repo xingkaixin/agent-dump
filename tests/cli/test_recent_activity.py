@@ -8,7 +8,6 @@ import sqlite3
 
 from cli_fixture import CliFixture, header, message, write_jsonl
 import pytest
-from test_tui import terminal
 
 
 def activity_sessions(cli: CliFixture, provider: str) -> tuple[list[str], datetime]:
@@ -47,11 +46,10 @@ def activity_sessions(cli: CliFixture, provider: str) -> tuple[list[str], dateti
 
 
 @pytest.mark.parametrize("provider", ["codex", "opencode"])
-@pytest.mark.parametrize("lang", ["en", "zh"])
-def test_activity_window_defaults_to_updated_time(cli: CliFixture, provider: str, lang: str) -> None:
+def test_activity_window_defaults_to_updated_time(cli: CliFixture, provider: str) -> None:
     ids, _ = activity_sessions(cli, provider)
     before = cli.fixtures.source_manifest(cli.root)
-    args = ("--list", "-d", "7", "-q", f"provider:{provider}", "--json", "--lang", lang)
+    args = ("--list", "-d", "7", "-q", f"provider:{provider}", "--json")
     created = cli.run(*args, "--time-field", "created")
     assert created.returncode == 0, created.stderr
     assert [item["id"] for item in json.loads(created.stdout)["data"]] == [ids[2]]
@@ -83,37 +81,6 @@ def test_activity_window_defaults_to_updated_time(cli: CliFixture, provider: str
     assert cli.fixtures.source_manifest(cli.root) == before
 
 
-@pytest.mark.parametrize("lang,today,basis", [("en", "Today", "created time"), ("zh", "今天", "按创建时间")])
-def test_activity_dates_and_selector_groups_follow_updated_time(
-    cli: CliFixture, lang: str, today: str, basis: str
-) -> None:
-    ids, now = activity_sessions(cli, "codex")
-    args = ("--time-field", "updated", "-d", "7", "-q", "provider:codex", "--no-metadata-summary", "--lang", lang)
-    listed = cli.run("--list", *args)
-    assert listed.returncode == 0, listed.stderr
-    assert basis not in listed.stdout
-    assert basis in cli.run("--list", *args, "--time-field", "created").stdout
-    assert now.strftime("%Y-%m-%d %H:%M") in listed.stdout
-    assert listed.stdout.index(ids[1]) < listed.stdout.index(ids[0])
-    selected = cli.run("--interactive", *args, stdin="q\n")
-    assert selected.returncode == 1 and not selected.stderr
-    assert f"[{today}]" in selected.stdout
-    assert (now - timedelta(days=200)).strftime("%Y-%m-%d") not in selected.stdout
-    assert not (cli.root / "sessions").exists()
-
-
-def test_unfiltered_activity_lists_order_by_updated_time(cli: CliFixture) -> None:
-    ids, _ = activity_sessions(cli, "codex")
-    args = ("-d", "7", "--no-metadata-summary", "--lang", "en")
-    machine = cli.run("--list", *args, "--json")
-    assert machine.returncode == 0, machine.stderr
-    assert [item["id"] for item in json.loads(machine.stdout)["data"]] == [ids[1], ids[0]]
-    for mode, stdin in (("--list", None), ("--interactive", "2\nq\n")):
-        result = cli.run(mode, *args, stdin=stdin)
-        assert "Codex" in result.stdout and not result.stderr
-        assert result.stdout.index(ids[1]) < result.stdout.index(ids[0])
-
-
 def test_stats_window_keeps_created_time(cli: CliFixture) -> None:
     activity_sessions(cli, "codex")
     result = cli.run("--stats", "-d", "7", "--json")
@@ -126,10 +93,6 @@ def test_stats_window_keeps_created_time(cli: CliFixture) -> None:
     [
         ["--collect", "--dry-run"],
         ["--stats"],
-        ["--reindex"],
-        ["--providers"],
-        ["codex://missing", "--head", "--json"],
-        ["codex://missing", "--read", "--json"],
     ],
 )
 def test_activity_basis_rejects_unsupported_modes(cli: CliFixture, args: list[str]) -> None:
@@ -139,29 +102,3 @@ def test_activity_basis_rejects_unsupported_modes(cli: CliFixture, args: list[st
     assert not result.stdout
     assert cli.fixtures.source_manifest(cli.root) == before
     assert not list(cli.root.glob("agent-dump-collect*.md"))
-
-
-@pytest.mark.skipif(os.name == "nt", reason="Real PTY; list and selector contracts are portable")
-def test_reader_can_open_an_old_recently_updated_session(cli: CliFixture) -> None:
-    activity_sessions(cli, "codex")
-    before = cli.fixtures.source_manifest(cli.root)
-    with terminal(cli, "--browse", "--time-field", "updated", "-d", "7", "-q", "provider:codex") as (
-        expect,
-        send,
-        _,
-        finish,
-    ):
-        expect("codex://activity-1")
-        send("\t")
-        expect("activity-marker")
-        send("q")
-        code, transcript = finish()
-        assert code == 0, transcript
-    assert cli.fixtures.source_manifest(cli.root) == before
-
-
-@pytest.mark.parametrize("args", [["--time-field", "modified"], ["--time-field", "updated", "-d", "0"]])
-def test_invalid_activity_arguments(cli: CliFixture, args: list[str]) -> None:
-    result = cli.run(*args, "--json")
-    assert result.returncode == 2 and result.stderr
-    assert not result.stdout

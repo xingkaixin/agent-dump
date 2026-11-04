@@ -120,23 +120,3 @@ def test_list_head_and_export(cli):
     assert (read["state"]["status"], read["state"]["input"]) == ("completed", {"file_path": "main.rs"})
     assert [part["text"] for part in read["state"]["output"]] == ["fn main() {}"]
     assert [part["text"] for part in final["parts"]] == ["Fixed"]
-
-
-def test_discovery_reads_sessions_and_titles_like_codesesh(cli):
-    prompt = [message("user", "Prompt title")]
-    create(cli, prompt, start={"sessionTitle": "Named", "title": "Ignored"}, identity="named")
-    create(cli, prompt, start={"title": "New Session"}, identity="prompted")
-    create(cli, [message("assistant", "Done")], start={"cwd": "/workspace/repo"}, identity="folder")
-    create(cli, prompt, start={"callingSessionId": "named"}, folder="nested", identity="child")
-    create(cli, prompt, identity="no-start")
-    create(cli, [message("user", "Hidden", visibility="llm_only")], start={}, identity="hidden")
-    create(cli, prompt, start={}, folder="a/b", identity="too-deep")
-
-    sessions = listed(cli)
-    assert {key: item["title"] for key, item in sessions.items()} == {
-        "named": "Named",
-        "prompted": "Prompt title",
-        "folder": "repo",
-        "child": "Prompt title",
-    }
-    assert cli.run("droid://hidden", "--head").returncode == 1

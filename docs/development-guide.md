@@ -73,13 +73,9 @@ Python 数值兼容、统一 Provider 工厂、平台差异和并发锁等例外
 
 ## 3. 交互式 CLI
 
-selector 只展示工作流传入的会话与计数，不发现来源或读取正文。Ratatui/Crossterm 处理终端；stdin 管道保留行输入。RAII 恢复终端模式；真实 PTY 验证位于 `tests/cli/test_tui.py`，Windows 用 TestBackend 验证绘制。
+selector 只展示工作流传入的会话与计数，不发现来源或读取正文。Ratatui/Crossterm 处理终端；stdin 管道保留行输入。RAII 恢复终端模式。`tests/cli/test_tui.py` 用真实 PTY 验证交互输入的 API key 不回显。
 
 第三方文本经 core 的 `output/render.rs` 净化。UI 布局不逐帧复刻旧 questionary；选择、取消、导出和终端恢复属于契约。
-
-### 阅读器验证
-
-`tests/cli/test_reader.py` 使用隔离来源与 POSIX PTY 验证搜索、复制请求、导出、resize 和退出恢复。`terminal/reader.rs` 的 TestBackend 测试覆盖宽窄布局、中文和工具搜索，Windows 同样执行。复制测试只检查 PTY 中的 OSC 52 序列，不访问系统剪贴板。
 
 ## 4. 构建与性能
 

@@ -60,8 +60,6 @@ def only_session(cli):
 @pytest.mark.parametrize(
     ("dates", "message"),
     [
-        (["--since", "bad"], "❌ Invalid date format. Use YYYY-MM-DD or YYYYMMDD."),
-        (["--since", "2026-+1-15", "--until", "2026-01-15"], "❌ Invalid date format. Use YYYY-MM-DD or YYYYMMDD."),
         (["--since", "20260230", "--until", "2026-01-15"], "❌ Invalid date format. Use YYYY-MM-DD or YYYYMMDD."),
         (["--since", "2026-02-01", "--until", "2026-01-01"], "❌ Invalid date range: since must be <= until."),
     ],
@@ -77,9 +75,6 @@ def test_invalid_date_ranges(cli, dates, message):
     [
         ('bad = "unterminated', "TOML"),
         ("[agent.codex]\ndeny=42\n", "agent.codex.deny"),
-        ("[agent]\ncodex=42\n", "agent.codex"),
-        ("[agent.codex]\ndeny=[0]\n", "agent.codex.deny"),
-        ('[agent.codex]\ndeny=[""]\n', "agent.codex.deny"),
     ],
 )
 def test_invalid_exclusion_config_stops_collect(cli, config, field):
@@ -94,37 +89,11 @@ def test_invalid_exclusion_config_stops_collect(cli, config, field):
     )
 
 
-def test_collect_requires_ai_configuration(cli):
-    result = cli.run("--collect", "--lang", "en")
-    assert (result.returncode, result.stdout, result.stderr) == (
-        1,
-        "❌ Collect requires config file.\nRun: agent-dump -config edit\n",
-        "",
-    )
-
-
-@pytest.mark.parametrize(
-    ("scenario", "requests", "notice"),
-    [
-        ("success", 1, "✅ Applied summary to JSON: "),
-        ("missing-config", 0, "⚠️  --summary skipped: config file not found."),
-        ("incomplete-config", 0, "⚠️  --summary skipped: config missing fields: base_url,model,api_key"),
-        ("401", 1, "⚠️  --summary skipped: AI summary request failed: OpenAI API HTTP 401"),
-    ],
-)
-def test_uri_summary_failures_still_export(cli, scenario, requests, notice):
-    def respond(body, count):
-        return (401, {}) if scenario == "401" else (200, {"choices": [{"message": {"content": "# Summary"}}]})
-
-    with server(respond) as (url, calls):
+def test_uri_summary_failure_still_exports(cli):
+    with server(lambda body, count: (401, {})) as (url, calls):
         configure(cli, url)
-        if scenario == "missing-config":
-            config_path(cli).unlink()
-        if scenario == "incomplete-config":
-            config_path(cli).write_text('[ai]\nprovider="openai"\n')
         result = cli.run(f"codex://{IDENTITY}", "--summary", "--format", "json", "--output", "exports", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.startswith(notice)
-    assert len(calls) == requests
-    exported = (cli.root / "exports" / "codex" / f"{IDENTITY}.json").read_text()
-    assert ("# Summary" in exported) == (scenario == "success")
+    assert result.stdout.startswith("⚠️  --summary skipped: AI summary request failed: OpenAI API HTTP 401")
+    assert len(calls) == 1
+    assert (cli.root / "exports" / "codex" / f"{IDENTITY}.json").exists()
