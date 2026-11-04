@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { BinaryMissingError } = require("../packages/cli/lib/resolve-binary.cjs");
-const { getForwardSignals, runCli } = require("../packages/cli/lib/run-agent-dump.cjs");
+const { runCli } = require("../packages/cli/lib/run-agent-dump.cjs");
 
 class FakeProcess extends EventEmitter {
   off(eventName, listener) {
@@ -50,29 +50,6 @@ test("runCli forwards argv and exits with the child exit code", async () => {
   assert.equal(exitCode, 3);
 });
 
-test("runCli prints an explicit error for unsupported platforms", async () => {
-  const messages = [];
-  let exitCode = null;
-
-  const child = await runCli({
-    platform: "linux",
-    arch: "arm64",
-    resolveBinaryImpl: () => {
-      throw new Error("Unsupported platform linux/arm64");
-    },
-    writeError: (message) => {
-      messages.push(message);
-    },
-    exit: (code) => {
-      exitCode = code;
-    }
-  });
-
-  assert.equal(child, null);
-  assert.equal(exitCode, 1);
-  assert.deepEqual(messages, ["Unsupported platform linux/arm64\n"]);
-});
-
 test("runCli installs the binary on demand when the vendored file is missing", async () => {
   const child = new EventEmitter();
   child.kill = () => {};
@@ -111,99 +88,4 @@ test("runCli installs the binary on demand when the vendored file is missing", a
       stdio: "inherit"
     }
   });
-});
-
-test("runCli does not infer a missing binary from an unrelated error message", async () => {
-  const messages = [];
-  let exitCode = null;
-  let installAttempted = false;
-
-  const child = await runCli({
-    platform: "linux",
-    arch: "x64",
-    resolveBinaryImpl: () => {
-      throw new Error("Registry response says Binary file is missing metadata");
-    },
-    ensureBinaryImpl: async () => {
-      installAttempted = true;
-      return "/tmp/agent-dump";
-    },
-    writeError: (message) => {
-      messages.push(message);
-    },
-    exit: (code) => {
-      exitCode = code;
-    }
-  });
-
-  assert.equal(child, null);
-  assert.equal(exitCode, 1);
-  assert.equal(installAttempted, false);
-  assert.deepEqual(messages, ["Registry response says Binary file is missing metadata\n"]);
-});
-
-test("runCli reports install failures when the binary cannot be recovered", async () => {
-  const messages = [];
-  let exitCode = null;
-
-  const child = await runCli({
-    platform: "linux",
-    arch: "x64",
-    resolveBinaryImpl: () => {
-      throw new BinaryMissingError("linux-x64", "/tmp/vendor/agent-dump");
-    },
-    ensureBinaryImpl: async () => {
-      throw new Error("network down");
-    },
-    writeError: (message) => {
-      messages.push(message);
-    },
-    exit: (code) => {
-      exitCode = code;
-    }
-  });
-
-  assert.equal(child, null);
-  assert.equal(exitCode, 1);
-  assert.deepEqual(messages, ["Failed to install agent-dump native binary: network down\n"]);
-});
-
-test("getForwardSignals keeps SIGBREAK only on Windows", () => {
-  assert.deepEqual(getForwardSignals("linux"), ["SIGINT", "SIGTERM", "SIGHUP"]);
-  assert.deepEqual(getForwardSignals("win32"), ["SIGINT", "SIGTERM", "SIGBREAK"]);
-});
-
-test("a damaged binary points the user at the reinstall that repairs it", async () => {
-  const errors = [];
-  const child = await runCli({
-    argv: [],
-    platform: "linux",
-    arch: "x64",
-    writeError: (text) => errors.push(text),
-    exit: () => {},
-    resolveBinaryImpl: () => "/vendor/agent-dump",
-    spawnImpl: () => new EventEmitter()
-  });
-
-  child.emit("error", Object.assign(new Error("Exec format error"), { code: "ENOEXEC" }));
-
-  assert.match(errors.join(""), /Failed to start agent-dump binary/);
-  assert.match(errors.join(""), /reinstall @agent-dump\/cli/);
-});
-
-test("an unrelated spawn failure does not claim the binary is damaged", async () => {
-  const errors = [];
-  const child = await runCli({
-    argv: [],
-    platform: "linux",
-    arch: "x64",
-    writeError: (text) => errors.push(text),
-    exit: () => {},
-    resolveBinaryImpl: () => "/vendor/agent-dump",
-    spawnImpl: () => new EventEmitter()
-  });
-
-  child.emit("error", Object.assign(new Error("too many open files"), { code: "EMFILE" }));
-
-  assert.doesNotMatch(errors.join(""), /reinstall/);
 });

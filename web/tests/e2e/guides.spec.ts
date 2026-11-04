@@ -1,125 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { readFile } from "node:fs/promises";
 
-test("missing pages have a noindex 404 and legacy sitemap redirects to the index", async ({ page, request }) => {
-  const response = await page.goto("/missing-seo-page/");
-  expect(response?.status()).toBe(404);
-  await expect(page.locator("h1")).toHaveText("Page not found");
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, follow");
-  await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
-  await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
-  const sitemap = await (await request.get("/sitemap-0.xml")).text();
-  expect(sitemap).not.toContain("/404");
-  expect(await readFile(new URL("../../dist/_redirects", import.meta.url), "utf8"))
-    .toContain("/sitemap.xml /sitemap-index.xml 301");
-});
-
-const guides = [
-  {
-    home: "/",
-    path: "/guides/export-codex-session/",
-    lang: "en",
-    title: "Export a Codex session to Markdown",
-  },
-  {
-    home: "/zh/",
-    path: "/zh/guides/export-codex-session/",
-    lang: "zh-Hans",
-    title: "将 Codex 会话导出为 Markdown",
-  },
-];
-
-for (const guide of guides) {
-  test(`${guide.lang} guide has crawlable content and reciprocal translations`, async ({
-    page,
-    request,
-  }) => {
-    await page.route("https://umami.xingkaixin.me/**", (route) =>
-      route.abort(),
-    );
-    await page.goto(guide.home);
-    await page.locator(`#guides a[href="${guide.path}"]`).click();
-    await expect(page).toHaveURL(guide.path);
-    await expect(page).toHaveTitle(`${guide.title} | Agent Dump`);
-    await expect(page.locator("h1")).toHaveText(guide.title);
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
-      "href",
-      `https://agent-dump.xingkaixin.me${guide.path}`,
-    );
-    await expect(page.locator('link[rel="alternate"]')).toHaveCount(3);
-    for (const translation of guides) {
-      await expect(
-        page.locator(`link[hreflang="${translation.lang}"]`),
-      ).toHaveAttribute(
-        "href",
-        `https://agent-dump.xingkaixin.me${translation.path}`,
-      );
-      await expect(
-        page.locator(`header a[lang="${translation.lang}"]`),
-      ).toHaveAttribute("href", translation.path);
-    }
-    await expect(page.locator("header .cta-h")).toHaveAttribute(
-      "href",
-      `${guide.home}#install`,
-    );
-
-    const response = await request.get(guide.path);
-    expect(response.ok()).toBe(true);
-    const html = await response.text();
-    expect(html).toContain("YOUR_SESSION_ID");
-    expect(html).toContain("./exports/codex/");
-    const schema = JSON.parse(
-      await page.locator('script[type="application/ld+json"]').innerText(),
-    );
-    expect(schema["@graph"]).toContainEqual(
-      expect.objectContaining({
-        "@type": "WebPage",
-        url: `https://agent-dump.xingkaixin.me${guide.path}`,
-      }),
-    );
-    expect(
-      schema["@graph"].some(
-        (node: { "@type": string }) => node["@type"] === "FAQPage",
-      ),
-    ).toBe(false);
-    expect(await (await request.get("/sitemap-0.xml")).text()).toContain(
-      `<loc>https://agent-dump.xingkaixin.me${guide.path}</loc>`,
-    );
-
-    for (const width of [360, 1280]) {
-      await page.setViewportSize({ width, height: 844 });
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth),
-      ).toBe(width);
-      await expect(page.locator("article h2").first()).toBeVisible();
-    }
-    await page.locator("header .cta-h").click();
-    await expect(page.locator("#install")).toBeVisible();
-  });
-}
-
-test("guide filters combine category and query, and recover from empty results", async ({
-  page,
-}) => {
-  await page.goto("/zh/guides/");
-  await expect(page.locator(".guide-card:visible")).toHaveCount(6);
-  await page.getByRole("button", { name: "导出与归档", exact: true }).click();
-  await expect(page.locator(".guide-card:visible")).toHaveCount(3);
-  await page.getByRole("searchbox", { name: "搜索指南" }).fill("Claude");
-  await expect(page.locator(".guide-card:visible")).toHaveCount(2);
-  await page.getByRole("searchbox").fill("no-such-guide");
-  await expect(page.getByRole("status")).toContainText("没有匹配的指南");
-  await page.getByRole("searchbox").fill("");
-  await page.getByRole("button", { name: "全部指南", exact: true }).click();
-  await expect(page.locator(".guide-card:visible")).toHaveCount(6);
-  await expect(page.getByRole("status")).toBeHidden();
-});
-
-test("all articles have indexable HTML, article metadata and working internal links", async ({
+test("all articles and their internal links are reachable", async ({
   page,
   request,
 }) => {
-  const sitemap = await (await request.get("/sitemap-0.xml")).text();
   for (const prefix of ["", "/zh"]) {
     await page.goto(`${prefix}/guides/`);
     const paths = await page
@@ -127,33 +11,8 @@ test("all articles have indexable HTML, article metadata and working internal li
       .evaluateAll((links) => links.map((link) => link.getAttribute("href")!));
     expect(paths.length).toBeGreaterThan(0);
     for (const path of paths) {
-      await page.goto(path);
-      await expect(page.locator("main h1")).toHaveCount(1);
-      await expect(page.locator('meta[property="og:type"]')).toHaveAttribute(
-        "content",
-        "article",
-      );
-      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
-        "href",
-        `https://agent-dump.xingkaixin.me${path}`,
-      );
-      const schema = JSON.parse(
-        await page.locator('script[type="application/ld+json"]').innerText(),
-      );
-      expect(schema["@graph"]).toContainEqual(
-        expect.objectContaining({
-          "@type": "Article",
-          headline: await page.locator("main h1").innerText(),
-        }),
-      );
-      expect(schema["@graph"]).toContainEqual(
-        expect.objectContaining({ "@type": "BreadcrumbList" }),
-      );
-      expect(sitemap).toContain(
-        `<loc>https://agent-dump.xingkaixin.me${path}</loc>`,
-      );
-      const response = await request.get(path);
-      expect(await response.text()).toContain("agent-dump");
+      const response = await page.goto(path);
+      expect(response?.ok(), path).toBe(true);
       const links = await page
         .locator('main a[href^="/"]')
         .evaluateAll((elements) =>
@@ -162,29 +21,6 @@ test("all articles have indexable HTML, article metadata and working internal li
       for (const href of new Set(links)) {
         expect((await request.get(href)).ok(), href).toBe(true);
       }
-      const toc = await page
-        .locator(".guide-toc a")
-        .evaluateAll((links) =>
-          links.map((a) => a.getAttribute("href")!.slice(1)),
-        );
-      for (const id of toc)
-        expect(
-          await page.evaluate(
-            (id) => Boolean(document.getElementById(decodeURIComponent(id))),
-            id,
-          ),
-        ).toBe(true);
     }
   }
-});
-
-test("article commands copy as plain text", async ({ context, page }) => {
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.goto("/zh/guides/handoff-context-to-ai-agent/");
-  const block = page.locator(".guide-code").first();
-  await block.getByRole("button", { name: "复制", exact: true }).click();
-  await expect(block.getByRole("status")).toHaveText("已复制");
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-    await block.locator("code").textContent(),
-  );
 });

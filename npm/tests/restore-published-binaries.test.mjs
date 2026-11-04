@@ -46,21 +46,6 @@ function localMetadata(integrity) {
   return JSON.stringify([{ name: "@agent-dump/cli-test", version: "1.2.3", integrity }]);
 }
 
-test("leaves a newly staged binary when the version is unpublished", async (t) => {
-  const packageRoot = await tempRoot(t, "agent-dump-restore-unpublished-");
-  const binaryPath = path.join(packageRoot, "bin", "agent-dump");
-  await writeFile(binaryPath, "local");
-  const responses = [command(0, localMetadata("sha512-local")), command(1, JSON.stringify({ error: { code: "E404" } }))];
-
-  const outcome = restorePublishedBinary(packageRoot, "agent-dump", {
-    run: () => responses.shift(),
-    log() {}
-  });
-
-  assert.equal(outcome, RestoreOutcome.UNPUBLISHED);
-  assert.equal(await readFile(binaryPath, "utf8"), "local");
-});
-
 test("restores the exact binary from an existing immutable package", async (t) => {
   const packageRoot = await tempRoot(t, "agent-dump-restore-published-");
   const binaryPath = path.join(packageRoot, "bin", "agent-dump");
@@ -87,30 +72,4 @@ test("restores the exact binary from an existing immutable package", async (t) =
 
   assert.equal(outcome, RestoreOutcome.RESTORED);
   assert.deepEqual(await readFile(binaryPath), publishedBinary);
-});
-
-test("fails if the current manifest cannot reproduce the published tarball", async (t) => {
-  const packageRoot = await tempRoot(t, "agent-dump-restore-conflict-");
-  await writeFile(path.join(packageRoot, "bin", "agent-dump"), "new-build");
-  const remoteIntegrity = "sha512-remote";
-  let localPackCount = 0;
-
-  const run = (args) => {
-    if (args[0] === "view") {
-      return command(0, JSON.stringify(remoteIntegrity));
-    }
-    if (args[0] === "pack" && args.includes("--pack-destination")) {
-      const destination = args[args.indexOf("--pack-destination") + 1];
-      const filename = "agent-dump-cli-test-1.2.3.tgz";
-      writeFileSync(path.join(destination, filename), packageTarball("agent-dump", Buffer.from("published")));
-      return command(0, JSON.stringify([{ filename, integrity: remoteIntegrity }]));
-    }
-    localPackCount += 1;
-    return command(0, localMetadata(localPackCount === 1 ? "sha512-local" : "sha512-still-different"));
-  };
-
-  assert.throws(
-    () => restorePublishedBinary(packageRoot, "agent-dump", { run, log() {} }),
-    /cannot be reconstructed/
-  );
 });

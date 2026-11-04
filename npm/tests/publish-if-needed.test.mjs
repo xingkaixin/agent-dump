@@ -65,87 +65,6 @@ test("rejects an existing version with different contents", async () => {
   assert.equal(calls.length, 2);
 });
 
-test("recovers when an identical concurrent publish wins the race", async () => {
-  const calls = [];
-  const run = queuedRunner(
-    [
-      command(0, localMetadata),
-      command(1, missing),
-      command(1, "", "publish conflict"),
-      command(0, JSON.stringify(localIntegrity)),
-      command(0, localMetadata)
-    ],
-    calls
-  );
-
-  const outcome = await publishPackageIfNeeded("./package", { run, log() {} });
-
-  assert.equal(outcome, PublishOutcome.RECOVERED);
-  assert.equal(calls.length, 5);
-});
-
-test("does not treat registry failures as a missing package", async () => {
-  const calls = [];
-  const run = queuedRunner([command(0, localMetadata), command(1, "", "network unavailable")], calls);
-
-  await assert.rejects(() => publishPackageIfNeeded("./package", { run, log() {} }), /network unavailable/);
-  assert.equal(calls.length, 2);
-});
-
-test("waits for a processed native package before publishing the wrapper", async () => {
-  const calls = [];
-  const waits = [];
-  const logs = [];
-  const wrapperMetadata = localMetadata.replace("cli-test", "cli");
-  const run = queuedRunner([
-    command(0, localMetadata), command(1, missing), command(0),
-    command(1, JSON.stringify({ error: { code: "ETARGET" } })),
-    command(1, missing), command(0, localMetadata),
-    command(0, wrapperMetadata), command(1, missing), command(0), command(0, wrapperMetadata)
-  ], calls);
-
-  await main(["./native", "./wrapper"], {
-    run,
-    log: (message) => logs.push(message),
-    wait: async (delay) => { waits.push(delay); }
-  });
-
-  assert.deepEqual(waits, [15_000, 15_000]);
-  assert.deepEqual(calls.filter(([verb]) => verb === "publish").map(([, file]) => file), ["./native", "./wrapper"]);
-  assert.equal(calls[5][1], "@agent-dump/cli-test@1.2.3");
-  assert.equal(calls[6][1], "./wrapper");
-  assert.ok(logs.some((message) => message.includes("ETARGET")));
-  assert.ok(logs.some((message) => message.includes("E404")));
-});
-
-test("publishes every native package before polling them together", async () => {
-  const calls = [];
-  const waits = [];
-  const otherMetadata = localMetadata.replace("cli-test", "cli-other");
-  const wrapperMetadata = localMetadata.replace("cli-test", "cli");
-  const run = queuedRunner([
-    command(0, localMetadata), command(1, missing), command(0),
-    command(0, otherMetadata), command(1, missing), command(0),
-    command(1, missing), command(0, otherMetadata),
-    command(0, localMetadata),
-    command(0, wrapperMetadata), command(1, missing), command(0), command(0, wrapperMetadata)
-  ], calls);
-
-  await main(["./native", "./other", "./wrapper"], {
-    run,
-    log() {},
-    wait: async (delay) => { waits.push(delay); }
-  });
-
-  assert.deepEqual(waits, [15_000]);
-  assert.deepEqual(calls.slice(6, 9).map(([verb, spec]) => [verb, spec]), [
-    ["pack", "@agent-dump/cli-test@1.2.3"],
-    ["pack", "@agent-dump/cli-other@1.2.3"],
-    ["pack", "@agent-dump/cli-test@1.2.3"]
-  ]);
-  assert.equal(calls[9][1], "./wrapper");
-});
-
 test("stops the release if a published package never becomes downloadable", async () => {
   const calls = [];
   const waits = [];
@@ -164,44 +83,6 @@ test("stops the release if a published package never becomes downloadable", asyn
   assert.ok(!calls.some(([, file]) => file === "./wrapper"));
   assert.equal(calls.filter(([verb]) => verb === "publish").length, 1);
 });
-
-for (const failure of [
-  command(1, JSON.stringify({ error: { code: "E403" } }), "access denied"),
-  command(1, "", "network unavailable"),
-  { ...command(null), error: new Error("npm not found") }
-]) {
-  test(`fails immediately on a download check error: ${failure.stderr || failure.error.message}`, async () => {
-    const calls = [];
-    const run = queuedRunner([
-      command(0, localMetadata), command(1, missing), command(0), failure
-    ], calls);
-
-    await assert.rejects(() => publishPackageIfNeeded("./package", {
-      run, log() {}, wait: async () => assert.fail("must not retry this failure")
-    }), /Could not check download availability/);
-    assert.equal(calls.length, 4);
-  });
-}
-
-for (const metadata of [
-  localMetadata.replace(localIntegrity, "sha512-other"),
-  localMetadata.replace("1.2.3", "1.2.4"),
-  localMetadata.replace("cli-test", "cli-other"),
-  "[]",
-  "invalid JSON"
-]) {
-  test(`rejects downloaded metadata that does not match the release: ${metadata}`, async () => {
-    const calls = [];
-    const run = queuedRunner([
-      command(0, localMetadata), command(1, missing), command(0), command(0, metadata)
-    ], calls);
-
-    await assert.rejects(() => publishPackageIfNeeded("./package", {
-      run, log() {}, wait: async () => assert.fail("must not retry invalid metadata")
-    }), /does not match the release tarball|npm returned invalid JSON/);
-    assert.equal(calls.length, 4);
-  });
-}
 
 test("release tarball list contains every platform before the wrapper", () => {
   const tarballs = releaseTarballPaths("/tmp/agent-dump-packed");

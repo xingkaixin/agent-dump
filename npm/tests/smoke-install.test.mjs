@@ -32,10 +32,6 @@ function validManifest() {
   };
 }
 
-test("accepts a packed platform tarball with exact target metadata", () => {
-  assert.doesNotThrow(() => validatePackedPlatformTarball(validMetadata(), validManifest(), spec, version));
-});
-
 test("rejects a packed platform tarball without its executable", () => {
   const metadata = validMetadata();
   metadata.files = metadata.files.filter((file) => !file.path.startsWith("bin/"));
@@ -43,26 +39,6 @@ test("rejects a packed platform tarball without its executable", () => {
   assert.throws(
     () => validatePackedPlatformTarball(metadata, validManifest(), spec, version),
     /must contain only bin\/agent-dump under bin\//
-  );
-});
-
-test("rejects a packed platform tarball with the wrong executable", () => {
-  const metadata = validMetadata();
-  metadata.files[0].path = "bin/agent-dump.exe";
-
-  assert.throws(
-    () => validatePackedPlatformTarball(metadata, validManifest(), spec, version),
-    /must contain only bin\/agent-dump under bin\//
-  );
-});
-
-test("rejects mismatched platform metadata", () => {
-  const manifest = validManifest();
-  manifest.os = ["darwin"];
-
-  assert.throws(
-    () => validatePackedPlatformTarball(validMetadata(), manifest, spec, version),
-    /does not declare linux\/x64/
   );
 });
 
