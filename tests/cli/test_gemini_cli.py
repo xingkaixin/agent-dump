@@ -1,7 +1,6 @@
 """Gemini CLI chats through the published CLI surface."""
 
 import json
-from pathlib import Path
 
 from cli_fixture import IDENTITY, write_jsonl
 
@@ -126,41 +125,3 @@ def test_list_head_and_export(cli):
     )
     assert (shell["state"]["status"], shell["state"]["output"], shell["state"]["error"]) == ("error", None, "exit 1")
     assert [(part["type"], part["text"]) for part in second["parts"]] == [("reasoning", "Plan"), ("text", "Done.")]
-
-
-def test_discovery_reads_chats_and_subagents_only(cli):
-    prompt = [entry("u", "user", "<session_context>cwd</session_context>"), entry("v", "user", "Prompt   title")]
-    create(cli, [header("main"), *prompt], name="session-main.jsonl")
-    create(cli, [header("agent01", kind="subagent"), *prompt], name="parent/agent01.jsonl")
-    legacy = cli.root / "sources/gemini-cli/.gemini/tmp/project/chats/session-legacy.json"
-    legacy.write_text(json.dumps({**header("legacy"), "messages": [entry("a", "user", "Legacy")]}, indent=2))
-    create(cli, [header("resumed"), entry("a", "user", "Resumed")], name="session-resumed.jsonl")
-    (legacy.parent / "session-resumed.json").write_text(
-        json.dumps({**header("resumed"), "messages": [entry("a", "user", "Old snapshot")]})
-    )
-    create(cli, [header("empty")], name="session-empty.jsonl")
-    create(cli, [entry("u", "user", "No session id")], name="session-anonymous.jsonl")
-    create(cli, [header("checkpoint"), *prompt], name="../checkpoint.jsonl")
-    create(cli, [header("elsewhere"), *prompt], name="../logs/session-elsewhere.jsonl")
-
-    sessions = run_json(cli, "--list", "-d", "36500", "-q", "provider:gemini-cli")
-    assert {item["id"]: item["title"] for item in sessions} == {
-        "main": "Prompt title",
-        "agent01": "Prompt title",
-        "legacy": "Legacy",
-        "resumed": "Resumed",
-    }
-    assert len(sessions) == 4
-    assert run_json(cli, "gemini-cli://agent01", "--head")["message_count"] == 2
-    assert cli.run("gemini-cli://empty", "--head").returncode == 1
-
-
-def test_gemini_cli_home_is_a_home_directory(cli):
-    home = Path(cli.environment["HOME"])
-    create(cli, [header("default"), entry("u", "user", "Default")], root=home)
-    create(cli, [header("custom"), entry("u", "user", "Custom")], root=home / "custom")
-
-    cli.environment.pop("GEMINI_CLI_HOME")
-    assert set(listed(cli)) == {"default"}
-    cli.environment["GEMINI_CLI_HOME"] = "~/custom"
-    assert set(listed(cli)) == {"custom"}

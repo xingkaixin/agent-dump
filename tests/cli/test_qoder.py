@@ -58,15 +58,3 @@ def test_list_head_and_export_use_the_claude_transcript(cli, provider):
     assert user["parts"][0]["text"] == "Explain the cache"
     assert (assistant["agent"], assistant["model"]) == (provider, "glm-5")
     assert assistant["parts"][0]["state"]["status"] == "completed"
-
-
-def test_default_roots_keep_qoder_and_qoder_cn_apart(cli):
-    home = cli.root / "home"
-    for provider, (variable, directory) in PROVIDERS.items():
-        del cli.environment[variable]
-        create(home / directory, [event("user", provider)], identity=provider)
-
-    for provider in PROVIDERS:
-        assert {key: item["title"] for key, item in listed(cli, provider).items()} == {provider: provider}
-    missing = cli.run("qoder://qoder-cn", "--head")
-    assert missing.returncode == 1

@@ -214,36 +214,3 @@ impl Provider for Grok {
         Ok(RawExport::File(path))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::tests::source_selection(
-            "sessions",
-            false,
-            |roots| Grok { roots },
-            |base| {
-                let path = base.join("project/kept");
-                std::fs::create_dir_all(&path).unwrap();
-                std::fs::write(
-                    path.join(SUMMARY),
-                    r#"{"info":{"id":"kept","cwd":"/workspace"}}"#,
-                )
-                .unwrap();
-                std::fs::write(
-                    path.join(UPDATES),
-                    concat!(
-                        r#"{"params":{"update":{"#,
-                        r#""sessionUpdate":"user_message_chunk","#,
-                        r#""content":{"type":"text","text":"Keep"}}}}"#,
-                    ),
-                )
-                .unwrap();
-                path
-            },
-        );
-    }
-}

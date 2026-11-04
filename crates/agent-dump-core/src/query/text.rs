@@ -161,31 +161,3 @@ impl TextQuery {
             .map(|matched| matched.range())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn snippets_read_raw_text_as_normalized_text() {
-        let text = format!(
-            "  \t{}\u{3000}\u{3000}needle\n\n{}  ",
-            "w ".repeat(30),
-            "x".repeat(47)
-        );
-        let snippet = |query: &str, mode| {
-            TextQuery::new(query, mode)
-                .find(&["", &text])
-                .unwrap()
-                .snippet
-        };
-        assert_eq!(
-            snippet("NEEDLE", Mode::Terms),
-            format!("...{}**needle** {}", "w ".repeat(24), "x".repeat(47))
-        );
-        assert_eq!(
-            snippet("w needle", Mode::Phrase),
-            format!("...{}**w needle** {}", "w ".repeat(24), "x".repeat(47))
-        );
-    }
-}

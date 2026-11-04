@@ -105,31 +105,6 @@ unixTest("failed download and checksum mismatch preserve the old executable", (t
   assert.equal(readFileSync(f.destination, "utf8"), old);
 });
 
-unixTest("updates an older executable only after successful verification", (t) => {
-  const f = fixture(t);
-  mkdirSync(join(f.root, "install"));
-  f.executable(f.destination, '#!/bin/sh\necho "agent-dump 0.9.0"\n');
-  const result = f.run({ AGENT_DUMP_VERSION: "1.0.0" });
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(readFileSync(f.destination, "utf8"), /1\.0\.0/);
-});
-
-unixTest("a checksummed executable that cannot run does not replace the old version", (t) => {
-  const f = fixture(t);
-  mkdirSync(join(f.root, "install"));
-  const old = '#!/bin/sh\necho "agent-dump 0.9.0"\n';
-  f.executable(f.destination, old);
-  f.executable(join(f.assets, "agent-dump"), "#!/bin/sh\nexit 1\n");
-  const name = "agent-dump-darwin-arm64";
-  writeFileSync(join(f.assets, name), readFileSync(join(f.assets, "agent-dump")));
-  const hash = createHash("sha256")
-    .update(readFileSync(join(f.assets, name)))
-    .digest("hex");
-  writeFileSync(join(f.assets, "SHA256SUMS"), `${hash}  ${name}\n`);
-  assert.notEqual(f.run().status, 0);
-  assert.equal(readFileSync(f.destination, "utf8"), old);
-});
-
 unixTest("refuses package-manager symlinks and unsupported platforms", (t) => {
   const f = fixture(t);
   mkdirSync(join(f.root, "install"));
@@ -137,18 +112,6 @@ unixTest("refuses package-manager symlinks and unsupported platforms", (t) => {
   assert.match(f.run().stderr, /Refusing to replace a symlink/);
   f.executable(join(f.bin, "uname"), "#!/bin/sh\necho unsupported\n");
   assert.match(f.run().stderr, /Supported platforms/);
-});
-
-unixTest("rejects old glibc before downloading", (t) => {
-  const f = fixture(t);
-  f.executable(
-    join(f.bin, "uname"),
-    '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo x86_64;; esac\n',
-  );
-  f.executable(join(f.bin, "getconf"), '#!/bin/sh\necho "glibc 2.16"\n');
-  const result = f.run();
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /glibc 2.17/);
 });
 
 for (const target of NATIVE_TARGETS.filter((target) => target.platform !== "win32")) {

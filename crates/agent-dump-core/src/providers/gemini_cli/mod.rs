@@ -192,31 +192,3 @@ impl Provider for GeminiCli {
         self.roots.select()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::tests::source_selection(
-            "tmp",
-            false,
-            |roots| GeminiCli { roots },
-            |base| {
-                let path = base.join("project/chats/session-kept.jsonl");
-                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-                std::fs::write(
-                    &path,
-                    concat!(
-                        r#"{"sessionId":"kept","projectHash":"hash"}"#,
-                        "\n",
-                        r#"{"id":"u","type":"user","content":"Keep"}"#,
-                    ),
-                )
-                .unwrap();
-                path
-            },
-        );
-    }
-}

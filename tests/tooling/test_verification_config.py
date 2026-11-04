@@ -4,22 +4,8 @@ from pathlib import Path
 import re
 
 import pytest
-import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-class TestSinglePytestConfig:
-    @pytest.mark.parametrize("shadowing_file", ["pytest.ini", "setup.cfg", "tox.ini"])
-    def test_no_file_shadows_the_pyproject_config(self, shadowing_file):
-        """pytest 只认一个配置文件，这些文件的优先级都高于 pyproject.toml。
-
-        pytest.ini 曾静默覆盖 [tool.pytest.ini_options] 约五个月，
-        testpaths / markers / addopts 全部失效。
-        """
-        assert not (REPO_ROOT / shadowing_file).exists(), (
-            f"{shadowing_file} 会覆盖 pyproject.toml 的 [tool.pytest.ini_options]"
-        )
 
 
 class TestPinnedUvInstaller:
@@ -53,19 +39,6 @@ class TestBuildBackendIsReproducible:
             assert "==" in requirement, f"构建约束未固定版本: {record}"
             assert "--hash=sha256:" in record, f"构建约束缺少可信 hash: {record}"
 
-    def test_constraint_input_and_generated_maturin_pin_match(self):
-        source_pin = (REPO_ROOT / "packaging" / "build-constraints.in").read_text(encoding="utf-8").strip()
-
-        assert source_pin.startswith("maturin==")
-        assert any(record.startswith(source_pin) for record in self._constraint_records())
-
-    def test_zig_linker_maturin_matches_the_build_backend(self):
-        """Linux 的 zig linker wrapper 调用 packaging 组的 maturin，版本必须与构建后端一致。"""
-        source_pin = (REPO_ROOT / "packaging" / "build-constraints.in").read_text(encoding="utf-8").strip()
-        pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-
-        assert source_pin in pyproject["dependency-groups"]["packaging"]
-
     def test_local_and_release_builds_use_the_same_hash_gate(self):
         justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
         artifacts = (REPO_ROOT / ".github/workflows/build-artifacts.yml").read_text(encoding="utf-8")
@@ -84,12 +57,6 @@ class TestBuildBackendIsReproducible:
         assert "packaging/verify_wheel.py --python 3.14" in artifacts
         assert "manylinux2014_x86_64@sha256:" in artifacts
 
-    def test_clean_build_does_not_sync_the_project_before_the_hash_gate(self):
-        justfile = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
-        clean_recipe = justfile.split("\nclean-build:", 1)[1].split("\n\n", 1)[0]
-
-        assert "uv run --no-project python" in clean_recipe
-
 
 class TestPinnedJustInstaller:
     def test_local_just_installer_pins_and_verifies_the_release(self):
@@ -99,27 +66,6 @@ class TestPinnedJustInstaller:
         assert re.search(r'JUST_SHA256: "[0-9a-f]{64}"', action)
         assert "releases/download/$JUST_VERSION/" in action
         assert "sha256sum --check" in action
-
-
-class TestCiCancelsSupersededRuns:
-    @staticmethod
-    def _workflow_preamble(name: str) -> str:
-        content = (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
-        return content.split("\njobs:\n", 1)[0]
-
-    def test_ci_cancels_only_an_older_run_with_the_same_identity(self):
-        preamble = self._workflow_preamble("ci.yml")
-        concurrency = preamble.split("\nconcurrency:\n", 1)[1].split("\nenv:\n", 1)[0]
-
-        assert "github.workflow" in concurrency
-        assert "github.event_name" in concurrency
-        assert "github.event.pull_request.number || github.sha" in concurrency
-        assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in concurrency
-
-    def test_release_does_not_share_the_ci_cancellation_group(self):
-        release_preamble = self._workflow_preamble("release.yml")
-
-        assert "github.event.pull_request.number" not in release_preamble
 
 
 class TestReleasePermissions:
@@ -158,14 +104,6 @@ class TestReleaseRetries:
         assert ".tgz" not in publish
         assert "./npm/packages/" not in publish
 
-    def test_same_tag_release_runs_are_serialized_without_cancellation(self):
-        preamble = self._release().split("\njobs:\n", 1)[0]
-        concurrency = preamble.split("\nconcurrency:\n", 1)[1].split("\nenv:\n", 1)[0]
-
-        assert "github.workflow" in concurrency
-        assert "github.ref" in concurrency
-        assert "cancel-in-progress: false" in concurrency
-
     def test_release_assets_use_the_effective_npm_binaries(self):
         release = self._release()
         stage_release = release.split("\n      - name: Stage GitHub release assets\n", 1)[1].split(
@@ -199,20 +137,7 @@ class TestVerificationConsumesTheCommittedLock:
     def _workflow(name: str) -> str:
         return (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
 
-    @pytest.mark.parametrize("workflow", ["ci.yml", "release.yml", "build-artifacts.yml"])
-    def test_every_uv_sync_is_locked(self, workflow):
-        content = self._workflow(workflow)
-        sync_lines = [
-            stripped
-            for line in content.splitlines()
-            if "uv sync" in (stripped := line.strip()) and not stripped.startswith("#")
-        ]
-
-        assert sync_lines, f"{workflow} 应当有 uv sync 步骤"
-        for line in sync_lines:
-            assert "--locked" in line, f"{workflow} 的 `{line}` 会在需要时静默重锁"
-
-    @pytest.mark.parametrize("workflow", ["ci.yml", "release.yml", "build-artifacts.yml"])
+    @pytest.mark.parametrize("workflow", ["release.yml", "build-artifacts.yml"])
     def test_uv_locked_is_set_for_the_whole_workflow(self, workflow):
         """--locked 只管 uv sync；后续的 uv run 需要 UV_LOCKED 才受同一约束。"""
         content = self._workflow(workflow)

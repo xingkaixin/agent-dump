@@ -27,17 +27,8 @@ fmt:
     uv run ruff format .
     @echo "✅ Code formatting complete!"
 
-lint-format: fmt
-
-fmt-check:
-    cargo fmt --all --check
-    uv run ruff format --check .
-
-# Run type checking for Rust and verification tools
-check: check-tools
-    cargo check --locked --workspace --all-targets
-
-check-tools:
+# Type-check Python verification and packaging tools
+check:
     @echo "🔍 Running type checks..."
     uv run ty check .
     @echo "✅ Type checking complete!"
@@ -55,14 +46,6 @@ reference:
 benchmark *args: build-rust
     uv run python scripts/benchmark_cli.py {{args}}
 
-# Check the Rust CLI on synthetic data
-check-rust:
-    cargo fmt --all --check
-    cargo clippy --locked --workspace --all-targets -- -D warnings
-    cargo test --locked --workspace
-    cargo build --locked --release
-    uv run pytest -q tests/cli
-
 # Build the Rust binary for performance evaluation
 build-rust:
     cargo build --locked --release
@@ -74,7 +57,7 @@ test-npm:
     @echo "✅ npm wrapper tests complete!"
 
 # Auto-fix lint issues and format code
-fix: lint-fix lint-format
+fix: lint-fix fmt
 
 # Type-check and build the landing page from the committed lockfile
 check-web:

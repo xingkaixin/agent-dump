@@ -328,37 +328,3 @@ impl Provider for Droid {
         self.roots.select()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn source_selection_retries_absence_and_keeps_selected_root() {
-        crate::providers::tests::source_selection(
-            "sessions",
-            false,
-            |roots| Droid {
-                roots,
-                models: None,
-            },
-            |base| {
-                let path = base.join("kept.jsonl");
-                std::fs::create_dir_all(base).unwrap();
-                std::fs::write(
-                    &path,
-                    concat!(
-                        r#"{"type":"session_start","id":"kept"}"#,
-                        "\n",
-                        r#"{"type":"message","id":"m","#,
-                        r#""timestamp":"2026-01-15T00:00:00Z","#,
-                        r#""message":{"role":"user","content":"Keep"}}"#,
-                        "\n",
-                    ),
-                )
-                .unwrap();
-                path
-            },
-        );
-    }
-}

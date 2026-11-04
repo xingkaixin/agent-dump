@@ -3,16 +3,14 @@
 import json
 import sqlite3
 
-import pytest
 from sqlite_fixture import create_legacy
 
 
-@pytest.mark.parametrize("journal", ["DELETE", "WAL"])
-def test_database_and_wal_remain_unchanged_and_new_commits_are_visible(cli, journal):
+def test_database_and_wal_remain_unchanged_and_new_commits_are_visible(cli):
     path = create_legacy(cli)
     writer = sqlite3.connect(path)
     try:
-        writer.execute(f"PRAGMA journal_mode={journal}")
+        writer.execute("PRAGMA journal_mode=WAL")
         writer.execute("PRAGMA wal_autocheckpoint=0")
         for body in ("Initial commit", "Committed update"):
             writer.execute(

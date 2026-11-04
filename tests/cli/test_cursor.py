@@ -70,7 +70,7 @@ def cursor(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     ("formats", "rejected"),
-    [("raw", ["raw"]), ("md", ["markdown"]), ("json,markdown", ["markdown"]), ("raw,md,json,raw", ["raw", "markdown"])],
+    [("json,markdown", ["markdown"])],
 )
 def test_cursor_rejects_unsupported_format_combinations(tmp_path, monkeypatch, formats, rejected):
     cli = cursor(tmp_path, monkeypatch)

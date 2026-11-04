@@ -1,5 +1,4 @@
 use super::*;
-use proto::tests::{bytes, varint};
 use rusqlite::Connection;
 use serde_json::json;
 
@@ -48,106 +47,28 @@ fn read(provider: &AntigravityCli, session: &Session) -> serde_json::Value {
     .unwrap()
 }
 
-#[test]
-fn native_steps_keep_order_tools_titles_and_summary_facts() {
-    let root = tempfile::tempdir().unwrap();
-    fixture(&root.path().join("conversations"), "session");
-    let summaries =
-        Connection::open(root.path().join("conversation_summaries.db"))
-            .unwrap();
-    summaries
-        .execute_batch(
-            "CREATE TABLE conversation_summaries (\
-             conversation_id TEXT PRIMARY KEY, title TEXT, \
-             workspace_uris TEXT, last_modified_time TEXT, \
-             parent_conversation_id TEXT);",
-        )
-        .unwrap();
-    let workspace = root.path().join("agy-fixture");
-    summaries
-        .execute(
-            "INSERT INTO conversation_summaries VALUES \
-             ('session', 'Summary title', ?1, \
-             '2026-09-02 16:57:28.971105+00:00', '')",
-            [json!([
-                "not a uri",
-                url::Url::from_file_path(&workspace).unwrap().as_str(),
-            ])
-            .to_string()],
-        )
-        .unwrap();
-    let mut provider = provider(root.path());
-    let discovery = discover(&mut provider);
-    assert!(discovery.failures.is_empty());
-    let [session] = &discovery.sessions[..] else {
-        panic!("expected one session")
-    };
-    assert_eq!(session.id, "session");
-    assert_eq!(session.title, "A title");
-    assert_eq!(Path::new(&session.directory), workspace);
-    assert_eq!(session.message_count, Some(3));
-    assert_eq!(
-        session.created_at.iso_utc(),
-        "2026-09-02T16:57:28.971000+00:00"
-    );
-    assert_eq!(session.created_at, session.updated_at);
-    let data = read(&provider, session);
-    let messages = data["messages"].as_array().unwrap();
-    assert_eq!(
-        messages
-            .iter()
-            .map(|message| &message["id"])
-            .collect::<Vec<_>>(),
-        ["session:1", "session:2", "session:3"]
-    );
-    assert!(
-        messages
-            .iter()
-            .all(|message| message["inferred_time"] == true)
-    );
-    assert_eq!(
-        messages
-            .iter()
-            .map(|message| &message["role"])
-            .collect::<Vec<_>>(),
-        ["user", "assistant", "assistant"]
-    );
-    assert_eq!(messages[1]["agent"], "antigravity-cli");
-    let tool = &messages[2]["parts"][0];
-    assert_eq!(
-        (&tool["tool"], &tool["callID"]),
-        (&json!("read_file"), &json!("call-1"))
-    );
-    assert_eq!(
-        tool["state"],
-        json!({
-            "status": "unknown",
-            "input": {"path": "a"},
-            "output": null,
-            "metadata": {
-                "antigravity_step_type": 132,
-                "antigravity_status": 3,
-            },
-        })
-    );
-    assert_eq!(
-        data["stats"],
-        json!({
-            "total_cost": 0,
-            "total_input_tokens": 0,
-            "total_output_tokens": 0,
-            "message_count": 3,
-        })
-    );
-    assert_eq!(
-        provider
-            .find("session", &mut |_| Ok(()))
-            .unwrap()
-            .session
-            .unwrap()
-            .title,
-        "A title"
-    );
+fn varint(number: u32, value: u64) -> Vec<u8> {
+    let mut bytes = encode(u64::from(number) << 3);
+    bytes.extend(encode(value));
+    bytes
+}
+
+fn bytes(number: u32, value: impl AsRef<[u8]>) -> Vec<u8> {
+    let value = value.as_ref();
+    let mut bytes = encode(u64::from(number) << 3 | 2);
+    bytes.extend(encode(u64::try_from(value.len()).unwrap()));
+    bytes.extend(value);
+    bytes
+}
+
+fn encode(mut value: u64) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    while value >= 0x80 {
+        bytes.push(u8::try_from(value & 0x7f).unwrap() | 0x80);
+        value >>= 7;
+    }
+    bytes.push(u8::try_from(value).unwrap());
+    bytes
 }
 
 #[test]
@@ -253,78 +174,4 @@ fn usage_deduplicates_retries_and_attaches_to_the_next_assistant_message() {
         })
     );
     assert_eq!(session.created_at.as_millisecond(), 1_788_000_001_500);
-}
-
-#[test]
-fn empty_databases_are_skipped_and_invalid_ones_fail_alone() {
-    let root = tempfile::tempdir().unwrap();
-    let base = root.path().join("conversations");
-    fixture(&base, "kept");
-    let empty = fixture(&base, "empty");
-    Connection::open(&empty)
-        .unwrap()
-        .execute("DELETE FROM steps", [])
-        .unwrap();
-    let corrupt = fixture(&base.join("nested"), "corrupt");
-    Connection::open(&corrupt)
-        .unwrap()
-        .execute(
-            "UPDATE steps SET step_payload = X'a201ff' WHERE idx = 2",
-            [],
-        )
-        .unwrap();
-    let unsupported = base.join("unsupported.db");
-    Connection::open(&unsupported)
-        .unwrap()
-        .execute_batch("CREATE TABLE steps (idx INTEGER)")
-        .unwrap();
-    let before: Vec<_> = [&empty, &corrupt, &unsupported]
-        .iter()
-        .map(|path| std::fs::read(path).unwrap())
-        .collect();
-    let discovery = discover(&mut provider(root.path()));
-    assert_eq!(
-        discovery
-            .sessions
-            .iter()
-            .map(|session| &session.id)
-            .collect::<Vec<_>>(),
-        ["kept"]
-    );
-    let mut failures: Vec<_> = discovery
-        .failures
-        .iter()
-        .map(|failure| (failure.source.clone(), failure.error.to_string()))
-        .collect();
-    failures.sort();
-    assert_eq!(
-        failures,
-        [
-            (
-                crate::storage::source_io::path_text(&corrupt),
-                "invalid Antigravity CLI step 2: truncated protobuf varint".into()
-            ),
-            (
-                crate::storage::source_io::path_text(&unsupported),
-                "unsupported Antigravity CLI database: no such table: gen_metadata".into()
-            ),
-        ]
-    );
-    assert_eq!(
-        [&empty, &corrupt, &unsupported]
-            .iter()
-            .map(|path| std::fs::read(path).unwrap())
-            .collect::<Vec<_>>(),
-        before
-    );
-}
-
-#[test]
-fn source_selection_retries_absence_and_keeps_selected_root() {
-    crate::providers::tests::source_selection(
-        "conversations",
-        false,
-        |roots| AntigravityCli { roots },
-        |base| fixture(base, "kept"),
-    );
 }

@@ -86,18 +86,5 @@ def record(kind, **fields):
     return {"type": "response_item", "timestamp": STAMP, "payload": {"type": kind, **fields}}
 
 
-def call(name="exec_command", identity="one", arguments=None, *, custom=False):
-    return record(
-        "custom_tool_call" if custom else "function_call",
-        name=name,
-        call_id=identity,
-        **{"input" if custom else "arguments": arguments if arguments is not None else {"cmd": "echo synthetic"}},
-    )
-
-
-def output(value="done", identity="one", *, custom=False):
-    return record("custom_tool_call_output" if custom else "function_call_output", call_id=identity, output=value)
-
-
 def reasoning(text="Thinking"):
     return record("reasoning", summary=[{"type": "summary_text", "text": text}])

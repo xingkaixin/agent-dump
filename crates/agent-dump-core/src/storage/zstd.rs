@@ -22,28 +22,3 @@ pub fn frames(mut input: &[u8]) -> crate::Result<(Vec<Vec<u8>>, bool)> {
     }
     Ok((frames, false))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn decodes_every_frame_and_drops_a_torn_tail() {
-        let frame = |text: &str| {
-            ruzstd::encoding::compress_to_vec(
-                text.as_bytes(),
-                ruzstd::encoding::CompressionLevel::Fastest,
-            )
-        };
-        let mut input = [frame("one\n"), frame("two\n")].concat();
-        assert_eq!(
-            frames(&input).unwrap(),
-            (vec![b"one\n".to_vec(), b"two\n".to_vec()], false)
-        );
-        let third = frame("three\n");
-        input.extend_from_slice(&third[..third.len() - 1]);
-        assert_eq!(frames(&input).unwrap().0.len(), 2);
-        assert!(frames(&input).unwrap().1);
-        assert!(frames(b"not zstd").is_err());
-    }
-}

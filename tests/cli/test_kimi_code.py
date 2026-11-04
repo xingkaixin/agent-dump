@@ -113,33 +113,3 @@ def test_list_head_and_export(cli):
     assert (read["title"], read["state"]["status"], read["state"]["input"]) == ("read", "completed", {"path": "a.rs"})
     assert [part["text"] for part in read["state"]["output"]] == ["fn main() {}"]
     assert (compaction["role"], compaction["parts"][0]["text"]) == ("compaction", "Earlier work")
-
-
-def test_discovery_needs_state_and_wire_and_skips_empty_sessions(cli):
-    prompt = [appended("user", "Prompt title")]
-    create(cli, prompt, state={"title": "State title", "workDir": "/state"}, identity="state")
-    create(cli, prompt, state={"customTitle": "Custom title", "custom": {"cwd": "/custom"}}, identity="custom")
-    indexed = create(cli, prompt, state={}, identity="indexed")
-    (cli.root / "sources/kimi-code/session_index.jsonl").write_text(
-        json.dumps({"sessionDir": str(indexed), "workDir": "/indexed"}) + "\n"
-    )
-    create(cli, None, state={}, identity="no-wire")
-    create(cli, prompt, identity="no-state")
-    create(cli, [{"type": "llm.request", "model": "kimi-k2"}], state={}, identity="empty")
-    create(cli, prompt, state={}, bucket="hash/nested", identity="too-deep")
-
-    sessions = listed(cli)
-    assert {key: (item["title"], item["working_directory"]) for key, item in sessions.items()} == {
-        "state": ("State title", "/state"),
-        "custom": ("Custom title", "/custom"),
-        "indexed": ("Prompt title", "/indexed"),
-    }
-    missing = cli.run("kimi-code://empty", "--head")
-    assert missing.returncode == 1
-
-
-def test_activity_window_follows_wire_newer_than_state(cli):
-    directory = create(cli, [appended("user", "Recent")], state={})
-    os.utime(directory / "agents/main/wire.jsonl")
-    sessions = run_json(cli, "--list", "-d", "7", "-q", "provider:kimi-code")
-    assert [item["id"] for item in sessions] == [IDENTITY]

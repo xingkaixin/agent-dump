@@ -16,7 +16,5 @@ pub(crate) mod kimi_code;
 pub(crate) mod pi;
 pub mod registry;
 pub(crate) mod sqlite;
-#[cfg(test)]
-pub(crate) mod tests;
 pub(crate) mod text;
 pub(crate) mod title;

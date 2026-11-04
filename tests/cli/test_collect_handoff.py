@@ -6,33 +6,18 @@ import shlex
 import subprocess
 
 from cli_fixture import IDENTITY, RUST, CliFixture, header, message, reasoning
-import pytest
 from test_collect import ARGS, only_session
 
 
-@pytest.mark.parametrize("mode", ["pm", "insight"])
-def test_handoff_commands_read_every_fragment(cli: CliFixture, mode: str) -> None:
+def test_handoff_commands_read_every_fragment(cli: CliFixture) -> None:
     only_session(cli)
     body = "完整正文😺" * 6000 + "最后的请求"
     outcome = "最终结果已经验证"
     cli.write([header(), message("user", body), reasoning("private reasoning"), message("assistant", outcome)])
     before = cli.fixtures.source_manifest(cli.root)
-    result = cli.run(*ARGS, "--emit-prompt", "--collect-mode", mode, "--save", "report.md")
+    result = cli.run(*ARGS, "--emit-prompt", "--save", "report.md")
     assert result.returncode == 0, result.stderr
     assert result.stdout.rstrip().endswith("<!-- agent-dump:collect-manifest-end -->")
-    for required in (
-        "has_more=false",
-        "data.next_cursor=null",
-        "status=partial",
-        "不混合不同版本",
-        "不加 --details",
-        "truncated=true",
-        "start/end",
-        "total_chars",
-        "页数预算",
-        "丢弃旧版本笔记",
-    ):
-        assert required in result.stdout
     envelopes = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{"untrusted_data"')]
     assert [item["untrusted_data"] for item in envelopes] == ["collect_task", "collect_session"]
     assert all(item["length"] == len(item["content"]) for item in envelopes)

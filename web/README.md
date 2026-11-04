@@ -19,7 +19,7 @@ pnpm build
 - 首屏标题与优化后的 WebP 主视觉直接显示，不依赖 JavaScript 或 WebGL。动效遵循 `prefers-reduced-motion`。交互示例使用虚构会话，在浏览器内筛选和展示，不访问真实数据。
 - 使用说明保存在 `web/src/pages/guides/` 和 `web/src/pages/zh/guides/` 的 Markdown 文件中。frontmatter 的 `slug`、`locale`、`category`、`order`、`updated`、`title`、`description` 驱动目录、语言切换和文章元数据；相同内容的翻译共用 slug。保留既有文章 URL。
 - 新文章同步英文和中文，更新日期必须反映实际内容修改。日文目录明确标记英文文章。正文要包含适用场景、有效命令、输出与限制，并同步 `public/llms.txt`。文章渲染为静态 HTML；筛选仅作渐进增强。
-- `web/tests/e2e` 覆盖目录筛选、示例交互、移动导航、无 JavaScript 内容、文章结构化数据与内链。`tests/tooling/test_docs_sync.py` 对照真实 CLI 校验指南参数、URI scheme 和导出目录。
+- `web/tests/e2e` 覆盖各语言安装命令、翻译跳转不落到 404、文章与内链可访问。
 - `404.astro` 生成顶层 `404.html`，配合 `notFoundHandling: "404-page"` 让未知路径返回 404。错误页使用 `noindex`，不输出 canonical 或结构化数据。`public/_redirects` 将旧 `/sitemap.xml` 永久重定向到 `/sitemap-index.xml`；在 GSC 提交后者，部署时核对完整的 18 个可索引页面。
 - Umami 仅采集正式域名 `agent-dump.xingkaixin.me`，忽略 hash 并启用 Core Web Vitals。保留 query 以支持 UTM 来源分析。本地、CI 和 Workers 预览不计入正式流量。
 - 转化事件：`install-cta` 表示点击安装入口；`install-copy` 表示成功复制 CLI 安装或免安装命令（`method` 区分工具）；`guide-copy` 表示成功复制指南示例；`outbound-click` 表示点击页脚外链。事件仅记录语言、入口或安装方式，不发送命令正文、会话内容。复制命令只是使用意向，不代表安装或执行成功；skill 命令不算 CLI 安装转化。

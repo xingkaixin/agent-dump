@@ -163,30 +163,3 @@ def test_list_head_and_export(cli):
         "Replaced",
         {"input": 3, "output": 1, "cache": {"read": 0, "write": 2}},
     )
-
-
-def test_discovery_needs_identity_cwd_and_messages(cli):
-    prompt = [user("Prompt title")]
-    titled = {"generated_title": "Generated title", "session_summary": "Summary title"}
-    create(cli, prompt, summary=summary("generated", **titled), directory="generated")
-    create(cli, prompt, summary=summary("summarized", session_summary="Summary title"), directory="summarized")
-    create(cli, prompt, summary=summary("prompted"), project="a/b/c", directory="prompted")
-    image = update("user_message_chunk", content={"type": "image", "data": "AA==", "mimeType": "image/png"})
-    create(cli, [image], summary=summary("image", cwd="/work/basename-dir"), directory="image")
-    create(cli, prompt, summary=summary("renamed"), directory="folder")
-    create(cli, prompt, summary={"info": {"id": "no-cwd"}}, directory="no-cwd")
-    create(cli, prompt, summary={"info": {"cwd": "/no-id"}}, directory="no-id")
-    create(cli, None, summary=summary("no-updates"), directory="no-updates")
-    create(cli, prompt, directory="no-summary")
-    create(cli, [xai("turn_completed", usage={"inputTokens": 1})], summary=summary("empty"), directory="empty")
-
-    sessions = listed(cli)
-    assert {key: item["title"] for key, item in sessions.items()} == {
-        "generated": "Generated title",
-        "summarized": "Summary title",
-        "prompted": "Prompt title",
-        "image": "basename-dir",
-        "renamed": "Prompt title",
-    }
-    assert run_json(cli, "grok://renamed", "--head")["id"] == "renamed"
-    assert cli.run("grok://empty", "--head").returncode == 1

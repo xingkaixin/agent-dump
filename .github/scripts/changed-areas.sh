@@ -8,11 +8,6 @@ web=false
 
 while IFS= read -r file; do
   case "$file" in
-    # 这两处由 tests/tooling/test_docs_sync.py 对照真实 CLI 校验
-    web/src/pages/* | web/src/lib/i18n.ts)
-      code=true
-      web=true
-      ;;
     web/README.md) ;;
     web/*) web=true ;;
     # 不写 *.md：resources/ 下的文件会嵌入二进制，npm/packages/ 下的会进 npm 包
