@@ -99,7 +99,7 @@ jobs:
         run: just lint-tools
 
       - name: Check
-        run: just check-tools
+        run: just check
 
   # release 二进制只在 artifacts 里构建一次，CLI 契约和工具验证也在那里跑
   rust:

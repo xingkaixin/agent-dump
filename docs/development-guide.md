@@ -35,7 +35,7 @@ cargo test --locked --workspace
 just isok
 ```
 
-`just test` 先构建 release 二进制，再运行 Rust 单元测试和不依赖历史 Python 的 pytest 契约。`just check-rust` 只运行 Rust 与 CLI 验证。`AGENT_DUMP_TEST_BINARY` 可指定实际安装的制品；缺少二进制会失败，不回退到其他命令。
+`just test` 先构建 release 二进制，再运行 Rust 单元测试和不依赖历史 Python 的 pytest 契约。`AGENT_DUMP_TEST_BINARY` 可指定实际安装的制品；缺少二进制会失败，不回退到其他命令。
 
 `pytest` 运行全部 CLI 契约，不依赖历史 Python 对照；CI 和 `just isok` 不安装参考环境。v0.15.9 不是行为基准，缺陷修复用默认契约测试或 Rust 单元测试断言新行为。
 
@@ -43,7 +43,7 @@ Python 参考安装在忽略的 `.venv-reference/` 中，版本及完整依赖 h
 
 `uv sync --locked --dev` 安装 pytest、Ruff、ty 等辅助工具；`pyproject.toml` 同时保留 pip/Maturin 所需元数据。pytest 配置只位于该文件，禁止额外配置覆盖。Python 应用的旧单元测试和覆盖率门禁已随源码退场，历史结果保留在 Git 历史中。
 
-`just fmt` 格式化整个 Rust workspace 和 Python 验证工具，`just fmt-check` 只检查格式；`just lint-format` 保留为 `fmt` 的别名。`just lint` 执行 Rustfmt、Clippy 和 Ruff；`just check` 执行 Cargo check 与辅助 Python 的 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 各执行一组 Rust 单元测试；四目标制品 job 构建 release 二进制，检查 pip/uv tool/uvx 与 npm/npx/bunx，并在 Linux、macOS arm64、Windows 上对这份二进制运行 CLI 契约和工具验证。
+`just fmt` 格式化整个 Rust workspace 和 Python 验证工具。`just lint` 执行 Rustfmt、Clippy 和 Ruff，Clippy 已覆盖 Rust 类型检查；`just check` 只对辅助 Python 运行 ty。Ruff 配置位于 `ruff.toml`，单行最大长度 120。CI 在 Linux、macOS、Windows 各执行一组 Rust 单元测试；四目标制品 job 构建 release 二进制，检查 pip/uv tool/uvx 与 npm/npx/bunx，并在 Linux、macOS arm64、Windows 上对这份二进制运行 CLI 契约和工具验证。
 
 ### CI 构建缓存与耗时报告
 
