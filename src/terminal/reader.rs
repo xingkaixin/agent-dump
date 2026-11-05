@@ -40,15 +40,22 @@ enum InputScope {
 }
 
 #[derive(Default)]
+enum Overlay {
+    #[default]
+    None,
+    Help(u16),
+    Editing(InputScope, String),
+}
+
+#[derive(Default)]
 struct State {
     selected: usize,
     body_focus: bool,
     offset: usize,
     expanded: bool,
     query: Query,
-    editing: Option<(InputScope, String)>,
+    overlay: Overlay,
     context: Option<usize>,
-    help: Option<u16>,
     lines: Vec<String>,
     starts: Vec<usize>,
     hits: Vec<usize>,
@@ -115,27 +122,6 @@ impl Reader {
         self.state.selected
     }
 
-    const fn scroll_help(&mut self, key: KeyCode, height: u16) {
-        let offset = self.state.help.as_mut().unwrap();
-        match key {
-            KeyCode::Esc | KeyCode::Char('?' | 'q') => self.state.help = None,
-            KeyCode::Up | KeyCode::Char('k') => {
-                *offset = offset.saturating_sub(1);
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                *offset = offset.saturating_add(1);
-            }
-            KeyCode::PageUp => {
-                *offset = offset.saturating_sub(height.saturating_sub(2));
-            }
-            KeyCode::PageDown => {
-                *offset = offset.saturating_add(height.saturating_sub(2));
-            }
-            KeyCode::Home => *offset = 0,
-            _ => {}
-        }
-    }
-
     fn toggle_excerpt(&mut self) {
         if self.state.context.is_some() {
             self.state.context = None;
@@ -149,42 +135,30 @@ impl Reader {
         }
     }
 
-    fn edit(
+    fn submit(
         &mut self,
-        key: KeyCode,
+        scope: InputScope,
+        input: String,
         data: Option<&SessionData>,
     ) -> crate::Result<Option<Action>> {
-        match key {
-            KeyCode::Esc => self.state.editing = None,
-            KeyCode::Backspace => {
-                self.state.editing.as_mut().unwrap().1.pop();
-            }
-            KeyCode::Char(c) if !c.is_control() => {
-                self.state.editing.as_mut().unwrap().1.push(c);
-            }
-            KeyCode::Enter => {
-                let (scope, input) = self.state.editing.take().unwrap();
-                if matches!(scope, InputScope::Sessions) {
-                    self.status = t("READER_SEARCHING", self.zh, &[]);
-                    self.render()?;
-                    return Ok(Some(Action::Search(input)));
-                }
-                self.state.query = Query {
-                    keyword: Some(input),
-                    ..Query::default()
-                };
-                self.state.context = None;
-                self.state.search(data);
-                self.state.expanded = true;
-                self.state.body_focus = true;
-                self.status = t(
-                    "READER_MATCHES",
-                    self.zh,
-                    &[("count", self.state.hits.len().to_string())],
-                );
-            }
-            _ => {}
+        if matches!(scope, InputScope::Sessions) {
+            self.status = t("READER_SEARCHING", self.zh, &[]);
+            self.render()?;
+            return Ok(Some(Action::Search(input)));
         }
+        self.state.query = Query {
+            keyword: Some(input),
+            ..Query::default()
+        };
+        self.state.context = None;
+        self.state.search(data);
+        self.state.expanded = true;
+        self.state.body_focus = true;
+        self.status = t(
+            "READER_MATCHES",
+            self.zh,
+            &[("count", self.state.hits.len().to_string())],
+        );
         Ok(None)
     }
 
@@ -257,7 +231,8 @@ impl Reader {
                     dirty = true;
                 }
                 Event::Paste(text) => {
-                    if let Some((_, input)) = &mut self.state.editing {
+                    if let Overlay::Editing(_, input) = &mut self.state.overlay
+                    {
                         input.push_str(&render::safe_body(&text));
                     }
                 }
@@ -267,19 +242,41 @@ impl Reader {
                     {
                         return Ok(Action::Quit);
                     }
-                    if self.state.help.is_some() {
-                        self.scroll_help(key.code, size.height);
-                        continue;
-                    }
-                    if self.state.editing.is_some() {
-                        if let Some(action) = self.edit(key.code, data)? {
-                            return Ok(action);
+                    match &mut self.state.overlay {
+                        Overlay::Help(offset) => {
+                            if scroll_help(offset, key.code, size.height) {
+                                self.state.overlay = Overlay::None;
+                            }
+                            continue;
                         }
-                        if key.code == KeyCode::Enter {
-                            dirty = true;
-                            jump = !self.state.hits.is_empty();
+                        Overlay::Editing(scope, input) => {
+                            match key.code {
+                                KeyCode::Esc => {
+                                    self.state.overlay = Overlay::None;
+                                }
+                                KeyCode::Backspace => {
+                                    input.pop();
+                                }
+                                KeyCode::Char(c) if !c.is_control() => {
+                                    input.push(c);
+                                }
+                                KeyCode::Enter => {
+                                    let scope = *scope;
+                                    let input = std::mem::take(input);
+                                    self.state.overlay = Overlay::None;
+                                    if let Some(action) =
+                                        self.submit(scope, input, data)?
+                                    {
+                                        return Ok(action);
+                                    }
+                                    dirty = true;
+                                    jump = !self.state.hits.is_empty();
+                                }
+                                _ => {}
+                            }
+                            continue;
                         }
-                        continue;
+                        Overlay::None => {}
                     }
                     let page =
                         usize::from(size.height.saturating_sub(7).max(1));
@@ -301,17 +298,23 @@ impl Reader {
                         }
                         KeyCode::Left => self.state.body_focus = false,
                         KeyCode::Char('/') => {
-                            self.state.editing =
-                                Some((InputScope::Messages, String::new()));
+                            self.state.overlay = Overlay::Editing(
+                                InputScope::Messages,
+                                String::new(),
+                            );
                         }
                         KeyCode::Char('s') => {
-                            self.state.editing =
-                                Some((InputScope::Sessions, String::new()));
+                            self.state.overlay = Overlay::Editing(
+                                InputScope::Sessions,
+                                String::new(),
+                            );
                         }
                         KeyCode::Char('c') => {
                             return Ok(Action::Search(String::new()));
                         }
-                        KeyCode::Char('?') => self.state.help = Some(0),
+                        KeyCode::Char('?') => {
+                            self.state.overlay = Overlay::Help(0);
+                        }
                         KeyCode::Char('x') => {
                             self.toggle_excerpt();
                             dirty = true;
@@ -449,6 +452,25 @@ impl Reader {
             }
         }
     }
+}
+
+const fn scroll_help(offset: &mut u16, key: KeyCode, height: u16) -> bool {
+    match key {
+        KeyCode::Esc | KeyCode::Char('?' | 'q') => return true,
+        KeyCode::Up | KeyCode::Char('k') => *offset = offset.saturating_sub(1),
+        KeyCode::Down | KeyCode::Char('j') => {
+            *offset = offset.saturating_add(1);
+        }
+        KeyCode::PageUp => {
+            *offset = offset.saturating_sub(height.saturating_sub(2));
+        }
+        KeyCode::PageDown => {
+            *offset = offset.saturating_add(height.saturating_sub(2));
+        }
+        KeyCode::Home => *offset = 0,
+        _ => {}
+    }
+    false
 }
 
 fn step(selected: usize, key: KeyCode, rows: usize) -> usize {
@@ -610,7 +632,7 @@ fn draw(
         frame.render_widget(Paragraph::new(t("READER_SMALL", zh, &[])), area);
         return;
     }
-    if let Some(offset) = state.help {
+    if let Overlay::Help(offset) = state.overlay {
         frame.render_widget(
             Paragraph::new(format!(
                 "{}\n\n{}\n\n{}",
@@ -687,23 +709,22 @@ fn draw(
     } else {
         draw_list(frame, areas[3], rows, state, zh);
     }
-    let status = state.editing.as_ref().map_or_else(
-        || render::safe_line(status),
-        |(scope, input)| {
-            format!(
-                "{} > {}",
-                t(
-                    match scope {
-                        InputScope::Sessions => "READER_INPUT_SESSIONS",
-                        InputScope::Messages => "READER_INPUT_MESSAGES",
-                    },
-                    zh,
-                    &[]
-                ),
-                render::safe_line(input)
-            )
-        },
-    );
+    let status = if let Overlay::Editing(scope, input) = &state.overlay {
+        format!(
+            "{} > {}",
+            t(
+                match scope {
+                    InputScope::Sessions => "READER_INPUT_SESSIONS",
+                    InputScope::Messages => "READER_INPUT_MESSAGES",
+                },
+                zh,
+                &[]
+            ),
+            render::safe_line(input)
+        )
+    } else {
+        render::safe_line(status)
+    };
     frame.render_widget(
         Paragraph::new(status).style(Style::default().fg(Color::Yellow)),
         areas[4],
