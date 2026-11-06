@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [1.2.8] - 2026-11-06
+
+### Changed
+
+- Codex finds subagents from thread ids the parent rollout mentions, or from threads created during its `spawn_agent` and `spawn_agents_on_csv` calls, instead of decoding the header of every rollout. With about 4.5k compressed rollouts, that index took about 16s on every export and search signature. Subagents the parent never references, such as guardian approval reviews, are no longer merged into the parent, and cache and search signatures check only the parent rollout (#556).
+- Model the session reader's help and input editing as one exclusive overlay (#555).
+- Keep only tests that guard product rules and release assumptions, and remove duplicate lint and check recipes (#554).
+
 ## [1.2.7] - 2026-11-03
 
 ### Changed
@@ -1357,3 +1365,4 @@
 [1.2.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.5
 [1.2.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.6
 [1.2.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.7
+[1.2.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.8

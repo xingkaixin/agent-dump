@@ -187,9 +187,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.8",
+        date: "2026-11-06",
+        isLatest: true,
+        title: "Faster Codex Session Export and Search",
+        description:
+          "Exporting or searching Codex sessions no longer scans every rollout to find subagents. With thousands of Codex sessions, this removes about 16 seconds from each export and full-text search. Only subagents the parent session actually starts or mentions are merged into its transcript, so background reviews no longer appear in the parent export.",
+        command: 'npx @agent-dump/cli@1.2.8 export codex://SESSION_ID --format markdown',
+        tags: ["Codex", "Session Export", "Performance"],
+      },
+      {
         version: "v1.2.7",
         date: "2026-11-03",
-        isLatest: true,
         title: "Faster AI Collect and Full-Text Search",
         description:
           "AI collect sends independent LLM requests concurrently, so summarizing long Codex, Claude Code, Cursor, and other AI sessions no longer leaves workers idle. Full-text search reads session bodies in parallel to locate matches faster. The website loads lighter fonts, and the docs now match the CLI contract.",
@@ -408,9 +417,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.8",
+        date: "2026-11-06",
+        isLatest: true,
+        title: "Codex 会话导出与搜索更快",
+        description:
+          "导出或搜索 Codex 会话时，不再扫描所有 rollout 来查找子 Agent。Codex 会话数达到数千时，每次导出和全文搜索可省去约 16 秒。只有父会话实际启动或提到的子 Agent 才会合并进对话记录，后台审查不再出现在父会话导出中。",
+        command: 'npx @agent-dump/cli@1.2.8 export codex://SESSION_ID --format markdown',
+        tags: ["Codex", "会话导出", "性能"],
+      },
+      {
         version: "v1.2.7",
         date: "2026-11-03",
-        isLatest: true,
         title: "AI collect 与全文搜索更快",
         description:
           "AI collect 并发发送彼此独立的 LLM 请求，汇总 Codex、Claude Code、Cursor 等工具的长 AI 会话时不再让 worker 空闲。全文搜索并行读取会话正文，更快定位命中位置。网站字体更轻量，文档与 CLI 契约保持一致。",
@@ -629,9 +647,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.8",
+        date: "2026-11-06",
+        isLatest: true,
+        title: "Codex セッションのエクスポートと検索を高速化",
+        description:
+          "Codex セッションをエクスポートまたは検索する際、サブエージェントを探すためにすべての rollout を走査しなくなりました。Codex セッションが数千件ある環境では、エクスポートと全文検索のたびに約 16 秒短縮されます。親セッションが実際に起動または参照したサブエージェントだけを会話記録に統合するため、バックグラウンドのレビューは親セッションのエクスポートに表示されなくなりました。",
+        command: 'npx @agent-dump/cli@1.2.8 export codex://SESSION_ID --format markdown',
+        tags: ["Codex", "セッションエクスポート", "パフォーマンス"],
+      },
+      {
         version: "v1.2.7",
         date: "2026-11-03",
-        isLatest: true,
         title: "AI collect と全文検索を高速化",
         description:
           "AI collect は互いに独立した LLM リクエストを並行して送信し、Codex、Claude Code、Cursor などの長い AI セッションを要約する際にワーカーが待機しなくなりました。全文検索はセッション本文を並列に読み込み、一致箇所をより速く特定します。Web サイトのフォントは軽量化し、ドキュメントは CLI の契約と一致させました。",

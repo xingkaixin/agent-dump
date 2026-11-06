@@ -2,6 +2,14 @@
 
 ## [未发布]
 
+## [1.2.8] - 2026-11-06
+
+### 变更
+
+- Codex 从父会话提到的 thread id，或在其 `spawn_agent`、`spawn_agents_on_csv` 调用期间创建的线程查找子 Agent，不再解码每个 rollout 的头部。约 4.5k 个压缩 rollout 时，这个索引在每次导出和搜索签名中耗时约 16 秒。父会话没有引用的子 Agent（如 guardian 审批）不再合并进父会话，缓存和搜索签名只检查父会话 rollout (#556)。
+- 会话阅读器的帮助和输入编辑改为一个互斥的浮层状态 (#555)。
+- 只保留守护产品规则和发布假设的测试，移除重复的 lint 与 check recipe (#554)。
+
 ## [1.2.7] - 2026-11-03
 
 ### 变更
@@ -1360,3 +1368,4 @@
 [1.2.5]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.5
 [1.2.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.6
 [1.2.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.7
+[1.2.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.8
