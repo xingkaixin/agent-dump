@@ -28,6 +28,12 @@ pub fn stem(path: &Path) -> String {
     name.strip_suffix(".jsonl").unwrap_or(name).to_owned()
 }
 
+pub fn id(path: &Path) -> String {
+    let stem = stem(path);
+    let parts: Vec<_> = stem.split('-').collect();
+    parts[parts.len().saturating_sub(5)..].join("-")
+}
+
 /// Codex keeps the plain rollout while it may still append to it.
 pub fn prefer_plain(paths: &mut Vec<PathBuf>) {
     let plain: HashSet<_> = paths
