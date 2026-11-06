@@ -527,11 +527,13 @@ impl Decoder {
 pub fn read(
     session: &Session,
     zh: bool,
-    subagents: &[PathBuf],
+    rollouts: &[PathBuf],
     diagnostics: &mut crate::providers::contract::DiagnosticSink<'_>,
 ) -> crate::Result<SessionData> {
     let mut decoder = Decoder::default();
+    let mut references = children::References::default();
     rollout::scan(&session.source_path, diagnostics, |record, diagnostics| {
+        references.visit(&record);
         if let Err(error) = decoder.record(&record, zh) {
             diagnostics(RecoverableDiagnostic::MessageConvertFailed(
                 error.to_string(),
@@ -547,7 +549,7 @@ pub fn read(
         .map(Usage::totals)
         .unwrap_or_default();
     children::merge(
-        subagents,
+        &children::resolve(&session.id, references, rollouts),
         &mut decoder.messages,
         &mut totals,
         diagnostics,

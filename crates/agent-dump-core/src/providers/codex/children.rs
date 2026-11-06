@@ -3,30 +3,126 @@ use crate::providers::codex::rollout;
 use crate::providers::codex::usage::{Totals, Usage};
 use crate::providers::contract::{DiagnosticSink, RecoverableDiagnostic};
 use crate::session::{Message, Part, parse_timestamp};
+use regex::Regex;
 use serde_json::Value;
-use std::collections::HashMap;
-use std::io::Read;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
-const PREFIX: u64 = 8 * 1024;
+static THREAD_ID: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+        .unwrap()
+});
 
-/// Subagent rollouts keyed by their parent thread.
-pub fn index(paths: &[PathBuf]) -> HashMap<String, Vec<PathBuf>> {
-    let mut children = HashMap::<String, Vec<PathBuf>>::new();
-    for path in paths {
-        if let Ok(Some(parent)) = parent(path) {
-            children.entry(parent).or_default().push(path.clone());
-        }
-    }
-    children
+/// Absorbs clock steps between a spawn record and the child's id.
+const SPAWN_MARGIN: i64 = 1000;
+
+/// Threads a parent rollout points at.
+#[derive(Default)]
+pub struct References {
+    ids: HashSet<String>,
+    /// Multi-agent v2 `spawn_agent` returns a task name and
+    /// `spawn_agents_on_csv` a job id, so their children are matched by
+    /// the creation time inside the thread id.
+    spawns: Vec<(i64, i64)>,
+    pending: HashMap<String, i64>,
+    last: i64,
 }
 
-fn parent(path: &Path) -> crate::Result<Option<String>> {
-    let mut prefix = Vec::new();
-    rollout::open(path)?.take(PREFIX).read_to_end(&mut prefix)?;
-    if !prefix.windows(8).any(|window| window == b"subagent") {
-        return Ok(None);
+impl References {
+    pub fn visit(&mut self, record: &Value) {
+        mentions(record, &mut self.ids);
+        let Some(time) = time(record) else {
+            return;
+        };
+        self.last = self.last.max(time);
+        let payload = &record["payload"];
+        if record["type"] != "response_item" {
+            return;
+        }
+        let call = text(&payload["call_id"]);
+        match text(&payload["type"]) {
+            "function_call"
+                if matches!(
+                    text(&payload["name"]),
+                    "spawn_agent" | "spawn_agents_on_csv"
+                ) =>
+            {
+                self.pending.insert(call.to_owned(), time);
+            }
+            "function_call_output" => {
+                if let Some(start) = self.pending.remove(call) {
+                    self.spawns.push((start, time));
+                }
+            }
+            _ => {}
+        }
     }
+}
+
+fn mentions(value: &Value, ids: &mut HashSet<String>) {
+    match value {
+        Value::String(text) => ids.extend(
+            THREAD_ID
+                .find_iter(text)
+                .map(|found| found.as_str().to_owned()),
+        ),
+        Value::Array(items) => {
+            for item in items {
+                mentions(item, ids);
+            }
+        }
+        Value::Object(fields) => {
+            for item in fields.values() {
+                mentions(item, ids);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Subagent rollouts of `parent` among the threads its rollout references.
+pub fn resolve(
+    parent: &str,
+    references: References,
+    paths: &[PathBuf],
+) -> Vec<PathBuf> {
+    let References {
+        ids,
+        mut spawns,
+        pending,
+        last,
+    } = references;
+    spawns.extend(pending.into_values().map(|start| (start, last)));
+    paths
+        .iter()
+        .filter(|path| {
+            let id = rollout::id(path);
+            id != parent
+                && (ids.contains(&id)
+                    || created(&id).is_some_and(|time| {
+                        spawns.iter().any(|&(start, end)| {
+                            (start - SPAWN_MARGIN..=end + SPAWN_MARGIN)
+                                .contains(&time)
+                        })
+                    }))
+        })
+        .filter(|path| {
+            matches!(parent_thread(path), Ok(Some(found)) if found == parent)
+        })
+        .cloned()
+        .collect()
+}
+
+/// Codex thread ids are UUID v7, which lead with their creation time.
+fn created(id: &str) -> Option<i64> {
+    if id.as_bytes().get(14) != Some(&b'7') {
+        return None;
+    }
+    i64::from_str_radix(&id.get(..13)?.replace('-', ""), 16).ok()
+}
+
+fn parent_thread(path: &Path) -> crate::Result<Option<String>> {
     let mut header = None;
     rollout::lines(path, |_, line, _| {
         header = rollout::object(line);
@@ -54,9 +150,7 @@ fn time(record: &Value) -> Option<i64> {
 }
 
 fn summary(path: &Path) -> crate::Result<Child> {
-    let stem = rollout::stem(path);
-    let parts: Vec<_> = stem.split('-').collect();
-    let mut id = parts[parts.len().saturating_sub(5)..].join("-");
+    let mut id = rollout::id(path);
     let mut nickname = None;
     let mut usage = Usage::default();
     let mut meta_seen = false;

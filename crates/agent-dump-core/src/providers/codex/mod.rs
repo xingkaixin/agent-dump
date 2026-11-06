@@ -21,7 +21,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 
 const TITLE_RECORDS: usize = 20;
 const TAIL_WINDOW: u64 = 64 * 1024;
@@ -45,7 +44,6 @@ pub struct Codex {
     roots: SourceRoots,
     titles: Option<HashMap<String, String>>,
     paths: Vec<PathBuf>,
-    children: OnceLock<HashMap<String, Vec<PathBuf>>>,
 }
 
 struct Scan {
@@ -228,7 +226,6 @@ impl Codex {
             roots,
             titles: None,
             paths: Vec::new(),
-            children: OnceLock::new(),
         }
     }
 
@@ -307,12 +304,7 @@ impl Codex {
         }
         rollout::prefer_plain(&mut files.paths);
         self.paths.clone_from(&files.paths);
-        self.children = OnceLock::new();
         Ok(files)
-    }
-
-    fn children(&self) -> &HashMap<String, Vec<PathBuf>> {
-        self.children.get_or_init(|| children::index(&self.paths))
     }
 
     fn scan(path: &Path) -> crate::Result<Scan> {
@@ -378,9 +370,7 @@ impl Codex {
         }
         let mut id = text(&payload["id"]).to_owned();
         if id.is_empty() {
-            let stem = rollout::stem(path);
-            let parts: Vec<_> = stem.split('-').collect();
-            id = parts[parts.len().saturating_sub(5)..].join("-");
+            id = rollout::id(path);
         }
         let created_at = parse_timestamp(text(&payload["timestamp"]))
             .unwrap_or(Timestamp::try_from(path.metadata()?.modified()?)?);
@@ -475,21 +465,7 @@ impl Provider for Codex {
             )
             .into());
         }
-        let children = self.children().get(&session.id);
-        transcript::read(
-            session,
-            zh,
-            children.map_or(&[][..], Vec::as_slice),
-            diagnostics,
-        )
-    }
-
-    fn change_sources(&self, session: &Session) -> Vec<PathBuf> {
-        let mut sources = vec![session.source_path.clone()];
-        if let Some(children) = self.children().get(&session.id) {
-            sources.extend(children.iter().cloned());
-        }
-        sources
+        transcript::read(session, zh, &self.paths, diagnostics)
     }
 
     fn json_payload(&self, data: &SessionData) -> serde_json::Value {
@@ -578,10 +554,14 @@ mod tests {
     }
 
     #[test]
-    fn subagents_add_usage_and_missing_replies_to_the_parent() {
+    fn referenced_subagents_add_usage_and_missing_replies_to_the_parent() {
         let directory = tempfile::tempdir().unwrap();
         let sessions = directory.path().join("sessions");
         let parent = "019e0000-0000-7000-8000-000000000001";
+        let forked = "019f0000-0000-7000-8000-000000000002";
+        let reported = "019f0000-0000-7000-8000-000000000003";
+        // UUIDv7 time of 2026-01-15T00:00:02.200Z, inside the spawn call.
+        let spawned = "019bbef3-b898-7000-8000-000000000004";
         let usage = |last: u64, total: u64| {
             event(
                 "event_msg",
@@ -605,6 +585,27 @@ mod tests {
                 said("2026-01-15T00:00:01Z", "user", "first"),
                 parent_turn.clone(),
                 usage(100, 100),
+                event(
+                    "event_msg",
+                    "2026-01-15T00:00:01.500Z",
+                    serde_json::json!({"type": "item_completed", "item": {
+                        "type": "SubAgentActivity", "agent_thread_id": forked
+                    }}),
+                ),
+                item(
+                    "2026-01-15T00:00:02.100Z",
+                    serde_json::json!({
+                        "type": "function_call", "name": "spawn_agent",
+                        "arguments": "{}", "call_id": "spawn"
+                    }),
+                ),
+                item(
+                    "2026-01-15T00:00:02.300Z",
+                    serde_json::json!({
+                        "type": "function_call_output", "call_id": "spawn",
+                        "output": "{\"task_name\":\"/root/spawned\"}"
+                    }),
+                ),
                 said("2026-01-15T00:00:03Z", "user", "last"),
                 said(
                     "2026-01-15T00:00:04Z",
@@ -612,7 +613,7 @@ mod tests {
                     &format!(
                         "<subagent_notification>{}</subagent_notification>",
                         serde_json::json!({
-                            "agent_path": "reported",
+                            "agent_id": reported,
                             "status": {"completed": "reported result"}
                         })
                     ),
@@ -641,7 +642,7 @@ mod tests {
             record
         };
         child(
-            "019f0000-0000-7000-8000-000000000002",
+            forked,
             serde_json::json!({"forked_from_id": parent, "agent_nickname": "Pascal"}),
             vec![
                 meta(parent, Value::Null),
@@ -658,11 +659,29 @@ mod tests {
             ],
         );
         child(
-            "reported",
+            reported,
             Value::Null,
             vec![reply(
                 "2026-01-15T00:00:04Z",
                 "reported result",
+                "final_answer",
+            )],
+        );
+        child(
+            spawned,
+            Value::Null,
+            vec![reply(
+                "2026-01-15T00:00:02.800Z",
+                "spawned result",
+                "final_answer",
+            )],
+        );
+        child(
+            "019f0000-0000-7000-8000-000000000005",
+            Value::Null,
+            vec![reply(
+                "2026-01-15T00:00:05Z",
+                "unreferenced result",
                 "final_answer",
             )],
         );
@@ -671,35 +690,26 @@ mod tests {
         let texts: Vec<_> = data
             .messages
             .iter()
-            .map(|message| {
-                (
-                    message.parts[0].content().unwrap(),
+            .filter_map(|message| {
+                Some((
+                    message.parts[0].content()?,
                     message.subagent_id.as_deref(),
                     message.nickname.as_deref(),
-                )
+                ))
             })
             .collect();
         assert_eq!(
             texts,
             [
                 ("first", None, None),
-                (
-                    "child result",
-                    Some("019f0000-0000-7000-8000-000000000002"),
-                    Some("Pascal")
-                ),
+                ("child result", Some(forked), Some("Pascal")),
+                ("spawned result", Some(spawned), None),
                 ("last", None, None),
-                ("reported result", Some("reported"), None),
+                ("reported result", Some(reported), None),
             ]
         );
         assert_eq!(data.stats.total_input_tokens, 107.into());
-        let child = read(&mut provider, "019f0000-0000-7000-8000-000000000002");
+        let child = read(&mut provider, forked);
         assert_eq!(child.stats.total_input_tokens, 7.into());
-        let session = provider
-            .find(parent, &mut |_| Ok(()))
-            .unwrap()
-            .session
-            .unwrap();
-        assert_eq!(provider.change_sources(&session).len(), 3);
     }
 }
