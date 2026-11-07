@@ -39,12 +39,12 @@ dev = [
     "ty==0.0.93",
 ]
 packaging = [
-    "maturin==1.15.0",
+    "maturin==1.16.0",
     "ziglang==0.17.0; sys_platform == 'linux'",
 ]
 
 [build-system]
-requires = ["maturin>=1.15,<1.16"]
+requires = ["maturin>=1.15,<1.17"]
 build-backend = "maturin"
 
 [tool.maturin]
