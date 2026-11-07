@@ -16,7 +16,7 @@ maturin==1.16.0 \
     --hash=sha256:deacbb204a20326862e194c7df4958e0514a0411c9a3ccf228a00067c11b5c7e \
     --hash=sha256:e285ec9eb10243d45d10417178cb2eb76e0cbb184d0aa4378b503489fa12ee78
     # via -r packaging/build-constraints.in
-tomli==2.5.0 \
+tomli==2.5.0 ; python_full_version < '3.11' \
     --hash=sha256:069435bd5480429b98c5e5afb02ab21c219b6f0064680671c6dc0d46817346ea \
     --hash=sha256:0dc598040da8d42cf20f0be588ed7004f46db12a0ac6c32e03a59dccedaaadcd \
     --hash=sha256:1245a6638fc4bb0a60af38a7d45413db34a13842027c77597c712c998c62fdf0 \
