@@ -1,67 +1,61 @@
-use crate::terminal::reader::{Action, Reader};
-use crate::terminal::tui::Row;
+use crate::terminal::reader::{Action, Entry, Reader};
 use agent_dump_core::output::{
     diagnostics, formats::OutputFormat, i18n::t, render,
 };
 use agent_dump_core::query::{
     Query, TimeField, filter, scanner, scanner::Scan, text::Mode,
 };
-use agent_dump_core::session::cache::SessionDataCache;
+use agent_dump_core::session::{
+    Session, cache::SessionDataCache, timestamp::Timestamp,
+};
 use std::io::Write;
 
 struct Results {
     positions: Vec<(usize, usize)>,
-    rows: Vec<Row>,
+    rows: Vec<Entry>,
     status: String,
 }
 
 fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
     let mut notices = Vec::new();
     let mut selection = filter::select(&scan.groups, query, zh, &mut notices)?;
-    if query.mode != Mode::Terms {
+    let grouped = query.mode != Mode::Terms || query.keyword.is_none();
+    if grouped {
         selection.matches.sort_by_key(|matched| {
             std::cmp::Reverse(
                 scan.groups[matched.group].sessions[matched.session].updated_at,
             )
         });
     }
+    let days = Days {
+        today: Timestamp::now().local_date(),
+        yesterday: Timestamp::days_ago(1)?.local_date(),
+        grouped,
+    };
     let rows = selection
         .matches
         .iter()
         .map(|matched| {
             let group = &scan.groups[matched.group];
-            let session = &group.sessions[matched.session];
-            let mut detail = render::safe_line(&format!(
-                "{} · {}",
+            entry(
                 group.info.display_name,
-                session.updated_at.format_local("%m-%d %H:%M")
-            ));
-            if !matched.snippet.is_empty() {
-                detail.push('\n');
-                detail.push_str(&render::safe_line(&matched.snippet));
-            }
-            Row {
-                title: render::safe_line(if session.title.trim().is_empty() {
-                    &session.id
-                } else {
-                    &session.title
-                }),
-                detail,
-                group: format!("{}://{}", group.info.scheme, session.id),
-            }
+                &format!("{}://", group.info.scheme),
+                &group.sessions[matched.session],
+                &matched.snippet,
+                &days,
+                zh,
+            )
         })
         .collect();
-    let mut status = t(
-        if selection.matches.is_empty() {
-            "READER_NO_MATCHES"
-        } else {
-            "READER_RESULTS"
-        },
-        zh,
-        &[("count", selection.matches.len().to_string())],
-    );
+    let mut status = if selection.matches.is_empty() {
+        t("READER_NO_MATCHES", zh, &[])
+    } else {
+        String::new()
+    };
     if !scan.failed_providers.is_empty() || !selection.failures.is_empty() {
-        status = format!("{} {status}", t("READER_PARTIAL", zh, &[]));
+        status = format!("{} {status}", t("READER_PARTIAL", zh, &[]))
+            .trim_end()
+            .into();
     }
     if !notices.is_empty() {
         status.push(' ');
@@ -76,6 +70,87 @@ fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
         rows,
         status,
     })
+}
+
+struct Days {
+    today: jiff::civil::Date,
+    yesterday: jiff::civil::Date,
+    grouped: bool,
+}
+
+fn entry(
+    provider: &str,
+    scheme: &str,
+    session: &Session,
+    snippet: &str,
+    days: &Days,
+    zh: bool,
+) -> Entry {
+    let updated = session.updated_at;
+    let date = updated.local_date();
+    let day = if !days.grouped {
+        String::new()
+    } else if date == days.today {
+        t("READER_TODAY", zh, &[])
+    } else if date == days.yesterday {
+        t("READER_YESTERDAY", zh, &[])
+    } else if date.year() == days.today.year() {
+        updated.format_local("%m-%d")
+    } else {
+        updated.format_local("%Y-%m-%d")
+    };
+    let count = t(
+        "READER_MESSAGES",
+        zh,
+        &[(
+            "count",
+            session
+                .message_count
+                .map_or_else(|| "?".into(), |count| count.to_string()),
+        )],
+    );
+    let location = session.display_location();
+    let place = std::path::Path::new(&location)
+        .file_name()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+    let meta = [
+        provider,
+        session.model.as_str(),
+        location.as_str(),
+        count.as_str(),
+        &format!(
+            "{} → {}",
+            session.created_at.format_local("%m-%d %H:%M"),
+            updated.format_local("%m-%d %H:%M")
+        ),
+    ]
+    .into_iter()
+    .filter(|part| !part.trim().is_empty())
+    .collect::<Vec<_>>()
+    .join(" · ");
+    Entry {
+        title: render::safe_line(if session.title.trim().is_empty() {
+            &session.id
+        } else {
+            &session.title
+        }),
+        provider: render::safe_line(provider),
+        time: updated.format_local(if days.grouped {
+            "%H:%M"
+        } else {
+            "%m-%d %H:%M"
+        }),
+        day,
+        count,
+        place: render::safe_line(&place),
+        snippet: if snippet.trim() == session.title.trim() {
+            String::new()
+        } else {
+            render::safe_line(snippet)
+        },
+        meta: render::safe_line(&meta),
+        uri: format!("{scheme}{}", session.id),
+    }
 }
 
 fn scope(query: &Query, days: i64, zh: bool) -> String {
