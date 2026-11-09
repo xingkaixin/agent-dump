@@ -573,8 +573,8 @@ agent-dump --browse --search "database lock" --format json,markdown --output ./e
 - Up/Down or j/k move or scroll in the focused pane; Enter/Right opens the transcript, Left returns to the list.
 - Tab switches panes; PageUp/PageDown scroll pages; Home/End jump to either end.
 - `s` searches sessions using all words, within the current Provider/path/date/role/limit scope. `--browse --search "database lock"` starts with the same search and relevance order. With a role filter, all words must occur in one message of that role. Hit navigation visits messages containing any search word. The header shows scope and search mode; `?` shows full scope and help. `c` clears search text while keeping scope.
-- `/` starts literal search within the current session; Enter searches, Esc cancels input, n/N jumps to the next/previous matching message. Search expands tool details.
-- `t` toggles tool details; `y` sends a URI clipboard request (requires terminal OSC 52 support).
+- `/` starts literal search within the current session; Enter searches, Esc cancels input, n/N jumps to the next/previous matching message. Matching messages show their tool details.
+- `t` toggles tool details for all messages; otherwise runs of tool-only messages collapse into one line. `y` sends a URI clipboard request (requires terminal OSC 52 support).
 - `x` previews the current matching message with three surrounding messages on each side. `+`/`-` changes that radius; n/N changes the hit. `e` exports exactly this range as JSON and/or Markdown with source URI and message positions. If the source changed since preview, export is rejected. `x` or Esc returns to the full session.
 - Space marks sessions for batch export. Outside excerpt preview, `e` exports all marked sessions, or the selected session when none are marked, using --format, --output and existing Provider capabilities. Default is JSON; print is not supported.
 - q/Esc/Ctrl-C close the reader and restore the terminal, exiting 0.
