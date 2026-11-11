@@ -427,7 +427,7 @@ impl Claude {
                 continue;
             };
             let timestamp = parse_timestamp(text(&record.timestamp));
-            if index == 1 {
+            if scan.created.is_none() {
                 scan.created = timestamp;
             }
             if internal(&record) {

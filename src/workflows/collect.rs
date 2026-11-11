@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use crate::collect::progress::progress;
 use agent_dump_core::output::render;
 use agent_dump_core::providers::registry;
-use agent_dump_core::query::{filter, project_path, scanner};
+use agent_dump_core::query::{TimeField, filter, project_path, scanner};
 use agent_dump_core::storage::private_files;
 use agent_dump_core::storage::source_io::path_text;
 
@@ -108,7 +108,8 @@ pub fn run(
         zh,
         warnings,
     )?;
-    let Some(scan) = discover(operation, &collect, zh, out, warnings)? else {
+    let Some(scan) = discover(operation, since, &collect, zh, out, warnings)?
+    else {
         return Ok(false);
     };
     let (mut positions, mut omissions) =
@@ -349,13 +350,22 @@ fn load_config(
 
 fn discover(
     operation: &Operation,
+    since: Date,
     collect: &CollectConfig,
     zh: bool,
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<Option<Scan>> {
-    let mut scan =
-        scanner::discover_all(operation.query.as_ref(), zh, warnings)?;
+    // The cutoff is `days` × 24h before now; one day reaches local midnight of
+    // `since`, the other covers a 25-hour DST day.
+    let days = i64::from((jiff::Zoned::now().date() - since).get_days()) + 2;
+    let mut scan = scanner::discover(
+        operation.query.as_ref(),
+        days.max(2),
+        TimeField::Updated,
+        zh,
+        warnings,
+    )?;
     if scan.groups.is_empty()
         && operation
             .query

@@ -38,9 +38,18 @@ static PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
     patterns
 });
 
+// Every pattern needs one of these openers, so most text skips all of them.
+static TAG: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"(?i)</?(?:command-message|command-name|local-command-caveat|",
+        r"local-command-stdout|system-reminder|command-args)",
+    ))
+    .unwrap()
+});
+
 pub fn clean(value: &str) -> String {
     let mut stripped = value.to_owned();
-    if stripped.contains('<') {
+    if stripped.contains('<') && TAG.is_match(&stripped) {
         for (pattern, replacement) in PATTERNS.iter() {
             if let std::borrow::Cow::Owned(updated) =
                 pattern.replace_all(&stripped, *replacement)

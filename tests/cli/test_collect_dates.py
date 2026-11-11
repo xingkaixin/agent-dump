@@ -64,6 +64,8 @@ def test_no_work_in_range_is_empty_success(cli: CliFixture) -> None:
     result = cli.run(*collect_args("2026-01-16", "2026-01-16"), "--dry-run")
     assert result.returncode == 0, result.stderr
     assert "No sessions" in result.stdout
+    later = cli.run(*collect_args("2026-02-01", "2026-02-01"), "--dry-run")
+    assert "No sessions" in later.stdout and "Scanning sessions: 0/0" in later.stderr
     handoff = cli.run(*collect_args("2026-01-16", "2026-01-16"), "--emit-prompt")
     assert handoff.returncode == 0 and not handoff.stdout
     cli.write([header(), message("user", "unknown date", stamp="invalid")])
