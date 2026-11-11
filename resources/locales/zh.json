@@ -354,6 +354,7 @@
   "QUERY_SUMMARY_CREATED_TIME": "按创建时间",
   "READER_NO_MATCHES": "没有匹配会话。s 修改搜索，c 清除关键词。? 查看范围；重新打开时可扩大 --days 或减少 --query 筛选。",
   "READER_PARTIAL": "结果不完整：部分来源无法读取。",
+  "READER_PARTIAL_TAG": "⚠ 结果不完整",
   "READER_ALL": "全部",
   "READER_CREATED": "创建",
   "READER_UPDATED": "更新",

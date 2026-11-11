@@ -354,6 +354,7 @@
   "QUERY_SUMMARY_CREATED_TIME": "created time",
   "READER_NO_MATCHES": "No matching sessions. s changes search; c clears it. Check scope with ?; widen --days or remove --query filters when reopening.",
   "READER_PARTIAL": "Partial results: some sources could not be read.",
+  "READER_PARTIAL_TAG": "⚠ partial results",
   "READER_ALL": "all",
   "READER_CREATED": "created",
   "READER_UPDATED": "updated",
