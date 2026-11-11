@@ -251,13 +251,12 @@ impl Decoder {
             if let Some(index) = self.current_assistant
                 && self.assistant_fold.has_plan(&self.messages, index)
             {
-                let parts = &self.messages[index].parts;
-                let plan = parts
+                self.pending_plan = self.messages[index]
+                    .parts
                     .iter()
                     .rposition(|part| matches!(part, Part::Plan(_)))
                     .filter(|_| planned)
-                    .unwrap_or(parts.len() - 1);
-                self.pending_plan = Some((index, plan));
+                    .map(|plan| (index, plan));
                 self.latest_assistant_text = None;
             }
             return Ok(());

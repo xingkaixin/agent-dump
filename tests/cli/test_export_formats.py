@@ -51,3 +51,22 @@ def test_codex_json_stats_sum_each_token_delta_once(cli):
         30,
         150,
     )
+
+
+def test_codex_reply_after_a_closed_plan_stays_a_message(cli):
+    cli.write(
+        [
+            header(),
+            message("user", "Plan it"),
+            message("assistant", "<proposed_plan>\nStep one\n</proposed_plan>"),
+            message("assistant", "Anything to adjust?"),
+            message("user", "Use the other approach"),
+        ]
+    )
+    result = cli.run(f"codex://{IDENTITY}", "--format", "json", "--output", "exports")
+    assert result.returncode == 0, result.stderr
+    messages = json.loads((cli.root / "exports" / "codex" / f"{IDENTITY}.json").read_text())["messages"]
+    texts = [part.get("text") for item in messages for part in item["parts"] if part["type"] == "text"]
+    assert texts == ["Plan it", "Anything to adjust?", "Use the other approach"]
+    plan = next(part for item in messages for part in item["parts"] if part["type"] == "plan")
+    assert (plan["approval_status"], plan["output"]) == ("fail", None)
