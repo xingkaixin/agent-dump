@@ -2,6 +2,29 @@
 
 ## [未发布]
 
+## [1.2.9] - 2026-11-11
+
+### 变更
+
+- 重新设计会话阅读器：会话按天分组，连续的纯工具消息折叠显示，顶栏显示位置、命中数和随上下文变化的按键提示。从列表底部向上移动时，选中项不再停留在最后一行。导航停止后才加载会话正文，并且只对可见消息折行，长会话不再拖慢列表 (#566)。
+- collect 按 Updated 时间窗口发现会话，`updated_at` 早于起始日期的会话不再读取 (#567)。
+- 关闭 SQLite 内存分配统计，避免并行读取会话时争用全局锁；sdist 携带 cargo 配置，从 sdist 构建的 wheel 保留该设置。不含标签的文本跳过标签匹配，Codex 压缩 rollout 扫描提前剪除记录 (#567)。
+- 在非 collect 模式下使用 collect 专用参数时给出警告，不再静默忽略 (#568)。
+- collect 的会话归并改为每个会话一个显式状态 (#568)。
+- 落地页 Agent 图标更新为上游当前的产品标识 (#559)。
+- 在 `AGENTS.md` 中写明产品原则和代码中看不出的约束 (#558)。
+- 更新 Rust 依赖、maturin、ty、web 运行时依赖和 GitHub Actions (#560, #562–#565)。
+
+### 问题修复
+
+- Codex：助手消息关闭已提出的计划后，紧随的用户回复被当作计划反馈吞掉；现在保留为普通消息 (#568)。
+- Claude Code：`created_at` 取自第一条带时间的记录。首行没有时间戳（如 mode 记录）时，原先回退到文件修改时间，并让 `updated_at` 晚于最后一条记录 (#567)。
+- 配置文件不是合法 TOML 时，`--config view` 报错并以退出码 1 结束，不再以退出码 0 显示默认值 (#568)。
+- 阅读器的部分结果标记固定显示在顶栏，不再在第一次切换选中项时消失 (#568)。
+- 交互模式下已生效的 `agents://` 查询 URI 不再被报告为已忽略 (#568)。
+- 查询指定的 Provider 无法读取且没有其他匹配时，文本 `--list` 和 `--stats` 与 `--json` 一样以退出码 1 结束 (#568)。
+- 交互模式下无效的 `--format` 作为用法错误以退出码 2 结束，不再是退出码 1 的意外错误 (#568)。
+
 ## [1.2.8] - 2026-11-06
 
 ### 变更
@@ -1369,3 +1392,4 @@
 [1.2.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.6
 [1.2.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.7
 [1.2.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.8
+[1.2.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.9
