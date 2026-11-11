@@ -21,3 +21,12 @@ def test_view_masks_api_key(cli):
     assert "  api_key: sec**********lue\n" in result.stdout
     assert key not in result.stdout + result.stderr
     assert path.read_text(encoding="utf-8") == source
+
+
+def test_view_rejects_unparseable_config(cli):
+    path = config_path(cli)
+    path.write_text("[ai\nprovider=", encoding="utf-8")
+    result = cli.run("--config", "view", "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Config is not valid TOML" in result.stdout + result.stderr
+    assert "provider:" not in result.stdout

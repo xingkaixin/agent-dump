@@ -533,7 +533,7 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 `[shortcut.<name>]` 定义可复用的快捷预设。`params` 声明位置输入名称。`args` 声明展开的 CLI argv 模板。提供 `date` 时，`{year}` / `{month}` / `{year_month}` 会自动派生。
 
 `agent-dump` 写入 `config.toml` 时会转义 TOML 特殊字符，并将文件权限限制为仅所有者可读写（`0600`），因为其中可能包含 API key。
-为兼容旧版本，程序仍可读取不合法的 TOML；但由于无法保证未知字段无损往返，`--config edit` 会拒绝改写。请先手动修正无效转义或替换配置文件。
+为兼容旧版本，程序仍可读取不合法的 TOML；但由于无法保证未知字段无损往返，`--config edit` 会拒绝改写。请先手动修正无效转义或替换配置文件。完全无法解析的配置会让 `--config view` 报错退出，不再显示默认值。
 
 ### 按最近活动查找会话
 

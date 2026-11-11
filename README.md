@@ -549,7 +549,7 @@ Collect, `--collect --dry-run`, and `--collect --emit-prompt` require valid TOML
 `[shortcut.<name>]` defines a reusable shortcut preset. `params` declares positional input names. `args` declares the expanded CLI argv template. When `date` is provided, `{year}` / `{month}` / `{year_month}` are derived automatically.
 
 When `agent-dump` writes `config.toml`, it preserves comments, whitespace, and field order, escapes TOML-sensitive characters, and restricts the file to owner-only permissions (`0600`) because it may contain an API key.
-Legacy invalid TOML can still be read for compatibility, but `--config edit` refuses to rewrite it because a safe round trip cannot preserve unknown values. Fix the invalid escaping manually or replace the file before editing.
+Legacy invalid TOML can still be read for compatibility, but `--config edit` refuses to rewrite it because a safe round trip cannot preserve unknown values. Fix the invalid escaping manually or replace the file before editing. A config that cannot be parsed at all makes `--config view` fail instead of showing defaults.
 
 ### Recently active sessions
 
