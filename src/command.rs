@@ -51,6 +51,16 @@ enum Mode {
     Browse,
     Help,
 }
+
+const QUERY_URI: &str = "agents:// query URI";
+
+const fn reads_query_uri(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::Collect | Mode::List | Mode::Interactive | Mode::Browse
+    )
+}
+
 fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
     let query_uri = args
         .uri
@@ -79,7 +89,7 @@ fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
         (
             query_uri && !args.collect && !args.browse,
             Mode::List,
-            "agents:// query URI",
+            QUERY_URI,
         ),
     ] {
         if present {
@@ -263,11 +273,35 @@ fn warn_ignored(
             }
         }
     }
+    if mode != Mode::Collect {
+        let unused: Vec<_> = [
+            (args.since.is_some(), "--since"),
+            (args.until.is_some(), "--until"),
+            (args.dry_run, "--dry-run"),
+            (args.save.is_some(), "--save"),
+        ]
+        .into_iter()
+        .filter_map(|(present, label)| present.then_some(label))
+        .collect();
+        if !unused.is_empty() {
+            writeln!(
+                out,
+                "{}",
+                i18n::t(
+                    "COLLECT_OPTIONS_IGNORED_WARNING",
+                    zh,
+                    &[("options", unused.join(", "))]
+                )
+            )?;
+        }
+    }
     let ignored: Vec<_> = candidates(args)
         .into_iter()
         .filter(|(candidate, _)| *candidate != mode)
         .map(|(_, label)| label)
-        .filter(|s| !s.is_empty())
+        .filter(|label| {
+            !label.is_empty() && (*label != QUERY_URI || !reads_query_uri(mode))
+        })
         .collect();
     if !ignored.is_empty() {
         writeln!(
@@ -316,13 +350,10 @@ fn resolve_query(
     mode: Mode,
     zh: bool,
 ) -> std::result::Result<Option<query::Query>, String> {
-    let query_uri = args.uri.as_deref().filter(|uri| {
-        uri.starts_with("agents://")
-            && matches!(
-                mode,
-                Mode::Collect | Mode::List | Mode::Interactive | Mode::Browse
-            )
-    });
+    let query_uri = args
+        .uri
+        .as_deref()
+        .filter(|uri| uri.starts_with("agents://") && reads_query_uri(mode));
     if query_uri.is_some() && args.query.is_some() {
         return Err(diagnostics::Diagnostic::query_error(
             &i18n::t("DIAG_QUERY_URI_WITH_Q_DETAIL", zh, &[]),
@@ -422,6 +453,16 @@ fn dispatch(
     }
 }
 
+fn formats(spec: &str, zh: bool) -> Result<Vec<output_formats::OutputFormat>> {
+    output_formats::parse(spec).map_err(|_| {
+        clap::Error::raw(
+            clap::error::ErrorKind::ValueValidation,
+            i18n::t("CLI_FORMAT_INVALID", zh, &[("value", spec.into())]),
+        )
+        .into()
+    })
+}
+
 fn list(
     args: &Args,
     query: Option<&query::Query>,
@@ -429,12 +470,7 @@ fn list(
     out: &mut impl Write,
 ) -> Result<bool> {
     if let Some(spec) = &args.format {
-        output_formats::parse(spec).map_err(|_| {
-            clap::Error::raw(
-                clap::error::ErrorKind::ValueValidation,
-                i18n::t("CLI_FORMAT_INVALID", zh, &[("value", spec.clone())]),
-            )
-        })?;
+        formats(spec, zh)?;
     }
     list_workflow::run(
         query,
@@ -459,8 +495,7 @@ fn interactive(
     out: &mut impl Write,
 ) -> Result<bool> {
     let browse = mode == Mode::Browse || crate::terminal::tui::available();
-    let formats =
-        output_formats::parse(args.format.as_deref().unwrap_or("json"))?;
+    let formats = formats(args.format.as_deref().unwrap_or("json"), zh)?;
     if formats.contains(&output_formats::OutputFormat::Print) {
         let diagnostic =
             diagnostics::Diagnostic::interactive_print(zh).render(zh);

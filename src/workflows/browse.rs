@@ -14,6 +14,7 @@ struct Results {
     positions: Vec<(usize, usize)>,
     rows: Vec<Entry>,
     status: String,
+    partial: bool,
 }
 
 fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
@@ -52,11 +53,6 @@ fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
     } else {
         String::new()
     };
-    if !scan.failed_providers.is_empty() || !selection.failures.is_empty() {
-        status = format!("{} {status}", t("READER_PARTIAL", zh, &[]))
-            .trim_end()
-            .into();
-    }
     if !notices.is_empty() {
         status.push(' ');
         status.push_str(&render::safe_line(&String::from_utf8_lossy(&notices)));
@@ -69,6 +65,8 @@ fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
             .collect(),
         rows,
         status,
+        partial: !scan.failed_providers.is_empty()
+            || !selection.failures.is_empty(),
     })
 }
 
@@ -277,6 +275,7 @@ pub fn run(
         zh,
     )?;
     reader.status = selected.status;
+    reader.partial = selected.partial;
     let cache = SessionDataCache::default();
     loop {
         let mut notices = Vec::new();
@@ -326,6 +325,7 @@ pub fn run(
                         query = next;
                         reader.set_results(selected.rows, &query);
                         reader.status = selected.status;
+                        reader.partial = selected.partial;
                     }
                     Err(error) => {
                         reader.status = render::safe_line(&error.to_string());

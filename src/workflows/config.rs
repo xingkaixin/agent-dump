@@ -82,6 +82,10 @@ pub fn run(
     let ai = config.ai();
     let output = config.output();
     if action == "view" && config.exists {
+        if let Err(error) = config.require_valid(zh) {
+            writeln!(out, "{error}")?;
+            return Ok(false);
+        }
         writeln!(
             out,
             "{}",

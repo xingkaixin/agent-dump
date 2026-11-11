@@ -145,7 +145,6 @@ struct State {
     selected: usize,
     body_focus: bool,
     expanded: bool,
-    loading: bool,
     query: Query,
     finder: Option<TextQuery>,
     overlay: Overlay,
@@ -170,6 +169,7 @@ pub struct Reader {
     page: usize,
     zh: bool,
     pub status: String,
+    pub partial: bool,
 }
 
 impl Reader {
@@ -194,6 +194,7 @@ impl Reader {
             page: 1,
             zh,
             status: String::new(),
+            partial: false,
         })
     }
 
@@ -243,7 +244,7 @@ impl Reader {
                 usize::from(list.height),
             );
         }
-        let view = if geometry.body.is_some() && !self.state.loading {
+        let view = if geometry.body.is_some() && self.state.body.built {
             self.measure()?;
             self.state.body.view(
                 data,
@@ -264,6 +265,7 @@ impl Reader {
             scope,
             state,
             status,
+            partial,
             zh,
             ..
         } = self;
@@ -276,6 +278,7 @@ impl Reader {
             scope,
             state,
             status,
+            partial: *partial,
             view: &view,
             zh: *zh,
         };
@@ -340,7 +343,6 @@ impl Reader {
         let marked = std::mem::take(&mut self.state.marked);
         self.state = State::with_query(&self.query, selected);
         self.state.marked = marked;
-        self.state.loading = true;
         self.status.clear();
     }
 
@@ -380,7 +382,6 @@ impl Reader {
         data: Option<&SessionData>,
         error: Option<&str>,
     ) -> crate::Result<Action> {
-        self.state.loading = false;
         let previous_hit = self.state.hit;
         self.state.search(data);
         self.state.hit =
@@ -1191,6 +1192,7 @@ struct Screen<'a> {
     scope: &'a str,
     state: &'a State,
     status: &'a str,
+    partial: bool,
     view: &'a View,
     zh: bool,
 }
@@ -1222,10 +1224,14 @@ fn draw(frame: &mut Frame<'_>, geometry: &Geometry, screen: &Screen<'_>) {
         return;
     }
     if let Overlay::Help(offset) = screen.state.overlay {
+        let mut scope = render::safe_body(screen.scope);
+        if screen.partial {
+            scope = format!("{scope}\n{}", t("READER_PARTIAL", zh, &[]));
+        }
         frame.render_widget(
             Paragraph::new(format!(
                 "{}\n\n{}\n\n{}",
-                render::safe_body(screen.scope),
+                scope,
                 t("READER_HELP_FULL", zh, &[]),
                 render::safe_body(screen.status)
             ))
@@ -1272,7 +1278,7 @@ fn draw_top(frame: &mut Frame<'_>, area: Rect, wide: bool, screen: &Screen) {
         zh,
         &[("count", screen.entries.len().to_string())],
     );
-    let right = match screen
+    let mut right = match screen
         .query
         .keyword
         .as_deref()
@@ -1305,6 +1311,15 @@ fn draw_top(frame: &mut Frame<'_>, area: Rect, wide: bool, screen: &Screen) {
         ],
         None => vec![Span::styled(count, dim())],
     };
+    if screen.partial {
+        right.insert(
+            0,
+            Span::styled(
+                format!("{} · ", t("READER_PARTIAL_TAG", zh, &[])),
+                Style::default().fg(HIT),
+            ),
+        );
+    }
     let mut left = vec![Span::styled("agent-dump", bold().fg(ACCENT))];
     let room = width.saturating_sub(
         right.iter().map(Span::width).sum::<usize>() + left[0].width() + 6,
@@ -1500,7 +1515,7 @@ fn draw_body(frame: &mut Frame<'_>, area: Rect, screen: &Screen) {
             header,
         );
     }
-    if state.loading {
+    if !state.body.built {
         let text = t(
             "READER_LOADING",
             screen.zh,
@@ -1764,6 +1779,36 @@ mod tests {
     }
 
     #[test]
+    fn partial_results_stay_marked_after_status_clears() {
+        let mut state = State::default();
+        state.rebuild(None, None, false);
+        let area = Rect::new(0, 0, 100, 24);
+        let geometry = Geometry::new(area, false);
+        let screen = Screen {
+            entries: &[],
+            slots: &[],
+            list_offset: 0,
+            query: &Query::default(),
+            finder: None,
+            scope: "",
+            state: &state,
+            status: "",
+            partial: true,
+            view: &View::default(),
+            zh: false,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+        terminal
+            .draw(|frame| draw(frame, &geometry, &screen))
+            .unwrap();
+        let top = terminal.backend().buffer().content[..100]
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect::<String>();
+        assert!(top.contains("partial results · 0 sessions"), "{top}");
+    }
+
+    #[test]
     #[ignore = "Manual release benchmark; run scripts/benchmark_reader_redraw.py"]
     fn benchmark_reader_redraw() {
         use std::hash::{DefaultHasher, Hash, Hasher};
@@ -1829,6 +1874,7 @@ mod tests {
                     scope: "",
                     state: &state,
                     status: "benchmark",
+                    partial: false,
                     view: &view,
                     zh: false,
                 };

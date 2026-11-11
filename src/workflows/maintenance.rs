@@ -178,7 +178,7 @@ pub fn run(
             )
             .render(zh)
         )?;
-        return Ok(names.is_some());
+        return Ok(names.is_some() && scan.failed_providers.is_empty());
     }
     if reindex {
         let mut index = SearchIndex::open()?;
