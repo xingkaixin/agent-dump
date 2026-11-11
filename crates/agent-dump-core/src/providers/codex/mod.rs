@@ -317,7 +317,11 @@ impl Codex {
             };
             let mut first = true;
             rollout::lines(path, |_, line, _| {
-                let record = rollout::object(line);
+                let record = if scan.head.len() < TITLE_RECORDS {
+                    rollout::object(line)
+                } else {
+                    jsonl::pruned(line, &RECORD)
+                };
                 if std::mem::take(&mut first) {
                     scan.header.clone_from(&record);
                 }

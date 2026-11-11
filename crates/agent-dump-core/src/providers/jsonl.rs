@@ -74,7 +74,7 @@ fn object(bytes: &[u8]) -> Option<Value> {
         .filter(Value::is_object)
 }
 
-fn pruned(bytes: &[u8], shape: &'static Shape) -> Option<Value> {
+pub fn pruned(bytes: &[u8], shape: &'static Shape) -> Option<Value> {
     let text = std::str::from_utf8(bytes).ok()?;
     let text = text.trim_start_matches([' ', '\t', '\n', '\r']);
     if !text.starts_with('{') {
