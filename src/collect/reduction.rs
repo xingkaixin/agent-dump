@@ -14,32 +14,32 @@ enum Job {
     Merge(usize, usize, Vec<Summary>),
 }
 
-struct Session {
-    slots: Vec<Option<Summary>>,
-    merging: bool,
-    failed: bool,
+enum Session {
+    Chunks(Vec<Option<Summary>>),
+    Merges(Vec<Option<Summary>>),
+    Done(Summary),
+    Failed,
 }
 
 impl Session {
-    fn advance(
-        &mut self,
-        entry: usize,
-        queue: &mut VecDeque<Job>,
-    ) -> Option<Summary> {
-        let payloads: Vec<_> = std::mem::take(&mut self.slots)
-            .into_iter()
-            .flatten()
-            .collect();
-        if self.merging && payloads.len() == 1 {
-            return payloads.into_iter().next();
+    fn advance(&mut self, entry: usize, queue: &mut VecDeque<Job>) -> bool {
+        let (merging, slots) = match self {
+            Self::Chunks(slots) => (false, slots),
+            Self::Merges(slots) => (true, slots),
+            Self::Done(_) | Self::Failed => return false,
+        };
+        let mut payloads: Vec<_> =
+            std::mem::take(slots).into_iter().flatten().collect();
+        if merging && payloads.len() == 1 {
+            *self = Self::Done(payloads.remove(0));
+            return true;
         }
-        self.merging = true;
         let batches: Vec<_> = payloads.chunks(8).map(<[_]>::to_vec).collect();
-        self.slots = vec![None; batches.len()];
+        *self = Self::Merges(vec![None; batches.len()]);
         for (index, batch) in batches.into_iter().enumerate().rev() {
             queue.push_front(Job::Merge(entry, index, batch));
         }
-        None
+        false
     }
 }
 
@@ -214,11 +214,7 @@ pub fn run(
     )?;
     let mut sessions: Vec<_> = entries
         .iter()
-        .map(|entry| Session {
-            slots: vec![None; entry.chunks.len()],
-            merging: false,
-            failed: false,
-        })
+        .map(|entry| Session::Chunks(vec![None; entry.chunks.len()]))
         .collect();
     let queue = entries
         .iter()
@@ -227,7 +223,6 @@ pub fn run(
             (0..e.chunks.len()).map(move |index| Job::Chunk(entry, index))
         })
         .collect();
-    let mut results = vec![None; entries.len()];
     let mut failed = Vec::new();
     let mut last_error = None;
     let mut chunks = 0;
@@ -239,7 +234,6 @@ pub fn run(
             Job::Chunk(entry, index) => (
                 entry,
                 index,
-                true,
                 summarize_chunk(
                     &entries[entry],
                     index,
@@ -252,7 +246,6 @@ pub fn run(
             Job::Merge(entry, index, payloads) => (
                 entry,
                 index,
-                false,
                 merge_session(
                     &entries[entry],
                     &payloads,
@@ -263,15 +256,17 @@ pub fn run(
                 ),
             ),
         },
-        |(entry, index, chunk, result), queue| {
+        |(entry, index, result), queue| {
             let session = &mut sessions[entry];
-            if session.failed {
+            let (Session::Chunks(slots) | Session::Merges(slots)) = session
+            else {
                 return Ok(());
-            }
+            };
             match result {
                 Ok(summary) => {
-                    session.slots[index] = Some(summary);
-                    if chunk {
+                    slots[index] = Some(summary);
+                    let filled = slots.iter().all(Option::is_some);
+                    if matches!(session, Session::Chunks(_)) {
                         chunks += 1;
                         progress(
                             "COLLECT_PROGRESS_SUMMARIZE_CHUNKS",
@@ -280,10 +275,7 @@ pub fn run(
                             warnings,
                         )?;
                     }
-                    if session.slots.iter().all(Option::is_some)
-                        && let Some(summary) = session.advance(entry, queue)
-                    {
-                        results[entry] = Some(summary);
+                    if filled && session.advance(entry, queue) {
                         merged += 1;
                         progress(
                             "COLLECT_PROGRESS_MERGE_SESSIONS",
@@ -294,7 +286,7 @@ pub fn run(
                     }
                 }
                 Err(error) => {
-                    session.failed = true;
+                    *session = Session::Failed;
                     queue.retain(|job| {
                         !matches!(job, Job::Chunk(i, _) | Job::Merge(i, ..) if *i == entry)
                     });
@@ -349,9 +341,12 @@ pub fn run(
     )?;
     let mut working: Vec<Group> = entries
         .iter()
-        .zip(results)
-        .filter_map(|(entry, summary)| {
-            summary.map(|summary| Group {
+        .zip(sessions)
+        .filter_map(|(entry, session)| {
+            let Session::Done(summary) = session else {
+                return None;
+            };
+            Some(Group {
                 date: entry.date.to_string(),
                 project_directory: entry.session.working_directory(),
                 session_uris: vec![entry.uri()],
