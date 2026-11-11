@@ -52,7 +52,10 @@ manifest-path = "Cargo.toml"
 bindings = "bin"
 locked = true
 strip = true
-include = [{ path = "rust-toolchain.toml", format = "sdist" }]
+include = [
+    { path = "rust-toolchain.toml", format = "sdist" },
+    { path = ".cargo/config.toml", format = "sdist" },
+]
 
 [tool.uv]
 # Python is used only for CLI verification and wheel build tooling.
