@@ -4,6 +4,29 @@
 
 ## [Unreleased]
 
+## [1.2.9] - 2026-11-11
+
+### Changed
+
+- Redesign the session reader: sessions are grouped by day, runs of tool-only messages are folded, and the top bar shows position, hits, and context-aware key hints. Moving up from the bottom of the list no longer pins the selection to the last row. Session bodies load after navigation settles and only visible messages are wrapped, so long sessions no longer stall the list (#566).
+- Collect discovers sessions within the Updated window, so sessions whose `updated_at` precedes the start date are no longer read (#567).
+- Speed up parallel session reads by disabling SQLite allocator statistics, which serialized readers on a global mutex; the sdist carries the cargo config so wheels built from it keep the flag. Text without tags skips tag patterns, and compressed Codex rollout scans prune records early (#567).
+- Collect-only options outside collect mode produce a warning instead of being dropped silently (#568).
+- Model collect session reduction as one explicit state per session (#568).
+- Update landing-page agent logos to current upstream product marks (#559).
+- State product principles and non-obvious constraints in `AGENTS.md` (#558).
+- Update Rust dependencies, maturin, ty, web runtime packages, and GitHub Actions (#560, #562–#565).
+
+### Fixed
+
+- Codex: a user reply after an assistant message that closed a proposed plan was consumed as plan feedback and lost; it now stays a message (#568).
+- Claude Code: `created_at` comes from the first dated record. A first line without a timestamp, such as a mode record, made it fall back to the file modification time and pushed `updated_at` past the last record (#567).
+- `--config view` exits 1 with an error for a config that is not valid TOML, instead of showing defaults with exit code 0 (#568).
+- The reader's partial results marker stays in the top bar instead of vanishing on the first selection change (#568).
+- An `agents://` query URI is no longer reported as ignored in interactive mode, where it is applied (#568).
+- Text `--list` and `--stats` exit 1, like `--json`, when the provider named in the query cannot be read and nothing else matches (#568).
+- An invalid `--format` in interactive mode is a usage error with exit code 2 instead of an unexpected error with exit code 1 (#568).
+
 ## [1.2.8] - 2026-11-06
 
 ### Changed
@@ -1366,3 +1389,4 @@
 [1.2.6]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.6
 [1.2.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.7
 [1.2.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.8
+[1.2.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.9

@@ -187,9 +187,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.9",
+        date: "2026-11-11",
+        isLatest: true,
+        title: "Redesigned Session Reader and Faster AI Collect",
+        description:
+          "The terminal session reader groups Codex, Claude Code, Cursor, and other AI sessions by day, folds long runs of tool calls, and shows your position, search hits, and the keys you can press. Long sessions no longer stall the list. AI collect skips sessions last updated before the requested range, so weekly summaries read less. Codex plan replies are no longer lost in session export, and failed providers or invalid config now return a clear error instead of an empty result.",
+        command: 'npx @agent-dump/cli@1.2.9 --browse',
+        tags: ["Session Reader", "AI Collect", "Session Export"],
+      },
+      {
         version: "v1.2.8",
         date: "2026-11-06",
-        isLatest: true,
         title: "Faster Codex Session Export and Search",
         description:
           "Exporting or searching Codex sessions no longer scans every rollout to find subagents. With thousands of Codex sessions, this removes about 16 seconds from each export and full-text search. Only subagents the parent session actually starts or mentions are merged into its transcript, so background reviews no longer appear in the parent export.",
@@ -417,9 +426,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.9",
+        date: "2026-11-11",
+        isLatest: true,
+        title: "会话阅读器重新设计，AI collect 更快",
+        description:
+          "终端会话阅读器按天分组 Codex、Claude Code、Cursor 等 AI 会话，折叠连续的工具调用，并显示当前位置、搜索命中数和可用按键。长会话不再拖慢列表。AI collect 跳过在时间范围之前就停止更新的会话，生成周报时读取更少。Codex 会话导出不再丢失计划后的用户回复；Provider 读取失败或配置无效时，明确报错而不是返回空结果。",
+        command: 'npx @agent-dump/cli@1.2.9 --browse',
+        tags: ["会话阅读器", "AI Collect", "会话导出"],
+      },
+      {
         version: "v1.2.8",
         date: "2026-11-06",
-        isLatest: true,
         title: "Codex 会话导出与搜索更快",
         description:
           "导出或搜索 Codex 会话时，不再扫描所有 rollout 来查找子 Agent。Codex 会话数达到数千时，每次导出和全文搜索可省去约 16 秒。只有父会话实际启动或提到的子 Agent 才会合并进对话记录，后台审查不再出现在父会话导出中。",
@@ -647,9 +665,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.9",
+        date: "2026-11-11",
+        isLatest: true,
+        title: "セッションリーダーを刷新し、AI collect を高速化",
+        description:
+          "ターミナルのセッションリーダーは Codex、Claude Code、Cursor などの AI セッションを日付ごとにまとめ、連続するツール呼び出しを折りたたみ、現在位置・検索ヒット数・使えるキーを表示します。長いセッションでも一覧が止まらなくなりました。AI collect は指定期間より前に更新が止まったセッションを読み込まないため、週次サマリーの読み込み量が減ります。Codex のセッションエクスポートでプラン後のユーザー返信が失われなくなり、プロバイダーの読み込み失敗や無効な設定は空の結果ではなく明確なエラーになります。",
+        command: 'npx @agent-dump/cli@1.2.9 --browse',
+        tags: ["セッションリーダー", "AI Collect", "セッションエクスポート"],
+      },
+      {
         version: "v1.2.8",
         date: "2026-11-06",
-        isLatest: true,
         title: "Codex セッションのエクスポートと検索を高速化",
         description:
           "Codex セッションをエクスポートまたは検索する際、サブエージェントを探すためにすべての rollout を走査しなくなりました。Codex セッションが数千件ある環境では、エクスポートと全文検索のたびに約 16 秒短縮されます。親セッションが実際に起動または参照したサブエージェントだけを会話記録に統合するため、バックグラウンドのレビューは親セッションのエクスポートに表示されなくなりました。",
