@@ -240,7 +240,7 @@ Next steps:
 | Code | Meaning |
 |------|---------|
 | `0` | The command did what was asked — including when the result set is legitimately empty (no sessions in the `--days` window, a keyword or `--search` that matched nothing), and when interactive export partially succeeds. |
-| `1` | The command could not do what was asked: no provider data exists on this machine, a URI did not resolve to a session, every requested interactive export failed, or an argument combination is invalid. |
+| `1` | The command could not do what was asked: no provider data exists on this machine, a provider named in the query could not be read and nothing else matched, a URI did not resolve to a session, every requested interactive export failed, or an argument combination is invalid. |
 | `2` | Argument usage error rejected by the argument parser (unknown flag, invalid `--format` value). |
 
 `agent-dump --list && ...` continues after an empty listing and stops only when no

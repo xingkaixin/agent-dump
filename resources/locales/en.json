@@ -118,6 +118,7 @@
   "URI_SUMMARY_LOADING": "⏳ Calling AI to generate URI summary, please wait...",
   "SUMMARY_IGNORED_NON_URI_WARNING": "⚠️  --summary is only supported in URI mode and will be ignored.",
   "HEAD_IGNORED_NON_URI_WARNING": "⚠️  --head is only supported in URI mode and will be ignored.",
+  "COLLECT_OPTIONS_IGNORED_WARNING": "⚠️  {options} only apply to --collect and will be ignored.",
   "CLI_MODE_OPTIONS_IGNORED_WARNING": "⚠️  Ignored lower-priority mode options: {options}",
   "URI_HEAD_WITH_FORMAT_ERROR": "❌ --head cannot be used with -format/--format.",
   "URI_HEAD_WITH_SUMMARY_ERROR": "❌ --head cannot be used with --summary.",

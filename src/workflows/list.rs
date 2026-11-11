@@ -48,7 +48,7 @@ pub fn run(
             render::list_banner(),
             Diagnostic::empty_list(names.as_deref(), roots, zh).render(zh)
         )?;
-        return Ok(names.is_some());
+        return Ok(names.is_some() && scan.failed_providers.is_empty());
     }
     let unfiltered = Query::default();
     let mut selection = filter::select(

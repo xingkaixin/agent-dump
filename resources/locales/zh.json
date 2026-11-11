@@ -118,6 +118,7 @@
   "URI_SUMMARY_LOADING": "⏳ 正在调用 AI 生成会话总结，请稍候...",
   "SUMMARY_IGNORED_NON_URI_WARNING": "⚠️  --summary 仅支持 URI 模式，当前已忽略。",
   "HEAD_IGNORED_NON_URI_WARNING": "⚠️  --head 仅支持 URI 模式，当前已忽略。",
+  "COLLECT_OPTIONS_IGNORED_WARNING": "⚠️  {options} 仅支持 --collect 模式，当前已忽略。",
   "CLI_MODE_OPTIONS_IGNORED_WARNING": "⚠️  已忽略较低优先级的模式参数：{options}",
   "URI_HEAD_WITH_FORMAT_ERROR": "❌ --head 不能与 -format/--format 同时使用。",
   "URI_HEAD_WITH_SUMMARY_ERROR": "❌ --head 不能与 --summary 同时使用。",
