@@ -161,3 +161,8 @@ def test_streamed_request_usage_is_counted_once(cli):
     )
     stats = rust_export(cli)["stats"]
     assert (stats["total_input_tokens"], stats["total_output_tokens"]) == (17 + 1, 4 + 1)
+
+
+def test_created_at_uses_first_timestamped_record(cli):
+    create(cli, [{"type": "mode", "mode": "default"}, event("user", "Prompt", timestamp="2026-01-10T08:00:00+00:00")])
+    assert listed(cli)[IDENTITY]["created_at"].startswith("2026-01-10T08:00:00")
