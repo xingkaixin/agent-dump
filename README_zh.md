@@ -62,7 +62,7 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **DeepChat** - 当前版本的本地会话（未加密数据库）
 - **Cherry Studio** - 2.x 的本地聊天和 Agent 会话
 - **MiniMax Code** - 当前 CLI 的本地 SQLite 会话
-- **Antigravity CLI** - 本地会话数据库，不解析工具结果
+- **Antigravity CLI** - CLI 和隔离 ACP 会话数据库，不解析工具结果
 - **更多工具** - 欢迎提交 PR 支持其他 AI 编码工具
 
 ## 功能特性
@@ -267,7 +267,7 @@ agent-dump opencode://session-id-abc123
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`；默认 macOS `~/Library/Application Support/DeepChat/app_db/agent.db`、Windows `%APPDATA%\DeepChat\app_db\agent.db`、Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`。
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` 或 `CHERRY_STUDIO_USER_DATA_DIR` 下的 `Data/cherrystudio.sqlite`；未指定时，依次检查 `~/.cherrystudio/boot-config.json` 中配置的用户数据目录，再检查平台默认目录，使用第一个存在的数据库。默认目录为 macOS `~/Library/Application Support/CherryStudio`、Windows `%APPDATA%\CherryStudio`、Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio`，数据库均位于其下的 `Data/cherrystudio.sqlite`。覆盖变量可用于便携版、开发版或选择多个安装中的一个。
 - **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`，只有 `~/.minimax-code` 存在数据库时改用该目录；数据库位于所选目录的 `v2/sqlite/runtime-state.sqlite`。只选择一个目录，显式路径不存在时不回退。
-- **Antigravity CLI**: `AGY_CONVERSATIONS_DIR` -> `~/.gemini/antigravity-cli/conversations` -> `data/antigravity-cli/conversations`。其下每个 `<conversation_id>.db` 是一个会话；父目录中可选的 `conversation_summaries.db` 提供标题、工作目录和更新时间。不读取 Antigravity IDE 的 `.gemini/antigravity/conversations/*.pb`。
+- **Antigravity CLI**: `AGY_CONVERSATIONS_DIR` -> `~/.gemini/antigravity-cli/conversations` -> `data/antigravity-cli/conversations`。其下每个 `<conversation_id>.db` 是一个会话；父目录中可选的 `conversation_summaries.db` 提供标题、工作目录和更新时间。未设置 `AGY_CONVERSATIONS_DIR` 时，同时发现 `<T3 home>/userdata/providers/antigravity/*/antigravity-acp/conversations`，T3 home 按 `T3CODE_HOME`、`~/.t3` 选择。T3 使用 `--base-dir` 时，将 `T3CODE_HOME` 设为同一目录。各来源独立读取可选摘要库。非空 `AGY_CONVERSATIONS_DIR` 关闭 T3 自动发现，保留原有本地开发回退。所有来源沿用 `antigravity-cli://` URI。不读取 Antigravity IDE 的 `.gemini/antigravity/conversations/*.pb`。
 
 注意：
 

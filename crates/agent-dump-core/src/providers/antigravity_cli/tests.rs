@@ -33,6 +33,7 @@ fn provider(root: &Path) -> AntigravityCli {
             root.join("fallback"),
             "Synthetic source",
         ),
+        profiles: Box::new(|| Ok(None)),
     }
 }
 

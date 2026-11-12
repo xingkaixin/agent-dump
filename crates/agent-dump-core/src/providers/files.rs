@@ -167,35 +167,42 @@ impl SourceRoots {
         let Some(base) = &self.base else {
             return Ok(SourceFiles::default());
         };
-        if !base.exists() {
-            return Ok(SourceFiles::default());
-        }
-        let mut walker = WalkDir::new(base);
-        if let Some(depth) = depth {
-            walker = walker.max_depth(depth);
-        }
-        let mut files = SourceFiles::default();
-        for entry in walker {
-            match entry {
-                Ok(entry) => {
-                    if !entry.file_type().is_dir() && accept(entry.path(), base)
-                    {
-                        files.paths.push(entry.into_path());
-                    }
-                }
-                Err(error) if error.depth() > 0 => {
-                    files.failures.push(SessionFailure {
-                        source: crate::storage::source_io::path_text(
-                            error.path().unwrap_or(base),
-                        ),
-                        error: error.into(),
-                    });
-                }
-                Err(error) => return Err(error.into()),
-            }
-        }
-        Ok(files)
+        files(base, depth, accept)
     }
+}
+
+pub fn files(
+    base: &Path,
+    depth: Option<usize>,
+    accept: impl Fn(&Path, &Path) -> bool,
+) -> crate::Result<SourceFiles> {
+    if !base.exists() {
+        return Ok(SourceFiles::default());
+    }
+    let mut walker = WalkDir::new(base);
+    if let Some(depth) = depth {
+        walker = walker.max_depth(depth);
+    }
+    let mut files = SourceFiles::default();
+    for entry in walker {
+        match entry {
+            Ok(entry) => {
+                if !entry.file_type().is_dir() && accept(entry.path(), base) {
+                    files.paths.push(entry.into_path());
+                }
+            }
+            Err(error) if error.depth() > 0 => {
+                files.failures.push(SessionFailure {
+                    source: crate::storage::source_io::path_text(
+                        error.path().unwrap_or(base),
+                    ),
+                    error: error.into(),
+                });
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(files)
 }
 
 pub fn discover<S: Send>(

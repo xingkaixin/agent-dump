@@ -62,7 +62,7 @@ Follow the generated read commands and cursors until `has_more=false` to cover t
 - **DeepChat** - Current local sessions from unencrypted databases
 - **Cherry Studio** - Local 2.x chats and agent sessions
 - **MiniMax Code** - Current CLI sessions from local SQLite storage
-- **Antigravity CLI** - Conversation databases; tool results are not decoded
+- **Antigravity CLI** - CLI and isolated ACP conversation databases; tool results are not decoded
 - **More Tools** - PRs are welcome to support other AI coding tools
 
 ## Features
@@ -268,7 +268,7 @@ provider has data on this machine.
 - **DeepChat**: `DEEPCHAT_USER_DATA_DIR/app_db/agent.db`; defaults to macOS `~/Library/Application Support/DeepChat/app_db/agent.db`, Windows `%APPDATA%\DeepChat\app_db\agent.db`, or Linux `${XDG_CONFIG_HOME:-~/.config}/DeepChat/app_db/agent.db`.
 - **Cherry Studio**: `CHERRYSTUDIO_USER_DATA_DIR` or `CHERRY_STUDIO_USER_DATA_DIR`, then `Data/cherrystudio.sqlite`; otherwise the first existing database in the user data directories configured by `~/.cherrystudio/boot-config.json`, then the platform default: macOS `~/Library/Application Support/CherryStudio`, Windows `%APPDATA%\CherryStudio`, or Linux `${XDG_CONFIG_HOME:-~/.config}/CherryStudio` (each with `Data/cherrystudio.sqlite`). Use the override for portable/dev installations or to select among multiple installations.
 - **MiniMax Code**: `MINIMAX_DATA_DIR` → `MAVIS_DATA_DIR` → `~/.minimax`, or `~/.minimax-code` when only that directory has a database; the database is `v2/sqlite/runtime-state.sqlite` under the selected root. Only one root is selected; a missing explicit path never falls back to another installation.
-- **Antigravity CLI**: `AGY_CONVERSATIONS_DIR` -> `~/.gemini/antigravity-cli/conversations` -> `data/antigravity-cli/conversations`. Each `<conversation_id>.db` below it is a session; the optional `conversation_summaries.db` in its parent directory supplies the title, working directory, and update time. Antigravity IDE `.gemini/antigravity/conversations/*.pb` files are not read.
+- **Antigravity CLI**: `AGY_CONVERSATIONS_DIR` -> `~/.gemini/antigravity-cli/conversations` -> `data/antigravity-cli/conversations`. Each `<conversation_id>.db` below it is a session; the optional `conversation_summaries.db` in its parent directory supplies the title, working directory, and update time. Without `AGY_CONVERSATIONS_DIR`, discovery also includes `<T3 home>/userdata/providers/antigravity/*/antigravity-acp/conversations`, where T3 home is `T3CODE_HOME` or `~/.t3`. Use the same `T3CODE_HOME` as T3's `--base-dir` when configured. Each store reads its own optional summary database. A nonempty `AGY_CONVERSATIONS_DIR` disables automatic T3 discovery and keeps the existing local development fallback. All stores use `antigravity-cli://` URIs. Antigravity IDE `.gemini/antigravity/conversations/*.pb` files are not read.
 
 Notes:
 
