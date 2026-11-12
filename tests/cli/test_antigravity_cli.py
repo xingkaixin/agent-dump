@@ -5,6 +5,7 @@ from pathlib import Path
 import sqlite3
 
 from cli_fixture import IDENTITY
+import pytest
 
 STAMP = 1768478400
 
@@ -27,7 +28,7 @@ def field(number, value):
     return encode(number << 3 | 2) + encode(len(value)) + value
 
 
-def metadata(created=None, call=None, usage=None):
+def metadata(created=None, call=None, usage=None, model=None):
     body = b""
     if created is not None:
         body += field(1, varint(1, created))
@@ -35,6 +36,8 @@ def metadata(created=None, call=None, usage=None):
         body += field(4, call)
     if usage is not None:
         body += field(9, usage)
+    if model is not None:
+        body += field(24, model)
     return field(5, body)
 
 
@@ -42,11 +45,11 @@ def user(text, created=STAMP):
     return 14, field(19, field(2, text)) + metadata(created)
 
 
-def assistant(text, created=STAMP, usage=None):
-    return 15, field(20, field(1, text)) + metadata(created, usage=usage)
+def assistant(text, created=STAMP, usage=None, model=None):
+    return 15, field(20, field(1, text)) + metadata(created, usage=usage, model=model)
 
 
-def create(cli, steps, *, identity=IDENTITY, conversations=None, summary=None, models=()):
+def create(cli, steps, *, identity=IDENTITY, conversations=None, summary=None, models=(), workspace_uris=None):
     conversations = conversations or cli.root / "sources/antigravity-cli/conversations"
     conversations.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(conversations / f"{identity}.db")
@@ -61,6 +64,12 @@ def create(cli, steps, *, identity=IDENTITY, conversations=None, summary=None, m
         "INSERT INTO gen_metadata (data) VALUES (?)",
         [(field(1, varint(3, model_id) + field(19, model)),) for model_id, model in models],
     )
+    if workspace_uris is not None:
+        connection.execute("CREATE TABLE trajectory_metadata_blob (data BLOB)")
+        connection.execute(
+            "INSERT INTO trajectory_metadata_blob VALUES (?)",
+            (b"".join(field(7, uri) for uri in workspace_uris),),
+        )
     connection.commit()
     connection.close()
     if summary is not None:
@@ -173,3 +182,44 @@ def test_default_root_override_and_empty_databases(cli):
 
     del cli.environment["AGY_CONVERSATIONS_DIR"]
     assert {key: item["title"] for key, item in listed(cli).items()} == {"default": "Default title"}
+
+
+@pytest.mark.parametrize("summary_mode", ["missing", "empty", "present"])
+def test_workspace_and_step_model_fallbacks(cli, summary_mode):
+    workspace = cli.root / "workspace"
+    summary_workspace = cli.root / "summary-workspace"
+    summary = None
+    if summary_mode != "missing":
+        summary = {"workspaces": [summary_workspace.as_uri()] if summary_mode == "present" else []}
+    create(
+        cli,
+        [
+            user("ACP prompt"),
+            assistant(
+                "ACP answer",
+                usage=varint(2, 10) + varint(3, 6),
+                model=field(8, "Display model") + field(12, "api-model"),
+            ),
+        ],
+        summary=summary,
+        workspace_uris=["https://example.test/remote", workspace.as_uri()],
+    )
+    before = cli.fixtures.source_manifest(cli.root)
+    expected_directory = str(summary_workspace if summary_mode == "present" else workspace)
+    record = listed(cli)[IDENTITY]
+    assert (record["working_directory"], record["model"], record["message_count"]) == (
+        expected_directory,
+        "api-model",
+        2,
+    )
+    head = run_json(cli, f"antigravity-cli://{IDENTITY}", "--head")
+    assert {key: head[key] for key in record} == record
+    result = cli.run(f"antigravity-cli://{IDENTITY}", "--format", "json", "--output", "exports")
+    assert result.returncode == 0, result.stderr
+    payload = json.loads((cli.root / f"exports/antigravity-cli/{IDENTITY}.json").read_text())
+    assert (payload["directory"], payload["messages"][1]["model"], payload["stats"]["total_tokens"]) == (
+        expected_directory,
+        "api-model",
+        16,
+    )
+    assert cli.fixtures.source_manifest(cli.root) == before

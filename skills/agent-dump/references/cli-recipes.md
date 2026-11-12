@@ -488,6 +488,8 @@ AGY_CONVERSATIONS_DIR=~/backup/conversations agent-dump --list --query "provider
 
 会话目录按非空 `AGY_CONVERSATIONS_DIR`、`~/.gemini/antigravity-cli/conversations` 选择，其下任意深度的 `<conversation_id>.db` 各为一个会话；父目录中可选的 `conversation_summaries.db` 提供标题、工作目录和更新时间。不读取 Antigravity IDE 的 `.pb` 文件。
 
+摘要没有有效工作目录时，从会话自身的 trajectory 元数据读取工作区 URI。主请求用量缺少模型 ID 时，从步骤模型配置读取 API 名或展示名；重试缺少模型身份时保持未知。
+
 只解码用户输入、助手文本、标题更新、工具调用、步骤时间和用量；工具结果不解析，工具状态为 `unknown`，其他步骤跳过。没有原生时间的消息标记为推测时间，collect 排除这类消息。重试中重复的用量只计一次，挂到下一条 assistant 消息；不估算费用。支持 print / JSON / Markdown，不支持 raw。步骤格式错误或表结构不支持时，只有该会话报告读取失败。
 
 ## Machine-readable output

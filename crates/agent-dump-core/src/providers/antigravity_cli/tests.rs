@@ -175,3 +175,60 @@ fn usage_deduplicates_retries_and_attaches_to_the_next_assistant_message() {
     );
     assert_eq!(session.created_at.as_millisecond(), 1_788_000_001_500);
 }
+
+#[test]
+fn step_model_fallback_does_not_guess_retry_models() {
+    let root = tempfile::tempdir().unwrap();
+    let path = fixture(&root.path().join("conversations"), "session");
+    let db = Connection::open(&path).unwrap();
+    db.execute("DELETE FROM steps", []).unwrap();
+    db.execute(
+        "INSERT INTO gen_metadata VALUES (0, ?1)",
+        [bytes(1, [varint(3, 7), bytes(19, "mapped-model")].concat())],
+    )
+    .unwrap();
+    let cases = [
+        (Some(7), false, "api-model", Some("mapped-model")),
+        (None, false, "api-model", Some("api-model")),
+        (None, false, "", Some("display-model")),
+        (Some(99), false, "api-model", None),
+        (None, true, "api-model", None),
+    ];
+    for (index, (model_id, retry, api_name, _)) in cases.iter().enumerate() {
+        let mut usage = varint(2, 1);
+        if let Some(id) = model_id {
+            usage.extend(varint(1, *id));
+        }
+        let usage = if *retry {
+            bytes(28, bytes(2, usage))
+        } else {
+            bytes(9, usage)
+        };
+        let metadata = [
+            usage,
+            bytes(
+                24,
+                [bytes(8, "display-model"), bytes(12, api_name)].concat(),
+            ),
+        ]
+        .concat();
+        db.execute(
+            "INSERT INTO steps VALUES (?1, 15, 3, ?2)",
+            rusqlite::params![
+                i64::try_from(index).unwrap(),
+                [bytes(5, metadata), bytes(20, bytes(1, "Answer"))].concat()
+            ],
+        )
+        .unwrap();
+    }
+    let mut provider = provider(root.path());
+    let session = discover(&mut provider).sessions.remove(0);
+    assert_eq!(session.model, "display-model");
+    let data = read(&provider, &session);
+    for (message, (_, _, _, expected)) in
+        data["messages"].as_array().unwrap().iter().zip(cases)
+    {
+        assert_eq!(message["model"], json!(expected));
+    }
+    assert_eq!(data["stats"]["total_input_tokens"], 5);
+}

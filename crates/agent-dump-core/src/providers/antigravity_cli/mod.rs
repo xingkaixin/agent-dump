@@ -9,9 +9,13 @@ use crate::providers::error::ProviderError;
 use crate::providers::files::{
     self as file_sessions, Located, SourceFiles, SourceRoots,
 };
-use crate::providers::sqlite::connection::{change_sources, connect};
+use crate::providers::sqlite::connection::{
+    change_sources, connect, has_table,
+};
 use crate::session::timestamp::Timestamp;
 use crate::session::{Part, Session, SessionData, Stats};
+use proto::Message as _;
+use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use transcript::Transcript;
@@ -36,9 +40,8 @@ fn stem(path: &Path) -> String {
         .into_owned()
 }
 
-fn directory(workspaces: &str) -> Option<String> {
-    serde_json::from_str::<Vec<String>>(workspaces)
-        .ok()?
+fn directory(workspaces: Vec<String>) -> Option<String> {
+    workspaces
         .into_iter()
         .find_map(|uri| url::Url::parse(&uri).ok()?.to_file_path().ok())
         .map(|path| crate::storage::source_io::path_text(&path))
@@ -73,6 +76,7 @@ fn read_summaries(
                 directory: row
                     .get::<_, Option<String>>(2)?
                     .as_deref()
+                    .and_then(|uris| serde_json::from_str(uris).ok())
                     .and_then(directory)
                     .unwrap_or_default(),
                 time: modified
@@ -92,14 +96,41 @@ fn timestamp(milliseconds: i64) -> crate::Result<Timestamp> {
     )
 }
 
-fn load(path: &Path, fallback: i64) -> crate::Result<Option<Transcript>> {
-    let connection = connect(path)?;
-    let mut transcript = transcript::read(&connection, &stem(path), fallback)?;
+fn load(
+    connection: &Connection,
+    id: &str,
+    fallback: i64,
+) -> crate::Result<Option<Transcript>> {
+    let mut transcript = transcript::read(connection, id, fallback)?;
     if transcript.messages.is_empty() && transcript.unsupported == 0 {
         return Ok(None);
     }
     crate::providers::text::clean_messages(&mut transcript.messages);
     Ok(Some(transcript))
+}
+
+fn trajectory_directory(
+    connection: &Connection,
+) -> crate::Result<Option<String>> {
+    if !has_table(connection, "trajectory_metadata_blob")? {
+        return Ok(None);
+    }
+    let mut statement =
+        connection.prepare("SELECT data FROM trajectory_metadata_blob")?;
+    let mut rows = statement.query([])?;
+    while let Some(row) = rows.next()? {
+        let metadata =
+            proto::TrajectoryMetadata::decode(&row.get::<_, Vec<u8>>(0)?)
+                .map_err(|error| {
+                    format!(
+                        "invalid Antigravity CLI workspace metadata: {error}"
+                    )
+                })?;
+        if let Some(directory) = directory(metadata.workspaces) {
+            return Ok(Some(directory));
+        }
+    }
+    Ok(None)
 }
 
 fn session(
@@ -114,7 +145,8 @@ fn session(
             Timestamp::try_from(path.metadata()?.modified()?)?.as_millisecond()
         }
     };
-    let Some(transcript) = load(path, fallback)? else {
+    let connection = connect(path)?;
+    let Some(transcript) = load(&connection, &id, fallback)? else {
         return Ok(None);
     };
     let prompt = transcript
@@ -141,9 +173,13 @@ fn session(
     let created = timestamp(times.clone().fold(fallback, i64::min))?;
     let updated = timestamp(times.fold(fallback, i64::max))?;
     Ok(Some(Session {
-        directory: summary
-            .map(|summary| summary.directory.clone())
-            .unwrap_or_default(),
+        directory: match summary
+            .map(|summary| &summary.directory)
+            .filter(|directory| !directory.is_empty())
+        {
+            Some(directory) => directory.clone(),
+            None => trajectory_directory(&connection)?.unwrap_or_default(),
+        },
         model: transcript.model.unwrap_or_default(),
         message_count: Some(transcript.messages.len()),
         source_metadata: serde_json::json!({ "fallback_time": fallback }),
@@ -261,7 +297,8 @@ impl Provider for AntigravityCli {
         let fallback = session.source_metadata["fallback_time"]
             .as_i64()
             .unwrap_or_else(|| session.updated_at.as_millisecond());
-        let transcript = load(path, fallback)?.unwrap_or_default();
+        let transcript =
+            load(&connect(path)?, &session.id, fallback)?.unwrap_or_default();
         let stats = Stats {
             message_count: transcript.messages.len(),
             total_input_tokens: transcript.input.into(),
