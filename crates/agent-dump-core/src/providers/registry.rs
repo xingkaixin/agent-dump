@@ -298,10 +298,12 @@ pub fn inside_source(path: &std::path::Path) -> crate::Result<bool> {
     Ok(all().iter().any(|registration| {
         (registration.open)()
             .and_then(|mut provider| {
-                Ok(match provider.select_source()? {
-                    Some(root) => target.starts_with(resolve(root)?),
-                    None => false,
-                })
+                for root in provider.protected_roots()? {
+                    if target.starts_with(resolve(&root)?) {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
             })
             .unwrap_or(false)
     }))

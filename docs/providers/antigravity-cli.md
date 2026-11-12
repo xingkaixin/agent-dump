@@ -2,7 +2,7 @@
 
 ## 1. 目标与依据
 
-读取 Antigravity CLI 的本地会话数据库，接入现有发现、查询、搜索、导出和 collect 流程。会话发现与解析以 CodeSesh 的 `antigravity-cli` 适配器为准（`crates/codesesh-core/src/agents/antigravity_cli.rs` 及其格式说明 `docs/agents/antigravity-cli.md`）。
+读取 Antigravity CLI 与隔离 ACP 实例的本地会话数据库，接入现有发现、查询、搜索、导出和 collect 流程。会话发现与解析参照 CodeSesh 的 [`antigravity-cli` 适配器](https://github.com/xingkaixin/codesesh/blob/235e4935515a61fea03cb433ada2c76e11efc928/crates/codesesh-core/src/agents/antigravity_cli.rs) 及其格式说明 `docs/agents/antigravity-cli.md`。
 
 该存储没有公开的 Protobuf schema。字段编号来自 CodeSesh 引用的第三方读取器和本地数据库核对，不是官方 schema 保证。agent-dump 只解码下表列出的字段。
 
@@ -13,11 +13,18 @@
 | Provider 标识 | `antigravity-cli`，展示名 `Antigravity CLI` |
 | URI | `antigravity-cli://<conversation_id>`，ID 为数据库文件名去掉 `.db` |
 | 会话目录 | `AGY_CONVERSATIONS_DIR` → `~/.gemini/antigravity-cli/conversations` → `data/antigravity-cli/conversations` |
+| 自动补充来源 | `<T3 home>/userdata/providers/antigravity/<instance>/antigravity-acp/conversations`，与常规会话目录同时读取 |
+| T3 home | 非空 `T3CODE_HOME` → `~/.t3`；T3 使用 `--base-dir` 时，把 `T3CODE_HOME` 设为同一目录 |
+| 显式覆盖 | 非空 `AGY_CONVERSATIONS_DIR` 关闭 T3 实例自动发现，保留原有本地开发回退规则 |
 | 会话 | 会话目录下任意深度的 `*.db`，每个文件是一个会话 |
-| 摘要库 | 会话目录的父目录中的 `conversation_summaries.db`，可选 |
+| 摘要库 | 各会话目录的父目录中的 `conversation_summaries.db`，分别读取，可选 |
 | 不读取 | Antigravity IDE 的 `.gemini/antigravity/conversations/*.pb` |
 
 数据库与摘要库均以只读事务打开，不写入、不迁移。摘要库提供标题、第一个可转换为本地路径的 `file://` 工作区 URI，以及 `last_modified_time`。摘要库中没有对应数据库的条目不会列出。
+
+摘要没有有效工作目录时，从会话数据库可选的 `trajectory_metadata_blob.data` 的重复字段 7 读取工作区 URI，使用第一个可转换为本地路径的 URI。
+
+每次发现和 URI 查找都重新枚举 T3 实例，只读取固定的 `antigravity-acp/conversations` 子目录，不打开 T3 应用数据库。某个实例的数据库、摘要库或目录读取失败时报告部分失败，其他来源继续返回结果。导出、collect 输出和搜索索引的写入保护覆盖常规来源根目录和 T3 的 Antigravity 实例父目录。
 
 ## 3. 字段映射
 
@@ -25,12 +32,14 @@
 
 | 字段 | 含义 |
 | --- | --- |
-| 5 | 步骤元数据：1 创建时间（1 秒、2 纳秒），4 工具调用（1 ID、2 名称、3 输入、9 备用名称），9 用量，28 重试（2 用量） |
+| 5 | 步骤元数据：1 创建时间（1 秒、2 纳秒），4 工具调用（1 ID、2 名称、3 输入、9 备用名称），9 用量，24 模型配置（8 展示名、12 API 名），28 重试（2 用量） |
 | 19 | 用户输入：2 文本，回退到 3.1 |
 | 20 | 助手文本：1 |
 | 30 | 标题更新：4 |
 
 用量字段：1 模型 ID，2 输入，3 总输出，4 缓存写入，5 缓存读取，7 消息 ID，9 推理，10 可见输出，11 响应 ID，12 Provider 消息 ID。`gen_metadata.data` 的 1.3 模型 ID 映射到 1.19 模型名。
+
+主请求用量没有模型 ID 时，使用步骤模型配置中非空的 API 名，再回退到展示名。重试可能使用不同模型，缺少模型 ID 时保持未知，不套用主请求的配置。
 
 解码器只实现 varint、64 位、长度分隔和 32 位 wire type。未知字段跳过；重复出现的单值 message 字段按 Protobuf 语义合并。截断、超长 varint、字段号 0、group 和非法 wire type、已知字段 wire type 不符、字符串非 UTF-8 都返回错误。
 

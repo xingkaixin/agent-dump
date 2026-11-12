@@ -131,6 +131,14 @@ pub trait Provider: Send + Sync {
     fn select_source(&mut self) -> crate::Result<Option<&Path>>;
     fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>>;
 
+    fn protected_roots(&mut self) -> crate::Result<Vec<PathBuf>> {
+        Ok(self
+            .select_source()?
+            .into_iter()
+            .map(Path::to_owned)
+            .collect())
+    }
+
     fn change_sources(&self, session: &Session) -> Vec<PathBuf> {
         vec![session.source_path.clone()]
     }

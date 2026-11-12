@@ -484,9 +484,14 @@ agent-dump --list --query "provider:antigravity-cli"
 agent-dump 'antigravity-cli://<conversation_id>' --head
 agent-dump 'antigravity-cli://<conversation_id>' --format json,markdown --output ./sessions
 AGY_CONVERSATIONS_DIR=~/backup/conversations agent-dump --list --query "provider:antigravity-cli"
+T3CODE_HOME=~/custom-t3 agent-dump --list --query "provider:antigravity-cli"
 ```
 
 会话目录按非空 `AGY_CONVERSATIONS_DIR`、`~/.gemini/antigravity-cli/conversations` 选择，其下任意深度的 `<conversation_id>.db` 各为一个会话；父目录中可选的 `conversation_summaries.db` 提供标题、工作目录和更新时间。不读取 Antigravity IDE 的 `.pb` 文件。
+
+未设置 `AGY_CONVERSATIONS_DIR` 时，同时发现 `<T3 home>/userdata/providers/antigravity/*/antigravity-acp/conversations`，T3 home 按非空 `T3CODE_HOME`、`~/.t3` 选择。T3 使用 `--base-dir` 时，将 `T3CODE_HOME` 设为同一目录。显式 `AGY_CONVERSATIONS_DIR` 关闭这项自动发现，并保留原有本地开发回退。CLI 与各 ACP 实例沿用同一个 Provider，各自读取摘要库；不读取 T3 应用数据库。单个实例失败会标记部分结果，其他来源继续返回。
+
+摘要没有有效工作目录时，从会话自身的 trajectory 元数据读取工作区 URI。主请求用量缺少模型 ID 时，从步骤模型配置读取 API 名或展示名；重试缺少模型身份时保持未知。
 
 只解码用户输入、助手文本、标题更新、工具调用、步骤时间和用量；工具结果不解析，工具状态为 `unknown`，其他步骤跳过。没有原生时间的消息标记为推测时间，collect 排除这类消息。重试中重复的用量只计一次，挂到下一条 assistant 消息；不估算费用。支持 print / JSON / Markdown，不支持 raw。步骤格式错误或表结构不支持时，只有该会话报告读取失败。
 

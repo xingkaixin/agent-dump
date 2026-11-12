@@ -39,7 +39,7 @@ agent-dump-core (internal library)
 - `discover` 返回可用性、会话窗口和部分失败。`Window::Created` 按创建时间裁剪；`Window::Updated` 不按创建时间裁剪；`Window::All` 发现全部会话元数据。会话和诊断按来源文件顺序产生，不受并行读取影响。`find` 是自包含的直接定位入口。
 - 在 `Window::Updated` 下，文件型 Provider 可跳过修改时间早于窗口的来源文件，前提是 `updated_at` 取自该文件；`updated_at` 取自其他文件的 Provider（如 Kimi-Code 的 wire.jsonl）不剪枝。
 - `read` 读取标准化正文。`session/mod.rs` 的 Session facts 供列表、head、统计和筛选共用，未知计数始终保持未知。
-- `source_root`、`search_roots`、`change_sources` 声明来源与失效范围。`select_source` 只做来源选择，不发现会话、不打开数据库。registry 的 `inside_source` 用它检查所有 Provider 的来源根；导出、collect 报告与日志、搜索索引写入前都经过该检查。
+- `source_root`、`search_roots`、`change_sources` 声明来源与失效范围。`select_source` 只做来源选择，不发现会话、不打开数据库。`protected_roots` 默认使用已选择的来源根，多来源 Provider 返回全部受保护的根目录；registry 的 `inside_source` 用它检查导出、collect 报告与日志、搜索索引的写入位置。
 - `json_payload`、`raw_export`、`supports_format` 投影 Provider 特有输出能力；共享工作流不解释 schema。
 - 可恢复诊断经显式 `DiagnosticSink` 传递，Provider 不直接打印。部分失败保留健康会话，并向 Collect 传播遗漏事实。
 

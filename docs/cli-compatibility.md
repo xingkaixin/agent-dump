@@ -23,6 +23,8 @@ New commands should use the standard spellings below. Existing aliases remain ac
 
 The short options `-i`, `-d`, `-q`, and `-h` remain supported. Running without arguments shows help; `--interactive` opens batch export and `--browse` opens the session reader.
 
+Antigravity CLI also discovers isolated ACP stores under `<T3CODE_HOME or ~/.t3>/userdata/providers/antigravity/*/antigravity-acp/conversations`, using the existing `antigravity-cli://` URI. A nonempty `AGY_CONVERSATIONS_DIR` disables automatic T3 discovery and keeps the existing local development fallback. Each store uses its own optional summary database; missing workspaces and primary model IDs can fall back to native trajectory and step metadata. See the [Provider rules](providers/antigravity-cli.md).
+
 ## Source builds and Python API migration
 
 Prebuilt wheels need no Rust compiler. Building from Git or an sdist requires Rust 1.90.0 and a C toolchain. Linux ARM64, Linux musl/Alpine, and Windows ARM64 have no prebuilt artifacts.
@@ -69,6 +71,8 @@ Version 0.15.9 is the last Python release. Since v1.0.0, wheels provide only the
 `-page-size`、`--page-size` 和 `-p` 会被接受，但不生效。它们既不让列表分页，也不控制 `--read`。有界读取使用 `--read --limit N --max-chars N`，并使用返回的游标继续。
 
 短参数 `-i`、`-d`、`-q`、`-h` 继续支持。不带参数运行显示帮助；`--interactive` 进入批量导出，`--browse` 打开会话阅读器。
+
+Antigravity CLI 同时发现 `<T3CODE_HOME 或 ~/.t3>/userdata/providers/antigravity/*/antigravity-acp/conversations` 下的隔离 ACP 会话，沿用 `antigravity-cli://` URI。非空 `AGY_CONVERSATIONS_DIR` 关闭 T3 自动发现，保留原有本地开发回退。各来源独立读取可选摘要库；工作目录和主请求模型 ID 缺失时，分别回退到原生 trajectory 和步骤元数据。详见 [Provider 规则](providers/antigravity-cli.md)。
 
 ## 源码构建与 Python API 迁移
 

@@ -176,6 +176,7 @@ pub struct Metadata {
     pub created: Option<Time>,
     pub call: Option<ToolCall>,
     pub usage: Option<Usage>,
+    pub model: Option<Model>,
     pub retries: Vec<Retry>,
 }
 
@@ -185,12 +186,44 @@ impl Message for Metadata {
             1 => merge(&mut self.created, field),
             4 => merge(&mut self.call, field),
             9 => merge(&mut self.usage, field),
+            24 => merge(&mut self.model, field),
             28 => {
                 self.retries.push(Retry::decode(field.bytes()?)?);
                 Ok(())
             }
             _ => Ok(()),
         }
+    }
+}
+
+#[derive(Default)]
+pub struct Model {
+    pub name: Option<String>,
+    pub api_name: Option<String>,
+}
+
+impl Message for Model {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        match number {
+            8 => self.name = Some(field.string()?),
+            12 => self.api_name = Some(field.string()?),
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct TrajectoryMetadata {
+    pub workspaces: Vec<String>,
+}
+
+impl Message for TrajectoryMetadata {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        if number == 7 {
+            self.workspaces.push(field.string()?);
+        }
+        Ok(())
     }
 }
 

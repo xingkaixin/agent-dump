@@ -3,15 +3,18 @@ mod transcript;
 
 use crate::output::formats::OutputFormat;
 use crate::providers::contract::{
-    DiagnosticSink, Discovery, Lookup, Provider, Window, source_roots,
+    DiagnosticSink, Discovery, Lookup, Provider, SessionFailure, Window,
+    source_roots,
 };
 use crate::providers::error::ProviderError;
-use crate::providers::files::{
-    self as file_sessions, Located, SourceFiles, SourceRoots,
+use crate::providers::files::{self as file_sessions, Located, SourceRoots};
+use crate::providers::sqlite::connection::{
+    change_sources, connect, has_table,
 };
-use crate::providers::sqlite::connection::{change_sources, connect};
 use crate::session::timestamp::Timestamp;
 use crate::session::{Part, Session, SessionData, Stats};
+use proto::Message as _;
+use rusqlite::Connection;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use transcript::Transcript;
@@ -20,6 +23,7 @@ const SUMMARIES: &str = "conversation_summaries.db";
 
 pub struct AntigravityCli {
     roots: SourceRoots,
+    profiles: Box<dyn Fn() -> crate::Result<Option<PathBuf>> + Send + Sync>,
 }
 
 #[derive(Default)]
@@ -36,21 +40,17 @@ fn stem(path: &Path) -> String {
         .into_owned()
 }
 
-fn directory(workspaces: &str) -> Option<String> {
-    serde_json::from_str::<Vec<String>>(workspaces)
-        .ok()?
+fn directory(workspaces: Vec<String>) -> Option<String> {
+    workspaces
         .into_iter()
         .find_map(|uri| url::Url::parse(&uri).ok()?.to_file_path().ok())
         .map(|path| crate::storage::source_io::path_text(&path))
 }
 
 fn read_summaries(
-    conversations: Option<&Path>,
+    conversations: &Path,
 ) -> crate::Result<HashMap<String, Summary>> {
     let mut summaries = HashMap::new();
-    let Some(conversations) = conversations else {
-        return Ok(summaries);
-    };
     let path = conversations
         .parent()
         .unwrap_or(conversations)
@@ -73,6 +73,7 @@ fn read_summaries(
                 directory: row
                     .get::<_, Option<String>>(2)?
                     .as_deref()
+                    .and_then(|uris| serde_json::from_str(uris).ok())
                     .and_then(directory)
                     .unwrap_or_default(),
                 time: modified
@@ -92,14 +93,41 @@ fn timestamp(milliseconds: i64) -> crate::Result<Timestamp> {
     )
 }
 
-fn load(path: &Path, fallback: i64) -> crate::Result<Option<Transcript>> {
-    let connection = connect(path)?;
-    let mut transcript = transcript::read(&connection, &stem(path), fallback)?;
+fn load(
+    connection: &Connection,
+    id: &str,
+    fallback: i64,
+) -> crate::Result<Option<Transcript>> {
+    let mut transcript = transcript::read(connection, id, fallback)?;
     if transcript.messages.is_empty() && transcript.unsupported == 0 {
         return Ok(None);
     }
     crate::providers::text::clean_messages(&mut transcript.messages);
     Ok(Some(transcript))
+}
+
+fn trajectory_directory(
+    connection: &Connection,
+) -> crate::Result<Option<String>> {
+    if !has_table(connection, "trajectory_metadata_blob")? {
+        return Ok(None);
+    }
+    let mut statement =
+        connection.prepare("SELECT data FROM trajectory_metadata_blob")?;
+    let mut rows = statement.query([])?;
+    while let Some(row) = rows.next()? {
+        let metadata =
+            proto::TrajectoryMetadata::decode(&row.get::<_, Vec<u8>>(0)?)
+                .map_err(|error| {
+                    format!(
+                        "invalid Antigravity CLI workspace metadata: {error}"
+                    )
+                })?;
+        if let Some(directory) = directory(metadata.workspaces) {
+            return Ok(Some(directory));
+        }
+    }
+    Ok(None)
 }
 
 fn session(
@@ -114,7 +142,8 @@ fn session(
             Timestamp::try_from(path.metadata()?.modified()?)?.as_millisecond()
         }
     };
-    let Some(transcript) = load(path, fallback)? else {
+    let connection = connect(path)?;
+    let Some(transcript) = load(&connection, &id, fallback)? else {
         return Ok(None);
     };
     let prompt = transcript
@@ -141,9 +170,13 @@ fn session(
     let created = timestamp(times.clone().fold(fallback, i64::min))?;
     let updated = timestamp(times.fold(fallback, i64::max))?;
     Ok(Some(Session {
-        directory: summary
-            .map(|summary| summary.directory.clone())
-            .unwrap_or_default(),
+        directory: match summary
+            .map(|summary| &summary.directory)
+            .filter(|directory| !directory.is_empty())
+        {
+            Some(directory) => directory.clone(),
+            None => trajectory_directory(&connection)?.unwrap_or_default(),
+        },
         model: transcript.model.unwrap_or_default(),
         message_count: Some(transcript.messages.len()),
         source_metadata: serde_json::json!({ "fallback_time": fallback }),
@@ -183,13 +216,55 @@ impl AntigravityCli {
                 },
                 "data/antigravity-cli/conversations",
             ),
+            profiles: Box::new(|| {
+                if file_sessions::environment_value("AGY_CONVERSATIONS_DIR")
+                    .is_some()
+                {
+                    return Ok(None);
+                }
+                Ok(Some(
+                    file_sessions::environment_root("T3CODE_HOME", ".t3")?
+                        .join("userdata/providers/antigravity"),
+                ))
+            }),
         })
     }
 
-    fn files(&mut self) -> crate::Result<SourceFiles> {
-        self.roots.files(None, |path, _| {
-            path.extension().is_some_and(|extension| extension == "db")
-        })
+    fn stores(&mut self) -> crate::Result<(Vec<PathBuf>, Vec<SessionFailure>)> {
+        self.roots.select()?;
+        let mut stores: Vec<_> = self.roots.base.clone().into_iter().collect();
+        let mut failures = Vec::new();
+        if let Some(profiles) = (self.profiles)()? {
+            let entries = match std::fs::read_dir(&profiles) {
+                Ok(entries) => entries,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Ok((stores, failures));
+                }
+                Err(error) => {
+                    failures.push(SessionFailure {
+                        source: crate::storage::source_io::path_text(&profiles),
+                        error: error.into(),
+                    });
+                    return Ok((stores, failures));
+                }
+            };
+            for entry in entries {
+                match entry.and_then(|entry| {
+                    Ok(entry.file_type()?.is_dir().then(|| {
+                        entry.path().join("antigravity-acp/conversations")
+                    }))
+                }) {
+                    Ok(Some(path)) => stores.push(path),
+                    Ok(None) => {}
+                    Err(error) => failures.push(SessionFailure {
+                        source: crate::storage::source_io::path_text(&profiles),
+                        error: error.into(),
+                    }),
+                }
+            }
+        }
+        stores.sort();
+        Ok((stores, failures))
     }
 
     fn missing(&self, path: &Path) -> crate::Result<crate::Error> {
@@ -220,16 +295,42 @@ impl Provider for AntigravityCli {
         window: Window,
         _diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Discovery> {
-        let files = self.files()?;
-        let summaries = read_summaries(self.roots.base.as_deref())?;
-        // Native step times can be newer than a WAL database's file time.
-        file_sessions::discover(
-            files,
-            window,
-            false,
-            |path| session(path, &summaries),
-            |_, session, _| Ok(session),
-        )
+        let (stores, failures) = self.stores()?;
+        let mut discovery = Discovery {
+            failures,
+            ..Discovery::default()
+        };
+        for store in stores {
+            let result = (|| {
+                let files = file_sessions::files(&store, None, |path, _| {
+                    path.extension().is_some_and(|extension| extension == "db")
+                })?;
+                let summaries = read_summaries(&store)?;
+                // Native step times can be newer than a WAL database's file time.
+                file_sessions::discover(
+                    files,
+                    window,
+                    false,
+                    |path| session(path, &summaries),
+                    |_, session, _| Ok(session),
+                )
+            })();
+            match result {
+                Ok(found) => {
+                    discovery.available |= found.available;
+                    discovery.sessions.extend(found.sessions);
+                    discovery.failures.extend(found.failures);
+                }
+                Err(error) => discovery.failures.push(SessionFailure {
+                    source: crate::storage::source_io::path_text(&store),
+                    error,
+                }),
+            }
+        }
+        discovery
+            .sessions
+            .sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(discovery)
     }
 
     fn find(
@@ -237,15 +338,40 @@ impl Provider for AntigravityCli {
         id: &str,
         _diagnostics: &mut DiagnosticSink<'_>,
     ) -> crate::Result<Lookup> {
-        let files = self.files()?;
-        let summaries = read_summaries(self.roots.base.as_deref())?;
-        file_sessions::find(
-            self.roots.base.as_deref(),
-            files,
-            id,
-            |path| stem(path) == id,
-            |path| session(path, &summaries),
-        )
+        let (stores, failures) = self.stores()?;
+        let mut lookup = Lookup {
+            failures,
+            ..Lookup::default()
+        };
+        for store in stores {
+            let result = (|| {
+                let files = file_sessions::files(&store, None, |path, _| {
+                    path.extension().is_some_and(|extension| extension == "db")
+                })?;
+                let summaries = read_summaries(&store)?;
+                file_sessions::find(
+                    Some(&store),
+                    files,
+                    id,
+                    |path| stem(path) == id,
+                    |path| session(path, &summaries),
+                )
+            })();
+            match result {
+                Ok(found) => {
+                    lookup.failures.extend(found.failures);
+                    if found.session.is_some() {
+                        lookup.session = found.session;
+                        break;
+                    }
+                }
+                Err(error) => lookup.failures.push(SessionFailure {
+                    source: crate::storage::source_io::path_text(&store),
+                    error,
+                }),
+            }
+        }
+        Ok(lookup)
     }
 
     fn read(
@@ -261,7 +387,8 @@ impl Provider for AntigravityCli {
         let fallback = session.source_metadata["fallback_time"]
             .as_i64()
             .unwrap_or_else(|| session.updated_at.as_millisecond());
-        let transcript = load(path, fallback)?.unwrap_or_default();
+        let transcript =
+            load(&connect(path)?, &session.id, fallback)?.unwrap_or_default();
         let stats = Stats {
             message_count: transcript.messages.len(),
             total_input_tokens: transcript.input.into(),
@@ -273,7 +400,24 @@ impl Provider for AntigravityCli {
     }
 
     fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
-        self.roots.search_roots()
+        let mut roots = self.roots.search_roots()?;
+        if let Some(profiles) = (self.profiles)()? {
+            roots.push(("T3CODE_HOME", profiles));
+        }
+        Ok(roots)
+    }
+
+    fn protected_roots(&mut self) -> crate::Result<Vec<PathBuf>> {
+        let mut roots: Vec<_> = self
+            .roots
+            .select()?
+            .into_iter()
+            .map(Path::to_owned)
+            .collect();
+        if let Some(profiles) = (self.profiles)()? {
+            roots.push(profiles);
+        }
+        Ok(roots)
     }
 
     fn change_sources(&self, session: &Session) -> Vec<PathBuf> {

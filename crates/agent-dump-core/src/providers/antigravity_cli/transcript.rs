@@ -199,10 +199,24 @@ pub fn read(
         let metadata = step.metadata.unwrap_or_default();
         let created = native_time(metadata.created);
         let time = created.unwrap_or(fallback);
-        for usage in metadata
+        let step_model = metadata.model.and_then(|model| {
+            model
+                .api_name
+                .filter(|name| !name.is_empty())
+                .or_else(|| model.name.filter(|name| !name.is_empty()))
+        });
+        // Retries can switch models; the step model describes only the primary request.
+        for (usage, fallback_model) in metadata
             .usage
             .into_iter()
-            .chain(metadata.retries.into_iter().filter_map(|retry| retry.usage))
+            .map(|usage| (usage, step_model.clone()))
+            .chain(
+                metadata
+                    .retries
+                    .into_iter()
+                    .filter_map(|retry| retry.usage)
+                    .map(|usage| (usage, None)),
+            )
         {
             let Some(tokens) = Tokens::new(&usage) else {
                 continue;
@@ -223,7 +237,10 @@ pub fn read(
             pending.push(Usage {
                 index,
                 time: created,
-                model: usage.model_id.and_then(|id| models.get(&id)).cloned(),
+                model: match usage.model_id {
+                    Some(id) => models.get(&id).cloned(),
+                    None => fallback_model,
+                },
                 tokens,
             });
         }
