@@ -113,3 +113,33 @@ def test_list_head_and_export(cli):
     assert (read["title"], read["state"]["status"], read["state"]["input"]) == ("read", "completed", {"path": "a.rs"})
     assert [part["text"] for part in read["state"]["output"]] == ["fn main() {}"]
     assert (compaction["role"], compaction["parts"][0]["text"]) == ("compaction", "Earlier work")
+
+
+def test_compatibility_tool_results_recognize_system_errors(cli):
+    cases = [
+        ("ReadFile", {"path": "src/missing.rs"}, [{"type": "text", "text": "<system>ERROR: missing"}], "error"),
+        ("Shell", {"command": "cargo check"}, "  <system>ERROR: timeout", "error"),
+        ("StrReplaceFile", {"path": "main.rs"}, [{"type": "text", "text": "<system>ERROR: no match"}], "error"),
+        ("Shell", {"command": "cat ok.txt"}, [{"type": "text", "text": "Example containing ERROR: ok"}], "completed"),
+        ("ReadFile", {"path": "fallback.rs"}, [{"content": "<system>ERROR: ignored"}], "completed"),
+    ]
+    wire = [appended("user", "Run tools")]
+    for index, (name, args, output, _) in enumerate(cases):
+        call_id = f"call_{index}"
+        wire.append(
+            appended(
+                "assistant",
+                [],
+                toolCalls=[{"id": call_id, "function": {"name": name, "arguments": json.dumps(args)}}],
+            )
+        )
+        wire.append(appended("tool", output, toolCallId=call_id))
+
+    create(cli, wire, state={"createdAt": STAMP * 1000, "workDir": "/workspace/kimi-code"})
+    result = cli.run(f"kimi-code://{IDENTITY}", "--format", "json", "--output", "exports")
+    assert result.returncode == 0, result.stderr
+    payload = json.loads((cli.root / f"exports/kimi-code/{IDENTITY}.json").read_text())
+    tool_parts = [part for message in payload["messages"] for part in message["parts"] if part["type"] == "tool"]
+    assert [part["state"]["status"] for part in tool_parts] == [expected for _, _, _, expected in cases]
+    assert [part["text"] for part in tool_parts[0]["state"]["output"]] == ["<system>ERROR: missing"]
+    assert [part["text"] for part in tool_parts[1]["state"]["output"]] == ["  <system>ERROR: timeout"]
