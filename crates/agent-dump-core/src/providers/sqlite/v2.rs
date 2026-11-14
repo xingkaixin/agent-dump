@@ -198,12 +198,24 @@ fn message(row: &Value) -> crate::Result<Option<Message>> {
             let children: HashSet<_> = parts
                 .iter()
                 .filter_map(|part| match part {
-                    Part::Tool(tool) if tool.tool == "subagent" => tool
-                        .state
-                        .get("metadata")
-                        .and_then(|metadata| metadata["sessionID"].as_str())
-                        .filter(|id| !id.is_empty()),
+                    Part::Tool(tool)
+                        if matches!(
+                            tool.tool.as_str(),
+                            "task" | "subagent"
+                        ) =>
+                    {
+                        tool.state.get("metadata")
+                    }
                     _ => None,
+                })
+                .flat_map(|metadata| {
+                    ["sessionId", "sessionID"].into_iter().filter_map(
+                        move |key| {
+                            metadata[key]
+                                .as_str()
+                                .filter(|id| !id.trim().is_empty())
+                        },
+                    )
                 })
                 .collect();
             let child = (children.len() == 1)
@@ -267,7 +279,17 @@ fn content_part(content: &Value, timestamp: i64) -> Part {
 
 fn tool(content: &Value, timestamp: i64) -> Part {
     let mut state = object(&content["state"]);
+    let invalid_error = (content["name"] == "invalid")
+        .then(|| {
+            state
+                .get("input")
+                .and_then(|input| input["error"].as_str())
+                .filter(|error| !error.trim().is_empty())
+                .map(str::to_owned)
+        })
+        .flatten();
     let status = match state.get("status").and_then(Value::as_str) {
+        _ if invalid_error.is_some() => "error",
         Some("completed") => "completed",
         Some("error") => "error",
         _ => "running",
@@ -282,6 +304,9 @@ fn tool(content: &Value, timestamp: i64) -> Part {
         .and_then(|error| error["message"].as_str())
     {
         output.push(json!({"type": "text", "text": error}));
+    }
+    if let Some(error) = invalid_error {
+        state.insert("error".into(), error.into());
     }
     if !output.is_empty() {
         state.insert("output".into(), output.into());
@@ -402,4 +427,127 @@ fn plain(value: &Value) -> String {
 
 fn object(value: &Value) -> Map<String, Value> {
     value.as_object().cloned().unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assistant_message(content: &[Value]) -> Message {
+        let row = json!({
+            "id": "assistant",
+            "type": "assistant",
+            "time_created": 1000,
+            "data": json!({ "content": content }).to_string(),
+        });
+        message(&row).unwrap().unwrap()
+    }
+
+    #[test]
+    fn links_only_unambiguous_task_and_subagent_children() {
+        let call = |name: &str, metadata: Value| {
+            json!({
+                "type": "tool",
+                "name": name,
+                "state": { "status": "completed", "metadata": metadata },
+            })
+        };
+        for (content, expected) in [
+            (
+                vec![call("task", json!({ "sessionId": "child" }))],
+                Some("child"),
+            ),
+            (
+                vec![call("task", json!({ "sessionID": "child" }))],
+                Some("child"),
+            ),
+            (
+                vec![call("subagent", json!({ "sessionId": "child" }))],
+                Some("child"),
+            ),
+            (
+                vec![call("subagent", json!({ "sessionID": "child" }))],
+                Some("child"),
+            ),
+            (
+                vec![
+                    call("task", json!({ "sessionId": "child" })),
+                    call("subagent", json!({ "sessionID": "child" })),
+                ],
+                Some("child"),
+            ),
+            (
+                vec![
+                    call("task", json!({ "sessionId": "child" })),
+                    call("task", json!({ "sessionId": "other" })),
+                ],
+                None,
+            ),
+            (
+                vec![call(
+                    "task",
+                    json!({ "sessionId": "child", "sessionID": "other" }),
+                )],
+                None,
+            ),
+            (vec![call("task", json!({ "sessionId": "   " }))], None),
+            (vec![call("read", json!({ "sessionId": "child" }))], None),
+        ] {
+            let parsed = assistant_message(&content);
+            assert_eq!(parsed.subagent_id.as_deref(), expected);
+        }
+    }
+
+    #[test]
+    fn invalid_input_error_marks_tool_failed_without_guessing_others() {
+        let err = "Invalid input for tool edit: JSON parsing failed";
+        let parsed = assistant_message(&[
+            json!({
+                "type": "tool",
+                "id": "c1",
+                "name": "invalid",
+                "state": {
+                    "status": "completed",
+                    "input": { "tool": "edit", "error": err },
+                    "content": [{ "type": "text", "text": "[Old tool result content cleared]" }],
+                },
+            }),
+            json!({
+                "type": "tool",
+                "id": "c2",
+                "name": "edit",
+                "state": {
+                    "status": "completed",
+                    "input": { "error": err },
+                    "content": [{ "type": "text", "text": "error mentioned in output" }],
+                },
+            }),
+            json!({
+                "type": "tool",
+                "id": "c3",
+                "name": "invalid",
+                "state": {
+                    "status": "completed",
+                    "input": { "tool": "edit", "error": "  " },
+                    "content": [],
+                },
+            }),
+        ]);
+        let Part::Tool(invalid) = &parsed.parts[0] else {
+            panic!("expected tool");
+        };
+        assert_eq!(invalid.state["status"], "error");
+        assert_eq!(invalid.state["error"], err);
+        assert_eq!(
+            invalid.state["output"],
+            json!([{ "type": "text", "text": "[Old tool result content cleared]" }])
+        );
+        for part in &parsed.parts[1..] {
+            let Part::Tool(tool) = part else {
+                panic!("expected tool");
+            };
+            assert_eq!(tool.state["status"], "completed");
+            assert!(!tool.state.contains_key("error"));
+        }
+    }
 }
