@@ -181,7 +181,7 @@ impl SearchIndex {
                 .map(|(name, _)| name.as_str())
                 .collect::<Vec<_>>()
                 == ["fts_rowid"];
-        if !columns.is_empty() && (version != 3 || !valid) {
+        if !columns.is_empty() && (version != 4 || !valid) {
             transaction.execute_batch(
                 "DROP TABLE IF EXISTS sessions_fts; DROP TABLE IF EXISTS \
                  sessions_fts_trigram; DROP TABLE IF EXISTS index_state;",
@@ -205,7 +205,7 @@ impl SearchIndex {
             "            CREATE VIRTUAL TABLE IF NOT EXISTS \
              sessions_fts_trigram USING fts5(agent_name UNINDEXED, \
              session_id UNINDEXED, title, content, tokenize='trigram');\n",
-            "            PRAGMA user_version = 3;",
+            "            PRAGMA user_version = 4;",
         ))?;
         let expired: Vec<i64> = transaction
             .prepare(

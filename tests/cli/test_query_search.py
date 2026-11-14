@@ -114,3 +114,52 @@ def test_query_keyword_uses_search_terms(cli, keyword):
         uris.append([session["uri"] for session in json.loads(result.stdout)["data"]])
     expected = [] if "missing" in keyword else [f"codex://{IDENTITY}"]
     assert uris == [expected] * 3
+
+
+def test_tool_error_without_output_is_searchable_and_locatable(cli):
+    database = cli.root / "sources/opencode.db"
+    needle = "tool-error-only-needle"
+    with closing(sqlite3.connect(database)) as writer:
+        writer.execute(
+            "UPDATE session_message SET data = ? WHERE id = ?",
+            (
+                json.dumps(
+                    {
+                        "content": [
+                            {
+                                "type": "tool",
+                                "id": "call_err",
+                                "name": "read",
+                                "state": {
+                                    "status": "error",
+                                    "input": {"filePath": "/repo/missing.ts"},
+                                    "error": needle,
+                                },
+                            }
+                        ]
+                    }
+                ),
+                "ses_bench_000000_1",
+            ),
+        )
+        writer.commit()
+
+    scoped = ["--query", "provider:opencode", "--days", "36500", "--json"]
+    listed = cli.run("--list", "-q", f"{needle} provider:opencode", "--days", "36500", "--json")
+    searched = cli.run("--search", needle, *scoped)
+    located = cli.run("--search", needle, "--locate", *scoped)
+    assert listed.returncode == searched.returncode == located.returncode == 0, (
+        listed.stderr,
+        searched.stderr,
+        located.stderr,
+    )
+
+    assert [item["uri"] for item in json.loads(listed.stdout)["data"]] == ["opencode://ses_bench_000000"]
+    search_hits = json.loads(searched.stdout)["data"]
+    assert len(search_hits) == 1
+    assert search_hits[0]["uri"] == "opencode://ses_bench_000000"
+    assert needle in search_hits[0]["snippet"]
+    locate_hits = json.loads(located.stdout)["data"]
+    assert len(locate_hits) == 1
+    assert locate_hits[0]["locations"][0]["position"] == 2
+    assert needle in locate_hits[0]["locations"][0]["snippet"]
