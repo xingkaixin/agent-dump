@@ -3,6 +3,7 @@
 from contextlib import closing
 import json
 from pathlib import Path
+import shlex
 import sqlite3
 
 from cli_fixture import IDENTITY
@@ -501,7 +502,15 @@ def test_multi_workspace_history_and_child_titles(cli):
         encoding="utf-8",
     )
     scoped = {
-        item["id"] for item in run_json(cli, "--list", "-d", "36500", "-q", f"provider:antigravity-cli path:{proj}")
+        item["id"]
+        for item in run_json(
+            cli,
+            "--list",
+            "-d",
+            "36500",
+            "-q",
+            f"provider:antigravity-cli path:{shlex.quote(str(proj))}",
+        )
     }
     assert scoped == {"ctx-session", "parent-z", "child-a", "greeting"}
     assert run_json(cli, "antigravity-cli://child-a", "--head")["working_directory"] == str(proj)
