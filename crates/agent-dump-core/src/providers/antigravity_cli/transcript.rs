@@ -1,7 +1,9 @@
+use super::WorkspaceHits;
 use super::proto::{self, Message as _};
+use crate::providers::sqlite::connection::has_column;
 use crate::session::{Message, Part};
 use rusqlite::Connection;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
@@ -13,6 +15,7 @@ pub struct Transcript {
     pub input: u64,
     pub output: u64,
     pub total: Option<u64>,
+    pub hits: WorkspaceHits,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -92,33 +95,103 @@ fn native_time(time: Option<proto::Time>) -> Option<i64> {
         .checked_add(time.nanos / 1_000_000)
 }
 
-fn tool(
-    call: proto::ToolCall,
+struct ToolEvidence {
     kind: i64,
     status: i64,
     time: i64,
-) -> Option<Part> {
-    let name = call
-        .name
-        .filter(|name| !name.is_empty())
-        .or(call.secondary_name)?;
-    let input = call.input.map(|input| {
-        serde_json::from_str(&input).unwrap_or(Value::String(input))
-    });
-    Some(Part::tool(
-        &name,
-        call.id.as_deref().unwrap_or_default(),
-        json!({
-            "status": "unknown",
-            "input": input,
-            "output": null,
-            "metadata": {
-                "antigravity_step_type": kind,
-                "antigravity_status": status,
-            },
-        }),
-        time,
-    ))
+    input: Option<Value>,
+    output: Option<String>,
+    error: Option<String>,
+}
+
+fn tool(name: &str, call_id: &str, evidence: ToolEvidence) -> Part {
+    let mut state = Map::from_iter([
+        (
+            "status".into(),
+            Value::String(
+                if evidence.error.is_some() {
+                    "error"
+                } else {
+                    "unknown"
+                }
+                .into(),
+            ),
+        ),
+        ("input".into(), evidence.input.unwrap_or(Value::Null)),
+        (
+            "output".into(),
+            evidence.output.map_or(Value::Null, Value::String),
+        ),
+        (
+            "metadata".into(),
+            json!({
+                "antigravity_step_type": evidence.kind,
+                "antigravity_status": evidence.status,
+            }),
+        ),
+    ]);
+    if let Some(error) = evidence.error {
+        state.insert("error".into(), Value::String(error));
+    }
+    Part::tool(name, call_id, Value::Object(state), evidence.time)
+}
+
+fn tool_output(step: &proto::Step, kind: i64) -> Option<String> {
+    match kind {
+        132 => step.tool.as_ref()?.result.as_ref()?.text.clone(),
+        8 => step.view_file.as_ref()?.content.clone(),
+        21 => step.run_command.as_ref()?.output.as_ref()?.text.clone(),
+        38 => step.mcp.as_ref()?.result.clone(),
+        _ => None,
+    }
+    .filter(|text| !text.is_empty())
+}
+
+fn tool_error(error: proto::ErrorDetails) -> Option<String> {
+    let mut parts = Vec::new();
+    for text in [error.message, error.details].into_iter().flatten() {
+        if !text.trim().is_empty() && !parts.contains(&text) {
+            parts.push(text);
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("\n"))
+}
+
+fn swarm_child_id(
+    tool: &str,
+    input: Option<&Value>,
+    output: Option<&str>,
+) -> Option<String> {
+    if tool != "swarm" || input?.get("action")?.as_str()? != "add" {
+        return None;
+    }
+    let output = output?;
+    let body = if output.starts_with("Created At: ") {
+        let (_, rest) = output.split_once('\n')?;
+        rest.strip_prefix("Completed At: ")?.split_once('\n')?.1
+    } else {
+        output
+    };
+    let result: Value = serde_json::from_str(body).ok()?;
+    if result.get("status")?.as_str()? != "added" {
+        return None;
+    }
+    result
+        .get("conversation_id")?
+        .as_str()
+        .filter(|id| !id.trim().is_empty())
+        .map(str::to_owned)
+}
+
+fn user_prompt_text(user: proto::UserPrompt) -> Option<String> {
+    user.text.filter(|text| !text.is_empty()).or_else(|| {
+        let joined: String = user
+            .items
+            .into_iter()
+            .filter_map(|item| item.text)
+            .collect();
+        (!joined.is_empty()).then_some(joined)
+    })
 }
 
 impl Transcript {
@@ -174,15 +247,24 @@ pub fn read(
     connection: &Connection,
     id: &str,
     fallback: i64,
+    candidates: &[String],
 ) -> crate::Result<Transcript> {
     let models = models(connection)?;
+    let sql = if has_column(connection, "steps", "error_details")? {
+        "SELECT idx, step_type, status, step_payload, error_details \
+         FROM steps ORDER BY idx"
+    } else {
+        "SELECT idx, step_type, status, step_payload, NULL \
+         FROM steps ORDER BY idx"
+    };
     let mut statement = connection
-        .prepare(
-            "SELECT idx, step_type, status, step_payload FROM steps ORDER BY idx",
-        )
+        .prepare(sql)
         .map_err(|error| unsupported(&error))?;
     let mut rows = statement.query([])?;
-    let mut transcript = Transcript::default();
+    let mut transcript = Transcript {
+        hits: WorkspaceHits::new(candidates.len()),
+        ..Transcript::default()
+    };
     let mut seen = HashSet::new();
     let mut pending = Vec::new();
     while let Some(row) = rows.next()? {
@@ -196,6 +278,18 @@ pub fn read(
         let step = proto::Step::decode(&payload).map_err(|error| {
             format!("invalid Antigravity CLI step {index}: {error}")
         })?;
+        let output = tool_output(&step, kind);
+        let error = row
+            .get::<_, Option<Vec<u8>>>(4)?
+            .map(|data| proto::ErrorDetails::decode(&data))
+            .transpose()
+            .map_err(|error| {
+                format!(
+                    "invalid Antigravity CLI error at step {index}: {error}"
+                )
+            })?
+            .and_then(tool_error)
+            .or_else(|| step.error.and_then(tool_error));
         let metadata = step.metadata.unwrap_or_default();
         let created = native_time(metadata.created);
         let time = created.unwrap_or(fallback);
@@ -245,19 +339,22 @@ pub fn read(
             });
         }
         let part = match kind {
-            14 => step
-                .user
-                .and_then(|user| {
-                    user.text
-                        .or_else(|| user.content.and_then(|text| text.text))
-                })
-                .filter(|text| !text.is_empty())
-                .map(|text| ("user", Part::text(text, time))),
+            14 => step.user.and_then(|user| {
+                if !candidates.is_empty() {
+                    super::record_user_context(
+                        &user,
+                        candidates,
+                        &mut transcript.hits.direct,
+                    );
+                }
+                user_prompt_text(user)
+                    .map(|text| ("user", Part::text(text, time), None))
+            }),
             15 => step
                 .assistant
                 .and_then(|text| text.text)
                 .filter(|text| !text.is_empty())
-                .map(|text| ("assistant", Part::text(text, time))),
+                .map(|text| ("assistant", Part::text(text, time), None)),
             23 => {
                 if let Some(title) = step
                     .title
@@ -271,17 +368,51 @@ pub fn read(
             _ => None,
         };
         let part = part.or_else(|| {
-            Some(("assistant", tool(metadata.call?, kind, status, time)?))
+            let call = metadata.call?;
+            let name = call
+                .name
+                .filter(|name| !name.is_empty())
+                .or(call.secondary_name)?;
+            let input = call.input.map(|input| {
+                serde_json::from_str(&input).unwrap_or(Value::String(input))
+            });
+            if !candidates.is_empty()
+                && let Some(input) = &input
+            {
+                super::record_tool_input(
+                    input,
+                    candidates,
+                    &mut transcript.hits,
+                );
+            }
+            let subagent_id = error
+                .is_none()
+                .then(|| {
+                    swarm_child_id(&name, input.as_ref(), output.as_deref())
+                })
+                .flatten();
+            let part = tool(
+                &name,
+                call.id.as_deref().unwrap_or_default(),
+                ToolEvidence {
+                    kind,
+                    status,
+                    time,
+                    input,
+                    output,
+                    error,
+                },
+            );
+            Some(("assistant", part, subagent_id))
         });
-        let Some((role, part)) = part else {
+        let Some((role, part, subagent_id)) = part else {
             transcript.unsupported += 1;
             continue;
         };
-        transcript.push(
-            Message::new(format!("{id}:{index}"), role, time, vec![part]),
-            created.is_none(),
-            &mut pending,
-        );
+        let mut message =
+            Message::new(format!("{id}:{index}"), role, time, vec![part]);
+        message.subagent_id = subagent_id;
+        transcript.push(message, created.is_none(), &mut pending);
     }
     if let Some(first) = pending.first() {
         let message = Message::new(
@@ -294,4 +425,61 @@ pub fn read(
         transcript.push(message, inferred, &mut pending);
     }
     Ok(transcript)
+}
+
+pub fn workspace_hits(
+    connection: &Connection,
+    candidates: &[String],
+) -> crate::Result<WorkspaceHits> {
+    let mut statement = connection
+        .prepare("SELECT idx, step_type, step_payload FROM steps ORDER BY idx")
+        .map_err(|error| unsupported(&error))?;
+    let mut rows = statement.query([])?;
+    let mut hits = WorkspaceHits::new(candidates.len());
+    while let Some(row) = rows.next()? {
+        let index: i64 = row.get(0)?;
+        let kind: i64 = row.get(1)?;
+        let Some(payload) = row.get::<_, Option<Vec<u8>>>(2)? else {
+            continue;
+        };
+        let step = proto::Step::decode(&payload).map_err(|error| {
+            format!("invalid Antigravity CLI step {index}: {error}")
+        })?;
+        if kind == 23 {
+            continue;
+        }
+        let has_text = match kind {
+            14 => {
+                if let Some(user) = step.user {
+                    super::record_user_context(
+                        &user,
+                        candidates,
+                        &mut hits.direct,
+                    );
+                    user_prompt_text(user).is_some()
+                } else {
+                    false
+                }
+            }
+            15 => step
+                .assistant
+                .and_then(|text| text.text)
+                .is_some_and(|text| !text.is_empty()),
+            _ => false,
+        };
+        if !has_text
+            && let Some(call) = step.metadata.and_then(|metadata| metadata.call)
+            && call
+                .name
+                .filter(|name| !name.is_empty())
+                .or(call.secondary_name)
+                .is_some()
+            && let Some(raw_input) = call.input
+        {
+            let input = serde_json::from_str(&raw_input)
+                .unwrap_or(Value::String(raw_input));
+            super::record_tool_input(&input, candidates, &mut hits);
+        }
+    }
+    Ok(hits)
 }

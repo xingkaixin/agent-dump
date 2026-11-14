@@ -109,35 +109,166 @@ fn merge<T: Message>(
 #[derive(Default)]
 pub struct Step {
     pub metadata: Option<Metadata>,
+    pub view_file: Option<FileView>,
     pub user: Option<UserPrompt>,
     pub assistant: Option<Text>,
+    pub run_command: Option<CommandRun>,
     pub title: Option<Title>,
+    pub error: Option<ErrorDetails>,
+    pub mcp: Option<McpCall>,
+    pub tool: Option<ToolExecution>,
 }
 
 impl Message for Step {
     fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
         match number {
             5 => merge(&mut self.metadata, field),
+            14 => merge(&mut self.view_file, field),
             19 => merge(&mut self.user, field),
             20 => merge(&mut self.assistant, field),
+            28 => merge(&mut self.run_command, field),
             30 => merge(&mut self.title, field),
+            31 => merge(&mut self.error, field),
+            47 => merge(&mut self.mcp, field),
+            140 => merge(&mut self.tool, field),
             _ => Ok(()),
         }
     }
 }
 
 #[derive(Default)]
+pub struct ToolExecution {
+    pub result: Option<Text>,
+}
+
+impl Message for ToolExecution {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        if number == 2 {
+            merge(&mut self.result, field)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct FileView {
+    pub content: Option<String>,
+}
+
+impl Message for FileView {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        if number == 4 {
+            self.content = Some(field.string()?);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct CommandRun {
+    pub output: Option<Text>,
+}
+
+impl Message for CommandRun {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        if number == 21 {
+            merge(&mut self.output, field)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct McpCall {
+    pub result: Option<String>,
+}
+
+impl Message for McpCall {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        if number == 3 {
+            self.result = Some(field.string()?);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct ErrorDetails {
+    pub message: Option<String>,
+    pub details: Option<String>,
+}
+
+impl Message for ErrorDetails {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        match number {
+            2 => self.message = Some(field.string()?),
+            3 => self.details = Some(field.string()?),
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
 pub struct UserPrompt {
     pub text: Option<String>,
-    pub content: Option<Text>,
+    pub items: Vec<UserItem>,
 }
 
 impl Message for UserPrompt {
     fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
         match number {
             2 => self.text = Some(field.string()?),
-            3 => merge(&mut self.content, field)?,
+            3 => self.items.push(UserItem::decode(field.bytes()?)?),
             _ => {}
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct UserItem {
+    pub text: Option<String>,
+    pub context: Option<UserContext>,
+}
+
+impl Message for UserItem {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        match number {
+            1 => self.text = Some(field.string()?),
+            2 => merge(&mut self.context, field)?,
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct UserContext {
+    pub file: Option<ContextTarget>,
+    pub directory: Option<ContextTarget>,
+}
+
+impl Message for UserContext {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        match number {
+            1 => merge(&mut self.file, field)?,
+            2 => merge(&mut self.directory, field)?,
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct ContextTarget {
+    pub uri: Option<String>,
+}
+
+impl Message for ContextTarget {
+    fn field(&mut self, number: u32, field: Field<'_>) -> crate::Result<()> {
+        if number == 5 {
+            self.uri = Some(field.string()?);
         }
         Ok(())
     }
