@@ -491,9 +491,9 @@ T3CODE_HOME=~/custom-t3 agent-dump --list --query "provider:antigravity-cli"
 
 未设置 `AGY_CONVERSATIONS_DIR` 时，同时发现 `<T3 home>/userdata/providers/antigravity/*/antigravity-acp/conversations`，T3 home 按非空 `T3CODE_HOME`、`~/.t3` 选择。T3 使用 `--base-dir` 时，将 `T3CODE_HOME` 设为同一目录。显式 `AGY_CONVERSATIONS_DIR` 关闭这项自动发现，并保留原有本地开发回退。CLI 与各 ACP 实例沿用同一个 Provider，各自读取摘要库；不读取 T3 应用数据库。单个实例失败会标记部分结果，其他来源继续返回。
 
-摘要没有有效工作目录时，从会话自身的 trajectory 元数据读取工作区 URI。主请求用量缺少模型 ID 时，从步骤模型配置读取 API 名或展示名；重试缺少模型身份时保持未知。
+摘要没有有效工作目录时，从会话自身的 trajectory 元数据读取工作区 URI；存在多个本地工作区候选时，依次按父目录可选 `history.jsonl`、用户输入上下文和工具入参、父会话工作区择优判定。主请求用量缺少模型 ID 时，从步骤模型配置读取 API 名或展示名；重试缺少模型身份时保持未知。
 
-只解码用户输入、助手文本、标题更新、工具调用、步骤时间和用量；工具结果不解析，工具状态为 `unknown`，其他步骤跳过。没有原生时间的消息标记为推测时间，collect 排除这类消息。重试中重复的用量只计一次，挂到下一条 assistant 消息；不估算费用。支持 print / JSON / Markdown，不支持 raw。步骤格式错误或表结构不支持时，只有该会话报告读取失败。
+解码用户输入（含分段和上下文 URI）、助手文本、标题更新、工具调用、步骤 132/8/21/38 工具结果、`error_details`/步骤显式错误、步骤时间和用量；有显式错误时工具状态为 `error`，其余仍为 `unknown`，无错误 `swarm add` 写入 `subagent_id`，其他步骤跳过。标题按标题更新、摘要标题、子会话 `agent_name`、首条用户输入回退。没有原生时间的消息标记为推测时间，collect 排除这类消息。重试中重复的用量只计一次，挂到下一条 assistant 消息；不估算费用。支持 print / JSON / Markdown，不支持 raw。步骤格式错误或表结构不支持时，只有该会话报告读取失败。
 
 ## Machine-readable output
 

@@ -3,6 +3,7 @@
 from contextlib import closing
 import json
 from pathlib import Path
+import shlex
 import sqlite3
 
 from cli_fixture import IDENTITY
@@ -50,17 +51,38 @@ def assistant(text, created=STAMP, usage=None, model=None):
     return 15, field(20, field(1, text)) + metadata(created, usage=usage, model=model)
 
 
-def create(cli, steps, *, identity=IDENTITY, conversations=None, summary=None, models=(), workspace_uris=None):
+def create(
+    cli,
+    steps,
+    *,
+    identity=IDENTITY,
+    conversations=None,
+    summary=None,
+    models=(),
+    workspace_uris=None,
+    errors=None,
+):
     conversations = conversations or cli.root / "sources/antigravity-cli/conversations"
     conversations.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(conversations / f"{identity}.db")
-    connection.executescript(
-        "CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER NOT NULL, status INTEGER NOT NULL,"
-        " step_payload BLOB); CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB);"
-    )
-    connection.executemany(
-        "INSERT INTO steps VALUES (?, ?, 3, ?)", [(index, kind, payload) for index, (kind, payload) in enumerate(steps)]
-    )
+    if errors is None:
+        connection.executescript(
+            "CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER NOT NULL, status INTEGER NOT NULL,"
+            " step_payload BLOB); CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB);"
+        )
+        connection.executemany(
+            "INSERT INTO steps VALUES (?, ?, 3, ?)",
+            [(index, kind, payload) for index, (kind, payload) in enumerate(steps)],
+        )
+    else:
+        connection.executescript(
+            "CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER NOT NULL, status INTEGER NOT NULL,"
+            " step_payload BLOB, error_details BLOB); CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB);"
+        )
+        connection.executemany(
+            "INSERT INTO steps VALUES (?, ?, 3, ?, ?)",
+            [(index, kind, payload, errors.get(index)) for index, (kind, payload) in enumerate(steps)],
+        )
     connection.executemany(
         "INSERT INTO gen_metadata (data) VALUES (?)",
         [(field(1, varint(3, model_id) + field(19, model)),) for model_id, model in models],
@@ -75,14 +97,37 @@ def create(cli, steps, *, identity=IDENTITY, conversations=None, summary=None, m
     connection.close()
     if summary is not None:
         connection = sqlite3.connect(conversations.parent / "conversation_summaries.db")
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS conversation_summaries (conversation_id TEXT PRIMARY KEY, title TEXT,"
-            " workspace_uris TEXT, last_modified_time TEXT, parent_conversation_id TEXT)"
-        )
-        connection.execute(
-            "INSERT INTO conversation_summaries VALUES (?, ?, ?, ?, '')",
-            (identity, summary.get("title", ""), json.dumps(summary.get("workspaces", [])), summary.get("modified")),
-        )
+        if "agent_name" in summary:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS conversation_summaries (conversation_id TEXT PRIMARY KEY, title TEXT,"
+                " workspace_uris TEXT, last_modified_time TEXT, parent_conversation_id TEXT, agent_name TEXT)"
+            )
+            connection.execute(
+                "INSERT INTO conversation_summaries VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    identity,
+                    summary.get("title", ""),
+                    json.dumps(summary.get("workspaces", [])),
+                    summary.get("modified"),
+                    summary.get("parent", ""),
+                    summary["agent_name"],
+                ),
+            )
+        else:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS conversation_summaries (conversation_id TEXT PRIMARY KEY, title TEXT,"
+                " workspace_uris TEXT, last_modified_time TEXT, parent_conversation_id TEXT)"
+            )
+            connection.execute(
+                "INSERT INTO conversation_summaries VALUES (?, ?, ?, ?, ?)",
+                (
+                    identity,
+                    summary.get("title", ""),
+                    json.dumps(summary.get("workspaces", [])),
+                    summary.get("modified"),
+                    summary.get("parent", ""),
+                ),
+            )
         connection.commit()
         connection.close()
     return conversations / f"{identity}.db"
@@ -378,3 +423,153 @@ def test_isolated_wal_updates_refresh_search(cli):
         assert [item["id"] for item in run_json(cli, "--search", "after-needle", *args)] == [IDENTITY]
         assert run_json(cli, "--search", "before-needle", *args) == []
         assert all(path.read_bytes() == contents for path, contents in durable.items())
+
+
+def test_multi_workspace_history_and_child_titles(cli):
+    aux = (cli.root / "aux-space").resolve()
+    proj = (cli.root / "proj-space").resolve()
+    other = (cli.root / "other-space").resolve()
+    workspaces = [aux.as_uri(), proj.as_uri()]
+    conversations = cli.root / "sources/antigravity-cli/conversations"
+
+    create(
+        cli,
+        [
+            (
+                14,
+                field(
+                    19,
+                    field(3, field(1, "Check "))
+                    + field(3, field(1, "@main.rs") + field(2, field(1, field(5, (proj / "src/main.rs").as_uri())))),
+                ),
+            )
+        ],
+        identity="ctx-session",
+        conversations=conversations,
+        summary={"workspaces": workspaces, "agent_name": "unused"},
+    )
+    create(
+        cli,
+        [
+            user("Parent prompt"),
+            (
+                132,
+                metadata(
+                    call=field(1, "c1")
+                    + field(2, "read_file")
+                    + field(3, json.dumps({"path": str(proj / "Cargo.toml")}))
+                ),
+            ),
+        ],
+        identity="parent-z",
+        conversations=conversations,
+        summary={"workspaces": workspaces, "agent_name": "coordinator"},
+    )
+    create(
+        cli,
+        [
+            user("Delegate task"),
+            (
+                132,
+                metadata(
+                    call=field(1, "c2") + field(2, "read_file") + field(3, json.dumps({"path": str(other / "note.md")}))
+                ),
+            ),
+        ],
+        identity="child-a",
+        conversations=conversations,
+        summary={"workspaces": workspaces, "parent": "parent-z", "agent_name": "reviewer"},
+    )
+    create(
+        cli,
+        [user("Hello")],
+        identity="greeting",
+        conversations=conversations,
+        summary={"workspaces": workspaces, "agent_name": ""},
+    )
+
+    records = listed(cli)
+    assert (records["ctx-session"]["working_directory"], records["ctx-session"]["title"]) == (
+        str(proj),
+        "Check @main.rs",
+    )
+    assert (records["parent-z"]["working_directory"], records["parent-z"]["title"]) == (str(proj), "Parent prompt")
+    assert (records["child-a"]["working_directory"], records["child-a"]["title"]) == (str(proj), "reviewer")
+    assert records["greeting"]["working_directory"] == str(aux)
+
+    (conversations.parent / "history.jsonl").write_text(
+        json.dumps({"conversationId": "greeting", "workspace": str(proj)}) + "\n",
+        encoding="utf-8",
+    )
+    scoped = {
+        item["id"]
+        for item in run_json(
+            cli,
+            "--list",
+            "-d",
+            "36500",
+            "-q",
+            f"provider:antigravity-cli path:{shlex.quote(str(proj))}",
+        )
+    }
+    assert scoped == {"ctx-session", "parent-z", "child-a", "greeting"}
+    assert run_json(cli, "antigravity-cli://child-a", "--head")["working_directory"] == str(proj)
+
+
+def test_tool_outputs_errors_and_swarm_subagent_export(cli):
+    steps = [
+        (132, metadata(call=field(1, "c0") + field(2, "read_file")) + field(140, field(2, field(1, "needle-132")))),
+        (8, metadata(call=field(1, "c1") + field(2, "view_file")) + field(14, field(4, "needle-view"))),
+        (21, metadata(call=field(1, "c2") + field(2, "run_command")) + field(28, field(21, field(1, "needle-cmd\n")))),
+        (38, metadata(call=field(1, "c3") + field(2, "call_mcp_tool")) + field(47, field(3, '{"ok":true}'))),
+        (132, metadata(call=field(1, "c4") + field(2, "read_file")) + field(140, field(2, field(1, "partial")))),
+        (
+            132,
+            metadata(call=field(1, "c5") + field(2, "read_file"))
+            + field(31, field(2, "Tag error") + field(3, "details")),
+        ),
+        (
+            132,
+            metadata(call=field(1, "c6") + field(2, "swarm") + field(3, '{"action":"add","name":"worker"}'))
+            + field(
+                140,
+                field(
+                    2,
+                    field(
+                        1,
+                        "Created At: 2026-11-14T10:00:00+08:00\n"
+                        "Completed At: 2026-11-14T10:00:01+08:00\n"
+                        '{"status":"added","conversation_id":"child-sub"}',
+                    ),
+                ),
+            ),
+        ),
+    ]
+    create(cli, steps, errors={4: field(2, "Permission denied") + field(3, "Permission denied")})
+
+    result = cli.run(f"antigravity-cli://{IDENTITY}", "--format", "json", "--output", "exports")
+    assert result.returncode == 0, result.stderr
+    messages = json.loads((cli.root / f"exports/antigravity-cli/{IDENTITY}.json").read_text())["messages"]
+
+    expected = ["needle-132", "needle-view", "needle-cmd", '{"ok":true}']
+    for message, output in zip(messages[:4], expected, strict=True):
+        state = message["parts"][0]["state"]
+        assert (state["status"], state["output"], "error" in state) == ("unknown", output, False)
+
+    assert (
+        messages[4]["parts"][0]["state"]["status"],
+        messages[4]["parts"][0]["state"]["output"],
+        messages[4]["parts"][0]["state"]["error"],
+    ) == (
+        "error",
+        "partial",
+        "Permission denied",
+    )
+    assert (messages[5]["parts"][0]["state"]["status"], messages[5]["parts"][0]["state"]["error"]) == (
+        "error",
+        "Tag error\ndetails",
+    )
+    assert (messages[6]["subagent_id"], messages[6]["parts"][0]["state"]["status"]) == ("child-sub", "unknown")
+
+    hits = run_json(cli, "--search", "needle-view", "-d", "36500", "-q", "provider:antigravity-cli")
+    assert [item["id"] for item in hits] == [IDENTITY]

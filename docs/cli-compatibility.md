@@ -23,7 +23,7 @@ New commands should use the standard spellings below. Existing aliases remain ac
 
 The short options `-i`, `-d`, `-q`, and `-h` remain supported. Running without arguments shows help; `--interactive` opens batch export and `--browse` opens the session reader.
 
-Antigravity CLI also discovers isolated ACP stores under `<T3CODE_HOME or ~/.t3>/userdata/providers/antigravity/*/antigravity-acp/conversations`, using the existing `antigravity-cli://` URI. A nonempty `AGY_CONVERSATIONS_DIR` disables automatic T3 discovery and keeps the existing local development fallback. Each store uses its own optional summary database; missing workspaces and primary model IDs can fall back to native trajectory and step metadata. See the [Provider rules](providers/antigravity-cli.md).
+Antigravity CLI also discovers isolated ACP stores under `<T3CODE_HOME or ~/.t3>/userdata/providers/antigravity/*/antigravity-acp/conversations`, using the existing `antigravity-cli://` URI. A nonempty `AGY_CONVERSATIONS_DIR` disables automatic T3 discovery and keeps the existing local development fallback. Each store uses its own optional summary database and `history.jsonl`; missing workspaces and primary model IDs can fall back to native trajectory and step metadata, multiple workspace candidates resolve to the active directory, and known tool results and explicit errors are preserved while other numeric tool statuses remain `unknown`. See the [Provider rules](providers/antigravity-cli.md).
 
 ## Source builds and Python API migration
 
@@ -72,7 +72,7 @@ Version 0.15.9 is the last Python release. Since v1.0.0, wheels provide only the
 
 短参数 `-i`、`-d`、`-q`、`-h` 继续支持。不带参数运行显示帮助；`--interactive` 进入批量导出，`--browse` 打开会话阅读器。
 
-Antigravity CLI 同时发现 `<T3CODE_HOME 或 ~/.t3>/userdata/providers/antigravity/*/antigravity-acp/conversations` 下的隔离 ACP 会话，沿用 `antigravity-cli://` URI。非空 `AGY_CONVERSATIONS_DIR` 关闭 T3 自动发现，保留原有本地开发回退。各来源独立读取可选摘要库；工作目录和主请求模型 ID 缺失时，分别回退到原生 trajectory 和步骤元数据。详见 [Provider 规则](providers/antigravity-cli.md)。
+Antigravity CLI 同时发现 `<T3CODE_HOME 或 ~/.t3>/userdata/providers/antigravity/*/antigravity-acp/conversations` 下的隔离 ACP 会话，沿用 `antigravity-cli://` URI。非空 `AGY_CONVERSATIONS_DIR` 关闭 T3 自动发现，保留原有本地开发回退。各来源独立读取可选摘要库和 `history.jsonl`；工作目录和主请求模型 ID 缺失时分别回退到原生 trajectory 和步骤元数据，多工作区按活跃证据择优判定；保留已知工具结果和显式错误，其余数值工具状态保持 `unknown`。详见 [Provider 规则](providers/antigravity-cli.md)。
 
 ## 源码构建与 Python API 迁移
 

@@ -118,11 +118,17 @@ pub fn searchable_message(message: &Message) -> String {
     let mut texts = message_texts(message);
     for part in &message.parts {
         if let Part::Tool(tool) = part {
+            let output = tool.state.get("output").filter(|v| !v.is_null());
+            let error = tool
+                .state
+                .get("error")
+                .filter(|v| !v.is_null() && Some(*v) != output);
             for value in [
                 tool.state
                     .get("arguments")
                     .or_else(|| tool.state.get("input")),
-                tool.state.get("output"),
+                output,
+                error,
             ]
             .into_iter()
             .flatten()
@@ -153,4 +159,55 @@ pub fn searchable(data: &SessionData) -> String {
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn searchable_message_indexes_unique_tool_error() {
+        let mut message = Message::new("m1".into(), "assistant", 1, Vec::new());
+        message.parts = vec![
+            Part::tool(
+                "read",
+                "c1",
+                json!({
+                    "status": "error",
+                    "input": {"path": "missing.rs"},
+                    "output": null,
+                    "error": "error-only-needle"
+                }),
+                1,
+            ),
+            Part::tool(
+                "edit",
+                "c2",
+                json!({
+                    "status": "error",
+                    "input": {"path": "a.rs"},
+                    "output": "shared-error-needle",
+                    "error": "shared-error-needle"
+                }),
+                2,
+            ),
+            Part::tool(
+                "bash",
+                "c3",
+                json!({
+                    "status": "error",
+                    "input": {"command": "false"},
+                    "output": "stdout-part",
+                    "error": "distinct-error-part"
+                }),
+                3,
+            ),
+        ];
+        let corpus = searchable_message(&message);
+        assert!(corpus.contains("error-only-needle"));
+        assert_eq!(corpus.matches("shared-error-needle").count(), 1);
+        assert!(corpus.contains("stdout-part"));
+        assert!(corpus.contains("distinct-error-part"));
+    }
 }

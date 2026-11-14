@@ -62,7 +62,7 @@ agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
 - **DeepChat** - 当前版本的本地会话（未加密数据库）
 - **Cherry Studio** - 2.x 的本地聊天和 Agent 会话
 - **MiniMax Code** - 当前 CLI 的本地 SQLite 会话
-- **Antigravity CLI** - CLI 和隔离 ACP 会话数据库，不解析工具结果
+- **Antigravity CLI** - CLI 和隔离 ACP 会话数据库
 - **更多工具** - 欢迎提交 PR 支持其他 AI 编码工具
 
 ## 功能特性
@@ -300,7 +300,7 @@ MiniMax Code 支持当前 CLI 已迁移展示消息的列表、查询、搜索�
 
 自定义 profile 或其他目录需显式设置 `MINIMAX_DATA_DIR`。不读取模型上下文 JSONL、附件实体，不执行迁移或恢复已回退删除的正文；暂不支持 raw、旧存储直读和桌面端数据。尚未完成迁移或损坏的会话会报告错误，不会被当成空会话。实现与验收范围见 [MiniMax Code 功能设计](docs/providers/minimax.md)。
 
-Antigravity CLI 支持列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。数据库以只读方式打开，只解码用户输入、助手文本、标题更新、工具调用、步骤时间和 token 用量对应的 Protobuf 字段。工具结果没有已知格式，工具调用状态为 `unknown`，元数据保留原始步骤类型和状态；其他无法识别的步骤跳过。没有步骤的数据库不列出。标题依次取最后一次标题更新、摘要标题和首条用户输入。没有原生时间的步骤使用摘要更新时间或数据库修改时间，并标记为推测时间，collect 排除这类消息。重试中重复的用量只计一次，挂到下一条助手消息；最后一步之后的用量生成一条只有用量的助手消息。输入包含缓存 token，会话输出包含推理 token；不估算费用。摘要没有有效工作目录时，从 trajectory 元数据读取工作区。主请求用量没有模型 ID 时使用步骤模型的 API 名或展示名，重试缺少模型身份时保持未知。不支持 raw 导出。步骤格式错误或表结构不支持时，只有该会话读取失败。详见 [Antigravity CLI 读取规则](docs/providers/antigravity-cli.md)。
+Antigravity CLI 支持列表、查询、搜索、统计、collect 及 print / JSON / Markdown 导出。数据库以只读方式打开，只解码用户输入（含分段文本和上下文 URI）、助手文本、标题更新、工具调用、已知工具结果、显式错误、步骤时间和 token 用量对应的 Protobuf 字段。步骤类型 132、8、21、38 的已知结果文本保留在 `output`；来自 `error_details` 或步骤载荷的显式错误将工具状态设为 `error` 并保留 `error`，其余数值状态仍为 `unknown`，元数据保留原始步骤类型和状态。无错误的 `swarm add` 调用将生成的 `conversation_id` 写入消息 `subagent_id`；其他无法识别的步骤跳过。没有步骤的数据库不列出。标题依次取最后一次标题更新、摘要标题、子会话 `agent_name` 和首条用户输入。没有原生时间的步骤使用摘要更新时间或数据库修改时间，并标记为推测时间，collect 排除这类消息。重试中重复的用量只计一次，挂到下一条助手消息；最后一步之后的用量生成一条只有用量的助手消息。输入包含缓存 token，会话输出包含推理 token；不估算费用。摘要没有有效工作区时，从 trajectory 元数据读取工作区；存在多个本地工作区时，依次按 `history.jsonl`、用户上下文和工具入参、父会话工作区选择活跃目录，最后回退到首个本地 URI。主请求用量没有模型 ID 时使用步骤模型的 API 名或展示名，重试缺少模型身份时保持未知。不支持 raw 导出。步骤格式错误或表结构不支持时，只有该会话读取失败。详见 [Antigravity CLI 读取规则](docs/providers/antigravity-cli.md)。
 
 OpenCode 支持旧版 SQLite 和 2.x `session_v2/session_message`。新旧表共存时同 ID 优先新版。`migration.v1-v2` 完成前，OpenCode 尚未复制的旧版会话继续列出；完成后只读新版，V2 中已删除的会话不会重新出现。没有可见消息的会话不列出，消息数只计可见消息。标题为空时使用首条用户文本，再没有时为 `Untitled Session`。新版消息按 `seq` 排序。图片附件转为 image part；其他附件、`@agent`/`@skill` 提及、错误以及系统、压缩和切换记录转为带标签的文本。只有消息 JSON 无效或 assistant 的 `content` 不是数组时整条 V2 会话读取失败，其他异常字段置空。输入 token 包含缓存读写，输出 token 包含推理；旧版父会话累加后代会话的用量。ZCode 使用旧版读取器，排除 `subagent_child` 会话，保留 plan 和图片 part。合成输入、系统/技能、压缩与 shell 记录不进入 collect。自定义或 channel 数据库使用 `OPENCODE_DB` 指定，显式路径缺失不回退，`:memory:` 不可用。不打开附件引用的文件。运行中和归档记录仍可读取，待投递 inbox 不计入会话。raw 仍是标准化 `.raw.json`，不是 OpenCode import 文件。详见[功能设计与验收范围](docs/providers/opencode-v2.md)。
 

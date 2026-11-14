@@ -155,6 +155,22 @@ fn output_parts(output: &Value, time: i64) -> Vec<Part> {
     }
 }
 
+fn output_text(content: &Value) -> String {
+    match content {
+        Value::String(text) => text.clone(),
+        Value::Array(items) => items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .or_else(|| item["text"].as_str())
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>()
+            .join(" "),
+        _ => content["text"].as_str().unwrap_or_default().to_owned(),
+    }
+}
+
 impl Transcript {
     fn append(&mut self, id: String, role: &str, time: i64, parts: Vec<Part>) {
         let index = self.messages.len();
@@ -308,8 +324,15 @@ impl Transcript {
                 return Ok(());
             }
             let parts = output_parts(&message["content"], time);
-            let updates =
-                Map::from_iter([("status".into(), "completed".into())]);
+            let status = if output_text(&message["content"])
+                .trim_start()
+                .starts_with("<system>ERROR:")
+            {
+                "error"
+            } else {
+                "completed"
+            };
+            let updates = Map::from_iter([("status".into(), status.into())]);
             return self.result(id, time, call, parts, updates);
         }
         if role != "user" && role != "assistant" {
@@ -426,4 +449,85 @@ pub fn read(
         |seq, record, _| transcript.record(seq, &record),
     )?;
     Ok(transcript)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn compatibility_results_recognize_system_errors_without_content_fallback()
+    {
+        let cases = [
+            (
+                "ReadFile",
+                json!([{ "type": "text", "text": "<system>ERROR: missing" }]),
+                "error",
+            ),
+            ("Shell", json!("  <system>ERROR: timeout"), "error"),
+            (
+                "StrReplaceFile",
+                json!({ "type": "text", "text": "<system>ERROR: obj" }),
+                "error",
+            ),
+            (
+                "Shell",
+                json!([{ "type": "text", "text": "Example containing ERROR: ok" }]),
+                "completed",
+            ),
+            (
+                "ReadFile",
+                json!([{ "content": "<system>ERROR: ignored" }]),
+                "completed",
+            ),
+        ];
+        let mut transcript = Transcript::default();
+        for (index, (name, output, _)) in cases.iter().enumerate() {
+            let call_id = format!("{name}:{index}");
+            transcript
+                .record(
+                    index * 2,
+                    &json!({
+                        "type": "context.append_message",
+                        "time": 1000,
+                        "message": {
+                            "role": "assistant",
+                            "content": [],
+                            "toolCalls": [{
+                                "id": call_id,
+                                "function": { "name": name, "arguments": "{}" }
+                            }],
+                        },
+                    }),
+                )
+                .unwrap();
+            transcript
+                .record(
+                    index * 2 + 1,
+                    &json!({
+                        "type": "context.append_message",
+                        "time": 1001,
+                        "message": {
+                            "role": "tool",
+                            "toolCallId": call_id,
+                            "content": output,
+                        },
+                    }),
+                )
+                .unwrap();
+        }
+        let statuses: Vec<_> = transcript
+            .messages
+            .iter()
+            .flat_map(|message| &message.parts)
+            .filter_map(|part| match part {
+                Part::Tool(tool) => Some(tool.state["status"].clone()),
+                _ => None,
+            })
+            .collect();
+        let expected: Vec<Value> =
+            cases.iter().map(|(_, _, status)| json!(status)).collect();
+        assert_eq!(statuses, expected);
+    }
 }

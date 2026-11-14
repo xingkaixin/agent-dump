@@ -97,7 +97,7 @@ OpenCode 按会话 ID 降序逐个复制旧版会话，并把最后复制的 ID 
 
 任意类型带 `error` 时追加 `[Error] 错误内容` 文本。图片以外的附件只显示名称、类型和 URI，不读取引用文件；附件不再写入消息元数据的 `files`。模型 variant、完成原因和其他非正文信息保留在消息元数据中。
 
-工具调用映射 `name → tool`、`id → callID`、`state.input → state.input`、`state.content → state.output`。状态只保留 completed/error，其余（含 streaming）归一为 running。保留结构化错误、执行时间和文件引用；错误文本进入可搜索的输出。streaming 的部分 JSON 参数保持字符串，不强行解析。shell 的 `status` 为 running 时为运行中；`exited` 且 `exit` 为空或 0 时为完成；其余为失败，并写入 `Shell 状态 (exit: 退出码)` 错误。`subagent` 工具的 `metadata.sessionID` 唯一时写入消息的 `subagent_id`。
+工具调用映射 `name → tool`、`id → callID`、`state.input → state.input`、`state.content → state.output`。状态只保留 completed/error，其余（含 streaming）归一为 running。保留结构化错误、执行时间和文件引用；错误文本进入可搜索的输出。streaming 的部分 JSON 参数保持字符串，不强行解析。shell 的 `status` 为 running 时为运行中；`exited` 且 `exit` 为空或 0 时为完成；其余为失败，并写入 `Shell 状态 (exit: 退出码)` 错误。`invalid` 工具带非空白 `state.input.error` 时按 `error` 状态与 `state.error` 保留（不额外改写 `state.output`）。`task` / `subagent` 工具的 `metadata.sessionId` 或 `sessionID` 去重后唯一时写入消息的 `subagent_id`。
 
 只有消息 JSON 无效、不是对象，或 assistant 的 `content` 不是数组时，整条 Session 正文读取失败。其他字段缺失或类型错误时置空，不让整条会话读取失败。
 
