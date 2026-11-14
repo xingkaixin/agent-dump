@@ -1,5 +1,11 @@
 packages: []
 
+packageExtensions:
+  # astro2tsx pins @emnapi/core to 1.11.3 but omits the matching runtime dependency.
+  '@astrojs/astro2tsx@0.1.3':
+    dependencies:
+      '@emnapi/runtime': '1.11.3'
+
 # pnpm 11 移除了 package.json 的 pnpm.onlyBuiltDependencies，改为在这里把每个包
 # 显式映射到 boolean。留成字符串占位等于没授权：pnpm 会把 esbuild 的 build script
 # 自动忽略，而干净安装拿不到它的原生二进制。
