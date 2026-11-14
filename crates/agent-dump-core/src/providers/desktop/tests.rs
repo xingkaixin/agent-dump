@@ -201,3 +201,90 @@ fn deepchat_usage_rows_replace_message_metadata_usage() {
         (&117.into(), &25.into())
     );
 }
+
+#[test]
+fn deepchat_tool_response_decodes_json_with_plain_text_fallback() {
+    let (_directory, mut provider, _, _) = fixture(Kind::DeepChat);
+    let child_result = serde_json::json!({
+        "schemaVersion": 1,
+        "kind": "child_agent_result",
+        "payload": {
+            "format": "json",
+            "value": {"delegation": {"childSessionId": "child-1"}}
+        }
+    });
+    let error_json = serde_json::json!({
+        "error": "Permission denied",
+        "code": "EACCES"
+    });
+    let connection = Connection::open(&provider.database).unwrap();
+    connection
+        .execute_batch(
+            r#"CREATE TABLE deepchat_assistant_blocks (message_id TEXT,
+              block_index INTEGER, block_type TEXT, status TEXT,
+              text_content TEXT, tool_call_id TEXT, tool_name TEXT,
+              tool_params TEXT, tool_response TEXT, action_type TEXT,
+              image_mime_type TEXT, extra_json TEXT, updated_at INTEGER);
+            INSERT INTO new_sessions VALUES
+              ('tools', 'Tools', 1, 1, '/p', NULL, NULL, NULL, 0);
+            INSERT INTO deepchat_messages VALUES
+              ('tu', 'tools', 1, 'user', '"Prompt"', 'sent', '{}', 1, 1),
+              ('ta', 'tools', 2, 'assistant', '[]', 'sent', '{}', 2, 2);"#,
+        )
+        .unwrap();
+    let rows = [
+        (
+            0i64,
+            "success",
+            None,
+            "c1",
+            "deepchat_subagents",
+            r#"{"operation":"inspect"}"#,
+            Some(child_result.to_string()),
+        ),
+        (
+            1,
+            "error",
+            None,
+            "c2",
+            "read",
+            r#"{"path":"secret.txt"}"#,
+            Some(error_json.to_string()),
+        ),
+        (2, "error", Some("Fallback error"), "c3", "bash", "{}", None),
+        (
+            3,
+            "success",
+            None,
+            "c4",
+            "read",
+            r#"{"path":"note.txt"}"#,
+            Some("plain output".into()),
+        ),
+    ];
+    for (idx, status, text, id, name, params, response) in rows {
+        connection
+            .execute(
+                "INSERT INTO deepchat_assistant_blocks (message_id, \
+                 block_index, block_type, status, text_content, tool_call_id, \
+                 tool_name, tool_params, tool_response, updated_at) \
+                 VALUES ('ta', ?, 'tool_call', ?, ?, ?, ?, ?, ?, 3)",
+                rusqlite::params![
+                    idx, status, text, id, name, params, response
+                ],
+            )
+            .unwrap();
+    }
+    drop(connection);
+    let data = read_json(&mut provider, "tools");
+    let parts = data["messages"][1]["parts"].as_array().unwrap();
+    assert_eq!(parts[0]["state"]["output"], child_result);
+    assert!(parts[0]["state"].get("error").is_none());
+    assert_eq!(parts[1]["state"]["status"], "error");
+    assert_eq!(parts[1]["state"]["output"], error_json);
+    assert_eq!(parts[1]["state"]["error"], error_json);
+    assert_eq!(parts[2]["state"]["status"], "error");
+    assert!(parts[2]["state"]["output"].is_null());
+    assert_eq!(parts[2]["state"]["error"], "Fallback error");
+    assert_eq!(parts[3]["state"]["output"], "plain output");
+}

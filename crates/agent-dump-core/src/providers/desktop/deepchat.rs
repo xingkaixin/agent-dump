@@ -481,6 +481,13 @@ fn structured_block(row: &Value) -> Value {
     })
 }
 
+fn decode_json(value: &Value) -> Value {
+    value
+        .as_str()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .unwrap_or_else(|| value.clone())
+}
+
 fn decode_block(block: &Value, fallback: i64) -> Option<Part> {
     let time = crate::compat::value::integer_or(&block["timestamp"], fallback);
     let body = text(&block["content"]);
@@ -494,14 +501,15 @@ fn decode_block(block: &Value, fallback: i64) -> Option<Part> {
                 "loading" => "running",
                 _ => "unknown",
             };
+            let output = decode_json(&tool["response"]);
             let mut state = json!({
                 "status": status,
                 "input": parse_json(&tool["params"]),
-                "output": tool["response"]
+                "output": output
             });
             if status == "error" {
-                if !tool["response"].is_null() {
-                    state["error"] = tool["response"].clone();
+                if !state["output"].is_null() {
+                    state["error"] = state["output"].clone();
                 } else if !body.is_empty() {
                     state["error"] = body.into();
                 }
