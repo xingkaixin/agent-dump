@@ -21,8 +21,8 @@ import subprocess
 import unicodedata
 import urllib.request
 
-from fontTools import subset  # ty: ignore[unresolved-import] - PEP 723 script dependency
-from fontTools.ttLib import TTFont  # ty: ignore[unresolved-import]
+from fontTools import subset  # ty: ignore[import-not-found] - PEP 723 script dependency
+from fontTools.ttLib import TTFont  # ty: ignore[import-not-found]
 
 WEB = Path(__file__).resolve().parent.parent
 OUT = WEB / "src" / "fonts"
