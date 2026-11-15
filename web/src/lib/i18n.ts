@@ -187,9 +187,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.10",
+        date: "2026-11-15",
+        isLatest: true,
+        title: "Antigravity ACP Sessions and Searchable Tool Errors",
+        description:
+          "Find and export Antigravity ACP sessions from T3 Code alongside regular Antigravity CLI history. Sessions with multiple workspaces now use the active project directory, and exports retain known tool results, explicit errors, and child session links. OpenCode, Kimi-Code, and DeepChat also preserve more tool evidence. Full-text search includes tool errors, so you can find failed commands and reuse their context in the next Agent handoff.",
+        command: 'npx @agent-dump/cli@1.2.10 list -q "provider:antigravity-cli"',
+        tags: ["Antigravity ACP", "Full-Text Search", "Session Export"],
+      },
+      {
         version: "v1.2.9",
         date: "2026-11-11",
-        isLatest: true,
         title: "Redesigned Session Reader and Faster AI Collect",
         description:
           "The terminal session reader groups Codex, Claude Code, Cursor, and other AI sessions by day, folds long runs of tool calls, and shows your position, search hits, and the keys you can press. Long sessions no longer stall the list. AI collect skips sessions last updated before the requested range, so weekly summaries read less. Codex plan replies are no longer lost in session export, and failed providers or invalid config now return a clear error instead of an empty result.",
@@ -426,9 +435,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.10",
+        date: "2026-11-15",
+        isLatest: true,
+        title: "读取 Antigravity ACP 会话，搜索工具错误",
+        description:
+          "T3 Code 中的 Antigravity ACP 会话，现在可以和常规 Antigravity CLI 历史一起查找、导出。多工作区会话使用活跃项目目录，导出保留已知工具结果、显式错误和子会话关联。OpenCode、Kimi-Code 和 DeepChat 也保留更多工具执行信息。全文搜索包含工具错误，方便找回失败的命令，并把上下文交给下一个 Agent。",
+        command: 'npx @agent-dump/cli@1.2.10 list -q "provider:antigravity-cli"',
+        tags: ["Antigravity ACP", "全文搜索", "会话导出"],
+      },
+      {
         version: "v1.2.9",
         date: "2026-11-11",
-        isLatest: true,
         title: "会话阅读器重新设计，AI collect 更快",
         description:
           "终端会话阅读器按天分组 Codex、Claude Code、Cursor 等 AI 会话，折叠连续的工具调用，并显示当前位置、搜索命中数和可用按键。长会话不再拖慢列表。AI collect 跳过在时间范围之前就停止更新的会话，生成周报时读取更少。Codex 会话导出不再丢失计划后的用户回复；Provider 读取失败或配置无效时，明确报错而不是返回空结果。",
@@ -665,9 +683,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.10",
+        date: "2026-11-15",
+        isLatest: true,
+        title: "Antigravity ACP セッションとツールエラー検索",
+        description:
+          "T3 Code の Antigravity ACP セッションを、通常の Antigravity CLI 履歴と一緒に検索・エクスポートできます。複数のワークスペースがあるセッションはアクティブなプロジェクトディレクトリを使い、既知のツール結果、明示的なエラー、子セッションへのリンクを保持します。OpenCode、Kimi-Code、DeepChat のツール実行情報も改善しました。全文検索にはツールエラーも含まれるため、失敗したコマンドを見つけ、そのコンテキストを次の Agent に引き継げます。",
+        command: 'npx @agent-dump/cli@1.2.10 list -q "provider:antigravity-cli"',
+        tags: ["Antigravity ACP", "全文検索", "セッションエクスポート"],
+      },
+      {
         version: "v1.2.9",
         date: "2026-11-11",
-        isLatest: true,
         title: "セッションリーダーを刷新し、AI collect を高速化",
         description:
           "ターミナルのセッションリーダーは Codex、Claude Code、Cursor などの AI セッションを日付ごとにまとめ、連続するツール呼び出しを折りたたみ、現在位置・検索ヒット数・使えるキーを表示します。長いセッションでも一覧が止まらなくなりました。AI collect は指定期間より前に更新が止まったセッションを読み込まないため、週次サマリーの読み込み量が減ります。Codex のセッションエクスポートでプラン後のユーザー返信が失われなくなり、プロバイダーの読み込み失敗や無効な設定は空の結果ではなく明確なエラーになります。",

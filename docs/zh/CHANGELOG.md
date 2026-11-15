@@ -2,6 +2,24 @@
 
 ## [未发布]
 
+## [1.2.10] - 2026-11-15
+
+### 新增功能
+
+- 除常规 Antigravity CLI 会话外，同时发现 T3 Code 管理的隔离 Antigravity ACP 会话。各来源独立读取摘要库；`T3CODE_HOME` 可指定 T3 的自定义目录，`AGY_CONVERSATIONS_DIR` 保留显式选择来源的行为 (#570)。
+
+### 问题修复
+
+- Antigravity CLI：从原生元数据补全缺失的工作目录和主请求模型名，多工作区会话选择活跃目录；保留分段用户输入和上下文 URI，并用子 Agent 名称补全缺失的标题 (#570, #571)。
+- Antigravity CLI：保留已知工具结果和显式错误，关联成功的 `swarm add` 调用创建的子会话。未知数值工具状态仍保持 `unknown` (#571)。
+- OpenCode V2：从 `sessionId` 或 `sessionID` 关联 `task` 和 `subagent` 子会话，并保留 `invalid` 工具错误 (#571)。
+- Kimi-Code：以 `<system>ERROR:` 开头的兼容工具结果标记为失败。DeepChat：导出前解码 JSON 字符串形式的工具响应 (#571)。
+- 全文搜索除工具输入和输出外，也索引不重复的工具错误。升级搜索索引 schema，让已有索引重建并包含修正后的内容 (#571)。
+
+### 变更
+
+- 更新 Rust 依赖、rusqlite、Python 开发工具、web 运行时依赖、Playwright 和 GitHub Release action；对齐 Astro 运行时依赖，并更新已改名的 ty lint 规则 (#572–#577)。
+
 ## [1.2.9] - 2026-11-11
 
 ### 变更
@@ -1393,3 +1411,4 @@
 [1.2.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.7
 [1.2.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.8
 [1.2.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.9
+[1.2.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.10

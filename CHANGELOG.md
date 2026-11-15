@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+## [1.2.10] - 2026-11-15
+
+### Added
+
+- Discover isolated Antigravity ACP conversation stores managed by T3 Code alongside regular Antigravity CLI sessions. Each store uses its own summary database; `T3CODE_HOME` selects a custom T3 base directory, and `AGY_CONVERSATIONS_DIR` keeps explicit source selection (#570).
+
+### Fixed
+
+- Antigravity CLI: recover missing workspaces and primary model names from native metadata, resolve the active directory when a session has multiple workspaces, preserve segmented user input and context URIs, and use child agent names as fallback titles (#570, #571).
+- Antigravity CLI: preserve known tool results and explicit errors, and link children created by successful `swarm add` calls. Unknown numeric tool statuses remain `unknown` (#571).
+- OpenCode V2: link `task` and `subagent` children from either `sessionId` or `sessionID`, and preserve `invalid` tool errors (#571).
+- Kimi-Code: mark compatibility tool results beginning with `<system>ERROR:` as failed. DeepChat: decode JSON-encoded tool responses before export (#571).
+- Full-text search includes distinct tool errors alongside inputs and outputs. Upgrade the search index schema so existing indexes rebuild with the corrected content (#571).
+
+### Changed
+
+- Update Rust dependencies, rusqlite, Python development tools, web runtime packages, Playwright, and the GitHub Release action. Align Astro's runtime dependencies and update the renamed ty lint rule (#572–#577).
+
 ## [1.2.9] - 2026-11-11
 
 ### Changed
@@ -1390,3 +1408,4 @@
 [1.2.7]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.7
 [1.2.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.8
 [1.2.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.9
+[1.2.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.10
