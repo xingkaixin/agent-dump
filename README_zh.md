@@ -37,7 +37,8 @@ agent-dump head codex://SESSION_ID --json
 agent-dump read-prompt codex://SESSION_ID
 
 # 将报告任务交给外部 Agent，无需配置 API
-agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
+agent-dump collect --days 7 --emit-prompt --output ./prompt.txt --save ./reports/weekly.md
+agent-dump --collect --verify-manifest ./prompt.txt --json
 ```
 
 按生成的命令和游标继续读取，直到 `has_more=false` 才完成所选内容的覆盖。检查退出码与 `status`，不能将 partial 结果当成完整读取。`--emit-prompt` 只生成任务说明，不会生成报告。详见[机器可读输出](#机器可读输出)、[带来源的上下文导出](#消息定位与上下文)和 [Agent recipes](skills/agent-dump/references/cli-recipes.md)。
@@ -402,7 +403,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 - `collect_task` 元数据保留只读的 `query` 筛选字段（未筛选时为 `null`，否则记录 `providers`、`path`、`roles`、`keyword`、`limit`）。
 - 不校验 AI 配置、不调用模型、不规划摘要 chunk、不创建 collect 日志或报告。内容查询仍可能读取正文并更新本地搜索索引。
 - 复用 collect 的排除规则和查询筛选。日期两端均包含，按可见文本段的**实际本地日期**筛选并逐日拆分。候选发现不按创建日期排除旧会话，但跳过 Provider 报告的更新时间早于起始日期的会话，生成清单时读取正文，仅保留含日期范围内活动的会话；外部 Agent 再根据读取页的 `text_spans` 筛选日期。清单不是内容快照。
-- 读取正文前，核对清单结束标记、候选数量、唯一 URI、JSON 长度和命令对应关系；JSON 能解析不等于清单完整。
+- 读取正文前，优先执行 `agent-dump --collect --verify-manifest <FILE> --json` 静态校验清单结束标记、两层无重复 JSON 键、候选数量、唯一 URI、Unicode JSON 长度和命令对应关系；JSON 能解析不等于清单完整。
   清单损坏时先使用已保存的完整文件；没有完整文件时，仅允许按原筛选条件重新生成一次提示词并直接保存输出。
   重生成是新候选清单，不是恢复旧快照；原条件不明或仍损坏时先询问，未经同意不交付残缺清单的部分日报。
 - 外部 agent 用 `--read --order asc --json` 逐页读取，再用 `--read --cursor <next_cursor> --json` 继续，直到 `has_more=false`。
@@ -438,6 +439,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |
 | `--dry-run` | 与 `--collect` 搭配使用，预览 provider 分布、session 数、chunk 数、并发配置、日期范围和保存路径，跳过 AI 请求和文件写入。 | - |
 | `--emit-prompt` | 与 `--collect` 搭配使用，生成交给外部 agent 的自包含任务提示词，不需要 AI 配置，不写报告。与 `--dry-run` 互斥；`--save` 指定最终报告位置，`--output` 将提示词写入文件或目录。 | - |
+| `--verify-manifest <FILE>` | 与 `--collect` 搭配静态只读校验 `--emit-prompt` 提示词清单完整性，不读取配置或 Provider 数据源。支持 `--json`；与 `--emit-prompt`、`--dry-run`、`--output`、`--save`、日期及查询参数互斥。 | - |
 | `--stats` | 显示最近 N 天会话使用统计，按 Agent 和时间分组。存在未知消息数时显示已知小计与未知会话数，不把部分和冒充总数。支持 `--days` 与 `--query`，推荐独立使用。 | - |
 | `--providers` | 显示已注册 provider 的能力矩阵，包括 URI scheme、支持及不支持的导出格式、持久索引不可用时采用的存储级关键词回退，以及本地搜索路径是否存在。不扫描会话。 | - |
 | `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。按空白切分的 distinct term 均按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），所有 term 都必须存在，但可以分别落在不同 corpus 字段；CJK term 必须连续。FTS5 不可用或 tokenizer 无法等价表达时使用同一套进程内逻辑文本 matcher；索引错误会在 stderr 提示并给出 `--reindex` 建议。每条结果的命中片段显示第一个命中 term 前后约 48 个字符，命中部分用 `**` 标出。可与 `--list` 组合。 | - |
@@ -560,15 +562,18 @@ agent-dump --search 'timeout' --json --query 'provider:codex'
 agent-dump --stats --json
 agent-dump codex://SESSION_ID --head --json
 agent-dump --providers --json
+agent-dump --collect --verify-manifest ./prompt.txt --json
 ```
 
 结果包含 `schema_version: 1`、`kind`（list/search/stats）、`status`（ok/partial/error）、`data`、`failed_providers`、`failed_sessions` 和 `error`。发现不完整或筛选读取失败时为 partial，健康结果仍可使用。列表和搜索的 data 为数组；统计为 total/by_provider/by_time 对象。未知目录、模型和消息数为 null；时间使用 UTC ISO 8601。统计中的 known_messages 只统计已知计数，unknown_message_count_sessions 单独记录未知会话数；时间桶按创建日期及本地日期计算。
 
-无匹配返回空数组和退出码 0；没有可用来源且未指定 Provider 范围时返回 error 和退出码 1。参数或执行错误可能只在 stderr 输出诊断，调用方必须检查退出码。`--json` 也支持消息上下文、`--read` 分段读取、`--head` 和 `--providers`，其他模式不支持。
+无匹配返回空数组和退出码 0；没有可用来源且未指定 Provider 范围时返回 error 和退出码 1。参数或执行错误可能只在 stderr 输出诊断，调用方必须检查退出码。`--json` 也支持消息上下文、`--read` 分段读取、`--head`、`--providers` 和 `--collect --verify-manifest`，其他模式不支持。
 
 `agent-dump <URI> --head --json` 返回 `kind: "head"`，`data` 为单条会话元数据。字段与列表一致，并包含 `project`、`version`、`subtargets`。不请求完整正文；URI 使用规范形式，未知目录、模型和消息数保留为 null，可恢复的查找诊断产生 `status: "partial"`，详情在 stderr。
 
 `agent-dump --providers --json`返回 `kind: "providers"`，`data` 为 Provider 数组。每项包含名称、显示名、scheme、标识符提示、可选 ID 前缀、支持的 `formats`，以及带 label/path/exists 的 `search_roots`。只检查能力和路径是否存在，不读取会话正文；路径存在不代表会话一定可读。两种结果均使用 `schema_version: 1`；失败时退出码非零，stdout 可能为空。
+
+`agent-dump --collect --verify-manifest <FILE> --json` 静态校验已保存的外部汇总提示词清单（不读取配置或 Provider 数据源），返回 `schema_version: 1`、`kind: "collect_manifest"`、`status`（`ok` 或 `error`）和 `data`（`valid`、`path`、`session_count`、`errors`），通过时退出 `0`，失败时退出 `1`。
 
 
 ### 消息定位与上下文

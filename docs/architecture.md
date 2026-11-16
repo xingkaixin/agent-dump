@@ -85,7 +85,7 @@ summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标
 
 ## 7. Collect
 
-execute、dry-run、emit-prompt 共用配置安全校验和候选会话筛选，候选发现不按创建日期截断，以 `Window::Updated` 跳过更新时间早于起始日期的会话，不读取其正文；会话扫描进度在 `collect/sessions.rs` 内按 `max(total / 10, 50)` 节流，避免大量会话扫描刷屏。`--emit-prompt` 由 `collect/handoff.rs` 生成任务说明，不发起内部 LLM 请求；生成的读取命令指向正在运行的原生可执行文件。传入 `--output`（仅 `--collect --emit-prompt` 允许，其他 collect 动作在 `command.rs` 报错拒绝）时，`workflows/collect.rs` 在发现前预检并校验 `guard_output` 与目标符号链接，候选非空时经 `private_files::write_text` 原子写入提示词文件（目录路径或分隔符结尾拼接 `agent-dump-collect-prompt-<since>-<until>.txt`），候选为空时不落盘。
+execute、dry-run、emit-prompt 共用配置安全校验和候选会话筛选，候选发现不按创建日期截断，以 `Window::Updated` 跳过更新时间早于起始日期的会话，不读取其正文；会话扫描进度在 `collect/sessions.rs` 内按 `max(total / 10, 50)` 节流，避免大量会话扫描刷屏。`--emit-prompt` 由 `collect/handoff.rs` 生成任务说明，不发起内部 LLM 请求；生成的读取命令指向正在运行的原生可执行文件。传入 `--output`（仅 `--collect --emit-prompt` 允许，其他 collect 动作在 `command.rs` 报错拒绝）时，`workflows/collect.rs` 在发现前预检并校验 `guard_output` 与目标符号链接，候选非空时经 `private_files::write_text` 原子写入提示词文件（目录路径或分隔符结尾拼接 `agent-dump-collect-prompt-<since>-<until>.txt`），候选为空时不落盘。`--verify-manifest` 由 `command.rs` 直接路由到 `workflows/collect.rs::verify` 与 `collect/verify.rs` 静态只读校验提示词清单，不读取配置或发现 Provider，强制校验结束标记、两层无重复 JSON 键、Unicode `length`、`collect_task` 与候选计数、唯一 URI 及 `read_argv`/`read_command` 一致性。
 
 - 日期归属：core transcript 的 visible_segments 投影标准化文本段及可靠时间；Collect 按文本段的本地日期筛选并逐日分块。无时间或 Provider 标记为推测时间的内容不属于任何日期，直接排除，不记录覆盖缺口。外部汇总通过 read 的 text_spans 使用同一日期事实。
 - 外部汇总清单：读取候选正文并按相同日期投影筛选，但不规划 chunk；只交接含本期活动的唯一会话，并在 `collect_task` 中携带只读 `query` 筛选字段（无筛选时为 `null`）与读取失败来源。
