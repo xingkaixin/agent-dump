@@ -30,6 +30,7 @@ pub fn read_entries(
     let mut failed = Vec::new();
     let mut last_error = None;
     let mut completed = 0;
+    let step = (positions.len() / 10).max(50);
     parallel::ordered(
         positions,
         |&(g, s)| {
@@ -103,15 +104,17 @@ pub fn read_entries(
                 }
             }
             completed += 1;
-            progress(
-                "COLLECT_PROGRESS_SCAN_SESSIONS",
-                &[
-                    ("current", completed.to_string()),
-                    ("total", positions.len().to_string()),
-                ],
-                zh,
-                warnings,
-            )?;
+            if completed == positions.len() || completed.is_multiple_of(step) {
+                progress(
+                    "COLLECT_PROGRESS_SCAN_SESSIONS",
+                    &[
+                        ("current", completed.to_string()),
+                        ("total", positions.len().to_string()),
+                    ],
+                    zh,
+                    warnings,
+                )?;
+            }
             Ok(())
         },
     )?;

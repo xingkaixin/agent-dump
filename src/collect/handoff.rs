@@ -23,6 +23,15 @@ pub fn handoff(
     gaps: &Gaps<'_>,
 ) -> crate::Result<String> {
     let now = Timestamp::now();
+    let query = operation.query.as_ref().map(|q| {
+        json!({
+            "providers": q.providers,
+            "path": q.path.as_ref().map(|p| path_text(p)),
+            "roles": q.roles,
+            "keyword": q.keyword,
+            "limit": q.limit
+        })
+    });
     let context = json!({
         "generated_at": now.iso_local(),
         "timezone": now.format_local("%Z"),
@@ -37,7 +46,8 @@ pub fn handoff(
         "discovery_failed_count": scan.failed_providers.len(),
         "query_read_failed_count": gaps.query_failures,
         "date_read_failed_count": gaps.read_failed.len(),
-        "date_read_failed_sessions": gaps.read_failed
+        "date_read_failed_sessions": gaps.read_failed,
+        "query": query
     });
     let mut prompt =
         crate::collect::prompts::handoff_header(operation.mode, since, until);

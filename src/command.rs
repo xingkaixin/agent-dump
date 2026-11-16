@@ -246,6 +246,11 @@ fn plan_error(args: &Args, mode: Mode) -> Option<&'static str> {
             || (args.uri.is_some() && !query_uri))
     {
         Some("COLLECT_MODE_CONFLICT")
+    } else if mode == Mode::Collect
+        && args.output.is_some()
+        && !args.emit_prompt
+    {
+        Some("COLLECT_OUTPUT_REQUIRES_EMIT_PROMPT")
     } else if mode == Mode::Uri
         && args.head
         && args.summary
@@ -414,6 +419,7 @@ fn dispatch(
                 since: args.since,
                 until: args.until,
                 save: args.save,
+                output: args.output,
                 mode: args.collect_mode,
                 action: if args.emit_prompt {
                     collect_model::Action::EmitPrompt

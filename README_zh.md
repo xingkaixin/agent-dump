@@ -367,21 +367,22 @@ Collect 的日期优先级为显式 `--since`/`--until`、显式 `--days`，最�
 ```bash
 agent-dump --collect --emit-prompt \
   --since 20260824 --until 20260830 \
-  --collect-mode pm --save ./reports/weekly.md
+  --collect-mode pm --save ./reports/weekly.md \
+  --output ./prompt.txt
 
-# 已有 collect shortcut 也可以临时启用
-agent-dump --shortcut ob 20260831 --emit-prompt
+# 已有 collect shortcut 也可以临时启用并落盘到目录
+agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 ```
 
-上面的命令直接输出提示词。交给 agent 执行时，推荐**首次运行就把 stdout 和 stderr 分别保存到私有文件**，
-避免候选清单被命令工具的输出上限截断。macOS/Linux 的 shortcut 示例（不需要新增 CLI 参数）：
+不传 `--output` 时直接向 stdout 输出提示词；传入 `--output` 时会原子写入目标文件（若指向已存在目录或以 `/` 结尾，Windows 下含 `\`，则自动拼接 `agent-dump-collect-prompt-<since>-<until>.txt`），并在 stdout 打印一行包含路径和会话数的确认信息。交给 agent 执行时，推荐**首次运行即使用 `--output` 写入私有目录或将 stdout 和 stderr 分别保存到私有文件**，避免候选清单被命令工具的输出上限截断。macOS/Linux 的 shortcut 示例（`--output` 写提示词，stderr 单独记录诊断）：
 
 ```bash
 (
   umask 077
   collect_task_dir=$(mktemp -d) || exit 1
   agent-dump --shortcut ob 20260831 --emit-prompt \
-    > "$collect_task_dir/prompt.md" 2> "$collect_task_dir/diagnostics.txt"
+    --output "$collect_task_dir/prompt.md" \
+    2> "$collect_task_dir/diagnostics.txt"
   collect_exit_code=$?
   printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
     "$collect_exit_code" "$collect_task_dir/prompt.md" "$collect_task_dir/diagnostics.txt"
@@ -397,7 +398,8 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 读取命令使用生成时的原生程序，无需另外全局安装 `agent-dump`；需要保留原来的 provider 路径环境变量。
 如果原运行程序已不可用，应先确认新的可用入口。
 
-- stdout 只输出提示词，诊断走 stderr；`--save` 仍是**最终报告路径**，不是提示词文件路径。
+- stdout 只输出提示词（传入 `--output` 时输出一行确认信息），诊断走 stderr；`--save` 仍是**最终报告路径**，而 `--collect` 模式下 `--output` 仅允许搭配 `--emit-prompt`，拒绝写入 Provider 源目录或符号链接目标，且无候选时不创建提示词文件。
+- `collect_task` 元数据保留只读的 `query` 筛选字段（未筛选时为 `null`，否则记录 `providers`、`path`、`roles`、`keyword`、`limit`）。
 - 不校验 AI 配置、不调用模型、不规划摘要 chunk、不创建 collect 日志或报告。内容查询仍可能读取正文并更新本地搜索索引。
 - 复用 collect 的排除规则和查询筛选。日期两端均包含，按可见文本段的**实际本地日期**筛选并逐日拆分。候选发现不按创建日期排除旧会话，但跳过 Provider 报告的更新时间早于起始日期的会话，生成清单时读取正文，仅保留含日期范围内活动的会话；外部 Agent 再根据读取页的 `text_spans` 筛选日期。清单不是内容快照。
 - 读取正文前，核对清单结束标记、候选数量、唯一 URI、JSON 长度和命令对应关系；JSON 能解析不等于清单完整。
@@ -435,7 +437,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | `--collect` | 按日期范围采集会话，可选通过 `--query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
 | `--collect-mode` | collect 输出模式：`pm` 生成项目管理视角总结，`insight` 生成作者洞察视角总结。 | `pm` |
 | `--dry-run` | 与 `--collect` 搭配使用，预览 provider 分布、session 数、chunk 数、并发配置、日期范围和保存路径，跳过 AI 请求和文件写入。 | - |
-| `--emit-prompt` | 与 `--collect` 搭配使用，输出交给外部 agent 的自包含任务提示词，不需要 AI 配置，不写报告。与 `--dry-run` 互斥；`--save` 指定最终报告位置。 | - |
+| `--emit-prompt` | 与 `--collect` 搭配使用，生成交给外部 agent 的自包含任务提示词，不需要 AI 配置，不写报告。与 `--dry-run` 互斥；`--save` 指定最终报告位置，`--output` 将提示词写入文件或目录。 | - |
 | `--stats` | 显示最近 N 天会话使用统计，按 Agent 和时间分组。存在未知消息数时显示已知小计与未知会话数，不把部分和冒充总数。支持 `--days` 与 `--query`，推荐独立使用。 | - |
 | `--providers` | 显示已注册 provider 的能力矩阵，包括 URI scheme、支持及不支持的导出格式、持久索引不可用时采用的存储级关键词回退，以及本地搜索路径是否存在。不扫描会话。 | - |
 | `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。按空白切分的 distinct term 均按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），所有 term 都必须存在，但可以分别落在不同 corpus 字段；CJK term 必须连续。FTS5 不可用或 tokenizer 无法等价表达时使用同一套进程内逻辑文本 matcher；索引错误会在 stderr 提示并给出 `--reindex` 建议。每条结果的命中片段显示第一个命中 term 前后约 48 个字符，命中部分用 `**` 标出。可与 `--list` 组合。 | - |
@@ -452,7 +454,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt
 | `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略；`--head` 不能与此选项组合。Cursor URI 仅支持 `json` 和 `print`（不支持 `raw/markdown`）。 | - |
 | `--summary` | 仅 URI 模式生效。开启后仅在 `--format` 包含 `json` 且 AI 配置完整时生成 summary；否则仅 warning 并继续导出（不启用 summary）。AI 请求期间会在 stderr 显示 loading 提示。不能与 `--head` 组合。 | - |
 | `--page-size`, `-p` | 仅兼容保留，不生效。读取分页使用 `--read` 与 `--limit` / `--max-chars`。 | 20 |
-| `--output` | 输出目录。所有文件格式的优先级均为：`--output` > `config.toml` `[export].output` > `./sessions`。相对路径从 agent-dump 执行目录解析。`--list` 下会警告并忽略。 | `config export.output` 或 `./sessions` |
+| `--output` | 导出文件目录（优先级：`--output` > `config.toml` `[export].output` > `./sessions`），或在 `--collect --emit-prompt` 下指定提示词文件/目录（传目录或以分隔符结尾时写入 `agent-dump-collect-prompt-<since>-<until>.txt`）。相对路径从 agent-dump 执行目录解析。`--list` 下会警告并忽略；非 `--emit-prompt` 的 `--collect` 下报错拒绝。 | `config export.output` 或 `./sessions` |
 | `-h, --help` | 显示帮助信息 | - |
 
 ### Python API 迁移

@@ -79,6 +79,57 @@ fn guard_output(path: &Path) -> crate::Result<()> {
     Ok(())
 }
 
+fn prepare_prompt_output(
+    output: &Path,
+    since: Date,
+    until: Date,
+) -> crate::Result<PathBuf> {
+    if output.as_os_str().is_empty() {
+        return Err("Collect prompt output path must not be empty".into());
+    }
+    if output.is_symlink() {
+        return Err("Collect prompt output must not be a symlink".into());
+    }
+    let raw = output.to_string_lossy();
+    let trailing_sep =
+        raw.ends_with('/') || raw.ends_with(std::path::MAIN_SEPARATOR);
+    let target = if output.is_dir() || trailing_sep {
+        output.join(format!(
+            "agent-dump-collect-prompt-{}-{}.txt",
+            since.strftime("%Y%m%d"),
+            until.strftime("%Y%m%d")
+        ))
+    } else {
+        output.to_path_buf()
+    };
+    let abs = std::path::absolute(target)?;
+    guard_prompt_output(output, &abs)?;
+    Ok(abs)
+}
+
+fn guard_prompt_output(output: &Path, abs: &Path) -> crate::Result<()> {
+    if output.is_symlink() || abs.is_symlink() {
+        return Err("Collect prompt output must not be a symlink".into());
+    }
+    guard_output(abs)
+}
+
+fn fail_prompt_write(
+    error: &crate::Error,
+    emit: bool,
+    zh: bool,
+    out: &mut impl Write,
+    warnings: &mut impl Write,
+) -> crate::Result<bool> {
+    report(
+        &terminal("COLLECT_WRITE_FAILED", zh, &[("error", error.to_string())]),
+        emit,
+        out,
+        warnings,
+    )?;
+    Ok(false)
+}
+
 pub fn run(
     operation: &Operation,
     zh: bool,
@@ -102,6 +153,17 @@ pub fn run(
         return Ok(false);
     };
     let collect = config.collect();
+    let prompt_target = match operation.output.as_deref() {
+        Some(output) if emit => {
+            match prepare_prompt_output(output, since, until) {
+                Ok(abs) => Some((output, abs)),
+                Err(error) => {
+                    return fail_prompt_write(&error, emit, zh, out, warnings);
+                }
+            }
+        }
+        _ => None,
+    };
     progress(
         "COLLECT_PROGRESS_START",
         &[("since", since.to_string()), ("until", until.to_string())],
@@ -173,22 +235,41 @@ pub fn run(
     }
     retain_eligible(operation, &scan, &mut positions, &mut entries);
     if emit {
-        writeln!(
-            out,
-            "{}",
-            crate::collect::handoff::handoff(
-                operation,
-                &scan,
-                &positions,
-                since,
-                until,
-                &output_path,
-                &crate::collect::handoff::Gaps {
-                    query_failures,
-                    read_failed: &read_failed,
-                },
-            )?
+        let prompt = crate::collect::handoff::handoff(
+            operation,
+            &scan,
+            &positions,
+            since,
+            until,
+            &output_path,
+            &crate::collect::handoff::Gaps {
+                query_failures,
+                read_failed: &read_failed,
+            },
         )?;
+        if let Some((raw_output, abs)) = prompt_target {
+            if let Err(error) =
+                guard_prompt_output(raw_output, &abs).and_then(|()| {
+                    private_files::write_text(&abs, &format!("{prompt}\n"))
+                })
+            {
+                return fail_prompt_write(&error, emit, zh, out, warnings);
+            }
+            writeln!(
+                out,
+                "{}",
+                terminal(
+                    "COLLECT_PROMPT_SAVED",
+                    zh,
+                    &[
+                        ("path", path_text(&abs)),
+                        ("count", positions.len().to_string()),
+                    ],
+                )
+            )?;
+        } else {
+            writeln!(out, "{prompt}")?;
+        }
         return Ok(true);
     }
     let session_count = entries

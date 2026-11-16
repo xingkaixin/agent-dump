@@ -368,22 +368,22 @@ Generate a self-contained task prompt instead of configuring an AI endpoint. No 
 ```bash
 agent-dump --collect --emit-prompt \
   --since 20260824 --until 20260830 \
-  --collect-mode pm --save ./reports/weekly.md
+  --collect-mode pm --save ./reports/weekly.md \
+  --output ./prompt.txt
 
 # Keep an existing collect shortcut and opt in for this invocation
-agent-dump --shortcut ob 20260831 --emit-prompt
+agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 ```
 
-These commands print the prompt directly. For agent execution, **save stdout and stderr to separate private files
-on the first invocation** so a command tool's output limit cannot discard candidates. A macOS/Linux shortcut example
-(no additional CLI option is needed):
+Without `--output`, these commands print the prompt to stdout. With `--output`, they atomically write the prompt to that file path—or `<dir>/agent-dump-collect-prompt-<since>-<until>.txt` when `--output` points to an existing directory or ends with `/` (`\` on Windows)—and print one confirmation line (`path` and `session_count`) to stdout. For agent execution, **use `--output` into a private directory or save stdout and stderr to separate private files on the first invocation** so a command tool's output limit cannot discard candidates. A macOS/Linux shortcut example capturing stderr diagnostics alongside `--output`:
 
 ```bash
 (
   umask 077
   collect_task_dir=$(mktemp -d) || exit 1
   agent-dump --shortcut ob 20260831 --emit-prompt \
-    > "$collect_task_dir/prompt.md" 2> "$collect_task_dir/diagnostics.txt"
+    --output "$collect_task_dir/prompt.md" \
+    2> "$collect_task_dir/diagnostics.txt"
   collect_exit_code=$?
   printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
     "$collect_exit_code" "$collect_task_dir/prompt.md" "$collect_task_dir/diagnostics.txt"
@@ -402,7 +402,8 @@ Commands use the running native executable; they do not require another global i
 Keep the same provider-path environment variables. If the original runtime is no longer available,
 confirm a replacement entry point before proceeding.
 
-- stdout contains the prompt; diagnostics go to stderr. `--save` still names the **final report**, not the prompt file.
+- stdout contains the prompt (or a single confirmation line when `--output` writes the prompt file); diagnostics go to stderr. `--save` still names the **final report**, while `--output` in collect mode requires `--emit-prompt`, rejects provider source directories and symlink targets, and skips creating the prompt file when no candidates match.
+- Task metadata in `collect_task` includes read-only `query` filter fields (`null` when unscoped, or `providers`, `path`, `roles`, `keyword`, `limit` when scoped).
 - Generation does not validate AI settings, call a model, plan summary chunks, write collect logs, or create the report.
   Content queries may still read transcripts and update the local search index while selecting candidates.
 - All collect exclusions and query filters still apply. Dates include both endpoints and select visible text by its **actual local date**, splitting long sessions across days. Candidate discovery does not exclude old sessions; generation reads their visible text to retain only sessions with in-range activity. The external Agent then applies dates using read-page `text_spans`. The manifest is not a content snapshot.
@@ -447,7 +448,7 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `--collect` | Collect sessions by date range, optionally constrained by `--query` or an `agents://...` query URI (mutually exclusive). Only visible user/assistant text is summarized; system/developer/tool messages, reasoning, plans, tool calls, and tool results are excluded, and empty projected sessions are ignored. PM mode extracts requests, decisions, and agent-reported outcomes before deterministic session merge and tree reduction. Multi-stage progress is shown on stderr. | - |
 | `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
-| `--emit-prompt` | Use with `--collect` to print a self-contained task for an external agent, without AI configuration or report writes. Incompatible with `--dry-run`; `--save` specifies the eventual report path. | - |
+| `--emit-prompt` | Use with `--collect` to emit a self-contained task for an external agent, without AI configuration or report writes. Incompatible with `--dry-run`; `--save` specifies the eventual report path and `--output` writes the prompt to a file or directory. | - |
 | `--stats` | Show session usage statistics for the last N days, grouped by agent and time. If any message count is unknown, reports the known subtotal and number of unknown Sessions instead of presenting a partial sum as a total. Supports `--days` and `--query`; use it as a standalone mode. | - |
 | `--providers` | Show the registered provider capability matrix, including URI schemes, supported and unsupported export formats, and whether local search roots exist. Does not scan sessions. | - |
 | `--search` | Full-text search across provider-normalized session titles, messages, reasoning, and tool state using local SQLite FTS5; raw provider metadata is not searched. Whitespace-delimited terms are matched literally (FTS5 operator syntax such as `AND`/`NEAR`/`*` is not interpreted), all distinct terms are required, and terms may occur in different corpus fields. CJK terms require literal adjacency. FTS5-unavailable and unsupported-tokenizer cases use the same in-process logical-text matcher; unreadable sessions and index errors are reported on stderr. Each result's snippet shows about 48 characters on each side of the first matching term, with the match in `**bold**`. Cached session text not seen for 30 days is removed automatically. Can be combined with `--list`. | - |
@@ -464,7 +465,7 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor supports only `json` and `print` (no `raw/markdown`). | - |
 | `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. Cannot be combined with `--head`. | - |
 | `--page-size`, `-p` | Compatibility only; ignored. For reading pages, use `--read` with `--limit` / `--max-chars`. | 20 |
-| `--output` | Output directory. Priority is `--output` > `config.toml` `[export].output` > `./sessions` for all file formats. Relative paths are resolved from the current working directory. Ignored in `--list` with warning. | `config export.output` or `./sessions` |
+| `--output` | Output directory for exports (`--output` > `config.toml` `[export].output` > `./sessions`), or prompt file/directory (`agent-dump-collect-prompt-<since>-<until>.txt` when targeting a directory) under `--collect --emit-prompt`. Relative paths resolve from the current working directory. Ignored in `--list` with warning; rejected in non-emit `--collect` mode. | `config export.output` or `./sessions` |
 | `-h, --help` | Show help message | - |
 
 When URI mode combines `print` with file formats, a print read/render failure is reported without blocking file exports. Raw source copying can still succeed when normalized parsing fails. Exit status remains `0` if any requested output succeeds, otherwise `1`.

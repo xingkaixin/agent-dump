@@ -85,10 +85,10 @@ summary、print、JSON、Markdown 复用一次已读取内容。raw 独立于标
 
 ## 7. Collect
 
-execute、dry-run、emit-prompt 共用配置安全校验和候选会话筛选，候选发现不按创建日期截断，以 `Window::Updated` 跳过更新时间早于起始日期的会话，不读取其正文。`--emit-prompt` 由 `collect/handoff.rs` 生成任务说明，不发起内部 LLM 请求；生成的读取命令指向正在运行的原生可执行文件。
+execute、dry-run、emit-prompt 共用配置安全校验和候选会话筛选，候选发现不按创建日期截断，以 `Window::Updated` 跳过更新时间早于起始日期的会话，不读取其正文；会话扫描进度在 `collect/sessions.rs` 内按 `max(total / 10, 50)` 节流，避免大量会话扫描刷屏。`--emit-prompt` 由 `collect/handoff.rs` 生成任务说明，不发起内部 LLM 请求；生成的读取命令指向正在运行的原生可执行文件。传入 `--output`（仅 `--collect --emit-prompt` 允许，其他 collect 动作在 `command.rs` 报错拒绝）时，`workflows/collect.rs` 在发现前预检并校验 `guard_output` 与目标符号链接，候选非空时经 `private_files::write_text` 原子写入提示词文件（目录路径或分隔符结尾拼接 `agent-dump-collect-prompt-<since>-<until>.txt`），候选为空时不落盘。
 
 - 日期归属：core transcript 的 visible_segments 投影标准化文本段及可靠时间；Collect 按文本段的本地日期筛选并逐日分块。无时间或 Provider 标记为推测时间的内容不属于任何日期，直接排除，不记录覆盖缺口。外部汇总通过 read 的 text_spans 使用同一日期事实。
-- 外部汇总清单：读取候选正文并按相同日期投影筛选，但不规划 chunk；只交接含本期活动的唯一会话，并携带读取失败来源。
+- 外部汇总清单：读取候选正文并按相同日期投影筛选，但不规划 chunk；只交接含本期活动的唯一会话，并在 `collect_task` 中携带只读 `query` 筛选字段（无筛选时为 `null`）与读取失败来源。
 - 计数与 limit：会话计数是唯一 URI 数，跨日单元分别摘要；查询先选候选，按文本日期过滤后再对唯一会话应用 limit。
 - 内容范围：只提取 user/assistant 可见文本，排除 tool、reasoning、system、plan 与 Provider 私有事件。没有可见对话的会话在 chunk 规划前忽略。
 - 分块与归并：候选正文并行读取，结果、诊断和进度按候选顺序处理。全部符合筛选规则的正文进入有界事件块，超长消息按 Unicode 字符拆分，不设置会话总字符截断。会话摘要逐层归并；最终报告超过单次输入限制时按来源组拆分请求，单个过大归属组明确失败。
