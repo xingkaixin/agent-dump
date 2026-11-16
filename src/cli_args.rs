@@ -65,6 +65,8 @@ pub struct Args {
     pub dry_run: bool,
     #[arg(long)]
     pub emit_prompt: bool,
+    #[arg(long, value_name = "FILE")]
+    pub verify_manifest: Option<PathBuf>,
     #[arg(long)]
     pub since: Option<String>,
     #[arg(long)]
@@ -207,6 +209,7 @@ pub fn normalize_arguments(args: Vec<OsString>) -> Vec<OsString> {
                         | "--since"
                         | "--until"
                         | "--save"
+                        | "--verify-manifest"
                         | "-p"
                         | "--page-size"
                 );
@@ -245,6 +248,7 @@ pub fn command(zh: bool) -> clap::Command {
         ("collect_mode", "COLLECT_MODE"),
         ("dry_run", "DRY_RUN"),
         ("emit_prompt", "EMIT_PROMPT"),
+        ("verify_manifest", "VERIFY_MANIFEST"),
         ("stats", "STATS"),
         ("providers", "PROVIDERS"),
         ("shortcut", "SHORTCUT"),

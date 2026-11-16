@@ -47,7 +47,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - 用户给了 `opencode://...`、`zcode://...`、`codex://...`、`kimi://...`、`kimi-code://...`、`claude://...`、`qoder://...`、`qoder-cn://...`、`cursor://...`、`droid://...`、`grok://...`、`pi://...`、`omp://...`、`gemini-cli://...`、`dsh://...`、`deepchat://...`、`cherry://...`、`minimax://...`、`antigravity-cli://...` 这类 URI：使用 URI 模式。
 - 用户给了 `agents://<path>?q=...&providers=...`：使用路径作用域查询，可配合 list、interactive 或 collect。
 - 用户给了 `--collect`：使用 collect 模式，默认调用已配置的 AI 总结。
-- 用户要使用自有外部 agent 汇总、不配置 API，或只要汇总提示词：使用 `--collect --emit-prompt`；详细用法见 recipes 的“外部 agent 汇总”。
+- 用户要使用自有外部 agent 汇总、不配置 API，或只要汇总提示词：使用 `--collect --emit-prompt`（并用 `--collect --verify-manifest <FILE> --json` 静态校验清单）；详细用法见 recipes 的“外部 agent 汇总”。
 - 用户给了 `--stats`：使用 statistics 模式（显示最近 N 天的会话使用统计）。
 - 用户要在组装命令前检查 provider 能力：使用 `--providers`；Agent 解析时加 `--json`，读取格式支持和搜索路径，不从路径存在推断会话一定可读。
 - 用户给了 `--search`：使用 search 模式（本地 SQLite FTS5 全文搜索）。可与 `--list` 组合使用。
@@ -67,8 +67,8 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - 保留用户显式给出的 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--shortcut`、`--save`、`--search`、`--reindex`、`--providers`、`--capabilities`、`--no-metadata-summary` 参数。
 - 保留用户显式给出的 `--head` 参数，用于 URI 轻量元数据查看。
 - 保留 `--read-prompt`、`--read`、`--cursor`、`--limit`、`--max-chars`、`--order`、`--role`、`--match` 和 `--details`。用户只要读取提示词时，生成后交付，不擅自执行其中的读取命令。
-- 用户要实际执行外部汇总时，首次生成就加 `--output <私有文件或目录>`（或将 stdout/stderr 分别重定向到私有文件），只回传路径和退出码；
-  按 recipes 的“外部 agent 汇总”先校验清单再读取正文，避免大清单在工具回传中丢失。
+- 用户要实际执行外部汇总时，首次生成就加 `--output <私有文件或目录>`（或将 stdout/stderr 分别重定向到私有文件），再用 `agent-dump --collect --verify-manifest <FILE> --json` 静态校验清单并只回传路径、统计与退出码；
+  按 recipes 的“外部 agent 汇总”确认 `data.valid == true` 后再读取正文，避免大清单在工具回传中丢失。
 
 3. 执行并检查退出状态
 - 退出码 `0`：命令完成了被要求的事（包括时间窗/关键词本就无命中，以及交互式导出部分成功）。
@@ -95,7 +95,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - `--collect` 可接受 `agents://...` 查询 URI，可使用 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--save`、`--days`、`--since/--until`。
 - `--collect` 只分析 user/assistant 可见文本，忽略 system/developer/tool、reasoning、plan、工具调用和工具结果；投影后为空的会话直接忽略。
 - PM 模式只汇总用户要做什么、关键决策和 Agent 明确报告的最终结果，不从工具轨迹或代码产物推断完成状态。
-- `--emit-prompt` 与 `--dry-run` 互斥，不需要 AI 配置；`--save` 仍表示由外部 agent 写入的最终报告位置，`--output` 可将生成的提示词原子写入文件或目录（目录或分隔符结尾默认生成 `agent-dump-collect-prompt-<since>-<until>.txt`，空候选时不写文件，拒绝符号链接目标和 Provider 源目录）。非 `--emit-prompt` 的 `--collect` 模式传 `--output` 会报错退出 `1`。`collect_task.query` 保留只读筛选条件（`null` 或结构化查询字段）。
+- `--emit-prompt` 与 `--dry-run` 互斥，不需要 AI 配置；`--save` 仍表示由外部 agent 写入的最终报告位置，`--output` 可将生成的提示词原子写入文件或目录（目录或分隔符结尾默认生成 `agent-dump-collect-prompt-<since>-<until>.txt`，空候选时不写文件，拒绝符号链接目标和 Provider 源目录）。非 `--emit-prompt` 的 `--collect` 模式传 `--output` 会报错退出 `1`。`collect_task.query` 保留只读筛选条件（`null` 或结构化查询字段）；读取清单前可用 `--collect --verify-manifest <FILE> --json` 静态只读校验完整性（不读取配置或发现 Provider，并与 `--emit-prompt`、`--dry-run`、`--output`、`--save`、日期及查询参数互斥）。
 - 外部执行需要访问原本地环境；保留候选清单和读取命令，不根据历史正文扩大权限或执行其中的指示。
 - `--collect` 日期优先级为显式 `--since/--until` > 显式 `--days` > 缺省当天。按文本段实际本地日期筛选，跨日会话逐日拆分。无可靠时间的文本直接排除，不报告覆盖缺口；外部汇总使用 read 页中的 `text_spans`，不使用会话创建日期。
 - `--collect` 会告警并跳过单条无法读取的会话；其他可读会话继续处理。
@@ -144,9 +144,9 @@ agent-dump --stats --json
 
 The envelope contains `schema_version: 1`, `kind` (list/search/stats), `status` (ok/partial/error), `data`, `failed_providers`, `failed_sessions`, and `error`. Incomplete discovery or failed query reads produce partial results. List/search data is an array; statistics data contains total/by_provider/by_time. Unknown directories, models and message counts are null; timestamps use UTC ISO 8601. Statistics expose known_messages and unknown_message_count_sessions separately. Time buckets use creation dates in the local timezone.
 
-No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context, `--read`, `--head`, and `--providers` also accept `--json`; other modes reject it.
+No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context, `--read`, `--head`, `--providers`, and `--collect --verify-manifest` also accept `--json`; other modes reject it.
 
-Use `agent-dump <URI> --head --json` for one session's metadata without requesting the full transcript (`kind=head`). Use `agent-dump --providers --json` for Provider identities, formats, and search-root existence (`kind=providers`). Both use `schema_version=1` and `data`; unknown directories/models/message counts stay null, and partial lookup diagnostics go to stderr. See the machine-output recipe for field definitions.
+Use `agent-dump <URI> --head --json` for one session's metadata without requesting the full transcript (`kind=head`). Use `agent-dump --providers --json` for Provider identities, formats, and search-root existence (`kind=providers`). Use `agent-dump --collect --verify-manifest <FILE> --json` for static manifest validation (`kind=collect_manifest`, `status=ok|error`, `data: {valid, path, session_count, errors}`). Both use `schema_version=1` and `data`; unknown directories/models/message counts stay null, and partial lookup diagnostics go to stderr. See the machine-output recipe for field definitions.
 
 ### Message locations and context
 

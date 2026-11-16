@@ -115,11 +115,14 @@ collect 只分析 user/assistant 可见文本，排除 system/developer/tool、r
 ### 外部 agent 汇总（collect --emit-prompt）
 
 ```bash
-agent-dump --collect --emit-prompt --save ./reports/daily.md
+agent-dump --collect --emit-prompt --save ./reports/daily.md --output ./prompt.txt
 agent-dump --collect --emit-prompt --since 20260824 --until 20260830 \
   --collect-mode insight --save ./reports/weekly.md --output ./prompt.txt
 agent-dump --collect --emit-prompt 'agents://.?providers=codex,claude&limit=20'
 agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
+
+# 读取任何正文前，静态只读校验提示词清单完整性
+agent-dump --collect --verify-manifest ./prompt.txt --json
 ```
 
 不传 `--output` 时直接打印提示词；传 `--output` 时将提示词原子写入文件或目录（已存在目录或以 `/` 结尾，Windows 含 `\`，自动拼接 `agent-dump-collect-prompt-<since>-<until>.txt`），stdout 仅打印一行确认信息。用户要求实际执行时，首次生成就通过 `--output` 写入私有目录或将 stdout、stderr 分别落盘，不依赖终端回传完整内容。
@@ -133,13 +136,18 @@ macOS/Linux 示例；在其他平台使用同等的私有临时目录和输出�
     --output "$collect_task_dir/prompt.md" \
     2> "$collect_task_dir/diagnostics.txt"
   collect_exit_code=$?
-  printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
-    "$collect_exit_code" "$collect_task_dir/prompt.md" "$collect_task_dir/diagnostics.txt"
+  if [ "$collect_exit_code" -eq 0 ] && [ -s "$collect_task_dir/prompt.md" ]; then
+    agent-dump --collect --verify-manifest "$collect_task_dir/prompt.md" --json \
+      > "$collect_task_dir/verify.json"
+  fi
+  printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\nVerify: %s\n' \
+    "$collect_exit_code" "$collect_task_dir/prompt.md" \
+    "$collect_task_dir/diagnostics.txt" "$collect_task_dir/verify.json"
   exit "$collect_exit_code"
 )
 ```
 
-先检查退出码和诊断，再读取提示词说明，并用脚本遍历完整文件校验清单，只回传统计，不把文件整体打印回工具。
+先检查退出码、stderr 诊断和 `verify.json`（确认 `data.valid == true`），再读取提示词说明，不要把完整清单再次打印进工具输出。
 无匹配候选时退出 `0`、不输出提示词且**不创建 `--output` 文件**（合法空结果，不执行汇总）；若用户只要提示词，则交付完整文件或其内容，不执行报告任务。
 
 - 无需 skill 或 AI 配置。未传 `--output` 时 stdout 是完整提示词；传 `--output` 时写入提示词文件（拒绝符号链接目标与 Provider 源目录）且 stdout 输出一行保存确认，诊断走 stderr；`--save` 指定最终报告，不保存提示词。
@@ -148,7 +156,7 @@ macOS/Linux 示例；在其他平台使用同等的私有临时目录和输出�
 - 提示词提供固定候选清单、每条 URI 的 argv/命令、原工作目录、时区、报告格式和绝对输出路径。
   读取命令复用生成时的原生程序；外部 agent 需要原环境和相同的 provider 路径设置。
 - 清单最后一个非空行是 `<!-- agent-dump:collect-manifest-end -->`；标记和可解析 JSON 都不能单独证明完整性。
-  按提示词核对总数、唯一 URI、两层 JSON 重复键、content 长度及 source/uri/读取命令的一致性，再读取任何正文。
+  优先使用 `agent-dump --collect --verify-manifest <FILE> --json` 静态核对结束标记、两层 JSON 重复键、总数、唯一 URI、content Unicode 长度及 source/uri/读取命令一致性，再读取任何正文。
   清单损坏时优先读取保存的完整文件；没有完整文件时，只能在原命令和筛选条件可确认的情况下重生成一次，
   保留 `--emit-prompt`、原环境和查询条件，并将日期固定为原任务的 since/until，不修改配置或扩大范围。
   输出直接保存到新私有文件，以校验后的新清单为唯一依据并说明生成时间和已知变化，不拼接新旧清单或截断残片。
@@ -279,6 +287,7 @@ agent-dump --search "auth" --list --days 30
 | `--providers` | N/A | 只读展示全部注册 provider 的能力与本地路径状态，不扫描会话 |
 | `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；只分析 user/assistant 可见文本并忽略空对话；PM 汇总请求、决策和 Agent 明确报告的结果；支持 `--days`、`--since/--until`、`--collect-mode pm/insight`、`--dry-run`、`--save`；非 `--emit-prompt` 下不允许 `--output`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
 | `--collect --emit-prompt` | 提示词 | 无需 AI 配置；沿用 collect 筛选和排除规则并在 `collect_task.query` 暴露只读筛选；与 `--dry-run` 互斥；`--save` 是最终报告路径，`--output` 将提示词写到文件或目录（无候选时不写） |
+| `--collect --verify-manifest` | 文本 / JSON | 静态只读校验 `--emit-prompt` 提示词清单完整性，不读取配置或发现 Provider；支持 `--json`（`kind: "collect_manifest"`），合法退出 `0`、损坏退出 `1`；与 `--emit-prompt`、`--dry-run`、`--output`、`--save`、日期及查询参数互斥 |
 | `--search` 模式 | N/A | 作为列表搜索模式使用；可与 `--list`、`--days`、`--query` 组合 |
 | `--reindex` | N/A | 独立的索引维护命令，不应与其他模式标志组合 |
 
@@ -507,15 +516,18 @@ agent-dump --search 'timeout' --json --query 'provider:codex'
 agent-dump --stats --json
 agent-dump codex://SESSION_ID --head --json
 agent-dump --providers --json
+agent-dump --collect --verify-manifest ./prompt.txt --json
 ```
 
 The envelope contains `schema_version: 1`, `kind` (list/search/stats), `status` (ok/partial/error), `data`, `failed_providers`, `failed_sessions`, and `error`. Incomplete discovery or failed query reads produce partial results. List/search data is an array; statistics data contains total/by_provider/by_time. Unknown directories, models and message counts are null; timestamps use UTC ISO 8601. Statistics expose known_messages and unknown_message_count_sessions separately. Time buckets use creation dates in the local timezone.
 
-No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context, `--read`, `--head`, and `--providers` also accept `--json`; other modes reject it.
+No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context, `--read`, `--head`, `--providers`, and `--collect --verify-manifest` also accept `--json`; other modes reject it.
 
 `agent-dump <URI> --head --json` returns `kind: "head"` and one session record in `data`, with the same facts as list output plus `project`, `version`, and `subtargets`. It does not request a full transcript. The URI is canonical, unknown directories/models/message counts remain null, and recoverable lookup diagnostics produce `status: "partial"` with details on stderr.
 
 `agent-dump --providers --json` returns `kind: "providers"` and a `data` array containing each Provider's name, display name, scheme, identifier label, optional ID prefixes, supported `formats`, and `search_roots` with label/path/exists. This inspects capabilities and path existence without reading session contents. An existing root does not guarantee a readable session. Both envelopes use `schema_version: 1`; failures return a nonzero exit code and may leave stdout empty.
+
+`agent-dump --collect --verify-manifest <FILE> --json` statically validates an emitted handoff prompt file without loading config or discovering Providers, returning `schema_version: 1`, `kind: "collect_manifest"`, `status` (`ok` or `error`), and `data` (`valid`, `path`, `session_count`, `errors`), exiting `0` when valid and `1` when invalid.
 
 
 ## Message locations and context

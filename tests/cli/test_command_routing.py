@@ -1,6 +1,6 @@
 """Mode precedence, conflicts, aliases and ignored options."""
 
-from cli_fixture import IDENTITY
+from cli_fixture import IDENTITY, CliFixture
 import pytest
 
 URI = f"codex://{IDENTITY}"
@@ -43,7 +43,7 @@ URI = f"codex://{IDENTITY}"
             ["--collect", "--emit-prompt", "--output", "prompt.txt", "--json"],
             1,
             "stderr",
-            "--json requires list, search, statistics, --providers, --head, --read or --message context mode.",
+            "--json requires list, search, statistics, --providers, --head, --read, --message context, or --collect --verify-manifest mode.",
         ),
         (
             [URI, "--read", "--output", "prompt.txt"],
@@ -100,3 +100,68 @@ def test_unreadable_requested_provider_is_not_an_empty_result(cli, mode):
     cli.environment["OPENCODE_DB"] = str(database)
     result = cli.run(mode, "-q", "provider:opencode", "-d", "36500", "--lang", "en")
     assert result.returncode == 1, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("args", "stream", "prefix"),
+    [
+        (["--verify-manifest", "manifest.txt"], "stdout", "❌ --verify-manifest requires --collect mode."),
+        (
+            ["--verify-manifest", "manifest.txt", "--json"],
+            "stderr",
+            "--json requires list, search, statistics, --providers, --head, --read, --message context, or --collect --verify-manifest mode.",
+        ),
+        (
+            ["--collect", "--verify-manifest", "manifest.txt", "--emit-prompt"],
+            "stderr",
+            "❌ --verify-manifest cannot be used with",
+        ),
+        (
+            ["--collect", "--verify-manifest", "manifest.txt", "--dry-run"],
+            "stdout",
+            "❌ --verify-manifest cannot be used with",
+        ),
+        (
+            ["--collect", "--verify-manifest", "manifest.txt", "--dry-run", "--json"],
+            "stderr",
+            "❌ --verify-manifest cannot be used with",
+        ),
+        (
+            ["--collect", "--verify-manifest", "manifest.txt", "--since", "2026-01-15"],
+            "stdout",
+            "❌ --verify-manifest cannot be used with",
+        ),
+        (
+            ["--collect", "--verify-manifest", "manifest.txt", "--days", "7"],
+            "stdout",
+            "❌ --verify-manifest cannot be used with",
+        ),
+        (
+            ["--collect", "--verify-manifest", "manifest.txt", "--output", "prompt.txt"],
+            "stdout",
+            "❌ --verify-manifest cannot be used with",
+        ),
+        (
+            ["--collect", "--verify-manifest", "manifest.txt", "-q", "provider:codex"],
+            "stdout",
+            "❌ --verify-manifest cannot be used with",
+        ),
+        (
+            ["--collect", "--verify-manifest", "manifest.txt", "agents://."],
+            "stdout",
+            "❌ --verify-manifest cannot be used with",
+        ),
+        (
+            ["--collect", "--verify-manifest", "manifest.txt", "--list"],
+            "stdout",
+            "❌ --collect cannot be used with URI/--interactive/--list.",
+        ),
+    ],
+)
+def test_verify_manifest_mode_conflicts(cli: CliFixture, args: list[str], stream: str, prefix: str) -> None:
+    before = cli.fixtures.source_manifest(cli.root)
+    result = cli.run(*args, "--lang", "en")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert getattr(result, stream).startswith(prefix)
+    assert not (result.stderr if stream == "stdout" else result.stdout)
+    assert cli.fixtures.source_manifest(cli.root) == before

@@ -37,7 +37,8 @@ agent-dump head codex://SESSION_ID --json
 agent-dump read-prompt codex://SESSION_ID
 
 # Prepare a report task for an external Agent; no API configuration needed
-agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md
+agent-dump collect --days 7 --emit-prompt --output ./prompt.txt --save ./reports/weekly.md
+agent-dump --collect --verify-manifest ./prompt.txt --json
 ```
 
 Follow the generated read commands and cursors until `has_more=false` to cover the selected content. Check exit codes and `status`; a partial result is not a complete reading. `--emit-prompt` creates instructions, not the report itself. See [machine-readable output](#machine-readable-output), [cited context exports](#message-locations-and-context), and the [Agent recipes](skills/agent-dump/references/cli-recipes.md).
@@ -407,8 +408,9 @@ confirm a replacement entry point before proceeding.
 - Generation does not validate AI settings, call a model, plan summary chunks, write collect logs, or create the report.
   Content queries may still read transcripts and update the local search index while selecting candidates.
 - All collect exclusions and query filters still apply. Dates include both endpoints and select visible text by its **actual local date**, splitting long sessions across days. Candidate discovery does not exclude old sessions; generation reads their visible text to retain only sessions with in-range activity. The external Agent then applies dates using read-page `text_spans`. The manifest is not a content snapshot.
-- Before reading transcripts, validate the manifest end marker, candidate count, unique URIs, JSON lengths, and command
-  identities. Parseable JSON alone does not prove completeness. Recover a damaged manifest from the full saved file first;
+- Before reading transcripts, verify the saved prompt file with `agent-dump --collect --verify-manifest <FILE> --json`
+  (checking the manifest end marker, duplicate JSON keys, candidate count, unique URIs, Unicode JSON lengths, and command
+  identities). Parseable JSON alone does not prove completeness. Recover a damaged manifest from the full saved file first;
   otherwise regenerate the prompt at most once with the original selection conditions and capture output directly.
   Regeneration creates a new candidate manifest, not the old snapshot. If the conditions are unknown or recovery fails,
   ask the user before delivering a partial report from a damaged manifest.
@@ -449,6 +451,7 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `--collect-mode` | collect output mode: `pm` for project-management summaries, `insight` for author insight summaries. | `pm` |
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
 | `--emit-prompt` | Use with `--collect` to emit a self-contained task for an external agent, without AI configuration or report writes. Incompatible with `--dry-run`; `--save` specifies the eventual report path and `--output` writes the prompt to a file or directory. | - |
+| `--verify-manifest <FILE>` | Statically verify an emitted `--collect` handoff manifest file without loading config or discovering Providers. Supports `--json`; conflicts with `--emit-prompt`, `--dry-run`, `--output`, `--save`, date flags, and queries. | - |
 | `--stats` | Show session usage statistics for the last N days, grouped by agent and time. If any message count is unknown, reports the known subtotal and number of unknown Sessions instead of presenting a partial sum as a total. Supports `--days` and `--query`; use it as a standalone mode. | - |
 | `--providers` | Show the registered provider capability matrix, including URI schemes, supported and unsupported export formats, and whether local search roots exist. Does not scan sessions. | - |
 | `--search` | Full-text search across provider-normalized session titles, messages, reasoning, and tool state using local SQLite FTS5; raw provider metadata is not searched. Whitespace-delimited terms are matched literally (FTS5 operator syntax such as `AND`/`NEAR`/`*` is not interpreted), all distinct terms are required, and terms may occur in different corpus fields. CJK terms require literal adjacency. FTS5-unavailable and unsupported-tokenizer cases use the same in-process logical-text matcher; unreadable sessions and index errors are reported on stderr. Each result's snippet shows about 48 characters on each side of the first matching term, with the match in `**bold**`. Cached session text not seen for 30 days is removed automatically. Can be combined with `--list`. | - |
@@ -575,15 +578,18 @@ agent-dump --search 'timeout' --json --query 'provider:codex'
 agent-dump --stats --json
 agent-dump codex://SESSION_ID --head --json
 agent-dump --providers --json
+agent-dump --collect --verify-manifest ./prompt.txt --json
 ```
 
 The envelope contains `schema_version: 1`, `kind` (list/search/stats), `status` (ok/partial/error), `data`, `failed_providers`, `failed_sessions`, and `error`. Incomplete discovery or failed query reads produce partial results. List/search data is an array; statistics data contains total/by_provider/by_time. Unknown directories, models and message counts are null; timestamps use UTC ISO 8601. Statistics expose known_messages and unknown_message_count_sessions separately. Time buckets use creation dates in the local timezone.
 
-No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context, `--read`, `--head`, and `--providers` also accept `--json`; other modes reject it.
+No matches produce an empty array and exit 0. No available source without an explicit Provider scope produces error and exit 1. Argument/execution failures may only emit stderr diagnostics; always check the exit code. Session context, `--read`, `--head`, `--providers`, and `--collect --verify-manifest` also accept `--json`; other modes reject it.
 
 `agent-dump <URI> --head --json` returns `kind: "head"` and one session record in `data`, with the same facts as list output plus `project`, `version`, and `subtargets`. It does not request a full transcript. The URI is canonical, unknown directories/models/message counts remain null, and recoverable lookup diagnostics produce `status: "partial"` with details on stderr.
 
 `agent-dump --providers --json` returns `kind: "providers"` and a `data` array containing each Provider's name, display name, scheme, identifier label, optional ID prefixes, supported `formats`, and `search_roots` with label/path/exists. This inspects capabilities and path existence without reading session contents. An existing root does not guarantee a readable session. Both envelopes use `schema_version: 1`; failures return a nonzero exit code and may leave stdout empty.
+
+`agent-dump --collect --verify-manifest <FILE> --json` statically validates an emitted handoff prompt file without reading config or Provider sources and returns `schema_version: 1`, `kind: "collect_manifest"`, `status` (`ok` or `error`), and `data` (`valid`, `path`, `session_count`, `errors`), exiting `0` when valid and `1` when invalid.
 
 
 ### Message locations and context
