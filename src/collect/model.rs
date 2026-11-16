@@ -3,6 +3,7 @@ use agent_dump_core::query::Query;
 use agent_dump_core::session::Session;
 use jiff::civil::Date;
 use serde::Serialize;
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Mode {
@@ -35,6 +36,7 @@ pub struct Operation {
     pub since: Option<String>,
     pub until: Option<String>,
     pub save: Option<String>,
+    pub output: Option<PathBuf>,
     pub mode: Mode,
     pub action: Action,
     pub query: Option<Query>,
