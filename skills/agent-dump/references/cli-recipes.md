@@ -117,12 +117,12 @@ collect 只分析 user/assistant 可见文本，排除 system/developer/tool、r
 ```bash
 agent-dump --collect --emit-prompt --save ./reports/daily.md
 agent-dump --collect --emit-prompt --since 20260824 --until 20260830 \
-  --collect-mode insight --save ./reports/weekly.md
+  --collect-mode insight --save ./reports/weekly.md --output ./prompt.txt
 agent-dump --collect --emit-prompt 'agents://.?providers=codex,claude&limit=20'
-agent-dump --shortcut ob 20260831 --emit-prompt
+agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 ```
 
-上述命令直接打印提示词。用户要求实际执行时，首次生成就将 stdout、stderr 分别落盘，不依赖终端回传完整内容。
+不传 `--output` 时直接打印提示词；传 `--output` 时将提示词原子写入文件或目录（已存在目录或以 `/` 结尾，Windows 含 `\`，自动拼接 `agent-dump-collect-prompt-<since>-<until>.txt`），stdout 仅打印一行确认信息。用户要求实际执行时，首次生成就通过 `--output` 写入私有目录或将 stdout、stderr 分别落盘，不依赖终端回传完整内容。
 macOS/Linux 示例；在其他平台使用同等的私有临时目录和输出流捕获，保留用户原有命令及参数：
 
 ```bash
@@ -130,7 +130,8 @@ macOS/Linux 示例；在其他平台使用同等的私有临时目录和输出�
   umask 077
   collect_task_dir=$(mktemp -d) || exit 1
   agent-dump --shortcut ob 20260831 --emit-prompt \
-    > "$collect_task_dir/prompt.md" 2> "$collect_task_dir/diagnostics.txt"
+    --output "$collect_task_dir/prompt.md" \
+    2> "$collect_task_dir/diagnostics.txt"
   collect_exit_code=$?
   printf 'Exit: %s\nPrompt: %s\nDiagnostics: %s\n' \
     "$collect_exit_code" "$collect_task_dir/prompt.md" "$collect_task_dir/diagnostics.txt"
@@ -139,9 +140,10 @@ macOS/Linux 示例；在其他平台使用同等的私有临时目录和输出�
 ```
 
 先检查退出码和诊断，再读取提示词说明，并用脚本遍历完整文件校验清单，只回传统计，不把文件整体打印回工具。
-生成提示词为空且退出 `0` 是合法空结果，不执行汇总；若用户只要提示词，则交付完整文件或其内容，不执行报告任务。
+无匹配候选时退出 `0`、不输出提示词且**不创建 `--output` 文件**（合法空结果，不执行汇总）；若用户只要提示词，则交付完整文件或其内容，不执行报告任务。
 
-- 无需 skill 或 AI 配置。stdout 是可交付的提示词，诊断走 stderr；`--save` 指定最终报告，不保存提示词。
+- 无需 skill 或 AI 配置。未传 `--output` 时 stdout 是完整提示词；传 `--output` 时写入提示词文件（拒绝符号链接目标与 Provider 源目录）且 stdout 输出一行保存确认，诊断走 stderr；`--save` 指定最终报告，不保存提示词。
+- `--collect` 模式下传 `--output` 必须搭配 `--emit-prompt`，否则以退出码 `1` 报错；`collect_task.query` 保留只读筛选字段（`null` 或 `providers`/`path`/`roles`/`keyword`/`limit`）。
 - shortcut 的 `args` 可以直接包含 `"--emit-prompt"`，也可以像上例临时追加；不重建或修改其他 shortcut 参数。
 - 提示词提供固定候选清单、每条 URI 的 argv/命令、原工作目录、时区、报告格式和绝对输出路径。
   读取命令复用生成时的原生程序；外部 agent 需要原环境和相同的 provider 路径设置。
@@ -275,8 +277,8 @@ agent-dump --search "auth" --list --days 30
 | `--interactive` 模式 | `json` | 支持 `json/markdown/raw`，不接受 `print` |
 | `--stats` 模式 | N/A | 推荐独立使用；支持 `--days` 与 `--query` |
 | `--providers` | N/A | 只读展示全部注册 provider 的能力与本地路径状态，不扫描会话 |
-| `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；只分析 user/assistant 可见文本并忽略空对话；PM 汇总请求、决策和 Agent 明确报告的结果；支持 `--days`、`--since/--until`、`--collect-mode pm/insight`、`--dry-run`、`--save`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
-| `--collect --emit-prompt` | 提示词 | 无需 AI 配置；沿用 collect 筛选和排除规则；与 `--dry-run` 互斥；`--save` 是外部 agent 的最终报告路径 |
+| `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；只分析 user/assistant 可见文本并忽略空对话；PM 汇总请求、决策和 Agent 明确报告的结果；支持 `--days`、`--since/--until`、`--collect-mode pm/insight`、`--dry-run`、`--save`；非 `--emit-prompt` 下不允许 `--output`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
+| `--collect --emit-prompt` | 提示词 | 无需 AI 配置；沿用 collect 筛选和排除规则并在 `collect_task.query` 暴露只读筛选；与 `--dry-run` 互斥；`--save` 是最终报告路径，`--output` 将提示词写到文件或目录（无候选时不写） |
 | `--search` 模式 | N/A | 作为列表搜索模式使用；可与 `--list`、`--days`、`--query` 组合 |
 | `--reindex` | N/A | 独立的索引维护命令，不应与其他模式标志组合 |
 
