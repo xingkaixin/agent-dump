@@ -411,16 +411,20 @@ confirm a replacement entry point before proceeding.
 - Before reading transcripts, verify the saved prompt file with `agent-dump --collect --verify-manifest <FILE> --json`
   (checking the manifest end marker, duplicate JSON keys, candidate count, unique URIs, Unicode JSON lengths, and command
   identities). Parseable JSON alone does not prove completeness. Recover a damaged manifest from the full saved file first;
-  otherwise regenerate the prompt at most once with the original selection conditions and capture output directly.
-  Regeneration creates a new candidate manifest, not the old snapshot. If the conditions are unknown or recovery fails,
-  ask the user before delivering a partial report from a damaged manifest.
-- Read each session with `--read --order asc --json`, then continue with `--read --cursor <next_cursor> --json` until
-  `has_more=false`. Save each page and its diagnostics separately. Process every fragment of long messages; a successful
-  page request does not mean complete reading. Analyze only visible user/assistant text without `--details`. Partial reads,
-  missing pages, and changing revisions must be disclosed; never combine notes from different revisions.
-- Ignore sessions without substantive visible dialogue. Keep approvals or duplicate transcripts only when they change a
-  request, decision, or outcome, and keep the current reporting process out of the work being summarized. Replacing an existing
-  report requires explicit user permission; prepare and verify the new content before replacing the old report.
+  otherwise regenerate the prompt at most once with the original selection conditions and save output directly (via `--output`
+  or stream redirection). Regeneration creates a new candidate manifest, not the old snapshot. If the conditions are unknown
+  or recovery fails, ask the user before delivering a partial report from a damaged manifest.
+- Read each session with `--read --order asc --json`, then continue with `--read --cursor <data.next_cursor> --json` only
+  (never combine `--cursor` with `--order`, `--limit`, `--max-chars`, `--role`, `--match`, or `--details`). Check top-level
+  `has_more` (not inside `data`) and stop only when `has_more=false` and `data.next_cursor=null`. Write batch scripts to
+  standalone `.py` files in a private temp directory instead of multi-quoted `python3 -c '...'` one-liners, and slice
+  `text_spans` with `s = max(0, span["start"] - msg["start"])`, `e = min(len(msg["text"]), span["end"] - msg["start"])`.
+  Process every fragment of long messages; partial reads, missing pages, and changing revisions must be disclosed, and notes
+  from different revisions must never be combined.
+- Read every candidate in the manifest before filtering (never hardcode skipping the active self-session by URI prior to
+  reading). Ignore sessions without substantive visible dialogue, keep approvals or duplicate transcripts only when they
+  change a request, decision, or outcome, and exclude the current reporting procedure during summary selection. Replacing an
+  existing report requires explicit user permission; prepare and verify the new content before replacing the old report.
 - `--emit-prompt` requires collect mode and conflicts with `--dry-run`. No matching candidates produces no prompt
   and exits `0`; no available provider or a preparation error exits `1`.
 - To make this permanent for a shortcut, add `"--emit-prompt"` to its `args`; shortcut expansion needs no special handling.
@@ -609,6 +613,8 @@ Pass `locations[].locator` from search unchanged to `--message`. Positions are o
 
 Use `--format json,markdown` to export the selected context. Files are named `<id>.messages-<start>-<end>.json` / `.md` under the Provider's output directory, separate from full-session exports. Both formats retain the canonical Session URI, the locator (revision plus target position), the absolute message range, and status. JSON retains normalized message records; Markdown renders their searchable text. Recoverable source diagnostics mark the file `partial` and are reported on stderr. Stale locators are rejected before file creation. Provider format restrictions still apply; raw/print file formats and `--json` with file-export options are rejected. `--output` requires an explicit `--format`; output-directory defaults follow full-session export rules.
 
+For reusing past engineering corrections, run separate `--search <TERM> --locate --json` queries across multiple literal synonyms (e.g., `avoid`, `instead`, `不要`, `不能`), inspect hits with `--read --json` to filter out ordinary Q&A, and export traceable excerpts via `--message <LOCATOR> --before 2 --after 1 --format json,markdown --output ./excerpts`. See [Agent recipes](skills/agent-dump/references/cli-recipes.md) for the complete workflow.
+
 ### On-demand reading and Agent read prompts
 
 Give an Agent this single command to obtain instructions and executable commands for reading a session in bounded pages, without installing a skill or configuring MCP:
@@ -642,13 +648,13 @@ agent-dump opencode://SESSION_ID --read --order asc --max-chars 4000 --details -
 
 Read options require `--read` and cannot mix with list, search, collect, export, `--head`, `--summary` or `--message`. Existing full URI printing, `--search` and `--query` keep their semantics. Matching is not regex, semantic or cross-message search. Add `--details` to search tool details. Both views skip messages with no readable text, do not read attachments, and do not represent every raw Provider field. Nonempty role/match values are limited to 100/4096 UTF-8 bytes; read URIs to 4096 bytes.
 
-JSON contains `schema_version: 1`, `kind: read`, `status`, `has_more` and `data`. Data includes uri, revision, total_messages before filtering, options, messages and next_cursor. Each fragment contains its original one-based position, a locator usable with `--message`, role, text, total_chars, and zero-based Unicode start/end offsets [start,end). `truncated` marks a partial message. Long messages resume at the next character through the cursor; characters within a message always traverse forwards.
+JSON contains `schema_version: 1`, `kind: read`, `status`, top-level `has_more` (not inside `data`), and `data`. `data` includes `uri`, `revision`, `total_messages` before filtering, `options`, `messages`, and `next_cursor`. Continuation calls with `--cursor` must not pass `--order`, `--limit`, `--max-chars`, `--role`, `--match`, or `--details`. Each fragment contains its original one-based position, a locator usable with `--message`, role, text, total_chars, and zero-based Unicode start/end offsets [start,end). `truncated` marks a partial message. Long messages resume at the next character through the cursor; characters within a message always traverse forwards.
 
-`has_more=false` means the selected view has no more matching content. Budget pagination does not make status partial. Recoverable source diagnostics produce partial status with details on stderr. No matches succeed with an empty array. Invalid, cross-session or stale cursors exit nonzero with empty stdout. Restart when the transcript changes; never combine revisions as one snapshot. Cursors do not preserve historical snapshots.
+`has_more=false` together with `data.next_cursor=null` means the selected view has no more matching content. Budget pagination does not make status partial. Recoverable source diagnostics produce partial status with details on stderr. No matches succeed with an empty array. Invalid, cross-session or stale cursors exit nonzero with empty stdout. Restart when the transcript changes; never combine revisions as one snapshot. Cursors do not preserve historical snapshots.
 
 Bounded output reduces content returned to the Agent, but reading may still parse the full source transcript; it does not promise partial disk I/O. Sources remain read-only and retain each Provider's existing data and platform support limits.
 
-Read pages without `--details` include `messages[].text_spans`: local `date` (null when unknown or inferred) and absolute Unicode `start`/`end` offsets within the message text. Spans are clipped to each returned fragment; subtract the fragment start when slicing its text. Separators between text parts are not dated. Collect handoffs use these spans to split and filter actual activity dates.
+Read pages without `--details` include `messages[].text_spans`: local `date` (null when unknown or inferred) and absolute Unicode `start`/`end` offsets within the message text. Spans are clipped to each returned fragment; slice with `s = max(0, span["start"] - msg["start"])`, `e = min(len(msg["text"]), span["end"] - msg["start"])` and take `msg["text"][s:e]` when `s < e`. Separators between text parts are not dated. Collect handoffs use these spans to split and filter actual activity dates.
 
 ### TUI session reader
 

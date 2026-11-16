@@ -404,12 +404,13 @@ agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 - 不校验 AI 配置、不调用模型、不规划摘要 chunk、不创建 collect 日志或报告。内容查询仍可能读取正文并更新本地搜索索引。
 - 复用 collect 的排除规则和查询筛选。日期两端均包含，按可见文本段的**实际本地日期**筛选并逐日拆分。候选发现不按创建日期排除旧会话，但跳过 Provider 报告的更新时间早于起始日期的会话，生成清单时读取正文，仅保留含日期范围内活动的会话；外部 Agent 再根据读取页的 `text_spans` 筛选日期。清单不是内容快照。
 - 读取正文前，优先执行 `agent-dump --collect --verify-manifest <FILE> --json` 静态校验清单结束标记、两层无重复 JSON 键、候选数量、唯一 URI、Unicode JSON 长度和命令对应关系；JSON 能解析不等于清单完整。
-  清单损坏时先使用已保存的完整文件；没有完整文件时，仅允许按原筛选条件重新生成一次提示词并直接保存输出。
+  清单损坏时先使用已保存的完整文件；没有完整文件时，仅允许按原筛选条件重新生成一次提示词并直接落盘（通过 `--output` 或输出重定向）。
   重生成是新候选清单，不是恢复旧快照；原条件不明或仍损坏时先询问，未经同意不交付残缺清单的部分日报。
-- 外部 agent 用 `--read --order asc --json` 逐页读取，再用 `--read --cursor <next_cursor> --json` 继续，直到 `has_more=false`。
+- 外部 agent 用 `--read --order asc --json` 逐页读取，再用 `--read --cursor <data.next_cursor> --json` 单独续读（严禁与 `--order`、`--limit`、`--max-chars`、`--role`、`--match`、`--details` 组合）。
+  注意 `has_more` 位于顶层 JSON（`data` 内不存在 `has_more`），必须同时满足 `has_more=false` 且 `data.next_cursor=null` 才算读完。批处理脚本应先写入私有临时目录的独立 `.py` 文件再执行（避免 `python3 -c '...'` 多层引号转义），并按 `s = max(0, span["start"] - msg["start"])`、`e = min(len(msg["text"]), span["end"] - msg["start"])` 切片 `text_spans`。
   每页正文和诊断分别落盘，长消息的所有片段都要读完；单页成功不算完整阅读。只分析 user/assistant 的可见 text，不加 `--details`。
   `status=partial`、缺页或内容版本变化都必须说明覆盖缺口，不混合不同版本的事实笔记。
-- 没有实质可见对话的来源直接忽略；审批或重复转录只有改变请求、决策或结果时才保留，当前汇总过程不作为被汇总的工作事项。
+- 禁止在读取正文前按 URI 硬编码跳过当前任务自会话；先读完正文，再在摘要取舍阶段排除本次汇报过程。没有实质可见对话的来源直接忽略；审批或重复转录只有改变请求、决策或结果时才保留。
   覆盖已有报告需要用户明确同意；先完成并核验新内容，再替换旧报告。
 - 仅支持 collect 模式，与 `--dry-run` 互斥。候选为空时不输出提示词，退出 `0`；无可用 provider 或准备失败时退出 `1`。
 - 要让 shortcut 始终生成提示词，在它的 `args` 中加入 `"--emit-prompt"` 即可，无需其他调整。
@@ -593,6 +594,8 @@ agent-dump codex://SESSION_ID --message 'REVISION:POSITION' --before 2 --after 3
 
 加 `--format json,markdown` 可导出选定片段。文件位于输出目录的 Provider 子目录，名称为 `<id>.messages-<start>-<end>.json` / `.md`，不会覆盖整条会话导出。两种格式均保留规范化会话 URI、定位符（正文 revision 和目标位置）、原始消息范围及状态。JSON 保留标准化消息记录；Markdown 展示消息的可搜索文本。可恢复的来源诊断会把文件标记为 `partial`，具体诊断进入 stderr。定位符过期时不会创建文件。各 Provider 的格式限制仍生效；不接受 raw/print 文件格式，也不能同时使用 `--json` 与文件导出参数。`--output` 需要显式指定 `--format`，默认目录与整条会话导出规则一致。
 
+需要复用历史工程纠错时，可先用多个中英文同义纠错词（如 `纠正`、`不要`、`不能`、`约束`、`avoid`、`instead`）分别执行 `--search <TERM> --locate --json`，结合 `--read --json` 核对原文区分真实纠错与普通追问，再用 `--message <LOCATOR> --before 2 --after 1 --format json,markdown --output ./excerpts` 导出保留 `Session URI` 与 `locator` 的可溯源片段；完整步骤见 [Agent recipes](skills/agent-dump/references/cli-recipes.md)。
+
 ### 按需读取与 Agent 读取提示词
 
 把下面这一条命令交给 Agent，它就能获得分段读取该会话的说明和可执行命令，无需安装 skill 或配置 MCP：
@@ -626,13 +629,13 @@ agent-dump opencode://SESSION_ID --read --order asc --max-chars 4000 --details -
 
 这些读取参数仅用于 `--read`，不能与列表、搜索、collect、导出、`--head`、`--summary` 或 `--message` 混用。原有 URI 全文打印、`--search` 和 `--query` 的语义不变。匹配不是正则、语义搜索或跨消息检索；搜索工具详情需显式加 `--details`。两种视图均跳过无可读文本的消息，不读取附件实体，也不承诺包含全部 Provider 原始字段。`--role` / `--match` 必须非空，分别最多 100 / 4096 个 UTF-8 字节；读取 URI 最多 4096 字节。
 
-JSON 包含 `schema_version: 1`、`kind: read`、`status`、`has_more` 和 `data`。data 中有 URI、revision、筛选前的 total_messages、options、messages 和 next_cursor。每个片段保留原会话一基 position、可用于 `--message` 的 locator、role、text、total_chars，以及从零开始的 Unicode 字符区间 start/end（左闭右开）。`truncated` 表示这一项只是消息的一部分；长消息通过游标从下一字符继续，消息内始终正序读取。
+JSON 包含 `schema_version: 1`、`kind: read`、`status`、**顶层 `has_more`**（`data` 对象内无 `has_more`）和 `data`。data 中有 URI、revision、筛选前的 total_messages、options、messages 和 next_cursor。`--cursor` 续读时严禁再传 `--order`、`--limit`、`--max-chars`、`--role`、`--match` 或 `--details`。每个片段保留原会话一基 position、可用于 `--message` 的 locator、role、text、total_chars，以及从零开始的 Unicode 字符区间 start/end（左闭右开）。`truncated` 表示这一项只是消息的一部分；长消息通过游标从下一字符继续，消息内始终正序读取。
 
-`has_more=false` 表示已读完所选视图中符合条件的内容；预算分段不会把 status 标为 partial。源读取存在可恢复诊断时为 partial，详情进入 stderr。无匹配成功返回空数组；无效、跨会话或过期游标非零退出且 stdout 为空。正文变化后需重新开始，不能把不同 revision 拼成一个快照；游标不保存历史快照。
+只有同时满足顶层 `has_more=false` 且 `data.next_cursor=null` 才表示已读完所选视图中符合条件的内容；预算分段不会把 status 标为 partial。源读取存在可恢复诊断时为 partial，详情进入 stderr。无匹配成功返回空数组；无效、跨会话或过期游标非零退出且 stdout 为空。正文变化后需重新开始，不能把不同 revision 拼成一个快照；游标不保存历史快照。
 
 分段输出减少返回给 Agent 的内容，内部仍可能解析完整源会话，不承诺局部磁盘读取。只读 Provider 来源，遵守各来源既有支持范围和平台限制。
 
-不加 `--details` 时，消息的 `text_spans` 给出实际本地 `date`（未知或推测时间为 null）及消息内 Unicode `start/end` 区间。区间裁剪到本页片段；切取片段 text 时减去片段 start。文本段间分隔空行不归属日期，外部汇总按这些区间筛选日期。
+不加 `--details` 时，消息的 `text_spans` 给出实际本地 `date`（未知或推测时间为 null）及消息内 Unicode `start/end` 区间。区间裁剪到本页片段；安全切片公式为 `s = max(0, span["start"] - msg["start"])`、`e = min(len(msg["text"]), span["end"] - msg["start"])`，仅取 `s < e` 的 `msg["text"][s:e]`。文本段间分隔空行不归属日期，外部汇总按这些区间筛选日期。
 
 ### TUI 会话阅读器
 

@@ -43,11 +43,12 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 ## 执行工作流
 
 1. 识别任务模式
-- 用户给出会话 URI 并希望 Agent 按需读取：优先执行 `agent-dump <URI> --read-prompt`，按返回说明使用 `--read --json` 分页。此能力适用于所有已支持 Provider，无需 MCP；详细规则见 recipes 的“按需读取”。
+- 用户给出会话 URI 并希望 Agent 按需读取：优先执行 `agent-dump <URI> --read-prompt`，按返回说明使用 `--read --json` 分页（注意 `has_more` 在顶层 JSON、`next_cursor` 在 `data` 内，且 `--cursor` 严禁与 `--order` 等筛选/预算参数组合）。此能力适用于所有已支持 Provider，无需 MCP；详细规则见 recipes 的“按需读取”。
 - 用户给了 `opencode://...`、`zcode://...`、`codex://...`、`kimi://...`、`kimi-code://...`、`claude://...`、`qoder://...`、`qoder-cn://...`、`cursor://...`、`droid://...`、`grok://...`、`pi://...`、`omp://...`、`gemini-cli://...`、`dsh://...`、`deepchat://...`、`cherry://...`、`minimax://...`、`antigravity-cli://...` 这类 URI：使用 URI 模式。
 - 用户给了 `agents://<path>?q=...&providers=...`：使用路径作用域查询，可配合 list、interactive 或 collect。
 - 用户给了 `--collect`：使用 collect 模式，默认调用已配置的 AI 总结。
-- 用户要使用自有外部 agent 汇总、不配置 API，或只要汇总提示词：使用 `--collect --emit-prompt`（并用 `--collect --verify-manifest <FILE> --json` 静态校验清单）；详细用法见 recipes 的“外部 agent 汇总”。
+- 用户要使用自有外部 agent 汇总、不配置 API，或只要汇总提示词：使用 `--collect --emit-prompt`（可用 `--output <PATH>` 直接落盘，并用 `--collect --verify-manifest <FILE> --json` 静态校验）；详细用法及分页切片参考脚本见 recipes 的“外部 agent 汇总”。
+- 用户要复用历史工程纠错或禁用约束：先用多个常见中文/英文同义纠错词分别执行 `--search <TERM> --locate --json`，再用 `--read --json` 核对上下文区分真实纠错与普通追问，最后用 `--message <LOCATOR> --before 2 --after 1 --format json,markdown --output ./excerpts` 导出带来源片段；详细流程见 recipes 的“复用历史纠错”。
 - 用户给了 `--stats`：使用 statistics 模式（显示最近 N 天的会话使用统计）。
 - 用户要在组装命令前检查 provider 能力：使用 `--providers`；Agent 解析时加 `--json`，读取格式支持和搜索路径，不从路径存在推断会话一定可读。
 - 用户给了 `--search`：使用 search 模式（本地 SQLite FTS5 全文搜索）。可与 `--list` 组合使用。
@@ -66,9 +67,9 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - 保留用户显式给出的 `--time-field`、`--output`、`--format`、`--lang`、`--days`、`--query`、`--summary`、`--collect`、`--since/--until`、`--config` 参数。
 - 保留用户显式给出的 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--shortcut`、`--save`、`--search`、`--reindex`、`--providers`、`--capabilities`、`--no-metadata-summary` 参数。
 - 保留用户显式给出的 `--head` 参数，用于 URI 轻量元数据查看。
-- 保留 `--read-prompt`、`--read`、`--cursor`、`--limit`、`--max-chars`、`--order`、`--role`、`--match` 和 `--details`。用户只要读取提示词时，生成后交付，不擅自执行其中的读取命令。
+- 保留 `--read-prompt`、`--read`、`--cursor`、`--limit`、`--max-chars`、`--order`、`--role`、`--match` 和 `--details`。注意 `--cursor` 必须单独续读，不能同时传 `--order`、`--limit`、`--max-chars`、`--role`、`--match` 或 `--details`。用户只要读取提示词时，生成后交付，不擅自执行其中的读取命令。
 - 用户要实际执行外部汇总时，首次生成就加 `--output <私有文件或目录>`（或将 stdout/stderr 分别重定向到私有文件），再用 `agent-dump --collect --verify-manifest <FILE> --json` 静态校验清单并只回传路径、统计与退出码；
-  按 recipes 的“外部 agent 汇总”确认 `data.valid == true` 后再读取正文，避免大清单在工具回传中丢失。
+  确认 `data.valid == true` 后，批处理脚本必须写入私有临时目录的独立 `.py` 文件再执行（禁止使用 `python3 -c '...'` 内联脚本），不得在读取前按 URI 硬编码跳过当前任务自会话，按 recipes 的“外部 agent 汇总”分页读取与按 `text_spans` 相对偏移切片。
 
 3. 执行并检查退出状态
 - 退出码 `0`：命令完成了被要求的事（包括时间窗/关键词本就无命中，以及交互式导出部分成功）。
@@ -165,7 +166,7 @@ Pass `locations[].locator` from search unchanged to `--message`. Positions are o
 
 Use `--format json,markdown` to export the selected context. Files are named `<id>.messages-<start>-<end>.json` / `.md` under the Provider's output directory, separate from full-session exports. Both formats retain the canonical Session URI, the locator (revision plus target position), the absolute message range, and status. JSON retains normalized message records; Markdown renders their searchable text. Recoverable source diagnostics mark the file `partial` and are reported on stderr. Stale locators are rejected before file creation. Provider format restrictions still apply; raw/print file formats and `--json` with file-export options are rejected. `--output` requires an explicit `--format`; output-directory defaults follow full-session export rules.
 
-Read pages without `--details` include `messages[].text_spans`: local `date` (null when unknown or inferred) and absolute Unicode `start`/`end` offsets within the message text. Spans are clipped to each returned fragment; subtract the fragment start when slicing its text. Separators between text parts are not dated. Collect handoffs use these spans to split and filter actual activity dates.
+Read pages without `--details` include `messages[].text_spans`: local `date` (null when unknown or inferred) and absolute Unicode `start`/`end` offsets within the message text. Spans are clipped to each returned fragment; slice safely with `s = max(0, span["start"] - msg["start"])`, `e = min(len(msg["text"]), span["end"] - msg["start"])`, keeping `msg["text"][s:e]` when `s < e`. Separators between text parts are not dated. Collect handoffs use these spans to split and filter actual activity dates.
 
 ### TUI session reader
 
