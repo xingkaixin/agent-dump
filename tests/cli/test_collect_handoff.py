@@ -128,9 +128,10 @@ def test_emit_prompt_output_writes_file_and_directory_and_records_query(cli: Cli
     assert default_file.is_file()
     assert dir_result.stdout == f"✅ Collect prompt saved (1 sessions): {default_file.resolve()}\n"
     task = _parse_task(default_file.read_text(encoding="utf-8"))
+    expected_path = str(Path(f"{cli.root.drive}/project"))
     assert task["query"] == {
         "providers": ["codex"],
-        "path": "/project",
+        "path": expected_path,
         "roles": ["user"],
         "keyword": "alpha",
         "limit": 5,
