@@ -130,6 +130,59 @@ fn fail_prompt_write(
     Ok(false)
 }
 
+pub fn verify(
+    path: &Path,
+    json: bool,
+    zh: bool,
+    out: &mut impl Write,
+) -> crate::Result<bool> {
+    let report = crate::collect::verify::verify(path);
+    if json {
+        serde_json::to_writer(
+            &mut *out,
+            &json!({
+                "schema_version": 1,
+                "kind": "collect_manifest",
+                "status": if report.valid { "ok" } else { "error" },
+                "data": report
+            }),
+        )?;
+        writeln!(out)?;
+        return Ok(report.valid);
+    }
+    if report.valid {
+        writeln!(
+            out,
+            "{}",
+            terminal(
+                "COLLECT_MANIFEST_VALID",
+                zh,
+                &[
+                    ("path", report.path),
+                    ("count", report.session_count.to_string()),
+                ]
+            )
+        )?;
+    } else {
+        writeln!(
+            out,
+            "{}",
+            terminal(
+                "COLLECT_MANIFEST_INVALID",
+                zh,
+                &[
+                    ("path", report.path),
+                    ("count", report.errors.len().to_string()),
+                ]
+            )
+        )?;
+        for error in &report.errors {
+            writeln!(out, "- {}", render::safe_line(error))?;
+        }
+    }
+    Ok(report.valid)
+}
+
 pub fn run(
     operation: &Operation,
     zh: bool,

@@ -43,7 +43,7 @@ URI = f"codex://{IDENTITY}"
             ["--collect", "--emit-prompt", "--output", "prompt.txt", "--json"],
             1,
             "stderr",
-            "--json requires list, search, statistics, --providers, --head, --read or --message context mode.",
+            "--json requires list, search, statistics, --providers, --head, --read, --message context, or --collect --verify-manifest mode.",
         ),
         (
             [URI, "--read", "--output", "prompt.txt"],

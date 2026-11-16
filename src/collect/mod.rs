@@ -9,3 +9,4 @@ pub mod prompts;
 pub mod reduction;
 pub mod sessions;
 pub mod summary;
+pub mod verify;

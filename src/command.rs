@@ -14,8 +14,8 @@ use agent_dump_core::query;
 use agent_dump_core::query::text as query_text;
 use std::io::{self, Write};
 
-pub fn shell_command(argv: &[String]) -> String {
-    if cfg!(windows) {
+pub fn shell_command_for(argv: &[String], windows: bool) -> String {
+    if windows {
         return "& ".to_owned()
             + &argv
                 .iter()
@@ -37,6 +37,10 @@ pub fn shell_command(argv: &[String]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+pub fn shell_command(argv: &[String]) -> String {
+    shell_command_for(argv, cfg!(windows))
 }
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -211,6 +215,7 @@ fn stderr_error(args: &Args, mode: Mode) -> Option<&'static str> {
         && !matches!(mode, Mode::List | Mode::Stats | Mode::Providers)
         && !(mode == Mode::Uri
             && (args.message.is_some() || args.read || args.head))
+        && !(mode == Mode::Collect && args.verify_manifest.is_some())
     {
         Some("JSON_MODE_ERROR")
     } else if (args.locate
@@ -237,6 +242,8 @@ fn plan_error(args: &Args, mode: Mode) -> Option<&'static str> {
         .is_some_and(|s| s.starts_with("agents://"));
     if args.emit_prompt && mode != Mode::Collect {
         Some("EMIT_PROMPT_REQUIRES_COLLECT")
+    } else if args.verify_manifest.is_some() && mode != Mode::Collect {
+        Some("VERIFY_MANIFEST_REQUIRES_COLLECT")
     } else if args.emit_prompt && args.dry_run {
         Some("COLLECT_ACTION_CONFLICT")
     } else if mode == Mode::Collect
@@ -246,6 +253,22 @@ fn plan_error(args: &Args, mode: Mode) -> Option<&'static str> {
             || (args.uri.is_some() && !query_uri))
     {
         Some("COLLECT_MODE_CONFLICT")
+    } else if mode == Mode::Collect
+        && args.verify_manifest.is_some()
+        && (args.emit_prompt
+            || args.dry_run
+            || args.output.is_some()
+            || args.save.is_some()
+            || args.since.is_some()
+            || args.until.is_some()
+            || args.days.is_some()
+            || args.query.is_some()
+            || query_uri
+            || candidates(args)
+                .iter()
+                .any(|(candidate, _)| *candidate != Mode::Collect))
+    {
+        Some("COLLECT_VERIFY_MANIFEST_CONFLICT")
     } else if mode == Mode::Collect
         && args.output.is_some()
         && !args.emit_prompt
@@ -413,27 +436,32 @@ fn dispatch(
     out: &mut impl Write,
 ) -> Result<bool> {
     match mode {
-        Mode::Collect => collect_workflow::run(
-            &collect_model::Operation {
-                days: args.days,
-                since: args.since,
-                until: args.until,
-                save: args.save,
-                output: args.output,
-                mode: args.collect_mode,
-                action: if args.emit_prompt {
-                    collect_model::Action::EmitPrompt
-                } else if args.dry_run {
-                    collect_model::Action::DryRun
-                } else {
-                    collect_model::Action::Execute
+        Mode::Collect => {
+            if let Some(path) = &args.verify_manifest {
+                return collect_workflow::verify(path, args.json, zh, out);
+            }
+            collect_workflow::run(
+                &collect_model::Operation {
+                    days: args.days,
+                    since: args.since,
+                    until: args.until,
+                    save: args.save,
+                    output: args.output,
+                    mode: args.collect_mode,
+                    action: if args.emit_prompt {
+                        collect_model::Action::EmitPrompt
+                    } else if args.dry_run {
+                        collect_model::Action::DryRun
+                    } else {
+                        collect_model::Action::Execute
+                    },
+                    query,
                 },
-                query,
-            },
-            zh,
-            out,
-            &mut io::stderr(),
-        ),
+                zh,
+                out,
+                &mut io::stderr(),
+            )
+        }
         Mode::Stats | Mode::Reindex => maintenance::run(
             query.as_ref(),
             args.days.unwrap_or(7),
