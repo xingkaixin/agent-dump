@@ -10,7 +10,7 @@ __COMMANDS_JSON__
 
 读取规则：
 - 检查退出码，解析完整 stdout JSON；诊断位于 stderr。非零退出码是失败，不是空会话。status=partial 表示有源记录未能读取，相关结论应说明这项缺口。
-- has_more=true 表示还有符合条件的内容。将 data.next_cursor 原样作为 continue 命令中的 CURSOR。只读到足以完成当前任务；声称完整阅读前必须到达 has_more=false。--cursor 不与筛选或预算参数组合，游标已保存这些设置。
+- has_more 位于顶层 JSON（data 对象内无 has_more），next_cursor 位于 data.next_cursor。has_more=true 时将 data.next_cursor 原样作为 continue 命令中的 CURSOR。--cursor 严禁与 --order、--limit、--max-chars、--role、--match、--details 组合（游标已保存这些设置）。只读到足以完成当前任务；声称完整阅读前必须同时满足 has_more=false 且 data.next_cursor=null。
 - 默认文本视图不含 reasoning、plan 和结构化工具详情。--details 加入这些字段现有的可读投影。两种视图都不读取附件实体，也不返回所有 Provider 原始字段。所选视图中无正文的消息会跳过。data.total_messages 是筛选前的标准化消息总数。
 - --role 指定一种标准化消息角色。--match 对每条消息在所选视图中的文本执行不区分大小写、归一化空白后的字面短语匹配，不是正则、语义搜索或跨消息匹配。先筛选，再分页；搜索工具详情时，在 filter 命令中添加 --details。
 - 新读取可指定 --limit 1..100（默认 20）、--max-chars 1..100000（默认 12000）、--order asc|desc（默认 desc）。字符预算只计算返回的消息正文，不包括 JSON 包装和游标元数据。如果命令工具截断 stdout，使用更小的 --max-chars 和 --limit 重新开始；不要解析残缺 JSON 或把缺失内容当作已读。
