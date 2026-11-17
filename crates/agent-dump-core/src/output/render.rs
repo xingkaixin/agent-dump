@@ -16,9 +16,12 @@ const fn unsafe_char(c: char) -> bool {
 }
 pub fn safe_body(text: &str) -> String {
     let mut safe = String::with_capacity(text.len());
-    text.split(unsafe_char)
-        .for_each(|piece| safe.push_str(piece));
+    push_safe_body(&mut safe, text);
     safe
+}
+pub fn push_safe_body(output: &mut String, text: &str) {
+    text.split(unsafe_char)
+        .for_each(|piece| output.push_str(piece));
 }
 pub fn safe_line(text: &str) -> String {
     let replaced: String = text

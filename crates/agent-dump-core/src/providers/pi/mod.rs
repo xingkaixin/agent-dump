@@ -163,7 +163,7 @@ impl Pi {
     }
 
     fn scan(path: &Path, kind: Kind) -> crate::Result<Option<Summary>> {
-        let scan = crate::providers::jsonl::metadata(path, 20, None)?;
+        let scan = crate::providers::jsonl::metadata(path, 20, None, true)?;
         let mut updated_at = None;
         let mut model = String::new();
         for record in scan.records.iter().chain(scan.tail.iter()) {

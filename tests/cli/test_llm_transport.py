@@ -93,6 +93,47 @@ def test_truncated_report_is_an_error(cli):
     assert len(calls) == 2
 
 
+def test_collect_reuses_http_connection_between_summary_phases(cli):
+    only_session(cli)
+    connections = []
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def setup(self):
+            connections.append(self.client_address)
+            super().setup()
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            requests.append(body)
+            text = json.dumps({"requests": ["fact"]}) if "response_format" in body else "# Final"
+            data = json.dumps({"choices": [{"message": {"content": text}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+            pass
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=httpd.serve_forever, args=(0.01,), daemon=True)
+    worker.start()
+    try:
+        configure(cli, f"http://127.0.0.1:{httpd.server_port}/v1")
+        result = cli.run(*ARGS, "--save", "report.md", "--lang", "en")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (cli.root / "report.md").read_text().strip() == "# Final"
+    assert len(requests) == 2
+    assert len(connections) == 1
+
+
 def test_collect_log_records_events_without_credentials(cli):
     only_session(cli)
 

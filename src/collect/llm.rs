@@ -52,21 +52,42 @@ pub fn schema(mode: Mode) -> Value {
     })
 }
 
-pub fn request(
-    config: &AiConfig,
-    prompt: &str,
-    timeout: u64,
-    structured: Option<Mode>,
-) -> Result<String, RequestError> {
-    content(config, &respond(config, prompt, timeout, structured)?)
+pub struct Client<'a> {
+    pub config: &'a AiConfig,
+    agent: ureq::Agent,
+}
+
+impl<'a> Client<'a> {
+    pub fn new(config: &'a AiConfig, timeout: u64, concurrency: usize) -> Self {
+        Self {
+            config,
+            agent: ureq::Agent::new_with_config(
+                ureq::Agent::config_builder()
+                    .timeout_global(Some(Duration::from_secs(timeout)))
+                    .max_redirects(0)
+                    .http_status_as_error(false)
+                    .max_idle_connections(concurrency)
+                    .max_idle_connections_per_host(concurrency)
+                    .build(),
+            ),
+        }
+    }
+
+    pub fn request(
+        &self,
+        prompt: &str,
+        structured: Option<Mode>,
+    ) -> Result<String, RequestError> {
+        content(self.config, &respond(self, prompt, structured)?)
+    }
 }
 
 fn respond(
-    config: &AiConfig,
+    client: &Client<'_>,
     prompt: &str,
-    timeout: u64,
     structured: Option<Mode>,
 ) -> Result<Value, RequestError> {
+    let config = client.config;
     let system = include_str!("../../resources/prompts/system.txt");
     let openai = config.provider == "openai";
     let mut payload = if openai {
@@ -102,7 +123,7 @@ fn respond(
     }
     merge(&mut payload, &config.extra_body);
     loop {
-        let result = post(config, &payload, timeout);
+        let result = post(client, &payload);
         let retry = match &result {
             Err(error) if openai => error.rejected.is_some_and(|param| {
                 config.extra_body.get(param).is_none()
@@ -175,11 +196,8 @@ fn content(
     Ok(content.into())
 }
 
-fn post(
-    config: &AiConfig,
-    payload: &Value,
-    timeout: u64,
-) -> Result<Value, RequestError> {
+fn post(client: &Client<'_>, payload: &Value) -> Result<Value, RequestError> {
+    let config = client.config;
     let provider = if config.provider == "openai" {
         "OpenAI"
     } else {
@@ -196,20 +214,13 @@ fn post(
     ))
     .map_err(|e| error(format!("{provider} API request failed: {e}"), false))?;
     let origin = url.origin();
-    let agent = ureq::Agent::new_with_config(
-        ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(timeout)))
-            .max_redirects(0)
-            .http_status_as_error(false)
-            .build(),
-    );
     let mut get = false;
     let mut credentials = true;
     for redirects in 0..=10 {
         let mut builder = if get {
-            agent.get(url.as_str()).force_send_body()
+            client.agent.get(url.as_str()).force_send_body()
         } else {
-            agent.post(url.as_str())
+            client.agent.post(url.as_str())
         };
         if !get {
             builder = builder.header("Content-Type", "application/json");
@@ -362,15 +373,13 @@ fn post(
 }
 
 pub fn summary(
-    config: &AiConfig,
+    client: &Client<'_>,
     prompt: &str,
-    timeout: u64,
     zh: bool,
 ) -> crate::Result<String> {
-    let response = match respond(config, prompt, timeout, None) {
-        Err(error) if error.retryable => {
-            respond(config, prompt, timeout, None)?
-        }
+    let config = client.config;
+    let response = match respond(client, prompt, None) {
+        Err(error) if error.retryable => respond(client, prompt, None)?,
         result => result?,
     };
     let (provider, reason) = if config.provider == "openai" {

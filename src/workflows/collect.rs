@@ -360,10 +360,14 @@ pub fn run(
         return Ok(true);
     }
     let logger = logger.as_ref().unwrap();
-    let ai = ai.as_ref().unwrap();
+    let client = crate::collect::llm::Client::new(
+        ai.as_ref().unwrap(),
+        collect.timeout,
+        collect.concurrency,
+    );
     let (groups, depth, summary_failures) = match crate::collect::reduction::run(
         &entries,
-        ai,
+        &client,
         &collect,
         operation.mode,
         logger,
@@ -387,7 +391,7 @@ pub fn run(
         &groups,
         depth,
         operation.mode,
-        ai,
+        &client,
         &collect,
         zh,
     ) {
@@ -672,7 +676,7 @@ fn final_summary(
     groups: &[Group],
     depth: usize,
     mode: Mode,
-    ai: &AiConfig,
+    client: &crate::collect::llm::Client<'_>,
     config: &CollectConfig,
     zh: bool,
 ) -> crate::Result<String> {
@@ -689,12 +693,8 @@ fn final_summary(
         config.concurrency,
         (0..prompts.len()).collect(),
         |index| {
-            let part = crate::collect::llm::summary(
-                ai,
-                &prompts[index],
-                config.timeout,
-                zh,
-            );
+            let part =
+                crate::collect::llm::summary(client, &prompts[index], zh);
             (index, part)
         },
         |(index, part), _| {

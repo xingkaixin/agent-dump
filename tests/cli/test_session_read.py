@@ -93,3 +93,23 @@ def test_cursor_rejects_modified_source_other_session_and_invalid_offsets(cli: C
     cli.write([*records, message("user", "Appended")])
     stale = cli.run(URI, "--read", "--cursor", cursor, "--json")
     assert stale.returncode == 1 and stale.stdout == "" and stale.stderr
+
+
+def test_read_spans_use_sanitized_unicode_offsets(cli: CliFixture) -> None:
+    record = message("assistant", "unused")
+    record["payload"]["content"] = [
+        {"type": "output_text", "text": "中\u202e文\x00🙂"},
+        {"type": "output_text", "text": "尾\t段"},
+    ]
+    cli.write([header(), record])
+    first = read(cli, URI, "--max-chars", "4")["data"]
+    fragment = first["messages"][0]
+    assert fragment["text"] == "中文🙂\n"
+    assert fragment["total_chars"] == 8
+    assert [(span["start"], span["end"]) for span in fragment["text_spans"]] == [(0, 3)]
+    second = read(cli, URI, "--cursor", first["next_cursor"])["data"]
+    fragment = second["messages"][0]
+    assert fragment["text"] == "\n尾\t段"
+    assert (fragment["start"], fragment["end"]) == (4, 8)
+    assert [(span["start"], span["end"]) for span in fragment["text_spans"]] == [(5, 8)]
+    assert second["next_cursor"] is None
