@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+## [1.2.11] - 2026-11-17
+
+### Added
+
+- Save collect handoff prompts directly with `--collect --emit-prompt --output <PATH>`, avoiding truncated runner output. File writes are atomic, directory targets get a dated filename, and task metadata retains the query filters (#579).
+- Statically validate saved handoff prompts with `--collect --verify-manifest <FILE>`, optionally returning JSON, without loading config or discovering Providers. Check the end marker, duplicate JSON keys, candidate counts, unique session URIs, Unicode lengths, and read command identities before reading transcripts (#580).
+
+### Changed
+
+- Clarify handoff pagination, cursor-only continuation, and fragment-relative `text_spans` slicing in prompts, READMEs, and Agent recipes. Document reading every candidate before filtering and reusing past engineering corrections through search and cited exports (#581).
+- Reduce repeated copying when scanning long Codex JSONL records and reading paginated transcripts, skip an unused Codex tail projection, and reuse HTTP connections across collect phases (#583).
+- Throttle collect scan progress for large session sets (#579).
+- Generate Cloudflare Build Output v1 for landing-page deployment with `cf 1.0.0-rc.0`.
+- Update Rust dependencies, including Jiff 1.0, Python development tools, Astro, Playwright, pnpm, and CI setup actions (#584, #585).
+
 ## [1.2.10] - 2026-11-15
 
 ### Added
@@ -1409,3 +1424,4 @@
 [1.2.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.8
 [1.2.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.9
 [1.2.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.10
+[1.2.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.11

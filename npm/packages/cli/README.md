@@ -125,7 +125,8 @@ agent-dump --collect --days 7 --query "provider:codex path:. limit:20" --dry-run
 agent-dump --collect --since 2026-04-01 --until 2026-04-15
 agent-dump --collect --collect-mode insight
 agent-dump --collect --dry-run --save ./reports
-agent-dump --collect --emit-prompt --save ./reports/weekly.md
+agent-dump --collect --emit-prompt --output ./prompt.txt --save ./reports/weekly.md
+agent-dump --collect --verify-manifest ./prompt.txt --json
 agent-dump --collect --save ./reports
 ```
 
@@ -134,6 +135,14 @@ Collect execution, dry-run, and prompt handoff all support `--query` filters. Do
 session read failures so incomplete input remains visible.
 Daily reports split conversation text by its actual activity date, including sessions spanning
 multiple days. Prompt handoffs use the same date boundaries and text spans.
+
+Use `--output` with `--emit-prompt` to save the complete handoff prompt directly to a file,
+avoiding truncated command output. Directory targets receive a dated prompt filename;
+`--save` still specifies the final report path. Query filters are preserved in task metadata.
+Verify the saved manifest before reading sessions: `--verify-manifest` checks its structure,
+counts, URIs, Unicode lengths, and read commands without loading config or Provider sources.
+It exits `0` for a valid manifest and `1` for an invalid one; `--json` returns a
+`kind: "collect_manifest"` envelope. Use verification separately from prompt generation.
 
 ### Config
 
