@@ -1,9 +1,10 @@
+use crate::collect::llm::Client;
 use crate::collect::log::Logger;
 use crate::collect::model::{Entry, Group, Mode, Summary};
 use crate::collect::pool;
 use crate::collect::progress::progress;
 use crate::collect::summary::{self as collect_summary, Context};
-use agent_dump_core::config::{AiConfig, CollectConfig};
+use agent_dump_core::config::CollectConfig;
 use agent_dump_core::output::i18n::{t, terminal};
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
@@ -46,21 +47,19 @@ impl Session {
 fn summarize_chunk(
     entry: &Entry,
     index: usize,
-    ai: &AiConfig,
-    timeout: u64,
+    client: &Client<'_>,
     mode: Mode,
     logger: &Logger,
 ) -> crate::Result<Summary> {
     let uri = entry.uri();
     collect_summary::request(
-        ai,
+        client,
         &crate::collect::prompts::chunk(
             entry,
             &entry.chunks[index],
             index,
             mode,
         ),
-        timeout,
         mode,
         &Context {
             label: format!("{uri} chunk {}/{}", index + 1, entry.chunks.len()),
@@ -76,8 +75,7 @@ fn summarize_chunk(
 fn merge_session(
     entry: &Entry,
     payloads: &[Summary],
-    ai: &AiConfig,
-    timeout: u64,
+    client: &Client<'_>,
     mode: Mode,
     logger: &Logger,
 ) -> crate::Result<Summary> {
@@ -93,9 +91,8 @@ fn merge_session(
             .into());
         }
         match collect_summary::request(
-            ai,
+            client,
             &prompt,
-            timeout,
             mode,
             &Context {
                 label: format!("{uri} session merge"),
@@ -125,8 +122,7 @@ fn merge_group(
     batch: &[Group],
     index: usize,
     depth: usize,
-    ai: &AiConfig,
-    timeout: u64,
+    client: &Client<'_>,
     mode: Mode,
     logger: &Logger,
 ) -> Group {
@@ -135,14 +131,13 @@ fn merge_group(
     let source = format!("collect://group-level-{depth}/group-{index}");
     if batch.len() > 1 && collect_summary::needs_compression(&merged) {
         match collect_summary::request(
-            ai,
+            client,
             &crate::collect::prompts::merge(
                 &source,
                 &payloads,
                 &format!("group-level-{depth}"),
                 mode,
             ),
-            timeout,
             mode,
             &Context {
                 label: source.clone(),
@@ -179,7 +174,7 @@ fn merge_group(
 
 pub fn run(
     entries: &[Entry],
-    ai: &AiConfig,
+    client: &Client<'_>,
     config: &CollectConfig,
     mode: Mode,
     logger: &Logger,
@@ -234,26 +229,12 @@ pub fn run(
             Job::Chunk(entry, index) => (
                 entry,
                 index,
-                summarize_chunk(
-                    &entries[entry],
-                    index,
-                    ai,
-                    config.timeout,
-                    mode,
-                    logger,
-                ),
+                summarize_chunk(&entries[entry], index, client, mode, logger),
             ),
             Job::Merge(entry, index, payloads) => (
                 entry,
                 index,
-                merge_session(
-                    &entries[entry],
-                    &payloads,
-                    ai,
-                    config.timeout,
-                    mode,
-                    logger,
-                ),
+                merge_session(&entries[entry], &payloads, client, mode, logger),
             ),
         },
         |(entry, index, result), queue| {
@@ -398,8 +379,7 @@ pub fn run(
                     batches[index],
                     index + 1,
                     depth,
-                    ai,
-                    config.timeout,
+                    client,
                     mode,
                     logger,
                 );

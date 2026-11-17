@@ -1,7 +1,7 @@
+use crate::collect::llm::Client;
 use crate::collect::log::Logger;
 use crate::collect::model::{Mode, Summary};
 use agent_dump_core::compat::json as compat_json;
-use agent_dump_core::config::AiConfig;
 use agent_dump_core::query::text as query_text;
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -154,13 +154,13 @@ pub struct Context<'a> {
 }
 
 pub fn request(
-    config: &AiConfig,
+    client: &Client<'_>,
     prompt: &str,
-    timeout: u64,
     mode: Mode,
     context: &Context<'_>,
     logger: &Logger,
 ) -> crate::Result<Summary> {
+    let config = client.config;
     let mut current = prompt.to_owned();
     let mut parse_attempt = 0;
     let mut transport_attempt = 0;
@@ -190,12 +190,7 @@ pub fn request(
         fields["prompt_chars"] = current.chars().count().into();
         logger.log("llm_request", fields.clone());
         fields.as_object_mut().unwrap().remove("prompt_chars");
-        let response = match crate::collect::llm::request(
-            config,
-            &current,
-            timeout,
-            Some(mode),
-        ) {
+        let response = match client.request(&current, Some(mode)) {
             Ok(response) => response,
             Err(error) => {
                 let retry = error.retryable && transport_attempt < 1;
