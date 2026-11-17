@@ -338,7 +338,8 @@ impl Codex {
             })?;
             return Ok(scan);
         }
-        let metadata = jsonl::metadata(path, TITLE_RECORDS, Some(&RECORD))?;
+        let metadata =
+            jsonl::metadata(path, TITLE_RECORDS, Some(&RECORD), false)?;
         let mut activity = Activity::default();
         for record in &metadata.records {
             activity.visit(record)?;

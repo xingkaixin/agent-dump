@@ -97,6 +97,7 @@ pub fn metadata(
     path: &Path,
     head_lines: usize,
     shape: Option<&'static Shape>,
+    include_tail: bool,
 ) -> crate::Result<Metadata> {
     let mut file = crate::storage::source_io::open(path)?;
     let size = file.metadata()?.len();
@@ -146,7 +147,11 @@ pub fn metadata(
     Ok(Metadata {
         header,
         records,
-        tail: tail(&mut file, size)?,
+        tail: if include_tail {
+            tail(&mut file, size)?
+        } else {
+            None
+        },
         complete: false,
     })
 }
