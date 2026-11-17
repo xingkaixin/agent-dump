@@ -2,7 +2,7 @@
   "name": "agent-dump-web",
   "type": "module",
   "version": "0.0.0",
-  "packageManager": "pnpm@11.22.0",
+  "packageManager": "pnpm@11.28.12",
   "engines": {
     "node": ">=22"
   },
@@ -15,20 +15,20 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@astrojs/react": "^7.1.7",
-    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/react": "^7.1.9",
+    "@astrojs/sitemap": "^3.7.5",
     "@base-ui/react": "^1.9.0",
     "@fontsource-variable/montserrat": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@tailwindcss/vite": "^4.3.5",
-    "astro": "^7.4.10",
+    "astro": "^7.4.12",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tailwindcss": "^4.3.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "sharp": "^0.35.5",
