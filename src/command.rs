@@ -357,7 +357,7 @@ fn validate_days(days: Option<i64>, mode: Mode, zh: bool) -> Result<()> {
     ) && let Some(days) = days
     {
         let maximum = i64::from(
-            jiff::Zoned::now()
+            jiff::ZonedDateTime::now()
                 .date()
                 .since((jiff::Unit::Day, jiff::civil::date(1, 1, 1)))?
                 .get_days(),

@@ -95,7 +95,7 @@ pub fn sessions(
     out: &mut impl Write,
     reader: &mut impl BufRead,
 ) -> crate::Result<Vec<usize>> {
-    let today = jiff::Zoned::now().date();
+    let today = jiff::ZonedDateTime::now().date();
     let keys = [
         "TIME_TODAY",
         "TIME_YESTERDAY",
