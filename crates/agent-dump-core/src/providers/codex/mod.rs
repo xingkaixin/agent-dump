@@ -170,8 +170,10 @@ fn recent(
     let mut last = None;
     let mut end = size;
     let mut carry = Vec::new();
+    let mut window = TAIL_WINDOW;
+    // Geometric windows keep copying an incomplete JSONL record linear.
     while end > floor && recent.updated.is_none() {
-        let start = end.saturating_sub(TAIL_WINDOW).max(floor);
+        let start = end.saturating_sub(window).max(floor);
         let mut chunk = vec![0; usize::try_from(end - start)?];
         crate::storage::source_io::at(path, file.seek(SeekFrom::Start(start)))?;
         crate::storage::source_io::at(path, file.read_exact(&mut chunk))?;
@@ -202,6 +204,7 @@ fn recent(
         chunk.truncate(first);
         carry = chunk;
         end = start;
+        window *= 2;
     }
     Ok((recent, last))
 }
