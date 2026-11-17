@@ -198,14 +198,14 @@ pub fn page(
                     body.push_str("\n\n");
                     offset += 2;
                 }
-                let text = render::safe_body(&text);
-                let end = offset + text.chars().count();
+                let start = body.len();
+                render::push_safe_body(&mut body, &text);
+                let end = offset + body[start..].chars().count();
                 spans.push(TextSpan {
                     start: offset,
                     end,
                     date: time.map(|time| time.local_date().to_string()),
                 });
-                body.push_str(&text);
                 offset = end;
             }
             (body, Some(spans))

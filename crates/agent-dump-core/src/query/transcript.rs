@@ -1,5 +1,7 @@
+use crate::session::timestamp::Timestamp;
 use crate::session::{Message, Part, SessionData};
 use serde_json::Value;
+use std::borrow::Cow;
 
 fn clean(value: &Value) -> String {
     if crate::compat::value::truthy(value) {
@@ -24,13 +26,13 @@ pub fn message_texts(message: &Message) -> Vec<String> {
 pub fn visible_texts(message: &Message) -> Vec<String> {
     visible_segments(message)
         .into_iter()
-        .map(|(text, _)| text)
+        .map(|(text, _)| text.into_owned())
         .collect()
 }
 
 pub fn visible_segments(
     message: &Message,
-) -> Vec<(String, Option<crate::session::timestamp::Timestamp>)> {
+) -> Vec<(Cow<'_, str>, Option<Timestamp>)> {
     let time = |millis: i64| {
         if message.inferred_time || millis == 0 {
             return None;
@@ -46,7 +48,7 @@ pub fn visible_segments(
             if let Part::Text(part) = part {
                 let text = part.text.trim();
                 (!text.is_empty())
-                    .then(|| (text.to_owned(), time(part.time_created)))
+                    .then(|| (Cow::Borrowed(text), time(part.time_created)))
             } else {
                 None
             }
@@ -55,7 +57,7 @@ pub fn visible_segments(
     segments.extend(
         legacy_texts(message)
             .into_iter()
-            .map(|text| (text, time(message.time_created))),
+            .map(|text| (Cow::Owned(text), time(message.time_created))),
     );
     segments
 }
