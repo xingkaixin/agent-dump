@@ -25,7 +25,7 @@ pnpm build
 - 转化事件：`install-cta` 表示点击安装入口；`install-copy` 表示成功复制 CLI 安装或免安装命令（`method` 区分工具）；`guide-copy` 表示成功复制指南示例；`outbound-click` 表示点击页脚外链。事件仅记录语言、入口或安装方式，不发送命令正文、会话内容。复制命令只是使用意向，不代表安装或执行成功；skill 命令不算 CLI 安装转化。
 - Umami 历史数据按 Hostname = `agent-dump.xingkaixin.me` 筛选后再比较。观察 GSC 的非品牌查询曝光、指南点击及 Umami 的安装命令复制率，避免用含测试流量的总浏览量判断 SEO 效果。
 
-部署只使用通过 mise 全局安装并已登录的 `cf`，不在项目依赖或 `mise.toml` 中安装 cf / Wrangler。当前已验证版本为 `cf 1.0.0-beta.12`。`web/scripts/prepare-worker.mjs` 把 Astro 的 `dist/` 复制到 Cloudflare Build Output Specification v0 目录，并写入 Worker 名称、正式域名及 HTML/404 行为。生成目录 `.cloudflare/` 不提交。该格式仍处于 beta；升级全局 cf 后先运行 dry run：
+部署只使用通过 mise 全局安装并已登录的 `cf`，不在项目依赖或 `mise.toml` 中安装 cf / Wrangler。当前已验证版本为 `cf 1.0.0-rc.0`。`web/scripts/prepare-worker.mjs` 把 Astro 的 `dist/` 复制到 Cloudflare Build Output Specification v1 目录，并写入 Worker 名称、正式域名及 HTML/404 行为。生成目录 `.cloudflare/` 不提交。`cf 1.0.0-rc.0` 起拒绝旧 v0 格式；升级全局 cf 后先运行 dry run：
 
 ```bash
 just build-web

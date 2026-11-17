@@ -2,6 +2,21 @@
 
 ## [未发布]
 
+## [1.2.11] - 2026-11-17
+
+### 新增功能
+
+- 使用 `--collect --emit-prompt --output <PATH>` 将 collect 交接提示词直接保存到文件，避免命令工具截断输出。文件采用原子写入，目录目标自动生成带日期的文件名，任务元数据保留查询筛选条件 (#579)。
+- 使用 `--collect --verify-manifest <FILE>` 静态校验已保存的交接提示词，可输出 JSON，无需加载配置或发现 Provider。读取会话前，检查结束标记、重复 JSON 键、候选数量、唯一会话 URI、Unicode 长度和读取命令对应关系 (#580)。
+
+### 变更
+
+- 在提示词、README 和 Agent recipes 中明确交接分页、仅携带游标的续读方式，以及相对消息片段的 `text_spans` 切片规则。补充先读取全部候选再筛选，以及通过搜索和带引用导出复用历史工程纠正的流程 (#581)。
+- 扫描 Codex 长 JSONL 记录和分页读取会话时减少重复复制，跳过未使用的 Codex 尾部投影，并在 collect 各阶段复用 HTTP 连接 (#583)。
+- 大量会话的 collect 扫描减少进度输出频率 (#579)。
+- 落地页部署生成 Cloudflare Build Output v1，兼容 `cf 1.0.0-rc.0`。
+- 更新 Rust 依赖（含 Jiff 1.0）、Python 开发工具、Astro、Playwright、pnpm 和 CI setup actions (#584, #585)。
+
 ## [1.2.10] - 2026-11-15
 
 ### 新增功能
@@ -1412,3 +1427,4 @@
 [1.2.8]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.8
 [1.2.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.9
 [1.2.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.10
+[1.2.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.11

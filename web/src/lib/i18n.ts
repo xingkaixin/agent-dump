@@ -187,9 +187,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.11",
+        date: "2026-11-17",
+        isLatest: true,
+        title: "Save and Verify Agent Handoffs",
+        description:
+          "Save a complete prompt handoff from Codex, Claude Code, Cursor, and other AI sessions directly to a file with --emit-prompt --output. Check the saved candidate manifest with --verify-manifest before the next Agent reads sessions, without API configuration or model calls. Handoff instructions clarify pagination and activity-date filtering. Codex session discovery and paginated reading do less copying, and AI collect reuses HTTP connections across summary stages.",
+        command: 'npx @agent-dump/cli@1.2.11 collect --days 7 --emit-prompt --output ./prompt.txt',
+        tags: ["Prompt Handoff", "AI Collect", "Performance"],
+      },
+      {
         version: "v1.2.10",
         date: "2026-11-15",
-        isLatest: true,
         title: "Antigravity ACP Sessions and Searchable Tool Errors",
         description:
           "Find and export Antigravity ACP sessions from T3 Code alongside regular Antigravity CLI history. Sessions with multiple workspaces now use the active project directory, and exports retain known tool results, explicit errors, and child session links. OpenCode, Kimi-Code, and DeepChat also preserve more tool evidence. Full-text search includes tool errors, so you can find failed commands and reuse their context in the next Agent handoff.",
@@ -435,9 +444,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.11",
+        date: "2026-11-17",
+        isLatest: true,
+        title: "交接提示词直接落盘，读取前校验清单",
+        description:
+          "用 --emit-prompt --output 将 Codex、Claude Code、Cursor 等 AI 会话的完整交接提示词直接保存到文件，避免命令输出被截断。下一个 Agent 读取会话前，可用 --verify-manifest 校验候选清单，无需配置 API 或调用模型。交接指令明确分页续读和活动日期筛选规则。Codex 会话发现与分页读取减少重复复制，AI collect 在各摘要阶段复用 HTTP 连接。",
+        command: 'npx @agent-dump/cli@1.2.11 collect --days 7 --emit-prompt --output ./prompt.txt',
+        tags: ["提示词交接", "AI collect", "性能"],
+      },
+      {
         version: "v1.2.10",
         date: "2026-11-15",
-        isLatest: true,
         title: "读取 Antigravity ACP 会话，搜索工具错误",
         description:
           "T3 Code 中的 Antigravity ACP 会话，现在可以和常规 Antigravity CLI 历史一起查找、导出。多工作区会话使用活跃项目目录，导出保留已知工具结果、显式错误和子会话关联。OpenCode、Kimi-Code 和 DeepChat 也保留更多工具执行信息。全文搜索包含工具错误，方便找回失败的命令，并把上下文交给下一个 Agent。",
@@ -683,9 +701,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.11",
+        date: "2026-11-17",
+        isLatest: true,
+        title: "引き継ぎプロンプトを保存し、候補一覧を検証",
+        description:
+          "Codex、Claude Code、Cursor などの AI セッションから作る引き継ぎプロンプトを、--emit-prompt --output でファイルへ直接保存し、コマンド出力の切り捨てを防げます。次の Agent がセッションを読む前に、--verify-manifest で候補一覧を検証できます。API 設定やモデル呼び出しは不要です。引き継ぎ指示ではページ送りと活動日による絞り込みを明確にしました。Codex のセッション検出とページ読み込みのコピーを減らし、AI collect は要約の各段階で HTTP 接続を再利用します。",
+        command: 'npx @agent-dump/cli@1.2.11 collect --days 7 --emit-prompt --output ./prompt.txt',
+        tags: ["プロンプト引き継ぎ", "AI collect", "パフォーマンス"],
+      },
+      {
         version: "v1.2.10",
         date: "2026-11-15",
-        isLatest: true,
         title: "Antigravity ACP セッションとツールエラー検索",
         description:
           "T3 Code の Antigravity ACP セッションを、通常の Antigravity CLI 履歴と一緒に検索・エクスポートできます。複数のワークスペースがあるセッションはアクティブなプロジェクトディレクトリを使い、既知のツール結果、明示的なエラー、子セッションへのリンクを保持します。OpenCode、Kimi-Code、DeepChat のツール実行情報も改善しました。全文検索にはツールエラーも含まれるため、失敗したコマンドを見つけ、そのコンテキストを次の Agent に引き継げます。",
