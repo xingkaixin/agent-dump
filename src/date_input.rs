@@ -39,7 +39,7 @@ pub fn collect_range(
     days: Option<i64>,
     zh: bool,
 ) -> crate::Result<(Date, Date)> {
-    let today = jiff::Zoned::now().date();
+    let today = jiff::ZonedDateTime::now().date();
     let parse = |raw| {
         parse(raw).ok_or_else(|| t("COLLECT_DATE_FORMAT_INVALID", zh, &[]))
     };

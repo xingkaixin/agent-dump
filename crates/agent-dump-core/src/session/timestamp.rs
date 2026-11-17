@@ -10,7 +10,11 @@ impl Timestamp {
     pub const UNIX_EPOCH: Self =
         Self(jiff::civil::date(1970, 1, 1).at(0, 0, 0, 0));
     pub fn now() -> Self {
-        Self(jiff::Timestamp::now().to_zoned(TimeZone::UTC).datetime())
+        Self(
+            jiff::Timestamp::now()
+                .to_zoned_datetime(TimeZone::UTC)
+                .datetime(),
+        )
     }
 
     pub fn days_ago(days: i64) -> crate::Result<Self> {
@@ -89,7 +93,7 @@ impl Timestamp {
         if let Ok(timestamp) =
             jiff::Timestamp::from_microsecond(self.as_microsecond())
         {
-            let local = timestamp.to_zoned(zone);
+            let local = timestamp.to_zoned_datetime(zone);
             // CPython delegates %Y padding to libc; glibc does not pad small years.
             if cfg!(all(target_os = "linux", target_env = "gnu")) {
                 return local
@@ -102,7 +106,7 @@ impl Timestamp {
         // Far-future IANA rules repeat with the 400-year Gregorian calendar cycle.
         let shifted = self.0.with().year(self.0.year() - 400).build().unwrap();
         let local = shifted
-            .to_zoned(TimeZone::UTC)
+            .to_zoned_datetime(TimeZone::UTC)
             .unwrap()
             .with_time_zone(zone);
         let year = local.year() + 400;

@@ -230,7 +230,7 @@ pub fn run(
     });
     let mut total = MessageStats::default();
     let mut ages = [0_usize; 5];
-    let today = jiff::Zoned::now().date();
+    let today = jiff::ZonedDateTime::now().date();
     for (g, group) in scan.groups.iter().enumerate() {
         for (s, session) in group.sessions.iter().enumerate() {
             if selected

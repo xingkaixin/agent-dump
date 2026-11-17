@@ -496,7 +496,8 @@ fn discover(
 ) -> crate::Result<Option<Scan>> {
     // The cutoff is `days` × 24h before now; one day reaches local midnight of
     // `since`, the other covers a 25-hour DST day.
-    let days = i64::from((jiff::Zoned::now().date() - since).get_days()) + 2;
+    let days =
+        i64::from((jiff::ZonedDateTime::now().date() - since).get_days()) + 2;
     let mut scan = scanner::discover(
         operation.query.as_ref(),
         days.max(2),
