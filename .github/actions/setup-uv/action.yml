@@ -9,27 +9,27 @@ runs:
       run: |
         set -euo pipefail
 
-        uv_version="0.12.5"
+        uv_version="0.13.9"
 
         case "$uv_version:$RUNNER_OS/$RUNNER_ARCH" in
-          "0.12.5:Linux/X64")
+          "0.13.9:Linux/X64")
             uv_target="x86_64-unknown-linux-gnu"
-            uv_sha256="68a509da24b06b4223a1c0175fb5eb5bc79342b76cbeff0cfe51ac3f5b17b6b2"
+            uv_sha256="a7fbaff2b9a271d85c1bdb540941090fd1ce011797b4abeb48e4dcd39c2471d5"
             uv_extension="tar.gz"
             ;;
-          "0.12.5:macOS/X64")
+          "0.13.9:macOS/X64")
             uv_target="x86_64-apple-darwin"
-            uv_sha256="b3b2137477cf96c9686ebfb71524614cec780c673fd73e59bce099aef02e70e8"
+            uv_sha256="617a3211261b0fc739562f0071aa34e9739797c510208ede8e2977c30903d041"
             uv_extension="tar.gz"
             ;;
-          "0.12.5:macOS/ARM64")
+          "0.13.9:macOS/ARM64")
             uv_target="aarch64-apple-darwin"
-            uv_sha256="5bb0e5fe008a773c3dbcb97ff79cd89e1241464fe9d2f986d52ad8f1b037bd62"
+            uv_sha256="5aeca67f2283f75235de40d0bd9c0a5bbc5fce23b6d48b3bf9fa1b2db08382ca"
             uv_extension="tar.gz"
             ;;
-          "0.12.5:Windows/X64")
+          "0.13.9:Windows/X64")
             uv_target="x86_64-pc-windows-msvc"
-            uv_sha256="4c4d49d8738847d9b71ba319e49a5688c93eac0fe6204b1df24e98528dddf39a"
+            uv_sha256="edd61f7f5728a56cc62455386661860bdfc7bab65872f39b0c25bdcc1d8e1beb"
             uv_extension="zip"
             ;;
           *)
