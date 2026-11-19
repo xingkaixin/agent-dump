@@ -7,7 +7,7 @@ use agent_dump_core::parallel;
 use agent_dump_core::providers::contract::{RawExport, render_search_roots};
 use agent_dump_core::providers::error::ProviderError;
 use agent_dump_core::providers::registry;
-use agent_dump_core::query::scanner::ScannedProvider;
+use agent_dump_core::query::scanner::{ScannedProvider, WindowScope};
 use agent_dump_core::query::{Query, filter, project_path, scanner};
 use agent_dump_core::session::cache::SessionDataCache;
 use agent_dump_core::storage::source_io::path_text;
@@ -18,7 +18,7 @@ use unicode_normalization::UnicodeNormalization;
 
 pub struct Operation {
     pub query: Option<Query>,
-    pub days: i64,
+    pub scope: WindowScope,
     pub formats: Vec<OutputFormat>,
     pub output: Option<PathBuf>,
     pub metadata: bool,
@@ -46,7 +46,7 @@ pub fn run(
         .unwrap_or_default();
     let mut scan = scanner::discover(
         operation.query.as_ref(),
-        operation.days,
+        operation.scope,
         time_field,
         zh,
         warnings,
@@ -84,24 +84,27 @@ pub fn run(
         scan.groups.retain(|g| !g.sessions.is_empty());
     }
     if scan.groups.is_empty() {
-        writeln!(
-            out,
-            "{}",
-            terminal(
+        let query_text = operation
+            .query
+            .as_ref()
+            .map_or(String::new(), |q| q.summary(zh));
+        let message = match operation.scope {
+            WindowScope::Days(days) => terminal(
                 "NO_SESSIONS_MATCHING_KEYWORD",
                 zh,
+                &[("days", days.to_string()), ("query", query_text)],
+            ),
+            WindowScope::Range(since, until) => terminal(
+                "NO_SESSIONS_MATCHING_KEYWORD_RANGE",
+                zh,
                 &[
-                    ("days", operation.days.to_string()),
-                    (
-                        "query",
-                        operation
-                            .query
-                            .as_ref()
-                            .map_or(String::new(), |q| q.summary(zh))
-                    )
-                ]
-            )
-        )?;
+                    ("since", since.to_string()),
+                    ("until", until.to_string()),
+                    ("query", query_text),
+                ],
+            ),
+        };
+        writeln!(out, "{message}")?;
         return Ok(false);
     }
     let index = if scan.groups.len() == 1 {
@@ -158,37 +161,37 @@ pub fn run(
         return Ok(false);
     }
     if group.sessions.is_empty() {
-        writeln!(
-            out,
-            "{}",
-            t(
-                "NO_SESSIONS_FOUND",
+        let message = match operation.scope {
+            WindowScope::Days(days) => {
+                t("NO_SESSIONS_FOUND", zh, &[("days", days.to_string())])
+            }
+            WindowScope::Range(since, until) => t(
+                "NO_SESSIONS_FOUND_RANGE",
                 zh,
-                &[("days", operation.days.to_string())]
-            )
-        )?;
+                &[("since", since.to_string()), ("until", until.to_string())],
+            ),
+        };
+        writeln!(out, "{message}")?;
         return Ok(false);
     }
-    let mut values = vec![
-        ("count", group.sessions.len().to_string()),
-        ("days", operation.days.to_string()),
-    ];
+    let mut values = vec![("count", group.sessions.len().to_string())];
+    match operation.scope {
+        WindowScope::Days(days) => values.push(("days", days.to_string())),
+        WindowScope::Range(since, until) => {
+            values.push(("since", since.to_string()));
+            values.push(("until", until.to_string()));
+        }
+    }
     if let Some(q) = &operation.query {
         values.push(("query", q.summary(zh)));
     }
-    writeln!(
-        out,
-        "{}",
-        terminal(
-            if operation.query.is_some() {
-                "SESSIONS_FOUND_FILTERED"
-            } else {
-                "SESSIONS_FOUND"
-            },
-            zh,
-            &values
-        )
-    )?;
+    let found_key = match (operation.scope, operation.query.is_some()) {
+        (WindowScope::Days(_), true) => "SESSIONS_FOUND_FILTERED",
+        (WindowScope::Days(_), false) => "SESSIONS_FOUND",
+        (WindowScope::Range(_, _), true) => "SESSIONS_FOUND_FILTERED_RANGE",
+        (WindowScope::Range(_, _), false) => "SESSIONS_FOUND_RANGE",
+    };
+    writeln!(out, "{}", terminal(found_key, zh, &values))?;
     if group.sessions.len() > 100 {
         writeln!(
             out,

@@ -4,6 +4,7 @@ use agent_dump_core::output::i18n::t;
 use agent_dump_core::output::render;
 use agent_dump_core::providers::registry;
 use agent_dump_core::query::index::SearchIndex;
+use agent_dump_core::query::scanner::WindowScope;
 use agent_dump_core::query::{Query, TimeField, filter, scanner};
 use agent_dump_core::storage::source_io::path_text;
 use std::collections::BTreeMap;
@@ -145,7 +146,7 @@ pub fn providers(
 
 pub fn run(
     query: Option<&Query>,
-    days: i64,
+    scope: WindowScope,
     reindex: bool,
     json: bool,
     zh: bool,
@@ -154,7 +155,7 @@ pub fn run(
 ) -> crate::Result<bool> {
     let scan = scanner::discover(
         query,
-        days,
+        scope,
         if reindex {
             TimeField::Updated
         } else {
@@ -284,18 +285,30 @@ pub fn run(
         );
     }
     if total.sessions == 0 {
-        writeln!(
-            out,
-            "{}",
-            t("STATS_NO_SESSIONS", zh, &[("days", days.to_string())])
-        )?;
+        let message = match scope {
+            WindowScope::Days(days) => {
+                t("STATS_NO_SESSIONS", zh, &[("days", days.to_string())])
+            }
+            WindowScope::Range(since, until) => t(
+                "STATS_NO_SESSIONS_RANGE",
+                zh,
+                &[("since", since.to_string()), ("until", until.to_string())],
+            ),
+        };
+        writeln!(out, "{message}")?;
         return Ok(true);
     }
-    writeln!(
-        out,
-        "{}\n",
-        t("STATS_HEADER", zh, &[("days", days.to_string())])
-    )?;
+    let header = match scope {
+        WindowScope::Days(days) => {
+            t("STATS_HEADER", zh, &[("days", days.to_string())])
+        }
+        WindowScope::Range(since, until) => t(
+            "STATS_HEADER_RANGE",
+            zh,
+            &[("since", since.to_string()), ("until", until.to_string())],
+        ),
+    };
+    writeln!(out, "{header}\n")?;
     writeln!(
         out,
         "{}",

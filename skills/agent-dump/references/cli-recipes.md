@@ -46,12 +46,14 @@ agent-dump --list --lang en
 
 ```bash
 agent-dump --list --time-field updated -d 7 --json
-agent-dump --search '数据库锁定' --time-field updated -d 7
+agent-dump --list --since 2026-03-01 --until 2026-03-07 --json
+agent-dump --search '数据库锁定' --since 2026-03-01 --until 2026-03-07
 agent-dump --browse --time-field updated -d 7
 agent-dump --interactive --time-field updated -d 7
+agent-dump --stats --since 2026-03-01 --until 2026-03-31 --json
 ```
 
-`--days` 默认按 Provider 记录的 `updated_at` 筛选，可找到最近 N 天内有活动的会话，包括很早创建的会话。加 `--time-field created` 改为按创建时间筛选。`--time-field` 只用于列表、搜索、浏览和交互模式，collect 和 stats 不接受它。
+`--days` 与 `--since`/`--until` 默认按 Provider 记录的 `updated_at` 筛选，可找到所选时间窗内有活动的会话，包括很早创建的会话。显式 `--since`/`--until` 覆盖 `--days`（仅传 `--since` 时默认截至今天；仅传 `--until` 时默认从当月 1 日开始）。加 `--time-field created` 改为按创建时间筛选。`--time-field` 只用于列表、搜索、浏览和交互模式，collect 和 stats 不接受它（stats 始终按创建时间筛选）。
 
 活动列表先按更新时间排序，再应用结果数量限制。文本列表和交互选择保留 Provider 分组；显示日期和“今天／昨天”等分组使用所选时间字段。全文搜索仍优先按相关性排序。JSON 保留原有创建时间和更新时间。为发现旧会话的新活动，可能需要扫描创建时间窗口之外的元数据。文件型 Provider 跳过修改时间早于窗口的会话文件，因此修改时间早于其中记录活动的文件不会被活动窗口找到；其余筛选沿用各 Provider 的 `updated_at` 事实。各 Provider 的覆盖范围和发现不完整时的诊断规则不变。
 
@@ -350,7 +352,7 @@ agent-dump --search "auth" --list --days 30
 | 非 URI 模式 | `json` | 主要配合 `--interactive` 使用 |
 | `--list` 模式 | N/A | 仅列出，不导出；`--format/--output` 会被忽略并警告 |
 | `--interactive` 模式 | `json` | 支持 `json/markdown/raw`，不接受 `print` |
-| `--stats` 模式 | N/A | 推荐独立使用；支持 `--days` 与 `--query` |
+| `--stats` 模式 | N/A | 推荐独立使用；支持 `--days`、`--since`/`--until` 与 `--query`（始终按创建时间筛选） |
 | `--providers` | N/A | 只读展示全部注册 provider 的能力与本地路径状态，不扫描会话 |
 | `--collect` 模式 | N/A | 可接受 `agents://...` 查询 URI；只分析 user/assistant 可见文本并忽略空对话；PM 汇总请求、决策和 Agent 明确报告的结果；支持 `--days`、`--since/--until`、`--collect-mode pm/insight`、`--dry-run`、`--save`；非 `--emit-prompt` 下不允许 `--output`；普通 session URI、`--interactive`、`--list` 会触发冲突 |
 | `--collect --emit-prompt` | 提示词 | 无需 AI 配置；沿用 collect 筛选和排除规则并在 `collect_task.query` 暴露只读筛选；与 `--dry-run` 互斥；`--save` 是最终报告路径，`--output` 将提示词写到文件或目录（无候选时不写） |

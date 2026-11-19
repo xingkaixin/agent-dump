@@ -82,8 +82,12 @@ def test_query_uri_is_reported_ignored_only_when_unused(cli, args, ignored):
 def test_collect_only_options_are_reported_ignored(cli):
     result = cli.run("--list", "--since", "2026-01-01", "--dry-run", "--save", "report.md", "--lang", "en")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.splitlines()[0] == "⚠️  --since, --dry-run, --save only apply to --collect and will be ignored."
+    assert result.stdout.splitlines()[0] == "⚠️  --dry-run, --save only apply to --collect and will be ignored."
     assert not (cli.root / "report.md").exists()
+
+    providers = cli.run("--providers", "--since", "2026-01-01", "--until", "2026-01-07", "--lang", "en")
+    assert providers.returncode == 0, providers.stdout + providers.stderr
+    assert providers.stdout.splitlines()[0] == "⚠️  --since, --until do not apply in this mode and will be ignored."
 
 
 def test_interactive_rejects_an_invalid_format_as_usage_error(cli):

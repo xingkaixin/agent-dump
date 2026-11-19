@@ -3,6 +3,7 @@ use agent_dump_core::output::i18n::t;
 use agent_dump_core::output::{diagnostics, render};
 use agent_dump_core::providers::contract::SessionGroup;
 use agent_dump_core::providers::registry;
+use agent_dump_core::query::scanner::WindowScope;
 use agent_dump_core::query::text::Mode;
 use agent_dump_core::query::{Query, context, filter, scanner};
 use agent_dump_core::session::cache::SessionDataCache;
@@ -17,14 +18,14 @@ pub struct Options {
 
 pub fn run(
     query: Option<&Query>,
-    days: i64,
+    scope: WindowScope,
     options: &Options,
     zh: bool,
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<bool> {
     let time_field = query.map(|query| query.time_field).unwrap_or_default();
-    let scan = scanner::discover(query, days, time_field, zh, warnings)?;
+    let scan = scanner::discover(query, scope, time_field, zh, warnings)?;
     if scan.groups.is_empty() && !options.json {
         let roots = match registry::search_roots() {
             Ok(roots) => roots,
@@ -144,15 +145,23 @@ pub fn run(
         && query.mode == Mode::Terms
     {
         write!(out, "{}{}", render::list_banner(), ignored_text)?;
-        writeln!(
-            out,
-            "{}",
-            t(
+        let header = match scope {
+            WindowScope::Days(days) => t(
                 "SEARCH_HEADER",
                 zh,
-                &[("days", days.to_string()), ("query", query.summary(zh))]
-            )
-        )?;
+                &[("days", days.to_string()), ("query", query.summary(zh))],
+            ),
+            WindowScope::Range(since, until) => t(
+                "SEARCH_HEADER_RANGE",
+                zh,
+                &[
+                    ("since", since.to_string()),
+                    ("until", until.to_string()),
+                    ("query", query.summary(zh)),
+                ],
+            ),
+        };
+        writeln!(out, "{header}")?;
         writeln!(out, "{}", "-".repeat(60))?;
         let matches = &selection.matches;
         if matches.is_empty() {
@@ -225,7 +234,7 @@ pub fn run(
         render::list(
             &groups,
             query.map(|q| q.summary(zh)).as_deref(),
-            days,
+            scope,
             options.summary,
             time_field,
             zh

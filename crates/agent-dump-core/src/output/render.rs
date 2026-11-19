@@ -329,23 +329,42 @@ pub fn transcript(uri: &str, data: &SessionData) -> String {
 pub fn list(
     groups: &[crate::providers::contract::SessionGroup],
     query: Option<&str>,
-    days: i64,
+    scope: crate::query::scanner::WindowScope,
     summary: bool,
     time_field: crate::query::TimeField,
     zh: bool,
 ) -> String {
+    use crate::query::scanner::WindowScope;
     let mut output = list_banner();
-    let header = match (zh, query) {
-        (true, Some(names)) => {
+    let header = match (scope, zh, query) {
+        (WindowScope::Days(days), true, Some(names)) => {
             format!("📋 列出最近 {days} 天且匹配「{names}」的会话:")
         }
-        (false, Some(names)) => {
+        (WindowScope::Days(days), false, Some(names)) => {
             format!(
                 "📋 Listing sessions from last {days} days matching '{names}':"
             )
         }
-        (true, None) => format!("📋 列出最近 {days} 天的会话:"),
-        (false, None) => format!("📋 Listing sessions from last {days} days:"),
+        (WindowScope::Days(days), true, None) => {
+            format!("📋 列出最近 {days} 天的会话:")
+        }
+        (WindowScope::Days(days), false, None) => {
+            format!("📋 Listing sessions from last {days} days:")
+        }
+        (WindowScope::Range(since, until), true, Some(names)) => {
+            format!("📋 列出 {since} ~ {until} 期间且匹配「{names}」的会话:")
+        }
+        (WindowScope::Range(since, until), false, Some(names)) => {
+            format!(
+                "📋 Listing sessions from {since} ~ {until} matching '{names}':"
+            )
+        }
+        (WindowScope::Range(since, until), true, None) => {
+            format!("📋 列出 {since} ~ {until} 期间的会话:")
+        }
+        (WindowScope::Range(since, until), false, None) => {
+            format!("📋 Listing sessions from {since} ~ {until}:")
+        }
     };
     writeln!(output, "{header}\n\n{}", "-".repeat(60)).unwrap();
     for group in groups {
@@ -353,7 +372,7 @@ pub fn list(
             &mut output,
             &group.sessions,
             group.provider,
-            days,
+            scope,
             summary,
             time_field,
             zh,
@@ -380,11 +399,12 @@ fn append_list_group(
     output: &mut String,
     sessions: &[Session],
     provider: &crate::providers::contract::ProviderInfo,
-    days: i64,
+    scope: crate::query::scanner::WindowScope,
     summary: bool,
     time_field: crate::query::TimeField,
     zh: bool,
 ) {
+    use crate::query::scanner::WindowScope;
     let display_name = provider.display_name;
     let scheme = provider.scheme;
     writeln!(
@@ -413,10 +433,19 @@ fn append_list_group(
         writeln!(
             output,
             "{}",
-            if zh {
-                format!("   (最近 {days} 天内无会话)")
-            } else {
-                format!("   (No sessions in last {days} days)")
+            match (scope, zh) {
+                (WindowScope::Days(days), true) => {
+                    format!("   (最近 {days} 天内无会话)")
+                }
+                (WindowScope::Days(days), false) => {
+                    format!("   (No sessions in last {days} days)")
+                }
+                (WindowScope::Range(since, until), true) => {
+                    format!("   ({since} ~ {until} 期间无会话)")
+                }
+                (WindowScope::Range(since, until), false) => {
+                    format!("   (No sessions in {since} ~ {until})")
+                }
             }
         )
         .unwrap();

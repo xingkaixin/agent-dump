@@ -54,9 +54,9 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - 用户给了 `--search`：使用 search 模式（本地 SQLite FTS5 全文搜索）。可与 `--list` 组合使用。
 - 用户给了 `--config view` 或 `--config edit`：使用 config 模式。
 - 用户要”先看列表/筛选”：使用 `--list` 模式。
-- `--days` 在 list/search/browse/interactive 模式默认按更新时间筛选；用户要按创建时间筛选时加 `--time-field created`。collect 和 stats 不接受 `--time-field`。
+- `--days` 与 `--since`/`--until` 在 list/search/browse/interactive 模式默认按更新时间筛选；显式 `--since`/`--until` 覆盖 `--days`（仅传 `--since` 时默认截至今天；仅传 `--until` 时默认从当月 1 日开始）；用户要按创建时间筛选时加 `--time-field created`。collect 和 stats 不接受 `--time-field`（stats 支持 `--since`/`--until` 且始终按创建时间）。
 - 用户要”交互式勾选后导出”：使用 `--browse`（或兼容入口 `--interactive`），空格标记会话，`e` 批量导出。
-- 用户只给 `--days` 或 `--query` 且未指定 `--interactive`：按列表模式处理（CLI 会自动启用 `--list`）。
+- 用户只给 `--days`、`--since`/`--until` 或 `--query` 且未指定 `--interactive`：按列表模式处理（CLI 会自动启用 `--list`）。
 - Codex URI 允许 `codex://threads/<session_id>` 变体，等价于 `codex://<session_id>`。
 - OpenCode 支持旧版与 2.x SQLite；自定义或 channel 数据库通过 `OPENCODE_DB` 指定。详见 recipes 的 OpenCode 2.x 部分。
 
@@ -101,7 +101,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - `--collect` 日期优先级为显式 `--since/--until` > 显式 `--days` > 缺省当天。按文本段实际本地日期筛选，跨日会话逐日拆分。无可靠时间的文本直接排除，不报告覆盖缺口；外部汇总使用 read 页中的 `text_spans`，不使用会话创建日期。
 - `--collect` 会告警并跳过单条无法读取的会话；其他可读会话继续处理。
 - `--collect` 与普通 session URI、`--interactive`、`--list` 组合时会报冲突。
-- `--stats` 支持 `--days` 与 `--query`；存在未知消息数时输出已知小计和未知会话数。
+- `--stats` 支持 `--days`、`--since`/`--until` 与 `--query`（始终按创建时间筛选）；存在未知消息数时输出已知小计和未知会话数。
 - `--query` 与 `agents://...?q=` 的 keyword 与 `--search` 匹配语义相同：按空白拆分，全部 term 必须命中，可分散出现。
 - `--search` 作为列表搜索模式使用，可与 `--list`、`--days`、`--query` 组合；按空白切分的 distinct term 均按字面量匹配，不解释 FTS5 操作符语法（`AND`/`NEAR`/`*` 等），全部 term 必须命中，CJK term 必须连续。
 - `--reindex` 是独立的索引维护命令，不应与其他模式标志组合。

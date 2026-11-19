@@ -132,6 +132,8 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
         desc_key: "CLI_SUBCMD_LIST_DESC",
         options: &[
             ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--since <DATE>", "CLI_SINCE_HELP"),
+            ("--until <DATE>", "CLI_UNTIL_HELP"),
             ("--time-field <FIELD>", "CLI_TIME_FIELD_HELP"),
             ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
             ("--json", "CLI_JSON_HELP"),
@@ -139,7 +141,7 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
         ],
         notes_key: "CLI_SUBCMD_LIST_NOTES",
         examples: &[
-            "agent-dump list -d 7 --json",
+            "agent-dump list --since 2026-01-01 --until 2026-01-07 --json",
             "agent-dump list -q \"provider:codex path:.\"",
         ],
     },
@@ -149,6 +151,8 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
         desc_key: "CLI_SUBCMD_SEARCH_DESC",
         options: &[
             ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--since <DATE>", "CLI_SINCE_HELP"),
+            ("--until <DATE>", "CLI_UNTIL_HELP"),
             ("--time-field <FIELD>", "CLI_TIME_FIELD_HELP"),
             ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
             ("--locate", "CLI_LOCATE_HELP"),
@@ -157,7 +161,7 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
         ],
         notes_key: "CLI_SUBCMD_SEARCH_NOTES",
         examples: &[
-            "agent-dump search \"auth token\" -d 30 --json",
+            "agent-dump search \"auth token\" --since 2026-01-01 --until 2026-01-31 --json",
             "agent-dump search \"panic\" --locate -q \"provider:codex\"",
         ],
     },
@@ -167,6 +171,8 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
         desc_key: "CLI_SUBCMD_BROWSE_DESC",
         options: &[
             ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--since <DATE>", "CLI_SINCE_HELP"),
+            ("--until <DATE>", "CLI_UNTIL_HELP"),
             ("--time-field <FIELD>", "CLI_TIME_FIELD_HELP"),
             ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
             ("--search <TERMS>", "CLI_SEARCH_HELP"),
@@ -176,7 +182,7 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
         ],
         notes_key: "CLI_SUBCMD_BROWSE_NOTES",
         examples: &[
-            "agent-dump browse -d 14",
+            "agent-dump browse --since 2026-01-01 --until 2026-01-14",
             "agent-dump browse -q \"provider:claude\" --output ./exports",
         ],
     },
@@ -192,6 +198,8 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
             ("--before <N>", "CLI_BEFORE_HELP"),
             ("--after <N>", "CLI_AFTER_HELP"),
             ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--since <DATE>", "CLI_SINCE_HELP"),
+            ("--until <DATE>", "CLI_UNTIL_HELP"),
             ("--time-field <FIELD>", "CLI_TIME_FIELD_HELP"),
             ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
             ("--no-metadata-summary", "CLI_NO_METADATA_SUMMARY_HELP"),
@@ -274,12 +282,14 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
         desc_key: "CLI_SUBCMD_STATS_DESC",
         options: &[
             ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--since <DATE>", "CLI_SINCE_HELP"),
+            ("--until <DATE>", "CLI_UNTIL_HELP"),
             ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
             ("--json", "CLI_JSON_HELP"),
         ],
         notes_key: "CLI_SUBCMD_STATS_NOTES",
         examples: &[
-            "agent-dump stats -d 30",
+            "agent-dump stats --since 2026-01-01 --until 2026-01-31",
             "agent-dump stats -d 30 -q \"provider:codex\" --json",
         ],
     },

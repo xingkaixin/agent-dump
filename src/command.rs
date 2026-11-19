@@ -11,6 +11,7 @@ use agent_dump_core::output::formats as output_formats;
 use agent_dump_core::output::i18n;
 use agent_dump_core::output::render;
 use agent_dump_core::query;
+use agent_dump_core::query::scanner::WindowScope;
 use agent_dump_core::query::text as query_text;
 use std::io::{self, Write};
 
@@ -103,6 +104,8 @@ fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
     if (!query_uri || args.collect)
         && (args.days.is_some()
             || args.time_field.is_some()
+            || args.since.as_deref().is_some_and(|s| !s.is_empty())
+            || args.until.as_deref().is_some_and(|s| !s.is_empty())
             || args.query.as_ref().is_some_and(|s| !s.is_empty()))
     {
         result.push((Mode::List, ""));
@@ -142,6 +145,13 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         return config_command::run(action, zh, out, &mut io::stdin().lock());
     }
     validate_days(args.days, mode, zh)?;
+    let scope = match resolve_scope(&args, mode, zh) {
+        Ok(scope) => scope,
+        Err(error) => {
+            writeln!(plan_out, "{error}")?;
+            return Ok(false);
+        }
+    };
     let query = match resolve_query(&args, mode, zh) {
         Ok(query) => query,
         Err(diagnostic) => {
@@ -161,7 +171,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         )?;
         return Ok(false);
     }
-    dispatch(args, mode, query, zh, out)
+    dispatch(args, mode, scope, query, zh, out)
 }
 
 fn chinese(lang: Option<&str>) -> bool {
@@ -488,11 +498,34 @@ fn warn_ignored(
         }
     }
     if mode != Mode::Collect {
+        let unused: Vec<_> =
+            [(args.dry_run, "--dry-run"), (args.save.is_some(), "--save")]
+                .into_iter()
+                .filter_map(|(present, label)| present.then_some(label))
+                .collect();
+        if !unused.is_empty() {
+            writeln!(
+                out,
+                "{}",
+                i18n::t(
+                    "COLLECT_OPTIONS_IGNORED_WARNING",
+                    zh,
+                    &[("options", unused.join(", "))]
+                )
+            )?;
+        }
+    }
+    if !matches!(
+        mode,
+        Mode::Collect
+            | Mode::List
+            | Mode::Interactive
+            | Mode::Browse
+            | Mode::Stats
+    ) {
         let unused: Vec<_> = [
             (args.since.is_some(), "--since"),
             (args.until.is_some(), "--until"),
-            (args.dry_run, "--dry-run"),
-            (args.save.is_some(), "--save"),
         ]
         .into_iter()
         .filter_map(|(present, label)| present.then_some(label))
@@ -502,7 +535,7 @@ fn warn_ignored(
                 out,
                 "{}",
                 i18n::t(
-                    "COLLECT_OPTIONS_IGNORED_WARNING",
+                    "DATE_RANGE_OPTIONS_IGNORED_WARNING",
                     zh,
                     &[("options", unused.join(", "))]
                 )
@@ -614,9 +647,24 @@ fn resolve_query(
     Ok(query)
 }
 
+fn resolve_scope(args: &Args, mode: Mode, zh: bool) -> Result<WindowScope> {
+    if matches!(
+        mode,
+        Mode::List | Mode::Interactive | Mode::Browse | Mode::Stats
+    ) && let Some((since, until)) = crate::date_input::optional_range(
+        args.since.as_deref(),
+        args.until.as_deref(),
+        zh,
+    )? {
+        return Ok(WindowScope::Range(since, until));
+    }
+    Ok(WindowScope::Days(args.days.unwrap_or(7)))
+}
+
 fn dispatch(
     args: Args,
     mode: Mode,
+    scope: WindowScope,
     query: Option<query::Query>,
     zh: bool,
     out: &mut impl Write,
@@ -650,16 +698,16 @@ fn dispatch(
         }
         Mode::Stats | Mode::Reindex => maintenance::run(
             query.as_ref(),
-            args.days.unwrap_or(7),
+            scope,
             mode == Mode::Reindex,
             args.json,
             zh,
             out,
             &mut io::stderr(),
         ),
-        Mode::List => list(&args, query.as_ref(), zh, out),
+        Mode::List => list(&args, scope, query.as_ref(), zh, out),
         Mode::Interactive | Mode::Browse => {
-            interactive(args, mode, query, zh, out)
+            interactive(args, mode, scope, query, zh, out)
         }
         Mode::Help => {
             crate::cli_args::command(zh).print_help()?;
@@ -685,6 +733,7 @@ fn formats(spec: &str, zh: bool) -> Result<Vec<output_formats::OutputFormat>> {
 
 fn list(
     args: &Args,
+    scope: WindowScope,
     query: Option<&query::Query>,
     zh: bool,
     out: &mut impl Write,
@@ -694,7 +743,7 @@ fn list(
     }
     list_workflow::run(
         query,
-        args.days.unwrap_or(7),
+        scope,
         &list_workflow::Options {
             summary: !args.no_metadata_summary,
             ignored: (args.format.is_some(), args.output.is_some()),
@@ -710,6 +759,7 @@ fn list(
 fn interactive(
     args: Args,
     mode: Mode,
+    scope: WindowScope,
     query: Option<query::Query>,
     zh: bool,
     out: &mut impl Write,
@@ -728,7 +778,7 @@ fn interactive(
     }
     let operation = crate::workflows::interactive::Operation {
         query,
-        days: args.days.unwrap_or(7),
+        scope,
         formats,
         output: args.output,
         metadata: !args.no_metadata_summary,

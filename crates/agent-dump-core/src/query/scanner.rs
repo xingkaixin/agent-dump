@@ -25,9 +25,31 @@ struct ProviderScan {
     result: crate::Result<(Box<dyn Provider>, Discovery)>,
 }
 
+#[derive(Clone, Copy)]
+pub enum WindowScope {
+    Days(i64),
+    Range(jiff::civil::Date, jiff::civil::Date),
+}
+
+impl WindowScope {
+    pub fn discovery_days(since: jiff::civil::Date) -> i64 {
+        let today = jiff::ZonedDateTime::now().date();
+        // The cutoff is `days` * 24h before now; one day reaches local midnight
+        // of `since`, the other covers a 25-hour DST day.
+        let span = i64::from((today - since).get_days()) + 2;
+        let max_days = i64::from(
+            today
+                .since((jiff::Unit::Day, jiff::civil::date(1, 1, 1)))
+                .map_or(0, |span| span.get_days()),
+        )
+        .saturating_sub(1);
+        span.clamp(0, max_days)
+    }
+}
+
 pub fn discover(
     query: Option<&Query>,
-    days: i64,
+    scope: WindowScope,
     time_field: TimeField,
     zh: bool,
     warnings: &mut impl Write,
@@ -35,7 +57,7 @@ pub fn discover(
     discover_registrations(
         crate::providers::registry::all(),
         query,
-        days,
+        scope,
         time_field,
         zh,
         warnings,
@@ -45,15 +67,27 @@ pub fn discover(
 fn discover_registrations(
     registrations: &'static [Registration],
     query: Option<&Query>,
-    days: i64,
+    scope: WindowScope,
     time_field: TimeField,
     zh: bool,
     warnings: &mut impl Write,
 ) -> crate::Result<Scan> {
-    let (window, updated_since) = match time_field {
-        TimeField::Created => (Window::Created(days), None),
-        TimeField::Updated => {
-            (Window::Updated(days), Some(Timestamp::days_ago(days)?))
+    let (window, updated_since, date_range) = match scope {
+        WindowScope::Days(days) => match time_field {
+            TimeField::Created => (Window::Created(days), None, None),
+            TimeField::Updated => (
+                Window::Updated(days),
+                Some(Timestamp::days_ago(days)?),
+                None,
+            ),
+        },
+        WindowScope::Range(since, until) => {
+            let days = WindowScope::discovery_days(since);
+            let window = match time_field {
+                TimeField::Created => Window::Created(days),
+                TimeField::Updated => Window::Updated(days),
+            };
+            (window, None, Some(since..=until))
         }
     };
     let selected: Vec<&'static Registration> = registrations
@@ -69,16 +103,24 @@ fn discover_registrations(
         [] => {}
         [registration] => {
             let result = scan_provider(registration, window);
-            record_scan(&mut scan, result, updated_since, zh, warnings)?;
+            record_scan(&mut scan, result, zh, warnings)?;
         }
         selected => {
             crate::parallel::ordered(
                 selected,
                 |registration| scan_provider(registration, window),
-                |result| {
-                    record_scan(&mut scan, result, updated_since, zh, warnings)
-                },
+                |result| record_scan(&mut scan, result, zh, warnings),
             )?;
+        }
+    }
+    for group in &mut scan.groups {
+        if let Some(cutoff) = updated_since {
+            group.sessions.retain(|s| s.updated_at >= cutoff);
+        }
+        if let Some(range) = &date_range {
+            group.sessions.retain(|s| {
+                range.contains(&time_field.timestamp(s).local_date())
+            });
         }
     }
     Ok(scan)
@@ -106,7 +148,6 @@ fn scan_provider(
 fn record_scan(
     scan: &mut Scan,
     provider_scan: ProviderScan,
-    updated_since: Option<Timestamp>,
     zh: bool,
     warnings: &mut impl Write,
 ) -> crate::Result<()> {
@@ -123,12 +164,7 @@ fn record_scan(
         )?;
     }
     match result {
-        Ok((provider, mut discovery)) => {
-            if let Some(cutoff) = updated_since {
-                discovery
-                    .sessions
-                    .retain(|session| session.updated_at >= cutoff);
-            }
+        Ok((provider, discovery)) => {
             if !discovery.failures.is_empty() {
                 scan.failed_providers.push(info.name.into());
             }
@@ -381,7 +417,7 @@ mod tests {
         let scan = discover_registrations(
             REGISTRATIONS,
             None,
-            7,
+            WindowScope::Days(7),
             TimeField::Created,
             false,
             &mut warnings,
@@ -459,7 +495,7 @@ mod tests {
         let scan = discover_registrations(
             REGISTRATIONS,
             Some(&query),
-            7,
+            WindowScope::Days(7),
             TimeField::Created,
             true,
             &mut warnings,
@@ -501,7 +537,7 @@ mod tests {
         let scan = discover_registrations(
             REGISTRATIONS,
             Some(&query),
-            7,
+            WindowScope::Days(7),
             TimeField::Created,
             false,
             &mut warnings,
@@ -549,7 +585,7 @@ mod tests {
         let scan = discover_registrations(
             REGISTRATIONS,
             None,
-            7,
+            WindowScope::Days(7),
             TimeField::Updated,
             false,
             &mut warnings,
