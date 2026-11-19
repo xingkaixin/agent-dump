@@ -13,7 +13,17 @@ use agent_dump_core::output::diagnostics;
 pub use agent_dump_core::{Error, Result};
 
 fn main() -> std::process::ExitCode {
-    let arguments = normalize_arguments(std::env::args_os().collect());
+    let raw_args: Vec<_> = std::env::args_os().collect();
+    if let Some(help) = cli_args::subcommand_help(&raw_args) {
+        let mut out = io::BufWriter::new(io::stdout().lock());
+        if let Err(error) = write!(out, "{help}").and_then(|()| out.flush())
+            && error.kind() != io::ErrorKind::BrokenPipe
+        {
+            return std::process::ExitCode::FAILURE;
+        }
+        return std::process::ExitCode::SUCCESS;
+    }
+    let arguments = normalize_arguments(raw_args);
     let emit = arguments.iter().any(|arg| {
         matches!(
             arg.to_str(),
