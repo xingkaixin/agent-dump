@@ -646,7 +646,7 @@ agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --search "database lock" --format json,markdown --output ./exports
 ```
 
-`--browse` 需要真实交互式终端，默认选择最近 7 天有更新的会话，按更新时间排序；加 `--time-field created` 改为按创建时间筛选。支持现有查询条件和 agents:// 查询 URI；只读取当前选择的会话正文（内容筛选本身仍可能读取多个会话）。宽终端显示列表和正文两栏；窄于 90 列时通过 Tab 切换单栏。阅读器只读 Provider 来源，不自动刷新活动会话；重新打开可获取新列表。
+`--browse` 需要真实交互式终端，默认选择最近 7 天有更新的会话，按更新时间排序。加 `--time-field created` 后，筛选、行时间、日期分组和时间排序都使用创建时间。通过 `--search` 或 `s` 搜索时先按相关性排序，同分时按所选时间字段排序。支持现有查询条件和 agents:// 查询 URI；只读取当前选择的会话正文（内容筛选本身仍可能读取多个会话）。宽终端显示列表和正文两栏；窄于 90 列时通过 Tab 切换单栏。阅读器只读 Provider 来源，不自动刷新活动会话；重新打开可获取新列表。
 
 - ↑/↓ 或 j/k：在当前区域移动或滚动；Enter/→ 进入正文，← 返回列表。
 - Tab：切换区域；PageUp/PageDown 翻页；Home/End 跳到首尾。

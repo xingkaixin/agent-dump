@@ -665,7 +665,7 @@ agent-dump --browse 'agents://.?providers=codex,claude'
 agent-dump --browse --search "database lock" --format json,markdown --output ./exports
 ```
 
-`--browse` requires an interactive terminal. By default, it selects sessions updated in the last seven days and sorts them by update time. Add `--time-field created` to filter by creation time. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
+`--browse` requires an interactive terminal. By default, it selects sessions updated in the last seven days and sorts them by update time. With `--time-field created`, filtering, displayed times, date groups and chronological order use creation time. Searches with `--search` or `s` sort by relevance, then by the selected time field. It supports existing query filters and agents:// query URIs, and reads the selected transcript on demand (content filtering itself may read multiple sessions). Wide terminals show list and transcript panes; below 90 columns Tab switches between single panes. Provider sources remain read-only. The reader does not live-refresh active sessions; reopen it to refresh the list.
 
 - Up/Down or j/k move or scroll in the focused pane; Enter/Right opens the transcript, Left returns to the list.
 - Tab switches panes; PageUp/PageDown scroll pages; Home/End jump to either end.
