@@ -464,8 +464,8 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `--no-metadata-summary` | Hide the per-session metadata summary line in list and interactive views. | off |
 | `-v`, `--version` | Print the version and exit. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
-| `--since` | Start date (`YYYY-MM-DD` or `YYYYMMDD`) for list, search, browse, interactive, stats, and collect. Explicit `--since`/`--until` overrides `--days`; passing `--since` alone defaults `--until` to today. | - |
-| `--until` | End date (`YYYY-MM-DD` or `YYYYMMDD`) for list, search, browse, interactive, stats, and collect. Passing `--until` alone defaults `--since` to the 1st of that month. | - |
+| `--since` | Start date (`YYYY-MM-DD` or `YYYYMMDD`) for list, search, browse, interactive, stats, read, and collect. Explicit `--since`/`--until` overrides `--days`; passing `--since` alone defaults `--until` to today. | - |
+| `--until` | End date (`YYYY-MM-DD` or `YYYYMMDD`) for list, search, browse, interactive, stats, read, and collect. Passing `--until` alone defaults `--since` to the 1st of that month. | - |
 | `--save` | collect report path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. With `--emit-prompt`, the path is included as an instruction for the external agent; no report is written. | - |
 | `--config` | Config management: `view` or `edit` | - |
 | `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `--days`, `--since`/`--until`, or `--query` is specified without `--interactive`) | - |
@@ -646,7 +646,7 @@ agent-dump opencode://SESSION_ID --read --order asc --max-chars 4000 --details -
 | `--cursor` | Continue using an unchanged cursor; selection, order and budgets are retained and cannot be overridden |
 | `--role` | Select one normalized role; surrounding whitespace and argument case are ignored |
 | `--match` | Case-insensitive literal phrase in each message's selected text view, with whitespace normalized; filtering precedes pagination |
-| `--since` / `--until` | Filter visible text segments by local date (`YYYY-MM-DD` / `YYYYMMDD`, inclusive); undated or inferred-time segments are excluded; cannot combine with `--details` or `--cursor` |
+| `--since` / `--until` | Filter visible text segments by local date (`YYYY-MM-DD` / `YYYYMMDD`, inclusive); undated or inferred-time segments are excluded; cannot combine with `--details` or `--cursor`. Use the same local time zone on every page |
 | `--details` | Include the readable projection of reasoning, plans and structured tool state; default is text parts only |
 
 Read options require `--read` and cannot mix with list, search, collect, export, `--head`, `--summary` or `--message`. Existing full URI printing, `--search` and `--query` keep their semantics. Matching is not regex, semantic or cross-message search. Add `--details` to search tool details. Both views skip messages with no readable text, do not read attachments, and do not represent every raw Provider field. Nonempty role/match values are limited to 100/4096 UTF-8 bytes; read URIs to 4096 bytes.

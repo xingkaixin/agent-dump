@@ -171,10 +171,11 @@ def test_read_date_filter_rejects_details_cursor_and_invalid_ranges(cli: CliFixt
     assert reversed_range.stdout == ""
     assert reversed_range.stderr
 
-    invalid_date = cli.run(URI, "--read", "--since", "not-a-date", "--json", "--lang", "en")
-    assert invalid_date.returncode == 1
-    assert invalid_date.stdout == ""
-    assert invalid_date.stderr
+    for flag in ["--since=not-a-date", "--since=", "--until="]:
+        invalid_date = cli.run(URI, "--read", flag, "--json", "--lang", "en")
+        assert invalid_date.returncode == 1
+        assert invalid_date.stdout == ""
+        assert "Invalid date format" in invalid_date.stderr
 
     if cursor is None:
         cli.write(
