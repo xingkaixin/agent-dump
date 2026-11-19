@@ -902,13 +902,15 @@ mod tests {
                 extract_config_workflow_keys(tokens, keys);
             }
             "src/workflows/list.rs" => {
-                require_keys("src/workflows/list.rs", keys, |out| {
+                require_keys("list.rs (present, key)", keys, |out| {
                     extract_for_table(
                         tokens,
                         &["present", "key"],
                         Some(1),
                         out,
                     );
+                });
+                require_keys("list.rs (key, value)", keys, |out| {
                     extract_for_table(tokens, &["key", "value"], Some(0), out);
                 });
             }
