@@ -19,14 +19,28 @@ struct Results {
 
 fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
     let mut notices = Vec::new();
-    let mut selection = filter::select(&scan.groups, query, zh, &mut notices)?;
+    let unbounded = Query {
+        limit: None,
+        ..query.clone()
+    };
+    let mut selection =
+        filter::select(&scan.groups, &unbounded, zh, &mut notices)?;
     let grouped = query.mode != Mode::Terms || query.keyword.is_none();
-    if grouped {
-        selection.matches.sort_by_key(|matched| {
-            std::cmp::Reverse(query.time_field.timestamp(
-                &scan.groups[matched.group].sessions[matched.session],
-            ))
-        });
+    let timestamp = |m: &filter::Match| {
+        query
+            .time_field
+            .timestamp(&scan.groups[m.group].sessions[m.session])
+    };
+    selection.matches.sort_by(|a, b| {
+        let by_time = || timestamp(b).cmp(&timestamp(a));
+        if grouped {
+            by_time()
+        } else {
+            b.rank.total_cmp(&a.rank).then_with(by_time)
+        }
+    });
+    if let Some(limit) = query.limit {
+        selection.matches.truncate(limit);
     }
     let days = Days {
         today: Timestamp::now().local_date(),
@@ -508,6 +522,16 @@ mod tests {
         assert_eq!(created.rows[0].time, yesterday.format_local("%H:%M"));
         assert_eq!(created.rows[1].time, three_days_ago.format_local("%H:%M"));
         assert_ne!(created.rows[1].day, "Today");
+        let limited = results(
+            &scan,
+            &Query {
+                limit: Some(1),
+                ..created_query
+            },
+            false,
+        )
+        .unwrap();
+        assert_eq!(limited.positions, [(0, 1)]);
         let expected_span = format!(
             "{} → {}",
             three_days_ago.format_local("%m-%d %H:%M"),
