@@ -67,7 +67,7 @@ description: 使用 agent-dump 为个人开发者与 AI Agent 查找、读取和
 - 保留用户显式给出的 `--time-field`、`--output`、`--format`、`--lang`、`--days`、`--query`、`--summary`、`--collect`、`--since/--until`、`--config` 参数。
 - 保留用户显式给出的 `--collect-mode pm|insight`、`--dry-run`、`--emit-prompt`、`--shortcut`、`--save`、`--search`、`--reindex`、`--providers`、`--capabilities`、`--no-metadata-summary` 参数。
 - 保留用户显式给出的 `--head` 参数，用于 URI 轻量元数据查看。
-- 保留 `--read-prompt`、`--read`、`--cursor`、`--limit`、`--max-chars`、`--order`、`--role`、`--match` 和 `--details`。注意 `--cursor` 必须单独续读，不能同时传 `--order`、`--limit`、`--max-chars`、`--role`、`--match` 或 `--details`。用户只要读取提示词时，生成后交付，不擅自执行其中的读取命令。
+- 保留 `--read-prompt`、`--read`、`--cursor`、`--limit`、`--max-chars`、`--order`、`--role`、`--match`、`--since`、`--until` 和 `--details`。注意 `--cursor` 必须单独续读，不能同时传 `--order`、`--limit`、`--max-chars`、`--role`、`--match`、`--since`、`--until` 或 `--details`；`--since`/`--until` 在 `--read` 下按可见文本段本地日期筛选（排除无时间或推测时间文本）且不可与 `--details` 组合。用户只要读取提示词时，生成后交付，不擅自执行其中的读取命令。
 - 用户要实际执行外部汇总时，首次生成就加 `--output <私有文件或目录>`（或将 stdout/stderr 分别重定向到私有文件），再用 `agent-dump --collect --verify-manifest <FILE> --json` 静态校验清单并只回传路径、统计与退出码；
   确认 `data.valid == true` 后，批处理脚本必须写入私有临时目录的独立 `.py` 文件再执行（禁止使用 `python3 -c '...'` 内联脚本），不得在读取前按 URI 硬编码跳过当前任务自会话，按 recipes 的“外部 agent 汇总”分页读取与按 `text_spans` 相对偏移切片。
 

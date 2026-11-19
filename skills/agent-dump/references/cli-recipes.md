@@ -661,9 +661,9 @@ agent-dump codex://SESSION_ID --read --details --order asc --max-chars 4000 --js
 ```
 
 - 默认按原始消息位置倒序，最多 20 条消息、12000 个 Unicode 正文字符。`--limit` 范围 1..100，`--max-chars` 范围 1..100000；字符预算不含 JSON 包装和游标。`--order asc` 从第一条开始，消息内字符始终正序。
-- 先按 `--role` 和 `--match` 筛选，再分页。role 为一种标准化角色；match 是归一化空白后不区分大小写的单消息字面短语，不解释正则，不跨消息匹配。role/match 非空且最多 100/4096 个 UTF-8 字节，URI 最多 4096 字节。
+- 先按 `--role`、`--match` 和可选的 `--since`/`--until` 筛选，再分页。role 为一种标准化角色；match 是归一化空白后不区分大小写的单消息字面短语，不解释正则，不跨消息匹配。role/match 非空且最多 100/4096 个 UTF-8 字节，URI 最多 4096 字节。`--since`/`--until` 按可见文本段本地日期闭区间筛选（排除无时间或推测时间文本），保留原消息位置与 locator，不可与 `--details` 组合。
 - 默认只返回文本部分；`--details` 加入 reasoning、plan 和工具状态的可读投影，也扩大 match 的匹配范围。所选视图中无文本的消息跳过，不读取附件实体，不代表包含 Provider 全部原始字段。
-- 检查退出码并解析完整 JSON：`kind=read`；**`has_more` 位于顶层 JSON**（`data` 内不存在 `has_more`），游标位于 `data.next_cursor`，必须原样传给下一次读取。`--cursor` 严禁与 `--order`、`--limit`、`--max-chars`、`--role`、`--match`、`--details` 组合（游标已保存这些设置）。
+- 检查退出码并解析完整 JSON：`kind=read`；**`has_more` 位于顶层 JSON**（`data` 内不存在 `has_more`），游标位于 `data.next_cursor`，必须原样传给下一次读取。`--cursor` 严禁与 `--order`、`--limit`、`--max-chars`、`--role`、`--match`、`--since`、`--until`、`--details` 组合（游标已保存这些设置）。
 - `data.messages` 保留原会话一基 position、locator、role、text、total_chars，以及从零开始的 Unicode 字符区间 start/end（左闭右开）。`truncated` 表示消息片段；超长消息由游标从下一字符继续。只有同时满足顶层 `has_more=false` 且 `data.next_cursor=null` 时，才能声称读完所选内容。
 - status=partial 表示来源存在可恢复读取诊断，详情在 stderr；分页和分段不算 partial。无匹配为成功空数组；失败时不把空 stdout 当作空会话。
 - 游标绑定会话和正文 revision。过期后重新读取，说明版本变化，不拼接不同版本。游标不保存历史正文；每次调用内部仍可能完整解析来源。

@@ -67,7 +67,7 @@ Codex 与 Claude 的连续 assistant 片段由 `session/assembly.rs` 合并。�
 
 ### 分段读取与读取提示词
 
-`--read` 由 `workflows/uri.rs` 通过 Provider find/read 定位和读取单个会话。core 的 `query/read.rs` 基于标准化 SessionData 提供文本视图、角色和字面短语筛选、消息分页及长消息字符续读。`output/render.rs` 拥有文本展示，CLI 的 `workflows/read.rs` 输出机器信封和读取提示词。
+`--read` 由 `workflows/uri.rs` 通过 Provider find/read 定位和读取单个会话。core 的 `query/read.rs` 基于标准化 SessionData 提供文本视图、角色、字面短语和本地日期范围（`--since`/`--until`，复用 `visible_segments` 排除无时间或推测时间的文本段，且不与 `--details` 同用）筛选、消息分页及长消息字符续读。`output/render.rs` 拥有文本展示，CLI 的 `workflows/read.rs` 输出机器信封和读取提示词。
 
 游标是版本化的自包含编码，记录 URI、正文 revision、筛选、顺序、预算和位置；续读只接受游标，不另行覆盖选择条件。revision 与消息 locator 来自 `query/context.rs`。正文变化时拒绝旧游标；不持久化历史正文，也不新增索引。每次调用都执行完整 Provider read。可恢复来源诊断标记 partial；分页、视图省略和字符分段不代表源读取失败。
 
