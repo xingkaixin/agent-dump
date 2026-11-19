@@ -38,8 +38,6 @@ pub fn optional_range(
     until: Option<&str>,
     zh: bool,
 ) -> crate::Result<Option<(Date, Date)>> {
-    let since = since.filter(|s| !s.is_empty());
-    let until = until.filter(|s| !s.is_empty());
     if since.is_none() && until.is_none() {
         return Ok(None);
     }
@@ -68,6 +66,8 @@ pub fn collect_range(
     days: Option<i64>,
     zh: bool,
 ) -> crate::Result<(Date, Date)> {
+    let since = since.filter(|s| !s.is_empty());
+    let until = until.filter(|s| !s.is_empty());
     if let Some(range) = optional_range(since, until, zh)? {
         return Ok(range);
     }

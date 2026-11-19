@@ -144,12 +144,12 @@ def test_list_search_stats_date_range_and_time_field(cli: CliFixture) -> None:
         dates["mid"][0],
         "--until",
         dates["mid"][0],
-        "-q",
-        "provider:codex",
         "--json",
     )
     assert implicit.returncode == 0 and not implicit.stderr
-    assert [item["id"] for item in json.loads(implicit.stdout)["data"]] == ["mid-both"]
+    assert [item["id"] for item in json.loads(implicit.stdout)["data"] if item["uri"].startswith("codex://")] == [
+        "mid-both"
+    ]
 
     assert cli.fixtures.source_manifest(cli.root) == before
 

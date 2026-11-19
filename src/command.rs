@@ -104,8 +104,8 @@ fn candidates(args: &Args) -> Vec<(Mode, &'static str)> {
     if (!query_uri || args.collect)
         && (args.days.is_some()
             || args.time_field.is_some()
-            || args.since.as_deref().is_some_and(|s| !s.is_empty())
-            || args.until.as_deref().is_some_and(|s| !s.is_empty())
+            || args.since.is_some()
+            || args.until.is_some()
             || args.query.as_ref().is_some_and(|s| !s.is_empty()))
     {
         result.push((Mode::List, ""));

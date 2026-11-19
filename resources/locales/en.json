@@ -380,7 +380,7 @@
   "CLI_TIME_FIELD_HELP": "Time basis for --days and --since/--until in list/search/browse/interactive: updated (default) or created",
   "TIME_FIELD_MODE_ERROR": "--time-field cannot be used with {mode}; it requires list, search, browse, or interactive mode.",
   "QUERY_SUMMARY_CREATED_TIME": "created time",
-  "READER_NO_MATCHES": "No matching sessions. s changes search; c clears it. Check scope with ?; widen --days or remove --query filters when reopening.",
+  "READER_NO_MATCHES": "No matching sessions. s changes search; c clears it. Check scope with ?; widen the date range or remove --query filters when reopening.",
   "READER_PARTIAL": "Partial results: some sources could not be read.",
   "READER_PARTIAL_TAG": "⚠ partial results",
   "READER_ALL": "all",
