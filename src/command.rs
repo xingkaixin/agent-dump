@@ -126,12 +126,12 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             out
         };
     let mode = mode(&args);
-    if let Some(key) = stderr_error(&args, mode) {
-        eprintln!("{}", i18n::t(key, zh, &[]));
+    if let Some(message) = stderr_error(&args, mode, zh) {
+        eprintln!("{message}");
         return Ok(false);
     }
-    if let Some(key) = plan_error(&args, mode) {
-        writeln!(plan_out, "{}", i18n::t(key, zh, &[]))?;
+    if let Some(message) = plan_error(&args, mode, zh) {
+        writeln!(plan_out, "{message}")?;
         return Ok(false);
     }
     warn_ignored(&args, mode, zh, plan_out)?;
@@ -178,111 +178,297 @@ fn chinese(lang: Option<&str>) -> bool {
     )
 }
 
-fn stderr_error(args: &Args, mode: Mode) -> Option<&'static str> {
+fn mode_label(args: &Args, mode: Mode, zh: bool) -> String {
+    match mode {
+        Mode::Providers => "--providers",
+        Mode::Config => "--config",
+        Mode::Collect => {
+            if args.emit_prompt {
+                "--collect --emit-prompt"
+            } else if args.dry_run {
+                "--collect --dry-run"
+            } else if args.verify_manifest.is_some() {
+                "--collect --verify-manifest"
+            } else {
+                "--collect"
+            }
+        }
+        Mode::Stats => "--stats",
+        Mode::Reindex => "--reindex",
+        Mode::Uri => {
+            if args.read {
+                "--read"
+            } else if args.read_prompt {
+                "--read-prompt"
+            } else if args.head {
+                "--head"
+            } else if args.message.is_some() {
+                "--message"
+            } else {
+                return i18n::t("MODE_SESSION_EXPORT", zh, &[]);
+            }
+        }
+        Mode::List => {
+            if args.search.as_deref().is_some_and(|s| !s.is_empty()) {
+                "--search"
+            } else if args.list {
+                "--list"
+            } else if args
+                .uri
+                .as_deref()
+                .is_some_and(|s| s.starts_with("agents://"))
+            {
+                return i18n::t("MODE_QUERY_URI", zh, &[]);
+            } else {
+                return i18n::t("MODE_LIST", zh, &[]);
+            }
+        }
+        Mode::Interactive => "--interactive",
+        Mode::Browse => "--browse",
+        Mode::Help => "",
+    }
+    .into()
+}
+
+fn push_unique(items: &mut Vec<&'static str>, label: &'static str) {
+    if !label.is_empty() && !items.contains(&label) {
+        items.push(label);
+    }
+}
+
+fn stderr_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
     if args.time_field.is_some()
         && !matches!(mode, Mode::List | Mode::Interactive | Mode::Browse)
     {
-        Some("TIME_FIELD_MODE_ERROR")
-    } else if (args.read || args.read_prompt)
-        && (mode != Mode::Uri
-            || candidates(args)
-                .iter()
-                .any(|(candidate, _)| *candidate != Mode::Uri)
-            || args.head
-            || args.message.is_some()
-            || args.locate
-            || args.summary
-            || args.format.is_some()
-            || args.output.is_some()
-            || args.emit_prompt
-            || args.dry_run
-            || args.since.is_some()
-            || args.until.is_some()
-            || args.save.is_some()
-            || (args.read_prompt && args.json))
-    {
-        Some("READ_MODE_ERROR")
-    } else if args.cursor.is_some()
-        && (args.limit.is_some()
-            || args.max_chars.is_some()
-            || args.order.is_some()
-            || args.role.is_some()
-            || args.read_match.is_some()
-            || args.details)
-    {
-        Some("READ_CURSOR_OPTIONS_ERROR")
-    } else if args.json
+        return Some(i18n::t(
+            "TIME_FIELD_MODE_ERROR",
+            zh,
+            &[("mode", mode_label(args, mode, zh))],
+        ));
+    }
+    if args.read || args.read_prompt {
+        let flag = if args.read_prompt {
+            "--read-prompt"
+        } else {
+            "--read"
+        };
+        let mut conflicts = Vec::new();
+        for (candidate, label) in candidates(args) {
+            if candidate != Mode::Uri {
+                push_unique(&mut conflicts, label);
+            }
+        }
+        for (present, label) in [
+            (args.days.is_some(), "--days"),
+            (
+                args.query.as_ref().is_some_and(|s| !s.is_empty()),
+                "--query",
+            ),
+            (args.head, "--head"),
+            (args.message.is_some(), "--message"),
+            (args.locate, "--locate"),
+            (args.summary, "--summary"),
+            (args.format.is_some(), "--format"),
+            (args.output.is_some(), "--output"),
+            (args.emit_prompt, "--emit-prompt"),
+            (args.dry_run, "--dry-run"),
+            (args.verify_manifest.is_some(), "--verify-manifest"),
+            (args.since.is_some(), "--since"),
+            (args.until.is_some(), "--until"),
+            (args.save.is_some(), "--save"),
+            (args.read_prompt && args.json, "--json"),
+        ] {
+            if present {
+                push_unique(&mut conflicts, label);
+            }
+        }
+        if mode != Mode::Uri && conflicts.is_empty() {
+            return Some(i18n::t(
+                "READ_REQUIRES_URI",
+                zh,
+                &[("flag", flag.into())],
+            ));
+        }
+        if !conflicts.is_empty() {
+            let key = if mode == Mode::Uri {
+                "READ_OPTION_CONFLICT"
+            } else {
+                "READ_URI_CONFLICT"
+            };
+            return Some(i18n::t(
+                key,
+                zh,
+                &[("flag", flag.into()), ("options", conflicts.join(", "))],
+            ));
+        }
+    }
+    if args.cursor.is_some() {
+        let conflicts: Vec<_> = [
+            (args.limit.is_some(), "--limit"),
+            (args.max_chars.is_some(), "--max-chars"),
+            (args.order.is_some(), "--order"),
+            (args.role.is_some(), "--role"),
+            (args.read_match.is_some(), "--match"),
+            (args.details, "--details"),
+        ]
+        .into_iter()
+        .filter_map(|(present, label)| present.then_some(label))
+        .collect();
+        if !conflicts.is_empty() {
+            return Some(i18n::t(
+                "READ_CURSOR_OPTIONS_ERROR",
+                zh,
+                &[("options", conflicts.join(", "))],
+            ));
+        }
+    }
+    if args.json
         && !matches!(mode, Mode::List | Mode::Stats | Mode::Providers)
         && !(mode == Mode::Uri
             && (args.message.is_some() || args.read || args.head))
         && !(mode == Mode::Collect && args.verify_manifest.is_some())
     {
-        Some("JSON_MODE_ERROR")
-    } else if (args.locate
-        && (mode != Mode::List
-            || args.search.as_deref().is_none_or(str::is_empty)))
-        || (args.message.is_some()
-            && (mode != Mode::Uri
-                || args.head
-                || args.summary
-                || (args.json
-                    && (args.format.is_some() || args.output.is_some()))
-                || (args.output.is_some() && args.format.is_none())))
-    {
-        Some("MESSAGE_MODE_ERROR")
-    } else {
-        None
+        return Some(if mode == Mode::Help {
+            i18n::t("JSON_MODE_ERROR", zh, &[])
+        } else {
+            i18n::t(
+                "JSON_MODE_CONFLICT",
+                zh,
+                &[("mode", mode_label(args, mode, zh))],
+            )
+        });
     }
+    if args.locate {
+        if !matches!(mode, Mode::List | Mode::Help) {
+            return Some(i18n::t(
+                "LOCATE_MODE_CONFLICT",
+                zh,
+                &[("mode", mode_label(args, mode, zh))],
+            ));
+        }
+        if args.search.as_deref().is_none_or(str::is_empty) {
+            return Some(i18n::t("LOCATE_REQUIRES_SEARCH", zh, &[]));
+        }
+    }
+    if args.message.is_some() {
+        if mode != Mode::Uri {
+            return Some(if mode == Mode::Help {
+                i18n::t("MESSAGE_REQUIRES_URI", zh, &[])
+            } else {
+                i18n::t(
+                    "MESSAGE_MODE_CONFLICT",
+                    zh,
+                    &[("mode", mode_label(args, mode, zh))],
+                )
+            });
+        }
+        let head_or_summary: Vec<_> =
+            [(args.head, "--head"), (args.summary, "--summary")]
+                .into_iter()
+                .filter_map(|(present, label)| present.then_some(label))
+                .collect();
+        if !head_or_summary.is_empty() {
+            return Some(i18n::t(
+                "MESSAGE_OPTION_CONFLICT",
+                zh,
+                &[("options", head_or_summary.join(", "))],
+            ));
+        }
+        if args.json && (args.format.is_some() || args.output.is_some()) {
+            let export_opts: Vec<_> = [
+                (args.format.is_some(), "--format"),
+                (args.output.is_some(), "--output"),
+            ]
+            .into_iter()
+            .filter_map(|(present, label)| present.then_some(label))
+            .collect();
+            return Some(i18n::t(
+                "MESSAGE_JSON_EXPORT_CONFLICT",
+                zh,
+                &[("options", export_opts.join(", "))],
+            ));
+        }
+        if args.output.is_some() && args.format.is_none() {
+            return Some(i18n::t("MESSAGE_OUTPUT_REQUIRES_FORMAT", zh, &[]));
+        }
+    }
+    None
 }
 
-fn plan_error(args: &Args, mode: Mode) -> Option<&'static str> {
+fn plan_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
     let query_uri = args
         .uri
         .as_deref()
         .is_some_and(|s| s.starts_with("agents://"));
     if args.emit_prompt && mode != Mode::Collect {
-        Some("EMIT_PROMPT_REQUIRES_COLLECT")
-    } else if args.verify_manifest.is_some() && mode != Mode::Collect {
-        Some("VERIFY_MANIFEST_REQUIRES_COLLECT")
-    } else if args.emit_prompt && args.dry_run {
-        Some("COLLECT_ACTION_CONFLICT")
-    } else if mode == Mode::Collect
-        && (args.list
-            || args.interactive
-            || args.browse
-            || (args.uri.is_some() && !query_uri))
-    {
-        Some("COLLECT_MODE_CONFLICT")
-    } else if mode == Mode::Collect
-        && args.verify_manifest.is_some()
-        && (args.emit_prompt
-            || args.dry_run
-            || args.output.is_some()
-            || args.save.is_some()
-            || args.since.is_some()
-            || args.until.is_some()
-            || args.days.is_some()
-            || args.query.is_some()
-            || query_uri
-            || candidates(args)
-                .iter()
-                .any(|(candidate, _)| *candidate != Mode::Collect))
-    {
-        Some("COLLECT_VERIFY_MANIFEST_CONFLICT")
-    } else if mode == Mode::Collect
-        && args.output.is_some()
-        && !args.emit_prompt
-    {
-        Some("COLLECT_OUTPUT_REQUIRES_EMIT_PROMPT")
-    } else if mode == Mode::Uri
-        && args.head
-        && args.summary
-        && args.format.is_none()
-    {
-        Some("URI_HEAD_WITH_SUMMARY_ERROR")
-    } else {
-        None
+        return Some(i18n::t("EMIT_PROMPT_REQUIRES_COLLECT", zh, &[]));
     }
+    if args.verify_manifest.is_some() && mode != Mode::Collect {
+        return Some(i18n::t("VERIFY_MANIFEST_REQUIRES_COLLECT", zh, &[]));
+    }
+    if args.emit_prompt && args.dry_run {
+        return Some(i18n::t("COLLECT_ACTION_CONFLICT", zh, &[]));
+    }
+    if mode == Mode::Collect {
+        let uri_label = if zh { "会话 URI" } else { "session URI" };
+        let collect_conflicts: Vec<_> = [
+            (args.uri.is_some() && !query_uri, uri_label),
+            (args.list, "--list"),
+            (args.interactive, "--interactive"),
+            (args.browse, "--browse"),
+        ]
+        .into_iter()
+        .filter_map(|(present, label)| present.then_some(label))
+        .collect();
+        if !collect_conflicts.is_empty() {
+            return Some(i18n::t(
+                "COLLECT_MODE_CONFLICT",
+                zh,
+                &[("options", collect_conflicts.join(", "))],
+            ));
+        }
+        if args.verify_manifest.is_some() {
+            let mut conflicts = Vec::new();
+            for (present, label) in [
+                (args.emit_prompt, "--emit-prompt"),
+                (args.dry_run, "--dry-run"),
+                (args.output.is_some(), "--output"),
+                (args.save.is_some(), "--save"),
+                (args.since.is_some(), "--since"),
+                (args.until.is_some(), "--until"),
+                (args.days.is_some(), "--days"),
+                (args.query.is_some(), "--query"),
+                (query_uri, QUERY_URI),
+            ] {
+                if present {
+                    push_unique(&mut conflicts, label);
+                }
+            }
+            for (candidate, label) in candidates(args) {
+                if candidate != Mode::Collect {
+                    push_unique(&mut conflicts, label);
+                }
+            }
+            if !conflicts.is_empty() {
+                return Some(i18n::t(
+                    "COLLECT_VERIFY_MANIFEST_CONFLICT",
+                    zh,
+                    &[("options", conflicts.join(", "))],
+                ));
+            }
+        }
+        if args.output.is_some() && !args.emit_prompt {
+            return Some(i18n::t(
+                "COLLECT_OUTPUT_REQUIRES_EMIT_PROMPT",
+                zh,
+                &[],
+            ));
+        }
+    }
+    if mode == Mode::Uri && args.head && args.summary && args.format.is_none() {
+        return Some(i18n::t("URI_HEAD_WITH_SUMMARY_ERROR", zh, &[]));
+    }
+    None
 }
 
 fn warn_ignored(

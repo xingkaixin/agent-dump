@@ -2,6 +2,7 @@ use crate::collect::model as collect_model;
 use agent_dump_core::output::i18n::t;
 use clap::{CommandFactory, FromArgMatches, Parser};
 use std::ffi::OsString;
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -115,17 +116,266 @@ const SUBCOMMANDS: [(&str, &str); 13] = [
     ("shortcut", "--shortcut"),
 ];
 
+struct SubcommandHelp {
+    name: &'static str,
+    usage: &'static str,
+    desc_key: &'static str,
+    options: &'static [(&'static str, &'static str)],
+    notes_key: &'static str,
+    examples: &'static [&'static str],
+}
+
+const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
+    SubcommandHelp {
+        name: "list",
+        usage: "agent-dump list [QUERY_URI] [OPTIONS]",
+        desc_key: "CLI_SUBCMD_LIST_DESC",
+        options: &[
+            ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--time-field <FIELD>", "CLI_TIME_FIELD_HELP"),
+            ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
+            ("--json", "CLI_JSON_HELP"),
+            ("--no-metadata-summary", "CLI_NO_METADATA_SUMMARY_HELP"),
+        ],
+        notes_key: "CLI_SUBCMD_LIST_NOTES",
+        examples: &[
+            "agent-dump list -d 7 --json",
+            "agent-dump list -q \"provider:codex path:.\"",
+        ],
+    },
+    SubcommandHelp {
+        name: "search",
+        usage: "agent-dump search <TERMS> [QUERY_URI] [OPTIONS]",
+        desc_key: "CLI_SUBCMD_SEARCH_DESC",
+        options: &[
+            ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--time-field <FIELD>", "CLI_TIME_FIELD_HELP"),
+            ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
+            ("--locate", "CLI_LOCATE_HELP"),
+            ("--json", "CLI_JSON_HELP"),
+            ("--no-metadata-summary", "CLI_NO_METADATA_SUMMARY_HELP"),
+        ],
+        notes_key: "CLI_SUBCMD_SEARCH_NOTES",
+        examples: &[
+            "agent-dump search \"auth token\" -d 30 --json",
+            "agent-dump search \"panic\" --locate -q \"provider:codex\"",
+        ],
+    },
+    SubcommandHelp {
+        name: "browse",
+        usage: "agent-dump browse [QUERY_URI] [OPTIONS]",
+        desc_key: "CLI_SUBCMD_BROWSE_DESC",
+        options: &[
+            ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--time-field <FIELD>", "CLI_TIME_FIELD_HELP"),
+            ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
+            ("--search <TERMS>", "CLI_SEARCH_HELP"),
+            ("--format <FORMAT>", "CLI_FORMAT_HELP"),
+            ("--output <DIR>", "CLI_OUTPUT_HELP"),
+            ("--no-metadata-summary", "CLI_NO_METADATA_SUMMARY_HELP"),
+        ],
+        notes_key: "CLI_SUBCMD_BROWSE_NOTES",
+        examples: &[
+            "agent-dump browse -d 14",
+            "agent-dump browse -q \"provider:claude\" --output ./exports",
+        ],
+    },
+    SubcommandHelp {
+        name: "export",
+        usage: "agent-dump export [URI] [OPTIONS]",
+        desc_key: "CLI_SUBCMD_EXPORT_DESC",
+        options: &[
+            ("--format <FORMAT>", "CLI_FORMAT_HELP"),
+            ("--output <DIR>", "CLI_OUTPUT_HELP"),
+            ("--summary", "CLI_SUMMARY_HELP"),
+            ("--message <LOCATOR>", "CLI_MESSAGE_HELP"),
+            ("--before <N>", "CLI_BEFORE_HELP"),
+            ("--after <N>", "CLI_AFTER_HELP"),
+            ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--time-field <FIELD>", "CLI_TIME_FIELD_HELP"),
+            ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
+            ("--no-metadata-summary", "CLI_NO_METADATA_SUMMARY_HELP"),
+        ],
+        notes_key: "CLI_SUBCMD_EXPORT_NOTES",
+        examples: &[
+            "agent-dump export codex://<id> --format markdown --output ./exports",
+            "agent-dump codex://<id> --message <LOCATOR> --json",
+            "agent-dump export -d 7 --format json,markdown",
+        ],
+    },
+    SubcommandHelp {
+        name: "head",
+        usage: "agent-dump head <URI> [OPTIONS]",
+        desc_key: "CLI_SUBCMD_HEAD_DESC",
+        options: &[("--json", "CLI_JSON_HELP")],
+        notes_key: "CLI_SUBCMD_HEAD_NOTES",
+        examples: &[
+            "agent-dump head codex://<id>",
+            "agent-dump head codex://<id> --json",
+        ],
+    },
+    SubcommandHelp {
+        name: "read",
+        usage: "agent-dump read <URI> [OPTIONS]",
+        desc_key: "CLI_SUBCMD_READ_DESC",
+        options: &[
+            ("--limit <1..100>", "CLI_READ_LIMIT_HELP"),
+            ("--max-chars <1..100000>", "CLI_READ_MAX_CHARS_HELP"),
+            ("--order <asc|desc>", "CLI_READ_ORDER_HELP"),
+            ("--role <ROLE>", "CLI_READ_ROLE_HELP"),
+            ("--match <PHRASE>", "CLI_READ_MATCH_HELP"),
+            ("--details", "CLI_READ_DETAILS_HELP"),
+            ("--cursor <CURSOR>", "CLI_READ_CURSOR_HELP"),
+            ("--json", "CLI_JSON_HELP"),
+        ],
+        notes_key: "CLI_SUBCMD_READ_NOTES",
+        examples: &[
+            "agent-dump read codex://<id> --limit 10 --json",
+            "agent-dump read codex://<id> --cursor <CURSOR> --json",
+        ],
+    },
+    SubcommandHelp {
+        name: "read-prompt",
+        usage: "agent-dump read-prompt <URI> [OPTIONS]",
+        desc_key: "CLI_SUBCMD_READ_PROMPT_DESC",
+        options: &[],
+        notes_key: "CLI_SUBCMD_READ_PROMPT_NOTES",
+        examples: &[
+            "agent-dump read-prompt codex://<id>",
+            "agent-dump read-prompt claude://<id> --lang zh",
+        ],
+    },
+    SubcommandHelp {
+        name: "collect",
+        usage: "agent-dump collect [QUERY_URI] [OPTIONS]",
+        desc_key: "CLI_SUBCMD_COLLECT_DESC",
+        options: &[
+            ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("--since <DATE>", "CLI_SINCE_HELP"),
+            ("--until <DATE>", "CLI_UNTIL_HELP"),
+            ("--collect-mode <MODE>", "CLI_COLLECT_MODE_HELP"),
+            ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
+            ("--save <PATH>", "CLI_SAVE_HELP"),
+            ("--dry-run", "CLI_DRY_RUN_HELP"),
+            ("--emit-prompt", "CLI_EMIT_PROMPT_HELP"),
+            ("--output <PATH>", "CLI_OUTPUT_HELP"),
+            ("--verify-manifest <FILE>", "CLI_VERIFY_MANIFEST_HELP"),
+            ("--json", "CLI_JSON_HELP"),
+        ],
+        notes_key: "CLI_SUBCMD_COLLECT_NOTES",
+        examples: &[
+            "agent-dump collect --since 2026-01-01 --until 2026-01-07 --dry-run",
+            "agent-dump collect --since 2026-01-01 --emit-prompt --output ./prompt.txt",
+        ],
+    },
+    SubcommandHelp {
+        name: "stats",
+        usage: "agent-dump stats [OPTIONS]",
+        desc_key: "CLI_SUBCMD_STATS_DESC",
+        options: &[
+            ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
+            ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
+            ("--json", "CLI_JSON_HELP"),
+        ],
+        notes_key: "CLI_SUBCMD_STATS_NOTES",
+        examples: &[
+            "agent-dump stats -d 30",
+            "agent-dump stats -d 30 -q \"provider:codex\" --json",
+        ],
+    },
+    SubcommandHelp {
+        name: "providers",
+        usage: "agent-dump providers [OPTIONS]",
+        desc_key: "CLI_SUBCMD_PROVIDERS_DESC",
+        options: &[("--json", "CLI_JSON_HELP")],
+        notes_key: "CLI_SUBCMD_PROVIDERS_NOTES",
+        examples: &["agent-dump providers", "agent-dump providers --json"],
+    },
+    SubcommandHelp {
+        name: "config",
+        usage: "agent-dump config <view|edit> [OPTIONS]",
+        desc_key: "CLI_SUBCMD_CONFIG_DESC",
+        options: &[],
+        notes_key: "CLI_SUBCMD_CONFIG_NOTES",
+        examples: &["agent-dump config view", "agent-dump config edit"],
+    },
+    SubcommandHelp {
+        name: "reindex",
+        usage: "agent-dump reindex [OPTIONS]",
+        desc_key: "CLI_SUBCMD_REINDEX_DESC",
+        options: &[("-d, --days <DAYS>", "CLI_DAYS_HELP")],
+        notes_key: "CLI_SUBCMD_REINDEX_NOTES",
+        examples: &["agent-dump reindex", "agent-dump reindex -d 90"],
+    },
+    SubcommandHelp {
+        name: "shortcut",
+        usage: "agent-dump shortcut <NAME> [ARGS...] [OPTIONS]",
+        desc_key: "CLI_SUBCMD_SHORTCUT_DESC",
+        options: &[],
+        notes_key: "CLI_SUBCMD_SHORTCUT_NOTES",
+        examples: &[
+            "agent-dump shortcut daily 2026-01-15",
+            "agent-dump shortcut weekly --dry-run",
+        ],
+    },
+];
+
+pub fn subcommand_help(arguments: &[OsString]) -> Option<String> {
+    let name = arguments.get(1)?.to_str()?;
+    let spec = SUBCOMMAND_HELP.iter().find(|spec| spec.name == name)?;
+    let requested = arguments[2..]
+        .iter()
+        .take_while(|arg| *arg != "--")
+        .any(|arg| arg == "-h" || arg == "--help");
+    if !requested {
+        return None;
+    }
+    Some(render_subcommand_help(spec, language(arguments)))
+}
+
+fn render_subcommand_help(spec: &SubcommandHelp, zh: bool) -> String {
+    let mut out = String::new();
+    let _ = writeln!(out, "{}\n", t(spec.desc_key, zh, &[]));
+    let _ = writeln!(
+        out,
+        "{}\n  {}\n",
+        if zh { "用法:" } else { "Usage:" },
+        spec.usage
+    );
+    let mut options: Vec<(&str, &str)> = spec.options.to_vec();
+    options.push(("--lang <en|zh>", "CLI_LANG_HELP"));
+    options.push(("-h, --help", "CLI_HELP_HELP"));
+    let width = options
+        .iter()
+        .map(|(flag, _)| flag.len())
+        .max()
+        .unwrap_or(0);
+    let _ = writeln!(out, "{}", if zh { "选项:" } else { "Options:" });
+    for (flag, key) in options {
+        let _ = writeln!(out, "  {flag:<width$}  {}", t(key, zh, &[]));
+    }
+    let notes = t(spec.notes_key, zh, &[]);
+    if !notes.is_empty() {
+        let _ = writeln!(out, "\n{}", if zh { "说明:" } else { "Notes:" });
+        for line in notes.lines() {
+            let _ = writeln!(out, "  - {line}");
+        }
+    }
+    if !spec.examples.is_empty() {
+        let _ = writeln!(out, "\n{}", if zh { "示例:" } else { "Examples:" });
+        for example in spec.examples {
+            let _ = writeln!(out, "  {example}");
+        }
+    }
+    out
+}
+
 fn expand_subcommand(mut args: Vec<OsString>) -> Vec<OsString> {
     let Some((name, flag)) = args.get(1).and_then(|arg| {
         SUBCOMMANDS.iter().find(|(name, _)| arg == *name).copied()
     }) else {
         return args;
     };
-    if args[2..].iter().any(|arg| arg == "-h" || arg == "--help") {
-        args.truncate(1);
-        args.push("--help".into());
-        return args;
-    }
     if name != "export" {
         args[1] = flag.into();
         return args;
