@@ -449,7 +449,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 | `--no-metadata-summary` | 在列表与交互视图中隐藏每个会话的元数据摘要行。 | 关闭 |
 | `-v`, `--version` | 打印版本号后退出。 | - |
 | `--shortcut` | 运行已配置的快捷预设。示例：`agent-dump --shortcut ob 20260408` | - |
-| `--since` | 开始日期（`YYYY-MM-DD` 或 `YYYYMMDD`），适用于 list、search、browse、interactive、stats、read 与 collect；显式 `--since`/`--until` 覆盖 `--days`，仅传 `--since` 时默认截至今天 | - |
+| `--since` | 开始日期（`YYYY-MM-DD` 或 `YYYYMMDD`），适用于 list、search、browse、interactive、stats、read 与 collect；在接受 `--days` 的模式中，显式日期优先。read 不接受 `--days`。仅传 `--since` 时默认截至今天 | - |
 | `--until` | 结束日期（`YYYY-MM-DD` 或 `YYYYMMDD`），适用于 list、search、browse、interactive、stats、read 与 collect；仅传 `--until` 时默认从当月 1 日开始 | - |
 | `--save` | collect 报告路径。支持绝对/相对目录或 `.md` 文件路径。未提供文件名时使用默认 collect 文件名。配合 `--emit-prompt` 时只把路径写入提示词，由外部 agent 生成报告。 | - |
 | `--config` | 配置管理：`view` 或 `edit` | - |

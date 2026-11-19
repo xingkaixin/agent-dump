@@ -464,7 +464,7 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `--no-metadata-summary` | Hide the per-session metadata summary line in list and interactive views. | off |
 | `-v`, `--version` | Print the version and exit. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
-| `--since` | Start date (`YYYY-MM-DD` or `YYYYMMDD`) for list, search, browse, interactive, stats, read, and collect. Explicit `--since`/`--until` overrides `--days`; passing `--since` alone defaults `--until` to today. | - |
+| `--since` | Start date (`YYYY-MM-DD` or `YYYYMMDD`) for list, search, browse, interactive, stats, read, and collect. In modes that accept `--days`, explicit dates override it. Read rejects `--days`. Passing `--since` alone ends the range today. | - |
 | `--until` | End date (`YYYY-MM-DD` or `YYYYMMDD`) for list, search, browse, interactive, stats, read, and collect. Passing `--until` alone defaults `--since` to the 1st of that month. | - |
 | `--save` | collect report path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. With `--emit-prompt`, the path is included as an instruction for the external agent; no report is written. | - |
 | `--config` | Config management: `view` or `edit` | - |
