@@ -762,21 +762,6 @@ mod tests {
         }
     }
 
-    fn extract_some_strings(tokens: &[Token], out: &mut Vec<String>) {
-        for i in 0..tokens.len().saturating_sub(3) {
-            if let [
-                Token::Ident(some),
-                Token::Punct('('),
-                Token::Str(value),
-                Token::Punct(')'),
-            ] = &tokens[i..i + 4]
-                && some == "Some"
-            {
-                out.push(value.clone());
-            }
-        }
-    }
-
     fn require_keys(
         label: &str,
         keys: &mut Vec<String>,
@@ -799,13 +784,8 @@ mod tests {
     }
 
     fn extract_command_keys(tokens: &[Token], keys: &mut Vec<String>) {
-        for fn_name in ["stderr_error", "plan_error"] {
-            let body = extract_fn_body(tokens, fn_name).unwrap_or_else(|| {
-                panic!("src/command.rs should define fn {fn_name}")
-            });
-            require_keys(&format!("src/command.rs::{fn_name}"), keys, |out| {
-                extract_some_strings(body, out);
-            });
+        for expr in extract_let_rhs(tokens, &["key"]) {
+            extract_expr_strings(expr, keys);
         }
         let warn_body = extract_fn_body(tokens, "warn_ignored")
             .expect("src/command.rs should define fn warn_ignored");
@@ -861,6 +841,18 @@ mod tests {
     ) {
         match rel_path {
             "src/cli_args.rs" => {
+                for token in tokens {
+                    if let Token::Str(key) = token
+                        && key.starts_with("CLI_")
+                        && key.bytes().all(|b| {
+                            b.is_ascii_uppercase()
+                                || b == b'_'
+                                || b.is_ascii_digit()
+                        })
+                    {
+                        keys.push(key.clone());
+                    }
+                }
                 let body = extract_fn_body(tokens, "command")
                     .expect("src/cli_args.rs should define fn command");
                 let mut suffixes = Vec::new();
@@ -1108,7 +1100,8 @@ mod tests {
         for required in [
             "CLI_DESC",
             "CLI_URI_HELP",
-            "READ_MODE_ERROR",
+            "READ_OPTION_CONFLICT",
+            "CLI_SUBCMD_EXPORT_DESC",
             "COLLECT_MODE_CONFLICT",
             "COLLECT_DRY_RUN_HEADER",
             "DIAG_QUERY_URI_INVALID",
