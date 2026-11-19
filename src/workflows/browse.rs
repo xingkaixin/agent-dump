@@ -23,15 +23,16 @@ fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
     let grouped = query.mode != Mode::Terms || query.keyword.is_none();
     if grouped {
         selection.matches.sort_by_key(|matched| {
-            std::cmp::Reverse(
-                scan.groups[matched.group].sessions[matched.session].updated_at,
-            )
+            std::cmp::Reverse(query.time_field.timestamp(
+                &scan.groups[matched.group].sessions[matched.session],
+            ))
         });
     }
     let days = Days {
         today: Timestamp::now().local_date(),
         yesterday: Timestamp::days_ago(1)?.local_date(),
         grouped,
+        time_field: query.time_field,
     };
     let rows = selection
         .matches
@@ -74,6 +75,7 @@ struct Days {
     today: jiff::civil::Date,
     yesterday: jiff::civil::Date,
     grouped: bool,
+    time_field: TimeField,
 }
 
 fn entry(
@@ -84,8 +86,8 @@ fn entry(
     days: &Days,
     zh: bool,
 ) -> Entry {
-    let updated = session.updated_at;
-    let date = updated.local_date();
+    let shown = days.time_field.timestamp(session);
+    let date = shown.local_date();
     let day = if !days.grouped {
         String::new()
     } else if date == days.today {
@@ -93,9 +95,9 @@ fn entry(
     } else if date == days.yesterday {
         t("READER_YESTERDAY", zh, &[])
     } else if date.year() == days.today.year() {
-        updated.format_local("%m-%d")
+        shown.format_local("%m-%d")
     } else {
-        updated.format_local("%Y-%m-%d")
+        shown.format_local("%Y-%m-%d")
     };
     let count = t(
         "READER_MESSAGES",
@@ -119,7 +121,7 @@ fn entry(
         &format!(
             "{} → {}",
             session.created_at.format_local("%m-%d %H:%M"),
-            updated.format_local("%m-%d %H:%M")
+            session.updated_at.format_local("%m-%d %H:%M")
         ),
     ]
     .into_iter()
@@ -133,7 +135,7 @@ fn entry(
             &session.title
         }),
         provider: render::safe_line(provider),
-        time: updated.format_local(if days.grouped {
+        time: shown.format_local(if days.grouped {
             "%H:%M"
         } else {
             "%m-%d %H:%M"
@@ -385,5 +387,182 @@ pub fn run(
                 };
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agent_dump_core::providers::contract::{
+        DiagnosticSink, Discovery, Lookup, Provider, ProviderInfo, Window,
+    };
+    use agent_dump_core::query::scanner::ScannedProvider;
+    use agent_dump_core::session::SessionData;
+    use std::path::{Path, PathBuf};
+
+    static TEST_PROVIDER: ProviderInfo = ProviderInfo {
+        name: "codex",
+        display_name: "Codex",
+        scheme: "codex",
+        identifier_label: "session_id",
+        uri_prefixes: &["codex://"],
+    };
+
+    struct StubProvider;
+
+    impl Provider for StubProvider {
+        fn discover(
+            &mut self,
+            _window: Window,
+            _diagnostics: &mut DiagnosticSink<'_>,
+        ) -> crate::Result<Discovery> {
+            Ok(Discovery::default())
+        }
+
+        fn find(
+            &mut self,
+            _id: &str,
+            _diagnostics: &mut DiagnosticSink<'_>,
+        ) -> crate::Result<Lookup> {
+            Ok(Lookup::default())
+        }
+
+        fn read(
+            &self,
+            _session: &Session,
+            _zh: bool,
+            _diagnostics: &mut DiagnosticSink<'_>,
+        ) -> crate::Result<SessionData> {
+            Err("unused".into())
+        }
+
+        fn source_root(&self) -> &Path {
+            Path::new("")
+        }
+
+        fn select_source(&mut self) -> crate::Result<Option<&Path>> {
+            Ok(None)
+        }
+
+        fn search_roots(&self) -> crate::Result<Vec<(&'static str, PathBuf)>> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn test_session(
+        id: &str,
+        created_at: Timestamp,
+        updated_at: Timestamp,
+    ) -> Session {
+        Session::new(
+            id.into(),
+            id.into(),
+            PathBuf::new(),
+            created_at,
+            updated_at,
+        )
+    }
+
+    #[test]
+    fn results_sort_group_and_format_using_query_time_field() {
+        let now = Timestamp::now();
+        let yesterday = Timestamp::days_ago(1).unwrap();
+        let three_days_ago = Timestamp::days_ago(3).unwrap();
+        let newer_created = test_session("newer-created", yesterday, yesterday);
+        let newer_updated = test_session("newer-updated", three_days_ago, now);
+        let scan = Scan {
+            groups: vec![ScannedProvider {
+                info: &TEST_PROVIDER,
+                provider: Box::new(StubProvider),
+                sessions: vec![newer_updated, newer_created],
+            }],
+            failed_providers: Vec::new(),
+        };
+
+        let updated = results(&scan, &Query::default(), false).unwrap();
+        assert_eq!(
+            updated
+                .rows
+                .iter()
+                .map(|row| row.title.as_str())
+                .collect::<Vec<_>>(),
+            ["newer-updated", "newer-created"]
+        );
+        assert_eq!(updated.rows[0].day, "Today");
+        assert_eq!(updated.rows[0].time, now.format_local("%H:%M"));
+
+        let created_query = Query {
+            time_field: TimeField::Created,
+            ..Query::default()
+        };
+        let created = results(&scan, &created_query, false).unwrap();
+        assert_eq!(
+            created
+                .rows
+                .iter()
+                .map(|row| row.title.as_str())
+                .collect::<Vec<_>>(),
+            ["newer-created", "newer-updated"]
+        );
+        assert_eq!(created.rows[0].day, "Yesterday");
+        assert_eq!(created.rows[0].time, yesterday.format_local("%H:%M"));
+        assert_eq!(created.rows[1].time, three_days_ago.format_local("%H:%M"));
+        assert_ne!(created.rows[1].day, "Today");
+        let expected_span = format!(
+            "{} → {}",
+            three_days_ago.format_local("%m-%d %H:%M"),
+            now.format_local("%m-%d %H:%M")
+        );
+        assert!(
+            created.rows[1].meta.contains(&expected_span),
+            "{}",
+            created.rows[1].meta
+        );
+    }
+
+    #[test]
+    fn entry_projects_time_field_in_grouped_and_ungrouped_views() {
+        let created: Timestamp = "2026-03-08T04:15:00+00:00".parse().unwrap();
+        let updated: Timestamp = "2026-03-10T09:45:00+00:00".parse().unwrap();
+        let session = test_session("s1", created, updated);
+        let today = updated.local_date();
+        let yesterday = today.yesterday().unwrap();
+
+        let grouped_created = entry(
+            "Codex",
+            "codex://",
+            &session,
+            "",
+            &Days {
+                today,
+                yesterday,
+                grouped: true,
+                time_field: TimeField::Created,
+            },
+            false,
+        );
+        assert_eq!(grouped_created.day, created.format_local("%m-%d"));
+        assert_eq!(grouped_created.time, created.format_local("%H:%M"));
+        assert!(grouped_created.meta.contains(&format!(
+            "{} → {}",
+            created.format_local("%m-%d %H:%M"),
+            updated.format_local("%m-%d %H:%M")
+        )));
+
+        let ungrouped_created = entry(
+            "Codex",
+            "codex://",
+            &session,
+            "",
+            &Days {
+                today,
+                yesterday,
+                grouped: false,
+                time_field: TimeField::Created,
+            },
+            false,
+        );
+        assert!(ungrouped_created.day.is_empty());
+        assert_eq!(ungrouped_created.time, created.format_local("%m-%d %H:%M"));
     }
 }

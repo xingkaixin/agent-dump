@@ -1,13 +1,15 @@
 """A few real PTY tests cover restoration, selection, resizing and secret input."""
 
+import base64
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 import os
 import select
 import struct
 import subprocess
 import time
 
-from cli_fixture import RUST
+from cli_fixture import RUST, header, message, write_jsonl
 import pytest
 from test_config_shortcuts import config_path
 
@@ -97,3 +99,48 @@ def test_config_paste_mask_and_save(cli):
     assert value["ai"]["api_key"] == secret
     assert value["ai"]["model"] == "模型-model"
     assert value["export"]["output"] == "exports"
+
+
+def test_browse_time_field_created_sorts_and_groups_by_created_time(cli):
+    for path in cli.source.parent.glob("*.jsonl"):
+        path.unlink()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    sessions = [
+        ("newer-created", "CreatedFirst", now - timedelta(days=1), now - timedelta(days=1)),
+        ("newer-updated", "UpdatedFirst", now - timedelta(days=3), now),
+    ]
+    for identity, text, created, updated in sessions:
+        path = write_jsonl(
+            cli.source.parent / f"rollout-{identity}.jsonl",
+            [
+                header(identity, timestamp=created.isoformat()),
+                message("user", text, stamp=updated.isoformat()),
+            ],
+        )
+        modified = max(created, updated)
+        os.utime(path, (modified.timestamp(), modified.timestamp()))
+
+    with terminal(
+        cli,
+        "--browse",
+        "--time-field",
+        "created",
+        "-d",
+        "7",
+        "-q",
+        "provider:codex",
+        "--lang",
+        "en",
+        width=120,
+        height=30,
+    ) as (expect, send, finish):
+        expect("UpdatedFirst")
+        send("y")
+        expect("Copy request sent")
+        send("q")
+        code, output = finish()
+        assert code == 0
+        expected_uri = base64.b64encode(b"codex://newer-created").decode()
+        assert expected_uri in output
+        assert "Yesterday" in output
+        assert "Today" not in output
