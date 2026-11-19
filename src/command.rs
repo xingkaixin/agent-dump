@@ -152,6 +152,22 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
             return Ok(false);
         }
     };
+    let read_dates = if mode == Mode::Uri && args.read && args.cursor.is_none()
+    {
+        match crate::date_input::optional_range(
+            args.since.as_deref(),
+            args.until.as_deref(),
+            zh,
+        ) {
+            Ok(dates) => dates,
+            Err(error) => {
+                writeln!(plan_out, "{error}")?;
+                return Ok(false);
+            }
+        }
+    } else {
+        None
+    };
     let query = match resolve_query(&args, mode, zh) {
         Ok(query) => query,
         Err(diagnostic) => {
@@ -171,7 +187,7 @@ pub fn run(args: Args, out: &mut impl Write) -> Result<bool> {
         )?;
         return Ok(false);
     }
-    dispatch(args, mode, scope, query, zh, out)
+    dispatch(args, mode, scope, read_dates, query, zh, out)
 }
 
 fn chinese(lang: Option<&str>) -> bool {
@@ -283,8 +299,8 @@ fn stderr_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
             (args.emit_prompt, "--emit-prompt"),
             (args.dry_run, "--dry-run"),
             (args.verify_manifest.is_some(), "--verify-manifest"),
-            (args.since.is_some(), "--since"),
-            (args.until.is_some(), "--until"),
+            (args.read_prompt && args.since.is_some(), "--since"),
+            (args.read_prompt && args.until.is_some(), "--until"),
             (args.save.is_some(), "--save"),
             (args.read_prompt && args.json, "--json"),
         ] {
@@ -319,6 +335,8 @@ fn stderr_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
             (args.order.is_some(), "--order"),
             (args.role.is_some(), "--role"),
             (args.read_match.is_some(), "--match"),
+            (args.since.is_some(), "--since"),
+            (args.until.is_some(), "--until"),
             (args.details, "--details"),
         ]
         .into_iter()
@@ -331,6 +349,23 @@ fn stderr_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
                 &[("options", conflicts.join(", "))],
             ));
         }
+    }
+    if args.read
+        && args.details
+        && (args.since.is_some() || args.until.is_some())
+    {
+        let dates: Vec<_> = [
+            (args.since.is_some(), "--since"),
+            (args.until.is_some(), "--until"),
+        ]
+        .into_iter()
+        .filter_map(|(present, label)| present.then_some(label))
+        .collect();
+        return Some(i18n::t(
+            "READ_OPTION_CONFLICT",
+            zh,
+            &[("flag", "--details".into()), ("options", dates.join(", "))],
+        ));
     }
     if args.json
         && !matches!(mode, Mode::List | Mode::Stats | Mode::Providers)
@@ -515,14 +550,15 @@ fn warn_ignored(
             )?;
         }
     }
-    if !matches!(
+    let accepts_date_range = matches!(
         mode,
         Mode::Collect
             | Mode::List
             | Mode::Interactive
             | Mode::Browse
             | Mode::Stats
-    ) {
+    ) || (mode == Mode::Uri && args.read);
+    if !accepts_date_range {
         let unused: Vec<_> = [
             (args.since.is_some(), "--since"),
             (args.until.is_some(), "--until"),
@@ -665,6 +701,7 @@ fn dispatch(
     args: Args,
     mode: Mode,
     scope: WindowScope,
+    read_dates: Option<(jiff::civil::Date, jiff::civil::Date)>,
     query: Option<query::Query>,
     zh: bool,
     out: &mut impl Write,
@@ -714,7 +751,7 @@ fn dispatch(
             writeln!(out)?;
             Ok(true)
         }
-        Mode::Uri => uri(args, zh, out),
+        Mode::Uri => uri(args, read_dates, zh, out),
         Mode::Providers | Mode::Config => {
             unreachable!("dispatched before query normalization")
         }
@@ -796,7 +833,12 @@ fn interactive(
     }
 }
 
-fn uri(mut args: Args, zh: bool, out: &mut impl Write) -> Result<bool> {
+fn uri(
+    mut args: Args,
+    read_dates: Option<(jiff::civil::Date, jiff::civil::Date)>,
+    zh: bool,
+    out: &mut impl Write,
+) -> Result<bool> {
     let uri = args.uri.take().ok_or("Provide a session URI or --list")?;
     let formats = if args.head || args.read || args.read_prompt {
         Vec::new()
@@ -827,7 +869,7 @@ fn uri(mut args: Args, zh: bool, out: &mut impl Write) -> Result<bool> {
         eprintln!("{}", i18n::t("MESSAGE_EXPORT_FORMAT_ERROR", zh, &[]));
         return Ok(false);
     }
-    let read = read_operation(&mut args);
+    let read = read_operation(&mut args, read_dates);
     uri_workflow::run(
         &uri_workflow::UriOperation {
             uri,
@@ -847,7 +889,10 @@ fn uri(mut args: Args, zh: bool, out: &mut impl Write) -> Result<bool> {
     )
 }
 
-fn read_operation(args: &mut Args) -> Option<uri_workflow::ReadOperation> {
+fn read_operation(
+    args: &mut Args,
+    read_dates: Option<(jiff::civil::Date, jiff::civil::Date)>,
+) -> Option<uri_workflow::ReadOperation> {
     use agent_dump_core::query::read::{Options, Order, Request};
     if args.read_prompt {
         return Some(uri_workflow::ReadOperation::Prompt);
@@ -870,6 +915,8 @@ fn read_operation(args: &mut Args) -> Option<uri_workflow::ReadOperation> {
             role: args.role.take().map(|s| s.trim().to_lowercase()),
             keyword: args.read_match.take(),
             details: args.details,
+            since: read_dates.map(|(since, _)| since.to_string()),
+            until: read_dates.map(|(_, until)| until.to_string()),
         })
     };
     Some(uri_workflow::ReadOperation::Page(request))
