@@ -10,12 +10,14 @@ use agent_dump_core::query::{
 use agent_dump_core::session::{
     Session, cache::SessionDataCache, timestamp::Timestamp,
 };
+use std::collections::BTreeSet;
 use std::io::Write;
 
 struct Results {
     positions: Vec<(usize, usize)>,
     rows: Vec<Entry>,
     status: String,
+    notices: String,
     partial: bool,
 }
 
@@ -25,8 +27,38 @@ fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
         limit: None,
         ..query.clone()
     };
-    let mut selection =
-        filter::select(&scan.groups, &unbounded, zh, &mut notices)?;
+    let (slice, group_offset, retain_providers) = match query.providers.as_ref()
+    {
+        Some(names)
+            if !scan
+                .groups
+                .iter()
+                .all(|group| names.contains(group.info.name)) =>
+        {
+            let mut matched = scan
+                .groups
+                .iter()
+                .enumerate()
+                .filter(|(_, group)| names.contains(group.info.name));
+            match (matched.next(), matched.next()) {
+                (Some((index, _)), None) => {
+                    (&scan.groups[index..=index], index, false)
+                }
+                (None, _) => (&[][..], 0, false),
+                _ => (scan.groups.as_slice(), 0, true),
+            }
+        }
+        _ => (scan.groups.as_slice(), 0, false),
+    };
+    let mut selection = filter::select(slice, &unbounded, zh, &mut notices)?;
+    for matched in &mut selection.matches {
+        matched.group += group_offset;
+    }
+    if retain_providers && let Some(names) = query.providers.as_ref() {
+        selection.matches.retain(|matched| {
+            names.contains(scan.groups[matched.group].info.name)
+        });
+    }
     let grouped = query.mode != Mode::Terms || query.keyword.is_none();
     let timestamp = |m: &filter::Match| {
         query
@@ -65,14 +97,15 @@ fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
             )
         })
         .collect();
+    let notice_text = render::safe_line(&String::from_utf8_lossy(&notices));
     let mut status = if selection.matches.is_empty() {
         t("READER_NO_MATCHES", zh, &[])
     } else {
         String::new()
     };
-    if !notices.is_empty() {
+    if !notice_text.is_empty() {
         status.push(' ');
-        status.push_str(&render::safe_line(&String::from_utf8_lossy(&notices)));
+        status.push_str(&notice_text);
     }
     Ok(Results {
         positions: selection
@@ -82,8 +115,13 @@ fn results(scan: &Scan, query: &Query, zh: bool) -> crate::Result<Results> {
             .collect(),
         rows,
         status,
-        partial: !scan.failed_providers.is_empty()
-            || !selection.failures.is_empty(),
+        notices: notice_text,
+        partial: scan.failed_providers.iter().any(|name| {
+            query
+                .providers
+                .as_ref()
+                .is_none_or(|names| names.contains(name))
+        }) || !selection.failures.is_empty(),
     })
 }
 
@@ -169,16 +207,17 @@ fn entry(
     }
 }
 
+fn provider_label(query: &Query, zh: bool) -> String {
+    let all = t("READER_ALL", zh, &[]);
+    query.providers.as_ref().map_or(all, |names| {
+        names.iter().cloned().collect::<Vec<_>>().join(",")
+    })
+}
+
 fn scope(query: &Query, window: WindowScope, zh: bool) -> String {
     let all = t("READER_ALL", zh, &[]);
     let mut values = vec![
-        (
-            "providers",
-            query.providers.as_ref().map_or_else(
-                || all.clone(),
-                |names| names.iter().cloned().collect::<Vec<_>>().join(","),
-            ),
-        ),
+        ("providers", provider_label(query, zh)),
         (
             "path",
             query.path.as_ref().map_or_else(
@@ -219,6 +258,81 @@ fn scope(query: &Query, window: WindowScope, zh: bool) -> String {
         }
     };
     t(key, zh, &values)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ProviderCycle {
+    Unchanged,
+    All,
+    Only(String),
+}
+
+fn next_provider(scan: &Scan, current: Option<&str>) -> ProviderCycle {
+    let names: Vec<&str> = scan
+        .groups
+        .iter()
+        .filter(|group| !group.sessions.is_empty())
+        .map(|group| group.info.name)
+        .collect();
+    match current {
+        None if names.len() > 1 => ProviderCycle::Only(names[0].to_owned()),
+        None => ProviderCycle::Unchanged,
+        Some(active) => match names.iter().position(|&name| name == active) {
+            Some(index) if index + 1 < names.len() => {
+                ProviderCycle::Only(names[index + 1].to_owned())
+            }
+            _ => ProviderCycle::All,
+        },
+    }
+}
+
+fn day_windows(initial: i64) -> Vec<i64> {
+    let mut windows = vec![7, 30, 90, 365];
+    if !windows.contains(&initial) {
+        windows.push(initial);
+        windows.sort_unstable();
+    }
+    windows
+}
+
+fn next_days(windows: &[i64], current: i64) -> i64 {
+    let index = windows
+        .iter()
+        .position(|&days| days == current)
+        .map_or(0, |index| (index + 1) % windows.len());
+    windows[index]
+}
+
+fn format_status(base: String, scan_warnings: &[u8], notices: &str) -> String {
+    let mut parts = vec![base];
+    let warning = render::safe_line(&String::from_utf8_lossy(scan_warnings));
+    if !warning.is_empty() {
+        parts.push(warning);
+    }
+    if !notices.is_empty() {
+        parts.push(notices.to_owned());
+    }
+    parts.retain(|part| !part.is_empty());
+    parts.join(" · ")
+}
+
+fn discover_in_scope(
+    query: &Query,
+    base_providers: Option<&BTreeSet<String>>,
+    window: WindowScope,
+    zh: bool,
+) -> crate::Result<(Scan, Vec<u8>)> {
+    let mut discover_query = query.clone();
+    discover_query.providers = base_providers.cloned();
+    let mut scan_warnings = Vec::new();
+    let scan = scanner::discover(
+        Some(&discover_query),
+        window,
+        query.time_field,
+        zh,
+        &mut scan_warnings,
+    )?;
+    Ok((scan, scan_warnings))
 }
 
 fn export_marked(
@@ -279,9 +393,16 @@ pub fn run(
         return Ok(false);
     }
     let mut query = operation.query.clone().unwrap_or_default();
-    let scan = scanner::discover(
+    let base_providers = query.providers.clone();
+    let mut active_provider: Option<String> = None;
+    let mut window = operation.scope;
+    let windows = match window {
+        WindowScope::Days(days) => day_windows(days),
+        WindowScope::Range(_, _) => Vec::new(),
+    };
+    let mut scan = scanner::discover(
         Some(&query),
-        operation.scope,
+        window,
         query.time_field,
         zh,
         warnings,
@@ -293,15 +414,11 @@ pub fn run(
     let selected = results(&scan, &query, zh)?;
     let mut positions = selected.positions;
     out.flush()?;
-    let mut reader = Reader::new(
-        selected.rows,
-        &query,
-        scope(&query, operation.scope, zh),
-        zh,
-    )?;
+    let mut reader =
+        Reader::new(selected.rows, &query, scope(&query, window, zh), zh)?;
     reader.status = selected.status;
     reader.partial = selected.partial;
-    let cache = SessionDataCache::default();
+    let mut cache = SessionDataCache::default();
     loop {
         let mut notices = Vec::new();
         let loaded = positions.get(reader.selected()).map(|&(g, s)| {
@@ -323,7 +440,7 @@ pub fn run(
         });
         if !notices.is_empty() {
             reader.status =
-                render::safe_line(&String::from_utf8_lossy(&notices));
+                format_status(std::mem::take(&mut reader.status), &notices, "");
         }
         let data = loaded
             .as_ref()
@@ -351,6 +468,145 @@ pub fn run(
                         reader.set_results(selected.rows, &query);
                         reader.status = selected.status;
                         reader.partial = selected.partial;
+                    }
+                    Err(error) => {
+                        reader.status = render::safe_line(&error.to_string());
+                    }
+                }
+            }
+            Action::Refresh => {
+                match discover_in_scope(
+                    &query,
+                    base_providers.as_ref(),
+                    window,
+                    zh,
+                )
+                .and_then(|(new_scan, scan_warnings)| {
+                    let selected = results(&new_scan, &query, zh)?;
+                    Ok((new_scan, scan_warnings, selected))
+                }) {
+                    Ok((new_scan, scan_warnings, selected)) => {
+                        let current_uri =
+                            reader.selected_uri().map(str::to_owned);
+                        let count = selected.rows.len();
+                        scan = new_scan;
+                        cache = SessionDataCache::default();
+                        positions = selected.positions;
+                        reader.set_results_preserving(
+                            selected.rows,
+                            &query,
+                            current_uri.as_deref(),
+                        );
+                        reader.set_scope(scope(&query, window, zh));
+                        reader.partial = selected.partial;
+                        reader.status = format_status(
+                            t(
+                                "READER_REFRESHED",
+                                zh,
+                                &[("count", count.to_string())],
+                            ),
+                            &scan_warnings,
+                            &selected.notices,
+                        );
+                    }
+                    Err(error) => {
+                        reader.status = render::safe_line(&error.to_string());
+                    }
+                }
+            }
+            Action::CycleProvider => {
+                let next_active =
+                    match next_provider(&scan, active_provider.as_deref()) {
+                        ProviderCycle::Unchanged => {
+                            reader.status =
+                                t("READER_SINGLE_PROVIDER", zh, &[]);
+                            continue;
+                        }
+                        ProviderCycle::All => None,
+                        ProviderCycle::Only(name) => Some(name),
+                    };
+                let mut next = query.clone();
+                next.providers = next_active.as_ref().map_or_else(
+                    || base_providers.clone(),
+                    |name| Some(BTreeSet::from([name.clone()])),
+                );
+                match results(&scan, &next, zh) {
+                    Ok(selected) => {
+                        let current_uri =
+                            reader.selected_uri().map(str::to_owned);
+                        let count = selected.rows.len();
+                        active_provider = next_active;
+                        query = next;
+                        positions = selected.positions;
+                        reader.set_results_preserving(
+                            selected.rows,
+                            &query,
+                            current_uri.as_deref(),
+                        );
+                        reader.set_scope(scope(&query, window, zh));
+                        reader.partial = selected.partial;
+                        reader.status = format_status(
+                            t(
+                                "READER_PROVIDER_FILTER",
+                                zh,
+                                &[
+                                    ("provider", provider_label(&query, zh)),
+                                    ("count", count.to_string()),
+                                ],
+                            ),
+                            &[],
+                            &selected.notices,
+                        );
+                    }
+                    Err(error) => {
+                        reader.status = render::safe_line(&error.to_string());
+                    }
+                }
+            }
+            Action::CycleDays => {
+                let WindowScope::Days(days) = window else {
+                    reader.status = t("READER_DATE_RANGE_FIXED", zh, &[]);
+                    continue;
+                };
+                let next_days = next_days(&windows, days);
+                let next_window = WindowScope::Days(next_days);
+                match discover_in_scope(
+                    &query,
+                    base_providers.as_ref(),
+                    next_window,
+                    zh,
+                )
+                .and_then(|(new_scan, scan_warnings)| {
+                    let selected = results(&new_scan, &query, zh)?;
+                    Ok((new_scan, scan_warnings, selected))
+                }) {
+                    Ok((new_scan, scan_warnings, selected)) => {
+                        let current_uri =
+                            reader.selected_uri().map(str::to_owned);
+                        let count = selected.rows.len();
+                        window = next_window;
+                        scan = new_scan;
+                        cache = SessionDataCache::default();
+                        positions = selected.positions;
+                        reader.set_results_preserving(
+                            selected.rows,
+                            &query,
+                            current_uri.as_deref(),
+                        );
+                        reader.set_scope(scope(&query, window, zh));
+                        reader.partial = selected.partial;
+                        reader.status = format_status(
+                            t(
+                                "READER_DAYS_WINDOW",
+                                zh,
+                                &[
+                                    ("days", next_days.to_string()),
+                                    ("count", count.to_string()),
+                                ],
+                            ),
+                            &scan_warnings,
+                            &selected.notices,
+                        );
                     }
                     Err(error) => {
                         reader.status = render::safe_line(&error.to_string());
@@ -429,6 +685,14 @@ mod tests {
         scheme: "codex",
         identifier_label: "session_id",
         uri_prefixes: &["codex://"],
+    };
+
+    static SECOND_PROVIDER: ProviderInfo = ProviderInfo {
+        name: "opencode",
+        display_name: "OpenCode",
+        scheme: "opencode",
+        identifier_label: "session_id",
+        uri_prefixes: &["opencode://"],
     };
 
     struct StubProvider;
@@ -597,5 +861,76 @@ mod tests {
         );
         assert!(ungrouped_created.day.is_empty());
         assert_eq!(ungrouped_created.time, created.format_local("%m-%d %H:%M"));
+    }
+
+    #[test]
+    fn provider_cycling_and_filtering_respect_available_groups() {
+        let now = Timestamp::now();
+        let scan = Scan {
+            groups: vec![
+                ScannedProvider {
+                    info: &SECOND_PROVIDER,
+                    provider: Box::new(StubProvider),
+                    sessions: vec![test_session("oc-1", now, now)],
+                },
+                ScannedProvider {
+                    info: &TEST_PROVIDER,
+                    provider: Box::new(StubProvider),
+                    sessions: vec![test_session("cx-1", now, now)],
+                },
+            ],
+            failed_providers: vec!["opencode".into()],
+        };
+
+        assert_eq!(
+            next_provider(&scan, None),
+            ProviderCycle::Only("opencode".into())
+        );
+        assert_eq!(
+            next_provider(&scan, Some("opencode")),
+            ProviderCycle::Only("codex".into())
+        );
+        assert_eq!(next_provider(&scan, Some("codex")), ProviderCycle::All);
+        assert_eq!(next_provider(&scan, Some("missing")), ProviderCycle::All);
+
+        let codex_only = Query {
+            providers: Some(BTreeSet::from(["codex".into()])),
+            ..Query::default()
+        };
+        let narrowed = results(&scan, &codex_only, false).unwrap();
+        assert_eq!(narrowed.positions, vec![(1, 0)]);
+        assert_eq!(narrowed.rows.len(), 1);
+        assert_eq!(narrowed.rows[0].uri, "codex://cx-1");
+        assert!(!narrowed.partial);
+
+        let all = results(&scan, &Query::default(), false).unwrap();
+        assert_eq!(all.rows.len(), 2);
+        assert!(all.partial);
+
+        let single = Scan {
+            groups: vec![ScannedProvider {
+                info: &TEST_PROVIDER,
+                provider: Box::new(StubProvider),
+                sessions: vec![test_session("cx-1", now, now)],
+            }],
+            failed_providers: vec!["opencode".into()],
+        };
+        assert!(!results(&single, &codex_only, false).unwrap().partial);
+        assert_eq!(next_provider(&single, None), ProviderCycle::Unchanged);
+    }
+
+    #[test]
+    fn day_windows_include_custom_initial_value_and_cycle() {
+        let standard = day_windows(7);
+        assert_eq!(standard, vec![7, 30, 90, 365]);
+        assert_eq!(next_days(&standard, 7), 30);
+        assert_eq!(next_days(&standard, 30), 90);
+        assert_eq!(next_days(&standard, 90), 365);
+        assert_eq!(next_days(&standard, 365), 7);
+
+        let custom = day_windows(14);
+        assert_eq!(custom, vec![7, 14, 30, 90, 365]);
+        assert_eq!(next_days(&custom, 14), 30);
+        assert_eq!(next_days(&custom, 7), 14);
     }
 }

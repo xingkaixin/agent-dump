@@ -51,6 +51,9 @@ pub enum Action {
     },
     ExportMarked(Vec<usize>),
     Search(String),
+    Refresh,
+    CycleProvider,
+    CycleDays,
     Quit,
 }
 
@@ -135,6 +138,7 @@ struct Body {
     width: usize,
     top: (usize, usize),
     active: Option<(usize, usize)>,
+    focused: Option<usize>,
     total: usize,
     built: bool,
     zh: bool,
@@ -199,12 +203,56 @@ impl Reader {
     }
 
     pub fn set_results(&mut self, entries: Vec<Entry>, query: &Query) {
+        self.set_results_preserving(entries, query, None);
+    }
+
+    pub fn set_results_preserving(
+        &mut self,
+        entries: Vec<Entry>,
+        query: &Query,
+        preserve_uri: Option<&str>,
+    ) {
+        let preserved = preserve_uri
+            .and_then(|uri| entries.iter().position(|entry| entry.uri == uri));
+        let (selected, body_focus, expanded) = match preserved {
+            Some(index) => (index, self.state.body_focus, self.state.expanded),
+            None => (0, false, false),
+        };
+        let marked_uris: BTreeSet<_> = self
+            .state
+            .marked
+            .iter()
+            .filter_map(|&row| self.entries.get(row))
+            .map(|entry| entry.uri.as_str())
+            .collect();
+        let marked = entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                preserve_uri.is_some()
+                    && marked_uris.contains(entry.uri.as_str())
+            })
+            .map(|(row, _)| row)
+            .collect();
         self.slots = slots(&entries);
         self.entries = entries;
         self.list_offset = 0;
         self.finder = finder(query);
         self.query = query.clone();
-        self.state = State::with_query(query, 0);
+        self.state = State::with_query(query, selected);
+        self.state.marked = marked;
+        self.state.body_focus = body_focus;
+        self.state.expanded = expanded;
+    }
+
+    pub fn set_scope(&mut self, scope: String) {
+        self.scope = scope;
+    }
+
+    pub fn selected_uri(&self) -> Option<&str> {
+        self.entries
+            .get(self.state.selected)
+            .map(|entry| entry.uri.as_str())
     }
 
     pub const fn selected(&self) -> usize {
@@ -538,6 +586,32 @@ impl Reader {
                     Err(error) => render::safe_line(&error.to_string()),
                 };
             }
+            KeyCode::Char('Y') => {
+                self.status =
+                    match data.and_then(|data| self.state.copy_target(data)) {
+                        Some(target) => match execute!(
+                            self.terminal.backend_mut(),
+                            CopyToClipboard::to_clipboard_from(target.text())
+                        ) {
+                            Ok(()) => target.status(self.zh),
+                            Err(error) => render::safe_line(&error.to_string()),
+                        },
+                        None => t("READER_COPY_EMPTY", self.zh, &[]),
+                    };
+            }
+            KeyCode::Char('r') => {
+                self.status = t("READER_REFRESHING", self.zh, &[]);
+                self.render(data)?;
+                return Ok(Some(Action::Refresh));
+            }
+            KeyCode::Char('p') => {
+                return Ok(Some(Action::CycleProvider));
+            }
+            KeyCode::Char('d') => {
+                self.status = t("READER_REFRESHING", self.zh, &[]);
+                self.render(data)?;
+                return Ok(Some(Action::CycleDays));
+            }
             KeyCode::Char('n' | 'N') if !self.state.hits.is_empty() => {
                 let count = self.state.hits.len();
                 self.state.hit = if key == KeyCode::Char('N') {
@@ -715,6 +789,10 @@ impl State {
             .chunks
             .get(body.top.0)
             .map(|chunk| (chunk.first, body.top.1));
+        let focused_message = body
+            .focused
+            .and_then(|i| body.chunks.get(i))
+            .map(|c| c.first);
         body.chunks.clear();
         body.notice.clear();
         body.active = None;
@@ -749,6 +827,8 @@ impl State {
         } else {
             body.notice = t("READER_NO_MATCHES", zh, &[]);
         }
+        body.focused =
+            focused_message.and_then(|message| body.chunk_of(message));
         body.rows = vec![None; body.chunks.len()];
         body.top = anchor
             .and_then(|(first, row)| {
@@ -770,6 +850,104 @@ impl State {
             self.body.locate(data, message, self.finder.as_ref());
         }
     }
+
+    fn copy_target(&mut self, data: &SessionData) -> Option<CopyTarget> {
+        if let Some(range) = self.context_range(data.messages.len()) {
+            let mut blocks = Vec::new();
+            for index in range.clone() {
+                let message = &data.messages[index];
+                let body = message_copy_text(message);
+                if !body.is_empty() {
+                    blocks.push(format!(
+                        "#{} [{}]\n{body}",
+                        index + 1,
+                        message.role
+                    ));
+                }
+            }
+            let text = blocks.join("\n\n");
+            if text.is_empty() {
+                return None;
+            }
+            return Some(CopyTarget::Range {
+                start: range.start + 1,
+                end: range.end,
+                text,
+            });
+        }
+        let chunk = self.body.focused_chunk(data)?;
+        let messages = &data.messages[chunk.first..=chunk.last];
+        if chunk.folded {
+            let text = tools(messages);
+            if text.is_empty() {
+                return None;
+            }
+            return Some(if chunk.first == chunk.last {
+                CopyTarget::Message {
+                    position: chunk.first + 1,
+                    text,
+                }
+            } else {
+                CopyTarget::Range {
+                    start: chunk.first + 1,
+                    end: chunk.last + 1,
+                    text,
+                }
+            });
+        }
+        let text = message_copy_text(&messages[0]);
+        if text.is_empty() {
+            return None;
+        }
+        Some(CopyTarget::Message {
+            position: chunk.first + 1,
+            text,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum CopyTarget {
+    Message {
+        position: usize,
+        text: String,
+    },
+    Range {
+        start: usize,
+        end: usize,
+        text: String,
+    },
+}
+
+impl CopyTarget {
+    fn text(&self) -> &str {
+        match self {
+            Self::Message { text, .. } | Self::Range { text, .. } => text,
+        }
+    }
+
+    fn status(&self, zh: bool) -> String {
+        match self {
+            Self::Message { position, .. } => t(
+                "READER_COPY_MESSAGE",
+                zh,
+                &[("position", position.to_string())],
+            ),
+            Self::Range { start, end, .. } => t(
+                "READER_COPY_EXCERPT",
+                zh,
+                &[("start", start.to_string()), ("end", end.to_string())],
+            ),
+        }
+    }
+}
+
+fn message_copy_text(message: &Message) -> String {
+    let text = message_texts(message).join("\n\n");
+    if !text.is_empty() {
+        return text;
+    }
+    tools(std::slice::from_ref(message))
 }
 
 impl Body {
@@ -794,8 +972,30 @@ impl Body {
             .get_or_insert_with(|| chunk_rows(data, span, width, zh))
     }
 
+    fn focused_chunk(&mut self, data: &SessionData) -> Option<Chunk> {
+        if let Some(chunk) = self.focused
+            && let Some(&span) = self.chunks.get(chunk)
+        {
+            return Some(span);
+        }
+        let (chunk, row) = self.top;
+        let &span = self.chunks.get(chunk)?;
+        if row > 0
+            && self.width > 0
+            && chunk + 1 < self.chunks.len()
+            && self
+                .rows_of(data, chunk)
+                .get(row)
+                .is_some_and(|item| item.kind == Kind::Blank)
+        {
+            return Some(self.chunks[chunk + 1]);
+        }
+        Some(span)
+    }
+
     fn down(&mut self, data: Option<&SessionData>, lines: usize) {
         let Some(data) = data else { return };
+        self.focused = None;
         let (mut chunk, mut row) = self.top;
         for _ in 0..lines {
             if chunk >= self.chunks.len() {
@@ -815,6 +1015,7 @@ impl Body {
 
     fn up(&mut self, data: Option<&SessionData>, lines: usize) {
         let Some(data) = data else { return };
+        self.focused = None;
         let (mut chunk, mut row) = self.top;
         for _ in 0..lines {
             if row > 0 {
@@ -830,11 +1031,13 @@ impl Body {
     }
 
     const fn home(&mut self) {
+        self.focused = None;
         self.top = (0, 0);
     }
 
     fn end(&mut self, data: Option<&SessionData>, page: usize) {
         let Some(found) = data else { return };
+        self.focused = None;
         let Some(last) = self.chunks.len().checked_sub(1) else {
             return;
         };
@@ -863,6 +1066,7 @@ impl Body {
         self.top = (chunk, row);
         self.active = Some((chunk, row));
         self.up(Some(data), 2);
+        self.focused = Some(chunk);
     }
 
     fn view(
@@ -1806,6 +2010,84 @@ mod tests {
             .map(ratatui::buffer::Cell::symbol)
             .collect::<String>();
         assert!(top.contains("partial results · 0 sessions"), "{top}");
+    }
+
+    #[test]
+    fn copy_target_uses_focused_message_or_excerpt_range() {
+        let data = session(vec![
+            text("user", "first prompt"),
+            text("assistant", "second needle answer"),
+            tool("Bash"),
+            tool("Read"),
+            text("user", "final note"),
+        ]);
+        let mut state = State::default();
+        state.rebuild(Some(&data), None, false);
+        state.body.set_width(40);
+        assert_eq!(
+            state.copy_target(&data),
+            Some(CopyTarget::Message {
+                position: 1,
+                text: "first prompt".into(),
+            })
+        );
+
+        state.query = Query {
+            keyword: Some("needle".into()),
+            ..Query::default()
+        };
+        state.search(Some(&data));
+        state.rebuild(Some(&data), None, false);
+        state.body.set_width(40);
+        state.jump(Some(&data));
+        state.expanded = true;
+        state.rebuild(Some(&data), None, false);
+        assert_eq!(
+            state.copy_target(&data),
+            Some(CopyTarget::Message {
+                position: 2,
+                text: "second needle answer".into(),
+            })
+        );
+
+        state.body.home();
+        assert_eq!(
+            state.copy_target(&data),
+            Some(CopyTarget::Message {
+                position: 1,
+                text: "first prompt".into(),
+            })
+        );
+
+        state.context = Some(1);
+        state.rebuild(Some(&data), None, false);
+        assert_eq!(
+            state.copy_target(&data),
+            Some(CopyTarget::Range {
+                start: 1,
+                end: 3,
+                text: "#1 [user]\nfirst prompt\n\n#2 [assistant]\nsecond needle answer\n\n#3 [assistant]\n▸ Bash".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn copy_target_handles_folded_tools_and_empty_sessions() {
+        let data = session(vec![tool("Bash"), tool("Read")]);
+        let mut state = State::default();
+        state.rebuild(Some(&data), None, false);
+        assert_eq!(
+            state.copy_target(&data),
+            Some(CopyTarget::Range {
+                start: 1,
+                end: 2,
+                text: "▸ Bash · Read".into(),
+            })
+        );
+
+        let empty = session(Vec::new());
+        state.rebuild(Some(&empty), None, false);
+        assert_eq!(state.copy_target(&empty), None);
     }
 
     #[test]
