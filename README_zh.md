@@ -449,8 +449,8 @@ agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 | `--no-metadata-summary` | 在列表与交互视图中隐藏每个会话的元数据摘要行。 | 关闭 |
 | `-v`, `--version` | 打印版本号后退出。 | - |
 | `--shortcut` | 运行已配置的快捷预设。示例：`agent-dump --shortcut ob 20260408` | - |
-| `--since` | 开始日期（`YYYY-MM-DD` 或 `YYYYMMDD`），适用于 list、search、browse、interactive、stats 与 collect；显式 `--since`/`--until` 覆盖 `--days`，仅传 `--since` 时默认截至今天 | - |
-| `--until` | 结束日期（`YYYY-MM-DD` 或 `YYYYMMDD`），适用于 list、search、browse、interactive、stats 与 collect；仅传 `--until` 时默认从当月 1 日开始 | - |
+| `--since` | 开始日期（`YYYY-MM-DD` 或 `YYYYMMDD`），适用于 list、search、browse、interactive、stats、read 与 collect；在接受 `--days` 的模式中，显式日期优先。read 不接受 `--days`。仅传 `--since` 时默认截至今天 | - |
+| `--until` | 结束日期（`YYYY-MM-DD` 或 `YYYYMMDD`），适用于 list、search、browse、interactive、stats、read 与 collect；仅传 `--until` 时默认从当月 1 日开始 | - |
 | `--save` | collect 报告路径。支持绝对/相对目录或 `.md` 文件路径。未提供文件名时使用默认 collect 文件名。配合 `--emit-prompt` 时只把路径写入提示词，由外部 agent 生成报告。 | - |
 | `--config` | 配置管理：`view` 或 `edit` | - |
 | `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `--days`、`--since`/`--until` 或 `--query` 且未指定 `--interactive` 则自动启用） | - |
@@ -627,11 +627,12 @@ agent-dump opencode://SESSION_ID --read --order asc --max-chars 4000 --details -
 | `--cursor` | 原样传入续读游标；游标保存原筛选、排序和预算，不能同时重设这些选项 |
 | `--role` | 筛选一种标准化角色，忽略参数首尾空白及大小写 |
 | `--match` | 对所选文本视图逐消息匹配字面短语，不区分大小写并归一化空白；先筛选再分页 |
+| `--since` / `--until` | 按本地日期闭区间（`YYYY-MM-DD` / `YYYYMMDD`）筛选可见文本段；排除无时间或推测时间的文本段；不可与 `--details` 或 `--cursor` 组合。续读时使用相同的本地时区 |
 | `--details` | 加入 reasoning、plan 和结构化工具状态的可读投影；默认只取文本部分 |
 
 这些读取参数仅用于 `--read`，不能与列表、搜索、collect、导出、`--head`、`--summary` 或 `--message` 混用。原有 URI 全文打印、`--search` 和 `--query` 的语义不变。匹配不是正则、语义搜索或跨消息检索；搜索工具详情需显式加 `--details`。两种视图均跳过无可读文本的消息，不读取附件实体，也不承诺包含全部 Provider 原始字段。`--role` / `--match` 必须非空，分别最多 100 / 4096 个 UTF-8 字节；读取 URI 最多 4096 字节。
 
-JSON 包含 `schema_version: 1`、`kind: read`、`status`、**顶层 `has_more`**（`data` 对象内无 `has_more`）和 `data`。data 中有 URI、revision、筛选前的 total_messages、options、messages 和 next_cursor。`--cursor` 续读时严禁再传 `--order`、`--limit`、`--max-chars`、`--role`、`--match` 或 `--details`。每个片段保留原会话一基 position、可用于 `--message` 的 locator、role、text、total_chars，以及从零开始的 Unicode 字符区间 start/end（左闭右开）。`truncated` 表示这一项只是消息的一部分；长消息通过游标从下一字符继续，消息内始终正序读取。
+JSON 包含 `schema_version: 1`、`kind: read`、`status`、**顶层 `has_more`**（`data` 对象内无 `has_more`）和 `data`。data 中有 URI、revision、筛选前的 total_messages、options、messages 和 next_cursor。`--cursor` 续读时严禁再传 `--order`、`--limit`、`--max-chars`、`--role`、`--match`、`--since`、`--until` 或 `--details`。每个片段保留原会话一基 position、可用于 `--message` 的 locator、role、text、total_chars，以及从零开始的 Unicode 字符区间 start/end（左闭右开）。`truncated` 表示这一项只是消息的一部分；长消息通过游标从下一字符继续，消息内始终正序读取。
 
 只有同时满足顶层 `has_more=false` 且 `data.next_cursor=null` 才表示已读完所选视图中符合条件的内容；预算分段不会把 status 标为 partial。源读取存在可恢复诊断时为 partial，详情进入 stderr。无匹配成功返回空数组；无效、跨会话或过期游标非零退出且 stdout 为空。正文变化后需重新开始，不能把不同 revision 拼成一个快照；游标不保存历史快照。
 

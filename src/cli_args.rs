@@ -232,6 +232,8 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
             ("--order <asc|desc>", "CLI_READ_ORDER_HELP"),
             ("--role <ROLE>", "CLI_READ_ROLE_HELP"),
             ("--match <PHRASE>", "CLI_READ_MATCH_HELP"),
+            ("--since <DATE>", "CLI_SINCE_HELP"),
+            ("--until <DATE>", "CLI_UNTIL_HELP"),
             ("--details", "CLI_READ_DETAILS_HELP"),
             ("--cursor <CURSOR>", "CLI_READ_CURSOR_HELP"),
             ("--json", "CLI_JSON_HELP"),
@@ -239,7 +241,7 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
         notes_key: "CLI_SUBCMD_READ_NOTES",
         examples: &[
             "agent-dump read codex://<id> --limit 10 --json",
-            "agent-dump read codex://<id> --cursor <CURSOR> --json",
+            "agent-dump read codex://<id> --since 2026-01-14 --until 2026-01-16 --json",
         ],
     },
     SubcommandHelp {
