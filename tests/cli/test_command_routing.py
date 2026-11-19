@@ -178,7 +178,7 @@ def _option_flags(help_text: str, heading: str) -> list[str]:
         ("list", "--days", "--verify-manifest"),
         ("search", "--locate", "--verify-manifest"),
         ("browse", "--search", "--verify-manifest"),
-        ("export", "--format", "--verify-manifest"),
+        ("export", "--format", "--json"),
         ("head", "--json", "--format"),
         ("read", "--cursor", "--verify-manifest"),
         ("read-prompt", "--lang", "--json"),
@@ -231,6 +231,18 @@ def test_global_help_is_preserved(cli: CliFixture) -> None:
             "en",
             "stderr",
             "--cursor cannot be used with --limit, --details; it retains the original selection and budgets.",
+        ),
+        (
+            ["browse", "--locate"],
+            "en",
+            "stderr",
+            "--locate cannot be used with --browse; it requires --search in search mode.",
+        ),
+        (
+            ["agents://.", "--message", "abc:1"],
+            "en",
+            "stderr",
+            "--message requires a single session URI and cannot be used with agents:// query URI.",
         ),
         (["--locate"], "en", "stderr", "--locate requires --search."),
         (

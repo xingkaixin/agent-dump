@@ -213,8 +213,22 @@ fn mode_label(args: &Args, mode: Mode, zh: bool) -> &'static str {
         Mode::List => {
             if args.search.as_deref().is_some_and(|s| !s.is_empty()) {
                 "--search"
-            } else {
+            } else if args.list {
                 "--list"
+            } else if args
+                .uri
+                .as_deref()
+                .is_some_and(|s| s.starts_with("agents://"))
+            {
+                if zh {
+                    "agents:// 查询 URI"
+                } else {
+                    QUERY_URI
+                }
+            } else if zh {
+                "列表模式"
+            } else {
+                "list mode"
             }
         }
         Mode::Interactive => "--interactive",
@@ -332,15 +346,15 @@ fn stderr_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
         });
     }
     if args.locate {
-        if args.search.as_deref().is_none_or(str::is_empty) {
-            return Some(i18n::t("LOCATE_REQUIRES_SEARCH", zh, &[]));
-        }
-        if mode != Mode::List {
+        if !matches!(mode, Mode::List | Mode::Help) {
             return Some(i18n::t(
                 "LOCATE_MODE_CONFLICT",
                 zh,
                 &[("mode", mode_label(args, mode, zh).into())],
             ));
+        }
+        if args.search.as_deref().is_none_or(str::is_empty) {
+            return Some(i18n::t("LOCATE_REQUIRES_SEARCH", zh, &[]));
         }
     }
     if args.message.is_some() {

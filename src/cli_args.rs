@@ -191,7 +191,6 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
             ("--message <LOCATOR>", "CLI_MESSAGE_HELP"),
             ("--before <N>", "CLI_BEFORE_HELP"),
             ("--after <N>", "CLI_AFTER_HELP"),
-            ("--json", "CLI_JSON_HELP"),
             ("-d, --days <DAYS>", "CLI_DAYS_HELP"),
             ("--time-field <FIELD>", "CLI_TIME_FIELD_HELP"),
             ("-q, --query <QUERY>", "CLI_QUERY_HELP"),
@@ -200,6 +199,7 @@ const SUBCOMMAND_HELP: &[SubcommandHelp] = &[
         notes_key: "CLI_SUBCMD_EXPORT_NOTES",
         examples: &[
             "agent-dump export codex://<id> --format markdown --output ./exports",
+            "agent-dump codex://<id> --message <LOCATOR> --json",
             "agent-dump export -d 7 --format json,markdown",
         ],
     },

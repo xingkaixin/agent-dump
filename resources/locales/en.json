@@ -412,7 +412,7 @@
   "CLI_SUBCMD_BROWSE_DESC": "Browse sessions and read transcripts in an interactive terminal.",
   "CLI_SUBCMD_BROWSE_NOTES": "Equivalent to --browse; requires an interactive terminal (TTY).\n--format excludes print and defaults to json when exporting.",
   "CLI_SUBCMD_EXPORT_DESC": "Export a session URI or open interactive batch export.",
-  "CLI_SUBCMD_EXPORT_NOTES": "With a session URI, defaults to --format json (pass --format print to print to stdout).\nWithout a session URI, enters --interactive mode (print is unsupported).\nWith --message <LOCATOR>, --format supports only json,markdown and --json cannot combine with --format/--output.",
+  "CLI_SUBCMD_EXPORT_NOTES": "With a session URI, defaults to --format json (pass --format print to print to stdout).\nWithout a session URI, enters --interactive mode (print is unsupported).\nWith --message <LOCATOR>, --format supports only json,markdown. To print message JSON, use the session URI directly as shown below.",
   "CLI_SUBCMD_HEAD_DESC": "Show lightweight session metadata without reading the full transcript.",
   "CLI_SUBCMD_HEAD_NOTES": "Equivalent to <URI> --head; requires a single session URI.\nCannot be combined with --format, --summary, --read, or --message.",
   "CLI_SUBCMD_READ_DESC": "Read bounded pages from a single session URI.",
