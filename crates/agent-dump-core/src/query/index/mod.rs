@@ -808,6 +808,7 @@ impl SearchIndex {
         if keys.is_empty() {
             return Ok(Vec::new());
         }
+        let snapshot = self.connection.unchecked_transaction()?;
         let candidates = match search_plan(query) {
             SearchPlan::Fallback => return self.literal_search(query, keys),
             SearchPlan::Cjk(expression) => {
@@ -822,7 +823,7 @@ impl SearchIndex {
                 self.mixed_fts_candidates(&cjk, &trigram, keys)?
             }
         };
-        let mut text = self.connection.prepare(
+        let mut text = snapshot.prepare(
             "SELECT title, content FROM session_content WHERE fts_rowid = ?",
         )?;
         let mut results = Vec::new();
@@ -845,6 +846,8 @@ impl SearchIndex {
                 rank: -score,
             });
         }
+        drop(text);
+        snapshot.commit()?;
         Ok(results)
     }
 
@@ -884,18 +887,20 @@ impl SearchIndex {
     ) -> crate::Result<Vec<(String, String, i64, f64)>> {
         // MATERIALIZED forces each FTS5 MATCH to scan its own index and score
         // against the global corpus before intersecting rowids.
-        let sql = "WITH cjk AS MATERIALIZED (\
+        let sql = "WITH scoped(rowid) AS MATERIALIZED ( \
+             SELECT s.fts_rowid FROM json_each(?3) scope JOIN index_state s \
+             ON s.agent = json_extract(scope.value, '$[0]') \
+             AND s.session_id = json_extract(scope.value, '$[1]')), \
+             cjk AS MATERIALIZED ( \
              SELECT rowid, bm25(sessions_fts) AS score FROM sessions_fts \
-             WHERE sessions_fts MATCH ?1), \
-             tri AS MATERIALIZED (\
+             WHERE sessions_fts MATCH ?1 AND +rowid IN scoped), \
+             tri AS MATERIALIZED ( \
              SELECT rowid, bm25(sessions_fts_trigram) AS score FROM \
-             sessions_fts_trigram WHERE sessions_fts_trigram MATCH ?2) \
+             sessions_fts_trigram WHERE sessions_fts_trigram MATCH ?2 \
+             AND +rowid IN scoped) \
              SELECT s.agent, s.session_id, s.fts_rowid, cjk.score + tri.score \
              AS score FROM cjk JOIN tri ON tri.rowid = cjk.rowid JOIN \
-             index_state s ON s.fts_rowid = cjk.rowid WHERE +s.fts_rowid IN \
-             (SELECT scoped.fts_rowid FROM json_each(?3) scope JOIN \
-             index_state scoped ON scoped.agent = json_extract(scope.value, \
-             '$[0]') AND scoped.session_id = json_extract(scope.value, '$[1]')) \
+             index_state s ON s.fts_rowid = cjk.rowid \
              ORDER BY score, s.session_updated_at DESC, s.session_created_at \
              DESC, s.agent, s.session_id";
         let mut ranked = self.connection.prepare(sql)?;
