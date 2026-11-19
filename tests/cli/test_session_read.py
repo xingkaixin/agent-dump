@@ -113,3 +113,80 @@ def test_read_spans_use_sanitized_unicode_offsets(cli: CliFixture) -> None:
     assert (fragment["start"], fragment["end"]) == (4, 8)
     assert [(span["start"], span["end"]) for span in fragment["text_spans"]] == [(5, 8)]
     assert second["next_cursor"] is None
+
+
+def test_read_since_until_filters_dated_segments_and_resumes_via_cursor(cli: CliFixture) -> None:
+    undated = message("user", "no timestamp")
+    undated.pop("timestamp")
+    cli.write(
+        [
+            header(),
+            message("user", "day one", stamp="2026-01-14T12:00:00+00:00"),
+            message("assistant", "folded day one", stamp="2026-01-14T12:05:00+00:00"),
+            message("assistant", "folded day two", stamp="2026-01-15T12:00:00+00:00"),
+            undated,
+            message("user", "day three", stamp="2026-01-16T12:00:00+00:00"),
+            message("assistant", "day four", stamp="2026-01-17T12:00:00+00:00"),
+        ]
+    )
+    unfiltered = read(cli, URI, "--limit", "1")["data"]
+    assert "since" not in unfiltered["options"]
+    assert "until" not in unfiltered["options"]
+
+    first = read(cli, URI, "--since", "2026-01-15", "--until", "2026-01-16", "--order", "asc", "--limit", "1")
+    data = first["data"]
+    assert data["options"]["since"] == "2026-01-15"
+    assert data["options"]["until"] == "2026-01-16"
+    assert len(data["messages"]) == 1
+    assert data["messages"][0]["position"] == 2
+    assert data["messages"][0]["text"] == "folded day two"
+    assert [span["date"] for span in data["messages"][0]["text_spans"]] == ["2026-01-15"]
+    assert first["has_more"] is True
+
+    second = read(cli, URI, "--cursor", data["next_cursor"])
+    data2 = second["data"]
+    assert len(data2["messages"]) == 1
+    assert data2["messages"][0]["position"] == 4
+    assert data2["messages"][0]["text"] == "day three"
+    assert [span["date"] for span in data2["messages"][0]["text_spans"]] == ["2026-01-16"]
+    assert second["has_more"] is False
+    assert data2["next_cursor"] is None
+
+
+def test_read_date_filter_rejects_details_cursor_and_invalid_ranges(cli: CliFixture) -> None:
+    cli.write([header(), message("user", "hello", stamp="2026-01-15T12:00:00+00:00")])
+    cursor = read(cli, URI, "--limit", "1")["data"]["next_cursor"]
+
+    details_conflict = cli.run(URI, "--read", "--details", "--since", "2026-01-15", "--json", "--lang", "en")
+    assert details_conflict.returncode == 1
+    assert details_conflict.stdout == ""
+    assert "--details" in details_conflict.stderr and "--since" in details_conflict.stderr
+
+    prompt_conflict = cli.run(URI, "--read-prompt", "--since", "2026-01-15", "--lang", "en")
+    assert prompt_conflict.returncode == 1
+    assert "--since" in prompt_conflict.stderr
+
+    reversed_range = cli.run(URI, "--read", "--since", "2026-01-20", "--until", "2026-01-15", "--json", "--lang", "en")
+    assert reversed_range.returncode == 1
+    assert reversed_range.stdout == ""
+    assert reversed_range.stderr
+
+    invalid_date = cli.run(URI, "--read", "--since", "not-a-date", "--json", "--lang", "en")
+    assert invalid_date.returncode == 1
+    assert invalid_date.stdout == ""
+    assert invalid_date.stderr
+
+    if cursor is None:
+        cli.write(
+            [
+                header(),
+                message("user", "one", stamp="2026-01-15T12:00:00+00:00"),
+                message("assistant", "two", stamp="2026-01-15T12:01:00+00:00"),
+            ]
+        )
+        cursor = read(cli, URI, "--limit", "1")["data"]["next_cursor"]
+    assert cursor is not None
+    cursor_conflict = cli.run(URI, "--read", "--cursor", cursor, "--since", "2026-01-15", "--json", "--lang", "en")
+    assert cursor_conflict.returncode == 1
+    assert cursor_conflict.stdout == ""
+    assert "--since" in cursor_conflict.stderr
