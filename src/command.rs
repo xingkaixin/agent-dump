@@ -178,7 +178,7 @@ fn chinese(lang: Option<&str>) -> bool {
     )
 }
 
-fn mode_label(args: &Args, mode: Mode, zh: bool) -> &'static str {
+fn mode_label(args: &Args, mode: Mode, zh: bool) -> String {
     match mode {
         Mode::Providers => "--providers",
         Mode::Config => "--config",
@@ -204,10 +204,8 @@ fn mode_label(args: &Args, mode: Mode, zh: bool) -> &'static str {
                 "--head"
             } else if args.message.is_some() {
                 "--message"
-            } else if zh {
-                "会话 URI 导出"
             } else {
-                "session URI export"
+                return i18n::t("MODE_SESSION_EXPORT", zh, &[]);
             }
         }
         Mode::List => {
@@ -220,21 +218,16 @@ fn mode_label(args: &Args, mode: Mode, zh: bool) -> &'static str {
                 .as_deref()
                 .is_some_and(|s| s.starts_with("agents://"))
             {
-                if zh {
-                    "agents:// 查询 URI"
-                } else {
-                    QUERY_URI
-                }
-            } else if zh {
-                "列表模式"
+                return i18n::t("MODE_QUERY_URI", zh, &[]);
             } else {
-                "list mode"
+                return i18n::t("MODE_LIST", zh, &[]);
             }
         }
         Mode::Interactive => "--interactive",
         Mode::Browse => "--browse",
         Mode::Help => "",
     }
+    .into()
 }
 
 fn push_unique(items: &mut Vec<&'static str>, label: &'static str) {
@@ -250,7 +243,7 @@ fn stderr_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
         return Some(i18n::t(
             "TIME_FIELD_MODE_ERROR",
             zh,
-            &[("mode", mode_label(args, mode, zh).into())],
+            &[("mode", mode_label(args, mode, zh))],
         ));
     }
     if args.read || args.read_prompt {
@@ -341,7 +334,7 @@ fn stderr_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
             i18n::t(
                 "JSON_MODE_CONFLICT",
                 zh,
-                &[("mode", mode_label(args, mode, zh).into())],
+                &[("mode", mode_label(args, mode, zh))],
             )
         });
     }
@@ -350,7 +343,7 @@ fn stderr_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
             return Some(i18n::t(
                 "LOCATE_MODE_CONFLICT",
                 zh,
-                &[("mode", mode_label(args, mode, zh).into())],
+                &[("mode", mode_label(args, mode, zh))],
             ));
         }
         if args.search.as_deref().is_none_or(str::is_empty) {
@@ -365,7 +358,7 @@ fn stderr_error(args: &Args, mode: Mode, zh: bool) -> Option<String> {
                 i18n::t(
                     "MESSAGE_MODE_CONFLICT",
                     zh,
-                    &[("mode", mode_label(args, mode, zh).into())],
+                    &[("mode", mode_label(args, mode, zh))],
                 )
             });
         }
