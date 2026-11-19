@@ -432,8 +432,8 @@ agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 |------|------|--------|
 | `uri` | 用于直接查看的 Agent Session URI（如 `opencode://session-id`），或作用域查询 URI，如 `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive`, `-i` | 打开会话阅读器选择和导出会话（终端中等同 `--browse`） | - |
-| `--days`, `-d` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。collect 模式下仅在未提供 `--since/--until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
-| `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 的时间依据：`created` 或 `updated`。 | `updated` |
+| `--days`, `-d` | 查询最近 N 天的会话，N 必须为日历范围内的正整数。未提供显式 `--since`/`--until` 时生效。 | collect 外默认 7；collect 内默认仅当天 |
+| `--time-field` | 列表、搜索、浏览和交互模式中 `--days` 与 `--since`/`--until` 的时间依据：`created` 或 `updated`。 | `updated` |
 | `--query`, `-q` | 查询过滤。关键词与 `--search` 一样按空白拆分、不区分大小写，所有 term 都必须出现在 Session 标题或逻辑 transcript 中。支持普通关键词或结构化条件，如 `bug provider:codex role:user path:. limit:20`。`limit` 必须为有符号 64 位范围内的正整数。出现结构化字段后，其他 `key:value` 写法会被拒绝。不能与 `agents://...` 查询 URI 同时使用。 | - |
 | `--head` | 仅 URI 模式。打印有界发现阶段已有的元数据，不重新读取完整正文；发现阶段完整扫描时消息数为精确值，否则明确显示“未知”。不导出文件也不打印正文。不能与 `--format` 或 `--summary` 组合。 | - |
 | `--collect` | 按日期范围采集会话，可选通过 `--query` 或 `agents://...` 查询 URI 约束范围（两者互斥）。只总结 user/assistant 可见文本，排除 system/developer/tool 消息、reasoning、plan、工具调用和工具结果，投影后为空的会话直接忽略。PM 模式提取 requests、decisions 和 Agent 明确报告的 outcomes，再进行 session 归并和 tree reduction。多阶段进度显示在 stderr。 | - |
@@ -441,7 +441,7 @@ agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 | `--dry-run` | 与 `--collect` 搭配使用，预览 provider 分布、session 数、chunk 数、并发配置、日期范围和保存路径，跳过 AI 请求和文件写入。 | - |
 | `--emit-prompt` | 与 `--collect` 搭配使用，生成交给外部 agent 的自包含任务提示词，不需要 AI 配置，不写报告。与 `--dry-run` 互斥；`--save` 指定最终报告位置，`--output` 将提示词写入文件或目录。 | - |
 | `--verify-manifest <FILE>` | 与 `--collect` 搭配静态只读校验 `--emit-prompt` 提示词清单完整性，不读取配置或 Provider 数据源。支持 `--json`；与 `--emit-prompt`、`--dry-run`、`--output`、`--save`、日期及查询参数互斥。 | - |
-| `--stats` | 显示最近 N 天会话使用统计，按 Agent 和时间分组。存在未知消息数时显示已知小计与未知会话数，不把部分和冒充总数。支持 `--days` 与 `--query`，推荐独立使用。 | - |
+| `--stats` | 显示所选 `--days` 或 `--since`/`--until` 范围内的会话使用统计（始终按会话创建时间），按 Agent 和时间分组。存在未知消息数时显示已知小计与未知会话数，不把部分和冒充总数。支持 `--days`、`--since`/`--until` 与 `--query`，推荐独立使用。 | - |
 | `--providers` | 显示已注册 provider 的能力矩阵，包括 URI scheme、支持及不支持的导出格式、持久索引不可用时采用的存储级关键词回退，以及本地搜索路径是否存在。不扫描会话。 | - |
 | `--search` | 基于 SQLite FTS5 的本地全文搜索，覆盖会话标题、消息内容、reasoning 和 tool state。按空白切分的 distinct term 均按字面量匹配（不解释 `AND`/`NEAR`/`*` 等 FTS5 操作符语法），所有 term 都必须存在，但可以分别落在不同 corpus 字段；CJK term 必须连续。FTS5 不可用或 tokenizer 无法等价表达时使用同一套进程内逻辑文本 matcher；索引错误会在 stderr 提示并给出 `--reindex` 建议。每条结果的命中片段显示第一个命中 term 前后约 48 个字符，命中部分用 `**` 标出。可与 `--list` 组合。 | - |
 | `--reindex` | 强制重建全文搜索索引。索引损坏或手动修改会话数据后使用。 | - |
@@ -449,11 +449,11 @@ agent-dump --shortcut ob 20260831 --emit-prompt --output ./prompt-dir/
 | `--no-metadata-summary` | 在列表与交互视图中隐藏每个会话的元数据摘要行。 | 关闭 |
 | `-v`, `--version` | 打印版本号后退出。 | - |
 | `--shortcut` | 运行已配置的快捷预设。示例：`agent-dump --shortcut ob 20260408` | - |
-| `--since` | collect 开始日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
-| `--until` | collect 结束日期，支持 `YYYY-MM-DD` 或 `YYYYMMDD` | - |
+| `--since` | 开始日期（`YYYY-MM-DD` 或 `YYYYMMDD`），适用于 list、search、browse、interactive、stats 与 collect；显式 `--since`/`--until` 覆盖 `--days`，仅传 `--since` 时默认截至今天 | - |
+| `--until` | 结束日期（`YYYY-MM-DD` 或 `YYYYMMDD`），适用于 list、search、browse、interactive、stats 与 collect；仅传 `--until` 时默认从当月 1 日开始 | - |
 | `--save` | collect 报告路径。支持绝对/相对目录或 `.md` 文件路径。未提供文件名时使用默认 collect 文件名。配合 `--emit-prompt` 时只把路径写入提示词，由外部 agent 生成报告。 | - |
 | `--config` | 配置管理：`view` 或 `edit` | - |
-| `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `--days` 或 `--query` 且未指定 `--interactive` 则自动启用） | - |
+| `--list` | 仅列出会话不导出，并输出全部匹配会话（若指定 `--days`、`--since`/`--until` 或 `--query` 且未指定 `--interactive` 则自动启用） | - |
 | `--format` | 输出格式。支持逗号分隔多值：`json \\| markdown \\| raw \\| print`。默认：URI 模式为 `print`，非 URI 模式为 `json`。URI 模式可混用 `print,json`；`--interactive` 不支持 `print`；`--list` 下会警告并忽略；`--head` 不能与此选项组合。Cursor URI 仅支持 `json` 和 `print`（不支持 `raw/markdown`）。 | - |
 | `--summary` | 仅 URI 模式生效。开启后仅在 `--format` 包含 `json` 且 AI 配置完整时生成 summary；否则仅 warning 并继续导出（不启用 summary）。AI 请求期间会在 stderr 显示 loading 提示。不能与 `--head` 组合。 | - |
 | `--page-size`, `-p` | 仅兼容保留，不生效。读取分页使用 `--read` 与 `--limit` / `--max-chars`。 | 20 |
@@ -544,12 +544,14 @@ collect、`--collect --dry-run` 与 `--collect --emit-prompt` 均要求合法 TO
 
 ```bash
 agent-dump --list --time-field updated -d 7 --json
-agent-dump --search '数据库锁定' --time-field updated -d 7
+agent-dump --list --since 2026-03-01 --until 2026-03-07 --json
+agent-dump --search '数据库锁定' --since 2026-03-01 --until 2026-03-07
 agent-dump --browse --time-field updated -d 7
 agent-dump --interactive --time-field updated -d 7
+agent-dump --stats --since 2026-03-01 --until 2026-03-31 --json
 ```
 
-`--days` 默认按 Provider 记录的 `updated_at` 筛选，可找到最近 N 天内有活动的会话，包括很早创建的会话。加 `--time-field created` 改为按创建时间筛选。该参数只用于列表、搜索、浏览和交互模式；collect 日期和统计含义不变。
+`--days` 与 `--since`/`--until` 默认按 Provider 记录的 `updated_at` 筛选，可找到所选时间窗内有活动的会话，包括很早创建的会话。显式 `--since`/`--until` 覆盖 `--days`（仅传 `--since` 时默认截至今天；仅传 `--until` 时默认从当月 1 日开始；日期按所选时间字段的本地日期闭区间比较）。加 `--time-field created` 改为按创建时间筛选。`--time-field` 只用于列表、搜索、浏览和交互模式；统计始终按会话创建时间筛选，collect 保留文本段日期归属语义。
 
 活动列表先按更新时间排序，再应用结果数量限制。文本列表和交互选择保留 Provider 分组；显示日期和“今天／昨天”等分组使用所选时间字段。全文搜索仍优先按相关性排序。JSON 保留原有创建时间和更新时间。为发现旧会话的新活动，可能需要扫描创建时间窗口之外的元数据。文件型 Provider 跳过修改时间早于窗口的会话文件，因此修改时间早于其中记录活动的文件不会被活动窗口找到；其余筛选沿用各 Provider 的 `updated_at` 事实。各 Provider 的覆盖范围和发现不完整时的诊断规则不变。
 

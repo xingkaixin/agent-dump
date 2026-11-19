@@ -3,7 +3,9 @@ use agent_dump_core::output::{
     diagnostics, formats::OutputFormat, i18n::t, render,
 };
 use agent_dump_core::query::{
-    Query, TimeField, filter, scanner, scanner::Scan, text::Mode,
+    Query, TimeField, filter,
+    scanner::{self, Scan, WindowScope},
+    text::Mode,
 };
 use agent_dump_core::session::{
     Session, cache::SessionDataCache, timestamp::Timestamp,
@@ -167,49 +169,56 @@ fn entry(
     }
 }
 
-fn scope(query: &Query, days: i64, zh: bool) -> String {
+fn scope(query: &Query, window: WindowScope, zh: bool) -> String {
     let all = t("READER_ALL", zh, &[]);
-    t(
-        "READER_SCOPE",
-        zh,
-        &[
-            (
-                "providers",
-                query.providers.as_ref().map_or_else(
-                    || all.clone(),
-                    |names| names.iter().cloned().collect::<Vec<_>>().join(","),
-                ),
+    let mut values = vec![
+        (
+            "providers",
+            query.providers.as_ref().map_or_else(
+                || all.clone(),
+                |names| names.iter().cloned().collect::<Vec<_>>().join(","),
             ),
-            (
-                "path",
-                query.path.as_ref().map_or_else(
-                    || all.clone(),
-                    |path| render::safe_line(&path.display().to_string()),
-                ),
+        ),
+        (
+            "path",
+            query.path.as_ref().map_or_else(
+                || all.clone(),
+                |path| render::safe_line(&path.display().to_string()),
             ),
-            (
-                "roles",
-                query.roles.as_ref().map_or_else(
-                    || all.clone(),
-                    |roles| roles.iter().cloned().collect::<Vec<_>>().join(","),
-                ),
+        ),
+        (
+            "roles",
+            query.roles.as_ref().map_or_else(
+                || all.clone(),
+                |roles| roles.iter().cloned().collect::<Vec<_>>().join(","),
             ),
-            ("limit", query.limit.map_or(all, |limit| limit.to_string())),
-            ("days", days.to_string()),
-            (
-                "time",
-                t(
-                    if query.time_field == TimeField::Updated {
-                        "READER_UPDATED"
-                    } else {
-                        "READER_CREATED"
-                    },
-                    zh,
-                    &[],
-                ),
+        ),
+        ("limit", query.limit.map_or(all, |limit| limit.to_string())),
+        (
+            "time",
+            t(
+                if query.time_field == TimeField::Updated {
+                    "READER_UPDATED"
+                } else {
+                    "READER_CREATED"
+                },
+                zh,
+                &[],
             ),
-        ],
-    )
+        ),
+    ];
+    let key = match window {
+        WindowScope::Days(days) => {
+            values.push(("days", days.to_string()));
+            "READER_SCOPE"
+        }
+        WindowScope::Range(since, until) => {
+            values.push(("since", since.to_string()));
+            values.push(("until", until.to_string()));
+            "READER_SCOPE_RANGE"
+        }
+    };
+    t(key, zh, &values)
 }
 
 fn export_marked(
@@ -272,7 +281,7 @@ pub fn run(
     let mut query = operation.query.clone().unwrap_or_default();
     let scan = scanner::discover(
         Some(&query),
-        operation.days,
+        operation.scope,
         query.time_field,
         zh,
         warnings,
@@ -287,7 +296,7 @@ pub fn run(
     let mut reader = Reader::new(
         selected.rows,
         &query,
-        scope(&query, operation.days, zh),
+        scope(&query, operation.scope, zh),
         zh,
     )?;
     reader.status = selected.status;

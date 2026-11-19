@@ -447,8 +447,8 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 |-----------|-------------|---------|
 | `uri` | Agent session URI to dump (e.g., `opencode://session-id`), or a scoped query URI such as `agents://.?q=refactor&providers=codex,claude&roles=user&limit=20` | - |
 | `--interactive`, `-i` | Open the session reader to select and export sessions (same as `--browse` in a terminal) | - |
-| `--days`, `-d` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. In collect mode, applies when `--since/--until` are omitted. | 7 outside collect; today only in collect |
-| `--time-field` | Use `created` or `updated` time for the `--days` window in list/search/browse/interactive modes. | `updated` |
+| `--days`, `-d` | Query sessions from the last positive N days. Values outside the supported calendar range are rejected. Applies when explicit `--since`/`--until` are omitted. | 7 outside collect; today only in collect |
+| `--time-field` | Use `created` or `updated` time for `--days` and `--since`/`--until` in list/search/browse/interactive modes. | `updated` |
 | `--query`, `-q` | Query filter. Keyword terms are split on whitespace and matched case-insensitively like `--search`; every term must occur in the session title or logical transcript. Supports a plain keyword or structured terms like `bug provider:codex role:user path:. limit:20`. Structured values containing spaces support shell-style quoting and escaping. `limit` must be a positive signed 64-bit integer. Once the query contains a structured key, other `key:value` tokens are rejected. Cannot be combined with `agents://...` query URIs. | - |
 | `--head` | URI mode only. Print bounded discovery metadata without rereading the transcript; message count is exact when discovery scanned the complete source and explicitly `unknown` otherwise. Does not export files or print body content. Cannot be combined with `--format` or `--summary`. | - |
 | `--collect` | Collect sessions by date range, optionally constrained by `--query` or an `agents://...` query URI (mutually exclusive). Only visible user/assistant text is summarized; system/developer/tool messages, reasoning, plans, tool calls, and tool results are excluded, and empty projected sessions are ignored. PM mode extracts requests, decisions, and agent-reported outcomes before deterministic session merge and tree reduction. Multi-stage progress is shown on stderr. | - |
@@ -456,7 +456,7 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `--dry-run` | Use with `--collect` to preview provider breakdown, session/chunk counts, concurrency, date range, and save path while skipping AI calls and file writes. | - |
 | `--emit-prompt` | Use with `--collect` to emit a self-contained task for an external agent, without AI configuration or report writes. Incompatible with `--dry-run`; `--save` specifies the eventual report path and `--output` writes the prompt to a file or directory. | - |
 | `--verify-manifest <FILE>` | Statically verify an emitted `--collect` handoff manifest file without loading config or discovering Providers. Supports `--json`; conflicts with `--emit-prompt`, `--dry-run`, `--output`, `--save`, date flags, and queries. | - |
-| `--stats` | Show session usage statistics for the last N days, grouped by agent and time. If any message count is unknown, reports the known subtotal and number of unknown Sessions instead of presenting a partial sum as a total. Supports `--days` and `--query`; use it as a standalone mode. | - |
+| `--stats` | Show session usage statistics for the requested `--days` or `--since`/`--until` window (always by session creation time), grouped by agent and time. If any message count is unknown, reports the known subtotal and number of unknown Sessions instead of presenting a partial sum as a total. Supports `--days`, `--since`/`--until`, and `--query`; use it as a standalone mode. | - |
 | `--providers` | Show the registered provider capability matrix, including URI schemes, supported and unsupported export formats, and whether local search roots exist. Does not scan sessions. | - |
 | `--search` | Full-text search across provider-normalized session titles, messages, reasoning, and tool state using local SQLite FTS5; raw provider metadata is not searched. Whitespace-delimited terms are matched literally (FTS5 operator syntax such as `AND`/`NEAR`/`*` is not interpreted), all distinct terms are required, and terms may occur in different corpus fields. CJK terms require literal adjacency. FTS5-unavailable and unsupported-tokenizer cases use the same in-process logical-text matcher; unreadable sessions and index errors are reported on stderr. Each result's snippet shows about 48 characters on each side of the first matching term, with the match in `**bold**`. Cached session text not seen for 30 days is removed automatically. Can be combined with `--list`. | - |
 | `--reindex` | Force rebuild of the full-text search index. Use when index is corrupted or after manual session data changes. | - |
@@ -464,11 +464,11 @@ Existing calls still accept `-days`, `-query`, `-format`, `-output`, `-summary`,
 | `--no-metadata-summary` | Hide the per-session metadata summary line in list and interactive views. | off |
 | `-v`, `--version` | Print the version and exit. | - |
 | `--shortcut` | Run a configured shortcut preset. Example: `agent-dump --shortcut ob 20260408` | - |
-| `--since` | collect start date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
-| `--until` | collect end date, supports `YYYY-MM-DD` or `YYYYMMDD` | - |
+| `--since` | Start date (`YYYY-MM-DD` or `YYYYMMDD`) for list, search, browse, interactive, stats, and collect. Explicit `--since`/`--until` overrides `--days`; passing `--since` alone defaults `--until` to today. | - |
+| `--until` | End date (`YYYY-MM-DD` or `YYYYMMDD`) for list, search, browse, interactive, stats, and collect. Passing `--until` alone defaults `--since` to the 1st of that month. | - |
 | `--save` | collect report path. Supports absolute/relative directory or `.md` file path. If no filename is provided, the default collect filename is used. With `--emit-prompt`, the path is included as an instruction for the external agent; no report is written. | - |
 | `--config` | Config management: `view` or `edit` | - |
-| `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `--days` or `--query` is specified without `--interactive`) | - |
+| `--list` | Only list sessions without exporting and print all matched sessions (auto-activated if `--days`, `--since`/`--until`, or `--query` is specified without `--interactive`) | - |
 | `--format` | Output format. Supports comma-separated values: `json \\| markdown \\| raw \\| print`. Default: URI mode `print`, non-URI mode `json`. URI mode can mix `print,json`; `--interactive` does not support `print`; `--list` ignores this option with warning; `--head` cannot be combined with this option. Cursor supports only `json` and `print` (no `raw/markdown`). | - |
 | `--summary` | URI mode only. When enabled, summary is generated only if `--format` includes `json` and AI config is complete; otherwise a warning is shown and export continues without summary. During AI requests, a loading hint is shown on stderr. Cannot be combined with `--head`. | - |
 | `--page-size`, `-p` | Compatibility only; ignored. For reading pages, use `--read` with `--limit` / `--max-chars`. | 20 |
@@ -563,12 +563,14 @@ Legacy invalid TOML can still be read for compatibility, but `--config edit` ref
 
 ```bash
 agent-dump --list --time-field updated -d 7 --json
-agent-dump --search 'database locked' --time-field updated -d 7
+agent-dump --list --since 2026-03-01 --until 2026-03-07 --json
+agent-dump --search 'database locked' --since 2026-03-01 --until 2026-03-07
 agent-dump --browse --time-field updated -d 7
 agent-dump --interactive --time-field updated -d 7
+agent-dump --stats --since 2026-03-01 --until 2026-03-31 --json
 ```
 
-`--days` uses the Provider-reported `updated_at` by default, so it finds sessions with activity in the last N days, including sessions created much earlier. Add `--time-field created` to filter by creation time instead. This option is available only for list, search, browse and interactive modes; collect dates and statistics retain their existing meaning.
+`--days` and `--since`/`--until` use the Provider-reported `updated_at` by default, so they find sessions with activity in the requested window, including sessions created much earlier. Explicit `--since`/`--until` overrides `--days` (`--since` alone ends today; `--until` alone starts on the 1st of that month; dates match the selected timestamp's local calendar date). Add `--time-field created` to filter by creation time instead. `--time-field` is available only for list, search, browse and interactive modes; statistics always filter by session creation time, and collect dates retain their text-segment date semantics.
 
 Activity lists order by updated time before applying a result limit. Human lists and interactive selection retain Provider groups; dates and Today/Yesterday groups use the selected time field. Search still orders primarily by relevance. JSON records retain both original timestamps. Discovery may scan metadata outside the creation-time window to find old active sessions. File-based Providers skip session files last modified before the window, so a file whose modification time is older than its recorded activity is not found by an activity window; filtering otherwise uses the Provider-projected `updated_at` fact. Provider coverage and partial-discovery diagnostics remain unchanged.
 
