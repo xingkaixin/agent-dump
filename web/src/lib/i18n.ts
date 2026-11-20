@@ -187,9 +187,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.12",
+        date: "2026-11-20",
+        isLatest: true,
+        title: "Filter Sessions by Date Range, Refresh the Reader In Place",
+        description:
+          "List, search, browse, and read Codex, Claude Code, Cursor, and other AI sessions within an exact local date range using --since and --until, so the next Agent handoff only reads the days you need. Every subcommand now has focused --help with examples, and conflicting flags are named in the error. The terminal session reader refreshes in place, copies message text, and switches Provider or lookback window without restarting. Multi-provider discovery runs in parallel, and full-text search uses the FTS5 index for more query types.",
+        command: 'npx @agent-dump/cli@1.2.12 list --since 2026-11-01 --until 2026-11-07',
+        tags: ["Date Range", "Session Reader", "Full-Text Search"],
+      },
+      {
         version: "v1.2.11",
         date: "2026-11-17",
-        isLatest: true,
         title: "Save and Verify Agent Handoffs",
         description:
           "Save a complete prompt handoff from Codex, Claude Code, Cursor, and other AI sessions directly to a file with --emit-prompt --output. Check the saved candidate manifest with --verify-manifest before the next Agent reads sessions, without API configuration or model calls. Handoff instructions clarify pagination and activity-date filtering. Codex session discovery and paginated reading do less copying, and AI collect reuses HTTP connections across summary stages.",
@@ -444,9 +453,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.12",
+        date: "2026-11-20",
+        isLatest: true,
+        title: "按日期范围筛选会话，阅读器原地刷新",
+        description:
+          "用 --since 和 --until 按本地日期精确列出、搜索、浏览和分页读取 Codex、Claude Code、Cursor 等 AI 会话，交接给下一个 Agent 时只读需要的那几天。每个子命令都有聚焦的 --help 和示例，参数冲突时错误信息会指出具体参数。终端会话阅读器可以原地刷新、复制消息正文，并在不重启的情况下切换 Provider 和回溯天数。多 Provider 会话发现改为并行，全文搜索有更多查询走 FTS5 索引。",
+        command: 'npx @agent-dump/cli@1.2.12 list --since 2026-11-01 --until 2026-11-07',
+        tags: ["日期范围", "会话阅读器", "全文搜索"],
+      },
+      {
         version: "v1.2.11",
         date: "2026-11-17",
-        isLatest: true,
         title: "交接提示词直接落盘，读取前校验清单",
         description:
           "用 --emit-prompt --output 将 Codex、Claude Code、Cursor 等 AI 会话的完整交接提示词直接保存到文件，避免命令输出被截断。下一个 Agent 读取会话前，可用 --verify-manifest 校验候选清单，无需配置 API 或调用模型。交接指令明确分页续读和活动日期筛选规则。Codex 会话发现与分页读取减少重复复制，AI collect 在各摘要阶段复用 HTTP 连接。",
@@ -701,9 +719,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.12",
+        date: "2026-11-20",
+        isLatest: true,
+        title: "日付範囲でセッションを絞り込み、リーダーをその場で更新",
+        description:
+          "--since と --until で、Codex、Claude Code、Cursor などの AI セッションをローカル日付の範囲で一覧・検索・閲覧・ページ読み込みできます。次の Agent への引き継ぎでは必要な日だけを読めます。すべてのサブコマンドに例付きの専用 --help が付き、フラグが競合するとエラーで該当フラグを示します。ターミナルのセッションリーダーは再起動せずにその場で更新し、メッセージ本文をコピーし、Provider や遡る日数を切り替えられます。複数 Provider のセッション検出は並列化され、全文検索はより多くのクエリで FTS5 インデックスを使います。",
+        command: 'npx @agent-dump/cli@1.2.12 list --since 2026-11-01 --until 2026-11-07',
+        tags: ["日付範囲", "セッションリーダー", "全文検索"],
+      },
+      {
         version: "v1.2.11",
         date: "2026-11-17",
-        isLatest: true,
         title: "引き継ぎプロンプトを保存し、候補一覧を検証",
         description:
           "Codex、Claude Code、Cursor などの AI セッションから作る引き継ぎプロンプトを、--emit-prompt --output でファイルへ直接保存し、コマンド出力の切り捨てを防げます。次の Agent がセッションを読む前に、--verify-manifest で候補一覧を検証できます。API 設定やモデル呼び出しは不要です。引き継ぎ指示ではページ送りと活動日による絞り込みを明確にしました。Codex のセッション検出とページ読み込みのコピーを減らし、AI collect は要約の各段階で HTTP 接続を再利用します。",

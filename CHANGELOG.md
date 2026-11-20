@@ -4,6 +4,25 @@
 
 ## [Unreleased]
 
+## [1.2.12] - 2026-11-20
+
+### Added
+
+- Filter list, search, browse, interactive, and stats by `--since`/`--until` local dates (`YYYY-MM-DD` or `YYYYMMDD`), matching collect precedence: explicit dates override `--days`, `--since` alone ends today, and `--until` alone starts on the 1st of that month. Invalid dates or `since > until` fail with exit code `1` (#590).
+- Filter `--read` pages by `--since`/`--until` local dates. Undated and inferred-time segments are excluded, original message positions and locators are preserved, and cursors carry the date filters. Date filters cannot combine with `--details`, `--cursor`, or `--read-prompt` (#595).
+- Show focused, localized `--help` for each subcommand with usage, accepted options, constraints, and examples. Conflict diagnostics now name the conflicting flags or active mode while keeping exit codes and output streams unchanged (#588).
+- In `--browse`, press `r` to refresh discovery in place, `Y` to copy the focused message text or previewed excerpt through OSC 52, `p` to cycle the Provider filter, and `d` to cycle the lookback window (#593).
+
+### Fixed
+
+- `--browse --time-field created` now sorts, groups, and displays row times by creation time instead of update time (#589).
+
+### Changed
+
+- Discover sessions from multiple Providers in parallel while keeping diagnostics, failures, and errors in Provider registry order; `list`/`stats` across all Providers ran about 1.4x faster in paired benchmarks (#587).
+- Route searches containing `i`-terms, Unicode case-folding variants, mixed CJK and Latin terms, or short plus long terms through FTS5 with BM25 ranking instead of full scans. The search index schema moves to v5 and existing indexes rebuild automatically; warm reads use WAL without taking a write transaction (#591).
+- Guard English and Chinese locale catalogs for key parity, placeholder consistency, and references from Rust source (#592).
+
 ## [1.2.11] - 2026-11-17
 
 ### Added
@@ -1425,3 +1444,4 @@
 [1.2.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.9
 [1.2.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.10
 [1.2.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.11
+[1.2.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.12

@@ -2,6 +2,25 @@
 
 ## [未发布]
 
+## [1.2.12] - 2026-11-20
+
+### 新增功能
+
+- list、search、browse、interactive 和 stats 支持用 `--since`/`--until` 按本地日期筛选（`YYYY-MM-DD` 或 `YYYYMMDD`），优先级与 collect 一致：显式日期覆盖 `--days`，只传 `--since` 时截止到今天，只传 `--until` 时从当月 1 日开始。日期无效或 `since > until` 时以退出码 `1` 失败 (#590)。
+- `--read` 分页支持用 `--since`/`--until` 按本地日期筛选。无日期和推断时间的片段被排除，保留原始消息位置与 locator，游标会携带日期筛选。日期筛选不能与 `--details`、`--cursor` 或 `--read-prompt` 同时使用 (#595)。
+- 每个子命令提供聚焦的本地化 `--help`，包含用法、可用参数、约束和示例。参数冲突诊断会指出具体冲突的参数或当前模式，退出码和输出流不变 (#588)。
+- `--browse` 中按 `r` 原地刷新会话发现，`Y` 通过 OSC 52 复制当前消息正文或预览的片段，`p` 循环切换 Provider 筛选，`d` 循环切换回溯天数 (#593)。
+
+### 问题修复
+
+- `--browse --time-field created` 现在按创建时间排序、分组和显示行时间，不再使用更新时间 (#589)。
+
+### 变更
+
+- 多个 Provider 的会话发现改为并行执行，诊断、失败和错误仍按 Provider 注册顺序输出；配对基准中跨全部 Provider 的 `list`/`stats` 约快 1.4 倍 (#587)。
+- 含 `i` 的词、Unicode 大小写折叠变体、中英文混合词，以及短词加长词的搜索改走 FTS5 和 BM25 排序，不再全表扫描。搜索索引 schema 升级到 v5，已有索引自动重建；热读取使用 WAL，不再开启写事务 (#591)。
+- 为中英文文案目录增加 key 一致性、占位符一致性和 Rust 源码引用检查 (#592)。
+
 ## [1.2.11] - 2026-11-17
 
 ### 新增功能
@@ -1428,3 +1447,4 @@
 [1.2.9]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.9
 [1.2.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.10
 [1.2.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.11
+[1.2.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.12
