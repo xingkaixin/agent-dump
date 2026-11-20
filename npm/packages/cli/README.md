@@ -67,12 +67,14 @@ agent-dump collect --emit-prompt
 ```
 
 Subcommands are aliases for the existing option forms; both remain supported.
+Run `agent-dump <subcommand> --help` for focused usage, options, and examples.
 
 ### List sessions
 
 ```bash
 agent-dump --list
 agent-dump --list --days 7
+agent-dump --list --since 2026-03-01 --until 2026-03-07
 agent-dump --list --query error
 ```
 
@@ -228,13 +230,17 @@ navigate matching messages. Press `x` to preview a hit with nearby context, `+`/
 the context radius, and `e` to export that excerpt with source locators and revision checks.
 Outside excerpt preview, Space marks sessions and `e` exports all marked sessions, or the
 selected session if none are marked. Exports use `--format` and `--output`.
-Use `t` for tool details and `y` for URI clipboard requests (requires OSC 52). Tab switches
-panes on narrow terminals; q/Esc/Ctrl-C closes the reader. Source sessions remain read-only;
-reopen to refresh the list.
+Use `t` for tool details, `y` for URI clipboard requests, and `Y` to copy the focused message
+text or previewed excerpt (both require OSC 52). Press `r` to refresh the list in place, `p` to
+cycle the Provider filter, and `d` to cycle the lookback window (`7` → `30` → `90` → `365`).
+Tab switches panes on narrow terminals; q/Esc/Ctrl-C closes the reader. Source sessions remain
+read-only.
 
 List, search, browse, and interactive selection use session update time for the `--days`
 window by default, including older conversations with recent activity. Add `--time-field created`
-to filter by creation time. Collect uses text activity dates; statistics keep creation-date buckets.
+to filter by creation time. Explicit `--since`/`--until` dates override `--days` in list, search,
+browse, interactive, and stats. Collect uses text activity dates; statistics keep creation-date
+buckets.
 
 `--json` writes one versioned JSON envelope to stdout for list, search, statistics, message
 context, bounded reads, head metadata, or Provider capabilities; diagnostics go to stderr.
@@ -254,14 +260,16 @@ file-export options, and `--output` requires `--format`.
 agent-dump codex://SESSION_ID --read-prompt
 agent-dump codex://SESSION_ID --read --order asc --limit 20 --max-chars 12000 --json
 agent-dump codex://SESSION_ID --read --cursor 'NEXT_CURSOR' --json
+agent-dump codex://SESSION_ID --read --since 2026-03-01 --until 2026-03-07 --json
 ```
 
 Replace `NEXT_CURSOR` with `data.next_cursor` from the previous page. Continue until
 `has_more=false`, including every fragment of long messages. Cursors preserve the selection,
-order, and budgets; do not override them on continuation. A changed transcript invalidates the
-cursor, so restart reading instead of combining revisions. Output is bounded, but each request
-may still parse the full source transcript. `--read-prompt` generates reading instructions
-without opening the source or confirming that the session exists.
+order, budgets, and date filters; do not override them on continuation. `--since`/`--until`
+keep text segments dated within the local range and exclude undated segments. A changed
+transcript invalidates the cursor, so restart reading instead of combining revisions. Output is
+bounded, but each request may still parse the full source transcript. `--read-prompt` generates
+reading instructions without opening the source or confirming that the session exists.
 
 Collect processes all eligible user/assistant text through bounded chunks and marks incomplete
 reports. `--collect --emit-prompt` generates a paginated reading task for an external Agent;
@@ -275,7 +283,7 @@ it does not create the report. See the full README for schemas, filters, and sou
 - **Machine-readable queries**: `--json` for list, search, statistics, message context, bounded reads, metadata, and capabilities
 - **Message context**: `--search --locate` and URI `--message` to read or export search hits with nearby messages and source locators
 - **Bounded Agent reading**: `--read` pages with continuation cursors and `--read-prompt` instructions
-- **Recent activity**: Date windows default to session update time; `--time-field created` selects creation time
+- **Recent activity**: Date windows default to session update time; `--time-field created` selects creation time, and `--since/--until` select explicit local dates
 - **URI direct access**: View or export any session by its URI without searching
 - **Head metadata**: `--head` reuses bounded discovery metadata without rereading the transcript and marks incomplete message counts as unknown
 - **Statistics**: `--stats` shows session and message counts grouped by agent and time, reporting known subtotals separately from sessions with unknown counts
