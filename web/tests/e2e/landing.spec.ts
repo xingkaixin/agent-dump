@@ -92,6 +92,8 @@ test("browser language only redirects to translations that exist", async ({
   const context = await browser.newContext({ locale: "ja-JP" });
   const page = await context.newPage();
   await page.goto("/guides/export-codex-session/");
-  await expect(page).toHaveURL("/guides/export-codex-session/");
+  await expect(page).toHaveURL("/ja/guides/export-codex-session/");
+  await page.goto("/guides/save-ai-conversations-to-obsidian/");
+  await expect(page).toHaveURL("/guides/save-ai-conversations-to-obsidian/");
   await context.close();
 });

@@ -31,7 +31,10 @@ const guides = await getGuides(locale);
               <span>{t.categories[guide.category]}</span>
               <Icon name="arrowRight" />
             </span>
-            <h3>{guide.title}</h3>
+            <h3>
+              {guide.title}
+              {guide.locale !== locale && locale === "ja" ? "（英語）" : ""}
+            </h3>
             <p>{guide.description}</p>
           </a>
         </div>
