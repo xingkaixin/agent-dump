@@ -1,7 +1,7 @@
 import type { Locale } from "./i18n";
 
 export interface Guide {
-  locale: "en" | "zh";
+  locale: Locale;
   slug: string;
   title: string;
   description: string;
@@ -38,8 +38,18 @@ export async function guidePaths(
 }
 
 export async function getGuides(locale: Locale) {
-  return (await entries())
-    .filter((entry) => entry.locale === (locale === "ja" ? "en" : locale))
+  const all = await entries();
+  const bySlug = new Map<string, Guide>();
+  for (const entry of all) {
+    if (entry.locale === "en" && !bySlug.has(entry.slug)) {
+      bySlug.set(entry.slug, entry);
+    }
+    if (entry.locale === locale) {
+      bySlug.set(entry.slug, entry);
+    }
+  }
+  return [...bySlug.values()]
+    .filter((entry) => entry.locale === locale || locale === "ja")
     .sort((a, b) => a.order - b.order)
     .map((entry) => ({
       ...entry,
@@ -56,6 +66,7 @@ export const guideUi = {
       "Practical guides to finding, exporting, and reusing your AI coding conversations. Real commands, from the first search to the next project.",
     all: "All guides",
     read: "Read guide",
+    readFallback: "Read guide",
     contents: "On this page",
     related: "Continue reading",
     updated: "Updated",
@@ -82,6 +93,7 @@ export const guideUi = {
       "从找回一次讨论，到导出记录、交接上下文和整理周报。每篇指南都从具体场景出发，提供可以照着操作的命令。",
     all: "全部指南",
     read: "阅读指南",
+    readFallback: "阅读指南",
     contents: "本文目录",
     related: "继续阅读",
     updated: "更新于",
@@ -105,9 +117,10 @@ export const guideUi = {
     seoTitle: "AIセッションのエクスポート・検索・引き継ぎガイド",
     title: "対話の履歴を、次の仕事へ。",
     description:
-      "AIとの対話の検索、エクスポート、引き継ぎを実際のコマンドで解説します。記事は英語で提供しています。",
+      "AIとの対話の検索、エクスポート、引き継ぎを実際のコマンドで解説します。主要ガイドは日本語で読めます。",
     all: "すべてのガイド",
-    read: "ガイドを読む（英語）",
+    read: "ガイドを読む",
+    readFallback: "ガイドを読む（英語）",
     contents: "目次",
     related: "関連ガイド",
     updated: "更新日",
@@ -115,7 +128,7 @@ export const guideUi = {
     filter: "ガイドを絞り込む",
     empty: "一致するガイドはありません。別のキーワードをお試しください。",
     search: "ガイドを検索",
-    note: "目的に合うガイドから始めましょう。記事は英語です。",
+    note: "目的に合うガイドから始めましょう。未翻訳の記事は英語で提供しています。",
     count: "全 {count} 件のガイド",
     found: "{total} 件中 {count} 件のガイド",
     clear: "検索と絞り込みをクリア",
@@ -131,12 +144,13 @@ export const guideUi = {
 export const codexGuidePaths = {
   en: "/guides/export-codex-session/",
   zh: "/zh/guides/export-codex-session/",
+  ja: "/ja/guides/export-codex-session/",
 };
 export const codexGuideLinks = {
-  en: { href: codexGuidePaths.en, label: "Export a Codex session to Markdown" },
+  en: { href: codexGuidePaths.en, label: "Export Codex Sessions to Markdown and JSON" },
   zh: { href: codexGuidePaths.zh, label: "将 Codex 会话导出为 Markdown" },
   ja: {
-    href: codexGuidePaths.en,
-    label: "CodexセッションをMarkdownにエクスポート（英語）",
+    href: codexGuidePaths.ja,
+    label: "Codex セッションを Markdown・JSON にエクスポート",
   },
 };

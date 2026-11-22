@@ -6,8 +6,11 @@
 
 - [All guides](https://agent-dump.xingkaixin.me/guides/): Practical workflows and commands.
 - [中文使用说明](https://agent-dump.xingkaixin.me/zh/guides/): 六个场景的操作步骤、输出说明和限制。
+- [日本語ガイド](https://agent-dump.xingkaixin.me/ja/guides/): Codex・Claude Code のエクスポート手順（日本語）と英語ガイド一覧。
 - [Export Codex sessions](https://agent-dump.xingkaixin.me/guides/export-codex-session/): Find a URI, export Markdown or JSON, and copy the transcript into notes or another conversation.
-- [Export Claude Code conversations](https://agent-dump.xingkaixin.me/guides/export-claude-code-conversations/): Save one or several local conversations.
+- [Export Claude Code conversations](https://agent-dump.xingkaixin.me/guides/export-claude-code-conversations/): Save one or several local conversations to Markdown, normalized JSON with token stats, or raw JSONL.
+- [Codex セッションを Markdown・JSON にエクスポート](https://agent-dump.xingkaixin.me/ja/guides/export-codex-session/): ローカル Codex セッションの URI 確認、Markdown・JSON 出力、トラブルシューティング。
+- [Claude Code セッションを Markdown・JSON にエクスポート](https://agent-dump.xingkaixin.me/ja/guides/export-claude-code-conversations/): ローカル Claude Code セッションの Markdown・構造化 JSON・一括エクスポート。
 - [Search coding history](https://agent-dump.xingkaixin.me/guides/search-ai-coding-history/): Full-text search, project filters, message locations, and cited excerpts.
 - [Hand off context to an agent](https://agent-dump.xingkaixin.me/guides/handoff-context-to-ai-agent/): Reading prompts, bounded JSON pages, cursors, and revision handling.
 - [Create work reports](https://agent-dump.xingkaixin.me/guides/weekly-report-from-ai-sessions/): Preview scope, configure AI collect, or generate a prompt for another agent.

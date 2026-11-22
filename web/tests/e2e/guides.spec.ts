@@ -4,7 +4,7 @@ test("all articles and their internal links are reachable", async ({
   page,
   request,
 }) => {
-  for (const prefix of ["", "/zh"]) {
+  for (const prefix of ["", "/zh", "/ja"]) {
     await page.goto(`${prefix}/guides/`);
     const paths = await page
       .locator(".guide-card > a")

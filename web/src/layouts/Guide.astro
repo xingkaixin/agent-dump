@@ -63,7 +63,16 @@ const content = (await Astro.slots.render("default")).replace(
   <main id="main" tabindex="-1">
     <header class="ghead dots">
       <div class="wrap rise">
-        <nav class="crumb" aria-label={locale === "zh" ? "面包屑导航" : "Breadcrumb"}>
+        <nav
+          class="crumb"
+          aria-label={
+            locale === "zh"
+              ? "面包屑导航"
+              : locale === "ja"
+                ? "パンくずリスト"
+                : "Breadcrumb"
+          }
+        >
           <a href={site.paths[locale]}>{t.home}</a>
           <span aria-hidden="true">/</span>
           <a href={guideIndexPaths[locale]}>{t.label}</a>
@@ -108,7 +117,9 @@ const content = (await Astro.slots.render("default")).replace(
           data-copy-error={
             locale === "zh"
               ? "复制失败，请手动选择命令"
-              : "Copy failed. Select the command manually."
+              : locale === "ja"
+                ? "コピーに失敗しました。コマンドを手動で選択してください。"
+                : "Copy failed. Select the command manually."
           }
           set:html={content}
         />
@@ -120,6 +131,7 @@ const content = (await Astro.slots.render("default")).replace(
                 <a class="relcard" href={entry.href}>
                   <span>{t.categories[entry.category]}</span>
                   {entry.title}
+                  {entry.locale !== locale && locale === "ja" ? "（英語）" : ""}
                 </a>
               </div>
             ))}

@@ -46,6 +46,8 @@ agent-dump 'claude://YOUR_SESSION_ID' --format markdown --output ./exports
 agent-dump 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
 ```
 
+`--format json` 会写出归一化后的 JSON 文件，包含会话元数据（`id`、`title`、`directory`、`version`、`time_created`、`time_updated`）、汇总统计 `stats`（`total_input_tokens`、`total_output_tokens`、`total_cost`、`message_count`）以及 `messages` 数组（每条消息含 `role`、`model`、`time_created`、`tokens`、`cost` 与结构化 `parts`）。如果需要保留未加工的原始记录，可使用 `--format raw` 导出 `.raw.jsonl` 文件。
+
 `--format json` 会写出导出文件。它与 `--json` 不同，后者用于受支持的查询和读取模式，将结构化结果写到标准输出。脚本只需要长对话的一部分时，可以使用[分页读取](/zh/guides/handoff-context-to-ai-agent/)。
 
 ## 导出多段对话

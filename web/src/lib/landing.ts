@@ -303,7 +303,7 @@ export const landing: Record<Locale, LandingCopy> = {
       scan: "直近 7 日 · すべての Provider",
       chunk: "user / assistant 本文を分割して読み取り",
     },
-    codexGuide: "Codex セッションを Markdown にエクスポート（英語）",
+    codexGuide: "Codex セッションを Markdown にエクスポート",
     uri: {
       label: "セッション URI はツールの scheme とセッション ID で構成されます",
     },

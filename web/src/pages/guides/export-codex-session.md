@@ -3,13 +3,13 @@ layout: ../../layouts/Guide.astro
 slug: export-codex-session
 category: export
 order: 1
-updated: "2026-10-03"
+updated: "2026-11-22"
 locale: en
-title: Export a Codex session to Markdown
-description: Export a Codex session to Markdown or JSON with Agent Dump. Find local conversations, copy the transcript into notes, and troubleshoot missing sessions.
+title: Export Codex Sessions to Markdown and JSON
+description: Export or copy a local Codex session to Markdown or JSON with one CLI command. Find the session URI, save transcripts to notes, and fix missing sessions.
 ---
 
-Use Agent Dump to find a saved local Codex conversation and export it as a Markdown file. Install the CLI, list your sessions, then pass a real session URI to the export command. The source session stays unchanged; the exported file can be opened in your editor or notes app.
+Use Agent Dump to export a local Codex session to Markdown or JSON, or copy a conversation transcript into notes, issues, or another agent. Install the CLI, list your sessions, then pass a real session URI to the export command. The source session stays unchanged.
 
 ## 1. Install Agent Dump
 

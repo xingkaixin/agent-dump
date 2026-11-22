@@ -36,7 +36,16 @@ const most = Math.max(...categories.map((category) => category.count));
   <main id="main" tabindex="-1">
     <section class="ghero dots">
       <div class="wrap">
-        <nav class="crumb" aria-label={locale === "zh" ? "面包屑导航" : "Breadcrumb"}>
+        <nav
+          class="crumb"
+          aria-label={
+            locale === "zh"
+              ? "面包屑导航"
+              : locale === "ja"
+                ? "パンくずリスト"
+                : "Breadcrumb"
+          }
+        >
           <a href={site.paths[locale]}>{t.home}</a>
           <span aria-hidden="true">/</span>
           <span>{t.label}</span>
@@ -115,7 +124,7 @@ const most = Math.max(...categories.map((category) => category.count));
                 <h2>{guide.title}</h2>
                 <p>{guide.description}</p>
                 <span class="gfoot">
-                  {t.read}
+                  {guide.locale === locale ? t.read : t.readFallback}
                   <Icon name="arrowUpRight" />
                 </span>
               </a>

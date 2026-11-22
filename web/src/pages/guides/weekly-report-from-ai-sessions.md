@@ -4,9 +4,9 @@ locale: "en"
 slug: "weekly-report-from-ai-sessions"
 category: "reports"
 order: 5
-updated: "2026-10-05"
-title: "Create a work report from AI coding sessions"
-description: "Turn saved AI coding conversations into a daily or weekly work report. Preview the session scope, use AI collect or a prompt handoff, and check coverage."
+updated: "2026-11-22"
+title: "Weekly Work Reports from Codex & Claude Code Sessions"
+description: "Turn local Codex and Claude Code sessions into a daily or weekly work report. Preview scope with --dry-run, run AI collect, or emit an agent handoff prompt."
 ---
 
 Agent Dump can collect saved coding conversations into a report of requested work, decisions, and reported results. Use it to prepare a daily note or weekly review, then verify the claims before sharing. A report summarizes dialogue; it does not independently verify that a change shipped.
