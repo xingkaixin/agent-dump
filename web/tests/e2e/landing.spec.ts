@@ -1,9 +1,27 @@
 import { expect, test } from "@playwright/test";
 
 const locales = [
-  { name: "English", path: "/", htmlLang: "en" },
-  { name: "Chinese", path: "/zh/", htmlLang: "zh-Hans" },
-  { name: "Japanese", path: "/ja/", htmlLang: "ja" },
+  {
+    name: "English",
+    path: "/",
+    htmlLang: "en",
+    blogLabel: "Blog",
+    blogHref: "https://xingkaixin.me/en/",
+  },
+  {
+    name: "Chinese",
+    path: "/zh/",
+    htmlLang: "zh-Hans",
+    blogLabel: "博客",
+    blogHref: "https://xingkaixin.me/",
+  },
+  {
+    name: "Japanese",
+    path: "/ja/",
+    htmlLang: "ja",
+    blogLabel: "ブログ",
+    blogHref: "https://xingkaixin.me/en/",
+  },
 ] as const;
 
 test.beforeEach(async ({ page }) => {
@@ -45,6 +63,26 @@ for (const locale of locales) {
         .poll(() => page.evaluate(() => navigator.clipboard.readText()))
         .toBe(command);
     }
+
+    const blogLinks = page.locator('footer a[href^="https://xingkaixin.me/"]');
+    await expect(blogLinks).toHaveCount(1);
+    await expect(blogLinks).toHaveText(locale.blogLabel);
+    await expect(blogLinks).toHaveAttribute("href", locale.blogHref);
+    await expect(blogLinks).toHaveAttribute("target", "_blank");
+    await expect(blogLinks).toHaveAttribute("rel", "noopener");
+
+    const jsonLdText = await page
+      .locator('script[type="application/ld+json"]')
+      .textContent();
+    const jsonLd = JSON.parse(jsonLdText ?? "{}");
+    const author = jsonLd["@graph"]?.find(
+      (node: { "@type"?: string }) => node["@type"] === "Person",
+    );
+    expect(author).toMatchObject({
+      "@type": "Person",
+      name: "XingKaiXin",
+      url: "https://xingkaixin.me/",
+    });
   });
 }
 

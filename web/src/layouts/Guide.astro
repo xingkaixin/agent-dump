@@ -78,7 +78,7 @@ const content = (await Astro.slots.render("default")).replace(
         </h1>
         <p class="deck">{description}</p>
         <p class="meta">
-          <a href={site.author.url}>
+          <a href={site.blogUrl[locale]} target="_blank" rel="noopener">
             <span class="ava" aria-hidden="true">{site.author.name[0].toUpperCase()}</span>
             {site.author.name}
           </a>

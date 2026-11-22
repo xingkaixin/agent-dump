@@ -10,10 +10,11 @@ const { locale } = Astro.props;
 const t = ui[locale];
 
 const links = [
-  { label: t.footerGithub, href: site.repo },
-  { label: "npm", href: site.npm },
-  { label: "PyPI", href: site.pypi },
-  { label: t.changelogLabel, href: site.changelogUrl[locale] },
+  { label: t.footerGithub, href: site.repo, rel: "noopener noreferrer" },
+  { label: "npm", href: site.npm, rel: "noopener noreferrer" },
+  { label: "PyPI", href: site.pypi, rel: "noopener noreferrer" },
+  { label: t.changelogLabel, href: site.changelogUrl[locale], rel: "noopener noreferrer" },
+  { label: t.footerBlog, href: site.blogUrl[locale], rel: "noopener" },
 ];
 ---
 
@@ -33,7 +34,7 @@ const links = [
           <a
             href={link.href}
             target="_blank"
-            rel="noopener noreferrer"
+            rel={link.rel}
             data-umami-event="outbound-click"
             data-umami-event-destination={link.label}
             data-umami-event-locale={t.htmlLang}
