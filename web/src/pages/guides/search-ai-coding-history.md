@@ -4,9 +4,9 @@ locale: "en"
 slug: "search-ai-coding-history"
 category: "search"
 order: 3
-updated: "2026-10-06"
-title: "Search AI coding history and find past decisions"
-description: "Find a past fix or decision across Codex, Claude Code, and other local AI tools. Filter by project, locate matching messages, and read the surrounding context."
+updated: "2026-11-22"
+title: "Search AI Coding History Across Codex & Claude Code"
+description: "Search local Codex, Claude Code, and AI coding sessions to trace past fixes and decisions. Filter by project, locate matching messages, and export cited excerpts."
 ---
 
 When you remember solving a problem but cannot remember which coding assistant you used, search your local conversation history with Agent Dump. You can narrow results to a project, inspect the matching messages, and keep a cited excerpt for the next task.

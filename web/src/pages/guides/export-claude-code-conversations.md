@@ -4,12 +4,12 @@ locale: "en"
 slug: "export-claude-code-conversations"
 category: "export"
 order: 2
-updated: "2026-10-03"
-title: "Export Claude Code conversations to Markdown and JSON"
-description: "Save a local Claude Code conversation as Markdown or JSON. Find the session URI, export a readable record, and troubleshoot missing project history."
+updated: "2026-11-22"
+title: "Export Claude Code Sessions to Markdown and JSON"
+description: "Export local Claude Code sessions and conversations to Markdown or structured JSON with token stats and messages. Includes batch export and troubleshooting."
 ---
 
-Agent Dump can export a saved Claude Code conversation into a file you can read outside the terminal. Use Markdown for a project note or review, and JSON for structured processing. Exporting does not modify the original Claude Code records.
+Agent Dump exports local Claude Code CLI sessions into Markdown or structured JSON files you can read, search, or parse outside the terminal. Use Markdown for project notes and reviews, and JSON for scripts or analytics. Exporting reads local session history without modifying original Claude Code records (this guide covers local Claude Code CLI sessions, not claude.ai web account exports).
 
 ## Install and find a conversation
 
@@ -45,6 +45,8 @@ Request both formats in the same command when you need a readable note and machi
 ```sh
 agent-dump 'claude://YOUR_SESSION_ID' --format json,markdown --output ./exports
 ```
+
+`--format json` writes a normalized JSON file containing session metadata (`id`, `title`, `directory`, `version`, `time_created`, `time_updated`), aggregated `stats` (`total_input_tokens`, `total_output_tokens`, `total_cost`, `message_count`), and a `messages` array (`role`, `model`, `time_created`, `tokens`, `cost`, and structured `parts`). To export the untouched source transcript instead, use `--format raw` to copy the original `.raw.jsonl` file.
 
 `--format json` writes an export file. It is different from `--json`, which produces structured standard output for supported query and reading modes. For scripts that need only part of a long conversation, use [bounded session reading](/guides/handoff-context-to-ai-agent/) instead of loading a full export.
 
