@@ -3,7 +3,7 @@ layout: ../../../layouts/Guide.astro
 slug: export-codex-session
 category: export
 order: 1
-updated: "2026-10-03"
+updated: "2026-11-22"
 locale: zh
 title: 将 Codex 会话导出为 Markdown
 description: 使用 Agent Dump 找到本地 Codex 会话，复制真实 URI，并导出 Markdown 或 JSON。包含安装步骤、输出路径和找不到会话时的排查方法。
@@ -73,3 +73,7 @@ agent-dump "codex://YOUR_SESSION_ID" --format json,markdown --output ./exports
 - 如果源记录只在另一台机器上，请在那台机器导出。Agent Dump 无法恢复已删除或不可访问的源记录。
 
 更多格式和筛选方式见 [CLI 参数说明](https://github.com/xingkaixin/agent-dump/blob/main/README_zh.md)。另一款编码工具的导出步骤见[导出 Claude Code 对话](/zh/guides/export-claude-code-conversations/)。
+
+## 延伸阅读
+
+- [你跟 AI 的每一次编码对话，都在悄悄消失](https://xingkaixin.me/posts/codesesh-ai-coding-sessions-disappearing/) — 讨论为什么本地 AI 编码对话容易散落流失，以及从 agent-dump 出发的留存与查看思路。

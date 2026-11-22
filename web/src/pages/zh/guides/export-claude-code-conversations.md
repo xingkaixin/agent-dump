@@ -4,7 +4,7 @@ locale: "zh"
 slug: "export-claude-code-conversations"
 category: "export"
 order: 2
-updated: "2026-10-03"
+updated: "2026-11-22"
 title: "将 Claude Code 对话导出为 Markdown 和 JSON"
 description: "找到本地 Claude Code 会话，将对话导出为 Markdown 或 JSON。了解输出路径、多格式导出，以及找不到项目历史时的排查方法。"
 ---
@@ -65,3 +65,8 @@ agent-dump --interactive --query 'provider:claude' --format markdown --output ./
 Agent Dump 读取本地保存的历史，不能从远程账号拉取缺失内容，也不能恢复被删除的源文件。分享导出文件前，先确认其中没有不适合公开的项目信息。
 
 接下来可以[跨工具搜索历史对话](/zh/guides/search-ai-coding-history/)，或[将导出结果保存到 Obsidian](/zh/guides/save-ai-conversations-to-obsidian/)。
+
+## 延伸阅读
+
+- [你跟 AI 的每一次编码对话，都在悄悄消失](https://xingkaixin.me/posts/codesesh-ai-coding-sessions-disappearing/) — 讨论 AI 编码会话留存与跨工具查看的问题，以及从 agent-dump 出发的实践。
+- [进程挂了 resume 回来，agent 却僵住了：log 才是 agent 本体](https://xingkaixin.me/posts/log-lock-in/) — 解释为什么 Claude Code 的对话记录不等于可恢复的执行状态。

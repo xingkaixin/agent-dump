@@ -4,7 +4,7 @@ locale: "zh"
 slug: "search-ai-coding-history"
 category: "search"
 order: 3
-updated: "2026-10-06"
+updated: "2026-11-22"
 title: "搜索 AI 编码历史，找回过去的决策"
 description: "跨 Codex、Claude Code 等本地工具搜索过去的修复方案和技术决策。按项目筛选，定位匹配消息，再阅读前后上下文。"
 ---
@@ -72,3 +72,8 @@ agent-dump 'codex://YOUR_SESSION_ID' --message 'REVISION:POSITION' --before 2 --
 导出的片段会保留会话 URI、定位符和消息范围。检查命令报告的输出路径及诊断信息；源会话保持不变。格式仍受工具能力限制，例如 Cursor 支持 JSON 和打印，不支持 Markdown。
 
 没有结果时，可以减少关键词、扩大日期范围、移除项目筛选，并执行 `agent-dump --providers` 检查源是否可用。
+
+## 延伸阅读
+
+- [每次跟 agent 聊完，你把最值钱的东西丢了](https://xingkaixin.me/posts/session-as-asset/) — 讨论如何把留在编码会话里的踩坑经验与工程判断沉淀成可搜索的决策记录。
+- [Agent 让每个人都有了翻译器，但团队不再说同一种语言](https://xingkaixin.me/posts/agent-team-babel/) — 讨论为什么需要找回困在 session 里的设计取舍并沉淀下来。

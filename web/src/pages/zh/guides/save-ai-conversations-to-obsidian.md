@@ -4,7 +4,7 @@ locale: "zh"
 slug: "save-ai-conversations-to-obsidian"
 category: "export"
 order: 6
-updated: "2026-10-03"
+updated: "2026-11-22"
 title: "把 AI 对话保存到 Obsidian 知识库"
 description: "将 Codex 和 Claude Code 对话保存为 Obsidian 中的 Markdown 笔记。使用独立导出目录，保留关键上下文，并了解归档与恢复的边界。"
 ---
@@ -52,3 +52,8 @@ agent-dump 'codex://YOUR_SESSION_ID' --format markdown --output '/path/to/Your V
 Markdown 导出是可阅读的记录，不是原始 Agent 数据库、附件、执行环境或运行中任务的备份。不同 Provider 支持的格式不同，例如 Cursor 不支持 Markdown 导出。可以通过 `agent-dump --providers` 查看格式能力。
 
 开启知识库同步或分享笔记前，应先检查导出内容。导出过程在本地完成，但保存后的文件会去哪里，取决于知识库自身的同步配置。
+
+## 延伸阅读
+
+- [每次跟 agent 聊完，你把最值钱的东西丢了](https://xingkaixin.me/posts/session-as-asset/) — 讨论如何将对话中的关键工程判断提炼为独立、可检索的笔记沉淀。
+- [你跟 AI 的每一次编码对话，都在悄悄消失](https://xingkaixin.me/posts/codesesh-ai-coding-sessions-disappearing/) — 梳理为什么要长期留存并回顾 AI 编码对话记录。
