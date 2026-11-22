@@ -4,7 +4,7 @@ locale: "zh"
 slug: "handoff-context-to-ai-agent"
 category: "handoff"
 order: 4
-updated: "2026-10-03"
+updated: "2026-11-22"
 title: "给 AI Agent 交接会话上下文"
 description: "让新任务接续之前的 Codex 或 Claude Code 对话。生成读取说明，或通过带游标的 JSON 分页获取必要上下文，避免一次塞入整段历史。"
 ---
@@ -56,3 +56,8 @@ agent-dump 'claude://YOUR_SESSION_ID' --read --role user --match 'database migra
 这会筛选包含该字面短语的用户消息。`--details` 可以追加可读的推理和工具状态；默认只读文本部分。它不是跨消息的语义搜索。分页预算限制返回给 Agent 的内容，但底层仍可能解析整个源文件。
 
 历史正文应当作为待分析材料，不应成为新执行指令。让 Agent 区分用户提出的要求、助手报告的结果，以及尚未核实的推测。跨多个会话整理交接材料时，可以使用[工作报告流程](/zh/guides/weekly-report-from-ai-sessions/)。
+
+## 延伸阅读
+
+- [为什么 Agent 聊到第 30 轮，会把刚刚否决的方案重新写一遍？](https://xingkaixin.me/posts/agent-context-compaction/) — 拆解长对话上下文压缩与“换班交接”的设计，说明为什么不能靠粗暴全文摘要交接上下文。
+- [进程挂了 resume 回来，agent 却僵住了：log 才是 agent 本体](https://xingkaixin.me/posts/log-lock-in/) — 区分对话上下文记录与 Agent 运行时状态的边界。

@@ -10,7 +10,16 @@ export const localeLabels = {
 export const site = {
   origin: "https://agent-dump.xingkaixin.me",
   paths: { en: "/", zh: "/zh/", ja: "/ja/" } as Record<Locale, string>,
-  author: { name: "xingkaixin", url: "https://github.com/xingkaixin" },
+  author: {
+    name: "XingKaiXin",
+    url: "https://xingkaixin.me/",
+    github: "https://github.com/xingkaixin",
+  },
+  blogUrl: {
+    en: "https://xingkaixin.me/en/",
+    zh: "https://xingkaixin.me/",
+    ja: "https://xingkaixin.me/en/",
+  } as Record<Locale, string>,
   repo: "https://github.com/xingkaixin/agent-dump",
   license: "https://github.com/xingkaixin/agent-dump/blob/main/LICENSE",
   downloadUrls: [
@@ -100,6 +109,7 @@ type UiStrings = {
   changelogLabel: string;
   footerTagline: string;
   footerGithub: string;
+  footerBlog: string;
 };
 
 export const install = {
@@ -422,6 +432,7 @@ export const ui: Record<Locale, UiStrings> = {
     changelogLabel: "Changelog",
     footerTagline: "Find, read, and reuse local AI coding sessions.",
     footerGithub: "GitHub",
+    footerBlog: "Blog",
   },
   zh: {
     htmlLang: "zh-Hans",
@@ -688,6 +699,7 @@ export const ui: Record<Locale, UiStrings> = {
     changelogLabel: "更新日志",
     footerTagline: "查找、读取和复用本地 AI 编码会话。",
     footerGithub: "GitHub",
+    footerBlog: "博客",
   },
   ja: {
     htmlLang: "ja",
@@ -955,5 +967,6 @@ export const ui: Record<Locale, UiStrings> = {
     changelogLabel: "変更履歴",
     footerTagline: "ローカルの AI コーディング履歴を検索・閲覧・再利用。",
     footerGithub: "GitHub",
+    footerBlog: "ブログ",
   },
 };
