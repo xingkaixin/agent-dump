@@ -184,19 +184,25 @@ pub fn run(
     if reindex {
         let mut index = SearchIndex::open()?;
         writeln!(out, "{}\n", t("REINDEX_START", zh, &[]))?;
+        let active: Vec<_> = scan
+            .groups
+            .iter()
+            .filter(|group| !group.sessions.is_empty())
+            .collect();
+        let names: Vec<_> =
+            active.iter().map(|group| group.info.name).collect();
+        index.clear_many(&names)?;
+        let index_groups: Vec<_> = active
+            .iter()
+            .map(|group| agent_dump_core::query::index::IndexGroup {
+                info: group.info,
+                provider: group.provider.as_ref(),
+                sessions: &group.sessions,
+            })
+            .collect();
+        let outcomes = index.update_groups(&index_groups, zh, warnings)?;
         let mut total = 0;
-        for group in &scan.groups {
-            if group.sessions.is_empty() {
-                continue;
-            }
-            index.clear(group.info.name)?;
-            let (count, _) = index.update(
-                group.info,
-                group.provider.as_ref(),
-                &group.sessions,
-                zh,
-                warnings,
-            )?;
+        for (group, (count, _)) in active.iter().zip(outcomes) {
             total += count;
             writeln!(
                 out,
@@ -249,8 +255,7 @@ pub fn run(
                 .or_default()
                 .add(session.message_count);
             total.add(session.message_count);
-            let date: jiff::civil::Date =
-                session.created_at.format_local("%Y-%m-%d").parse()?;
+            let date = session.created_at.local_date();
             let days = today.since((jiff::Unit::Day, date))?.get_days();
             ages[if days <= 0 {
                 0

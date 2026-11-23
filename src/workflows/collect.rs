@@ -520,6 +520,9 @@ fn discover(
             .flatten()
             .map(|path| project_path(path))
             .collect::<crate::Result<_>>()?;
+        if denied.is_empty() {
+            continue;
+        }
         group.sessions.retain(|session| {
             let path = (!session.directory.trim().is_empty())
                 .then(|| project_path(&session.directory))
