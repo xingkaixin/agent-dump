@@ -258,6 +258,26 @@ impl Provider for Desktop {
         }
         payload
     }
+
+    fn write_json_payload(
+        &self,
+        data: &SessionData,
+        summary: Option<&str>,
+        writer: &mut dyn std::io::Write,
+    ) -> crate::Result<()> {
+        use serde::Serialize;
+        let mut payload = self.json_payload(data);
+        if let Some(summary) = summary
+            && let Some(object) = payload.as_object_mut()
+        {
+            object.insert("summary".into(), summary.into());
+        }
+        payload.serialize(&mut serde_json::Serializer::with_formatter(
+            writer,
+            crate::compat::json::Formatter::default(),
+        ))?;
+        Ok(())
+    }
 }
 
 fn search_roots(

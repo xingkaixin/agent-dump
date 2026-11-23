@@ -19,9 +19,66 @@ pub fn safe_body(text: &str) -> String {
     push_safe_body(&mut safe, text);
     safe
 }
+
+fn visit_safe_body<E>(
+    text: &str,
+    mut emit: impl FnMut(&str) -> Result<(), E>,
+) -> Result<(), E> {
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut start = 0;
+    let mut i = 0;
+    while i < len {
+        let b = bytes[i];
+        let skip = if b < 0x80 {
+            if (b >= 0x20 && b != 0x7f) || b == b'\t' || b == b'\n' {
+                i += 1;
+                continue;
+            }
+            1
+        } else if i + 1 < len
+            && ((b == 0xC2 && (0x80..=0x9F).contains(&bytes[i + 1]))
+                || (b == 0xD8 && bytes[i + 1] == 0x9C))
+        {
+            2
+        } else if b == 0xE2
+            && i + 2 < len
+            && ((bytes[i + 1] == 0x80
+                && (bytes[i + 2] == 0x8E
+                    || bytes[i + 2] == 0x8F
+                    || (0xAA..=0xAE).contains(&bytes[i + 2])))
+                || (bytes[i + 1] == 0x81
+                    && (0xA6..=0xA9).contains(&bytes[i + 2])))
+        {
+            3
+        } else {
+            i += 1;
+            continue;
+        };
+        if start < i {
+            emit(&text[start..i])?;
+        }
+        i += skip;
+        start = i;
+    }
+    if start < len {
+        emit(&text[start..])?;
+    }
+    Ok(())
+}
+
 pub fn push_safe_body(output: &mut String, text: &str) {
-    text.split(unsafe_char)
-        .for_each(|piece| output.push_str(piece));
+    let _ = visit_safe_body::<std::convert::Infallible>(text, |piece| {
+        output.push_str(piece);
+        Ok(())
+    });
+}
+
+fn write_safe_body(
+    output: &mut impl std::io::Write,
+    text: &str,
+) -> std::io::Result<()> {
+    visit_safe_body(text, |piece| output.write_all(piece.as_bytes()))
 }
 pub fn safe_line(text: &str) -> String {
     let replaced: String = text
@@ -111,7 +168,8 @@ fn append_section(
     writeln!(output, "## {index}. {}\n", safe_line(role)).unwrap();
     for text in texts {
         if !text.is_empty() {
-            writeln!(output, "{}\n", safe_body(text)).unwrap();
+            push_safe_body(output, text);
+            output.push_str("\n\n");
         }
     }
     *index += 1;
@@ -247,9 +305,121 @@ pub fn read_page(page: &crate::query::read::Page) -> String {
     output
 }
 
+fn write_section(
+    output: &mut impl std::io::Write,
+    index: &mut usize,
+    role: &str,
+    texts: &[&str],
+) -> std::io::Result<()> {
+    if texts.is_empty() {
+        return Ok(());
+    }
+    writeln!(output, "\n## {index}. {}", safe_line(role))?;
+    for text in texts {
+        if !text.is_empty() {
+            output.write_all(b"\n")?;
+            write_safe_body(output, text)?;
+            output.write_all(b"\n")?;
+        }
+    }
+    *index += 1;
+    Ok(())
+}
+
+pub fn write_transcript(
+    output: &mut impl std::io::Write,
+    uri: &str,
+    data: &SessionData,
+) -> std::io::Result<()> {
+    writeln!(output, "# Session Dump\n\n- URI: `{}`", safe_line(uri))?;
+    let mut index = 1;
+    for message in &data.messages {
+        if message.role == "developer" {
+            continue;
+        }
+        if message.role != "tool" {
+            let texts: Vec<_> = message
+                .parts
+                .iter()
+                .filter_map(Part::content)
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .collect();
+            if !texts.is_empty() {
+                let mut role = message.role.clone();
+                if let Some(first) = role.get_mut(..1) {
+                    first.make_ascii_uppercase();
+                }
+                if message.role == "assistant"
+                    && let Some(nickname) = &message.nickname
+                {
+                    role = format!("Assistant ({nickname})");
+                }
+                write_section(output, &mut index, &role, &texts)?;
+            }
+        }
+        if !matches!(message.role.as_str(), "assistant" | "tool") {
+            continue;
+        }
+        for part in &message.parts {
+            let Part::Tool(tool) = part else {
+                continue;
+            };
+            if tool.tool != "subagent" {
+                continue;
+            }
+            let mut prompt = tool
+                .state
+                .get("prompt")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("")
+                .trim()
+                .to_owned();
+            if prompt.is_empty() {
+                match tool
+                    .state
+                    .get("arguments")
+                    .or_else(|| tool.state.get("input"))
+                {
+                    Some(arguments @ serde_json::Value::Object(_)) => {
+                        prompt =
+                            crate::compat::value::field(arguments, "message")
+                                .trim()
+                                .into();
+                        if prompt.is_empty() {
+                            prompt =
+                                crate::compat::value::pretty_json(arguments);
+                        }
+                    }
+                    Some(serde_json::Value::String(text)) => {
+                        prompt = text.trim().into();
+                    }
+                    _ => (),
+                }
+            }
+            if !prompt.is_empty() {
+                let role = tool.nickname.as_ref().map_or_else(
+                    || "Assistant".into(),
+                    |name| format!("Assistant ({name})"),
+                );
+                write_section(output, &mut index, &role, &[&prompt])?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn transcript(uri: &str, data: &SessionData) -> String {
-    let mut output =
-        format!("# Session Dump\n\n- URI: `{}`\n\n", safe_line(uri));
+    let estimate: usize = data
+        .messages
+        .iter()
+        .flat_map(|m| &m.parts)
+        .filter_map(Part::content)
+        .map(str::len)
+        .sum();
+    let mut output = String::with_capacity(estimate + 256);
+    writeln!(output, "# Session Dump\n\n- URI: `{}`\n", safe_line(uri))
+        .unwrap();
     let mut index = 1;
     for message in &data.messages {
         if message.role == "developer" {

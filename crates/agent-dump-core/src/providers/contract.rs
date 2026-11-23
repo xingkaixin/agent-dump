@@ -147,6 +147,36 @@ pub trait Provider: Send + Sync {
         serde_json::to_value(data).unwrap()
     }
 
+    fn write_json_payload(
+        &self,
+        data: &SessionData,
+        summary: Option<&str>,
+        writer: &mut dyn std::io::Write,
+    ) -> crate::Result<()> {
+        use serde::Serialize;
+        #[derive(Serialize)]
+        struct WithSummary<'a, T: ?Sized> {
+            #[serde(flatten)]
+            payload: &'a T,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            summary: Option<&'a str>,
+        }
+        let mut serializer = serde_json::Serializer::with_formatter(
+            writer,
+            crate::compat::json::Formatter::default(),
+        );
+        if let Some(summary) = summary {
+            WithSummary {
+                payload: data,
+                summary: Some(summary),
+            }
+            .serialize(&mut serializer)?;
+        } else {
+            data.serialize(&mut serializer)?;
+        }
+        Ok(())
+    }
+
     fn supports_format(
         &self,
         _format: crate::output::formats::OutputFormat,
