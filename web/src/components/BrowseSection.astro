@@ -1,7 +1,7 @@
 ---
 import type { Locale } from "../lib/i18n";
 import { landing } from "../lib/landing";
-import { BrowseDemo } from "./BrowseDemo";
+import BrowseDemo from "./BrowseDemo.astro";
 interface Props {
   locale: Locale;
 }
@@ -16,7 +16,6 @@ const l = landing[locale];
     </div>
     <div data-reveal>
       <BrowseDemo
-        client:visible
         lang={locale === "zh" ? "zh" : "en"}
         copy={l.browse}
       />

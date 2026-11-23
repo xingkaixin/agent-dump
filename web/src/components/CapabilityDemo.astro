@@ -1,0 +1,247 @@
+---
+import type { CapabilityCopy, LandingCopy } from "../lib/landing";
+import Icon from "./Icon.astro";
+
+interface Props {
+  items: CapabilityCopy[];
+  sample: LandingCopy["sample"];
+  notes: LandingCopy["notes"];
+  demo: LandingCopy["demo"];
+  untouched: string;
+}
+
+const { items, sample, notes, demo, untouched } = Astro.props;
+const AUTOPLAY_MS = 6000;
+const QUERY = "auth timeout";
+
+const commands = [
+  "agent-dump search 'auth timeout' --query 'path:.' --days 30",
+  "agent-dump read codex://019a7c2e --json",
+  "agent-dump export codex://019a7c2e --format markdown --output ./sessions",
+  "agent-dump collect --days 7 --emit-prompt --save ./reports/weekly.md",
+];
+
+const results = [
+  { provider: "claude", title: sample.s1, meta: "2 hits · 3d", msg: 14, quote: sample.q1, loc: "claude://7f3c91#msg-14" },
+  { provider: "codex", title: sample.s2, meta: "4 hits · 6d", msg: 3, quote: sample.q2, loc: "codex://019a7c2e#msg-3" },
+  { provider: "cursor", title: sample.s3, meta: "1 hit · 12d" },
+];
+
+const splitQuote = (text: string) => {
+  const idx = text.indexOf(QUERY);
+  if (idx < 0) return { before: text, match: null, after: "" };
+  return { before: text.slice(0, idx), match: QUERY, after: text.slice(idx + QUERY.length) };
+};
+---
+
+<div class="capbox" data-cap-demo data-autoplay-ms={AUTOPLAY_MS}>
+  <div class="ctabs" role="tablist" aria-orientation="vertical">
+    {items.map((item, index) => (
+      <button
+        type="button"
+        role="tab"
+        id={`capability-tab-${index}`}
+        aria-selected={index === 0 ? "true" : "false"}
+        aria-controls="capability-terminal"
+        class="ctab"
+        data-cap-tab={index}
+        data-cap-cmd={commands[index]}
+      >
+        <span class="vb">{item.verb}</span>
+        <span class="bd">{item.body}</span>
+        <span class="prog" aria-hidden="true" hidden={index !== 0}>
+          <i style={`animation-duration:${AUTOPLAY_MS}ms`} />
+        </span>
+      </button>
+    ))}
+  </div>
+  <div
+    class="win"
+    id="capability-terminal"
+    role="tabpanel"
+    aria-labelledby="capability-tab-0"
+    data-cap-panel-wrap
+  >
+    <div class="win-cmd">
+      <span class="tok">$</span>
+      <span data-cap-cmd-text>{commands[0]}</span>
+    </div>
+
+    <div data-cap-pane="0">
+      <div class="win-body stg">
+        <div class="sbar">
+          <Icon name="search" />
+          <span class="q">{QUERY}</span>
+          <span class="kbd">s</span>
+        </div>
+        <div class="fchips">
+          <span class="fchip on">path:.</span>
+          <span class="fchip on">{demo.days}</span>
+          <span class="fchip">{demo.provider}</span>
+          <span class="fchip">{demo.role}</span>
+        </div>
+        {results.map((result) => {
+          const q = result.quote ? splitQuote(result.quote) : null;
+          return (
+            <div class="res">
+              <div class="r1">
+                <span class="pbadge">{result.provider}</span>
+                <span class="t">{result.title}</span>
+                <span class="m">{result.meta}</span>
+              </div>
+              {q && (
+                <>
+                  <p class="qq">
+                    › msg {result.msg} “{q.before}{q.match && <mark>{q.match}</mark>}{q.after}”
+                  </p>
+                  <p class="loc">{result.loc}</p>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    <div data-cap-pane="1" hidden>
+      <div class="win-body">
+        <div class="rd stg">
+          <div class="code">{`{\n  `}<span class="tm">"kind"</span>: <span class="tok">"read"</span>, <span class="tm">"status"</span>: <span class="tok">"ok"</span>{`,\n  `}<span class="tm">"data"</span>{`: {\n    `}<span class="tm">"total_messages"</span>: <span class="tam">38</span>{`,\n    `}<span class="tm">"messages"</span>{`: [ … ],\n    `}<span class="tm">"next_cursor"</span>: <span class="tok">"r1.7b2275…"</span>{`\n  },\n  `}<span class="tm">"has_more"</span>: <span class="tam">true</span>{`\n}`}</div>
+          <ol class="rail">
+            <li><b>PAGE 1</b><span>msg 1–16 · cursor →</span></li>
+            <li><b>PAGE 2</b><span>msg 17–32 · cursor →</span></li>
+            <li><b>PAGE 3</b><span>msg 33–38</span></li>
+            <li class="end"><b>DONE</b><span>has_more=false · {demo.readDone}</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <div data-cap-pane="2" hidden>
+      <div class="win-body">
+        <div class="ex stg">
+          <div class="sheet">
+            <div class="doc"><span class="fm">{`---\nuri: codex://019a7c2e\nprovider: codex\nmessages: 38\n---`}</span>{`\n`}<span class="hd"># {sample.s2}</span>{`\n\n`}<span class="rl">## user</span>{` · msg 1\n${demo.exportUser}\n\n`}<span class="rl">## assistant</span>{` · msg 2\n${demo.exportAssistant}`}<span class="stamp">{untouched}</span></div>
+          </div>
+          <div class="side">
+            <div class="filecard">
+              <Icon name="folder" small />
+              <span>./sessions/</span>
+              <span class="fmt">DIR</span>
+            </div>
+            <div class="filecard">
+              <span>{sample.s2}.md</span>
+              <span class="fmt">MD</span>
+            </div>
+            <div class="filecard">
+              <span>{sample.s2}.json</span>
+              <span class="fmt">JSON</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div data-cap-pane="3" hidden>
+      <div class="win-body">
+        <div class="ctop">
+          <span class="fchip on">{notes.scan}</span>
+          <span class="fchip">{notes.chunk}</span>
+        </div>
+        <div class="chunks" aria-hidden="true">
+          {Array.from({ length: 56 }, (_, index) => (
+            <span
+              class="ck"
+              style={`animation-delay:${(0.15 + index * 0.035).toFixed(3)}s`}
+            />
+          ))}
+        </div>
+        <div class="cfoot">
+          <div class="stdout">
+            <span class="tok">→ stdout</span> {demo.collectStdout}
+          </div>
+          <span class="okpill">
+            <span class="pdot" />
+            status: complete
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>("[data-cap-demo]")) {
+    const ms = Number(root.dataset.autoplayMs) || 6000;
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-cap-tab]"));
+    const panes = Array.from(root.querySelectorAll<HTMLElement>("[data-cap-pane]"));
+    const wrap = root.querySelector<HTMLElement>("[data-cap-panel-wrap]");
+    const cmdText = root.querySelector<HTMLElement>("[data-cap-cmd-text]");
+    let active = 0;
+    let auto = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let timer: number | undefined;
+
+    const show = (index: number) => {
+      active = index;
+      tabs.forEach((tab, i) => {
+        const current = i === index;
+        tab.setAttribute("aria-selected", String(current));
+        const prog = tab.querySelector<HTMLElement>(".prog");
+        if (prog) {
+          prog.hidden = !(current && auto);
+          if (current && auto) {
+            const bar = prog.firstElementChild as HTMLElement | null;
+            if (bar) {
+              bar.style.animation = "none";
+              void bar.offsetWidth;
+              bar.style.animation = "";
+            }
+          }
+        }
+      });
+      panes.forEach((pane, i) => {
+        pane.hidden = i !== index;
+      });
+      if (wrap) wrap.setAttribute("aria-labelledby", `capability-tab-${index}`);
+      if (cmdText) cmdText.textContent = tabs[index]?.dataset.capCmd ?? "";
+    };
+
+    const schedule = () => {
+      clearTimeout(timer);
+      if (!auto) return;
+      timer = window.setTimeout(() => {
+        show((active + 1) % tabs.length);
+        schedule();
+      }, ms);
+    };
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => {
+        auto = false;
+        clearTimeout(timer);
+        show(index);
+      });
+    });
+
+    if (auto) {
+      if ("IntersectionObserver" in window) {
+        const io = new IntersectionObserver(
+          (entries) => {
+            if (entries[0]?.isIntersecting) {
+              show(active);
+              schedule();
+            } else {
+              clearTimeout(timer);
+            }
+          },
+          { threshold: 0.1 },
+        );
+        io.observe(root);
+      } else {
+        schedule();
+      }
+    } else {
+      show(0);
+    }
+  }
+</script>
