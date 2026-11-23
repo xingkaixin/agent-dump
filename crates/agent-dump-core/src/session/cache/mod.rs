@@ -15,6 +15,9 @@ struct PathSignal {
     size: Option<u64>,
 }
 
+pub type StatEntry = (Option<SystemTime>, Option<i128>, Option<u64>);
+pub type StatCache = std::collections::HashMap<PathBuf, StatEntry>;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SessionSignal {
     updated: i64,
@@ -24,52 +27,98 @@ pub struct SessionSignal {
 
 impl SessionSignal {
     pub fn signature(&self) -> String {
-        let paths: Vec<_> = self
-            .sources
-            .iter()
-            .map(|source| {
-                let modified = source.modified.map(|time| {
-                    match time.duration_since(SystemTime::UNIX_EPOCH) {
-                        Ok(duration) => i128::try_from(duration.as_nanos())
-                            .expect("Duration nanoseconds fit in i128"),
-                        Err(error) => {
-                            -(i128::try_from(error.duration().as_nanos())
-                                .expect("Duration nanoseconds fit in i128"))
+        use std::fmt::Write;
+        fn write_json_ascii_str(out: &mut String, s: &str) {
+            out.push('"');
+            for c in s.chars() {
+                match c {
+                    '"' => out.push_str("\\\""),
+                    '\\' => out.push_str("\\\\"),
+                    '\x08' => out.push_str("\\b"),
+                    '\x0c' => out.push_str("\\f"),
+                    '\n' => out.push_str("\\n"),
+                    '\r' => out.push_str("\\r"),
+                    '\t' => out.push_str("\\t"),
+                    c if (c as u32) < 0x20 => {
+                        let _ = write!(out, "\\u{:04x}", c as u32);
+                    }
+                    c if c.is_ascii() => out.push(c),
+                    c => {
+                        for unit in c.encode_utf16(&mut [0; 2]) {
+                            let _ = write!(out, "\\u{unit:04x}");
                         }
                     }
-                });
-                serde_json::json!([
-                    crate::storage::source_io::path_text(&source.path),
-                    modified,
-                    source.changed,
-                    source.size
-                ])
-            })
-            .collect();
-        let value = serde_json::json!([
-            crate::session::timestamp::Timestamp::from_microsecond(
-                self.updated
-            )
-            .unwrap()
-            .iso_utc(),
-            paths,
-            self.title
-        ]);
-        let mut encoded = String::new();
-        for c in value.to_string().chars() {
-            if c.is_ascii() {
-                encoded.push(c);
-            } else {
-                for unit in c.encode_utf16(&mut [0; 2]) {
-                    use std::fmt::Write;
-                    write!(encoded, "\\u{unit:04x}").unwrap();
                 }
             }
+            out.push('"');
         }
+
+        let mut encoded = String::with_capacity(128 + self.title.len());
+        encoded.push('[');
+        let iso = crate::session::timestamp::Timestamp::from_microsecond(
+            self.updated,
+        )
+        .unwrap()
+        .iso_utc();
+        write_json_ascii_str(&mut encoded, &iso);
+        encoded.push_str(",[");
+        for (i, source) in self.sources.iter().enumerate() {
+            if i > 0 {
+                encoded.push(',');
+            }
+            encoded.push('[');
+            write_json_ascii_str(
+                &mut encoded,
+                &crate::storage::source_io::path_text(&source.path),
+            );
+            encoded.push(',');
+            match source.modified {
+                Some(time) => {
+                    let nanos =
+                        match time.duration_since(SystemTime::UNIX_EPOCH) {
+                            Ok(duration) => i128::try_from(duration.as_nanos())
+                                .expect("Duration nanoseconds fit in i128"),
+                            Err(error) => {
+                                -(i128::try_from(error.duration().as_nanos())
+                                    .expect("Duration nanoseconds fit in i128"))
+                            }
+                        };
+                    let _ = write!(encoded, "{nanos}");
+                }
+                None => encoded.push_str("null"),
+            }
+            encoded.push(',');
+            match source.changed {
+                Some(changed) => {
+                    let _ = write!(encoded, "{changed}");
+                }
+                None => encoded.push_str("null"),
+            }
+            encoded.push(',');
+            match source.size {
+                Some(size) => {
+                    let _ = write!(encoded, "{size}");
+                }
+                None => encoded.push_str("null"),
+            }
+            encoded.push(']');
+        }
+        encoded.push_str("],");
+        write_json_ascii_str(&mut encoded, &self.title);
+        encoded.push(']');
         encoded
     }
 
     pub fn new(provider: &(impl Provider + ?Sized), session: &Session) -> Self {
+        let mut cache = std::collections::HashMap::new();
+        Self::new_with_cache(provider, session, &mut cache)
+    }
+
+    pub fn new_with_cache(
+        provider: &(impl Provider + ?Sized),
+        session: &Session,
+        stat_cache: &mut StatCache,
+    ) -> Self {
         let mut sources = Vec::new();
         for path in provider.change_sources(session) {
             if sources
@@ -78,14 +127,26 @@ impl SessionSignal {
             {
                 continue;
             }
-            let metadata = path.metadata().ok();
+            let (modified, changed, size) =
+                if let Some(&cached) = stat_cache.get(&path) {
+                    cached
+                } else {
+                    let metadata = path.metadata().ok();
+                    let entry = (
+                        metadata
+                            .as_ref()
+                            .and_then(|metadata| metadata.modified().ok()),
+                        metadata.as_ref().and_then(changed_time),
+                        metadata.map(|metadata| metadata.len()),
+                    );
+                    stat_cache.insert(path.clone(), entry);
+                    entry
+                };
             sources.push(PathSignal {
                 path,
-                modified: metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.modified().ok()),
-                changed: metadata.as_ref().and_then(changed_time),
-                size: metadata.map(|metadata| metadata.len()),
+                modified,
+                changed,
+                size,
             });
         }
         Self {

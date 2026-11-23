@@ -1,6 +1,6 @@
 ---
 import { ui, type Locale } from "../lib/i18n";
-import { Faq } from "./Faq";
+import Faq from "./Faq.astro";
 
 interface Props {
   locale: Locale;
@@ -13,7 +13,7 @@ const t = ui[locale];
   <div class="wrap faq">
     <h2 class="h2" data-reveal>{t.faqHeading}</h2>
     <div data-reveal>
-      <Faq client:visible items={t.faq} />
+      <Faq items={t.faq} />
     </div>
   </div>
 </section>

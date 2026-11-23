@@ -273,7 +273,9 @@ struct Batch<'a> {
     operation: &'a Operation,
     configured: &'a str,
     collisions: HashSet<(usize, usize)>,
-    cache: SessionDataCache,
+    output_dirs: HashMap<usize, Result<export::OutputDir, String>>,
+    cache: Option<SessionDataCache>,
+    needs_raw: bool,
     zh: bool,
 }
 
@@ -289,31 +291,64 @@ impl Batch<'_> {
             operation,
             configured,
             ref collisions,
+            ref output_dirs,
             ref cache,
+            needs_raw,
             zh,
         } = self;
         let group = &groups[g];
         let session = &group.sessions[index];
         let uri = format!("{}://{}", group.info.scheme, session.id);
-        let raw = group.provider.raw_export(session);
-        let data = (operation.formats.iter().any(|f| *f != OutputFormat::Raw)
-            || matches!(raw, Ok(RawExport::Session)))
-        .then(|| {
-            cache.lease(
-                group.info.name,
-                group.provider.as_ref(),
-                session,
-                zh,
-                &mut |d| {
+        let raw = if needs_raw {
+            group.provider.raw_export(session)
+        } else {
+            Ok(RawExport::Session)
+        };
+        let needs_session_data =
+            operation.formats.iter().any(|f| *f != OutputFormat::Raw)
+                || matches!(raw, Ok(RawExport::Session));
+        let mut owned_data = None;
+        let mut leased_data = None;
+        if needs_session_data {
+            if let Some(cache) = cache {
+                leased_data = Some(cache.lease(
+                    group.info.name,
+                    group.provider.as_ref(),
+                    session,
+                    zh,
+                    &mut |d| {
+                        writeln!(
+                            written.warnings,
+                            "{}",
+                            diagnostics::record_warning(&d, zh)
+                        )?;
+                        Ok(())
+                    },
+                ));
+            } else {
+                owned_data = Some(group.provider.read(session, zh, &mut |d| {
                     writeln!(
                         written.warnings,
                         "{}",
                         diagnostics::record_warning(&d, zh)
                     )?;
                     Ok(())
-                },
-            )
-        });
+                }));
+            }
+        }
+        let read_error = owned_data
+            .as_ref()
+            .and_then(|r| r.as_ref().err())
+            .or_else(|| leased_data.as_ref().and_then(|r| r.as_ref().err()));
+        let prepared = owned_data
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .or_else(|| {
+                leased_data
+                    .as_ref()
+                    .and_then(|r| r.as_ref().ok())
+                    .map(std::ops::Deref::deref)
+            });
         for (f, &format) in operation.formats.iter().enumerate() {
             if collisions.contains(&(position, f)) {
                 let base = export::output_base(
@@ -351,9 +386,9 @@ impl Batch<'_> {
             }
             let needs_data = format != OutputFormat::Raw
                 || matches!(raw, Ok(RawExport::Session));
-            let error = match (&raw, &data) {
+            let error = match (&raw, read_error) {
                 (Err(e), _) if format == OutputFormat::Raw => Some(e),
-                (_, Some(Err(e))) if needs_data => Some(e),
+                (_, Some(e)) if needs_data => Some(e),
                 _ => None,
             };
             if let Some(error) = error {
@@ -372,22 +407,33 @@ impl Batch<'_> {
                 )?;
                 continue;
             }
-            let base =
-                export::output_base(operation.output.as_deref(), configured)
+            let export_result = match output_dirs.get(&g) {
+                Some(Ok(dir)) => (export::SessionExport {
+                    provider: group.provider.as_ref(),
+                    session,
+                    uri: &uri,
+                    data: prepared,
+                    raw: &raw,
+                })
+                .write_to(dir, format, None),
+                Some(Err(message)) => Err(message.clone().into()),
+                None => {
+                    let base = export::output_base(
+                        operation.output.as_deref(),
+                        configured,
+                    )
                     .join(group.info.name);
-            let prepared = data
-                .as_ref()
-                .and_then(|d| d.as_ref().ok())
-                .map(std::ops::Deref::deref);
-            match (export::SessionExport {
-                provider: group.provider.as_ref(),
-                session,
-                uri: &uri,
-                data: prepared,
-                raw: &raw,
-            })
-            .write(format, &base, None)
-            {
+                    (export::SessionExport {
+                        provider: group.provider.as_ref(),
+                        session,
+                        uri: &uri,
+                        data: prepared,
+                        raw: &raw,
+                    })
+                    .write(format, &base, None)
+                }
+            };
+            match export_result {
                 Ok(path) => {
                     written.exported += 1;
                     written.directories.push(path_text(path.parent().unwrap()));
@@ -441,25 +487,67 @@ pub fn export(
     out: &mut impl Write,
     warnings: &mut impl Write,
 ) -> crate::Result<usize> {
-    let cache = SessionDataCache::default();
+    let needs_raw = operation.formats.contains(&OutputFormat::Raw);
+    let mut seen_picks = HashSet::with_capacity(picks.len());
+    let has_duplicate_picks =
+        picks.iter().any(|&pick| !seen_picks.insert(pick));
+    let cache = has_duplicate_picks.then(SessionDataCache::default);
+    let mut base_dirs: HashMap<usize, (PathBuf, PathBuf, String)> =
+        HashMap::new();
+    let mut output_dirs: HashMap<usize, Result<export::OutputDir, String>> =
+        HashMap::new();
     let mut targets: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
+    let output_root =
+        export::output_base(operation.output.as_deref(), configured);
     for (position, &(g, index)) in picks.iter().enumerate() {
         let group = &groups[g];
+        let (base, absolute_base, folded_prefix) = match base_dirs.entry(g) {
+            std::collections::hash_map::Entry::Occupied(entry) => {
+                entry.into_mut()
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let base = output_root.join(group.info.name);
+                let absolute = project_path(&path_text(&base))?;
+                let mut prefix = path_text(&absolute);
+                if !prefix.ends_with('/') {
+                    prefix.push('/');
+                }
+                let normalized: String = prefix.nfc().collect();
+                let folded = caseless::default_case_fold_str(&normalized);
+                output_dirs.insert(
+                    g,
+                    export::OutputDir::prepare(&base)
+                        .map_err(|error| error.to_string()),
+                );
+                entry.insert((base, absolute, folded))
+            }
+        };
         let session = &group.sessions[index];
-        let raw = group.provider.raw_export(session);
+        let raw = needs_raw.then(|| group.provider.raw_export(session));
         for (f, &format) in operation.formats.iter().enumerate() {
-            let base =
-                export::output_base(operation.output.as_deref(), configured)
-                    .join(group.info.name);
-            if let Ok(path) =
-                export::target(&session.id, &base, format, raw.as_ref().ok())
+            let raw_ref = raw.as_ref().and_then(|r| r.as_ref().ok());
+            if let Ok(path) = export::target(&session.id, base, format, raw_ref)
             {
-                let absolute = project_path(&path_text(&path))?;
-                let normalized: String = path_text(&absolute).nfc().collect();
-                targets
-                    .entry(caseless::default_case_fold_str(&normalized))
-                    .or_default()
-                    .push((position, f));
+                let file_name = path.file_name().unwrap();
+                let key = if let Some(name_str) = file_name.to_str()
+                    && name_str.bytes().all(|b| {
+                        b.is_ascii_lowercase()
+                            || b.is_ascii_digit()
+                            || matches!(b, b'_' | b'-' | b'.' | b'~')
+                    }) {
+                    let mut combined = String::with_capacity(
+                        folded_prefix.len() + name_str.len(),
+                    );
+                    combined.push_str(folded_prefix);
+                    combined.push_str(name_str);
+                    combined
+                } else {
+                    let absolute = absolute_base.join(file_name);
+                    let normalized: String =
+                        path_text(&absolute).nfc().collect();
+                    caseless::default_case_fold_str(&normalized)
+                };
+                targets.entry(key).or_default().push((position, f));
             }
         }
     }
@@ -474,7 +562,9 @@ pub fn export(
         operation,
         configured,
         collisions,
+        output_dirs,
         cache,
+        needs_raw,
         zh,
     };
     let mut exported = 0;

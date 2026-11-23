@@ -1,0 +1,93 @@
+---
+import Icon from "./Icon.astro";
+
+interface Props {
+  items: { question: string; answer: string }[];
+}
+
+const { items } = Astro.props;
+---
+
+<div data-faq>
+  {items.map((item, i) => (
+    <div class="qa">
+      <h3>
+        <button
+          type="button"
+          class="qbtn"
+          aria-expanded={i === 0 ? "true" : "false"}
+          aria-controls={`faq-panel-${i}`}
+        >
+          <span>{item.question}</span>
+          <span class="pl">
+            <Icon name="plus" small />
+          </span>
+        </button>
+      </h3>
+      <div
+        id={`faq-panel-${i}`}
+        class="qpanel"
+        hidden={i !== 0}
+      >
+        <p class="qans">{item.answer}</p>
+      </div>
+    </div>
+  ))}
+</div>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>("[data-faq]")) {
+    const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>(".qbtn"));
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    const setOpen = (btn: HTMLButtonElement, open: boolean) => {
+      const panelId = btn.getAttribute("aria-controls");
+      const panel = panelId ? document.getElementById(panelId) : null;
+      btn.setAttribute("aria-expanded", String(open));
+      if (!panel) return;
+
+      if (reduced.matches) {
+        panel.style.height = "";
+        panel.hidden = !open;
+        return;
+      }
+
+      if (open) {
+        panel.hidden = false;
+        const target = panel.scrollHeight;
+        panel.style.height = "0px";
+        void panel.offsetHeight;
+        panel.style.height = `${target}px`;
+        const done = () => {
+          if (btn.getAttribute("aria-expanded") === "true") {
+            panel.style.height = "";
+          }
+        };
+        panel.addEventListener("transitionend", done, { once: true });
+      } else {
+        panel.style.height = `${panel.scrollHeight}px`;
+        void panel.offsetHeight;
+        panel.style.height = "0px";
+        const done = () => {
+          if (btn.getAttribute("aria-expanded") === "false") {
+            panel.hidden = true;
+            panel.style.height = "";
+          }
+        };
+        panel.addEventListener("transitionend", done, { once: true });
+      }
+    };
+
+    for (const btn of buttons) {
+      btn.addEventListener("click", () => {
+        const isOpen = btn.getAttribute("aria-expanded") === "true";
+        for (const other of buttons) {
+          if (other !== btn && other.getAttribute("aria-expanded") === "true") {
+            setOpen(other, false);
+          }
+        }
+        setOpen(btn, !isOpen);
+      });
+    }
+  }
+</script>

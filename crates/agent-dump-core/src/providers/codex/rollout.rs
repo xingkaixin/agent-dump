@@ -36,6 +36,9 @@ pub fn id(path: &Path) -> String {
 
 /// Codex keeps the plain rollout while it may still append to it.
 pub fn prefer_plain(paths: &mut Vec<PathBuf>) {
+    if !paths.iter().any(|path| compressed(path)) {
+        return;
+    }
     let plain: HashSet<_> = paths
         .iter()
         .filter(|path| !compressed(path))
@@ -92,7 +95,7 @@ pub fn lines(
     path: &Path,
     mut visit: impl FnMut(usize, &[u8], bool) -> crate::Result<bool>,
 ) -> crate::Result<()> {
-    let mut reader = BufReader::new(open(path)?);
+    let mut reader = BufReader::with_capacity(64 * 1024, open(path)?);
     let mut line = Vec::new();
     let mut number = 0;
     loop {

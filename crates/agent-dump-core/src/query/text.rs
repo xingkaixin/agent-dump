@@ -111,14 +111,19 @@ impl TextQuery {
         self.evidence(fields)
     }
     fn evidence(&self, fields: &[&str]) -> Option<Evidence> {
-        let spans: Vec<Vec<_>> = fields
-            .iter()
-            .map(|s| self.patterns.iter().map(|p| p.find(s)).collect())
-            .collect();
-        if !(0..self.patterns.len())
-            .all(|term| spans.iter().any(|field| field[term].is_some()))
-        {
-            return None;
+        let mut spans: Vec<Vec<Option<regex::Match<'_>>>> =
+            vec![vec![None; self.patterns.len()]; fields.len()];
+        for (term, pattern) in self.patterns.iter().enumerate() {
+            let mut matched_any = false;
+            for (field_idx, s) in fields.iter().enumerate() {
+                if let Some(m) = pattern.find(s) {
+                    spans[field_idx][term] = Some(m);
+                    matched_any = true;
+                }
+            }
+            if !matched_any {
+                return None;
+            }
         }
         let title_matches = spans
             .first()

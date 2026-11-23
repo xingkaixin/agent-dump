@@ -47,19 +47,21 @@ static TAG: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
-pub fn clean(value: &str) -> String {
-    let mut stripped = value.to_owned();
-    if stripped.contains('<') && TAG.is_match(&stripped) {
-        for (pattern, replacement) in PATTERNS.iter() {
-            if let std::borrow::Cow::Owned(updated) =
-                pattern.replace_all(&stripped, *replacement)
-            {
-                stripped = updated;
-            }
+fn has_trailing_line_space(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let len = bytes.len();
+    for (i, &b) in bytes.iter().enumerate() {
+        if matches!(b, b' ' | b'\t')
+            && (i + 1 == len || matches!(bytes[i + 1], b'\n' | b'\r'))
+        {
+            return true;
         }
     }
-    let mut output = String::with_capacity(stripped.len());
-    for (index, line) in stripped.split('\n').enumerate() {
+    false
+}
+
+fn trim_lines_into(source: &str, output: &mut String) {
+    for (index, line) in source.split('\n').enumerate() {
         if index > 0 {
             output.push('\n');
         }
@@ -71,11 +73,68 @@ pub fn clean(value: &str) -> String {
             None => output.push_str(line.trim_end_matches([' ', '\t'])),
         }
     }
+}
+
+fn strip_tags(value: &str) -> Option<String> {
+    if !value.contains('<') || !TAG.is_match(value) {
+        return None;
+    }
+    let mut stripped = value.to_owned();
+    for (pattern, replacement) in PATTERNS.iter() {
+        if let std::borrow::Cow::Owned(updated) =
+            pattern.replace_all(&stripped, *replacement)
+        {
+            stripped = updated;
+        }
+    }
+    Some(stripped)
+}
+
+pub fn clean(value: &str) -> String {
+    let stripped = strip_tags(value);
+    let source = stripped.as_deref().unwrap_or(value);
+    if !has_trailing_line_space(source) {
+        if source.trim().is_empty() {
+            return String::new();
+        }
+        let len = source.trim_end_matches(['\r', '\n']).len();
+        return if let Some(mut owned) = stripped {
+            owned.truncate(len);
+            owned
+        } else {
+            source[..len].to_owned()
+        };
+    }
+    let mut output = String::with_capacity(source.len());
+    trim_lines_into(source, &mut output);
     if output.trim().is_empty() {
         return String::new();
     }
     output.truncate(output.trim_end_matches(['\r', '\n']).len());
     output
+}
+
+pub fn clean_in_place(value: &mut String) {
+    if let Some(stripped) = strip_tags(value) {
+        *value = stripped;
+    }
+    if !has_trailing_line_space(value) {
+        if value.trim().is_empty() {
+            value.clear();
+        } else {
+            let len = value.trim_end_matches(['\r', '\n']).len();
+            value.truncate(len);
+        }
+        return;
+    }
+    let mut output = String::with_capacity(value.len());
+    trim_lines_into(value, &mut output);
+    if output.trim().is_empty() {
+        value.clear();
+        return;
+    }
+    output.truncate(output.trim_end_matches(['\r', '\n']).len());
+    *value = output;
 }
 
 pub fn clean_messages(messages: &mut Vec<Message>) {
@@ -89,15 +148,15 @@ pub fn clean_messages(messages: &mut Vec<Message>) {
 fn clean_part(part: &mut Part) -> bool {
     match part {
         Part::Text(text) | Part::Reasoning(text) => {
-            text.text = clean(&text.text);
+            clean_in_place(&mut text.text);
             !text.text.is_empty()
         }
         Part::Plan(plan) => {
-            plan.input = clean(&plan.input);
+            clean_in_place(&mut plan.input);
             !plan.input.is_empty()
         }
         Part::Tool(tool) => {
-            tool.title = clean(&tool.title);
+            clean_in_place(&mut tool.title);
             for key in ["input", "output", "error", "metadata"] {
                 if let Some(value) = tool.state.get_mut(key) {
                     clean_value(value);
@@ -111,7 +170,7 @@ fn clean_part(part: &mut Part) -> bool {
 
 fn clean_value(value: &mut Value) {
     match value {
-        Value::String(text) => *text = clean(text),
+        Value::String(text) => clean_in_place(text),
         Value::Array(values) => values.iter_mut().for_each(clean_value),
         Value::Object(values) => values.values_mut().for_each(clean_value),
         _ => {}

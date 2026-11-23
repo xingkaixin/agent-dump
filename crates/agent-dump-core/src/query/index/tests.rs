@@ -535,3 +535,78 @@ fn warm_open_update_and_search_take_no_write_lock_and_throttle_expiry() {
     assert_eq!(remaining, 0);
     assert_eq!(content_remaining, 0);
 }
+
+#[test]
+fn cjk_bm25_ranks_shorter_document_ahead_of_longer_non_cjk_padding() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut index =
+        SearchIndex::at(&directory.path().join("index.db")).unwrap();
+    let filler = "padding english tokens without target ".repeat(60);
+    let sessions = vec![
+        session_with_title(directory.path(), "long", "note", 2),
+        session_with_title(directory.path(), "short", "note", 1),
+        session_with_title(directory.path(), "other", "note", 1),
+    ];
+    let reader = Reader(move |s: &Session| {
+        Ok(match s.id.as_str() {
+            "long" => format!("{filler} 中国"),
+            "short" => "中国".into(),
+            "other" => filler.clone(),
+            _ => unreachable!(),
+        })
+    });
+    update(&mut index, &reader, &sessions);
+    let hits = index
+        .search(
+            &TextQuery::new("中国", Mode::Terms),
+            &keys(&["long", "short", "other"]),
+        )
+        .unwrap();
+    assert_eq!(
+        hits.iter().map(|h| h.id.as_str()).collect::<Vec<_>>(),
+        vec!["short", "long"]
+    );
+    assert!(hits[0].rank > hits[1].rank);
+}
+
+#[test]
+fn cold_index_handles_duplicate_session_ids_in_discovery_order() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut index =
+        SearchIndex::at(&directory.path().join("index.db")).unwrap();
+    let first = session_with_title(directory.path(), "dup", "first", 1);
+    let second = session_with_title(directory.path(), "dup", "second", 2);
+    let reader = Reader(|s: &Session| Ok(format!("body {}", s.title)));
+    let (added, failed) = update(&mut index, &reader, &[first, second]);
+    assert_eq!(added, 2);
+    assert!(failed.is_empty());
+    let hits = search(&index, "second", "dup");
+    assert_eq!(hits.len(), 1);
+    assert!(search(&index, "first", "dup").is_empty());
+}
+
+#[test]
+fn update_returns_error_without_hanging_when_write_lock_times_out() {
+    let directory = tempfile::tempdir().unwrap();
+    let db_path = directory.path().join("index.db");
+    let mut index = SearchIndex::at(&db_path).unwrap();
+    index
+        .connection
+        .busy_timeout(std::time::Duration::from_millis(50))
+        .unwrap();
+    let mut sessions = Vec::new();
+    for i in 0..12 {
+        let id = format!("s{i}");
+        let file = directory.path().join(&id);
+        let size = if i < 2 { 18 << 20 } else { 1 << 20 };
+        std::fs::File::create(&file).unwrap().set_len(size).unwrap();
+        sessions.push(session(directory.path(), &id, 1));
+    }
+    let blocker = Connection::open(&db_path).unwrap();
+    blocker.execute_batch("BEGIN IMMEDIATE;").unwrap();
+    let reader = Reader(|_: &Session| Ok("lock timeout body".into()));
+    let result =
+        index.update(info(), &reader, &sessions, false, &mut Vec::new());
+    blocker.execute_batch("ROLLBACK;").unwrap();
+    assert!(result.is_err());
+}

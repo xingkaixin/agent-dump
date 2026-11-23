@@ -54,30 +54,91 @@ impl Timestamp {
             .expect("civil datetime microseconds fit in i64")
     }
     pub fn iso_utc(self) -> String {
-        format!(
-            "{}.{:06}+00:00",
-            self.0.strftime("%Y-%m-%dT%H:%M:%S"),
-            self.0.subsec_nanosecond() / 1_000
-        )
+        let mut out = String::with_capacity(32);
+        let d = self.0;
+        let _ = write!(
+            out,
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:06}+00:00",
+            d.year(),
+            d.month(),
+            d.day(),
+            d.hour(),
+            d.minute(),
+            d.second(),
+            d.subsec_nanosecond() / 1_000
+        );
+        out
     }
-    pub fn local_date(self) -> jiff::civil::Date {
-        let text = self.format_local("%Y-%m-%d");
-        let parts: Vec<_> = text.split('-').collect();
-        jiff::civil::Date::new(
-            parts[0].parse().unwrap(),
-            parts[1].parse().unwrap(),
-            parts[2].parse().unwrap(),
-        )
-        .unwrap()
-    }
-    pub fn iso_local(self) -> String {
-        let mut result =
-            format!("{}T{}", self.local_date(), self.format_local("%H:%M:%S"));
-        let micros = self.0.subsec_nanosecond() / 1_000;
-        if micros != 0 {
-            write!(result, ".{micros:06}").unwrap();
+
+    fn to_local_zoned(self) -> (jiff::ZonedDateTime, i16) {
+        let zone = TimeZone::system();
+        if let Ok(timestamp) =
+            jiff::Timestamp::from_microsecond(self.as_microsecond())
+        {
+            return (timestamp.to_zoned_datetime(zone), 0);
         }
-        result + &self.format_local("%:z")
+        // Jiff reserves 26 hours at each timestamp boundary for zone conversion.
+        // Far-future IANA rules repeat with the 400-year Gregorian calendar cycle.
+        let shifted = self.0.with().year(self.0.year() - 400).build().unwrap();
+        let local = shifted
+            .to_zoned_datetime(TimeZone::UTC)
+            .unwrap()
+            .with_time_zone(zone);
+        (local, 400)
+    }
+
+    pub fn local_date(self) -> jiff::civil::Date {
+        let (local, shift) = self.to_local_zoned();
+        if shift == 0 {
+            local.date()
+        } else {
+            jiff::civil::Date::new(
+                local.year() + shift,
+                local.month(),
+                local.day(),
+            )
+            .unwrap()
+        }
+    }
+
+    pub fn iso_local(self) -> String {
+        let (local, shift) = self.to_local_zoned();
+        let year = local.year() + shift;
+        let micros = self.0.subsec_nanosecond() / 1_000;
+        let offset = local.offset().seconds();
+        let sign = if offset < 0 { '-' } else { '+' };
+        let abs = offset.unsigned_abs();
+        let oh = abs / 3600;
+        let om = (abs % 3600) / 60;
+        let mut result = String::with_capacity(32);
+        if cfg!(all(target_os = "linux", target_env = "gnu")) && shift == 0 {
+            let _ = write!(
+                result,
+                "{}-{:02}-{:02}T{:02}:{:02}:{:02}",
+                year,
+                local.month(),
+                local.day(),
+                local.hour(),
+                local.minute(),
+                local.second(),
+            );
+        } else {
+            let _ = write!(
+                result,
+                "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}",
+                year,
+                local.month(),
+                local.day(),
+                local.hour(),
+                local.minute(),
+                local.second(),
+            );
+        }
+        if micros != 0 {
+            let _ = write!(result, ".{micros:06}");
+        }
+        let _ = write!(result, "{sign}{oh:02}:{om:02}");
+        result
     }
     #[allow(
         clippy::cast_possible_truncation,
@@ -89,11 +150,35 @@ impl Timestamp {
         (self.as_microsecond() as f64 / 1_000_000.0 * 1_000.0) as i64
     }
     pub fn format_local(self, format: &str) -> String {
-        let zone = TimeZone::system();
-        if let Ok(timestamp) =
-            jiff::Timestamp::from_microsecond(self.as_microsecond())
-        {
-            let local = timestamp.to_zoned_datetime(zone);
+        let (local, shift) = self.to_local_zoned();
+        if format == "%Y-%m-%d %H:%M" {
+            let year = local.year() + shift;
+            let mut out = String::with_capacity(16);
+            if cfg!(all(target_os = "linux", target_env = "gnu")) && shift == 0
+            {
+                let _ = write!(
+                    out,
+                    "{}-{:02}-{:02} {:02}:{:02}",
+                    year,
+                    local.month(),
+                    local.day(),
+                    local.hour(),
+                    local.minute()
+                );
+            } else {
+                let _ = write!(
+                    out,
+                    "{:04}-{:02}-{:02} {:02}:{:02}",
+                    year,
+                    local.month(),
+                    local.day(),
+                    local.hour(),
+                    local.minute()
+                );
+            }
+            return out;
+        }
+        if shift == 0 {
             // CPython delegates %Y padding to libc; glibc does not pad small years.
             if cfg!(all(target_os = "linux", target_env = "gnu")) {
                 return local
@@ -102,24 +187,101 @@ impl Timestamp {
             }
             return local.strftime(format).to_string();
         }
-        // Jiff reserves 26 hours at each timestamp boundary for zone conversion.
-        // Far-future IANA rules repeat with the 400-year Gregorian calendar cycle.
-        let shifted = self.0.with().year(self.0.year() - 400).build().unwrap();
-        let local = shifted
-            .to_zoned_datetime(TimeZone::UTC)
-            .unwrap()
-            .with_time_zone(zone);
-        let year = local.year() + 400;
+        let year = local.year() + shift;
         local
             .strftime(format.replace("%Y", &format!("{year:04}")).as_str())
             .to_string()
     }
 }
 
+fn parse_2(bytes: &[u8]) -> Option<i8> {
+    let a = bytes[0].wrapping_sub(b'0');
+    let b = bytes[1].wrapping_sub(b'0');
+    (a <= 9 && b <= 9).then(|| i8::try_from(a * 10 + b).unwrap())
+}
+
+fn parse_4(bytes: &[u8]) -> Option<i16> {
+    let a = u16::from(bytes[0].wrapping_sub(b'0'));
+    let b = u16::from(bytes[1].wrapping_sub(b'0'));
+    let c = u16::from(bytes[2].wrapping_sub(b'0'));
+    let d = u16::from(bytes[3].wrapping_sub(b'0'));
+    (a <= 9 && b <= 9 && c <= 9 && d <= 9)
+        .then(|| i16::try_from(a * 1000 + b * 100 + c * 10 + d).unwrap())
+}
+
+fn fast_iso(value: &str) -> Option<Timestamp> {
+    let bytes = value.as_bytes();
+    if bytes.len() < 20
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !matches!(bytes[10], b'T' | b't' | b' ')
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+    {
+        return None;
+    }
+    let year = parse_4(&bytes[0..4])?;
+    if year < 1 {
+        return None;
+    }
+    let month = parse_2(&bytes[5..7])?;
+    let day = parse_2(&bytes[8..10])?;
+    let hour = parse_2(&bytes[11..13])?;
+    let minute = parse_2(&bytes[14..16])?;
+    let second = parse_2(&bytes[17..19])?;
+    let mut i = 19;
+    let mut micros: i32 = 0;
+    if bytes.get(i) == Some(&b'.') {
+        i += 1;
+        let start = i;
+        let mut scale = 100_000;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            if scale > 0 {
+                micros += i32::from(bytes[i] - b'0') * scale;
+                scale /= 10;
+            }
+            i += 1;
+        }
+        if i == start {
+            return None;
+        }
+    }
+    let offset_secs: i64 = match bytes.get(i).copied() {
+        Some(b'Z' | b'z') if i + 1 == bytes.len() => 0,
+        Some(sign @ (b'+' | b'-'))
+            if i + 6 == bytes.len() && bytes[i + 3] == b':' =>
+        {
+            let oh = i64::from(parse_2(&bytes[i + 1..i + 3])?);
+            let om = i64::from(parse_2(&bytes[i + 4..i + 6])?);
+            if oh > 23 || om > 59 {
+                return None;
+            }
+            let secs = oh * 3600 + om * 60;
+            if sign == b'-' { -secs } else { secs }
+        }
+        _ => return None,
+    };
+    let date = jiff::civil::Date::new(year, month, day).ok()?;
+    let time =
+        jiff::civil::Time::new(hour, minute, second, micros * 1_000).ok()?;
+    let local = date.to_datetime(time);
+    let utc = if offset_secs == 0 {
+        local
+    } else {
+        local
+            .checked_sub(SignedDuration::from_secs(offset_secs))
+            .ok()?
+    };
+    Timestamp::checked(utc).ok()
+}
+
 impl FromStr for Timestamp {
     type Err = crate::Error;
 
     fn from_str(value: &str) -> crate::Result<Self> {
+        if let Some(parsed) = fast_iso(value) {
+            return Ok(parsed);
+        }
         let pieces =
             jiff::fmt::temporal::DateTimeParser::new().parse_pieces(value)?;
         let local = pieces

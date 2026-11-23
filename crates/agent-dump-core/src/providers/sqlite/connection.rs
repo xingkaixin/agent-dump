@@ -16,7 +16,9 @@ pub fn connect(path: &Path) -> crate::Result<Connection> {
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
     connection.busy_timeout(std::time::Duration::from_secs(5))?;
-    connection.execute_batch("PRAGMA query_only = ON; BEGIN")?;
+    connection.execute_batch(
+        "PRAGMA query_only = ON; PRAGMA cache_size = -16000; PRAGMA temp_store = MEMORY; BEGIN",
+    )?;
     Ok(connection)
 }
 
@@ -65,9 +67,7 @@ impl Readers {
             connect(path)?
         };
         let result = read(&connection);
-        if connection.execute_batch("ROLLBACK").is_ok()
-            && connection.release_memory().is_ok()
-        {
+        if connection.execute_batch("ROLLBACK").is_ok() {
             self.0
                 .lock()
                 .unwrap()
@@ -78,11 +78,10 @@ impl Readers {
 }
 
 pub fn has_table(connection: &Connection, name: &str) -> crate::Result<bool> {
-    Ok(connection.query_row(
+    let mut stmt = connection.prepare(
         "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)",
-        [name],
-        |row| row.get(0),
-    )?)
+    )?;
+    Ok(stmt.query_row([name], |row| row.get(0))?)
 }
 
 pub fn has_column(
@@ -90,11 +89,10 @@ pub fn has_column(
     table: &str,
     name: &str,
 ) -> crate::Result<bool> {
-    Ok(connection.query_row(
+    let mut stmt = connection.prepare(
         "SELECT EXISTS(SELECT 1 FROM pragma_table_info(?) WHERE name = ?)",
-        [table, name],
-        |row| row.get(0),
-    )?)
+    )?;
+    Ok(stmt.query_row([table, name], |row| row.get(0))?)
 }
 
 pub fn rows(

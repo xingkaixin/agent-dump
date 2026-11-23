@@ -10,7 +10,6 @@ use agent_dump_core::providers::contract::{
 use agent_dump_core::providers::registry::{self, Registration};
 use agent_dump_core::query::context;
 use agent_dump_core::query::read as query_read;
-use agent_dump_core::session::cache::SessionDataCache;
 use agent_dump_core::session::{Session, SessionData};
 use agent_dump_core::storage::source_io::path_text;
 use std::io::Write;
@@ -342,21 +341,22 @@ fn export(
     };
     let uri = &operation.uri;
     let raw = provider.raw_export(session);
-    let cache = SessionDataCache::default();
     let prepared = (operation
         .formats
         .iter()
         .any(|format| *format != OutputFormat::Raw)
         || matches!(raw, Ok(RawExport::Session)))
     .then(|| {
-        cache.get(info.name, provider, session, zh, &mut |diagnostic| {
-            writeln!(
-                warnings,
-                "{}",
-                diagnostics::record_warning(&diagnostic, zh)
-            )?;
-            Ok(())
-        })
+        provider
+            .read(session, zh, &mut |diagnostic| {
+                writeln!(
+                    warnings,
+                    "{}",
+                    diagnostics::record_warning(&diagnostic, zh)
+                )?;
+                Ok(())
+            })
+            .map(std::sync::Arc::new)
     });
     let summary = if operation.summary {
         generate_summary(
@@ -378,7 +378,8 @@ fn export(
     if operation.formats.contains(&OutputFormat::Print) {
         match prepared.as_ref().unwrap() {
             Ok(data) => {
-                writeln!(out, "{}", render::transcript(uri, data))?;
+                render::write_transcript(out, uri, data)?;
+                out.write_all(b"\n")?;
                 success = true;
             }
             Err(error) => write!(out, "{}", read_failed(error.as_ref()))?,

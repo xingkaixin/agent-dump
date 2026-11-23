@@ -1,6 +1,6 @@
 ---
 import { install, site, ui, type Locale } from "../lib/i18n";
-import { InstallPicker } from "./InstallPicker";
+import InstallPicker from "./InstallPicker.astro";
 
 interface Props {
   locale: Locale;
@@ -30,7 +30,6 @@ const platforms = ["macOS Intel / Apple Silicon", "Linux x64", "Windows x64"];
     </div>
     <div data-reveal>
       <InstallPicker
-        client:visible
         groups={groups}
         skill={{ note: t.skillNote, command: site.skillCommand }}
         copy={t.copy}

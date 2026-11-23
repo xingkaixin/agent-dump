@@ -1,0 +1,496 @@
+---
+import {
+  demoSessions,
+  tuiStrings,
+} from "../lib/browse-demo";
+
+interface Props {
+  lang: "zh" | "en";
+  copy: {
+    autoplay: string;
+    replay: string;
+    label: string;
+    keysLabel: string;
+    space: string;
+    keys: string[];
+  };
+}
+
+const { lang, copy } = Astro.props;
+const t = tuiStrings[lang];
+const sessions = demoSessions[lang];
+const current = sessions[0];
+const clientPayload = JSON.stringify({ t, sessions }).replace(/</g, "\\u003c");
+const chips: [string, string][] = [
+  ["↓", "j"],
+  ["↑", "k"],
+  ["Tab", "pane"],
+  ["", " "],
+  ["e", "e"],
+  ["s", "search"],
+  ["/", "find"],
+  ["n", "n"],
+  ["x", "x"],
+  ["t", "t"],
+  ["c", "c"],
+  ["?", "?"],
+];
+---
+
+<div data-browse-demo data-lang={lang}>
+  <div class="tui">
+    <div class="term-bar">
+      <span class="tab">
+        <span class="prompt-mark">&gt;_</span>
+        agent-dump --browse --time-field updated --days 7
+      </span>
+      <span class="auto-pill" data-bd-auto>
+        <span class="pdot" aria-hidden="true" />
+        {copy.autoplay}
+      </span>
+      <button type="button" class="replay" data-bd-replay hidden>
+        {copy.replay}
+      </button>
+    </div>
+    <div
+      class="tui-screen"
+      tabindex="0"
+      role="application"
+      aria-roledescription="terminal"
+      aria-label={copy.label}
+      data-bd-screen
+    >
+      <div class="tui-body">
+        <div class="tpane act" data-bd-list>
+          <p class="ph">
+            <span>{t.sessions}</span>
+            <span>{sessions.length}</span>
+          </p>
+          {sessions.map((session, index) => (
+            <div class={`trow${index === 0 ? " sel" : ""}`}>
+              <span class="cr">{index === 0 ? "›" : ""}</span>
+              <span class="mk2">○</span>
+              <span class="tt">{session.title}</span>
+              <span class="tw">{session.provider} · {session.when}</span>
+            </div>
+          ))}
+        </div>
+        <div class="tpane" data-bd-body>
+          <p class="ph">
+            <span>{`${t.body} · 1/${current.messages.length}`}</span>
+            <span>{current.path}</span>
+          </p>
+          <p class="thead">
+            <b>{current.uri}</b> · {current.title}
+          </p>
+          {current.messages.map(([role, text]) => (
+            <div>
+              <div class="tmsg">
+                <span class={role === "user" ? "trole u" : "trole a"}>{role}</span>
+                <span>{text}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div class="tstat">
+        <span class="l" aria-live="polite" data-bd-status>{t.ready}</span>
+        <span class="r">{t.scope}</span>
+      </div>
+      <div class="thelp" data-bd-help hidden>
+        <b>{t.helpTitle}</b>
+        {t.helpFull}
+      </div>
+    </div>
+  </div>
+  <div role="group" aria-label={copy.keysLabel} class="keys">
+    {chips.map(([cap, action], index) => (
+      <button type="button" class="key" data-bd-key={action}>
+        <kbd class="kbd">{cap || copy.space}</kbd>
+        {copy.keys[index]}
+      </button>
+    ))}
+  </div>
+  <script type="application/json" data-bd-data set:html={clientPayload} />
+</div>
+
+<script>
+  import {
+    demoScript,
+    type DemoSession,
+    type TuiStrings,
+  } from "../lib/browse-demo";
+
+  type Status = { key: keyof TuiStrings; args?: Record<string, number> };
+  type State = {
+    selected: number;
+    marked: string[];
+    focus: "list" | "body";
+    editing: "sessions" | "messages" | null;
+    input: string;
+    sessionQuery: string;
+    messageQuery: string;
+    hit: number;
+    excerpt: boolean;
+    radius: number;
+    details: boolean;
+    help: boolean;
+    status: Status | null;
+    scroll: number;
+  };
+
+  const initial: State = {
+    selected: 0,
+    marked: [],
+    focus: "list",
+    editing: null,
+    input: "",
+    sessionQuery: "",
+    messageQuery: "",
+    hit: 0,
+    excerpt: false,
+    radius: 3,
+    details: false,
+    help: false,
+    status: null,
+    scroll: 0,
+  };
+
+  const TICK_MS = 700;
+  const MACRO_MS = 110;
+
+  const esc = (s: string) =>
+    s.replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+    );
+
+  const fmt = (tpl: string, args: Record<string, string | number> = {}) =>
+    tpl.replace(/\{(\w+)\}/g, (m, k) => (k in args ? String(args[k]) : m));
+
+  const markHtml = (text: string, terms: string[]) => {
+    if (!terms.length) return esc(text);
+    const pattern = new RegExp(
+      `(${terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
+      "gi",
+    );
+    return text
+      .split(pattern)
+      .map((part, i) => (i % 2 ? `<mark>${esc(part)}</mark>` : esc(part)))
+      .join("");
+  };
+
+  const computeView = (state: State, sessions: DemoSession[]) => {
+    const words = state.sessionQuery.toLowerCase().split(/\s+/).filter(Boolean);
+    const rows = sessions.filter((s) => {
+      const hay = `${s.title} ${s.messages.map((m) => m[1]).join(" ")}`.toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
+    const selected = Math.min(state.selected, Math.max(0, rows.length - 1));
+    const current = rows[selected];
+    const phrase = state.messageQuery.toLowerCase();
+    const hits = (current?.messages ?? []).flatMap(([, body], index) => {
+      const lower = body.toLowerCase();
+      const found = phrase
+        ? lower.includes(phrase)
+        : words.length > 0 && words.every((w) => lower.includes(w));
+      return found ? [index] : [];
+    });
+    const hitIndex = hits.length ? hits[state.hit % hits.length] : -1;
+    const total = current?.messages.length ?? 0;
+    const range =
+      hitIndex >= 0
+        ? {
+            start: Math.max(0, hitIndex - state.radius),
+            end: Math.min(total, hitIndex + state.radius + 1),
+            total,
+          }
+        : { start: 0, end: total, total };
+    return { words, rows, selected, current, hits, hitIndex, range };
+  };
+
+  const press = (state: State, key: string, sessions: DemoSession[]): State | null => {
+    const v = computeView(state, sessions);
+    const next = (patch: Partial<State>): State => ({ ...state, status: null, ...patch });
+
+    if (state.help) {
+      if (key === "Escape" || key === "?" || key === "q") return next({ help: false });
+      return key === "ArrowUp" || key === "ArrowDown" || key === " " ? state : null;
+    }
+    if (state.editing) {
+      if (key === "Escape") return next({ editing: null, input: "" });
+      if (key === "Enter" && state.editing === "sessions")
+        return next({
+          editing: null,
+          input: "",
+          sessionQuery: state.input.trim(),
+          messageQuery: "",
+          selected: 0,
+          hit: 0,
+          excerpt: false,
+          scroll: 0,
+        });
+      if (key === "Enter")
+        return next({
+          editing: null,
+          input: "",
+          messageQuery: state.input,
+          hit: 0,
+          excerpt: false,
+          scroll: 0,
+          focus: "body",
+        });
+      if (key === "Backspace") return { ...state, input: state.input.slice(0, -1) };
+      if (key.length === 1) return { ...state, input: state.input + key };
+      return null;
+    }
+
+    const last = Math.max(0, v.rows.length - 1);
+    const move = (to: number) =>
+      to === v.selected
+        ? state
+        : next({ selected: to, messageQuery: "", hit: 0, excerpt: false, scroll: 0 });
+    const inBody = state.focus === "body";
+
+    switch (key) {
+      case "ArrowDown":
+      case "j":
+        return inBody ? { ...state, scroll: state.scroll + 1 } : move(Math.min(v.selected + 1, last));
+      case "ArrowUp":
+      case "k":
+        return inBody
+          ? { ...state, scroll: Math.max(0, state.scroll - 1) }
+          : move(Math.max(0, v.selected - 1));
+      case "Home":
+        return move(0);
+      case "End":
+        return move(last);
+      case "ArrowRight":
+      case "Enter":
+        return { ...state, focus: "body" };
+      case "ArrowLeft":
+        return { ...state, focus: "list" };
+      case "s":
+        return next({ editing: "sessions", input: "" });
+      case "/":
+        return next({ editing: "messages", input: "" });
+      case "c":
+        return next({ sessionQuery: "", messageQuery: "", selected: 0, hit: 0, excerpt: false, scroll: 0 });
+      case "?":
+        return { ...state, help: true };
+      case "n":
+      case "N": {
+        const count = v.hits.length;
+        if (!count) return state;
+        const hit = key === "N" ? (state.hit + count - 1) % count : (state.hit + 1) % count;
+        return next({ hit, focus: "body", scroll: 0 });
+      }
+      case "x":
+        if (state.excerpt) return next({ excerpt: false });
+        if (v.hits.length)
+          return next({ excerpt: true, radius: 3, scroll: 0, status: { key: "excerptHelp" } });
+        return next({ status: { key: "needHit" } });
+      case "+":
+      case "=":
+      case "-":
+        if (!state.excerpt || !v.current) return state;
+        return {
+          ...state,
+          radius:
+            key === "-"
+              ? Math.max(0, state.radius - 1)
+              : Math.min(v.current.messages.length, state.radius + 1),
+        };
+      case "Escape":
+        return state.excerpt ? next({ excerpt: false }) : next({ status: { key: "quit" } });
+      case "q":
+      case "Q":
+        return next({ status: { key: "quit" } });
+      case "t":
+        return { ...state, details: !state.details };
+      case " ": {
+        if (!v.current) return state;
+        const uri = v.current.uri;
+        const marked = state.marked.includes(uri)
+          ? state.marked.filter((item) => item !== uri)
+          : [...state.marked, uri];
+        return next({ marked, status: { key: "marked", args: { count: marked.length } } });
+      }
+      case "e":
+        if (state.marked.length && !state.excerpt)
+          return next({ status: { key: "exported", args: { count: state.marked.length } } });
+        if (state.excerpt)
+          return next({
+            status: { key: "exportedRange", args: { start: v.range.start + 1, end: v.range.end } },
+          });
+        return v.current ? next({ status: { key: "exportedOne" } }) : state;
+      case "y":
+        return v.current ? next({ status: { key: "copyRequest" } }) : state;
+      default:
+        return null;
+    }
+  };
+
+  for (const root of document.querySelectorAll<HTMLElement>("[data-browse-demo]")) {
+    const raw = root.querySelector<HTMLScriptElement>("[data-bd-data]")?.textContent;
+    if (!raw) continue;
+    const { t, sessions } = JSON.parse(raw) as { t: TuiStrings; sessions: DemoSession[] };
+    const listPane = root.querySelector<HTMLElement>("[data-bd-list]")!;
+    const bodyPane = root.querySelector<HTMLElement>("[data-bd-body]")!;
+    const statusEl = root.querySelector<HTMLElement>("[data-bd-status]")!;
+    const helpEl = root.querySelector<HTMLElement>("[data-bd-help]")!;
+    const autoPill = root.querySelector<HTMLElement>("[data-bd-auto]")!;
+    const replayBtn = root.querySelector<HTMLButtonElement>("[data-bd-replay]")!;
+    const screen = root.querySelector<HTMLElement>("[data-bd-screen]")!;
+
+    let state: State = initial;
+    let auto = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let step = 0;
+    let intervalId: number | undefined;
+    let macroTimers: number[] = [];
+
+    const render = () => {
+      const v = computeView(state, sessions);
+      const items = v.current
+        ? v.current.messages
+            .map(([role, text, tool], index) => ({ index, role, text, tool: tool?.trim() }))
+            .filter(({ index }) => !state.excerpt || (index >= v.range.start && index < v.range.end))
+        : [];
+      const activeIdx = items.findIndex((item) => item.index === v.hitIndex);
+      const offset = Math.min(Math.max(0, items.length - 1), Math.max(0, activeIdx - 1) + state.scroll);
+      const terms = v.hits.length ? (state.messageQuery ? [state.messageQuery] : v.words) : [];
+
+      let status: string;
+      if (state.editing)
+        status = `${state.editing === "sessions" ? t.inputSessions : t.inputMessages} > ${state.input}`;
+      else if (state.status) status = fmt(t[state.status.key], state.status.args);
+      else if (v.hits.length) status = fmt(t.matches, { count: v.hits.length });
+      else if (v.words.length) status = fmt(t.results, { count: v.rows.length });
+      else status = t.ready;
+
+      const bodyTitle = state.excerpt
+        ? fmt(t.excerptRange, { start: v.range.start + 1, end: v.range.end, total: v.range.total })
+        : `${t.body} · ${offset + 1}/${items.length}`;
+
+      autoPill.hidden = !auto;
+      replayBtn.hidden = auto;
+      listPane.className = state.focus === "list" ? "tpane act" : "tpane";
+      bodyPane.className = state.focus === "body" ? "tpane act" : "tpane";
+
+      listPane.innerHTML =
+        `<p class="ph"><span>${esc(t.sessions)}</span><span>${v.rows.length}</span></p>` +
+        (state.sessionQuery
+          ? `<p class="tsearch">${esc(fmt(t.state, { count: v.rows.length, mode: t.terms, query: state.sessionQuery }))}</p>`
+          : "") +
+        (v.rows.length === 0 ? `<p class="tempty">${esc(t.noMatches)}</p>` : "") +
+        v.rows
+          .map((s, i) => {
+            const marked = state.marked.includes(s.uri);
+            return `<div class="trow${i === v.selected ? " sel" : ""}${marked ? " marked" : ""}"><span class="cr">${i === v.selected ? "›" : ""}</span><span class="mk2">${marked ? "●" : "○"}</span><span class="tt">${esc(s.title)}</span><span class="tw">${esc(s.provider)} · ${esc(s.when)}</span></div>`;
+          })
+          .join("");
+
+      bodyPane.innerHTML =
+        `<p class="ph"><span>${esc(bodyTitle)}</span><span>${esc(v.current?.path ?? "")}</span></p>` +
+        (v.current
+          ? `<p class="thead"><b>${esc(v.current.uri)}</b> · ${esc(v.current.title)}</p>`
+          : `<p class="tempty">${esc(t.noMatches)}</p>`) +
+        items
+          .slice(offset)
+          .map(
+            (item) =>
+              `<div><div class="${item.index === v.hitIndex ? "tmsg cur" : "tmsg"}"><span class="${item.role === "user" ? "trole u" : "trole a"}">${esc(item.role)}</span><span>${markHtml(item.text, terms)}</span></div>${state.details && item.tool ? `<p class="ttool">${esc(item.tool)}</p>` : ""}</div>`,
+          )
+          .join("");
+
+      statusEl.innerHTML = `${esc(status)}${state.editing ? '<span class="caret" aria-hidden="true"></span>' : ""}`;
+      helpEl.hidden = !state.help;
+    };
+
+    const apply = (key: string) => {
+      const next = press(state, key, sessions);
+      if (!next) return false;
+      state = next;
+      render();
+      return true;
+    };
+
+    const stopAuto = () => {
+      clearInterval(intervalId);
+      intervalId = undefined;
+      macroTimers.forEach(clearTimeout);
+      macroTimers = [];
+      if (auto) {
+        auto = false;
+        render();
+      }
+    };
+
+    const startAuto = () => {
+      clearInterval(intervalId);
+      if (!auto) return;
+      intervalId = window.setInterval(() => {
+        const key = demoScript[step % demoScript.length];
+        step += 1;
+        if (key === "RESET") {
+          state = initial;
+          render();
+        } else if (key !== "__") {
+          apply(key);
+        }
+      }, TICK_MS);
+    };
+
+    const runMacro = (keys: string[]) => {
+      stopAuto();
+      macroTimers = keys.map((k, i) => window.setTimeout(() => apply(k), i * MACRO_MS));
+    };
+
+    screen.addEventListener("keydown", (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (apply(event.key)) {
+        event.preventDefault();
+        stopAuto();
+      }
+    });
+    screen.addEventListener("mousedown", stopAuto);
+
+    replayBtn.addEventListener("click", () => {
+      stopAuto();
+      step = 0;
+      state = initial;
+      auto = true;
+      render();
+      startAuto();
+    });
+
+    for (const btn of root.querySelectorAll<HTMLButtonElement>("[data-bd-key]")) {
+      btn.addEventListener("click", () => {
+        const action = btn.dataset.bdKey ?? "";
+        if (action === "search") runMacro(["s", "a", "u", "t", "h", "Enter"]);
+        else if (action === "find") runMacro(["/", "t", "o", "k", "e", "n", "Enter"]);
+        else {
+          stopAuto();
+          apply(action === "pane" ? (state.focus === "list" ? "ArrowRight" : "ArrowLeft") : action);
+        }
+      });
+    }
+
+    if (auto) {
+      if ("IntersectionObserver" in window) {
+        const io = new IntersectionObserver(
+          (entries) => {
+            if (entries[0]?.isIntersecting) startAuto();
+            else {
+              clearInterval(intervalId);
+              intervalId = undefined;
+            }
+          },
+          { threshold: 0.1 },
+        );
+        io.observe(root);
+      } else {
+        startAuto();
+      }
+    }
+  }
+</script>

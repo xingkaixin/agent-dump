@@ -15,7 +15,8 @@ pub use agent_dump_core::{Error, Result};
 fn main() -> std::process::ExitCode {
     let raw_args: Vec<_> = std::env::args_os().collect();
     if let Some(help) = cli_args::subcommand_help(&raw_args) {
-        let mut out = io::BufWriter::new(io::stdout().lock());
+        let mut out =
+            io::BufWriter::with_capacity(64 * 1024, io::stdout().lock());
         if let Err(error) = write!(out, "{help}").and_then(|()| out.flush())
             && error.kind() != io::ErrorKind::BrokenPipe
         {
@@ -55,7 +56,7 @@ fn main() -> std::process::ExitCode {
     };
     let emit = args.emit_prompt || args.json || args.read || args.read_prompt;
     let zh = args.lang.as_deref().map_or(zh, |lang| lang == "zh");
-    let mut out = io::BufWriter::new(io::stdout().lock());
+    let mut out = io::BufWriter::with_capacity(64 * 1024, io::stdout().lock());
     match command::run(args, &mut out).and_then(|success| {
         out.flush()?;
         Ok(success)

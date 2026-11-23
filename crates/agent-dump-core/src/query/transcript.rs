@@ -116,51 +116,75 @@ fn json_value(value: &Value) -> String {
         search_value(value)
     }
 }
-pub fn searchable_message(message: &Message) -> String {
-    let mut texts = message_texts(message);
+fn append_searchable_message(output: &mut String, message: &Message) {
+    let mut push_piece = |piece: &str| {
+        let trimmed = piece.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        if !output.is_empty() {
+            output.push_str("\n\n");
+        }
+        output.push_str(trimmed);
+    };
+    for part in &message.parts {
+        if let Some(content) = part.content() {
+            push_piece(content);
+        }
+    }
+    if message.extra.contains_key("content") {
+        for text in legacy_texts(message) {
+            push_piece(&text);
+        }
+    }
     for part in &message.parts {
         if let Part::Tool(tool) = part {
-            let output = tool.state.get("output").filter(|v| !v.is_null());
+            let output_val = tool.state.get("output").filter(|v| !v.is_null());
             let error = tool
                 .state
                 .get("error")
-                .filter(|v| !v.is_null() && Some(*v) != output);
+                .filter(|v| !v.is_null() && Some(*v) != output_val);
             for value in [
                 tool.state
                     .get("arguments")
                     .or_else(|| tool.state.get("input")),
-                output,
+                output_val,
                 error,
             ]
             .into_iter()
             .flatten()
             .filter(|v| !v.is_null())
             {
-                texts.push(search_value(value));
+                let rendered = search_value(value);
+                push_piece(&rendered);
             }
             if let Some(prompt) = tool.state.get("prompt") {
                 let prompt = clean(prompt);
-                if !prompt.is_empty() {
-                    texts.push(prompt);
-                }
+                push_piece(&prompt);
             }
         }
     }
-    texts
-        .iter()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n")
+}
+
+pub fn searchable_message(message: &Message) -> String {
+    let mut output = String::new();
+    append_searchable_message(&mut output, message);
+    output
 }
 
 pub fn searchable(data: &SessionData) -> String {
-    data.messages
+    let estimate: usize = data
+        .messages
         .iter()
-        .map(searchable_message)
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n")
+        .flat_map(|m| &m.parts)
+        .filter_map(Part::content)
+        .map(str::len)
+        .sum();
+    let mut output = String::with_capacity(estimate + data.messages.len() * 2);
+    for message in &data.messages {
+        append_searchable_message(&mut output, message);
+    }
+    output
 }
 
 #[cfg(test)]

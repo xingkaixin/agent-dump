@@ -101,29 +101,48 @@ pub fn metadata(
 ) -> crate::Result<Metadata> {
     let mut file = crate::storage::source_io::open(path)?;
     let size = file.metadata()?.len();
-    let mut bytes = Vec::new();
     if size <= FULL_SCAN_LIMIT {
+        let mut bytes = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
         crate::storage::source_io::at(path, file.read_to_end(&mut bytes))?;
-        let lines: Vec<_> = bytes
+        let mut header = None;
+        let mut first = true;
+        let mut records = Vec::new();
+        for line in bytes
             .split(|byte| *byte == b'\n')
             .filter(|line| nonempty(line))
-            .collect();
-        let mut records = Vec::new();
-        for line in &lines {
-            records.extend(match shape {
+        {
+            let record = match shape {
                 Some(shape) if records.len() >= head_lines => {
                     pruned(line, shape)
                 }
                 _ => object(line),
-            });
+            };
+            if first {
+                first = false;
+                header.clone_from(&record);
+            }
+            if let Some(record) = record {
+                records.push(record);
+            }
         }
         return Ok(Metadata {
-            header: lines.first().and_then(|line| object(line)),
+            header,
             records,
             tail: None,
             complete: true,
         });
     }
+    metadata_large(path, &mut file, size, head_lines, include_tail)
+}
+
+pub fn metadata_large(
+    path: &Path,
+    file: &mut std::fs::File,
+    size: u64,
+    head_lines: usize,
+    include_tail: bool,
+) -> crate::Result<Metadata> {
+    let mut bytes = Vec::with_capacity(usize::try_from(WINDOW).unwrap_or(0));
     crate::storage::source_io::at(
         path,
         file.by_ref().take(WINDOW).read_to_end(&mut bytes),
@@ -138,17 +157,26 @@ pub fn metadata(
                 .collect()
         })
         .unwrap_or_default();
-    let header = if end.is_none() {
+    let mut records = Vec::with_capacity(lines.len());
+    let mut header = if end.is_none() {
         Some(serde_json::json!({}))
     } else {
-        lines.first().and_then(|line| object(line))
+        None
     };
-    let records = lines.iter().filter_map(|line| object(line)).collect();
+    for (index, line) in lines.iter().enumerate() {
+        let record = object(line);
+        if index == 0 && end.is_some() {
+            header.clone_from(&record);
+        }
+        if let Some(record) = record {
+            records.push(record);
+        }
+    }
     Ok(Metadata {
         header,
         records,
         tail: if include_tail {
-            tail(&mut file, size)?
+            tail(file, size)?
         } else {
             None
         },
@@ -210,7 +238,10 @@ pub fn scan_numbered(
         &mut DiagnosticSink<'_>,
     ) -> crate::Result<()>,
 ) -> crate::Result<()> {
-    let mut reader = BufReader::new(crate::storage::source_io::open(path)?);
+    let mut reader = BufReader::with_capacity(
+        64 * 1024,
+        crate::storage::source_io::open(path)?,
+    );
     let mut line = Vec::new();
     let mut number = 0;
     let mut skipped = Vec::new();

@@ -40,7 +40,7 @@ pub fn ordered<'a, T: Sync, R: Send>(
     let workers = std::thread::available_parallelism()
         .map_or(4, std::num::NonZero::get)
         .min(items.len());
-    let ahead = workers * 4;
+    let ahead = (workers * 16).max(128);
     let next = AtomicUsize::new(0);
     let window = Window {
         consumed: Mutex::new(Some(0)),

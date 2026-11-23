@@ -2,7 +2,7 @@ use crate::output::i18n::t;
 use crate::providers::contract::{Provider, ProviderInfo};
 use crate::query::text::{Mode, TextQuery};
 use crate::session::Session;
-use crate::session::cache::{SessionDataCache, SessionSignal};
+use crate::session::cache::SessionSignal;
 use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -13,11 +13,16 @@ pub struct SearchIndex {
     connection: Connection,
 }
 
+pub struct IndexGroup<'a> {
+    pub info: &'a ProviderInfo,
+    pub provider: &'a dyn Provider,
+    pub sessions: &'a [Session],
+}
+
 struct IndexedRow {
     signature: String,
     rowid: i64,
     observed: f64,
-    last_seen_at: f64,
     content_hash: Vec<u8>,
 }
 
@@ -62,21 +67,63 @@ const fn cjk(c: char) -> bool {
     matches!(c, '\u{4e00}'..='\u{9fff}')
 }
 
-fn separate_cjk(text: &str) -> Option<String> {
-    if !text.chars().any(cjk) {
+fn first_cjk_byte(text: &str) -> Option<usize> {
+    if text.is_ascii() {
         return None;
     }
-    let mut output = String::new();
-    let mut previous = None;
-    for c in text.chars() {
-        if previous.is_some_and(|p| {
-            (cjk(p) && !crate::query::text::whitespace(c))
-                || (cjk(c) && !crate::query::text::whitespace(p))
-        }) {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if (0xE4..=0xE9).contains(&bytes[i])
+            && let Some(c) = text[i..].chars().next()
+        {
+            if cjk(c) {
+                return Some(i);
+            }
+            i += c.len_utf8();
+            continue;
+        }
+        i += 1;
+    }
+    None
+}
+
+fn separate_cjk(text: &str) -> Option<String> {
+    let first = first_cjk_byte(text)?;
+    let mut output =
+        String::with_capacity(text.len() + (text.len() - first) / 3);
+    output.push_str(&text[..first]);
+    let bytes = text.as_bytes();
+    let mut prev_cjk = false;
+    let mut prev_ws = text[..first]
+        .chars()
+        .next_back()
+        .is_none_or(crate::query::text::whitespace);
+    let mut i = first;
+    while i < bytes.len() {
+        if bytes[i] < 0x80 {
+            let run_start = i;
+            if prev_cjk && !crate::query::text::whitespace(bytes[i] as char) {
+                output.push(' ');
+            }
+            while i < bytes.len() && bytes[i] < 0x80 {
+                i += 1;
+            }
+            output.push_str(&text[run_start..i]);
+            prev_cjk = false;
+            prev_ws = crate::query::text::whitespace(bytes[i - 1] as char);
+            continue;
+        }
+        let c = text[i..].chars().next().unwrap();
+        let cur_cjk = cjk(c);
+        let cur_ws = !cur_cjk && crate::query::text::whitespace(c);
+        if (prev_cjk && !cur_ws) || (cur_cjk && !prev_ws) {
             output.push(' ');
         }
         output.push(c);
-        previous = Some(c);
+        prev_cjk = cur_cjk;
+        prev_ws = cur_ws;
+        i += c.len_utf8();
     }
     Some(output)
 }
@@ -127,12 +174,25 @@ fn fold_trigram(text: &str) -> Option<String> {
     if text.is_ascii() {
         return None;
     }
-    let first = text
-        .char_indices()
-        .find(|&(_, c)| fold_trigram_char(c) != c)?;
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    let mut first = None;
+    while i < bytes.len() {
+        if bytes[i] < 0x80 {
+            i += 1;
+            continue;
+        }
+        let c = text[i..].chars().next()?;
+        if fold_trigram_char(c) != c {
+            first = Some(i);
+            break;
+        }
+        i += c.len_utf8();
+    }
+    let first = first?;
     let mut output = String::with_capacity(text.len());
-    output.push_str(&text[..first.0]);
-    for c in text[first.0..].chars() {
+    output.push_str(&text[..first]);
+    for c in text[first..].chars() {
         output.push(fold_trigram_char(c));
     }
     Some(output)
@@ -313,6 +373,111 @@ fn delete_text(connection: &Connection, rowid: i64) -> crate::Result<()> {
     Ok(())
 }
 
+struct TxGuard<'c> {
+    conn: &'c Connection,
+    active: bool,
+}
+
+impl Drop for TxGuard<'_> {
+    fn drop(&mut self) {
+        if self.active {
+            let _ = self.conn.execute_batch("ROLLBACK");
+        }
+    }
+}
+
+struct ByteBudget {
+    limit: usize,
+    state: std::sync::Mutex<(usize, bool)>,
+    cvar: std::sync::Condvar,
+}
+
+impl ByteBudget {
+    const fn new(limit: usize) -> Self {
+        Self {
+            limit,
+            state: std::sync::Mutex::new((0, false)),
+            cvar: std::sync::Condvar::new(),
+        }
+    }
+
+    fn acquire(&self, bytes: usize) -> Option<BudgetPermit<'_>> {
+        let mut guard = self.state.lock().unwrap();
+        while !guard.1
+            && guard.0 > 0
+            && guard.0.saturating_add(bytes) > self.limit
+        {
+            guard = self.cvar.wait(guard).unwrap();
+        }
+        if guard.1 {
+            return None;
+        }
+        guard.0 = guard.0.saturating_add(bytes);
+        drop(guard);
+        Some(BudgetPermit {
+            budget: self,
+            bytes,
+        })
+    }
+
+    fn release(&self, bytes: usize) {
+        let mut guard = self.state.lock().unwrap();
+        guard.0 = guard.0.saturating_sub(bytes);
+        drop(guard);
+        self.cvar.notify_all();
+    }
+
+    fn grow(&self, extra: usize) {
+        if extra > 0 {
+            let mut guard = self.state.lock().unwrap();
+            guard.0 = guard.0.saturating_add(extra);
+        }
+    }
+
+    fn cancel(&self) {
+        let mut guard = self.state.lock().unwrap();
+        guard.1 = true;
+        drop(guard);
+        self.cvar.notify_all();
+    }
+}
+
+struct CancelBudget<'a>(&'a ByteBudget);
+
+impl Drop for CancelBudget<'_> {
+    fn drop(&mut self) {
+        self.0.cancel();
+    }
+}
+
+struct BudgetPermit<'a> {
+    budget: &'a ByteBudget,
+    bytes: usize,
+}
+
+impl BudgetPermit<'_> {
+    fn grow_to(&mut self, actual: usize) {
+        if actual > self.bytes {
+            self.budget.grow(actual - self.bytes);
+            self.bytes = actual;
+        }
+    }
+
+    fn disarm(mut self) -> usize {
+        let bytes = self.bytes;
+        self.bytes = 0;
+        bytes
+    }
+}
+
+impl Drop for BudgetPermit<'_> {
+    fn drop(&mut self) {
+        if self.bytes > 0 {
+            self.budget.release(self.bytes);
+        }
+    }
+}
+
 impl SearchIndex {
     pub fn open() -> crate::Result<Self> {
         let root = std::env::var_os("XDG_CACHE_HOME")
@@ -355,7 +520,9 @@ impl SearchIndex {
                 std::fs::Permissions::from_mode(0o600),
             );
         }
-        connection.execute_batch("PRAGMA synchronous = NORMAL;")?;
+        connection.execute_batch(
+            "PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -16000;",
+        )?;
         let version: i64 =
             connection
                 .query_row("PRAGMA user_version", [], |row| row.get(0))?;
@@ -381,6 +548,11 @@ impl SearchIndex {
                 transaction.commit()?;
             }
             return Ok(Self { connection });
+        }
+        let page_count: i64 =
+            connection.query_row("PRAGMA page_count", [], |row| row.get(0))?;
+        if page_count == 0 {
+            connection.execute_batch("PRAGMA page_size = 16384;")?;
         }
         if !journal_mode.eq_ignore_ascii_case("wal") {
             let _: String = connection.query_row(
@@ -431,6 +603,8 @@ impl SearchIndex {
                  content,\n",
                 "    content='', contentless_delete=1,\n",
                 "    tokenize='trigram');\n",
+                "INSERT INTO sessions_fts_trigram(sessions_fts_trigram, rank) \
+                 VALUES('pgsz', 16384);\n",
                 "PRAGMA user_version = 5;",
             ))?;
         }
@@ -445,13 +619,26 @@ impl SearchIndex {
     }
 
     pub fn clear(&mut self, provider: &str) -> crate::Result<()> {
+        self.clear_many(&[provider])
+    }
+
+    pub fn clear_many(&mut self, providers: &[&str]) -> crate::Result<()> {
+        if providers.is_empty() {
+            return Ok(());
+        }
         let transaction = self.connection.transaction_with_behavior(
             rusqlite::TransactionBehavior::Immediate,
         )?;
-        let rows: Vec<i64> = transaction
-            .prepare("SELECT fts_rowid FROM index_state WHERE agent = ?")?
-            .query_map([provider], |r| r.get(0))?
-            .collect::<Result<_, _>>()?;
+        let mut select = transaction
+            .prepare("SELECT fts_rowid FROM index_state WHERE agent = ?")?;
+        let mut rows = Vec::new();
+        for &provider in providers {
+            let mut ids = select.query([provider])?;
+            while let Some(r) = ids.next()? {
+                rows.push(r.get::<_, i64>(0)?);
+            }
+        }
+        drop(select);
         for rowid in rows {
             delete(&transaction, rowid)?;
         }
@@ -459,10 +646,6 @@ impl SearchIndex {
         Ok(())
     }
 
-    #[allow(
-        clippy::cast_precision_loss,
-        reason = "The shared SQLite schema stores timestamps as floating-point seconds"
-    )]
     pub fn update(
         &mut self,
         info: &ProviderInfo,
@@ -471,241 +654,327 @@ impl SearchIndex {
         zh: bool,
         warnings: &mut impl Write,
     ) -> crate::Result<(usize, Vec<String>)> {
+        let mut results = self.update_groups(
+            &[IndexGroup {
+                info,
+                provider,
+                sessions,
+            }],
+            zh,
+            warnings,
+        )?;
+        Ok(results.pop().unwrap_or_default())
+    }
+
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::too_many_lines,
+        reason = "The shared SQLite schema stores timestamps as floating-point seconds"
+    )]
+    pub fn update_groups(
+        &mut self,
+        groups: &[IndexGroup<'_>],
+        zh: bool,
+        warnings: &mut impl Write,
+    ) -> crate::Result<Vec<(usize, Vec<String>)>> {
+        if groups.is_empty() {
+            return Ok(Vec::new());
+        }
         let observed = now();
-        let indexed: HashMap<String, IndexedRow> = self
-            .connection
-            .prepare(
-                "SELECT session_id, updated_signature, fts_rowid, indexed_at, \
-                 last_seen_at, content_hash FROM index_state WHERE agent = ?",
-            )?
-            .query_map([info.name], |r| {
-                Ok((
-                    r.get(0)?,
-                    IndexedRow {
-                        signature: r.get(1)?,
-                        rowid: r.get(2)?,
-                        observed: r.get(3)?,
-                        last_seen_at: r.get(4)?,
-                        content_hash: r.get(5)?,
-                    },
-                ))
-            })?
-            .collect::<Result<_, _>>()?;
-        // Rows expire after 30 unseen days. Skipping the UPDATE when no row is
-        // stale avoids acquiring a SQLite write lock on warm searches.
-        let stale_seen: Vec<&str> = sessions
-            .iter()
-            .filter_map(|session| {
-                indexed
-                    .get(&session.id)
-                    .is_some_and(|row| {
-                        row.last_seen_at < observed - DAY_SECONDS
-                    })
-                    .then_some(session.id.as_str())
-            })
-            .collect();
-        if !stale_seen.is_empty() {
-            self.connection.execute(
-                "UPDATE index_state SET last_seen_at = ? WHERE agent = ? AND \
-                 last_seen_at < ? AND session_id IN (SELECT value FROM \
-                 json_each(?))",
-                params![
+        let mut stat_cache = HashMap::new();
+        let mut indexed_by_group: Vec<HashMap<String, (String, f64)>> =
+            Vec::with_capacity(groups.len());
+        let mut pending: Vec<(usize, &Session, String, u64)> = Vec::new();
+        let mut load_stmt = self.connection.prepare(
+            "SELECT session_id, updated_signature, last_seen_at \
+             FROM index_state WHERE agent = ?",
+        )?;
+        let mut stale_stmt = self.connection.prepare(
+            "UPDATE index_state SET last_seen_at = ? WHERE agent = ? AND \
+             last_seen_at < ? AND session_id IN (SELECT value FROM \
+             json_each(?))",
+        )?;
+        for (g, group) in groups.iter().enumerate() {
+            let indexed: HashMap<String, (String, f64)> = load_stmt
+                .query_map([group.info.name], |r| {
+                    Ok((r.get(0)?, (r.get(1)?, r.get(2)?)))
+                })?
+                .collect::<Result<_, _>>()?;
+            // Rows expire after 30 unseen days. Skipping the UPDATE when no
+            // row is stale avoids acquiring a SQLite write lock on warm searches.
+            let stale_seen: Vec<&str> = group
+                .sessions
+                .iter()
+                .filter_map(|session| {
+                    indexed
+                        .get(&session.id)
+                        .is_some_and(|&(_, last_seen)| {
+                            last_seen < observed - DAY_SECONDS
+                        })
+                        .then_some(session.id.as_str())
+                })
+                .collect();
+            if !stale_seen.is_empty() {
+                stale_stmt.execute(params![
                     observed,
-                    info.name,
+                    group.info.name,
                     observed - DAY_SECONDS,
                     serde_json::to_string(&stale_seen)?
-                ],
-            )?;
-        }
-        let pending: Vec<_> = sessions
-            .iter()
-            .filter_map(|session| {
-                let signature =
-                    SessionSignal::new(provider, session).signature();
-                (indexed
-                    .get(&session.id)
-                    .is_none_or(|old| old.signature != signature))
-                .then_some((session, signature))
-            })
-            .collect();
-        if pending.is_empty() {
-            return Ok((0, Vec::new()));
-        }
-        if pending.len() >= 10 {
-            writeln!(
-                warnings,
-                "{}",
-                t(
-                    "INDEX_UPDATE_PROGRESS",
-                    zh,
-                    &[
-                        ("agent", info.display_name.into()),
-                        ("count", pending.len().to_string())
-                    ]
-                )
-            )?;
-        }
-        let cache = SessionDataCache::default();
-        let workers = std::thread::available_parallelism()
-            .map_or(4, std::num::NonZero::get);
-        let read = |reads: &[(&Session, String)]| {
-            std::thread::scope(|scope| {
-                let jobs: Vec<_> = reads
-                    .iter()
-                    .map(|(session, _)| {
-                        let cache = &cache;
-                        scope.spawn(move || {
-                            let mut diagnostics = Vec::new();
-                            let prepared = cache
-                                .lease(
-                                    info.name,
-                                    provider,
-                                    session,
-                                    zh,
-                                    &mut |d| {
-                                        diagnostics.push(d);
-                                        Ok(())
-                                    },
-                                )
-                                .map(|data| {
-                                    let raw =
-                                        crate::query::transcript::searchable(
-                                            &data,
-                                        );
-                                    let hash =
-                                        content_hash(&session.title, &raw);
-                                    let cjk_title =
-                                        separate_cjk(&session.title);
-                                    let cjk_content = separate_cjk(&raw);
-                                    let trigram_title =
-                                        fold_trigram(&session.title);
-                                    let trigram_content = fold_trigram(&raw);
-                                    PreparedText {
-                                        raw,
-                                        hash,
-                                        cjk_title,
-                                        cjk_content,
-                                        trigram_title,
-                                        trigram_content,
-                                    }
-                                });
-                            (prepared, diagnostics)
-                        })
-                    })
-                    .collect();
-                jobs.into_iter()
-                    .map(|job| {
-                        job.join().map_err(|_| "Index reader panicked".into())
-                    })
-                    .collect::<crate::Result<Vec<_>>>()
-            })
-        };
-        let mut added = 0;
-        let mut failed = Vec::new();
-        let mut rest = &pending[..];
-        while !rest.is_empty() {
-            let limit = rest.len().min(32);
-            let mut texts = Vec::new();
-            let mut bytes = 0;
-            while texts.len() < limit && bytes < BATCH_BYTES {
-                let reads =
-                    read(&rest[texts.len()..limit.min(texts.len() + workers)])?;
-                bytes += reads
-                    .iter()
-                    .filter_map(|(prepared, _)| prepared.as_ref().ok())
-                    .map(|prepared| {
-                        prepared.raw.len()
-                            + prepared
-                                .cjk_content
-                                .as_ref()
-                                .map_or(0, String::len)
-                            + prepared
-                                .trigram_content
-                                .as_ref()
-                                .map_or(0, String::len)
-                    })
-                    .sum::<usize>();
-                texts.extend(reads);
+                ])?;
             }
-            let (batch, remaining) = rest.split_at(texts.len());
-            rest = remaining;
-            for (_, diagnostics) in &texts {
-                for diagnostic in diagnostics {
-                    writeln!(
-                        warnings,
-                        "{}",
-                        crate::output::diagnostics::record_warning(
-                            diagnostic, zh
-                        )
-                    )?;
+            let start_len = pending.len();
+            for session in group.sessions {
+                let signature = SessionSignal::new_with_cache(
+                    group.provider,
+                    session,
+                    &mut stat_cache,
+                )
+                .signature();
+                if indexed
+                    .get(&session.id)
+                    .is_none_or(|(old_sig, _)| *old_sig != signature)
+                {
+                    let size = stat_cache
+                        .get(&session.source_path)
+                        .and_then(|entry| entry.2)
+                        .unwrap_or(0);
+                    pending.push((g, session, signature, size));
                 }
             }
-            let transaction = self.connection.transaction_with_behavior(
-                rusqlite::TransactionBehavior::Immediate,
+            let group_pending = pending.len() - start_len;
+            if group_pending >= 10 {
+                writeln!(
+                    warnings,
+                    "{}",
+                    t(
+                        "INDEX_UPDATE_PROGRESS",
+                        zh,
+                        &[
+                            ("agent", group.info.display_name.into()),
+                            ("count", group_pending.to_string())
+                        ]
+                    )
+                )?;
+            }
+            indexed_by_group.push(indexed);
+        }
+        drop(load_stmt);
+        drop(stale_stmt);
+        if pending.is_empty() {
+            return Ok(vec![(0, Vec::new()); groups.len()]);
+        }
+        let mut seen_keys = HashSet::with_capacity(pending.len());
+        let has_duplicates = pending.iter().any(|&(g, session, _, _)| {
+            !seen_keys.insert((g, session.id.as_str()))
+        });
+        let mut path_counts: HashMap<&Path, usize> = HashMap::new();
+        for &(_, session, _, _) in &pending {
+            *path_counts
+                .entry(session.source_path.as_path())
+                .or_insert(0) += 1;
+        }
+        let estimated_bytes: Vec<usize> = pending
+            .iter()
+            .map(|&(_, session, _, size)| {
+                let unknown_expanded = size == 0
+                    || crate::storage::zstd::compressed(&session.source_path)
+                    || session
+                        .source_path
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("gz"));
+                if unknown_expanded {
+                    return BATCH_BYTES;
+                }
+                let shared = path_counts
+                    .get(session.source_path.as_path())
+                    .copied()
+                    .unwrap_or(1)
+                    .max(1) as u64;
+                usize::try_from(size / shared)
+                    .unwrap_or(BATCH_BYTES)
+                    .saturating_mul(2)
+                    .max(4096)
+            })
+            .collect();
+        let mut dispatch: Vec<usize> = (0..pending.len()).collect();
+        if !has_duplicates {
+            dispatch.sort_by(|&a, &b| pending[b].3.cmp(&pending[a].3));
+        }
+        let mut added = vec![0usize; groups.len()];
+        let mut failed_by_idx: Vec<(usize, usize, String)> = Vec::new();
+        let mut diags_by_idx: Vec<(
+            usize,
+            Vec<crate::providers::contract::RecoverableDiagnostic>,
+        )> = Vec::new();
+        let workers = if has_duplicates {
+            1
+        } else {
+            std::thread::available_parallelism()
+                .map_or(4, std::num::NonZero::get)
+                .min(pending.len())
+        };
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let budget = ByteBudget::new(BATCH_BYTES);
+        let conn = &mut self.connection;
+        std::thread::scope(|scope| -> crate::Result<()> {
+            let _cancel = CancelBudget(&budget);
+            let (sender, receiver) = std::sync::mpsc::sync_channel(workers * 2);
+            for _ in 0..workers {
+                let sender = sender.clone();
+                let next = &next;
+                let budget = &budget;
+                let pending = &pending;
+                let dispatch = &dispatch;
+                let estimated_bytes = &estimated_bytes;
+                scope.spawn(move || {
+                    loop {
+                        let pos = next
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(&idx) = dispatch.get(pos) else {
+                            break;
+                        };
+                        let Some(mut permit) =
+                            budget.acquire(estimated_bytes[idx])
+                        else {
+                            break;
+                        };
+                        let (g, session, _, _) = pending[idx];
+                        let mut diagnostics = Vec::new();
+                        let prepared = groups[g]
+                            .provider
+                            .read(session, zh, &mut |d| {
+                                diagnostics.push(d);
+                                Ok(())
+                            })
+                            .map(|data| {
+                                let raw =
+                                    crate::query::transcript::searchable(&data);
+                                let hash = content_hash(&session.title, &raw);
+                                let cjk_title = separate_cjk(&session.title);
+                                let cjk_content = separate_cjk(&raw);
+                                let trigram_title =
+                                    fold_trigram(&session.title);
+                                let trigram_content = fold_trigram(&raw);
+                                PreparedText {
+                                    raw,
+                                    hash,
+                                    cjk_title,
+                                    cjk_content,
+                                    trigram_title,
+                                    trigram_content,
+                                }
+                            });
+                        if let Ok(ref prepared) = prepared {
+                            let actual = prepared.raw.len()
+                                + prepared
+                                    .cjk_content
+                                    .as_ref()
+                                    .map_or(0, String::len)
+                                + prepared
+                                    .trigram_content
+                                    .as_ref()
+                                    .map_or(0, String::len);
+                            permit.grow_to(actual);
+                        }
+                        let reserved = permit.disarm();
+                        if sender
+                            .send((idx, reserved, prepared, diagnostics))
+                            .is_err()
+                        {
+                            budget.release(reserved);
+                            break;
+                        }
+                    }
+                });
+            }
+            drop(sender);
+            let mut batch_bytes = 0usize;
+            let mut in_tx = false;
+            let mut tx_guard = TxGuard {
+                conn,
+                active: false,
+            };
+            let mut select_latest = conn.prepare(
+                "SELECT updated_signature, fts_rowid, indexed_at, \
+                 content_hash FROM index_state WHERE \
+                 agent = ? AND session_id = ?",
             )?;
-            {
-                let mut select_latest = transaction.prepare(
-                    "SELECT updated_signature, fts_rowid, indexed_at, \
-                     last_seen_at, content_hash FROM index_state WHERE agent \
-                     = ? AND session_id = ?",
-                )?;
-                let mut update_state = transaction.prepare(
-                    "UPDATE index_state SET source_path = ?, \
-                     updated_signature = ?, content_hash = ?, indexed_at = ?, \
-                     last_seen_at = MAX(last_seen_at, ?), session_updated_at \
-                     = ?, session_created_at = ? WHERE fts_rowid = ?",
-                )?;
-                let mut insert_state = transaction.prepare(
-                    "INSERT INTO index_state (agent, session_id, source_path, \
-                     updated_signature, content_hash, indexed_at, \
-                     last_seen_at, session_updated_at, session_created_at) \
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                )?;
-                let mut insert_content = transaction.prepare(
-                    "INSERT INTO session_content (fts_rowid, title, content) \
-                     VALUES (?, ?, ?)",
-                )?;
-                let mut insert_fts = transaction.prepare(
-                    "INSERT INTO sessions_fts (rowid, agent_name, session_id, \
-                     title, content) VALUES (?, ?, ?, ?, ?)",
-                )?;
-                let mut insert_trigram = transaction.prepare(
-                    "INSERT INTO sessions_fts_trigram (rowid, agent_name, \
-                     session_id, title, content) VALUES (?, ?, ?, ?, ?)",
-                )?;
-                for ((session, signature), (prepared, _)) in
-                    batch.iter().zip(texts)
-                {
+            let mut update_state = conn.prepare(
+                "UPDATE index_state SET source_path = ?, \
+                 updated_signature = ?, content_hash = ?, indexed_at \
+                 = ?, last_seen_at = MAX(last_seen_at, ?), \
+                 session_updated_at = ?, session_created_at = ? WHERE \
+                 fts_rowid = ?",
+            )?;
+            let mut insert_state = conn.prepare(
+                "INSERT INTO index_state (agent, session_id, \
+                 source_path, updated_signature, content_hash, \
+                 indexed_at, last_seen_at, session_updated_at, \
+                 session_created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )?;
+            let mut insert_content = conn.prepare(
+                "INSERT INTO session_content (fts_rowid, title, \
+                 content) VALUES (?, ?, ?)",
+            )?;
+            let mut insert_fts = conn.prepare(
+                "INSERT INTO sessions_fts (rowid, agent_name, \
+                 session_id, title, content) VALUES (?, ?, ?, ?, ?)",
+            )?;
+            let mut insert_trigram = conn.prepare(
+                "INSERT INTO sessions_fts_trigram (rowid, agent_name, \
+                 session_id, title, content) VALUES (?, ?, ?, ?, ?)",
+            )?;
+            for (idx, reserved, prepared, diagnostics) in receiver {
+                let _release = BudgetPermit {
+                    budget: &budget,
+                    bytes: reserved,
+                };
+                if !diagnostics.is_empty() {
+                    diags_by_idx.push((idx, diagnostics));
+                }
+                if !in_tx {
+                    tx_guard.conn.execute_batch("BEGIN IMMEDIATE")?;
+                    tx_guard.active = true;
+                    in_tx = true;
+                }
+                let step = (|| -> crate::Result<()> {
+                    let (g, session, ref signature, _) = pending[idx];
+                    let info = groups[g].info;
                     let latest = select_latest
                         .query_row(params![info.name, session.id], |r| {
                             Ok(IndexedRow {
                                 signature: r.get(0)?,
                                 rowid: r.get(1)?,
                                 observed: r.get(2)?,
-                                last_seen_at: r.get(3)?,
-                                content_hash: r.get(4)?,
+                                content_hash: r.get(3)?,
                             })
                         })
                         .optional()?;
                     if latest.as_ref().is_some_and(|row| {
                         row.signature == *signature || row.observed > observed
                     }) || (latest.is_none()
-                        && indexed.contains_key(&session.id))
+                        && indexed_by_group[g].contains_key(&session.id))
                     {
-                        continue;
+                        return Ok(());
                     }
                     let Ok(prepared) = prepared else {
                         if let Some(row) = latest {
-                            delete(&transaction, row.rowid)?;
+                            delete(tx_guard.conn, row.rowid)?;
                         }
-                        failed.push(session.id.clone());
-                        continue;
+                        failed_by_idx.push((idx, g, session.id.clone()));
+                        return Ok(());
                     };
+                    let doc_bytes = prepared.raw.len()
+                        + prepared.cjk_content.as_ref().map_or(0, String::len)
+                        + prepared
+                            .trigram_content
+                            .as_ref()
+                            .map_or(0, String::len);
                     let (rowid, changed) = if let Some(row) = latest {
                         let unchanged = row.content_hash.as_slice()
                             == prepared.hash.as_slice();
                         if !unchanged {
-                            delete_text(&transaction, row.rowid)?;
+                            delete_text(tx_guard.conn, row.rowid)?;
                         }
                         update_state.execute(params![
                             crate::storage::source_io::path_text(
@@ -734,7 +1003,7 @@ impl SearchIndex {
                             session.updated_at.as_microsecond() as f64 / 1e6,
                             session.created_at.as_microsecond() as f64 / 1e6
                         ])?;
-                        (transaction.last_insert_rowid(), true)
+                        (tx_guard.conn.last_insert_rowid(), true)
                     };
                     if changed {
                         insert_content.execute(params![
@@ -769,35 +1038,69 @@ impl SearchIndex {
                                 .unwrap_or(&prepared.raw)
                         ])?;
                     }
-                    added += 1;
+                    added[g] += 1;
+                    batch_bytes += doc_bytes;
+                    if batch_bytes >= BATCH_BYTES {
+                        tx_guard.conn.execute_batch("COMMIT")?;
+                        tx_guard.active = false;
+                        in_tx = false;
+                        batch_bytes = 0;
+                    }
+                    Ok(())
+                })();
+                if let Err(err) = step {
+                    budget.cancel();
+                    return Err(err);
                 }
             }
-            transaction.commit()?;
+            if in_tx {
+                tx_guard.conn.execute_batch("COMMIT")?;
+                tx_guard.active = false;
+            }
+            Ok(())
+        })?;
+        diags_by_idx.sort_by_key(|(idx, _)| *idx);
+        for (_, diagnostics) in diags_by_idx {
+            for diagnostic in &diagnostics {
+                writeln!(
+                    warnings,
+                    "{}",
+                    crate::output::diagnostics::record_warning(diagnostic, zh)
+                )?;
+            }
         }
-        if !failed.is_empty() {
-            writeln!(
-                warnings,
-                "{}",
-                crate::output::i18n::terminal(
-                    "WARN_INDEX_SKIPPED_SESSIONS",
-                    zh,
-                    &[
-                        ("agent", info.display_name.into()),
-                        ("count", failed.len().to_string()),
-                        (
-                            "examples",
-                            failed
-                                .iter()
-                                .take(3)
-                                .cloned()
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )
-                    ]
-                )
-            )?;
+        failed_by_idx.sort_by_key(|(idx, _, _)| *idx);
+        let mut failed_by_group: Vec<Vec<String>> =
+            vec![Vec::new(); groups.len()];
+        for (_, g, id) in failed_by_idx {
+            failed_by_group[g].push(id);
         }
-        Ok((added, failed))
+        for (g, failed) in failed_by_group.iter().enumerate() {
+            if !failed.is_empty() {
+                writeln!(
+                    warnings,
+                    "{}",
+                    crate::output::i18n::terminal(
+                        "WARN_INDEX_SKIPPED_SESSIONS",
+                        zh,
+                        &[
+                            ("agent", groups[g].info.display_name.into()),
+                            ("count", failed.len().to_string()),
+                            (
+                                "examples",
+                                failed
+                                    .iter()
+                                    .take(3)
+                                    .cloned()
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            )
+                        ]
+                    )
+                )?;
+            }
+        }
+        Ok(added.into_iter().zip(failed_by_group).collect())
     }
 
     pub fn search(
@@ -857,26 +1160,23 @@ impl SearchIndex {
         expression: &str,
         keys: &HashSet<(String, String)>,
     ) -> crate::Result<Vec<(String, String, i64, f64)>> {
-        // Unary + keeps MATCH as the FTS scan instead of repeating it per key.
-        // Filtering returned rows retains the global BM25 corpus.
         let sql = format!(
             "SELECT s.agent, s.session_id, f.rowid, bm25({table}) FROM {table} \
              f JOIN index_state s ON s.fts_rowid = f.rowid WHERE {table} MATCH \
-             ? AND +f.rowid IN (SELECT scoped.fts_rowid FROM json_each(?) \
-             scope JOIN index_state scoped ON scoped.agent = \
-             json_extract(scope.value, '$[0]') AND scoped.session_id = \
-             json_extract(scope.value, '$[1]')) ORDER BY bm25({table}), \
-             s.session_updated_at DESC, s.session_created_at DESC, s.agent, \
-             s.session_id"
+             ? ORDER BY bm25({table}), s.session_updated_at DESC, \
+             s.session_created_at DESC, s.agent, s.session_id"
         );
         let mut ranked = self.connection.prepare(&sql)?;
-        let rows = ranked
-            .query_map(
-                params![expression, serde_json::to_string(keys)?],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-            )?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(rows)
+        let mut rows = ranked.query([expression])?;
+        let mut out = Vec::new();
+        while let Some(r) = rows.next()? {
+            let provider: String = r.get(0)?;
+            let id: String = r.get(1)?;
+            if keys.contains(&(provider.clone(), id.clone())) {
+                out.push((provider, id, r.get(2)?, r.get(3)?));
+            }
+        }
+        Ok(out)
     }
 
     fn mixed_fts_candidates(
@@ -885,36 +1185,29 @@ impl SearchIndex {
         trigram_expression: &str,
         keys: &HashSet<(String, String)>,
     ) -> crate::Result<Vec<(String, String, i64, f64)>> {
-        // MATERIALIZED forces each FTS5 MATCH to scan its own index and score
-        // against the global corpus before intersecting rowids.
-        let sql = "WITH scoped(rowid) AS MATERIALIZED ( \
-             SELECT s.fts_rowid FROM json_each(?3) scope JOIN index_state s \
-             ON s.agent = json_extract(scope.value, '$[0]') \
-             AND s.session_id = json_extract(scope.value, '$[1]')), \
-             cjk AS MATERIALIZED ( \
+        let sql = "WITH cjk AS MATERIALIZED ( \
              SELECT rowid, bm25(sessions_fts) AS score FROM sessions_fts \
-             WHERE sessions_fts MATCH ?1 AND +rowid IN scoped), \
+             WHERE sessions_fts MATCH ?1), \
              tri AS MATERIALIZED ( \
              SELECT rowid, bm25(sessions_fts_trigram) AS score FROM \
-             sessions_fts_trigram WHERE sessions_fts_trigram MATCH ?2 \
-             AND +rowid IN scoped) \
+             sessions_fts_trigram WHERE sessions_fts_trigram MATCH ?2) \
              SELECT s.agent, s.session_id, s.fts_rowid, cjk.score + tri.score \
              AS score FROM cjk JOIN tri ON tri.rowid = cjk.rowid JOIN \
              index_state s ON s.fts_rowid = cjk.rowid \
              ORDER BY score, s.session_updated_at DESC, s.session_created_at \
              DESC, s.agent, s.session_id";
         let mut ranked = self.connection.prepare(sql)?;
-        let rows = ranked
-            .query_map(
-                params![
-                    cjk_expression,
-                    trigram_expression,
-                    serde_json::to_string(keys)?
-                ],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-            )?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(rows)
+        let mut rows =
+            ranked.query(params![cjk_expression, trigram_expression])?;
+        let mut out = Vec::new();
+        while let Some(r) = rows.next()? {
+            let provider: String = r.get(0)?;
+            let id: String = r.get(1)?;
+            if keys.contains(&(provider.clone(), id.clone())) {
+                out.push((provider, id, r.get(2)?, r.get(3)?));
+            }
+        }
+        Ok(out)
     }
 
     fn literal_search(
@@ -923,6 +1216,39 @@ impl SearchIndex {
         keys: &HashSet<(String, String)>,
     ) -> crate::Result<Vec<SearchResult>> {
         let mut results = Vec::new();
+        if keys.len() > 64 {
+            let mut agents: Vec<&str> =
+                keys.iter().map(|(provider, _)| provider.as_str()).collect();
+            agents.sort_unstable();
+            agents.dedup();
+            let placeholders = vec!["?"; agents.len()].join(", ");
+            let sql = format!(
+                "SELECT s.agent, s.session_id, c.title, c.content FROM \
+                 index_state s JOIN session_content c ON c.fts_rowid = \
+                 s.fts_rowid WHERE s.agent IN ({placeholders})"
+            );
+            let mut statement = self.connection.prepare(&sql)?;
+            let mut rows =
+                statement.query(rusqlite::params_from_iter(agents))?;
+            while let Some(row) = rows.next()? {
+                let provider: String = row.get(0)?;
+                let id: String = row.get(1)?;
+                if !keys.contains(&(provider.clone(), id.clone())) {
+                    continue;
+                }
+                let title = row.get_ref(2)?.as_str()?;
+                let content = row.get_ref(3)?.as_str()?;
+                if let Some(evidence) = query.find(&[title, content]) {
+                    results.push(SearchResult {
+                        provider,
+                        id,
+                        snippet: evidence.snippet,
+                        rank: if evidence.title_matches { 1.0 } else { 0.0 },
+                    });
+                }
+            }
+            return Ok(results);
+        }
         let keys: Vec<_> = keys.iter().collect();
         for batch in keys.chunks(400) {
             let filters =
@@ -938,9 +1264,9 @@ impl SearchIndex {
                 batch.iter().flat_map(|(provider, id)| [provider, id]),
             ))?;
             while let Some(row) = rows.next()? {
-                let title: String = row.get(2)?;
-                let content: String = row.get(3)?;
-                if let Some(evidence) = query.find(&[&title, &content]) {
+                let title = row.get_ref(2)?.as_str()?;
+                let content = row.get_ref(3)?.as_str()?;
+                if let Some(evidence) = query.find(&[title, content]) {
                     results.push(SearchResult {
                         provider: row.get(0)?,
                         id: row.get(1)?,

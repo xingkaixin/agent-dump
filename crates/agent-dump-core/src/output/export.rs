@@ -59,33 +59,55 @@ fn filename(id: &str) -> crate::Result<String> {
     }
 }
 
-fn write(
-    output: &Path,
+pub struct OutputDir {
+    output: PathBuf,
+    directory: PathBuf,
+    ensured: std::sync::OnceLock<()>,
+}
+
+impl OutputDir {
+    pub fn prepare(output: &Path) -> crate::Result<Self> {
+        let directory = std::path::absolute(output)?;
+        if crate::providers::registry::inside_source(&directory)? {
+            return Err(
+                "Export output must be outside the Provider source directory"
+                    .into(),
+            );
+        }
+        Ok(Self {
+            output: output.to_path_buf(),
+            directory,
+            ensured: std::sync::OnceLock::new(),
+        })
+    }
+
+    fn ensure(&self) -> crate::Result<()> {
+        if self.ensured.get().is_none() {
+            crate::storage::private_files::ensure_directory(&self.output)?;
+            let _ = self.ensured.set(());
+        }
+        Ok(())
+    }
+}
+
+fn write_in(
+    dir: &OutputDir,
     session_id: &str,
     suffix: &str,
     contents: impl FnOnce(&mut fs::File) -> crate::Result<()>,
 ) -> crate::Result<PathBuf> {
-    let directory = std::path::absolute(output)?;
-    if crate::providers::registry::inside_source(&directory)? {
-        return Err(
-            "Export output must be outside the Provider source directory"
-                .into(),
-        );
-    }
-    let output_path = output.join(format!("{}{suffix}", filename(session_id)?));
-    let destination = std::path::absolute(&output_path)?;
+    let name = format!("{}{suffix}", filename(session_id)?);
+    let output_path = dir.output.join(&name);
+    let destination = dir.directory.join(&name);
     if destination.is_symlink() {
         return Err("Export destination must not be a symlink".into());
     }
-    crate::storage::private_files::ensure_directory(output)?;
+    dir.ensure()?;
     let mut temporary = tempfile::Builder::new()
-        .prefix(&format!(
-            ".{}.",
-            output_path.file_name().unwrap().to_string_lossy()
-        ))
+        .prefix(&format!(".{name}."))
         .suffix(".tmp")
         .rand_bytes(8)
-        .tempfile_in(&directory)?;
+        .tempfile_in(&dir.directory)?;
     contents(temporary.as_file_mut())?;
     temporary.flush()?;
     crate::storage::private_files::sync(temporary.as_file())?;
@@ -99,6 +121,16 @@ fn write(
     Ok(output_path)
 }
 
+fn write(
+    output: &Path,
+    session_id: &str,
+    suffix: &str,
+    contents: impl FnOnce(&mut fs::File) -> crate::Result<()>,
+) -> crate::Result<PathBuf> {
+    let dir = OutputDir::prepare(output)?;
+    write_in(&dir, session_id, suffix, contents)
+}
+
 pub fn json(
     session_id: &str,
     data: &impl serde::Serialize,
@@ -106,7 +138,7 @@ pub fn json(
     suffix: &str,
 ) -> crate::Result<PathBuf> {
     write(output, session_id, suffix, |file| {
-        let mut writer = io::BufWriter::new(file);
+        let mut writer = io::BufWriter::with_capacity(64 * 1024, file);
         data.serialize(&mut serde_json::Serializer::with_formatter(
             &mut writer,
             crate::compat::json::Formatter::default(),
@@ -225,38 +257,90 @@ impl SessionExport<'_> {
         output: &Path,
         summary: Option<&str>,
     ) -> crate::Result<PathBuf> {
+        let dir = OutputDir::prepare(output)?;
+        self.write_to(&dir, format, summary)
+    }
+
+    pub fn write_to(
+        &self,
+        dir: &OutputDir,
+        format: crate::output::formats::OutputFormat,
+        summary: Option<&str>,
+    ) -> crate::Result<PathBuf> {
         use crate::output::formats::OutputFormat;
         use crate::providers::contract::RawExport;
         match format {
             OutputFormat::Raw => match self.raw.as_ref().unwrap() {
                 RawExport::File(source) => {
-                    raw(&self.session.id, source, output)
+                    write_in(dir, &self.session.id, ".raw.jsonl", |file| {
+                        if !crate::storage::zstd::compressed(source) {
+                            io::copy(&mut fs::File::open(source)?, file)?;
+                            return Ok(());
+                        }
+                        let (frames, _) =
+                            crate::storage::zstd::frames(&fs::read(source)?)
+                                .map_err(|error| {
+                                    format!("{}: {error}", source.display())
+                                })?;
+                        for frame in frames {
+                            file.write_all(&frame)?;
+                        }
+                        Ok(())
+                    })
                 }
-                RawExport::Session => json(
-                    &self.session.id,
-                    self.data.unwrap(),
-                    output,
-                    ".raw.json",
-                ),
+                RawExport::Session => {
+                    write_in(dir, &self.session.id, ".raw.json", |file| {
+                        let mut writer =
+                            io::BufWriter::with_capacity(64 * 1024, file);
+                        serde::Serialize::serialize(
+                            self.data.unwrap(),
+                            &mut serde_json::Serializer::with_formatter(
+                                &mut writer,
+                                crate::compat::json::Formatter::default(),
+                            ),
+                        )?;
+                        writer.flush()?;
+                        Ok(())
+                    })
+                }
             },
             OutputFormat::Json => {
-                let mut payload =
-                    self.provider.json_payload(self.data.unwrap());
-                if let Some(summary) = summary
-                    && let Some(object) = payload.as_object_mut()
-                {
-                    object.insert("summary".into(), summary.into());
-                }
-                json(&self.session.id, &payload, output, ".json")
+                write_in(dir, &self.session.id, ".json", |file| {
+                    let mut writer =
+                        io::BufWriter::with_capacity(64 * 1024, file);
+                    self.provider.write_json_payload(
+                        self.data.unwrap(),
+                        summary,
+                        &mut writer,
+                    )?;
+                    writer.flush()?;
+                    Ok(())
+                })
             }
-            OutputFormat::Markdown => markdown(
-                &self.session.id,
-                &crate::output::render::transcript(
-                    self.uri,
-                    self.data.unwrap(),
-                ),
-                output,
-            ),
+            OutputFormat::Markdown => {
+                if cfg!(windows) {
+                    let text = crate::output::render::transcript(
+                        self.uri,
+                        self.data.unwrap(),
+                    );
+                    write_in(dir, &self.session.id, ".md", |file| {
+                        file.write_all(text.replace('\n', "\r\n").as_bytes())?;
+                        Ok(())
+                    })
+                } else {
+                    write_in(dir, &self.session.id, ".md", |file| {
+                        let mut writer =
+                            io::BufWriter::with_capacity(64 * 1024, file);
+                        crate::output::render::write_transcript(
+                            &mut writer,
+                            self.uri,
+                            self.data.unwrap(),
+                        )?;
+                        writer.flush()?;
+                        Ok(())
+                    })
+                }
+            }
             OutputFormat::Print => unreachable!(),
         }
     }

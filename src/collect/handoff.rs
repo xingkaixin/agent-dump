@@ -62,12 +62,13 @@ pub fn handoff(
         let session = &group.sessions[s];
         (session.created_at, group.info.name, session.id.clone())
     });
+    let exe = path_text(&std::env::current_exe()?);
     for (g, s) in positions {
         let group = &scan.groups[g];
         let session = &group.sessions[s];
         let uri = format!("{}://{}", group.info.scheme, session.id);
         let argv = [
-            path_text(&std::env::current_exe()?),
+            exe.clone(),
             uri.clone(),
             "--read".into(),
             "--order".into(),

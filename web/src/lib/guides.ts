@@ -10,12 +10,45 @@ export interface Guide {
   updated: string;
 }
 
+function parseFrontmatter(raw: string): Guide {
+  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const data: Record<string, string> = {};
+  if (match) {
+    for (const line of match[1].split(/\r?\n/)) {
+      const idx = line.indexOf(":");
+      if (idx <= 0) continue;
+      const key = line.slice(0, idx).trim();
+      let value = line.slice(idx + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      data[key] = value;
+    }
+  }
+  return {
+    locale: data.locale as Locale,
+    slug: data.slug,
+    title: data.title,
+    description: data.description,
+    category: data.category as Guide["category"],
+    order: Number(data.order),
+    updated: data.updated,
+  };
+}
+
+const rawGuides = import.meta.glob<string>("../pages/**/guides/*.md", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+
+const allGuides: Guide[] = Object.values(rawGuides).map(parseFrontmatter);
+
 async function entries() {
-  const modules = import.meta.glob<{ frontmatter: Guide }>(
-    "../pages/**/guides/*.md",
-  );
-  const pages = await Promise.all(Object.values(modules).map((load) => load()));
-  return pages.map((page) => page.frontmatter);
+  return allGuides;
 }
 
 export const guideIndexPaths = {

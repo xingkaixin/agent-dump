@@ -33,6 +33,14 @@ static CONTEXT_BLOCK: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
+static CONTEXT_MARKER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"(?i)agents\.md instructions for|<instructions>|",
+        r"<environment_context>|<permissions instructions>|<collaboration_mode>",
+    ))
+    .unwrap()
+});
+
 pub fn inner_tag<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
     let start = format!("<{tag}>");
     let end = format!("</{tag}>");
@@ -51,11 +59,24 @@ pub fn injected_context(content: &Value) -> bool {
     {
         return false;
     }
-    let text = items
-        .iter()
-        .map(|item| item["text"].as_str().unwrap())
-        .collect::<Vec<_>>()
-        .join("\n\n");
+    let first = items[0]["text"]
+        .as_str()
+        .unwrap()
+        .trim_start_matches(['\r', '\n']);
+    if !first.starts_with(['<', '#']) {
+        return false;
+    }
+    let joined;
+    let text = if items.len() == 1 {
+        items[0]["text"].as_str().unwrap()
+    } else {
+        joined = items
+            .iter()
+            .map(|item| item["text"].as_str().unwrap())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        joined.as_str()
+    };
     let mut rest = text.trim_start_matches(['\r', '\n']).trim_end();
     if rest.is_empty() {
         return false;
@@ -84,17 +105,33 @@ pub fn user_text(content: &Value) -> String {
 
 /// Codex injects these into user turns; any occurrence marks context.
 pub fn context(content: &Value, text: &str) -> bool {
-    let lower = text.to_lowercase();
-    injected_context(content)
-        || [
-            "agents.md instructions for",
-            "<instructions>",
-            "<environment_context>",
-            "<permissions instructions>",
-            "<collaboration_mode>",
-        ]
-        .iter()
-        .any(|marker| lower.contains(marker))
+    injected_context(content) || CONTEXT_MARKER.is_match(text)
+}
+
+pub fn context_from_content(content: &Value) -> bool {
+    if injected_context(content) {
+        return true;
+    }
+    match content {
+        Value::Array(items) => {
+            let mut count = 0;
+            for item in items {
+                if let Some(s) = item["text"].as_str().or_else(|| item.as_str())
+                {
+                    count += 1;
+                    if CONTEXT_MARKER.is_match(s) {
+                        return true;
+                    }
+                }
+            }
+            if count <= 1 {
+                return false;
+            }
+            CONTEXT_MARKER.is_match(&user_text(content))
+        }
+        Value::String(text) => CONTEXT_MARKER.is_match(text),
+        _ => false,
+    }
 }
 
 pub fn subagent_notification(
@@ -187,7 +224,42 @@ pub fn record_subagent_output(
     tool.state.insert("output".into(), output.clone());
 }
 
-pub fn json_payload(data: &SessionData) -> SessionData {
+pub fn json_payload(data: &SessionData) -> std::borrow::Cow<'_, SessionData> {
+    let needs_transform = data.messages.iter().any(|message| {
+        if message.parts.is_empty() {
+            return true;
+        }
+        if message.role == "user"
+            && let [Part::Text(part)] = &message.parts[..]
+        {
+            let body = part.text.trim();
+            if body.starts_with("<skill>")
+                && body.ends_with("</skill>")
+                && inner_tag(body, "name").is_some_and(|name| !name.is_empty())
+            {
+                return true;
+            }
+        }
+        let has_wait_agent = message.parts.iter().any(|part| {
+            matches!(
+                part,
+                Part::Tool(tool)
+                    if tool.tool.rsplit('.').next() == Some("wait_agent")
+            )
+        });
+        if has_wait_agent {
+            return true;
+        }
+        let all_tools = message
+            .parts
+            .iter()
+            .all(|part| matches!(part, Part::Tool(_)));
+        (all_tools && message.mode.as_deref() != Some("tool"))
+            || (!all_tools && message.mode.as_deref() == Some("tool"))
+    });
+    if !needs_transform {
+        return std::borrow::Cow::Borrowed(data);
+    }
     let mut payload = data.clone();
     let mut skill_index = 0;
     for message in &mut payload.messages {
@@ -248,7 +320,7 @@ pub fn json_payload(data: &SessionData) -> SessionData {
         }
     }
     payload.messages.retain(|message| !message.parts.is_empty());
-    payload
+    std::borrow::Cow::Owned(payload)
 }
 
 pub fn output_parts(

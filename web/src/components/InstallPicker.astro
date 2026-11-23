@@ -1,0 +1,153 @@
+---
+import Icon from "./Icon.astro";
+
+interface Method {
+  label: string;
+  code: string;
+  note?: string;
+}
+
+interface Props {
+  groups: { label: string; methods: Method[] }[];
+  skill: { note: string; command: string };
+  copy: string;
+  copied: string;
+}
+
+const { groups, skill, copy, copied } = Astro.props;
+const methods = groups.flatMap((group) => group.methods);
+const first = methods[0];
+---
+
+<div class="picker" data-install-picker data-copy-label={copy} data-copied-label={copied}>
+  {groups.map((group) => (
+    <div class="grp">
+      <span class="gl">{group.label}</span>
+      <div role="group" aria-label={group.label} class="opts">
+        {group.methods.map((item) => (
+          <button
+            type="button"
+            aria-pressed={item.label === first.label ? "true" : "false"}
+            aria-controls="install-command"
+            class="opt"
+            data-install-opt={item.label}
+            data-code={item.code}
+            data-note={item.note ?? ""}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  ))}
+  <div id="install-command" class="cmdbox" aria-label={first.label} role="region" data-install-region>
+    <span aria-hidden="true" class="dl">$</span>
+    <code data-install-code>{first.code}</code>
+    <button
+      type="button"
+      aria-label={copy}
+      class="cbtn"
+      data-copy-btn
+      data-copy-text={first.code}
+      data-install-method={first.label}
+    >
+      <span data-ic-copy><Icon name="copy" small /></span>
+      <span data-ic-check hidden><Icon name="check" small /></span>
+      <span aria-hidden="true" data-copy-text-label>{copy}</span>
+    </button>
+    <span role="status" aria-live="polite" class="sr-only" data-copy-status></span>
+  </div>
+  <p class="inote" data-install-note hidden={!first.note}>{first.note ?? ""}</p>
+  <div class="skill">
+    <span>{skill.note}</span>
+    <code>{skill.command}</code>
+    <button
+      type="button"
+      aria-label={copy}
+      class="cbtn"
+      data-copy-btn
+      data-copy-text={skill.command}
+    >
+      <span data-ic-copy><Icon name="copy" small /></span>
+      <span data-ic-check hidden><Icon name="check" small /></span>
+      <span aria-hidden="true" data-copy-text-label>{copy}</span>
+    </button>
+    <span role="status" aria-live="polite" class="sr-only" data-copy-status></span>
+  </div>
+</div>
+
+<script>
+  import { copyText } from "../lib/clipboard";
+  import { trackEvent } from "../lib/analytics";
+
+  for (const picker of document.querySelectorAll<HTMLElement>("[data-install-picker]")) {
+    const copyLabel = picker.dataset.copyLabel ?? "Copy";
+    const copiedLabel = picker.dataset.copiedLabel ?? "Copied";
+    const opts = Array.from(picker.querySelectorAll<HTMLButtonElement>("[data-install-opt]"));
+    const region = picker.querySelector<HTMLElement>("[data-install-region]");
+    const codeEl = picker.querySelector<HTMLElement>("[data-install-code]");
+    const noteEl = picker.querySelector<HTMLElement>("[data-install-note]");
+    const primaryCopy = region?.querySelector<HTMLButtonElement>("[data-copy-btn]");
+    const timers = new WeakMap<HTMLButtonElement, number>();
+
+    const setCopied = (btn: HTMLButtonElement, copied: boolean) => {
+      const label = copied ? copiedLabel : copyLabel;
+      btn.classList.toggle("ok", copied);
+      btn.setAttribute("aria-label", label);
+      const textEl = btn.querySelector<HTMLElement>("[data-copy-text-label]");
+      if (textEl) textEl.textContent = label;
+      const icCopy = btn.querySelector<HTMLElement>("[data-ic-copy]");
+      const icCheck = btn.querySelector<HTMLElement>("[data-ic-check]");
+      if (icCopy) icCopy.hidden = copied;
+      if (icCheck) icCheck.hidden = !copied;
+      const status = btn.nextElementSibling;
+      if (status?.hasAttribute("data-copy-status")) {
+        status.textContent = copied ? copiedLabel : "";
+      }
+    };
+
+    for (const opt of opts) {
+      opt.addEventListener("click", () => {
+        const label = opt.dataset.installOpt ?? "";
+        const code = opt.dataset.code ?? "";
+        const note = opt.dataset.note ?? "";
+        for (const other of opts) {
+          other.setAttribute("aria-pressed", String(other === opt));
+        }
+        if (region) region.setAttribute("aria-label", label);
+        if (codeEl) codeEl.textContent = code;
+        if (noteEl) {
+          noteEl.textContent = note;
+          noteEl.hidden = !note;
+        }
+        if (primaryCopy) {
+          primaryCopy.dataset.copyText = code;
+          primaryCopy.dataset.installMethod = label;
+          clearTimeout(timers.get(primaryCopy));
+          setCopied(primaryCopy, false);
+        }
+      });
+    }
+
+    for (const btn of picker.querySelectorAll<HTMLButtonElement>("[data-copy-btn]")) {
+      btn.addEventListener("click", async () => {
+        const text = btn.dataset.copyText ?? "";
+        try {
+          if (!(await copyText(text))) return;
+          setCopied(btn, true);
+          clearTimeout(timers.get(btn));
+          timers.set(
+            btn,
+            window.setTimeout(() => setCopied(btn, false), 1600),
+          );
+          const method = btn.dataset.installMethod;
+          if (method) {
+            trackEvent("install-copy", { method });
+          }
+        } catch {
+          /* clipboard denied — leave state untouched */
+        }
+      });
+    }
+  }
+</script>

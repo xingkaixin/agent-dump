@@ -122,14 +122,16 @@ fn indexed(
     }
     let mut index = crate::query::index::SearchIndex::open()?;
     let mut selection = Selection::default();
-    for group in groups {
-        let (_, failed) = index.update(
-            group.info,
-            group.provider.as_ref(),
-            &group.sessions,
-            zh,
-            warnings,
-        )?;
+    let index_groups: Vec<_> = groups
+        .iter()
+        .map(|group| crate::query::index::IndexGroup {
+            info: group.info,
+            provider: group.provider.as_ref(),
+            sessions: &group.sessions,
+        })
+        .collect();
+    let outcomes = index.update_groups(&index_groups, zh, warnings)?;
+    for (group, (_, failed)) in groups.iter().zip(outcomes) {
         for id in failed {
             let key = (group.info.name.to_owned(), id);
             if positions.contains_key(&key) {

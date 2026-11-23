@@ -2,9 +2,7 @@
 import { readFileSync } from "node:fs";
 import { appendFile, readFile } from "node:fs/promises";
 import { defineConfig } from "astro/config";
-import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
-import tailwindcss from "@tailwindcss/vite";
 
 const cargoSource = readFileSync(
   new URL("../Cargo.toml", import.meta.url),
@@ -32,7 +30,6 @@ export default defineConfig({
     routing: { prefixDefaultLocale: false },
   },
   integrations: [
-    react(),
     sitemap({
       i18n: {
         defaultLocale: "en",
@@ -67,7 +64,6 @@ export default defineConfig({
     },
   ],
   vite: {
-    plugins: [tailwindcss()],
     define: {
       __AGENT_DUMP_VERSION__: JSON.stringify(version),
     },
