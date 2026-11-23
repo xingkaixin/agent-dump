@@ -137,33 +137,39 @@ impl SqliteProvider {
         let layout = self.layout(connection)?;
         let mut sessions = Vec::new();
         if layout.v2 {
-            let selected = selected(connection, "session_v2", "1", &[], true)?;
+            let v2_rows = query_v2_rows(connection, condition, parameters)?;
+            let selected = if condition == "1" {
+                selected_v2_rows(&v2_rows)
+            } else {
+                selected(connection, "session_v2", "1", &[], true)?
+            };
+            let needs_title: HashSet<String> = v2_rows
+                .iter()
+                .filter(|row| row.title.as_deref().and_then(title).is_none())
+                .map(|row| row.id.clone())
+                .collect();
             let facts = if has_table(connection, "session_message")? {
                 Some(v2::facts(
                     connection,
                     &format!("SELECT s.id FROM session_v2 s WHERE {condition}"),
                     parameters,
+                    Some(&needs_title),
                 )?)
             } else {
                 None
             };
-            for row in rows(
-                connection,
-                &format!(
-                    "SELECT s.id, s.title, s.time_created, s.time_updated, \
-                     s.slug, s.directory, s.version, s.summary_files, s.model, \
-                     s.project_id, s.parent_id FROM session_v2 s \
-                     WHERE {condition}"
-                ),
-                parameters,
-            )? {
-                sessions.extend(listed(
-                    &row,
-                    source,
-                    true,
-                    &selected,
-                    facts.as_ref(),
-                ));
+            for row in v2_rows {
+                if !selected.contains(&row.id) {
+                    continue;
+                }
+                let row_facts = match &facts {
+                    Some(facts) => match facts.get(&row.id) {
+                        Some(f) => Some(f),
+                        None => continue,
+                    },
+                    None => None,
+                };
+                sessions.push(build_v2_session(row, source, row_facts));
             }
         }
         if let Some(legacy) = &layout.legacy {
@@ -281,6 +287,201 @@ impl SqliteProvider {
     }
 }
 
+struct V2Row {
+    id: String,
+    title: Option<String>,
+    time_created: Option<f64>,
+    time_updated: Option<f64>,
+    directory: Option<String>,
+    version: Value,
+    model: Option<String>,
+    project_id: Option<String>,
+    parent_id: Option<String>,
+}
+
+fn value_ref_to_string(value: rusqlite::types::ValueRef<'_>) -> String {
+    match value {
+        rusqlite::types::ValueRef::Null => String::new(),
+        rusqlite::types::ValueRef::Integer(n) => n.to_string(),
+        rusqlite::types::ValueRef::Real(n) => n.to_string(),
+        rusqlite::types::ValueRef::Text(b)
+        | rusqlite::types::ValueRef::Blob(b) => {
+            String::from_utf8_lossy(b).into_owned()
+        }
+    }
+}
+
+fn value_ref_to_opt_str(
+    value: rusqlite::types::ValueRef<'_>,
+) -> Option<String> {
+    match value {
+        rusqlite::types::ValueRef::Text(b) => {
+            Some(String::from_utf8_lossy(b).into_owned())
+        }
+        _ => None,
+    }
+}
+
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Matches serde_json::Value::as_f64 for millisecond SQLite timestamps"
+)]
+const fn value_ref_to_opt_f64(
+    value: rusqlite::types::ValueRef<'_>,
+) -> Option<f64> {
+    match value {
+        rusqlite::types::ValueRef::Integer(n) => Some(n as f64),
+        rusqlite::types::ValueRef::Real(n) => Some(n),
+        _ => None,
+    }
+}
+
+fn value_ref_to_json(value: rusqlite::types::ValueRef<'_>) -> Value {
+    match value {
+        rusqlite::types::ValueRef::Null => Value::Null,
+        rusqlite::types::ValueRef::Integer(n) => Value::from(n),
+        rusqlite::types::ValueRef::Real(n) => Value::from(n),
+        rusqlite::types::ValueRef::Text(b)
+        | rusqlite::types::ValueRef::Blob(b) => {
+            Value::String(String::from_utf8_lossy(b).into_owned())
+        }
+    }
+}
+
+fn query_v2_rows(
+    connection: &Connection,
+    condition: &str,
+    parameters: &[&dyn ToSql],
+) -> crate::Result<Vec<V2Row>> {
+    let sql = format!(
+        "SELECT s.id, s.title, s.time_created, s.time_updated, \
+         s.directory, s.version, s.model, s.project_id, s.parent_id \
+         FROM session_v2 s WHERE {condition}"
+    );
+    let mut statement = connection.prepare(&sql)?;
+    let mut rows = statement.query(parameters)?;
+    let mut out = Vec::new();
+    while let Some(row) = rows.next()? {
+        out.push(V2Row {
+            id: value_ref_to_string(row.get_ref(0)?),
+            title: value_ref_to_opt_str(row.get_ref(1)?),
+            time_created: value_ref_to_opt_f64(row.get_ref(2)?),
+            time_updated: value_ref_to_opt_f64(row.get_ref(3)?),
+            directory: value_ref_to_opt_str(row.get_ref(4)?),
+            version: value_ref_to_json(row.get_ref(5)?),
+            model: value_ref_to_opt_str(row.get_ref(6)?),
+            project_id: value_ref_to_opt_str(row.get_ref(7)?),
+            parent_id: value_ref_to_opt_str(row.get_ref(8)?),
+        });
+    }
+    Ok(out)
+}
+
+fn selected_v2_rows(rows: &[V2Row]) -> HashSet<String> {
+    let known: HashSet<&str> = rows.iter().map(|row| row.id.as_str()).collect();
+    let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut selected = HashSet::with_capacity(rows.len());
+    for row in rows {
+        let child = row.parent_id.as_deref().filter(|parent| {
+            !parent.is_empty() && *parent != row.id && known.contains(*parent)
+        });
+        if let Some(parent) = child {
+            children.entry(parent).or_default().push(row.id.as_str());
+        } else {
+            selected.insert(row.id.clone());
+        }
+    }
+    let mut pending: Vec<_> = selected.iter().cloned().collect();
+    while let Some(id) = pending.pop() {
+        for &child in children.get(id.as_str()).into_iter().flatten() {
+            if selected.insert(child.to_owned()) {
+                pending.push(child.to_owned());
+            }
+        }
+    }
+    selected
+}
+
+fn build_v2_session(row: V2Row, path: &Path, facts: Option<&Facts>) -> Session {
+    let ts = |value: Option<f64>| {
+        value
+            .and_then(|v| epoch_seconds(v / 1000.0))
+            .unwrap_or(Timestamp::UNIX_EPOCH)
+    };
+    let created_at = ts(row.time_created);
+    let updated_at = row.time_updated.map_or(created_at, |v| ts(Some(v)));
+    let model = row
+        .model
+        .as_deref()
+        .and_then(|raw| crate::compat::json::from_str(raw).ok())
+        .and_then(|val| val["id"].as_str().map(str::to_owned))
+        .unwrap_or_default();
+    let display = row
+        .title
+        .as_deref()
+        .and_then(title)
+        .or_else(|| facts.and_then(|f| f.title.clone()))
+        .unwrap_or_else(|| "Untitled Session".into());
+    let project = row
+        .project_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
+    Session {
+        id: row.id,
+        title: display,
+        created_at,
+        updated_at,
+        source_path: path.to_owned(),
+        directory: row.directory.unwrap_or_default(),
+        version: row.version,
+        model,
+        project,
+        message_count: facts.map(|f| f.count),
+        subtargets: Vec::new(),
+        source_metadata: serde_json::json!({"schema": "v2"}),
+    }
+}
+
+fn selected_from_rows(
+    rows: &[Value],
+    orphans: bool,
+    parent: bool,
+    task: bool,
+) -> HashSet<String> {
+    let known: HashSet<_> = rows.iter().map(|row| string(&row["id"])).collect();
+    let mut children: HashMap<&str, Vec<String>> = HashMap::new();
+    let mut selected = HashSet::with_capacity(rows.len());
+    for row in rows {
+        let id = string(&row["id"]);
+        let child = row["parent_id"].as_str().filter(|parent| {
+            !orphans
+                || (!parent.is_empty()
+                    && *parent != id
+                    && known.contains(*parent))
+        });
+        if let Some(parent) = child {
+            children.entry(parent).or_default().push(id);
+        } else if orphans
+            || parent
+            || !task
+            || row["task_type"] != "subagent_child"
+        {
+            selected.insert(id);
+        }
+    }
+    let mut pending: Vec<_> = selected.iter().cloned().collect();
+    while let Some(id) = pending.pop() {
+        for child in children.get(id.as_str()).into_iter().flatten() {
+            if selected.insert(child.clone()) {
+                pending.push(child.clone());
+            }
+        }
+    }
+    selected
+}
+
 fn selected(
     connection: &Connection,
     table: &str,
@@ -299,32 +500,7 @@ fn selected(
         ),
         parameters,
     )?;
-    let known: HashSet<_> = rows.iter().map(|row| string(&row["id"])).collect();
-    let mut children: HashMap<&str, Vec<String>> = HashMap::new();
-    let mut selected = HashSet::new();
-    for row in &rows {
-        let id = string(&row["id"]);
-        let child = row["parent_id"].as_str().filter(|parent| {
-            !orphans
-                || (!parent.is_empty()
-                    && *parent != id
-                    && known.contains(*parent))
-        });
-        if let Some(parent) = child {
-            children.entry(parent).or_default().push(id);
-        } else if orphans || parent || row["task_type"] != "subagent_child" {
-            selected.insert(id);
-        }
-    }
-    let mut pending: Vec<_> = selected.iter().cloned().collect();
-    while let Some(id) = pending.pop() {
-        for child in children.get(id.as_str()).into_iter().flatten() {
-            if selected.insert(child.clone()) {
-                pending.push(child.clone());
-            }
-        }
-    }
-    Ok(selected)
+    Ok(selected_from_rows(&rows, orphans, parent, task))
 }
 
 fn listed(

@@ -2,11 +2,10 @@ use crate::compat::value::{
     add_integer, float, integer, integer_number, json_object, string, text,
 };
 use crate::providers::sqlite::Facts;
-use crate::providers::sqlite::connection::{each_row, rows};
 use crate::session::{
     ImagePart, Message, Part, Session, SessionData, Stats, TextPart, ToolPart,
 };
-use rusqlite::{Connection, ToSql};
+use rusqlite::{Connection, ToSql, types::ValueRef};
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 
@@ -15,16 +14,17 @@ pub fn read(
     session: &Session,
     row: &Value,
 ) -> crate::Result<SessionData> {
-    let messages = rows(
-        connection,
+    let mut stmt = connection.prepare(
         "SELECT id, type, seq, time_created, data FROM session_message \
          WHERE session_id = ? ORDER BY seq ASC",
-        &[&session.id],
-    )?
-    .iter()
-    .map(decode)
-    .filter_map(Result::transpose)
-    .collect::<crate::Result<Vec<_>>>()?;
+    )?;
+    let mut rows = stmt.query([&session.id])?;
+    let mut messages = Vec::new();
+    while let Some(r) = rows.next()? {
+        if let Some(msg) = decode_sqlite_row(r)? {
+            messages.push(msg);
+        }
+    }
     let current = crate::providers::sqlite::build_session(
         row,
         &session.source_path,
@@ -65,65 +65,848 @@ pub fn read(
     Ok(payload)
 }
 
+fn value_from_ref(value: ValueRef<'_>) -> crate::Result<Value> {
+    Ok(match value {
+        ValueRef::Null => Value::Null,
+        ValueRef::Integer(v) => v.into(),
+        ValueRef::Real(v) => crate::compat::json::float(v).into(),
+        ValueRef::Text(v) => std::str::from_utf8(v)?.into(),
+        ValueRef::Blob(bytes) => {
+            bytes.iter().copied().map(Value::from).collect()
+        }
+    })
+}
+
+fn json_from_ref(value: ValueRef<'_>) -> crate::Result<Value> {
+    match value {
+        ValueRef::Text(bytes) => crate::compat::json::from_slice(bytes),
+        ValueRef::Blob(bytes) => crate::compat::json::from_bytes(bytes),
+        other => {
+            let val = value_from_ref(other)?;
+            Err(crate::providers::error::ProviderError::Cause {
+                kind: "TypeError",
+                message: format!(
+                    "the JSON object must be str, bytes or bytearray, not {}",
+                    crate::compat::value::type_name(&val)
+                ),
+            }
+            .into())
+        }
+    }
+}
+
+fn decode_sqlite_row(r: &rusqlite::Row<'_>) -> crate::Result<Option<Message>> {
+    let id_val = value_from_ref(r.get_ref(0)?)?;
+    let id_str = string(&id_val);
+    let kind_val = value_from_ref(r.get_ref(1)?)?;
+    let seq_val = value_from_ref(r.get_ref(2)?)?;
+    let time_val = value_from_ref(r.get_ref(3)?)?;
+    let data = json_from_ref(r.get_ref(4)?).map_err(|error| {
+        crate::providers::error::ProviderError::invalid(format!(
+            "Invalid OpenCode V2 message {id_str}: {error}"
+        ))
+    })?;
+    message_from_parts(id_str, kind_val, seq_val, &time_val, data).map_err(
+        |error| {
+            crate::providers::error::ProviderError::invalid(format!(
+                "Invalid OpenCode V2 message {}: {error}",
+                string(&id_val)
+            ))
+            .into()
+        },
+    )
+}
+
+enum FastFact {
+    Count { title: Option<String> },
+    Skip,
+    Fallback,
+}
+
+fn is_non_empty_clean(s: &str) -> bool {
+    if !s.contains('<') {
+        return s.bytes().any(|b| !b.is_ascii_whitespace())
+            && !s.trim().is_empty();
+    }
+    !crate::providers::text::clean(s).is_empty()
+}
+
+struct PositiveNumberVisitor;
+impl<'de> serde::de::Visitor<'de> for PositiveNumberVisitor {
+    type Value = bool;
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("any JSON value")
+    }
+    fn visit_i64<E>(self, v: i64) -> Result<bool, E> {
+        Ok(v > 0)
+    }
+    fn visit_u64<E>(self, v: u64) -> Result<bool, E> {
+        Ok(v > 0)
+    }
+    fn visit_f64<E>(self, v: f64) -> Result<bool, E> {
+        Ok(v > 0.0)
+    }
+    fn visit_bool<E>(self, _: bool) -> Result<bool, E> {
+        Ok(false)
+    }
+    fn visit_str<E>(self, _: &str) -> Result<bool, E> {
+        Ok(false)
+    }
+    fn visit_unit<E>(self) -> Result<bool, E> {
+        Ok(false)
+    }
+    fn visit_none<E>(self) -> Result<bool, E> {
+        Ok(false)
+    }
+    fn visit_seq<A: serde::de::SeqAccess<'de>>(
+        self,
+        mut seq: A,
+    ) -> Result<bool, A::Error> {
+        while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+        Ok(false)
+    }
+    fn visit_map<A: serde::de::MapAccess<'de>>(
+        self,
+        mut map: A,
+    ) -> Result<bool, A::Error> {
+        let mut positive = false;
+        let mut entries = 0usize;
+        while let Some(key) = map.next_key::<std::borrow::Cow<'de, str>>()? {
+            entries += 1;
+            if entries == 1 && key == "$serde_json::private::Number" {
+                let raw = map.next_value::<std::borrow::Cow<'de, str>>()?;
+                positive =
+                    raw.parse::<f64>().is_ok_and(|n| n.is_finite() && n > 0.0);
+            } else {
+                positive = false;
+                map.next_value::<serde::de::IgnoredAny>()?;
+            }
+        }
+        Ok(entries == 1 && positive)
+    }
+}
+
+struct PositiveSeed;
+impl<'de> serde::de::DeserializeSeed<'de> for PositiveSeed {
+    type Value = bool;
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<bool, D::Error> {
+        deserializer.deserialize_any(PositiveNumberVisitor)
+    }
+}
+
+struct TokensSeed;
+impl<'de> serde::de::DeserializeSeed<'de> for TokensSeed {
+    type Value = bool;
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<bool, D::Error> {
+        struct CacheSeed;
+        impl<'de> serde::de::DeserializeSeed<'de> for CacheSeed {
+            type Value = bool;
+            fn deserialize<D: serde::Deserializer<'de>>(
+                self,
+                deserializer: D,
+            ) -> Result<bool, D::Error> {
+                struct V;
+                impl<'de> serde::de::Visitor<'de> for V {
+                    type Value = bool;
+                    fn expecting(
+                        &self,
+                        f: &mut std::fmt::Formatter<'_>,
+                    ) -> std::fmt::Result {
+                        f.write_str("any JSON value")
+                    }
+                    fn visit_map<A: serde::de::MapAccess<'de>>(
+                        self,
+                        mut map: A,
+                    ) -> Result<bool, A::Error> {
+                        let mut pos = false;
+                        while let Some(k) =
+                            map.next_key::<std::borrow::Cow<'de, str>>()?
+                        {
+                            if matches!(k.as_ref(), "read" | "write") {
+                                pos |= map.next_value_seed(PositiveSeed)?;
+                            } else {
+                                map.next_value::<serde::de::IgnoredAny>()?;
+                            }
+                        }
+                        Ok(pos)
+                    }
+                    fn visit_bool<E>(self, _: bool) -> Result<bool, E> {
+                        Ok(false)
+                    }
+                    fn visit_i64<E>(self, _: i64) -> Result<bool, E> {
+                        Ok(false)
+                    }
+                    fn visit_u64<E>(self, _: u64) -> Result<bool, E> {
+                        Ok(false)
+                    }
+                    fn visit_f64<E>(self, _: f64) -> Result<bool, E> {
+                        Ok(false)
+                    }
+                    fn visit_str<E>(self, _: &str) -> Result<bool, E> {
+                        Ok(false)
+                    }
+                    fn visit_unit<E>(self) -> Result<bool, E> {
+                        Ok(false)
+                    }
+                    fn visit_none<E>(self) -> Result<bool, E> {
+                        Ok(false)
+                    }
+                    fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                        self,
+                        mut seq: A,
+                    ) -> Result<bool, A::Error> {
+                        while seq
+                            .next_element::<serde::de::IgnoredAny>()?
+                            .is_some()
+                        {}
+                        Ok(false)
+                    }
+                }
+                deserializer.deserialize_any(V)
+            }
+        }
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = bool;
+            fn expecting(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+            ) -> std::fmt::Result {
+                f.write_str("any JSON value")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<bool, A::Error> {
+                let mut pos = false;
+                while let Some(k) =
+                    map.next_key::<std::borrow::Cow<'de, str>>()?
+                {
+                    match k.as_ref() {
+                        "input" | "output" | "reasoning" => {
+                            pos |= map.next_value_seed(PositiveSeed)?;
+                        }
+                        "cache" => {
+                            pos |= map.next_value_seed(CacheSeed)?;
+                        }
+                        _ => {
+                            map.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(pos)
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_str<E>(self, _: &str) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_unit<E>(self) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_none<E>(self) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<bool, A::Error> {
+                while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+                Ok(false)
+            }
+        }
+        deserializer.deserialize_any(V)
+    }
+}
+
+struct NonNullSeed;
+impl<'de> serde::de::DeserializeSeed<'de> for NonNullSeed {
+    type Value = bool;
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<bool, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = bool;
+            fn expecting(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+            ) -> std::fmt::Result {
+                f.write_str("any JSON value")
+            }
+            fn visit_unit<E>(self) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_none<E>(self) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_str<E>(self, _: &str) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<bool, A::Error> {
+                while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+                Ok(true)
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<bool, A::Error> {
+                while map
+                    .next_entry::<serde::de::IgnoredAny, serde::de::IgnoredAny>(
+                    )?
+                    .is_some()
+                {}
+                Ok(true)
+            }
+        }
+        deserializer.deserialize_any(V)
+    }
+}
+
+struct NonEmptyArraySeed;
+impl<'de> serde::de::DeserializeSeed<'de> for NonEmptyArraySeed {
+    type Value = bool;
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<bool, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = bool;
+            fn expecting(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+            ) -> std::fmt::Result {
+                f.write_str("any JSON value")
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<bool, A::Error> {
+                let mut any = false;
+                while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {
+                    any = true;
+                }
+                Ok(any)
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_str<E>(self, _: &str) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_unit<E>(self) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_none<E>(self) -> Result<bool, E> {
+                Ok(false)
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<bool, A::Error> {
+                while map
+                    .next_entry::<serde::de::IgnoredAny, serde::de::IgnoredAny>(
+                    )?
+                    .is_some()
+                {}
+                Ok(false)
+            }
+        }
+        deserializer.deserialize_any(V)
+    }
+}
+
+struct OptStrSeed;
+impl<'de> serde::de::DeserializeSeed<'de> for OptStrSeed {
+    type Value = Option<std::borrow::Cow<'de, str>>;
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = Option<std::borrow::Cow<'de, str>>;
+            fn expecting(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+            ) -> std::fmt::Result {
+                f.write_str("any JSON value")
+            }
+            fn visit_borrowed_str<E>(
+                self,
+                v: &'de str,
+            ) -> Result<Self::Value, E> {
+                Ok(Some(std::borrow::Cow::Borrowed(v)))
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(Some(std::borrow::Cow::Owned(v.to_owned())))
+            }
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
+                Ok(Some(std::borrow::Cow::Owned(v)))
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_none<E>(self) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+                Ok(None)
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                while map
+                    .next_entry::<serde::de::IgnoredAny, serde::de::IgnoredAny>(
+                    )?
+                    .is_some()
+                {}
+                Ok(None)
+            }
+        }
+        deserializer.deserialize_any(V)
+    }
+}
+
+struct AssistantContentItemSeed;
+impl<'de> serde::de::DeserializeSeed<'de> for AssistantContentItemSeed {
+    type Value = bool;
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<bool, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = bool;
+            fn expecting(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+            ) -> std::fmt::Result {
+                f.write_str("any JSON value")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<bool, A::Error> {
+                let mut kind: Option<std::borrow::Cow<'de, str>> = None;
+                let mut text_non_empty = false;
+                let mut name_non_empty = false;
+                while let Some(k) =
+                    map.next_key::<std::borrow::Cow<'de, str>>()?
+                {
+                    match k.as_ref() {
+                        "type" => {
+                            kind = map.next_value_seed(OptStrSeed)?;
+                        }
+                        "text" => {
+                            if let Some(s) = map.next_value_seed(OptStrSeed)? {
+                                text_non_empty = is_non_empty_clean(&s);
+                            }
+                        }
+                        "name" => {
+                            if let Some(s) = map.next_value_seed(OptStrSeed)? {
+                                name_non_empty = !s.is_empty();
+                            }
+                        }
+                        _ => {
+                            map.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(match kind.as_deref() {
+                    Some("text" | "reasoning") => text_non_empty,
+                    Some("tool") if name_non_empty => true,
+                    _ => true,
+                })
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_str<E>(self, _: &str) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_unit<E>(self) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_none<E>(self) -> Result<bool, E> {
+                Ok(true)
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<bool, A::Error> {
+                while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+                Ok(true)
+            }
+        }
+        deserializer.deserialize_any(V)
+    }
+}
+
+struct AssistantContentSeed;
+impl<'de> serde::de::DeserializeSeed<'de> for AssistantContentSeed {
+    type Value = Option<bool>;
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        deserializer: D,
+    ) -> Result<Option<bool>, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = Option<bool>;
+            fn expecting(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+            ) -> std::fmt::Result {
+                f.write_str("any JSON value")
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Option<bool>, A::Error> {
+                let mut visible = false;
+                while let Some(item) =
+                    seq.next_element_seed(AssistantContentItemSeed)?
+                {
+                    visible |= item;
+                }
+                Ok(Some(visible))
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<Option<bool>, E> {
+                Ok(None)
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<Option<bool>, E> {
+                Ok(None)
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<Option<bool>, E> {
+                Ok(None)
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<Option<bool>, E> {
+                Ok(None)
+            }
+            fn visit_str<E>(self, _: &str) -> Result<Option<bool>, E> {
+                Ok(None)
+            }
+            fn visit_unit<E>(self) -> Result<Option<bool>, E> {
+                Ok(None)
+            }
+            fn visit_none<E>(self) -> Result<Option<bool>, E> {
+                Ok(None)
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Option<bool>, A::Error> {
+                while map
+                    .next_entry::<serde::de::IgnoredAny, serde::de::IgnoredAny>(
+                    )?
+                    .is_some()
+                {}
+                Ok(None)
+            }
+        }
+        deserializer.deserialize_any(V)
+    }
+}
+
+struct RowFactVisitor<'k> {
+    kind: &'k str,
+    want_title: bool,
+}
+
+impl<'de> serde::de::Visitor<'de> for RowFactVisitor<'_> {
+    type Value = FastFact;
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a JSON object")
+    }
+    fn visit_map<A: serde::de::MapAccess<'de>>(
+        self,
+        mut map: A,
+    ) -> Result<FastFact, A::Error> {
+        let mut used = false;
+        let mut has_error = false;
+        let mut has_visible_part = false;
+        let mut content_seen: Option<bool> = None;
+        let mut user_title: Option<String> = None;
+        let mut need_fallback = false;
+        while let Some(key) = map.next_key::<std::borrow::Cow<'de, str>>()? {
+            match (self.kind, key.as_ref()) {
+                (_, "cost") => used |= map.next_value_seed(PositiveSeed)?,
+                (_, "tokens") => used |= map.next_value_seed(TokensSeed)?,
+                (_, "error") => has_error = map.next_value_seed(NonNullSeed)?,
+                ("user", "text") => {
+                    if let Some(s) = map.next_value_seed(OptStrSeed)? {
+                        if self.want_title {
+                            user_title = crate::providers::sqlite::title(&s);
+                            has_visible_part |=
+                                user_title.is_some() || is_non_empty_clean(&s);
+                        } else {
+                            has_visible_part |= is_non_empty_clean(&s);
+                        }
+                    }
+                }
+                ("user", "files" | "agents" | "skills") => {
+                    if map.next_value_seed(NonEmptyArraySeed)? {
+                        need_fallback = true;
+                    }
+                }
+                ("assistant", "content") => {
+                    content_seen = map.next_value_seed(AssistantContentSeed)?;
+                }
+                _ => {
+                    map.next_value::<serde::de::IgnoredAny>()?;
+                }
+            }
+        }
+        if need_fallback {
+            return Ok(FastFact::Fallback);
+        }
+        match self.kind {
+            "user" => {
+                if used || has_visible_part || has_error {
+                    Ok(FastFact::Count { title: user_title })
+                } else {
+                    Ok(FastFact::Skip)
+                }
+            }
+            "assistant" => match content_seen {
+                // Missing/non-array content is a corrupt message that still counts.
+                None => Ok(FastFact::Count { title: None }),
+                Some(visible) => {
+                    if used || visible || has_error {
+                        Ok(FastFact::Count { title: None })
+                    } else {
+                        Ok(FastFact::Skip)
+                    }
+                }
+            },
+            _ => Ok(FastFact::Count { title: None }),
+        }
+    }
+}
+
+fn fast_v2_fact(kind: &str, bytes: &[u8], want_title: bool) -> FastFact {
+    if kind == "idle" {
+        return FastFact::Skip;
+    }
+    let Ok(text_str) = std::str::from_utf8(bytes) else {
+        return FastFact::Fallback;
+    };
+    let trimmed = text_str.trim_start_matches([' ', '\t', '\n', '\r']);
+    if !trimmed.starts_with('{') {
+        return FastFact::Fallback;
+    }
+    let mut de = serde_json::Deserializer::from_str(trimmed);
+    match serde::Deserializer::deserialize_map(
+        &mut de,
+        RowFactVisitor { kind, want_title },
+    ) {
+        Ok(fact) if de.end().is_ok() => fact,
+        _ => FastFact::Fallback,
+    }
+}
+
 pub fn facts(
     connection: &Connection,
     sessions: &str,
     parameters: &[&dyn ToSql],
+    needs_title: Option<&HashSet<String>>,
 ) -> crate::Result<HashMap<String, Facts>> {
     let mut facts: HashMap<String, (Facts, i64)> = HashMap::new();
-    each_row(
-        connection,
-        &format!(
-            "SELECT id, session_id, type, seq, time_created, data \
-             FROM session_message WHERE session_id IN ({sessions})"
-        ),
-        parameters,
-        |row| {
-            // A corrupt message stays countable so reading reports it.
-            let message = match message(&row) {
-                Ok(None) => return Ok(()),
-                Ok(Some(message)) => Some(message),
-                Err(_) => None,
-            };
-            let (facts, first) =
-                facts.entry(string(&row["session_id"])).or_default();
-            facts.count += 1;
-            let seq = integer(&row["seq"]);
-            if (facts.title.is_none() || seq < *first)
-                && let Some(title) = message.and_then(|message| {
-                    crate::providers::sqlite::user_title(std::slice::from_ref(
-                        &message,
-                    ))
-                })
-            {
-                facts.title = Some(title);
-                *first = seq;
+    let sql = format!(
+        "SELECT id, session_id, type, seq, time_created, data \
+         FROM session_message WHERE session_id IN ({sessions})"
+    );
+    let mut statement = connection.prepare(&sql)?;
+    let mut rows = statement.query(parameters)?;
+    while let Some(r) = rows.next()? {
+        let kind_ref = r.get_ref(2)?;
+        let kind = match kind_ref {
+            ValueRef::Text(b) => std::str::from_utf8(b).unwrap_or(""),
+            _ => "",
+        };
+        if kind == "idle" {
+            continue;
+        }
+        let session_id = match r.get_ref(1)? {
+            ValueRef::Text(b) => std::str::from_utf8(b)?,
+            other => {
+                let s = string(&value_from_ref(other)?);
+                let seq = match r.get_ref(3)? {
+                    ValueRef::Integer(v) => v,
+                    other => integer(&value_from_ref(other)?),
+                };
+                let (entry, first) = facts.entry(s).or_default();
+                entry.count += 1;
+                let _ = (seq, first);
+                continue;
             }
-            Ok(())
-        },
-    )?;
+        };
+        let seq = match r.get_ref(3)? {
+            ValueRef::Integer(v) => v,
+            other => integer(&value_from_ref(other)?),
+        };
+        let want_title = kind == "user"
+            && needs_title.is_none_or(|set| set.contains(session_id))
+            && facts
+                .get(session_id)
+                .is_none_or(|(f, first)| f.title.is_none() || seq < *first);
+        let fast = match r.get_ref(5)? {
+            ValueRef::Text(bytes) => fast_v2_fact(kind, bytes, want_title),
+            _ => FastFact::Fallback,
+        };
+        match fast {
+            FastFact::Skip => {}
+            FastFact::Count { title } => {
+                let (entry, first) =
+                    if let Some(pair) = facts.get_mut(session_id) {
+                        pair
+                    } else {
+                        facts.entry(session_id.to_owned()).or_default()
+                    };
+                entry.count += 1;
+                if let Some(title) = title
+                    && (entry.title.is_none() || seq < *first)
+                {
+                    entry.title = Some(title);
+                    *first = seq;
+                }
+            }
+            FastFact::Fallback => {
+                let id_val = value_from_ref(r.get_ref(0)?)?;
+                let kind_val = value_from_ref(kind_ref)?;
+                let seq_val = value_from_ref(r.get_ref(3)?)?;
+                let time_val = value_from_ref(r.get_ref(4)?)?;
+                let data = json_from_ref(r.get_ref(5)?);
+                let msg = match data.and_then(|data| {
+                    message_from_parts(
+                        string(&id_val),
+                        kind_val,
+                        seq_val,
+                        &time_val,
+                        data,
+                    )
+                }) {
+                    Ok(None) => continue,
+                    Ok(Some(msg)) => Some(msg),
+                    Err(_) => None,
+                };
+                let (entry, first) =
+                    if let Some(pair) = facts.get_mut(session_id) {
+                        pair
+                    } else {
+                        facts.entry(session_id.to_owned()).or_default()
+                    };
+                entry.count += 1;
+                if (entry.title.is_none() || seq < *first)
+                    && let Some(title) = msg.and_then(|msg| {
+                        crate::providers::sqlite::user_title(
+                            std::slice::from_ref(&msg),
+                        )
+                    })
+                {
+                    entry.title = Some(title);
+                    *first = seq;
+                }
+            }
+        }
+    }
     Ok(facts
         .into_iter()
         .map(|(session, (facts, _))| (session, facts))
         .collect())
 }
 
-fn decode(row: &Value) -> crate::Result<Option<Message>> {
-    message(row).map_err(|error| {
-        crate::providers::error::ProviderError::invalid(format!(
-            "Invalid OpenCode V2 message {}: {error}",
-            string(&row["id"])
-        ))
-        .into()
-    })
-}
-
+#[cfg(test)]
 fn message(row: &Value) -> crate::Result<Option<Message>> {
     let data = crate::providers::sqlite::connection::json_cell(&row["data"])?;
-    if !data.is_object() {
+    message_from_parts(
+        string(&row["id"]),
+        row["type"].clone(),
+        row["seq"].clone(),
+        &row["time_created"],
+        data,
+    )
+}
+
+fn message_from_parts(
+    id: String,
+    kind_val: Value,
+    seq_val: Value,
+    time_val: &Value,
+    mut data: Value,
+) -> crate::Result<Option<Message>> {
+    let Some(mut obj) = data.as_object_mut().map(std::mem::take) else {
         return Err("message data must be an object".into());
-    }
-    let kind = text(&row["type"]);
+    };
+    let kind = text(&kind_val);
     if kind == "idle" {
         return Ok(None);
     }
@@ -137,50 +920,61 @@ fn message(row: &Value) -> crate::Result<Option<Message>> {
         | "location-switched" => "custom",
         _ => "unknown",
     };
-    let timestamp = integer(&row["time_created"]);
-    let mut message =
-        Message::new(string(&row["id"]), role, timestamp, Vec::new());
-    message.agent = data["agent"].as_str().map(str::to_owned);
-    message.model = data["model"]["id"].as_str().map(std::convert::Into::into);
-    message.provider = data["model"]["providerID"].as_str().map(str::to_owned);
-    if !data["time"]["completed"].is_null() {
-        message.time_completed = integer(&data["time"]["completed"]).into();
+    let timestamp = integer(time_val);
+    let mut message = Message::new(id, role, timestamp, Vec::new());
+    message.agent = obj.get("agent").and_then(Value::as_str).map(str::to_owned);
+    if let Some(model) = obj.get("model") {
+        message.model = model["id"].as_str().map(std::convert::Into::into);
+        message.provider = model["providerID"].as_str().map(str::to_owned);
     }
-    message.tokens = object(&data["tokens"]);
-    message.cost = serde_json::Number::from_f64(float(&data["cost"])).unwrap();
-    message.entry_type = Some(row["type"].clone());
-    let mut metadata = data.as_object().unwrap().clone();
-    for name in ["text", "content", "files"] {
-        metadata.remove(name);
+    if let Some(time) = obj.get("time")
+        && !time["completed"].is_null()
+    {
+        message.time_completed = integer(&time["completed"]).into();
     }
-    metadata.insert("seq".into(), row["seq"].clone());
-    message.metadata = Some(metadata);
+    message.tokens = obj
+        .get("tokens")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    message.cost =
+        serde_json::Number::from_f64(obj.get("cost").map_or(0.0, float))
+            .unwrap();
+    let used = usage_map(&obj);
     let line = |text: String| Part::text(text, timestamp);
     let parts = &mut message.parts;
     match kind {
         "user" => {
-            parts.push(line(text(&data["text"]).into()));
-            for file in data["files"].as_array().into_iter().flatten() {
-                let image = file["mime"]
-                    .as_str()
-                    .is_some_and(|mime| mime.starts_with("image/"))
-                    && file["data"]
+            let t = match obj.remove("text").unwrap_or(Value::Null) {
+                Value::String(s) => s,
+                _ => String::new(),
+            };
+            parts.push(line(t));
+            if let Some(Value::Array(files)) = obj.remove("files") {
+                for file in &files {
+                    let image = file["mime"]
                         .as_str()
-                        .is_some_and(|data| !data.is_empty());
-                parts.push(if image {
-                    Part::Image(ImagePart {
-                        mime_type: file["mime"].as_str().map(str::to_owned),
-                        data: file["data"].clone(),
-                        time_created: timestamp,
-                    })
-                } else {
-                    line(attachment(file))
-                });
+                        .is_some_and(|mime| mime.starts_with("image/"))
+                        && file["data"]
+                            .as_str()
+                            .is_some_and(|data| !data.is_empty());
+                    parts.push(if image {
+                        Part::Image(ImagePart {
+                            mime_type: file["mime"].as_str().map(str::to_owned),
+                            data: file["data"].clone(),
+                            time_created: timestamp,
+                        })
+                    } else {
+                        line(attachment(file))
+                    });
+                }
             }
-            for mention in ["agents", "skills"]
-                .iter()
-                .flat_map(|name| data[*name].as_array().into_iter().flatten())
-            {
+            for mention in ["agents", "skills"].iter().flat_map(|name| {
+                obj.get(*name)
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+            }) {
                 if let Some(name) =
                     mention["name"].as_str().filter(|name| !name.is_empty())
                 {
@@ -189,9 +983,9 @@ fn message(row: &Value) -> crate::Result<Option<Message>> {
             }
         }
         "assistant" => {
-            let content = data["content"]
-                .as_array()
-                .ok_or("content must be an array")?;
+            let data_content = obj.remove("content").unwrap_or(Value::Null);
+            let content =
+                data_content.as_array().ok_or("content must be an array")?;
             parts.extend(
                 content.iter().map(|item| content_part(item, timestamp)),
             );
@@ -223,14 +1017,16 @@ fn message(row: &Value) -> crate::Result<Option<Message>> {
                 .flatten();
             message.subagent_id = child;
         }
-        "shell" => parts.push(shell(&data, timestamp)),
+        "shell" => parts.push(shell_map(&obj, timestamp)),
         "compaction" => {
             let status =
-                data.get("status").map_or_else(|| "undefined".into(), plain);
+                obj.get("status").map_or_else(|| "undefined".into(), plain);
             let mut sections = vec![format!("[Compaction: {status}]")];
             for name in ["summary", "recent"] {
-                if let Some(text) =
-                    data[name].as_str().filter(|text| !text.is_empty())
+                if let Some(text) = obj
+                    .get(name)
+                    .and_then(Value::as_str)
+                    .filter(|text| !text.is_empty())
                 {
                     sections.push(text.into());
                 }
@@ -238,21 +1034,35 @@ fn message(row: &Value) -> crate::Result<Option<Message>> {
             parts.push(line(sections.join("\n\n")));
         }
         "synthetic" | "system" | "skill" => {
-            let label = data["description"]
-                .as_str()
-                .or_else(|| data["name"].as_str())
+            let label = obj
+                .get("description")
+                .and_then(Value::as_str)
+                .or_else(|| obj.get("name").and_then(Value::as_str))
                 .unwrap_or_default();
             parts.push(line(format!("[{kind}] {label}")));
-            parts.push(line(text(&data["text"]).into()));
+            let t = match obj.remove("text").unwrap_or(Value::Null) {
+                Value::String(s) => s,
+                _ => String::new(),
+            };
+            parts.push(line(t));
         }
-        _ => parts.push(line(format!("[{kind}] {}", describe(&data)))),
+        _ => {
+            let rendered =
+                serde_json::to_string_pretty(&obj).unwrap_or_default();
+            parts.push(line(format!("[{kind}] {rendered}")));
+        }
     }
-    if !data["error"].is_null() {
+    obj.remove("text");
+    obj.remove("content");
+    obj.remove("files");
+    if let Some(error) = obj.get("error").filter(|v| !v.is_null()) {
         message
             .parts
-            .push(line(format!("[Error] {}", describe(&data["error"]))));
+            .push(line(format!("[Error] {}", describe(error))));
     }
-    let used = usage(&data);
+    obj.insert("seq".into(), seq_val);
+    message.entry_type = Some(kind_val);
+    message.metadata = Some(obj);
     let mut messages = vec![message];
     crate::providers::text::clean_messages(&mut messages);
     Ok(messages
@@ -332,16 +1142,18 @@ fn tool(content: &Value, timestamp: i64) -> Part {
     }))
 }
 
-fn shell(data: &Value, timestamp: i64) -> Part {
-    let status = match data["status"].as_str() {
+fn shell_map(data: &Map<String, Value>, timestamp: i64) -> Part {
+    let field = |name: &str| data.get(name).unwrap_or(&Value::Null);
+    let status = match field("status").as_str() {
         Some("running") => "running",
         Some("exited")
-            if data["exit"].is_null() || float(&data["exit"]) == 0.0 =>
+            if field("exit").is_null() || float(field("exit")) == 0.0 =>
         {
             "completed"
         }
         _ => "error",
     };
+    let output = field("output");
     let mut state = Map::from_iter([
         ("status".into(), status.into()),
         (
@@ -351,27 +1163,27 @@ fn shell(data: &Value, timestamp: i64) -> Part {
                 |command| json!({"command": command}),
             ),
         ),
-        ("output".into(), data["output"]["output"].clone()),
-        ("exit".into(), data["exit"].clone()),
-        ("truncated".into(), data["output"]["truncated"].clone()),
-        ("time".into(), object(&data["time"]).into()),
+        ("output".into(), output["output"].clone()),
+        ("exit".into(), field("exit").clone()),
+        ("truncated".into(), output["truncated"].clone()),
+        ("time".into(), object(field("time")).into()),
     ]);
     if status == "error" {
-        let exit = if data["exit"].is_null() {
+        let exit = if field("exit").is_null() {
             "unknown".into()
         } else {
-            plain(&data["exit"])
+            plain(field("exit"))
         };
         state.insert(
             "error".into(),
-            format!("Shell {} (exit: {exit})", plain(&data["status"])).into(),
+            format!("Shell {} (exit: {exit})", plain(field("status"))).into(),
         );
     }
-    let command = text(&data["command"]);
+    let command = text(field("command"));
     Part::Tool(Box::new(ToolPart {
         subagent_type: None,
         tool: "shell".into(),
-        call_id: text(&data["shellID"]).into(),
+        call_id: text(field("shellID")).into(),
         title: command.into(),
         state,
         time_created: timestamp,
@@ -395,10 +1207,10 @@ fn attachment(file: &Value) -> String {
     format!("[Attachment] {}", fields.join(" · "))
 }
 
-fn usage(data: &Value) -> bool {
-    let tokens = &data["tokens"];
+fn usage_map(data: &Map<String, Value>) -> bool {
+    let tokens = data.get("tokens").unwrap_or(&Value::Null);
     let positive = |value: &Value| value.as_f64().is_some_and(|n| n > 0.0);
-    positive(&data["cost"])
+    data.get("cost").is_some_and(positive)
         || [
             &tokens["input"],
             &tokens["output"],
@@ -549,5 +1361,22 @@ mod tests {
             assert_eq!(tool.state["status"], "completed");
             assert!(!tool.state.contains_key("error"));
         }
+    }
+
+    #[test]
+    fn decimal_cost_counts_in_v2_facts() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE session_v2 (id TEXT);
+             CREATE TABLE session_message (id TEXT, session_id TEXT, \
+                 type TEXT, seq INTEGER, time_created INTEGER, data TEXT);
+             INSERT INTO session_v2 VALUES ('s1');
+             INSERT INTO session_message VALUES \
+                 ('m1', 's1', 'assistant', 1, 1000, '{\"content\":[],\"cost\":0.25}');",
+        )
+        .unwrap();
+        let result =
+            facts(&conn, "SELECT id FROM session_v2", &[], None).unwrap();
+        assert_eq!(result.get("s1").map(|f| f.count), Some(1));
     }
 }

@@ -3,16 +3,9 @@ use crate::providers::codex::rollout;
 use crate::providers::codex::usage::{Totals, Usage};
 use crate::providers::contract::{DiagnosticSink, RecoverableDiagnostic};
 use crate::session::{Message, Part, parse_timestamp};
-use regex::Regex;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
-
-static THREAD_ID: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-        .unwrap()
-});
 
 /// Absorbs clock steps between a spawn record and the child's id.
 const SPAWN_MARGIN: i64 = 1000;
@@ -60,13 +53,51 @@ impl References {
     }
 }
 
+const fn is_lower_hex(b: u8) -> bool {
+    matches!(b, b'0'..=b'9' | b'a'..=b'f')
+}
+
+fn scan_uuids(text: &str, ids: &mut HashSet<String>) {
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    if len < 36 {
+        return;
+    }
+    let mut pos = 8;
+    let limit = len - 27;
+    while pos < limit {
+        let Some(offset) = bytes[pos..limit].iter().position(|&b| b == b'-')
+        else {
+            break;
+        };
+        let dash = pos + offset;
+        if bytes[dash + 5] == b'-'
+            && bytes[dash + 10] == b'-'
+            && bytes[dash + 15] == b'-'
+        {
+            let start = dash - 8;
+            let end = start + 36;
+            if bytes[start..dash].iter().all(|&b| is_lower_hex(b))
+                && bytes[dash + 1..dash + 5].iter().all(|&b| is_lower_hex(b))
+                && bytes[dash + 6..dash + 10].iter().all(|&b| is_lower_hex(b))
+                && bytes[dash + 11..dash + 15].iter().all(|&b| is_lower_hex(b))
+                && bytes[dash + 16..end].iter().all(|&b| is_lower_hex(b))
+            {
+                let candidate = &text[start..end];
+                if !ids.contains(candidate) {
+                    ids.insert(candidate.to_owned());
+                }
+                pos = end + 8;
+                continue;
+            }
+        }
+        pos = dash + 1;
+    }
+}
+
 fn mentions(value: &Value, ids: &mut HashSet<String>) {
     match value {
-        Value::String(text) => ids.extend(
-            THREAD_ID
-                .find_iter(text)
-                .map(|found| found.as_str().to_owned()),
-        ),
+        Value::String(text) => scan_uuids(text, ids),
         Value::Array(items) => {
             for item in items {
                 mentions(item, ids);
@@ -94,6 +125,9 @@ pub fn resolve(
         last,
     } = references;
     spawns.extend(pending.into_values().map(|start| (start, last)));
+    if spawns.is_empty() && ids.iter().all(|id| id == parent) {
+        return Vec::new();
+    }
     paths
         .iter()
         .filter(|path| {

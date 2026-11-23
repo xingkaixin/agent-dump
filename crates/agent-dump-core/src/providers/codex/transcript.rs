@@ -1,7 +1,7 @@
 use crate::compat::value::{field, parsed_string, string, text, truthy};
 use crate::providers::codex::enrichment::{
-    context, output_parts, record_subagent_output, subagent_notification,
-    user_text,
+    context_from_content, output_parts, record_subagent_output,
+    subagent_notification,
 };
 use crate::providers::codex::usage::Usage;
 use crate::providers::codex::{children, exec, rollout};
@@ -35,17 +35,21 @@ fn split_plan(body: &str) -> Option<(&str, &str, &str)> {
     (!plan.is_empty()).then_some((before.trim(), plan, after.trim()))
 }
 
-fn content_parts(payload: &Value, timestamp: i64) -> crate::Result<Vec<Part>> {
+fn content_parts(
+    payload: &mut Value,
+    timestamp: i64,
+) -> crate::Result<Vec<Part>> {
     let assistant = payload["role"] == "assistant";
     let expected = if assistant {
         "output_text"
     } else {
         "input_text"
     };
-    let Some(items) = payload["content"].as_array() else {
+    let Some(items) = payload.get_mut("content").and_then(Value::as_array_mut)
+    else {
         return Ok(Vec::new());
     };
-    let mut parts = Vec::new();
+    let mut parts = Vec::with_capacity(items.len());
     for item in items {
         if matches!(item["type"], Value::Array(_) | Value::Object(_)) {
             return Err(format!(
@@ -57,7 +61,10 @@ fn content_parts(payload: &Value, timestamp: i64) -> crate::Result<Vec<Part>> {
         if item["type"] != expected {
             continue;
         }
-        let body = field(item, "text");
+        let body = match item.get_mut("text") {
+            Some(Value::String(s)) => std::mem::take(s),
+            _ => field(item, "text"),
+        };
         if assistant && let Some((before, plan, after)) = split_plan(&body) {
             if !before.is_empty() {
                 parts.push(Part::text(before.into(), timestamp));
@@ -140,15 +147,22 @@ fn tool_search_text(payload: &Value) -> String {
 }
 
 impl Decoder {
-    fn record(&mut self, record: &Value, zh: bool) -> crate::Result<()> {
-        let payload = &record["payload"];
+    fn record(&mut self, record: &mut Value, zh: bool) -> crate::Result<()> {
+        let kind = text(&record["type"]).to_owned();
+        let id = field(record, "timestamp");
+        if matches!(kind.as_str(), "session_meta" | "turn_context")
+            && let Some(model) = super::meta_model(record)
+        {
+            self.model = Some(model);
+        }
+        let Some(payload) = record.get_mut("payload") else {
+            let _ = self.usage.get_or_insert_with(|| Usage::new(&Value::Null));
+            return Ok(());
+        };
         let usage = self.usage.get_or_insert_with(|| Usage::new(payload));
-        match text(&record["type"]) {
+        match kind.as_str() {
             "session_meta" | "turn_context" => {
-                if let Some(model) = super::meta_model(record) {
-                    self.model = Some(model);
-                }
-                if record["type"] == "turn_context" {
+                if kind == "turn_context" {
                     usage.turn(payload);
                 }
                 return Ok(());
@@ -175,7 +189,6 @@ impl Decoder {
             )
             .into());
         }
-        let id = field(record, "timestamp");
         let timestamp = parse_timestamp(id.trim())
             .map_or(0, crate::session::timestamp::Timestamp::as_millisecond);
         match text(&payload["type"]) {
@@ -190,21 +203,21 @@ impl Decoder {
             "web_search_call" => self.push_tool(
                 "web_search".into(),
                 text(&payload["call_id"]).trim().into(),
-                payload["action"].clone(),
+                payload["action"].take(),
                 "completed",
                 timestamp,
             ),
             "tool_search_call" => self.push_tool(
                 "tool_search".into(),
                 text(&payload["call_id"]).trim().into(),
-                payload["arguments"].clone(),
+                payload["arguments"].take(),
                 "running",
                 timestamp,
             ),
             "image_generation_call" => self.push_tool(
                 "image_generation".into(),
                 text(&payload["call_id"]).trim().into(),
-                json!({"revised_prompt": payload["revised_prompt"]}),
+                json!({"revised_prompt": payload["revised_prompt"].take()}),
                 "completed",
                 timestamp,
             ),
@@ -224,7 +237,7 @@ impl Decoder {
 
     fn message(
         &mut self,
-        payload: &Value,
+        payload: &mut Value,
         id: String,
         timestamp: i64,
     ) -> crate::Result<()> {
@@ -232,14 +245,11 @@ impl Decoder {
         if matches!(role.as_str(), "developer" | "system") {
             return Ok(());
         }
+        if role == "user" && context_from_content(&payload["content"]) {
+            return Ok(());
+        }
         let parts = content_parts(payload, timestamp)?;
-        if parts.is_empty()
-            || (role == "user"
-                && context(
-                    &payload["content"],
-                    &user_text(&payload["content"]),
-                ))
-        {
+        if parts.is_empty() {
             return Ok(());
         }
         if role == "assistant" {
@@ -261,49 +271,49 @@ impl Decoder {
             }
             return Ok(());
         }
-        let user_text = parts
-            .iter()
-            .filter_map(|part| match part {
-                Part::Text(text) if !text.text.trim().is_empty() => {
-                    Some(text.text.trim())
-                }
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let is_notification = user_text.starts_with("<subagent_notification>")
-            && user_text.ends_with("</subagent_notification>");
-        if self.pending_plan.is_some()
-            && role == "user"
-            && !user_text.is_empty()
-            && !is_notification
-        {
-            if user_text
-                .trim_start()
-                .starts_with("PLEASE IMPLEMENT THIS PLAN")
-                || user_text == "Implement the plan."
-            {
-                self.finish_plan("success", None);
-            } else {
-                self.finish_plan("fail", Some(user_text));
-            }
-        } else {
-            let notification = (role == "user")
-                .then(|| {
-                    subagent_notification(
-                        &id,
-                        timestamp,
-                        &parts,
-                        &mut self.nicknames,
-                    )
+        if self.pending_plan.is_some() && role == "user" {
+            let user_text = parts
+                .iter()
+                .filter_map(|part| match part {
+                    Part::Text(text) if !text.text.trim().is_empty() => {
+                        Some(text.text.trim())
+                    }
+                    _ => None,
                 })
-                .flatten();
-            self.messages.push(
-                notification.unwrap_or_else(|| {
-                    Message::new(id, &role, timestamp, parts)
-                }),
-            );
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            let is_notification = user_text
+                .starts_with("<subagent_notification>")
+                && user_text.ends_with("</subagent_notification>");
+            if !user_text.is_empty() && !is_notification {
+                if user_text
+                    .trim_start()
+                    .starts_with("PLEASE IMPLEMENT THIS PLAN")
+                    || user_text == "Implement the plan."
+                {
+                    self.finish_plan("success", None);
+                } else {
+                    self.finish_plan("fail", Some(user_text));
+                }
+                self.current_assistant = None;
+                self.latest_assistant_text = None;
+                return Ok(());
+            }
         }
+        let notification = (role == "user")
+            .then(|| {
+                subagent_notification(
+                    &id,
+                    timestamp,
+                    &parts,
+                    &mut self.nicknames,
+                )
+            })
+            .flatten();
+        self.messages.push(
+            notification
+                .unwrap_or_else(|| Message::new(id, &role, timestamp, parts)),
+        );
         self.current_assistant = None;
         self.latest_assistant_text = None;
         Ok(())
@@ -531,15 +541,19 @@ pub fn read(
 ) -> crate::Result<SessionData> {
     let mut decoder = Decoder::default();
     let mut references = children::References::default();
-    rollout::scan(&session.source_path, diagnostics, |record, diagnostics| {
-        references.visit(&record);
-        if let Err(error) = decoder.record(&record, zh) {
-            diagnostics(RecoverableDiagnostic::MessageConvertFailed(
-                error.to_string(),
-            ))?;
-        }
-        Ok(())
-    })?;
+    rollout::scan(
+        &session.source_path,
+        diagnostics,
+        |mut record, diagnostics| {
+            references.visit(&record);
+            if let Err(error) = decoder.record(&mut record, zh) {
+                diagnostics(RecoverableDiagnostic::MessageConvertFailed(
+                    error.to_string(),
+                ))?;
+            }
+            Ok(())
+        },
+    )?;
     decoder.finish_plan("fail", None);
     crate::providers::text::clean_messages(&mut decoder.messages);
     let mut totals = decoder
