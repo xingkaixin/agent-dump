@@ -75,3 +75,8 @@ ratatui.workspace = true
 crossterm.workspace = true
 unicode-width.workspace = true
 unicode-normalization.workspace = true
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
