@@ -197,9 +197,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "View full changelog on GitHub",
     updates: [
       {
+        version: "v1.2.13",
+        date: "2026-11-24",
+        isLatest: true,
+        title: "Faster CLI Across Every Workflow, Lighter Binary, Japanese Guides",
+        description:
+          "Listing, searching, exporting, and summarizing Codex, Claude Code, Cursor, and other local AI sessions runs up to 2.4x faster, with up to 83% lower peak memory on large JSONL rollouts and a 21% smaller native binary. Exports stream directly to disk and full-text search indexes update in batched transactions. The website drops its client React bundle for faster page loads and adds Japanese export guides for Codex and Claude Code.",
+        command: 'npx @agent-dump/cli@1.2.13 list --days 7',
+        tags: ["Performance", "Session Export", "Full-Text Search"],
+      },
+      {
         version: "v1.2.12",
         date: "2026-11-20",
-        isLatest: true,
         title: "Filter Sessions by Date Range, Refresh the Reader In Place",
         description:
           "List, search, browse, and read Codex, Claude Code, Cursor, and other AI sessions within an exact local date range using --since and --until, so the next Agent handoff only reads the days you need. Every subcommand now has focused --help with examples, and conflicting flags are named in the error. The terminal session reader refreshes in place, copies message text, and switches Provider or lookback window without restarting. Multi-provider discovery runs in parallel, and full-text search uses the FTS5 index for more query types.",
@@ -464,9 +473,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "在 GitHub 查看完整更新日志",
     updates: [
       {
+        version: "v1.2.13",
+        date: "2026-11-24",
+        isLatest: true,
+        title: "全流程更快更省内存，原生二进制瘦身，新增日文指南",
+        description:
+          "列出、搜索、导出和汇总 Codex、Claude Code、Cursor 等本地 AI 会话最高提速 2.4 倍，大型 JSONL 会话峰值内存最高降低 83%，原生可执行文件缩小约 21%。导出改为直接流式写盘，全文搜索索引按批量事务更新。产品网站移除客户端 React 依赖以加快首屏加载，并新增 Codex 与 Claude Code 日文导出指南。",
+        command: 'npx @agent-dump/cli@1.2.13 list --days 7',
+        tags: ["性能", "会话导出", "全文搜索"],
+      },
+      {
         version: "v1.2.12",
         date: "2026-11-20",
-        isLatest: true,
         title: "按日期范围筛选会话，阅读器原地刷新",
         description:
           "用 --since 和 --until 按本地日期精确列出、搜索、浏览和分页读取 Codex、Claude Code、Cursor 等 AI 会话，交接给下一个 Agent 时只读需要的那几天。每个子命令都有聚焦的 --help 和示例，参数冲突时错误信息会指出具体参数。终端会话阅读器可以原地刷新、复制消息正文，并在不重启的情况下切换 Provider 和回溯天数。多 Provider 会话发现改为并行，全文搜索有更多查询走 FTS5 索引。",
@@ -731,9 +749,18 @@ export const ui: Record<Locale, UiStrings> = {
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
+        version: "v1.2.13",
+        date: "2026-11-24",
+        isLatest: true,
+        title: "全ワークフローを高速化・省メモリ化、日本語エクスポートガイドを追加",
+        description:
+          "Codex、Claude Code、Cursor などのローカル AI セッションの一覧表示・全文検索・エクスポート・要約が最大 2.4 倍高速になり、大きな JSONL セッションのピークメモリを最大 83% 削減、ネイティブバイナリも約 21% 軽量化しました。エクスポートは直接ストリーミング書き込みになり、全文検索インデックスの更新も一括トランザクション化されています。公式サイトはクライアント側の React バンドルを廃止して表示を高速化し、Codex と Claude Code の日本語ガイドを追加しました。",
+        command: 'npx @agent-dump/cli@1.2.13 list --days 7',
+        tags: ["パフォーマンス", "セッションエクスポート", "全文検索"],
+      },
+      {
         version: "v1.2.12",
         date: "2026-11-20",
-        isLatest: true,
         title: "日付範囲でセッションを絞り込み、リーダーをその場で更新",
         description:
           "--since と --until で、Codex、Claude Code、Cursor などの AI セッションをローカル日付の範囲で一覧・検索・閲覧・ページ読み込みできます。次の Agent への引き継ぎでは必要な日だけを読めます。すべてのサブコマンドに例付きの専用 --help が付き、フラグが競合するとエラーで該当フラグを示します。ターミナルのセッションリーダーは再起動せずにその場で更新し、メッセージ本文をコピーし、Provider や遡る日数を切り替えられます。複数 Provider のセッション検出は並列化され、全文検索はより多くのクエリで FTS5 インデックスを使います。",

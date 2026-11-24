@@ -2,6 +2,15 @@
 
 ## [未发布]
 
+## [1.2.13] - 2026-11-24
+
+### 变更
+
+- 在保持所有可观察行为不变的前提下降低 CLI 延迟、峰值内存与发布二进制体积：在 release profile 启用 thin LTO、单 codegen unit 和符号裁剪（二进制体积约减 21.5%）；将 Codex 最近会话扫描改为 64 KiB 反向扫描器（大 JSONL 峰值 RSS 约降 83%），并为 Codex 和 SQLite V2 引入零 DOM serde visitor；将 FTS5 索引更新合并为单事务并按 `ByteBudget` 限制并发读取；JSON 与 Markdown 导出直接流式写入 64 KiB 缓冲。配对基准中 list、stats、search、export 和 collect 提速约 1.5–2.4 倍 (#603)。
+- 将落地页的 React 交互组件替换为原生 Astro 与纯 TypeScript，拆分落地页与指南样式表并压缩内联 JSON-LD，落地页 JS 传输量约降 96%，总传输量约降 55% (#603)。
+- 新增 Codex 与 Claude Code 导出指南的日文翻译及未翻译文章回退展示，优化英文指南 SEO 元数据并补充标准化 JSON 导出字段与 `--format raw` 说明，同时增加页脚作者博客链接、`Person` JSON-LD 和中文指南延伸阅读链接 (#601, #602)。
+- 更新 Rust 依赖（`rusqlite` 0.43、`nix` 0.32、`jiff` 1.0.1、`regex` 1.13.2）(#598–#600)。
+
 ## [1.2.12] - 2026-11-20
 
 ### 新增功能
@@ -1448,3 +1457,4 @@
 [1.2.10]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.10
 [1.2.11]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.11
 [1.2.12]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.12
+[1.2.13]: https://github.com/xingkaixin/agent-dump/releases/tag/v1.2.13
