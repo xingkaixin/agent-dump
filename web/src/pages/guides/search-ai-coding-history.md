@@ -4,7 +4,7 @@ locale: "en"
 slug: "search-ai-coding-history"
 category: "search"
 order: 3
-updated: "2026-11-22"
+updated: "2026-11-24"
 title: "Search AI Coding History Across Codex & Claude Code"
 description: "Search local Codex, Claude Code, and AI coding sessions to trace past fixes and decisions. Filter by project, locate matching messages, and export cited excerpts."
 ---
@@ -21,10 +21,10 @@ agent-dump --search 'auth timeout' --days 90
 
 Every distinct term must match the session, but terms can appear in different messages or corpus fields. This is literal full-text search, not semantic search. The corpus includes normalized titles, messages, reasoning, and tool state. FTS operators such as `AND` are not interpreted as query syntax.
 
-The default date window is seven days. Increase `--days` for older work. To find recently active conversations regardless of when they began:
+The default date window is seven days filtered by latest update time. Increase `--days` for older work, or pass `--time-field created` (or `--since` / `--until`) when you want to filter by creation date or an exact range:
 
 ```sh
-agent-dump --search 'auth timeout' --time-field updated --days 7
+agent-dump --search 'auth timeout' --time-field created --days 30
 ```
 
 ## Narrow to a project or tool

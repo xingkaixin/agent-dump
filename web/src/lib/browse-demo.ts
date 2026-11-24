@@ -9,7 +9,7 @@ export const tuiStrings = {
     help: "s 搜索会话 · / 会话内查找 · n/N 命中 · x 摘录 · +/- 上下文\nTab 切换 · 空格 选择 · e 导出 · y URI · c 清词 · ? 帮助 · q 退出",
     results: "{count} 个会话 · s 搜索 · x 预览命中摘录",
     noMatches:
-      "没有匹配会话。s 修改搜索，c 清除关键词。? 查看范围；重新打开时可扩大 --days 或减少 --query 筛选。",
+      "没有匹配会话。s 修改搜索，c 清除关键词；也可用 p 切换来源、d 调整天数、r 刷新，或按 ? 查看范围。",
     scope: "来源: 全部 · 最近 7 天（更新）\n目录: 全部 · 角色: 全部 · 上限: 全部",
     state: "{count} 个会话 · 搜索（{mode}）: {query}",
     terms: "全部词",
@@ -21,7 +21,7 @@ export const tuiStrings = {
     excerptRange: "摘录 #{start}–{end}/{total} · +/- 上下文",
     helpTitle: "帮助 · ↑/↓ 滚动 · ?/Esc 关闭",
     helpFull:
-      "s：搜索当前范围内会话，全部词均须命中\n/：在当前会话内查找字面短语\nc：清除关键词，保留来源、目录、日期和角色筛选\nn/N：下一条/上一条命中消息\nx：预览命中消息，默认包含前后各 3 条\n+/-：前后各增加/减少一条消息\n空格：选择会话用于批量导出\ne：导出预览范围；未预览时导出已选会话或当前完整会话\nx/Esc：退出摘录预览\nTab/左右：切换栏 · 上下/j/k：移动\nt：工具详情 · y：复制会话 URI\nq/Ctrl-C：退出 · ?/Esc：关闭帮助\n\n浏览期间来源、目录、日期筛选保持固定。重新打开时使用 --query / --days / --time-field 更改范围。",
+      "s：搜索当前范围内会话，全部词均须命中\n/：在当前会话内查找字面短语\nc：清除关键词，保留来源、目录、日期和角色筛选\nn/N：下一条/上一条命中消息\nx：预览命中消息，默认包含前后各 3 条\n+/-：前后各增加/减少一条消息\n空格：选择会话用于批量导出\ne：导出预览范围；未预览时导出已选会话或当前完整会话\nx/Esc：退出摘录预览\nTab/左右：切换栏 · 上下/j/k：移动\nt：工具详情 · y：复制会话 URI · Y：复制当前消息\np/d/r：切换 Provider / 回溯天数 / 原地刷新\nq/Ctrl-C：退出 · ?/Esc：关闭帮助\n\n浏览期间目录、角色、上限与时间字段保持固定；可用 p/d/r 在线调整来源、天数或刷新。",
     exported: "导出 {count} 个所选会话…",
     exportedOne: "导出当前完整会话…",
     exportedRange: "导出摘录 #{start}–{end}…",
@@ -36,7 +36,7 @@ export const tuiStrings = {
     help: "s search sessions · / find here · n/N hits · x excerpt · +/- context\nTab panes · Space select · e export · y URI · c clear search · ? help · q quit",
     results: "{count} sessions · s search · x preview matching excerpt",
     noMatches:
-      "No matching sessions. s changes search; c clears it. Check scope with ?; widen --days or remove --query filters when reopening.",
+      "No matching sessions. s changes search; c clears it. Use p/d/r to switch provider, adjust days, or refresh, or ? to check scope.",
     scope: "Provider: all · updated: last 7 days\nPath: all · Role: all · Limit: all",
     state: "{count} sessions · Search ({mode}): {query}",
     terms: "all words",
@@ -49,7 +49,7 @@ export const tuiStrings = {
     excerptRange: "Excerpt #{start}–{end}/{total} · +/- context",
     helpTitle: "Help · ↑/↓ scroll · ?/Esc close",
     helpFull:
-      "s: search sessions in this scope (all words must match)\n/: find a literal phrase in the current session\nc: clear search words, keep Provider/path/date/role filters\nn/N: next/previous matching message\nx: preview the match with 3 messages on either side\n+/-: add/remove one message on each side\nSpace: select sessions for batch export\ne: export the previewed range, selected sessions, or the full session\nx/Esc: leave excerpt preview\nTab/Left/Right: switch panes · arrows/j/k: move\nt: toggle tool details · y: copy session URI\nq/Ctrl-C: quit · ?/Esc: close help\n\nProvider/path/date filters stay fixed while browsing. Reopen with different --query / --days / --time-field options to change scope.",
+      "s: search sessions in this scope (all words must match)\n/: find a literal phrase in the current session\nc: clear search words, keep Provider/path/date/role filters\nn/N: next/previous matching message\nx: preview the match with 3 messages on either side\n+/-: add/remove one message on each side\nSpace: select sessions for batch export\ne: export the previewed range, selected sessions, or the full session\nx/Esc: leave excerpt preview\nTab/Left/Right: switch panes · arrows/j/k: move\nt: toggle tool details · y: copy session URI · Y: copy message text\np/d/r: switch provider / lookback days / refresh in place\nq/Ctrl-C: quit · ?/Esc: close help\n\nPath, role, limit, and time-field filters stay fixed while browsing. Use p/d/r to refine provider/days or refresh in place.",
     exported: "Exporting {count} selected sessions…",
     exportedOne: "Exporting the full session…",
     exportedRange: "Exporting excerpt #{start}–{end}…",

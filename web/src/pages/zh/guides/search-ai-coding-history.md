@@ -4,7 +4,7 @@ locale: "zh"
 slug: "search-ai-coding-history"
 category: "search"
 order: 3
-updated: "2026-11-22"
+updated: "2026-11-24"
 title: "搜索 AI 编码历史，找回过去的决策"
 description: "跨 Codex、Claude Code 等本地工具搜索过去的修复方案和技术决策。按项目筛选，定位匹配消息，再阅读前后上下文。"
 ---
@@ -21,10 +21,10 @@ agent-dump --search 'auth timeout' --days 90
 
 每个不同的搜索词都需要在该会话中出现，但可以位于不同消息或字段。它是字面全文搜索，不是语义搜索。搜索范围包括归一化后的标题、消息、推理和工具状态，不把 `AND` 等 FTS 操作符当作查询语法。
 
-默认日期窗口是七天。查更早的工作时增大 `--days`。如果要找最近仍在使用的旧会话，按更新时间筛选：
+默认日期窗口是最近七天，按最近更新时间筛选。查更早的工作时增大 `--days`；需要按会话创建时间或精确日期范围筛选时，使用 `--time-field created` 或 `--since` / `--until`：
 
 ```sh
-agent-dump --search 'auth timeout' --time-field updated --days 7
+agent-dump --search 'auth timeout' --time-field created --days 30
 ```
 
 ## 限定项目或工具

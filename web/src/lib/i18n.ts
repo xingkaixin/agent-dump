@@ -392,7 +392,7 @@ export const ui: Record<Locale, UiStrings> = {
         title: "Resilient Collect, Provider Pre-Scoping & Visual Redesign",
         description:
           "Collect workflows now gracefully preserve partial session successes during batch failures and isolate unknown projects cleanly. Scope providers upfront before discovery to accelerate queries, paired with an all-new WebGL landing visual experience.",
-        command: "agent-dump --collect --agent codex --days 7",
+        command: 'agent-dump --collect --query "provider:codex" --days 7',
         tags: ["Resilient Collect", "Provider Scoping", "Visual Redesign"],
       },
       {
@@ -400,7 +400,7 @@ export const ui: Record<Locale, UiStrings> = {
         date: "2026-09-01",
         title: "External Agent Handoff & Visible Dialogue Summaries",
         description:
-          "Generate self-contained prompts with safe read-only URI commands using `--emit-prompt`, allowing external AI agents to autonomously collect sessions and author reports without local API configuration. Session summarization now strictly filters for visible human/assistant dialogue.",
+          "Generate self-contained prompts with safe read-only URI commands using --emit-prompt, allowing external AI agents to autonomously collect sessions and author reports without local API configuration. Session summarization now strictly filters for visible human/assistant dialogue.",
         command: "agent-dump --collect --emit-prompt --save ./reports/weekly.md",
         tags: ["Agent Handoff", "AI Collect", "Dialogue Filter"],
       },
@@ -668,7 +668,7 @@ export const ui: Record<Locale, UiStrings> = {
         title: "会话收集容错保留、Provider 预剪裁与全新落地页视效",
         description:
           "批量会话收集全面支持部分失败保留，单会话读取异常不再中断全局任务，未识别项目独立安全归组；按 Provider 查询时提前剪裁扫描范围。落地页全新重塑，带来多层会话聚合与激光检索视效。",
-        command: "agent-dump --collect --agent codex --days 7",
+        command: 'agent-dump --collect --query "provider:codex" --days 7',
         tags: ["Collect 容错", "Provider 剪裁", "视效升级"],
       },
       {
@@ -676,7 +676,7 @@ export const ui: Record<Locale, UiStrings> = {
         date: "2026-09-01",
         title: "外部 Agent 提示词交接与纯净对话提取",
         description:
-          "新增 `--emit-prompt` 选项，输出自包含的外部 Agent 提示词与只读 URI 指令，无需配置本地 API Key 即可交由外部 AI 独立完成会话收集与报告编写。会话摘要精准过滤工具执行与推理轨迹，仅保留用户与助手对话正文。",
+          "新增 --emit-prompt 选项，输出自包含的外部 Agent 提示词与只读 URI 指令，无需配置本地 API Key 即可交由外部 AI 独立完成会话收集与报告编写。会话摘要精准过滤工具执行与推理轨迹，仅保留用户与助手对话正文。",
         command: "agent-dump --collect --emit-prompt --save ./reports/weekly.md",
         tags: ["外部 Agent 交接", "AI 收集", "纯净对话提取"],
       },
@@ -745,7 +745,7 @@ export const ui: Record<Locale, UiStrings> = {
     providersHeading: `${providers.length} のツール、1 つの URI 構文`,
     moreTools: { title: "その他のツール", note: "PRを歓迎します" },
     capabilitiesHeading: "できること",
-    updatesHeading: "更新履歴とロードマップ",
+    updatesHeading: "最新情報",
     viewFullChangelog: "GitHubで完全な変更履歴を表示",
     updates: [
       {
@@ -944,7 +944,7 @@ export const ui: Record<Locale, UiStrings> = {
         title: "セッション収集のエラー耐性強化とProvider事前絞り込み",
         description:
           "セッション一括収集時に一部の取得失敗があっても成功分を確実に保持し、未知プロジェクトを安全に分離。Provider指定時のスキャン範囲を事前剪定して高速化。製品ランディングページのデザインとビジュアルも全面刷新。",
-        command: "agent-dump --collect --agent codex --days 7",
+        command: 'agent-dump --collect --query "provider:codex" --days 7',
         tags: ["収集エラー耐性", "Provider絞り込み", "デザイン刷新"],
       },
       {
@@ -952,7 +952,7 @@ export const ui: Record<Locale, UiStrings> = {
         date: "2026-09-01",
         title: "外部Agentへのプロンプト引き継ぎと対話抽出",
         description:
-          "`--emit-prompt`により、API設定なしで外部AIエージェントにセッション収集とレポート作成を委譲できるプロンプトを生成可能に。セッション要约時に対話本文のみを正確に抽出し、ノイズを排除します。",
+          "--emit-prompt により、API設定なしで外部AIエージェントにセッション収集とレポート作成を委譲できるプロンプトを生成可能に。セッション要約時に対話本文のみを正確に抽出し、ノイズを排除します。",
         command: "agent-dump --collect --emit-prompt --save ./reports/weekly.md",
         tags: ["Agent引き継ぎ", "AI要約", "対話抽出"],
       },
@@ -969,7 +969,7 @@ export const ui: Record<Locale, UiStrings> = {
     installHeading: "インストール",
     installNote:
       "curl、Homebrew、Scoop なら Python や Node.js は不要です。uv と JavaScript パッケージも利用できます。JavaScript ラッパーには Node.js 22 以降が必要です。",
-    skillNote: "またはagent skillとして追加",
+    skillNote: "または agent skill として追加",
     copy: "コピー",
     copied: "コピーしました",
     faqHeading: "よくある質問",

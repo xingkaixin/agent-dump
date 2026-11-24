@@ -9,12 +9,18 @@
 - [日本語ガイド](https://agent-dump.xingkaixin.me/ja/guides/): Codex・Claude Code のエクスポート手順（日本語）と英語ガイド一覧。
 - [Export Codex sessions](https://agent-dump.xingkaixin.me/guides/export-codex-session/): Find a URI, export Markdown or JSON, and copy the transcript into notes or another conversation.
 - [Export Claude Code conversations](https://agent-dump.xingkaixin.me/guides/export-claude-code-conversations/): Save one or several local conversations to Markdown, normalized JSON with token stats, or raw JSONL.
-- [Codex セッションを Markdown・JSON にエクスポート](https://agent-dump.xingkaixin.me/ja/guides/export-codex-session/): ローカル Codex セッションの URI 確認、Markdown・JSON 出力、トラブルシューティング。
-- [Claude Code セッションを Markdown・JSON にエクスポート](https://agent-dump.xingkaixin.me/ja/guides/export-claude-code-conversations/): ローカル Claude Code セッションの Markdown・構造化 JSON・一括エクスポート。
 - [Search coding history](https://agent-dump.xingkaixin.me/guides/search-ai-coding-history/): Full-text search, project filters, message locations, and cited excerpts.
 - [Hand off context to an agent](https://agent-dump.xingkaixin.me/guides/handoff-context-to-ai-agent/): Reading prompts, bounded JSON pages, cursors, and revision handling.
 - [Create work reports](https://agent-dump.xingkaixin.me/guides/weekly-report-from-ai-sessions/): Preview scope, configure AI collect, or generate a prompt for another agent.
 - [Save to Obsidian](https://agent-dump.xingkaixin.me/guides/save-ai-conversations-to-obsidian/): Export Markdown into a vault with a dedicated output directory.
+- [将 Codex 会话导出为 Markdown](https://agent-dump.xingkaixin.me/zh/guides/export-codex-session/): 找到本地 Codex 会话 URI、导出 Markdown 或 JSON 及排查步骤。
+- [导出 Claude Code 对话](https://agent-dump.xingkaixin.me/zh/guides/export-claude-code-conversations/): 将本地 Claude Code 会话保存为 Markdown、结构化 JSON 或原始 JSONL。
+- [搜索 AI 编码历史](https://agent-dump.xingkaixin.me/zh/guides/search-ai-coding-history/): 全文搜索、按项目筛选、定位消息并导出带引用的上下文片段。
+- [把历史对话交给下一个 AI Agent](https://agent-dump.xingkaixin.me/zh/guides/handoff-context-to-ai-agent/): 读取提示词、有界 JSON 分页、续读游标与版本一致性。
+- [从 AI 编码会话生成日报或周报](https://agent-dump.xingkaixin.me/zh/guides/weekly-report-from-ai-sessions/): 预览范围、内置 AI 汇总或外部 Agent 提示词交接。
+- [将 AI 对话保存到 Obsidian](https://agent-dump.xingkaixin.me/zh/guides/save-ai-conversations-to-obsidian/): 按独立输出目录将 Markdown 导出到 Obsidian 笔记库。
+- [Codex セッションを Markdown・JSON にエクスポート](https://agent-dump.xingkaixin.me/ja/guides/export-codex-session/): ローカル Codex セッションの URI 確認、Markdown・JSON 出力、トラブルシューティング。
+- [Claude Code セッションを Markdown・JSON にエクスポート](https://agent-dump.xingkaixin.me/ja/guides/export-claude-code-conversations/): ローカル Claude Code セッションの Markdown・構造化 JSON・一括エクスポート。
 
 ## Behavior boundaries
 
